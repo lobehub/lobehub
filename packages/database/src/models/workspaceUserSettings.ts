@@ -68,7 +68,7 @@ export class WorkspaceUserSettingsModel {
    * in the patch is a no-op — pass an explicit `{}` to clear it).
    */
   updatePreference = async (patch: Partial<WorkspaceUserPreference>) => {
-    const current = (await this.getPreference()) ?? {};
+    const current = await this.getPreference();
     // Per-agent override maps merge one level deeper: clients patch a single
     // agent's leaf from a local copy that may be stale or empty (for example a
     // picker used before the preference fetch settles). A top-level replace

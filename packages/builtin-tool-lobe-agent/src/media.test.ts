@@ -29,7 +29,7 @@ describe('media', () => {
         'https://example.com/image.png',
         'http://example.com/video.mp4',
         'data:audio/mpeg;base64,abcd',
-        'data:image/png;base64,abcd',
+        'data:image/png;base64,iVBORw0KGgo=',
         'data:video/mp4;base64,abcd',
         'data:text/plain;base64,abcd',
         'ftp://example.com/image.png',
@@ -41,7 +41,7 @@ describe('media', () => {
         'https://example.com/image.png',
         'http://example.com/video.mp4',
         'data:audio/mpeg;base64,abcd',
-        'data:image/png;base64,abcd',
+        'data:image/png;base64,iVBORw0KGgo=',
         'data:video/mp4;base64,abcd',
       ],
     });
@@ -66,6 +66,34 @@ describe('media', () => {
     expect(formatMediaUrlValidationError(oversizedValidation)).toContain(
       `${MAX_MEDIA_URL_LENGTH} character limit`,
     );
+  });
+
+  it('should reject media urls the analysis model can never fetch', () => {
+    const pngDataUrl =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const validation = validateMediaUrls([
+      'http://127.0.0.1:8899/D.jpg',
+      'http://localhost:3000/shot.png',
+      'http://192.168.1.10/cam.jpg',
+      'http://[::1]/a.png',
+      'data:image/jpeg;base64,PLACEHOLDER',
+      'https://example.com/image.png',
+      pngDataUrl,
+    ]);
+
+    expect(validation.validUrls).toEqual(['https://example.com/image.png', pngDataUrl]);
+    expect(validation.unreachableUrls).toEqual([
+      'http://127.0.0.1:8899/D.jpg',
+      'http://localhost:3000/shot.png',
+      'http://192.168.1.10/cam.jpg',
+      'http://[::1]/a.png',
+    ]);
+    expect(validation.invalidDataUrls).toEqual(['data:image/jpeg;base64,PLACEHOLDER']);
+
+    const message = formatMediaUrlValidationError(validation);
+    expect(message).toContain('local or private network address');
+    expect(message).toContain('http://127.0.0.1:8899/D.jpg');
+    expect(message).toContain('not a decodable image');
   });
 
   it('should create media file refs for message attachments', () => {

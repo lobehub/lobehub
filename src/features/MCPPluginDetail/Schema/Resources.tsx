@@ -1,6 +1,4 @@
-import { Block, Highlighter } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Block, cssVar, Highlighter, Tag } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,6 +20,7 @@ const Resources = memo<{ mode?: ModeType }>(({ mode }) => {
       <InlineTable
         dataSource={resources}
         pagination={false}
+        rowKey={'uri'}
         size={'middle'}
         columns={[
           {
@@ -46,8 +45,8 @@ const Resources = memo<{ mode?: ModeType }>(({ mode }) => {
             title: t('mcp.details.schema.resources.table.uri'),
           },
           {
-            dataIndex: 'description',
             key: 'description',
+            render: (_, record) => (record as { description?: string }).description,
             title: t('mcp.details.schema.resources.table.description'),
           },
         ]}

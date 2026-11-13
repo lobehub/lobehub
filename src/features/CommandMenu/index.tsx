@@ -1,13 +1,13 @@
 'use client';
 
 import { stopPropagation } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
 import { Command, defaultFilter } from 'cmdk';
 import { CornerDownLeft } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 import { useGlobalStore } from '@/store/global';
 
@@ -195,9 +195,10 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
                   value="send-to-agent"
                   onSelect={handleSendToSelectedAgent}
                 >
-                  <Avatar
-                    emojiScaleWithBackground
+                  <AgentAvatar
+                    agentId={selectedAgent.id}
                     avatar={selectedAgent.avatar}
+                    name={selectedAgent.title}
                     shape="square"
                     size={20}
                   />

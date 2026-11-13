@@ -1,4 +1,4 @@
-import type * as BaseUI from '@lobehub/ui/base-ui';
+import type * as BaseUI from '@lobehub/ui';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,11 +8,12 @@ import TerminalPanelToggle from './index';
 const mocks = vi.hoisted(() => ({
   showTerminalPanel: false,
   toggleTerminalPanel: vi.fn(),
+  visible: true,
 }));
 
 const actionIconPropsSpy = vi.hoisted(() => vi.fn());
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
+vi.mock('@lobehub/ui', async (importOriginal) => {
   const actual = await importOriginal<typeof BaseUI>();
   return {
     ...actual,
@@ -23,7 +24,11 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
   };
 });
 
-vi.mock('@/const/version', () => ({ isDesktop: true }));
+// Where the entry shows is `useTerminalEntry`'s call (tested beside it); the
+// header only renders what it answers.
+vi.mock('@/features/ChatTerminal/useTerminalEntry', () => ({
+  useTerminalEntry: () => mocks.visible,
+}));
 
 vi.mock('@/store/global', () => ({
   useGlobalStore: (
@@ -58,6 +63,7 @@ vi.mock('@/store/user/selectors', () => ({
 describe('TerminalPanelToggle', () => {
   beforeEach(() => {
     mocks.showTerminalPanel = false;
+    mocks.visible = true;
     mocks.toggleTerminalPanel.mockReset();
     actionIconPropsSpy.mockClear();
   });
@@ -76,5 +82,13 @@ describe('TerminalPanelToggle', () => {
     rerender(<TerminalPanelToggle key="open" />);
 
     expect(actionIconPropsSpy).toHaveBeenCalledWith(expect.objectContaining({ active: true }));
+  });
+
+  it('renders nothing where the header holds no terminal entry', () => {
+    mocks.visible = false;
+
+    render(<TerminalPanelToggle />);
+
+    expect(screen.queryByRole('button')).toBeNull();
   });
 });

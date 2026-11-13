@@ -109,10 +109,12 @@ describe('serverMessagesEngine', () => {
         planTodo: { enabled: true, todos: { items, updatedAt: 'now' } },
         provider: 'openai',
       });
-      const userContent = result.find((message) => message.role === 'user')?.content;
+      const userMessages = result.filter((message) => message.role === 'user');
 
-      expect(userContent).toContain('<todo_context>');
-      expect(userContent).toContain('Keep server context in sync');
+      expect(userMessages).toHaveLength(2);
+      expect(userMessages[0].content).toBe('Hello');
+      expect(userMessages[1].content).toContain('<todo_context>');
+      expect(userMessages[1].content).toContain('Keep server context in sync');
     });
 
     it('does not inject an empty TODO state', async () => {
@@ -144,8 +146,12 @@ describe('serverMessagesEngine', () => {
         provider: 'openai',
       });
 
-      expect(serverResult.find((message) => message.role === 'user')?.content).toBe(
-        clientResult.messages.find((message) => message.role === 'user')?.content,
+      expect(
+        serverResult.filter((message) => message.role === 'user').map(({ content }) => content),
+      ).toEqual(
+        clientResult.messages
+          .filter((message) => message.role === 'user')
+          .map(({ content }) => content),
       );
     });
   });
@@ -186,6 +192,46 @@ describe('serverMessagesEngine', () => {
 
       expect(result[0].role).toBe('system');
       expect(result[0].content).toBe(systemRole + '\n\n' + getCurrentDateContent());
+    });
+
+    it('renders the cloud-sandbox workspace placeholders to the ephemeral wording unless the builder supplies them', async () => {
+      const messages = createBasicMessages();
+      const systemRole =
+        '<env>{{sandbox_workspace}}</env><session>{{sandbox_session_files}}</session>';
+
+      // No additionalVariables — the run got no persistent workspace: the
+      // original ephemeral-session wording must render, never the literal tokens.
+      const { messages: fallback } = await serverMessagesEngine({
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole,
+      });
+      expect(fallback[0].content).not.toContain('{{sandbox_workspace}}');
+      expect(fallback[0].content).not.toContain('{{sandbox_session_files}}');
+      expect(fallback[0].content).toContain(
+        'Files created here are temporary and session-specific',
+      );
+      expect(fallback[0].content).toContain('Files from previous sessions may not persist');
+
+      // The builder's persistent-workspace guidance overrides both fallbacks.
+      const { messages: resolved } = await serverMessagesEngine({
+        additionalVariables: {
+          sandbox_session_files: '- Files in your working directory persist',
+          sandbox_workspace: '- Your working directory is a persistent workspace',
+        },
+        messages,
+        model: 'gpt-4',
+        provider: 'openai',
+        systemRole,
+      });
+      expect(resolved[0].content).toContain(
+        '<env>- Your working directory is a persistent workspace</env>',
+      );
+      expect(resolved[0].content).toContain(
+        '<session>- Files in your working directory persist</session>',
+      );
+      expect(resolved[0].content).not.toContain('temporary and session-specific');
     });
 
     it('renders {{workingDirectory}} to a fallback instead of leaking the literal ', async () => {
@@ -361,6 +407,40 @@ describe('serverMessagesEngine', () => {
       expect(content[0].text).toContain('url="https://app.example.com/f/file1"');
     });
 
+    it('sends attachments planned for preview as previews', async () => {
+      const content = 'row,value\n'.repeat(1000);
+      const { messages: result } = await serverMessagesEngine({
+        attachmentPreviewFileIds: ['file1'],
+        messages: [
+          {
+            content: 'Read this',
+            createdAt: Date.now(),
+            fileList: [
+              {
+                content,
+                fileType: 'text/csv',
+                id: 'file1',
+                name: 'data.csv',
+                size: content.length,
+                url: 'https://app.example.com/f/file1',
+              },
+            ],
+            id: 'msg-1',
+            role: 'user',
+            updatedAt: Date.now(),
+          } as UIChatMessage,
+        ],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const userMessage = result.find((message) => message.role === 'user');
+      const text = (userMessage?.content as any[])[0].text as string;
+
+      expect(text).toContain('truncated="true"');
+      expect(text).not.toContain(content);
+    });
+
     it('should pass active topic document initial context into MessagesEngine', async () => {
       const { messages: result } = await serverMessagesEngine({
         initialContext: {
@@ -528,6 +608,104 @@ describe('serverMessagesEngine', () => {
     });
   });
 
+  describe('stale tool result trimming', () => {
+    const READ_CONTENT = 'x'.repeat(120_000);
+
+    // A readFile result superseded by a later write to the same path, outside
+    // the default recency window and past the default size gate, so the trim
+    // fires unless the switch disables it. No createdAt → cold cache.
+    const supersededReadMessages = (): UIChatMessage[] =>
+      [
+        {
+          content: '',
+          id: 'a1',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'readFile',
+              arguments: JSON.stringify({ path: '/a.ts' }),
+              id: 'call-readFile',
+              identifier: 'lobe-local-system',
+              type: 'builtin',
+            },
+          ],
+        },
+        {
+          content: READ_CONTENT,
+          id: 't1',
+          plugin: {
+            apiName: 'readFile',
+            arguments: JSON.stringify({ path: '/a.ts' }),
+            identifier: 'lobe-local-system',
+          },
+          pluginState: { loc: [0, 200], path: '/a.ts' },
+          role: 'tool',
+          tool_call_id: 'call-readFile',
+        },
+        {
+          content: '',
+          id: 'a2',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'writeFile',
+              arguments: JSON.stringify({ path: '/a.ts' }),
+              id: 'call-writeFile',
+              identifier: 'lobe-local-system',
+              type: 'builtin',
+            },
+          ],
+        },
+        {
+          content: 'Successfully wrote to /a.ts',
+          id: 't2',
+          plugin: {
+            apiName: 'writeFile',
+            arguments: JSON.stringify({ path: '/a.ts' }),
+            identifier: 'lobe-local-system',
+          },
+          pluginState: { path: '/a.ts', success: true },
+          role: 'tool',
+          tool_call_id: 'call-writeFile',
+        },
+        ...Array.from({ length: 21 }, (_, i) => ({
+          content: `recent ${i}`,
+          id: `pad-${i}`,
+          role: 'assistant',
+        })),
+      ] as unknown as UIChatMessage[];
+
+    const payloadText = (messages: any[]) =>
+      messages
+        .map((m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content)))
+        .join('\n');
+
+    it('trims stale tool results by default', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        messages: supersededReadMessages(),
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const payload = payloadText(result);
+      expect(payload).not.toContain(READ_CONTENT);
+      expect(payload).toContain('superseded by a later write');
+    });
+
+    it('forwards enableStaleToolResultTrim: false to the engine', async () => {
+      const { messages: result } = await serverMessagesEngine({
+        enableStaleToolResultTrim: false,
+        messages: supersededReadMessages(),
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const payload = payloadText(result);
+      expect(payload).toContain(READ_CONTENT);
+      expect(payload).not.toContain('superseded by a later write');
+    });
+  });
+
   describe('user memory injection', () => {
     it('should inject user memories when provided', async () => {
       const messages = createBasicMessages();
@@ -590,27 +768,6 @@ describe('serverMessagesEngine', () => {
         },
         messages,
         model: 'gpt-4',
-        provider: 'openai',
-      });
-
-      expect(result).toBeDefined();
-    });
-
-    it('should inject Page Editor context when provided', async () => {
-      const messages = createBasicMessages();
-
-      const { messages: result } = await serverMessagesEngine({
-        messages,
-        model: 'gpt-4',
-        pageContentContext: {
-          markdown: '# Test Document\n\nPage content',
-          metadata: {
-            charCount: 30,
-            lineCount: 3,
-            title: 'Test Document',
-          },
-          xml: '<doc><h1 id="1">Test Document</h1><p id="2">Page content</p></doc>',
-        },
         provider: 'openai',
       });
 
@@ -826,11 +983,6 @@ describe('serverMessagesEngine', () => {
         },
         messages,
         model: 'gpt-4',
-        pageContentContext: {
-          markdown: '# Doc',
-          metadata: { charCount: 5, lineCount: 1, title: 'Doc' },
-          xml: '<doc><h1 id="1">Doc</h1></doc>',
-        },
         provider: 'openai',
       });
 

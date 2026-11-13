@@ -1,0 +1,126 @@
+{
+  "description": "A recorded #general afternoon: three bursts, a run that dies, an early flush. Each step lists the event, the decision/effects the scheduler produced and the state snapshot it persisted, as captured from the Redis scheduler key.",
+  "options": { "collectMs": 20000, "cooldownMs": 60000, "runLeaseMs": 300000 },
+  "steps": [
+    {
+      "event": { "at": 1000, "messageId": "d1", "threadId": "discord:g:c1", "type": "message" },
+      "decision": "hold",
+      "effects": [{ "at": 21000, "type": "scheduleFlush" }],
+      "state": {
+        "collectUntil": 21000,
+        "pending": [{ "at": 1000, "messageId": "d1", "threadId": "discord:g:c1" }],
+        "phase": "collecting",
+        "released": []
+      }
+    },
+    {
+      "event": { "at": 9000, "messageId": "d2", "threadId": "discord:g:c1:t7", "type": "message" },
+      "decision": "hold",
+      "effects": [],
+      "state": {
+        "collectUntil": 21000,
+        "pending": [
+          { "at": 1000, "messageId": "d1", "threadId": "discord:g:c1" },
+          { "at": 9000, "messageId": "d2", "threadId": "discord:g:c1:t7" }
+        ],
+        "phase": "collecting",
+        "released": []
+      }
+    },
+    {
+      "event": { "at": 20500, "type": "flush" },
+      "effects": [{ "at": 21000, "type": "scheduleFlush" }],
+      "state": {
+        "collectUntil": 21000,
+        "pending": [
+          { "at": 1000, "messageId": "d1", "threadId": "discord:g:c1" },
+          { "at": 9000, "messageId": "d2", "threadId": "discord:g:c1:t7" }
+        ],
+        "phase": "collecting",
+        "released": []
+      }
+    },
+    {
+      "event": { "at": 21100, "type": "flush" },
+      "effects": [
+        {
+          "messageIds": ["d1", "d2"],
+          "runId": "run-1",
+          "threadIds": ["discord:g:c1", "discord:g:c1:t7"],
+          "type": "startRun"
+        },
+        { "at": 321100, "type": "scheduleFlush" }
+      ],
+      "state": {
+        "leaseUntil": 321100,
+        "pending": [],
+        "phase": "running",
+        "released": ["d1", "d2"],
+        "runId": "run-1"
+      }
+    },
+    {
+      "event": { "at": 21400, "messageId": "d1", "threadId": "discord:g:c1", "type": "message" },
+      "decision": "release",
+      "effects": [],
+      "state": {
+        "leaseUntil": 321100,
+        "pending": [],
+        "phase": "running",
+        "released": ["d1", "d2"],
+        "runId": "run-1"
+      }
+    },
+    {
+      "event": { "at": 30000, "messageId": "d3", "threadId": "discord:g:c1", "type": "message" },
+      "decision": "hold",
+      "effects": [],
+      "state": {
+        "leaseUntil": 321100,
+        "pending": [{ "at": 30000, "messageId": "d3", "threadId": "discord:g:c1" }],
+        "phase": "running",
+        "released": ["d1", "d2"],
+        "runId": "run-1"
+      }
+    },
+    {
+      "event": { "at": 45000, "runId": "run-1", "type": "runDone" },
+      "effects": [{ "at": 105000, "type": "scheduleFlush" }],
+      "state": {
+        "cooldownUntil": 105000,
+        "pending": [{ "at": 30000, "messageId": "d3", "threadId": "discord:g:c1" }],
+        "phase": "cooldown",
+        "released": []
+      }
+    },
+    {
+      "event": { "at": 105000, "type": "flush" },
+      "effects": [
+        {
+          "messageIds": ["d3"],
+          "runId": "run-2",
+          "threadIds": ["discord:g:c1"],
+          "type": "startRun"
+        },
+        { "at": 405000, "type": "scheduleFlush" }
+      ],
+      "state": {
+        "leaseUntil": 405000,
+        "pending": [],
+        "phase": "running",
+        "released": ["d3"],
+        "runId": "run-2"
+      }
+    },
+    {
+      "event": { "at": 405000, "type": "flush" },
+      "effects": [{ "at": 465000, "type": "scheduleFlush" }],
+      "state": { "cooldownUntil": 465000, "pending": [], "phase": "cooldown", "released": [] }
+    },
+    {
+      "event": { "at": 465000, "type": "flush" },
+      "effects": [],
+      "state": { "pending": [], "phase": "idle", "released": [] }
+    }
+  ]
+}

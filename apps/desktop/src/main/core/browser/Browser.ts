@@ -10,6 +10,7 @@ import { preloadDir, resourcesDir } from '@/const/dir';
 import { DESKTOP_EXTERNAL_NAVIGATION_HOSTS, isMac } from '@/const/env';
 import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
 import { backendProxyProtocolManager } from '@/core/infrastructure/BackendProxyProtocolManager';
+import { getRemoteDebuggingRendererArgs } from '@/modules/remoteDebugging';
 import { appendVercelCookie, setResponseHeader } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 import { getSystemLanguage, resolveUILocale } from '@/utils/system-language';
@@ -17,6 +18,7 @@ import { LOADING_SCREEN_PAINTED_CHANNEL } from '~common/loadingScreen';
 import { SYSTEM_LANGUAGE_ARG_PREFIX } from '~common/systemLanguage';
 
 import type { App } from '../App';
+import { attachDevInstanceLabel, getDevInstanceLabel } from './devInstanceLabel';
 import { WindowStateManager } from './WindowStateManager';
 import { WindowThemeManager } from './WindowThemeManager';
 
@@ -88,6 +90,9 @@ export default class Browser {
   private _browserWindow?: BrowserWindow;
   private hasPresentedFirstFrame = false;
   private ignoreNextPreventUnload = false;
+  private promptBeforeUnload = true;
+  private unloadOperation: (() => void) | null = null;
+  private pendingUnloadConfirmation: { ota: boolean; resume: () => void } | null = null;
   private resolveFirstFrame!: () => void;
   private readonly firstFramePromise = new Promise<void>((resolve) => {
     this.resolveFirstFrame = resolve;
@@ -107,15 +112,52 @@ export default class Browser {
     return this._browserWindow?.webContents ?? null;
   }
 
-  reloadIgnoringCache = (ignoreBeforeUnload = false) => {
-    const webContents = this.browserWindow.webContents;
+  reloadIgnoringCache = (ignoreBeforeUnload = false, promptBeforeUnload = true) => {
+    this.runWithUnloadConfirmation(
+      () => this.browserWindow.webContents.reloadIgnoringCache(),
+      promptBeforeUnload,
+      ignoreBeforeUnload,
+    );
+  };
+
+  runWithUnloadConfirmation = (
+    operation: () => void,
+    promptBeforeUnload = true,
+    ignoreBeforeUnload = false,
+  ) => {
+    if (this.pendingUnloadConfirmation) return;
+    this.unloadOperation = operation;
+    this.promptBeforeUnload = promptBeforeUnload;
     this.ignoreNextPreventUnload = ignoreBeforeUnload;
     try {
-      webContents.reloadIgnoringCache();
+      operation();
     } catch (error) {
+      this.unloadOperation = null;
       this.ignoreNextPreventUnload = false;
+      this.promptBeforeUnload = true;
       throw error;
     }
+  };
+
+  cancelUnloadConfirmation = () => {
+    if (!this.pendingUnloadConfirmation) return;
+    this.pendingUnloadConfirmation = null;
+    this.broadcast('reloadConfirmationCancelled');
+  };
+
+  resolveUnloadConfirmation = (proceed: boolean) => {
+    const pending = this.pendingUnloadConfirmation;
+    this.pendingUnloadConfirmation = null;
+    if (!pending) return;
+    if (
+      pending.ota &&
+      !this.app.coreUpdateManager.resolveUnloadConfirmation(
+        this.browserWindow.webContents.id,
+        proceed,
+      )
+    )
+      return;
+    if (proceed) this.runWithUnloadConfirmation(pending.resume, true, true);
   };
 
   // ==================== Constructor ====================
@@ -201,7 +243,10 @@ export default class Browser {
       show: false,
       title,
       webPreferences: {
-        additionalArguments: [`${SYSTEM_LANGUAGE_ARG_PREFIX}${getSystemLanguage()}`],
+        additionalArguments: [
+          `${SYSTEM_LANGUAGE_ARG_PREFIX}${getSystemLanguage()}`,
+          ...getRemoteDebuggingRendererArgs(),
+        ],
         backgroundThrottling: false,
         contextIsolation: true,
         preload: path.join(preloadDir, 'index.js'),
@@ -292,6 +337,9 @@ export default class Browser {
     this.setupTopLevelNavigationListener(browserWindow);
     this.setupWillPreventUnloadListener(browserWindow);
     this.setupContextMenu(browserWindow);
+
+    const devInstanceLabel = getDevInstanceLabel();
+    if (devInstanceLabel) attachDevInstanceLabel(browserWindow, devInstanceLabel);
   }
 
   private setupTopLevelNavigationListener(browserWindow: BrowserWindow): void {
@@ -336,19 +384,42 @@ export default class Browser {
 
   private setupWillPreventUnloadListener(browserWindow: BrowserWindow): void {
     logger.debug(`[${this.identifier}] Setting up 'will-prevent-unload' event listener.`);
-    browserWindow.webContents.on('did-start-loading', () => {
+    // Loading starts before beforeunload; clear approval only after navigation commits.
+    browserWindow.webContents.on('did-navigate', () => {
+      this.unloadOperation = null;
       this.ignoreNextPreventUnload = false;
+      this.promptBeforeUnload = true;
     });
     browserWindow.webContents.on('will-prevent-unload', (event) => {
       logger.debug(
         `[${this.identifier}] 'will-prevent-unload' fired. isQuiting: ${this.app.isQuiting}`,
       );
+      const resume = this.unloadOperation;
+      this.unloadOperation = null;
+      const promptBeforeUnload = this.promptBeforeUnload;
+      this.promptBeforeUnload = true;
       const ignorePreventUnload = this.ignoreNextPreventUnload;
       this.ignoreNextPreventUnload = false;
       if (this.app.isQuiting || ignorePreventUnload) {
         logger.info(`[${this.identifier}] Ignoring beforeunload cancellation.`);
         event.preventDefault();
+        return;
       }
+      if (promptBeforeUnload) {
+        // An unload event has no continuation; only replay operations captured at their source.
+        if (!resume) return;
+        if (!this.pendingUnloadConfirmation) {
+          this.pendingUnloadConfirmation = {
+            resume,
+            ota: this.app.coreUpdateManager.pauseForUnloadConfirmation(
+              browserWindow.webContents.id,
+            ),
+          };
+          this.broadcast('reloadConfirmationRequested');
+        }
+        return;
+      }
+      this.app.coreUpdateManager.handleUnloadPrevented();
     });
   }
 
@@ -380,7 +451,16 @@ export default class Browser {
       onCleanup: () => this.themeManager.cleanup(),
       onHide: () => this.hide(),
     });
-    browserWindow.on('close', closeHandler);
+    browserWindow.on('close', (event) => {
+      if (this.pendingUnloadConfirmation && !this.app.isQuiting) {
+        event.preventDefault();
+        return;
+      }
+      closeHandler(event);
+      if (!event.defaultPrevented && !this.options.keepAlive) {
+        this.unloadOperation = () => browserWindow.close();
+      }
+    });
   }
 
   private setupFocusListener(browserWindow: BrowserWindow): void {
@@ -420,18 +500,24 @@ export default class Browser {
     logger.debug(`[${this.identifier}] Setting up context menu.`);
 
     browserWindow.webContents.on('context-menu', (_event, params) => {
-      const { x, y, selectionText, linkURL, srcURL, mediaType, isEditable } = params;
+      const { x, y, selectionText, linkURL, srcURL, mediaType, isEditable, hasImageContents } =
+        params;
 
       // Use the platform menu system with full context data
-      this.app.menuManager.showContextMenu('default', {
-        isEditable,
-        linkURL: linkURL || undefined,
-        mediaType: mediaType as any,
-        selectionText: selectionText || undefined,
-        srcURL: srcURL || undefined,
-        x,
-        y,
-      });
+      this.app.menuManager.showContextMenu(
+        'default',
+        {
+          hasImageContents,
+          isEditable,
+          linkURL: linkURL || undefined,
+          mediaType: mediaType as any,
+          selectionText: selectionText || undefined,
+          srcURL: srcURL || undefined,
+          x,
+          y,
+        },
+        browserWindow,
+      );
     });
   }
 
@@ -683,7 +769,6 @@ export default class Browser {
       if (requestHeaders['Origin']) {
         originMap.set(details.id, requestHeaders['Origin']);
         delete requestHeaders['Origin'];
-        logger.debug(`[${this.identifier}] Removed Origin header for: ${details.url}`);
       }
 
       appendVercelCookie(requestHeaders);

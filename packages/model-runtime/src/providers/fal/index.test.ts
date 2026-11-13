@@ -3,10 +3,12 @@ import { fal } from '@fal-ai/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { CreateImagePayload } from '../../types';
-import { LobeFalAI } from './index';
+import { clearFalInputSchemaCache } from './catalog';
+import { LobeFalAI, resolveFalImageSize } from './index';
 
 // Mock the fal client
 vi.mock('@fal-ai/client', () => ({
+  createFalClient: vi.fn(() => ({})),
   fal: {
     config: vi.fn(),
     subscribe: vi.fn(),
@@ -19,6 +21,11 @@ const mockFal = vi.mocked(fal);
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
 
+const createImageResponse = (image: { url: string; width?: number; height?: number }) => ({
+  requestId: 'test-request-id',
+  data: { images: [image] },
+});
+
 const provider = 'fal';
 const bizErrorType = 'ProviderBizError';
 const invalidErrorType = 'InvalidProviderAPIKey';
@@ -27,11 +34,19 @@ let instance: LobeFalAI;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  clearFalInputSchemaCache();
+  // Endpoints outside the built-in cards look up their input schema; keep that lookup off
+  // fal's real catalog API, where rate limiting retries outlast the test timeout.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('{}', { status: 500 })),
+  );
   instance = new LobeFalAI({ apiKey: 'test-api-key' });
 });
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('LobeFalAI', () => {
@@ -60,18 +75,11 @@ describe('LobeFalAI', () => {
   describe('createImage', () => {
     it('should create image successfully with basic parameters', async () => {
       // Arrange
-      const mockImageResponse = {
-        requestId: 'test-request-id',
-        data: {
-          images: [
-            {
-              url: 'https://example.com/image.jpg',
-              width: 1024,
-              height: 1024,
-            },
-          ],
-        },
-      };
+      const mockImageResponse = createImageResponse({
+        url: 'https://example.com/image.jpg',
+        width: 1024,
+        height: 1024,
+      });
       mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
       const payload: CreateImagePayload = {
@@ -133,18 +141,11 @@ describe('LobeFalAI', () => {
 
     it('should map standard parameters to fal-specific parameters', async () => {
       // Arrange
-      const mockImageResponse = {
-        requestId: 'test-request-id',
-        data: {
-          images: [
-            {
-              url: 'https://example.com/image.jpg',
-              width: 512,
-              height: 512,
-            },
-          ],
-        },
-      };
+      const mockImageResponse = createImageResponse({
+        url: 'https://example.com/image.jpg',
+        width: 512,
+        height: 512,
+      });
       mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
       const payload: CreateImagePayload = {
@@ -181,18 +182,11 @@ describe('LobeFalAI', () => {
 
     it('should map imageUrls parameter to image_urls', async () => {
       // Arrange
-      const mockImageResponse = {
-        requestId: 'test-request-id',
-        data: {
-          images: [
-            {
-              url: 'https://example.com/image.jpg',
-              width: 512,
-              height: 512,
-            },
-          ],
-        },
-      };
+      const mockImageResponse = createImageResponse({
+        url: 'https://example.com/image.jpg',
+        width: 512,
+        height: 512,
+      });
       mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
       const payload: CreateImagePayload = {
@@ -219,18 +213,11 @@ describe('LobeFalAI', () => {
 
     it('should handle parameters without width and height', async () => {
       // Arrange
-      const mockImageResponse = {
-        requestId: 'test-request-id',
-        data: {
-          images: [
-            {
-              url: 'https://example.com/image.jpg',
-              width: 1024,
-              height: 1024,
-            },
-          ],
-        },
-      };
+      const mockImageResponse = createImageResponse({
+        url: 'https://example.com/image.jpg',
+        width: 1024,
+        height: 1024,
+      });
       mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
       const payload: CreateImagePayload = {
@@ -257,18 +244,11 @@ describe('LobeFalAI', () => {
 
     it('should handle custom parameters that are not in the mapping', async () => {
       // Arrange
-      const mockImageResponse = {
-        requestId: 'test-request-id',
-        data: {
-          images: [
-            {
-              url: 'https://example.com/image.jpg',
-              width: 768,
-              height: 768,
-            },
-          ],
-        },
-      };
+      const mockImageResponse = createImageResponse({
+        url: 'https://example.com/image.jpg',
+        width: 768,
+        height: 768,
+      });
       mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
       const payload: CreateImagePayload = {
@@ -301,16 +281,9 @@ describe('LobeFalAI', () => {
 
     it('should return only imageUrl when width and height are not provided in response', async () => {
       // Arrange
-      const mockImageResponse = {
-        requestId: 'test-request-id',
-        data: {
-          images: [
-            {
-              url: 'https://example.com/image.jpg',
-            },
-          ],
-        },
-      };
+      const mockImageResponse = createImageResponse({
+        url: 'https://example.com/image.jpg',
+      });
       mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
       const payload: CreateImagePayload = {
@@ -393,16 +366,9 @@ describe('LobeFalAI', () => {
     describe('Parameter filtering', () => {
       it('should filter out null values', async () => {
         // Arrange
-        const mockImageResponse = {
-          requestId: 'test-request-id',
-          data: {
-            images: [
-              {
-                url: 'https://example.com/image.jpg',
-              },
-            ],
-          },
-        };
+        const mockImageResponse = createImageResponse({
+          url: 'https://example.com/image.jpg',
+        });
         mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
         const payload: CreateImagePayload = {
@@ -431,16 +397,9 @@ describe('LobeFalAI', () => {
 
       it('should filter out undefined values', async () => {
         // Arrange
-        const mockImageResponse = {
-          requestId: 'test-request-id',
-          data: {
-            images: [
-              {
-                url: 'https://example.com/image.jpg',
-              },
-            ],
-          },
-        };
+        const mockImageResponse = createImageResponse({
+          url: 'https://example.com/image.jpg',
+        });
         mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
         const payload: CreateImagePayload = {
@@ -469,16 +428,9 @@ describe('LobeFalAI', () => {
 
       it('should filter out empty arrays', async () => {
         // Arrange
-        const mockImageResponse = {
-          requestId: 'test-request-id',
-          data: {
-            images: [
-              {
-                url: 'https://example.com/image.jpg',
-              },
-            ],
-          },
-        };
+        const mockImageResponse = createImageResponse({
+          url: 'https://example.com/image.jpg',
+        });
         mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
         const payload: CreateImagePayload = {
@@ -508,18 +460,11 @@ describe('LobeFalAI', () => {
     describe('Seedream and Hunyuan special endpoints', () => {
       it('should use text-to-image endpoint when no imageUrls provided', async () => {
         // Arrange
-        const mockImageResponse = {
-          requestId: 'test-request-id',
-          data: {
-            images: [
-              {
-                url: 'https://example.com/generated.jpg',
-                width: 1024,
-                height: 1024,
-              },
-            ],
-          },
-        };
+        const mockImageResponse = createImageResponse({
+          url: 'https://example.com/generated.jpg',
+          width: 1024,
+          height: 1024,
+        });
         mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
         const payload: CreateImagePayload = {
@@ -553,18 +498,11 @@ describe('LobeFalAI', () => {
 
       it('should use edit endpoint when imageUrls is provided', async () => {
         // Arrange
-        const mockImageResponse = {
-          requestId: 'test-request-id',
-          data: {
-            images: [
-              {
-                url: 'https://example.com/edited.jpg',
-                width: 1024,
-                height: 1024,
-              },
-            ],
-          },
-        };
+        const mockImageResponse = createImageResponse({
+          url: 'https://example.com/edited.jpg',
+          width: 1024,
+          height: 1024,
+        });
         mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
         const payload: CreateImagePayload = {
@@ -597,18 +535,11 @@ describe('LobeFalAI', () => {
 
       it('should use edit endpoint when multiple imageUrls are provided', async () => {
         // Arrange
-        const mockImageResponse = {
-          requestId: 'test-request-id',
-          data: {
-            images: [
-              {
-                url: 'https://example.com/edited.jpg',
-                width: 1024,
-                height: 1024,
-              },
-            ],
-          },
-        };
+        const mockImageResponse = createImageResponse({
+          url: 'https://example.com/edited.jpg',
+          width: 1024,
+          height: 1024,
+        });
         mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
         const payload: CreateImagePayload = {
@@ -641,18 +572,11 @@ describe('LobeFalAI', () => {
 
       it('should use text-to-image endpoint when imageUrls is empty array', async () => {
         // Arrange
-        const mockImageResponse = {
-          requestId: 'test-request-id',
-          data: {
-            images: [
-              {
-                url: 'https://example.com/generated.jpg',
-                width: 1024,
-                height: 1024,
-              },
-            ],
-          },
-        };
+        const mockImageResponse = createImageResponse({
+          url: 'https://example.com/generated.jpg',
+          width: 1024,
+          height: 1024,
+        });
         mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
         const payload: CreateImagePayload = {
@@ -687,16 +611,9 @@ describe('LobeFalAI', () => {
 
       it('should handle seedream v4 with other parameters', async () => {
         // Arrange
-        const mockImageResponse = {
-          requestId: 'test-request-id',
-          data: {
-            images: [
-              {
-                url: 'https://example.com/edited.jpg',
-              },
-            ],
-          },
-        };
+        const mockImageResponse = createImageResponse({
+          url: 'https://example.com/edited.jpg',
+        });
         mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
         const payload: CreateImagePayload = {
@@ -727,18 +644,11 @@ describe('LobeFalAI', () => {
 
       it('should use text-to-image endpoint for seedream v4.5 when no imageUrls provided', async () => {
         // Arrange
-        const mockImageResponse = {
-          requestId: 'test-request-id',
-          data: {
-            images: [
-              {
-                url: 'https://example.com/generated.jpg',
-                width: 2048,
-                height: 2048,
-              },
-            ],
-          },
-        };
+        const mockImageResponse = createImageResponse({
+          url: 'https://example.com/generated.jpg',
+          width: 2048,
+          height: 2048,
+        });
         mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
         const payload: CreateImagePayload = {
@@ -772,18 +682,11 @@ describe('LobeFalAI', () => {
 
       it('should use edit endpoint for seedream v4.5 when imageUrls is provided', async () => {
         // Arrange
-        const mockImageResponse = {
-          requestId: 'test-request-id',
-          data: {
-            images: [
-              {
-                url: 'https://example.com/edited.jpg',
-                width: 2048,
-                height: 2048,
-              },
-            ],
-          },
-        };
+        const mockImageResponse = createImageResponse({
+          url: 'https://example.com/edited.jpg',
+          width: 2048,
+          height: 2048,
+        });
         mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
         const payload: CreateImagePayload = {
@@ -816,18 +719,11 @@ describe('LobeFalAI', () => {
 
       it('should use text-to-image endpoint for hunyuan-image v3 when no imageUrls provided', async () => {
         // Arrange
-        const mockImageResponse = {
-          requestId: 'test-request-id',
-          data: {
-            images: [
-              {
-                url: 'https://example.com/generated.jpg',
-                width: 1024,
-                height: 1024,
-              },
-            ],
-          },
-        };
+        const mockImageResponse = createImageResponse({
+          url: 'https://example.com/generated.jpg',
+          width: 1024,
+          height: 1024,
+        });
         mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
         const payload: CreateImagePayload = {
@@ -858,18 +754,11 @@ describe('LobeFalAI', () => {
 
       it('should use edit endpoint for hunyuan-image v3 when imageUrls is provided', async () => {
         // Arrange
-        const mockImageResponse = {
-          requestId: 'test-request-id',
-          data: {
-            images: [
-              {
-                url: 'https://example.com/edited.jpg',
-                width: 1024,
-                height: 1024,
-              },
-            ],
-          },
-        };
+        const mockImageResponse = createImageResponse({
+          url: 'https://example.com/edited.jpg',
+          width: 1024,
+          height: 1024,
+        });
         mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
         const payload: CreateImagePayload = {
@@ -901,19 +790,76 @@ describe('LobeFalAI', () => {
       });
     });
 
+    describe('Qwen Image 3 (alibaba namespace)', () => {
+      beforeEach(() => {
+        mockFal.subscribe.mockResolvedValue(
+          createImageResponse({ url: 'https://example.com/generated.jpg' }) as any,
+        );
+      });
+
+      it('should keep the alibaba namespace and use text-to-image without imageUrls', async () => {
+        await instance.createImage({
+          model: 'alibaba/qwen-image-3',
+          params: { aspectRatio: '16:9', prompt: 'A poster', resolution: '1K' },
+        });
+
+        expect(mockFal.subscribe).toHaveBeenCalledWith('alibaba/qwen-image-3/text-to-image', {
+          input: {
+            enable_safety_checker: false,
+            image_size: { height: 768, width: 1360 },
+            num_images: 1,
+            prompt: 'A poster',
+          },
+        });
+      });
+
+      it('should use the edit endpoint with imageUrls and a 2K image size', async () => {
+        await instance.createImage({
+          model: 'alibaba/qwen-image-3',
+          params: {
+            aspectRatio: '1:1',
+            imageUrls: ['https://example.com/input.png'],
+            prompt: 'Make it snow',
+            resolution: '2K',
+          },
+        });
+
+        expect(mockFal.subscribe).toHaveBeenCalledWith('alibaba/qwen-image-3/edit', {
+          input: {
+            enable_safety_checker: false,
+            image_size: { height: 2048, width: 2048 },
+            image_urls: ['https://example.com/input.png'],
+            num_images: 1,
+            prompt: 'Make it snow',
+          },
+        });
+      });
+
+      it('should keep image sizes within the resolution pixel budget', () => {
+        for (const aspectRatio of ['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3', '21:9']) {
+          for (const [resolution, edge] of [
+            ['1K', 1024],
+            ['2K', 2048],
+          ] as const) {
+            const size = resolveFalImageSize(aspectRatio, resolution)!;
+            expect(size.width % 16).toBe(0);
+            expect(size.height % 16).toBe(0);
+            expect(size.width * size.height).toBeLessThanOrEqual(edge * edge);
+            expect(Math.max(size.width, size.height)).toBeLessThanOrEqual(2048);
+          }
+        }
+        expect(resolveFalImageSize('16:9', '1K')).toEqual({ height: 768, width: 1360 });
+        expect(resolveFalImageSize('16:9', '2K')).toEqual({ height: 1152, width: 2048 });
+        expect(resolveFalImageSize('1:1', '4K')).toBeUndefined();
+      });
+    });
+
     describe('Edge cases', () => {
       it('should handle empty params object', async () => {
         // Arrange
-        const mockImageResponse = {
-          requestId: 'test-request-id',
-          data: {
-            images: [
-              {
-                url: 'https://example.com/image.jpg',
-              },
-            ],
-          },
-        };
+        const mockImageResponse = createImageResponse({
+          url: 'https://example.com/image.jpg',
+        });
         mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
         const payload: CreateImagePayload = {
@@ -941,16 +887,9 @@ describe('LobeFalAI', () => {
 
       it('should handle model with different format', async () => {
         // Arrange
-        const mockImageResponse = {
-          requestId: 'test-request-id',
-          data: {
-            images: [
-              {
-                url: 'https://example.com/image.jpg',
-              },
-            ],
-          },
-        };
+        const mockImageResponse = createImageResponse({
+          url: 'https://example.com/image.jpg',
+        });
         mockFal.subscribe.mockResolvedValue(mockImageResponse as any);
 
         const payload: CreateImagePayload = {

@@ -1,13 +1,13 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
   AccordionTrigger,
+  Flexbox,
   Text,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { Database } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +16,7 @@ import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useEvalStore } from '@/store/eval';
+import { datasetSelectors, useEvalStore } from '@/store/eval';
 import { isModifierClick } from '@/utils/navigation';
 
 interface DatasetListProps {
@@ -33,8 +33,10 @@ const DatasetList = memo<DatasetListProps>(({ activeKey, itemKey }) => {
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
   const useFetchAllDatasets = useEvalStore((s) => s.useFetchAllDatasets);
-  const { data, isLoading } = useFetchAllDatasets();
-  const datasets: Array<{ id: string; name: string }> = data ?? [];
+  const { isLoading } = useFetchAllDatasets();
+  const datasets: Array<{ id: string; name: string }> = useEvalStore(
+    datasetSelectors.agentDatasets,
+  );
 
   return (
     <AccordionItem value={itemKey}>

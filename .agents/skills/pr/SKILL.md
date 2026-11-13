@@ -54,25 +54,45 @@ A feature or fix needs a published acceptance round before the PR is opened (AGE
 ### 6. Create PR with `gh pr create --base canary`
 
 - Title: `<gitmoji> <type>(<scope>): <description>`
-- Body: based on PR template (`.github/PULL_REQUEST_TEMPLATE.md`), fill checkboxes
+- Body: based on PR template (`.github/PULL_REQUEST_TEMPLATE.md`)
+- Obey the `AGENT-INSTRUCTIONS` HTML comments in that template. Keep them commented out, and do not copy them into the visible description.
 - Link related GitHub issues using magic keywords (`Fixes #123`, `Closes #123`)
-- Link Linear issues if applicable (`Fixes LOBE-xxx`)
-- Put the acceptance link (or the explicit skip reason) under **Test**
-- Use HEREDOC for body to preserve formatting
+- Link the LobeHub task if applicable (`LobeHub task: [T-<n>](url)`)
+- Put the acceptance link (or the explicit skip reason) under **Test** in the Summary section.
+- Follow the source-label, privacy, and AI assistance rules in **PR Template** below when creating or updating a PR. Do not request prompt disclosure or block the normal PR workflow waiting for consent to publish a conversation.
+- Write the body to a temporary file and use `--body-file` to preserve formatting.
 
-### 7. Open in browser
+### 7. Link the PR to its acceptance
+
+An acceptance round published before the PR existed carries no PR, and reusing that round is correct, so nothing else ever tells the acceptance about the PR. Right after `gh pr create`, record the link through the production publish environment. If step 1 reused a known acceptance and skipped the lookup, `publish_lh` is not defined yet: run [Publish auth preflight](../../acceptance/PROCESS.md#publish-auth-preflight) now to define and verify it.
+
+```bash
+publish_lh acceptance link-pr <acceptanceId> "$(gh pr view --json url --jq .url)"
+```
+
+Do this for each PR in a stack; they share one acceptance. Skip it when the PR states that no acceptance is needed. A later round links itself only when its `result.json` names the PR (`pullRequest`); a PR inferred from the branch is recorded on the round but never linked. If the installed CLI lacks `link-pr`, or the server rejects it as unknown, mention that in the reply instead of retrying.
+
+### 8. Open in browser
 
 `gh pr view --web`
 
 ## PR Template
 
-Use `.github/PULL_REQUEST_TEMPLATE.md` as the body structure. Key sections:
+Use [`.github/PULL_REQUEST_TEMPLATE.md`](../../../.github/PULL_REQUEST_TEMPLATE.md) as the source of truth for body structure, contribution classification, disclosure eligibility, and required fields. Follow its `AGENT-INSTRUCTIONS` when filling these sections:
 
-- **Change Type**: Check the appropriate gitmoji type
-- **Related Issue**: Link GitHub/Linear issues with magic keywords
-- **Description of Change**: Summarize what and why
-- **How to Test**: Describe test approach, check relevant boxes
-- **Acceptance**: the published `https://app.lobehub.com/acceptance/<id>` link, or why the change has no user-visible outcome
+- **Summary**: fill for every PR, including the required Contribution source label. AI-assisted work remains labeled `AI-assisted` even when organization membership exempts the author from disclosing details; human review does not make it human-only. Use `Unknown` when the source cannot be established.
+- **AI assistance**: apply the template's organization-member exemption to details only, never to the source label. When required, fill its six fields using the final diff and verification evidence, not private conversation summaries. Use one section per PR, combining tools/models across sessions; report unknown metadata and unperformed review/checks honestly.
+
+Prompts and transcripts are private by default and are not required fields. Only if the author explicitly requests sharing them, review the exact proposed text for sensitive information and obtain confirmation before publishing that text. Authorization to create or update a PR is not consent to publish a conversation. Check attached logs and screenshots for sensitive information too.
+
+### No production data identifiers
+
+PR titles, bodies, comments and review replies are public. Never put an identifier or detail taken from production data in them, even when that is where the bug was found:
+
+- Record ids: topic (`tpc_…`), message (`msg_…`), operation (`op_…`), agent (`agt_…`), document (`docs_…`), user, device and bot ids. This includes agent vent ids and ids of internal reproduction reports.
+- User details: device or host names, local paths, file names, quoted user text, and app links to a user's agent or topic.
+
+Describe the evidence instead: "observed in a production topic", "a user with two desktops (device A and device B)". Obvious placeholders (`tpc_xxx`, `C:\Users\user`) are fine in examples. Commit hashes, deployment ids and code identifiers are not production data. The same rule applies to commit messages and code comments.
 
 ## Notes
 
@@ -144,11 +164,11 @@ cd apps/cli && bun run type-check 2>&1 | grep -iE "connect\.ts|device\.register"
 
 Filter to your touched files — this repo's standalone type-check emits pre-existing env noise (`__ELECTRON__`, `@/types/llm`, unbuilt `@lobechat/types`) that isn't yours.
 
-## PR + Linear bookkeeping
+## PR + task bookkeeping
 
-- **Each PR closes only its own layer's issues.** Server PR: `Closes LOBE-<server>`. Client PR: `Closes LOBE-<pkg> / <desktop> / <cli>`. Don't let one PR's body claim another layer's issue.
-- Both PRs are `Part of LOBE-<parent>`.
-- On PR creation, move each closed sub-issue to **In Review** (not Done) and add a completion comment — see the `linear` skill.
+- **Each PR links only its own layer's LobeHub tasks.** Server PR: `LobeHub task: [T-<server>](url)`. Client PR: the `<pkg>` / `<desktop>` / `<cli>` tasks. Don't let one PR's body claim another layer's task.
+- Both PRs are `Part of T-<parent>`.
+- On PR creation, add a completion comment to each linked subtask with `lh task comment <id> -m`, finish the rest of the stack bookkeeping, and only then set the subtasks to `paused` with `lh task edit <id> --status paused`: pausing a task interrupts its running operations, including the agent doing this bookkeeping. Complete each with `lh task complete <id>` only after merge.
 
 ## Gotchas
 

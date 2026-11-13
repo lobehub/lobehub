@@ -145,6 +145,16 @@ describe('ResolveAgentInterventionBySourceSchema', () => {
     targets: [{ toolCallId: 'call-1', toolMessageId: 'message-1' }],
   };
 
+  it('accepts the resolving client stream features', () => {
+    expect(
+      ResolveAgentInterventionBySourceSchema.parse({
+        ...source,
+        action: { scope: 'once', type: 'approve_tool' },
+        streamFeatures: ['member_runtime_end'],
+      }).streamFeatures,
+    ).toEqual(['member_runtime_end']);
+  });
+
   it('accepts exact source-locator Web actions without durable item authority', () => {
     expect(
       ResolveAgentInterventionBySourceSchema.parse({

@@ -1,3 +1,4 @@
+import { LayersEnum } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -8,6 +9,14 @@ import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
 import { createLocalFileScopeKey, createLocalFileTabId } from './helpers';
 import { PortalViewType } from './initialState';
+
+const dashboardFlag = vi.hoisted(() => ({ enabled: true }));
+vi.mock('@/store/serverConfig', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getServerConfigStoreState: () => ({
+    featureFlags: { enableDashboard: dashboardFlag.enabled },
+  }),
+}));
 
 const localFileTabId = ({
   deviceId,
@@ -273,6 +282,47 @@ describe('chatDockSlice', () => {
     });
   });
 
+  describe('openDashboardWidget', () => {
+    it('opens the widget view, carrying the dry run it was opened from', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.clearPortalStack();
+        result.current.openDashboardWidget('widget-1', 'run-1');
+      });
+
+      expect(result.current.showPortal).toBe(true);
+      expect(chatPortalSelectors.dashboardWidgetView(result.current)).toEqual({
+        runId: 'run-1',
+        type: PortalViewType.DashboardWidget,
+        widgetId: 'widget-1',
+      });
+
+      act(() => {
+        result.current.openDashboardWidget('widget-2');
+      });
+      expect(chatPortalSelectors.dashboardWidgetView(result.current)).toEqual({
+        type: PortalViewType.DashboardWidget,
+        widgetId: 'widget-2',
+      });
+    });
+
+    it('opens nothing while the dashboard feature flag is off', () => {
+      const { result } = renderHook(() => useChatStore());
+      dashboardFlag.enabled = false;
+      try {
+        act(() => {
+          result.current.clearPortalStack();
+          result.current.openDashboardWidget('widget-1', 'run-1');
+        });
+        expect(chatPortalSelectors.dashboardWidgetView(result.current)).toBeFalsy();
+        expect(result.current.portalStack).toEqual([]);
+      } finally {
+        dashboardFlag.enabled = true;
+      }
+    });
+  });
+
   describe('openArtifact', () => {
     it('keeps a parent task portal addressable while its run artifact is open', () => {
       const { result } = renderHook(() => useChatStore());
@@ -413,6 +463,26 @@ describe('chatDockSlice', () => {
         { agentId: 'agt_1', type: PortalViewType.AgentDetail },
       ]);
       expect(result.current.showPortal).toBe(true);
+    });
+  });
+
+  describe('openMemoryDetail', () => {
+    it('should push MemoryDetail view and expose it through the selector', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openMemoryDetail({ id: 'preference-1', layer: LayersEnum.Preference });
+      });
+
+      expect(result.current.portalStack).toEqual([
+        { id: 'preference-1', layer: LayersEnum.Preference, type: PortalViewType.MemoryDetail },
+      ]);
+      expect(result.current.showPortal).toBe(true);
+      expect(chatPortalSelectors.memoryDetailView(result.current)).toEqual({
+        id: 'preference-1',
+        layer: LayersEnum.Preference,
+        type: PortalViewType.MemoryDetail,
+      });
     });
   });
 
@@ -939,6 +1009,110 @@ describe('chatDockSlice', () => {
       // Closing the remote tab drops only its buffer; the local tab's stays.
       expect(result.current.dirtyLocalFileContents[remoteId]).toBeUndefined();
       expect(result.current.dirtyLocalFileContents[localId]).toBe('dirty content');
+    });
+  });
+
+  describe('retargetLocalFiles', () => {
+    it('moves a renamed file tab, its buffer and active state to the new path', () => {
+      const { result } = renderHook(() => useChatStore());
+      const oldId = localFileTabId({ filePath: '/rt/notes.md', workingDirectory: '/rt' });
+      const newId = localFileTabId({ filePath: '/rt/meeting-notes.md', workingDirectory: '/rt' });
+
+      act(() => {
+        result.current.openLocalFile({ filePath: '/rt/notes.md', workingDirectory: '/rt' });
+        result.current.setLocalFileBuffer(oldId, 'draft');
+      });
+      act(() => {
+        result.current.retargetLocalFiles([{ from: '/rt/notes.md', to: '/rt/meeting-notes.md' }]);
+      });
+
+      const tab = result.current.openLocalFiles.find((file) => file.id === newId);
+      expect(tab?.filePath).toBe('/rt/meeting-notes.md');
+      expect(result.current.openLocalFiles.some((file) => file.id === oldId)).toBe(false);
+      expect(result.current.activeLocalFileId).toBe(newId);
+      expect(result.current.activeLocalFilePath).toBe('/rt/meeting-notes.md');
+      expect(result.current.activeLocalFileIdsByScope[createLocalFileScopeKey('/rt')]).toBe(newId);
+      expect(result.current.dirtyLocalFileContents[newId]).toBe('draft');
+      expect(oldId in result.current.dirtyLocalFileContents).toBe(false);
+    });
+
+    it('carries tabs under a moved folder and leaves other devices alone', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({ filePath: '/mv/src/a.ts', workingDirectory: '/mv' });
+        result.current.openLocalFile({
+          deviceId: 'remote',
+          filePath: '/mv/src/a.ts',
+          workingDirectory: '/mv',
+        });
+      });
+      act(() => {
+        result.current.retargetLocalFiles([{ from: '/mv/src', to: '/mv/lib/src' }]);
+      });
+
+      const paths = result.current.openLocalFiles
+        .filter((file) => file.workingDirectory === '/mv')
+        .map((file) => `${file.deviceId ?? 'local'}:${file.filePath}`);
+      expect(paths).toEqual(['local:/mv/lib/src/a.ts', 'remote:/mv/src/a.ts']);
+    });
+    it('carries tabs under a moved folder with Windows path separators', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: 'C:\\win\\src\\a.ts',
+          workingDirectory: 'C:\\win',
+        });
+      });
+      act(() => {
+        result.current.retargetLocalFiles([{ from: 'C:\\win\\src', to: 'C:\\win\\lib' }]);
+      });
+
+      expect(
+        result.current.openLocalFiles
+          .filter((file) => file.workingDirectory === 'C:\\win')
+          .map((file) => file.filePath),
+      ).toEqual(['C:\\win\\lib\\a.ts']);
+    });
+  });
+
+  describe('closeLocalFilesAt', () => {
+    it('closes tabs of deleted files and of files inside a deleted folder', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({ filePath: '/del/a.md', workingDirectory: '/del' });
+        result.current.openLocalFile({ filePath: '/del/dir/b.md', workingDirectory: '/del' });
+        result.current.openLocalFile({ filePath: '/del/keep.md', workingDirectory: '/del' });
+      });
+      act(() => {
+        result.current.closeLocalFilesAt(['/del/a.md', '/del/dir']);
+      });
+
+      expect(
+        result.current.openLocalFiles
+          .filter((file) => file.workingDirectory === '/del')
+          .map((file) => file.filePath),
+      ).toEqual(['/del/keep.md']);
+    });
+
+    it('closes tabs inside a deleted folder with Windows path separators', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({
+          filePath: 'D:\\del\\dir\\b.md',
+          workingDirectory: 'D:\\del',
+        });
+      });
+      act(() => {
+        result.current.closeLocalFilesAt(['D:\\del\\dir']);
+      });
+
+      expect(
+        result.current.openLocalFiles.filter((file) => file.workingDirectory === 'D:\\del'),
+      ).toEqual([]);
     });
   });
 

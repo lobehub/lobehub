@@ -142,6 +142,27 @@ export type ExpertiseReasonKind = 'mechanism' | 'taste';
 export type ExpertiseReasonSource = 'inferred' | 'reviewer';
 
 /**
+ * What a rule does when a delivery breaks it.
+ *
+ * `remind` only reaches the agent's context; `block` is meant to hold the delivery until the
+ * reviewer waves it through. Storing the choice is the reviewer's half — the compiler and the
+ * verify-plan wiring that make `block` actually stop anything land separately.
+ */
+export type ExpertiseEnforcement = 'block' | 'remind';
+export const EXPERTISE_ENFORCEMENTS: ExpertiseEnforcement[] = ['block', 'remind'];
+
+/**
+ * Which way a rule pushes the work.
+ *
+ * `positive` steers toward something good ("open full content as its own page"); `negative`
+ * names what gets a delivery sent back ("no bare blue links on non-link controls"). It is a
+ * reading of the rule, not of where it came from — a rule distilled from a rejection is often
+ * phrased as guidance. Independent of `polarity`, which only picks the section keys of the body.
+ */
+export type ExpertiseRuleDirection = 'negative' | 'positive';
+export const EXPERTISE_RULE_DIRECTIONS: ExpertiseRuleDirection[] = ['positive', 'negative'];
+
+/**
  * What a backtest concluded about one lesson.
  *
  * `ready` does not mean the standard is correct — it means firing it would not have contradicted

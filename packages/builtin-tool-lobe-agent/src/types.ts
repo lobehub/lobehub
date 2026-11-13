@@ -4,6 +4,7 @@ export const LobeAgentApiName = {
   analyzeMedia: 'analyzeMedia',
   askUserQuestion: 'askUserQuestion',
   callSubAgent: 'callSubAgent',
+  cancelSubAgent: 'cancelSubAgent',
   clearTodos: 'clearTodos',
   createPlan: 'createPlan',
   createTodos: 'createTodos',
@@ -92,7 +93,8 @@ export interface VentParams {
   toolName?: string;
 }
 
-export type VentRejectionReason = 'invalid_category' | 'invalid_severity' | 'rate_limited';
+export type VentRejectionReason =
+  'duplicate' | 'empty_content' | 'invalid_category' | 'invalid_severity' | 'rate_limited';
 
 export type VentStateReason = VentRejectionReason | 'missing_context' | 'runtime_error' | null;
 
@@ -141,8 +143,41 @@ export interface CallSubAgentParams {
   description: string;
   inheritMessages?: boolean;
   instruction: string;
+  /**
+   * Start the sub-agent and return right away instead of waiting for it. The
+   * parent keeps working; when the sub-agent finishes, its result reaches the
+   * parent as a new message (waking it up if its turn has already ended).
+   */
+  runInBackground?: boolean;
   runInClient?: boolean;
+  /**
+   * Id of an earlier sub-agent (from its result's `<sub_agent id>` trailer).
+   * When set, `instruction` is sent as a new turn to that same sub-agent, which
+   * keeps its previous history, instead of starting a fresh one.
+   */
+  subAgentId?: string;
   timeout?: number;
+}
+
+/**
+ * Parameters for cancelSubAgent API
+ * Stop a running sub-agent dispatched earlier by callSubAgent.
+ */
+export interface CancelSubAgentParams {
+  /** Why the sub-agent is no longer needed; kept on the tool call for the UI. */
+  reason?: string;
+  /** Id of the sub-agent to stop (from its `<sub_agent id>` trailer). */
+  subAgentId: string;
+}
+
+/** State persisted on the cancelSubAgent tool message. */
+export interface CancelSubAgentState {
+  /**
+   * - `cancelled`: the sub-agent was stopped.
+   * - `not_running`: it had already finished or stopped; nothing was cancelled.
+   */
+  status: 'cancelled' | 'not_running';
+  threadId: string;
 }
 
 /** Execution stats reported back by a finished sub-agent run. */
@@ -175,12 +210,34 @@ export interface SubAgentRunStats {
  */
 export interface CallSubAgentState extends SubAgentRunStats {
   /**
+   * Started with `runInBackground`: the tool result is only the start receipt,
+   * and the sub-agent's answer is delivered to the parent as a separate
+   * message. The completion bridge reads this to choose that delivery instead
+   * of backfilling the result and resuming a parked parent.
+   */
+  background?: boolean;
+  /**
+   * When the finished background result was handed to the parent. Unset while
+   * the result is still waiting for the parent's conversation to go idle.
+   */
+  deliveredAt?: string;
+  /**
    * Live totals streamed from the running sub-agent, patched into the store in
    * memory only (never persisted). Held in its own key so it can't be mistaken
    * for the authoritative flat stats, which are written exactly once — by the
    * completion bridge — when the run finishes.
    */
   progress?: SubAgentRunStats;
+  /**
+   * Final answer of a background run, held here for its delivery to the parent
+   * — the tool result itself stays the start receipt the parent already read.
+   */
+  result?: string;
+  /**
+   * Who a background run's answer is delivered as: the named `callAgent`
+   * target, or the parent itself (with the call's description) for a clone.
+   */
+  sender?: { agentId: string; name: string };
   status?: 'pending' | 'completed' | 'error';
   threadId: string;
 }

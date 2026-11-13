@@ -33,6 +33,7 @@ import { GoalService } from '../index';
 import * as modelConfig from '../modelConfig';
 import * as scheduler from '../scheduler';
 import { GoalSupervisorService } from './index';
+import { SUPERVISOR_DIAGNOSIS_TIMEOUT_MS } from './policy';
 import { GoalSupervisorTools } from './tools';
 
 const db = await getTestDB();
@@ -93,12 +94,24 @@ afterEach(async () => {
   await db.delete(users);
 });
 
+/**
+ * A Goal whose Task failed with a transport error.
+ *
+ * `enabled: false` stands for the legacy Goal the creation invariant deliberately
+ * does not backfill. The server now rejects that flag on create, so the row is
+ * cleared directly — which is precisely the config shape a pre-invariant Goal has.
+ */
 const failedGoal = async (enabled = true, error = 'fetch failed: ECONNRESET') => {
   const graph = await service().create({
-    config: { supervision: { enabled } },
+    config: { supervision: { enabled: true } },
     tasks: ['Finish existing report'],
     title: 'Interrupted delivery',
   });
+  if (!enabled)
+    await db
+      .update(goals)
+      .set({ config: { supervision: { enabled: false } } })
+      .where(eq(goals.id, graph.goal.id));
   const created = await service().tick(graph.goal.id);
   const taskId = created.taskId!;
   const topicId = `topic-failed-${++sequence}`;
@@ -118,12 +131,13 @@ const failedGoal = async (enabled = true, error = 'fetch failed: ECONNRESET') =>
 };
 
 /**
- * The run itself settled cleanly and something around it broke: the device link
- * dropped, or verification could not run. The Task is left `paused`, not `failed`,
- * and its operation is `done`, not `error`.
+ * The run itself settled cleanly and something around it broke: the device
+ * gateway errored, or verification could not run. The Task is left `paused`, not
+ * `failed`, and its operation is `done`, not `error`. (An offline device is not
+ * supervision's: the coordinator's offline retry schedule owns that failure.)
  */
 const pipelineFailureGoal = async (
-  error = '{"error":"DEVICE_OFFLINE","success":false}',
+  error = '{"error":"DEVICE_GATEWAY_ERROR","success":false}',
   withRun = true,
 ) => {
   const graph = await service().create({
@@ -517,7 +531,10 @@ describe('Goal Supervisor integration', () => {
     // Routed as `paused`; a person then marks it `failed` without supplying a new
     // error, so the run's transport reason survives and the policy still accepts it.
     // Only claiming against the status the incident was opened on keeps this decision.
-    const { goalId, taskId } = await failedGoal(true, '{"error":"DEVICE_OFFLINE","success":false}');
+    const { goalId, taskId } = await failedGoal(
+      true,
+      '{"error":"DEVICE_GATEWAY_ERROR","success":false}',
+    );
     await taskModel.update(taskId, { status: 'paused' });
     expect((await service().tick(goalId)).outcome).toBe('waiting_external');
     await diagnose(goalId);
@@ -548,6 +565,84 @@ describe('Goal Supervisor integration', () => {
     expect(after.incidents.at(-1)?.status).toBe('escalated');
   });
 
+  describe('a diagnosis left open by another Task', () => {
+    /** A second failed run on the Goal, while the first incident is still `diagnosing`. */
+    const failAgain = async (taskId: string) => {
+      const topicId = `topic-second-${++sequence}`;
+      const operationId = `op-second-${sequence}`;
+      await db.insert(topics).values({ id: topicId, userId });
+      await operationModel.recordStart({ operationId, taskId, topicId });
+      await operationModel.recordCompletion(operationId, {
+        completionReason: 'done',
+        status: 'done',
+      });
+      await db
+        .insert(taskTopics)
+        .values({ operationId, seq: 2, status: 'completed', taskId, topicId, userId });
+      return operationId;
+    };
+
+    const ageFirstIncident = async (goalId: string) => {
+      const state = (await goalModel.findById(goalId))!.config!.supervisorState!;
+      await goalModel.updateSupervisorState(goalId, state.revision, {
+        ...state,
+        incidents: state.incidents.map((item) => ({
+          ...item,
+          createdAt: new Date(Date.now() - SUPERVISOR_DIAGNOSIS_TIMEOUT_MS - 1000).toISOString(),
+        })),
+      });
+    };
+
+    it('keeps waiting while that diagnosis is inside its window', async () => {
+      const { goalId, taskId } = await pipelineFailureGoal();
+      await service().tick(goalId);
+      await failAgain(taskId);
+      vi.mocked(scheduler.scheduleGoalAdvance).mockClear();
+
+      const result = await service().tick(goalId);
+
+      expect(result.message).toBe('Another interruption is being diagnosed');
+      expect(scheduler.scheduleGoalAdvance).toHaveBeenCalledTimes(1);
+      const { incidents } = (await goalModel.findById(goalId))!.config!.supervisorState!;
+      expect(incidents.map((item) => item.status)).toEqual(['diagnosing']);
+    });
+
+    it('backs off the poll the longer that diagnosis has been open', async () => {
+      const { goalId, taskId } = await pipelineFailureGoal();
+      await service().tick(goalId);
+      await failAgain(taskId);
+      const state = (await goalModel.findById(goalId))!.config!.supervisorState!;
+      await goalModel.updateSupervisorState(goalId, state.revision, {
+        ...state,
+        incidents: state.incidents.map((item) => ({
+          ...item,
+          createdAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+        })),
+      });
+      vi.mocked(scheduler.scheduleGoalAdvance).mockClear();
+
+      await service().tick(goalId);
+
+      const [params] = vi.mocked(scheduler.scheduleGoalAdvance).mock.calls[0];
+      expect(params.delay).toBeGreaterThanOrEqual(30);
+    });
+
+    it('escalates it once expired instead of rescheduling forever', async () => {
+      const { goalId, taskId } = await pipelineFailureGoal();
+      await service().tick(goalId);
+      const operationId = await failAgain(taskId);
+      await ageFirstIncident(goalId);
+
+      const result = await service().tick(goalId);
+
+      expect(result.message).not.toBe('Another interruption is being diagnosed');
+      const { incidents } = (await goalModel.findById(goalId))!.config!.supervisorState!;
+      expect(incidents[0].status).toBe('escalated');
+      expect(incidents[0].resolvedAt).toBeDefined();
+      expect(incidents[1].failedOperationId).toBe(operationId);
+    });
+  });
+
   it('leaves a paused transport failure alone once a person marks it failed', async () => {
     // The run errored with a recoverable transport error and the lifecycle paused the
     // Task. A person then marks it failed without supplying a new error, so the
@@ -562,7 +657,7 @@ describe('Goal Supervisor integration', () => {
     expect(move.outcome).not.toBe('waiting_external');
   });
 
-  it('without supervision the same transport failure opens a human Gate', async () => {
+  it('a Goal created before supervision was mandatory opens a human Gate instead', async () => {
     const { goalId } = await failedGoal(false);
     expect((await service().tick(goalId)).outcome).toBe('waiting_human');
     expect((await service().graph(goalId)).decisions[0].authority).toBe('user');

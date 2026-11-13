@@ -63,9 +63,15 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
       // `ctx.workingDirectory` is undefined whenever the agent has none
       // configured — so an off-contract `cwd` must be dropped here rather than
       // mistaken for a server-injected one.
-      const output = await this.runtime.executeToolCall(apiName, params, {
-        workingDirectory: ctx?.workingDirectory,
-      });
+      const output = await this.runtime.executeToolCall(
+        apiName,
+        apiName === 'runCommand'
+          ? { ...params, topicId: ctx?.topicId ?? undefined, agentId: ctx?.agentId }
+          : params,
+        {
+          workingDirectory: ctx?.workingDirectory,
+        },
+      );
       // apiEnum and the runtime dispatch cover the same tool set, so a null
       // (unknown tool) here is a programming error, not a user-facing state.
       if (!output) return this.errorResult(new Error(`Unknown local-system API: ${apiName}`));
@@ -139,15 +145,21 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
   // expose it in. The runtime anchors `cwd` to `ctx.workingDirectory` (and
   // refuses the model's own `cwd` while `trustArgsCwd` is off), which is exactly
   // the root the fence needs: a model must not get to choose what it is fenced
-  // to. An unfenced command adds neither field and behaves as before.
-  runCommand = (params: RunCommandParams, ctx?: BuiltinToolContext) =>
-    this.execute(
+  // to. An unfenced command adds neither field and behaves as before. The
+  // host-only `sandboxRoot` override is dropped for the same reason: a model
+  // that guessed it could otherwise move its own fence.
+  runCommand = (params: RunCommandParams, ctx?: BuiltinToolContext) => {
+    const { sandboxRoot: _offContractSandboxRoot, ...modelParams } = params as RunCommandParams & {
+      sandboxRoot?: unknown;
+    };
+    return this.execute(
       'runCommand',
       ctx?.localSandbox === true
-        ? { ...params, sandbox: true, sandboxNetwork: ctx?.localSandboxNetwork === true }
-        : params,
+        ? { ...modelParams, sandbox: true, sandboxNetwork: ctx?.localSandboxNetwork === true }
+        : modelParams,
       ctx,
     );
+  };
 
   getCommandOutput = (params: GetCommandOutputParams, ctx?: BuiltinToolContext) =>
     this.execute('getCommandOutput', params, ctx);

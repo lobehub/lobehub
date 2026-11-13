@@ -4,9 +4,10 @@ import { type AgentShareVisitorContext, getActivePluginIds } from '@lobechat/typ
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { lambdaClient } from '@/libs/trpc/client';
-import { agentService } from '@/services/agent';
+import { agentDocumentService } from '@/services/agentDocument';
 import { messageService } from '@/services/message';
 import { notebookService } from '@/services/notebook';
+import { sandboxStorageService } from '@/services/sandboxStorage';
 import { userService } from '@/services/user';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -82,6 +83,11 @@ export const createBrowserContextFactProviders = ({
   groupId,
   shareVisitor,
 }: BrowserContextFactSource = {}): ContextFactProviders => ({
+  findAgentDocument: async (targetAgentId, documentId) => {
+    const doc = await agentDocumentService.readDocument({ agentId: targetAgentId, id: documentId });
+    return doc ? { content: doc.content, title: doc.title } : null;
+  },
+
   findTopic: async (topicId) => {
     const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
     if (!topic) return null;
@@ -213,9 +219,9 @@ export const createBrowserContextFactProviders = ({
       name: provider.name,
     })),
 
-  // The prefetched list is reused when present so sending never waits on it.
-  listRecentAgents: async (limit) =>
-    getAgentStoreState().availableAgents ?? (await agentService.queryAgents({ limit })),
+  // The local copy is reused when present so sending never waits on it; after
+  // the agents change it is fetched fresh.
+  listRecentAgents: () => getAgentStoreState().getAvailableAgents(),
 
   // Non-recommended builtins are uninstalled by default; the builder must
   // not present them as installed and pin unusable identifiers.
@@ -225,6 +231,16 @@ export const createBrowserContextFactProviders = ({
     chatSelectors
       .currentUserFiles(getChatStoreState())
       .map((file) => ({ name: file.name, size: file.size })),
+
+  // Asked of the server, because the placement follows an entitlement only it
+  // can resolve. Left unimplemented, the prompt described a disposable sandbox
+  // to a run that had a persistent directory, and the model — told its files
+  // would not survive — cloned into /tmp.
+  resolveSandboxPersistence: async () => {
+    const topicId = getChatStoreState().activeTopicId ?? undefined;
+    const placement = await sandboxStorageService.resolveSessionPlacement({ topicId });
+    return placement ?? undefined;
+  },
 
   listTopicMessages: async (topic) => {
     const msgs = await messageService.getMessages({

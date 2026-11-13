@@ -17,6 +17,30 @@ import { getTestDB } from '../../../../core/getTestDB';
 import { DeprecatedDataImporterRepos as DataImporterRepos } from '../index';
 import mockImportData from './fixtures/messages.json';
 
+type ImportSession = NonNullable<ImporterEntryData['sessions']>[number];
+
+const createImportConfig = (model = 'abc', systemRole = 'abc'): ImportSession['config'] => ({
+  model,
+  chatConfig: {} as any,
+  params: {},
+  systemRole,
+  tts: {} as any,
+  openingQuestions: [],
+});
+
+const createImportSession = (
+  id: string,
+  title: string,
+  config = createImportConfig(),
+): ImportSession => ({
+  id,
+  createdAt: '2022-05-14T18:18:10.494Z',
+  updatedAt: '2023-01-01',
+  type: 'agent',
+  config,
+  meta: { title },
+});
+
 const CURRENT_CONFIG_VERSION = 7;
 
 const serverDB = await getTestDB();
@@ -84,40 +108,8 @@ describe('DataImporter', () => {
       const data: ImporterEntryData = {
         version: CURRENT_CONFIG_VERSION,
         sessions: [
-          {
-            id: 'session1',
-            createdAt: '2022-05-14T18:18:10.494Z',
-            updatedAt: '2023-01-01',
-            type: 'agent',
-            config: {
-              model: 'abc',
-              chatConfig: {} as any,
-              params: {},
-              systemRole: 'abc',
-              tts: {} as any,
-              openingQuestions: [],
-            },
-            meta: {
-              title: 'Session 1',
-            },
-          },
-          {
-            id: 'session2',
-            createdAt: '2022-05-14T18:18:10.494Z',
-            updatedAt: '2023-01-01',
-            type: 'agent',
-            config: {
-              model: 'abc',
-              chatConfig: {} as any,
-              params: {},
-              systemRole: 'abc',
-              tts: {} as any,
-              openingQuestions: [],
-            },
-            meta: {
-              title: 'Session 2',
-            },
-          },
+          createImportSession('session1', 'Session 1'),
+          createImportSession('session2', 'Session 2'),
         ],
       };
 
@@ -148,40 +140,8 @@ describe('DataImporter', () => {
       const data: ImporterEntryData = {
         version: CURRENT_CONFIG_VERSION,
         sessions: [
-          {
-            id: 'session1',
-            createdAt: '2022-05-14T18:18:10.494Z',
-            updatedAt: '2023-01-01',
-            type: 'agent',
-            config: {
-              model: 'abc',
-              chatConfig: {} as any,
-              params: {},
-              systemRole: 'abc',
-              tts: {} as any,
-              openingQuestions: [],
-            },
-            meta: {
-              title: 'Session 1',
-            },
-          },
-          {
-            id: 'session2',
-            createdAt: '2022-05-14T18:18:10.494Z',
-            updatedAt: '2023-01-01',
-            type: 'agent',
-            config: {
-              model: 'abc',
-              chatConfig: {} as any,
-              params: {},
-              systemRole: 'abc',
-              tts: {} as any,
-              openingQuestions: [],
-            },
-            meta: {
-              title: 'Session 2',
-            },
-          },
+          createImportSession('session1', 'Session 1'),
+          createImportSession('session2', 'Session 2'),
         ],
       };
 
@@ -206,14 +166,7 @@ describe('DataImporter', () => {
             updatedAt: '2023-01-01',
             type: 'agent',
             group: 'group1',
-            config: {
-              model: 'abc',
-              chatConfig: {} as any,
-              params: {},
-              systemRole: 'abc',
-              tts: {} as any,
-              openingQuestions: [],
-            },
+            config: createImportConfig(),
             meta: {
               title: 'Session 1',
             },
@@ -224,14 +177,7 @@ describe('DataImporter', () => {
             createdAt: '2022-05-14T18:18:10.494Z',
             updatedAt: '2023-01-01',
             type: 'agent',
-            config: {
-              model: 'abc',
-              chatConfig: {} as any,
-              params: {},
-              systemRole: 'abc',
-              tts: {} as any,
-              openingQuestions: [],
-            },
+            config: createImportConfig(),
             meta: {
               title: 'Session 2',
             },
@@ -242,14 +188,7 @@ describe('DataImporter', () => {
             createdAt: '2022-05-14T18:18:10.494Z',
             updatedAt: '2023-01-01',
             type: 'agent',
-            config: {
-              model: 'abc',
-              chatConfig: {} as any,
-              params: {},
-              systemRole: 'abc',
-              tts: {} as any,
-              openingQuestions: [],
-            },
+            config: createImportConfig(),
             meta: {
               title: 'Session 3',
             },
@@ -284,40 +223,8 @@ describe('DataImporter', () => {
       const data: ImporterEntryData = {
         version: CURRENT_CONFIG_VERSION,
         sessions: [
-          {
-            id: 'session1',
-            createdAt: '2022-05-14T18:18:10.494Z',
-            updatedAt: '2023-01-01',
-            type: 'agent',
-            config: {
-              model: 'abc',
-              chatConfig: {} as any,
-              params: {},
-              systemRole: 'Test Agent 1',
-              tts: {} as any,
-              openingQuestions: [],
-            },
-            meta: {
-              title: 'Session 1',
-            },
-          },
-          {
-            id: 'session2',
-            createdAt: '2022-05-14T18:18:10.494Z',
-            updatedAt: '2023-01-01',
-            type: 'agent',
-            config: {
-              model: 'def',
-              chatConfig: {} as any,
-              params: {},
-              systemRole: 'Test Agent 2',
-              tts: {} as any,
-              openingQuestions: [],
-            },
-            meta: {
-              title: 'Session 2',
-            },
-          },
+          createImportSession('session1', 'Session 1', createImportConfig('abc', 'Test Agent 1')),
+          createImportSession('session2', 'Session 2', createImportConfig('def', 'Test Agent 2')),
         ],
       };
 
@@ -366,23 +273,7 @@ describe('DataImporter', () => {
       // First import some sessions
       await importer.importData({
         sessions: [
-          {
-            id: 'session1',
-            createdAt: '2022-05-14T18:18:10.494Z',
-            updatedAt: '2023-01-01',
-            type: 'agent',
-            config: {
-              model: 'abc',
-              chatConfig: {} as any,
-              params: {},
-              systemRole: 'Test Agent 1',
-              tts: {} as any,
-              openingQuestions: [],
-            },
-            meta: {
-              title: 'Session 1',
-            },
-          },
+          createImportSession('session1', 'Session 1', createImportConfig('abc', 'Test Agent 1')),
         ],
         version: CURRENT_CONFIG_VERSION,
       });
@@ -390,23 +281,7 @@ describe('DataImporter', () => {
       // Import the same sessions again
       await importer.importData({
         sessions: [
-          {
-            id: 'session1',
-            createdAt: '2022-05-14T18:18:10.494Z',
-            updatedAt: '2023-01-01',
-            type: 'agent',
-            config: {
-              model: 'abc',
-              chatConfig: {} as any,
-              params: {},
-              systemRole: 'Test Agent 1',
-              tts: {} as any,
-              openingQuestions: [],
-            },
-            meta: {
-              title: 'Session 1',
-            },
-          },
+          createImportSession('session1', 'Session 1', createImportConfig('abc', 'Test Agent 1')),
         ],
         version: CURRENT_CONFIG_VERSION,
       });
@@ -440,23 +315,7 @@ describe('DataImporter', () => {
           },
         ],
         sessions: [
-          {
-            id: 'session1',
-            createdAt: '2022-05-14T18:18:10.494Z',
-            updatedAt: '2023-01-01',
-            type: 'agent',
-            config: {
-              model: 'abc',
-              chatConfig: {} as any,
-              params: {},
-              systemRole: 'abc',
-              tts: {} as any,
-              openingQuestions: [],
-            },
-            meta: {
-              title: 'Session 1',
-            },
-          },
+          createImportSession('session1', 'Session 1'),
           {
             id: 'session2',
             createdAt: '2022-05-14T18:18:10.494Z',
@@ -510,25 +369,7 @@ describe('DataImporter', () => {
     it('should associate imported topics with sessions', async () => {
       const data: ImporterEntryData = {
         version: CURRENT_CONFIG_VERSION,
-        sessions: [
-          {
-            id: 'session1',
-            createdAt: '2022-05-14T18:18:10.494Z',
-            updatedAt: '2023-01-01',
-            type: 'agent',
-            config: {
-              model: 'abc',
-              chatConfig: {} as any,
-              params: {},
-              systemRole: 'abc',
-              tts: {} as any,
-              openingQuestions: [],
-            },
-            meta: {
-              title: 'Session 1',
-            },
-          },
-        ],
+        sessions: [createImportSession('session1', 'Session 1')],
         topics: [
           {
             id: 'topic1',
@@ -586,25 +427,7 @@ describe('DataImporter', () => {
             parentId: 'msg1',
           },
         ],
-        sessions: [
-          {
-            id: 'session1',
-            createdAt: '2022-05-14T18:18:10.494Z',
-            updatedAt: '2023-01-01',
-            type: 'agent',
-            config: {
-              model: 'abc',
-              chatConfig: {} as any,
-              params: {},
-              systemRole: 'abc',
-              tts: {} as any,
-              openingQuestions: [],
-            },
-            meta: {
-              title: 'Session 1',
-            },
-          },
-        ],
+        sessions: [createImportSession('session1', 'Session 1')],
         topics: [
           {
             id: 'topic1',
@@ -663,28 +486,34 @@ describe('DataImporter', () => {
       expect(result.messages.errors).toBe(0);
     });
 
+    it('skips a trashed message identity when the same data is imported again', async () => {
+      const data: ImporterEntryData = {
+        messages: [
+          {
+            content: 'Imported once',
+            createdAt: 1715186011586,
+            id: 'trashed-import-message',
+            role: 'user',
+            updatedAt: 1715186015053,
+          },
+        ],
+        version: CURRENT_CONFIG_VERSION,
+      };
+      await importer.importData(data);
+      await serverDB
+        .update(messages)
+        .set({ deletedAt: new Date('2026-09-10T01:00:00Z'), isDeleted: true })
+        .where(eq(messages.clientId, 'trashed-import-message'));
+
+      const second = await new DataImporterRepos(serverDB, userId).importData(data);
+
+      expect(second.messages).toMatchObject({ added: 0, errors: 0, skips: 1 });
+    });
+
     it('should associate imported messages with sessions and topics', async () => {
       const data: ImporterEntryData = {
         version: CURRENT_CONFIG_VERSION,
-        sessions: [
-          {
-            id: 'session1',
-            createdAt: '2022-05-14T18:18:10.494Z',
-            updatedAt: '2023-01-01',
-            type: 'agent',
-            config: {
-              model: 'abc',
-              chatConfig: {} as any,
-              params: {},
-              systemRole: 'abc',
-              tts: {} as any,
-              openingQuestions: [],
-            },
-            meta: {
-              title: 'Session 1',
-            },
-          },
-        ],
+        sessions: [createImportSession('session1', 'Session 1')],
         topics: [
           {
             id: 'topic1',
@@ -783,8 +612,6 @@ describe('DataImporter', () => {
 
       expect(msg2?.parent?.clientId).toBe('msg1');
     });
-
-    it('should import parentId Success', () => {});
   });
 
   describe('real world examples', { timeout: 15000 }, () => {
@@ -878,7 +705,6 @@ describe('DataImporter', () => {
                 "You are a LobeChat technical operator 🍐🐊. You now need to write a developer's guide for LobeChat as a guide for them to develop LobeChat. This guide will include several sections, and you need to output the corresponding document content based on the user's input.\n\nHere is the technical introduction of LobeChat\n\n    LobeChat is an AI conversation application built with the Next.js framework. It uses a series of technology stacks to implement various functions and features.\n\n\n    ## Basic Technology Stack\n\n    The core technology stack of LobeChat is as follows:\n\n    - **Framework**: We chose [Next.js](https://nextjs.org/), a powerful React framework that provides key features such as server-side rendering, routing framework, and Router Handler for our project.\n    - **Component Library**: We use [Ant Design (antd)](https://ant.design/) as the basic component library, and introduce [lobe-ui](https://github.com/lobehub/lobe-ui) as our business component library.\n    - **State Management**: We use [zustand](https://github.com/pmndrs/zustand), a lightweight and easy-to-use state management library.\n    - **Network Request**: We adopt [swr](https://swr.vercel.app/), a React Hooks library for data fetching.\n    - **Routing**: We directly use the routing solution provided by [Next.js](https://nextjs.org/) itself.\n    - **Internationalization**: We use [i18next](https://www.i18next.com/) to implement multi-language support for the application.\n    - **Styling**: We use [antd-style](https://github.com/ant-design/antd-style), a CSS-in-JS library that is compatible with Ant Design.\n    - **Unit Testing**: We use [vitest](https://github.com/vitejs/vitest) for unit testing.\n\n    ## Folder Directory Structure\n\n    The folder directory structure of LobeChat is as follows:\n\n    \\`\\`\\`bash\n    src\n    ├── app        # Main logic and state management related code of the application\n    ├── components # Reusable UI components\n    ├── config     # Application configuration files, including client environment variables and server environment variables\n    ├── const      # Used to define constants, such as action types, route names, etc.\n    ├── features   # Function modules related to business functions, such as Agent settings, plugin development pop-ups, etc.\n    ├── hooks      # Custom utility Hooks reused throughout the application\n    ├── layout     # Layout components of the application, such as navigation bar, sidebar, etc.\n    ├── locales    # Language files for internationalization\n    ├── services   # Encapsulated backend service interfaces, such as HTTP requests\n    ├── store      # Zustand store for state management\n    ├── types      # TypeScript type definition files\n    └── utils      # Common utility functions\n    \\`\\`\\`\n",
               tts: {
                 showAllLocaleVoice: false,
-                sttLocale: 'auto',
                 ttsService: 'openai',
                 voice: { openai: 'alloy' },
               },

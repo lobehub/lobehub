@@ -122,6 +122,11 @@ export interface Agent {
 export interface CallLLMPayload {
   additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   allowedToolNames?: string[];
+  /**
+   * Attachments the context engine sends as a preview plus file id, planned by
+   * `shouldCompress` so attachment text fits under the compression threshold.
+   */
+  attachmentPreviewFileIds?: string[];
   isFirstMessage?: boolean;
   messages: any[];
   model: string;
@@ -299,6 +304,12 @@ export interface AgentInstructionResolveBlockedTools extends AgentInstructionBas
   payload: {
     /** Optional message to write into blocked tool result content */
     blockedContent?: string;
+    /**
+     * Per-call override of {@link blockedContent}, keyed by tool call id, for
+     * rejections whose message must name the specific call (tool + call id).
+     * A plain record so the instruction stays serializable.
+     */
+    blockedContentByCallId?: Record<string, string>;
     /** Optional machine-readable blocked reason */
     blockedReason?: string;
     /** Parent message ID (assistant message) */

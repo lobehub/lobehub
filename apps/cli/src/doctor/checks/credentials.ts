@@ -1,3 +1,4 @@
+import { agentRunMissingLoginReport, isInsideAgentRun } from '../../auth/refresh';
 import { maskSecret, pickAuthSource } from '../../auth/source';
 import { CLI_API_KEY_ENV } from '../../constants/auth';
 import { CLI_PRIMARY_BIN } from '../../constants/identity';
@@ -24,19 +25,22 @@ const credentialSource: DoctorCheck = {
       tokenType: source.tokenType,
     };
 
-    if (!source.token)
+    if (!source.token) {
+      if (isInsideAgentRun()) return { ...agentRunMissingLoginReport(), evidence, status: 'fail' };
+
       return {
         detail: 'No credential anywhere: no login on disk, no API key in the environment.',
         evidence,
         fix: `Run '${CLI_PRIMARY_BIN} login', or set ${CLI_API_KEY_ENV}.`,
         status: 'fail',
       };
+    }
 
     if (source.kind === 'env-jwt')
       return {
         detail: `Authenticating with the LOBEHUB_JWT in this environment (${maskSecret(source.token)}), not with the stored login.`,
         evidence,
-        fix: 'Expected? This is how server-dispatched runs authenticate. If not, unset LOBEHUB_JWT.',
+        fix: 'Expected? This is how server-dispatched runs authenticate. If not, unset LOBEHUB_JWT and LOBEHUB_JWT_FILE.',
         status: 'warn',
       };
 
@@ -71,12 +75,17 @@ const credentialValidity: DoctorCheck = {
 
     if (credential.error)
       return {
-        detail: `${credential.origin} cannot be used: ${credential.error}.`,
+        // The probe's reasons are whole sentences, so the trailing period has to give way rather
+        // than double up behind them.
+        detail: `${credential.origin} cannot be used: ${credential.error.replace(/\.$/, '')}.`,
         evidence,
+        // The probe's own remedy wins: a refresh that never got an answer needs a retry, and
+        // printing the generic "log in again" under that diagnosis contradicts it.
         fix:
-          credential.kind === 'env-api-key'
+          credential.fix ??
+          (credential.kind === 'env-api-key'
             ? `Issue a fresh key and re-export ${CLI_API_KEY_ENV}.`
-            : `Run '${CLI_PRIMARY_BIN} login' again.`,
+            : `Run '${CLI_PRIMARY_BIN} login' again.`),
         status: 'fail',
       };
 

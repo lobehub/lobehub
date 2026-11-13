@@ -20,16 +20,16 @@ export interface AgentMemoryChatConfig {
 
 export interface AgentSelfIterationChatConfig {
   selfIteration?: {
+    /**
+     * Legacy per-agent switch, kept so stored configs still parse. Ignored: Labs →
+     * Self-evolving (`preference.lab.enableSelfLearning`) is the only self-iteration control.
+     */
     enabled?: boolean;
   };
 }
 
 export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIterationChatConfig {
   codexMaxReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
-  /**
-   * Model ID to use for generating compression summaries
-   */
-  compressionModelId?: string;
   deepseekV4GAReasoningEffort?: 'none' | 'low' | 'high' | 'max';
   deepseekV4ReasoningEffort?: 'none' | 'high' | 'max';
 
@@ -83,6 +83,13 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * Custom reasoning effort level
    */
   enableReasoningEffort?: boolean;
+  /**
+   * Whether stale tool results (overwritten file reads, outdated browser
+   * snapshots, old command output) are replaced with short placeholders in the
+   * model context to save tokens.
+   * Treat undefined as `true` — trimming is the default.
+   */
+  enableStaleToolResultTrim?: boolean;
   /**
    * Whether to enable streaming output
    */
@@ -238,7 +245,6 @@ export const AgentChatConfigSchema = z
     deepseekV4GAReasoningEffort: z.enum(['none', 'low', 'high', 'max']).optional(),
     deepseekV4ReasoningEffort: z.enum(['none', 'high', 'max']).optional(),
     qwen38ReasoningEffort: z.enum(['none', 'low', 'medium', 'xhigh']).optional(),
-    compressionModelId: z.string().optional(),
     disableContextCaching: z.boolean().optional(),
     disableGatewayMode: z.boolean().optional(),
     effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
@@ -254,6 +260,7 @@ export const AgentChatConfigSchema = z
     enableReasoning: z.boolean().optional(),
     enableReasoningEffort: z.boolean().optional(),
     enableStreaming: z.boolean().optional(),
+    enableStaleToolResultTrim: z.boolean().optional(),
     gpt5ReasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
     gpt5_1ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
     gpt5_2ProReasoningEffort: z.enum(['medium', 'high', 'xhigh']).optional(),
@@ -300,7 +307,9 @@ export const AgentChatConfigSchema = z
     thinkingLevel3: z.enum(['low', 'medium', 'high']).optional(),
     thinkingLevel4: z.enum(['minimal', 'high']).optional(),
     toolResultMaxLength: z.number().default(25000),
-    topicGroupMode: z.enum(['byTime', 'byProject', 'flat', 'byStatus']).optional(),
+    topicGroupMode: z
+      .enum(['byTime', 'byProject', 'flat', 'byStatus', 'byAgent', 'byDevice'])
+      .optional(),
     urlContext: z.boolean().optional(),
     useModelBuiltinSearch: z.boolean().optional(),
   })

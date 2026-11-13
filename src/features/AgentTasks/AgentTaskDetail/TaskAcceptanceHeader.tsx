@@ -1,8 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Block, cssVar, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { ShieldCheck } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,7 +28,7 @@ export const TaskAcceptanceHeader = memo<TaskAcceptanceHeaderProps>(
         gap={8}
         paddingBlock={4}
         paddingInline={8}
-        style={{ cursor: 'pointer', width: 'fit-content' }}
+        style={{ cursor: 'pointer', marginInlineStart: -8, width: 'fit-content' }}
         variant={'borderless'}
         onClick={onToggle}
       >

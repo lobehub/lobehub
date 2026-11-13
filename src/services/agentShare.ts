@@ -44,6 +44,11 @@ class AgentShareService {
     );
   }
 
+  /** Candidates for the share settings skill picker — see the router's JSDoc. */
+  async listGrantableSkills(agentId: string) {
+    return lambdaClient.agentShare.listGrantableSkills.query({ agentId });
+  }
+
   async updateShareConfig(agentId: string, config: AgentShareConfigPatchInput) {
     return lambdaClient.agentShare.updateShareConfig.mutate({ agentId, config });
   }

@@ -1,3 +1,5 @@
+import { isHomePathname } from '@/features/HomeLayout/isHomePathname';
+
 export interface ActiveConversationCoordinate {
   agentBasePath?: string;
   agentId?: string;
@@ -5,7 +7,11 @@ export interface ActiveConversationCoordinate {
   groupId?: string;
   hash: string;
   isConversation: boolean;
+  /** The Home page, which projects the inbox agent as the active agent. */
+  isHome: boolean;
   pathname: string;
+  projectBasePath?: string;
+  projectId?: string;
   routeAgentId?: string;
   search: string;
   threadId: string | null;
@@ -13,15 +19,17 @@ export interface ActiveConversationCoordinate {
 }
 
 interface ResolveActiveConversationCoordinateOptions {
-  params: { aid?: string; gid?: string; topicId?: string };
+  params: { aid?: string; gid?: string; projectId?: string; topicId?: string };
   resolvedAgentId?: string;
   url: string;
+  workspaceSlug?: string | null;
 }
 
 export const resolveActiveConversationCoordinate = ({
   params,
   resolvedAgentId,
   url,
+  workspaceSlug,
 }: ResolveActiveConversationCoordinateOptions): ActiveConversationCoordinate => {
   const location = new URL(url, 'https://desktop.local');
   const segments = location.pathname.split('/').filter(Boolean);
@@ -37,11 +45,34 @@ export const resolveActiveConversationCoordinate = ({
     !!params.gid &&
     groupSegmentIndex >= 0 &&
     (groupSuffixLength === 0 || (groupSuffixLength === 1 && params.topicId !== undefined));
-  const isConversation = agentConversation || groupConversation;
+  // Locate the route root structurally: a project slug may itself be named
+  // "project", so a plain lastIndexOf could land on the slug segment instead.
+  const projectSegmentIndex = params.projectId
+    ? segments.findIndex(
+        (segment, index) =>
+          segment === 'project' &&
+          segments[index + 1] === params.projectId &&
+          segments[index + 2] === 'topic',
+      )
+    : -1;
+  const projectSuffixLength =
+    projectSegmentIndex < 0 || segments[projectSegmentIndex + 2] !== 'topic'
+      ? -1
+      : segments.length - projectSegmentIndex - 3;
+  const projectConversation =
+    !!params.projectId &&
+    projectSegmentIndex >= 0 &&
+    segments[projectSegmentIndex + 1] === params.projectId &&
+    segments[projectSegmentIndex + 2] === 'topic' &&
+    (projectSuffixLength === 0 || (projectSuffixLength === 1 && params.topicId !== undefined));
+  const isConversation = agentConversation || groupConversation || projectConversation;
   const agentBasePath =
     agentSegmentIndex >= 0 ? `/${segments.slice(0, agentSegmentIndex + 2).join('/')}` : undefined;
   const groupBasePath =
     groupSegmentIndex >= 0 ? `/${segments.slice(0, groupSegmentIndex + 2).join('/')}` : undefined;
+  const projectBasePath = projectConversation
+    ? `/${segments.slice(0, projectSegmentIndex + 3).join('/')}`
+    : undefined;
 
   return {
     agentBasePath,
@@ -50,7 +81,10 @@ export const resolveActiveConversationCoordinate = ({
     groupId: groupSegmentIndex >= 0 ? params.gid : undefined,
     hash: location.hash,
     isConversation,
+    isHome: isHomePathname(location.pathname, workspaceSlug),
     pathname: location.pathname,
+    projectBasePath,
+    projectId: projectConversation ? params.projectId : undefined,
     routeAgentId: params.aid,
     search: location.search,
     threadId: isConversation ? location.searchParams.get('thread') : null,
@@ -63,7 +97,8 @@ export const buildActiveConversationUrl = (
   topicId: string | null,
   threadId: string | null,
 ) => {
-  const basePath = coordinate.groupBasePath || coordinate.agentBasePath;
+  const basePath =
+    coordinate.groupBasePath || coordinate.agentBasePath || coordinate.projectBasePath;
   if (!basePath) {
     return `${coordinate.pathname}${coordinate.search}${coordinate.hash}`;
   }

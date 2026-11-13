@@ -1,14 +1,24 @@
-import { DropdownMenu, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, Tag, toast } from '@lobehub/ui/base-ui';
-import { Card } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Spin,
+  Tag,
+  toast,
+} from '@lobehub/ui';
 import { ArrowRight, ChevronRight, Database, Ellipsis, Pencil, Play, Trash2 } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import { benchmarkDatasetPath } from '@/features/LobeBench/experimentNavigation';
+import { useIsLobeBenchBenchmark } from '@/features/LobeBench/useIsLobeBenchBenchmark';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { agentEvalService } from '@/services/agentEval';
+import { useEvalStore } from '@/store/eval';
 
 import { DATASET_PRESETS } from '../../../../config/datasetPresets';
 import TestCaseEmptyState from './TestCaseEmptyState';
@@ -16,9 +26,7 @@ import TestCaseTable from './TestCaseTable';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
-    .ant-card-body {
-      padding: 0;
-    }
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   // Tonal figure block that leads with the dataset's headline metric — its
   // test-case count — given mono weight so it reads as a result at a glance.
@@ -171,6 +179,8 @@ const DatasetCard = memo<DatasetCardProps>(
     onRun,
   }) => {
     const { t } = useTranslation('eval');
+    const deleteDataset = useEvalStore((s) => s.deleteDataset);
+    const lobeBench = useIsLobeBenchBenchmark(benchmarkId);
 
     const handleDelete = useCallback(() => {
       confirmModal({
@@ -179,7 +189,7 @@ const DatasetCard = memo<DatasetCardProps>(
         okText: t('common.delete'),
         onOk: async () => {
           try {
-            await agentEvalService.deleteDataset(dataset.id);
+            await deleteDataset(dataset.id);
             toast.success(t('dataset.delete.success'));
             onRefresh();
           } catch {
@@ -188,10 +198,10 @@ const DatasetCard = memo<DatasetCardProps>(
         },
         title: t('common.delete'),
       });
-    }, [dataset.id, onRefresh, t]);
+    }, [dataset.id, deleteDataset, onRefresh, t]);
 
     return (
-      <Card className={styles.card}>
+      <Block className={styles.card} variant={'outlined'}>
         <div
           className={styles.datasetHeader}
           role="button"
@@ -264,7 +274,7 @@ const DatasetCard = memo<DatasetCardProps>(
           <div className={styles.expandedSection}>
             {loading ? (
               <Flexbox align="center" justify="center" style={{ padding: '48px 24px' }}>
-                <NeuralNetworkLoading size={48} />
+                <Spin size="large" />
               </Flexbox>
             ) : total === 0 ? (
               <TestCaseEmptyState onAddCase={onAddCase} onImport={onImport} />
@@ -285,7 +295,7 @@ const DatasetCard = memo<DatasetCardProps>(
             <Flexbox horizontal align="center" className={styles.footer} justify="center">
               <WorkspaceLink
                 className={styles.footerLink}
-                to={`/eval/bench/${benchmarkId}/datasets/${dataset.id}`}
+                to={benchmarkDatasetPath(dataset.id, lobeBench)}
               >
                 <Button icon={ArrowRight} iconPosition="end" size="small" type="text">
                   {t('dataset.detail.viewDetail')}
@@ -294,7 +304,7 @@ const DatasetCard = memo<DatasetCardProps>(
             </Flexbox>
           </div>
         )}
-      </Card>
+      </Block>
     );
   },
 );

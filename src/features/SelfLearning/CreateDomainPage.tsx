@@ -1,9 +1,20 @@
 'use client';
 
-import { Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
-import { ActionIcon, Button, Popover, Text, toast } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Divider,
+  Flexbox,
+  Icon,
+  Input,
+  Popover,
+  Spin,
+  Text,
+  TextArea,
+  toast,
+} from '@lobehub/ui';
 import {
   AnchorIcon,
   ArrowLeftIcon,
@@ -19,7 +30,6 @@ import { Link, useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import { useResolvedAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
 import NavHeader from '@/features/NavHeader';
@@ -28,6 +38,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import type { ExpertiseDomainDraft } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
+import { expertiseActions } from '@/store/expertise';
 import { shinyTextStyles } from '@/styles';
 
 import { type AdjustmentTarget, mergeAdjustedBlock } from './createDomainAdjustment';
@@ -285,6 +296,8 @@ const CreateDomainPage = memo(() => {
         title: draft.title.trim(),
       });
       if (storageKey) localStorage.removeItem(storageKey);
+      // The portrait the page opens on may be a local copy from before this direction existed.
+      void expertiseActions.refreshOverview(agentId);
       navigate(urlJoin('/agent', agentId, 'self-evolving', id));
     } catch {
       toast.error(t('create.failed'));
@@ -460,7 +473,7 @@ const CreateDomainPage = memo(() => {
                         justify={'space-between'}
                       >
                         <Flexbox horizontal align={'center'} gap={8}>
-                          <NeuralNetworkLoading size={18} />
+                          <Spin size="small" variant="network" />
                           <div
                             aria-label={t('create.generating')}
                             className={styles.generatingTextViewport}
@@ -526,7 +539,7 @@ const CreateDomainPage = memo(() => {
                     </Button>
                   </Flexbox>
                 </Flexbox>
-                <Divider style={{ margin: 0 }} />
+                <Divider />
                 <Flexbox className={styles.reviewSection} gap={12}>
                   <Flexbox horizontal align={'flex-start'} gap={8} justify={'space-between'}>
                     <Text fontSize={14} type={'secondary'}>

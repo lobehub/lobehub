@@ -36,6 +36,27 @@ afterEach(async () => {
   await serverDB.delete(users).where(eq(users.id, userId));
 });
 
+const cancelledChatTopicMetadata = (): UserMemoryExtractionMetadata => ({
+  control: {
+    cancelRequestedAt: new Date().toISOString(),
+  },
+  progress: {
+    completedTopics: 0,
+    totalTopics: 1,
+  },
+  source: 'chat_topic',
+});
+
+const initialHourlyMetadata = (): HourlyUserMemoryExtractionMetadata => ({
+  progress: {
+    processedUsers: 0,
+    scheduledBatches: 0,
+    scheduledChildRuns: 0,
+  },
+  source: 'hourly_chat_topic',
+  startedAt: '2026-07-06T00:00:00.000Z',
+});
+
 describe('AsyncTaskModel', () => {
   describe('create', () => {
     it('should create a new async task', async () => {
@@ -131,6 +152,16 @@ describe('AsyncTaskModel', () => {
 
       expect(chunkTasks).toHaveLength(2);
       expect(chunkTasks.every((t) => t.type === AsyncTaskType.Chunking)).toBe(true);
+    });
+
+    it('should return an empty list without scanning for timeout when given no ids', async () => {
+      await serverDB
+        .insert(asyncTasks)
+        .values({ status: AsyncTaskStatus.Processing, type: AsyncTaskType.Chunking, userId });
+
+      const chunkTasks = await asyncTaskModel.findByIds([], AsyncTaskType.Chunking);
+
+      expect(chunkTasks).toEqual([]);
     });
   });
 
@@ -328,16 +359,7 @@ describe('AsyncTaskModel', () => {
       const [task] = await serverDB
         .insert(asyncTasks)
         .values({
-          metadata: {
-            control: {
-              cancelRequestedAt: new Date().toISOString(),
-            },
-            progress: {
-              completedTopics: 0,
-              totalTopics: 1,
-            },
-            source: 'chat_topic',
-          },
+          metadata: cancelledChatTopicMetadata(),
           status: AsyncTaskStatus.Processing,
           type: AsyncTaskType.UserMemoryExtractionWithChatTopic,
           userId,
@@ -353,16 +375,7 @@ describe('AsyncTaskModel', () => {
       const [task] = await serverDB
         .insert(asyncTasks)
         .values({
-          metadata: {
-            control: {
-              cancelRequestedAt: new Date().toISOString(),
-            },
-            progress: {
-              completedTopics: 0,
-              totalTopics: 1,
-            },
-            source: 'chat_topic',
-          },
+          metadata: cancelledChatTopicMetadata(),
           status: AsyncTaskStatus.Processing,
           type: AsyncTaskType.Chunking,
           userId,
@@ -381,16 +394,7 @@ describe('AsyncTaskModel', () => {
       const [task] = await serverDB
         .insert(asyncTasks)
         .values({
-          metadata: {
-            control: {
-              cancelRequestedAt: new Date().toISOString(),
-            },
-            progress: {
-              completedTopics: 0,
-              totalTopics: 1,
-            },
-            source: 'chat_topic',
-          },
+          metadata: cancelledChatTopicMetadata(),
           status: AsyncTaskStatus.Processing,
           type: AsyncTaskType.UserMemoryExtractionWithChatTopic,
           userId: otherUserId,
@@ -414,15 +418,7 @@ describe('AsyncTaskModel', () => {
       const task = await serverDB
         .insert(asyncTasks)
         .values({
-          metadata: {
-            progress: {
-              processedUsers: 0,
-              scheduledBatches: 0,
-              scheduledChildRuns: 0,
-            },
-            source: 'hourly_chat_topic',
-            startedAt: '2026-07-06T00:00:00.000Z',
-          },
+          metadata: initialHourlyMetadata(),
           status: AsyncTaskStatus.Processing,
           type: AsyncTaskType.UserMemoryExtractionHourly,
           userId,
@@ -514,15 +510,7 @@ describe('AsyncTaskModel', () => {
       const task = await serverDB
         .insert(asyncTasks)
         .values({
-          metadata: {
-            progress: {
-              processedUsers: 0,
-              scheduledBatches: 0,
-              scheduledChildRuns: 0,
-            },
-            source: 'hourly_chat_topic',
-            startedAt: '2026-07-06T00:00:00.000Z',
-          },
+          metadata: initialHourlyMetadata(),
           status: AsyncTaskStatus.Pending,
           type: AsyncTaskType.UserMemoryExtractionHourly,
           userId,
@@ -545,15 +533,7 @@ describe('AsyncTaskModel', () => {
       const task = await serverDB
         .insert(asyncTasks)
         .values({
-          metadata: {
-            progress: {
-              processedUsers: 0,
-              scheduledBatches: 0,
-              scheduledChildRuns: 0,
-            },
-            source: 'hourly_chat_topic',
-            startedAt: '2026-07-06T00:00:00.000Z',
-          },
+          metadata: initialHourlyMetadata(),
           status: AsyncTaskStatus.Pending,
           type: AsyncTaskType.UserMemoryExtractionHourly,
           userId,
@@ -641,6 +621,14 @@ describe('AsyncTaskModel', () => {
         .then((res) => res[0]);
 
       const requested = await asyncTaskModel.isHourlyMemoryExtractionCancellationRequested(task.id);
+
+      expect(requested).toBe(false);
+    });
+
+    it('should return false when the task id resolves to nothing', async () => {
+      const requested = await asyncTaskModel.isHourlyMemoryExtractionCancellationRequested(
+        '00000000-0000-0000-0000-000000000000',
+      );
 
       expect(requested).toBe(false);
     });
@@ -873,6 +861,32 @@ describe('initHourlyUserMemoryExtractionMetadata', () => {
       scheduledChildRuns: 3,
     });
   });
+
+  it('should leave upstash undefined when control carries none', () => {
+    const result = initHourlyUserMemoryExtractionMetadata({
+      control: { cancelRequestedAt: '2026-07-06T01:00:00.000Z' },
+      startedAt: '2026-07-06T00:00:00.000Z',
+    });
+
+    expect(result.control).toEqual({
+      cancelReason: undefined,
+      cancelRequestedAt: '2026-07-06T01:00:00.000Z',
+      cancelledBy: undefined,
+      upstash: undefined,
+    });
+  });
+
+  it('should default workflowRunIds to an empty list when upstash omits it', () => {
+    const result = initHourlyUserMemoryExtractionMetadata({
+      control: { upstash: { entryWorkflowRunId: 'entry-only' } },
+      startedAt: '2026-07-06T00:00:00.000Z',
+    });
+
+    expect(result.control?.upstash).toEqual({
+      entryWorkflowRunId: 'entry-only',
+      workflowRunIds: [],
+    });
+  });
 });
 
 describe('AsyncTaskModel.findByInferenceId', () => {
@@ -898,5 +912,57 @@ describe('AsyncTaskModel.findByInferenceId', () => {
       '00000000-0000-0000-0000-000000000000',
     );
     expect(result).toBeUndefined();
+  });
+});
+
+describe('AsyncTaskModel.claimVideoCompletion', () => {
+  it('should atomically claim an active video task once and preserve metadata', async () => {
+    const [task] = await serverDB
+      .insert(asyncTasks)
+      .values({
+        metadata: { webhookToken: 'secret-token' },
+        status: AsyncTaskStatus.Processing,
+        type: AsyncTaskType.VideoGeneration,
+        userId,
+      })
+      .returning();
+
+    const firstClaim = await AsyncTaskModel.claimVideoCompletion(
+      serverDB,
+      task.id,
+      'webhook-event-1',
+    );
+    const duplicateClaim = await AsyncTaskModel.claimVideoCompletion(
+      serverDB,
+      task.id,
+      'webhook-event-2',
+    );
+
+    const claimedTask = await serverDB.query.asyncTasks.findFirst({
+      where: eq(asyncTasks.id, task.id),
+    });
+
+    expect(firstClaim).toBe(true);
+    expect(duplicateClaim).toBe(false);
+    expect(claimedTask?.metadata).toMatchObject({
+      completionEventId: 'webhook-event-1',
+      webhookToken: 'secret-token',
+    });
+    expect(
+      (claimedTask?.metadata as { completionClaimedAt?: string } | undefined)?.completionClaimedAt,
+    ).toBeTypeOf('string');
+  });
+
+  it('should not claim a terminal video task', async () => {
+    const [task] = await serverDB
+      .insert(asyncTasks)
+      .values({
+        status: AsyncTaskStatus.Success,
+        type: AsyncTaskType.VideoGeneration,
+        userId,
+      })
+      .returning();
+
+    await expect(AsyncTaskModel.claimVideoCompletion(serverDB, task.id)).resolves.toBe(false);
   });
 });

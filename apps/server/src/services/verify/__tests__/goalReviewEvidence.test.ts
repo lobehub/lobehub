@@ -1,10 +1,11 @@
 // @vitest-environment node
 import { REVIEW_PREDICT_PROMPT_VERSION } from '@lobechat/prompts';
+import sharp from 'sharp';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeChatDatabase } from '@/database/type';
 
-import { VerifyReviewPredictorService } from '../reviewPredictor';
+import { GATE_REVIEW_MAX_VISUALS, VerifyReviewPredictorService } from '../reviewPredictor';
 
 const mocks = vi.hoisted(() => ({
   result: vi.fn(),
@@ -171,6 +172,30 @@ describe('Goal review evidence', () => {
   });
 
   /**
+   * Regression: the Goal review attached only the first three frames. A check
+   * carrying four header shots, a close recording and a tooltip shot came back
+   * "unjudgeable — open the hidden LocalFile screenshot, GIF and tooltip", and a
+   * delivery whose verifiers had all passed was parked on a person.
+   */
+  it('attaches every frame of an ordinary check when the review gates the Task', async () => {
+    const ids = ['s1', 's2', 's3', 's4', 's5', 'g1', 's6'];
+    mocks.evidence.mockResolvedValue(
+      ids.map((id) => ({ fileId: id, id, type: id.startsWith('g') ? 'gif' : 'screenshot' })),
+    );
+    mocks.file.mockImplementation(async (id: string) => ({ id, size: 10, url: `key-${id}` }));
+    mocks.url.mockImplementation(async ({ id }: { id: string }) => `https://x/${id}`);
+
+    const prediction = await review().predict({
+      ...params,
+      includeTextEvidence: true,
+      maxVisuals: GATE_REVIEW_MAX_VISUALS,
+    });
+    const payload = JSON.stringify(mocks.generate.mock.calls[0][0].messages);
+    for (const id of ids) expect(payload).toContain(`https://x/${id}`);
+    expect(prediction?.statusReason).toBeUndefined();
+  });
+
+  /**
    * Regression: frames went to the provider as links it had to download. A
    * provider that could not reach the storage behind them (a bucket on
    * localhost or a private network) failed every review of the check with
@@ -186,6 +211,115 @@ describe('Goal review evidence', () => {
     const payload = JSON.stringify(mocks.generate.mock.calls[0][0].messages);
     expect(payload).toContain('data:image/png;base64,iVBORw==');
     expect(mocks.url).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Regression: the inline ceiling was per frame only, so a gate review carrying
+   * twelve large frames could build a request body far past provider limits.
+   */
+  it('keeps regions drawn on a GIF frame sheet off the original animation', async () => {
+    mocks.evidence.mockResolvedValue([
+      { fileId: 'f-gif', id: 'g1', type: 'gif' },
+      { fileId: 'f-png', id: 's1', type: 'screenshot' },
+    ]);
+    const frames = await Promise.all(
+      ['#ff0000', '#0000ff'].map((background) =>
+        sharp({ create: { background, channels: 3, height: 8, width: 8 } })
+          .png()
+          .toBuffer(),
+      ),
+    );
+    const gif = await sharp(frames, { join: { animated: true } })
+      .gif()
+      .toBuffer();
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    mocks.file.mockImplementation(async (id: string) =>
+      id === 'f-gif'
+        ? { fileType: 'image/gif', id, size: gif.length, url: 'key-gif' }
+        : { fileType: 'image/png', id, size: png.length, url: 'key-png' },
+    );
+    mocks.bytes.mockImplementation(async (url: string) =>
+      url === 'key-gif' ? new Uint8Array(gif) : png,
+    );
+    const box = { height: 0.2, width: 0.2, x: 0.1, y: 0.1 };
+    mocks.generate.mockResolvedValue({
+      action: 'reject',
+      comment: 'Spinner in frame 3',
+      regions: [
+        { ...box, comment: 'on the sheet', imageIndex: 0 },
+        { ...box, comment: 'on the screenshot', imageIndex: 1 },
+      ],
+    });
+
+    await review().predict(params);
+
+    const payload = JSON.stringify(mocks.generate.mock.calls[0][0].messages);
+    expect(payload).not.toContain('data:image/gif');
+    expect(payload).toContain('frames in playback order');
+    expect(mocks.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        annotations: [{ comment: 'on the screenshot', evidenceId: 's1', rect: box }],
+        comment: 'Spinner in frame 3',
+      }),
+    );
+  });
+
+  it('still sends a GIF as a sheet after the inline budget is spent', async () => {
+    const big = 5 * 1024 * 1024;
+    const frames = await Promise.all(
+      ['#ff0000', '#0000ff'].map((background) =>
+        sharp({ create: { background, channels: 3, height: 8, width: 8 } })
+          .png()
+          .toBuffer(),
+      ),
+    );
+    const gif = await sharp(frames, { join: { animated: true } })
+      .gif()
+      .toBuffer();
+    // Three 5 MiB screenshots spend the whole 15 MiB budget before the GIF.
+    mocks.evidence.mockResolvedValue([
+      ...['s1', 's2', 's3'].map((id) => ({ fileId: id, id, type: 'screenshot' })),
+      { fileId: 'f-gif', id: 'g1', type: 'gif' },
+    ]);
+    mocks.file.mockImplementation(async (id: string) =>
+      id === 'f-gif'
+        ? { fileType: 'image/gif', id, size: gif.length, url: 'key-gif' }
+        : { fileType: 'image/png', id, size: big, url: `key-${id}` },
+    );
+    mocks.bytes.mockImplementation(async (url: string) =>
+      url === 'key-gif' ? new Uint8Array(gif) : new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+    );
+    mocks.url.mockImplementation(async ({ id }: { id: string }) => `https://x/${id}`);
+
+    await review().predict({ ...params, maxVisuals: GATE_REVIEW_MAX_VISUALS });
+
+    const payload = JSON.stringify(mocks.generate.mock.calls[0][0].messages);
+    // The sheet is budgeted first, so the last screenshot is the one linked.
+    expect(payload).toContain('https://x/s3');
+    expect(payload).not.toContain('https://x/f-gif');
+    expect(payload).toContain('frames in playback order');
+  });
+
+  it('links the frames past the per-request inline budget', async () => {
+    const size = 4 * 1024 * 1024;
+    const ids = ['s1', 's2', 's3', 's4', 's5'];
+    mocks.evidence.mockResolvedValue(ids.map((id) => ({ fileId: id, id, type: 'screenshot' })));
+    mocks.file.mockImplementation(async (id: string) => ({
+      fileType: 'image/png',
+      id,
+      size,
+      url: `key-${id}`,
+    }));
+    mocks.bytes.mockResolvedValue(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    mocks.url.mockImplementation(async ({ id }: { id: string }) => `https://x/${id}`);
+
+    await review().predict({ ...params, maxVisuals: GATE_REVIEW_MAX_VISUALS });
+    // 15 MiB budget: three 4 MiB frames inline, the fourth and fifth are linked.
+    expect(mocks.bytes).toHaveBeenCalledTimes(3);
+    const payload = JSON.stringify(mocks.generate.mock.calls[0][0].messages);
+    expect(payload).not.toContain('https://x/s3');
+    expect(payload).toContain('https://x/s4');
+    expect(payload).toContain('https://x/s5');
   });
 
   it('links a frame too large to send inline', async () => {

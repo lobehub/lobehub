@@ -1,100 +1,75 @@
-import { copyToClipboard, Icon } from '@lobehub/ui';
-import {
-  ActionIcon,
-  confirmModal,
-  type DropdownItem,
-  DropdownMenu,
-  toast,
-} from '@lobehub/ui/base-ui';
-import { CopyIcon, LinkIcon, MoreHorizontalIcon, TrashIcon } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { ActionIcon, cssVar, DropdownMenu } from '@lobehub/ui';
+import { ArchiveIcon, ArchiveRestoreIcon, MoreHorizontalIcon } from 'lucide-react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useAppOrigin } from '@/hooks/useAppOrigin';
-import { usePermission } from '@/hooks/usePermission';
-import { useGoalStore } from '@/store/goal';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { goalSelectors, useGoalStore } from '@/store/goal';
+
+import { useGoalArchiveToggle } from './useGoalArchiveToggle';
+import { useGoalMenuItems } from './useGoalMenuItems';
 
 interface GoalDetailActionsProps {
   /** Absent for a goal with no responsible agent — e.g. one created from a project. */
   agentId?: string;
+  archivedAt?: Date | string | null;
   goalId: string;
+  /** Moves to the in-place title editor instead of opening the rename dialog. */
+  onRename?: () => void;
   projectId?: string | null;
 }
 
-const GoalDetailActions = memo<GoalDetailActionsProps>(({ agentId, goalId, projectId }) => {
-  const { t } = useTranslation(['chat', 'common']);
-  const navigate = useWorkspaceAwareNavigate();
-  const { allowed: canEditTask } = usePermission('create_content');
-  const deleteGoal = useGoalStore((s) => s.deleteGoal);
-  // Not `window.location.href`: on desktop that is the `app://renderer` shell
-  // origin (and the shell location does not track the active tab) — build the
-  // shareable web URL from the app origin and the goal route explicitly.
-  const appOrigin = useAppOrigin();
-  const shareUrl = appOrigin
-    ? `${appOrigin}${agentId ? `/agent/${agentId}/goal/${goalId}` : `/goal/${goalId}`}`
-    : undefined;
+/** The detail header's archive button and "more" menu, beside the favorite star like a task's. */
+const GoalDetailActions = memo<GoalDetailActionsProps>(
+  ({ agentId, archivedAt, goalId, onRename, projectId }) => {
+    const { t } = useTranslation('chat');
+    const status = useGoalStore((s) => goalSelectors.goalGraph(goalId)(s)?.goal.status);
+    const creatorUserId = useGoalStore((s) => goalSelectors.goalGraph(goalId)(s)?.goal.userId);
+    const title = useGoalStore((s) => goalSelectors.goalGraph(goalId)(s)?.goal.title);
+    const archive = useGoalArchiveToggle({ archivedAt, creatorUserId, goalId, status });
+    const items = useGoalMenuItems({
+      agentId,
+      // Still passed: an archived goal's status submenu stays locked until restored.
+      archivedAt,
+      creatorUserId,
+      goalId,
+      // The archive action has its own header button.
+      omitArchive: true,
+      onRename,
+      projectId,
+      status,
+      title,
+    });
 
-  const items = useMemo<DropdownItem[]>(
-    () => [
-      {
-        icon: <Icon icon={CopyIcon} />,
-        key: 'copyId',
-        label: t('taskList.contextMenu.copyId'),
-        onClick: async () => {
-          await copyToClipboard(goalId);
-          toast.success(t('taskList.contextMenu.copyIdSuccess'));
-        },
-      },
-      {
-        disabled: !shareUrl,
-        icon: <Icon icon={LinkIcon} />,
-        key: 'copyLink',
-        label: t('taskList.contextMenu.copyLink'),
-        onClick: async () => {
-          if (!shareUrl) return;
-          await copyToClipboard(shareUrl);
-          toast.success(t('taskList.contextMenu.copyLinkSuccess'));
-        },
-      },
-      { type: 'divider' },
-      {
-        danger: true,
-        disabled: !canEditTask,
-        icon: <Icon icon={TrashIcon} />,
-        key: 'delete',
-        label: t('delete', { ns: 'common' }),
-        onClick: () => {
-          confirmModal({
-            content: t('goalDetail.deleteConfirm.content'),
-            okButtonProps: { danger: true },
-            okText: t('goalDetail.deleteConfirm.ok'),
-            onOk: async () => {
-              // Mirrors the list scope the goal was rendered under, so the page
-              // the user lands on is the one whose cache was just refreshed.
-              await deleteGoal(agentId, goalId, projectId ? `project:${projectId}` : undefined);
-              navigate(
-                agentId
-                  ? `/agent/${agentId}/goals`
-                  : projectId
-                    ? `/project/${projectId}/goals`
-                    : '/',
-              );
-            },
-            title: t('goalDetail.deleteConfirm.title'),
-          });
-        },
-      },
-    ],
-    [agentId, canEditTask, deleteGoal, goalId, navigate, projectId, shareUrl, t],
-  );
+    const canArchive = !archive.deniedReason;
 
-  return (
-    <DropdownMenu items={items} placement={'bottomRight'}>
-      <ActionIcon icon={MoreHorizontalIcon} size={'small'} title={t('goalDetail.moreActions')} />
-    </DropdownMenu>
-  );
-});
+    return (
+      <>
+        {/* A blocked archive stays enabled so hover and keyboard users can read why;
+            a click only repeats the reason. Never mark it `aria-disabled`: ActionIcon
+            styles that with `pointer-events: none`, which hides the reason. */}
+        <ActionIcon
+          aria-description={archive.deniedReason}
+          aria-label={archive.label}
+          color={canArchive ? undefined : cssVar.colorTextDisabled}
+          icon={archive.isArchived ? ArchiveRestoreIcon : ArchiveIcon}
+          size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+          style={canArchive ? undefined : { cursor: 'not-allowed' }}
+          title={archive.deniedReason ?? archive.label}
+          tooltipProps={{ placement: 'bottom' }}
+          onClick={() => void archive.toggle()}
+        />
+        <DropdownMenu items={items} placement={'bottomRight'}>
+          <ActionIcon
+            icon={MoreHorizontalIcon}
+            size={'small'}
+            title={t('goalDetail.moreActions')}
+          />
+        </DropdownMenu>
+      </>
+    );
+  },
+);
 
 GoalDetailActions.displayName = 'GoalDetailActions';
 

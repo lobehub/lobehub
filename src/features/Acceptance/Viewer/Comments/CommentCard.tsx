@@ -1,30 +1,32 @@
 'use client';
 
 import type { AcceptanceCommentItem } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import type { DropdownItem } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui';
 import {
   ActionIcon,
   Avatar,
   confirmModal,
+  cx,
   DropdownMenu,
+  Flexbox,
+  Icon,
   Tag,
   Text,
   toast,
-} from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+} from '@lobehub/ui';
 import { Link2, MoreHorizontal, Trash2 } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAcceptanceOrigin } from '@/features/Acceptance/origin';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import { AttachmentThumbs } from '../Evidence/attachments';
 import { commentAnchorUrl } from './anchor';
+import CommentContent from './CommentContent';
 import CommentReactions from './CommentReactions';
-import { styles } from './styles';
+import { styles, TIMELINE_NODE } from './styles';
 
 export const commentAuthorName = (author: AcceptanceCommentItem['author']) =>
   author.fullName || author.username || '—';
@@ -66,8 +68,9 @@ interface CommentCardProps {
   /**
    * `boxed` is the discussion message: a header strip over the body.
    * `plain` is the floating note: the same content with no frame of its own.
+   * `feed` is the discussion feed: an author line, the words indented under it.
    */
-  variant?: 'boxed' | 'plain';
+  variant?: 'boxed' | 'feed' | 'plain';
 }
 
 /** One remark: who, when, what — and the author's own actions behind a menu. */
@@ -84,6 +87,7 @@ const CommentCard = memo<CommentCardProps>(
   }) => {
     const { t } = useTranslation('verify');
     const time = useActivityTime(comment.createdAt);
+    const appOrigin = useAcceptanceOrigin();
     const [deleting, setDeleting] = useState(false);
     const name = nameOverride ?? commentAuthorName(comment.author);
     const viewerId = useUserStore(userProfileSelectors.userId);
@@ -91,7 +95,7 @@ const CommentCard = memo<CommentCardProps>(
 
     const copyAnchor = async () => {
       try {
-        await navigator.clipboard.writeText(commentAnchorUrl(comment.id));
+        await navigator.clipboard.writeText(commentAnchorUrl(comment.id, appOrigin));
         toast.success(t('acceptance.comments.linkCopied'));
       } catch (cause) {
         console.error('[acceptance:comments]', cause);
@@ -155,6 +159,7 @@ const CommentCard = memo<CommentCardProps>(
           wrap={'wrap'}
         >
           {variant === 'plain' && <CommentAvatar comment={comment} size={18} />}
+          {variant === 'feed' && <CommentAvatar comment={comment} size={TIMELINE_NODE} />}
           <Text
             className={nameOverride ? styles.headline : styles.authorName}
             fontSize={13}
@@ -210,18 +215,16 @@ const CommentCard = memo<CommentCardProps>(
             </div>
           )}
         </Flexbox>
-        <div className={variant === 'boxed' ? styles.body : styles.panelBody}>
-          {comment.deletedAt ? (
-            <span className={styles.deleted}>{t('acceptance.comments.deleted')}</span>
-          ) : (
-            comment.content
-          )}
-          {/* Exhibits, under the words rather than inside them. */}
-          {comment.attachments.length > 0 && (
-            <div className={styles.attachments}>
-              <AttachmentThumbs attachments={comment.attachments} size={'comment'} />
-            </div>
-          )}
+        <div
+          className={
+            variant === 'boxed'
+              ? styles.body
+              : variant === 'feed'
+                ? styles.feedBody
+                : styles.panelBody
+          }
+        >
+          <CommentContent comment={comment} />
           {onReact && (
             <CommentReactions
               reactions={comment.reactions}

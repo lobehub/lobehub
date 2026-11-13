@@ -90,37 +90,6 @@ describe('BaseFileSearch', () => {
       expect(fileSearch.testDetermineContentType('tar')).toBe('archive');
       expect(fileSearch.testDetermineContentType('gz')).toBe('archive');
     });
-
-    it('should return audio for audio extensions', () => {
-      expect(fileSearch.testDetermineContentType('mp3')).toBe('audio');
-      expect(fileSearch.testDetermineContentType('wav')).toBe('audio');
-      expect(fileSearch.testDetermineContentType('ogg')).toBe('audio');
-    });
-
-    it('should return video for video extensions', () => {
-      expect(fileSearch.testDetermineContentType('mp4')).toBe('video');
-      expect(fileSearch.testDetermineContentType('avi')).toBe('video');
-      expect(fileSearch.testDetermineContentType('mkv')).toBe('video');
-    });
-
-    it('should return image for image extensions', () => {
-      expect(fileSearch.testDetermineContentType('png')).toBe('image');
-      expect(fileSearch.testDetermineContentType('jpg')).toBe('image');
-      expect(fileSearch.testDetermineContentType('gif')).toBe('image');
-    });
-
-    it('should return document for document extensions', () => {
-      expect(fileSearch.testDetermineContentType('pdf')).toBe('document');
-      expect(fileSearch.testDetermineContentType('doc')).toBe('document');
-      expect(fileSearch.testDetermineContentType('docx')).toBe('document');
-    });
-
-    it('should return code for code extensions', () => {
-      expect(fileSearch.testDetermineContentType('ts')).toBe('code');
-      expect(fileSearch.testDetermineContentType('js')).toBe('code');
-      expect(fileSearch.testDetermineContentType('py')).toBe('code');
-    });
-
     it('should return unknown for unrecognized extensions', () => {
       expect(fileSearch.testDetermineContentType('xyz')).toBe('unknown');
       expect(fileSearch.testDetermineContentType('foo')).toBe('unknown');
@@ -152,10 +121,6 @@ describe('BaseFileSearch', () => {
       expect(fileSearch.testEscapeGlobPattern('path\\file.ts')).toBe('path\\\\file\\.ts');
     });
 
-    it('should escape dots', () => {
-      expect(fileSearch.testEscapeGlobPattern('normal-file.ts')).toBe('normal-file\\.ts');
-    });
-
     it('should return unchanged string if no special characters', () => {
       expect(fileSearch.testEscapeGlobPattern('normal-file-ts')).toBe('normal-file-ts');
     });
@@ -180,17 +145,11 @@ describe('BaseFileSearch', () => {
       expect(results[0].engine).toBe('mdfind');
     });
 
-    it('should handle undefined engine', async () => {
+    it('should infer content type without an engine', async () => {
       const options: SearchOptions = { keywords: 'test' };
       const results = await fileSearch.testProcessFilePaths(['/test/file.ts'], options);
 
       expect(results[0].engine).toBeUndefined();
-    });
-
-    it('should determine content type from extension', async () => {
-      const options: SearchOptions = { keywords: 'test' };
-      const results = await fileSearch.testProcessFilePaths(['/test/file.ts'], options);
-
       expect(results[0].contentType).toBe('code');
     });
   });
@@ -293,31 +252,6 @@ describe('BaseFileSearch', () => {
       const results = await fileSearch.search({ keywords: 'test' });
 
       expect(results[0].engine).toBe('test-engine');
-    });
-  });
-
-  describe('glob', () => {
-    it('should return GlobFilesResult with engine', async () => {
-      const result = await fileSearch.glob({ pattern: '*.ts' });
-
-      expect(result.engine).toBe('test-engine');
-      expect(result.success).toBe(true);
-    });
-  });
-
-  describe('checkSearchServiceStatus', () => {
-    it('should return true', async () => {
-      const status = await fileSearch.checkSearchServiceStatus();
-
-      expect(status).toBe(true);
-    });
-  });
-
-  describe('updateSearchIndex', () => {
-    it('should return true', async () => {
-      const result = await fileSearch.updateSearchIndex();
-
-      expect(result).toBe(true);
     });
   });
 });

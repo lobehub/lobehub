@@ -16,7 +16,6 @@ on:
       - '.github/workflows/sync*.y*ml'
       - '.github/workflows/auto-*.yml'
       - '.github/workflows/manual-*.yml'
-      - '.github/workflows/lighthouse.yml'
       - '.github/workflows/bundle-analyzer.yml'
   pull_request:
     paths-ignore:
@@ -30,7 +29,6 @@ on:
       - '.github/workflows/sync*.y*ml'
       - '.github/workflows/auto-*.yml'
       - '.github/workflows/manual-*.yml'
-      - '.github/workflows/lighthouse.yml'
       - '.github/workflows/bundle-analyzer.yml'
 
 permissions:
@@ -197,7 +195,7 @@ jobs:
         run: node .github/scripts/bundle-size-gate.cjs check --current size-report/entry-graph.json --baseline .size-baseline/entry-graph.json --label "First-screen static import graph (gzip)" --report size-report/report.md --floor 65536
 
       - name: Upload size report with resolved dependency versions
-        if: always() && env.SIZE_GATE_ENABLED == 'true'
+        if: ${{ !cancelled() && env.SIZE_GATE_ENABLED == 'true' }}
         uses: actions/upload-artifact@v6
         with:
           name: size-report
@@ -206,7 +204,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Comment bundle size report on PR
-        if: always() && env.SIZE_GATE_ENABLED == 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: ${{ !cancelled() && env.SIZE_GATE_ENABLED == 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) }}
         uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

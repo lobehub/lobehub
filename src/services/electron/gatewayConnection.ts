@@ -13,8 +13,24 @@ class GatewayConnectionService {
     return ensureElectronIpc().gatewayConnection.getConnectionStatus();
   };
 
+  getKeepAwake = async () => {
+    return ensureElectronIpc().gatewayConnection.getKeepAwake();
+  };
+
+  setKeepAwake = async (enabled: boolean) => {
+    return ensureElectronIpc().gatewayConnection.setKeepAwake({ enabled });
+  };
+
   getDeviceInfo = async () => {
     return ensureElectronIpc().gatewayConnection.getDeviceInfo();
+  };
+
+  getStableDeviceId = async () => {
+    return ensureElectronIpc().gatewayConnection.getStableDeviceId();
+  };
+
+  getWorkspaceDeviceId = async (workspaceId: string) => {
+    return ensureElectronIpc().gatewayConnection.getWorkspaceDeviceId({ workspaceId });
   };
 }
 

@@ -1,6 +1,5 @@
 'use client';
 
-import { ContextMenuTrigger, Flexbox } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
@@ -8,15 +7,17 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  ContextMenuTrigger,
+  cx,
+  Flexbox,
+  Spin,
   Text,
-} from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+} from '@lobehub/ui';
 import { ArrowRight } from 'lucide-react';
 import React, { memo, type MouseEvent, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchAgentLabels } from '@/hooks/useFetchAgentLabels';
@@ -77,18 +78,18 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
               <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
                 {t(titleKey)}
               </Text>
-              {isRevalidating && <NeuralNetworkLoading size={14} />}
+              {isRevalidating && <Spin size="small" variant="network" />}
             </Flexbox>
           </AccordionTrigger>
           <Flexbox
             horizontal
             align="center"
+            gap={2}
             className={cx(
               'accordion-action',
               accordionStyles.action,
               accordionStyles.actionBorderless,
             )}
-            gap={2}
           >
             {/* The flat view-all page adapts per mode: workspace gets the
                 workspace/private segments + per-user pin + author column;

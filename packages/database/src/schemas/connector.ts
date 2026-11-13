@@ -51,6 +51,13 @@ export interface OIDCConfig {
   scopes?: string[];
   tokenEndpoint?: string;
 
+  /**
+   * How the client authenticates at the token endpoint. DCR records the method
+   * the server registered; otherwise it is learned from the first successful
+   * exchange. Servers that enforce the registered method reject any other one.
+   */
+  tokenEndpointAuthMethod?: 'client_secret_basic' | 'client_secret_post' | 'none';
+
   /** Recommended for public clients */
   usePKCE?: boolean;
 }
@@ -271,7 +278,7 @@ export type ConnectorToolPermission =
  *
  * Rows are batch-upserted when a connector is connected or its manifest is
  * refreshed. On upsert, only manifest-derived fields (displayName, description,
- * inputSchema, outputSchema, crudType, renderConfig) are overwritten;
+ * inputSchema, outputSchema, crudType, renderConfig, metadata) are overwritten;
  * user-controlled fields (permission, isWorkArtifact, workArtifactConfig,
  * limitConfig) are never overwritten so that user preferences survive
  * manifest refreshes.
@@ -345,7 +352,12 @@ export const userConnectorTools = pgTable(
      */
     limitConfig: jsonb('limit_config').$type<Record<string, unknown>>(),
 
-    /** Safe non-sensitive metadata for display and future extensibility */
+    /**
+     * Safe non-sensitive metadata synced from the manifest, rewritten on every
+     * sync. `visibility` holds an MCP tool's `_meta.ui.visibility` (MCP Apps):
+     * a tool without "model" stays callable by its view but is left out of
+     * the model's tool list.
+     */
     metadata: jsonb('metadata').$type<Record<string, unknown>>(),
 
     ...timestamps,

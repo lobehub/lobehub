@@ -1,6 +1,5 @@
 'use client';
 
-import { ContextMenuTrigger, Flexbox } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
@@ -8,14 +7,16 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  ContextMenuTrigger,
+  cx,
+  Flexbox,
+  Spin,
   Text,
-} from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+} from '@lobehub/ui';
 import { ArrowRight } from 'lucide-react';
 import React, { memo, type MouseEvent, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
@@ -105,18 +106,18 @@ const Private = memo<PrivateProps>(({ itemKey }) => {
               <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
                 {t('navPanel.privateAgents', { defaultValue: 'Private' })}
               </Text>
-              {isRevalidating && <NeuralNetworkLoading size={14} />}
+              {isRevalidating && <Spin size="small" variant="network" />}
             </Flexbox>
           </AccordionTrigger>
           <Flexbox
             horizontal
             align="center"
+            gap={2}
             className={cx(
               'accordion-action',
               accordionStyles.action,
               accordionStyles.actionBorderless,
             )}
-            gap={2}
           >
             <ActionIcon
               icon={ArrowRight}

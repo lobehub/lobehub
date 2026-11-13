@@ -85,8 +85,15 @@ export interface AgentDocumentWithRules extends AgentDocument, AgentDocumentDeri
 
 /** A document-tree entry with its optional original uploaded file. */
 export interface AgentDocumentListItem extends AgentDocumentDerivedFields {
+  /** When the backing document was created. */
+  createdAt: Date;
   description: string | null;
   documentId: string;
+  /**
+   * When the backing document last changed (content, title, …). `updatedAt` is
+   * the agent binding's, which content edits do not touch.
+   */
+  documentUpdatedAt: Date;
   /** Original file to preview; absent for editable agent documents. */
   fileId?: string | null;
   filename: string;
@@ -103,6 +110,7 @@ export interface AgentDocumentListItem extends AgentDocumentDerivedFields {
 export interface AgentDocumentContextRow extends AgentDocumentDerivedFields {
   content: string;
   contentCharCount?: number;
+  createdAt?: Date;
   description: string | null;
   documentId: string;
   editorData: Record<string, any> | null;
@@ -125,6 +133,7 @@ export interface AgentDocumentContextRow extends AgentDocumentDerivedFields {
 export interface AgentDocumentContextPayload {
   content: string;
   contentCharCount?: number;
+  createdAt?: Date;
   description: string | null;
   documentId: string;
   filename: string;

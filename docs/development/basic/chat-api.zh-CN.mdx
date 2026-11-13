@@ -310,7 +310,7 @@ Agent Runtime 循环的执行位置取决于场景：
   子 agent 任务、API/Cron 触发。循环在服务端运行，
   通过 SSE 流式推送事件到客户端，
   入口为 `AgentRuntimeService.executeStep()`
-  （`apps/server/src/services/agentRuntime/AgentRuntimeService.ts`），
+  （`apps/server/src/services/agentRuntime/AgentRuntimeService/executeStep/index.ts`），
   tRPC 路由为 `apps/server/src/routers/lambda/aiAgent.ts`
 
 ## Model Runtime
@@ -361,8 +361,8 @@ export interface LobeRuntimeAI {
 }
 ```
 
-**适配器架构**：通过 `openaiCompatibleFactory` 和
-`anthropicCompatibleFactory` 两种工厂函数，
+**适配器架构**：通过 `createOpenAICompatibleRuntime` 和
+`createAnthropicCompatibleRuntime` 两种工厂函数，
 大多数提供商只需少量配置即可接入。
 目前支持超过 40 个模型提供商
 （OpenAI、Anthropic、Google、Azure、Bedrock、Ollama 等），

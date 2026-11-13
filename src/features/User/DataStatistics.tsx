@@ -1,22 +1,14 @@
 'use client';
 
 import { type FlexboxProps } from '@lobehub/ui';
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { Badge } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Badge, createStaticStyles, cssVar, Flexbox, Spin, Tooltip } from '@lobehub/ui';
 import { isUndefined } from 'es-toolkit/compat';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import { useClientDataSWR } from '@/libs/swr';
-import { statsKeys } from '@/libs/swr/keys';
-import { agentService } from '@/services/agent';
-import { messageService } from '@/services/message';
-import { topicService } from '@/services/topic';
 import { useServerConfigStore } from '@/store/serverConfig';
+import { statsActions, statsSelectors, useStatsStore } from '@/store/stats';
 import { formatShortenNumber } from '@/utils/format';
-import { today } from '@/utils/time';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
@@ -46,43 +38,31 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const DataStatistics = memo<Omit<FlexboxProps, 'children'>>(({ style, ...rest }) => {
   const mobile = useServerConfigStore((s) => s.isMobile);
-  // assistants (counted from the agents table — the sidebar list source of truth)
-  const { data: agents, isLoading: agentsLoading } = useClientDataSWR(statsKeys.countAgents(), () =>
-    agentService.countAgents(),
-  );
-  // topics
-  const { data: topics, isLoading: topicsLoading } = useClientDataSWR(statsKeys.countTopics(), () =>
-    topicService.countTopics(),
-  );
-  // messages
-  const { data: { messages, messagesToday } = {}, isLoading: messagesLoading } = useClientDataSWR(
-    statsKeys.countMessages(),
-    async () => ({
-      messages: await messageService.countMessages({ approximate: true }),
-      // today's delta stays exact — it is small, cheap, and shown as "+N"
-      messagesToday: await messageService.countMessages({
-        startDate: today().format('YYYY-MM-DD'),
-      }),
-    }),
-  );
+  statsActions.useFetchCount('agents');
+  statsActions.useFetchCount('topics');
+  statsActions.useFetchCount('messages');
+  const agents = useStatsStore(statsSelectors.count('agents'))?.count;
+  const topics = useStatsStore(statsSelectors.count('topics'))?.count;
+  const { count: messages, today: messagesToday } =
+    useStatsStore(statsSelectors.count('messages')) ?? {};
 
   const { t } = useTranslation('common');
 
-  const loading = <NeuralNetworkLoading size={20} />;
+  const loading = <Spin size="middle" />;
 
   const items = [
     {
-      count: agentsLoading || isUndefined(agents) ? loading : agents,
+      count: isUndefined(agents) ? loading : agents,
       key: 'sessions',
       title: t('dataStatistics.sessions'),
     },
     {
-      count: topicsLoading || isUndefined(topics) ? loading : topics,
+      count: isUndefined(topics) ? loading : topics,
       key: 'topics',
       title: t('dataStatistics.topics'),
     },
     {
-      count: messagesLoading || isUndefined(messages) ? loading : messages,
+      count: isUndefined(messages) ? loading : messages,
       countToady: messagesToday,
       key: 'messages',
       title: t('dataStatistics.messages'),

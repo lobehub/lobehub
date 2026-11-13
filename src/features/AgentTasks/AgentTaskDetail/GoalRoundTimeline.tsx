@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -38,7 +36,7 @@ const styles = createStaticStyles(({ css }) => ({
   rail: css`
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
+    gap: 4px;
     align-items: center;
 
     min-width: 0;

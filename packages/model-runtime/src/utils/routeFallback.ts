@@ -1,4 +1,4 @@
-import { toRecord } from '@lobechat/utils';
+import { toRecord } from './object';
 
 import { getErrorCodeSpec } from '../errors/specs';
 import { AgentRuntimeErrorType } from '../types/error';
@@ -125,7 +125,7 @@ const collectErrorStrings = (
   return result;
 };
 
-const collectStatusCodes = (
+export const collectStatusCodes = (
   value: unknown,
   visited = new WeakSet<object>(),
   depth = 0,

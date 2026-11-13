@@ -127,8 +127,9 @@ describe('MessagesEngine', () => {
           createBasicParams({ stepContext: { todos: messageTodos } }),
         ).process();
 
-        expect(result.messages[0].content).toContain('<todo_context>');
-        expect(result.messages[0].content).toContain('Message task');
+        expect(result.messages[0].content).toBe('Hello');
+        expect(result.messages.at(-1)?.content).toContain('<todo_context>');
+        expect(result.messages.at(-1)?.content).toContain('Message task');
       });
 
       it('prefers message state over plan metadata', async () => {
@@ -139,8 +140,9 @@ describe('MessagesEngine', () => {
           }),
         ).process();
 
-        expect(result.messages[0].content).toContain('Message task');
-        expect(result.messages[0].content).not.toContain('Metadata task');
+        expect(result.messages[0].content).toBe('Hello');
+        expect(result.messages.at(-1)?.content).toContain('Message task');
+        expect(result.messages.at(-1)?.content).not.toContain('Metadata task');
       });
 
       it('uses an empty message tombstone to suppress non-empty metadata', async () => {
@@ -151,8 +153,11 @@ describe('MessagesEngine', () => {
           }),
         ).process();
 
-        expect(result.messages[0].content).not.toContain('<todo_context>');
-        expect(result.messages[0].content).not.toContain('Metadata task');
+        expect(result.messages).toHaveLength(2);
+        expect(result.messages[0].content).toBe('Hello');
+        expect(
+          result.messages.some((message) => String(message.content).includes('<todo_context>')),
+        ).toBe(false);
       });
 
       it('falls back to enabled plan metadata when message state is undefined', async () => {
@@ -160,7 +165,62 @@ describe('MessagesEngine', () => {
           createBasicParams({ planTodo: { enabled: true, todos: metadataTodos } }),
         ).process();
 
-        expect(result.messages[0].content).toContain('Metadata task');
+        expect(result.messages[0].content).toBe('Hello');
+        expect(result.messages.at(-1)?.content).toContain('Metadata task');
+      });
+
+      it('skips TODO injection when disabled for the current LLM call', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({
+            planTodo: { enabled: true, injectTodos: false, todos: metadataTodos },
+          }),
+        ).process();
+
+        expect(
+          result.messages.some((message) => String(message.content).includes('<todo_context>')),
+        ).toBe(false);
+      });
+
+      it('keeps the historical prefix stable across create, update, and clear', async () => {
+        const createResult = await new MessagesEngine(
+          createBasicParams({ stepContext: { todos: metadataTodos } }),
+        ).process();
+        const updateResult = await new MessagesEngine(
+          createBasicParams({ stepContext: { todos: messageTodos } }),
+        ).process();
+        const clearResult = await new MessagesEngine(
+          createBasicParams({ stepContext: { todos: { items: [], updatedAt: 'cleared' } } }),
+        ).process();
+        const signatures = (messages: typeof createResult.messages) =>
+          messages.map(({ content, role }) => JSON.stringify({ content, role }));
+
+        expect(signatures(updateResult.messages.slice(0, -1))).toEqual(
+          signatures(createResult.messages.slice(0, -1)),
+        );
+        expect(signatures(clearResult.messages)).toEqual(
+          signatures(createResult.messages.slice(0, -1)),
+        );
+      });
+
+      it('keeps historical and virtual-tail providers in their intended messages', async () => {
+        const result = await new MessagesEngine(
+          createBasicParams({
+            additionalContexts: [
+              {
+                content: { text: 'Runtime tail', type: 'text' },
+                placement: 'virtual_tail',
+                wrapper: { tag: 'runtime_context' },
+              },
+            ],
+            stepContext: { todos: messageTodos },
+            topicReferences: [{ summary: 'Referenced summary', topicId: 'topic-1' }],
+          }),
+        ).process();
+
+        expect(result.messages[0].content).toContain('<topic_reference_context>');
+        expect(result.messages[0].content).not.toContain('<todo_context>');
+        expect(result.messages.at(-1)?.content).toContain('<todo_context>');
+        expect(result.messages.at(-1)?.content).toContain('<runtime_context>');
       });
     });
 
@@ -682,6 +742,79 @@ describe('MessagesEngine', () => {
 
       expect(content[0].text).toContain('url="https://files.example.com/test.txt"');
     });
+
+    describe('oversized attachment previews', () => {
+      const oversizedParams = (overrides?: Partial<MessagesEngineParams>) =>
+        createBasicParams({
+          knowledge: {
+            fileContents: [
+              { content: 'agent,row\n'.repeat(20_000), fileId: 'agent-file', filename: 'a.csv' },
+            ],
+          },
+          messages: [
+            {
+              content: 'Summarize this',
+              createdAt: Date.now(),
+              fileList: [
+                {
+                  content: 'row,value\n'.repeat(20_000),
+                  fileType: 'text/csv',
+                  id: 'big-file',
+                  name: 'big.csv',
+                  size: 200_000,
+                  url: 'https://files.example.com/big.csv',
+                },
+              ],
+              id: 'msg-1',
+              role: 'user',
+              updatedAt: Date.now(),
+            } as UIChatMessage,
+          ],
+          ...overrides,
+        });
+
+      const userText = async (params: MessagesEngineParams) => {
+        const result = await new MessagesEngine(params).process();
+        return result.messages
+          .filter((message) => message.role === 'user')
+          .flatMap((message) =>
+            typeof message.content === 'string'
+              ? [message.content]
+              : (message.content as any[]).map((part) => part.text ?? ''),
+          )
+          .join('\n');
+      };
+
+      it('names readAttachment when the final tool set carries it', async () => {
+        const text = await userText(
+          oversizedParams({ toolsConfig: { tools: ['lobe-attachments'] } }),
+        );
+
+        expect(text).toContain('call readAttachment with fileId="big-file" and offset=401');
+        expect(text).toContain('call readAttachment with fileId="agent-file" and offset=401');
+      });
+
+      it('does not promise readAttachment when the tool is not enabled', async () => {
+        // Custom / exclusive tool modes, share visitors and legacy clients never enable it.
+        const text = await userText(
+          oversizedParams({ toolsConfig: { tools: ['lobe-web-browsing'] } }),
+        );
+
+        expect(text).toContain('no tool to read the rest is available here');
+        expect(text).not.toContain('readAttachment');
+      });
+
+      it('does not promise readAttachment when the model cannot call tools', async () => {
+        const text = await userText(
+          oversizedParams({
+            capabilities: { isCanUseFC: () => false },
+            toolsConfig: { tools: ['lobe-attachments'] },
+          }),
+        );
+
+        expect(text).not.toContain('readAttachment');
+      });
+    });
   });
 
   describe('tools config', () => {
@@ -755,97 +888,6 @@ describe('MessagesEngine', () => {
     });
   });
 
-  describe('Page Editor context', () => {
-    it('should inject page content to the last user message when pageContentContext is provided', async () => {
-      const messages: UIChatMessage[] = [
-        {
-          content: 'First question',
-          createdAt: Date.now(),
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: Date.now(),
-        } as UIChatMessage,
-        {
-          content: 'Answer',
-          createdAt: Date.now(),
-          id: 'msg-2',
-          role: 'assistant',
-          updatedAt: Date.now(),
-        } as UIChatMessage,
-        {
-          content: 'Second question about the page',
-          createdAt: Date.now(),
-          id: 'msg-3',
-          role: 'user',
-          updatedAt: Date.now(),
-        } as UIChatMessage,
-      ];
-
-      const params = createBasicParams({
-        messages,
-        pageContentContext: {
-          markdown: '# Document Title\n\nDocument content here.',
-          metadata: {
-            charCount: 40,
-            lineCount: 3,
-            title: 'Test Document',
-          },
-        },
-      });
-      const engine = new MessagesEngine(params);
-
-      const result = await engine.process();
-
-      expect(result.messages).toEqual([
-        { content: 'First question', role: 'user' },
-        { content: 'Answer', role: 'assistant' },
-        {
-          content: `Second question about the page
-
-<!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->
-<context.instruction>following part contains context information injected by the system. Please follow these instructions:
-
-1. Always prioritize handling user-visible content.
-2. the context is only required when user's queries rely on it.
-</context.instruction>
-<current_page_context>
-<current_page title="Test Document">
-<markdown chars="40" lines="3">
-# Document Title
-
-Document content here.
-</markdown>
-</current_page>
-</current_page_context>
-<!-- END SYSTEM CONTEXT -->`,
-          role: 'user',
-        },
-      ]);
-
-      expect(result.metadata.pageEditorContextInjected).toBe(true);
-    });
-
-    it('should not inject page content when not enabled', async () => {
-      const messages: UIChatMessage[] = [
-        {
-          content: 'Question',
-          createdAt: Date.now(),
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: Date.now(),
-        } as UIChatMessage,
-      ];
-
-      const params = createBasicParams({ messages });
-      const engine = new MessagesEngine(params);
-
-      const result = await engine.process();
-
-      expect(result.messages).toEqual([{ content: 'Question', role: 'user' }]);
-      expect(result.metadata.pageEditorContextInjected).toBeUndefined();
-    });
-  });
-
   describe('Active Topic Document context', () => {
     it('should inject active topic document context to the last user message', async () => {
       const messages: UIChatMessage[] = [
@@ -888,42 +930,6 @@ Document content here.
       expect(userMessage?.content).toContain('Do not use PageAgent editor tools');
       expect(userMessage?.content).toContain('Call readDocument with format="xml" only when');
       expect(result.metadata.activeTopicDocumentContextInjected).toBe(true);
-    });
-
-    it('should skip active topic document context when page editor context is enabled', async () => {
-      const messages: UIChatMessage[] = [
-        {
-          content: 'Question',
-          createdAt: Date.now(),
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: Date.now(),
-        } as UIChatMessage,
-      ];
-
-      const params = createBasicParams({
-        initialContext: {
-          activeTopicDocument: {
-            agentDocumentId: 'agd_123',
-            documentId: 'docs_123',
-            title: 'Topic Plan',
-          },
-          pageEditor: {
-            markdown: '# Page',
-            metadata: { title: 'Page' },
-            xml: '<root />',
-          },
-        },
-        messages,
-      });
-      const engine = new MessagesEngine(params);
-
-      const result = await engine.process();
-      const userMessage = result.messages.find((m) => m.role === 'user');
-
-      expect(userMessage?.content).not.toContain('<active_topic_document>');
-      expect(result.metadata.activeTopicDocumentContextInjected).toBeUndefined();
-      expect(result.metadata.pageEditorContextInjected).toBe(true);
     });
   });
 
@@ -1050,253 +1056,79 @@ Document content here.
     });
   });
 
+  describe('Provider-reused tool_call ids', () => {
+    it('should send each step its own stored result when every step reuses `<tool>:0`', async () => {
+      // Stored shape of a Kimi (zeabur / nvidia / moonshot) run: every step's
+      // call id is `lobe-local-system____runCommand:0`, and every step succeeded.
+      const reusedId = 'lobe-local-system____runCommand:0';
+      const step = (n: number): UIChatMessage[] => [
+        {
+          content: '',
+          createdAt: Date.now(),
+          id: `assistant-${n}`,
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'runCommand',
+              arguments: `{"command":"echo ok-${n}"}`,
+              id: reusedId,
+              identifier: 'lobe-local-system',
+              type: 'builtin',
+            },
+          ],
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+        {
+          content: `Command completed successfully.\n\nStdout: ok-${n}`,
+          createdAt: Date.now(),
+          id: `tool-${n}`,
+          plugin: {
+            apiName: 'runCommand',
+            arguments: `{"command":"echo ok-${n}"}`,
+            identifier: 'lobe-local-system',
+            type: 'builtin',
+          },
+          role: 'tool',
+          tool_call_id: reusedId,
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const engine = new MessagesEngine(
+        createBasicParams({
+          messages: [
+            {
+              content: 'run three commands',
+              createdAt: Date.now(),
+              id: 'user-1',
+              role: 'user',
+              updatedAt: Date.now(),
+            } as UIChatMessage,
+            ...step(1),
+            ...step(2),
+            ...step(3),
+          ],
+        }),
+      );
+
+      const result = await engine.process();
+      const toolMessages = result.messages.filter((m) => m.role === 'tool');
+      const callIds = result.messages
+        .filter((m) => m.role === 'assistant')
+        .flatMap((m) => (m as any).tool_calls.map((call: { id: string }) => call.id));
+
+      expect(toolMessages.map((m) => m.content)).toEqual([
+        'Command completed successfully.\n\nStdout: ok-1',
+        'Command completed successfully.\n\nStdout: ok-2',
+        'Command completed successfully.\n\nStdout: ok-3',
+      ]);
+      expect(new Set(callIds).size).toBe(3);
+      expect(toolMessages.map((m) => (m as any).tool_call_id)).toEqual(callIds);
+      expect(result.metadata.toolMessageReorder?.removedInvalidTools).toBe(0);
+    });
+  });
+
   describe('Page Selections', () => {
-    it('should inject page selections to each user message that has them', async () => {
-      const messages: UIChatMessage[] = [
-        {
-          content: 'First question with selection',
-          createdAt: Date.now(),
-          id: 'msg-1',
-          metadata: {
-            pageSelections: [
-              {
-                content: 'Selected paragraph 1',
-                id: 'sel-1',
-                pageId: 'page-1',
-                xml: '<p>Selected paragraph 1</p>',
-              },
-            ],
-          },
-          role: 'user',
-          updatedAt: Date.now(),
-        } as UIChatMessage,
-        {
-          content: 'Answer to first',
-          createdAt: Date.now(),
-          id: 'msg-2',
-          role: 'assistant',
-          updatedAt: Date.now(),
-        } as UIChatMessage,
-        {
-          content: 'Second question with different selection',
-          createdAt: Date.now(),
-          id: 'msg-3',
-          metadata: {
-            pageSelections: [
-              {
-                content: 'Selected paragraph 2',
-                id: 'sel-2',
-                pageId: 'page-1',
-                xml: '<p>Selected paragraph 2</p>',
-              },
-            ],
-          },
-          role: 'user',
-          updatedAt: Date.now(),
-        } as UIChatMessage,
-      ];
-
-      const params = createBasicParams({
-        messages,
-        pageContentContext: {
-          markdown: '# Doc',
-          metadata: { title: 'Doc' },
-        },
-      });
-      const engine = new MessagesEngine(params);
-
-      const result = await engine.process();
-
-      expect(result.messages).toEqual([
-        {
-          content: `First question with selection
-
-<!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->
-<context.instruction>following part contains context information injected by the system. Please follow these instructions:
-
-1. Always prioritize handling user-visible content.
-2. the context is only required when user's queries rely on it.
-</context.instruction>
-<user_page_selections>
-<user_selections count="1">
-<selection >
-<p>Selected paragraph 1</p>
-</selection>
-</user_selections>
-</user_page_selections>
-<!-- END SYSTEM CONTEXT -->`,
-          role: 'user',
-        },
-        { content: 'Answer to first', role: 'assistant' },
-        {
-          content: `Second question with different selection
-
-<!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->
-<context.instruction>following part contains context information injected by the system. Please follow these instructions:
-
-1. Always prioritize handling user-visible content.
-2. the context is only required when user's queries rely on it.
-</context.instruction>
-<user_page_selections>
-<user_selections count="1">
-<selection >
-<p>Selected paragraph 2</p>
-</selection>
-</user_selections>
-</user_page_selections>
-<current_page_context>
-<current_page title="Doc">
-<markdown chars="5" lines="1">
-# Doc
-</markdown>
-</current_page>
-</current_page_context>
-<!-- END SYSTEM CONTEXT -->`,
-          role: 'user',
-        },
-      ]);
-    });
-
-    it('should skip user messages without pageSelections', async () => {
-      const messages: UIChatMessage[] = [
-        {
-          content: 'No selection here',
-          createdAt: Date.now(),
-          id: 'msg-1',
-          role: 'user',
-          updatedAt: Date.now(),
-        } as UIChatMessage,
-        {
-          content: 'Answer',
-          createdAt: Date.now(),
-          id: 'msg-2',
-          role: 'assistant',
-          updatedAt: Date.now(),
-        } as UIChatMessage,
-        {
-          content: 'With selection',
-          createdAt: Date.now(),
-          id: 'msg-3',
-          metadata: {
-            pageSelections: [
-              {
-                content: 'Selected text',
-                id: 'sel-1',
-                pageId: 'page-1',
-                xml: '<span>Selected text</span>',
-              },
-            ],
-          },
-          role: 'user',
-          updatedAt: Date.now(),
-        } as UIChatMessage,
-      ];
-
-      const params = createBasicParams({
-        messages,
-        pageContentContext: {
-          markdown: '# Doc',
-          metadata: { title: 'Doc' },
-        },
-      });
-      const engine = new MessagesEngine(params);
-
-      const result = await engine.process();
-
-      expect(result.messages).toEqual([
-        { content: 'No selection here', role: 'user' },
-        { content: 'Answer', role: 'assistant' },
-        {
-          content: `With selection
-
-<!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->
-<context.instruction>following part contains context information injected by the system. Please follow these instructions:
-
-1. Always prioritize handling user-visible content.
-2. the context is only required when user's queries rely on it.
-</context.instruction>
-<user_page_selections>
-<user_selections count="1">
-<selection >
-<span>Selected text</span>
-</selection>
-</user_selections>
-</user_page_selections>
-<current_page_context>
-<current_page title="Doc">
-<markdown chars="5" lines="1">
-# Doc
-</markdown>
-</current_page>
-</current_page_context>
-<!-- END SYSTEM CONTEXT -->`,
-          role: 'user',
-        },
-      ]);
-    });
-
-    it('should have only one SYSTEM CONTEXT wrapper when both selections and page content are injected', async () => {
-      const messages: UIChatMessage[] = [
-        {
-          content: 'Question about selection',
-          createdAt: Date.now(),
-          id: 'msg-1',
-          metadata: {
-            pageSelections: [
-              {
-                content: 'Selected text',
-                id: 'sel-1',
-                pageId: 'page-1',
-                xml: '<p>Selected text</p>',
-              },
-            ],
-          },
-          role: 'user',
-          updatedAt: Date.now(),
-        } as UIChatMessage,
-      ];
-
-      const params = createBasicParams({
-        messages,
-        pageContentContext: {
-          markdown: '# Full Document',
-          metadata: { title: 'Full Doc' },
-        },
-      });
-      const engine = new MessagesEngine(params);
-
-      const result = await engine.process();
-
-      expect(result.messages).toEqual([
-        {
-          content: `Question about selection
-
-<!-- SYSTEM CONTEXT (NOT PART OF USER QUERY) -->
-<context.instruction>following part contains context information injected by the system. Please follow these instructions:
-
-1. Always prioritize handling user-visible content.
-2. the context is only required when user's queries rely on it.
-</context.instruction>
-<user_page_selections>
-<user_selections count="1">
-<selection >
-<p>Selected text</p>
-</selection>
-</user_selections>
-</user_page_selections>
-<current_page_context>
-<current_page title="Full Doc">
-<markdown chars="15" lines="1">
-# Full Document
-</markdown>
-</current_page>
-</current_page_context>
-<!-- END SYSTEM CONTEXT -->`,
-          role: 'user',
-        },
-      ]);
-    });
-
     it('should inject generic text selections when page editor is not enabled', async () => {
       const messages: UIChatMessage[] = [
         {
@@ -1332,7 +1164,7 @@ Document content here.
       );
     });
 
-    it('should not inject legacy page selections when page editor is not enabled', async () => {
+    it('should inject legacy page selections as LiteXML with node ids', async () => {
       const messages: UIChatMessage[] = [
         {
           content: 'Question',
@@ -1340,7 +1172,12 @@ Document content here.
           id: 'msg-1',
           metadata: {
             pageSelections: [
-              { content: 'Selected', id: 'sel-1', pageId: 'page-1', xml: '<p>Selected</p>' },
+              {
+                content: 'Selected',
+                id: 'sel-1',
+                pageId: 'page-1',
+                xml: '<p id="ab12">Selected</p>',
+              },
             ],
           },
           role: 'user',
@@ -1348,13 +1185,13 @@ Document content here.
         } as UIChatMessage,
       ];
 
-      // No pageContentContext or initialContext.pageEditor means not enabled
-      const params = createBasicParams({ messages });
-      const engine = new MessagesEngine(params);
+      const engine = new MessagesEngine(createBasicParams({ messages }));
 
       const result = await engine.process();
 
-      expect(result.messages).toEqual([{ content: 'Question', role: 'user' }]);
+      expect(result.messages[0].content).toContain('source="page"');
+      expect(result.messages[0].content).toContain('<p id="ab12">Selected</p>');
+      expect(result.messages[0].content).not.toContain('<user_page_selections');
     });
 
     it('should place additional contexts at the stable prefix and virtual tail', async () => {

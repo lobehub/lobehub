@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { buildBotSender, formatPrompt, formatReferencedMessage } from '../formatPrompt';
+import { SOURCE_MESSAGES_FIELD } from '../mergeMessages';
 
 describe('formatReferencedMessage', () => {
   it('should return undefined when raw is undefined', () => {
@@ -78,6 +79,33 @@ describe('formatPrompt', () => {
   };
 
   const discordSanitize = (text: string) => text.replaceAll(/<@!?bot123>\s*/g, '').trim();
+
+  it('includes a quote carried by an earlier source of a merged turn', () => {
+    const quotedEarlier = {
+      ...baseMessage,
+      raw: { referenced_message: { author: { username: 'Alice' }, content: 'q.pdf' } },
+      text: 'see this',
+    };
+    const last = { ...baseMessage, raw: {}, text: '@bot file it' };
+    const merged = {
+      ...last,
+      [SOURCE_MESSAGES_FIELD]: [quotedEarlier, last],
+      text: 'see this\n@bot file it',
+    };
+
+    expect(formatPrompt(merged)).toContain(
+      '<referenced_message sender="Alice">q.pdf</referenced_message>',
+    );
+  });
+
+  it('lists a quote shared by several merged sources only once', () => {
+    const raw = { referenced_message: { author: { username: 'Alice' }, content: 'same' } };
+    const first = { ...baseMessage, raw, text: 'a' };
+    const second = { ...baseMessage, raw, text: 'b' };
+    const merged = { ...second, [SOURCE_MESSAGES_FIELD]: [first, second], text: 'a\nb' };
+
+    expect(formatPrompt(merged).match(/<referenced_message/g)).toHaveLength(1);
+  });
 
   it('should format basic message with speaker tag', () => {
     const result = formatPrompt(baseMessage);

@@ -41,7 +41,7 @@ export class PluginInternalsActionImpl {
     const sourceMap: Record<string, 'builtin' | 'mcp' | 'composio' | 'lobehubSkill'> = {};
 
     // Get all installed plugins (all treated as MCP now)
-    const installedPlugins = pluginSelectors.installedPlugins(toolStoreState);
+    const installedPlugins = pluginSelectors.confirmedInstalledPlugins(toolStoreState);
     for (const plugin of installedPlugins) {
       if (plugin.manifest) {
         manifests[plugin.identifier] = plugin.manifest as ToolManifest;

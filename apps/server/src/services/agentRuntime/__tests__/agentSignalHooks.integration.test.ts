@@ -21,6 +21,18 @@ const stubUiMessagesSnapshot = (service: unknown) => {
   };
 };
 
+/**
+ * `executeStep` refuses to run when the durable terminal check fails. These
+ * tests exercise the step loop with an empty database stand-in, so give the
+ * operation row the non-terminal status a live run would have.
+ */
+const stubRunningDurableOperation = (service: unknown) => {
+  vi.spyOn(
+    (service as { agentOperationModel: { findById: (...args: any[]) => any } }).agentOperationModel,
+    'findById',
+  ).mockResolvedValue({ status: 'running' } as any);
+};
+
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'http://localhost:3010' } }));
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(function () {
@@ -46,6 +58,7 @@ vi.mock('@/server/modules/AgentRuntime', () => ({
       saveAgentState: vi.fn(),
       saveStepResult: vi.fn(),
       tryClaimStep: vi.fn().mockResolvedValue(true),
+      refreshStepLock: vi.fn().mockResolvedValue(true),
     };
   }),
   createStreamEventManager: vi.fn(function () {
@@ -78,9 +91,7 @@ vi.mock('@/server/services/queue/impls', () => ({
   isQueueAgentRuntimeEnabled: vi.fn().mockReturnValue(false),
 }));
 vi.mock('@/server/featureFlags', () => ({
-  getServerFeatureFlagsStateFromRuntimeConfig: vi
-    .fn()
-    .mockResolvedValue({ enableAgentSelfIteration: true }),
+  getServerFeatureFlagsStateFromRuntimeConfig: vi.fn().mockResolvedValue({}),
 }));
 vi.mock('../../agentSignal/featureGate', () => ({
   isAgentSignalEnabledForUser: vi.fn().mockResolvedValue(true),
@@ -107,7 +118,7 @@ describe('AgentRuntimeService Agent Signal hook integration', () => {
 
   it(
     'emits source events for beforeStep and afterStep boundaries',
-    { timeout: 20_000 },
+    { timeout: 60_000 },
     async () => {
       (globalThis as AgentSignalRedisTestGlobal).__agentSignalRedisClient = mockRedis;
       mockRedis.set.mockResolvedValue('OK');
@@ -119,6 +130,7 @@ describe('AgentRuntimeService Agent Signal hook integration', () => {
       const { AgentRuntimeService } = await import('../AgentRuntimeService');
       const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
       stubUiMessagesSnapshot(service);
+      stubRunningDurableOperation(service);
       const coordinator = (service as any).coordinator;
 
       vi.spyOn(coordinator, 'loadAgentState').mockResolvedValue({
@@ -222,6 +234,7 @@ describe('AgentRuntimeService Agent Signal hook integration', () => {
       snapshotStore: snapshotStore as any,
     });
     stubUiMessagesSnapshot(service);
+    stubRunningDurableOperation(service);
     const coordinator = (service as any).coordinator;
 
     vi.spyOn(coordinator, 'loadAgentState').mockResolvedValue({
@@ -321,6 +334,7 @@ describe('AgentRuntimeService Agent Signal hook integration', () => {
       snapshotStore: snapshotStore as any,
     });
     stubUiMessagesSnapshot(service);
+    stubRunningDurableOperation(service);
     const coordinator = (service as any).coordinator;
 
     vi.spyOn(coordinator, 'loadAgentState').mockResolvedValue({

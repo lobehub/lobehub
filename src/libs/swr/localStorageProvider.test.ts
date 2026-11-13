@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { bootTiming } from '@/libs/bootTiming';
 
-import { builtinAgentKeys, taskTemplateKeys } from './keys';
 import { buildLocalDataKey, localDataCache } from './localDataCache';
 import {
   CACHE_TIERS,
@@ -60,13 +59,13 @@ describe('createCacheProvider — tiering', () => {
     expect(getScopedCacheKey('anon:personal')).not.toBe(getScopedCacheKey('u1:personal'));
   });
 
-  it('restores the builtin agent configuration from durable storage after a reload', async () => {
+  it('restores an idb-tier entry from durable storage after a reload, isolated per scope', async () => {
     const scope = { value: 's1' };
     const options = { idbPatterns: [...CACHE_TIERS.idb], localPatterns: [...CACHE_TIERS.local] };
     const { provider } = buildProvider(scope, options);
     await provider.hydrateScope?.();
-    const key = JSON.stringify(builtinAgentKeys.init('inbox', 's1'));
-    const data = { data: { id: 'inbox-1', profile: { fullBodyArtwork: '/custom.webp' } } };
+    const key = JSON.stringify(['task:detail', 'T-1']);
+    const data = { data: [{ id: 'task-1', title: 'Keep me' }] };
     provider().set(key, data);
     await until(async () => (await localDataCache.entriesByScope('s1')).length > 0);
 
@@ -104,7 +103,7 @@ describe('createCacheProvider — tiering', () => {
       localPatterns: [...CACHE_TIERS.local],
     });
     const map = provider();
-    const key = JSON.stringify(taskTemplateKeys.listDailyRecommend('', 3, 'zh-CN'));
+    const key = JSON.stringify(['taskTemplate:listDailyRecommend:v2', '', 3, 'zh-CN']);
 
     map.set(key, { data: [{ id: 1, title: 'Daily brief' }] });
 

@@ -16,6 +16,10 @@ const hasUtf8Bom = (buf: Uint8Array): boolean =>
 const hasUtf16Bom = (buf: Uint8Array): boolean =>
   buf.length >= 2 && ((buf[0] === 0xff && buf[1] === 0xfe) || (buf[0] === 0xfe && buf[1] === 0xff));
 
+/** Whether sampled bytes are UTF-16 text, with or without a BOM. */
+export const isUtf16Buffer = (buf: Uint8Array): boolean =>
+  hasUtf16Bom(buf) || detectUtf16NoBom(buf) !== null;
+
 /**
  * Heuristically determine if a buffer looks like binary data.
  *

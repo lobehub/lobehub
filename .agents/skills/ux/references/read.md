@@ -16,8 +16,8 @@ clear next action (CTA + value props); distinguish "no data yet" (onboarding CTA
 "no match for filters" (clear-filters affordance) — they are different screens. When a
 surface keeps its toolbar/header mounted with no data (so a create / `+` affordance
 stays reachable), the **body** below must still render an empty placeholder —
-persistent chrome is no excuse for dead space. Loading uses a skeleton /
-`NeuralNetworkLoading`, never a flash of blank or a layout shift; error surfaces the
+persistent chrome is no excuse for dead space. Loading follows the
+[feedback §4.1](./feedback.md) scenario table, never a flash of blank or a layout shift; error surfaces the
 reason and a retry/back path.
 
 The single most common way this breaks: the fetch reads only `{ data, isLoading }`, never
@@ -104,12 +104,13 @@ Distinguish `error` (transient → reason + retry, keep the URL) from a resolved
 
 - [ ] Empty state is a real page with explanation + CTA, not a blank screen. _(Meaningful)_
 - [ ] Empty variants distinguished: "no data yet" vs "no filter match". _(Certainty)_
+- [ ] An empty state that replaces a list sits in place **unframed** (not inside the list's bordered container), its title states the outcome ("Create your first OAuth app", not "No apps yet"), and it owns the page's one primary action — the header hides its duplicate Create while empty. ❌ OAuth Apps, first pass: the empty state rendered inside the list frame with "No OAuth apps yet" next to a header Create button. _(Meaningful・Certainty)_
 - [ ] Error is checked **before** the empty branch — a failed fetch never renders as empty (`!error && length === 0` gates empty); read `error`, don't coerce `data ?? []`. _(Certainty・Meaningful)_
 - [ ] On a **metrics / aggregate** surface (dashboard, stats, cost), a failed fetch never falls through to a **zero-valued default** (`data?.summary ?? {…:0}`, `?? 0`) — a confident `$0` reads as real data, not "empty"; branch `error` before rendering any aggregate. _(Certainty・Meaningful)_
 - [ ] A list merged from a fetched set + a **static/frontend set** (`[...fetched, ...placeholders]`, a catalog padded with "coming soon" rows) branches `error` **before** merging — a failed fetch there keeps `length > 0` via the static entries, so neither the empty guard nor an error-unread call site catches it (a plausible partial catalog); `fallbackData: []` makes it automatic. _(Certainty・Meaningful)_
 - [ ] A detail page reads `error` before falling to `NotFound` — a failed fetch shows a reload state, not a "doesn't exist" 404 (deleted vs failed-to-load are different screens). _(Certainty・Meaningful)_
 - [ ] Always-rendered chrome still renders a body empty placeholder. _(Meaningful)_
-- [ ] Loading designed (skeleton / NeuralNetworkLoading), no layout shift — a detail page's "record not loaded yet" is a skeleton, never a bare `return null` / blank. _(Natural)_
+- [ ] Loading designed per feedback §4.1 (skeleton / `Spin`), no layout shift — a detail page's "record not loaded yet" is a skeleton, never a bare `return null` / blank. _(Natural)_
 - [ ] Error designed with reason + retry/back path. _(Meaningful)_
 
 ## 1.2 Lists at scale・Certainty・Natural
@@ -553,3 +554,32 @@ material, not as the page.
 - [ ] An embedded document folds to a **titled row** (first meaningful line as label) that expands to full text — no first-N-px cropped preview with a fade. _(Natural)_
 - [ ] Quoted/embedded content is visually subordinated: a quiet container + capped heading scale, never sharing the host page's typographic hierarchy. _(Meaningful)_
 - [ ] A mask/fade helper's `size` unit is verified against its implementation (px vs %) before shipping — a wrong unit blanks real content. _(Certainty)_
+
+## 1.14 An entity without an image falls back to its type glyph, not a letter avatar・Certainty・Natural
+
+Entities that carry an optional image — an app logo, an agent avatar, a workspace icon — need
+a **no-image** rendering, and the generic letter-avatar (`<Avatar title={name} />` with no
+`avatar`) is the wrong default for most of them. It renders the first characters of the
+name at half the avatar's size: Latin names become a shouting "LO" monogram, CJK names
+become **two oversized glyphs** that overflow the tile, and the slot reads as an unfinished
+state rather than "no logo set". Worse, the `title` that feeds it is easy to wire to the
+wrong string: a **field label** passed as `title` makes every empty logo slot render that
+label ("名称") as its avatar. Fall back to a **type-semantic glyph** (an app-window icon for
+an OAuth app, the product's agent glyph for an agent) on a quiet fill, shared by every surface
+that shows the entity — list row, detail header, edit form, create form — so "no logo" looks
+the same everywhere. Where the same slot is also an **upload target**, the same glyph with a
+dashed outline and no fill signals "you can set one" without a second placeholder style.
+
+> ✅ OAuth apps: one `AppLogoPlaceholder` (app-window glyph, quiet fill) renders in the list
+> row, the detail header and — outlined, unfilled — in the create / edit logo uploaders
+> (`features/Settings/oauth-apps/features/AppLogo`).
+> ❌ OAuth apps, pre-fix: the create modal passed the **name field's label** as the uploader's
+> `title`, so the empty logo rendered "名称" as two giant glyphs; the detail header rendered a
+> 72px "LO" monogram from the app name, and the list row fed `app.logoUri || app.name` straight
+> into `Avatar` (`AppItem.tsx`).
+
+**Checklist**
+
+- [ ] An entity with no image renders a shared type glyph placeholder, not a letter avatar of its name — check a CJK name. _(Certainty)_
+- [ ] A fallback `title` is the entity's own data, never a form label or other UI string. _(Certainty)_
+- [ ] The placeholder is identical across list, detail, create and edit; upload slots differ only by an outline. _(Natural)_

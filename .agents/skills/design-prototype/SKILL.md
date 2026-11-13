@@ -6,10 +6,10 @@ description: 'Use for interactive HTML prototypes (交互原型) with the real L
 # Design Prototype
 
 One HTML file, double-click to open, fully interactive, rendered by the **actual
-design system** (`@lobehub/ui` 5.x + antd 6 + antd-style tokens, exact versions from
-this repo's `node_modules`) — while the source stays **production-style React**
-(`import { Block } from '@lobehub/ui'`, `createStyles(({ css, token }) => …)`, hooks,
-`memo`). Promotion to production is mostly "split into files", not "rewrite".
+design system** (`@lobehub/ui` 6.x components, compiled `style.css`, `--lobe-*` theme tokens — exact
+versions from this repo's `node_modules`) — while the source stays **production-style
+React** (`import { Block } from '@lobehub/ui'`, `createStaticStyles(({ css, cssVar }) => …)`,
+hooks, `memo`). Promotion to production is mostly "split into files", not "rewrite".
 
 Prototype code may be quick-and-dirty (one file, no i18n, inline data) — but the
 **interaction must be complete**: states, transitions, and affordances are the point
@@ -19,23 +19,33 @@ of a prototype, not its code style.
 
 ```
 one-time (~2s, cached):   scripts/build-runtime.sh  →  lobe-prototype-runtime.js (IIFE global)
+                                                       + lobe-prototype-runtime.css
                                                        + vendored babel.min.js
-per prototype (no build): single HTML  =  <script runtime> + babel-standalone
+per prototype (no build): single HTML  =  <link css> + <script runtime> + babel-standalone
                           + <script type="text/babel"> with production-style React
 ```
 
-- The runtime bundles `react`, `react-dom/client`, `@lobehub/ui`, `@lobehub/ui/base-ui`,
-  `antd` (curated subset), `antd-style`, `lucide-react` from the repo's own
-  `node_modules` — so tokens/components/versions match production, and react/emotion/
-  theme-context are singletons by construction.
+- The runtime bundles `react`, `react-dom/client`, the full `@lobehub/ui` namespace,
+  `lucide-react` and `motion` from the repo's own `node_modules` — so tokens/components/
+  versions match production, and react/emotion/theme-scope are singletons by
+  construction.
+- `entry.mjs` also imports `@lobehub/ui/theme.css` + `global.css` + `style.css` (the same
+  three the app loads in `src/layout/GlobalProvider/AppTheme.tsx`); esbuild emits them
+  as `lobe-prototype-runtime.css`, linked from the template's `<head>`.
 - A 3-line `window.require` shim + babel's `transform-modules-commonjs` lets the
   prototype keep real `import` statements.
-- `ThemeProvider themeMode="auto"` → light/dark follow the OS.
+- Theming is CSS attributes, not a provider: the template's head script calls
+  `setLobeTheme({ appearance })` from `prefers-color-scheme` (and on change), so
+  light/dark follow the OS before first paint. Force a theme with
+  `setLobeTheme({ appearance: 'dark' })`, or `<ThemeScope appearance="dark">` for an
+  island. The React tree is wrapped in `<ConfigProvider motion={motion}>` like the app's
+  `AppTheme` (motion for `Button`, `Drawer`, `Modal`, …, plus fonts, focus ring and the
+  popup portal host) and `<ToastHost />` for `toast`.
 
 > ⚠️ Don't re-attempt the pure-CDN route (esm.sh import maps). It was tried and
-> rejected: esm.sh's CJS named-export analysis fails serially across antd's dep chain
-> (`@ant-design/fast-color` → `@ant-design/colors` → `@rc-component/qrcode` → …), and
-> `?bundle` leaks an unversioned `react-is` 404. Whack-a-mole, not a foundation.
+> rejected: esm.sh's CJS named-export analysis failed serially across the dep chain and
+> `?bundle` leaked an unversioned `react-is` 404. Bundling from the repo's own
+> `node_modules` is the only way to match production versions exactly.
 
 ## Quickstart
 
@@ -45,8 +55,9 @@ per prototype (no build): single HTML  =  <script runtime> + babel-standalone
    bash .agents/skills/design-prototype/scripts/build-runtime.sh /tmp/my-proto
    ```
 
-   Skip if `lobe-prototype-runtime.js` + `babel.min.js` are already there and the
-   design-system versions haven't bumped.
+   Skip if `lobe-prototype-runtime.{js,css}` + `babel.min.js` are already there and the
+   design-system versions haven't bumped. The first run downloads `babel.min.js` from
+   unpkg (pinned); later runs reuse it.
 
 2. **Copy [`references/template.html`](references/template.html)** into the same dir,
    rename, and replace the sample `App` with the real surface. Keep the runtime shim
@@ -80,28 +91,44 @@ viewport if the surface has a mobile story.
 
 See [`assets/entry.mjs`](assets/entry.mjs) — the single source of truth. Currently:
 
-- `@lobehub/ui`: ActionIcon, Alert, Avatar, Block, Button, Center, Collapse,
-  DraggablePanel, Drawer, DropdownMenu, Empty, Flexbox, Highlighter, Hotkey, Icon,
-  Image, Input, InputNumber, Markdown, Modal, NeuralNetworkLoading, Popover,
-  ScrollShadow, SearchBar, Segmented, Select, Skeleton, SortableList, Tabs, Tag,
-  Text, TextArea, ThemeProvider, Tooltip
-- `@lobehub/ui/base-ui`: full namespace (Select, Modal, DropdownMenu, Switch, Toast,
-  FloatingSheet, …)
-- `antd`: App, Badge, Checkbox, Divider, Dropdown, Progress, Radio, Slider, Space,
-  Steps, Table
-- `antd-style`, `lucide-react`, `react`, `react-dom/client`: full namespaces
+- `@lobehub/ui`: full namespace — every component (`Button`, `Input`, `Modal`,
+  `createModal`, `confirmModal`, `Table`, `Switch`, `Checkbox`, `Radio`, `Badge`,
+  `Progress`, `Slider`, `Steps`, `Divider`, `DropdownMenu`, `Accordion`, `Collapsible`,
+  `Spin`, `Skeleton`, `DraggablePanel`, `FloatingSheet`, …) plus `toast` / `ToastHost`,
+  `MotionProvider`, `setLobeTheme`, `ThemeScope`, `useThemeMode`, `useTheme`, and the
+  styling API `createStaticStyles`, `cssVar`, `cx`, `css`, `keyframes`, `responsive`,
+  `useResponsive`
+- `@lobehub/icons`: Amp, ClaudeCode, Codex, HermesAgent, OpenClaw, OpenCode
+- `lucide-react`, `motion/react`, `motion/react-m`, `react`, `react/jsx-runtime`,
+  `react-dom`, `react-dom/client`: full namespaces
 
-Missing a component → add to `entry.mjs`, rerun the build script (\~2s). Sizes:
-curated ≈ 16MB (fine from disk); a full `export * from '@lobehub/ui'` works too
-(≈ 27MB) if you'd rather never curate.
+Not included: `@lobehub/ui/form`, `@lobehub/ui/pro-table`, `@lobehub/ui/chat` and the
+other subpaths — add `import * as x from '@lobehub/ui/<sub>'` + a `'@lobehub/ui/<sub>': x`
+entry and rebuild (\~2s). Size ≈ 17MB JS + 0.3MB CSS (fine from disk).
+
+### Picking the v6 equivalent
+
+- Feedback: `toast.success(…)` + `<ToastHost />`; dialogs: `Modal`, `createModal`,
+  `confirmModal`.
+- Menus: `DropdownMenu items={…}` (opens on click); context menus: `ContextMenuTrigger`.
+- Layout: `Flexbox horizontal gap={…}` / `Center` / `Grid` — there is no `Space`.
+- Disclosure: `Accordion` for several sections, `Collapsible` for one region.
+- `Badge`, `Checkbox`, `Divider`, `Progress`, `Radio`, `Slider`, `Steps`, `Switch`,
+  `Table` (`columns` / `dataSource` / `rowSelection`) are root exports.
+- Unsure about a name → check `node_modules/@lobehub/ui/es/index.d.mts` rather than
+  guessing; an unknown import is `undefined` at runtime, not a build error.
 
 ## Pitfalls
 
-- **`Switch` lives in `@lobehub/ui/base-ui`**, not the root package (as do the other
-  base-ui primitives). Importing it from the root fails the runtime build.
-- **Use `createStyles` (runtime), not `createStaticStyles`** — static extraction
-  needs a build step. This is the one sanctioned deviation from production style;
-  note it when handing the prototype to an implementer.
+- **Style with `createStaticStyles` + `cssVar.*`** exactly as production does — it is
+  emotion-backed and inserts at call time, so it needs no build step. Tokens resolve
+  to `var(--lobe-*)` and flip with the theme; never hardcode light/dark colors.
+- **Component styles live in cascade layers** (`lobe-base`, `lobe-popup`, `lobe-ui`), so
+  any unlayered CSS in the prototype's `<style>` beats them. Override through
+  `className` / `style` / `classNames` / `styles` slot props, not global selectors
+  like `button { … }`.
+- **Keep the `<link>` to `lobe-prototype-runtime.css`** — without it components render
+  unstyled and `--lobe-*` tokens are undefined.
 - **babel must stay the raw UMD file** (unpkg/jsdelivr). esm.sh rewrites it to ESM
   and a classic `<script src>` chokes on `export`.
 - The require shim throws with the module name when an import isn't in the runtime —
@@ -118,8 +145,8 @@ _demonstrates_:
   ideally behind a state-toggle strip like the template's. A happy-path-only
   prototype under-specifies the design and silently blesses missing states.
 - Reuse the app's **surface contracts**: side panels are `DraggablePanel`
-  (collapse + drag-resize come free), loading is skeleton/`NeuralNetworkLoading`
-  (never antd `Spin`), modals via `createModal`-style flows.
+  (collapse + drag-resize come free), loading follows the ux skill's feedback §4.1
+  scenario table (`Skeleton` / `Spin`, `variant="network"` only for AI work), modals via `createModal`-style flows.
 - Don't paint affordances you don't wire (`cursor: zoom-in` with no zoom, keycap
   chips with no keys) — in an _interactive_ prototype a dead affordance is a spec bug.
 - Walk the ux Quick review against the prototype before delivering; annotate

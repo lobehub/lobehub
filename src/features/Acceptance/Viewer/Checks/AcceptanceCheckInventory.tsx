@@ -1,24 +1,30 @@
 'use client';
 
 import { isDraftVerifyRun } from '@lobechat/const/verify';
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Select, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, useResponsive } from 'antd-style';
+import {
+  ActionIcon,
+  createStaticStyles,
+  Flexbox,
+  Select,
+  Text,
+  toast,
+  useResponsive,
+} from '@lobehub/ui';
 import { ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useSingleton } from '@/hooks/useSingleton';
-import { mutate as globalMutate } from '@/libs/swr';
-import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
+import { useVerifyStore } from '@/store/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { hasVisualEvidence } from '../Evidence/evidence';
 import AcceptanceInteractionCost from '../History/AcceptanceInteractionCost';
-import { acceptanceCheckPath } from '../routes';
+import { acceptanceCheckPath, useAcceptanceRouteBase } from '../routes';
 import { checksForTurn } from '../turnChecks';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { useAcceptanceTurn } from '../useAcceptanceTurn';
@@ -34,6 +40,7 @@ import {
   userReviewState,
 } from './checkState';
 import { EMPTY_ID_SET, setAggregateEntry } from './expandState';
+import { collectGroupFeedback } from './readPresentation';
 
 const styles = createStaticStyles(({ css }) => ({
   filters: css`
@@ -60,19 +67,23 @@ const styles = createStaticStyles(({ css }) => ({
 interface AcceptanceCheckInventoryProps {
   children?: ReactNode;
   onOpenTrace?: (verifierOperationId: string) => void | Promise<void>;
+  /** Rides right after the title — a host's word on where the delivery stands. */
+  titleExtra?: ReactNode;
   toolbar?: ReactNode;
 }
 
 const AcceptanceCheckInventory = ({
   children,
   onOpenTrace,
+  titleExtra,
   toolbar,
 }: AcceptanceCheckInventoryProps) => {
   const { t } = useTranslation('verify');
   const { md = true } = useResponsive();
   const { acceptanceId, embedded } = useAcceptanceScope();
+  const routeBase = useAcceptanceRouteBase();
   const { data, mutate } = useAcceptanceBundle(acceptanceId);
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [localFilter, setLocalFilter] = useState<CheckFilter>('all');
   const urlFilterRaw = searchParams.get('filter');
@@ -185,7 +196,7 @@ const AcceptanceCheckInventory = ({
     try {
       await action();
       await mutate();
-      void globalMutate(isAcceptanceListKey);
+      void useVerifyStore.getState().refreshAcceptanceLists();
       return true;
     } catch (cause) {
       console.error('[acceptance:review]', cause);
@@ -209,7 +220,8 @@ const AcceptanceCheckInventory = ({
     !md && !embedded
       ? (id: string) =>
           navigate(
-            acceptanceCheckPath(acceptanceId, id) + (searchParams.size ? `?${searchParams}` : ''),
+            acceptanceCheckPath(acceptanceId, id, routeBase) +
+              (searchParams.size ? `?${searchParams}` : ''),
             {
               state: { fromCheckList: true },
             },
@@ -222,12 +234,7 @@ const AcceptanceCheckInventory = ({
     : [];
   const allGroupsCollapsed =
     groupKeys.length > 0 && groupKeys.every((key) => collapsedGroups.has(key));
-  const groupFeedback = data.rounds.flatMap((round) =>
-    (round.run.decisionDetail?.groupFeedback ?? []).map((entry) => ({
-      ...entry,
-      roundIndex: round.run.roundIndex ?? 0,
-    })),
-  );
+  const groupFeedback = collectGroupFeedback(data.rounds);
   const currentRound = data.rounds.at(-1)?.run.roundIndex ?? 0;
 
   return (
@@ -237,6 +244,7 @@ const AcceptanceCheckInventory = ({
           <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap' }}>
             {t('acceptance.checks.title')}
           </Text>
+          {titleExtra}
           <Flexbox flex={1} />
           {toolbar}
         </Flexbox>

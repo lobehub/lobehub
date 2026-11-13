@@ -4,15 +4,17 @@ import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
 import { FileService } from '@/server/services/file';
-import { MarketService } from '@/server/services/market';
-import { createSandboxService } from '@/server/services/sandbox';
+import { createSandboxService, resolveSandboxSessionConfig } from '@/server/services/sandbox';
 import {
+  isDirectLhInvocation,
   isLhCommand,
   preprocessLhCommand,
   SHARE_VISITOR_LH_BLOCKED_MESSAGE,
 } from '@/server/services/toolExecution/preprocessLhCommand';
 
+import { pageSandboxWrapper } from './pageSandboxSync';
 import { resolveContentWorkspaceId } from './resolveWorkspaceScope';
+import { createSandboxMarketService } from './sandboxMarket';
 import { type ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:cloud-sandbox');
@@ -31,7 +33,7 @@ const SHELL_TOOL_NAMES = new Set(['execScript', 'runCommand']);
  *
  * `isShareVisitor` (set from `context.agentShareVisitor`, see the factory
  * below) disables the shim entirely: a share visitor's run executes under the
- * creator's identity, so the shim's `lh() { LOBEHUB_JWT=… }` prelude would
+ * creator's identity, so the shim's `LOBEHUB_JWT=…` `lh` wrapper would
  * otherwise hand a JWT scoped to the CREATOR's own account into a shell the
  * VISITOR fully controls. `lobe-cloud-sandbox` is allowlisted for share
  * visitors specifically because this shim is skipped for them — see
@@ -40,6 +42,8 @@ const SHELL_TOOL_NAMES = new Set(['execScript', 'runCommand']);
 const withLhPreprocessing = (
   service: ISandboxService,
   resolve: {
+    /** This run's operation, so an `lh agent run` from here is attributed to its agent. */
+    operationId: string | undefined;
     userId: string;
     /** Raw context workspace id, log-only — cheap to read, unlike {@link resolveContentWorkspaceId}. */
     workspaceIdHint: string | undefined;
@@ -61,7 +65,7 @@ const withLhPreprocessing = (
     // silently falling through to `preprocessLhCommand` (which independently
     // refuses too — see its `shareVisitorBlocked` param — but this is the
     // primary, intended-to-be-load-bearing check).
-    if (resolve.isShareVisitor && isLhCommand(command)) {
+    if (resolve.isShareVisitor && isDirectLhInvocation(command)) {
       // Deliberately no command content: it is visitor/model-controlled and
       // may carry an inline token — same as the `preprocessLhCommand` refusal.
       log(
@@ -85,6 +89,7 @@ const withLhPreprocessing = (
       resolve.userId,
       workspaceId,
       resolve.isShareVisitor,
+      resolve.operationId,
     );
 
     if (result.error) {
@@ -125,29 +130,65 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
       // non-fatal — MarketService will fall back to trustedClientToken
     }
 
-    const marketService = new MarketService({
-      accessToken,
-      userInfo: { userId: context.userId, workspaceId: context.workspaceId },
+    // The workspace this run belongs to. `context.workspaceId` is empty on the
+    // dispatch and resume paths, which is most of them: a workspace agent's
+    // tool call then resolved its topic in the personal scope, found nothing,
+    // and ran ephemeral — the conversation said "Lobehub Dev" while `pwd`
+    // answered `/workspace` and the clone went somewhere nothing reads.
+    //
+    // Recovered once and used for everything this runtime builds, because the
+    // danger is not the recovery but a disagreement: the claim signs a
+    // directory that the token's identity must also name, or an organization's
+    // files mount inside a personal session. `creds.ts` recovers the same way.
+    const workspaceId = await resolveContentWorkspaceId(context);
+
+    // Persistence for this run: the entitlement that goes on the trust token,
+    // and the topic's own preferences that go on each request.
+    const sandbox = await resolveSandboxSessionConfig({
+      isShareVisitorRun: Boolean(context.agentShareVisitor),
+      serverDB: context.serverDB,
+      topicId: context.topicId,
+      userId: context.userId,
+      workspaceId,
     });
-    const fileService = new FileService(context.serverDB, context.userId, context.workspaceId);
+
+    const marketService = createSandboxMarketService(
+      context,
+      accessToken,
+      workspaceId,
+      sandbox.claim,
+    );
+    const fileService = new FileService(context.serverDB, context.userId, workspaceId);
     const sandboxService = createSandboxService({
+      agentShareVisitor: context.agentShareVisitor
+        ? {
+            shareId: context.agentShareVisitor.shareId,
+            visitorUserId: context.agentShareVisitor.visitorUserId,
+          }
+        : undefined,
       fileService,
       marketService,
+      sandboxCwd: sandbox.cwd,
+      sandboxInitialization: sandbox.initialization,
+      sandboxInstanceId: sandbox.environment,
+      sandboxSpecification: sandbox.specification,
+      sandboxWorkingDir: sandbox.workingDir,
+      sandboxMode: sandbox.mode,
       serverDB: context.serverDB,
       topicId: context.topicId,
       userId: context.userId,
     });
 
-    let workspaceIdPromise: Promise<string | undefined> | undefined;
+    const wrapPage = pageSandboxWrapper(context, workspaceId);
+    const preprocessed = withLhPreprocessing(sandboxService, {
+      isShareVisitor: Boolean(context.agentShareVisitor),
+      operationId: context.operationId,
+      userId: context.userId,
+      workspaceId: async () => workspaceId,
+      workspaceIdHint: workspaceId,
+    });
 
-    return new CloudSandboxExecutionRuntime(
-      withLhPreprocessing(sandboxService, {
-        isShareVisitor: Boolean(context.agentShareVisitor),
-        userId: context.userId,
-        workspaceId: () => (workspaceIdPromise ??= resolveContentWorkspaceId(context)),
-        workspaceIdHint: context.workspaceId,
-      }),
-    );
+    return new CloudSandboxExecutionRuntime(wrapPage ? wrapPage(preprocessed) : preprocessed);
   },
   identifier: CloudSandboxIdentifier,
 };

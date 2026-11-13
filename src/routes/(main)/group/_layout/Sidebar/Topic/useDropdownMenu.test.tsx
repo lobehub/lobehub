@@ -42,7 +42,7 @@ vi.mock('@/store/user', () => ({
   useUserStore: () => userMock.currentUserId,
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   confirmModal: confirmModalMock,
   toast: messageMock,
@@ -177,7 +177,10 @@ describe('group useTopicActionsDropdownMenu', () => {
       workspaceArchiveItem.onClick?.({} as never);
     }
     expect(confirmModalMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ title: 'actions.confirmArchiveMergedPullRequestsWorkspace' }),
+      expect.objectContaining({
+        content: 'actions.confirmArchiveMergedPullRequestsWorkspace',
+        title: 'actions.archiveMergedPullRequestsWorkspace',
+      }),
     );
     await confirmModalMock.mock.calls[0][0].onOk();
     expect(chatStoreMock.updateTopicStatus).toHaveBeenCalledTimes(2);
@@ -191,16 +194,16 @@ describe('group useTopicActionsDropdownMenu', () => {
     });
 
     expect(workspaceUnstarredItem).toMatchObject({
-      label: 'actions.removeUnstarredWorkspace',
+      label: 'actions.removeUnpinnedWorkspace',
     });
     if (workspaceUnstarredItem && 'onClick' in workspaceUnstarredItem) {
       workspaceUnstarredItem.onClick?.({} as never);
     }
     expect(openWorkspaceDeleteAllModalMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        acknowledgeText: 'actions.confirmRemoveUnstarredWorkspaceAcknowledge',
-        description: 'actions.confirmRemoveUnstarredWorkspace',
-        title: 'actions.removeUnstarredWorkspace',
+        acknowledgeText: 'actions.confirmRemoveUnpinnedWorkspaceAcknowledge',
+        description: 'actions.confirmRemoveUnpinnedWorkspace',
+        title: 'actions.removeUnpinnedWorkspace',
       }),
     );
     await openWorkspaceDeleteAllModalMock.mock.calls[0][0].onConfirm();

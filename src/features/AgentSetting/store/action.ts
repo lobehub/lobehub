@@ -6,7 +6,7 @@ import {
   chainSummaryTags,
 } from '@lobechat/prompts';
 import { type TracePayload } from '@lobechat/types';
-import { TraceNameMap, TraceTopicType } from '@lobechat/types';
+import { RequestTrigger, TraceNameMap, TraceTopicType } from '@lobechat/types';
 import { type PartialDeep } from 'type-fest';
 import { type StateCreator } from 'zustand/vanilla';
 
@@ -107,6 +107,7 @@ export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, g
         chainPickEmoji([meta.title, meta.description, systemRole].filter(Boolean).join(',')),
       ),
       trace: get().getCurrentTracePayload({ traceName: TraceNameMap.EmojiPicker }),
+      trigger: RequestTrigger.AgentMeta,
     });
   },
   autocompleteAgentDescription: async () => {
@@ -134,6 +135,7 @@ export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, g
         chainSummaryDescription(systemRole, globalHelpers.getCurrentLanguage()),
       ),
       trace: get().getCurrentTracePayload({ traceName: TraceNameMap.SummaryAgentDescription }),
+      trigger: RequestTrigger.AgentMeta,
     });
   },
   autocompleteAgentTags: async () => {
@@ -165,6 +167,7 @@ export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, g
         ),
       ),
       trace: get().getCurrentTracePayload({ traceName: TraceNameMap.SummaryAgentTags }),
+      trigger: RequestTrigger.AgentMeta,
     });
   },
   autocompleteAgentTitle: async () => {
@@ -195,6 +198,7 @@ export const store: StateCreator<Store, [['zustand/devtools', never]]> = (set, g
         ),
       ),
       trace: get().getCurrentTracePayload({ traceName: TraceNameMap.SummaryAgentTitle }),
+      trigger: RequestTrigger.AgentMeta,
     });
   },
   autocompleteAllMeta: (replace) => {

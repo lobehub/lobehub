@@ -2,9 +2,8 @@
 
 import type { CrawlErrorResult, CrawlSuccessResult } from '@lobechat/web-crawler';
 import { Block, Flexbox, stopPropagation } from '@lobehub/ui';
-import { ActionIcon, Alert, Text } from '@lobehub/ui/base-ui';
-import { Descriptions } from 'antd';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, Alert, Descriptions, Text } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { ExternalLink } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -81,7 +80,6 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
         <div>
           <Descriptions
             column={1}
-            size="small"
             classNames={{
               content: styles.footerText,
               label: styles.footerText,
@@ -125,7 +123,6 @@ const CrawlerResultCard = memo<CrawlerData>(({ result, messageId, crawler, origi
       <Flexbox className={styles.footer}>
         <Descriptions
           column={2}
-          size="small"
           classNames={{
             content: styles.footerText,
             label: styles.footerText,

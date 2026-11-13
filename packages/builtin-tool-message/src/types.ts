@@ -143,7 +143,20 @@ export interface SendMessageEmbed {
 
 // --- Direct Messaging ---
 
-export interface SendDirectMessageParams {
+/**
+ * Which connection a send goes out through. Both are optional: when neither is
+ * set and the call targets the IM conversation this run is replying in, the
+ * server runtime sends through the same connection the conversation arrived
+ * on (per-agent bot or System Bot messenger). Never set both.
+ */
+export interface MessageSendRoute {
+  /** Per-agent bot id from `listBots`. */
+  botId?: string;
+  /** System Bot connection id from `listMessengers`. */
+  messengerInstallationId?: string;
+}
+
+export interface SendDirectMessageParams extends MessageSendRoute {
   /**
    * Optional: outbound media attachments (images / files / video / audio).
    * Same shape as `SendMessageParams.attachments` — see `SendMessageAttachment`.
@@ -211,7 +224,7 @@ export interface SendMessageAttachment {
   type: 'image' | 'file' | 'video' | 'audio';
 }
 
-export interface SendMessageParams {
+export interface SendMessageParams extends MessageSendRoute {
   /**
    * Optional: outbound media attachments (images / files / video / audio).
    * Platforms that don't support outbound media silently drop these so the
@@ -270,8 +283,17 @@ export interface ReadMessagesState {
   totalFetched?: number;
 }
 
+export interface MessageItemAttachment {
+  /** MIME type when the platform reports it (Discord `content_type`). */
+  contentType?: string;
+  name: string;
+  /** Bytes, when the platform reports it. */
+  size?: number;
+  url: string;
+}
+
 export interface MessageItem {
-  attachments?: { name: string; url: string }[];
+  attachments?: MessageItemAttachment[];
   author: { id: string; name: string };
   content: string;
   id: string;
@@ -506,7 +528,7 @@ export interface ListThreadsState {
   threads?: { id: string; messageCount?: number; name: string }[];
 }
 
-export interface ReplyToThreadParams {
+export interface ReplyToThreadParams extends MessageSendRoute {
   /**
    * Optional: outbound media attachments (images / files / video / audio).
    * Same shape as `SendMessageParams.attachments` — see `SendMessageAttachment`.
@@ -802,6 +824,7 @@ export const MESSENGER_PUSH_CONTENT_MAX_LENGTH = 2000;
 
 export const MessengerPushPlatform = {
   discord: 'discord',
+  linq: 'linq',
   slack: 'slack',
   telegram: 'telegram',
   wechat: 'wechat',

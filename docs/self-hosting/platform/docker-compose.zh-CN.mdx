@@ -357,6 +357,8 @@ docker run --rm --entrypoint /bin/node lobehub/lobehub -e 'const c=require("cryp
   通过 `lh connect --gateway http://your_server_ip:8788` 接入的设备，可以经由 `8788` 端口的设备网关为该部署执行本地工具。
 </Callout>
 
+可选：在 `.env` 中设置 `DEVICE_GATEWAY_PUBLIC_URL` 为客户端可访问的网关地址，例如 `http://your_server_ip:8788`，不要使用容器内部地址 `http://gateway:8788`。不配置时可继续使用上面的 `--gateway`；域名配置参见 [连接设备网关](/zh/docs/self-hosting/advanced/desktop#连接设备网关)。
+
 ## 升级已有部署
 
 <Callout type="warning">

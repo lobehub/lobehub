@@ -20,7 +20,9 @@ on the desktop shell or is fully provable through backend/CLI output.
    when authentication must survive browser restarts.
 
 ```bash
-SESSION=app
+SESSION=app-<run-id>                         # unique per run; parallel runs must not share one
+export AGENT_BROWSER_IDLE_TIMEOUT_MS=1800000 # set this before the first call; the only thing
+                                             # that closes the session when the run dies
 agent-browser --session $SESSION open "http://localhost:3000/"
 agent-browser --session $SESSION snapshot -i
 # interact via refs, then capture
@@ -51,9 +53,15 @@ Upload the screenshot (`--type screenshot`) and the network proof (the HAR as
 
 ## Local frontend against a remote backend
 
-If you can only run the frontend locally but the backend is remote, drive the
-frontend URL the same way — just remember the backend is not your branch, so it
-proves frontend behavior, not backend changes.
+Reach for this only when the change under test is frontend-only **and** no
+self-contained local environment can run it. Drive the frontend URL the same way,
+but treat it as a fallback, not a default: the backend is not your branch and may
+be production, so it proves frontend behavior against someone else's backend and
+data — not backend changes, and not the delivered branch end to end.
+
+Keep the local dev server the project's adapter provides as the default surface.
+When a remote-backed surface is unavoidable, say so in the report so the reviewer
+knows which layers the evidence actually covers.
 
 ## Time-based behavior & OS-level steps
 
@@ -63,6 +71,33 @@ proves frontend behavior, not backend changes.
 - **A native step the page can't script** (file picker, OS permission prompt, Save
   dialog) — drop to Computer Use for that step, then return:
   [../references/computer-use.md](../references/computer-use.md).
+
+## Teardown — close the session you opened {#web-teardown}
+
+Every named `--session` starts a background daemon with its own browser that
+keeps running after your process exits. Nothing reaps it: a run that ends
+without closing leaks a full headless browser (hundreds of MB to over 1 GB per
+session), and unique per-run session names make the leak grow by one browser
+every run.
+
+```bash
+agent-browser --session $SESSION close
+```
+
+Close only the sessions this run opened. Never `close --all` or
+`pkill -f agent-browser` as routine cleanup — that kills sibling runs'
+browsers mid-capture. Keep `AGENT_BROWSER_IDLE_TIMEOUT_MS` set so a run that
+crashes before teardown still releases its browser.
+
+A session also grows *while* it stays open: renderer heap, page cache, and every
+screenshot, HAR buffer and CDP frame it has taken. On a run with many captures,
+close and reopen the session periodically (reopen with `--restore` to keep auth)
+instead of holding one browser for the whole round.
+
+When a run boots services, drives a browser and records media together, start the
+[resource guard](../references/resource-guard.md) next to the session: it samples
+swap and per-group RSS and, at red, stops only the processes this run started.
+Report its peak tier with the round.
 
 ## Boundaries
 

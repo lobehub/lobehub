@@ -1,11 +1,20 @@
+import type { GoalReportMetadata } from './goalReport';
 import type { TaskStatus } from './task';
 
-export type WorkType = 'document' | 'external' | 'file' | 'task';
+/**
+ * `goal_report` is the wrap-up report of a Goal: one Work per goal, a new
+ * version per acceptance result. It is read through the goal graph, not the
+ * generic Work lists.
+ */
+export type WorkType = 'canvas' | 'document' | 'external' | 'file' | 'goal_report' | 'task';
+/** Work types the generic Work lists return; a `goal_report` is read through its goal. */
+export type ListedWorkType = Exclude<WorkType, 'goal_report'>;
 export type LinearWorkResourceType = 'linear_document' | 'linear_issue';
 export type GithubWorkResourceType = 'github_issue' | 'github_pull_request';
 /** Every resource type backed by the unified `external` Work type. */
 export type ExternalWorkResourceType = GithubWorkResourceType | LinearWorkResourceType;
-export type WorkResourceType = 'document' | ExternalWorkResourceType | 'file' | 'task';
+export type WorkResourceType =
+  'canvas' | 'document' | ExternalWorkResourceType | 'file' | 'goal_report' | 'task';
 export type WorkVisibility = 'private' | 'public';
 /**
  * How a version changed the Work. Not derivable from `version === 1`: updating
@@ -23,8 +32,91 @@ export type WorkVersionChangeType = 'created' | 'updated';
 export type WorkDisplayField =
   'content' | 'description' | 'identifier' | 'status' | 'title' | 'url';
 
+/**
+ * Server-written Agent Share provenance on a `works` row. Mirrors the
+ * document/file provenance: a Work registered by a share visitor's run stays
+ * owned by the CREATOR (the run executes under their account) but is fenced
+ * off from the creator's ordinary Work surfaces and served back only to the
+ * visitor's own share topic.
+ */
+export interface AgentShareWorkProvenance {
+  shareId: string;
+  topicId: string;
+  visitorUserId: string;
+}
+
+export interface CanvasWorkPublishMetadata {
+  deploymentId: string;
+  publishedVersion: number;
+}
+
+export interface WorkMetadata {
+  agentShare?: AgentShareWorkProvenance;
+  canvasPublish?: CanvasWorkPublishMetadata;
+}
+
+/**
+ * Explicit read/write boundary for the Work registry, same shape as
+ * `DocumentAccessScope`: `ordinary` sees only rows WITHOUT share provenance;
+ * `agentShare` sees only rows stamped with exactly this share/topic/visitor.
+ */
+export type WorkAccessScope =
+  ({ type: 'agentShare' } & AgentShareWorkProvenance) | { type: 'ordinary' };
+
+export const ordinaryWorkAccessScope = {
+  type: 'ordinary',
+} as const satisfies WorkAccessScope;
+
+export const agentShareWorkAccessScope = (
+  provenance: AgentShareWorkProvenance,
+): WorkAccessScope => ({
+  shareId: provenance.shareId,
+  topicId: provenance.topicId,
+  type: 'agentShare',
+  visitorUserId: provenance.visitorUserId,
+});
+
+export interface CanvasPublishFile {
+  content: string;
+  contentType: string;
+  encoding: 'base64' | 'utf8';
+  path: string;
+}
+
+export interface CanvasPublishBundle {
+  files: CanvasPublishFile[];
+  html: string;
+}
+
+export interface CanvasWorkVersionMetadata {
+  entry: string;
+  fileCount: number;
+  manifestKey: string;
+  runtimeMajor: number;
+  totalSize: number;
+}
+
+/**
+ * Storage one Canvas holds in the caller's file usage: every distinct blob
+ * registered under the canvas across all its versions. The canvas is the unit
+ * a user can free — its files only render together, so they are never listed
+ * or deleted one by one.
+ */
+export interface CanvasStorageItem {
+  canvasId: string;
+  fileCount: number;
+  /** `null` when the files outlived their Work (the save never registered one). */
+  title: string | null;
+  totalSize: number;
+  updatedAt: Date;
+  workId: string | null;
+}
+
 export interface WorkVersionMetadata {
   agentDocumentId?: string;
+  /** `external` GitHub PR Work — the branch the pull request merges into. */
+  baseBranch?: string;
+  canvas?: CanvasWorkVersionMetadata;
   /**
    * `file` Work — the edited file's identity in the file store, when the entity
    * file was persisted. `filePath` is always present for a file Work; the
@@ -37,6 +129,16 @@ export interface WorkVersionMetadata {
   fileSize?: number;
   /** `file` Work — durable, fetchable URL of the persisted file. */
   fileUrl?: string;
+  /** `goal_report` Work — the structured storyline; the full report is the version's `content`. */
+  goalReport?: GoalReportMetadata;
+  /** `goal_report` Work — the report as an HTML page: a `custom/html` document id. */
+  goalReportPageId?: string;
+  /**
+   * `external` GitHub PR Work — the pull request's source branch as the tool
+   * named it: REST `head.ref` is the bare branch, while `gh --head` may carry
+   * `owner:branch` for a fork.
+   */
+  headBranch?: string;
   /** `file` Work — lines added by this version's edit (0 when the source tool reports none). */
   linesAdded?: number;
   /** `file` Work — lines deleted by this version's edit (0 when the source tool reports none). */
@@ -198,8 +300,17 @@ export interface FileWorkListItem extends WorkListBaseItem {
   type: 'file';
 }
 
+export interface CanvasWorkListItem extends WorkListBaseItem {
+  resourceType: 'canvas';
+  type: 'canvas';
+}
+
 export type WorkListItem =
-  DocumentWorkListItem | ExternalWorkListItem | FileWorkListItem | TaskWorkListItem;
+  | CanvasWorkListItem
+  | DocumentWorkListItem
+  | ExternalWorkListItem
+  | FileWorkListItem
+  | TaskWorkListItem;
 
 export interface TaskWorkVersionEventItem extends TaskWorkListItem {
   version: WorkVersionPreview;
@@ -217,7 +328,12 @@ export interface FileWorkVersionEventItem extends FileWorkListItem {
   version: WorkVersionPreview;
 }
 
+export interface CanvasWorkVersionEventItem extends CanvasWorkListItem {
+  version: WorkVersionPreview;
+}
+
 export type WorkVersionEventItem =
+  | CanvasWorkVersionEventItem
   | DocumentWorkVersionEventItem
   | ExternalWorkVersionEventItem
   | FileWorkVersionEventItem
@@ -251,8 +367,18 @@ export interface FileWorkSummaryItem extends FileWorkListItem {
   version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
 }
 
+export interface CanvasWorkSummaryItem extends CanvasWorkListItem {
+  event: WorkSummaryVersionPreview;
+  totalCost: number | null;
+  version: Pick<WorkVersionItem, 'createdAt' | 'id' | 'version'> | null;
+}
+
 export type WorkSummaryItem =
-  DocumentWorkSummaryItem | ExternalWorkSummaryItem | FileWorkSummaryItem | TaskWorkSummaryItem;
+  | CanvasWorkSummaryItem
+  | DocumentWorkSummaryItem
+  | ExternalWorkSummaryItem
+  | FileWorkSummaryItem
+  | TaskWorkSummaryItem;
 export type WorkSummaryMap = Record<string, WorkSummaryItem[]>;
 
 export interface RegisterDocumentWorkParams {
@@ -311,6 +437,26 @@ export interface RegisterFileWorkParams {
   visibility?: WorkVisibility;
 }
 
+export interface RegisterCanvasWorkParams {
+  agentId?: string | null;
+  canvasId: string;
+  cumulativeCost?: number | null;
+  cumulativeUsage?: WorkVersionCumulativeUsage | null;
+  description?: string | null;
+  /** Checked under the Work row lock; 0 means this must be the first version. */
+  expectedVersion?: number;
+  messageId?: string | null;
+  metadata: CanvasWorkVersionMetadata;
+  rootOperationId?: string | null;
+  threadId?: string | null;
+  title: string;
+  toolCallId?: string | null;
+  toolIdentifier: string;
+  toolName: string;
+  topicId?: string | null;
+  visibility?: WorkVisibility;
+}
+
 export interface DeleteDocumentWorkParams {
   agentDocumentId?: string | null;
   agentId?: string | null;
@@ -343,6 +489,12 @@ export interface RegisterExternalWorkParams {
   description?: string | null;
   identifier?: string | null;
   messageId?: string | null;
+  /**
+   * Provider facts outside the display columns (a PR's branches). With
+   * `patchFields`, keys merge over the current version's metadata, so an edit
+   * that names no branch keeps the one captured at create.
+   */
+  metadata?: WorkVersionMetadata | null;
   patchFields?: WorkDisplayField[];
   /**
    * Canonical resource identity (`owner/repo#number`, a linear id, …). Required:
@@ -491,4 +643,15 @@ export type WorkRegistrationIntent =
       action: 'delete';
       document: { agentDocumentId?: string | null; agentId?: string | null; documentId: string };
       type: 'document';
+    }
+  | {
+      action: 'register';
+      canvas: {
+        canvasId: string;
+        description?: string | null;
+        metadata: CanvasWorkVersionMetadata;
+        title: string;
+        toolName: string;
+      };
+      type: 'canvas';
     };

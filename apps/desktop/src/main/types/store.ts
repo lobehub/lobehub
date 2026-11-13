@@ -16,9 +16,18 @@ export interface ElectronMainStore {
   };
   dataSyncConfig: DataSyncConfig;
   /**
+   * Settings → About → Debug logs: packaged builds also write `debug` records to
+   * `<userData>/logs/*.jsonl`. Dev builds always do.
+   */
+  debugLoggingEnabled: boolean;
+  /**
    * Explicit completion state for the multi-step desktop onboarding flow.
    * Undefined preserves the legacy behavior for users who completed onboarding
    * before this marker existed.
+   *
+   * This covers only the device's local first-run setup. It is not the
+   * account onboarding (`users.onboarding.finishedAt`): the renderer checks
+   * that after sign-in and sends unfinished accounts to `/onboarding`.
    */
   desktopOnboardingCompleted?: boolean;
   encryptedTokens: {
@@ -29,13 +38,31 @@ export interface ElectronMainStore {
   };
   gatewayDeviceId: string;
   gatewayEnabled: boolean;
-  gatewayUrl: string;
+  /**
+   * Keep the computer from idle-sleeping while the device gateway connection
+   * is enabled, so the device stays reachable from other clients. The display
+   * can still sleep.
+   */
+  gatewayKeepAwake: boolean;
+  /**
+   * Device gateway address the user chose, used ahead of what the server
+   * advertises. Absent by default. Older installs persisted the official
+   * gateway here as a default, so that exact value reads as "not configured".
+   */
+  gatewayUrl?: string;
+  /**
+   * Legacy, account-less list of shared workspaces. An entry moves into
+   * `gatewayWorkspaceEnrollmentsByAccount` once the server shows the signed-in
+   * account enrolled it; until then it is kept but never restored.
+   */
+  gatewayWorkspaceEnrollments?: string[];
   /**
    * Workspaces this machine's personal gateway connection has been shared into
-   * (via the `enrollWorkspace` device RPC). Persisted so an app restart can
-   * re-open the workspace share connections without re-sharing from the web UI.
+   * (via the `enrollWorkspace` device RPC), per `<serverKey>#<userId>`.
+   * Persisted so an app restart can re-open the share connections without
+   * re-sharing from the web UI — only for the account that shared them.
    */
-  gatewayWorkspaceEnrollments: string[];
+  gatewayWorkspaceEnrollmentsByAccount: Record<string, string[]>;
   /**
    * Developer toggle: when true, hetero-agent (CC / Codex) CLI raw streams are
    * traced to disk even in packaged production builds. Dev builds always trace
@@ -61,6 +88,12 @@ export interface ElectronMainStore {
   localFileWorkspaceRoots: string[];
   networkProxy: NetworkProxySettings;
   pendingRestoreRoute: string;
+  /**
+   * Settings → About → Remote Debugging: open the Chromium DevTools protocol port on every
+   * launch, even in packaged builds, so agents can evaluate code, read store
+   * snapshots and take screenshots. Off by default; a change applies on restart.
+   */
+  remoteDebuggingEnabled: boolean;
   shortcuts: Record<string, string>;
   storagePath: string;
   themeMode: 'dark' | 'light' | 'system';

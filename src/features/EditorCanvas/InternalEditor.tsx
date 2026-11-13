@@ -3,15 +3,20 @@
 import { isDesktop } from '@lobechat/const';
 import type { IEditor } from '@lobehub/editor';
 import {
+  ReactAlertPlugin,
+  ReactChartPlugin,
+  ReactFootnotePlugin,
   ReactImagePlugin,
   ReactLinkPlugin,
   ReactLiteXmlPlugin,
+  ReactMathPlugin,
   ReactMentionPlugin,
   ReactTablePlugin,
   ReactToolbarPlugin,
+  ReactVideoPlugin,
 } from '@lobehub/editor';
 import { Editor, useEditorState } from '@lobehub/editor/react';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import type { CSSProperties, RefObject } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
@@ -25,11 +30,24 @@ import InlineToolbar from './InlineToolbar';
 import LinearFilePlugin from './LinearFilePlugin';
 import { registerAttachmentClickOpen } from './registerAttachmentClickOpen';
 import { registerBlockDecoratorCaretGuard } from './registerBlockDecoratorCaretGuard';
+import { registerBlockDecoratorClickToWrite } from './registerBlockDecoratorClickToWrite';
+import { registerImageFilePastePreference } from './registerImageFilePastePreference';
 import { needsImageRehost, rehostImage } from './rehostImage';
+import OrderedListNumberMenu from './richList/OrderedListNumberMenu';
+import { LIST_HEADING_ATTRIBUTE, ReactRichListPlugin } from './richList/RichListPlugin';
 import { useFileUpload, useImageUpload } from './useImageUpload';
 
-const IMAGE_FILTERS = [
+interface FileFilter {
+  extensions: string[];
+  name: string;
+}
+
+const IMAGE_FILTERS: FileFilter[] = [
   { extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif'], name: 'Images' },
+];
+
+const VIDEO_FILTERS: FileFilter[] = [
+  { extensions: ['mp4', 'webm', 'mov', 'm4v', 'ogv'], name: 'Videos' },
 ];
 
 // Force the Lexical FileNode's outer `<span>` to render as its own block-
@@ -43,12 +61,100 @@ const fileNodeStyles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+// A bullet item's marker at a given nesting depth. Lexical nests a list inside a
+// `.editor_listItemNested` item; items holding only a nested list, and check
+// list items, draw no bullet. `ul` outranks @lobehub/editor's own `-` marker rule.
+const bullet = (depth: number) =>
+  `${'.editor_listItemNested '.repeat(depth)}ul.editor_listUnordered > .editor_listItem:not(:has(ul), [role='checkbox'])::before`;
+
+// Notion-style list markers in the theme color: a solid disc, then a hollow
+// circle, then a square, repeating with depth; ordered list numbers match.
+// A text color applied to the item still colors its marker.
+const listMarkerStyles = createStaticStyles(({ css, cssVar }) => {
+  // Resolved on the item itself, where Lexical sets `--listitem-marker-color`.
+  const markerColor = `var(--listitem-marker-color, ${cssVar.colorPrimary})`;
+  const markerSize = '0.375em';
+
+  return {
+    content: css`
+      ol.editor_listOrdered > .editor_listItem::marker {
+        color: ${markerColor};
+      }
+
+      ${bullet(0)}, ${bullet(3)} {
+        content: '';
+
+        display: inline-block;
+
+        box-sizing: border-box;
+        width: ${markerSize};
+        height: ${markerSize};
+        margin-inline: -0.9em calc(0.9em - ${markerSize});
+        border-radius: 50%;
+
+        vertical-align: middle;
+
+        opacity: 1;
+        background: ${markerColor};
+      }
+
+      ${bullet(1)}, ${bullet(4)} {
+        border: 0.09em solid ${markerColor};
+        background: transparent;
+      }
+
+      ${bullet(2)}, ${bullet(5)} {
+        border: none;
+        border-radius: 0.06em;
+        background: ${markerColor};
+      }
+
+      /* A list item styled as a heading takes the heading's type scale
+         (@lobehub/editor's header styles); its marker scales with it. */
+      .editor_listItem[${LIST_HEADING_ATTRIBUTE}] {
+        margin-block-start: max(
+          calc(var(--lobe-markdown-header-multiple) * var(--lobe-markdown-margin-multiple) * 0.4em),
+          var(--lobe-markdown-font-size)
+        );
+        /* Indent by the body font, so heading items line up with plain ones. */
+        margin-inline-start: var(--lobe-markdown-font-size);
+        font-weight: bold;
+        line-height: 1.25;
+      }
+
+      .editor_listItem[${LIST_HEADING_ATTRIBUTE}='h1'] {
+        font-size: calc(
+          var(--lobe-markdown-font-size) * (1 + 1.5 * var(--lobe-markdown-header-multiple))
+        );
+      }
+
+      .editor_listItem[${LIST_HEADING_ATTRIBUTE}='h2'] {
+        font-size: calc(
+          var(--lobe-markdown-font-size) * (1 + var(--lobe-markdown-header-multiple))
+        );
+      }
+
+      .editor_listItem[${LIST_HEADING_ATTRIBUTE}='h3'] {
+        font-size: calc(
+          var(--lobe-markdown-font-size) * (1 + 0.5 * var(--lobe-markdown-header-multiple))
+        );
+      }
+
+      .editor_listItem[${LIST_HEADING_ATTRIBUTE}='h4'] {
+        font-size: calc(
+          var(--lobe-markdown-font-size) * (1 + 0.25 * var(--lobe-markdown-header-multiple))
+        );
+      }
+    `,
+  };
+});
+
 /**
  * Base plugins for the editor (without image and toolbar, which need dynamic config)
  */
 const STATIC_PLUGINS = [
   ReactLiteXmlPlugin,
-  ...createChatInputRichPlugins({ linkPlugin: ReactLinkPlugin }),
+  ...createChatInputRichPlugins({ linkPlugin: ReactLinkPlugin, mathPlugin: false }),
   // The kernel reads a plugin's config once at init, and `mentionOption` can
   // arrive later (workspace pages resolve their member source asynchronously),
   // so pin the member chip's markdown form here rather than relying on
@@ -56,6 +162,11 @@ const STATIC_PLUGINS = [
   // comment editors, so a chip serialises identically in every canvas.
   Editor.withProps(ReactMentionPlugin, { markdownWriter: writeTopicCommentMentionMarkdown }),
   ReactTablePlugin,
+  ReactAlertPlugin,
+  ReactFootnotePlugin,
+  ReactChartPlugin,
+  // After ReactListPlugin (in the rich plugins above), whose markdown it extends.
+  ReactRichListPlugin,
 ];
 
 const EDITOR_INIT_DATA_SOURCE_TYPES = ['json', 'markdown'] as const;
@@ -108,6 +219,7 @@ export interface InternalEditorProps extends EditorCanvasProps {
  */
 const InternalEditor = memo<InternalEditorProps>(
   ({
+    allowContentBleed,
     blockImageCaretGuard = false,
     className,
     contentChangeLockRef,
@@ -115,6 +227,7 @@ const InternalEditor = memo<InternalEditorProps>(
     disabled,
     editable = true,
     editor,
+    enableInlineMath = true,
     extraPlugins,
     floatingToolbar = true,
     getPopupContainer,
@@ -134,17 +247,17 @@ const InternalEditor = memo<InternalEditorProps>(
     const handleImageUpload = useImageUpload();
     const handleFileUpload = useFileUpload();
 
-    const handlePickFile = useCallback(async (): Promise<File | null> => {
+    const pickDesktopFile = useCallback(async (filters: FileFilter[]): Promise<File | null> => {
       if (!isDesktop) return null;
       const { ensureElectronIpc } = await import('@/utils/electron/ipc');
       const ipc = ensureElectronIpc();
-      const result = await (ipc as any).localSystem.handlePickFile({
-        filters: IMAGE_FILTERS,
-      });
+      const result = await (ipc as any).localSystem.handlePickFile({ filters });
       if (result.canceled || !result.file) return null;
       const { data, mimeType, name } = result.file;
       return new File([data], name, { type: mimeType });
     }, []);
+    const handlePickImage = useCallback(() => pickDesktopFile(IMAGE_FILTERS), [pickDesktopFile]);
+    const handlePickVideo = useCallback(() => pickDesktopFile(VIDEO_FILTERS), [pickDesktopFile]);
 
     const finalPlaceholder = placeholder || t('pageEditor.editorPlaceholder');
     const wrapperStyle = useMemo<CSSProperties>(
@@ -153,11 +266,11 @@ const InternalEditor = memo<InternalEditorProps>(
         maxWidth: '100%',
         minWidth: 0,
         opacity: disabled ? 0.65 : undefined,
-        overflow: 'hidden',
+        overflow: allowContentBleed ? 'visible' : 'hidden',
         pointerEvents: disabled ? 'none' : undefined,
         width: '100%',
       }),
-      [disabled],
+      [allowContentBleed, disabled],
     );
 
     // Build plugins array
@@ -171,7 +284,12 @@ const InternalEditor = memo<InternalEditorProps>(
         handleUpload: handleImageUpload,
         needRehost: (url: string) =>
           !!editor.getLexicalEditor?.()?.isEditable() && needsImageRehost(url),
-        onPickFile: isDesktop ? handlePickFile : undefined,
+        onPickFile: isDesktop ? handlePickImage : undefined,
+      });
+
+      const videoPlugin = Editor.withProps(ReactVideoPlugin, {
+        handleUpload: handleFileUpload,
+        onPickFile: isDesktop ? handlePickVideo : undefined,
       });
 
       const filePlugin = Editor.withProps(LinearFilePlugin, {
@@ -179,10 +297,12 @@ const InternalEditor = memo<InternalEditorProps>(
         theme: { file: fileNodeStyles.fileWrapper as unknown as string },
       });
 
+      const mathPlugin = Editor.withProps(ReactMathPlugin, { enableInlineMath });
+
       // Build base plugins with optional extra plugins prepended
       const basePlugins = extraPlugins
-        ? [...extraPlugins, ...STATIC_PLUGINS, imagePlugin, filePlugin]
-        : [...STATIC_PLUGINS, imagePlugin, filePlugin];
+        ? [...extraPlugins, ...STATIC_PLUGINS, mathPlugin, imagePlugin, videoPlugin, filePlugin]
+        : [...STATIC_PLUGINS, mathPlugin, imagePlugin, videoPlugin, filePlugin];
 
       if (!floatingToolbar || disabled) return basePlugins;
 
@@ -232,11 +352,13 @@ const InternalEditor = memo<InternalEditorProps>(
       editable,
       editor,
       editorState,
+      enableInlineMath,
       extraPlugins,
       floatingToolbar,
       handleFileUpload,
       handleImageUpload,
-      handlePickFile,
+      handlePickImage,
+      handlePickVideo,
       readonlySelectionItems,
       toolbarExtraItems,
     ]);
@@ -259,13 +381,27 @@ const InternalEditor = memo<InternalEditorProps>(
       return () => unregister?.();
     }, [editor]);
 
-    // Opt-in (comment editors): keep the caret out of the root node around
+    // Copy Image from apps like Discord puts an image-only HTML flavor next to
+    // the bitmap; upload the bitmap instead of rehosting the remote URL.
+    useEffect(() => {
+      if (!editor) return;
+      const unregister = registerImageFilePastePreference(editor);
+      return () => unregister?.();
+    }, [editor]);
+
+    // Opt-in (comment / task editors): keep the caret out of the root node around
     // block images by pushing an empty paragraph next to the image instead of
     // showing Lexical's horizontal root-level caret.
     useEffect(() => {
       if (!editor || !blockImageCaretGuard) return;
-      const unregister = registerBlockDecoratorCaretGuard(editor);
-      return () => unregister?.();
+      const unregisterGuard = registerBlockDecoratorCaretGuard(editor);
+      // A click in a block image's row, or typing with the image selected,
+      // continues writing on the line after it.
+      const unregisterClick = registerBlockDecoratorClickToWrite(editor);
+      return () => {
+        unregisterGuard?.();
+        unregisterClick?.();
+      };
     }, [blockImageCaretGuard, editor]);
 
     const onInitRef = useRef(onInit);
@@ -353,32 +489,35 @@ const InternalEditor = memo<InternalEditorProps>(
     }, [contentChangeLockRef, disabled, editor]); // Only depend on stable refs and editor
 
     return (
-      <div
-        className={className}
-        style={wrapperStyle}
-        onClick={(e) => {
-          e.stopPropagation();
-          e.preventDefault();
-        }}
-      >
-        <Editor
-          content={''}
-          editable={editable && !disabled}
-          editor={editor}
-          getPopupContainer={getPopupContainer}
-          mentionOption={mentionOption}
-          placeholder={finalPlaceholder}
-          plugins={plugins}
-          slashOption={slashItems ? { items: slashItems } : undefined}
-          type={'text'}
-          style={{
-            paddingBottom: 32,
-            ...style,
-            ...contentStyle,
+      <>
+        <div
+          className={cx(listMarkerStyles.content, className)}
+          style={wrapperStyle}
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
           }}
-          {...(onPressEnter ? { onPressEnter } : {})}
-        />
-      </div>
+        >
+          <Editor
+            content={''}
+            editable={editable && !disabled}
+            editor={editor}
+            getPopupContainer={getPopupContainer}
+            mentionOption={mentionOption}
+            placeholder={finalPlaceholder}
+            plugins={plugins}
+            slashOption={slashItems ? { items: slashItems } : undefined}
+            type={'text'}
+            style={{
+              paddingBottom: 32,
+              ...style,
+              ...contentStyle,
+            }}
+            {...(onPressEnter ? { onPressEnter } : {})}
+          />
+        </div>
+        {editable && !disabled && <OrderedListNumberMenu editor={editor} />}
+      </>
     );
   },
 );

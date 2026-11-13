@@ -1,7 +1,10 @@
 import { type SlashOptions } from '@lobehub/editor';
 import {
+  INSERT_ALERT_COMMAND,
+  INSERT_CHART_COMMAND,
   INSERT_CHECK_LIST_COMMAND,
   INSERT_CODEMIRROR_COMMAND,
+  INSERT_FOOTNOTE_COMMAND,
   INSERT_HEADING_COMMAND,
   INSERT_HORIZONTAL_RULE_COMMAND,
   INSERT_IMAGE_COMMAND,
@@ -9,25 +12,31 @@ import {
   INSERT_ORDERED_LIST_COMMAND,
   INSERT_TABLE_COMMAND,
   INSERT_UNORDERED_LIST_COMMAND,
+  INSERT_VIDEO_COMMAND,
 } from '@lobehub/editor';
-import { Text } from '@lobehub/ui/base-ui';
+import { Text } from '@lobehub/ui';
 import {
+  ChartColumnIcon,
   Heading1Icon,
   Heading2Icon,
   Heading3Icon,
   ImageIcon,
   ListIcon,
   ListOrderedIcon,
+  ListRestartIcon,
   ListTodoIcon,
+  MessageSquareWarningIcon,
   MinusIcon,
   SigmaIcon,
   SquareDashedBottomCodeIcon,
+  SuperscriptIcon,
   Table2Icon,
+  VideoIcon,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { openFileSelector } from '@/features/EditorCanvas';
+import { openFileSelector, requestListNumberMenu } from '@/features/EditorCanvas';
 
 export const useSlashItems = (): SlashOptions['items'] => {
   const { t } = useTranslation('editor');
@@ -86,6 +95,15 @@ export const useSlashItems = (): SlashOptions['items'] => {
         },
       },
       {
+        // The keyboard's way to the menu the pointer opens on a list number.
+        icon: ListRestartIcon,
+        key: 'num',
+        label: t('list.number.set'),
+        onSelect: (editor) => {
+          requestListNumberMenu(editor);
+        },
+      },
+      {
         type: 'divider',
       },
       {
@@ -103,6 +121,14 @@ export const useSlashItems = (): SlashOptions['items'] => {
         },
       },
       {
+        icon: VideoIcon,
+        key: 'video',
+        label: t('slash.video'),
+        onSelect: (editor) => {
+          editor.dispatchCommand(INSERT_VIDEO_COMMAND, {});
+        },
+      },
+      {
         icon: MinusIcon,
         key: 'hr',
         label: t('slash.hr'),
@@ -116,6 +142,22 @@ export const useSlashItems = (): SlashOptions['items'] => {
         label: t('slash.table'),
         onSelect: (editor) => {
           editor.dispatchCommand(INSERT_TABLE_COMMAND, { columns: '3', rows: '3' });
+        },
+      },
+      {
+        icon: MessageSquareWarningIcon,
+        key: 'alert',
+        label: t('slash.alert'),
+        onSelect: (editor) => {
+          editor.dispatchCommand(INSERT_ALERT_COMMAND, undefined);
+        },
+      },
+      {
+        icon: ChartColumnIcon,
+        key: 'chart',
+        label: t('slash.chart'),
+        onSelect: (editor) => {
+          editor.dispatchCommand(INSERT_CHART_COMMAND, undefined);
         },
       },
       {
@@ -138,6 +180,14 @@ export const useSlashItems = (): SlashOptions['items'] => {
           queueMicrotask(() => {
             editor.focus();
           });
+        },
+      },
+      {
+        icon: SuperscriptIcon,
+        key: 'footnote',
+        label: t('slash.footnote'),
+        onSelect: (editor) => {
+          editor.dispatchCommand(INSERT_FOOTNOTE_COMMAND, undefined);
         },
       },
     ];

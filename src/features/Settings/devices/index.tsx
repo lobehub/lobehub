@@ -1,98 +1,42 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, Form, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
-import { MonitorUpIcon, RefreshCwIcon } from 'lucide-react';
+import { Flexbox } from '@lobehub/ui';
 import { memo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useNavigate, useParams } from 'react-router';
 
-import { FORM_STYLE } from '@/const/layoutTokens';
-import {
-  DeviceConnectModal,
-  DeviceDetailPanel,
-  DeviceManager,
-  useDeviceList,
-} from '@/features/DeviceManager';
-import NavHeader from '@/features/NavHeader';
-import RightPanel from '@/features/RightPanel';
-import SettingContainer from '@/features/Setting/SettingContainer';
-import { useElectronStore } from '@/store/electron';
+import { DeviceConnectModal, DeviceDetailPage, DeviceManager } from '@/features/DeviceManager';
+
+import ThisComputer from './ThisComputer';
 
 interface PageProps {
   mobile?: boolean;
 }
 
-const Page = memo<PageProps>(({ mobile }) => {
-  const { t } = useTranslation('setting');
+const Page = memo<PageProps>(() => {
   const [open, setOpen] = useState(false);
   const [initialTab, setInitialTab] = useState<'cli' | 'desktop'>();
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>();
-  // Shares DeviceManager's SWR entry, so the header actions drive the list it
-  // renders — the same wiring the workspace devices page uses.
-  const { data, isValidating, mutate } = useDeviceList();
+  // `/settings/devices/:sub` — the second level is one device's detail page.
+  const { sub: deviceId } = useParams<{ sub?: string }>();
+  const navigate = useNavigate();
 
   const handleConnect = (tab?: 'cli' | 'desktop') => {
     setInitialTab(tab);
     setOpen(true);
   };
 
-  const devices = (data ?? []).filter((device) => device.scope === 'personal');
-  const selectedDevice = devices.find((device) => device.deviceId === selectedDeviceId);
+  // Personal-only route: plain `navigate` keeps it out of any active workspace.
+  const openDevice = (id: string) => navigate(`/settings/devices/${encodeURIComponent(id)}`);
+  const backToList = () => navigate('/settings/devices');
 
-  const useFetchDeviceInfo = useElectronStore((s) => s.useFetchGatewayDeviceInfo);
-  const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
-  useFetchDeviceInfo();
-  const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
-
-  // Narrow viewports have no room beside the list, so the detail stays inside
-  // the manager (the master-detail stack DeviceManager owns by default).
-  const externalDetail = !mobile;
-
+  // Same toolbar + card grid as the workspace devices page. The personal pool
+  // has no visibility tabs, and the shared settings header already shows the
+  // page title, so the toolbar's leading slot stays empty.
   const list = (
-    <Form
-      collapsible={false}
-      itemsType={'group'}
-      variant={'filled'}
-      items={[
-        {
-          children: (
-            <DeviceManager
-              inlineDetail={!externalDetail}
-              scope={'personal'}
-              selectedDeviceId={selectedDeviceId}
-              onConnect={handleConnect}
-              onSelectedDeviceChange={setSelectedDeviceId}
-            />
-          ),
-          extra: (
-            <Flexbox horizontal align={'center'} gap={8}>
-              {devices.length > 0 && (
-                <Text fontSize={12} type={'secondary'} weight={500}>
-                  {t('devices.selection.total', { count: devices.length })}
-                </Text>
-              )}
-              <Button
-                icon={<Icon icon={MonitorUpIcon} />}
-                size={'small'}
-                onClick={() => handleConnect()}
-              >
-                {t('devices.connectWizard.button')}
-              </Button>
-              <ActionIcon
-                icon={RefreshCwIcon}
-                loading={isValidating}
-                size={'small'}
-                title={t('devices.actions.refresh')}
-                onClick={() => mutate()}
-              />
-            </Flexbox>
-          ),
-          title: t('devices.title'),
-        },
-      ]}
-      {...FORM_STYLE}
-    />
+    <Flexbox gap={24}>
+      <DeviceManager scope={'personal'} onConnect={handleConnect} onOpenDevice={openDevice} />
+      {isDesktop && <ThisComputer />}
+    </Flexbox>
   );
 
   const connectModal = (
@@ -104,50 +48,19 @@ const Page = memo<PageProps>(({ mobile }) => {
     />
   );
 
-  if (mobile)
-    return (
-      <>
-        {list}
-        {connectModal}
-      </>
-    );
+  const content = deviceId ? (
+    <DeviceDetailPage deviceId={deviceId} scope={'personal'} onBack={backToList} />
+  ) : (
+    list
+  );
 
+  // Desktop renders inside the shared settings header + container, mobile under
+  // the mobile layout header.
   return (
-    <Flexbox horizontal flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
-      <Flexbox flex={1} height={'100%'} style={{ minWidth: 0 }}>
-        <NavHeader styles={{ center: { alignItems: 'center' } }}>
-          <Text weight={500}>{t('devices.title')}</Text>
-        </NavHeader>
-        {/* The list keeps the settings reading column — centered at the shared
-            1024 max width — so opening the detail only narrows the space it
-            centers in, it never turns the page into a left-hugging column. */}
-        <SettingContainer maxWidth={1024} paddingBlock={'24px 128px'} paddingInline={24}>
-          {list}
-        </SettingContainer>
-      </Flexbox>
-      {/* Page-level rail rather than a card beside the list: the detail is a
-          full-height surface with its own scroll, so a device with a long
-          working-directory history stays readable without stretching the page. */}
-      <RightPanel
-        defaultWidth={420}
-        expand={!!selectedDevice}
-        maxWidth={640}
-        minWidth={320}
-        onExpandChange={(next) => {
-          if (!next) setSelectedDeviceId(undefined);
-        }}
-      >
-        {selectedDevice && (
-          <DeviceDetailPanel
-            device={selectedDevice}
-            isCurrent={selectedDevice.deviceId === currentDeviceId}
-            key={selectedDevice.deviceId}
-            onClose={() => setSelectedDeviceId(undefined)}
-          />
-        )}
-      </RightPanel>
+    <>
+      {content}
       {connectModal}
-    </Flexbox>
+    </>
   );
 });
 

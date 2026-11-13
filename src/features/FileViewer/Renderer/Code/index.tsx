@@ -1,15 +1,14 @@
 'use client';
 
-import { Center, Flexbox, Highlighter } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
-import { memo } from 'react';
+import { Center, createStaticStyles, Flexbox, Highlighter, Spin } from '@lobehub/ui';
+import { memo, useMemo } from 'react';
 
 import AsyncError from '@/components/AsyncError';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { getLanguageFromFilename } from '@/utils/fileLanguage';
 
 import { useTextFileLoader } from '../../hooks/useTextFileLoader';
 import NotSupport from '../../NotSupport';
+import { formatJsonForPreview } from './formatJson';
 
 const styles = createStaticStyles(({ css }) => ({
   page: css`
@@ -28,6 +27,10 @@ interface CodeViewerProps {
 const CodeViewer = memo<CodeViewerProps>(({ url, fileName }) => {
   const { error, fileData, loading, tooLarge } = useTextFileLoader(url);
   const language = getLanguageFromFilename(fileName);
+  const content = useMemo(
+    () => (fileData === null ? null : formatJsonForPreview(fileData, language)),
+    [fileData, language],
+  );
 
   if (!loading && fileData === null)
     return (
@@ -39,13 +42,13 @@ const CodeViewer = memo<CodeViewerProps>(({ url, fileName }) => {
 
   return (
     <Flexbox className={styles.page}>
-      {!loading && fileData !== null ? (
+      {!loading && content !== null ? (
         <Highlighter language={language} showLanguage={false} variant={'borderless'}>
-          {fileData}
+          {content}
         </Highlighter>
       ) : (
         <Center height={'100%'}>
-          <NeuralNetworkLoading size={36} />
+          <Spin size="large" />
         </Center>
       )}
     </Flexbox>

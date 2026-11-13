@@ -15,11 +15,33 @@ import {
   goalEvents,
   goalNodes,
   goals,
+  messagePlugins,
+  messages,
   tasks,
+  topics,
   users,
+  verifyCheckResults,
+  verifyRuns,
 } from '@/database/schemas';
 
 import { buildTaskPrompt } from './buildTaskPrompt';
+
+const promptDeps = (
+  db: Parameters<typeof buildTaskPrompt>[1]['db'],
+  taskModel: TaskModel,
+  userId: string,
+): Parameters<typeof buildTaskPrompt>[1] => ({
+  briefModel: new BriefModel(db, userId),
+  db,
+  taskModel,
+  taskTopicModel: new TaskTopicModel(db, userId),
+  userId,
+});
+
+const taskAcceptance = (subjectId: string): Parameters<AcceptanceModel['create']>[0] => ({
+  subjectId,
+  subjectType: 'task',
+});
 
 const db = await getTestDB();
 const userId = 'goal-work-prompt-test-user';
@@ -75,13 +97,7 @@ describe('buildTaskPrompt Goal loop context', () => {
     });
     const currentTask = await taskModel.findById(task.id);
 
-    const result = await buildTaskPrompt(currentTask!, {
-      briefModel: new BriefModel(db, userId),
-      db,
-      taskModel,
-      taskTopicModel: new TaskTopicModel(db, userId),
-      userId,
-    });
+    const result = await buildTaskPrompt(currentTask!, promptDeps(db, taskModel, userId));
 
     expect(result.prompt).toContain('Automatic Acceptance review:');
     expect(result.prompt).toContain('Review feedback on the last delivery');
@@ -92,17 +108,349 @@ describe('buildTaskPrompt Goal loop context', () => {
   });
 });
 
-describe('buildTaskPrompt delivery acceptance', () => {
-  const buildFor = async (taskId: string) => {
+describe('buildTaskPrompt questions earlier rounds asked', () => {
+  /**
+   * Regression: each Goal round is a fresh conversation, so a question an
+   * earlier round put to the owner — and the answer — never reached the next.
+   * Rounds asked the same thing again, timed out, delivered "awaiting your
+   * confirmation", failed Acceptance and spawned another round.
+   */
+  it('hands the next round what earlier rounds asked and what came back', async () => {
     const taskModel = new TaskModel(db, userId);
-    const currentTask = await taskModel.findById(taskId);
-    return buildTaskPrompt(currentTask!, {
+    const task = await taskModel.create({ instruction: 'Compare the two designs.' });
+    await taskModel.update(task.id, { totalTopics: 2 });
+    const goal = await new GoalModel(db, userId).create({
+      subjectType: 'standalone',
+      title: 'Asked before',
+    });
+    const graphModel = new GoalGraphModel(db, userId);
+    const taskNode = await graphModel.createNode(goal.id, { kind: 'task', title: 'Compare' });
+    await graphModel.bindTask(goal.id, taskNode!.id, task.id);
+
+    const taskTopicModel = new TaskTopicModel(db, userId);
+    const asks = [
+      {
+        content: 'User answers:\n- Confirm the four decisions as recommended?: Yes',
+        question: 'Confirm the four decisions as recommended?',
+        topicId: 'asked-round-1',
+      },
+      {
+        content:
+          'No answer received within the wait window; the user did not respond. Continue without their input or ask in plain text.',
+        question: 'Can a virtual display be created on this machine?',
+        topicId: 'asked-round-2',
+      },
+    ];
+    for (const [i, ask] of asks.entries()) {
+      await db.insert(topics).values({ id: ask.topicId, userId });
+      await taskTopicModel.add(task.id, ask.topicId, { seq: i + 1, trigger: 'goal' });
+      const messageId = `asked-message-${i}`;
+      await db.insert(messages).values({
+        content: ask.content,
+        createdAt: new Date(Date.UTC(2026, 9, 1, 10 + i)),
+        id: messageId,
+        role: 'tool',
+        topicId: ask.topicId,
+        userId,
+      });
+      await db.insert(messagePlugins).values({
+        apiName: 'askUserQuestion',
+        arguments: JSON.stringify({ questions: [{ options: [], question: ask.question }] }),
+        id: messageId,
+        identifier: 'claude-code',
+        toolCallId: `tc-${i}`,
+        userId,
+      });
+    }
+
+    const result = await buildTaskPrompt((await taskModel.findById(task.id))!, {
+      briefModel: new BriefModel(db, userId),
+      db,
+      taskModel,
+      taskTopicModel,
+      userId,
+    });
+
+    expect(result.prompt).toContain('Questions earlier rounds already asked the owner');
+    expect(result.prompt).toContain(
+      '1. Confirm the four decisions as recommended?\n       → User answers: - Confirm the four decisions as recommended?: Yes',
+    );
+    expect(result.prompt).toContain(
+      '2. Can a virtual display be created on this machine?\n       → No answer received within the wait window',
+    );
+    expect(result.prompt).toContain('Do not ask the owner again');
+  });
+});
+
+describe('buildTaskPrompt unresolved checks', () => {
+  const planItem = (id: string) => ({
+    id,
+    index: 0,
+    onFail: 'auto_repair' as const,
+    required: true,
+    title: `Check ${id}`,
+    verifierConfig: {},
+    verifierType: 'agent' as const,
+  });
+
+  it('carries the last judged failure when the newest round is still unjudged', async () => {
+    // A repair round re-plans every check and leaves them pending until the
+    // verifier runs. A retry dispatched meanwhile read only that newest round,
+    // found nothing failed, and was told to "close the gaps below" with no gaps.
+    const taskModel = new TaskModel(db, userId);
+    const task = await taskModel.create({ instruction: 'Land the file tree PR.' });
+    await taskModel.update(task.id, { totalTopics: 2 });
+    const goal = await new GoalModel(db, userId).create({
+      subjectType: 'standalone',
+      title: 'Unjudged repair round',
+    });
+    const graphModel = new GoalGraphModel(db, userId);
+    const taskNode = await graphModel.createNode(goal.id, { kind: 'task', title: 'Land it' });
+    await graphModel.bindTask(goal.id, taskNode!.id, task.id);
+    const acceptance = await new AcceptanceModel(db, userId).create(taskAcceptance(task.id));
+    const [judged, unjudged] = await db
+      .insert(verifyRuns)
+      .values(
+        [1, 2].map((roundIndex) => ({
+          acceptanceId: acceptance.id,
+          plan: [planItem('rebased'), planItem('evidence')],
+          roundIndex,
+          userId,
+        })),
+      )
+      .returning();
+    await db.insert(verifyCheckResults).values(
+      [
+        { checkItemId: 'rebased', status: 'passed', verdict: 'passed', verifyRunId: judged.id },
+        {
+          checkItemId: 'evidence',
+          status: 'failed',
+          suggestion: 'Capture the account switch run and the no-data loading contrast.',
+          verdict: 'failed',
+          verifyRunId: judged.id,
+        },
+        { checkItemId: 'rebased', status: 'pending', verifyRunId: unjudged.id },
+        { checkItemId: 'evidence', status: 'pending', verifyRunId: unjudged.id },
+      ].map((row) => ({ ...row, userId, verifierType: 'agent' as const })),
+    );
+
+    const result = await buildTaskPrompt(
+      (await taskModel.findById(task.id))!,
+      promptDeps(db, taskModel, userId),
+    );
+
+    expect(result.prompt).toContain('Unresolved checks from the last round:');
+    expect(result.prompt).toContain(
+      '1. Check evidence — Capture the account switch run and the no-data loading contrast.',
+    );
+    expect(result.prompt).not.toContain('Check rebased');
+  });
+  it('tells the next attempt which disputed checks were waived or must still be met', async () => {
+    const taskModel = new TaskModel(db, userId);
+    const task = await taskModel.create({ instruction: 'Ship the report.' });
+    await taskModel.update(task.id, { totalTopics: 1 });
+    const goal = await new GoalModel(db, userId).create({
+      subjectType: 'standalone',
+      title: 'Disputed checks',
+    });
+    const graphModel = new GoalGraphModel(db, userId);
+    const taskNode = await graphModel.createNode(goal.id, { kind: 'task', title: 'Ship' });
+    await graphModel.bindTask(goal.id, taskNode!.id, task.id);
+    const acceptance = await new AcceptanceModel(db, userId).create({
+      subjectId: task.id,
+      subjectType: 'task',
+    });
+    const [run] = await db
+      .insert(verifyRuns)
+      .values({
+        acceptanceId: acceptance.id,
+        plan: [planItem('pdf'), planItem('totals')],
+        roundIndex: 1,
+        userId,
+      } as never)
+      .returning();
+    const ruled = (outcome: 'overruled' | 'upheld') => ({
+      dispute: {
+        arbitration: { decidedAt: 'now', outcome, votes: [] },
+        filedAt: 'now',
+        kind: 'invalid_criterion' as const,
+        reason: 'Not in the requirement',
+      },
+    });
+    await db.insert(verifyCheckResults).values(
+      [
+        { checkItemId: 'pdf', metadata: ruled('upheld'), suggestion: 'Export a PDF.' },
+        { checkItemId: 'totals', metadata: ruled('overruled'), suggestion: 'Add a total row.' },
+      ].map((row) => ({
+        ...row,
+        status: 'failed' as const,
+        userId,
+        verdict: 'failed' as const,
+        verifierType: 'agent' as const,
+        verifyRunId: run.id,
+      })),
+    );
+
+    const result = await buildTaskPrompt((await taskModel.findById(task.id))!, {
       briefModel: new BriefModel(db, userId),
       db,
       taskModel,
       taskTopicModel: new TaskTopicModel(db, userId),
       userId,
     });
+
+    expect(result.prompt).toContain('Disputed criteria already ruled on:');
+    expect(result.prompt).toContain('Check pdf — upheld.');
+    expect(result.prompt).toContain('Check totals — overruled.');
+    // A waived check is not a gap to close.
+    expect(result.prompt).toContain('1. Check totals — Add a total row.');
+    expect(result.prompt).not.toContain('Export a PDF.');
+  });
+
+  it('keeps flow nodes that reuse one criterion as separate checks', async () => {
+    // Two flow nodes can point at the same criterion asset; folding them onto
+    // the criterion id let one node's failure stand in for the node that passed.
+    const taskModel = new TaskModel(db, userId);
+    const task = await taskModel.create({ instruction: 'Verify both branches.' });
+    await taskModel.update(task.id, { totalTopics: 1 });
+    const goal = await new GoalModel(db, userId).create({
+      subjectType: 'standalone',
+      title: 'Repeated flow asset',
+    });
+    const graphModel = new GoalGraphModel(db, userId);
+    const taskNode = await graphModel.createNode(goal.id, { kind: 'task', title: 'Verify' });
+    await graphModel.bindTask(goal.id, taskNode!.id, task.id);
+    const acceptance = await new AcceptanceModel(db, userId).create(taskAcceptance(task.id));
+    const flowItem = (id: string, node: string) => ({
+      ...planItem(id),
+      sourceCriterionId: 'shared-criterion',
+      sourceFlowNode: { flowId: 'flow-1', nodeId: node },
+      title: `Branch ${node}`,
+    });
+    const [run] = await db
+      .insert(verifyRuns)
+      .values({
+        acceptanceId: acceptance.id,
+        plan: [flowItem('occurrence-a', 'a'), flowItem('occurrence-b', 'b')],
+        roundIndex: 1,
+        userId,
+      } as never)
+      .returning();
+    await db.insert(verifyCheckResults).values(
+      [
+        { checkItemId: 'occurrence-a', status: 'passed' as const, verdict: 'passed' as const },
+        {
+          checkItemId: 'occurrence-b',
+          status: 'failed' as const,
+          suggestion: 'Branch b never reached the confirmation step.',
+          verdict: 'failed' as const,
+        },
+      ].map((row) => ({ ...row, userId, verifierType: 'agent' as const, verifyRunId: run.id })),
+    );
+
+    const result = await buildTaskPrompt(
+      (await taskModel.findById(task.id))!,
+      promptDeps(db, taskModel, userId),
+    );
+
+    expect(result.prompt).toContain('1. Branch b — Branch b never reached the confirmation step.');
+    expect(result.prompt).not.toContain('Branch a');
+  });
+  it('carries a failed check into the unjudged successor that supersedes it', async () => {
+    // A repair round may reword a failed check as a new item that `supersedes`
+    // it. Looking up only the successor id lost the failure it inherits.
+    const taskModel = new TaskModel(db, userId);
+    const task = await taskModel.create({ instruction: 'Reword and retry.' });
+    await taskModel.update(task.id, { totalTopics: 2 });
+    const goal = await new GoalModel(db, userId).create({
+      subjectType: 'standalone',
+      title: 'Superseded check',
+    });
+    const graphModel = new GoalGraphModel(db, userId);
+    const taskNode = await graphModel.createNode(goal.id, { kind: 'task', title: 'Retry' });
+    await graphModel.bindTask(goal.id, taskNode!.id, task.id);
+    const acceptance = await new AcceptanceModel(db, userId).create(taskAcceptance(task.id));
+    const [judged, reworded] = await db
+      .insert(verifyRuns)
+      .values([
+        { acceptanceId: acceptance.id, plan: [planItem('old-wording')], roundIndex: 1, userId },
+        {
+          acceptanceId: acceptance.id,
+          plan: [{ ...planItem('new-wording'), supersedes: ['old-wording'] }],
+          roundIndex: 2,
+          userId,
+        },
+      ] as never)
+      .returning();
+    await db.insert(verifyCheckResults).values([
+      {
+        checkItemId: 'old-wording',
+        status: 'failed' as const,
+        suggestion: 'The export still drops the table.',
+        userId,
+        verdict: 'failed' as const,
+        verifierType: 'agent' as const,
+        verifyRunId: judged.id,
+      },
+      {
+        checkItemId: 'new-wording',
+        status: 'pending' as const,
+        userId,
+        verifierType: 'agent' as const,
+        verifyRunId: reworded.id,
+      },
+    ]);
+
+    const result = await buildTaskPrompt(
+      (await taskModel.findById(task.id))!,
+      promptDeps(db, taskModel, userId),
+    );
+
+    expect(result.prompt).toContain('1. Check new-wording — The export still drops the table.');
+  });
+});
+
+describe('buildTaskPrompt owner change request', () => {
+  it('keeps the owner reject comment when the rework already opened a new round', async () => {
+    const taskModel = new TaskModel(db, userId);
+    const task = await taskModel.create({ instruction: 'Complete full Goal acceptance' });
+    await taskModel.update(task.id, { totalTopics: 2 });
+    const goal = await new GoalModel(db, userId).create({
+      subjectType: 'standalone',
+      title: 'Reworked delivery',
+    });
+    const graphModel = new GoalGraphModel(db, userId);
+    const taskNode = await graphModel.createNode(goal.id, {
+      kind: 'task',
+      title: 'Complete full Goal acceptance',
+    });
+    await graphModel.bindTask(goal.id, taskNode!.id, task.id);
+    const acceptance = await new AcceptanceModel(db, userId).create(taskAcceptance(task.id));
+    const runModel = new VerifyRunModel(db, userId);
+    const rejected = await runModel.create({ acceptanceId: acceptance.id, roundIndex: 1 });
+    await runModel.setDecision(rejected.id, 'reject', {
+      comment: 'Add a day-one agenda',
+      decidedAt: new Date().toISOString(),
+      decidedBy: userId,
+    });
+    // The rework's first attempt planned its own round, then failed to run.
+    await runModel.create({ acceptanceId: acceptance.id, roundIndex: 2 });
+
+    const result = await buildTaskPrompt(
+      (await taskModel.findById(task.id))!,
+      promptDeps(db, taskModel, userId),
+    );
+
+    expect(result.prompt).toContain('Review feedback on the last delivery');
+    expect(result.prompt).toContain('"Add a day-one agenda"');
+  });
+});
+
+describe('buildTaskPrompt delivery acceptance', () => {
+  const buildFor = async (taskId: string) => {
+    const taskModel = new TaskModel(db, userId);
+    const currentTask = await taskModel.findById(taskId);
+    return buildTaskPrompt(currentTask!, promptDeps(db, taskModel, userId));
   };
 
   it('renders the acceptance section for a plain task with a verify config', async () => {

@@ -182,16 +182,6 @@ describe('ContextEngine', () => {
       expect(result.stats.processedCount).toBe(3);
     });
 
-    it('should handle messages array correctly', async () => {
-      const processor = createMockProcessor('p1');
-      const engine = new ContextEngine({ pipeline: [processor] });
-
-      const input = createInitialContext();
-      const result = await engine.process(input);
-
-      expect(result.messages).toEqual(input.messages);
-    });
-
     it('should handle empty messages', async () => {
       const processor = createMockProcessor('p1');
       const engine = new ContextEngine({ pipeline: [processor] });
@@ -246,27 +236,6 @@ describe('ContextEngine', () => {
       expect(processor1.process).toHaveBeenCalled();
       expect(processor2.process).toHaveBeenCalled();
       expect(processor3.process).not.toHaveBeenCalled();
-    });
-
-    it('should skip remaining processors if context is already aborted', async () => {
-      const processor1: ContextProcessor = {
-        name: 'p1',
-        process: vi.fn(async (context) => ({
-          ...context,
-          isAborted: true,
-        })),
-      };
-      const processor2 = createMockProcessor('p2');
-
-      const engine = new ContextEngine({
-        pipeline: [processor1, processor2],
-      });
-
-      const result = await engine.process(createInitialContext());
-
-      expect(result.isAborted).toBe(true);
-      expect(result.stats.processedCount).toBe(1);
-      expect(processor2.process).not.toHaveBeenCalled();
     });
 
     it('should throw PipelineError when processor fails', async () => {

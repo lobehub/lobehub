@@ -119,6 +119,14 @@ vi.mock('../lobeAgentPlan', () => ({
 
 const { lobeAgentRuntime } = await import('../lobeAgent');
 
+const previousImageMessage = () => ({
+  id: 'msg-previous',
+  imageList: [
+    { alt: 'previous.png', id: 'file-previous', url: 'https://example.com/previous.png' },
+  ],
+  role: 'user',
+});
+
 describe('lobeAgentRuntime', () => {
   const baseContext: ToolExecutionContext = {
     messageId: 'msg-1',
@@ -216,6 +224,123 @@ describe('lobeAgentRuntime', () => {
     const convertedBuffer = Buffer.from(imagePart.image_url.url.split(',')[1], 'base64');
     const pixel = await sharp(convertedBuffer).raw().toBuffer();
     expect([...pixel.subarray(0, 3)]).toEqual([255, 255, 255]);
+  });
+
+  it('should explain that media analysis needs LobeHub balance when the budget is exhausted', async () => {
+    mockChat.mockRejectedValueOnce({
+      budget: { availableCredits: 0, requiredCredits: 1219, shortfallCredits: 1219 },
+      error: { message: 'Budget exceeded' },
+      errorType: 'InsufficientBudgetForModel',
+      provider: 'test-provider',
+    });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: ['https://example.com/image.png'],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: 'InsufficientBudgetForModel' });
+    expect(result.content).toContain('balance');
+    expect(result.content).toContain('test-provider/vision-model');
+    expect(result.content).toMatch(/own API key/i);
+  });
+
+  it('should surface the gateway rejection reason instead of a bare blocked message', async () => {
+    mockChat.mockRejectedValueOnce({
+      _responseBody: { provider: 'lobehub', reason: 'not_onboarded' },
+      error: { message: 403 },
+      errorType: 403,
+      message: 'Request blocked.',
+    });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: ['https://example.com/image.png'],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: 'GATEWAY_NOT_ONBOARDED' });
+    expect(result.content).toContain('platform model gateway');
+    expect(result.content).toContain('HTTP 403');
+    expect(result.content).toContain('provider: lobehub');
+    expect(result.content).toContain('not_onboarded');
+    expect(result.content).toMatch(/not a content-policy verdict/i);
+  });
+
+  it('should still rethrow unexpected non-gateway chat failures', async () => {
+    mockChat.mockRejectedValueOnce(new Error('socket hang up'));
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    await expect(
+      runtime.analyzeMedia({
+        question: 'what is this?',
+        urls: ['https://example.com/image.png'],
+      }),
+    ).rejects.toThrow('socket hang up');
+  });
+
+  it('should rethrow ordinary structured HTTP errors without gateway response body', async () => {
+    mockChat.mockRejectedValueOnce({ errorType: 429, message: 'Rate limited' });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    await expect(
+      runtime.analyzeMedia({
+        question: 'what is this?',
+        urls: ['https://example.com/image.png'],
+      }),
+    ).rejects.toMatchObject({ errorType: 429, message: 'Rate limited' });
+  });
+
+  it('should rethrow a provider-only response body — provider alone is not a gateway marker', async () => {
+    // `normalizeChatMessageError` propagates `provider` into every error body as
+    // display metadata, so a provider-only `_responseBody` (e.g. a 429 rate
+    // limit tagged with the relay provider) must keep the rethrow behavior.
+    mockChat.mockRejectedValueOnce({
+      _responseBody: { provider: 'lobehub' },
+      errorType: 429,
+      message: 'Rate limited',
+    });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    await expect(
+      runtime.analyzeMedia({
+        question: 'what is this?',
+        urls: ['https://example.com/image.png'],
+      }),
+    ).rejects.toMatchObject({ errorType: 429, message: 'Rate limited' });
+  });
+
+  it('should classify a gateway rejection from the response body alone (no message needed)', async () => {
+    mockChat.mockRejectedValueOnce({
+      _responseBody: { provider: 'lobehub', reason: 'quota_exceeded' },
+      errorType: 402,
+    });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: ['https://example.com/image.png'],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: 'GATEWAY_QUOTA_EXCEEDED' });
+  });
+
+  it('should reject loopback media urls before calling the multimodal model', async () => {
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: ['http://127.0.0.1:8899/D.jpg'],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('local or private network address');
+    expect(mockChat).not.toHaveBeenCalled();
+    expect(mockImageUrlToBase64).not.toHaveBeenCalled();
   });
 
   it('should detect suffixless images after downloading without transcoding supported formats', async () => {
@@ -589,13 +714,7 @@ describe('lobeAgentRuntime', () => {
       },
     ]);
     mockMessageModelQuery.mockResolvedValue([
-      {
-        id: 'msg-previous',
-        imageList: [
-          { alt: 'previous.png', id: 'file-previous', url: 'https://example.com/previous.png' },
-        ],
-        role: 'user',
-      },
+      previousImageMessage(),
       {
         id: 'msg-1',
         imageList: [
@@ -651,15 +770,7 @@ describe('lobeAgentRuntime', () => {
         topicId: 'topic-1',
       },
     ]);
-    mockMessageModelQuery.mockResolvedValue([
-      {
-        id: 'msg-previous',
-        imageList: [
-          { alt: 'previous.png', id: 'file-previous', url: 'https://example.com/previous.png' },
-        ],
-        role: 'user',
-      },
-    ]);
+    mockMessageModelQuery.mockResolvedValue([previousImageMessage()]);
     const runtime = lobeAgentRuntime.factory({ ...baseContext, topicId: 'topic-1' });
 
     const result = await runtime.analyzeMedia({
@@ -707,15 +818,7 @@ describe('lobeAgentRuntime', () => {
     for (const { expectedQuery, sourceMessage } of cases) {
       vi.clearAllMocks();
       mockMessageModelQueryByIds.mockResolvedValue([sourceMessage]);
-      mockMessageModelQuery.mockResolvedValue([
-        {
-          id: 'msg-previous',
-          imageList: [
-            { alt: 'previous.png', id: 'file-previous', url: 'https://example.com/previous.png' },
-          ],
-          role: 'user',
-        },
-      ]);
+      mockMessageModelQuery.mockResolvedValue([previousImageMessage()]);
       mockInitModelRuntimeFromDB.mockResolvedValue({ chat: mockChat });
       mockConsumeStreamUntilDone.mockResolvedValue(undefined);
 
@@ -851,6 +954,7 @@ describe('lobeAgentRuntime', () => {
       );
 
       expect(run).toHaveBeenCalledWith({
+        background: false,
         description: 'Research',
         instruction: 'Find the answer',
         timeout: 1000,
@@ -893,6 +997,80 @@ describe('lobeAgentRuntime', () => {
       expect(result.success).toBe(false);
       expect(result.content).toBe('Sub-agent failed to start: QStash queue unavailable');
       expect(result).toMatchObject({ error: { code: 'SUB_AGENT_START_FAILED' } });
+    });
+
+    it('passes subAgentId to the runner to continue an earlier sub-agent', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi
+        .fn()
+        .mockResolvedValue({ started: true, subOperationId: 'sub-op-2', threadId: 'thread-1' });
+
+      const result = await runtime.callSubAgent(
+        {
+          description: 'Hand over',
+          instruction: 'Summarize your findings',
+          subAgentId: ' thread-1 ',
+        },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(run).toHaveBeenCalledWith(expect.objectContaining({ subAgentId: 'thread-1' }));
+      expect(result).toMatchObject({ deferred: true, state: { threadId: 'thread-1' } });
+    });
+
+    it('explains why an earlier sub-agent could not be continued', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi.fn().mockResolvedValue({
+        error: 'Sub-agent "thread-1" is still running.',
+        started: false,
+        threadId: 'thread-1',
+      });
+
+      const result = await runtime.callSubAgent(
+        { description: 'Hand over', instruction: 'Summarize', subAgentId: 'thread-1' },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(result.deferred).toBeUndefined();
+      expect(result.content).toBe(
+        'Sub-agent could not be continued: Sub-agent "thread-1" is still running.',
+      );
+    });
+
+    // GPT-family models fill every declared field, so "start a new sub-agent"
+    // arrives as `subAgentId: ""` rather than an omitted key.
+    it.each(['', '  '])('starts a new sub-agent when subAgentId is blank (%j)', async (blank) => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi
+        .fn()
+        .mockResolvedValue({ started: true, subOperationId: 'sub-op-3', threadId: 'thread-3' });
+
+      const result = await runtime.callSubAgent(
+        { description: 'Research', instruction: 'Find the answer', subAgentId: blank },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(run).toHaveBeenCalledWith({
+        background: false,
+        description: 'Research',
+        instruction: 'Find the answer',
+        subAgentId: undefined,
+        timeout: undefined,
+      });
+      expect(result).toMatchObject({ deferred: true, success: true });
+    });
+
+    it('rejects a non-string subAgentId', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi.fn();
+
+      const result = await runtime.callSubAgent(
+        { description: 'Hand over', instruction: 'Summarize', subAgentId: 42 as any },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(result).toMatchObject({ error: { code: 'INVALID_ARGUMENTS' }, success: false });
+      expect(run).not.toHaveBeenCalled();
     });
 
     it('fails (not deferred) when no sub-agent runner is available', async () => {

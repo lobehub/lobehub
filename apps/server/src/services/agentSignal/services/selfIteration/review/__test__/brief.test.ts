@@ -5,7 +5,6 @@ import { BriefModel } from '@/database/models/brief';
 
 import { ActionStatus, ApplyMode, ReviewRunStatus, Risk, Scope } from '../../types';
 import { createBriefSelfReviewService, createServerSelfReviewBriefWriter } from '../brief';
-import type { SelfReviewBriefTextTranslator } from '../briefText';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -28,29 +27,46 @@ const getSelfReviewProposal = (
   brief: ReturnType<ReturnType<typeof createBriefSelfReviewService>['projectNightlyReviewBrief']>,
 ) => getNightlySelfReview(brief)?.selfReviewProposal;
 
-const zhCNBriefText: Record<string, string> = {
-  'brief.agentSignal.selfReview.applied.heading': '已更新',
-  'brief.agentSignal.selfReview.applied.summary': '已应用 {{count}} 条夜间回顾更新。',
-  'brief.agentSignal.selfReview.applied.summary_plural': '已应用 {{count}} 条夜间回顾更新。',
-  'brief.agentSignal.selfReview.applied.title': '夜间回顾已更新资源',
-  'brief.agentSignal.selfReview.error.heading': '问题',
-  'brief.agentSignal.selfReview.error.summary': '部分夜间回顾内容未能完成。',
-  'brief.agentSignal.selfReview.error.title': '夜间回顾遇到了问题',
-  'brief.agentSignal.selfReview.ideas.summary': '已保存夜间回顾记录，供后续查看。',
-  'brief.agentSignal.selfReview.ideas.title': '夜间回顾记录',
-  'brief.agentSignal.selfReview.proposal.heading': '建议',
-  'brief.agentSignal.selfReview.proposal.summary': '有 {{count}} 条夜间回顾建议需要你确认。',
-  'brief.agentSignal.selfReview.proposal.summary_plural': '有 {{count}} 条夜间回顾建议需要你确认。',
-  'brief.agentSignal.selfReview.proposal.title': '有夜间回顾建议需要确认',
-};
+const existingReviewBrief = (
+  existingProposal: NonNullable<ReturnType<typeof getSelfReviewProposal>>,
+) => ({
+  agentId: 'agent-1',
+  id: 'brief-old',
+  metadata: {
+    agentSignal: {
+      nightlySelfReview: {
+        selfReviewProposal: existingProposal,
+      },
+    },
+  },
+  trigger: 'agent-signal:nightly-review',
+});
 
-const createTranslator =
-  (resources: Record<string, string>): SelfReviewBriefTextTranslator =>
-  (key, options = {}) =>
-    Object.entries(options).reduce(
-      (content, [name, value]) => content.replace(`{{${name}}}`, value),
-      resources[key] ?? key,
-    );
+const refineManagedSkillAction = (): NonNullable<
+  Parameters<
+    ReturnType<typeof createBriefSelfReviewService>['projectNightlyReviewBrief']
+  >[0]['plan']
+>['actions'][number] => ({
+  actionType: 'refine_skill',
+  applyMode: ApplyMode.ProposalOnly,
+  baseSnapshot: completeRefineSkillBaseSnapshot('adoc-1'),
+  confidence: 0.91,
+  dedupeKey: 'skill:adoc-1',
+  evidenceRefs: [{ id: 'adoc-1', type: 'agent_document' }],
+  idempotencyKey: 'source:refine_skill:skill:adoc-1',
+  operation: {
+    domain: 'skill',
+    input: {
+      patch: 'Use the existing skill index.',
+      skillDocumentId: 'adoc-1',
+      userId: 'user-1',
+    },
+    operation: 'refine',
+  },
+  rationale: 'Refine the managed skill instead of creating duplicate skill drafts.',
+  risk: Risk.Medium,
+  target: { skillDocumentId: 'adoc-1' },
+});
 
 describe('briefSelfReviewService', () => {
   /**
@@ -209,9 +225,9 @@ describe('briefSelfReviewService', () => {
 
   /**
    * @example
-   * Nightly proposal briefs use server-translated shell text before persistence.
+   * Nightly proposal briefs persist source-English shell text around user-authored summaries.
    */
-  it('projects proposal results to Chinese decision briefs', () => {
+  it('keeps proposal shell text in English around localized action summaries', () => {
     const service = createBriefSelfReviewService();
 
     const brief = service.projectNightlyReviewBrief({
@@ -230,14 +246,13 @@ describe('briefSelfReviewService', () => {
       },
       reviewWindowEnd: '2026-05-09T20:00:00.000Z',
       reviewWindowStart: '2026-05-09T18:00:00.000Z',
-      t: createTranslator(zhCNBriefText),
       timezone: 'Asia/Shanghai',
       userId: 'user-1',
     });
 
-    expect(brief?.title).toBe('有夜间回顾建议需要确认');
+    expect(brief?.title).toBe('Dream suggestion needs review');
     expect(brief?.summary).toBe(
-      '有 1 条夜间回顾建议需要你确认。\n\n**建议**\n- 检查技能合并建议。',
+      '1 dream suggestion needs your review.\n\n**Suggestion**\n- 检查技能合并建议。',
     );
     expect(brief?.type).toBe('decision');
   });
@@ -252,29 +267,7 @@ describe('briefSelfReviewService', () => {
       agentId: 'agent-1',
       localDate: '2026-05-09',
       plan: {
-        actions: [
-          {
-            actionType: 'refine_skill',
-            applyMode: ApplyMode.ProposalOnly,
-            baseSnapshot: completeRefineSkillBaseSnapshot('adoc-1'),
-            confidence: 0.91,
-            dedupeKey: 'skill:adoc-1',
-            evidenceRefs: [{ id: 'adoc-1', type: 'agent_document' }],
-            idempotencyKey: 'source:refine_skill:skill:adoc-1',
-            operation: {
-              domain: 'skill',
-              input: {
-                patch: 'Use the existing skill index.',
-                skillDocumentId: 'adoc-1',
-                userId: 'user-1',
-              },
-              operation: 'refine',
-            },
-            rationale: 'Refine the managed skill instead of creating duplicate skill drafts.',
-            risk: Risk.Medium,
-            target: { skillDocumentId: 'adoc-1' },
-          },
-        ],
+        actions: [refineManagedSkillAction()],
         plannerVersion: 'test-planner',
         reviewScope: Scope.Nightly,
         summary: 'Review found a skill refinement proposal.',
@@ -299,9 +292,9 @@ describe('briefSelfReviewService', () => {
     });
 
     expect(projected?.actions).toEqual([
-      { key: 'approve', label: 'Apply', type: 'resolve' },
+      { key: 'approve', label: 'Approve', type: 'resolve' },
       { key: 'dismiss', label: 'Dismiss', type: 'resolve' },
-      { key: 'feedback', label: 'Request changes', type: 'comment' },
+      { key: 'feedback', label: 'Feedback', type: 'comment' },
     ]);
     const nightlySelfReview = projected?.metadata.agentSignal?.nightlySelfReview;
 
@@ -342,27 +335,7 @@ describe('briefSelfReviewService', () => {
             rationale: 'No self-iteration change is needed.',
             risk: Risk.Low,
           },
-          {
-            actionType: 'refine_skill',
-            applyMode: ApplyMode.ProposalOnly,
-            baseSnapshot: completeRefineSkillBaseSnapshot('adoc-1'),
-            confidence: 0.91,
-            dedupeKey: 'skill:adoc-1',
-            evidenceRefs: [{ id: 'adoc-1', type: 'agent_document' }],
-            idempotencyKey: 'source:refine_skill:skill:adoc-1',
-            operation: {
-              domain: 'skill',
-              input: {
-                patch: 'Use the existing skill index.',
-                skillDocumentId: 'adoc-1',
-                userId: 'user-1',
-              },
-              operation: 'refine',
-            },
-            rationale: 'Refine the managed skill instead of creating duplicate skill drafts.',
-            risk: Risk.Medium,
-            target: { skillDocumentId: 'adoc-1' },
-          },
+          refineManagedSkillAction(),
         ],
         plannerVersion: 'test-planner',
         reviewScope: Scope.Nightly,
@@ -393,7 +366,9 @@ describe('briefSelfReviewService', () => {
     });
 
     expect(getNightlySelfReview(projected)?.actionCounts.proposed).toBe(1);
-    expect(projected?.summary).toContain('1 dream suggestion needs your review.');
+    expect(projected?.summary).toBe(
+      'Refine the managed skill instead of creating duplicate skill drafts.',
+    );
     expect(projected?.summary).not.toContain('No self-iteration change is needed.');
     expect(getSelfReviewProposal(projected)?.actions).toHaveLength(1);
     expect(getSelfReviewProposal(projected)?.actions[0]).toMatchObject({
@@ -402,11 +377,161 @@ describe('briefSelfReviewService', () => {
     });
   });
 
+  describe('specific proposal and ideas text', () => {
+    const createSkillPlanAction = (index: number) => ({
+      actionType: 'create_skill' as const,
+      applyMode: ApplyMode.ProposalOnly,
+      baseSnapshot: {
+        absent: true,
+        skillName: `pr-checklist-${index}`,
+        targetType: 'skill' as const,
+      },
+      confidence: 0.9,
+      dedupeKey: `skill:pr-checklist-${index}`,
+      evidenceRefs: [{ id: 'topic-1', type: 'topic' as const }],
+      idempotencyKey: `source:create_skill:${index}`,
+      operation: {
+        domain: 'skill' as const,
+        input: {
+          bodyMarkdown: '# PR checklist',
+          description: 'Checklist for reviewing pull requests.',
+          name: `pr-checklist-${index}`,
+          title: index === 1 ? 'PR checklist' : `Skill ${index}`,
+          userId: 'user-1',
+        },
+        operation: 'create' as const,
+      },
+      rationale:
+        index === 1
+          ? 'The user asked for the same PR review steps three times.'
+          : `Rationale ${index}.`,
+      risk: Risk.Low,
+      target: { skillName: `pr-checklist-${index}` },
+    });
+
+    const projectCreateSkillProposal = (count: number, options: { summary?: string } = {}) => {
+      const actions = Array.from({ length: count }, (_, index) => createSkillPlanAction(index + 1));
+
+      return createBriefSelfReviewService().projectNightlyReviewBrief({
+        agentId: 'agent-1',
+        localDate: '2026-05-09',
+        plan: {
+          actions,
+          plannerVersion: 'test-planner',
+          reviewScope: Scope.Nightly,
+          summary: options.summary ?? 'Self-review tool-first runtime completed.',
+        },
+        result: {
+          actions: actions.map((action) => ({
+            idempotencyKey: action.idempotencyKey,
+            receiptId: 'proposal-receipt',
+            status: ActionStatus.Proposed,
+            ...(options.summary ? { summary: options.summary } : {}),
+          })),
+          sourceId: 'source',
+          status: ReviewRunStatus.Completed,
+        },
+        reviewWindowEnd: '2026-05-09T20:00:00.000Z',
+        reviewWindowStart: '2026-05-09T18:00:00.000Z',
+        timezone: 'Asia/Shanghai',
+        userId: 'user-1',
+      });
+    };
+
+    /**
+     * @example
+     * A create_skill proposal brief names the skill and says why, not "a suggestion needs review".
+     */
+    it('names the proposed skill and uses the proposal summary as the body', () => {
+      const brief = projectCreateSkillProposal(1, {
+        summary: 'Save the PR review steps as a reusable skill.',
+      });
+
+      expect(brief?.title).toBe('New skill: PR checklist');
+      expect(brief?.summary).toBe('Save the PR review steps as a reusable skill.');
+      expect(getSelfReviewProposal(brief)?.summary).toBe(
+        'Save the PR review steps as a reusable skill.',
+      );
+    });
+
+    /**
+     * @example
+     * Without a proposal summary the body falls back to the action rationale.
+     */
+    it('falls back to the action rationale when the proposal has no summary', () => {
+      const brief = projectCreateSkillProposal(1);
+
+      expect(brief?.title).toBe('New skill: PR checklist');
+      expect(brief?.summary).toBe('The user asked for the same PR review steps three times.');
+      expect(getSelfReviewProposal(brief)).not.toHaveProperty('summary');
+    });
+
+    /**
+     * @example
+     * Multi-action proposals count the rest in the title and list every action in the body.
+     */
+    it('lists each action of a multi-action proposal', () => {
+      const brief = projectCreateSkillProposal(2, { summary: 'Two skills would save time.' });
+
+      expect(brief?.title).toBe('New skill: PR checklist (+1 more)');
+      expect(brief?.summary).toBe(
+        [
+          'Two skills would save time.',
+          '',
+          '- **New skill: PR checklist** — The user asked for the same PR review steps three times.',
+          '- **New skill: Skill 2** — Rationale 2.',
+        ].join('\n'),
+      );
+    });
+
+    /**
+     * @example
+     * Ideas-only briefs list their ideas instead of "saved dream notes".
+     */
+    it('lists the ideas of an ideas-only brief', () => {
+      const brief = createBriefSelfReviewService().projectNightlyReviewBrief({
+        agentId: 'agent-1',
+        ideas: [
+          {
+            evidenceRefs: [],
+            idempotencyKey: 'idea-1',
+            rationale: 'Users often ask for weekly summaries.',
+            risk: Risk.Low,
+            title: 'Weekly digest',
+          },
+          {
+            evidenceRefs: [],
+            idempotencyKey: 'idea-2',
+            rationale: 'Release notes keep missing the migration section.',
+            risk: Risk.Low,
+            target: { skillName: 'release-notes' },
+          },
+        ],
+        localDate: '2026-05-09',
+        result: { actions: [], sourceId: 'source', status: ReviewRunStatus.Completed },
+        reviewWindowEnd: '2026-05-09T20:00:00.000Z',
+        reviewWindowStart: '2026-05-09T18:00:00.000Z',
+        timezone: 'UTC',
+        userId: 'user-1',
+      });
+
+      expect(brief?.type).toBe('insight');
+      expect(brief?.title).toBe('Dream note: Weekly digest (+1 more)');
+      expect(brief?.summary).toBe(
+        [
+          '- **Dream note: Weekly digest** — Users often ask for weekly summaries.',
+          '- **Dream note: release-notes** — Release notes keep missing the migration section.',
+        ].join('\n'),
+      );
+    });
+  });
+
   /**
    * @example
-   * Failed nightly runs produce an error brief when there is a user-actionable failure.
+   * Failed nightly runs stay silent: a run failure is not something the user
+   * can decide on, so it must not land in "Needs you".
    */
-  it('projects failed nightly outcomes to error briefs', () => {
+  it('does not project failed nightly outcomes to error briefs', () => {
     const service = createBriefSelfReviewService();
 
     const brief = service.projectNightlyReviewBrief({
@@ -428,17 +553,7 @@ describe('briefSelfReviewService', () => {
       userId: 'user-1',
     });
 
-    expect(brief).toMatchObject({
-      priority: 'normal',
-      type: 'error',
-    });
-    expect(brief?.metadata).toMatchObject({
-      agentSignal: {
-        nightlySelfReview: {
-          outcome: 'error',
-        },
-      },
-    });
+    expect(brief).toBeUndefined();
   });
 
   /**
@@ -537,6 +652,72 @@ describe('briefSelfReviewService', () => {
     expect(create).toHaveBeenCalledWith(brief);
   });
 
+  describe('ideas brief dedupe', () => {
+    const projectIdeasBrief = (localDate: string) => {
+      const brief = createBriefSelfReviewService().projectNightlyReviewBrief({
+        agentId: 'agent-1',
+        ideas: [{ evidenceRefs: [], idempotencyKey: 'idea-1', rationale: 'Try X', risk: Risk.Low }],
+        localDate,
+        result: {
+          actions: [],
+          sourceId: `nightly:${localDate}`,
+          status: ReviewRunStatus.Completed,
+        },
+        reviewWindowEnd: `${localDate}T14:30:00.000Z`,
+        reviewWindowStart: `${localDate}T00:00:00.000Z`,
+        timezone: 'UTC',
+        userId: 'user-1',
+      });
+      if (!brief) throw new Error('Expected projected ideas brief');
+      return brief;
+    };
+
+    /**
+     * @example
+     * A replayed idea-only completion for the same agent + local date reuses the existing brief.
+     */
+    it('reuses an unresolved ideas brief for the same agent and local date', async () => {
+      const existing = projectIdeasBrief('2026-05-04');
+      const existingRow = { ...existing, id: 'brief-ideas-1' } as unknown as Awaited<
+        ReturnType<BriefModel['create']>
+      >;
+      const list = vi
+        .spyOn(BriefModel.prototype, 'listUnresolvedByAgentAndTrigger')
+        .mockResolvedValue([existingRow]);
+      const create = vi.spyOn(BriefModel.prototype, 'create');
+      const writer = createServerSelfReviewBriefWriter({} as never, 'user-1');
+
+      await expect(writer.writeDailyBrief(projectIdeasBrief('2026-05-04'))).resolves.toBe(
+        existingRow,
+      );
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'agent-1', trigger: 'agent-signal:nightly-review' }),
+      );
+      expect(create).not.toHaveBeenCalled();
+    });
+
+    /**
+     * @example
+     * An ideas brief from another local date does not block today's ideas brief.
+     */
+    it('creates a new ideas brief when only another local date has one', async () => {
+      const existingRow = {
+        ...projectIdeasBrief('2026-05-03'),
+        id: 'brief-old',
+      } as unknown as Awaited<ReturnType<BriefModel['create']>>;
+      vi.spyOn(BriefModel.prototype, 'listUnresolvedByAgentAndTrigger').mockResolvedValue([
+        existingRow,
+      ]);
+      const created = { id: 'brief-new' } as Awaited<ReturnType<BriefModel['create']>>;
+      const create = vi.spyOn(BriefModel.prototype, 'create').mockResolvedValue(created);
+      const writer = createServerSelfReviewBriefWriter({} as never, 'user-1');
+      const brief = projectIdeasBrief('2026-05-04');
+
+      await expect(writer.writeDailyBrief(brief)).resolves.toBe(created);
+      expect(create).toHaveBeenCalledWith(brief);
+    });
+  });
+
   /**
    * @example
    * A compatible pending proposal refreshes the old brief instead of creating a duplicate.
@@ -603,18 +784,9 @@ describe('briefSelfReviewService', () => {
       expiresAt: '2026-05-12T00:00:00.000Z',
       updatedAt: '2026-05-09T00:00:00.000Z',
     };
-    const existingBrief = {
-      agentId: 'agent-1',
-      id: 'brief-old',
-      metadata: {
-        agentSignal: {
-          nightlySelfReview: {
-            selfReviewProposal: existingProposal,
-          },
-        },
-      },
-      trigger: 'agent-signal:nightly-review',
-    } as Awaited<ReturnType<BriefModel['create']>>;
+    const existingBrief = existingReviewBrief(existingProposal) as Awaited<
+      ReturnType<BriefModel['create']>
+    >;
     const updatedBrief = {
       ...existingBrief,
       metadata: {
@@ -724,18 +896,9 @@ describe('briefSelfReviewService', () => {
         },
       ],
     };
-    const existingBrief = {
-      agentId: 'agent-1',
-      id: 'brief-old',
-      metadata: {
-        agentSignal: {
-          nightlySelfReview: {
-            selfReviewProposal: existingProposal,
-          },
-        },
-      },
-      trigger: 'agent-signal:nightly-review',
-    } as Awaited<ReturnType<BriefModel['create']>>;
+    const existingBrief = existingReviewBrief(existingProposal) as Awaited<
+      ReturnType<BriefModel['create']>
+    >;
     const createdBrief = { id: 'brief-new' } as Awaited<ReturnType<BriefModel['create']>>;
     const create = vi.spyOn(BriefModel.prototype, 'create').mockResolvedValue(createdBrief);
     vi.spyOn(BriefModel.prototype, 'listUnresolvedByAgentAndTrigger').mockResolvedValue([
@@ -823,18 +986,9 @@ describe('briefSelfReviewService', () => {
       expiresAt: '2026-05-12T00:00:00.000Z',
       updatedAt: '2026-05-09T00:00:00.000Z',
     };
-    const existingBrief = {
-      agentId: 'agent-1',
-      id: 'brief-old',
-      metadata: {
-        agentSignal: {
-          nightlySelfReview: {
-            selfReviewProposal: existingProposal,
-          },
-        },
-      },
-      trigger: 'agent-signal:nightly-review',
-    } as Awaited<ReturnType<BriefModel['create']>>;
+    const existingBrief = existingReviewBrief(existingProposal) as Awaited<
+      ReturnType<BriefModel['create']>
+    >;
     const createdBrief = { id: 'brief-new' } as Awaited<ReturnType<BriefModel['create']>>;
     const create = vi.spyOn(BriefModel.prototype, 'create').mockResolvedValue(createdBrief);
     vi.spyOn(BriefModel.prototype, 'listUnresolvedByAgentAndTrigger').mockResolvedValue([

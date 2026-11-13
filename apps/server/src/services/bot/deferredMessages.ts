@@ -35,7 +35,7 @@ export type DeferredBotMessage = ReturnType<Message['toJSON']>;
 const TTL_SECONDS = 30 * 60;
 
 /** Hard cap so a runaway sender cannot grow the list unboundedly. */
-const MAX_DEFERRED_PER_THREAD = 20;
+export const MAX_DEFERRED_PER_THREAD = 20;
 
 export const buildDeferredMessagesKey = (applicationId: string, platformThreadId: string): string =>
   `bot:deferred-messages:${applicationId}:${platformThreadId}`;

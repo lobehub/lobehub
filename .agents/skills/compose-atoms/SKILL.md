@@ -177,7 +177,7 @@ If the light assembler appears on the importer chain, a static import still exis
 | Host                          | Mounts                                                                    |
 | ----------------------------- | ------------------------------------------------------------------------- |
 | In-app `Acceptance/index.tsx` | Identity, goal, inventory, decision, focus workflow, ledger + write slots |
-| Workbench public detail       | Identity, goal, inventory only                                            |
+| Workbench public detail       | Identity, goal, inventory, discussion with sign-in guidance               |
 | Portal                        | Full assembler + `OriginConversationProvider`                             |
 
 Read `AcceptanceGoal` (read + `editSlot`) and `AcceptanceGoalEdit` (write) for the slot cut. Read `originConversation.tsx` for a host seam. Read workbench `AcceptanceDetail.tsx` for a light assembler.

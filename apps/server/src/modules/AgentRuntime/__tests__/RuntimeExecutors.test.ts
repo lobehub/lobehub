@@ -2,12 +2,15 @@ import { type AgentState } from '@lobechat/agent-runtime';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { type AgentGroupConfig, ToolNameResolver } from '@lobechat/context-engine';
 import { consumeStreamUntilDone, ModelEmptyError } from '@lobechat/model-runtime';
+import type { ChatToolPayload } from '@lobechat/types';
 import type * as ModelBank from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as ContextEngineering from '@/server/modules/Mecha/ContextEngineering';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { HookDispatcher } from '@/server/services/agentRuntime/hooks';
 
+import * as ClientToolDispatch from '../dispatchClientTool';
 import { createRuntimeExecutors, type RuntimeExecutorContext } from '../RuntimeExecutors';
 import type { StreamEvent } from '../StreamEventManager';
 import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
@@ -50,17 +53,11 @@ const mockBuiltinModels = vi.hoisted(() => [
 ]);
 
 // Mock dependencies
-vi.mock('@/server/modules/ModelRuntime', () => ({
-  initModelRuntimeFromDB: vi.fn().mockResolvedValue({
-    // Emit a minimal non-empty completion so the call_llm empty-completion
-    // guard doesn't treat the default mock as a "gave up" turn and
-    // throw ModelEmptyError. Tests that exercise real output override this.
-    chat: vi.fn().mockImplementation(async (_payload: any, options: any) => {
-      await options?.callback?.onText?.('done');
-      return new Response('done');
-    }),
-  }),
-}));
+vi.mock('@/server/modules/ModelRuntime', async () => {
+  const { createModelRuntimeMock } = await import('./mocks/modelRuntimeMock');
+
+  return createModelRuntimeMock();
+});
 
 vi.mock('@/server/services/message', () => ({
   MessageService: vi.fn().mockImplementation(function () {
@@ -81,7 +78,7 @@ vi.mock('@lobechat/model-runtime', async () => {
   // retry path and these tests share a single class identity for instanceof.
   const { isEmptyModelCompletion, ModelEmptyError } =
     await import('../../../../../../packages/model-runtime/src/errors/modelEmptyCompletion');
-  const { ModelRefusalError } =
+  const { isModelRefusalFinishReason, ModelRefusalError } =
     await import('../../../../../../packages/model-runtime/src/errors/modelRefusal');
   // Same treatment: the reasoning-config merge is pure, and the replay gate
   // reads its output (e.g. the DeepSeek V4 thinking opt-out), so use the real
@@ -116,6 +113,7 @@ vi.mock('@lobechat/model-runtime', async () => {
     isDeepSeekV4FamilyModel: (model: string) =>
       typeof model === 'string' && model.toLowerCase().includes('deepseek-v4'),
     isEmptyModelCompletion,
+    isModelRefusalFinishReason,
     isKimiAlwaysPreserveThinkingModel: (model: string) =>
       /^kimi-k2\.(?:[7-9]|\d{2,})-code(?:$|-)/.test(model),
     ModelEmptyError,
@@ -243,6 +241,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       // call_llm does a parent existence preflight; return a truthy row by
       // default so existing tests don't have to stub it.
       findById: vi.fn().mockResolvedValue({ id: 'msg-existing' }),
+      findMessagePlugin: vi.fn().mockResolvedValue(undefined),
       // The abort settle asks whether a row already holds the call. Null by
       // default: these tests exercise calls that never got one.
       findToolMessageIdByToolCallId: vi.fn().mockResolvedValue(null),
@@ -337,6 +336,36 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       messages,
     },
     type: 'compress_context' as const,
+  });
+
+  const createSearchToolCall = () => ({
+    apiName: 'search',
+    arguments: '{}',
+    id: 'tool-call-1',
+    identifier: 'web-search',
+    type: 'default' as const,
+  });
+
+  const createCrawlToolCall = () => ({
+    apiName: 'crawl',
+    arguments: '{}',
+    id: 'tool-call-2',
+    identifier: 'web-browsing',
+    type: 'default' as const,
+  });
+
+  const createCallLlmInstruction = () => ({
+    payload: {
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'gpt-4',
+      provider: 'openai',
+    },
+    type: 'call_llm' as const,
+  });
+
+  const createBatchToolInstruction = (toolsCalling: ChatToolPayload[]) => ({
+    payload: { parentMessageId: 'assistant-msg-123', toolsCalling },
+    type: 'call_tools_batch' as const,
   });
 
   describe('call_llm executor', () => {
@@ -607,17 +636,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         },
       });
 
-      await executors.call_llm!(
-        {
-          payload: {
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'gpt-4',
-            provider: 'openai',
-          },
-          type: 'call_llm' as const,
-        },
-        state,
-      );
+      await executors.call_llm!(createCallLlmInstruction(), state);
 
       expect(
         mockChat.mock.calls[0][0].tools.map((tool: { function: { name: string } }) => {
@@ -940,14 +959,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         const executors = createRuntimeExecutors(ctx);
         const state = createMockState();
 
-        const instruction = {
-          payload: {
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'gpt-4',
-            provider: 'openai',
-          },
-          type: 'call_llm' as const,
-        };
+        const instruction = createCallLlmInstruction();
 
         const result = await executors.call_llm!(instruction, state);
         const assistant = result.newState.messages.at(-1) as any;
@@ -1179,14 +1191,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           },
         });
 
-        const instruction = {
-          payload: {
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'gpt-4',
-            provider: 'openai',
-          },
-          type: 'call_llm' as const,
-        };
+        const instruction = createCallLlmInstruction();
 
         const result = await executors.call_llm!(instruction, state);
         const assistant = result.newState.messages.at(-1) as any;
@@ -2116,14 +2121,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         ];
         const state = createMockState({ tools: tools as any });
 
-        const instruction = {
-          payload: {
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'gpt-4',
-            provider: 'openai',
-          },
-          type: 'call_llm' as const,
-        };
+        const instruction = createCallLlmInstruction();
 
         await executors.call_llm!(instruction, state);
 
@@ -2143,14 +2141,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         ];
         const state = createMockState({ tools: stateTools as any });
 
-        const instruction = {
-          payload: {
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'gpt-4',
-            provider: 'openai',
-          },
-          type: 'call_llm' as const,
-        };
+        const instruction = createCallLlmInstruction();
 
         await executors.call_llm!(instruction, state);
 
@@ -2172,14 +2163,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           ] as any,
         });
 
-        const instruction = {
-          payload: {
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'gpt-4',
-            provider: 'openai',
-          },
-          type: 'call_llm' as const,
-        };
+        const instruction = createCallLlmInstruction();
 
         await executors.call_llm!(instruction, state);
 
@@ -2221,7 +2205,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           ...overrides,
         });
 
-      const callWithMessages = async (
+      const callAndGetMessages = async (
         messages: any[],
         state: AgentState,
         contextOverrides?: Partial<RuntimeExecutorContext>,
@@ -2238,12 +2222,90 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           state,
         );
 
-        // The shared context rules may prepend an agent-management block as its
-        // own user turn; the TODO state rides on the actual user message.
-        return mockChat.mock.calls[0][0].messages.findLast(
-          (message: { role?: string }) => message.role === 'user',
-        )?.content as string;
+        return mockChat.mock.calls[0][0].messages as Array<{
+          content?: unknown;
+          role?: string;
+        }>;
       };
+
+      const callWithMessages = async (
+        messages: any[],
+        state: AgentState,
+        contextOverrides?: Partial<RuntimeExecutorContext>,
+      ) =>
+        (await callAndGetMessages(messages, state, contextOverrides))
+          .filter((message) => message.role === 'user')
+          .map((message) => String(message.content))
+          .join('\n\n');
+
+      it.each([
+        { apiNames: ['listDocuments'], expected: false, stepCount: 1, stepIndex: 1 },
+        { apiNames: ['updateTodos'], expected: true, stepCount: 1, stepIndex: 1 },
+        {
+          apiNames: ['updateTodos', 'listDocuments'],
+          expected: true,
+          stepCount: 1,
+          stepIndex: 1,
+        },
+        { apiNames: ['listDocuments'], expected: true, stepCount: 11, stepIndex: 10 },
+      ])(
+        'injects TODOs=$expected after $apiNames at runtime step $stepIndex',
+        async ({ apiNames, expected, stepCount, stepIndex }) => {
+          const todos = {
+            items: [{ status: 'processing', text: 'Review the cache report' }],
+            updatedAt: 'now',
+          };
+          const content = await callWithMessages(
+            [
+              { content: 'Keep going', role: 'user' },
+              {
+                content: '',
+                role: 'assistant',
+                tool_calls: [
+                  {
+                    function: { arguments: '{}', name: 'lobe-agent____createTodos' },
+                    id: 'create-call',
+                    type: 'function',
+                  },
+                ],
+              },
+              {
+                content: 'created',
+                plugin: { apiName: 'createTodos', identifier: 'lobe-agent' },
+                pluginState: { todos },
+                role: 'tool',
+                tool_call_id: 'create-call',
+              },
+              {
+                content: '',
+                role: 'assistant',
+                tool_calls: apiNames.map((apiName, index) => ({
+                  function: {
+                    arguments: '{}',
+                    name: `${apiName === 'listDocuments' ? 'docs' : 'lobe-agent'}____${apiName}`,
+                  },
+                  id: `current-call-${index}`,
+                  type: 'function',
+                })),
+              },
+              ...apiNames.map((apiName, index) => ({
+                content: 'result',
+                plugin: {
+                  apiName,
+                  identifier: apiName === 'listDocuments' ? 'docs' : 'lobe-agent',
+                },
+                ...(apiName === 'updateTodos' && { pluginState: { todos } }),
+                role: 'tool',
+                tool_call_id: `current-call-${index}`,
+              })),
+            ],
+            stateWithLobeAgent({ stepCount }),
+            { stepIndex },
+          );
+
+          expect(content.includes('<todo_context>')).toBe(expected);
+        },
+      );
 
       it('injects the newest valid message TODO state and skips Notebook', async () => {
         mockFindPlanDocuments.mockResolvedValue([
@@ -2278,6 +2340,43 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         // The plan document is still read for the plan block, but history wins
         // for the TODO state.
         expect(content).not.toContain('Stale metadata task');
+      });
+
+      it('keeps tool-loop history unchanged and injects pluginState todos at the tail', async () => {
+        const messages = await callAndGetMessages(
+          [
+            { content: 'Refactor the parser', role: 'user' },
+            {
+              content: '',
+              role: 'assistant',
+              tool_calls: [
+                {
+                  function: { arguments: '{}', name: 'createTodos' },
+                  id: 'call-1',
+                  type: 'function',
+                },
+              ],
+            },
+            {
+              content: 'created',
+              pluginState: {
+                todos: {
+                  items: [{ status: 'processing', text: 'Write parser tests' }],
+                  updatedAt: 'new',
+                },
+              },
+              role: 'tool',
+              tool_call_id: 'call-1',
+            },
+          ],
+          stateWithLobeAgent(),
+        );
+        const userMessages = messages.filter((message) => message.role === 'user');
+
+        expect(userMessages.map((message) => message.content)).toContain('Refactor the parser');
+        expect(userMessages.at(-1)?.content).toContain('<todo_context>');
+        expect(userMessages.at(-1)?.content).toContain('Write parser tests');
+        expect(messages.at(-1)?.role).toBe('user');
       });
 
       it.each([{ items: [], updatedAt: 'canonical-clear' }, []])(
@@ -2395,14 +2494,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           },
         });
 
-        const instruction = {
-          payload: {
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'gpt-4',
-            provider: 'openai',
-          },
-          type: 'call_llm' as const,
-        };
+        const instruction = createCallLlmInstruction();
 
         await executors.call_llm!(instruction, state);
 
@@ -2478,14 +2570,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           },
         });
 
-        const instruction = {
-          payload: {
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'gpt-4',
-            provider: 'openai',
-          },
-          type: 'call_llm' as const,
-        };
+        const instruction = createCallLlmInstruction();
 
         await executors.call_llm!(instruction, state);
 
@@ -2802,14 +2887,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           forceFinish: true,
         });
 
-        const instruction = {
-          payload: {
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'gpt-4',
-            provider: 'openai',
-          },
-          type: 'call_llm' as const,
-        };
+        const instruction = createCallLlmInstruction();
 
         await executors.call_llm!(instruction, state);
 
@@ -2837,14 +2915,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           world: { agent: { plugins: [], systemRole: 'test' }, eval: evalContext as any },
         });
 
-        const instruction = {
-          payload: {
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'gpt-4',
-            provider: 'openai',
-          },
-          type: 'call_llm' as const,
-        };
+        const instruction = createCallLlmInstruction();
 
         await executors.call_llm!(instruction, state);
 
@@ -2907,14 +2978,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           },
         });
 
-        const instruction = {
-          payload: {
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'gpt-4',
-            provider: 'openai',
-          },
-          type: 'call_llm' as const,
-        };
+        const instruction = createCallLlmInstruction();
 
         await executors.call_llm!(instruction, state);
 
@@ -2928,14 +2992,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         const executors = createRuntimeExecutors(ctxWithConfig);
         const state = createMockState({ world: { agent: { plugins: [], systemRole: 'test' } } });
 
-        const instruction = {
-          payload: {
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'gpt-4',
-            provider: 'openai',
-          },
-          type: 'call_llm' as const,
-        };
+        const instruction = createCallLlmInstruction();
 
         await executors.call_llm!(instruction, state);
 
@@ -2988,14 +3045,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           },
         });
 
-        const instruction = {
-          payload: {
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'gpt-4',
-            provider: 'openai',
-          },
-          type: 'call_llm' as const,
-        };
+        const instruction = createCallLlmInstruction();
 
         await executors.call_llm!(instruction, state);
 
@@ -3270,13 +3320,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const instruction = {
         payload: {
           parentMessageId: 'assistant-msg-123',
-          toolCalling: {
-            apiName: 'search',
-            arguments: '{}',
-            id: 'tool-call-1',
-            identifier: 'web-search',
-            type: 'default' as const,
-          },
+          toolCalling: createSearchToolCall(),
         },
         type: 'call_tool' as const,
       };
@@ -3347,9 +3391,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       expect(mockMessageModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          metadata: {
-            toolExecutionTimeMs: 100,
-          },
+          metadata: { toolExecutionTimeMs: 100, toolResultStop: false, toolResultSuccess: true },
         }),
       );
     });
@@ -3450,13 +3492,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const instruction = {
         payload: {
           parentMessageId: 'assistant-msg-123',
-          toolCalling: {
-            apiName: 'search',
-            arguments: '{}',
-            id: 'tool-call-1',
-            identifier: 'web-search',
-            type: 'default' as const,
-          },
+          toolCalling: createSearchToolCall(),
         },
         type: 'call_tool' as const,
       };
@@ -3481,13 +3517,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const instruction = {
         payload: {
           parentMessageId: 'deleted-parent',
-          toolCalling: {
-            apiName: 'search',
-            arguments: '{}',
-            id: 'tool-call-1',
-            identifier: 'web-search',
-            type: 'default' as const,
-          },
+          toolCalling: createSearchToolCall(),
         },
         type: 'call_tool' as const,
       };
@@ -3565,14 +3595,14 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         state: {},
         success: false,
       });
-      const loadAgentState = vi.fn().mockResolvedValue({ status: 'interrupted' });
-
+      const loadAgentState = vi.fn(async () => ({
+        status: mockToolExecutionService.executeTool.mock.calls.length ? 'interrupted' : 'running',
+      }));
       const executors = createRuntimeExecutors({
         ...ctx,
         loadAgentState,
       });
       const state = createMockState();
-
       const instruction = {
         payload: {
           parentMessageId: 'assistant-msg-123',
@@ -3681,41 +3711,40 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     });
 
     describe('skipCreateToolMessage (resumption after human approval)', () => {
+      beforeEach(() => {
+        mockMessageModel.findById.mockImplementation(async (id: string) => ({
+          id,
+          role: 'tool',
+          content: '',
+        }));
+        mockMessageModel.findMessagePlugin.mockImplementation(async (id: string) => ({
+          toolCallId: id.replace('pending-tool-msg-', 'tool-call-'),
+        }));
+      });
       it('should update existing tool message instead of creating a new one', async () => {
         const executors = createRuntimeExecutors(ctx);
         const state = createMockState();
-
         const instruction = {
           payload: {
             parentMessageId: 'pending-tool-msg-1',
             skipCreateToolMessage: true,
-            toolCalling: {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
+            toolCalling: createSearchToolCall(),
           },
           type: 'call_tool' as const,
         };
-
         await executors.call_tool!(instruction, state);
-
         expect(mockMessageModel.create).not.toHaveBeenCalled();
         expect(mockMessageModel.updateToolMessage).toHaveBeenCalledWith(
           'pending-tool-msg-1',
           expect.objectContaining({
             content: 'Tool result',
-            metadata: { toolExecutionTimeMs: 100 },
+            metadata: { toolExecutionTimeMs: 100, toolResultStop: false, toolResultSuccess: true },
           }),
         );
       });
-
       it('should return the existing toolMessageId as parentMessageId for the next LLM step', async () => {
         const executors = createRuntimeExecutors(ctx);
         const state = createMockState();
-
         const instruction = {
           payload: {
             parentMessageId: 'pending-tool-msg-42',
@@ -3730,17 +3759,13 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           },
           type: 'call_tool' as const,
         };
-
         const result = await executors.call_tool!(instruction, state);
-
         const nextPayload = result.nextContext?.payload as { parentMessageId?: string } | undefined;
         expect(nextPayload?.parentMessageId).toBe('pending-tool-msg-42');
       });
-
       it('should fall back to creating a new tool message when skipCreateToolMessage is false', async () => {
         const executors = createRuntimeExecutors(ctx);
         const state = createMockState();
-
         const instruction = {
           payload: {
             parentMessageId: 'assistant-msg-7',
@@ -3755,15 +3780,12 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           },
           type: 'call_tool' as const,
         };
-
         await executors.call_tool!(instruction, state);
-
         expect(mockMessageModel.create).toHaveBeenCalledTimes(1);
         expect(mockMessageModel.updateToolMessage).not.toHaveBeenCalled();
       });
     });
   });
-
   describe('request_human_approve executor', () => {
     const createMockState = (overrides?: Partial<AgentState>): AgentState => ({
       cost: createMockCost(),
@@ -4021,28 +4043,22 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{"query": "test1"}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-            {
-              apiName: 'crawl',
-              arguments: '{"url": "https://example.com"}',
-              id: 'tool-call-2',
-              identifier: 'web-browsing',
-              type: 'default' as const,
-            },
-          ],
+      const instruction = createBatchToolInstruction([
+        {
+          apiName: 'search',
+          arguments: '{"query": "test1"}',
+          id: 'tool-call-1',
+          identifier: 'web-search',
+          type: 'default' as const,
         },
-        type: 'call_tools_batch' as const,
-      };
+        {
+          apiName: 'crawl',
+          arguments: '{"url": "https://example.com"}',
+          id: 'tool-call-2',
+          identifier: 'web-browsing',
+          type: 'default' as const,
+        },
+      ]);
 
       await executors.call_tools_batch!(instruction, state);
 
@@ -4104,28 +4120,22 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'createTask',
-              arguments: '{"name":"A"}',
-              id: 'tool-call-1',
-              identifier: 'lobe-task',
-              type: 'default' as const,
-            },
-            {
-              apiName: 'updateTask',
-              arguments: '{"name":"B"}',
-              id: 'tool-call-2',
-              identifier: 'lobe-task',
-              type: 'default' as const,
-            },
-          ],
+      const instruction = createBatchToolInstruction([
+        {
+          apiName: 'createTask',
+          arguments: '{"name":"A"}',
+          id: 'tool-call-1',
+          identifier: 'lobe-task',
+          type: 'default' as const,
         },
-        type: 'call_tools_batch' as const,
-      };
+        {
+          apiName: 'updateTask',
+          arguments: '{"name":"B"}',
+          id: 'tool-call-2',
+          identifier: 'lobe-task',
+          type: 'default' as const,
+        },
+      ]);
 
       await executors.call_tools_batch!(instruction, state);
 
@@ -4192,28 +4202,22 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-retry-batch',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-stop-batch',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-          ],
+      const instruction = createBatchToolInstruction([
+        {
+          apiName: 'search',
+          arguments: '{}',
+          id: 'tool-call-retry-batch',
+          identifier: 'web-search',
+          type: 'default' as const,
         },
-        type: 'call_tools_batch' as const,
-      };
+        {
+          apiName: 'search',
+          arguments: '{}',
+          id: 'tool-call-stop-batch',
+          identifier: 'web-search',
+          type: 'default' as const,
+        },
+      ]);
 
       const result = await executors.call_tools_batch!(instruction, state);
 
@@ -4230,21 +4234,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState({ messages: [{ content: 'old', role: 'user' }] });
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-          ],
-        },
-        type: 'call_tools_batch' as const,
-      };
+      const instruction = createBatchToolInstruction([createSearchToolCall()]);
 
       const result = await executors.call_tools_batch!(instruction, state);
 
@@ -4266,21 +4256,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-          ],
-        },
-        type: 'call_tools_batch' as const,
-      };
+      const instruction = createBatchToolInstruction([createSearchToolCall()]);
 
       const result = await executors.call_tools_batch!(instruction, state);
 
@@ -4305,28 +4281,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-            {
-              apiName: 'crawl',
-              arguments: '{}',
-              id: 'tool-call-2',
-              identifier: 'web-browsing',
-              type: 'default' as const,
-            },
-          ],
-        },
-        type: 'call_tools_batch' as const,
-      };
+      const instruction = createBatchToolInstruction([
+        createSearchToolCall(),
+        createCrawlToolCall(),
+      ]);
 
       const result = await executors.call_tools_batch!(instruction, state);
 
@@ -4352,15 +4310,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const instruction = {
         payload: {
           parentMessageId: 'original-parent-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-          ],
+          toolsCalling: [createSearchToolCall()],
         },
         type: 'call_tools_batch' as const,
       };
@@ -4386,15 +4336,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const instruction = {
         payload: {
           parentMessageId: 'deleted-parent',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-          ],
+          toolsCalling: [createSearchToolCall()],
         },
         type: 'call_tools_batch' as const,
       };
@@ -4420,28 +4362,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-            {
-              apiName: 'crawl',
-              arguments: '{}',
-              id: 'tool-call-2',
-              identifier: 'web-browsing',
-              type: 'default' as const,
-            },
-          ],
-        },
-        type: 'call_tools_batch' as const,
-      };
+      const instruction = createBatchToolInstruction([
+        createSearchToolCall(),
+        createCrawlToolCall(),
+      ]);
 
       const result = await executors.call_tools_batch!(instruction, state);
 
@@ -4467,28 +4391,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-            {
-              apiName: 'crawl',
-              arguments: '{}',
-              id: 'tool-call-2',
-              identifier: 'web-browsing',
-              type: 'default' as const,
-            },
-          ],
-        },
-        type: 'call_tools_batch' as const,
-      };
+      const instruction = createBatchToolInstruction([
+        createSearchToolCall(),
+        createCrawlToolCall(),
+      ]);
 
       await expect(executors.call_tools_batch!(instruction, state)).rejects.toThrow(
         'Database error',
@@ -4499,28 +4405,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-            {
-              apiName: 'crawl',
-              arguments: '{}',
-              id: 'tool-call-2',
-              identifier: 'web-browsing',
-              type: 'default' as const,
-            },
-          ],
-        },
-        type: 'call_tools_batch' as const,
-      };
+      const instruction = createBatchToolInstruction([
+        createSearchToolCall(),
+        createCrawlToolCall(),
+      ]);
 
       await executors.call_tools_batch!(instruction, state);
 
@@ -4544,28 +4432,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-            {
-              apiName: 'crawl',
-              arguments: '{}',
-              id: 'tool-call-2',
-              identifier: 'web-browsing',
-              type: 'default' as const,
-            },
-          ],
-        },
-        type: 'call_tools_batch' as const,
-      };
+      const instruction = createBatchToolInstruction([
+        createSearchToolCall(),
+        createCrawlToolCall(),
+      ]);
 
       const result = await executors.call_tools_batch!(instruction, state);
 
@@ -4594,21 +4464,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         },
       });
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-          ],
-        },
-        type: 'call_tools_batch' as const,
-      };
+      const instruction = createBatchToolInstruction([createSearchToolCall()]);
 
       await executors.call_tools_batch!(instruction, state);
 
@@ -4662,15 +4518,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const instruction = {
         payload: {
           parentMessageId: 'msg-2',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-          ],
+          toolsCalling: [createSearchToolCall()],
         },
         type: 'call_tools_batch' as const,
       };
@@ -4737,21 +4585,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         },
       });
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-          ],
-        },
-        type: 'call_tools_batch' as const,
-      };
+      const instruction = createBatchToolInstruction([createSearchToolCall()]);
 
       const result = await executors.call_tools_batch!(instruction, state);
 
@@ -4790,28 +4624,22 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{"query": "test"}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-            {
-              apiName: 'crawl',
-              arguments: '{"url": "https://example.com"}',
-              id: 'tool-call-2',
-              identifier: 'web-browsing',
-              type: 'default' as const,
-            },
-          ],
+      const instruction = createBatchToolInstruction([
+        {
+          apiName: 'search',
+          arguments: '{"query": "test"}',
+          id: 'tool-call-1',
+          identifier: 'web-search',
+          type: 'default' as const,
         },
-        type: 'call_tools_batch' as const,
-      };
+        {
+          apiName: 'crawl',
+          arguments: '{"url": "https://example.com"}',
+          id: 'tool-call-2',
+          identifier: 'web-browsing',
+          type: 'default' as const,
+        },
+      ]);
 
       const result = await executors.call_tools_batch!(instruction, state);
 
@@ -4856,45 +4684,35 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{"query": "test"}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-            {
-              apiName: 'crawl',
-              arguments: '{"url": "https://example.com"}',
-              id: 'tool-call-2',
-              identifier: 'web-browsing',
-              type: 'default' as const,
-            },
-          ],
+      const instruction = createBatchToolInstruction([
+        {
+          apiName: 'search',
+          arguments: '{"query": "test"}',
+          id: 'tool-call-1',
+          identifier: 'web-search',
+          type: 'default' as const,
         },
-        type: 'call_tools_batch' as const,
-      };
+        {
+          apiName: 'crawl',
+          arguments: '{"url": "https://example.com"}',
+          id: 'tool-call-2',
+          identifier: 'web-browsing',
+          type: 'default' as const,
+        },
+      ]);
 
       await executors.call_tools_batch!(instruction, state);
 
       expect(mockMessageModel.create).toHaveBeenNthCalledWith(
         1,
         expect.objectContaining({
-          metadata: {
-            toolExecutionTimeMs: 150,
-          },
+          metadata: { toolExecutionTimeMs: 150, toolResultStop: false, toolResultSuccess: true },
         }),
       );
       expect(mockMessageModel.create).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({
-          metadata: {
-            toolExecutionTimeMs: 250,
-          },
+          metadata: { toolExecutionTimeMs: 250, toolResultStop: false, toolResultSuccess: true },
         }),
       );
     });
@@ -4916,21 +4734,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         },
       });
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-          ],
-        },
-        type: 'call_tools_batch' as const,
-      };
+      const instruction = createBatchToolInstruction([createSearchToolCall()]);
 
       await executors.call_tools_batch!(instruction, state);
 
@@ -4953,21 +4757,15 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         },
       });
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'createDocument',
-              arguments: '{"title":"Test","content":"Hello"}',
-              id: 'tool-call-1',
-              identifier: 'lobe-agent-documents',
-              type: 'builtin' as const,
-            },
-          ],
+      const instruction = createBatchToolInstruction([
+        {
+          apiName: 'createDocument',
+          arguments: '{"title":"Test","content":"Hello"}',
+          id: 'tool-call-1',
+          identifier: 'lobe-agent-documents',
+          type: 'builtin' as const,
         },
-        type: 'call_tools_batch' as const,
-      };
+      ]);
 
       await executors.call_tools_batch!(instruction, state);
 
@@ -4994,21 +4792,15 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         },
       });
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'generateImage',
-              arguments: '{"prompt":"A lighthouse"}',
-              id: 'tool-call-1',
-              identifier: 'lobe-image-generation',
-              type: 'builtin' as const,
-            },
-          ],
+      const instruction = createBatchToolInstruction([
+        {
+          apiName: 'generateImage',
+          arguments: '{"prompt":"A lighthouse"}',
+          id: 'tool-call-1',
+          identifier: 'lobe-image-generation',
+          type: 'builtin' as const,
         },
-        type: 'call_tools_batch' as const,
-      };
+      ]);
 
       await executors.call_tools_batch!(instruction, state);
 
@@ -5031,21 +4823,15 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         },
       });
 
-      const instruction = {
-        payload: {
-          parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'createDocument',
-              arguments: '{"title":"Test","content":"Hello"}',
-              id: 'tool-call-1',
-              identifier: 'lobe-agent-documents',
-              type: 'builtin' as const,
-            },
-          ],
+      const instruction = createBatchToolInstruction([
+        {
+          apiName: 'createDocument',
+          arguments: '{"title":"Test","content":"Hello"}',
+          id: 'tool-call-1',
+          identifier: 'lobe-agent-documents',
+          type: 'builtin' as const,
         },
-        type: 'call_tools_batch' as const,
-      };
+      ]);
 
       await executors.call_tools_batch!(instruction, state);
 
@@ -5110,6 +4896,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           parentId: 'assistant-msg-123',
           pluginError: 'blocked_by_security_privacy',
           pluginIntervention: {
+            runtimeType: 'server',
             rejectedReason: 'blocked_by_security_privacy',
             status: 'rejected',
           },
@@ -5179,14 +4966,13 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
       // Should create two aborted tool messages
       expect(mockMessageModel.create).toHaveBeenCalledTimes(2);
-
       // First tool message
       expect(mockMessageModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'agent-123',
           content: 'Tool execution was aborted by user.',
           parentId: 'assistant-msg-123',
-          pluginIntervention: { status: 'aborted' },
+          pluginIntervention: { runtimeType: 'server', status: 'aborted' },
           role: 'tool',
           threadId: 'thread-123',
           tool_call_id: 'tool-call-1',
@@ -5200,7 +4986,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           agentId: 'agent-123',
           content: 'Tool execution was aborted by user.',
           parentId: 'assistant-msg-123',
-          pluginIntervention: { status: 'aborted' },
+          pluginIntervention: { runtimeType: 'server', status: 'aborted' },
           role: 'tool',
           threadId: 'thread-123',
           tool_call_id: 'tool-call-2',
@@ -5216,15 +5002,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const instruction = {
         payload: {
           parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-          ],
+          toolsCalling: [createSearchToolCall()],
         },
         type: 'resolve_aborted_tools' as const,
       };
@@ -5241,15 +5019,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const instruction = {
         payload: {
           parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-          ],
+          toolsCalling: [createSearchToolCall()],
         },
         type: 'resolve_aborted_tools' as const,
       };
@@ -5272,15 +5042,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const instruction = {
         payload: {
           parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-          ],
+          toolsCalling: [createSearchToolCall()],
         },
         type: 'resolve_aborted_tools' as const,
       };
@@ -5318,22 +5080,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const instruction = {
         payload: {
           parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-            {
-              apiName: 'crawl',
-              arguments: '{}',
-              id: 'tool-call-2',
-              identifier: 'web-browsing',
-              type: 'default' as const,
-            },
-          ],
+          toolsCalling: [createSearchToolCall(), createCrawlToolCall()],
         },
         type: 'resolve_aborted_tools' as const,
       };
@@ -5369,22 +5116,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       const instruction = {
         payload: {
           parentMessageId: 'assistant-msg-123',
-          toolsCalling: [
-            {
-              apiName: 'search',
-              arguments: '{}',
-              id: 'tool-call-1',
-              identifier: 'web-search',
-              type: 'default' as const,
-            },
-            {
-              apiName: 'crawl',
-              arguments: '{}',
-              id: 'tool-call-2',
-              identifier: 'web-browsing',
-              type: 'default' as const,
-            },
-          ],
+          toolsCalling: [createSearchToolCall(), createCrawlToolCall()],
         },
         type: 'resolve_aborted_tools' as const,
       };
@@ -5458,7 +5190,11 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         });
         return new Response(source.pipeThrough(createCallbacksTransformer(callbacks)));
       });
-      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
+      const handleChatStreamError = vi.fn();
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        chat: mockChat,
+        handleChatStreamError,
+      } as any);
 
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
@@ -5483,6 +5219,8 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         await rejectionExpectation;
 
         expect(mockChat).toHaveBeenCalledTimes(6);
+        // Every attempt is its own `chat()` call, so each failed stream is reported once.
+        expect(handleChatStreamError).toHaveBeenCalledTimes(6);
 
         const retryEvents = mockStreamManager.publishStreamEvent.mock.calls.filter(
           ([, event]: [string, { type: string }]) => event.type === 'stream_retry',
@@ -5983,6 +5721,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
   });
 
   describe('hooks integration', () => {
+    const createMockDispatcher = () => ({
+      dispatch: vi.fn().mockResolvedValue(undefined),
+      hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+      evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
+      evaluateToolCall: vi.fn().mockResolvedValue({
+        status: 'allow',
+      }),
+      dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+    });
+
     const createToolState = (overrides?: Partial<AgentState>): AgentState => ({
       cost: createMockCost(),
       createdAt: new Date().toISOString(),
@@ -6014,11 +5762,311 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     });
 
     describe('call_tool hooks', () => {
-      it('should dispatch beforeToolCall and afterToolCall hooks', async () => {
-        const mockDispatcher = {
-          dispatch: vi.fn().mockResolvedValue(undefined),
-          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+      it.each(['allow', 'deny'] as const)(
+        'applies env-configured %s before executing the tool',
+        async (permissionDecision) => {
+          vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'http://webhook-service/ingress');
+          vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-env-secret');
+          vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'beforeToolCall, afterToolCall');
+          vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
+          vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', 'block');
+          const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+            async () =>
+              new Response(
+                JSON.stringify({
+                  decision: permissionDecision,
+                  ...(permissionDecision === 'deny' && { reason: 'Denied by env hook' }),
+                }),
+              ),
+          );
+          try {
+            const dispatcher = new HookDispatcher();
+            dispatcher.register('op-123', []);
+            const serialized = JSON.stringify(dispatcher.getSerializedHooks('op-123'));
+            const persisted = JSON.parse(serialized);
+            const result = await createRuntimeExecutors({
+              ...ctx,
+              hookDispatcher: new HookDispatcher(),
+            }).call_tool!(createToolInstruction(), createToolState({ host: { hooks: persisted } }));
+            expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(
+              permissionDecision === 'allow' ? 1 : 0,
+            );
+            if (permissionDecision === 'deny') {
+              expect(result.events).toContainEqual(
+                expect.objectContaining({
+                  type: 'tool_result',
+                  result: expect.objectContaining({
+                    content: 'Denied by env hook',
+                    error: 'hook_denied',
+                  }),
+                }),
+              );
+            }
+            // Under `toolCall`, afterToolCall gates a completed result: a call the
+            // before control denied never runs, so it has no result to gate.
+            expect(
+              fetchSpy.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).hookType),
+            ).toEqual(
+              permissionDecision === 'allow'
+                ? ['beforeToolCall', 'afterToolCall']
+                : ['beforeToolCall'],
+            );
+            if (permissionDecision === 'allow')
+              expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body)).mocked).toBe(false);
+          } finally {
+            fetchSpy.mockRestore();
+            vi.unstubAllEnvs();
+          }
+        },
+      );
+
+      it('invokes each local before handler once across observation and mock dispatch', async () => {
+        const dispatcher = new HookDispatcher();
+        const handler = vi.fn();
+        dispatcher.register('op-123', [{ id: 'observe-once', type: 'beforeToolCall', handler }]);
+        await createRuntimeExecutors({ ...ctx, hookDispatcher: dispatcher }).call_tool!(
+          createToolInstruction(),
+          createToolState(),
+        );
+        expect(handler).toHaveBeenCalledTimes(1);
+        expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(1);
+      });
+      it.each([false, true])(
+        'keeps runtime owner identity in shared-session tool hooks (throws: %s)',
+        async (throws) => {
+          const mockDispatcher = createMockDispatcher();
+          if (throws)
+            mockToolExecutionService.executeTool.mockRejectedValue(new Error('Tool failed'));
+          const state = createToolState({
+            principal: {
+              actor: {
+                shareVisitor: {
+                  agentId: 'shared-agent',
+                  shareId: 'share-1',
+                  visitorUserId: 'visitor-1',
+                },
+              },
+            },
+          });
+
+          await createRuntimeExecutors({ ...ctx, hookDispatcher: mockDispatcher as any })
+            .call_tool!(createToolInstruction(), state);
+
+          expect(mockToolExecutionService.executeTool).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ userId: 'user-123' }),
+          );
+          expect(ctx.userId).toBe('user-123');
+          const identity = expect.objectContaining({ userId: 'user-123' });
+          expect(mockDispatcher.evaluateToolCall).toHaveBeenCalledWith(
+            'op-123',
+            identity,
+            undefined,
+            undefined,
+          );
+          expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenCalledWith(
+            'op-123',
+            identity,
+            undefined,
+          );
+          expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+            'op-123',
+            throws ? 'onToolCallError' : 'afterToolCall',
+            identity,
+            undefined,
+          );
+        },
+      );
+
+      it('should preserve native identity and structured results across tool notifications', async () => {
+        const mockDispatcher = createMockDispatcher();
+        const toolResult = {
+          content: 'device output',
+          deviceExecutionTime: 17,
+          executionTime: 23,
+          state: { files: ['output.txt'], nested: { count: 1 } },
+          success: true,
         };
+        mockToolExecutionService.executeTool.mockResolvedValue(toolResult);
+        const state = createToolState({
+          binding: { device: { id: 'device-1' } },
+          origin: {
+            agentId: 'child-agent',
+            documentId: 'document-1',
+            groupId: 'group-1',
+            lineage: { isSubAgent: true, parentOperationId: 'parent-operation' },
+            sessionId: 'session-1',
+            sourceMessageId: 'user-message',
+            taskId: 'task-1',
+            threadId: 'thread-1',
+            topicId: 'child-topic',
+            workspaceId: 'workspace-1',
+          },
+          plan: { execution: { deviceId: 'device-1', kind: 'device', target: 'device' } },
+        });
+        const instruction = createToolInstruction();
+        instruction.payload.toolCalling = { ...instruction.payload.toolCalling, source: 'mcp' };
+
+        await createRuntimeExecutors({ ...ctx, hookDispatcher: mockDispatcher as any }).call_tool!(
+          instruction,
+          state,
+        );
+
+        const identity = {
+          activeDeviceId: 'device-1',
+          userId: 'user-123',
+          agentId: 'child-agent',
+          apiName: 'search_tweets',
+          args: { query: 'test' },
+          assistantMessageId: 'parent-msg',
+          documentId: 'document-1',
+          executionTarget: 'device',
+          executor: 'server',
+          groupId: 'group-1',
+          identifier: 'twitter',
+          operationId: 'op-123',
+          parentOperationId: 'parent-operation',
+          sessionId: 'session-1',
+          sourceMessageId: 'user-message',
+          taskId: 'task-1',
+          threadId: 'thread-1',
+          toolCallId: 'tc-1',
+          toolSource: 'mcp',
+          topicId: 'child-topic',
+          workspaceId: 'workspace-1',
+        };
+        expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenCalledWith(
+          'op-123',
+          expect.objectContaining(identity),
+          undefined,
+        );
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+          'op-123',
+          'afterToolCall',
+          expect.objectContaining({
+            ...identity,
+            mocked: false,
+            result: toolResult,
+          }),
+          undefined,
+        );
+        const after = mockDispatcher.dispatch.mock.calls.find(
+          ([, type]) => type === 'afterToolCall',
+        )![2];
+        for (const key of ['content', 'success', 'executionTimeMs']) {
+          expect(after).not.toHaveProperty(key);
+        }
+      });
+
+      it('should report structured blocked results as unsuccessful notifications, not exceptions', async () => {
+        const mockDispatcher = createMockDispatcher();
+        const toolResult = {
+          content: 'Tool unavailable in this scope',
+          executionTime: 0,
+          state: { reason: 'tool_not_allowed', type: 'blocked' },
+          success: false,
+        };
+        mockToolExecutionService.executeTool.mockResolvedValue(toolResult);
+
+        await createRuntimeExecutors({ ...ctx, hookDispatcher: mockDispatcher as any }).call_tool!(
+          createToolInstruction(),
+          createToolState(),
+        );
+
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+          'op-123',
+          'afterToolCall',
+          expect.objectContaining({
+            mocked: false,
+            result: toolResult,
+            toolCallId: 'tc-1',
+          }),
+          undefined,
+        );
+        expect(
+          mockDispatcher.dispatch.mock.calls.some(([, type]) => type === 'onToolCallError'),
+        ).toBe(false);
+        const before = mockDispatcher.dispatchBeforeToolCall.mock.calls[0][1];
+        expect(before.parentOperationId).toBeUndefined();
+        expect(before.rootOperationId).toBeUndefined();
+      });
+
+      it('should correlate repeated tool names in a batch by native call ids', async () => {
+        const mockDispatcher = createMockDispatcher();
+        const tool = createToolInstruction().payload.toolCalling;
+        await createRuntimeExecutors({ ...ctx, hookDispatcher: mockDispatcher as any })
+          .call_tools_batch!(
+          {
+            payload: {
+              parentMessageId: 'batch-assistant',
+              toolsCalling: [tool, { ...tool, arguments: '{"query":"second"}', id: 'tc-2' }],
+            },
+            type: 'call_tools_batch',
+          },
+          createToolState(),
+        );
+
+        const afterEvents = mockDispatcher.dispatch.mock.calls
+          .filter(([, type]) => type === 'afterToolCall')
+          .map(([, , event]) => event);
+        expect(afterEvents).toHaveLength(2);
+        expect(afterEvents).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              args: { query: 'test' },
+              assistantMessageId: 'batch-assistant',
+              toolCallId: 'tc-1',
+            }),
+            expect.objectContaining({
+              args: { query: 'second' },
+              assistantMessageId: 'batch-assistant',
+              toolCallId: 'tc-2',
+            }),
+          ]),
+        );
+      });
+
+      it('should retain client routing and structured client results in notifications', async () => {
+        const mockDispatcher = createMockDispatcher();
+        const result = {
+          content: 'client result',
+          executionTime: 11,
+          state: { path: 'client.txt' },
+          success: true,
+        };
+        const dispatchClient = vi
+          .spyOn(ClientToolDispatch, 'dispatchClientTool')
+          .mockResolvedValue(result);
+        const instruction = createToolInstruction();
+        instruction.payload.toolCalling = {
+          ...instruction.payload.toolCalling,
+          executor: 'client',
+          source: 'mcp',
+        };
+
+        await createRuntimeExecutors({
+          ...ctx,
+          hookDispatcher: mockDispatcher as any,
+          streamManager: { ...ctx.streamManager, sendToolExecute: vi.fn() },
+        }).call_tool!(instruction, createToolState());
+
+        expect(dispatchClient).toHaveBeenCalledOnce();
+        expect(mockToolExecutionService.executeTool).not.toHaveBeenCalled();
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+          'op-123',
+          'afterToolCall',
+          expect.objectContaining({
+            executor: 'client',
+            result,
+            toolCallId: 'tc-1',
+            toolSource: 'mcp',
+          }),
+          undefined,
+        );
+      });
+
+      it('should dispatch beforeToolCall and afterToolCall hooks', async () => {
+        const mockDispatcher = createMockDispatcher();
 
         const ctxWithHooks = { ...ctx, hookDispatcher: mockDispatcher as any };
         const executors = createRuntimeExecutors(ctxWithHooks);
@@ -6032,6 +6080,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             callIndex: 1,
             identifier: 'twitter',
           }),
+          undefined,
         );
 
         // afterToolCall dispatched via dispatch()
@@ -6042,7 +6091,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             apiName: 'search_tweets',
             identifier: 'twitter',
             mocked: false,
-            success: true,
+            result: expect.objectContaining({ success: true }),
           }),
           undefined,
         );
@@ -6056,6 +6105,11 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         const controller = new AbortController();
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+          evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
+          evaluateToolCall: vi.fn().mockResolvedValue({
+            status: 'allow',
+          }),
           dispatchBeforeToolCall: vi.fn().mockImplementation(async () => {
             controller.abort();
             return null;
@@ -6083,10 +6137,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         // time it lands, `executeStep` has emitted the terminal hooks and the
         // operation is unregistered, so a local consumer drops it silently and a
         // webhook consumer would see `afterToolCall` after `onComplete`.
-        const mockDispatcher = {
-          dispatch: vi.fn().mockResolvedValue(undefined),
-          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
-        };
+        const mockDispatcher = createMockDispatcher();
 
         const controller = new AbortController();
         mockToolExecutionService.executeTool.mockImplementationOnce(async () => {
@@ -6116,6 +6167,11 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should skip real execution when beforeToolCall returns mock', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+          evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
+          evaluateToolCall: vi.fn().mockResolvedValue({
+            status: 'allow',
+          }),
           dispatchBeforeToolCall: vi.fn().mockResolvedValue({
             isMocked: true,
             result: { content: '{"mocked":true}', success: true },
@@ -6134,7 +6190,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
           'op-123',
           'afterToolCall',
-          expect.objectContaining({ mocked: true, success: true }),
+          expect.objectContaining({
+            mocked: true,
+            result: expect.objectContaining({ success: true }),
+          }),
           undefined,
         );
 
@@ -6150,6 +6209,11 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should preserve failed mock results without executing the real tool', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          hasAfterToolCallControl: vi.fn().mockReturnValue(false),
+          evaluateAfterToolCall: vi.fn().mockResolvedValue({ status: 'allow' }),
+          evaluateToolCall: vi.fn().mockResolvedValue({
+            status: 'allow',
+          }),
           dispatchBeforeToolCall: vi.fn().mockResolvedValue({
             isMocked: true,
             result: { content: 'fixture error', error: 'fixture error', success: false },
@@ -6168,7 +6232,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
           'op-123',
           'afterToolCall',
-          expect.objectContaining({ mocked: true, success: false }),
+          expect.objectContaining({
+            mocked: true,
+            result: {
+              content: 'fixture error',
+              error: 'fixture error',
+              executionTime: 0,
+              success: false,
+            },
+            toolCallId: 'tc-1',
+          }),
           undefined,
         );
       });
@@ -6176,10 +6249,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should dispatch onToolCallError when tool throws', async () => {
         mockToolExecutionService.executeTool.mockRejectedValue(new Error('Connection refused'));
 
-        const mockDispatcher = {
-          dispatch: vi.fn().mockResolvedValue(undefined),
-          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
-        };
+        const mockDispatcher = createMockDispatcher();
 
         const ctxWithHooks = { ...ctx, hookDispatcher: mockDispatcher as any };
         const executors = createRuntimeExecutors(ctxWithHooks);
@@ -6191,18 +6261,18 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           'onToolCallError',
           expect.objectContaining({
             apiName: 'search_tweets',
+            args: { query: 'test' },
             error: 'Connection refused',
             identifier: 'twitter',
+            assistantMessageId: 'parent-msg',
+            toolCallId: 'tc-1',
           }),
           undefined,
         );
       });
 
       it('should derive callIndex from state.usage.tools.byTool', async () => {
-        const mockDispatcher = {
-          dispatch: vi.fn().mockResolvedValue(undefined),
-          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
-        };
+        const mockDispatcher = createMockDispatcher();
 
         const ctxWithHooks = { ...ctx, hookDispatcher: mockDispatcher as any };
         const executors = createRuntimeExecutors(ctxWithHooks);
@@ -6214,6 +6284,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenCalledWith(
           'op-123',
           expect.objectContaining({ callIndex: 1 }),
+          undefined,
         );
 
         // Second call: state reflects 1 prior call → callIndex = 2
@@ -6232,6 +6303,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenLastCalledWith(
           'op-123',
           expect.objectContaining({ callIndex: 2 }),
+          undefined,
         );
       });
 
@@ -6246,10 +6318,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
     describe('compress_context hooks', () => {
       it('should dispatch beforeCompact and afterCompact hooks', async () => {
-        const mockDispatcher = {
-          dispatch: vi.fn().mockResolvedValue(undefined),
-          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
-        };
+        const mockDispatcher = createMockDispatcher();
 
         const ctxWithHooks = {
           ...ctx,
@@ -6283,11 +6352,48 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     });
 
     describe('request_human_approve hooks', () => {
+      it('creates an empty result slot before a human answer can be claimed', async () => {
+        const state = createToolState({
+          messages: [{ content: '', id: 'asst-1', role: 'assistant' }],
+        });
+        const dispatcher = new HookDispatcher();
+        dispatcher.register('op-123', [
+          {
+            id: 'result-control',
+            type: 'afterToolCall',
+            webhook: { url: 'https://hooks.example/policy', responseHandling: 'toolCall' },
+          },
+        ]);
+        const executors = createRuntimeExecutors({
+          ...ctx,
+          hookDispatcher: dispatcher,
+          loadAgentState: async () => state,
+        });
+        await executors.request_human_approve!(
+          {
+            type: 'request_human_approve',
+            pendingToolsCalling: [
+              {
+                apiName: 'ask',
+                arguments: '{}',
+                id: 'call-ask',
+                identifier: 'questions',
+                type: 'builtin',
+              },
+            ],
+          },
+          state,
+        );
+        expect(mockMessageModel.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            content: '',
+            tool_call_id: 'call-ask',
+          }),
+        );
+      });
+
       it('should dispatch beforeHumanIntervention hook', async () => {
-        const mockDispatcher = {
-          dispatch: vi.fn().mockResolvedValue(undefined),
-          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
-        };
+        const mockDispatcher = createMockDispatcher();
 
         const ctxWithHooks = { ...ctx, hookDispatcher: mockDispatcher as any };
         const executors = createRuntimeExecutors(ctxWithHooks);
@@ -6372,7 +6478,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             arguments: JSON.stringify({
               agentId: 'target-agent-id',
               instruction: 'Do something',
-              runAsTask: true,
             }),
             id: 'tool-call-1',
             identifier: 'lobe-agent-management',
@@ -6433,7 +6538,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             arguments: JSON.stringify({
               agentId: 'target-agent-id',
               instruction: 'Do something useful',
-              runAsTask: true,
             }),
             id: 'tool-call-1',
             identifier: 'lobe-agent-management',

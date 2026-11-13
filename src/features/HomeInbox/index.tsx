@@ -1,16 +1,13 @@
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Segmented } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { ActionIcon, createStaticStyles, cx, Flexbox } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { Fragment, memo, type ReactNode, useMemo, useState } from 'react';
+import { Fragment, memo, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
   useHomeUsageWidget,
   useHomeUsageWidgetActive,
 } from '@/business/client/features/HomeUsageWidget';
-import { useWorkspaceMemberProfiles } from '@/business/client/hooks/useWorkspaceMemberProfiles';
 import AsyncError from '@/components/AsyncError';
 import { BriefCardSkeleton } from '@/features/DailyBrief/BriefCardSkeleton';
 import GroupBlock from '@/features/Home/components/GroupBlock';
@@ -21,10 +18,10 @@ import Recommendations, { useRecommendationsVisible } from '@/features/Recommend
 // acceptance workspace into its chunk for one hook.
 import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useBriefStore } from '@/store/brief';
-import { briefListSelectors } from '@/store/brief/selectors';
+import { briefListSelectors, briefNewsSelectors } from '@/store/brief/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { goalSelectors, useGoalStore } from '@/store/goal';
+import { useGoalStore } from '@/store/goal';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
@@ -40,22 +37,30 @@ import { resolveShownNewsOffset, shouldShowNewsItemTime } from './newsDayOffset'
 import NewsList from './NewsList';
 import { ownsRailSections } from './railSectionPlacement';
 import RunningTasksCard from './RunningTasksCard';
-import { filterTopicsForInboxScope, resolveInboxScopeToggleSection } from './scopeTogglePlacement';
-import { splitBriefs } from './splitBriefs';
+import { filterMyInboxTopics } from './scopeTogglePlacement';
+import { arrangeDayNews, splitBriefs } from './splitBriefs';
 import UnreadTopicList from './UnreadTopicList';
 import { useHomeInboxTopics } from './useHomeInboxTopics';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  onlyMe: css`
-    margin-inline-start: 8px;
-    padding-inline: 5px;
-    border-radius: 3px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
+const styles = createStaticStyles(({ css }) => ({
   subtitle: css`
     margin-inline-start: 8px;
   `,
 }));
+
+/**
+ * Mounted only while the rail has settled with nothing to show, so the page
+ * hears "empty" once the feeds have answered and "not empty" as soon as any
+ * card returns — including when the rail unmounts.
+ */
+const RailEmptyReporter = ({ onChange }: { onChange: (empty: boolean) => void }) => {
+  useEffect(() => {
+    onChange(true);
+    return () => onChange(false);
+  }, [onChange]);
+
+  return null;
+};
 
 interface InboxSection {
   /** Header action revealed on hover (GroupBlock's action slot). */
@@ -70,6 +75,8 @@ interface InboxSection {
   key: string;
   /** Omitted when the section labels itself (the running card names its own count). */
   label?: string;
+  /** A refresh is in flight over rows already on screen (see GroupBlock `loading`). */
+  loading?: boolean;
   node: ReactNode;
   onCollapsedChange?: (collapsed: boolean) => void;
   /** Section carries its own card shell — the rail renders it verbatim. */
@@ -84,22 +91,16 @@ interface InboxSection {
  * - **Goals** — the standing exception to "while you were away": goals run for
  *   days, so the ones still open (waiting on you, or working) are listed here
  *   rather than left to the agent page nobody visits mid-flight.
- * - **Needs you** — briefs blocking an agent (decide / fix). Errors sink to the
- *   bottom: a stuck decision blocks work right now, a failed run has already
- *   stopped.
+ * - **Needs you** — decision briefs blocking an agent. Run failures are not
+ *   decisions; they go to the notification center instead.
  * - **Unread** — runs that finished while you were away, each showing the agent's
  *   last reply so the answer is right there.
  * - **Running** — collapsed to one line, showing who is working; a healthy run
  *   needs nothing from you.
  * - **News** — `insight` + `result` briefs (reports of finished work); read them
  *   or don't.
- *
- * **Workspace mode** adds a mine/team split, but only over the sections it can
- * honestly widen. Topics are workspace-shared, so the unread + running feeds
- * already carry every member's runs — the toggle filters them by triggerer, and
- * team view tags each row with whose it is. Briefs are per-user by a deliberate
- * ownership rule (a member never sees another's brief), so Needs-you and News
- * stay mine in both views; team view marks News as such rather than pretending.
+ * In a workspace this page stays the viewer's own: everyone's runs live on the
+ * team tab of Home (`HomeTeamBoard`).
  *
  * Sections are siblings, never nested: each names itself and carries its own
  * count, and one absent section never hides another's heading.
@@ -114,9 +115,12 @@ interface HomeInboxProps {
    * news) fold into this column instead of disappearing with it.
    */
   inlineRail?: boolean;
-  /** Controlled mine/team scope — lets the page share one scope across sibling sections. */
-  onScopeChange?: (scope: 'mine' | 'team') => void;
-  scope?: 'mine' | 'team';
+  /**
+   * Rail only: told `true` once the rail's feeds have loaded and it has no card
+   * to show, and `false` when a card appears, so the page can hand its space to
+   * the main column without guessing from a loading rail.
+   */
+  onRailEmptyChange?: (empty: boolean) => void;
   variant?: 'default' | 'main' | 'rail';
 }
 
@@ -126,8 +130,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     hideRunning,
     hideUnread,
     inlineRail,
-    onScopeChange,
-    scope: controlledScope,
+    onRailEmptyChange,
     variant = 'default',
   } = props;
   const isRail = variant === 'rail';
@@ -138,14 +141,16 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const myId = useUserStore(userProfileSelectors.userId);
 
-  // Briefs are per-user AND per-workspace rows, so the feed is read through the
-  // active cache scope — a list left over from the previous workspace holds ids
-  // this one cannot resolve, and every action on it would fail silently.
+  // Briefs are per-user AND per-workspace rows: a list left over from the
+  // previous workspace holds ids this one cannot resolve, and every action on it
+  // would fail silently. The `briefList` replica partitions by identity scope
+  // and clears its view on a scope switch, so the selectors only ever surface
+  // the active scope's feed.
   const cacheScope = useCacheScope();
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
-  const briefsSWR = useFetchBriefs(isLogin, cacheScope);
-  const briefs = useBriefStore(briefListSelectors.briefs(cacheScope));
-  const isBriefsInit = useBriefStore(briefListSelectors.isBriefsInit(cacheScope));
+  const briefsSWR = useFetchBriefs(isLogin);
+  const briefs = useBriefStore(briefListSelectors.briefs);
+  const isBriefsInit = useBriefStore(briefListSelectors.isBriefsInit);
 
   // The news digest is day-scoped: it fetches only briefs *created* on the
   // viewed local day (today by default), resolved or not, with ‹ › paging into
@@ -157,26 +162,39 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // of serving yesterday under a "Daily brief" label until remount.
   const newsDay = dayjs().subtract(newsDayOffset, 'day').format('YYYY-MM-DD');
   const useFetchNewsByDay = useBriefStore((s) => s.useFetchNewsByDay);
-  const newsSWR = useFetchNewsByDay(isLogin === true && showRailSections, cacheScope, newsDay);
-  const dayNews = newsSWR.data?.news;
-  const hasEarlierNews = newsSWR.data?.hasEarlier ?? false;
-  // `keepPreviousData` shows the previous day's payload while a page flip is in
-  // flight, so everything the user SEES (title, empty copy, arrow gating) must
-  // derive from the payload's own day — not from `newsDayOffset`, which has
-  // already moved on. Otherwise a slow flip renders "Yesterday's brief" over
-  // today's items. Clicks navigate relative to the shown day for the same
-  // reason: WYSIWYG paging self-heals any offset/data divergence.
-  const shownNewsOffset = newsSWR.data ? resolveShownNewsOffset(newsSWR.data.day) : 0;
+  const newsSync = useFetchNewsByDay(isLogin === true && showRailSections, newsDay);
+  // While a page flip is in flight the previous day stays on screen. Only the
+  // day *key* is remembered here — the row itself is read from the replica,
+  // which clears on a scope switch, so another identity's digest never shows.
+  // A restored empty day is not the server's answer (it may just be stale), so
+  // it is not paintable — no "nothing today" copy — until confirmed.
+  const requestedNews = useBriefStore(briefNewsSelectors.paintableNewsDay(newsDay));
+  const [settledNewsDay, setSettledNewsDay] = useState(newsDay);
+  if (requestedNews && settledNewsDay !== newsDay) setSettledNewsDay(newsDay);
+  const newsData = useBriefStore(
+    briefNewsSelectors.paintableNewsDay(requestedNews ? newsDay : settledNewsDay),
+  );
+  const dayNews = newsData?.news;
+  const hasEarlierNews = newsData?.hasEarlier ?? false;
+  // The previous day's payload shows while a page flip is in flight, so
+  // everything the user SEES (title, empty copy, arrow gating) must derive
+  // from the payload's own day — not from `newsDayOffset`, which has already
+  // moved on. Otherwise a slow flip renders "Yesterday's brief" over today's
+  // items. Clicks navigate relative to the shown day for the same reason:
+  // WYSIWYG paging self-heals any offset/data divergence.
+  const shownNewsOffset = newsData ? resolveShownNewsOffset(newsData.day) : 0;
 
   // Goals are the one home feed that is not about today: they run for days, so
   // the dashboard is where you check on them. Behind the same lab toggle as the
   // goal pages themselves — without it a row would navigate to a redirect.
-  const goalsEnabled = useUserStore(labPreferSelectors.enableTopicAcceptance);
+  const goalsEnabled = useUserStore(labPreferSelectors.enableGoals);
   const showGoals = isLogin === true && goalsEnabled && showRailSections;
   const useFetchHomeGoals = useGoalStore((s) => s.useFetchHomeGoals);
   const goalsSWR = useFetchHomeGoals(showGoals, cacheScope);
-  const goals = useGoalStore(goalSelectors.homeGoals(cacheScope));
-  const isGoalsInit = useGoalStore(goalSelectors.isHomeGoalsInitialized(cacheScope));
+  // Read the replica view, not the hook: the persisted roll-up paints the rail
+  // on the first frame and the sync only confirms it, so a cache hit no longer
+  // renders one empty frame before the revalidate lands.
+  const goals = useGoalStore((s) => s.homeGoalsByScope[cacheScope]?.goals);
   // The goal rail reads the goal's own lifecycle state (`goals.status`), so it
   // no longer needs a separate acceptance read to decide each pile.
   const goalEntries = useMemo(
@@ -198,32 +216,27 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     isLogin === true && usageActive && showRailSections && !hiddenWidgets.includes('usage'),
   );
 
-  // A team context is a workspace with more than the viewer in it. In personal
-  // mode this map is empty, so `isTeam` is false and the whole mine/team layer
-  // stays dark — the inbox is byte-for-byte the personal one.
-  const memberProfiles = useWorkspaceMemberProfiles();
-  const isTeam = memberProfiles.size > 1;
-
-  const [internalScope, setInternalScope] = useState<'mine' | 'team'>('mine');
-  const scope = controlledScope ?? internalScope;
-  const setScope = onScopeChange ?? setInternalScope;
-  const teamView = isTeam && scope === 'team';
-
   const { needsYou } = useMemo(() => splitBriefs(briefs), [briefs]);
+  // Urgent briefs already waiting in "Needs you" leave the digest; the rest
+  // lead with urgent, then normal, then info.
+  const news = useMemo(() => arrangeDayNews(dayNews ?? [], briefs), [dayNews, briefs]);
 
-  // Topics are already workspace-wide from the server; "mine" is the viewer's
-  // own runs, "team" is everyone's. Personal mode has only the viewer's, so the
-  // filter is a no-op there.
+  // Topics are workspace-wide from the server; this page only shows the
+  // viewer's own, and the team tab owns everyone's.
   const unreadTopics = useMemo(
-    () => filterTopicsForInboxScope(topics.unread, myId, teamView),
-    [teamView, topics.unread, myId],
+    () => filterMyInboxTopics(topics.unread, myId),
+    [topics.unread, myId],
   );
   const runningTopics = useMemo(
-    () => filterTopicsForInboxScope(topics.running, myId, teamView),
-    [teamView, topics.running, myId],
+    () => filterMyInboxTopics(topics.running, myId),
+    [topics.running, myId],
   );
 
   if (!isLogin) return null;
+
+  // The cached feed is on screen while the server confirms it: say so on the
+  // section heading instead of hiding the rows behind a skeleton.
+  const briefsRefreshing = isBriefsInit && briefsSWR.isValidating;
 
   const blockState = resolveInboxBlockState({
     hasError: Boolean(briefsSWR.error),
@@ -260,39 +273,12 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     );
   }
 
-  // Mine/team lives at page level (governs the topic sections), so it rides on
-  // the first titled section's header — the primary "Needs you", or Unread when
-  // there's nothing to handle. Only shown in a team workspace.
-  const scopeToggle = isTeam ? (
-    <Segmented
-      size={'small'}
-      value={scope}
-      options={[
-        { label: t('inbox.scope.mine'), value: 'mine' },
-        { label: t('inbox.scope.team'), value: 'team' },
-      ]}
-      onChange={(value) => setScope(value as 'mine' | 'team')}
-    />
-  ) : undefined;
-  const toggleSectionKey = scopeToggle
-    ? resolveInboxScopeToggleSection({
-        hiddenWidgets,
-        hideNeedsYou,
-        hideUnread,
-        needsYouCount: needsYou.length,
-        preferUnread: isMain,
-        unreadCount: unreadTopics.length,
-      })
-    : null;
-  const placeToggle = (key: typeof toggleSectionKey): ReactNode =>
-    key === toggleSectionKey ? scopeToggle : undefined;
-
   const sections: InboxSection[] = [];
 
   // A goal feed failure must not be silent: without this the card just vanishes,
   // which is indistinguishable from having no open goals — the one reading a
   // long-running goal surface can least afford.
-  if (showGoals && goalsSWR.error && !isGoalsInit)
+  if (showGoals && goalsSWR.error && goals === undefined)
     sections.push({
       key: 'goals-error',
       label: t('inbox.goals.title'),
@@ -325,14 +311,14 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       isRail
         ? {
             key: 'needsYou',
-            node: <NeedsYouRailCard briefs={needsYou} scopeControl={placeToggle('needsYou')} />,
+            node: <NeedsYouRailCard briefs={needsYou} />,
             selfShelled: true,
           }
         : {
-            action: placeToggle('needsYou'),
             count: needsYou.length,
             key: 'needsYou',
             label: t('inbox.needsYou.title'),
+            loading: briefsRefreshing,
             node: (
               <Flexbox gap={12}>
                 {needsYou.map((brief) => (
@@ -354,14 +340,13 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
 
   if (!hideUnread && unreadTopics.length > 0)
     sections.push({
-      action: placeToggle('unread'),
       count: unreadTopics.length,
       key: 'unread',
       label: t('inbox.unread.title'),
+      loading: topics.isRefreshing,
       node: (
         <UnreadTopicList
           bare={isRail}
-          showAuthor={teamView}
           topics={unreadTopics}
           onFollowUpSent={topics.promoteToRunning}
         />
@@ -385,10 +370,10 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       sections.push({ key: 'needsYou-loading', node: <BriefCardSkeleton /> });
     } else if (!hideNeedsYou && needsYou.length > 0) {
       sections.push({
-        action: placeToggle('needsYou'),
         count: needsYou.length,
         key: 'needsYou',
         label: t('inbox.needsYou.title'),
+        loading: briefsRefreshing,
         node: (
           <Flexbox gap={12}>
             {needsYou.map((brief) => (
@@ -406,21 +391,21 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   if (!hideRunning && !isRail && runningTopics.length > 0)
     sections.push({
       key: 'running',
-      node: <RunningTasksCard bare={isRail} running={runningTopics} showAuthor={teamView} />,
+      node: <RunningTasksCard bare={isRail} running={runningTopics} />,
     });
 
   // A first-load failure of the day feed must not make the whole section
   // vanish — an absent "Daily brief" is indistinguishable from having no
   // briefs, so surface the error with a retry like the topic feed does.
-  if (showRailSections && newsSWR.error && !dayNews)
+  if (showRailSections && newsSync.error && !dayNews)
     sections.push({
       key: 'news-error',
       label: t('inbox.news.title'),
       node: (
         <AsyncError
-          error={newsSWR.error}
+          error={newsSync.error}
           variant={'inline'}
-          onRetry={() => void newsSWR.mutate()}
+          onRetry={() => void newsSync.revalidate()}
         />
       ),
     });
@@ -431,12 +416,11 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // Everything below renders from `shownNewsOffset` / the payload's own day —
   // see the comment at `shownNewsOffset` for why `newsDayOffset` must not be
   // used for display.
-  const news = dayNews ?? [];
   const unresolvedNews = news.filter((brief) => !brief.resolvedAt);
   const showNewsSection =
     showRailSections && !!dayNews && (news.length > 0 || shownNewsOffset > 0 || hasEarlierNews);
   if (showNewsSection) {
-    const newsDate = dayjs(newsSWR.data!.day);
+    const newsDate = dayjs(newsData!.day);
     const newsLabel =
       shownNewsOffset === 0
         ? t('inbox.news.title')
@@ -453,9 +437,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     sections.push({
       action: (
         <Flexbox horizontal align={'center'} gap={4}>
-          {unresolvedNews.length > 0 && (
-            <MarkAllReadButton news={unresolvedNews} onResolved={() => void newsSWR.mutate()} />
-          )}
+          {unresolvedNews.length > 0 && <MarkAllReadButton news={unresolvedNews} />}
           <ActionIcon
             disabled={!hasEarlierNews}
             icon={ChevronLeftIcon}
@@ -475,11 +457,6 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       // Mid-paging (or on an empty day) the arrows are the section's only
       // controls — they must not vanish when the pointer leaves the header.
       actionAlwaysVisible: shownNewsOffset > 0 || news.length === 0,
-      // Team view: News is still only mine (briefs are per-user), so say so
-      // rather than let a team-scoped page imply it spans the team.
-      badge: teamView && (
-        <span className={cx(homeType.meta, styles.onlyMe)}>{t('inbox.scope.onlyMe')}</span>
-      ),
       count: news.length || undefined,
       key: 'news',
       label: newsLabel,
@@ -511,13 +488,32 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   if (visibleSections.length === 0) {
     if (isMain) return null;
 
-    if (isRail)
-      return recommendationsVisible || usageCard ? (
-        <Flexbox gap={12}>
-          {recommendationsVisible && <Recommendations variant={'rail'} />}
-          {usageCard}
-        </Flexbox>
-      ) : null;
+    if (isRail) {
+      if (recommendationsVisible || usageCard)
+        return (
+          <Flexbox gap={12}>
+            {recommendationsVisible && <Recommendations variant={'rail'} />}
+            {usageCard}
+          </Flexbox>
+        );
+
+      // Still waiting on a feed that may yet fill the rail: keep its place
+      // with the loading skeleton rather than collapse it and slide the page
+      // back when the cards land.
+      const railFeedsSettled =
+        (!showGoals || goals !== undefined || Boolean(goalsSWR.error)) &&
+        (!showRailSections || Boolean(dayNews) || Boolean(newsSync.error));
+
+      if (!railFeedsSettled)
+        return (
+          <Flexbox gap={12}>
+            <BriefCardSkeleton />
+            <BriefCardSkeleton />
+          </Flexbox>
+        );
+
+      return onRailEmptyChange ? <RailEmptyReporter onChange={onRailEmptyChange} /> : null;
+    }
 
     // With no titled block above it, the bare recommendations list doesn't need
     // the full section gap below the input area — offset the parent's gap so it
@@ -545,6 +541,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
           count,
           key,
           label,
+          loading,
           node,
           onCollapsedChange,
           selfShelled,
@@ -559,6 +556,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
                 collapsed={collapsed}
                 count={count}
                 key={key}
+                loading={loading}
                 title={
                   label && (
                     <>
@@ -578,10 +576,11 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
           return (
             <GroupBlock
               action={action}
-              actionAlwaysVisible={actionAlwaysVisible || key === toggleSectionKey}
+              actionAlwaysVisible={actionAlwaysVisible}
               collapsed={collapsed}
               count={count}
               key={key}
+              loading={loading}
               title={
                 <>
                   {label}

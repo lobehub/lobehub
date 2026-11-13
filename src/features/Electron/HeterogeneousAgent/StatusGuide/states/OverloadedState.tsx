@@ -1,7 +1,5 @@
-import { Flexbox, Highlighter, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
-import { Ban, Loader2, RotateCcw } from 'lucide-react';
+import { Button, createStaticStyles, Flexbox, Highlighter, Spin, Text } from '@lobehub/ui';
+import { Ban, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import GuideActions from '../GuideActions';
@@ -34,7 +32,7 @@ const OverloadedState = ({
     return (
       <GuideShell
         compact
-        icon={<Icon spin icon={Loader2} size={18} />}
+        icon={<Spin size="small" />}
         title={t('cliOverloadedGuide.autoRetry.title', { name: config.title })}
         variant={variant}
         actions={

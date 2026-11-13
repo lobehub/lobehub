@@ -9,7 +9,10 @@ import { isAbortError } from '@/server/services/agentRuntime/abort';
 
 import type { ExecRunContext, InternalExecAgentParams } from '../types';
 import type { ApprovalClaimState } from './approvalResume';
+import type { OperationInitRequest } from './operationInit';
+import { buildPendingInitSlots, resolveOperationInitSlots } from './operationInitSlots';
 import type { OperationPrepResult } from './operationPrep';
+import { traceStartStage } from './sendTracing';
 import type { ToolDiscoveryResult } from './toolDiscovery';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -24,7 +27,21 @@ export interface StartOperationDeps {
   workspaceId?: string;
 }
 
+/** What the init produced, or the request the step-0 worker will run it from. */
+export type StartOperationInit =
+  | {
+      discovery: ToolDiscoveryResult;
+      /** Final runtime context — base prep context with 16b/16c overrides applied. */
+      initialContext: OperationPrepResult['initialContext'];
+      prep: OperationPrepResult;
+    }
+  | { pendingRequest: OperationInitRequest };
+
 export interface StartOperationInput {
+  /** See {@link InternalExecAgentParams.acceptsFileWorks}. */
+  acceptsFileWorks?: boolean;
+  /** See {@link InternalExecAgentParams.acceptsMemberRuntimeEnd}. */
+  acceptsMemberRuntimeEnd?: boolean;
   approvalClaim: ApprovalClaimState;
   approvalSourceOperationId?: string;
   approvalSourceToolMessageIds: string[];
@@ -32,26 +49,37 @@ export interface StartOperationInput {
   botContext?: InternalExecAgentParams['botContext'];
   botPlatformContext?: InternalExecAgentParams['botPlatformContext'];
   clientIp?: string;
+  /** Wire protocol the calling client declared; `2` opts the run into message_patch delivery. */
+  clientProtocol?: 1 | 2;
   /** Tri-state disabled plugin identifiers, kept on the world slot for the context rules. */
   disabledPluginIds?: string[];
   discordContext?: any;
-  discovery: ToolDiscoveryResult;
   enableExpertise: boolean;
   evalContext?: InternalExecAgentParams['evalContext'];
   evalRuntime?: InternalExecAgentParams['evalRuntime'];
   hooks?: InternalExecAgentParams['hooks'];
   includeFinalState?: boolean;
-  /** Final runtime context — base prep context with 16b/16c overrides applied. */
-  initialContext: OperationPrepResult['initialContext'];
+  init: StartOperationInit;
+  initialLlmCalls?: number;
   initialStepCount?: number;
+  /** Relay executor the calling client declared; lands on `state.host.llmExecutor`. */
+  llmExecutor?: InternalExecAgentParams['llmExecutor'];
   maxSteps?: number;
+  onOperationCreated?: InternalExecAgentParams['onOperationCreated'];
+  /**
+   * Called once the first step is queued. A later startup failure (a marker
+   * write) still returns `success: false` while the run executes, so ownership
+   * that follows the run (its concurrency slot) must transfer here.
+   */
+  onScheduled?: () => void;
   operationId: string;
   operationTaskId?: string;
   parentOperationId?: string;
-  prep: OperationPrepResult;
   providedApprovalResolutionRequestId?: string;
   queueRetries?: number;
   queueRetryDelay?: string;
+  /** See {@link InternalExecAgentParams.reservedOperationId}. */
+  reservedOperation?: boolean;
   signal?: AbortSignal;
   stream?: boolean;
   topicStartOwnerOperationId?: string;
@@ -86,11 +114,14 @@ export const startOperation = async (
     provider,
     resolvedAgentId,
     shareGate,
+    topicEditingGroupId,
     topicId,
     trigger,
     userMessageId,
   } = ctx;
   const {
+    acceptsFileWorks,
+    acceptsMemberRuntimeEnd,
     approvalClaim,
     approvalSourceOperationId,
     approvalSourceToolMessageIds,
@@ -100,21 +131,21 @@ export const startOperation = async (
     clientIp,
     disabledPluginIds,
     discordContext,
-    discovery,
     enableExpertise,
     evalContext,
     evalRuntime,
     hooks,
-    initialContext,
+    init,
+    initialLlmCalls,
     initialStepCount,
     maxSteps,
     operationId,
     operationTaskId,
     parentOperationId,
-    prep,
     providedApprovalResolutionRequestId,
     queueRetries,
     queueRetryDelay,
+    reservedOperation,
     signal,
     stream,
     topicStartOwnerOperationId,
@@ -123,33 +154,75 @@ export const startOperation = async (
     userInterventionConfig,
     userTimezone,
   } = input;
-  const { audio, video, vision } = discovery.modelMediaCapabilities;
+  // A builder topic continued from another surface (scope `main`, an approval
+  // resume) arrives without the group it edits; the group the topic was opened
+  // on stands in, so the run still knows its target.
+  const editingGroupId =
+    (appContext?.scope === 'group_agent_builder' ? appContext.editingGroupId : undefined) ||
+    topicEditingGroupId;
 
-  log(
-    'execAgent: creating operation %s — agentDocuments=%d, knowledgeBases=%s, tools=%d, skills=%d',
-    operationId,
-    discovery.hasAgentDocuments ? 'yes' : 0,
-    discovery.hasEnabledKnowledgeBases,
-    discovery.tools?.length ?? 0,
-    prep.operationSkillSet?.skills?.length ?? 0,
-  );
+  const pendingInitRequest = 'pendingRequest' in init ? init.pendingRequest : undefined;
+  log('execAgent: creating operation %s (deferred init: %s)', operationId, !!pendingInitRequest);
 
   // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
   // If createOperation fails, we still have valid messages that need error info
   try {
+    // A server-internal approval continuation (no client of its own declared
+    // anything — client-facing routes always pass a boolean) streams to the
+    // parked operation's client: carry its `member_runtime_end` declaration over
+    // (read here, before the parked operation is retired below).
+    const memberRuntimeEndAccepted =
+      acceptsMemberRuntimeEnd ??
+      (approvalSourceOperationId
+        ? await deps.agentRuntimeService.acceptsMemberRuntimeEnd(approvalSourceOperationId)
+        : undefined);
+    // Same client, same device: the continuation also keeps the parked
+    // operation's relay executor, or its next device-only call has none.
+    const llmExecutor =
+      input.llmExecutor ??
+      (approvalSourceOperationId
+        ? await deps.agentRuntimeService.getLlmExecutor(approvalSourceOperationId)
+        : undefined);
+    // Its `file_works` declaration too, or the continuation's terminal push
+    // would drop the file Work card the parked client can render.
+    const fileWorksAccepted =
+      acceptsFileWorks ??
+      (approvalSourceOperationId
+        ? await deps.agentRuntimeService.acceptsFileWorks(approvalSourceOperationId)
+        : undefined);
+    // The Group Agent Builder target is server state captured on the parked
+    // operation row. A continuation is the SAME builder conversation: it must
+    // re-bind to the edited group instead of relying on the resumed topic's
+    // `metadata.editingGroupId`, which older topics never received — the member
+    // tools would then answer `No active group found`. Never trusted from the
+    // resolving client; read back from the durable row.
+    const inheritedEditingGroupId = approvalSourceOperationId
+      ? await deps.agentRuntimeService.getOperationEditingGroupId(approvalSourceOperationId)
+      : undefined;
+    const { modelCapabilities, ...initSlots } =
+      'pendingRequest' in init
+        ? buildPendingInitSlots({
+            assistantMessageId,
+            operationId,
+            parentMessageId: userMessageId ?? parentMessageId ?? '',
+          })
+        : await resolveOperationInitSlots(init);
     const result = await deps.agentRuntimeService.createOperation({
+      ...initSlots,
+      pendingInitRequest,
+      acceptsFileWorks: fileWorksAccepted,
+      acceptsMemberRuntimeEnd: memberRuntimeEndAccepted,
+      clientProtocol: input.clientProtocol,
       includeFinalState: input.includeFinalState,
-      activeDeviceId: discovery.activeDeviceId,
-      activeDeviceScope: discovery.activeDeviceScope,
+      llmExecutor,
       agentConfig,
-      agentGroup: discovery.operationAgentGroup,
       agentShareVisitor: shareGate
         ? {
             agentId: shareGate.agentId,
             // Mirrors `shareConfig.allowReadMemory` so `BuiltinToolsExecutor`
             // can re-check the memory tool's grant at dispatch time (the
             // actual chokepoint) via `isShareBlockedDataToolCall` — see
-            // `shareGate.ts`.
+            // `shareGate/dispatch.ts`.
             allowReadMemory: shareGate.shareConfig.allowReadMemory,
             // Mirrors `shareConfig.toolGrants` so tool runtimes resolved
             // outside `toolManifestMap` (e.g. `activateSkill`, which queries
@@ -172,16 +245,18 @@ export const startOperation = async (
             // creation time. See `AgentShareGate.shareId`'s JSDoc for why the
             // id itself is the revocation token.
             shareId: shareGate.shareId,
+            // Mirrors `shareConfig.skillGrants` so the skill runtime can
+            // re-check every load against the SAME allowlist the skill pool was
+            // assembled from. Assembly alone is not enough: `activateSkill`
+            // resolves a model-supplied skill NAME, so a name the pool never
+            // offered still reaches the runtime.
+            skillGrants: shareGate.shareConfig.skillGrants,
             showErrorDetails: shareGate.shareConfig.showErrorDetails,
             showModelInfo: shareGate.shareConfig.showModelInfo,
             visitorUserId: shareGate.visitorUserId,
           }
         : undefined,
-      deviceSystemInfo:
-        Object.keys(prep.deviceSystemInfo).length > 0 ? prep.deviceSystemInfo : undefined,
       disabledPluginIds,
-      executionPlan: discovery.executionPlan,
-      searchDecision: discovery.searchDecision,
       userTimezone,
       appContext: {
         // Background self-iteration runs execute under a builtin slug (so they
@@ -191,6 +266,7 @@ export const startOperation = async (
         // context (state.origin.agentId) targets the reviewed agent; ordinary
         // runs (no marker) fall back to the resolved executing agent.
         agentId: appContext?.agentSignal?.agentId ?? resolvedAgentId,
+        assistantMessageId,
         // Propagate the originating request's client IP / user agent into
         // state.metadata (via the `...appContext` spread in createOperation) so
         // downstream LLM-call metadata can carry them for auditing and spend
@@ -208,8 +284,13 @@ export const startOperation = async (
         // owned by the builtin builder agent, so the edited group only rides
         // here. Read by the group-agent-builder server runtime and by the
         // `<current_group_context>` injector.
-        ...(appContext?.scope === 'group_agent_builder' && appContext?.editingGroupId
-          ? { editingGroupId: appContext.editingGroupId }
+        //
+        // An intervention continuation arrives without the group (the parked
+        // run's client is gone), so the parked operation's durable target
+        // stands in — the same inheritance `fileWorks` / `memberRuntimeEnd`
+        // already use. An explicit request value always wins.
+        ...(editingGroupId || inheritedEditingGroupId
+          ? { editingGroupId: editingGroupId ?? inheritedEditingGroupId }
           : {}),
         // Run-scoped Agent Signal marker for background self-iteration / memory
         // runs — lands in state.origin.signal so the completion path can
@@ -223,6 +304,7 @@ export const startOperation = async (
         // inactivity-watchdog abandon path can distinguish an isolated group
         // member ('member') from a genuine callSubAgent child.
         orchestrationRole: appContext?.orchestrationRole,
+        projectId: appContext?.projectId,
         scope: appContext?.scope,
         sessionId: appContext?.sessionId,
         sourceMessageId: userMessageId ?? parentMessageId ?? undefined,
@@ -236,20 +318,15 @@ export const startOperation = async (
         trigger,
       },
       autoStart,
+      onOperationCreated: input.onOperationCreated,
       botContext,
       botPlatformContext,
       deviceAccessPolicy: { canUseDevice, reason: deviceAccessReason },
       discordContext,
-      // Run context the context engine injects into the system message —
-      // carried on the operation like `expertise`, not on the agent config.
-      connectorOwnershipNote: discovery.connectorOwnershipNote,
       evalContext,
       evalRuntime,
       enableExpertise,
-      expertise: prep.expertise,
-      projectInstructions: prep.projectInstructions,
-      initialContext,
-      initialMessages: prep.allMessages,
+      initialLlmCalls,
       initialStepCount,
       ...(providedApprovalResolutionRequestId && approvalSourceOperationId
         ? {
@@ -268,45 +345,21 @@ export const startOperation = async (
           }
         : {}),
       maxSteps,
-      modelRuntimeConfig: {
-        mediaCapabilities: {
-          ...(typeof audio === 'boolean' && { audio }),
-          ...(typeof video === 'boolean' && { video }),
-          ...(typeof vision === 'boolean' && { vision }),
-        },
-        // Read once during discovery: every LLM attempt of this run resolves its
-        // parameters from here, so no step re-reads the bank, the user's model
-        // row or the reasoning config — and none of them can change mid-run.
-        modelFacts: discovery.modelFacts,
-        model,
-        provider,
-      },
+      modelRuntimeConfig: { ...modelCapabilities, model, provider },
       hooks,
-      // Listed once during discovery: every step renders {{CREDS_LIST}} from
-      // here instead of asking the Market API again. Awaited only now, so the
-      // read overlapped with the operation preparation that ran in between.
-      operationCredentials: await discovery.credentialFactsPromise,
       operationId,
       parentOperationId,
+      reservedOperation,
       signal,
       queueRetries,
       queueRetryDelay,
       stream,
-      toolSet: {
-        activatableToolIds: prep.activatableToolIds,
-        enabledToolIds: discovery.toolsResult.enabledToolIds,
-        executorMap: discovery.toolExecutorMap,
-        manifestMap: discovery.toolManifestMap,
-        sourceMap: discovery.toolSourceMap,
-        tools: discovery.tools,
-      },
-      operationSkillSet: prep.operationSkillSet,
       userId: deps.userId,
       userInterventionConfig,
-      userMemory: prep.userMemory,
       workspaceId: deps.workspaceId,
     });
     approvalClaim.continuationStarted = true;
+    if (result.autoStarted) input.onScheduled?.();
 
     // The approval continuation is a fresh operation. Legacy direct callers
     // retire the old parked runtime here, only after createOperation has
@@ -356,7 +409,9 @@ export const startOperation = async (
     let gatewayToken: string | undefined;
     if (!deps.withholdGatewayToken) {
       try {
-        gatewayToken = await signUserJWT(shareGate?.visitorUserId ?? deps.userId);
+        gatewayToken = await traceStartStage('sign_gateway_token', () =>
+          signUserJWT(shareGate?.visitorUserId ?? deps.userId),
+        );
       } catch {
         log('execAgent: failed to sign gateway JWT, gateway auth will be unavailable');
       }

@@ -1,4 +1,8 @@
-import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
+import {
+  type AgentRunLlmExecutor,
+  type AgentRuntimeContext,
+  type AgentState,
+} from '@lobechat/agent-runtime';
 import type {
   AgentGroupConfig,
   BotPlatformContext,
@@ -9,8 +13,11 @@ import type {
   ToolSource,
 } from '@lobechat/context-engine';
 import type {
+  AgentRunInitRequest,
   AgentShareVisitorContext,
   ChatTopicBotContext,
+  EvalConnectorSnapshots,
+  EvalMemoryReference,
   EvalToolForwardingConfig,
   ExpertiseContextSnapshot,
   FrozenCredentialFacts,
@@ -131,7 +138,8 @@ export type StepCompletionReason =
   | 'cost_limit'
   | 'tool_call_repeat_limit'
   | 'waiting_for_human'
-  | 'waiting_for_async_tool';
+  | 'waiting_for_async_tool'
+  | 'waiting_for_client';
 
 // ==================== Execution Params ====================
 
@@ -143,6 +151,12 @@ export interface AgentExecutionParams {
    * (treated as attempt 1) on the first re-check armed by a completion bridge.
    */
   asyncToolVerifyAttempt?: number;
+  /**
+   * Expiry check of a `waiting_for_client` park, carrying the park's
+   * `parkedAt`. Scheduled when the run parks; ends the run with an actionable
+   * error if it is still parked on that same wait. Runs without the step lock.
+   */
+  clientLlmWaitExpired?: string;
   context?: AgentRuntimeContext;
   externalRetryCount?: number;
   /**
@@ -190,6 +204,11 @@ export interface AgentExecutionParams {
    * via `tryResumeParentFromAsyncTool`.
    */
   resumeAsyncTool?: boolean;
+  /**
+   * Continue a run parked in `waiting_for_client`: replay the parked LLM call
+   * now that a client asked to run it. Scheduled by `resumeFromClientLlmWait`.
+   */
+  resumeClientLlm?: boolean;
   /**
    * Keep the operation lock held after this step returns. Used by the inline
    * step loop so the lock spans the whole invocation rather than being dropped
@@ -268,6 +287,12 @@ export interface AgentExecutionResult {
  * `AgentRuntimeService.completeSubAgentBridge`.
  */
 export interface SubAgentBridgeParams {
+  /**
+   * Failure reason known to the caller but absent from the child's stored
+   * state — set when the watchdog abandoned the child, whose coordinator state
+   * was never marked errored.
+   */
+  errorMessage?: string;
   /** Child op's final state — passed in local mode; loaded from the coordinator otherwise. */
   finalState?: AgentState;
   /** Child (sub-agent) operation ID. */
@@ -301,6 +326,8 @@ export interface GroupActionMemberBridgeParams {
    * collapse the anchor onto the group tool call itself).
    */
   anchorMessageId: string;
+  /** Member deadline (epoch ms), carried for approval continuations. */
+  deadlineAt?: number;
   /** Total members forked under this group tool call — the K=N barrier target. */
   expectedMembers: number;
   /** Child member op's final state — passed in local mode; loaded otherwise. */
@@ -375,6 +402,13 @@ export interface ExecGroupMemberParams {
   timeout?: number;
   /** Group topic id. */
   topicId: string;
+  /**
+   * The supervisor run's approval policy. Members answer to the same mode the
+   * user picked for the turn, so a `humanIntervention: 'required'` tool still
+   * asks for approval when a member calls it. Falls back to headless only when
+   * the supervisor carries none.
+   */
+  userInterventionConfig?: UserInterventionConfig;
 }
 
 export interface ExecGroupMemberResult {
@@ -388,6 +422,20 @@ export interface ExecGroupMemberResult {
 }
 
 export interface OperationCreationParams {
+  /**
+   * The client starting this run renders `file` Works (declared via
+   * `aiAgent.execAgent`'s `streamFeatures`). Stored on
+   * `state.host.acceptsFileWorks`; a group member run streaming on its
+   * supervisor's channel inherits the supervisor's when it declares none.
+   */
+  acceptsFileWorks?: boolean;
+  /**
+   * The client starting this run handles `member_runtime_end` (declared via
+   * `aiAgent.execAgent`'s `streamFeatures`). Persisted on the op's metadata so
+   * the Gateway stream notifier renames the group member terminals it mirrors
+   * onto this op's channel only for a client that recognizes the new event.
+   */
+  acceptsMemberRuntimeEnd?: boolean;
   activeDeviceId?: string;
   /**
    * Principal pool the routed `activeDeviceId` lives in. `personal` when a
@@ -420,6 +468,8 @@ export interface OperationCreationParams {
      * read on the completion path to project receipts.
      */
     agentSignal?: AgentSignalOperationMarker;
+    /** Assistant row the run streams into, stored on `state.origin.assistantMessageId`. */
+    assistantMessageId?: string;
     /**
      * Client IP of the originating request. Spread onto `state.principal.audit.clientIp`
      * so downstream LLM-call metadata can carry it for auditing and spend
@@ -439,6 +489,8 @@ export interface OperationCreationParams {
      * callSubAgent child (which shares `isSubAgent: true`).
      */
     orchestrationRole?: 'supervisor' | 'member';
+    /** Project the run belongs to, stored on `state.origin.projectId`. */
+    projectId?: string;
     scope?: string | null;
     /** Conversation/session locator used to rebuild an authenticated Review route. */
     sessionId?: string;
@@ -477,6 +529,11 @@ export interface OperationCreationParams {
   botContext?: ChatTopicBotContext;
   /** Bot platform context for injecting platform capabilities (e.g. markdown support) */
   botPlatformContext?: BotPlatformContext;
+  /**
+   * Wire protocol the client that started this run speaks; `2` lets the run
+   * deliver message revisions instead of whole `uiMessages` snapshots. Absent ⇒ 1.
+   */
+  clientProtocol?: 1 | 2;
   /**
    * Borrowed-connector attribution, resolved once during tool discovery. Run
    * context for the context engine to inject — see `expertise`.
@@ -518,6 +575,8 @@ export interface OperationCreationParams {
   /** Opt into runtime state snapshots on step_complete events. Defaults to false. */
   includeFinalState?: boolean;
   initialContext: AgentRuntimeContext;
+  /** Initial LLM-call count offset for resumed operations (accumulated from previous runs) */
+  initialLlmCalls?: number;
   initialMessages?: any[];
   /** Initial step count offset for resumed operations (accumulated from previous runs) */
   initialStepCount?: number;
@@ -532,10 +591,19 @@ export interface OperationCreationParams {
     sourceOperationId: string;
     sourceToolMessageIds: string[];
   };
+  /**
+   * The client that started this run can execute relayed LLM attempts
+   * (`llm_execute`). Stored on `state.host.llmExecutor`; a sub-agent run
+   * inherits its parent's when it declares none, relaying on the parent's
+   * channel (`channelOperationId`).
+   */
+  llmExecutor?: AgentRunLlmExecutor;
   maxSteps?: number;
   modelRuntimeConfig?: any;
   /** Marks the source claim non-rollbackable once deterministic runtime state is durable. */
   onInterventionPrepared?: () => void;
+  /** Prepare dependent records after persistence and before execution dispatch. */
+  onOperationCreated?: (operationId: string) => Promise<void>;
   /** Credentials frozen for the run; see {@link FrozenCredentialFacts}. */
   operationCredentials?: FrozenCredentialFacts;
   operationId: string;
@@ -549,12 +617,23 @@ export interface OperationCreationParams {
    */
   parentOperationId?: string;
   /**
+   * Create the operation without its init: the step-0 worker runs it from this
+   * request. The init's own fields (`toolSet`, `initialMessages`, …) are then
+   * ignored and `initialContext` is only the placeholder step 0 is queued with.
+   */
+  pendingInitRequest?: AgentRunInitRequest;
+  /**
    * A project's root instruction files, collected once during operation prep.
    * Run context for the context engine to inject — see `expertise`.
    */
   projectInstructions?: ProjectInstructionFile[];
   queueRetries?: number;
   queueRetryDelay?: string;
+  /**
+   * `operationId` names an idle row a durable dispatcher reserved for this exact run. Start
+   * must initialize that reservation or fail; it never inserts a fresh row.
+   */
+  reservedOperation?: boolean;
   /** Search route resolved once before the operation starts. */
   searchDecision?: SearchDecision;
   /** Abort startup before the first step is scheduled */
@@ -654,6 +733,24 @@ export interface StartExecutionResult {
   success: boolean;
 }
 export interface EvalRuntimeContext {
+  /**
+   * The only tool identifiers an attempt may see or call: what the case
+   * declares (its connectors, mocked services and forwarded tools) plus the
+   * runtime's own infrastructure tools. Absent when the case does not declare
+   * an environment of its own (an Evaluation Lab run on a real Agent keeps the
+   * Agent's tools). Enforced twice: the operation's tool set is pruned to it
+   * before the first step, and a `beforeToolCall` hook refuses anything else.
+   */
+  allowedTools?: string[];
+  /**
+   * The eval attempt this run serves: one case run, or one pass@k thread of
+   * it, including the sub-agents it forks. Mocks key their session on it.
+   */
+  attemptId?: string;
   caseId?: string;
+  /** Exact connection references plus target/tool fingerprints; no credentials. */
+  connectorSnapshots?: EvalConnectorSnapshots;
+  /** Server-created isolated Memory scope of this trial; never taken from user input. */
+  memory?: EvalMemoryReference;
   toolForwarding?: EvalToolForwardingConfig;
 }

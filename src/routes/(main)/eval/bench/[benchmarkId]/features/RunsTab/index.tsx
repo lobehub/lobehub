@@ -1,15 +1,13 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, Select, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Select, Text } from '@lobehub/ui';
 import { Plus } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { runSelectors, useEvalStore } from '@/store/eval';
 
-import { createRunCreateModal } from '../RunCreateModal';
+import { useCreateRun } from '../RunCreateModal/useCreateRun';
 import { createRunEditModal } from '../RunEditModal';
 import EmptyState from './EmptyState';
 import RunCard from './RunCard';
@@ -47,9 +45,11 @@ const RunsTab = memo<RunsTabProps>(({ benchmarkId }) => {
   const { t } = useTranslation('eval');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const useFetchRuns = useEvalStore((s) => s.useFetchRuns);
-  const runList = useEvalStore(runSelectors.runList);
+  const runList = useEvalStore(runSelectors.runList(benchmarkId));
   const refreshRuns = useEvalStore((s) => s.refreshRuns);
   useFetchRuns(benchmarkId);
+  const { createRun, lobeBench } = useCreateRun(benchmarkId);
+  const createLabel = lobeBench ? t('lobeBench.benchmark.newExperiment') : t('run.actions.create');
 
   const sortedRuns = useMemo(
     () =>
@@ -92,19 +92,14 @@ const RunsTab = memo<RunsTabProps>(({ benchmarkId }) => {
               onChange={setStatusFilter}
             />
           </Flexbox>
-          <Button
-            icon={Plus}
-            size="small"
-            type="primary"
-            onClick={() => createRunCreateModal({ benchmarkId })}
-          >
-            {t('run.actions.create')}
+          <Button icon={Plus} size="small" type="primary" onClick={() => createRun()}>
+            {createLabel}
           </Button>
         </Flexbox>
       )}
 
       {sortedRuns.length === 0 ? (
-        <EmptyState onCreate={() => createRunCreateModal({ benchmarkId })} />
+        <EmptyState createLabel={createLabel} onCreate={() => createRun()} />
       ) : filteredRuns.length === 0 ? (
         <Flexbox className={styles.filterEmpty}>
           <Text color={cssVar.colorTextTertiary}>{t('run.filter.empty')}</Text>

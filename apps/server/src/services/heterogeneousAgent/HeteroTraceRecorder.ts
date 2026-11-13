@@ -43,6 +43,7 @@ export interface HeteroTraceTotals {
  * stashed on the partial so finalize prefers it over summing per-turn steps. */
 interface HeteroSessionUsage {
   totalCost?: number;
+  totalCredits?: number;
   totalInputTokens?: number;
   totalOutputTokens?: number;
   totalTokens?: number;
@@ -50,6 +51,19 @@ interface HeteroSessionUsage {
 
 const num = (v: unknown): number | undefined => (typeof v === 'number' ? v : undefined);
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
+
+/**
+ * Every hetero step is one model turn: a turn that calls tools is retyped
+ * `call_tool` but still made the LLM call, so counting `call_llm` steps alone
+ * reported one call for a 284-step run.
+ */
+const isModelTurn = (step: StepSnapshot): boolean =>
+  step.stepType === 'call_llm' ||
+  !!step.toolsCalling?.length ||
+  !!step.content ||
+  !!step.reasoning ||
+  step.inputTokens !== undefined ||
+  step.outputTokens !== undefined;
 
 /**
  * Hetero-native execution-trace recorder. Unlike the built-in
@@ -174,6 +188,8 @@ export class HeteroTraceRecorder {
       const totalOutputTokens =
         session?.totalOutputTokens ?? steps.reduce((sum, s) => sum + (s.outputTokens || 0), 0);
       const totalCost = session?.totalCost ?? steps.reduce((sum, s) => sum + (s.totalCost || 0), 0);
+      const totalCredits =
+        session?.totalCredits ?? steps.reduce((sum, s) => sum + (s.credits || 0), 0);
 
       // Fall back to the agentId/topicId encoded in the operationId when the
       // caller didn't supply them, so the snapshot body and its S3 key never
@@ -195,6 +211,7 @@ export class HeteroTraceRecorder {
         steps,
         topicId,
         totalCost,
+        totalCredits,
         totalSteps: steps.length,
         totalTokens,
         traceId: operationId,
@@ -205,7 +222,7 @@ export class HeteroTraceRecorder {
       await this.store.removePartial(operationId);
 
       return {
-        llmCalls: steps.filter((s) => s.stepType === 'call_llm').length,
+        llmCalls: steps.filter(isModelTurn).length,
         model: partial.model ?? null,
         provider: partial.provider ?? null,
         stepCount: steps.length,
@@ -308,6 +325,7 @@ export class HeteroTraceRecorder {
         const outT = usage ? num(usage.totalOutputTokens) : undefined;
         const tot = usage ? num(usage.totalTokens) : undefined;
         const cost = num(data.costUsd);
+        const credits = usage ? num(usage.credits) : undefined;
 
         // Claude Code emits one `turn_metadata` per turn (incremental usage) and
         // a single final `result_usage` carrying the authoritative SESSION
@@ -320,6 +338,7 @@ export class HeteroTraceRecorder {
           };
           target.heteroSessionUsage = {
             totalCost: cost ?? target.heteroSessionUsage?.totalCost,
+            totalCredits: credits ?? target.heteroSessionUsage?.totalCredits,
             totalInputTokens: inT ?? target.heteroSessionUsage?.totalInputTokens,
             totalOutputTokens: outT ?? target.heteroSessionUsage?.totalOutputTokens,
             totalTokens:
@@ -337,6 +356,7 @@ export class HeteroTraceRecorder {
         else if (inT !== undefined || outT !== undefined)
           step.totalTokens = (inT ?? 0) + (outT ?? 0);
         if (cost !== undefined) step.totalCost = cost;
+        if (credits !== undefined) step.credits = credits;
         break;
       }
       default: {

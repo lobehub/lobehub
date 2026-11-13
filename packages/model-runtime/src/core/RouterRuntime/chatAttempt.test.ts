@@ -9,10 +9,12 @@ describe('observeChatAttempt', () => {
   const attempt = {
     apiType: 'openai',
     attemptId: 'attempt-1',
+    channelId: 'channel-1',
     model: 'model',
     optionIndex: 0,
     providerId: 'test',
     requestId: 'request-1',
+    routerId: 'router-1',
     startedAt: 1000,
   };
 
@@ -48,7 +50,12 @@ describe('observeChatAttempt', () => {
     await response.text();
     expect(completion.mock.calls[0][0]).toEqual(final.mock.calls[0][0]);
     expect(final.mock.calls[0][0]).toMatchObject({
-      routeAttempt: { attemptId: 'attempt-1', requestId: 'request-1' },
+      routeAttempt: {
+        attemptId: 'attempt-1',
+        channelId: 'channel-1',
+        requestId: 'request-1',
+        routerId: 'router-1',
+      },
       speed: { ttft: 200, duration: 1000, latency: 1300, tps: 100 },
     });
     expect(finished).toHaveBeenCalledTimes(1);
@@ -180,6 +187,62 @@ describe('observeChatAttempt', () => {
     expect(finished).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'completed' }));
   });
 
+  it.each([
+    ['refusal', 'ModelRefusalError'],
+    ['sensitive', 'ModelRefusalError'],
+    ['end_turn', 'ModelEmptyError'],
+  ] as const)(
+    'reports an empty completion stopped by %s as %s',
+    async (finishReason, errorName) => {
+      const finished = vi.fn();
+      const attemptRun = observeChatAttempt(
+        async ({ callback }) => {
+          await callback?.onFinal?.({ finishReason, text: '' });
+          return new Response(null);
+        },
+        undefined,
+        attempt,
+        true,
+        finished,
+      );
+
+      await expect(attemptRun).rejects.toMatchObject({ name: errorName });
+      expect(finished).toHaveBeenCalledWith(
+        expect.objectContaining({
+          error: expect.objectContaining({
+            diagnostics: expect.objectContaining({ finishReason }),
+          }),
+          outcome: 'empty',
+        }),
+      );
+    },
+  );
+
+  it('reports a reasoning-only refusal as a refusal', async () => {
+    const finished = vi.fn();
+    const attemptRun = observeChatAttempt(
+      async ({ callback }) => {
+        await callback?.onReasoningPart?.({ content: 'reason', partType: 'text' });
+        await callback?.onFinal?.({ finishReason: 'refusal', text: '' });
+        return new Response(null);
+      },
+      undefined,
+      attempt,
+      true,
+      finished,
+    );
+
+    await expect(attemptRun).rejects.toMatchObject({ name: 'ModelRefusalError' });
+    expect(finished).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          diagnostics: expect.objectContaining({ reasoningLength: 6 }),
+        }),
+        outcome: 'empty',
+      }),
+    );
+  });
+
   it('adds attempt identity without replacing provider performance', async () => {
     let now = 1000;
     vi.spyOn(Date, 'now').mockImplementation(() => now);
@@ -209,8 +272,10 @@ describe('observeChatAttempt', () => {
     expect(finished.mock.calls[0][0].speed.tps).toBeUndefined();
     expect(final.mock.calls[0][0].routeAttempt).toEqual({
       attemptId: 'attempt-1',
+      channelId: 'channel-1',
       outcome: 'completed',
       requestId: 'request-1',
+      routerId: 'router-1',
     });
   });
 
@@ -293,6 +358,118 @@ describe('observeChatAttempt', () => {
       expect(finished.mock.calls[0][0].outcome).toBe(data.error ? 'interrupted' : 'cancelled');
     }
   });
+
+  it.each([
+    {
+      error: {
+        body: { message: 'The content was blocked for safety reasons.', provider: 'google' },
+        type: 'ProviderContentPolicyViolation',
+      },
+      expected: 'The content was blocked for safety reasons.',
+    },
+    {
+      error: { message: 'Internal error encountered.', name: 'Stream parsing error' },
+      expected: 'Internal error encountered.',
+    },
+  ])(
+    'keeps the provider message when a plain error payload interrupts visible output',
+    async ({ error, expected }) => {
+      const finished = vi.fn();
+      const response = await observeChatAttempt(
+        async ({ callback }) => {
+          await callback?.onText?.('partial');
+          await callback?.onError?.(error);
+          await callback?.onFinal?.({ text: 'partial' });
+          return new Response('done');
+        },
+        undefined,
+        attempt,
+        true,
+        finished,
+      );
+      await response.text();
+
+      const streamError = finished.mock.calls[0][0].error;
+      expect(streamError).toMatchObject({
+        error: { cause: error, message: expected, name: 'StreamChunkError' },
+        message: expected,
+        name: 'StreamChunkError',
+      });
+    },
+  );
+
+  it.each([
+    {
+      error: {
+        body: { message: 'The content was blocked for safety reasons.', provider: 'google' },
+        type: 'ProviderContentPolicyViolation',
+      },
+      errorType: 'ProviderContentPolicyViolation',
+    },
+    {
+      error: { errorType: 'ContentModeration', message: 'blocked by moderation' },
+      errorType: 'ContentModeration',
+    },
+    // A provider closing the stream without a terminal event is upstream-owned, not a
+    // harness stream error, even after output was already shown.
+    {
+      error: {
+        body: { name: 'Stream parsing error', reason: 'unexpected_end' },
+        message: 'Stream ended unexpectedly',
+        name: 'Stream parsing error',
+        type: 'ProviderStreamInterrupted',
+      },
+      errorType: 'ProviderStreamInterrupted',
+    },
+    // Fallback buckets carry no classification of their own, so they stay StreamChunkError.
+    { error: { message: 'boom', type: 'ProviderBizError' }, errorType: 'StreamChunkError' },
+    { error: { message: 'Internal error encountered.' }, errorType: 'StreamChunkError' },
+  ])('keeps the code a stream error already carries: $errorType', async ({ error, errorType }) => {
+    const finished = vi.fn();
+    const response = await observeChatAttempt(
+      async ({ callback }) => {
+        await callback?.onText?.('partial');
+        await callback?.onError?.(error);
+        await callback?.onFinal?.({ text: 'partial' });
+        return new Response('done');
+      },
+      undefined,
+      attempt,
+      true,
+      finished,
+    );
+    await response.text();
+
+    expect(finished.mock.calls[0][0].error).toMatchObject({ errorType });
+  });
+
+  it.each([
+    { expectedOutcome: 'completed', text: 'I cannot help with that.' },
+    { expectedOutcome: 'empty', text: '' },
+  ])(
+    'reports the provider finish reason on a $expectedOutcome attempt',
+    async ({ expectedOutcome, text }) => {
+      const finished = vi.fn();
+      const response = await observeChatAttempt(
+        async ({ callback }) => {
+          if (text) await callback?.onText?.(text);
+          await callback?.onFinal?.({ finishReason: 'refusal', text });
+          return new Response('done');
+        },
+        undefined,
+        attempt,
+        true,
+        finished,
+      );
+      await response.text().catch(() => {});
+
+      expect(finished).toHaveBeenCalledTimes(1);
+      expect(finished.mock.calls[0][0]).toMatchObject({
+        finishReason: 'refusal',
+        outcome: expectedOutcome,
+      });
+    },
+  );
 
   it('keeps concurrent attempt identities isolated even with shared options', async () => {
     const finals: OnFinishData[] = [];

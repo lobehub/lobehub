@@ -10,7 +10,7 @@ import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
-type EffortKey = Exclude<keyof AiModelReasoningConfig, 'reasoningMode'>;
+export type EffortKey = Exclude<keyof AiModelReasoningConfig, 'reasoningMode'>;
 /** Every level any effort-family param can take — all have a `reasoningEffort.levels.*` label. */
 type EffortLevel = NonNullable<AiModelReasoningConfig[EffortKey]>;
 type ReasoningMode = NonNullable<AiModelReasoningConfig['reasoningMode']>;
@@ -28,6 +28,32 @@ export interface ReasoningEffortControl {
   select: (patch: AiModelReasoningConfig) => void;
   updating: boolean;
 }
+
+/**
+ * The effort level a model runs at: the saved value when present, otherwise the
+ * same model-dependent fallback as the ControlsForm slider.
+ */
+export const resolveReasoningEffortValue = (
+  model: string,
+  effortKey: EffortKey | undefined,
+  config: AiModelReasoningConfig | undefined,
+): EffortLevel | undefined => {
+  if (!effortKey) return undefined;
+
+  const saved = config?.[effortKey];
+  if (saved) return saved;
+
+  if (effortKey === 'gpt5_2ReasoningEffort' && model === 'gpt-5.5') return 'medium';
+  if (
+    effortKey === 'thinkingLevel' ||
+    effortKey === 'thinkingLevel2' ||
+    effortKey === 'thinkingLevel3' ||
+    effortKey === 'thinkingLevel4'
+  )
+    return resolveDefaultThinkingLevelForModel(model, effortKey);
+
+  return MODEL_REASONING_PARAM_DEFAULTS[effortKey];
+};
 
 /**
  * Reasoning effort / mode for one model instance.
@@ -111,22 +137,10 @@ export const useReasoningEffortControl = (
     EffortKey | undefined;
   const hasReasoningMode = reasoningParams.includes('reasoningMode');
 
-  // Keep the same model-dependent fallback as the ControlsForm slider
-  const effortDefault = effortKey
-    ? effortKey === 'gpt5_2ReasoningEffort' && model === 'gpt-5.5'
-      ? 'medium'
-      : effortKey === 'thinkingLevel' ||
-          effortKey === 'thinkingLevel2' ||
-          effortKey === 'thinkingLevel3' ||
-          effortKey === 'thinkingLevel4'
-        ? resolveDefaultThinkingLevelForModel(model, effortKey)
-        : MODEL_REASONING_PARAM_DEFAULTS[effortKey]
-    : undefined;
-
   return {
     effortKey,
     effortLevels: effortKey ? MODEL_REASONING_PARAM_LEVELS[effortKey] : [],
-    effortValue: (effortKey && config?.[effortKey]) ?? effortDefault,
+    effortValue: resolveReasoningEffortValue(model, effortKey, config),
     hasReasoningMode,
     hasReasoningParams,
     modeLevels: MODEL_REASONING_PARAM_LEVELS.reasoningMode,

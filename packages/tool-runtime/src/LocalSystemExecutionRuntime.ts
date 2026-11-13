@@ -451,6 +451,11 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'getCommandOutput': {
         return {
+          // Surface raw.error so a failed lookup reaches the model as its real
+          // reason ("Shell ID … not found in this device process …") rather
+          // than "[UNKNOWN_EXEC_ERROR] Tool execution failed" — the generic text
+          // left the model unable to tell a lost session from a broken command.
+          error: raw.error ? { message: String(raw.error) } : undefined,
           result: {
             durationMs: raw.duration_ms,
             exitCode: raw.exit_code,
@@ -468,6 +473,7 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
 
       case 'killCommand': {
         return {
+          error: raw.error ? { message: String(raw.error) } : undefined,
           result: { error: raw.error, success: raw.success },
           success: raw.success,
         };

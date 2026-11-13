@@ -9,6 +9,33 @@ import { AsyncTaskStatus } from '@/types/asyncTask';
 import { FileSource } from '@/types/files';
 import { TransferErrorCode } from '@/types/transferError';
 
+const uploadInput = () => ({
+  hash: 'test-hash',
+  fileType: 'text',
+  name: 'test.txt',
+  size: 100,
+  url: 'files/test.txt',
+  metadata: {},
+});
+
+const plainTextUploadInput = () => ({
+  fileType: 'text/plain',
+  hash: 'test-hash',
+  metadata: {},
+  name: 'test.txt',
+  size: 100,
+  url: 'files/test.txt',
+});
+
+const movedFileInput = () => ({
+  hash: 'test-hash',
+  fileType: 'text',
+  metadata: { path: 'new/path.txt' },
+  name: 'test.txt',
+  size: 100,
+  url: 'new/path.txt',
+});
+
 const buildMockFileAccessUrl = ({ id }: { id: string }) => `https://lobehub.com/f/${id}`;
 
 const routerMocks = vi.hoisted(() => {
@@ -188,6 +215,7 @@ const mockFileModelDeleteUnreferenced = vi.fn();
 const mockFileModelDeleteMany = vi.fn();
 const mockFileModelFindById = vi.fn();
 const mockFileModelFindByIds = vi.fn();
+const mockFileModelFindKnowledgeBaseIds = vi.fn().mockResolvedValue([]);
 const mockFileModelQuery = vi.fn();
 const mockFileModelUpdate = vi.fn();
 const mockFileModelUpdateGlobalFile = vi.fn();
@@ -205,6 +233,7 @@ vi.mock('@/database/models/file', () => ({
       deleteMany: mockFileModelDeleteMany,
       findById: mockFileModelFindById,
       findByIds: mockFileModelFindByIds,
+      findKnowledgeBaseIds: mockFileModelFindKnowledgeBaseIds,
       query: mockFileModelQuery,
       update: mockFileModelUpdate,
       updateGlobalFile: mockFileModelUpdateGlobalFile,
@@ -278,6 +307,7 @@ const mockDocumentModelFindById = vi.fn();
 const mockDocumentModelFindBySlug = vi.fn();
 const mockDocumentModelTransferTo = vi.fn();
 const mockDocumentModelSubtreeHasForeignRows = vi.fn().mockResolvedValue(false);
+const mockDocumentModelSyncFromFile = vi.fn().mockResolvedValue([]);
 
 vi.mock('@/database/repositories/knowledge', () => ({
   KnowledgeRepo: vi.fn(function () {
@@ -295,6 +325,7 @@ vi.mock('@/database/models/document', () => ({
       findById: mockDocumentModelFindById,
       findBySlug: mockDocumentModelFindBySlug,
       subtreeHasForeignRows: mockDocumentModelSubtreeHasForeignRows,
+      syncFromFile: mockDocumentModelSyncFromFile,
       transferTo: mockDocumentModelTransferTo,
     };
   }),
@@ -500,14 +531,7 @@ describe('fileRouter', () => {
       mockFileModelCheckHash.mockResolvedValue({ isExist: false });
       mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
 
-      const result = await caller.createFile({
-        hash: 'test-hash',
-        fileType: 'text',
-        name: 'test.txt',
-        size: 100,
-        url: 'files/test.txt',
-        metadata: {},
-      });
+      const result = await caller.createFile(uploadInput());
 
       expect(result).toEqual({
         id: 'new-file-id',
@@ -559,6 +583,43 @@ describe('fileRouter', () => {
       );
     });
 
+    /** @example Agent-document uploads are readable by other members of the workspace. */
+    it('defaults agent-document uploads to public without changing ordinary upload defaults', async () => {
+      // ROOT CAUSE:
+      // Agent uploads used the ordinary private-file default while their document rows
+      // were public. Other workspace members saw the document but its preview returned 404.
+      // Default the dedicated upload source to public and retain private ordinary uploads.
+      ({ caller } = createCallerWithCtx({ workspaceId: 'workspace-1' }));
+      mockFileModelCheckHash.mockResolvedValue({ isExist: false });
+      mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
+      const upload = {
+        fileType: 'application/pdf',
+        hash: 'agent-upload-hash',
+        metadata: {},
+        name: 'brief.pdf',
+        size: 100,
+        url: 'files/brief.pdf',
+      };
+
+      await caller.createFile({ ...upload, source: FileSource.AgentDocument });
+
+      /** @example The persisted original file has the same public visibility as its document. */
+      expect(mockFileModelCreate).toHaveBeenLastCalledWith(
+        expect.objectContaining({ source: FileSource.AgentDocument, visibility: 'public' }),
+        true,
+        routerMocks.transactionClient,
+      );
+
+      await caller.createFile(upload);
+
+      /** @example An ordinary upload still starts private. */
+      expect(mockFileModelCreate).toHaveBeenLastCalledWith(
+        expect.objectContaining({ source: undefined, visibility: 'private' }),
+        true,
+        routerMocks.transactionClient,
+      );
+    });
+
     it('should drop an unrecognised source instead of failing the upload', async () => {
       mockFileModelCheckHash.mockResolvedValue({ isExist: false });
       mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
@@ -592,14 +653,7 @@ describe('fileRouter', () => {
         .mockRejectedValueOnce(new Error('NoSuchKey'));
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(function () {});
 
-      await caller.createFile({
-        hash: 'test-hash',
-        fileType: 'text',
-        metadata: { path: 'new/path.txt' },
-        name: 'test.txt',
-        size: 100,
-        url: 'new/path.txt',
-      });
+      await caller.createFile(movedFileInput());
 
       expect(mockFileModelUpdateGlobalFile).toHaveBeenCalledWith(
         'test-hash',
@@ -629,14 +683,7 @@ describe('fileRouter', () => {
         contentType: 'text/plain',
       });
 
-      await caller.createFile({
-        hash: 'test-hash',
-        fileType: 'text',
-        metadata: { path: 'new/path.txt' },
-        name: 'test.txt',
-        size: 100,
-        url: 'new/path.txt',
-      });
+      await caller.createFile(movedFileInput());
 
       expect(mockFileModelUpdateGlobalFile).not.toHaveBeenCalled();
       expect(mockFileModelCreate).toHaveBeenCalledWith(
@@ -650,14 +697,7 @@ describe('fileRouter', () => {
       mockFileModelCheckHash.mockResolvedValue({ isExist: false });
       mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
 
-      await caller.createFile({
-        hash: 'test-hash',
-        fileType: 'text',
-        name: 'test.txt',
-        size: 100,
-        url: 'files/test.txt',
-        metadata: {},
-      });
+      await caller.createFile(uploadInput());
 
       expect(routerMocks.serverDB.transaction).toHaveBeenCalledTimes(1);
       expect(routerMocks.businessFileUploadCheck).toHaveBeenCalledWith(
@@ -691,14 +731,7 @@ describe('fileRouter', () => {
         status: 'settled',
       });
 
-      await caller.createFile({
-        fileType: 'text/plain',
-        hash: 'test-hash',
-        metadata: {},
-        name: 'test.txt',
-        size: 100,
-        url: 'files/test.txt',
-      });
+      await caller.createFile(plainTextUploadInput());
 
       expect(routerMocks.businessFileUploadCheck).not.toHaveBeenCalled();
       expect(mockFileUploadFindLatestForUpdate).toHaveBeenCalledWith(
@@ -724,16 +757,10 @@ describe('fileRouter', () => {
       mockFileUploadTouchActive.mockResolvedValue(upload);
       mockFileServiceGetFileMetadata.mockResolvedValue({ contentLength: 101 });
 
-      await expect(
-        caller.createFile({
-          fileType: 'text/plain',
-          hash: 'test-hash',
-          metadata: {},
-          name: 'test.txt',
-          size: 100,
-          url: 'files/test.txt',
-        }),
-      ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: 'Uploaded file size mismatch' });
+      await expect(caller.createFile(plainTextUploadInput())).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: 'Uploaded file size mismatch',
+      });
 
       expect(mockFileUploadReleaseBestEffort).toHaveBeenCalledWith('files/test.txt');
       expect(mockFileModelCreate).not.toHaveBeenCalled();
@@ -780,16 +807,7 @@ describe('fileRouter', () => {
         url: 'files/test.txt',
       });
 
-      await expect(
-        caller.createFile({
-          fileType: 'text/plain',
-          hash: 'test-hash',
-          metadata: {},
-          name: 'test.txt',
-          size: 100,
-          url: 'files/test.txt',
-        }),
-      ).resolves.toEqual({
+      await expect(caller.createFile(plainTextUploadInput())).resolves.toEqual({
         id: 'settled-file-id',
         url: 'https://lobehub.com/f/settled-file-id',
       });
@@ -803,14 +821,7 @@ describe('fileRouter', () => {
       mockFileModelCheckHash.mockResolvedValue({ isExist: false });
       mockFileModelCreate.mockResolvedValue({ id: 'new-file-id' });
 
-      await caller.createFile({
-        hash: 'test-hash',
-        fileType: 'text',
-        name: 'test.txt',
-        size: 100,
-        url: 'files/test.txt',
-        metadata: {},
-      });
+      await caller.createFile(uploadInput());
 
       expect(routerMocks.businessFileUploadCheck).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -976,14 +987,7 @@ describe('fileRouter', () => {
         contentType: 'text/plain',
       });
 
-      await caller.createFile({
-        hash: 'test-hash',
-        fileType: 'text',
-        name: 'test.txt',
-        size: 100,
-        url: 'files/test.txt',
-        metadata: {},
-      });
+      await caller.createFile(uploadInput());
 
       // Verify create was called with input size since contentLength < 1
       expect(mockFileModelCreate).toHaveBeenCalledWith(
@@ -1029,6 +1033,34 @@ describe('fileRouter', () => {
 
       expect(result.url).toBe('https://lobehub.com/f/test-id');
     });
+
+    it('should expose the libraries the file belongs to', async () => {
+      mockFileModelFindById.mockResolvedValue(mockFile);
+      mockFileModelFindKnowledgeBaseIds.mockResolvedValueOnce(['kb-1']);
+
+      const result = await caller.findById({ id: 'test-id' });
+
+      expect(mockFileModelFindKnowledgeBaseIds).toHaveBeenCalledWith('test-id');
+      expect(result.knowledgeBaseIds).toEqual(['kb-1']);
+    });
+  });
+
+  describe('getReadableUrl', () => {
+    it('should throw when the file does not exist', async () => {
+      mockFileModelFindById.mockResolvedValue(null);
+
+      await expect(caller.getReadableUrl({ id: 'invalid-id' })).rejects.toThrow(TRPCError);
+    });
+
+    it('should return the storage URL instead of the /f/:id proxy', async () => {
+      mockFileModelFindById.mockResolvedValue(mockFile);
+      mockFileServiceGetFullFileUrl.mockResolvedValue('https://s3.example.com/test-url?sig=1');
+
+      const result = await caller.getReadableUrl({ id: 'test-id' });
+
+      expect(mockFileServiceGetFullFileUrl).toHaveBeenCalledWith('test-url');
+      expect(result.url).toBe('https://s3.example.com/test-url?sig=1');
+    });
   });
 
   describe('getFileItemById', () => {
@@ -1038,12 +1070,12 @@ describe('fileRouter', () => {
       await expect(caller.getFileItemById({ id: 'invalid-id' })).rejects.toThrow(TRPCError);
     });
 
-    it('should return proxy URL format ${APP_URL}/f/:id', async () => {
-      mockFileModelFindById.mockResolvedValue(mockFile);
-
+    it('should return proxy URL format ${APP_URL}/f/:id and the parent folder', async () => {
+      mockFileModelFindById.mockResolvedValue({ ...mockFile, parentId: 'docs_folder' });
       const result = await caller.getFileItemById({ id: 'test-id' });
 
       expect(result?.url).toBe('https://lobehub.com/f/test-id');
+      expect(result?.parentId).toBe('docs_folder');
     });
   });
 
@@ -1276,6 +1308,17 @@ describe('fileRouter', () => {
   });
 
   describe('removeUnreferencedFile', () => {
+    /** @example A client retry after server-side cleanup succeeds without touching storage. */
+    it('accepts cleanup of an already removed upload', async () => {
+      mockFileModelFindById.mockResolvedValue(undefined);
+      /** @example Repeating cleanup is idempotent. */
+      await expect(
+        caller.removeUnreferencedFile({ id: 'removed-upload' }),
+      ).resolves.toBeUndefined();
+      /** @example Missing files do not trigger another storage deletion. */
+      expect(mockFileServiceDeleteFile).not.toHaveBeenCalled();
+    });
+
     it('keeps object storage when the file became referenced before cleanup', async () => {
       mockFileModelFindById.mockResolvedValue({ id: 'voice-file', userId: 'test-user' });
       mockFileModelDeleteUnreferenced.mockResolvedValue(undefined);
@@ -1331,6 +1374,10 @@ describe('fileRouter', () => {
       await caller.updateFile({ id: 'file-1', parentId: 'parent-folder' });
 
       expect(mockFileModelUpdate).toHaveBeenCalledWith('file-1', { parentId: 'docs_parent' });
+      expect(mockDocumentModelSyncFromFile).toHaveBeenCalledWith('file-1', {
+        name: undefined,
+        parentId: 'docs_parent',
+      });
     });
 
     it('should strip forged agent-share provenance from metadata updates', async () => {
@@ -1345,6 +1392,7 @@ describe('fileRouter', () => {
       });
 
       expect(mockFileModelUpdate).toHaveBeenCalledWith('file-1', { metadata: { width: 100 } });
+      expect(mockDocumentModelSyncFromFile).not.toHaveBeenCalled();
     });
   });
 

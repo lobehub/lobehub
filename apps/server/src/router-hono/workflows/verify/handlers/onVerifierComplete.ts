@@ -9,6 +9,7 @@ const log = debug('lobe-server:workflows:verify:on-verifier-complete');
 export interface OnVerifierCompletePayload {
   checkItemId: string;
   errorMessage?: string;
+  errorType?: string;
   hookId?: string;
   hookType?: string;
   operationId: string;
@@ -24,6 +25,7 @@ export async function onVerifierComplete(c: Context) {
     const {
       checkItemId,
       errorMessage,
+      errorType,
       operationId,
       parentOperationId,
       reason,
@@ -50,6 +52,7 @@ export async function onVerifierComplete(c: Context) {
       {
         checkItemId,
         errorMessage,
+        errorType,
         parentOperationId,
         reason,
         verifierOperationId: operationId,

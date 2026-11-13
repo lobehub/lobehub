@@ -1,0 +1,254 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  AGGREGATE_THRESHOLD,
+  REVIEW_MARKER,
+  findingMarker,
+  toAnnotations,
+  toConclusion,
+  toFindingComments,
+  toFindings,
+  toMarkdown,
+  toTitle,
+  toUsageLine,
+} from './report';
+
+const diagnostic = (overrides: Record<string, unknown> = {}) => ({
+  filePath: '/repo/apps/server/src/services/x.ts',
+  loc: { start: { column: 0, line: 12 } },
+  message: 'Promise.all fans out over rows | unbounded\nSuggestion: use pMap with a cap',
+  ruleId: 'lobehub/pmap-over-promise-all',
+  severity: 'error' as const,
+  ...overrides,
+});
+
+describe('toFindings', () => {
+  it('splits message and suggestion, strips the plugin prefix, and sorts errors first', () => {
+    const findings = toFindings(
+      {
+        diagnostics: [
+          diagnostic({
+            filePath: '/repo/src/a.tsx',
+            ruleId: 'lobehub/no-mode-flags',
+            severity: 'warn',
+          }),
+          diagnostic(),
+        ],
+      },
+      '/repo',
+    );
+    expect(findings.map((f) => [f.severity, f.rule, f.file])).toEqual([
+      ['error', 'pmap-over-promise-all', 'apps/server/src/services/x.ts'],
+      ['warning', 'no-mode-flags', 'src/a.tsx'],
+    ]);
+    expect(findings[0]).toMatchObject({
+      line: 12,
+      message: 'Promise.all fans out over rows | unbounded',
+      suggestion: 'use pMap with a cap',
+    });
+  });
+
+  it('prefers the suggestion carried in evidence by declarative rules', () => {
+    const [finding] = toFindings(
+      {
+        diagnostics: [
+          diagnostic({ evidence: { suggestion: 'cap it with pMap' }, message: 'fans out' }),
+        ],
+      },
+      '/repo',
+    );
+    expect(finding).toMatchObject({ message: 'fans out', suggestion: 'cap it with pMap' });
+  });
+
+  it('drops calibration fixtures, which fire by design', () => {
+    const findings = toFindings(
+      { diagnostics: [diagnostic({ filePath: '/repo/packages/alint/fixtures/pmap/bad.ts' })] },
+      '/repo',
+    );
+    expect(findings).toEqual([]);
+  });
+
+  /**
+   * Regression: only `packages/alint/fixtures` was recognised, so a package-level
+   * rule's own bad fixtures would have turned the ALint check red on every PR
+   * that touched them.
+   */
+  it('drops the fixtures of package-level rules too, but not ordinary alint paths', () => {
+    const findings = toFindings(
+      {
+        diagnostics: [
+          diagnostic({
+            filePath: '/repo/packages/heterogeneous-agents/alint/fixtures/agent-layering/bad.ts',
+          }),
+          diagnostic({ filePath: '/repo/packages/heterogeneous-agents/src/alint/fixtures.ts' }),
+        ],
+      },
+      '/repo',
+    );
+    expect(findings.map((finding) => finding.file)).toEqual([
+      'packages/heterogeneous-agents/src/alint/fixtures.ts',
+    ]);
+  });
+});
+
+describe('verdict', () => {
+  const error = toFindings({ diagnostics: [diagnostic()] }, '/repo');
+  const warning = toFindings({ diagnostics: [diagnostic({ severity: 'warn' })] }, '/repo');
+
+  it('fails the check only when an error-level finding exists', () => {
+    expect(toConclusion(error)).toBe('failure');
+    expect(toConclusion(warning)).toBe('neutral');
+    expect(toConclusion([])).toBe('success');
+  });
+
+  it('titles the check with the counts', () => {
+    expect(toTitle([...error, ...warning, ...warning])).toBe('1 error, 2 warnings');
+    expect(toTitle([])).toBe('No findings on the changed lines');
+  });
+
+  it('maps severities to check-run annotation levels and caps them at 50', () => {
+    expect(toAnnotations(error)[0]).toMatchObject({
+      annotation_level: 'failure',
+      path: 'apps/server/src/services/x.ts',
+      start_line: 12,
+      title: 'pmap-over-promise-all',
+    });
+    expect(toAnnotations(Array.from({ length: 60 }, () => warning[0]))).toHaveLength(50);
+  });
+});
+
+describe('toFindingComments', () => {
+  const file = 'apps/server/src/services/x.ts';
+  const on = (line: number) =>
+    diagnostic({ loc: { start: { column: 0, line } }, message: `finding at ${line}` });
+  const commentsFor = (...lines: number[]) =>
+    toFindingComments(toFindings({ diagnostics: lines.map(on) }, '/repo'));
+
+  it('comments one line per finding, like an eslint run', () => {
+    expect(commentsFor(12, 40)).toEqual([
+      {
+        body: [
+          findingMarker(`${file}:12`),
+          '**`pmap-over-promise-all`** · error',
+          '',
+          'finding at 12',
+        ].join('\n'),
+        key: `${file}:12`,
+        line: 12,
+        path: file,
+        side: 'RIGHT',
+      },
+      {
+        body: [
+          findingMarker(`${file}:40`),
+          '**`pmap-over-promise-all`** · error',
+          '',
+          'finding at 40',
+        ].join('\n'),
+        key: `${file}:40`,
+        line: 40,
+        path: file,
+        side: 'RIGHT',
+      },
+    ]);
+  });
+
+  it('keys findings that share a line apart, so fixing one leaves no comment behind', () => {
+    const comments = toFindingComments(
+      toFindings(
+        {
+          diagnostics: [
+            diagnostic({ message: 'first rule' }),
+            diagnostic({ message: 'second rule', ruleId: 'lobehub/no-mode-flags' }),
+            diagnostic({ message: 'first rule, again' }),
+          ],
+        },
+        '/repo',
+      ),
+    );
+
+    expect(comments.map((comment) => comment.key)).toEqual([
+      `${file}:12:pmap-over-promise-all`,
+      `${file}:12:no-mode-flags`,
+      `${file}:12:pmap-over-promise-all#2`,
+    ]);
+    for (const comment of comments)
+      expect(comment.body.startsWith(findingMarker(comment.key))).toBe(true);
+  });
+
+  it(`keeps the per-line comments up to ${5} findings and aggregates above`, () => {
+    expect(commentsFor(1, 2, 3, 4, 5)).toHaveLength(AGGREGATE_THRESHOLD);
+
+    const [aggregated] = commentsFor(1, 2, 3, 4, 5, 6);
+    expect(aggregated.key).toBe(file);
+    expect(aggregated.line).toBe(1);
+    expect(aggregated.body).toContain('**ALint · 6 findings in this file**');
+    expect(aggregated.body.match(/^- /gm)).toHaveLength(6);
+  });
+
+  it('carries the suggestion inline, and leaves it out when the rule has none', () => {
+    const [withSuggestion] = toFindingComments(
+      toFindings({ diagnostics: [diagnostic()] }, '/repo'),
+    );
+    expect(withSuggestion.body).toContain('💡 use pMap with a cap');
+
+    const [without] = toFindingComments(
+      toFindings({ diagnostics: [diagnostic({ message: 'fans out' })] }, '/repo'),
+    );
+    expect(without.body).not.toContain('💡');
+  });
+
+  it('caps a run at 50 comments, like the annotations', () => {
+    const findings = toFindings(
+      {
+        diagnostics: Array.from({ length: 60 }, (_, index) =>
+          diagnostic({ filePath: `/repo/src/file-${index}.ts` }),
+        ),
+      },
+      '/repo',
+    );
+    expect(toFindingComments(findings)).toHaveLength(50);
+  });
+});
+
+describe('toMarkdown', () => {
+  it('renders a marked comment with a linked row per finding and escaped cells', () => {
+    const markdown = toMarkdown(toFindings({ diagnostics: [diagnostic()] }, '/repo'), {
+      repo: 'lobehub/lobehub',
+      runUrl: 'https://example.com/run',
+      sha: 'abcdef1234567',
+    });
+    expect(markdown.startsWith(REVIEW_MARKER)).toBe(true);
+    expect(markdown).toContain('### ❌ ALint · 1 error');
+    expect(markdown).toContain(
+      '[`apps/server/src/services/x.ts:12`](https://github.com/lobehub/lobehub/blob/abcdef1234567/apps/server/src/services/x.ts#L12)',
+    );
+    expect(markdown).toContain('Promise.all fans out over rows \\| unbounded');
+    expect(markdown).toContain('💡 use pMap with a cap');
+    expect(markdown).toContain('[run](https://example.com/run)');
+  });
+
+  it('renders a clean verdict when nothing was found', () => {
+    expect(toMarkdown([], { repo: 'lobehub/lobehub', sha: 'abcdef1234567' })).toContain(
+      '### ✅ ALint · No findings on the changed lines',
+    );
+  });
+});
+
+describe('toUsageLine', () => {
+  it('reports calls, cache hits and tokens so spend can be read back from the check run', () => {
+    const usage = toUsageLine({
+      diagnostics: [],
+      execution: { cached: 3, completed: 12, planned: 15 },
+      usage: { inputTokens: 23_456, outputTokens: 789 },
+    });
+    expect(usage).toBe('12 model calls, 3 cached · 23,456 input / 789 output tokens');
+    expect(toMarkdown([], { repo: 'lobehub/lobehub', sha: 'abcdef1234567', usage })).toContain(
+      `· ${usage}</sub>`,
+    );
+  });
+
+  it('stays silent when alint reported no execution or usage', () => {
+    expect(toUsageLine({ diagnostics: [] })).toBeUndefined();
+  });
+});

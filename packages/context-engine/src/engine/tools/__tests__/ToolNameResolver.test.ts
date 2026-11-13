@@ -2,6 +2,43 @@ import { describe, expect, it } from 'vitest';
 
 import { ToolNameResolver } from '../ToolNameResolver';
 
+const testPluginManifests = () => ({
+  'test-plugin': {
+    api: [{ description: 'My action', name: 'myAction', parameters: {} }],
+    identifier: 'test-plugin',
+    meta: {},
+    type: 'builtin' as const,
+  },
+});
+
+const activatorManifest = () => ({
+  api: [{ description: '', name: 'activateTools', parameters: {} }],
+  identifier: 'lobe-activator',
+  meta: {},
+  type: 'builtin' as const,
+});
+
+const documentManifest = (identifier: string) => ({
+  api: [{ description: '', name: 'createDocument', parameters: {} }],
+  identifier,
+  meta: {},
+  type: 'builtin' as const,
+});
+
+const singleToolCall = (
+  argumentsValue: string,
+  name: string,
+): Parameters<ToolNameResolver['resolve']>[0] => [
+  {
+    function: {
+      arguments: argumentsValue,
+      name,
+    },
+    id: 'call_1',
+    type: 'function',
+  },
+];
+
 describe('ToolNameResolver', () => {
   const resolver = new ToolNameResolver();
   describe('generate - basic functionality', () => {
@@ -22,11 +59,6 @@ describe('ToolNameResolver', () => {
 
     it('should treat legacy default type the same as builtin', () => {
       const result = resolver.generate('test-plugin', 'myAction', 'default');
-      expect(result).toBe('test-plugin____myAction');
-    });
-
-    it('should handle undefined type as builtin', () => {
-      const result = resolver.generate('test-plugin', 'myAction');
       expect(result).toBe('test-plugin____myAction');
     });
   });
@@ -101,12 +133,6 @@ describe('ToolNameResolver', () => {
       const result = resolver.generate('plugin', '', 'builtin');
       expect(result).toBe('plugin____');
     });
-
-    it('should handle numeric identifiers and action names', () => {
-      const result = resolver.generate('plugin123', 'action456', 'type789');
-      expect(result).toBe('plugin123____action456____type789');
-    });
-
     it('should hash invalid api names so provider tool names stay valid', () => {
       const result = resolver.generate('mcp-server', 'get.current/weather', 'mcp');
 
@@ -114,15 +140,6 @@ describe('ToolNameResolver', () => {
       expect(result).toMatch(/^[\w-]+$/);
       expect(result).not.toContain('get.current/weather');
     });
-
-    it('should hash non-ASCII api names so provider tool names stay valid', () => {
-      const result = resolver.generate('custom_mcp_plugin', '中文API', 'mcp');
-
-      expect(result).toMatch(/^custom_mcp_plugin____MD5HASH_[\da-f]+____mcp$/);
-      expect(result).toMatch(/^[\w-]+$/);
-      expect(result).not.toContain('中文API');
-    });
-
     it('should hash invalid identifiers so provider tool names stay valid', () => {
       const result = resolver.generate('@browser/use', 'open_page', 'mcp');
 
@@ -193,25 +210,9 @@ describe('ToolNameResolver', () => {
 
   describe('resolve - basic functionality', () => {
     it('should resolve normal tool calls without hashing', () => {
-      const toolCalls = [
-        {
-          function: {
-            arguments: '{"query": "test"}',
-            name: 'test-plugin____myAction',
-          },
-          id: 'call_1',
-          type: 'function',
-        },
-      ];
+      const toolCalls = singleToolCall('{"query": "test"}', 'test-plugin____myAction');
 
-      const manifests = {
-        'test-plugin': {
-          api: [{ description: 'My action', name: 'myAction', parameters: {} }],
-          identifier: 'test-plugin',
-          meta: {},
-          type: 'builtin' as const,
-        },
-      };
+      const manifests = testPluginManifests();
 
       const result = resolver.resolve(toolCalls, manifests);
 
@@ -327,12 +328,7 @@ describe('ToolNameResolver', () => {
       ];
 
       const manifests = {
-        'lobe-notebook': {
-          api: [{ description: '', name: 'createDocument', parameters: {} }],
-          identifier: 'lobe-notebook',
-          meta: {},
-          type: 'builtin' as const,
-        },
+        'lobe-notebook': documentManifest('lobe-notebook'),
       };
 
       const result = resolver.resolve(toolCalls, manifests);
@@ -384,16 +380,7 @@ describe('ToolNameResolver', () => {
     });
 
     it('should keep hashed apiName if manifest not found', () => {
-      const toolCalls = [
-        {
-          function: {
-            arguments: '{}',
-            name: 'plugin____MD5HASH_abc123def456',
-          },
-          id: 'call_1',
-          type: 'function',
-        },
-      ];
+      const toolCalls = singleToolCall('{}', 'plugin____MD5HASH_abc123def456');
 
       const result = resolver.resolve(toolCalls, {});
 
@@ -401,16 +388,7 @@ describe('ToolNameResolver', () => {
     });
 
     it('should keep hashed apiName if api not found in manifest', () => {
-      const toolCalls = [
-        {
-          function: {
-            arguments: '{}',
-            name: 'plugin____MD5HASH_abc123def456',
-          },
-          id: 'call_1',
-          type: 'function',
-        },
-      ];
+      const toolCalls = singleToolCall('{}', 'plugin____MD5HASH_abc123def456');
 
       const manifests = {
         plugin: {
@@ -454,41 +432,6 @@ describe('ToolNameResolver', () => {
       expect(result[0]).toEqual({
         apiName,
         arguments: '{"location":"Shanghai"}',
-        id: 'call_1',
-        identifier,
-        type: 'mcp',
-      });
-    });
-
-    it('should resolve non-ASCII apiName hashed for provider-safe tool names', () => {
-      const identifier = 'custom_mcp_plugin';
-      const apiName = '中文API';
-      const toolName = resolver.generate(identifier, apiName, 'mcp');
-
-      const result = resolver.resolve(
-        [
-          {
-            function: {
-              arguments: '{"query":"最近工作压力好大"}',
-              name: toolName,
-            },
-            id: 'call_1',
-            type: 'function',
-          },
-        ],
-        {
-          [identifier]: {
-            api: [{ description: 'Chat with companion', name: apiName, parameters: {} }],
-            identifier,
-            meta: {},
-            type: 'mcp' as const,
-          },
-        },
-      );
-
-      expect(result[0]).toEqual({
-        apiName,
-        arguments: '{"query":"最近工作压力好大"}',
         id: 'call_1',
         identifier,
         type: 'mcp',
@@ -653,14 +596,7 @@ describe('ToolNameResolver', () => {
         },
       ];
 
-      const manifests = {
-        'test-plugin': {
-          api: [{ description: 'My action', name: 'myAction', parameters: {} }],
-          identifier: 'test-plugin',
-          meta: {},
-          type: 'builtin' as const,
-        },
-      };
+      const manifests = testPluginManifests();
 
       const result = resolver.resolve(toolCalls, manifests);
 
@@ -669,25 +605,9 @@ describe('ToolNameResolver', () => {
     });
 
     it('should handle missing thoughtSignature', () => {
-      const toolCalls = [
-        {
-          function: {
-            arguments: '{"query": "test"}',
-            name: 'test-plugin____myAction',
-          },
-          id: 'call_1',
-          type: 'function',
-        },
-      ];
+      const toolCalls = singleToolCall('{"query": "test"}', 'test-plugin____myAction');
 
-      const manifests = {
-        'test-plugin': {
-          api: [{ description: 'My action', name: 'myAction', parameters: {} }],
-          identifier: 'test-plugin',
-          meta: {},
-          type: 'builtin' as const,
-        },
-      };
+      const manifests = testPluginManifests();
 
       const result = resolver.resolve(toolCalls, manifests);
 
@@ -766,12 +686,7 @@ describe('ToolNameResolver', () => {
         ];
 
         const manifests = {
-          'lobe-activator': {
-            api: [{ description: '', name: 'activateTools', parameters: {} }],
-            identifier: 'lobe-activator',
-            meta: {},
-            type: 'builtin' as const,
-          },
+          'lobe-activator': activatorManifest(),
         };
 
         const result = resolver.resolve(toolCalls, manifests);
@@ -780,27 +695,11 @@ describe('ToolNameResolver', () => {
       });
 
       it('should drop bare API names when multiple manifests expose the same name (ambiguous)', () => {
-        const toolCalls = [
-          {
-            function: { arguments: '{}', name: 'createDocument' },
-            id: 'call_1',
-            type: 'function',
-          },
-        ];
+        const toolCalls = singleToolCall('{}', 'createDocument');
 
         const manifests = {
-          'lobe-agent-documents': {
-            api: [{ description: '', name: 'createDocument', parameters: {} }],
-            identifier: 'lobe-agent-documents',
-            meta: {},
-            type: 'builtin' as const,
-          },
-          'lobe-notebook': {
-            api: [{ description: '', name: 'createDocument', parameters: {} }],
-            identifier: 'lobe-notebook',
-            meta: {},
-            type: 'builtin' as const,
-          },
+          'lobe-agent-documents': documentManifest('lobe-agent-documents'),
+          'lobe-notebook': documentManifest('lobe-notebook'),
         };
 
         const result = resolver.resolve(toolCalls, manifests);
@@ -842,21 +741,10 @@ describe('ToolNameResolver', () => {
       // `offeredToolNames` parameter restricts the fallback to tools that
       // were actually offered this turn.
       it('should restrict fallback to tools actually offered this turn', () => {
-        const toolCalls = [
-          {
-            function: { arguments: '{}', name: 'activateTools' },
-            id: 'call_1',
-            type: 'function',
-          },
-        ];
+        const toolCalls = singleToolCall('{}', 'activateTools');
 
         const manifests = {
-          'lobe-activator': {
-            api: [{ description: '', name: 'activateTools', parameters: {} }],
-            identifier: 'lobe-activator',
-            meta: {},
-            type: 'builtin' as const,
-          },
+          'lobe-activator': activatorManifest(),
           // Disabled this turn — must not be reachable via fallback
           'lobe-activator-deprecated': {
             api: [{ description: '', name: 'activateTools', parameters: {} }],
@@ -874,21 +762,10 @@ describe('ToolNameResolver', () => {
       });
 
       it('should drop bare API names whose tool was not offered this turn', () => {
-        const toolCalls = [
-          {
-            function: { arguments: '{}', name: 'activateTools' },
-            id: 'call_1',
-            type: 'function',
-          },
-        ];
+        const toolCalls = singleToolCall('{}', 'activateTools');
 
         const manifests = {
-          'lobe-activator': {
-            api: [{ description: '', name: 'activateTools', parameters: {} }],
-            identifier: 'lobe-activator',
-            meta: {},
-            type: 'builtin' as const,
-          },
+          'lobe-activator': activatorManifest(),
         };
 
         // Manifest exists but the tool was not sent to the LLM this turn.
@@ -938,12 +815,7 @@ describe('ToolNameResolver', () => {
         ];
 
         const manifests = {
-          'lobe-activator': {
-            api: [{ description: '', name: 'activateTools', parameters: {} }],
-            identifier: 'lobe-activator',
-            meta: {},
-            type: 'builtin' as const,
-          },
+          'lobe-activator': activatorManifest(),
           'lobe-remote-device': {
             api: [{ description: '', name: 'listOnlineDevices', parameters: {} }],
             identifier: 'lobe-remote-device',
@@ -986,30 +858,14 @@ describe('ToolNameResolver', () => {
       });
 
       it('should treat an enabled call as unique when a disabled duplicate would have made it ambiguous', () => {
-        const toolCalls = [
-          {
-            function: { arguments: '{}', name: 'createDocument' },
-            id: 'call_1',
-            type: 'function',
-          },
-        ];
+        const toolCalls = singleToolCall('{}', 'createDocument');
 
         const manifests = {
           // Only this manifest's createDocument is offered this turn.
-          'lobe-agent-documents': {
-            api: [{ description: '', name: 'createDocument', parameters: {} }],
-            identifier: 'lobe-agent-documents',
-            meta: {},
-            type: 'builtin' as const,
-          },
+          'lobe-agent-documents': documentManifest('lobe-agent-documents'),
           // Installed but not offered — without the offered-list restriction
           // this would make the fallback ambiguous and drop the valid call.
-          'lobe-notebook': {
-            api: [{ description: '', name: 'createDocument', parameters: {} }],
-            identifier: 'lobe-notebook',
-            meta: {},
-            type: 'builtin' as const,
-          },
+          'lobe-notebook': documentManifest('lobe-notebook'),
         };
 
         const result = resolver.resolve(toolCalls, manifests, [

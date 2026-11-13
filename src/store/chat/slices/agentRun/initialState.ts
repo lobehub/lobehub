@@ -8,7 +8,7 @@ export type MainConversationScrollToIndex = (
 
 /**
  * Last `op_lifecycle` notice the shared gateway socket delivered for an
- * operation. Written only when the `enableGatewayMux` lab flag routes runs
+ * operation. Written only when the multiplexed transport routes runs
  * over the multiplexed socket; the hub emits one for every op the user owns,
  * whether or not this tab is subscribed to it.
  */
@@ -29,8 +29,8 @@ export interface ChatAIChatState {
    */
   gatewayConnections: Record<string, GatewayConnection>;
   /**
-   * Mux-level op lifecycle feed, keyed by operationId. No UI reads it yet;
-   * later work drives spinners / reconnect decisions from it.
+   * Mux-level op lifecycle feed, keyed by operationId. `useTopicRunEvents`
+   * reads it to follow runs another device starts on an open topic.
    */
   gatewayFeed: Record<string, GatewayFeedEntry>;
   inputFiles: File[];

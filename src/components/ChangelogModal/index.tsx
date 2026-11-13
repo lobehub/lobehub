@@ -1,6 +1,6 @@
 'use client';
 
-import { createModal } from '@lobehub/ui/base-ui';
+import { createModal } from '@lobehub/ui';
 import { t } from 'i18next';
 import { ArrowUpRightIcon } from 'lucide-react';
 import { lazy, Suspense } from 'react';

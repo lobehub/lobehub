@@ -1,23 +1,28 @@
 'use client';
 
-import { Empty, Flexbox } from '@lobehub/ui';
-import { Button, confirmModal, type ModalInstance, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  Empty,
+  Flexbox,
+  type ModalInstance,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { ArrowLeftIcon, Clock3Icon } from 'lucide-react';
 import { memo, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
-import { DOCUMENT_HISTORY_QUERY_LIST_LIMIT } from '@/const/documentHistory';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { useEventCallback } from '@/hooks/useEventCallback';
-import { useClientDataSWR } from '@/libs/swr';
 import type {
   DocumentHistoryListItem,
   DocumentHistorySaveSource,
-  ListHistoryOutput,
 } from '@/server/routers/lambda/_schema/documentHistory';
 import { documentService } from '@/services/document';
 import { useDocumentStore } from '@/store/document';
@@ -87,8 +92,7 @@ const HistoryPanel = memo(() => {
 
   const { expand: showPageAgentPanel, toggle: togglePageAgentPanel } = usePageAgentPanelControl();
 
-  const markDirty = useDocumentStore((s) => s.markDirty);
-  const performSave = useDocumentStore((s) => s.performSave);
+  const restoreVersion = useDocumentStore((s) => s.restoreVersion);
   const lastUpdatedTime = useDocumentStore(
     (s) => editorSelectors.lastUpdatedTime(documentId!)(s) ?? null,
   );
@@ -96,16 +100,10 @@ const HistoryPanel = memo(() => {
   const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
   const compareInstanceRef = useRef<ModalInstance | null>(null);
 
-  const { data, isLoading } = useClientDataSWR<ListHistoryOutput>(
-    documentId ? ['page-editor-document-history', documentId, lastUpdatedTime] : null,
-    async () =>
-      documentService.listDocumentHistory({
-        documentId: documentId!,
-        includeCurrent: true,
-        limit: DOCUMENT_HISTORY_QUERY_LIST_LIMIT,
-      }),
-    { keepPreviousData: true },
-  );
+  // Painted from the document store's history replica; a save re-reads it
+  // while the last list stays on screen.
+  const useFetchDocumentHistory = useDocumentStore((s) => s.useFetchDocumentHistory);
+  const { data, isLoading } = useFetchDocumentHistory(documentId, lastUpdatedTime);
 
   const items = useMemo(() => data?.items ?? [], [data?.items]);
   const historyItemsById = useMemo<Record<string, DocumentHistoryListItem>>(() => {
@@ -178,12 +176,7 @@ const HistoryPanel = memo(() => {
             `page-editor-history-${documentId}`,
           );
 
-          editor.setDocument('json', JSON.stringify(result.editorData));
-          markDirty(documentId);
-          await performSave(documentId, undefined, {
-            restoreFromHistoryId: historyId,
-            saveSource: 'restore',
-          });
+          await restoreVersion(documentId, { editorData: result.editorData, historyId });
           onSuccess?.();
         } catch (error) {
           console.error('[PageEditor] Failed to restore history item:', error);

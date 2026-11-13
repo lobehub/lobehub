@@ -1,15 +1,17 @@
 'use client';
 
 import type { EvalThreadResult } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Tabs } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
+import {
+  experimentContextSuffix,
+  parseExperimentId,
+} from '@/features/LobeBench/experimentNavigation';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
@@ -27,6 +29,10 @@ const CaseDetail = memo(() => {
   }>();
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
+  // Opened from a Lobe Bench experiment: "back" returns there and prev/next keep the context.
+  const [searchParams] = useSearchParams();
+  const experimentId = parseExperimentId(searchParams.get('experiment'));
+  const suffix = experimentContextSuffix(experimentId);
   const useFetchRunDetail = useEvalStore((s) => s.useFetchRunDetail);
   const useFetchRunResults = useEvalStore((s) => s.useFetchRunResults);
   const isActive = useEvalStore(runSelectors.isRunActive(runId!));
@@ -35,10 +41,10 @@ const CaseDetail = memo(() => {
   const pollingConfig = { refreshInterval: isActive ? POLLING_INTERVAL : 0 };
   useFetchRunDetail(runId!, pollingConfig);
   const {
-    data: resultsData,
     error: resultsError,
-    isLoading: isLoadingResults,
-    mutate: mutateResults,
+    isHydrated: resultsHydrated,
+    isValidating: resultsValidating,
+    revalidate: revalidateResults,
   } = useFetchRunResults(runId!, pollingConfig);
 
   const runDetail = useEvalStore(runSelectors.getRunDetailById(runId!));
@@ -97,23 +103,33 @@ const CaseDetail = memo(() => {
   // failed fetch (ux Read §1.1). A page-level failure gets a reason + Reload.
   return (
     <AsyncBoundary
-      data={resultsData}
+      data={runResults}
       error={resultsError}
       errorVariant={'page'}
       isEmpty={!caseResult}
-      isLoading={isLoadingResults}
+      isLoading={!resultsHydrated || resultsValidating}
       loading={<RouteLoading />}
-      onRetry={() => mutateResults()}
+      onRetry={() => void revalidateResults()}
     >
       {caseResult && (
         <Flexbox height="100%" style={{ overflow: 'hidden' }}>
           <CaseHeader
             caseNumber={(caseResult.testCase?.sortOrder ?? 0) + 1}
             evalResult={displayEvalResult}
-            runName={runDetail?.name || runId!.slice(0, 8)}
-            onBack={() => navigate(`/eval/bench/${benchmarkId}/runs/${runId}`)}
-            onNext={nextCaseId ? () => navigate(`${basePath}/${nextCaseId}`) : undefined}
-            onPrev={prevCaseId ? () => navigate(`${basePath}/${prevCaseId}`) : undefined}
+            runName={
+              experimentId
+                ? t('lobeBench.attempt.backToExperiment')
+                : runDetail?.name || runId!.slice(0, 8)
+            }
+            onNext={nextCaseId ? () => navigate(`${basePath}/${nextCaseId}${suffix}`) : undefined}
+            onPrev={prevCaseId ? () => navigate(`${basePath}/${prevCaseId}${suffix}`) : undefined}
+            onBack={() =>
+              navigate(
+                experimentId
+                  ? `/eval/lobe-bench/experiments/${experimentId}`
+                  : `/eval/bench/${benchmarkId}/runs/${runId}`,
+              )
+            }
           />
           {hasMultipleThreads && (
             <Flexbox
@@ -134,6 +150,7 @@ const CaseDetail = memo(() => {
             {topicId && agentId ? (
               <ChatArea
                 agentId={agentId}
+                reloadKey={caseResult.status}
                 threadId={activeThreadId ?? undefined}
                 topicId={topicId}
               />
@@ -142,8 +159,10 @@ const CaseDetail = memo(() => {
             )}
             <InfoSidebar
               evalResult={displayEvalResult}
+              experimentId={experimentId ?? undefined}
               passed={displayPassed}
               score={displayScore}
+              status={currentThread ? currentThread.status : caseResult.status}
               testCase={caseResult.testCase}
             />
           </Flexbox>

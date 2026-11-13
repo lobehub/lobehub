@@ -14,10 +14,10 @@ Test the `packages/database` Model and Repository layers.
 `getTestDB()` (`src/core/getTestDB.ts`) returns different engines based on the
 `TEST_SERVER_DB` env var:
 
-| Mode                    | Engine                              | When               | Notes                                                                                                                                                               |
-| ----------------------- | ----------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **client-db** (default) | PGlite (in-memory)                  | `bunx vitest run`  | Migration runner **skips any SQL containing `pg_search` / `bm25`** — the ParadeDB BM25 `@@@` operator does not exist here.                                          |
-| **server-db**           | node-postgres → `DATABASE_TEST_URL` | `TEST_SERVER_DB=1` | CI uses the `paradedb/paradedb` image (has `pg_search`). **Coverage is measured in this mode** (`test:coverage` → `vitest.config.server.mts`, uploaded to Codecov). |
+| Mode                    | Engine                              | When               | Notes                                                                                                                                                                       |
+| ----------------------- | ----------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **client-db** (default) | PGlite (in-memory)                  | `bunx vitest run`  | Runs the real migrations; the `pg_search` / BM25 migrations **skip themselves** because PGlite has no `pg_search`, so the ParadeDB BM25 `@@@` operator does not exist here. |
+| **server-db**           | node-postgres → `DATABASE_TEST_URL` | `TEST_SERVER_DB=1` | CI uses the `paradedb/paradedb` image (has `pg_search`). **Coverage is measured in this mode** (`test:coverage` → `vitest.config.server.mts`, uploaded to Codecov).         |
 
 ```bash
 # 1. Client environment (fast, default — what most local runs use)

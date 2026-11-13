@@ -7,8 +7,26 @@ export const MAX_RETAINED_BROWSER_WEBVIEWS = 10;
 const RETAINED_IN_USE_GRACE_MS = 60_000;
 const BOUNDS_POLL_INTERVAL_MS = 100;
 const RESIZE_BRIDGE_WIDTH = 10;
-const RESIZE_HANDLE_SELECTOR =
-  '.ant-draggable-panel-left-handle, .ant-draggable-panel-right-handle';
+/**
+ * Where a guest waits while no pane shows it. It must stay inside the viewport:
+ * Chromium stops compositing a guest moved off-screen, so `capturePage` then
+ * hangs or rejects with `UnknownVizError` and `requestAnimationFrame` stalls —
+ * a background agent could navigate and read such a page but never screenshot
+ * it. Opacity 0 plus `pointer-events: none` keeps it invisible and inert.
+ */
+const PARKED_STYLE = {
+  height: '800px',
+  left: '0px',
+  opacity: '0',
+  pointerEvents: 'none',
+  position: 'fixed',
+  top: '0',
+  width: '1200px',
+} as const;
+// `lobe-` is the published block prefix from @lobehub/ui v6.2; the `base-`
+// names stay as a fallback until that release is what this app resolves.
+const PANEL_SELECTOR = '.lobe-draggable-panel, .base-draggable-panel';
+const RESIZE_HANDLE_SELECTOR = '.lobe-draggable-panel__handle, .base-draggable-panel-handle';
 
 interface BrowserWebviewElement extends HTMLElement {
   getWebContentsId: () => number;
@@ -20,10 +38,13 @@ interface RetainedWebview {
   host?: HTMLElement;
   interactionBridge?: HTMLDivElement;
   lastBoundsKey?: string;
+  /** Last panel size sent to the main process, so a fixed viewport refits on resize. */
+  lastPanelSizeKey?: string;
   lastUsedAt: number;
   ready: Promise<BrowserWebviewElement>;
   resizeObserver?: ResizeObserver;
   restoreInteraction?: () => void;
+  sessionId: string;
   syncBounds?: () => void;
   visible: boolean;
   webview: BrowserWebviewElement;
@@ -96,15 +117,7 @@ class BrowserWebviewRegistry {
     retained.lastUsedAt = Date.now();
     retained.lastBoundsKey = undefined;
     retained.visible = false;
-    Object.assign(webview.style, {
-      height: '800px',
-      left: '-10000px',
-      opacity: '0',
-      pointerEvents: 'none',
-      position: 'fixed',
-      top: '0',
-      width: '1200px',
-    });
+    Object.assign(webview.style, PARKED_STYLE);
   }
 
   ensure(sessionId: string): Promise<BrowserWebviewElement> {
@@ -144,20 +157,13 @@ class BrowserWebviewRegistry {
     const retained: RetainedWebview = {
       lastUsedAt: Date.now(),
       ready,
+      sessionId,
       visible: false,
       webview,
     };
     this.retained.set(sessionId, retained);
     getHiddenHost().append(webview);
-    Object.assign(webview.style, {
-      height: '800px',
-      left: '-10000px',
-      opacity: '0',
-      pointerEvents: 'none',
-      position: 'fixed',
-      top: '0',
-      width: '1200px',
-    });
+    Object.assign(webview.style, PARKED_STYLE);
 
     return ready;
   }
@@ -174,6 +180,17 @@ class BrowserWebviewRegistry {
       webContentsId: webview.getWebContentsId(),
     });
     if (!result.success) throw new Error(result.error || 'Failed to register browser webview');
+  }
+
+  private reportPanelSize(retained: RetainedWebview, bounds: DOMRect): void {
+    const height = Math.round(bounds.height);
+    const width = Math.round(bounds.width);
+    const sizeKey = `${width}x${height}`;
+    if (retained.lastPanelSizeKey === sizeKey) return;
+    retained.lastPanelSizeKey = sizeKey;
+    ensureElectronIpc()
+      .browserControl.reportPanelSize({ height, sessionId: retained.sessionId, width })
+      .catch(() => {});
   }
 
   private scheduleBoundsSync(retained: RetainedWebview): void {
@@ -218,14 +235,7 @@ class BrowserWebviewRegistry {
     // ancestor collapses to zero. Checking the host alone therefore misses the
     // closed state and leaves the guest's last compositor frame on screen.
     if (clippedByAncestor || bounds.width <= 0 || bounds.height <= 0) {
-      Object.assign(retained.webview.style, {
-        height: '800px',
-        left: '-10000px',
-        opacity: '0',
-        pointerEvents: 'none',
-        top: '0',
-        width: '1200px',
-      });
+      Object.assign(retained.webview.style, PARKED_STYLE);
       if (retained.interactionBridge) {
         retained.interactionBridge.style.pointerEvents = 'none';
         retained.interactionBridge.style.visibility = 'hidden';
@@ -240,6 +250,7 @@ class BrowserWebviewRegistry {
       top: `${bounds.top}px`,
       width: `${bounds.width}px`,
     });
+    this.reportPanelSize(retained, bounds);
     if (!retained.restoreInteraction) retained.webview.style.pointerEvents = 'auto';
     if (retained.interactionBridge) {
       const isRtl = getComputedStyle(retained.host).direction === 'rtl';
@@ -285,9 +296,48 @@ class BrowserWebviewRegistry {
       zIndex: '1',
     });
 
+    // The guest swallows every pointer event over its bounds, so an edge drag has
+    // to be replayed onto the panel's own resize handle. The handle drags on
+    // pointer events and reads its origin from the first `pointerdown`, so a bare
+    // `mousedown` starts nothing -- the whole gesture is forwarded instead.
+    const PointerEventCtor = (
+      typeof PointerEvent === 'undefined' ? MouseEvent : PointerEvent
+    ) as typeof MouseEvent;
+
+    // `replay` dispatches a bubbling event on the handle, which reaches this same
+    // capture listener on the way back up to `window`. Re-entrancy is cut here:
+    // without it the first forwarded move re-dispatches itself from inside its
+    // own dispatch until the stack overflows and the panel never resizes.
+    let replaying = false;
+
+    const replay = (handle: HTMLElement, type: string, source: PointerEvent) => {
+      if (replaying) return;
+
+      replaying = true;
+      try {
+        handle.dispatchEvent(
+          new PointerEventCtor(type, {
+            bubbles: true,
+            button: source.button,
+            buttons: source.buttons,
+            cancelable: true,
+            clientX: source.clientX,
+            clientY: source.clientY,
+            composed: true,
+          }),
+        );
+      } finally {
+        replaying = false;
+      }
+    };
+
+    let stopForwarding: (() => void) | undefined;
+
     const restoreInteraction = () => {
       window.removeEventListener('blur', restoreInteraction);
-      window.removeEventListener('mouseup', restoreInteraction, true);
+      window.removeEventListener('pointerup', restoreInteraction, true);
+      stopForwarding?.();
+      stopForwarding = undefined;
       retained.restoreInteraction = undefined;
       bridge.style.pointerEvents = 'auto';
       if (retained.visible && retained.webview.style.opacity === '1') {
@@ -295,34 +345,38 @@ class BrowserWebviewRegistry {
       }
     };
 
-    bridge.addEventListener('mousedown', (event) => {
+    bridge.addEventListener('pointerdown', (event) => {
       if (event.button !== 0) return;
+      event.preventDefault();
 
       retained.webview.style.pointerEvents = 'none';
       bridge.style.pointerEvents = 'none';
       retained.restoreInteraction = restoreInteraction;
 
       const resizeHandle = retained.host
-        ?.closest('.ant-draggable-panel')
+        ?.closest(PANEL_SELECTOR)
         ?.querySelector<HTMLElement>(RESIZE_HANDLE_SELECTOR);
       if (!resizeHandle) {
         restoreInteraction();
         return;
       }
 
+      // Registered before the restore listeners so the final `pointerup` still
+      // reaches the handle before the bridge lets go of the pointer.
+      const forward = (moveEvent: PointerEvent) => replay(resizeHandle, moveEvent.type, moveEvent);
+      window.addEventListener('pointermove', forward, true);
+      window.addEventListener('pointerup', forward, true);
+      window.addEventListener('pointercancel', forward, true);
+      stopForwarding = () => {
+        window.removeEventListener('pointermove', forward, true);
+        window.removeEventListener('pointerup', forward, true);
+        window.removeEventListener('pointercancel', forward, true);
+      };
+
       window.addEventListener('blur', restoreInteraction, { once: true });
-      window.addEventListener('mouseup', restoreInteraction, { capture: true, once: true });
-      resizeHandle.dispatchEvent(
-        new MouseEvent('mousedown', {
-          bubbles: true,
-          button: event.button,
-          buttons: event.buttons,
-          clientX: event.clientX,
-          clientY: event.clientY,
-          screenX: event.screenX,
-          screenY: event.screenY,
-        }),
-      );
+      window.addEventListener('pointerup', restoreInteraction, { capture: true, once: true });
+
+      replay(resizeHandle, 'pointerdown', event);
     });
 
     overlayHost.append(bridge);

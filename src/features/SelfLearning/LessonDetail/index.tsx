@@ -1,8 +1,6 @@
 'use client';
 
-import { Block, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Block, createStaticStyles, cssVar, Empty, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { MessagesSquare } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -62,8 +60,12 @@ const LessonDetail = memo(() => {
   const { t } = useTranslation('selfLearning');
   const { domainId, lessonId } = useParams();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const { data: domain, error: domainError, mutate: mutateDomain } = useExpertiseDomain(domainId);
-  const { data, error, isLoading, mutate } = useExpertiseLesson(lessonId);
+  const {
+    data: domain,
+    error: domainError,
+    revalidate: revalidateDomain,
+  } = useExpertiseDomain(domainId);
+  const { data, error, isLoading, notFound, revalidate } = useExpertiseLesson(lessonId);
   const domainPath =
     activeAgentId && domainId
       ? urlJoin('/agent', activeAgentId, 'self-evolving', domainId)
@@ -104,10 +106,10 @@ const LessonDetail = memo(() => {
             empty={<Empty title={t('rules.detail.notFound')} />}
             error={error}
             errorVariant={'page'}
-            isEmpty={!error && !isLoading && !data}
+            isEmpty={notFound && !data}
             isLoading={isLoading}
             loading={<Loading debugId={'SelfLearningLesson'} />}
-            onRetry={() => mutate()}
+            onRetry={() => void revalidate()}
           >
             {data && (
               <Flexbox gap={20} paddingBlock={'14px 64px'}>
@@ -127,10 +129,10 @@ const LessonDetail = memo(() => {
                     </Text>
                     {data.lesson.layer && <Tag>{data.lesson.layer}</Tag>}
                   </Flexbox>
-                  {domainError && (
+                  {!!domainError && (
                     <Text fontSize={12.5} type={'danger'}>
                       {t('rules.detail.domainUnavailable')} ·{' '}
-                      <Text as={'button'} type={'info'} onClick={() => void mutateDomain()}>
+                      <Text as={'button'} type={'info'} onClick={() => void revalidateDomain()}>
                         {t('rules.detail.retry')}
                       </Text>
                     </Text>

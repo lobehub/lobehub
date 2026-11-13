@@ -5,16 +5,27 @@ import { runWithIpcContext } from '@/utils/ipc';
 
 import DevtoolsCtr from '../DevtoolsCtr';
 
-const { getAppMetricsMock, getGPUFeatureStatusMock, getGPUInfoMock, ipcMainHandleMock } =
-  vi.hoisted(() => ({
-    getAppMetricsMock: vi.fn(),
-    getGPUFeatureStatusMock: vi.fn(),
-    getGPUInfoMock: vi.fn(),
-    ipcMainHandleMock: vi.fn(),
-  }));
+const {
+  fromWebContentsMock,
+  getAllWebContentsMock,
+  getAppMetricsMock,
+  getGPUFeatureStatusMock,
+  getGPUInfoMock,
+  ipcMainHandleMock,
+} = vi.hoisted(() => ({
+  fromWebContentsMock: vi.fn(),
+  getAllWebContentsMock: vi.fn((): unknown[] => []),
+  getAppMetricsMock: vi.fn(),
+  getGPUFeatureStatusMock: vi.fn(),
+  getGPUInfoMock: vi.fn(),
+  ipcMainHandleMock: vi.fn(),
+}));
+
+vi.mock('@/utils/appMetrics', () => ({ getSharedAppMetrics: () => getAppMetricsMock() }));
 
 vi.mock('electron', () => ({
-  BrowserWindow: {},
+  BrowserWindow: { fromWebContents: fromWebContentsMock },
+  webContents: { getAllWebContents: getAllWebContentsMock },
   app: {
     getAppMetrics: getAppMetricsMock,
     getGPUFeatureStatus: getGPUFeatureStatusMock,
@@ -79,10 +90,25 @@ describe('DevtoolsCtr', () => {
             name: null,
             pid: undefined,
             type: 'Browser',
+            windowTitle: null,
             workingSetMB: 100 / 1024,
           },
-          { cpuPercent: 2.25, name: null, pid: undefined, type: 'Tab', workingSetMB: 200 / 1024 },
-          { cpuPercent: 0, name: null, pid: undefined, type: 'Utility', workingSetMB: 300 / 1024 },
+          {
+            cpuPercent: 2.25,
+            name: null,
+            pid: undefined,
+            type: 'Tab',
+            windowTitle: null,
+            workingSetMB: 200 / 1024,
+          },
+          {
+            cpuPercent: 0,
+            name: null,
+            pid: undefined,
+            type: 'Utility',
+            windowTitle: null,
+            workingSetMB: 300 / 1024,
+          },
         ],
         rendererResidentMB: null,
       });
@@ -109,8 +135,22 @@ describe('DevtoolsCtr', () => {
         cpuPercent: 4,
         gpu: { cpuPercent: 2.5, memoryMB: 64 },
         processes: [
-          { cpuPercent: 1.5, name: null, pid: 1, type: 'Browser', workingSetMB: 1 },
-          { cpuPercent: 2.5, name: 'GPU Process', pid: 2, type: 'GPU', workingSetMB: 64 },
+          {
+            cpuPercent: 1.5,
+            name: null,
+            pid: 1,
+            type: 'Browser',
+            windowTitle: null,
+            workingSetMB: 1,
+          },
+          {
+            cpuPercent: 2.5,
+            name: 'GPU Process',
+            pid: 2,
+            type: 'GPU',
+            windowTitle: null,
+            workingSetMB: 64,
+          },
         ],
         rendererResidentMB: null,
       });
@@ -152,6 +192,35 @@ describe('DevtoolsCtr', () => {
           devtoolsCtr.getAppProcessMetrics(),
         ),
       ).resolves.toMatchObject({ cpuPercent: 3, gpu: null, rendererResidentMB: 8 });
+    });
+  });
+
+  describe('getAppProcessMetrics window titles', () => {
+    it('labels each renderer with the title of the window it hosts', async () => {
+      getAppMetricsMock.mockReturnValue([
+        { cpu: { percentCPUUsage: 0 }, memory: { workingSetSize: 1024 }, pid: 42, type: 'Tab' },
+        { cpu: { percentCPUUsage: 0 }, memory: { workingSetSize: 1024 }, pid: 43, type: 'Tab' },
+      ]);
+      getAllWebContentsMock.mockReturnValue([
+        { getOSProcessId: () => 42, title: 'LobeHub' },
+        { getOSProcessId: () => 43, title: undefined },
+      ]);
+      fromWebContentsMock.mockImplementation((contents: { title?: string }) =>
+        contents.title ? { getTitle: () => contents.title } : null,
+      );
+
+      const { processes } = await devtoolsCtr.getAppProcessMetrics();
+
+      expect(processes.map((row) => row.windowTitle)).toEqual(['LobeHub', null]);
+    });
+  });
+
+  describe('openProcessExplorer', () => {
+    it('shows the process explorer window', async () => {
+      await devtoolsCtr.openProcessExplorer();
+
+      expect(mockRetrieveByIdentifier).toHaveBeenCalledWith('processExplorer');
+      expect(mockShow).toHaveBeenCalled();
     });
   });
 

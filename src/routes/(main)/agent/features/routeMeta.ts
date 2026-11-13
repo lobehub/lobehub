@@ -1,16 +1,29 @@
 import {
   ChartColumnBigIcon,
+  CpuIcon,
   FileUserIcon,
   GraduationCapIcon,
+  LibraryBigIcon,
+  MailIcon,
   MessageSquare,
   MessagesSquareIcon,
+  MonitorSmartphoneIcon,
   RadioTowerIcon,
+  ScrollTextIcon,
   Share2Icon,
+  SparklesIcon,
   UsersIcon,
+  WrenchIcon,
 } from 'lucide-react';
 import { lazy } from 'react';
 
+import {
+  AgentChannelDetailSkeleton,
+  AgentChannelSkeleton,
+} from '@/components/Skeleton/AgentChannel';
 import AgentShareSkeleton from '@/components/Skeleton/AgentShare';
+import AgentStatisticsSkeleton from '@/components/Skeleton/AgentStatistics';
+import AgentConversationLayoutSkeleton from '@/components/Skeleton/Conversation/AgentLayout';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ProfileSkeleton from '@/components/Skeleton/Profile';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
@@ -21,6 +34,36 @@ const AgentDynamicMeta = lazy(() => import('@/features/RouteMeta/AgentDynamicMet
 const TopicsDynamicMeta = lazy(() =>
   import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
     default: module.TopicsDynamicMeta,
+  })),
+);
+const EngineDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.EngineDynamicMeta,
+  })),
+);
+const InstructionDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.InstructionDynamicMeta,
+  })),
+);
+const KnowledgeDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.KnowledgeDynamicMeta,
+  })),
+);
+const SkillsDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.SkillsDynamicMeta,
+  })),
+);
+const EnvironmentDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.EnvironmentDynamicMeta,
+  })),
+);
+const ToolsDynamicMeta = lazy(() =>
+  import('@/features/RouteMeta/AgentDynamicMeta').then((module) => ({
+    default: module.ToolsDynamicMeta,
   })),
 );
 const ProfileDynamicMeta = lazy(() =>
@@ -61,6 +104,12 @@ export const agentRouteMeta = routeMeta({
   titleKey: 'navigation.chat',
 });
 
+// Desktop mounts the working sidebar beside the conversation; mobile does not.
+export const agentChatDesktopRouteMeta = routeMeta({
+  ...agentRouteMeta,
+  Skeleton: AgentConversationLayoutSkeleton,
+});
+
 export const topicsRouteMeta = routeMeta({
   DynamicMeta: TopicsDynamicMeta,
   icon: MessagesSquareIcon,
@@ -75,17 +124,71 @@ export const agentProfileRouteMeta = routeMeta({
   titleKey: 'navigation.profile',
 });
 
+export const agentInstructionRouteMeta = routeMeta({
+  DynamicMeta: InstructionDynamicMeta,
+  icon: ScrollTextIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.instruction',
+});
+
+export const agentKnowledgeRouteMeta = routeMeta({
+  DynamicMeta: KnowledgeDynamicMeta,
+  icon: LibraryBigIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.knowledge',
+});
+
+export const agentSkillsRouteMeta = routeMeta({
+  DynamicMeta: SkillsDynamicMeta,
+  icon: SparklesIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.skills',
+});
+
+export const agentEngineRouteMeta = routeMeta({
+  DynamicMeta: EngineDynamicMeta,
+  icon: CpuIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.engine',
+});
+
+export const agentEnvironmentRouteMeta = routeMeta({
+  DynamicMeta: EnvironmentDynamicMeta,
+  icon: MonitorSmartphoneIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.environment',
+});
+
+export const agentToolsRouteMeta = routeMeta({
+  DynamicMeta: ToolsDynamicMeta,
+  icon: WrenchIcon,
+  Skeleton: ProfileSkeleton,
+  titleKey: 'navigation.tools',
+});
+
+export const agentMailRouteMeta = routeMeta({
+  icon: MailIcon,
+  Skeleton: createSurfaceSkeleton('list'),
+  titleKey: 'navigation.mail',
+});
+
 export const agentChannelRouteMeta = routeMeta({
   DynamicMeta: ChannelDynamicMeta,
   icon: RadioTowerIcon,
-  Skeleton: createSurfaceSkeleton('grid'),
+  Skeleton: AgentChannelSkeleton,
   titleKey: 'navigation.channels',
+});
+
+// A platform detail is a credential form without the tab switcher, not the card grid.
+export const agentChannelDetailRouteMeta = routeMeta({
+  ...agentChannelRouteMeta,
+  Skeleton: AgentChannelDetailSkeleton,
 });
 
 export const agentStatisticsRouteMeta = routeMeta({
   DynamicMeta: StatisticsDynamicMeta,
   icon: ChartColumnBigIcon,
-  Skeleton: createSurfaceSkeleton('grid'),
+  Skeleton: AgentStatisticsSkeleton,
   titleKey: 'navigation.stats',
 });
 

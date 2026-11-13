@@ -1,5 +1,5 @@
 import { RadarChart } from '@lobehub/charts';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import type { ModelRating, ModelRatingSource } from 'model-bank';
 import type { FC } from 'react';
 import { memo } from 'react';

@@ -1,29 +1,13 @@
 'use client';
 
 import { type PopoverProps } from '@lobehub/ui';
-import { Flexbox, Popover } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Flexbox, Popover, Spin } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { type ReactNode } from 'react';
 import { memo, Suspense } from 'react';
 
 import DebugNode from '@/components/DebugNode';
-import UpdateLoading from '@/components/Loading/UpdateLoading';
 import { useIsMobile } from '@/hooks/useIsMobile';
-
-const prefixCls = 'ant';
-
-const styles = createStaticStyles(({ css }) => ({
-  popoverContent: css`
-    .${prefixCls}-form {
-      .${prefixCls}-form-item:first-child {
-        padding-block: 0 4px;
-      }
-      .${prefixCls}-form-item:last-child {
-        padding-block: 4px 0;
-      }
-    }
-  `,
-}));
 
 export interface ActionPopoverProps extends Omit<PopoverProps, 'title' | 'content' | 'children'> {
   children?: ReactNode;
@@ -57,9 +41,7 @@ const ActionPopover = memo<ActionPopoverProps>(
     const resolvedClassNames =
       typeof customClassNames === 'function' ? customClassNames : customClassNames;
     const contentClassName =
-      typeof resolvedClassNames === 'object' && resolvedClassNames?.content
-        ? cx(styles.popoverContent, resolvedClassNames.content)
-        : styles.popoverContent;
+      typeof resolvedClassNames === 'object' ? resolvedClassNames?.content : undefined;
 
     // Properly handle styles (can be object or function)
     const resolvedStyles = typeof customStyles === 'function' ? customStyles : customStyles;
@@ -74,7 +56,7 @@ const ActionPopover = memo<ActionPopoverProps>(
             <Flexbox horizontal gap={8} justify={'space-between'} style={{ marginBottom: 16 }}>
               {title}
               {extra}
-              {loading && <UpdateLoading style={{ color: cssVar.colorTextSecondary }} />}
+              {loading && <Spin size="small" style={{ color: cssVar.colorTextSecondary }} />}
             </Flexbox>
           )}
           {content}

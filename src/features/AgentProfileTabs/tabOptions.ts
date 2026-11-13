@@ -1,24 +1,49 @@
 import urlJoin from 'url-join';
 
-export type AgentProfileTab = 'channel' | 'profile' | 'share' | 'statistics';
+export type AgentProfileTab =
+  | 'channel'
+  | 'engine'
+  | 'environment'
+  | 'instruction'
+  | 'knowledge'
+  | 'mail'
+  | 'profile'
+  | 'self-evolving'
+  | 'share'
+  | 'skills'
+  | 'statistics'
+  | 'tools';
 
 export interface AgentProfileTabOption {
   label: string;
   value: AgentProfileTab;
 }
 
-/**
- * Message channels exist for cloud agents and for the two CLI providers whose
- * runtime can host them — a device-only heterogeneous agent has nothing to
- * connect, so the segment must not be offered.
- */
-export const supportsMessageChannels = (heterogeneousProviderType?: string) =>
-  !heterogeneousProviderType ||
-  heterogeneousProviderType === 'claude-code' ||
-  heterogeneousProviderType === 'codex';
+export type AgentProfileTabGroupKey = 'general' | 'identity' | 'profile' | 'setup' | 'shape';
+
+export interface AgentProfileTabGroup {
+  key: AgentProfileTabGroupKey;
+  options: AgentProfileTabOption[];
+}
 
 export const buildAgentProfileTabPath = (agentId: string, tab: AgentProfileTab) =>
   urlJoin('/agent', agentId, tab);
+
+const AGENT_PROFILE_ROUTE =
+  /^(?:\/[^/]+)?\/agent\/[^/]+\/(profile|instruction|knowledge|engine|environment|tools|skills|mail(?:\/[^/]+)?|channel(?:\/[^/]+)?|self-evolving(?:\/[^/]+)*|statistics|share)\/?$/;
+
+/**
+ * The profile-group tab a URL belongs to, if any. Anchored on Agent subroutes,
+ * not substrings: `/channels/:id` and workspace slugs such as `channel-team`
+ * are not part of the group.
+ */
+export const getAgentProfileTab = (pathname: string): AgentProfileTab | undefined => {
+  const segment = AGENT_PROFILE_ROUTE.exec(
+    pathname.replace(/^\/_dangerous_local_dev_proxy(?=\/)/, ''),
+  )?.[1];
+
+  return segment?.split('/')[0] as AgentProfileTab | undefined;
+};
 
 /**
  * Which segments the profile-group switcher shows.
@@ -35,27 +60,72 @@ export const buildAgentProfileTabPath = (agentId: string, tab: AgentProfileTab) 
 export const buildAgentProfileTabOptions = ({
   active,
   canConfigure,
-  channelsSupported,
   labels,
+  mailSupported,
+  selfLearningSupported,
   shareSupported,
+  heterogeneous,
 }: {
   active: AgentProfileTab;
   canConfigure: boolean;
-  channelsSupported: boolean;
   labels: Record<AgentProfileTab, string>;
+  mailSupported: boolean;
+  selfLearningSupported: boolean;
   shareSupported: boolean;
+  /**
+   * Heterogeneous agents (Claude Code, Codex, …) bring their own system prompt, tools and skills,
+   * so the instruction, tools and skills pages have nothing to configure for them.
+   */
+  heterogeneous: boolean;
 }): AgentProfileTabOption[] => {
   const showProfile = canConfigure || active === 'profile';
-  const showChannel = (canConfigure && channelsSupported) || active === 'channel';
+  // Engine, Instruction, Environment, Tools and Skills edit the same agent config as Profile, so
+  // they follow its gate.
+  const showEngine = canConfigure || active === 'engine';
+  const showKnowledge = (canConfigure && !heterogeneous) || active === 'knowledge';
+  const showInstruction = (canConfigure && !heterogeneous) || active === 'instruction';
+  // Where a heterogeneous agent runs and what it needs there; a harness agent has no such page.
+  const showEnvironment = (canConfigure && heterogeneous) || active === 'environment';
+  const showTools = (canConfigure && !heterogeneous) || active === 'tools';
+  const showSkills = (canConfigure && !heterogeneous) || active === 'skills';
+  const showMail = (canConfigure && mailSupported) || active === 'mail';
+  // Channels can dispatch to a bound device; cloud sandbox support is not required.
+  const showChannel = canConfigure || active === 'channel';
   // Sharing hands visitors real execution on the owner's account, so the
   // segment follows the same configure gate as Profile / Channels on top of the
   // capability gate (personal, non-builtin agents on deployments that allow it).
   const showShare = (canConfigure && shareSupported) || active === 'share';
+  const showSelfLearning = selfLearningSupported || active === 'self-evolving';
 
   return [
     showProfile ? { label: labels.profile, value: 'profile' as const } : null,
+    showInstruction ? { label: labels.instruction, value: 'instruction' as const } : null,
+    showKnowledge ? { label: labels.knowledge, value: 'knowledge' as const } : null,
+    showEngine ? { label: labels.engine, value: 'engine' as const } : null,
+    showEnvironment ? { label: labels.environment, value: 'environment' as const } : null,
+    showTools ? { label: labels.tools, value: 'tools' as const } : null,
+    showSkills ? { label: labels.skills, value: 'skills' as const } : null,
+    showMail ? { label: labels.mail, value: 'mail' as const } : null,
     showChannel ? { label: labels.channel, value: 'channel' as const } : null,
+    showSelfLearning ? { label: labels['self-evolving'], value: 'self-evolving' as const } : null,
     { label: labels.statistics, value: 'statistics' as const },
     showShare ? { label: labels.share, value: 'share' as const } : null,
   ].filter((option) => !!option);
 };
+
+const AGENT_PROFILE_TAB_GROUPS: { key: AgentProfileTabGroupKey; tabs: AgentProfileTab[] }[] = [
+  { key: 'profile', tabs: ['profile'] },
+  { key: 'shape', tabs: ['instruction', 'knowledge'] },
+  { key: 'setup', tabs: ['engine', 'environment', 'tools', 'skills'] },
+  { key: 'identity', tabs: ['mail', 'channel'] },
+  { key: 'general', tabs: ['self-evolving', 'statistics', 'share'] },
+];
+
+/** Sidebar sections for the visible tabs; a section with nothing to open is left out. */
+export const groupAgentProfileTabOptions = (
+  options: AgentProfileTabOption[],
+): AgentProfileTabGroup[] =>
+  AGENT_PROFILE_TAB_GROUPS.map(({ key, tabs }) => ({
+    key,
+    options: tabs.flatMap((tab) => options.filter((option) => option.value === tab)),
+  })).filter((group) => group.options.length > 0);

@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Icon } from '@lobehub/ui';
 import { LinkIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,15 +36,14 @@ const TelegramDetail = memo<TelegramDetailProps>(({ appId, botUsername, name, on
 
   const data = useMessengerData('telegram');
   const { handleSetActive, handleUnlink } = useLinkActions({
-    installationsMutate: data.installationsMutate,
-    linksMutate: data.linksMutate,
     name,
     platform: 'telegram',
   });
 
   if (data.error && data.isInitialLoading)
     return <AsyncError error={data.error} variant={'block'} onRetry={data.mutate} />;
-  if (data.isInitialLoading) return <IntegrationDetailSkeleton withNestedContent />;
+  if (data.isInitialLoading)
+    return <IntegrationDetailSkeleton withNestedContent platform={'telegram'} />;
 
   const { links } = data;
   const hasLinks = links.length > 0;

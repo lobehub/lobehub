@@ -17,13 +17,13 @@ const getVercelUrl = () => {
   return `https://${process.env.VERCEL_BRANCH_URL}`;
 };
 
-const APP_URL = process.env.APP_URL
-  ? process.env.APP_URL
-  : isInVercel
+const APP_URL =
+  process.env.APP_URL ||
+  (isInVercel
     ? getVercelUrl()
     : process.env.NODE_ENV === 'development'
       ? `http://localhost:${process.env.PORT || 3010}`
-      : `http://localhost:${process.env.PORT || 3210}`;
+      : `http://localhost:${process.env.PORT || 3210}`);
 
 // INTERNAL_APP_URL is used for server-to-server calls to bypass CDN/proxy
 // Falls back to APP_URL if not set
@@ -50,6 +50,8 @@ export const getAppConfig = () => {
 
       APP_URL: z.string(),
       INTERNAL_APP_URL: z.string().optional(),
+      VIDEO_GENERATION_PREFER_WEBHOOK: z.boolean().optional(),
+      WEBHOOK_PROXY_URL: z.string().url().optional(),
       VERCEL_EDGE_CONFIG: z.string().optional(),
       MIDDLEWARE_REWRITE_THROUGH_LOCAL: z.boolean().optional(),
 
@@ -61,6 +63,7 @@ export const getAppConfig = () => {
       SSRF_ALLOW_IP_ADDRESS_LIST: z.string().optional(),
 
       MARKET_BASE_URL: z.string().optional(),
+      MARKET_SKILL_INSTALL_BASE_URL: z.string().url().optional(),
       /**
        * Trusted Client Secret for Market API authentication
        * 64-character hex string (32 bytes) shared with Market server
@@ -78,11 +81,30 @@ export const getAppConfig = () => {
       AGENT_GATEWAY_SERVICE_TOKEN: z.string().optional(),
       ENABLE_AGENT_GATEWAY: z.boolean().optional(),
       /**
+       * Realtime page collaboration through the gateway's document rooms
+       * (LobeHub Cloud only; the self-hosted gateway has no rooms). Off: pages
+       * save over HTTP and the page agent writes back to the stored row.
+       */
+      ENABLE_PAGE_COLLAB: z.boolean().optional(),
+      ENABLE_WORKSPACE_PAGE_COLLAB: z.boolean().optional(),
+      /**
        * Server-to-server Agent Gateway endpoint, e.g. a Docker Compose service
        * name the browser cannot resolve. Falls back to AGENT_GATEWAY_URL.
        */
       AGENT_GATEWAY_INTERNAL_URL: z.string().url().optional(),
       AGENT_GATEWAY_URL: z.string().url().optional(),
+      /**
+       * Which Agent Gateway wire protocol this deployment's gateway can serve.
+       *
+       * `2` means it exposes the per-user multiplexed socket (`GET /v2/ws`);
+       * `1` means only the per-operation socket (`GET /ws`). Unset is resolved
+       * from the build: business builds ship against the v2 gateway, every
+       * other deployment gets 1, which is what `lobehub/lobehub-gateway`
+       * serves. Set it explicitly when that guess is wrong — a client that
+       * dials `/v2/ws` on a gateway without it has no stream until it has
+       * burned its fallback budget on 404s.
+       */
+      AGENT_GATEWAY_PROTOCOL: z.coerce.number().int().min(1).max(2).optional(),
       /**
        * Enable Queue-based Agent Runtime
        * When true, use QStash for async agent execution (production)
@@ -113,6 +135,8 @@ export const getAppConfig = () => {
 
       APP_URL,
       INTERNAL_APP_URL,
+      VIDEO_GENERATION_PREFER_WEBHOOK: process.env.VIDEO_GENERATION_PREFER_WEBHOOK === '1',
+      WEBHOOK_PROXY_URL: process.env.WEBHOOK_PROXY_URL,
       MIDDLEWARE_REWRITE_THROUGH_LOCAL: process.env.MIDDLEWARE_REWRITE_THROUGH_LOCAL === '1',
 
       CUSTOM_FONT_FAMILY: process.env.CUSTOM_FONT_FAMILY,
@@ -122,13 +146,17 @@ export const getAppConfig = () => {
       SSRF_ALLOW_PRIVATE_IP_ADDRESS: process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS === '1',
       SSRF_ALLOW_IP_ADDRESS_LIST: process.env.SSRF_ALLOW_IP_ADDRESS_LIST,
       MARKET_BASE_URL: process.env.MARKET_BASE_URL,
+      MARKET_SKILL_INSTALL_BASE_URL: process.env.MARKET_SKILL_INSTALL_BASE_URL || undefined,
 
       MARKET_TRUSTED_CLIENT_SECRET: process.env.MARKET_TRUSTED_CLIENT_SECRET,
       MARKET_TRUSTED_CLIENT_ID: process.env.MARKET_TRUSTED_CLIENT_ID,
 
       AGENT_GATEWAY_SERVICE_TOKEN: process.env.AGENT_GATEWAY_SERVICE_TOKEN,
       ENABLE_AGENT_GATEWAY: process.env.ENABLE_AGENT_GATEWAY === '1',
+      ENABLE_PAGE_COLLAB: process.env.ENABLE_PAGE_COLLAB === '1',
+      ENABLE_WORKSPACE_PAGE_COLLAB: process.env.ENABLE_WORKSPACE_PAGE_COLLAB === '1',
       AGENT_GATEWAY_URL: process.env.AGENT_GATEWAY_URL,
+      AGENT_GATEWAY_PROTOCOL: process.env.AGENT_GATEWAY_PROTOCOL || undefined,
       AGENT_GATEWAY_INTERNAL_URL: process.env.AGENT_GATEWAY_INTERNAL_URL || undefined,
       enableQueueAgentRuntime: process.env.AGENT_RUNTIME_MODE === 'queue',
       TELEMETRY_DISABLED: process.env.TELEMETRY_DISABLED === '1',

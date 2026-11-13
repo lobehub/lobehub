@@ -46,7 +46,7 @@ Known per-vendor footguns:
 
 ## family/generation derivation
 
-Rule-based, no research needed: `scripts/derive-family.ts` holds the per-family regex rules. Traps already encoded there — keep them when extending:
+Rule-based, no research needed: `.agents/skills/model-bank-metadata/scripts/derive-family.ts` holds the per-family regex rules. Traps already encoded there — keep them when extending:
 
 - Date suffixes are not versions: `claude-sonnet-4-20250514` is generation `claude-4`, not `claude-4.2`.
 - Size suffixes are not versions: `llama-3-8b` → `llama-3` (not `llama-3.8`); `gemma-7b-it` is **gemma-1** (not gemma-7).
@@ -59,7 +59,7 @@ Rule-based, no research needed: `scripts/derive-family.ts` holds the per-family 
 1. **Extract ids**: `bun .agents/skills/model-bank-metadata/scripts/extract-model-ids.ts` → unique normalized chat-model ids (normalization = last path segment, lowercased). Non-chat types (image/video/embedding/tts) have no knowledge cutoff — skip them.
 2. **Research (multi-agent)**: chunk ids by family (≤50 per chunk) and fan out one research agent per chunk (Workflow tool), each returning `{id, cutoff, source}` with the sourcing rules above baked into the prompt, **plus** one adversarial verify agent per chunk that re-fetches cited sources and refutes unsupported claims. The verify pass is load-bearing: it caught the Cohere aggregator copy-paste and the AWS launch-date conflation.
 3. **Policy filter**: before applying, drop entries whose only source is a rejected category (check the returned `sources` map — e.g. drop everything sourced to aws.amazon.com).
-4. **Apply**: `bun scripts/apply-cutoffs.ts <map.json>` and `bun scripts/apply-family.ts <map.json>` (run from repo root). Both are idempotent codemods keyed on normalized id — aggregator providers get the same values automatically; entries that already have the field are skipped. They rely on the uniform prettier formatting of the data files (entries start `  {` / end `  },`, fields at 4-space indent).
+4. **Apply**: `bun .agents/skills/model-bank-metadata/scripts/apply-cutoffs.ts <map.json>` and `bun .agents/skills/model-bank-metadata/scripts/apply-family.ts <map.json>` (run from repo root). Both are idempotent codemods keyed on normalized id — aggregator providers get the same values automatically; entries that already have the field are skipped. They rely on the uniform prettier formatting of the data files (entries start `  {` / end `  },`, fields at 4-space indent).
 5. **Verify**: `cd packages/model-bank && bunx vitest run src/aiModels/__tests__/index.test.ts && bunx tsc --noEmit`.
 
 ## Maintenance rules

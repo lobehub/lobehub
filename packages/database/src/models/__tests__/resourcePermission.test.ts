@@ -121,6 +121,14 @@ describe('ResourcePermissionModel', () => {
 describe('ResourcePermissionModel collaborators', () => {
   const kbId = 'rp-test-kb';
 
+  const memberAEditGrant = (): Parameters<ResourcePermissionModel['upsertCollaborators']>[0] => ({
+    accessLevel: 'edit',
+    createdBy: ownerId,
+    resourceId: kbId,
+    resourceType: 'knowledgeBase',
+    userIds: [memberA],
+  });
+
   it('grants and lists collaborators in a stable order', async () => {
     await model.upsertCollaborators({
       accessLevel: 'edit',
@@ -139,13 +147,7 @@ describe('ResourcePermissionModel collaborators', () => {
   });
 
   it('a collaborator grant never leaks into the workspace-wide level', async () => {
-    await model.upsertCollaborators({
-      accessLevel: 'edit',
-      createdBy: ownerId,
-      resourceId: kbId,
-      resourceType: 'knowledgeBase',
-      userIds: [memberA],
-    });
+    await model.upsertCollaborators(memberAEditGrant());
 
     // The workspace-wide subject has no explicit row, so the default applies —
     // the per-member row must not satisfy the workspace-wide read.
@@ -191,13 +193,7 @@ describe('ResourcePermissionModel collaborators', () => {
   });
 
   it('getCollaboratorResourceIds matches the exact level and workspace scope', async () => {
-    await model.upsertCollaborators({
-      accessLevel: 'edit',
-      createdBy: ownerId,
-      resourceId: kbId,
-      resourceType: 'knowledgeBase',
-      userIds: [memberA],
-    });
+    await model.upsertCollaborators(memberAEditGrant());
     await model.upsertCollaborators({
       accessLevel: 'use',
       createdBy: ownerId,
@@ -261,17 +257,29 @@ describe('ResourcePermissionModel collaborators', () => {
 
   it('removeAll clears the workspace-wide row and every grant together', async () => {
     await model.setAccessLevel('knowledgeBase', kbId, 'use', ownerId);
-    await model.upsertCollaborators({
-      accessLevel: 'edit',
-      createdBy: ownerId,
-      resourceId: kbId,
-      resourceType: 'knowledgeBase',
-      userIds: [memberA],
-    });
+    await model.upsertCollaborators(memberAEditGrant());
 
     await model.removeAll('knowledgeBase', kbId);
 
     expect(await model.getAccessLevel('knowledgeBase', kbId)).toBeNull();
     expect(await model.listCollaborators('knowledgeBase', kbId)).toEqual([]);
+  });
+
+  it('upsert and remove are no-ops on an empty member list', async () => {
+    // An empty batch must not emit an `in ()` / `values ()` statement — Drizzle
+    // throws on those — and must not disturb the rows already stored.
+    await model.upsertCollaborators(memberAEditGrant());
+
+    await model.upsertCollaborators({
+      accessLevel: 'edit',
+      createdBy: ownerId,
+      resourceId: kbId,
+      resourceType: 'knowledgeBase',
+      userIds: [],
+    });
+    await model.removeCollaborators('knowledgeBase', kbId, []);
+
+    const rows = await model.listCollaborators('knowledgeBase', kbId);
+    expect(rows.map((r) => r.userId)).toEqual([memberA]);
   });
 });

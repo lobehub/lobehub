@@ -4,7 +4,7 @@ import { getGoalTaskProgress } from './goalTaskProgress';
 
 /**
  * Live Goal status for one `goals` row: the graph snapshot → phase and how much
- * of its Tasks are closed. The card only holds the goal id, so everything else is
+ * of its Tasks is closed. The card only holds the goal id, so everything else is
  * fetched here.
  */
 export const useGoalTaskStatus = ({
@@ -32,6 +32,7 @@ export const useGoalTaskStatus = ({
       ).length,
       taskTotal: taskNodes.length,
     }),
+    snapshot,
     startedAt: snapshot?.goal.startedAt ?? undefined,
     title: snapshot?.goal.title,
   };

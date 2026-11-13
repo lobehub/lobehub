@@ -6,7 +6,8 @@ import { memo, useMemo } from 'react';
 
 import { ActionTagNode } from '@/features/ChatInput/InputEditor/ActionTag/ActionTagNode';
 import { LocalFileTagNode } from '@/features/ChatInput/InputEditor/LocalFileTag';
-import { mentionFilledClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
+import { mentionPlainClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
+import { ReferDocumentNode } from '@/features/ChatInput/InputEditor/ReferDocument/ReferDocumentNode';
 import { ReferTopicNode } from '@/features/ChatInput/InputEditor/ReferTopic/ReferTopicNode';
 
 import { downloadPreviewImage } from '../../components/downloadPreviewImage';
@@ -19,7 +20,7 @@ interface RichTextMessageProps {
 
 const LINE_HEIGHT = 1.6;
 const style: CSSProperties = { '--common-line-height': LINE_HEIGHT } as CSSProperties;
-const EXTRA_NODES = [ActionTagNode, ReferTopicNode, LocalFileTagNode];
+const EXTRA_NODES = [ActionTagNode, ReferTopicNode, ReferDocumentNode, LocalFileTagNode];
 const PREVIEW_OPTIONS = { onDownload: downloadPreviewImage };
 
 const RichTextMessage = memo<RichTextMessageProps>(({ editorState, variant = 'chat' }) => {
@@ -34,7 +35,7 @@ const RichTextMessage = memo<RichTextMessageProps>(({ editorState, variant = 'ch
   return (
     <PreviewGroup preview={PREVIEW_OPTIONS}>
       <LexicalRenderer
-        className={mentionFilledClassName}
+        className={mentionPlainClassName}
         extraNodes={EXTRA_NODES}
         overrides={richTextImageRenderers}
         style={style}

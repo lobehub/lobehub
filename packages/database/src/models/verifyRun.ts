@@ -25,7 +25,12 @@ import { VerifyCriterionModel } from './verifyCriterion';
  * / verifyStatus) so the router response and every UI / CLI consumer stay
  * unchanged while the storage moves from agent_operations to verify_runs.
  */
+/** What auto-repair decided for a failed round (`verify_runs.metadata.autoRepair`). */
+export type VerifyAutoRepairOutcome = 'declined' | 'spawned';
+
 export interface VerifyRunState {
+  /** `declined` makes a failed round with `auto_repair` checks final. */
+  verifyAutoRepair: VerifyAutoRepairOutcome | null;
   verifyPlan: VerifyCheckItem[] | null;
   verifyPlanConfirmedAt: Date | null;
   /** The session id — exposed so a builder holding only its operationId can
@@ -54,6 +59,8 @@ const decodeCursor = (cursor?: string): { createdAt: Date; id: string } | null =
 const toState = (run: VerifyRunItem | null | undefined): VerifyRunState | null =>
   run
     ? {
+        verifyAutoRepair:
+          (run.metadata as { autoRepair?: VerifyAutoRepairOutcome } | null)?.autoRepair ?? null,
         verifyPlan: (run.plan ?? null) as VerifyCheckItem[] | null,
         verifyPlanConfirmedAt: run.planConfirmedAt ?? null,
         verifyRunId: run.id,
@@ -288,6 +295,25 @@ export class VerifyRunModel {
     );
   };
 
+  /**
+   * Every round of several acceptances at once, in round order — the batched
+   * form of `listByAcceptance`.
+   *
+   * Feeds a surface that summarises many acceptances on a poll: one statement
+   * regardless of how many it covers. A caller wanting each acceptance's
+   * standing counts it from the check union (`AcceptanceService`), so the
+   * summary and the list it expands to read the same rows.
+   */
+  listByAcceptances = async (acceptanceIds: string[]): Promise<VerifyRunItem[]> => {
+    const ids = [...new Set(acceptanceIds.filter(Boolean))];
+    if (ids.length === 0) return [];
+
+    return this.db.query.verifyRuns.findMany({
+      orderBy: [asc(verifyRuns.roundIndex)],
+      where: and(inArray(verifyRuns.acceptanceId, ids), this.ownership()),
+    });
+  };
+
   /** Every round chained onto an acceptance aggregate, in round order. */
   listByAcceptance = async (acceptanceId: string): Promise<VerifyRunItem[]> => {
     return this.db.query.verifyRuns.findMany({
@@ -324,6 +350,33 @@ export class VerifyRunModel {
 
     if (!run) throw new Error(`Verify run "${runId}" not found in the current workspace`);
     return run;
+  };
+
+  /**
+   * Take a round its run never delivered off the acceptance. Only a `planned`
+   * round with no judged result qualifies — evidence the builder submitted
+   * mid-run sits in `pending` rows and was never verified — so a round that
+   * has started judging keeps its place. The row stays, so a late finish of
+   * the same run can attach it again as a new round.
+   */
+  detachUndeliveredRound = async (runId: string): Promise<boolean> => {
+    const detached = await this.db
+      .update(verifyRuns)
+      .set({ acceptanceId: null, roundIndex: null })
+      .where(
+        and(
+          eq(verifyRuns.id, runId),
+          eq(verifyRuns.status, 'planned'),
+          isNotNull(verifyRuns.acceptanceId),
+          sql`not exists (select 1 from ${verifyCheckResults}
+            where ${verifyCheckResults.verifyRunId} = ${verifyRuns.id}
+              and ${verifyCheckResults.status} <> 'pending')`,
+          this.ownership(),
+        ),
+      )
+      .returning({ id: verifyRuns.id });
+
+    return detached.length > 0;
   };
 
   /**
@@ -364,13 +417,21 @@ export class VerifyRunModel {
           context: target.context ?? source.context,
           goal: target.goal ?? source.goal,
           metadata: { ...target.metadata, ...source.metadata },
-          operationId: target.operationId ?? source.operationId,
+          // The incoming run is the live work, and its operation is what the
+          // lifecycle keys on (`findByOperation`). Keeping a stale draft's
+          // operation instead would orphan the attempt that is actually running.
+          operationId: source.operationId ?? target.operationId,
           plan,
           planConfirmedAt: new Date(),
           scenario: target.scenario ?? source.scenario,
-          source: source.source ?? target.source,
-          // Ingested rounds carry no rollup status: the report settles them.
-          status: null,
+          source: source.source,
+          // The survivor takes over the source's identity, so it takes over its
+          // pipeline status too. An ingested round carries none and the report
+          // settles it, which is what nulls the draft's own `planned` here. A LIVE
+          // round folded mid-flight keeps its status instead: `claimEvidenceCollection`
+          // and `claimVerifying` only move a run that still has one, so clearing it
+          // would strand the run — and its Task — with nothing able to judge it.
+          status: source.status,
         })
         .where(eq(verifyRuns.id, targetRunId))
         .returning();
@@ -565,6 +626,26 @@ export class VerifyRunModel {
     return claimed.length > 0;
   };
 
+  /** Record the auto-repair decision without clobbering the rest of `metadata`. */
+  recordAutoRepair = async (runId: string, outcome: VerifyAutoRepairOutcome): Promise<void> => {
+    await this.db
+      .update(verifyRuns)
+      .set({
+        metadata: sql`coalesce(${verifyRuns.metadata}, '{}'::jsonb) || jsonb_build_object('autoRepair', ${outcome}::text)`,
+      })
+      .where(and(eq(verifyRuns.id, runId), this.ownership()));
+  };
+
+  /** Stamp the sweep's one re-drive of this round without clobbering the rest of `metadata`. */
+  recordVerifierRedrive = async (runId: string, at: Date): Promise<void> => {
+    await this.db
+      .update(verifyRuns)
+      .set({
+        metadata: sql`coalesce(${verifyRuns.metadata}, '{}'::jsonb) || jsonb_build_object('verifierRedrivenAt', ${at.toISOString()}::text)`,
+      })
+      .where(and(eq(verifyRuns.id, runId), this.ownership()));
+  };
+
   setMetadata = async (runId: string, metadata: Record<string, unknown>): Promise<void> => {
     await this.db
       .update(verifyRuns)
@@ -621,8 +702,11 @@ export class VerifyRunModel {
   };
 
   /**
-   * One page of runs stranded in `verifying` since before `olderThan`, across
-   * all owners — the sweep's input (see `sweepStuckVerifyRuns`).
+   * One page of runs stranded in `verifying`, or confirmed `planned` rounds
+   * whose operation ended without a delivery (a child that aborted, or a
+   * task's own run that errored or was abandoned while still on the
+   * acceptance), since before `olderThan`, across all owners — the sweep's
+   * input (see `sweepStuckVerifyRuns`).
    *
    * No per-user scope, like `TaskModel.findStuckTasks`: this backs a global
    * cron, and each row carries the owner the recovery is then performed as.
@@ -656,7 +740,25 @@ export class VerifyRunModel {
     const updatedAtMs = sql`date_trunc('milliseconds', ${verifyRuns.updatedAt})`;
 
     const conditions = [
-      eq(verifyRuns.status, 'verifying'),
+      or(
+        eq(verifyRuns.status, 'verifying'),
+        and(
+          eq(verifyRuns.status, 'planned'),
+          isNotNull(verifyRuns.planConfirmedAt),
+          sql`exists (select 1 from ${agentOperations}
+            where ${agentOperations.id} = ${verifyRuns.operationId}
+              and ${agentOperations.parentOperationId} is not null
+              and ${agentOperations.completionReason} in ('error', 'interrupted'))`,
+        ),
+        and(
+          eq(verifyRuns.status, 'planned'),
+          isNotNull(verifyRuns.acceptanceId),
+          sql`exists (select 1 from ${agentOperations}
+            where ${agentOperations.id} = ${verifyRuns.operationId}
+              and ${agentOperations.parentOperationId} is null
+              and ${agentOperations.status} in ('error', 'abandoned', 'interrupted'))`,
+        ),
+      )!,
       lt(verifyRuns.updatedAt, olderThan),
       isNotNull(verifyRuns.operationId),
     ];

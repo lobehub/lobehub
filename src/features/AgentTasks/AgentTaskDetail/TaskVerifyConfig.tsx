@@ -1,19 +1,24 @@
 'use client';
 
-import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
-import { Block, Flexbox, Icon, TextArea } from '@lobehub/ui';
+import { AgentRuntimeErrorType } from '@lobechat/types';
 import {
   ActionIcon,
+  Block,
   Button,
   confirmModal,
+  createStaticStyles,
+  cssVar,
   type DropdownItem,
   DropdownMenu,
+  Flexbox,
+  Icon,
   Select,
+  Spin,
   Tag,
   Text,
+  TextArea,
   toast,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import {
   ChevronRight,
   ChevronUp,
@@ -29,7 +34,6 @@ import {
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   CriterionList,
   CriterionRequiredChip,
@@ -40,8 +44,6 @@ import { useRubrics } from '@/features/Acceptance/hooks';
 import { usePermission } from '@/hooks/usePermission';
 import { useSingleton } from '@/hooks/useSingleton';
 import { type VerifyCriterionDraft, verifyService } from '@/services/verify';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
@@ -62,7 +64,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   row: css`
     cursor: pointer;
-    padding-block: 10px;
+    padding-block: 8px;
     padding-inline: 12px;
 
     & + & {
@@ -138,24 +140,6 @@ const TaskVerifyConfig = memo(() => {
   const taskInstruction = useTaskStore(taskDetailSelectors.activeTaskInstruction);
   const taskName = useTaskStore(taskDetailSelectors.activeTaskName);
   const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
-  const taskModel = useTaskStore(taskDetailSelectors.activeTaskModel);
-  const taskProvider = useTaskStore(taskDetailSelectors.activeTaskProvider);
-  const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
-
-  // Resolve model/provider the same way TaskModelConfig does: task override first,
-  // then the assignee agent's model, then the active agent for unassigned tasks.
-  const agentModel = useAgentStore((s) =>
-    assigneeAgentId
-      ? agentByIdSelectors.getAgentModelById(assigneeAgentId)(s)
-      : agentSelectors.currentAgentModel(s),
-  );
-  const agentProvider = useAgentStore((s) =>
-    assigneeAgentId
-      ? agentByIdSelectors.getAgentModelProviderById(assigneeAgentId)(s)
-      : agentSelectors.currentAgentModelProvider(s),
-  );
-  const model = taskModel || agentModel || '';
-  const provider = taskProvider || agentProvider || '';
   const taskAcceptanceGoal = resolveTaskAcceptanceGoal({
     description: taskDescription,
     instruction: taskInstruction,
@@ -163,7 +147,7 @@ const TaskVerifyConfig = memo(() => {
   });
   const savedCount = verify?.verifyCriteriaIds?.length ?? 0;
 
-  const { data: rubrics } = useRubrics();
+  const { data: rubrics, mutate: refreshRubrics } = useRubrics();
 
   // ---- local working state ----
   const [requirement, setRequirement] = useState(verify?.requirement ?? '');
@@ -362,7 +346,7 @@ const TaskVerifyConfig = memo(() => {
   // ---- actions ----
   const generateCriteria = useCallback(
     async (goal: string) => {
-      if (!goal || generating || !model || !provider) return;
+      if (!goal || generating) return;
       setExpanded(true);
       setRequirement(goal);
       setGenerating(true);
@@ -371,7 +355,6 @@ const TaskVerifyConfig = memo(() => {
           context: taskName?.trim() ? `Task: ${taskName.trim()}` : undefined,
           goal,
           maxCriteria: 8,
-          modelConfig: { model, provider },
         });
         if (generated.length === 0) throw new Error('No acceptance criteria were generated.');
         const items = generated.map((draft) => toDraftItem(draft));
@@ -380,21 +363,21 @@ const TaskVerifyConfig = memo(() => {
         console.error('[TaskVerifyConfig] generate failed:', error);
         toast.error(
           isInvalidProviderApiKeyError(error)
-            ? t('verifyConfig.generateInvalidProviderAPIKey', { model, provider })
+            ? t('verifyConfig.generateInvalidPlanModelKey')
             : t('verifyConfig.generateFailed'),
         );
       } finally {
         setGenerating(false);
       }
     },
-    [commit, generating, model, provider, t, taskName],
+    [commit, generating, t, taskName],
   );
 
   const handleGenerate = useCallback(async () => {
     const goal = requirement.trim();
-    if (!goal || generating || !model || !provider) return;
+    if (!goal || generating) return;
     await generateCriteria(goal);
-  }, [generateCriteria, generating, model, provider, requirement]);
+  }, [generateCriteria, generating, requirement]);
 
   const handleCollapsedClick = useCallback(() => {
     if (savedCount > 0 || requirement.trim()) {
@@ -500,11 +483,13 @@ const TaskVerifyConfig = memo(() => {
         rubric.id,
         templateCriterionIds.map((criterionId) => ({ criterionId })),
       );
+      // The template list is persisted: list the new template now, not after a reload.
+      void refreshRubrics();
       toast.success(t('verifyConfig.saveAsTemplateSuccess'));
     } catch (e) {
       console.error('[TaskVerifyConfig] save as template failed:', e);
     }
-  }, [drafts, verify?.verifyCriteriaIds, requirement, t]);
+  }, [drafts, verify?.verifyCriteriaIds, refreshRubrics, requirement, t]);
 
   const rubricOptions = useMemo(
     () => (rubrics ?? []).map((r) => ({ label: r.title, value: r.id })),
@@ -537,7 +522,7 @@ const TaskVerifyConfig = memo(() => {
         gap={8}
         paddingBlock={4}
         paddingInline={8}
-        style={{ width: 'fit-content' }}
+        style={{ marginInlineStart: -8, width: 'fit-content' }}
         variant={'borderless'}
         onClick={handleCollapsedClick}
       >
@@ -574,7 +559,7 @@ const TaskVerifyConfig = memo(() => {
     return (
       <Block className={styles.section} variant={'outlined'}>
         <Flexbox horizontal align={'center'} gap={12}>
-          <NeuralNetworkLoading size={20} />
+          <Spin size="middle" variant="network" />
           <Text className={styles.subtitle}>{t('verifyConfig.generating')}</Text>
         </Flexbox>
       </Block>

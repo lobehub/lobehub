@@ -6,12 +6,14 @@ import type { ContextFactProviders, ContextFactRequest } from '@lobechat/mecha';
 import {
   agentShareDocumentAccessScope,
   getActivePluginIds,
+  isLiveAgentAccount,
   ordinaryDocumentAccessScope,
 } from '@lobechat/types';
 
 import { loadModels } from '@/business/client/model-bank/loadModels';
 import { composioEnv } from '@/config/composio';
 import { AgentModel } from '@/database/models/agent';
+import { AgentAccountModel } from '@/database/models/agentAccount';
 import { AiModelModel } from '@/database/models/aiModel';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { FileModel } from '@/database/models/file';
@@ -27,8 +29,10 @@ import { loadConnectedComposioIds } from '@/server/modules/AgentRuntime/adapters
 import type { RuntimeExecutorContext } from '@/server/modules/AgentRuntime/context';
 import { buildPostProcessUrl, log } from '@/server/modules/AgentRuntime/executorHelpers';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { AgentInboxService } from '@/server/services/agentIdentity/inbox';
 import { MarketService } from '@/server/services/market';
 import { OnboardingService } from '@/server/services/onboarding';
+import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
 import { toAgentContextDocuments } from '@/utils/agentDocumentContextMapping';
 
 export interface ServerContextFactSource {
@@ -76,6 +80,17 @@ export const createServerContextFactProviders = ({
     : ordinaryDocumentAccessScope;
 
   return {
+    findAgentDocument: async (agentId, documentId) => {
+      const doc = await new AgentDocumentsService(
+        db,
+        userId,
+        workspaceId,
+        undefined,
+        documentAccessScope,
+      ).getDocumentById(documentId, agentId);
+      return doc ? { content: doc.content, title: doc.title } : null;
+    },
+
     findTopic: async (topicId) => {
       const topic = await new TopicModel(db, userId, ctx.workspaceId).findById(topicId);
       if (!topic) return null;
@@ -185,6 +200,45 @@ export const createServerContextFactProviders = ({
       if (!workspace?.slug)
         log('Workspace %s has no slug; skipping workspace context', targetWorkspaceId);
       return { appUrl, slug: workspace?.slug ?? undefined };
+    },
+
+    /**
+     * The agent's own identity as first-class state: the live addresses it owns
+     * and how much is unread in its inbox (never the messages themselves). Read
+     * on every step so a message that landed mid-conversation is visible on the
+     * next one — this is what the runtime relies on instead of carrying an
+     * always-on mailbox tool.
+     *
+     * A share visitor never gets the agent's identity: it is the creator's.
+     */
+    listAgentAccountContext: async (agentId) => {
+      const targetAgentId = agentId ?? state.origin?.agentId;
+      if (!targetAgentId || ctx.agentShareVisitor) return undefined;
+
+      const accounts = await new AgentAccountModel(db, userId, undefined, workspaceId).query({
+        agentId: targetAgentId,
+        liveOnly: true,
+      });
+      if (accounts.length === 0) return undefined;
+
+      // `liveOnly` already drops retired kinds in SQL; re-assert it here so the
+      // identity block can only ever name a kind the runtime has a provider for.
+      const liveAccounts = accounts.filter(isLiveAgentAccount);
+      if (liveAccounts.length === 0) return undefined;
+
+      const summary = await AgentInboxService.summary(db, targetAgentId);
+
+      return {
+        accounts: liveAccounts.map((account) => ({
+          capabilities: account.capabilities,
+          displayName: account.displayName,
+          identifier: account.identifier,
+          kind: account.kind,
+          provider: account.provider,
+          status: account.status,
+        })),
+        inbox: summary,
+      };
     },
 
     listAgentDocuments: async (agentId) => {
@@ -305,6 +359,7 @@ export const createServerContextFactProviders = ({
       (await new AgentModel(db, userId, ctx.workspaceId).queryAgents({ limit })).map((a) => ({
         description: a.description,
         id: a.id,
+        name: a.name,
         title: a.title,
       })),
 
@@ -330,6 +385,28 @@ export const createServerContextFactProviders = ({
 
     listSandboxFiles: async (topicId) =>
       new FileModel(db, userId).findFilesToInitInSandbox(topicId),
+
+    // Resolved from the same inputs the cloud-sandbox runtime uses, so the model
+    // is never told its files persist while its tools write to a directory that
+    // does not — or the reverse. Keyed on `ctx.workspaceId` for the same reason
+    // the runtime is: that is the workspace the trust token carries, and the
+    // entitlement has to agree with the token that presents it.
+    resolveSandboxPersistence: async () => {
+      const { mode, cwd, claim, workingDir } = await resolveSandboxSessionConfig({
+        isShareVisitorRun: Boolean(ctx.agentShareVisitor),
+        serverDB: db,
+        topicId: ctx.topicId ?? state.origin?.topicId,
+        userId,
+        // The run's workspace, the same one every other fact here is scoped to.
+        // Reading the raw context instead looked the topic up in the personal
+        // scope on any path that does not carry the id, found nothing, and
+        // described a disposable sandbox to a run that had a persistent one —
+        // so the model was told its files would not survive and worked in /tmp.
+        workspaceId,
+      });
+
+      return claim ? { cwd, mode, workingDir } : undefined;
+    },
 
     listTopicMessages: async (topic) => {
       const messages = await new MessageModel(db, userId, ctx.workspaceId).query(

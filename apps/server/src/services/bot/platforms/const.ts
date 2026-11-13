@@ -12,6 +12,24 @@ export const displayToolCallsField: FieldSchema = {
 };
 
 /**
+ * Whether the bot posts a short "working on it" message before the agent starts. Off by default:
+ * on platforms that cannot edit a sent message (QQ, WeChat) it stays in the chat as its own
+ * message, which breaks immersion for role-play bots. On editable platforms the same message is
+ * where tool-call progress is edited in, so `displayToolCalls` needs it on.
+ */
+export const processingMessageField: FieldSchema = {
+  key: 'processingMessage',
+  default: false,
+  description: 'channel.processingMessageHint',
+  label: 'channel.processingMessage',
+  type: 'boolean',
+};
+
+/** Only an explicit `true` posts the message; rows saved before the field existed skip it. */
+export const shouldPostProcessingMessage = (settings?: Record<string, unknown>): boolean =>
+  settings?.processingMessage === true;
+
+/**
  * Per-platform "how to find this ID" tooltip keys. Each platform paints a
  * different path to the value the operator has to paste — Discord wants
  * Developer Mode + right-click, Telegram wants @userinfobot, Slack uses
@@ -89,6 +107,7 @@ const PLATFORM_REPLY_LOCALES: Record<string, BotReplyLocale> = {
   feishu: 'zh-CN',
   imessage: 'en-US',
   lark: 'en-US',
+  linq: 'en-US',
   qq: 'zh-CN',
   slack: 'en-US',
   telegram: 'en-US',
@@ -420,8 +439,15 @@ export function normalizeAllowFromEntries(raw: unknown): Array<{ id: string; nam
  * "bug" can carry a directive like "Scan the recent thread and reply if you
  * spot an actionable bug report"). When `instruction` is empty/absent the
  * keyword just wakes the bot with the user's raw text — same as a mention.
+ *
+ * `asName` marks the keyword as one of the bot's names ("canis", "倏昱"): saying it calls the bot
+ * the way its display name does. It still wakes like any keyword (and still carries its
+ * `instruction`), and bot-wake reads it as `named-in-text`: answered at once rather than held in
+ * the scheduler's collect window, not silenced by the owner's presence, and listed among the bot's
+ * names for the classifier.
  */
 export interface WatchKeywordEntry {
+  asName?: boolean;
   instruction?: string;
   keyword: string;
 }
@@ -432,11 +458,12 @@ export interface WatchKeywordEntry {
  * these keywords. Empty (default) preserves the today behaviour of only
  * responding to mentions / DMs / subscribed-thread mentions.
  *
- * Stored as `Array<{ keyword, instruction? }>`. The optional `instruction`
+ * Stored as `Array<{ keyword, instruction?, asName? }>`. The optional `instruction`
  * is appended as a user-side prompt prefix when the keyword wakes the bot —
  * letting operators wire each trigger to an explicit directive ("scan the
  * thread for a bug report", "summarise the last 20 messages", …) rather
- * than only routing the raw message.
+ * than only routing the raw message. `asName` makes the keyword one of the
+ * bot's names (see {@link WatchKeywordEntry}).
  */
 export const watchKeywordsField: FieldSchema = {
   key: 'watchKeywords',
@@ -463,6 +490,12 @@ export const watchKeywordsField: FieldSchema = {
         placeholder: 'channel.watchKeywordInstructionPlaceholder',
         type: 'string',
       },
+      {
+        description: 'channel.watchKeywordAsNameHint',
+        key: 'asName',
+        label: 'channel.watchKeywordAsNameLabel',
+        type: 'boolean',
+      },
     ],
   },
 };
@@ -471,21 +504,23 @@ export const watchKeywordsField: FieldSchema = {
  * Parse `settings.watchKeywords` into the canonical entry list. Accepts
  * three shapes for forward-compat with any future schema migrations:
  *
- * 1. `Array<{ keyword, instruction? }>` — current form-produced shape
+ * 1. `Array<{ keyword, instruction?, asName? }>` — current form-produced shape
  * 2. `string[]` — flat array fallback (no instructions attached)
  * 3. `string` — comma / newline / whitespace-separated text (legacy / paste)
  *
  * Keywords are lowercased and deduplicated (matching is case-insensitive,
  * so we normalise once at parse time rather than per-message). The first
  * non-empty `instruction` wins on duplicates so the operator's authoring
- * order is preserved.
+ * order is preserved; a keyword is a name when any of its duplicates says so.
+ * `asName` is kept only when `true`, so an entry without the flag reads
+ * exactly as it did before the flag existed.
  */
 export function extractWatchKeywordEntries(
   settings: Record<string, unknown> | null | undefined,
 ): WatchKeywordEntry[] {
   const raw = settings?.watchKeywords;
   const byKeyword = new Map<string, WatchKeywordEntry>();
-  const push = (keyword: unknown, instruction?: unknown) => {
+  const push = (keyword: unknown, instruction?: unknown, asName?: unknown) => {
     if (typeof keyword !== 'string') return;
     const normalised = keyword.trim().toLowerCase();
     if (!normalised) return;
@@ -493,7 +528,11 @@ export function extractWatchKeywordEntries(
       typeof instruction === 'string' && instruction.trim() ? instruction.trim() : undefined;
     const existing = byKeyword.get(normalised);
     if (!existing) {
-      byKeyword.set(normalised, { keyword: normalised, instruction: trimmedInstruction });
+      byKeyword.set(normalised, {
+        keyword: normalised,
+        instruction: trimmedInstruction,
+        ...(asName === true && { asName: true }),
+      });
       return;
     }
     // Keep the first non-empty instruction so the operator's authoring order
@@ -501,6 +540,7 @@ export function extractWatchKeywordEntries(
     if (!existing.instruction && trimmedInstruction) {
       existing.instruction = trimmedInstruction;
     }
+    if (asName === true) existing.asName = true;
   };
   if (typeof raw === 'string') {
     for (const piece of raw.split(/[\s,]+/)) push(piece);
@@ -511,8 +551,8 @@ export function extractWatchKeywordEntries(
         continue;
       }
       if (entry && typeof entry === 'object' && 'keyword' in entry) {
-        const obj = entry as { instruction?: unknown; keyword?: unknown };
-        push(obj.keyword, obj.instruction);
+        const obj = entry as { asName?: unknown; instruction?: unknown; keyword?: unknown };
+        push(obj.keyword, obj.instruction, obj.asName);
       }
     }
   }
@@ -617,7 +657,7 @@ const findFirstMatchingKeyword = (
  * never sees the names — those exist purely so the operator can recognise
  * each entry on the settings page.
  */
-function parseIdList(raw: unknown): string[] {
+export function parseIdList(raw: unknown): string[] {
   if (typeof raw === 'string') {
     return raw
       .split(/[\s,]+/)
@@ -911,4 +951,117 @@ export function getStepReactionEmoji(stepType: string | undefined, toolsCalling:
   const toolsAboutToRun =
     stepType === 'call_llm' && Array.isArray(toolsCalling) && toolsCalling.length > 0;
   return toolsAboutToRun ? WORKING_REACTION_EMOJI : THINKING_REACTION_EMOJI;
+}
+
+// ---------- Reaction mode ----------
+
+/**
+ * How much status-reaction churn the bot produces on the user's message while
+ * an execution is running. Every reaction swap is one or two platform API
+ * calls (`removeReaction` + `addReaction`), and on Feishu/Slack each of them
+ * pings users who have message notifications turned on — so a multi-tool run
+ * under the `full` mode can ring a phone a dozen times.
+ *
+ * - `none`    — never touch reactions.
+ * - `minimal` — ACK (👀) on receipt, 🤔 when the agent starts, removed on
+ *               completion. No per-step swaps.
+ * - `full`    — the legacy behaviour: also swap between 🤔 / ⚡ after every
+ *               step to mirror what the runtime is doing.
+ */
+export type BotReactionMode = 'full' | 'minimal' | 'none';
+
+export const BOT_REACTION_MODES: readonly BotReactionMode[] = ['minimal', 'full', 'none'];
+
+export const DEFAULT_BOT_REACTION_MODE: BotReactionMode = 'minimal';
+
+/**
+ * The mode a bot is created with. A new bot starts with status reactions off, so it does not ping
+ * anyone until its owner turns them on. {@link DEFAULT_BOT_REACTION_MODE} stays the schema default
+ * and the runtime fallback, because rows saved before the field existed carry no `reactionMode`
+ * and must keep reacting as they always have; only a bot being created gets this mode.
+ */
+export const NEW_BOT_REACTION_MODE: BotReactionMode = 'none';
+
+export const reactionModeField: FieldSchema = {
+  key: 'reactionMode',
+  default: DEFAULT_BOT_REACTION_MODE,
+  description: 'channel.reactionModeHint',
+  enum: [...BOT_REACTION_MODES],
+  enumDescriptions: [
+    'channel.reactionModeMinimalHint',
+    'channel.reactionModeFullHint',
+    'channel.reactionModeNoneHint',
+  ],
+  enumLabels: [
+    'channel.reactionModeMinimal',
+    'channel.reactionModeFull',
+    'channel.reactionModeNone',
+  ],
+  label: 'channel.reactionMode',
+  type: 'string',
+};
+
+/**
+ * Coerce a raw settings value into a known mode. Rows saved before the field
+ * existed carry `undefined`, and a hand-edited value could be anything — both
+ * fall back to the schema default rather than silently disabling reactions.
+ */
+export function normalizeBotReactionMode(value: unknown): BotReactionMode {
+  return BOT_REACTION_MODES.includes(value as BotReactionMode)
+    ? (value as BotReactionMode)
+    : DEFAULT_BOT_REACTION_MODE;
+}
+
+/**
+ * Where a bot answers a message addressed to it at the top level of a channel:
+ *
+ * - `agent`  — the bot decides before it starts: a quick answer stays in the channel, work that
+ *              runs long or invites follow-ups moves into a thread it names. It also posts a short
+ *              acknowledgement first when the work takes a while.
+ * - `thread` — the previous behaviour: every @-mention and keyword wake opens a reply thread.
+ */
+export type BotReplyPlacementMode = 'agent' | 'thread';
+
+export const BOT_REPLY_PLACEMENT_MODES: readonly BotReplyPlacementMode[] = ['agent', 'thread'];
+
+export const DEFAULT_BOT_REPLY_PLACEMENT_MODE: BotReplyPlacementMode = 'agent';
+
+export const replyPlacementField: FieldSchema = {
+  key: 'replyPlacement',
+  choices: true,
+  default: DEFAULT_BOT_REPLY_PLACEMENT_MODE,
+  description: 'channel.replyPlacementHint',
+  enum: [...BOT_REPLY_PLACEMENT_MODES],
+  enumDescriptions: ['channel.replyPlacementAgentHint', 'channel.replyPlacementThreadHint'],
+  enumLabels: ['channel.replyPlacementAgent', 'channel.replyPlacementThread'],
+  enumRecommended: DEFAULT_BOT_REPLY_PLACEMENT_MODE,
+  label: 'channel.replyPlacement',
+  type: 'string',
+};
+
+/** Rows saved before the field existed carry `undefined`; they get the schema default. */
+export function normalizeBotReplyPlacementMode(value: unknown): BotReplyPlacementMode {
+  return BOT_REPLY_PLACEMENT_MODES.includes(value as BotReplyPlacementMode)
+    ? (value as BotReplyPlacementMode)
+    : DEFAULT_BOT_REPLY_PLACEMENT_MODE;
+}
+
+/**
+ * The moments at which the bridge / callback service may touch the reaction:
+ * - `received` — webhook arrival ACK.
+ * - `thinking` — hand-off to the agent runtime.
+ * - `step`     — after each runtime step (🤔 / ⚡ swap).
+ * - `clear`    — completion / failure cleanup.
+ */
+export type BotReactionPhase = 'clear' | 'received' | 'step' | 'thinking';
+
+/**
+ * Whether a reaction API call is allowed for `phase` under `mode`. For `clear`
+ * this only gates the untracked legacy fallback: a reaction the run actually
+ * applied is always removed, even after a mid-run switch to `none`.
+ */
+export function shouldApplyReaction(mode: BotReactionMode, phase: BotReactionPhase): boolean {
+  if (mode === 'none') return false;
+  if (phase === 'step') return mode === 'full';
+  return true;
 }

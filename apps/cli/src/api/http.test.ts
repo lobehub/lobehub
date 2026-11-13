@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as RefreshModule from '../auth/refresh';
+
 const mockGetValidToken = vi.hoisted(() => vi.fn());
 const mockResolveServerUrl = vi.hoisted(() => vi.fn(() => 'https://app.lobehub.com'));
 
-vi.mock('../auth/refresh', () => ({
+vi.mock('../auth/refresh', async (importOriginal) => ({
+  ...(await importOriginal<typeof RefreshModule>()),
   getValidToken: mockGetValidToken,
 }));
 
@@ -20,9 +23,13 @@ describe('api/http auth helpers', () => {
     vi.clearAllMocks();
     delete process.env.LOBEHUB_JWT;
     delete process.env.LOBEHUB_WORKSPACE_ID;
+    // Outside an agent run, so a missing login keeps the plain "log in first" wording.
+    vi.stubEnv('LOBEHUB_OPERATION_ID', '');
+    vi.stubEnv('LOBEHUB_TOPIC_ID', '');
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     if (originalJwt === undefined) delete process.env.LOBEHUB_JWT;
     else process.env.LOBEHUB_JWT = originalJwt;
 
@@ -53,6 +60,7 @@ describe('api/http auth helpers', () => {
     process.env.LOBEHUB_WORKSPACE_ID = 'workspace-1';
     mockGetValidToken.mockResolvedValue({
       credentials: { accessToken: 'stored-jwt' },
+      status: 'ok',
     });
 
     const { getAuthInfo } = await import('./http');
@@ -75,5 +83,23 @@ describe('api/http auth helpers', () => {
       'Oidc-Auth': 'env-jwt',
       'X-Workspace-Id': 'workspace-1',
     });
+  });
+
+  /**
+   * A reconnect must not end the process: the journal and the status endpoint may still accept the
+   * current access token, and the command's polling fallback only runs if this rejects.
+   */
+  it('should throw instead of exiting when a reconnect resolves no credential', async () => {
+    mockGetValidToken.mockResolvedValue({ status: 'no-login' });
+    const exit = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit must not run on a reconnect');
+    }) as unknown as typeof process.exit);
+
+    const { resolveAgentStreamAuthInfo } = await import('./http');
+
+    await expect(resolveAgentStreamAuthInfo()).rejects.toThrow(/No authentication found/);
+    expect(exit).not.toHaveBeenCalled();
+
+    exit.mockRestore();
   });
 });

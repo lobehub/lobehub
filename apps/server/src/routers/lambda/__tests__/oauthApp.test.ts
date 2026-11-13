@@ -51,31 +51,44 @@ describe('oauthAppRouter', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockCreate.mockResolvedValue({ client: webApp, secret: 'lcs_plain' });
+    mockCreate.mockResolvedValue({ client: { ...webApp, clientSecret: null } });
   });
 
   describe('create', () => {
     it('defaults to a device app when no type is given', async () => {
-      mockCreate.mockResolvedValue({
-        client: { ...webApp, clientSecret: null },
-        secret: undefined,
-      });
+      mockCreate.mockResolvedValue({ client: { ...webApp, clientSecret: null } });
 
       await caller().create({ name: 'My CLI' });
 
       expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ type: 'device' }));
     });
 
-    it('returns the plaintext secret exactly once, alongside hasSecret', async () => {
+    it('keeps the original contract for clients that omit issueSecret', async () => {
+      mockCreate.mockResolvedValue({ client: webApp, secret: 'lcs_plain' });
+
       const created = await caller().create({
         name: 'Develop Center',
         redirectUris: ['https://dc.lobehub.com/callback'],
         type: 'web',
       });
 
+      expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ issueSecret: true }));
       expect(created.clientSecret).toBe('lcs_plain');
       expect(created.hasSecret).toBe(true);
       expect(created).not.toHaveProperty('clientSecret', 'iv:tag:cipher');
+    });
+
+    it('creates a web app without a secret when the client generates it on demand', async () => {
+      const created = await caller().create({
+        issueSecret: false,
+        name: 'Develop Center',
+        redirectUris: ['https://dc.lobehub.com/callback'],
+        type: 'web',
+      });
+
+      expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({ issueSecret: false }));
+      expect(created.clientSecret).toBeUndefined();
+      expect(created.hasSecret).toBe(false);
     });
 
     it('lets a web app be created before its redirect URIs are configured', async () => {
@@ -114,6 +127,36 @@ describe('oauthAppRouter', () => {
           redirectUris: ['https://dc.lobehub.com/callback', 'http://localhost:3022/callback'],
         }),
       );
+    });
+  });
+
+  describe('logo', () => {
+    it('rejects an inline data-URI logo that oidc-provider would refuse', async () => {
+      await expect(
+        caller().create({ logoUri: 'data:image/png;base64,iVBORw0KGgo=', name: 'Logo App' }),
+      ).rejects.toThrow();
+      await expect(
+        caller().update({
+          id: 'lca_app',
+          value: { logoUri: 'data:image/png;base64,iVBORw0KGgo=' },
+        }),
+      ).rejects.toThrow();
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(mockUpdate).not.toHaveBeenCalled();
+    });
+
+    it('accepts an uploaded https logo', async () => {
+      await caller().create({ logoUri: 'https://files.lobehub.com/logo.png', name: 'Logo App' });
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ logoUri: 'https://files.lobehub.com/logo.png' }),
+      );
+    });
+
+    it('lets an update clear the logo with null', async () => {
+      await caller().update({ id: 'lca_app', value: { logoUri: null } });
+
+      expect(mockUpdate).toHaveBeenCalledWith('lca_app', { logoUri: null });
     });
   });
 

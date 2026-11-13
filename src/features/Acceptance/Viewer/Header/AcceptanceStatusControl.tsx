@@ -1,14 +1,12 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { toast } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui';
+import { Icon, toast } from '@lobehub/ui';
 import { CircleCheck, RotateCcw, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { mutate as globalMutate } from '@/libs/swr';
-import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
+import { useVerifyStore } from '@/store/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { getAcceptanceStatusActions } from '../statusActions';
@@ -27,14 +25,17 @@ const AcceptanceStatusControl = () => {
     try {
       await verifyService.updateAcceptanceStatus(data.acceptance.id, status);
       await mutate();
-      void globalMutate(isAcceptanceListKey);
+      void useVerifyStore.getState().refreshAcceptanceLists();
       toast.success(t('acceptance.workspace.statusSuccess'));
     } catch {
       toast.error(t('acceptance.workspace.statusError'));
     }
   };
 
-  const menu: DropdownItem[] = getAcceptanceStatusActions(data.acceptance.status).map((action) => {
+  const menu: DropdownItem[] = getAcceptanceStatusActions(
+    data.acceptance.status,
+    data.acceptance.subjectType,
+  ).map((action) => {
     if (action === 'accept') {
       return {
         icon: <Icon icon={CircleCheck} />,
@@ -59,7 +60,12 @@ const AcceptanceStatusControl = () => {
     };
   });
 
-  return <AcceptanceStatusPill menu={menu} status={data.acceptance.status} />;
+  return (
+    <AcceptanceStatusPill
+      menu={menu.length > 0 ? menu : undefined}
+      status={data.acceptance.status}
+    />
+  );
 };
 
 export default AcceptanceStatusControl;

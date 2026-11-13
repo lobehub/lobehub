@@ -1,8 +1,10 @@
+import { imagePlaceholder } from '../imageEcho';
 import type {
   AgentEventAdapter,
   HeterogeneousAgentEvent,
   HeterogeneousRateLimitInfo,
   HeterogeneousTerminalErrorData,
+  HeterogeneousToolResultImage,
   StepCompleteData,
   StreamStartData,
   ToolCallPayload,
@@ -45,6 +47,12 @@ interface CodexCommandExecutionItem extends CodexBaseItem {
   aggregated_output?: string;
   command?: string;
   exit_code?: number | null;
+}
+
+/** Image tool outputs omitted by exec --json and recovered from its rollout. */
+export interface CodexImageOutputItem extends CodexBaseItem {
+  images: HeterogeneousToolResultImage[];
+  type: 'image_output';
 }
 
 interface CodexTodoListEntry {
@@ -113,6 +121,7 @@ type CodexToolItem =
   | CodexCollabToolCallItem
   | CodexCommandExecutionItem
   | CodexFileChangeItem
+  | CodexImageOutputItem
   | CodexMcpToolCallItem
   | CodexTodoListItem
   | CodexWebSearchItem;
@@ -125,6 +134,9 @@ interface ZonedDateTimeParts {
   second: number;
   year: number;
 }
+
+const isImageOutputItem = (item: CodexToolItem): item is CodexImageOutputItem =>
+  item.type === 'image_output';
 
 const isCommandExecutionItem = (item: CodexToolItem): item is CodexCommandExecutionItem =>
   item.type === CODEX_COMMAND_API;
@@ -343,11 +355,13 @@ const toMcpToolPayloadArguments = (item: CodexMcpToolCallItem) => ({
 const toToolPayload = (item: CodexToolItem): ToolCallPayload => ({
   apiName: item.type || CODEX_COMMAND_API,
   arguments: JSON.stringify(
-    isCommandExecutionItem(item)
-      ? { command: item.command || '' }
-      : isMcpToolCallItem(item)
-        ? toMcpToolPayloadArguments(item)
-        : item,
+    isImageOutputItem(item)
+      ? {}
+      : isCommandExecutionItem(item)
+        ? { command: item.command || '' }
+        : isMcpToolCallItem(item)
+          ? toMcpToolPayloadArguments(item)
+          : item,
   ),
   id: item.id,
   identifier: CODEX_IDENTIFIER,
@@ -474,6 +488,15 @@ const isSuccessfulToolCompletion = (item: CodexToolItem): boolean => {
 };
 
 const getToolResultData = (item: CodexToolItem): ToolResultData => {
+  if (isImageOutputItem(item)) {
+    return {
+      content: item.images.map(({ mediaType }) => imagePlaceholder(mediaType)).join('\n\n'),
+      isError: false,
+      pluginState: { images: item.images },
+      toolCallId: item.id,
+    };
+  }
+
   const isSuccess = isSuccessfulToolCompletion(item);
   const output = getToolContent(item, isSuccess);
 
@@ -822,7 +845,17 @@ export class CodexAdapter implements AgentEventAdapter {
       case 'turn.completed': {
         return this.handleTurnCompleted(raw);
       }
-      case 'error':
+      case 'error': {
+        // exec --json drops app-server's willRetry flag from StreamError notifications.
+        // Preserve Codex's reconnect notices as retries, without ending the turn or tools.
+        if (
+          typeof raw.message === 'string' &&
+          /^Reconnecting\.\.\. (?:\d+\/\d+|waiting for network)(?: \(|$)/.test(raw.message)
+        ) {
+          return [this.makeEvent('stream_retry', { message: raw.message })];
+        }
+        return this.handleTerminalError(raw);
+      }
       case 'turn.failed': {
         return this.handleTerminalError(raw);
       }
@@ -1230,6 +1263,8 @@ export class CodexAdapter implements AgentEventAdapter {
     return {
       ...(this.currentModel ? { model: this.currentModel } : {}),
       provider: CODEX_IDENTIFIER,
+      // Persist the native thread before a non-zero exec exit can skip finish-path persistence.
+      ...(this.sessionId ? { sessionId: this.sessionId } : {}),
       ...extra,
     };
   }

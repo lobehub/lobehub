@@ -66,21 +66,27 @@ describe('code tree call sites', () => {
   const read = (relativePath: string) =>
     readFileSync(join(__dirname, '..', '..', '..', 'src', relativePath), 'utf8');
 
-  const CODE_TREE_FILES = [
-    'features/Conversation/WorkingSidebar/Files/index.tsx',
-    'features/Conversation/WorkingSidebar/Review/FileTreeNav.tsx',
-  ];
+  // A tree may keep its pierre CSS bundle in a sibling module; read those together.
+  const CODE_TREE_FILES: Record<string, string[]> = {
+    'features/Conversation/WorkingSidebar/Files/index.tsx': [
+      'features/Conversation/WorkingSidebar/Files/fileTreeStyle.ts',
+    ],
+    'features/Conversation/WorkingSidebar/Review/FileTreeNav.tsx': [],
+  };
 
-  it.each(CODE_TREE_FILES)('%s renders with FOLDER_ICON_CSS and no document tokens', (file) => {
-    const source = read(file);
-    expect(source).toContain('FOLDER_ICON_CSS');
-    expect(source).not.toContain('DOCUMENT_TREE_ICON_CSS');
-    expect(source).not.toContain('DOCUMENT_TREE_ROW_CSS');
-    expect(source).not.toContain('DOCUMENT_TREE_LAYOUT');
-    // They keep their own pre-existing 12px label and pierre's default 30px row
-    // (no `itemHeight` prop) — that is what "文件的那个 tree 渲染保留原样" means.
-    // The document tree's 14px / 36px must never reach them.
-    expect(source).toContain('--trees-font-size-override: 12px');
-    expect(source).not.toContain('itemHeight');
-  });
+  it.each(Object.keys(CODE_TREE_FILES))(
+    '%s renders with FOLDER_ICON_CSS and no document tokens',
+    (file) => {
+      const source = [file, ...CODE_TREE_FILES[file]].map(read).join('\n');
+      expect(source).toContain('FOLDER_ICON_CSS');
+      expect(source).not.toContain('DOCUMENT_TREE_ICON_CSS');
+      expect(source).not.toContain('DOCUMENT_TREE_ROW_CSS');
+      expect(source).not.toContain('DOCUMENT_TREE_LAYOUT');
+      // They keep their own pre-existing 12px label and pierre's default 30px row
+      // (no `itemHeight` prop) — that is what "文件的那个 tree 渲染保留原样" means.
+      // The document tree's 14px / 36px must never reach them.
+      expect(source).toContain('--trees-font-size-override: 12px');
+      expect(source).not.toContain('itemHeight');
+    },
+  );
 });

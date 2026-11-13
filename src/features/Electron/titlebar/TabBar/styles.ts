@@ -1,4 +1,4 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 
 import { TAB_ICON_SIZE, TAB_INLINE_INSET } from './tabLayout';
 
@@ -101,7 +101,9 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
 
     background-color: transparent;
 
-    transition: background-color 0.15s ${cssVar.motionEaseInOut};
+    transition:
+      background-color 0.15s ${cssVar.motionEaseInOut},
+      box-shadow 0.15s ${cssVar.motionEaseInOut};
 
     &:hover {
       background-color: ${cssVar.colorFillQuaternary};
@@ -132,21 +134,19 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
        too. The button stays mounted at every tier and fades; unmounting it made it vanish
        mid-pin.
 
-       A lone tab never mounts the button (the last tab cannot close), so :has([data-
-       tab-close]) keeps the title margin from opening a hole for a control that is not
-       there — which otherwise still ran the mask gradient in as if a close affordance
-       were arriving.
+       A lone tab is not closable, so the rule is gated on data-closable as well; the
+       button then stays faded and inert, and the title keeps its full width.
 
-       :has() also carries the keyboard path — the button is focusable at these tiers, so
+       :has() carries the keyboard path — the button is focusable at these tiers, so
        without it a tabbing user would land on something invisible.
 
        Reservation is 20px button + 3px inset - the tab's own 6px end padding. Margin
        rather than padding: the mask applies to the padding box, so padding would put the
        gradient inside the reservation instead of at the text's edge. */
-    &[data-tier='full']:hover:has([data-tab-close]),
-    &[data-tier='compact']:hover:has([data-tab-close]),
-    &[data-tier='full']:has([data-tab-close]:focus-visible),
-    &[data-tier='compact']:has([data-tab-close]:focus-visible) {
+    &[data-closable][data-tier='full']:hover,
+    &[data-closable][data-tier='compact']:hover,
+    &[data-closable][data-tier='full']:has([data-tab-close]:focus-visible),
+    &[data-closable][data-tier='compact']:has([data-tab-close]:focus-visible) {
       [data-tab-close] {
         pointer-events: auto;
         opacity: 1;
@@ -214,7 +214,6 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
   `,
   tabDragging: css`
     cursor: grabbing;
-    z-index: 1;
     background-color: ${cssVar.colorBgElevated};
     box-shadow: ${cssVar.boxShadowSecondary};
   `,

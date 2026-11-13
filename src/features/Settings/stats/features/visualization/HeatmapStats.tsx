@@ -1,14 +1,9 @@
-import { Block, Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
-import { cssVar } from 'antd-style';
+import { formatDuration as formatDurationMs } from '@lobechat/utils';
+import { Block, cssVar, Divider, Flexbox, Skeleton } from '@lobehub/ui';
 import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { statsKeys } from '@/libs/swr/keys';
-import { messageService } from '@/services/message';
-import { topicService } from '@/services/topic';
+import { statsActions, statsSelectors, useStatsStore } from '@/store/stats';
 import { formatShortenNumber } from '@/utils/format';
 
 import { HeatmapType } from '../../types';
@@ -19,17 +14,12 @@ import { HeatmapType } from '../../types';
  */
 const formatDuration = (seconds?: number) => {
   if (!seconds || seconds < 1) return '--';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
+  return formatDurationMs(seconds * 1000);
 };
 
 /**
  * Token-dimension summary row for the activity heatmap. The peak / streak figures
- * are derived from the daily token-heatmap series (same SWR key as the heatmap,
+ * are derived from the daily token-heatmap series (same replica entry as the heatmap,
  * so the request is deduped); the longest-task duration comes from the agent
  * operations' wall-clock time. The cumulative token total lives in the overview
  * cards above, so it is intentionally not repeated here.
@@ -37,14 +27,12 @@ const formatDuration = (seconds?: number) => {
 const HeatmapStats = memo(() => {
   const { t } = useTranslation('auth');
 
-  const { data, isLoading } = useClientDataSWR(statsKeys.heatmaps(HeatmapType.Tokens), () =>
-    messageService.getTokenHeatmaps(),
-  );
-  const loading = isLoading || !data;
+  statsActions.useFetchHeatmap(HeatmapType.Tokens);
+  const data = useStatsStore(statsSelectors.settledHeatmap(HeatmapType.Tokens));
+  const loading = !data;
 
-  const { data: maxTaskDuration } = useClientDataSWR(statsKeys.maxTaskDuration(), () =>
-    topicService.getMaxTaskDuration(),
-  );
+  statsActions.useFetchMaxTaskDuration();
+  const maxTaskDuration = useStatsStore(statsSelectors.maxTaskDuration);
 
   const stats = useMemo(() => {
     if (!data?.length) return { current: 0, longest: 0, peak: 0 };
@@ -92,7 +80,7 @@ const HeatmapStats = memo(() => {
       <Flexbox horizontal align={'center'} width={'100%'}>
         {items.map((item, index) => (
           <Fragment key={item.label}>
-            {index > 0 && <Divider style={{ height: 32, margin: 0 }} type={'vertical'} />}
+            {index > 0 && <Divider orientation={'vertical'} style={{ height: 32 }} />}
             <Flexbox align={'center'} flex={1} gap={4}>
               <div style={{ fontSize: 20, fontWeight: 'bold' }}>
                 {loading || item.loading ? <Skeleton height={28} width={56} /> : item.value}

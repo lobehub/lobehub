@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { edgeDirection, routeEdge, segmentHitsBox } from './edgeRouting';
+import { edgeDirection, routeEdge, segmentHitsBox, sideToSidePath } from './edgeRouting';
 import { experimentStatusVisual } from './experimentStatus';
 
 const boxes = [
@@ -42,6 +42,14 @@ describe('exploration relations and status', () => {
     expect(first).not.toEqual(second);
     expect(first[0]).toEqual(second[0]);
     expect(first.at(-1)).toEqual(second.at(-1));
+  });
+  it('runs a side-to-side link horizontally with its vertical centred between the two', () => {
+    expect(sideToSidePath({ x: 300, y: 700 }, { x: 500, y: 300 })).toEqual([
+      { x: 300, y: 700 },
+      { x: 400, y: 700 },
+      { x: 400, y: 300 },
+      { x: 500, y: 300 },
+    ]);
   });
   it('never uses the running-ring fallback for waiting, completed or unstarted experiments', () => {
     const states = ['proposed', 'waiting', 'resolved'] as const;

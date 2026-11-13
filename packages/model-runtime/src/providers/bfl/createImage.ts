@@ -1,4 +1,3 @@
-import { imageUrlToBase64 } from '@lobechat/utils';
 import createDebug from 'debug';
 import type { RuntimeImageGenParamsValue } from 'model-bank';
 
@@ -7,6 +6,7 @@ import type { CreateImagePayload, CreateImageResponse } from '../../types/image'
 import type { TaskResult } from '../../utils/asyncifyPolling';
 import { asyncifyPolling } from '../../utils/asyncifyPolling';
 import { AgentRuntimeError } from '../../utils/createError';
+import { referenceImageUrlToBase64 } from '../../utils/referenceImageCache';
 import { parseDataUri } from '../../utils/uriParser';
 import type { BflAsyncResponse, BflModelId, BflRequest, BflResultResponse } from './types';
 import { BFL_ENDPOINTS, BflStatusResponse } from './types';
@@ -39,7 +39,7 @@ async function convertImageToBase64(imageUrl: string): Promise<string> {
 
     if (type === 'url') {
       // Convert URL to base64
-      const { base64 } = await imageUrlToBase64(imageUrl);
+      const { base64 } = await referenceImageUrlToBase64(imageUrl);
       return base64;
     }
 

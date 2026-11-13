@@ -58,8 +58,13 @@ describe('formatDuration', () => {
   });
 
   it('should format minutes and seconds', () => {
-    expect(formatDuration(65_000)).toBe('1m5s');
-    expect(formatDuration(120_000)).toBe('2m0s');
+    expect(formatDuration(65_000)).toBe('1m 5s');
+    expect(formatDuration(120_000)).toBe('2m 0s');
+  });
+
+  it('should roll long runs up into hours and days', () => {
+    expect(formatDuration(3_723_000)).toBe('1h 2m');
+    expect(formatDuration(90_000_000)).toBe('1d 1h 0m');
   });
 });
 

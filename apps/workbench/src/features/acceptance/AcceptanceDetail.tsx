@@ -1,8 +1,9 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import { extractUuid } from '@/features/Acceptance/utils';
@@ -11,46 +12,41 @@ import {
   AcceptanceScope,
 } from '@/features/Acceptance/Viewer/AcceptanceScope';
 import AcceptanceCheckInventory from '@/features/Acceptance/Viewer/Checks/AcceptanceCheckInventory';
+import AcceptanceDiscussion from '@/features/Acceptance/Viewer/Comments/AcceptanceDiscussion';
 import AcceptanceGoal from '@/features/Acceptance/Viewer/Header/AcceptanceGoal';
 import AcceptanceIdentity from '@/features/Acceptance/Viewer/Header/AcceptanceIdentity';
+import AcceptanceShare from '@/features/Acceptance/Viewer/Header/AcceptanceShare';
 import { useAcceptanceBundle } from '@/features/Acceptance/Viewer/useAcceptanceBundle';
 
 import { WorkbenchHeader } from '../../shell/WorkbenchHeader';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    overflow: auto;
-    flex: 1;
-    min-height: 0;
-  `,
-  header: css`
-    flex: none;
-
-    min-height: 48px;
-    padding-inline: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  page: css`
-    width: 100%;
-    height: 100dvh;
-    background: ${cssVar.colorBgContainer};
-  `,
-  report: css`
-    width: 100%;
-    max-width: 920px;
-    margin-block: 0;
-    margin-inline: auto;
-    padding-block: 20px;
-    padding-inline: 24px;
-
-    @media (width <= 768px) {
-      padding-block: 16px;
-      padding-inline: 12px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  body: { overflow: 'auto', flex: '1', minHeight: '0' },
+  header: {
+    flex: 'none',
+    minHeight: '48px',
+    paddingInline: '12px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  page: {
+    width: '100%',
+    height: '100dvh',
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  report: {
+    width: '100%',
+    maxWidth: '920px',
+    marginBlock: '0',
+    marginInline: 'auto',
+    paddingBlock: { 'default': '20px', '@media (width <= 768px)': '16px' },
+    paddingInline: { 'default': '24px', '@media (width <= 768px)': '12px' },
+  },
+});
 
 const Title = () => {
   const { acceptanceId } = useParams<{ acceptanceId: string }>();
@@ -63,24 +59,34 @@ const Title = () => {
 };
 
 const WorkbenchAcceptanceDetail = () => {
+  const { t } = useTranslation('verify');
   const params = useParams<{ acceptanceId: string }>();
   const acceptanceId = extractUuid(params.acceptanceId);
   if (!acceptanceId) return null;
 
   return (
     <AcceptanceScope acceptanceId={acceptanceId}>
-      <Flexbox className={styles.page}>
-        <Flexbox className={styles.header} justify={'center'}>
+      <Flexbox className={stylex.props(styles.page).className}>
+        <Flexbox className={stylex.props(styles.header).className} justify={'center'}>
           <WorkbenchHeader>
             <Title />
           </WorkbenchHeader>
         </Flexbox>
-        <div className={styles.body}>
+        <div {...stylex.props(styles.body)}>
           <AcceptanceBundleGate height={'100%'}>
-            <Flexbox className={styles.report} gap={16}>
-              <AcceptanceIdentity />
+            <Flexbox className={stylex.props(styles.report).className} gap={16}>
+              <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'}>
+                <Flexbox flex={1} style={{ minWidth: 0 }}>
+                  <AcceptanceIdentity />
+                </Flexbox>
+                <AcceptanceShare />
+              </Flexbox>
               <AcceptanceGoal />
               <AcceptanceCheckInventory />
+              <section aria-label={t('acceptance.comments.title')}>
+                <Text as={'h2'}>{t('acceptance.comments.title')}</Text>
+                <AcceptanceDiscussion />
+              </section>
             </Flexbox>
           </AcceptanceBundleGate>
         </div>

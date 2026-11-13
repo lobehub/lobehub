@@ -156,7 +156,10 @@ Existing routes unchanged. New:
    status in the lifecycle notification only.
 
 Leave `interrupt` as-is (documented no-op; the web client interrupts via tRPC). Do not
-attempt to implement it.
+attempt to implement it. The hub still accepts and forwards the frame for wire
+compatibility, but no client in this repo sends one: `sendInterrupt` was removed from both
+`AgentStreamClient` and `OperationSubscription` so nothing can be wired to a stop that the
+op DO silently drops.
 
 ### 3.2 Init metadata
 
@@ -259,8 +262,10 @@ Subscribe algorithm (per connection, per op):
 1. Record sub `{ lastSeq: Number(lastEventId ?? 0), executor, state:'replaying' }`.
 2. Call op DO `hub-subscribe`. If it returns a `userId` that ≠ hub's userId ⇒
    `subscribe_failed{forbidden}` and drop the sub. If `userId` is undefined (op not inited
-   yet — the init/subscribe race, LOBE-10443): keep the sub with `state:'pending'`, send
-   `resume_complete{ pending:true, gap:false }` and return; when an `op-lifecycle` with
+   yet — the init/subscribe race: a subscriber that arrives before the op exists must not be
+   answered with an empty replay, because the client reads an empty replay as a finished
+   session and clears the shared `runningOperation`): keep the sub with `state:'pending'`,
+   send `resume_complete{ pending:true, gap:false }` and return; when an `op-lifecycle` with
    status `running` arrives for that op, run steps 3-5 for every pending sub.
 3. Call op DO `replay{ since: String(lastSeq) }`; send each returned message (with
    `operationId` added) in order, updating `lastSeq`.
@@ -325,7 +330,6 @@ interface OperationSubscription {
   on<K extends keyof AgentStreamClientEvents>(event: K, cb: AgentStreamClientEvents[K]): () => void;
   // plus 'resume_complete': (info: { status?: SessionStatus; gap: boolean; pending?: boolean }) => void
   sendToolResult(result: ToolResultPayload): boolean; // queued while disconnected, TTL 120s
-  sendInterrupt(): boolean;
   unsubscribe(): void;
 }
 ```
@@ -348,7 +352,7 @@ Behavior:
 - `createOperationClient(mux, operationId, { resumeOnConnect?, lastEventId?, executor? })`
   returns an object structurally compatible with the store's
   `GatewayConnection['client']` Pick (`connect`, `disconnect`, `on`, `reconnect`,
-  `sendInterrupt`, `sendToolResult`, `updateToken`): `connect` = subscribe, `disconnect` =
+  `sendToolResult`, `updateToken`): `connect` = subscribe, `disconnect` =
   unsubscribe, `reconnect` = unsubscribe+subscribe with lastEventId, `updateToken` = no-op
   (token comes from `getToken`). Emits the same `AgentStreamClientEvents`
   (`connected` when `resume_complete`/first event arrives or immediately if the socket is
@@ -359,6 +363,8 @@ Behavior:
 
 - Labs flag `enableGatewayMux` (labPrefer selector + `LAB_FEATURES` entry `gatewayMux`,
   stage `alpha`, i18n `labs` namespace en-US + zh-CN).
+  _Update: the rollout gate (later the `agent_gateway_mux` feature flag) has been
+  removed. Web takes v2 wherever `serverConfig.agentGatewayProtocol === 2`._
 - `GatewayActionImpl.createClient(options, ctx)` — when the flag is on, return
   `createOperationClient(getMux(identity), operationId, {...})` where `identity` is
   `'owner'` (getToken = `aiAgentService.issueGatewayUserToken`) or `share:${agentShareId}`

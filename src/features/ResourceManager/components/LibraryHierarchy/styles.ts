@@ -1,4 +1,4 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   dragging: css`
@@ -12,6 +12,18 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     &,
     &:hover {
       background: ${cssVar.colorPrimaryBg};
+    }
+  `,
+  dropBefore: css`
+    &,
+    &:hover {
+      box-shadow: inset 0 2px 0 0 ${cssVar.colorPrimary};
+    }
+  `,
+  dropAfter: css`
+    &,
+    &:hover {
+      box-shadow: inset 0 -2px 0 0 ${cssVar.colorPrimary};
     }
   `,
   treeItem: css`

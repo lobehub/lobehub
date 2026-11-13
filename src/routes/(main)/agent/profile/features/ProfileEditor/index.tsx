@@ -1,329 +1,106 @@
 'use client';
 
-import { isDesktop } from '@lobechat/const';
-import {
-  isHeterogeneousProviderBindingSupported,
-  isRemoteHeterogeneousType,
-  isServerDefaultHeterogeneousAgentType,
-} from '@lobechat/heterogeneous-agents';
-import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import type { TabsItem } from '@lobehub/ui/base-ui';
-import { Alert, Button, Tabs } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, Flexbox, toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { ChevronDown, Wrench } from 'lucide-react';
-import React, { memo } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
-import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
-import { ModelIcon } from '@/components/LobeIcons';
-import { resolveServerDefaultAgentModels } from '@/features/HeterogeneousAgent/modelPicker';
-import ReasoningEffortSelect from '@/features/ModelSelect/ReasoningEffortSelect';
-import ModelSwitchPanel from '@/features/ModelSwitchPanel';
-import RunPriorityHint from '@/features/ProfileEditor/AgentUserTools/RunPriorityHint';
-import { resolveExecutionTarget } from '@/helpers/executionTarget';
-import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
-import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
+import IdentityFields from '@/features/AgentIdentityModal/IdentityFields';
+import { useAgentIdentityForm } from '@/features/AgentIdentityModal/useAgentIdentityForm';
+import { AgentProfileArtwork } from '@/features/AgentProfileArtwork';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
-import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { agentSelectors } from '@/store/agent/selectors';
+import { useGlobalStore } from '@/store/global';
+import { globalGeneralSelectors } from '@/store/global/selectors';
 
-import EditorCanvas from '../EditorCanvas';
-import AgentHeader from './AgentHeader';
-import AgentTool from './AgentTool';
-import CloudHeterogeneousConfig from './CloudHeterogeneousConfig';
-import HeterogeneousAgentStatusCard from './HeterogeneousAgentStatusCard';
-import RemoteAgentConfigCard from './RemoteAgentConfigCard';
-import WorkspaceAgentDevicePolicy from './WorkspaceAgentDevicePolicy';
-import { WorkspaceAgentModelPolicy } from './WorkspaceAgentModelPolicy';
-import { WorkspaceAgentPolicyCard } from './WorkspaceAgentPolicyCard';
+/** The identity fields on the page, saved together with one button. */
+const IdentityForm = memo<{ agentId: string }>(({ agentId }) => {
+  const { t } = useTranslation(['common', 'setting']);
+  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
+  const slug = useAgentStore(agentSelectors.getAgentSlugById(agentId));
+  const form = useAgentIdentityForm({
+    agentId,
+    onSaved: () => toast.success(t('settingAgent.identity.saved', { ns: 'setting' })),
+  });
 
-const styles = createStaticStyles(({ css }) => ({
-  configLabel: css`
-    font-size: 12px;
-    line-height: 1;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  configStack: css`
-    container-type: inline-size;
-  `,
-  configPanel: css`
-    padding: 24px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  topArea: css`
-    cursor: default;
-    margin-block-end: 28px;
-  `,
-}));
-
-const ProfileEditor = memo(() => {
-  const { t } = useTranslation(['setting', 'agent']);
-  const { allowed: canEdit } = usePermission('edit_own_content');
-  const agentId = useAgentStore((s) => s.activeAgentId || '');
-  const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
-  const { isShared } = useAgentShareSupported(agentId);
-  const chatModels = useEnabledChatModels();
-  const enabledList =
-    isShared && AGENT_SHARE_ALLOWED_PROVIDERS
-      ? chatModels.filter((provider) => AGENT_SHARE_ALLOWED_PROVIDERS?.includes(provider.id))
-      : undefined;
-  const selectedModel = useAiInfraStore(
-    aiModelSelectors.getEnabledModelById(config?.model ?? '', config?.provider ?? ''),
-  );
-  const isWorkspaceAgent = useAgentStore(agentByIdSelectors.isWorkspaceAgentById(agentId));
-  const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
-  const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
-  const heterogeneousProvider = config?.agencyConfig?.heterogeneousProvider;
-  const { agencyConfig: effectiveAgencyConfig, workspaceScoped } =
-    useEffectiveAgencyConfig(agentId);
-
-  const updateHeterogeneousCommand = async (command: string) => {
-    if (!canEdit) return;
-    if (!heterogeneousProvider) return;
-    await updateAgentConfigById(agentId, {
-      agencyConfig: {
-        heterogeneousProvider: { ...heterogeneousProvider, command },
-      },
-    });
-  };
-
-  const updateHeterogeneousEnv = async (env: Record<string, string>) => {
-    if (!canEdit) return;
-    if (!heterogeneousProvider) return;
-    await updateAgentConfigById(agentId, {
-      agencyConfig: {
-        heterogeneousProvider: { ...heterogeneousProvider, env },
-      },
-    });
-  };
-
-  const updateHeterogeneousAuthMode = async (
-    authMode: HeterogeneousAuthMode,
-    apiConfig?: HeterogeneousApiConfig,
-  ) => {
-    if (!canEdit || !heterogeneousProvider) return;
-    await updateAgentConfigById(agentId, {
-      agencyConfig: {
-        heterogeneousProvider: { ...heterogeneousProvider, apiConfig, authMode },
-      },
-    });
-  };
-
-  const updateHeterogeneousApiConfig = async (apiConfig: HeterogeneousApiConfig | undefined) => {
-    if (!canEdit || !heterogeneousProvider) return;
-    await updateAgentConfigById(agentId, {
-      agencyConfig: {
-        heterogeneousProvider: { ...heterogeneousProvider, apiConfig },
-      },
-    });
-  };
-
-  const updateBoundDeviceId = async (boundDeviceId: string) => {
-    await updateAgentConfigById(agentId, {
-      agencyConfig: { ...config?.agencyConfig, boundDeviceId, executionTarget: 'device' },
-    });
-  };
-
-  const isRemoteHetero =
-    isHeterogeneous &&
-    !!heterogeneousProvider &&
-    isRemoteHeterogeneousType(heterogeneousProvider.type);
-  const showCloudHeterogeneousTab = heterogeneousProvider?.type === 'claude-code';
-  const localDesktopAvailable =
-    isDesktop &&
-    !!heterogeneousProvider &&
-    isHeterogeneousProviderBindingSupported(heterogeneousProvider.type) &&
-    resolveExecutionTarget(effectiveAgencyConfig, {
-      clientExecutionAvailable: true,
-      isHetero: true,
-      workspaceScoped,
-    }) === 'local';
-  // Workspace agents are excluded even when the author could spawn them
-  // locally: the binding UI would list workspace-scoped providers, but Desktop
-  // main resolves the reference in the personal scope only (see
-  // `selectRuntimeType`'s personal-scope guard). The deployment-default API
-  // source is not a user-provider binding, so it stays available whenever
-  // local Desktop execution is available.
-  const apiModeAvailable = localDesktopAvailable && !isWorkspaceAgent;
-  const useFetchServerDefaultCapability = useAgentStore(
-    (s) => s.useFetchServerDefaultHeterogeneousCapability,
-  );
-  // The shared matrix owns which native drivers can reach the deployment relay;
-  // model/runtime compatibility continues to come from the server capability below.
-  const serverDefaultAgentType =
-    heterogeneousProvider && isServerDefaultHeterogeneousAgentType(heterogeneousProvider.type)
-      ? heterogeneousProvider.type
-      : undefined;
-  const serverCapabilityEnabled = localDesktopAvailable && !!serverDefaultAgentType;
-  const serverCapability = useFetchServerDefaultCapability(serverCapabilityEnabled);
-  const serverDefaultModels =
-    serverCapability.data?.enabled === true && serverDefaultAgentType
-      ? resolveServerDefaultAgentModels(serverCapability.data.models, serverDefaultAgentType)
-      : [];
-  const serverDefaultAvailable = serverCapabilityEnabled && serverDefaultModels.length > 0;
-  const serverDefaultUnavailableReason = !localDesktopAvailable
-    ? t('heterogeneousStatus.apiMode.localOnly')
-    : serverCapability.error
-      ? t('heterogeneousStatus.apiMode.serverDefault.loadFailed')
-      : serverCapability.data?.enabled === false
-        ? t(
-            serverCapability.data.reason === 'disabled'
-              ? 'heterogeneousStatus.apiMode.serverDefault.disabled'
-              : 'heterogeneousStatus.apiMode.serverDefault.invalidConfiguration',
-          )
-        : serverCapabilityEnabled && !serverCapability.isLoading && !serverDefaultAvailable
-          ? t('heterogeneousStatus.apiMode.serverDefault.unsupported')
-          : undefined;
-  const heterogeneousTabItems: TabsItem[] = heterogeneousProvider
-    ? [
-        ...(showCloudHeterogeneousTab
-          ? [
-              {
-                key: 'cloud',
-                label: t('heterogeneousStatus.cloud.tabLabel'),
-                children: (
-                  <CloudHeterogeneousConfig
-                    provider={heterogeneousProvider}
-                    onEnvChange={updateHeterogeneousEnv}
-                  />
-                ),
-              },
-            ]
-          : []),
-        {
-          key: 'desktop',
-          label: t('heterogeneousStatus.desktop.tabLabel'),
-          disabled: !isDesktop,
-          children: (
-            <HeterogeneousAgentStatusCard
-              apiModeAvailable={apiModeAvailable}
-              apiModeWorkspaceBlocked={isWorkspaceAgent}
-              provider={heterogeneousProvider}
-              serverDefaultAvailable={serverDefaultAvailable}
-              serverDefaultLoading={serverCapabilityEnabled && serverCapability.isLoading}
-              serverDefaultModels={serverDefaultModels}
-              serverDefaultUnavailableReason={serverDefaultUnavailableReason}
-              onApiConfigChange={updateHeterogeneousApiConfig}
-              onAuthModeChange={updateHeterogeneousAuthMode}
-              onCommandChange={updateHeterogeneousCommand}
-              onServerDefaultRetry={() => {
-                void serverCapability.mutate();
-              }}
-            />
-          ),
-        },
-      ]
-    : [];
+  const dirty =
+    form.name.trim() !== (meta.name ?? '').trim() ||
+    form.title.trim() !== (meta.title ?? '').trim() ||
+    form.description.trim() !== (meta.description ?? '').trim() ||
+    (!form.slugLocked && form.slug.trim().toLowerCase() !== (slug ?? ''));
 
   return (
-    <>
-      <Flexbox
-        className={styles.topArea}
-        onClick={(e) => {
-          e.stopPropagation();
-        }}
-      >
-        {/* Header: Avatar + Name + Description */}
-        <AgentHeader />
-        <Flexbox
-          className={styles.configStack}
-          gap={8}
-          paddingBlock={isRemoteHetero ? '8px 0' : undefined}
+    <Flexbox gap={20}>
+      <IdentityFields agentId={agentId} autoFocus={false} form={form} />
+      <Flexbox horizontal gap={8}>
+        <Button
+          disabled={!dirty || form.saving}
+          loading={form.saving}
+          type={'primary'}
+          onClick={() => {
+            void form.save();
+          }}
         >
-          {isRemoteHetero && heterogeneousProvider ? (
-            // Remote platform agents (openclaw / hermes): show device config panel
-            <RemoteAgentConfigCard
-              provider={heterogeneousProvider}
-              onBoundDeviceChange={updateBoundDeviceId}
-            />
-          ) : isHeterogeneous && heterogeneousProvider ? (
-            // Local CLI agents: Claude Code supports cloud config; Codex is desktop-only for now.
-            <Tabs
-              defaultActiveKey={isDesktop || !showCloudHeterogeneousTab ? 'desktop' : 'cloud'}
-              items={heterogeneousTabItems}
-              size="small"
-            />
-          ) : isWorkspaceAgent ? (
-            <>
-              <Flexbox horizontal gap={8} wrap={'wrap'}>
-                <WorkspaceAgentModelPolicy agentId={agentId} />
-                <WorkspaceAgentDevicePolicy agentId={agentId} />
-              </Flexbox>
-              <WorkspaceAgentPolicyCard
-                fullWidth
-                action={<RunPriorityHint agentId={agentId} />}
-                icon={Wrench}
-                title={t('settingAgent.toolsConfig.title')}
-              >
-                <AgentTool />
-              </WorkspaceAgentPolicyCard>
-            </>
-          ) : (
-            <Flexbox className={styles.configPanel} gap={10}>
-              <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
-                <div className={styles.configLabel}>{t('settingAgent.runtimeConfig.title')}</div>
-                <RunPriorityHint agentId={agentId} />
-              </Flexbox>
-              <Flexbox horizontal align={'center'} gap={12} justify={'flex-start'} wrap={'wrap'}>
-                <ModelSwitchPanel
-                  enabledList={enabledList}
-                  model={config?.model}
-                  open={canEdit ? undefined : false}
-                  openOnHover={false}
-                  placement={'bottomLeft'}
-                  provider={config?.provider}
-                  notice={
-                    enabledList && (
-                      <Alert
-                        showIcon
-                        title={t('share.settings.modelRestriction.title', { ns: 'agent' })}
-                        type={'info'}
-                        description={t('share.settings.modelRestriction.description', {
-                          ns: 'agent',
-                        })}
-                      />
-                    )
-                  }
-                  onModelChange={async (value) => {
-                    if (canEdit) await updateAgentConfigById(agentId, value);
-                  }}
-                >
-                  <Button disabled={!canEdit}>
-                    <ModelIcon model={config?.model} size={20} />
-                    {selectedModel?.displayName || config?.model}
-                    <ChevronDown size={14} />
-                  </Button>
-                </ModelSwitchPanel>
-                {config?.model && config.provider && (
-                  <ReasoningEffortSelect
-                    disabled={!canEdit}
-                    model={config.model}
-                    provider={config.provider}
-                  />
-                )}
-              </Flexbox>
-              <AgentTool />
-            </Flexbox>
-          )}
-          {isHeterogeneous ? (
-            <WorkspaceAgentDevicePolicy agentId={agentId} showDevicePicker={!isRemoteHetero} />
-          ) : null}
-        </Flexbox>
+          {t('save', { ns: 'common' })}
+        </Button>
       </Flexbox>
-      {/* Main Content: Prompt Editor — built-in model runtime only. Hetero agents
-          (Claude Code / Codex + remote platforms) run an external CLI with its own
-          system prompt, so the agent's systemRole never reaches them. Hide the
-          editor here to avoid a control that looks effective but isn't (mirrors the
-          ModelSelect hiding above). */}
-      {!isHeterogeneous && <EditorCanvas />}
-    </>
+    </Flexbox>
   );
 });
+
+IdentityForm.displayName = 'IdentityForm';
+
+/**
+ * The Profile page: the agent's face — avatar and cover — and who it is, as the identity form
+ * right on the page. The instruction, what runs it and what it can use each have their own page.
+ */
+const ProfileEditor = memo(() => {
+  const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
+  const { allowed: canEdit } = usePermission('edit_own_content');
+  const agentId = useAgentStore((s) => s.activeAgentId || '');
+  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
+  const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
+  /** Keeps the render-only fallback avatar out of generation references. */
+  const storedAvatar = useAgentStore(agentSelectors.getAgentStoredAvatarById(agentId));
+  const updateMetaById = useAgentStore((s) => s.updateAgentMetaById);
+
+  return (
+    <Flexbox
+      gap={32}
+      paddingBlock={'0 48px'}
+      // Clicking here must not pull focus into the prompt editor of the shared session.
+      style={{ cursor: 'default' }}
+      onClick={(e) => {
+        e.stopPropagation();
+      }}
+    >
+      <Flexbox style={{ marginInline: -16, width: 'calc(100% + 32px)' }}>
+        <AgentProfileArtwork
+          agentId={agentId}
+          avatar={meta.avatar}
+          background={meta.backgroundColor}
+          canEdit={canEdit}
+          description={meta.description}
+          locale={locale}
+          name={meta.name}
+          storedAvatar={storedAvatar}
+          systemRole={config?.systemRole}
+          title={meta.title}
+          onAvatarChange={(avatar) => {
+            if (canEdit) void updateMetaById(agentId, { avatar });
+          }}
+          onBackgroundChange={(backgroundColor) => {
+            if (canEdit) void updateMetaById(agentId, { backgroundColor });
+          }}
+        />
+      </Flexbox>
+      {/* Keyed by agent so switching agents starts the form from that agent's values. */}
+      <IdentityForm agentId={agentId} key={agentId} />
+    </Flexbox>
+  );
+});
+
+ProfileEditor.displayName = 'ProfileEditor';
 
 export default ProfileEditor;

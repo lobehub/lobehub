@@ -4,6 +4,26 @@ import path from 'node:path';
 import { exists, mountDir, rootDir } from './paths';
 import type { RepoMount, RunResult } from './types';
 
+const MAX_GIT_CONTEXT_LENGTH = 1000;
+const MAX_GIT_STDERR_LENGTH = 2000;
+const TRUNCATION_SUFFIX = '\n… [truncated]';
+
+const redactSecrets = (value: string) =>
+  value
+    .replaceAll(/([a-z][a-z\d+.-]*:\/\/)[^@\s/]+@/giu, '$1[REDACTED]@')
+    .replaceAll(/\b(Basic|Bearer)\s+\S+/giu, '$1 [REDACTED]')
+    .replaceAll(
+      /((?:^|[?&\s/])(?:access[_-]?token|api[_-]?key|password|passwd|secret|token)=)[^&\s"'\\]+/giu,
+      '$1[REDACTED]',
+    )
+    .replaceAll(/\b(?:gh[pousr]_\w+|github_pat_\w+)\b/gu, '[REDACTED]');
+
+const boundedDiagnostic = (value: string, maxLength: number) => {
+  const redacted = redactSecrets(value.trim());
+  if (redacted.length <= maxLength) return redacted;
+  return `${redacted.slice(0, maxLength - TRUNCATION_SUFFIX.length)}${TRUNCATION_SUFFIX}`;
+};
+
 export const run = (command: string, args: string[], cwd: string): Promise<RunResult> =>
   new Promise((resolvePromise) => {
     const child = spawn(command, args, {
@@ -47,5 +67,13 @@ export const runTool = async (mount: RepoMount, toolArgs: string[], files: strin
 
 export const git = async (args: string[], cwd = rootDir()): Promise<string[]> => {
   const result = await run('git', args, cwd);
+  if (result.code !== 0) {
+    const command = boundedDiagnostic(JSON.stringify(['git', ...args]), MAX_GIT_CONTEXT_LENGTH);
+    const safeCwd = boundedDiagnostic(cwd, MAX_GIT_CONTEXT_LENGTH);
+    const stderr = boundedDiagnostic(result.stderr, MAX_GIT_STDERR_LENGTH) || '(empty)';
+    throw new Error(
+      `Git command failed with exit code ${result.code}\ncwd: ${safeCwd}\ncommand: ${command}\nstderr: ${stderr}`,
+    );
+  }
   return result.stdout.split('\n').filter(Boolean);
 };

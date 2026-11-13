@@ -1,8 +1,10 @@
 import type {
   AcceptanceCriterionSummary,
+  DisputeAcceptanceCriterionParams,
   SubmitAcceptanceEvidenceParams,
 } from '@lobechat/builtin-tool-acceptance-evidence';
 import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
+import { VERIFY_DISPUTE_KINDS } from '@lobechat/const/verify';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DocumentModel } from '@/database/models/document';
@@ -11,12 +13,32 @@ import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
+import { fileCheckDispute } from '@/server/services/verify/dispute';
+import { evidenceTypeForStoredFile } from '@/server/services/verify/evidenceMedium';
 
 import type { ServerRuntimeRegistration } from './types';
 
 /** Bounded wait for the run-start plan instantiation to land (~3s total). */
 const PLAN_WAIT_ATTEMPTS = 6;
 const PLAN_WAIT_INTERVAL_MS = 500;
+
+/**
+ * Mirror back the fields the server actually received for an evidence item.
+ * Models routinely "remember" writing a payload they never emitted in the
+ * arguments JSON (T-574: a builder resubmitted `{type}`-only items six times
+ * because the rejection never showed what had arrived, so it could not tell a
+ * transport problem from its own output). The echo turns each rejection into a
+ * self-diagnosable signal instead of a blind retry loop.
+ */
+const describeEvidenceFields = (item: SubmitAcceptanceEvidenceParams['evidence'][number]) => {
+  const present = (['content', 'description', 'documentId', 'fileId', 'type'] as const).filter(
+    (key) => {
+      const value = item[key];
+      return typeof value === 'string' && value.trim().length > 0;
+    },
+  );
+  return present.length > 0 ? present.join(', ') : 'no fields';
+};
 
 class AcceptanceEvidenceExecutionRuntime {
   constructor(
@@ -32,8 +54,8 @@ class AcceptanceEvidenceExecutionRuntime {
    * The builder now captures evidence inside the main Task run, so the plan
    * hangs off the operation the tool is called from. The post-run
    * evidence-submission turn is a *child* operation, and its plan still lives
-   * on the parent — hence the parent wins when there is one. Resolving only the
-   * parent (the original shape) made every in-run call fail NO_PARENT_OPERATION.
+   * on the parent. Repair operations have a parent AND their own round, so their
+   * own plan must win; otherwise repaired evidence overwrites the failed round.
    */
   private resolveRunOperationId = async () => {
     if (!this.operationId) return undefined;
@@ -43,7 +65,11 @@ class AcceptanceEvidenceExecutionRuntime {
       this.workspaceId,
     ).findById(this.operationId);
     if (!operation) return undefined;
-    return operation.parentOperationId ?? operation.id;
+    if (!operation.parentOperationId) return operation.id;
+    const ownRun = await new VerifyRunModel(this.db, this.userId, this.workspaceId).findByOperation(
+      operation.id,
+    );
+    return ownRun ? operation.id : operation.parentOperationId;
   };
 
   listCriteria = async () => {
@@ -146,7 +172,11 @@ class AcceptanceEvidenceExecutionRuntime {
     const empty = params.evidence.find((item) => !item.content && !item.documentId && !item.fileId);
     if (empty) {
       return {
-        content: 'Every evidence item needs content, a documentId, or a fileId.',
+        content:
+          'Every evidence item needs content, a documentId, or a fileId. ' +
+          `The server received only [${describeEvidenceFields(empty)}] for the rejected item — ` +
+          'if you intended a payload, write it as literal item fields inside the `evidence` ' +
+          'array of the tool arguments, e.g. {"type":"text","content":"..."}, and resend.',
         error: 'INVALID_EVIDENCE',
         success: false,
       };
@@ -168,7 +198,9 @@ class AcceptanceEvidenceExecutionRuntime {
     // with no file, which renders on the acceptance as a visual check with
     // nothing behind it: strictly worse than an honest text note.
     const unbacked = params.evidence.find(
-      (item) => (item.type === 'screenshot' || item.type === 'video') && !item.fileId,
+      (item) =>
+        (item.type === 'gif' || item.type === 'screenshot' || item.type === 'video') &&
+        !item.fileId,
     );
     if (unbacked) {
       return {
@@ -176,7 +208,8 @@ class AcceptanceEvidenceExecutionRuntime {
           `Evidence of type "${unbacked.type}" must reference a real artifact through fileId — ` +
           'inline content cannot stand in for one. Capture the artifact with a tool that ' +
           'returns a files.id, then cite that id. If you cannot produce one, submit what you ' +
-          'actually observed as type "text" instead of claiming a visual artifact.',
+          'actually observed as type "text" instead of claiming a visual artifact. ' +
+          `The server received only [${describeEvidenceFields(unbacked)}] for the rejected item.`,
         error: 'UNBACKED_VISUAL_EVIDENCE',
         success: false,
       };
@@ -210,6 +243,7 @@ class AcceptanceEvidenceExecutionRuntime {
     }
 
     const fileIds = [...new Set(params.evidence.flatMap((evidence) => evidence.fileId ?? []))];
+    const filesById = new Map<string, Awaited<ReturnType<FileModel['findById']>>>();
     if (fileIds.length > 0) {
       const files = await Promise.all(
         fileIds.map((fileId) =>
@@ -224,6 +258,7 @@ class AcceptanceEvidenceExecutionRuntime {
           success: false,
         };
       }
+      fileIds.forEach((fileId, index) => filesById.set(fileId, files[index]));
     }
 
     const result = await new VerifyCheckResultModel(
@@ -249,7 +284,10 @@ class AcceptanceEvidenceExecutionRuntime {
         description: evidence.description ?? null,
         documentId: evidence.documentId ?? null,
         fileId: evidence.fileId ?? null,
-        type: evidence.type,
+        type: evidenceTypeForStoredFile(
+          evidence.type,
+          evidence.fileId ? filesById.get(evidence.fileId) : undefined,
+        ),
       })),
     );
 
@@ -257,6 +295,47 @@ class AcceptanceEvidenceExecutionRuntime {
       content: `Recorded ${params.evidence.length} evidence item(s) for "${item.title}".`,
       success: true,
     };
+  };
+
+  disputeCriterion = async (params: DisputeAcceptanceCriterionParams) => {
+    if (!this.operationId) return { error: 'NO_OPERATION', success: false };
+    if (
+      !params.checkItemId ||
+      !params.reason?.trim() ||
+      !(VERIFY_DISPUTE_KINDS as readonly string[]).includes(params.kind)
+    ) {
+      return {
+        content:
+          'A dispute needs a checkItemId, a kind (invalid_criterion or missed_evidence) and a reason.',
+        error: 'INVALID_ARGUMENTS',
+        success: false,
+      };
+    }
+
+    const runOperationId = await this.resolveRunOperationId();
+    if (!runOperationId) return { error: 'NO_OPERATION', success: false };
+    const operation = await new AgentOperationModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).findById(runOperationId);
+
+    const result = await fileCheckDispute(
+      this.db,
+      this.userId,
+      {
+        checkItemId: params.checkItemId,
+        evidenceIds: params.evidenceIds?.filter((id) => id?.trim()),
+        kind: params.kind,
+        reason: params.reason,
+        runOperationId,
+        taskId: operation?.taskId ?? undefined,
+      },
+      this.workspaceId,
+    );
+    return result.success
+      ? { content: result.message, dispute: result.dispute, success: true }
+      : { content: result.message, error: result.error, success: false };
   };
 }
 

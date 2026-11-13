@@ -13,6 +13,7 @@ import {
 const webContext: SettingsSearchContext = {
   disableEmailPassword: false,
   enableBusinessFeatures: true,
+  enableChannels: false,
   enableComposio: true,
   enableGatewayMode: true,
   hasEmail: true,
@@ -24,6 +25,15 @@ const webContext: SettingsSearchContext = {
 };
 
 describe('settings search index', () => {
+  it('only exposes the channel decision setting when channels are enabled', () => {
+    const item = SETTINGS_SEARCH_ITEMS.find(
+      (entry) => entry.labelKey === 'systemAgent.channelRouting.title',
+    )!;
+
+    expect(item.visible?.({ ...webContext, enableChannels: false }) ?? true).toBe(false);
+    expect(item.visible?.({ ...webContext, enableChannels: true }) ?? true).toBe(true);
+  });
+
   it('derives one search item per lab feature in catalog order', () => {
     const labsItems = SETTINGS_SEARCH_ITEMS.filter((item) => item.tab === SettingsTabs.Labs);
 
@@ -38,6 +48,18 @@ describe('settings search index', () => {
     for (const feature of LAB_FEATURES) {
       const item = labsItems.find(({ anchor }) => anchor === `labs-${feature.flag}`)!;
       expect(item.visible?.(webContext) ?? true).toBe(!feature.desktopOnly);
+    }
+  });
+
+  it('shows workspace lab features exactly where business features are enabled', () => {
+    const labsItems = SETTINGS_SEARCH_ITEMS.filter((item) => item.tab === SettingsTabs.Labs);
+    const workspaceItems = LAB_FEATURES.filter((feature) => feature.workspaceOnly).map(({ flag }) =>
+      labsItems.find(({ anchor }) => anchor === `labs-${flag}`)!,
+    );
+
+    for (const item of workspaceItems) {
+      expect(item.visible?.(webContext)).toBe(true);
+      expect(item.visible?.({ ...webContext, enableBusinessFeatures: false })).toBe(false);
     }
   });
 

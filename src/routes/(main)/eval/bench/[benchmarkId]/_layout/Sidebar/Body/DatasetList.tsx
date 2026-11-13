@@ -1,22 +1,24 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
   AccordionTrigger,
+  Flexbox,
   Text,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { Database } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { benchmarkDatasetPath } from '@/features/LobeBench/experimentNavigation';
+import { useIsLobeBenchBenchmark } from '@/features/LobeBench/useIsLobeBenchBenchmark';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useEvalStore } from '@/store/eval';
+import { datasetSelectors, useEvalStore } from '@/store/eval';
 
 interface DatasetListProps {
   activeKey: string;
@@ -27,8 +29,9 @@ interface DatasetListProps {
 const DatasetList = memo<DatasetListProps>(({ activeKey, benchmarkId, itemKey }) => {
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
-  const datasetList = useEvalStore((s) => s.datasetList);
-  const isLoading = useEvalStore((s) => s.isLoadingDatasets);
+  const datasetList = useEvalStore(datasetSelectors.datasetList(benchmarkId));
+  const isLoading = useEvalStore(datasetSelectors.isLoadingDatasetList(benchmarkId));
+  const lobeBench = useIsLobeBenchBenchmark(benchmarkId);
 
   return (
     <AccordionItem value={itemKey}>
@@ -54,10 +57,10 @@ const DatasetList = memo<DatasetListProps>(({ activeKey, benchmarkId, itemKey })
             datasetList.map((ds: any) => (
               <WorkspaceLink
                 key={ds.id}
-                to={`/eval/bench/${benchmarkId}/datasets/${ds.id}`}
+                to={benchmarkDatasetPath(ds.id, lobeBench)}
                 onClick={(e) => {
                   e.preventDefault();
-                  navigate(`/eval/bench/${benchmarkId}/datasets/${ds.id}`);
+                  navigate(benchmarkDatasetPath(ds.id, lobeBench));
                 }}
               >
                 <NavItem

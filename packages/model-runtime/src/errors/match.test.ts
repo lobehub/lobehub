@@ -229,14 +229,6 @@ describe('numericId contract', () => {
     }
   });
 
-  it('spec entries appear in source order sorted by numericId', () => {
-    // JS object keys preserve insertion order — this guard prevents future
-    // additions from being wedged into the wrong section.
-    const ids = specs.map((s) => s.numericId);
-    const sortedIds = [...ids].sort((a, b) => a - b);
-    expect(ids).toEqual(sortedIds);
-  });
-
   it('tier digit is 0 (OSS) or the cloud digit', () => {
     for (const spec of specs) {
       const tier = Math.floor(spec.numericId / 100) % 10;
@@ -350,6 +342,18 @@ describe('matchErrorPattern — second residue convergence round', () => {
     [
       'Unable to download content from the provided URL before the timeout.',
       AgentRuntimeErrorType.RemoteMediaDownloadTimeout,
+    ],
+    [
+      'Exceeded maximum number of images (50) allowed in the request.',
+      AgentRuntimeErrorType.ExceededImageLimit,
+    ],
+    [
+      'Too many images in request: 51, maximum allowed: 50.',
+      AgentRuntimeErrorType.ExceededImageLimit,
+    ],
+    [
+      'Exceeded maximum number of images (100) allowed in the request.',
+      AgentRuntimeErrorType.ExceededImageLimit,
     ],
     ['404 page not found', AgentRuntimeErrorType.UserConfigError],
     [

@@ -1,34 +1,22 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Button, Select } from '@lobehub/ui/base-ui';
+import { Avatar, Button, Empty, Flexbox, Input, Select, Spin, TextArea, toast } from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { useMutation } from '@tanstack/react-query';
-import { Empty, Form, Input, Spin } from 'antd';
-import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type CredsApi } from '../useCredsApi';
+import { credErrorKey } from '../credError';
+import { createExtras, type CredsApi } from '../useCredsApi';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  connectionOption: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  `,
-  footer: css`
-    display: flex;
-    gap: 8px;
-    justify-content: flex-end;
-    margin-block-start: 24px;
-  `,
-  provider: css`
-    font-weight: 500;
-  `,
-  username: css`
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  connectionOption: { display: 'flex', gap: '8px', alignItems: 'center' },
+  footer: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginBlockStart: '24px' },
+  provider: { fontWeight: 500 },
+  username: { color: cssVar.colorTextSecondary },
+});
 
 interface OAuthCredFormProps {
   credsApi: CredsApi;
@@ -46,7 +34,7 @@ interface FormValues {
 
 const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onBack, onSuccess }) => {
   const { t } = useTranslation('setting');
-  const [form] = Form.useForm<FormValues>();
+  const form = useForm<FormValues>({ onSubmit: (values) => handleSubmit(values) });
 
   const { data: connectionsData, isLoading } = credsApi.query.listOAuthConnections.useQuery();
 
@@ -57,11 +45,11 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onBack, onS
 
     return {
       label: (
-        <span className={styles.connectionOption}>
+        <span {...stylex.props(styles.connectionOption)}>
           {conn.avatar && <Avatar avatar={conn.avatar} size={24} />}
           <span>
-            <span className={styles.provider}>{provider}</span>
-            {displayName && <span className={styles.username}> - {displayName}</span>}
+            <span {...stylex.props(styles.provider)}>{provider}</span>
+            {displayName && <span {...stylex.props(styles.username)}> - {displayName}</span>}
           </span>
         </span>
       ),
@@ -79,7 +67,11 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onBack, onS
         key: values.key,
         name: values.name,
         oauthConnectionId: values.oauthConnectionId,
+        ...createExtras(credsApi),
       });
+    },
+    onError: (error) => {
+      toast.error(t(credErrorKey(error, 'creds.errors.createFailed')));
     },
     onSuccess: () => {
       onSuccess();
@@ -104,7 +96,7 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onBack, onS
     return (
       <Flexbox gap={16}>
         <Empty description={t('creds.oauth.noConnections')} />
-        <div className={styles.footer}>
+        <div {...stylex.props(styles.footer)}>
           <Button onClick={onBack}>{t('creds.form.back')}</Button>
         </div>
       </Flexbox>
@@ -112,47 +104,43 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onBack, onS
   }
 
   return (
-    <Form<FormValues> form={form} layout="vertical" onFinish={handleSubmit}>
-      <Form.Item
+    <Form form={form} layout="vertical">
+      <Form.Field
         label={t('creds.form.selectConnection')}
         name="oauthConnectionId"
-        rules={[{ required: true, message: t('creds.form.connectionRequired') }]}
+        required={t('creds.form.connectionRequired')}
       >
         <Select
           disabled={disabled}
           options={connectionOptions}
           placeholder={t('creds.form.selectConnectionPlaceholder')}
         />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item
+      <Form.Field
         label={t('creds.form.key')}
         name="key"
-        rules={[
-          { required: true, message: t('creds.form.keyRequired') },
-          { pattern: /^[\w-]+$/, message: t('creds.form.keyPattern') },
-        ]}
+        required={t('creds.form.keyRequired')}
+        validate={(value?: string) =>
+          value && !/^[\w-]+$/.test(value) ? t('creds.form.keyPattern') : undefined
+        }
       >
         <Input disabled={disabled} placeholder="e.g., github-oauth" />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item
-        label={t('creds.form.name')}
-        name="name"
-        rules={[{ required: true, message: t('creds.form.nameRequired') }]}
-      >
+      <Form.Field label={t('creds.form.name')} name="name" required={t('creds.form.nameRequired')}>
         <Input disabled={disabled} placeholder="e.g., GitHub Connection" />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item label={t('creds.form.description')} name="description">
-        <Input.TextArea
+      <Form.Field label={t('creds.form.description')} name="description">
+        <TextArea
           disabled={disabled}
           placeholder={t('creds.form.descriptionPlaceholder')}
           rows={2}
         />
-      </Form.Item>
+      </Form.Field>
 
-      <div className={styles.footer}>
+      <div {...stylex.props(styles.footer)}>
         <Button onClick={onBack}>{t('creds.form.back')}</Button>
         <Button
           disabled={disabled}

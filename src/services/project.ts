@@ -4,9 +4,30 @@ import { createWorkspaceLambdaClient, lambdaClient } from '@/libs/trpc/client';
 
 const PROJECT_PAGE_SIZE = 100;
 
+export interface ProjectAgentBindingPatch {
+  enabled?: boolean;
+  responsibility?: string | null;
+  role?: string | null;
+  sortOrder?: number;
+}
+
+export interface ProjectKnowledgeBaseBindingPatch {
+  enabled?: boolean;
+  sortOrder?: number;
+}
+
 class ProjectService {
   acceptCompletion = async (id: string, comment?: string) =>
     lambdaClient.project.acceptCompletion.mutate({ comment, id });
+
+  addAgent = async (id: string, agentId: string, patch: ProjectAgentBindingPatch = {}) =>
+    lambdaClient.project.addAgent.mutate({ agentId, id, ...patch });
+
+  addKnowledgeBase = async (
+    id: string,
+    knowledgeBaseId: string,
+    patch: ProjectKnowledgeBaseBindingPatch = {},
+  ) => lambdaClient.project.addKnowledgeBase.mutate({ id, knowledgeBaseId, ...patch });
 
   listAll = async (params: { statuses?: ProjectStatus[] } = {}) => {
     const projects = [];
@@ -26,16 +47,26 @@ class ProjectService {
     return { ...response, data: projects };
   };
 
+  /** Folder-card content (recent topics, task progress, members) for every visible project. */
+  listOverviews = async () => lambdaClient.project.listOverviews.query();
+
   detail = async (id: string) => lambdaClient.project.detail.query({ id });
 
   delete = async (id: string) => lambdaClient.project.delete.mutate({ id });
 
+  move = async (id: string, anchor: { afterId: string } | { beforeId: string }) =>
+    lambdaClient.project.move.mutate({ id, ...anchor });
+
   create = async (
     params: {
       avatar?: string;
+      coordinatorAgentId?: string;
+      dedicatedAgentId?: string;
       description?: string;
-      identifier: string;
+      id?: string;
+      identifier?: string;
       name: string;
+      repository?: { defaultBranch?: string; name: string; url: string };
       slug?: string;
       visibility?: ProjectVisibility;
     },
@@ -48,12 +79,37 @@ class ProjectService {
   rejectCompletion = async (id: string, comment: string) =>
     lambdaClient.project.rejectCompletion.mutate({ comment, id });
 
+  removeAgent = async (id: string, agentId: string) =>
+    lambdaClient.project.removeAgent.mutate({ agentId, id });
+
+  removeKnowledgeBase = async (id: string, knowledgeBaseId: string) =>
+    lambdaClient.project.removeKnowledgeBase.mutate({ id, knowledgeBaseId });
+
+  replaceCoordinator = async (id: string, agentId: string) =>
+    lambdaClient.project.replaceCoordinator.mutate({ agentId, id });
+
   reopen = async (id: string) => lambdaClient.project.reopen.mutate({ id });
 
   requestCompletion = async (id: string) => lambdaClient.project.requestCompletion.mutate({ id });
 
-  update = async (id: string, input: { name?: string }) =>
-    lambdaClient.project.update.mutate({ id, ...input });
+  update = async (
+    id: string,
+    input: {
+      avatar?: string | null;
+      description?: string | null;
+      name?: string;
+      slug?: string | null;
+    },
+  ) => lambdaClient.project.update.mutate({ id, ...input });
+
+  updateAgent = async (id: string, agentId: string, patch: ProjectAgentBindingPatch) =>
+    lambdaClient.project.updateAgent.mutate({ agentId, id, ...patch });
+
+  updateKnowledgeBase = async (
+    id: string,
+    knowledgeBaseId: string,
+    patch: ProjectKnowledgeBaseBindingPatch,
+  ) => lambdaClient.project.updateKnowledgeBase.mutate({ id, knowledgeBaseId, ...patch });
 
   updateStatus = async (id: string, status: 'active' | 'archived' | 'backlog' | 'paused') =>
     lambdaClient.project.updateStatus.mutate({ id, status });

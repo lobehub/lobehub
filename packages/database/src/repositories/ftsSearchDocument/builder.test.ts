@@ -22,7 +22,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { FTS_SEARCH_DOCUMENT_FIXTURES } from './__tests__/fixtures';
-import { FtsSearchDocumentBuilder } from './builder';
+import { FTS_SEARCH_DOCUMENT_CONTENT_MAX_CHARS, FtsSearchDocumentBuilder } from './builder';
 import { FTS_SEARCH_DOCUMENT_ENTITIES } from './zodSchema';
 
 const userId = 'search-document-user';
@@ -386,6 +386,28 @@ describe('FtsSearchDocumentBuilder', () => {
     await expect(
       builder.buildByIds('documents', ['generated-document-agent-share']),
     ).resolves.toEqual([]);
+  });
+
+  it('caps oversized document content by characters while keeping the full character count', async () => {
+    const content = `${'文'.repeat(FTS_SEARCH_DOCUMENT_CONTENT_MAX_CHARS)}tail beyond the cap`;
+    await db.insert(documents).values({
+      content,
+      fileType: 'text/plain',
+      id: 'document-oversized',
+      source: 'https://example.com/oversized.txt',
+      sourceType: 'file',
+      title: 'Oversized document',
+      totalCharCount: content.length,
+      totalLineCount: 1,
+      userId,
+    });
+
+    const [document] = await builder.buildByIds('documents', ['document-oversized']);
+
+    expect(document.source).toMatchObject({
+      content: '文'.repeat(FTS_SEARCH_DOCUMENT_CONTENT_MAX_CHARS),
+      total_char_count: content.length,
+    });
   });
 
   it('rejects invalid batch limits before querying PostgreSQL', async () => {

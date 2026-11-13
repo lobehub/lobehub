@@ -1,4 +1,3 @@
-import { PAGE_DOCUMENT_FILE_TYPES, PAGE_DOCUMENT_SOURCE_TYPES } from '@lobechat/const';
 import { type DocumentItem } from '@lobechat/database/schemas';
 
 import { lambdaClient } from '@/libs/trpc/client';
@@ -166,10 +165,13 @@ export class DocumentService {
   }
 
   async queryDocuments(params?: {
+    creator?: 'others' | 'self';
     current?: number;
     fileTypes?: string[];
     pageSize?: number;
+    sortBy?: 'createdAt' | 'title' | 'updatedAt';
     sourceTypes?: string[];
+    standaloneOnly?: boolean;
   }): Promise<{ items: DocumentItem[]; total: number }> {
     return lambdaClient.document.queryDocuments.query(params);
   }
@@ -205,23 +207,6 @@ export class DocumentService {
     const result = await lambdaClient.document.compareDocumentHistoryItems.query(params);
 
     return serializeHistoryComparison(result);
-  }
-
-  async getPageDocuments(pageSize: number = 20): Promise<DocumentItem[]> {
-    const result = await this.queryDocuments({
-      current: 0,
-      fileTypes: PAGE_DOCUMENT_FILE_TYPES,
-      pageSize,
-      sourceTypes: PAGE_DOCUMENT_SOURCE_TYPES,
-    });
-
-    return result.items
-      .filter(
-        (doc) =>
-          PAGE_DOCUMENT_SOURCE_TYPES.includes(doc.sourceType) &&
-          PAGE_DOCUMENT_FILE_TYPES.includes(doc.fileType),
-      )
-      .map((doc) => ({ ...doc, filename: doc.filename ?? doc.title ?? 'Untitled' }));
   }
 
   async getDocumentById(id: string, uniqueKey?: string): Promise<DocumentItem | undefined> {
@@ -287,6 +272,15 @@ export class DocumentService {
     return {
       savedAt: result.savedAt instanceof Date ? result.savedAt.toISOString() : result.savedAt,
     };
+  }
+
+  /** Store a page's live collaboration room as a version; false when it has no live room. */
+  async snapshotPageVersion(documentId: string, saveSource: 'manual'): Promise<boolean> {
+    const { recorded } = await lambdaClient.document.snapshotPageVersion.mutate({
+      documentId,
+      saveSource,
+    });
+    return recorded;
   }
 
   async transferDocument(

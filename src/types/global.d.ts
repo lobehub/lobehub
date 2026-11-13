@@ -1,29 +1,20 @@
-import 'antd-style';
+import '@lobehub/ui';
 
 import { type IEditor } from '@lobehub/editor';
-import { type LobeCustomStylish, type LobeCustomToken } from '@lobehub/ui';
-import { type AntdToken } from 'antd-style/lib/types/theme';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
 
 import { type SPAServerConfig } from './spaServerConfig';
-
-declare module 'antd-style' {
-  export interface CustomToken extends LobeCustomToken {}
-
-  export interface CustomStylish extends LobeCustomStylish {}
-}
-
-declare module 'styled-components' {
-  export interface DefaultTheme extends AntdToken, LobeCustomToken {}
-}
 
 declare global {
   interface Window {
     __DEBUG_PROXY__: boolean | undefined;
     __editor?: IEditor;
     __LOBE_BOOT_T_HTML__?: number;
-    /** Dev-only: Zustand store snapshots via `getState()` keyed by store name */
+    /**
+     * Zustand store snapshots via `getState()` keyed by store name. Registered in dev, and in
+     * Desktop builds while remote debugging is on (`lobeEnv.exposeStores`).
+     */
     __LOBE_STORES?: Record<string, () => unknown>;
     /** Chat input editor of the main composer, mounted by MainChatInput while it is on screen */
     __mainEditor?: ChatInputEditor;
@@ -32,6 +23,8 @@ declare global {
       chromeVersion?: string;
       darwinMajorVersion?: number;
       electronVersion?: string;
+      /** Desktop remote debugging (CDP) is on, so stores register on `window.__LOBE_STORES` */
+      exposeStores?: boolean;
       isMacTahoe?: boolean;
       nodeVersion?: string;
       platform?: NodeJS.Platform;

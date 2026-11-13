@@ -215,6 +215,41 @@ describe('LocalFileCtr — readFile / readFiles (real fs)', () => {
       expect(result.content).toContain('[Image: failed.png]');
     });
 
+    it('should surface the storage-quota reason instead of a generic placeholder', async () => {
+      mockUploadService.uploadLocalFile.mockRejectedValue(
+        new Error(
+          'Command failed: lobe-cli.js file upload shot17.png --json id,url\n[ERROR] storage_block:upgrade_required',
+        ),
+      );
+      const filePath = path.join(tmpDir, 'shot17.png');
+      await writeFile(filePath, pngBytes);
+
+      const result = await localFileCtr.readFile({ path: filePath });
+
+      expect(result.imageUrl).toBeUndefined();
+      expect(result.content).toContain('[Image: shot17.png]');
+      expect(result.content).toContain('storage_block:upgrade_required');
+      expect(result.content).toMatch(/file storage is full/i);
+      expect(result.content).toMatch(/retrying will not help/i);
+    });
+
+    it('should tell a network upload failure apart from a full storage', async () => {
+      mockUploadService.uploadLocalFile.mockRejectedValue(
+        new Error(
+          'Command failed: lobe-cli.js file upload a.png\n[ERROR] fetch failed: ECONNRESET',
+        ),
+      );
+      const filePath = path.join(tmpDir, 'net.png');
+      await writeFile(filePath, pngBytes);
+
+      const result = await localFileCtr.readFile({ path: filePath });
+
+      expect(result.content).toContain('[Image: net.png]');
+      expect(result.content).toMatch(/network/i);
+      expect(result.content).toContain('ECONNRESET');
+      expect(result.content).not.toMatch(/storage is full/i);
+    });
+
     it('should return a readable error for a missing image', async () => {
       const result = await localFileCtr.readFile({ path: path.join(tmpDir, 'missing.png') });
 

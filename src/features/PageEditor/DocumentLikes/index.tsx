@@ -1,20 +1,24 @@
 'use client';
 
 import type { DocumentLikeSummary } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Skeleton, Text, toast, Tooltip } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Skeleton, Text, toast, Tooltip } from '@lobehub/ui';
 import { ThumbsUp } from 'lucide-react';
 import { memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import AsyncError from '@/components/AsyncError';
-import { useClientDataSWR } from '@/libs/swr';
-import { documentLikeKeys } from '@/libs/swr/keys';
+import UserAvatar from '@/components/UserAvatar';
 import { documentLikeService } from '@/services/documentLike';
+import {
+  documentCommentActions,
+  documentCommentSelectors,
+  useDocumentCommentStore,
+} from '@/store/documentComment';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
+
+import { resolveDocumentSectionState } from '../isDocumentUnavailableError';
 
 const BUTTON_SIZE = 56;
 const ICON_SIZE = 22;
@@ -108,18 +112,22 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const useDocumentLikeSummary = (workspaceId: string | null, documentId?: string | null) =>
-  useClientDataSWR<DocumentLikeSummary>(
-    workspaceId && documentId ? documentLikeKeys.summary(workspaceId, documentId) : null,
-    () => documentLikeService.summary(documentId!),
-    { dedupingInterval: 30_000 },
-  );
+/**
+ * The like summary paints from its replica: a reload shows the last confirmed
+ * count and likers on the first frame, and the network confirms it.
+ */
+const useDocumentLikeSummary = (workspaceId: string | null, documentId?: string | null) => {
+  const enabledId = workspaceId ? documentId : undefined;
+  const { error, revalidate } = documentCommentActions.useFetchLikeSummary(enabledId);
+  const data = useDocumentCommentStore(documentCommentSelectors.likeSummary(enabledId));
+  return { data, error, isLoading: Boolean(enabledId) && !data && !error, revalidate };
+};
 
 const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
   const { t } = useTranslation('file');
   const workspaceId = useActiveWorkspaceId();
   const user = useUserStore(userProfileSelectors.userProfile);
-  const { data, error, isLoading, mutate } = useDocumentLikeSummary(workspaceId, documentId);
+  const { data, error, isLoading, revalidate } = useDocumentLikeSummary(workspaceId, documentId);
   // Last user-intended liked state; null when the UI matches the server.
   const targetRef = useRef<boolean | null>(null);
   const inFlightRef = useRef(false);
@@ -131,6 +139,8 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
   const drain = useCallback(async () => {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
+    // Answers settle under the identity this drain started in (see beginLikeSettle).
+    const settle = documentCommentActions.beginLikeSettle(documentId);
     let sent: boolean | undefined;
     try {
       let summary: DocumentLikeSummary | undefined;
@@ -141,7 +151,7 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
           : await documentLikeService.unlike(documentId);
       }
       targetRef.current = null;
-      if (summary) await mutate(summary, { revalidate: false });
+      if (summary) settle.confirm(summary);
     } catch (toggleError) {
       console.error('Failed to toggle document like', toggleError);
       targetRef.current = null;
@@ -149,13 +159,13 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
       // Recover the truth from the server rather than guessing a rollback
       // point across coalesced toggles. The recovery fetch itself can fail
       // (e.g. an outage) — swallow it so drain() never rejects out of a void
-      // call; SWR revalidates again on the next focus/interval and corrects
+      // call; the replica revalidates again on the next focus and corrects
       // any stale optimistic state then.
-      await mutate().catch(() => undefined);
+      await settle.refresh().catch(() => undefined);
     } finally {
       inFlightRef.current = false;
     }
-  }, [documentId, mutate, t]);
+  }, [documentId, t]);
 
   const toggle = useCallback(() => {
     if (!data) return;
@@ -163,42 +173,41 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
     const nextLiked = !(targetRef.current ?? data.liked);
     targetRef.current = nextLiked;
 
-    void mutate(
-      (previous) => {
-        if (!previous) return previous;
-        return nextLiked
-          ? {
-              liked: true,
-              likers: [
-                {
-                  avatar: user?.avatar ?? null,
-                  fullName: user?.fullName ?? null,
-                  id: user?.id ?? 'me',
-                  username: user?.username ?? null,
-                },
-                ...previous.likers.filter((liker) => liker.id !== (user?.id ?? 'me')),
-              ],
-              total: previous.total + 1,
-            }
-          : {
-              liked: false,
-              likers: previous.likers.filter((liker) => liker.id !== (user?.id ?? 'me')),
-              total: Math.max(0, previous.total - 1),
-            };
-      },
-      { revalidate: false },
+    documentCommentActions.applyLikeSummary(documentId, (previous) =>
+      nextLiked
+        ? {
+            liked: true,
+            likers: [
+              {
+                avatar: user?.avatar ?? null,
+                fullName: user?.fullName ?? null,
+                id: user?.id ?? 'me',
+                username: user?.username ?? null,
+              },
+              ...previous.likers.filter((liker) => liker.id !== (user?.id ?? 'me')),
+            ],
+            total: previous.total + 1,
+          }
+        : {
+            liked: false,
+            likers: previous.likers.filter((liker) => liker.id !== (user?.id ?? 'me')),
+            total: Math.max(0, previous.total - 1),
+          },
     );
     void drain();
-  }, [data, drain, mutate, user?.avatar, user?.fullName, user?.id, user?.username]);
+  }, [data, documentId, drain, user?.avatar, user?.fullName, user?.id, user?.username]);
 
   if (!workspaceId) return null;
 
-  // A failed initial load must not masquerade as a zero-like page: surface a
-  // retryable error instead of the idle state with a dead button.
-  if (!data && error)
+  // A page that went private or is gone drops even the cached count and likers;
+  // a failed initial load must not masquerade as a zero-like page, so it
+  // surfaces a retryable error instead of the idle state with a dead button.
+  const sectionState = resolveDocumentSectionState(data, error);
+  if (sectionState === 'hidden') return null;
+  if (sectionState === 'error')
     return (
       <Flexbox data-document-likes align={'center'} className={styles.section} gap={16}>
-        <AsyncError error={error} variant={'inline'} onRetry={() => void mutate()} />
+        <AsyncError error={error} variant={'inline'} onRetry={() => void revalidate()} />
       </Flexbox>
     );
 
@@ -255,7 +264,7 @@ const DocumentLikes = memo<{ documentId: string }>(({ documentId }) => {
             const name = liker.fullName || liker.username || liker.id;
             return (
               <Tooltip key={liker.id} title={name}>
-                <Avatar avatar={liker.avatar || name} size={32} />
+                <UserAvatar avatar={liker.avatar} name={name} size={32} />
               </Tooltip>
             );
           })}

@@ -1,9 +1,18 @@
 // @vitest-environment node
 import { getTestDB } from '@lobechat/database/test-utils';
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ScmChangeRequestModel, ScmInstallationModel } from '@/database/models/scm';
-import { acceptances, scmWebhookDeliveries, users } from '@/database/schemas';
+import {
+  acceptances,
+  scmIdentities,
+  scmWebhookDeliveries,
+  topics,
+  users,
+  works,
+  workspaces,
+} from '@/database/schemas';
 
 import * as fx from '../github/__tests__/fixtures';
 import { normalizeGitHubEvent } from '../github/normalize';
@@ -241,6 +250,115 @@ describe('ScmIngestService', () => {
     await ingest('check_run', fx.checkRunEvent());
     row = await ScmChangeRequestModel.findById(serverDB, row!.id);
     expect(row).toMatchObject({ ciStatus: 'success', lastEventKind: 'ci_passed' });
+  });
+
+  it("routes a pull request to the author's own conversation, not the installation's tenant", async () => {
+    // The org installed the App on its workspace; the pull request was
+    // opened by a member whose agent lives in their personal scope.
+    const orgOwner = 'scm-ingest-org-owner';
+    await serverDB.insert(users).values({ id: orgOwner });
+    const [workspace] = await serverDB
+      .insert(workspaces)
+      .values({ name: 'ws', primaryOwnerId: orgOwner, slug: 'scm-ingest-ws' })
+      .returning();
+    await ScmInstallationModel.bind(serverDB, {
+      accountExternalId: '1',
+      accountLogin: 'lobehub',
+      accountType: 'organization',
+      installationId: String(fx.installation.id),
+      provider: 'github',
+      repositorySelection: 'all',
+      userId: orgOwner,
+      workspaceId: workspace.id,
+    });
+
+    // `pullRequest.user.id` is 42 in the fixture; that account is linked to
+    // our member, who is not in the workspace at all.
+    await serverDB.insert(scmIdentities).values({
+      externalLogin: 'arvinxx',
+      externalUserId: '42',
+      provider: 'github',
+      userId,
+    });
+    const [topic] = await serverDB.insert(topics).values({ title: 'PR topic', userId }).returning();
+    await serverDB.insert(works).values({
+      originTopicId: topic.id,
+      resourceId: 'lobehub/lobehub#19719',
+      resourceType: 'github_pull_request',
+      toolIdentifier: 'lobe-local-system',
+      toolName: 'runCommand',
+      type: 'external',
+      userId,
+      visibility: 'private',
+    });
+
+    expect(await ingest('pull_request', fx.pullRequestEvent('opened'))).toMatchObject({
+      status: 'processed',
+    });
+
+    const row = await ScmChangeRequestModel.findByIdentity(
+      serverDB,
+      'github',
+      'lobehub/lobehub',
+      19_719,
+    );
+    // The conversation is found, and the row says where to look for it.
+    expect(row).toMatchObject({ topicId: topic.id, userId, workspaceId: null });
+
+    // The workspace still sees the pull request: it owns the installation.
+    const seen = await ScmChangeRequestModel.listByScope(serverDB, {
+      userId: orgOwner,
+      workspaceId: workspace.id,
+    });
+    expect(seen.map((item) => item.id)).toContain(row!.id);
+
+    await serverDB.delete(users).where(eq(users.id, orgOwner));
+  });
+
+  it('keeps the routed owner when a later event resolves nothing', async () => {
+    const orgOwner = 'scm-ingest-org-owner-2';
+    await serverDB.insert(users).values({ id: orgOwner });
+    const [workspace] = await serverDB
+      .insert(workspaces)
+      .values({ name: 'ws', primaryOwnerId: orgOwner, slug: 'scm-ingest-ws-2' })
+      .returning();
+    await ScmInstallationModel.bind(serverDB, {
+      accountExternalId: '1',
+      accountLogin: 'lobehub',
+      accountType: 'organization',
+      installationId: String(fx.installation.id),
+      provider: 'github',
+      repositorySelection: 'all',
+      userId: orgOwner,
+      workspaceId: workspace.id,
+    });
+    await serverDB.insert(scmIdentities).values({
+      externalLogin: 'arvinxx',
+      externalUserId: '42',
+      provider: 'github',
+      userId,
+    });
+    // Personal acceptance, named in the fixture body.
+    await serverDB
+      .insert(acceptances)
+      .values({ id: acceptanceId, subjectId: 's', subjectType: 'standalone', userId });
+
+    await ingest('pull_request', fx.pullRequestEvent('opened'));
+    let row = await ScmChangeRequestModel.findByIdentity(
+      serverDB,
+      'github',
+      'lobehub/lobehub',
+      19_719,
+    );
+    expect(row).toMatchObject({ acceptanceId, userId, workspaceId: null });
+
+    // The link is edited out of the body and nothing else points at the
+    // pull request. That is less context, not a new owner.
+    await ingest('pull_request', fx.pullRequestEvent('edited', { body: 'No links here.' }));
+    row = await ScmChangeRequestModel.findById(serverDB, row!.id);
+    expect(row).toMatchObject({ acceptanceId, userId, workspaceId: null });
+
+    await serverDB.delete(users).where(eq(users.id, orgOwner));
   });
 
   it('maintains the installation from lifecycle events', async () => {

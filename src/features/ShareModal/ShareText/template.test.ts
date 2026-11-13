@@ -113,6 +113,25 @@ describe('generateMarkdown', () => {
     expect(result).toContain('```json\n{"result": "tool data"}\n```');
   });
 
+  it('should drop the hidden sub-agent reference from callSubAgent results', () => {
+    const result = generateMarkdown({
+      ...defaultParams,
+      includeTool: true,
+      messages: [
+        {
+          content: 'Found parts 1-3\n\n<sub_agent id="thd_1" />',
+          createdAt: Date.now(),
+          id: 'sub-agent-tool',
+          plugin: { apiName: 'callSubAgent', arguments: '{}', identifier: 'lobe-agent' },
+          role: 'tool',
+        },
+      ] as UIChatMessage[],
+    });
+
+    expect(result).toContain('```json\nFound parts 1-3\n```');
+    expect(result).not.toContain('<sub_agent');
+  });
+
   it('should exclude tool messages when includeTool is false', () => {
     const result = generateMarkdown({
       ...defaultParams,

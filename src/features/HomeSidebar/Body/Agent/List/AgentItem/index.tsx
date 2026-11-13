@@ -1,13 +1,14 @@
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { Loader2, PinIcon } from 'lucide-react';
+import { ActionIcon, Spin } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { PinIcon } from 'lucide-react';
 import { type CSSProperties, type DragEvent } from 'react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
@@ -19,59 +20,51 @@ import { useHomeStore } from '@/store/home';
 import { useAgentModal } from '../../ModalProvider';
 import Actions from '../Item/Actions';
 import { usePreservedAgentUrl } from '../usePreservedAgentUrl';
-import Avatar from './Avatar';
 import { useAgentDropdownMenu } from './useDropdownMenu';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  badge: css`
-    pointer-events: none;
-
-    position: absolute;
-    inset-block-end: -3px;
-    inset-inline-end: -3px;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    min-width: 14px;
-    height: 14px;
-    padding-inline: 3px;
-    border: 1.5px solid ${cssVar.colorBgContainer};
-    border-radius: 999px;
-
-    font-size: 9px;
-    font-weight: 600;
-    line-height: 1;
-    color: #fff;
-
-    background: ${cssVar.colorError};
-  `,
-  runningBadge: css`
-    pointer-events: none;
-
-    position: absolute;
-    inset-block-end: -3px;
-    inset-inline-end: -3px;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 14px;
-    height: 14px;
-    border: 1.5px solid ${cssVar.colorBgContainer};
-    border-radius: 999px;
-
-    color: ${cssVar.colorWarning};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  wrapper: css`
-    position: relative;
-    display: inline-flex;
-  `,
-}));
+const styles = stylex.create({
+  badge: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    insetBlockEnd: '-3px',
+    insetInlineEnd: '-3px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: '14px',
+    height: '14px',
+    paddingInline: '3px',
+    borderWidth: '1.5px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBgContainer,
+    borderRadius: '999px',
+    fontSize: '9px',
+    fontWeight: 600,
+    lineHeight: 1,
+    color: '#fff',
+    backgroundColor: cssVar.colorError,
+    backgroundImage: 'none',
+  },
+  runningBadge: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    insetBlockEnd: '-3px',
+    insetInlineEnd: '-3px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '14px',
+    height: '14px',
+    borderWidth: '1.5px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBgContainer,
+    borderRadius: '999px',
+    color: cssVar.colorWarning,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  wrapper: { position: 'relative', display: 'inline-flex' },
+});
 
 interface AgentItemProps {
   className?: string;
@@ -89,7 +82,6 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
   const unreadCount = item.unreadCount ?? 0;
   const { t } = useTranslation('chat');
   const { openCreateGroupModal } = useAgentModal();
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
 
   const prefetchAgent = usePrefetchAgent();
@@ -147,23 +139,25 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
   // Memoize avatar icon (show loader when updating, running spinner or unread badge at bottom-right)
   const avatarIcon = useMemo(() => {
     if (isUpdating) {
-      return <Icon spin color={cssVar.colorTextDescription} icon={Loader2} size={18} />;
+      return <Spin size="small" style={{ color: cssVar.colorTextDescription }} />;
     }
 
     const avatarNode = (
-      <Avatar
+      <AgentAvatar
+        agentId={id}
         avatar={typeof avatar === 'string' ? avatar : undefined}
-        avatarBackground={backgroundColor || undefined}
-        title={displayTitle}
+        background={backgroundColor || undefined}
+        name={displayTitle}
+        size={22}
       />
     );
 
     if (isLoading) {
       return (
-        <span className={styles.wrapper}>
+        <span {...stylex.props(styles.wrapper)}>
           {avatarNode}
-          <span className={styles.runningBadge}>
-            <Icon spin icon={Loader2} size={9} />
+          <span {...stylex.props(styles.runningBadge)}>
+            <Spin size={9} style={{ color: 'inherit' }} />
           </span>
         </span>
       );
@@ -171,22 +165,22 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
 
     if (unreadCount > 0) {
       return (
-        <span className={styles.wrapper}>
+        <span {...stylex.props(styles.wrapper)}>
           {avatarNode}
-          <span className={styles.badge}>{unreadCount > 99 ? '99+' : unreadCount}</span>
+          <span {...stylex.props(styles.badge)}>{unreadCount > 99 ? '99+' : unreadCount}</span>
         </span>
       );
     }
 
     return avatarNode;
-  }, [isUpdating, isLoading, avatar, backgroundColor, displayTitle, unreadCount]);
+  }, [isUpdating, isLoading, id, avatar, backgroundColor, displayTitle, unreadCount]);
 
   const dropdownMenu = useAgentDropdownMenu({
-    anchor,
     avatar: typeof avatar === 'string' ? avatar : undefined,
     backgroundColor: backgroundColor || undefined,
     group: undefined, // TODO: pass group from parent if needed
     id,
+    name: item.name,
     openCreateGroupModal: handleOpenCreateGroupModal,
     pinned: pinned ?? false,
     slug,
@@ -198,7 +192,6 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
   return (
     <WorkspaceLink
       aria-label={displayTitle}
-      ref={setAnchor}
       to={agentUrl}
       onClick={onNavigate}
       onMouseEnter={handleMouseEnter}

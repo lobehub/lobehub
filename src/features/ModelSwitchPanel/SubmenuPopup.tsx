@@ -12,6 +12,8 @@ import { PanelContent } from './components/PanelContent';
 import { styles } from './styles';
 
 interface ModelSwitchSubmenuPopupProps {
+  /** Muted text shown after the active model's name, e.g. its reasoning effort */
+  activeSecondaryText?: string;
   enabledList?: EnabledProviderWithModels[];
   model?: string;
   notice?: ReactNode;
@@ -27,11 +29,12 @@ interface ModelSwitchSubmenuPopupProps {
  * The caller supplies the `DropdownMenuSubmenuRoot` and its trigger row.
  */
 export const ModelSwitchSubmenuPopup = memo<ModelSwitchSubmenuPopupProps>(
-  ({ enabledList, model, notice, onModelChange, onOpenChange, provider }) => (
+  ({ activeSecondaryText, enabledList, model, notice, onModelChange, onOpenChange, provider }) => (
     <DropdownMenuPortal>
       <DropdownMenuPositioner alignOffset={-4} anchor={null} placement="right" sideOffset={8}>
         <DropdownMenuPopup className={styles.container} onKeyDown={stopPropagation}>
           <PanelContent
+            activeSecondaryText={activeSecondaryText}
             enabledList={enabledList}
             model={model}
             notice={notice}

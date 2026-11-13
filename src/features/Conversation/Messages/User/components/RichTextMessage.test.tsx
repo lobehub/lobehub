@@ -125,7 +125,7 @@ describe('RichTextMessage', () => {
     expect(container.textContent).toContain('report.md');
   });
 
-  // Regression (LOBE-14115): the renderer's stock image node is a bare <img>,
+  // Regression: the renderer's stock image node is a bare <img>,
   // so an image inside a published comment could not be enlarged.
   it('should open the image viewer when a rendered image is clicked', async () => {
     const { container } = render(

@@ -30,6 +30,19 @@ describe('resolveToolRules', () => {
     expect(resolveToolRules(request({ model: { canUseFC: false } })).toolMode).toBe('agent');
   });
 
+  it('enables only the attachments tool when an oversized file is previewed', () => {
+    expect(resolveToolRules(request()).rules['lobe-attachments']).toBe(false);
+
+    const { rules } = resolveToolRules(request({ hasOversizedFiles: true }));
+    expect(rules['lobe-attachments']).toBe(true);
+    expect(rules['lobe-knowledge-base']).toBe(false);
+
+    const chatMode = resolveToolRules(
+      request({ agent: { chatConfig: { enableAgentMode: false } }, hasOversizedFiles: true }),
+    );
+    expect(chatMode.rules['lobe-attachments']).toBe(true);
+  });
+
   it('chat mode is a strict whitelist with no activator and no always-on tools', () => {
     const resolved = resolveToolRules(
       request({

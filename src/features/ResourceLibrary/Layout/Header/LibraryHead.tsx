@@ -1,9 +1,17 @@
 'use client';
 
-import { Block, Center, stopPropagation } from '@lobehub/ui';
-import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { ActionIcon, DropdownMenu, Skeleton, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import type { DropdownItem } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Center,
+  createStaticStyles,
+  cx,
+  DropdownMenu,
+  Skeleton,
+  stopPropagation,
+  Text,
+} from '@lobehub/ui';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import type { DragEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -47,7 +55,9 @@ const Head = memo<{ id: string }>(({ id }) => {
   const [isDropZoneActive, setIsDropZoneActive] = useState(false);
 
   const useFetchKnowledgeBaseList = useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseList);
-  const { data: libraries } = useFetchKnowledgeBaseList();
+  // Fetch orchestration only; the rows are read from the replica view below.
+  useFetchKnowledgeBaseList();
+  const libraries = useKnowledgeBaseStore(knowledgeBaseSelectors.getKnowledgeBaseList());
   const activeLibrary = libraries?.find((library) => library.id === id) as
     (NonNullable<typeof libraries>[number] & { memberRestricted?: boolean }) | undefined;
 
@@ -106,7 +116,7 @@ const Head = memo<{ id: string }>(({ id }) => {
         key: library.id,
         label: library.name,
         onClick: () => handleLibrarySwitch(library.id),
-        style: library.id === id ? { backgroundColor: 'var(--ant-control-item-bg-active)' } : {},
+        style: library.id === id ? { backgroundColor: 'var(--lobe-control-item-bg-active)' } : {},
       },
       visibility: library.visibility,
     }));

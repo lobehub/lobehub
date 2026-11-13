@@ -258,11 +258,34 @@ const humanSize = (bytes) => {
 
 const formatDelta = (delta, baseline) => {
   const sign = delta > 0 ? '+' : delta < 0 ? '-' : '';
-  const percent = baseline > 0 ? ` (${sign}${((delta / baseline) * 100).toFixed(2)}%)` : '';
+  // `delta` is already signed, so its magnitude has to be re-abs'd here: without this a
+  // shrinking entry renders as `(--50.00%)`.
+  const percent = baseline > 0 ? ` (${sign}${Math.abs((delta / baseline) * 100).toFixed(2)}%)` : '';
   return `${sign}${humanSize(Math.abs(delta))}${percent}`;
 };
 
 const formatCountLimit = (count) => (Number.isInteger(count) ? String(count) : count.toFixed(2));
+
+/**
+ * Verdict line appended to the section heading. The heading is the only place the PR
+ * comment can see the numbers from — a passing gate is folded to a single line, so the
+ * magnitude has to live where that line can be built without re-deriving the tables.
+ *
+ * `unit` separates measurements that are not byte sizes: the Vite file count can decide
+ * the verdict, but it must never be rendered through the byte-oriented `formatDelta`.
+ */
+const buildHeadline = (compared) => {
+  if (compared.length === 0) return '';
+  const overCount = compared.filter((entry) => entry.over).length;
+  if (overCount > 0) return `exceeds the gate on ${overCount} of ${compared.length} entries`;
+  const sizes = compared.filter((entry) => entry.unit !== 'files');
+  if (sizes.length === 0) return '';
+  const worst = sizes.reduce((max, entry) =>
+    Math.abs(entry.delta) > Math.abs(max.delta) ? entry : max,
+  );
+  const count = `${sizes.length} ${sizes.length === 1 ? 'entry' : 'entries'}`;
+  return `${count}, largest Δ ${formatDelta(worst.delta, worst.base)}`;
+};
 
 const appendReport = (file, section) => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -308,6 +331,8 @@ const check = (args) => {
 
   const keys = [...new Set([...Object.keys(baselineSizes), ...Object.keys(currentSizes)])];
   const rows = [];
+  // Every comparison that produced a number and a verdict, feeding the heading headline.
+  const compared = [];
   let failed = false;
 
   for (const key of keys) {
@@ -325,6 +350,7 @@ const check = (args) => {
     const limit = Math.max((base * percent) / 100, floor);
     const over = delta > limit;
     if (over) failed = true;
+    compared.push({ base, delta, over, unit: 'bytes' });
     rows.push(
       `| ${key} | ${humanSize(base)} | ${humanSize(cur)} | ${formatDelta(delta, base)} | ${over ? '❌' : '✅'} |`,
     );
@@ -351,6 +377,12 @@ const check = (args) => {
       const chunkLimit = baselineJsChunks.total * (1 + jsChunkPercent / 100);
       const over = currentJsChunks.total > chunkLimit;
       if (over) failed = true;
+      compared.push({
+        base: baselineJsChunks.total,
+        delta: currentJsChunks.total - baselineJsChunks.total,
+        over,
+        unit: 'files',
+      });
       const targetKeys = [
         ...new Set([
           ...Object.keys(baselineJsChunks.targets || {}),
@@ -383,8 +415,9 @@ const check = (args) => {
     ({ name, before, after }) => `| ${name} | ${before || '—'} | ${after || '—'} |`,
   );
 
+  const headline = buildHeadline(compared);
   const section = [
-    `### ${failed ? '❌' : '✅'} ${label}`,
+    `### ${failed ? '❌' : '✅'} ${label}${headline ? ` — ${headline}` : ''}`,
     '',
     `| Entry | Baseline | Current | Δ | Result |`,
     `| --- | --- | --- | --- | --- |`,
@@ -447,6 +480,7 @@ const check = (args) => {
 };
 
 module.exports = {
+  buildHeadline,
   countJsFiles,
   diffResolvedDeps,
   measureEntryGraph,

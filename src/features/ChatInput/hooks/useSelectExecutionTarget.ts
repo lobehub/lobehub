@@ -2,14 +2,16 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceExecutionTarget } from '@lobechat/types';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 import { useCallback } from 'react';
 
 import { useAgentManagementAccess } from '@/features/ResourcePermission/useAgentManagementAccess';
+import { useLocalMachineDeviceIds } from '@/hooks/useLocalMachineDeviceIds';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { deviceSelectors, getDeviceStoreState } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 
@@ -74,6 +76,9 @@ export interface SelectExecutionTargetOptions {
  * respective semantics. That's why the old
  * `if (target === 'local' && isWorkspaceAgent) return;` guard is gone: with
  * per-user overrides my choice can't hurt other members.
+ *
+ * Resolves `true` only when the pick was persisted, so a caller with follow-up
+ * writes (re-pinning a topic) can stop when the save was refused or failed.
  */
 export const useSelectExecutionTarget = (agentId: string) => {
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
@@ -97,20 +102,21 @@ export const useSelectExecutionTarget = (agentId: string) => {
   // `local` selection to this device.
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
+  const localMachineDeviceIds = useLocalMachineDeviceIds();
 
   return useCallback(
     async (
       target: DeviceExecutionTarget,
       deviceId?: string,
       options?: SelectExecutionTargetOptions,
-    ) => {
-      if (isAccessLoading) return;
+    ): Promise<boolean> => {
+      if (isAccessLoading) return false;
 
       // Fixed workspace agents are author-controlled. Keep any existing member
       // override dormant (so switching back to member choice restores it), but
       // never let this picker create or update an override while fixed.
       if (usesWorkspaceMemberSelection && agencyConfig?.executionTargetSelectionPolicy === 'fixed')
-        return;
+        return false;
 
       const boundDeviceId = agencyConfig?.boundDeviceId;
       let nextBoundDeviceId = target === 'device' ? deviceId : boundDeviceId;
@@ -125,7 +131,7 @@ export const useSelectExecutionTarget = (agentId: string) => {
         }
         // Hetero agents must execute somewhere; without a resolvable local
         // device there is nothing to pin `local` to, so don't switch.
-        if (isHetero && !nextBoundDeviceId) return;
+        if (isHetero && !nextBoundDeviceId) return false;
       }
 
       // Store the intent verbatim (`local` stays `local`), not a
@@ -155,8 +161,18 @@ export const useSelectExecutionTarget = (agentId: string) => {
       // A `local` pick on a workspace agent is always this caller's own
       // machine — a personal device the workspace-shared row must never
       // reference (the server rejects it) — so it routes to the per-user
-      // override even for managers and private-agent owners.
-      if (usesWorkspaceMemberSelection || (isWorkspaceAgent && target === 'local')) {
+      // override even for managers and private-agent owners. Picking this
+      // machine's own PRIVATE workspace row is the same choice made through
+      // the gateway: binding it on the shared row would point every other
+      // member at a device they cannot see. A row shared as public stays a
+      // shared pick, like any other workspace device.
+      const picksThisMachine =
+        target === 'local' ||
+        (target === 'device' &&
+          !!deviceId &&
+          localMachineDeviceIds.includes(deviceId) &&
+          deviceSelectors.getDeviceById(deviceId)(getDeviceStoreState())?.visibility === 'private');
+      if (usesWorkspaceMemberSelection || (isWorkspaceAgent && picksThisMachine)) {
         const nextOverrides = {
           ...workspaceUserPreference.agentDeviceOverrides,
           [agentId]: {
@@ -170,8 +186,9 @@ export const useSelectExecutionTarget = (agentId: string) => {
           await updateWorkspaceUserPreference({ agentDeviceOverrides: nextOverrides });
         } catch {
           if (!options?.silent) toast.error(t('saveAgentConfigFail', { ns: 'common' }));
+          return false;
         }
-        return;
+        return true;
       }
 
       const nextConfig = {
@@ -198,7 +215,7 @@ export const useSelectExecutionTarget = (agentId: string) => {
           ...(options?.silent ? { showErrorMessage: false } : {}),
         });
       } catch {
-        return;
+        return false;
       }
 
       // A manager's earlier `local` pick lives in their own override and would
@@ -231,8 +248,10 @@ export const useSelectExecutionTarget = (agentId: string) => {
             { showErrorMessage: false },
           );
           if (!options?.silent) toast.error(t('saveAgentConfigFail', { ns: 'common' }));
+          return false;
         }
       }
+      return true;
     },
     [
       agentId,
@@ -241,6 +260,7 @@ export const useSelectExecutionTarget = (agentId: string) => {
       isHetero,
       isAccessLoading,
       isWorkspaceAgent,
+      localMachineDeviceIds,
       updateAgentConfigById,
       updateWorkspaceUserPreference,
       usesWorkspaceMemberSelection,

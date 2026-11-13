@@ -52,13 +52,24 @@ export interface WechatAttachmentSendResult {
 // that mock the adapter module would make the import throw right there.
 const WECHAT_SESSION_EXPIRED = -14;
 
-const describeWechatUploadError = (error: unknown): string => {
+//
+// Name the bot by its App ID: a user can hold several WeChat connections (a
+// per-agent bot integration and the System Bot messenger), and without the id
+// they rescan whichever one they think of first — usually the wrong one.
+const describeWechatUploadError = (error: unknown, applicationId?: string): string => {
   const message = error instanceof Error ? error.message : String(error);
   const code = (error as { code?: unknown } | null)?.code;
-  if (code === WECHAT_SESSION_EXPIRED)
-    return `WeChat bot session expired (errcode -14): the bot must be logged in again by scanning its QR code before media can be sent; ${message}`;
+  if (code === WECHAT_SESSION_EXPIRED) {
+    const bot = applicationId ? `WeChat bot ${applicationId}` : 'WeChat bot';
+    return `${bot} session expired (errcode -14): that bot must be logged in again by scanning its QR code before media can be sent; ${message}`;
+  }
   return message;
 };
+
+export interface SendWechatAttachmentsOptions {
+  /** iLink App ID of the sending bot, surfaced in failure details. */
+  applicationId?: string;
+}
 
 const mapAttachmentTypeToUploadMediaType = (
   type: WechatOutboundAttachment['type'],
@@ -137,6 +148,7 @@ export const sendWechatAttachments = async (
   toUserId: string,
   attachments: WechatOutboundAttachment[],
   contextToken: string,
+  options: SendWechatAttachmentsOptions = {},
 ): Promise<WechatAttachmentSendResult> => {
   const budget = PLATFORM_ATTACHMENT_BUDGETS.wechat;
   const fallbackLines: string[] = [];
@@ -228,7 +240,7 @@ export const sendWechatAttachments = async (
         error,
       );
       failures.push({
-        detail: describeWechatUploadError(error),
+        detail: describeWechatUploadError(error, options.applicationId),
         name: attachment.name,
         reason: 'upload-failed',
         type: attachment.type,

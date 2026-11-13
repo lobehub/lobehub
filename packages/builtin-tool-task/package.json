@@ -10,14 +10,14 @@
   "main": "./src/index.ts",
   "dependencies": {
     "@lobechat/const": "workspace:*",
-    "@lobechat/prompts": "workspace:*"
+    "@lobechat/prompts": "workspace:*",
+    "@lobechat/utils": "workspace:*"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@lobehub/ui": "^5",
-    "antd-style": "*",
+    "@lobehub/ui": "^6.0.4",
     "lucide-react": "*",
     "react": "*",
     "react-i18next": "*"

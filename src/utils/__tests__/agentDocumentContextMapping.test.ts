@@ -73,6 +73,11 @@ describe('toAgentContextDocument', () => {
     expect(toAgentContextDocument(buildDoc({ updatedAt: ts })).updatedAt).toBe(ts);
   });
 
+  it('propagates createdAt so the index can mark docs created during the current run', () => {
+    const ts = new Date('2026-09-23T22:57:58.000Z');
+    expect(toAgentContextDocument(buildDoc({ createdAt: ts })).createdAt).toBe(ts);
+  });
+
   it('maps a fully populated row into the AgentContextDocument shape', () => {
     const doc = buildDoc({
       description: 'web-crawled article',
@@ -91,6 +96,7 @@ describe('toAgentContextDocument', () => {
     expect(toAgentContextDocument(doc)).toEqual({
       content: 'body',
       contentCharCount: 4,
+      createdAt: doc.createdAt,
       description: 'web-crawled article',
       filename: 'crawl.md',
       id: 'agent-doc-2',
@@ -196,6 +202,38 @@ describe('toAgentContextDocuments', () => {
     expect(result.map((d) => d.id)).toEqual(['child-1', 'child-2', 'root']);
     expect(result.map((d) => d.folderTitle)).toEqual(['dailyBrief', 'dailyBrief', undefined]);
     expect(result.map((d) => d.parentId)).toEqual(['folder-doc', 'folder-doc', undefined]);
+  });
+
+  // A workflow document holds its run records; they fold under it like folder
+  // contents, and the parent document itself stays in the index.
+  it('stamps the parent title on children of an ordinary document', () => {
+    const rows = [
+      buildDoc({ documentId: 'sop-doc', id: 'sop', sourceType: 'file', title: 'Fix-round SOP' }),
+      buildDoc({ documentId: 'run-1', id: 'run-1', parentId: 'sop-doc', sourceType: 'file' }),
+      buildDoc({ documentId: 'run-2', id: 'run-2', parentId: 'sop-doc', sourceType: 'file' }),
+    ];
+
+    const result = toAgentContextDocuments(rows);
+
+    expect(result.map((d) => d.id)).toEqual(['sop', 'run-1', 'run-2']);
+    expect(result.map((d) => [d.folderTitle, d.parentKind])).toEqual([
+      [undefined, undefined],
+      ['Fix-round SOP', 'document'],
+      ['Fix-round SOP', 'document'],
+    ]);
+  });
+
+  it('does not treat web clips or skill rows as parents', () => {
+    const rows = [
+      buildDoc({ documentId: 'web-doc', id: 'web', sourceType: 'web' }),
+      buildDoc({ documentId: 'skill-doc', fileType: 'skills/index', id: 'skill' }),
+      buildDoc({ documentId: 'a', id: 'a', parentId: 'web-doc', sourceType: 'file' }),
+      buildDoc({ documentId: 'b', id: 'b', parentId: 'skill-doc', sourceType: 'file' }),
+    ];
+
+    const result = toAgentContextDocuments(rows);
+
+    expect(result.filter((d) => d.folderTitle)).toEqual([]);
   });
 
   it('keeps non-folder skill rows such as the SKILL.md index', () => {

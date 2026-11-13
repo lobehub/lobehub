@@ -8,7 +8,9 @@ import { useElectronStore } from '@/store/electron';
 import { initialState } from '@/store/electron/initialState';
 import { useUserStore } from '@/store/user';
 
-import { MAX_LIVE_TAB_ROUTERS } from './resolveLiveTabIds';
+import { useDisplayedTabStore } from './displayedTab';
+import { restoreTabWhenHidden } from './hiddenTabRestore';
+import { useLiveTabRouterCap } from './liveTabRouterCap';
 import TabHost from './TabHost';
 import TabLocationReporter from './TabLocationReporter';
 import {
@@ -28,6 +30,8 @@ interface Creation {
   router: TabRouter;
   url: string;
 }
+
+const LIVE_CAP = 3;
 
 let created: Creation[];
 const initialUserState = useUserStore.getState();
@@ -82,6 +86,7 @@ const setStore = (tabs: TabItem[], activeTabId: string | null) => {
 beforeEach(() => {
   created = [];
   window.localStorage.clear();
+  useLiveTabRouterCap.setState({ cap: LIVE_CAP });
   resetTabRouterManager();
   setStore([], null);
   useUserStore.setState({
@@ -256,7 +261,7 @@ describe('TabHost', () => {
   });
 
   it('disposes a router evicted past the LRU cap and recreates it fresh when reactivated', async () => {
-    const baseTabs: TabItem[] = Array.from({ length: MAX_LIVE_TAB_ROUTERS }, (_, index) => ({
+    const baseTabs: TabItem[] = Array.from({ length: LIVE_CAP }, (_, index) => ({
       id: `t${index}`,
       lastVisited: 10 - index,
       url: `/item/t${index}`,
@@ -270,7 +275,7 @@ describe('TabHost', () => {
       act(() => useElectronStore.setState({ activeTabId: tab.id }));
       await screen.findByTestId(`param-${tab.id}`);
     }
-    expect(created).toHaveLength(MAX_LIVE_TAB_ROUTERS);
+    expect(created).toHaveLength(LIVE_CAP);
 
     const withEvictor: TabItem[] = [
       ...baseTabs,
@@ -328,7 +333,7 @@ describe('TabHost', () => {
     act(() => {
       useElectronStore.setState({ activeTabId: 'f0', tabs: evicted });
     });
-    for (const tab of fillers.slice(1, MAX_LIVE_TAB_ROUTERS)) {
+    for (const tab of fillers.slice(1, LIVE_CAP)) {
       act(() => useElectronStore.setState({ activeTabId: tab.id }));
       await screen.findByTestId(`param-${tab.id}`);
     }
@@ -350,7 +355,7 @@ describe('TabHost', () => {
 
   it("snapshots a hidden tab's navigated location into the store on LRU eviction", async () => {
     const target: TabItem = { id: 'target', lastVisited: 1, url: '/item/target' };
-    const fillers: TabItem[] = Array.from({ length: MAX_LIVE_TAB_ROUTERS - 1 }, (_, index) => ({
+    const fillers: TabItem[] = Array.from({ length: LIVE_CAP - 1 }, (_, index) => ({
       id: `f${index}`,
       lastVisited: 10 + index,
       url: `/item/f${index}`,
@@ -483,5 +488,99 @@ describe('TabHost', () => {
     expect(screen.queryByTestId('param-b')).not.toBeInTheDocument();
     expect(useElectronStore.getState().tabs.find((t) => t.id === 'b')!.url).toBe('/agent/moved');
     expect(getTabHistorySnapshot('b').canGoBack).toBe(true);
+  });
+
+  it('keeps the outgoing tab on screen until a cold tab finishes its first load', async () => {
+    let releaseColdLoader!: () => void;
+    const coldLoader = new Promise<null>((resolve) => {
+      releaseColdLoader = () => resolve(null);
+    });
+    const createLoadingRouter = (url: string): TabRouter => {
+      const router = createMemoryRouter(
+        [
+          {
+            element: React.createElement(TestRoute),
+            loader: () => (url === '/item/cold' ? coldLoader : null),
+            path: '/item/:id',
+          },
+        ],
+        { initialEntries: [url] },
+      );
+      created.push({ dispose: vi.spyOn(router, 'dispose'), router, url });
+      return router;
+    };
+    setStore(
+      [
+        { id: 'warm', lastVisited: 2, url: '/item/warm' },
+        { id: 'cold', lastVisited: 1, url: '/item/cold' },
+      ],
+      'warm',
+    );
+    render(React.createElement(TabHost, { createRouter: createLoadingRouter }));
+    expect(await screen.findByTestId('param-warm')).toBeVisible();
+
+    act(() => useElectronStore.setState({ activeTabId: 'cold' }));
+    await vi.waitFor(() => expect(getTabRouter('cold')).toBeDefined());
+
+    expect(screen.getByTestId('param-warm')).toBeVisible();
+    expect(useDisplayedTabStore.getState().tabId).toBe('warm');
+
+    await act(async () => {
+      releaseColdLoader();
+      await coldLoader;
+    });
+
+    expect(await screen.findByTestId('param-cold')).toBeVisible();
+    expect(screen.getByTestId('param-warm')).not.toBeVisible();
+    expect(useDisplayedTabStore.getState().tabId).toBe('cold');
+  });
+
+  it('restores a tab to its earlier location once another tab takes its slot', async () => {
+    setStore(
+      [
+        { id: 'origin', lastVisited: 2, url: '/item/clicked' },
+        { id: 'other', lastVisited: 1, url: '/item/other' },
+      ],
+      'origin',
+    );
+    renderHost();
+    await screen.findByTestId('param-clicked');
+
+    restoreTabWhenHidden('origin', { from: '/item/clicked', to: '/item/before' });
+    await act(async () => {});
+    expect(getTabRouter('origin')!.state.location.pathname).toBe('/item/clicked');
+
+    act(() => useElectronStore.setState({ activeTabId: 'other' }));
+    await screen.findByTestId('param-other');
+
+    await vi.waitFor(() =>
+      expect(getTabRouter('origin')!.state.location.pathname).toBe('/item/before'),
+    );
+    expect(useElectronStore.getState().tabs.find((t) => t.id === 'origin')!.url).toBe(
+      '/item/before',
+    );
+  });
+
+  it('drops the restore when the tab already left the location it was meant to undo', async () => {
+    setStore(
+      [
+        { id: 'origin', lastVisited: 2, url: '/item/clicked' },
+        { id: 'other', lastVisited: 1, url: '/item/other' },
+      ],
+      'origin',
+    );
+    renderHost();
+    await screen.findByTestId('param-clicked');
+
+    restoreTabWhenHidden('origin', { from: '/item/clicked', to: '/item/before' });
+    await act(async () => {
+      await getTabRouter('origin')!.navigate('/item/elsewhere');
+    });
+
+    act(() => useElectronStore.setState({ activeTabId: 'other' }));
+    await screen.findByTestId('param-other');
+    await act(async () => {});
+
+    expect(getTabRouter('origin')!.state.location.pathname).toBe('/item/elsewhere');
   });
 });

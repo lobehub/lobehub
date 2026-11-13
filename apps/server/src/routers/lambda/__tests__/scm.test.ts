@@ -7,7 +7,13 @@ import {
   ScmIdentityModel,
   ScmInstallationModel,
 } from '@/database/models/scm';
-import { scmWebhookDeliveries, users, workspaceMembers, workspaces } from '@/database/schemas';
+import {
+  scmWebhookDeliveries,
+  topics,
+  users,
+  workspaceMembers,
+  workspaces,
+} from '@/database/schemas';
 
 import { scmRouter } from '../scm';
 
@@ -15,16 +21,20 @@ const serverDB = await getTestDB();
 const userId = 'scm-router-user';
 const otherUserId = 'scm-router-user-2';
 
-vi.mock('@/envs/scm', () => ({
-  scmEnv: { ENABLED_GITHUB_APP: true, GITHUB_APP_SLUG: 'lobehub-dev' },
-}));
+const scmEnv = vi.hoisted(() => ({ ENABLED_GITHUB_APP: true, GITHUB_APP_SLUG: 'lobehub-dev' }));
+vi.mock('@/envs/scm', () => ({ scmEnv }));
 
-const mocks = vi.hoisted(() => ({ consumeClaim: vi.fn(), fetchInstallation: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  consumeClaim: vi.fn(),
+  fetchInstallation: vi.fn(),
+  listRepositories: vi.fn(),
+}));
 vi.mock('@/server/services/scm/oauth/stateStore', () => ({
   consumeScmInstallClaim: mocks.consumeClaim,
 }));
 vi.mock('@/server/services/scm/github/app', () => ({
   fetchGitHubInstallation: mocks.fetchInstallation,
+  listGitHubInstallationRepositoryDetails: mocks.listRepositories,
 }));
 
 vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
@@ -138,6 +148,31 @@ describe('scmRouter', () => {
     expect((await ws.listChangeRequests({ limit: 10 })).map((r) => r.repoFullName)).toEqual([
       'c/shared',
     ]);
+  });
+
+  it('reports a wake target for the caller own open PR, and none without the GitHub App', async () => {
+    await serverDB.insert(topics).values({ id: 'scm-router-topic', title: 't', userId });
+    await ScmChangeRequestModel.upsert(serverDB, {
+      links: { topicId: 'scm-router-topic' },
+      number: 4,
+      provider: 'github',
+      repoFullName: 'a/wake',
+      state: 'open',
+      url: 'https://github.com/a/wake/pull/4',
+      userId,
+    });
+
+    expect(await caller({ userId }).hasWakeTarget({ topicId: 'scm-router-topic' })).toBe(true);
+    expect(
+      await caller({ userId: otherUserId }).hasWakeTarget({ topicId: 'scm-router-topic' }),
+    ).toBe(false);
+
+    scmEnv.ENABLED_GITHUB_APP = false;
+    try {
+      expect(await caller({ userId }).hasWakeTarget({ topicId: 'scm-router-topic' })).toBe(false);
+    } finally {
+      scmEnv.ENABLED_GITHUB_APP = true;
+    }
   });
 
   it('refuses a claim that is expired or was minted for someone else', async () => {
@@ -268,5 +303,95 @@ describe('scmRouter', () => {
     await expect(
       caller({ userId, workspaceId: workspace.id }).connectInstallation({ claim: 'c6' }),
     ).resolves.toMatchObject({ userId, workspaceId: workspace.id });
+  });
+
+  describe('listRepositories', () => {
+    const repo = (fullName: string, pushedAt: string | null) => ({
+      defaultBranch: 'main',
+      description: null,
+      fullName,
+      htmlUrl: `https://github.com/${fullName}`,
+      ownerAvatarUrl: null,
+      private: false,
+      pushedAt,
+    });
+
+    afterEach(() => {
+      mocks.listRepositories.mockReset();
+      scmEnv.ENABLED_GITHUB_APP = true;
+    });
+
+    it('reports an unconfigured deployment without calling GitHub', async () => {
+      scmEnv.ENABLED_GITHUB_APP = false;
+      expect(await caller({ userId }).listRepositories()).toEqual({
+        configured: false,
+        installations: 0,
+        repositories: [],
+        truncated: false,
+      });
+      expect(mocks.listRepositories).not.toHaveBeenCalled();
+    });
+
+    it('reports no installations so the picker can ask to connect GitHub', async () => {
+      expect(await caller({ userId }).listRepositories()).toEqual({
+        configured: true,
+        installations: 0,
+        repositories: [],
+        truncated: false,
+      });
+    });
+
+    it('merges live installations, newest push first, skipping suspended ones', async () => {
+      await bind('201', { userId });
+      await bind('202', { userId });
+      const suspended = await bind('203', { userId });
+      await ScmInstallationModel.setSuspended(serverDB, suspended.id, true);
+      await bind('204', { userId: otherUserId });
+      mocks.listRepositories.mockImplementation(async (installationId: string) =>
+        installationId === '201'
+          ? {
+              repositories: [
+                repo('a/old', '2026-01-01T00:00:00Z'),
+                repo('a/shared', '2026-03-01T00:00:00Z'),
+              ],
+              truncated: false,
+            }
+          : {
+              repositories: [
+                repo('b/new', '2026-05-01T00:00:00Z'),
+                repo('A/Shared', '2026-03-01T00:00:00Z'),
+              ],
+              truncated: true,
+            },
+      );
+
+      const result = await caller({ userId }).listRepositories();
+
+      expect(mocks.listRepositories.mock.calls.map(([id]) => id).sort()).toEqual(['201', '202']);
+      expect(result.installations).toBe(2);
+      expect(result.truncated).toBe(true);
+      expect(result.repositories.map((item) => item.fullName.toLowerCase())).toEqual([
+        'b/new',
+        'a/shared',
+        'a/old',
+      ]);
+    });
+
+    it('lists what it can when one installation fails, and errors only when all do', async () => {
+      await bind('301', { userId });
+      await bind('302', { userId });
+      mocks.listRepositories.mockImplementation(async (installationId: string) => {
+        if (installationId === '301') throw new Error('rate limited');
+        return { repositories: [repo('c/ok', null)], truncated: false };
+      });
+      expect(
+        (await caller({ userId }).listRepositories()).repositories.map((item) => item.fullName),
+      ).toEqual(['c/ok']);
+
+      mocks.listRepositories.mockRejectedValue(new Error('down'));
+      await expect(caller({ userId }).listRepositories()).rejects.toMatchObject({
+        code: 'BAD_GATEWAY',
+      });
+    });
   });
 });

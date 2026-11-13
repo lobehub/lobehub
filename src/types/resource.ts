@@ -38,9 +38,13 @@ export interface ResourceItem {
   fileId?: string | null;
   fileType: string;
   finishEmbedding?: boolean;
+  /** Whether any document or file sits under this row, so a page can expand like a folder. */
+  hasChildren?: boolean;
   // Identity
   id: string;
   knowledgeBaseId?: string;
+  /** Knowledge bases the row is filed into; the drive tags rows with them. */
+  knowledgeBaseIds?: string[];
   // Metadata
   metadata?: Record<string, any>;
   // Real ID or temp-resource-{timestamp}-{random}
@@ -72,8 +76,12 @@ export interface ResourceItem {
 /**
  * Query parameters for fetching resources
  */
+export type ResourceSorter = 'custom' | 'name' | 'createdAt' | 'size';
+
 export interface ResourceQueryParams {
   category?: FilesTabs;
+  /** Drive listing: uploaded files and the folders that hold them, no pages. */
+  filesOnly?: boolean;
   includeContentPreview?: boolean;
   libraryId?: string;
   limit?: number;
@@ -81,7 +89,7 @@ export interface ResourceQueryParams {
   parentId?: string | null;
   q?: string;
   showFilesInKnowledgeBase?: boolean;
-  sorter?: 'name' | 'createdAt' | 'size';
+  sorter?: ResourceSorter;
   sortType?: SortType;
   /**
    * Origin narrowing driven by the explorer's source filter chips

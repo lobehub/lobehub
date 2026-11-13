@@ -9,7 +9,7 @@ user-invocable: false
 Canonical living examples, both extracted 2026-08 — read the real files, this skill records
 the decisions and landmines, not copies of the code:
 
-- **`apps/workbench`** (`/verify`, `/acceptance`) — all code in this repo, builds and deploys from OSS CI.
+- **`apps/workbench`** (`/acceptance`, `/agent/:aid/docs/:docId`; `/verify` only redirects retired report links into Acceptance) — all code in this repo, builds and deploys from OSS CI.
 - **`apps/share`** (`/share/t/:id`, `/share/page/:id`) — renders Cloud-only surfaces, so it
   builds and deploys from **lobehub-cloud** CI. See §1b before touching it.
 - **`apps/auth`** (`/signin`, `/signup`, …) — the SSG variant: `ssr: false` + `prerender`, so
@@ -67,7 +67,6 @@ workers/app.ts  # worker entry: API reverse proxy + createRequestHandler
 src/            # app-owned features/shell (may coexist with a legacy SPA entry)
 vite.config.rr.mts   # RR pipeline; legacy vite.config.ts can coexist (RR CLI: -c vite.config.rr.mts)
 wrangler.jsonc  # name, account_id, nodejs_compat, vars (API base / app home)
-staticCssOptions.mjs # ONE source for static-css hrefTemplate (vite plugin + emit + dev middleware)
 ```
 
 Reuse main-src code via `@/*` deep imports + Vite 8 native `resolve.tsconfigPaths: true`
@@ -108,6 +107,14 @@ tsconfig, glob dirs). New `import.meta.glob` patterns in shared code need a new 
 the one manual rule. See `apps/workbench/scripts/should-build.mjs` +
 `.github/workflows/deploy-workbench.yml`; the overlay-hosted variant is lobehub-cloud's
 `scripts/shouldBuildShare.ts` + `.github/workflows/deploy-share.yml` (§1b).
+
+The manifest is only a pre-filter: it lists every module the build loaded, so type-only files,
+barrels and tree-shaken code trigger builds too. The deploy decision is the **output hash**
+(`scripts/workerOutputHash.ts`): the build is deterministic (comment-only edits hash
+identically), so `deploy.ts` hashes `build/`, compares it with the `output-hash.txt` carried in
+the same artifact, and skips upload + `wrangler deploy` when equal — keeping Cloudflare's
+100-version rollback window for real releases. Manual dispatch passes no previous hash and
+always deploys. Workbench has it; share does not yet.
 
 **PR-time verify is a separate workflow per repo that can change the artifact** — deploy
 ownership (§1b) does not decide verify ownership. Each verify builds the worker, uploads a
@@ -152,7 +159,7 @@ Do not assume that; `apps/share` needed 8.2MB of stubbing. Measure per app.
 
 The RR config is a **factory** so both hosts share one pipeline:
 `apps/share/vite.config.shared.mts` exports
-`createShareRrConfig({ appRoot, extraSsrStubs, repoRoot, resolvePlugins, staticCss })`, and the
+`createShareRrConfig({ appRoot, extraSsrStubs, repoRoot, resolvePlugins })`, and the
 OSS `vite.config.rr.mts` is a thin caller reading `SHARE_TSCONFIG_PROJECT` /
 `SHARE_EXTRA_SSR_STUBS`. Cloud fills both in `scripts/shareApp.ts` and drives the submodule app
 through `scripts/{buildShare,devShare,deployShare,shouldBuildShare}.ts`.
@@ -228,11 +235,10 @@ gateway routes API to `app` instead), and redirect `/` + unknown paths to `WORKB
 - **i18n**: narrow to the namespaces the app renders; root loader preloads locale resources,
   i18n inits sync (`initAsync: false`) with bundled resources; SSR env stubs the shared glob
   loader to only its namespaces (full glob = every locale × ns as worker chunks).
-- **CSS three layers**: lobe-ui `static-css` (antd probes + theme vars, hrefTemplate from the
-  shared options file; emitted as hashed files, dev served by config middleware) →
-  antd-style `extractStaticStyle(html, { includeAntd: false })` for emotion →
-  `buildInlineAntdStyle(cache, { styleKeys })` fallback. Non-streaming render
-  (`await stream.allReady`) so extraction is complete.
+- **CSS two layers**: `@lobehub/ui/theme.css` + `global.css` + `style.css` imported by the
+  theme shell, which RR emits as route `<link>`s → `extractStaticStyle(html)` in
+  `entry.server.tsx` for emotion. Non-streaming render (`await stream.allReady`) so extraction
+  is complete.
 - `<html suppressHydrationWarning>` — next-themes stamps `data-theme` pre-hydration.
 - **Time-dependent output must be client-gated**: relative timestamps and anything else the
   server and client compute differently belong behind a `useHydrated()`
@@ -306,7 +312,7 @@ and swaps a `window.__SERVER_CONFIG__` placeholder for the deployment's config.
   If that is still too slow, the remaining move is one build plus N renders against
   `build/server/index.js` with the locale threaded through `entry.server.tsx` — that trades the
   build-time define for request state, so it needs `AsyncLocalStorage` or strict sequencing.
-  Verify RTL locales (`ar`, `fa-IR`) in a browser — they exercise the antd direction path that
+  Verify RTL locales (`ar`, `fa-IR`) in a browser — they exercise the `<html dir>` path that
   no LTR document touches.
 - **The prerender list is loaded by plain Node** (`react-router.config.ts`), so it cannot import
   anything alias-resolved and has to be a literal array. Guard it against the dictionaries on
@@ -345,10 +351,10 @@ RR v8 gotchas (docs/templates still say v7):
 ## 4. SEO
 
 One shared builder (`app/lib/seo.ts` → `buildPageMeta`): title, description, robots,
-og:title/description/type/site\_name/locale (underscore form)/image(+alt), twitter card set.
+og:title/description/type/site_name/locale (underscore form)/image(+alt), twitter card set.
 Rules: leaf `meta` **fully replaces** root meta — every leaf returns the whole set;
 `og:image` must be an **absolute URL** (reuse landing's `https://lobehub.com/assets/cao-og.webp`);
-dynamic title/description come from the route loader (subject title · BRANDING\_NAME,
+dynamic title/description come from the route loader (subject title · BRANDING_NAME,
 requirement text truncated \~200 chars).
 
 ## 5. Gateway Routing (torii, `../lobehub-gateway`)
@@ -364,7 +370,7 @@ To add a micro app:
    Leave `/trpc` unruled: it falls to `default` (app) so browser API calls stay same-origin
    authenticated. `.data` suffix is normalized before matching.
 4. Validate: `bun run test` in the gateway repo (invariant suite reads the mirror).
-5. Staging: `bun scripts/torii.ts push --env staging --expect <fp>` (needs TORII\_ACCESS\_\*),
+5. Staging: `bun scripts/torii.ts push --env staging --expect <fp>` (needs TORII_ACCESS\_\*),
    or poke staging KV directly (`wrangler kv key put --namespace-id <staging CONFIG ns>`) —
    README-sanctioned. Prod writes only via the Toriiban (鳥居番) admin **Promote** button:
    `torii.ts promote` prints the exact delta and refuses to write, and

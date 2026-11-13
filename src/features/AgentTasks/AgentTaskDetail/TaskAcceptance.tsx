@@ -1,9 +1,20 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, Collapsible, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
 import {
+  ActionIcon,
+  Button,
+  Collapsible,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Spin,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
+import dayjs from 'dayjs';
+import {
+  BadgeCheck,
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
@@ -14,7 +25,6 @@ import {
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   type AcceptanceCheck,
   checkDisplayTitle,
@@ -39,6 +49,7 @@ import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
+import { useVerifyStore } from '@/store/verify';
 
 import GoalRoundTimeline from './GoalRoundTimeline';
 import { resolveTaskAcceptanceRequirement } from './resolveTaskAcceptanceProjection';
@@ -46,11 +57,8 @@ import { TaskAcceptanceHeader } from './TaskAcceptanceHeader';
 import TaskVerifyConfig from './TaskVerifyConfig';
 
 const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    padding-inline: 12px;
-  `,
   error: css`
-    padding-block: 10px;
+    padding-block: 8px;
     padding-inline: 12px;
     border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorErrorBg};
@@ -62,7 +70,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   groupHeader: css`
     cursor: pointer;
-    padding-block: 9px;
+    padding-block: 8px;
     padding-inline: 12px;
   `,
 }));
@@ -183,7 +191,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   // acceptance section here would advertise a contract that never runs.
   if (automationMode) return null;
 
-  if (subjectLoading) return <NeuralNetworkLoading size={28} />;
+  if (subjectLoading) return <Spin size="middle" />;
   // Before the first Acceptance round exists, the configured criteria ARE the
   // delivery acceptance. Keep them in this single slot; once a round exists,
   // replace the definitions with their live/result projection below.
@@ -210,6 +218,8 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
           verifyCriteriaIds: null,
         });
         await verifyService.deleteAcceptance(acceptanceSubject.id, purge);
+        useVerifyStore.getState().removeAcceptancesFromLists([acceptanceSubject.id]);
+        void useVerifyStore.getState().refreshAcceptanceLists();
         await mutateSubject();
       },
     });
@@ -244,12 +254,32 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
   // through the acceptance page. Its own 验收检查清单 header replaces the
   // section header; the report link rides in the inventory toolbar.
   if (variant === 'result' && acceptanceSubject && !subjectError) {
+    // Signed off is finished: the verdict moves up beside the title, and the
+    // decision bar — which has nothing left to offer — stops covering the
+    // evidence below it.
+    const accepted = bundle?.acceptance.status === 'accepted';
+    const acceptedAt = accepted ? bundle?.acceptance.completedAt : undefined;
+    const acceptedBadge = accepted && (
+      <Tooltip
+        title={t('acceptance.banner.accepted', {
+          ns: 'verify',
+          time: acceptedAt ? dayjs(acceptedAt).format('YYYY-MM-DD HH:mm') : '',
+        })}
+      >
+        <Flexbox data-task-acceptance-accepted horizontal align={'center'} gap={4}>
+          <Icon color={cssVar.colorSuccess} icon={BadgeCheck} size={14} />
+          <Text fontSize={12} style={{ color: cssVar.colorSuccess, whiteSpace: 'nowrap' }}>
+            {t('taskDetail.acceptanceState.accepted')}
+          </Text>
+        </Flexbox>
+      </Tooltip>
+    );
     return (
       <AcceptanceScope embedded acceptanceId={acceptanceSubject.id}>
         <AcceptanceBundleGate height={160}>
           <Flexbox gap={16}>
-            <AcceptanceCheckInventory toolbar={reportButton} />
-            <AcceptanceDecision />
+            <AcceptanceCheckInventory titleExtra={acceptedBadge} toolbar={reportButton} />
+            {!accepted && <AcceptanceDecision />}
           </Flexbox>
         </AcceptanceBundleGate>
       </AcceptanceScope>
@@ -272,7 +302,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
     return (
       <Flexbox gap={8}>
         {header}
-        <Flexbox className={styles.body}>
+        <Flexbox>
           <AcceptanceError onRetry={() => void mutateSubject()} />
         </Flexbox>
       </Flexbox>
@@ -283,9 +313,9 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
     <Flexbox gap={8}>
       {header}
       <Collapsible open={sectionExpanded}>
-        <Flexbox className={styles.body} gap={14}>
-          {bundleLoading && <NeuralNetworkLoading size={28} />}
-          {bundleError && <AcceptanceError onRetry={() => void mutateBundle()} />}
+        <Flexbox gap={16}>
+          {bundleLoading && <Spin size="middle" />}
+          {bundleError ? <AcceptanceError onRetry={() => void mutateBundle()} /> : null}
           {bundle && (
             <>
               <GoalRoundTimeline rounds={bundle.rounds} />
@@ -308,7 +338,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
                   </Text>
                 </Flexbox>
               )}
-              <Flexbox gap={7}>
+              <Flexbox gap={8}>
                 <Flexbox horizontal align={'center'} gap={8}>
                   <Text fontSize={12} type={'secondary'}>
                     {t('taskDetail.acceptance.checklist')}

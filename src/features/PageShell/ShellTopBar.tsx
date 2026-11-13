@@ -1,15 +1,13 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ArrowLeft, ChevronsUpDownIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { useActiveWorkspace } from '@/business/client/hooks/useActiveWorkspace';
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
-import Avatar from '@/components/Avatar';
 import { ProductLogo } from '@/components/Branding';
+import WorkspaceAvatar from '@/components/WorkspaceAvatar';
 import UserAvatar from '@/features/User/UserAvatar';
 
 /**
@@ -34,6 +32,11 @@ interface ShellTopBarProps {
    * is only occasionally wanted.
    */
   onBack?: () => void;
+  /**
+   * Replaces the read-only workspace pill, e.g. with a control that switches
+   * the page's scope. Rendered in personal scope too.
+   */
+  scope?: ReactNode;
   /** The collection this page belongs to, e.g. Deliveries. */
   title?: ReactNode;
   /** Sits right after the title — typically the button opening the list drawer. */
@@ -93,7 +96,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const ShellTopBar = ({ actions, onBack, title, titleExtra }: ShellTopBarProps) => {
+const ShellTopBar = ({ actions, onBack, scope, title, titleExtra }: ShellTopBarProps) => {
   const workspace = useActiveWorkspace();
   const workspaces = useWorkspaces();
 
@@ -101,7 +104,6 @@ const ShellTopBar = ({ actions, onBack, title, titleExtra }: ShellTopBarProps) =
   // scope to switch to, so the bar is the product, the collection, and you.
   const switchable = workspaces.length > 1;
   const scopeName = workspace?.name;
-  const scopeAvatar = workspace?.avatar || scopeName;
 
   return (
     <Flexbox horizontal align={'center'} className={styles.root} gap={8}>
@@ -126,15 +128,16 @@ const ShellTopBar = ({ actions, onBack, title, titleExtra }: ShellTopBarProps) =
       )}
       {titleExtra}
 
-      {scopeName && (
-        <Flexbox horizontal align={'center'} className={styles.scopePill} gap={6}>
-          <Avatar avatar={scopeAvatar} shape={'square'} size={20} />
-          <Text fontSize={13} weight={600}>
-            {scopeName}
-          </Text>
-          {switchable && <ChevronsUpDownIcon color={cssVar.colorTextQuaternary} size={12} />}
-        </Flexbox>
-      )}
+      {scope ??
+        (scopeName && (
+          <Flexbox horizontal align={'center'} className={styles.scopePill} gap={6}>
+            <WorkspaceAvatar avatar={workspace?.avatar} name={scopeName} size={20} />
+            <Text fontSize={13} weight={600}>
+              {scopeName}
+            </Text>
+            {switchable && <ChevronsUpDownIcon color={cssVar.colorTextQuaternary} size={12} />}
+          </Flexbox>
+        ))}
 
       <Flexbox flex={1} />
       {actions}

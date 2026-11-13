@@ -1,10 +1,9 @@
 'use client';
 
-import { Center, Flexbox } from '@lobehub/ui';
+import { Center, Flexbox, Spin } from '@lobehub/ui';
 import { lazy, memo, Suspense } from 'react';
 
 import AsyncError from '@/components/AsyncError';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
 import { useBlobFileLoader } from '../../hooks/useBlobFileLoader';
 import NotSupport from '../../NotSupport';
@@ -51,7 +50,7 @@ const MSDocViewer = memo<MSDocViewerProps>(({ fileName, fileType, url }) => {
   if (loading)
     return (
       <Center height={'100%'} width={'100%'}>
-        <NeuralNetworkLoading size={36} />
+        <Spin size="large" />
       </Center>
     );
 
@@ -72,7 +71,7 @@ const MSDocViewer = memo<MSDocViewerProps>(({ fileName, fileType, url }) => {
     <Suspense
       fallback={
         <Center height={'100%'} width={'100%'}>
-          <NeuralNetworkLoading size={36} />
+          <Spin size="large" />
         </Center>
       }
     >

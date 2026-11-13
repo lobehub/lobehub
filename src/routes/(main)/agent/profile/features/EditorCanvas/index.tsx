@@ -3,9 +3,7 @@
 import type { IEditor } from '@lobehub/editor';
 import { ReactMentionPlugin, ReactTablePlugin, ReactToolbarPlugin } from '@lobehub/editor';
 import { Editor } from '@lobehub/editor/react';
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, createStaticStyles, cssVar, Flexbox, toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { CodeXmlIcon, LetterTextIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -33,11 +31,6 @@ const styles = createStaticStyles(({ css }) => ({
   editorShell: css`
     min-height: 300px;
     padding-block: 18px;
-    padding-inline: 18px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
   `,
   root: css`
     padding-block-end: 16px;

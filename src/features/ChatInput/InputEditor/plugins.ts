@@ -12,18 +12,20 @@ import { type Editor } from '@lobehub/editor/react';
 
 import { ReactActionTagPlugin } from './ActionTag';
 import { ReactLocalFileTagPlugin } from './LocalFileTag';
+import { ReactReferDocumentPlugin } from './ReferDocument';
 import { ReactReferTopicPlugin } from './ReferTopic';
 
 type EditorPlugins = NonNullable<Parameters<typeof Editor>[0]['plugins']>;
 
 interface CreateChatInputRichPluginsOptions {
   linkPlugin?: EditorPlugins[number] | false;
-  mathPlugin?: EditorPlugins[number];
+  mathPlugin?: EditorPlugins[number] | false;
 }
 
 export const CHAT_INPUT_EMBED_PLUGINS: EditorPlugins = [
   ReactActionTagPlugin,
   ReactReferTopicPlugin,
+  ReactReferDocumentPlugin,
   ReactLocalFileTagPlugin,
   ReactMentionPlugin,
 ];
@@ -38,6 +40,6 @@ export const createChatInputRichPlugins = ({
   ReactHRPlugin,
   ...(linkPlugin ? [linkPlugin] : []),
   ReactVirtualBlockPlugin,
-  mathPlugin,
+  ...(mathPlugin ? [mathPlugin] : []),
   ...CHAT_INPUT_EMBED_PLUGINS,
 ];

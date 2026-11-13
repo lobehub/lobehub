@@ -1,12 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { cacheScope, createReplicaState, REPLICA_INDEX_KEY } from '@/libs/replica';
 import { taskService } from '@/services/task';
 import { useUserStore } from '@/store/user';
 
 import { useTaskStore } from '../../store';
+import { taskDetailRefreshes } from '../detail/testUtils';
+import {
+  taskGroupListQueryKey,
+  taskGroupListResource,
+  taskListQueryKey,
+  taskListResource,
+} from '../list/projection';
 
 vi.mock('@/services/task', () => ({
   taskService: {
+    archive: vi.fn(),
     cancelTopic: vi.fn(),
     deleteTopic: vi.fn(),
     run: vi.fn(),
@@ -19,21 +28,51 @@ vi.mock('@/libs/swr', () => ({
   useClientDataSWR: vi.fn(),
 }));
 
-const mockDetail = { identifier: 'T-1', instruction: 'Test', status: 'backlog' } as any;
+const mockDetail = { id: 'T-1', identifier: 'T-1', instruction: 'Test', status: 'backlog' } as any;
 
 beforeEach(() => {
   vi.clearAllMocks();
   useTaskStore.setState({
     activeTaskId: 'T-1',
-    listGroupBy: 'status',
-    listGroupExcludeStatuses: undefined,
+    taskRefIndex: Object.fromEntries(
+      ['T-1', 'T-2', 'T-3', 'T-parent', 'T-child'].map((id) => [id, id]),
+    ),
     taskDetailMap: { 'T-1': { ...mockDetail } },
-    taskGroups: [],
-    tasks: [],
+    taskGroupListMap: {},
+    taskGroupListReplica: createReplicaState(),
+    taskListMap: {},
+    taskListReplica: createReplicaState(),
   });
 });
 
+/** One loaded list (`list`) and one loaded board (`board`) holding the task. */
+const seedCollections = (groups: any[], tasks: any[], groupBy = 'status') =>
+  useTaskStore.setState({
+    taskGroupListMap: { board: { groupBy: groupBy as any, groups } },
+    taskListMap: { list: { items: tasks, total: tasks.length } },
+  });
+const listTasks = (state = useTaskStore.getState()) => state.taskListMap.list.items;
+const boardGroups = (state = useTaskStore.getState()) => state.taskGroupListMap.board.groups;
+
 describe('TaskLifecycleSliceAction', () => {
+  describe('archiveTask', () => {
+    it('resolves once the write commits, even if the refresh afterwards fails', async () => {
+      const { mutate } = await import('@/libs/swr');
+      vi.mocked(taskService.archive).mockResolvedValue({ success: true } as any);
+      vi.mocked(mutate).mockRejectedValue(new Error('refresh failed'));
+
+      await expect(useTaskStore.getState().archiveTask('T-1', true)).resolves.toBeUndefined();
+      expect(taskService.archive).toHaveBeenCalledWith('T-1', true);
+      vi.mocked(mutate).mockReset();
+    });
+
+    it('still rejects when the archive write itself fails', async () => {
+      vi.mocked(taskService.archive).mockRejectedValue(new Error('BAD_REQUEST'));
+
+      await expect(useTaskStore.getState().archiveTask('T-1', true)).rejects.toThrow('BAD_REQUEST');
+    });
+  });
+
   describe('runTask', () => {
     it('should optimistically set status to running and call service', async () => {
       vi.mocked(taskService.run).mockResolvedValue({ success: true } as any);
@@ -59,12 +98,11 @@ describe('TaskLifecycleSliceAction', () => {
     });
 
     it('should refresh detail on error', async () => {
-      const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.run).mockRejectedValue(new Error('fail'));
 
       await useTaskStore.getState().runTask('T-1');
 
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
     });
 
     it('should surface the run failure when the caller requires it', async () => {
@@ -132,23 +170,29 @@ describe('TaskLifecycleSliceAction', () => {
     });
 
     it('should immediately synchronize list and kanban collections', async () => {
-      useTaskStore.setState({
-        taskGroups: [
-          { key: 'backlog', tasks: [{ identifier: 'T-1', status: 'backlog' }], total: 1 },
+      seedCollections(
+        [
+          {
+            key: 'backlog',
+            tasks: [{ id: 'T-1', identifier: 'T-1', status: 'backlog' }],
+            total: 1,
+          },
           { key: 'done', tasks: [], total: 0 },
-        ] as any,
-        tasks: [{ identifier: 'T-1', status: 'backlog' }] as any,
-      });
+        ],
+        [{ id: 'T-1', identifier: 'T-1', status: 'backlog' }],
+      );
       vi.mocked(taskService.updateStatus).mockImplementation(async () => {
         const state = useTaskStore.getState();
 
-        expect(state.tasks.find((task) => task.identifier === 'T-1')?.status).toBe('completed');
-        expect(state.taskGroups.find((group) => group.key === 'backlog')).toMatchObject({
+        expect(listTasks(state).find((task) => task.identifier === 'T-1')?.status).toBe(
+          'completed',
+        );
+        expect(boardGroups(state).find((group) => group.key === 'backlog')).toMatchObject({
           tasks: [],
           total: 0,
         });
-        expect(state.taskGroups.find((group) => group.key === 'done')).toMatchObject({
-          tasks: [expect.objectContaining({ identifier: 'T-1', status: 'completed' })],
+        expect(boardGroups(state).find((group) => group.key === 'done')).toMatchObject({
+          tasks: [expect.objectContaining({ id: 'T-1', identifier: 'T-1', status: 'completed' })],
           total: 1,
         });
 
@@ -159,22 +203,24 @@ describe('TaskLifecycleSliceAction', () => {
     });
 
     it('should preserve assignee grouping when a task status changes', async () => {
-      useTaskStore.setState({
-        listGroupBy: 'assignee',
-        taskGroups: [
+      seedCollections(
+        [
           {
             assigneeAgentId: 'agent-1',
             key: 'assignee:agent-1',
-            tasks: [{ assigneeAgentId: 'agent-1', identifier: 'T-1', status: 'backlog' }],
+            tasks: [
+              { assigneeAgentId: 'agent-1', id: 'T-1', identifier: 'T-1', status: 'backlog' },
+            ],
             total: 1,
           },
-        ] as any,
-        tasks: [{ assigneeAgentId: 'agent-1', identifier: 'T-1', status: 'backlog' }] as any,
-      });
+        ],
+        [{ assigneeAgentId: 'agent-1', id: 'T-1', identifier: 'T-1', status: 'backlog' }],
+        'assignee',
+      );
       vi.mocked(taskService.updateStatus).mockImplementation(async () => {
-        expect(useTaskStore.getState().taskGroups[0]).toMatchObject({
+        expect(boardGroups()[0]).toMatchObject({
           key: 'assignee:agent-1',
-          tasks: [expect.objectContaining({ identifier: 'T-1', status: 'completed' })],
+          tasks: [expect.objectContaining({ id: 'T-1', identifier: 'T-1', status: 'completed' })],
           total: 1,
         });
         return { success: true } as any;
@@ -184,13 +230,17 @@ describe('TaskLifecycleSliceAction', () => {
     });
 
     it('should roll list and kanban collections back when the status update fails', async () => {
-      useTaskStore.setState({
-        taskGroups: [
-          { key: 'backlog', tasks: [{ identifier: 'T-1', status: 'backlog' }], total: 1 },
+      seedCollections(
+        [
+          {
+            key: 'backlog',
+            tasks: [{ id: 'T-1', identifier: 'T-1', status: 'backlog' }],
+            total: 1,
+          },
           { key: 'done', tasks: [], total: 0 },
-        ] as any,
-        tasks: [{ identifier: 'T-1', status: 'backlog' }] as any,
-      });
+        ],
+        [{ id: 'T-1', identifier: 'T-1', status: 'backlog' }],
+      );
       vi.mocked(taskService.updateStatus).mockRejectedValue(new Error('fail'));
 
       await expect(useTaskStore.getState().updateTaskStatus('T-1', 'completed')).rejects.toThrow(
@@ -198,26 +248,59 @@ describe('TaskLifecycleSliceAction', () => {
       );
 
       const state = useTaskStore.getState();
-      expect(state.tasks.find((task) => task.identifier === 'T-1')?.status).toBe('backlog');
-      expect(state.taskGroups.find((group) => group.key === 'backlog')).toMatchObject({
-        tasks: [expect.objectContaining({ identifier: 'T-1', status: 'backlog' })],
+      expect(listTasks(state).find((task) => task.identifier === 'T-1')?.status).toBe('backlog');
+      expect(boardGroups(state).find((group) => group.key === 'backlog')).toMatchObject({
+        tasks: [expect.objectContaining({ id: 'T-1', identifier: 'T-1', status: 'backlog' })],
         total: 1,
       });
-      expect(state.taskGroups.find((group) => group.key === 'done')).toMatchObject({
+      expect(boardGroups(state).find((group) => group.key === 'done')).toMatchObject({
         tasks: [],
         total: 0,
       });
     });
 
+    it('should put a card back in its original slot when the status update fails', async () => {
+      seedCollections(
+        [
+          {
+            key: 'backlog',
+            tasks: [
+              { id: 'T-4', identifier: 'T-4', status: 'backlog' },
+              { id: 'T-1', identifier: 'T-1', status: 'backlog' },
+              { id: 'T-2', identifier: 'T-2', status: 'backlog' },
+            ],
+            total: 3,
+          },
+          { key: 'done', tasks: [], total: 0 },
+        ],
+        [{ id: 'T-1', identifier: 'T-1', status: 'backlog' }],
+      );
+      vi.mocked(taskService.updateStatus).mockRejectedValue(new Error('fail'));
+
+      await expect(useTaskStore.getState().updateTaskStatus('T-1', 'completed')).rejects.toThrow(
+        'fail',
+      );
+
+      expect(boardGroups()[0].tasks.map((task: any) => task.identifier)).toEqual([
+        'T-4',
+        'T-1',
+        'T-2',
+      ]);
+    });
+
     it('should preserve the committed status when cache refreshes fail', async () => {
       const { mutate } = await import('@/libs/swr');
-      useTaskStore.setState({
-        taskGroups: [
-          { key: 'backlog', tasks: [{ identifier: 'T-1', status: 'backlog' }], total: 1 },
+      seedCollections(
+        [
+          {
+            key: 'backlog',
+            tasks: [{ id: 'T-1', identifier: 'T-1', status: 'backlog' }],
+            total: 1,
+          },
           { key: 'done', tasks: [], total: 0 },
-        ] as any,
-        tasks: [{ identifier: 'T-1', status: 'backlog' }] as any,
-      });
+        ],
+        [{ id: 'T-1', identifier: 'T-1', status: 'backlog' }],
+      );
       vi.mocked(taskService.updateStatus).mockResolvedValue({ success: true } as any);
       vi.mocked(mutate)
         .mockRejectedValueOnce(new Error('detail refresh failed'))
@@ -229,23 +312,129 @@ describe('TaskLifecycleSliceAction', () => {
       );
 
       const state = useTaskStore.getState();
-      expect(state.tasks.find((task) => task.identifier === 'T-1')?.status).toBe('completed');
-      expect(state.taskGroups.find((group) => group.key === 'done')).toMatchObject({
-        tasks: [expect.objectContaining({ identifier: 'T-1', status: 'completed' })],
+      expect(listTasks(state).find((task) => task.identifier === 'T-1')?.status).toBe('completed');
+      expect(boardGroups(state).find((group) => group.key === 'done')).toMatchObject({
+        tasks: [expect.objectContaining({ id: 'T-1', identifier: 'T-1', status: 'completed' })],
         total: 1,
       });
     });
 
+    it('drops a task from a status-filtered list once it no longer matches, even if refresh fails', async () => {
+      const { mutate } = await import('@/libs/swr');
+      useTaskStore.setState({
+        taskListMap: {
+          recent: {
+            items: [
+              { id: 'T-1', identifier: 'T-1', status: 'running' },
+              { id: 'T-2', identifier: 'T-2', status: 'running' },
+            ] as any,
+            statuses: ['running', 'paused'],
+            total: 2,
+          },
+        },
+      });
+      vi.mocked(taskService.updateStatus).mockResolvedValue({ success: true } as any);
+      vi.mocked(mutate).mockRejectedValue(new Error('refresh failed'));
+
+      await useTaskStore.getState().updateTaskStatus('T-1', 'completed');
+
+      expect(useTaskStore.getState().taskListMap.recent).toMatchObject({
+        items: [{ id: 'T-2', identifier: 'T-2' }],
+        total: 1,
+      });
+      vi.mocked(mutate).mockReset();
+    });
+
+    it('drops a card that moves into a status the board hides, even if refresh fails', async () => {
+      const { mutate } = await import('@/libs/swr');
+      useTaskStore.setState({
+        taskGroupListMap: {
+          board: {
+            excludeStatuses: ['canceled', 'completed'],
+            groupBy: 'status',
+            groups: [
+              {
+                key: 'running',
+                tasks: [{ id: 'T-1', identifier: 'T-1', status: 'running' }],
+                total: 1,
+              },
+              // The server still returns the hidden status's empty column.
+              { key: 'done', tasks: [], total: 0 },
+            ] as any,
+          },
+        },
+      });
+      vi.mocked(taskService.updateStatus).mockResolvedValue({ success: true } as any);
+      vi.mocked(mutate).mockRejectedValue(new Error('refresh failed'));
+
+      await useTaskStore.getState().updateTaskStatus('T-1', 'completed');
+
+      expect(useTaskStore.getState().taskGroupListMap.board.groups).toMatchObject([
+        { key: 'running', tasks: [], total: 0 },
+        { key: 'done', tasks: [], total: 0 },
+      ]);
+      vi.mocked(mutate).mockReset();
+    });
+
+    it('carries a committed status into persisted lists and boards that are not loaded', async () => {
+      const scope = `task-status-${crypto.randomUUID()}:personal`;
+      vi.spyOn(cacheScope, 'get').mockReturnValue(scope);
+      vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+      const listKey = taskListQueryKey({ visibility: 'all' });
+      const boardKey = taskGroupListQueryKey({ groupBy: 'status', visibility: 'all' });
+      const seed = async (resource: any, queryKey: string, data: unknown) => {
+        await resource.storage.set({ queryKey, scope }, { data, updatedAt: 1 });
+        await resource.storage.set(
+          { queryKey: REPLICA_INDEX_KEY, scope },
+          { data: [queryKey], updatedAt: 1 },
+        );
+      };
+      await seed(taskListResource, listKey, {
+        items: [{ id: 'T-1', identifier: 'T-1', status: 'backlog' }],
+        total: 1,
+      });
+      await seed(taskGroupListResource, boardKey, {
+        groupBy: 'status',
+        groups: [
+          {
+            key: 'backlog',
+            tasks: [{ id: 'T-1', identifier: 'T-1', status: 'backlog' }],
+            total: 1,
+          },
+          { key: 'done', tasks: [], total: 0 },
+        ],
+      });
+      vi.mocked(taskService.updateStatus).mockResolvedValue({ success: true } as any);
+
+      // Changed from the detail page: neither collection is in memory.
+      await useTaskStore.getState().updateTaskStatus('T-1', 'completed');
+
+      await vi.waitFor(async () => {
+        const list = await taskListResource.storage!.get({ queryKey: listKey, scope });
+        expect(list?.data.items[0].status).toBe('completed');
+        const board = await taskGroupListResource.storage!.get({ queryKey: boardKey, scope });
+        expect(board?.data.groups).toMatchObject([
+          { key: 'backlog', tasks: [], total: 0 },
+          { key: 'done', tasks: [{ id: 'T-1', identifier: 'T-1', status: 'completed' }], total: 1 },
+        ]);
+      });
+      vi.restoreAllMocks();
+    });
+
     it('should not let an older failed request roll back a newer status', async () => {
       let rejectFirstRequest: (reason: Error) => void = () => {};
-      useTaskStore.setState({
-        taskGroups: [
-          { key: 'backlog', tasks: [{ identifier: 'T-1', status: 'backlog' }], total: 1 },
+      seedCollections(
+        [
+          {
+            key: 'backlog',
+            tasks: [{ id: 'T-1', identifier: 'T-1', status: 'backlog' }],
+            total: 1,
+          },
           { key: 'done', tasks: [], total: 0 },
           { key: 'canceled', tasks: [], total: 0 },
-        ] as any,
-        tasks: [{ identifier: 'T-1', status: 'backlog' }] as any,
-      });
+        ],
+        [{ id: 'T-1', identifier: 'T-1', status: 'backlog' }],
+      );
       vi.mocked(taskService.updateStatus)
         .mockImplementationOnce(
           async () =>
@@ -263,12 +452,12 @@ describe('TaskLifecycleSliceAction', () => {
       await expect(firstRequest).rejects.toThrow('first request failed');
 
       const state = useTaskStore.getState();
-      expect(state.tasks.find((task) => task.identifier === 'T-1')?.status).toBe('canceled');
-      expect(state.taskGroups.find((group) => group.key === 'canceled')).toMatchObject({
-        tasks: [expect.objectContaining({ identifier: 'T-1', status: 'canceled' })],
+      expect(listTasks(state).find((task) => task.identifier === 'T-1')?.status).toBe('canceled');
+      expect(boardGroups(state).find((group) => group.key === 'canceled')).toMatchObject({
+        tasks: [expect.objectContaining({ id: 'T-1', identifier: 'T-1', status: 'canceled' })],
         total: 1,
       });
-      expect(state.taskGroups.find((group) => group.key === 'done')).toMatchObject({
+      expect(boardGroups(state).find((group) => group.key === 'done')).toMatchObject({
         tasks: [],
         total: 0,
       });
@@ -301,13 +490,12 @@ describe('TaskLifecycleSliceAction', () => {
 
   describe('cancelTopic', () => {
     it('should call service and refresh active detail', async () => {
-      const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.cancelTopic).mockResolvedValue({ success: true } as any);
 
       await useTaskStore.getState().cancelTopic('tpc_1');
 
       expect(taskService.cancelTopic).toHaveBeenCalledWith('tpc_1');
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
     });
 
     it('should not refresh if no activeTaskId', async () => {
@@ -324,13 +512,12 @@ describe('TaskLifecycleSliceAction', () => {
 
   describe('deleteTopic', () => {
     it('should call service and refresh active detail', async () => {
-      const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.deleteTopic).mockResolvedValue({ success: true } as any);
 
       await useTaskStore.getState().deleteTopic('tpc_1');
 
       expect(taskService.deleteTopic).toHaveBeenCalledWith('tpc_1');
-      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
+      expect(taskDetailRefreshes('T-1')).not.toHaveLength(0);
     });
   });
 });

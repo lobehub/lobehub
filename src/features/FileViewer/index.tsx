@@ -1,17 +1,17 @@
 'use client';
 
 import { MARKDOWN_MIME_TYPES } from '@lobechat/const';
-import { Center } from '@lobehub/ui';
-import type { CSSProperties, JSXElementConstructor } from 'react';
+import { Center, Spin } from '@lobehub/ui';
+import type { CSSProperties, JSXElementConstructor, ReactNode } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
 
 import AsyncError from '@/components/AsyncError';
 import { isHtmlFile } from '@/components/HtmlPreview';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { type FileListItem } from '@/types/files';
 
-import { isPdfFile } from './fileType';
+import { isAudioFile, isPdfFile } from './fileType';
 import NotSupport from './NotSupport';
+import AudioViewer from './Renderer/Audio';
 import CodeViewer from './Renderer/Code';
 import HTMLViewer from './Renderer/HTML';
 import ImageViewer from './Renderer/Image';
@@ -101,6 +101,15 @@ const matchesFileType = (
 
 interface FileViewerProps extends FileListItem {
   className?: string;
+  /**
+   * Editing tools for image files (`ImageEditTools`). Only hosts that show a
+   * persisted library file mount them; omit for read-only previews.
+   */
+  imageTools?: ReactNode;
+  /** Host close action, surfaced in the image viewer's top bar. */
+  onClose?: () => void;
+  /** Forwarded to the PDF renderer; see {@link PDFViewerProps.showChunkHighlights}. */
+  showChunkHighlights?: boolean;
   style?: CSSProperties;
 }
 
@@ -143,7 +152,8 @@ const usePDFRenderer = (enabled: boolean) => {
 /**
  * Preview any file type.
  */
-const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) => {
+const FileViewer = memo<FileViewerProps>((props) => {
+  const { id, style, fileType, url, name, imageTools, onClose, showChunkHighlights } = props;
   const isPDF = isPdfFile({ fileName: name, fileType, path: url });
   const { retry: retryPDFRenderer, state: pdfRendererState } = usePDFRenderer(isPDF);
 
@@ -158,19 +168,35 @@ const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) =>
 
     if (pdfRendererState.status === 'ready') {
       const { Renderer } = pdfRendererState;
-      return <Renderer fileId={id} url={url} />;
+      return <Renderer fileId={id} showChunkHighlights={showChunkHighlights} url={url} />;
     }
 
     return (
       <Center height={'100%'} width={'100%'}>
-        <NeuralNetworkLoading size={36} />
+        <Spin size="large" />
       </Center>
     );
   }
 
   // Image files
   if (matchesFileType(fileType, name, IMAGE_EXTENSIONS, IMAGE_MIME_TYPES)) {
-    return <ImageViewer fileId={id} url={url} />;
+    return (
+      <ImageViewer
+        // A document-coalesced item carries a `docs_*` id; the tools need the
+        // persisted file behind it.
+        fileId={props.fileId ?? id}
+        key={url}
+        name={name}
+        tools={imageTools}
+        url={url}
+        onClose={onClose}
+      />
+    );
+  }
+
+  // Audio files - checked before video so `audio/ogg` / `audio/webm` play as audio.
+  if (isAudioFile({ fileName: name, fileType })) {
+    return <AudioViewer fileId={id} fileName={name} key={url} url={url} />;
   }
 
   // Video files

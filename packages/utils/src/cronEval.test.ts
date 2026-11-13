@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { isExecutionTime } from './cronEval';
+import {
+  findDueOccurrence,
+  findUpcomingOccurrence,
+  hasSameScheduleMinute,
+  isCronOccurrence,
+  isExecutionTime,
+  isPreciseSchedulePattern,
+  snapScheduleToStandardMinute,
+  validateCronPattern,
+  validateScheduleUpdate,
+} from './cronEval';
 
 const SHANGHAI = 'Asia/Shanghai';
 
@@ -90,8 +100,19 @@ describe('isExecutionTime', () => {
   });
 
   describe('daily pattern — catch-up after missed scheduled time', () => {
-    it('catches up at 23:00 if 21:00 was missed and the task never ran today', () => {
-      // Last run was yesterday at 21:00; dispatcher comes online at 23:00 today.
+    it('catches up a missed 21:00 tick within the grace window', () => {
+      // Last run was yesterday at 21:00; the 21:00 and 21:05 ticks were lost.
+      expect(
+        isExecutionTime({
+          cronPattern: '0 21 * * *',
+          currentTime: utc('2026-04-29T21:10:00'),
+          lastExecutedAt: utc('2026-04-28T21:00:00'),
+          timezone: 'UTC',
+        }),
+      ).toBe(true);
+    });
+
+    it('does NOT replay a 21:00 occurrence two hours late — waits for the next one', () => {
       expect(
         isExecutionTime({
           cronPattern: '0 21 * * *',
@@ -99,7 +120,7 @@ describe('isExecutionTime', () => {
           lastExecutedAt: utc('2026-04-28T21:00:00'),
           timezone: 'UTC',
         }),
-      ).toBe(true);
+      ).toBe(false);
     });
 
     it('does NOT catch-up after manual run already covered today (manual at 22:00, dispatcher at 23:00)', () => {
@@ -114,9 +135,20 @@ describe('isExecutionTime', () => {
     });
   });
 
-  describe('hourly / interval patterns are unaffected by the fix', () => {
-    it('every-hour-at-:00 still dedups within the 60-minute window', () => {
-      // Last run 30 minutes ago — same hour window, do not refire.
+  describe('hourly / interval patterns', () => {
+    it('every-hour-at-:00 does not refire on the next tick of the same hour', () => {
+      // The 15:00 occurrence already ran at 15:00:03; the 15:05 tick must skip.
+      expect(
+        isExecutionTime({
+          cronPattern: '0 * * * *',
+          currentTime: utc('2026-04-29T15:05:00'),
+          lastExecutedAt: utc('2026-04-29T15:00:03'),
+          timezone: 'UTC',
+        }),
+      ).toBe(false);
+    });
+
+    it('every-hour-at-:00 still fires 15:00 after a manual run at 14:30', () => {
       expect(
         isExecutionTime({
           cronPattern: '0 * * * *',
@@ -124,7 +156,7 @@ describe('isExecutionTime', () => {
           lastExecutedAt: utc('2026-04-29T14:30:00'),
           timezone: 'UTC',
         }),
-      ).toBe(false);
+      ).toBe(true);
     });
 
     it('every-hour-at-:00 fires after 60 minutes since last run', () => {
@@ -176,6 +208,116 @@ describe('isExecutionTime', () => {
     });
   });
 
+  describe('full cron semantics', () => {
+    it('honours day-of-month and month fields', () => {
+      expect(
+        isExecutionTime({
+          cronPattern: '0 9 1 5 *',
+          currentTime: utc('2026-05-01T09:00:00'),
+          lastExecutedAt: null,
+          timezone: 'UTC',
+        }),
+      ).toBe(true);
+      expect(
+        isExecutionTime({
+          cronPattern: '0 9 1 5 *',
+          currentTime: utc('2026-05-02T09:00:00'),
+          lastExecutedAt: null,
+          timezone: 'UTC',
+        }),
+      ).toBe(false);
+    });
+
+    it('treats a weekday range as every day in the range', () => {
+      // 2026-04-30 is a Thursday.
+      expect(
+        isExecutionTime({
+          cronPattern: '0 9 * * 1-5',
+          currentTime: utc('2026-04-30T09:00:00'),
+          lastExecutedAt: utc('2026-04-29T09:00:00'),
+          timezone: 'UTC',
+        }),
+      ).toBe(true);
+      // 2026-05-02 is a Saturday.
+      expect(
+        isExecutionTime({
+          cronPattern: '0 9 * * 1-5',
+          currentTime: utc('2026-05-02T09:00:00'),
+          lastExecutedAt: utc('2026-05-01T09:00:00'),
+          timezone: 'UTC',
+        }),
+      ).toBe(false);
+    });
+
+    it('fires each occurrence of a minute-offset pattern once, at or after the target', () => {
+      const tick = (time: string, last: string) =>
+        isExecutionTime({
+          cronPattern: '30 14 * * *',
+          currentTime: utc(time),
+          lastExecutedAt: utc(last),
+          timezone: 'UTC',
+        });
+      expect(tick('2026-04-29T14:25:00', '2026-04-28T14:30:00')).toBe(false);
+      expect(tick('2026-04-29T14:30:00', '2026-04-28T14:30:00')).toBe(true);
+      expect(tick('2026-04-29T14:35:00', '2026-04-29T14:30:05')).toBe(false);
+    });
+
+    it('never fires an invalid pattern or timezone', () => {
+      for (const [cronPattern, timezone] of [
+        ['0 9 * *', 'UTC'],
+        ['0 0 9 * * *', 'UTC'],
+        ['61 9 * * *', 'UTC'],
+        ['0 9 * * *', 'Mars/Base'],
+      ] as const) {
+        expect(
+          isExecutionTime({
+            cronPattern,
+            currentTime: utc('2026-04-29T09:00:00'),
+            lastExecutedAt: null,
+            timezone,
+          }),
+        ).toBe(false);
+      }
+    });
+  });
+
+  describe('validateCronPattern', () => {
+    it('previews the next runs in the pattern timezone', () => {
+      const result = validateCronPattern('45 11 * * 1-5', 'Asia/Ho_Chi_Minh', {
+        from: utc('2026-09-25T05:00:00'),
+      });
+      expect(result).toEqual({
+        nextRuns: [
+          utc('2026-09-28T04:45:00'),
+          utc('2026-09-29T04:45:00'),
+          utc('2026-09-30T04:45:00'),
+        ],
+        valid: true,
+      });
+    });
+
+    it('previews a one-shot date on its actual date', () => {
+      const result = validateCronPattern('0 10 27 9 *', SHANGHAI, {
+        count: 1,
+        from: utc('2026-09-20T03:15:55'),
+      });
+      expect(result).toEqual({ nextRuns: [utc('2026-09-27T02:00:00')], valid: true });
+    });
+
+    it.each([
+      ['0 9 * *', 'UTC', /expected 5 fields/],
+      ['0 0 9 * * *', 'UTC', /expected 5 fields/],
+      ['@daily', 'UTC', /expected 5 fields/],
+      ['61 9 * * *', 'UTC', /61/],
+      ['0 0 30 2 *', 'UTC', /day of month/],
+      ['0 9 * * *', 'Mars/Base', /unknown timezone/],
+    ])('rejects %s (%s)', (pattern, timezone, error) => {
+      const result = validateCronPattern(pattern, timezone);
+      expect(result.valid).toBe(false);
+      expect(!result.valid && result.error).toMatch(error);
+    });
+  });
+
   describe('null / first-run handling', () => {
     it('fires when there is no lastExecutedAt and clock matches', () => {
       expect(
@@ -187,5 +329,255 @@ describe('isExecutionTime', () => {
         }),
       ).toBe(true);
     });
+  });
+});
+
+describe('isExecutionTime — arming lower bound', () => {
+  it('does NOT fire an occurrence that predates arming (09:00 slot, armed 09:05, 09:10 tick)', () => {
+    expect(
+      isExecutionTime({
+        armedAt: utc('2026-04-29T09:05:00'),
+        cronPattern: '0 9 * * *',
+        currentTime: utc('2026-04-29T09:10:00'),
+        lastExecutedAt: null,
+        timezone: 'UTC',
+      }),
+    ).toBe(false);
+  });
+
+  it('does NOT replay the slot just before a re-arm when the last run is older', () => {
+    expect(
+      isExecutionTime({
+        armedAt: utc('2026-04-29T09:05:00'),
+        cronPattern: '0 9 * * *',
+        currentTime: utc('2026-04-29T09:10:00'),
+        lastExecutedAt: utc('2026-04-27T09:00:00'),
+        timezone: 'UTC',
+      }),
+    ).toBe(false);
+  });
+
+  it('fires the first occurrence after arming', () => {
+    expect(
+      isExecutionTime({
+        armedAt: utc('2026-04-29T08:55:00'),
+        cronPattern: '0 9 * * *',
+        currentTime: utc('2026-04-29T09:00:00'),
+        lastExecutedAt: null,
+        timezone: 'UTC',
+      }),
+    ).toBe(true);
+  });
+
+  it('fires the next day once the armed slot has passed', () => {
+    expect(
+      isExecutionTime({
+        armedAt: utc('2026-04-29T09:05:00'),
+        cronPattern: '0 9 * * *',
+        currentTime: utc('2026-04-30T09:00:00'),
+        lastExecutedAt: null,
+        timezone: 'UTC',
+      }),
+    ).toBe(true);
+  });
+});
+
+describe('isExecutionTime — grace window vs the 10-minute dispatcher', () => {
+  it('still fires a 09:01 occurrence on the 09:20 tick when the 09:10 tick was missed', () => {
+    expect(
+      isExecutionTime({
+        cronPattern: '1 9 * * *',
+        currentTime: utc('2026-04-29T09:20:00'),
+        lastExecutedAt: utc('2026-04-28T09:10:00'),
+        timezone: 'UTC',
+      }),
+    ).toBe(true);
+  });
+
+  it('covers one missed tick plus jitter: a 09:01 occurrence on a late 09:20 tick (09:25)', () => {
+    expect(
+      isExecutionTime({
+        cronPattern: '1 9 * * *',
+        currentTime: utc('2026-04-29T09:25:00'),
+        lastExecutedAt: utc('2026-04-28T09:10:00'),
+        timezone: 'UTC',
+      }),
+    ).toBe(true);
+  });
+
+  it('does NOT replay an occurrence older than the grace window', () => {
+    expect(
+      isExecutionTime({
+        cronPattern: '1 9 * * *',
+        currentTime: utc('2026-04-29T09:40:00'),
+        lastExecutedAt: utc('2026-04-28T09:10:00'),
+        timezone: 'UTC',
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('findDueOccurrence', () => {
+  it('identifies the occurrence each tick in the grace window would fire', () => {
+    const input = { cronPattern: '0 9 * * *', timezone: 'UTC' };
+    const occurrence = new Date('2026-09-21T09:00:00Z');
+
+    // Every tick inside the grace window resolves to the same occurrence, so
+    // the dispatcher can key a reservation on it.
+    for (const tick of ['09:00', '09:10', '09:20']) {
+      expect(
+        findDueOccurrence({ ...input, currentTime: new Date(`2026-09-21T${tick}:00Z`) }),
+      ).toEqual(occurrence);
+    }
+    // Once reserved, later ticks see it as covered.
+    expect(
+      findDueOccurrence({
+        ...input,
+        currentTime: new Date('2026-09-21T09:10:00Z'),
+        lastExecutedAt: occurrence,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('validateScheduleUpdate', () => {
+  const from = new Date('2026-09-26T00:00:00Z');
+
+  it('ignores patches that do not touch the schedule', () => {
+    expect(validateScheduleUpdate({ pattern: '0 0 9 * * *' }, {})).toBeUndefined();
+    expect(
+      validateScheduleUpdate({ pattern: '0 0 9 * * *' }, { automationMode: 'heartbeat' }),
+    ).toBeUndefined();
+  });
+
+  it('checks a pattern-only change against the stored timezone', () => {
+    expect(
+      validateScheduleUpdate(
+        { pattern: '0 9 * * *', timezone: 'Mars/Base' },
+        { schedulePattern: '0 10 * * *' },
+      ),
+    ).toEqual({ error: 'unknown timezone "Mars/Base"', valid: false });
+  });
+
+  it('re-checks the stored pair when schedule mode is enabled', () => {
+    expect(
+      validateScheduleUpdate(
+        { pattern: '0 0 9 * * *', timezone: 'UTC' },
+        { automationMode: 'schedule' },
+      ),
+    ).toMatchObject({ valid: false });
+  });
+
+  it('previews the resulting schedule when it is valid', () => {
+    expect(
+      validateScheduleUpdate(
+        { pattern: '0 9 * * *', timezone: 'UTC' },
+        { scheduleTimezone: 'Asia/Shanghai' },
+        { count: 1, from },
+      ),
+    ).toEqual({ preview: 'next runs (Asia/Shanghai) → Sat 2026-09-26 09:00', valid: true });
+  });
+
+  it('rejects an invalid timezone even when no pattern is set', () => {
+    expect(validateScheduleUpdate(null, { scheduleTimezone: 'Mars/Base' })).toMatchObject({
+      valid: false,
+    });
+    expect(validateScheduleUpdate(null, { scheduleTimezone: null })).toBeUndefined();
+  });
+});
+
+describe('findUpcomingOccurrence', () => {
+  const at = (currentTime: string, cronPattern: string, extra = {}) =>
+    findUpcomingOccurrence({
+      cronPattern,
+      currentTime: utc(currentTime),
+      timezone: 'UTC',
+      ...extra,
+    });
+
+  it('finds an occurrence before the next tick', () => {
+    expect(at('2026-09-21T09:10:00', '17 9 * * *')).toEqual(utc('2026-09-21T09:17:00'));
+  });
+
+  it('honors the pattern timezone', () => {
+    expect(
+      findUpcomingOccurrence({
+        cronPattern: '17 9 * * *',
+        currentTime: utc('2026-09-21T01:10:00'),
+        timezone: SHANGHAI,
+      }),
+    ).toEqual(utc('2026-09-21T01:17:00'));
+  });
+
+  it('leaves the next tick boundary to that tick', () => {
+    expect(at('2026-09-21T09:10:00', '20 9 * * *')).toBeNull();
+  });
+
+  it('ignores an occurrence after the next tick', () => {
+    expect(at('2026-09-21T09:10:00', '25 9 * * *')).toBeNull();
+  });
+
+  it('does not take the current minute again', () => {
+    expect(at('2026-09-21T09:17:00', '17 9 * * *')).toBeNull();
+  });
+
+  it('skips an occurrence already covered', () => {
+    expect(
+      at('2026-09-21T09:10:00', '17 9 * * *', { lastExecutedAt: utc('2026-09-21T09:17:00') }),
+    ).toBeNull();
+  });
+
+  it('never fires an invalid pattern', () => {
+    expect(at('2026-09-21T09:10:00', 'not a cron')).toBeNull();
+  });
+});
+
+describe('isCronOccurrence', () => {
+  it('matches only instants of the pattern in its timezone', () => {
+    expect(isCronOccurrence('17 9 * * *', SHANGHAI, utc('2026-09-21T01:17:00'))).toBe(true);
+    expect(isCronOccurrence('17 9 * * *', 'UTC', utc('2026-09-21T01:17:00'))).toBe(false);
+  });
+
+  it('treats invalid input as no occurrence', () => {
+    expect(isCronOccurrence('nope', 'UTC', utc('2026-09-21T01:17:00'))).toBe(false);
+    expect(isCronOccurrence('17 9 * * *', 'UTC', new Date('invalid'))).toBe(false);
+  });
+});
+
+describe('isPreciseSchedulePattern', () => {
+  it.each(['0 9 * * *', '30 9 * * *', '00 9 * * *', '0,30 * * * *', '* * * * *', '*/15 * * * *'])(
+    'does not count %s',
+    (pattern) => {
+      expect(isPreciseSchedulePattern(pattern)).toBe(false);
+    },
+  );
+
+  it.each(['17 9 * * *', '0,17 9 * * *', '17-17 9 * * *', '17/60 9 * * *', '59 * * * *'])(
+    'counts %s',
+    (pattern) => {
+      expect(isPreciseSchedulePattern(pattern)).toBe(true);
+    },
+  );
+});
+
+describe('hasSameScheduleMinute', () => {
+  it('compares only the minute field', () => {
+    expect(hasSameScheduleMinute('17 9 * * *', ' 17 10 * * 1')).toBe(true);
+    expect(hasSameScheduleMinute('17 9 * * *', '18 9 * * *')).toBe(false);
+  });
+});
+
+describe('snapScheduleToStandardMinute', () => {
+  it.each([
+    ['17 9 * * 1', '30 9 * * 1'],
+    ['14 9 * * *', '0 9 * * *'],
+    ['45 9 * * *', '0 9 * * *'],
+  ])('moves %s to %s', (pattern, expected) => {
+    expect(snapScheduleToStandardMinute(pattern)).toBe(expected);
+  });
+
+  it('leaves standard and interval patterns alone', () => {
+    expect(snapScheduleToStandardMinute('30 9 * * *')).toBe('30 9 * * *');
+    expect(snapScheduleToStandardMinute('*/15 * * * *')).toBe('*/15 * * * *');
   });
 });

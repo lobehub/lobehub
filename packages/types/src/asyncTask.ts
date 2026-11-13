@@ -4,6 +4,8 @@ export enum AsyncTaskType {
   Chunking = 'chunk',
   Embedding = 'embedding',
   ImageGeneration = 'image_generation',
+  /** One-way Linear issue → task sync run in the background (`linear_issue_sync`). */
+  LinearIssueSync = 'linear_issue_sync',
   UserMemoryExtractionHourly = 'user_memory_extraction:hourly',
   UserMemoryExtractionWithChatTopic = 'user_memory_extraction:chat_topic',
   VideoGeneration = 'video_generation',
@@ -18,6 +20,11 @@ export enum AsyncTaskStatus {
 
 export enum AsyncTaskErrorType {
   EmbeddingError = 'EmbeddingError',
+
+  /**
+   * The plan's vector storage cannot hold this file's vectors; nothing was embedded.
+   */
+  EmbeddingQuotaExceeded = 'EmbeddingQuotaExceeded',
 
   /**
    * File exceeds the in-memory parser limit and cannot be chunked.
@@ -201,8 +208,15 @@ export interface HourlyUserMemoryExtractionMetadata {
   startedAt: string;
 }
 
+export type VideoGenerationCompletionMode = 'polling' | 'webhook';
+
 export interface VideoGenerationTaskMetadata {
-  precharge?: Record<string, unknown>;
+  completionClaimedAt?: string;
+  completionEventId?: string;
+  completionMode?: VideoGenerationCompletionMode;
+  precharge?: unknown;
+  previousGenerationId?: string;
+  route?: VideoGenerationRoute;
   /**
    * Origin of the submitting request, carried across the async boundary so the
    * completion charge (webhook / polling) can keep the spend attributed.
@@ -213,4 +227,15 @@ export interface VideoGenerationTaskMetadata {
    */
   spendOrigin?: SpendOrigin;
   webhookToken?: string;
+}
+
+export interface VideoGenerationRoute {
+  apiType: string;
+  /**
+   * Router attempt that created the video, so the completion charge can be attributed to it.
+   * Routing ignores it: only `routerId` and `channelId` pin later polls.
+   */
+  attemptId?: string;
+  channelId?: string;
+  routerId?: string;
 }

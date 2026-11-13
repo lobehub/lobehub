@@ -5,29 +5,54 @@ import {
   ordinaryFileAccessScope,
   stripAgentShareDocumentProvenance,
 } from '@lobechat/types';
-import { and, asc, count, desc, eq, inArray, isNull, ne, notInArray, or, sum } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  ne,
+  notExists,
+  notInArray,
+  or,
+  sum,
+} from 'drizzle-orm';
 
 import type { DocumentItem, NewDocument } from '../schemas';
 import {
+  agentDocuments,
   DOCUMENT_FOLDER_TYPE,
   documentCommentMentions,
   documentComments,
+  documentHistories,
   documentLikes,
   documents,
   files,
   knowledgeBaseFiles,
+  messages,
+  messagesFiles,
   nextDocumentUpdatedAt,
   works,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { documentMatchesAccessScope } from '../utils/documentVisibility';
+import { notFileBackedPlaceholder } from '../utils/fileBackedPlaceholder';
 import {
   fileReferenceMatchesAccessScope,
   notAgentShareFileReference,
 } from '../utils/fileVisibility';
+import { documentOriginalCharCount } from '../utils/originalCharCount';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface QueryDocumentParams {
+  /**
+   * Narrow by creator: `self` keeps the caller's own documents, `others` keeps
+   * documents other workspace members created (still subject to visibility).
+   */
+  creator?: 'others' | 'self';
   current?: number;
   /**
    * Knowledge-base ids whose documents must be dropped from the listing —
@@ -37,8 +62,17 @@ export interface QueryDocumentParams {
   excludeKnowledgeBaseIds?: string[];
   fileTypes?: string[];
   pageSize?: number;
+  /**
+   * Row order: `updatedAt` (default) and `createdAt` list the newest first,
+   * `title` lists A→Z. Ties fall back to the id so offset pages never overlap.
+   */
+  sortBy?: DocumentQuerySortBy;
   sourceTypes?: string[];
+  /** Keep only documents that live outside every knowledge base. */
+  standaloneOnly?: boolean;
 }
+
+export type DocumentQuerySortBy = 'createdAt' | 'title' | 'updatedAt';
 
 export const DOCUMENT_TRANSFER_FOREIGN_ROWS =
   'Document subtree contains content created by other users';
@@ -130,21 +164,10 @@ export class DocumentModel {
   };
 
   create = async (params: Omit<NewDocument, 'userId'>): Promise<DocumentItem> => {
-    // Workspace-mode default for visibility:
-    //   - explicit visibility wins
-    //   - user-authored Pages (`sourceType: 'api'`) default to
-    //     `'private'` so workspace members start drafts in their own space and
-    //     publish when ready
-    //   - all other top-level rows (web crawls, file ingests, topic snapshots,
-    //     agent-signal artifacts, …): leave the schema default (`'public'`) so
-    //     existing behavior is preserved — these don't have a Pages-style
-    //     draft / publish lifecycle and were workspace-shared from day one
-    // Personal mode leaves it to the schema default; the filter ignores it.
-    let visibility = params.visibility;
-    if (!visibility && this.workspaceId && params.sourceType === 'api') {
-      visibility = 'private';
-    }
-
+    // Workspace documents default to the schema's `'public'`: a workspace is a
+    // collaborative space, so whatever a member (or an agent acting for them)
+    // writes there is shared unless the caller explicitly asks for `'private'`.
+    // Personal mode ignores the column.
     const result = (await this.db
       .insert(documents)
       .values(
@@ -153,7 +176,6 @@ export class DocumentModel {
           {
             ...params,
             metadata: this.scopeMetadata(params.metadata),
-            ...(visibility ? { visibility } : {}),
           },
         ),
       )
@@ -171,11 +193,14 @@ export class DocumentModel {
   };
 
   query = async ({
+    creator,
     current = 0,
     pageSize = 9999,
     excludeKnowledgeBaseIds,
     fileTypes,
+    sortBy = 'updatedAt',
     sourceTypes,
+    standaloneOnly,
   }: QueryDocumentParams = {}): Promise<{
     items: DocumentItem[];
     total: number;
@@ -185,6 +210,25 @@ export class DocumentModel {
 
     if (fileTypes?.length) {
       conditions.push(inArray(documents.fileType, fileTypes));
+    }
+
+    if (creator === 'self') conditions.push(eq(documents.userId, this.userId));
+    if (creator === 'others') conditions.push(ne(documents.userId, this.userId));
+
+    if (standaloneOnly) {
+      conditions.push(
+        isNull(documents.knowledgeBaseId),
+        // Parsed files taken from a library keep `knowledgeBaseId` null, so the
+        // `knowledgeBaseId` check alone still lets them through. A document that
+        // is backed by a file living in a library is not standalone either.
+        or(
+          isNull(documents.fileId),
+          notInArray(
+            documents.fileId,
+            this.db.select({ fileId: knowledgeBaseFiles.fileId }).from(knowledgeBaseFiles),
+          ),
+        )!,
+      );
     }
 
     if (excludeKnowledgeBaseIds?.length) {
@@ -220,6 +264,13 @@ export class DocumentModel {
     }
 
     const whereCondition = and(...conditions);
+    const orderBy =
+      sortBy === 'title'
+        ? [asc(documents.title), desc(documents.updatedAt), asc(documents.id)]
+        : [
+            desc(sortBy === 'createdAt' ? documents.createdAt : documents.updatedAt),
+            asc(documents.id),
+          ];
 
     // Fetch items and total count in parallel
     // Optimize: Exclude large JSONB fields (content, pages, editorData) for better performance
@@ -252,7 +303,7 @@ export class DocumentModel {
         })
         .from(documents)
         .where(whereCondition)
-        .orderBy(desc(documents.updatedAt))
+        .orderBy(...orderBy)
         .limit(pageSize)
         .offset(offset),
       this.db
@@ -289,6 +340,55 @@ export class DocumentModel {
       .where(and(this.readScope(), inArray(documents.id, ids)));
   };
 
+  /**
+   * Whether a parsed document that prompts preview instead of inline exists for the given files or
+   * for any file attached to a message in `topicId`: longer than `minChars`, or cut at parse time
+   * (`metadata.originalCharCount` above the stored length). Mirrors `isOversizedFileContent` in
+   * `@lobechat/prompts`, so the run gets a tool that can read those previews in windows.
+   */
+  hasFileDocumentsOverChars = async ({
+    fileIds = [],
+    minChars,
+    topicId,
+  }: {
+    fileIds?: string[];
+    minChars: number;
+    topicId?: string | null;
+  }): Promise<boolean> => {
+    const fileConditions = [];
+    if (fileIds.length > 0) fileConditions.push(inArray(documents.fileId, fileIds));
+    if (topicId) {
+      fileConditions.push(
+        inArray(
+          documents.fileId,
+          this.db
+            .select({ fileId: messagesFiles.fileId })
+            .from(messagesFiles)
+            .innerJoin(messages, eq(messages.id, messagesFiles.messageId))
+            .where(eq(messages.topicId, topicId)),
+        ),
+      );
+    }
+    if (fileConditions.length === 0) return false;
+
+    const [row] = await this.db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(
+        and(
+          this.ownership(),
+          or(
+            gt(documents.totalCharCount, minChars),
+            gt(documentOriginalCharCount(), documents.totalCharCount),
+          ),
+          or(...fileConditions),
+        ),
+      )
+      .limit(1);
+
+    return !!row;
+  };
+
   findByFileId = async (fileId: string, accessScope: FileAccessScope = ordinaryFileAccessScope) => {
     const [document] = await this.db
       .select()
@@ -298,10 +398,13 @@ export class DocumentModel {
       // Pick the oldest one explicitly instead of leaving the choice to the
       // query plan, so repeated lookups keep returning the same content.
       // `created_at` carries no uniqueness guarantee, so `id` breaks ties.
+      // An agent-document upload's empty placeholder row holds no text, so it is
+      // never the file's parse result; skipping it lets `parseFile` run.
       .where(
         and(
           this.ownership(),
           eq(documents.fileId, fileId),
+          notFileBackedPlaceholder(),
           fileReferenceMatchesAccessScope(this.db, documents.fileId, accessScope),
         ),
       )
@@ -357,6 +460,51 @@ export class DocumentModel {
       .returning({ updatedAt: documents.updatedAt });
 
     return row?.updatedAt;
+  };
+
+  /**
+   * Mirror a file's placement / name onto the document row(s) backed by it
+   * (`documents.file_id = fileId`). The knowledge-base tree is rendered from
+   * `documents.parent_id`, so moving only the `files` row leaves the item under
+   * its old folder. Counterpart of the document → file sync in
+   * `DocumentService.updateDocument`.
+   */
+  syncFromFile = async (fileId: string, value: { name?: string; parentId?: string | null }) => {
+    const patch: Partial<DocumentItem> = {};
+    if (value.name !== undefined) {
+      patch.title = value.name;
+      patch.filename = value.name;
+    }
+    if (value.parentId !== undefined) patch.parentId = value.parentId;
+    if (Object.keys(patch).length === 0) return [];
+
+    return this.db
+      .update(documents)
+      .set({ ...patch, updatedAt: nextDocumentUpdatedAt() })
+      .where(
+        and(
+          this.readScope(),
+          eq(documents.fileId, fileId),
+          // Skip documents that are an agent's own copy of the file
+          // (AgentDocumentsService.importFile): they keep their collision-safe VFS filename and
+          // agent-folder parent. Such a copy is created together with its agent_documents
+          // binding in one transaction, so both rows share `created_at` (defaultNow() is fixed
+          // per transaction). `associateDocument` binds a document that already existed, so an
+          // associated knowledge-base mirror or page keeps following the file.
+          notExists(
+            this.db
+              .select({ id: agentDocuments.id })
+              .from(agentDocuments)
+              .where(
+                and(
+                  eq(agentDocuments.documentId, documents.id),
+                  eq(agentDocuments.createdAt, documents.createdAt),
+                ),
+              ),
+          ),
+        ),
+      )
+      .returning({ id: documents.id });
   };
 
   /**
@@ -432,7 +580,7 @@ export class DocumentModel {
             eq(works.resourceId, rootId),
             buildWorkspaceWhere(
               { userId: this.userId, workspaceId: this.workspaceId },
-              { userId: works.userId, workspaceId: works.workspaceId },
+              { isDeleted: works.isDeleted, userId: works.userId, workspaceId: works.workspaceId },
             ),
           ),
         );
@@ -661,6 +809,18 @@ export class DocumentModel {
         .set({ ...ownershipUpdate, ...visibilityUpdate })
         .where(inArray(files.parentId, ids));
 
+      // History reads filter on the denormalized scope. A workspace target
+      // filters on `workspace_id` alone, so authors keep their attribution; a
+      // personal target reads `user_id = owner`, so the new owner takes every version.
+      await (trx as LobeChatDatabase)
+        .update(documentHistories)
+        .set(
+          targetWorkspaceId
+            ? { workspaceId: targetWorkspaceId }
+            : { userId: targetUserId, workspaceId: null },
+        )
+        .where(inArray(documentHistories.documentId, ids));
+
       return { documentIds: ids };
     });
   };
@@ -695,8 +855,10 @@ export class DocumentModel {
         const currentId = queue.shift()!;
         if (seen.has(currentId)) continue;
         seen.add(currentId);
-        const original = byId.get(currentId);
-        if (!original) continue;
+        // Invariant: the queue only holds documentId (the subtree root
+        // collectSubtree fetched by that id) and ids pushed from subtree rows,
+        // all of which are byId keys.
+        const original = byId.get(currentId)!;
 
         const newParentId =
           currentId === documentId ? null : (idMap.get(original.parentId!) ?? null);

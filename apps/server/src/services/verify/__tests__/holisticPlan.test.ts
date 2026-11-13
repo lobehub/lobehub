@@ -1,6 +1,9 @@
 import type { VerifyCheckItem } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AiGenerationService } from '@/server/services/aiGeneration';
+
+import { VERIFY_PLAN_MODEL_CONFIG } from '../modelConfig';
 import { VerifyPlanGeneratorService } from '../planGenerator';
 
 // Mock the model modules the generator constructs (holistic fallback).
@@ -12,6 +15,7 @@ const {
   findByIdsMock,
   generateObjectMock,
   getCriteriaMock,
+  getUserSettingsMock,
   setCriteriaMock,
   setPlanMock,
 } = vi.hoisted(() => ({
@@ -22,6 +26,7 @@ const {
   findByIdsMock: vi.fn(async () => [] as any[]),
   generateObjectMock: vi.fn(),
   getCriteriaMock: vi.fn(async () => [] as any[]),
+  getUserSettingsMock: vi.fn(async (): Promise<any> => undefined),
   setCriteriaMock: vi.fn(),
   setPlanMock: vi.fn(async (_runId: string, _items: any[]) => {}),
 }));
@@ -50,6 +55,11 @@ vi.mock('@/database/models/verifyCriterion', () => ({
       create: createCriterionMock,
       findByIds: findByIdsMock,
     };
+  }),
+}));
+vi.mock('@/database/models/user', () => ({
+  UserModel: vi.fn(function () {
+    return { getUserSettings: getUserSettingsMock };
   }),
 }));
 vi.mock('@/database/models/document', () => ({
@@ -162,20 +172,120 @@ describe('generateDraftPlan — holistic fallback', () => {
   });
 });
 
-describe('generateCriteria tracing', () => {
-  it('keeps generic task criteria generation on the verify-plan scenario', async () => {
+describe('verify plan generation model', () => {
+  beforeEach(() => {
+    generateObjectMock.mockReset();
+  });
+
+  it('keeps generic task criteria generation on the verify-plan scenario and pinned model', async () => {
     generateObjectMock.mockResolvedValue({ criteria: [] });
 
     await new VerifyPlanGeneratorService(db, 'user-1').generateCriteria({
       goal: 'Ship the feature',
-      modelConfig: { model: 'test-model', provider: 'test-provider' },
     });
 
     expect(generateObjectMock).toHaveBeenCalledWith(
-      expect.any(Object),
+      expect.objectContaining(VERIFY_PLAN_MODEL_CONFIG),
       expect.objectContaining({
         tracing: expect.objectContaining({ scenario: 'verify_plan_gen' }),
       }),
     );
+  });
+
+  it('splits an undecomposed requirement on the pinned model without a caller model', async () => {
+    generateObjectMock.mockResolvedValue({ criteria: [] });
+
+    await new VerifyPlanGeneratorService(db, 'user-1').generateDraftPlan({
+      enableAiGeneration: true,
+      goal: 'Ship the feature',
+      holisticFallback: true,
+      operationId: 'op-1',
+    });
+
+    expect(generateObjectMock).toHaveBeenCalledTimes(1);
+    expect(generateObjectMock).toHaveBeenCalledWith(
+      expect.objectContaining(VERIFY_PLAN_MODEL_CONFIG),
+      expect.any(Object),
+    );
+  });
+
+  /**
+   * Regression: a Task's run goal opens with English scaffolding ("Verify only
+   * this Task…") around a Chinese brief, and "write in the language of the run
+   * goal" produced English check titles on a Chinese account's acceptance page.
+   */
+  describe('output language', () => {
+    const systemPrompt = () =>
+      (generateObjectMock.mock.calls.at(-1)![0] as { messages: { content: string }[] }).messages[0]
+        .content;
+    const taskGoal = 'Verify only this Task: 挤水分 A/C。\n\nRequired Task outcome: 删除死代码';
+
+    it("writes criteria in the account's response language", async () => {
+      generateObjectMock.mockResolvedValue({ criteria: [] });
+      getUserSettingsMock.mockResolvedValue({ general: { responseLanguage: 'zh-CN' } });
+
+      await new VerifyPlanGeneratorService(db, 'user-1').generateDraftPlan({
+        enableAiGeneration: true,
+        goal: taskGoal,
+        operationId: 'op-1',
+      });
+
+      expect(systemPrompt()).toContain(
+        'title, description, instruction and every requiredEvidence hint in zh-CN',
+      );
+    });
+
+    it('falls back to the goal content language, not its English scaffolding, when unset', async () => {
+      generateObjectMock.mockResolvedValue({ criteria: [] });
+      getUserSettingsMock.mockResolvedValue({ general: {} });
+
+      await new VerifyPlanGeneratorService(db, 'user-1').generateCriteria({ goal: taskGoal });
+
+      expect(systemPrompt()).toContain('Ignore the English system wording');
+    });
+
+    it('does not let a settings read failure block plan generation', async () => {
+      generateObjectMock.mockResolvedValue({ criteria: [] });
+      getUserSettingsMock.mockRejectedValue(new Error('db down'));
+
+      await new VerifyPlanGeneratorService(db, 'user-1').generateCriteria({ goal: taskGoal });
+
+      expect(systemPrompt()).toContain('Ignore the English system wording');
+    });
+  });
+});
+
+/**
+ * Regression: plan generation in a workspace billed the caller's personal budget because the
+ * model call was built without the workspace id, so the cost never reached workspace spend.
+ */
+describe('verify plan generation billing scope', () => {
+  beforeEach(() => {
+    generateObjectMock.mockReset();
+    vi.mocked(AiGenerationService).mockClear();
+  });
+
+  it('bills criteria generation to the workspace it runs in', async () => {
+    generateObjectMock.mockResolvedValue({ criteria: [] });
+
+    await new VerifyPlanGeneratorService(db, 'user-1', 'ws-1').generateCriteria({
+      goal: 'Ship the feature',
+    });
+
+    expect(AiGenerationService).toHaveBeenCalledWith(db, 'user-1', 'ws-1');
+  });
+
+  it('bills the requirement split to the workspace it runs in', async () => {
+    generateObjectMock.mockResolvedValue({ criteria: [] });
+
+    await new VerifyPlanGeneratorService(db, 'user-1', 'ws-1').generateDraftPlan({
+      enableAiGeneration: true,
+      goal: 'Ship the feature',
+      holisticFallback: true,
+      operationId: 'op-1',
+    });
+
+    expect(generateObjectMock).toHaveBeenCalledTimes(1);
+    expect(AiGenerationService).toHaveBeenCalledWith(db, 'user-1', 'ws-1');
   });
 });

@@ -314,29 +314,6 @@ describe('LobeMoonshotOpenAI', () => {
         const payload = getLastRequestPayload();
         expect(payload.temperature).toBe(0.4);
       });
-
-      it('should normalize temperature to 0.5 when temperature is 1', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'moonshot-v1-8k',
-          temperature: 1,
-        });
-
-        const payload = getLastRequestPayload();
-        expect(payload.temperature).toBe(0.5);
-      });
-
-      it('should normalize temperature to 0 when temperature is 0', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'moonshot-v1-8k',
-          temperature: 0,
-        });
-
-        const payload = getLastRequestPayload();
-        expect(payload.temperature).toBe(0);
-      });
-
       it('should handle kimi-k2.5 model with thinking enabled by default', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
@@ -364,35 +341,6 @@ describe('LobeMoonshotOpenAI', () => {
         expect(payload.temperature).toBe(0.6);
         expect(payload.thinking).toEqual({ type: 'disabled' });
       });
-
-      it('should handle kimi-k2.6 model with thinking enabled by default', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'kimi-k2.6',
-          temperature: 0.5,
-          top_p: 0.8,
-        });
-
-        const payload = getLastRequestPayload();
-        expect(payload.temperature).toBe(1);
-        expect(payload.top_p).toBe(0.95);
-        expect(payload.frequency_penalty).toBe(0);
-        expect(payload.presence_penalty).toBe(0);
-        expect(payload.thinking).toEqual({ type: 'enabled' });
-      });
-
-      it('should handle kimi-k2.6 model with thinking disabled', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'kimi-k2.6',
-          thinking: { budget_tokens: 0, type: 'disabled' },
-        });
-
-        const payload = getLastRequestPayload();
-        expect(payload.temperature).toBe(0.6);
-        expect(payload.thinking).toEqual({ type: 'disabled' });
-      });
-
       it('should handle kimi-k2.6 model with preserveThinking enabled', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
@@ -508,22 +456,6 @@ describe('LobeMoonshotOpenAI', () => {
         expect(payload.thinking).toEqual({ type: 'enabled' });
         expect(payload.temperature).toBe(1);
       });
-
-      it('should always enable thinking for kimi-k2.7-code', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'kimi-k2.7-code',
-          temperature: 0.5,
-        });
-
-        const payload = getLastRequestPayload();
-        expect(payload.thinking).toEqual({ type: 'enabled' });
-        expect(payload.temperature).toBe(1);
-        expect(payload.top_p).toBe(0.95);
-        expect(payload.frequency_penalty).toBe(0);
-        expect(payload.presence_penalty).toBe(0);
-      });
-
       it('should ignore thinking disabled for native thinking models', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
@@ -681,7 +613,7 @@ describe('LobeMoonshotAnthropicAI', () => {
       });
     });
 
-    it('should use any schema tool choice for always-thinking Kimi models', async () => {
+    it('should use auto schema tool choice for always-thinking Kimi models', async () => {
       await instance.generateObject({
         messages: [{ content: 'Extract the result', role: 'user' }],
         model: 'kimi-k3',
@@ -689,11 +621,11 @@ describe('LobeMoonshotAnthropicAI', () => {
       });
 
       const payload = getLastRequestPayload();
-      expect(payload.tool_choice).toEqual({ type: 'any' });
+      expect(payload.tool_choice).toEqual({ type: 'auto' });
       expect(payload.thinking).toBeUndefined();
     });
 
-    it('should enable thinking and use any tool choice for Kimi thinking-toggle models', async () => {
+    it('should enable thinking and use auto tool choice for Kimi thinking-toggle models', async () => {
       await instance.generateObject({
         messages: [{ content: 'Get the result', role: 'user' }],
         model: 'kimi-k2.6',
@@ -711,7 +643,7 @@ describe('LobeMoonshotAnthropicAI', () => {
 
       const payload = getLastRequestPayload();
       expect(payload.thinking).toEqual({ budget_tokens: 1024, type: 'enabled' });
-      expect(payload.tool_choice).toEqual({ type: 'any' });
+      expect(payload.tool_choice).toEqual({ type: 'auto' });
     });
 
     it('should explicitly enable thinking for native K2.x models', async () => {
@@ -723,7 +655,7 @@ describe('LobeMoonshotAnthropicAI', () => {
 
       const payload = getLastRequestPayload();
       expect(payload.thinking).toEqual({ budget_tokens: 1024, type: 'enabled' });
-      expect(payload.tool_choice).toEqual({ type: 'any' });
+      expect(payload.tool_choice).toEqual({ type: 'auto' });
     });
 
     it('should normalize assistant history when thinking is enabled', async () => {

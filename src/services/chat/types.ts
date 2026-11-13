@@ -16,6 +16,8 @@ export interface FetchOptions extends FetchSSEOptions {
   /** Initial context for page editor (captured at operation start) */
   initialContext?: RuntimeInitialContext;
   metadata?: ChatRequestMetadata;
+  /** The agent operation this call runs in; sent so the call's usage groups with its run. */
+  operationId?: string;
   signal?: AbortSignal | undefined;
   /** Step context for page editor (updated each step) */
   stepContext?: RuntimeStepContext;

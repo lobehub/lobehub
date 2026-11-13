@@ -32,6 +32,12 @@ const BINARY_FALLBACK_MIME = 'application/octet-stream';
 const TEXT_MIME_PATTERN =
   /^(?:text\/|application\/(?:ecmascript|graphql|javascript|json|toml|xhtml\+xml|xml|yaml))/;
 
+// SVG is text on disk but must keep its registered type: browsers only render
+// it as an image from `image/svg+xml`, never from text/plain or application/xml.
+// Other `+xml` types (atom, rss, …) stay on the text downgrade so text previews
+// keep working for them.
+const SVG_MIME = 'image/svg+xml';
+
 const withCharset = (mimeType: string): string =>
   TEXT_MIME_PATTERN.test(mimeType) && !mimeType.includes('charset=')
     ? `${mimeType}; charset=utf-8`
@@ -89,10 +95,13 @@ export const tryGetMimeType = (filePath: string): string | undefined => {
  * sniff overrule mime-db when the two disagree.
  *
  * 1. `fileTypeFromBuffer()` — magic-byte detection. Authoritative when it
- *    matches: real MPEG-TS media wins here regardless of extension.
+ *    matches: real MPEG-TS media wins here regardless of extension. The one
+ *    exception is a generic `application/xml` match, which yields to the
+ *    `.svg` extension (an SVG with an `<?xml` prolog).
  * 2. Extension lookup (custom map + `mime.getType`) — the only signal for
  *    text formats file-type can't fingerprint (json/css/md/svg/…).
  *    - Text mime → use as-is (with charset appended).
+ *    - `image/svg+xml` → use as-is; it is text but must render as an image.
  *    - Binary mime + non-empty buffer that sniffs as text → downgrade to
  *      text/plain. Saves TypeScript source from mime-db's `video/mp2t`.
  *    - Otherwise → use the extension mime.
@@ -101,12 +110,18 @@ export const tryGetMimeType = (filePath: string): string | undefined => {
 export const resolveMimeType = async (filePath: string, buffer: Uint8Array): Promise<string> => {
   const { fileTypeFromBuffer } = await import('file-type');
   const detected = await fileTypeFromBuffer(buffer);
-  if (detected?.mime) return detected.mime;
+  const fromExtension = lookupExtensionMime(filePath);
+  if (detected?.mime) {
+    // file-type fingerprints any `<?xml` prolog as generic application/xml,
+    // which would hide an SVG's image/svg+xml; the extension is more specific.
+    if (detected.mime === 'application/xml' && fromExtension === SVG_MIME) return SVG_MIME;
+    return detected.mime;
+  }
 
   const isBinary = looksBinary(buffer);
-  const fromExtension = lookupExtensionMime(filePath);
   if (fromExtension) {
     if (TEXT_MIME_PATTERN.test(fromExtension)) return withCharset(fromExtension);
+    if (fromExtension === SVG_MIME) return SVG_MIME;
     if (buffer.byteLength > 0 && !isBinary) return TEXT_FALLBACK_MIME;
     return fromExtension;
   }

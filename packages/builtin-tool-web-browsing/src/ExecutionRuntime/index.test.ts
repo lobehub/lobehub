@@ -132,4 +132,135 @@ describe('WebBrowsingExecutionRuntime', () => {
       );
     });
   });
+
+  describe('crawlMultiPages', () => {
+    const longPage = Array.from({ length: 5000 }, (_, i) => `paragraph ${i + 1}`).join('\n');
+    const createSearchService = () => ({
+      crawlPages: vi.fn().mockResolvedValue({
+        results: [
+          {
+            data: { content: longPage, title: 'Long', url: 'https://example.com/long' },
+            originalUrl: 'https://example.com/long',
+          },
+        ],
+      }),
+      webSearch: vi.fn(),
+    });
+
+    it('pages a long crawled page through its saved agent document', async () => {
+      const runtime = new WebBrowsingExecutionRuntime({
+        canReadSavedDocuments: true,
+        documentService: {
+          associateDocument: vi.fn().mockResolvedValue({ id: 'agent-doc-1' }),
+          createDocument: vi.fn().mockResolvedValue({ id: 'docs-1' }),
+        },
+        searchService: createSearchService() as any,
+      });
+
+      const result = await runtime.crawlMultiPages({ urls: ['https://example.com/long'] });
+
+      expect(result.content).not.toContain('paragraph 5000');
+      expect(result.content).toMatch(
+        /\[Showing lines 1-\d+ of 5000 lines, \d+ characters\. To continue, call lobe-agent-documents readDocument with id="agent-doc-1", format="markdown" and offset=\d+\.\]/,
+      );
+    });
+
+    it('does not name readDocument when the run cannot call it', async () => {
+      // Chat mode, or a custom tool set with browsing alone, has no lobe-agent-documents.
+      const createDocument = vi.fn().mockResolvedValue({ id: 'docs-1' });
+      const runtime = new WebBrowsingExecutionRuntime({
+        documentService: {
+          associateDocument: vi.fn().mockResolvedValue({ id: 'agent-doc-1' }),
+          createDocument,
+        },
+        searchService: createSearchService() as any,
+      });
+
+      const result = await runtime.crawlMultiPages({ urls: ['https://example.com/long'] });
+
+      expect(createDocument).toHaveBeenCalled();
+      expect(result.content).toMatch(/Lines \d+-5000 were left out\./);
+      expect(result.content).not.toContain('readDocument');
+    });
+
+    it('reports what was left out when the page was not saved', async () => {
+      const runtime = new WebBrowsingExecutionRuntime({
+        searchService: createSearchService() as any,
+      });
+
+      const result = await runtime.crawlMultiPages({ urls: ['https://example.com/long'] });
+
+      expect(result.content).toMatch(/Lines \d+-5000 were left out\./);
+    });
+
+    it('returns an oversized crawl result without saving it as a document', async () => {
+      // A 13 MB JS bundle served from a CDN was snapshotted into a document on the
+      // main thread and kept the event loop busy until the liveness probe killed the pod.
+      const hugeBody = 'const a = 1;\n'.repeat(100_000);
+      const createDocument = vi.fn().mockResolvedValue({ id: 'docs-1' });
+      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const runtime = new WebBrowsingExecutionRuntime({
+        canReadSavedDocuments: true,
+        documentService: {
+          associateDocument: vi.fn().mockResolvedValue({ id: 'agent-doc-1' }),
+          createDocument,
+        },
+        searchService: {
+          crawlPages: vi.fn().mockResolvedValue({
+            results: [
+              {
+                data: { content: hugeBody, title: 'Bundle', url: 'https://example.com/index.js' },
+                originalUrl: 'https://example.com/index.js',
+              },
+            ],
+          }),
+          webSearch: vi.fn(),
+        } as any,
+      });
+
+      try {
+        const result = await runtime.crawlMultiPages({ urls: ['https://example.com/index.js'] });
+
+        expect(createDocument).not.toHaveBeenCalled();
+        expect(result.success).toBe(true);
+        expect(result.content).toContain('const a = 1;');
+        expect(result.content).toMatch(/Lines \d+-\d+ were left out\./);
+        expect(result.content).not.toContain('readDocument');
+      } finally {
+        consoleWarn.mockRestore();
+      }
+    });
+
+    it('logs a save failure by its driver cause instead of the query parameters', async () => {
+      // Drizzle's "Failed query" wrapper embeds every bound parameter, here the whole
+      // page and its editor JSON; logging it whole wrote about 30 MB to stderr per failure.
+      const queryError = new Error(
+        `Failed query: insert into "documents" ...\nparams: ${'page body '.repeat(10_000)}`,
+        {
+          cause: Object.assign(new Error('unsupported Unicode escape sequence'), { code: '22P05' }),
+        },
+      );
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const runtime = new WebBrowsingExecutionRuntime({
+        documentService: {
+          associateDocument: vi.fn(),
+          createDocument: vi.fn().mockRejectedValue(queryError),
+        },
+        searchService: createSearchService() as any,
+      });
+
+      try {
+        const result = await runtime.crawlMultiPages({ urls: ['https://example.com/long'] });
+
+        expect(result.success).toBe(true);
+        expect(consoleError).toHaveBeenCalledTimes(1);
+        const logged = consoleError.mock.calls[0].map(String).join(' ');
+        expect(logged).toContain('22P05 unsupported Unicode escape sequence');
+        expect(logged).toContain('https://example.com/long');
+        expect(logged).not.toContain('page body');
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+  });
 });

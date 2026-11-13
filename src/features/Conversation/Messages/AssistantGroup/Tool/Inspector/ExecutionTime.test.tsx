@@ -5,6 +5,10 @@ import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import ExecutionTime from './ExecutionTime';
+import Inspectors from './index';
+
+vi.mock('./StatusIndicator', () => ({ default: () => null }));
+vi.mock('./ToolTitle', () => ({ default: () => null }));
 
 describe('ExecutionTime', () => {
   afterEach(() => {
@@ -81,7 +85,7 @@ describe('ExecutionTime', () => {
     expect(screen.getByText('0ms')).toBeTruthy();
   });
 
-  it('formats elapsed times longer than a minute as Xmin Ys', () => {
+  it('formats elapsed times longer than a minute as Xm Ys', () => {
     vi.useFakeTimers();
     vi.setSystemTime(10_000);
 
@@ -93,7 +97,7 @@ describe('ExecutionTime', () => {
       vi.advanceTimersByTime(83_000);
     });
 
-    expect(screen.getByText('1min23s')).toBeTruthy();
+    expect(screen.getByText('1m 23s')).toBeTruthy();
 
     rerender(<ExecutionTime isExecuting startTime={10_000} timerKey="tool-minutes" />);
 
@@ -101,7 +105,7 @@ describe('ExecutionTime', () => {
       vi.advanceTimersByTime(60_000);
     });
 
-    expect(screen.getByText('2min23s')).toBeTruthy();
+    expect(screen.getByText('2m 23s')).toBeTruthy();
   });
 
   it('clears the cached start time when execution stops', () => {
@@ -127,5 +131,37 @@ describe('ExecutionTime', () => {
     rerender(<ExecutionTime isExecuting timerKey="tool-stop" />);
 
     expect(screen.getByText('0ms')).toBeTruthy();
+  });
+
+  it('keeps separate inspector clocks for messages that reuse a native tool id', () => {
+    // Codex numbers items per run, so `item_1` appears in every topic and resumed turn.
+    vi.useFakeTimers();
+    vi.setSystemTime(10_000);
+    const renderTool = (messageId: string) =>
+      render(
+        <Inspectors
+          isToolCalling
+          apiName="exec"
+          identifier="codex"
+          messageId={messageId}
+          toolCallId="item_1"
+        />,
+      );
+
+    const first = renderTool('message-a');
+    act(() => {
+      vi.advanceTimersByTime(2500);
+    });
+    first.unmount();
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    const second = renderTool('message-b');
+    expect(screen.getByText('0ms')).toBeTruthy();
+    second.unmount();
+
+    renderTool('message-a');
+    expect(screen.getByText('3.5s')).toBeTruthy();
   });
 });

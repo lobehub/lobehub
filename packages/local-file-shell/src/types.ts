@@ -149,6 +149,24 @@ export interface ReadFileResult {
   truncated?: boolean;
 }
 
+/** Durable reference to an image uploaded to file storage. */
+export interface UploadedImageRecord {
+  id: string;
+  url: string;
+}
+
+/**
+ * {@link ReadFileResult} for an image path. The bytes are uploaded to file
+ * storage instead of being read as text, so a vision model can see the image.
+ */
+export interface ReadImageFileResult extends ReadFileResult {
+  /** File record id of the uploaded image; absent when the upload failed. */
+  imageFileId?: string;
+  /** Durable URL of the uploaded image; absent when the upload failed. */
+  imageUrl?: string;
+  isImage: true;
+}
+
 export interface WriteFileParams {
   content: string;
   /** Working directory a relative `path` resolves against. See {@link ReadFileParams.cwd}. */
@@ -309,6 +327,51 @@ export interface RenameFileResult {
   error?: string;
   newPath: string;
   success: boolean;
+}
+
+export interface CreateFileParams {
+  /** Initial content. Defaults to an empty file. */
+  content?: string;
+  /** Working directory a relative `path` resolves against. See {@link ReadFileParams.cwd}. */
+  cwd?: string;
+  path: string;
+}
+
+export interface CreateDirectoryParams {
+  /** Working directory a relative `path` resolves against. See {@link ReadFileParams.cwd}. */
+  cwd?: string;
+  path: string;
+}
+
+/** Result of creating one new file or directory. Never overwrites: an existing entry fails. */
+export interface CreateEntryResult {
+  error?: string;
+  /** The resolved absolute path of the entry that was (or would have been) created. */
+  path: string;
+  success: boolean;
+}
+
+export interface CopyFileItem {
+  sourcePath: string;
+  /**
+   * Where the copy lands. Omit it to duplicate next to the source under a
+   * Finder-style free name (`name copy.ext`, `name copy 2.ext`, …).
+   */
+  targetPath?: string;
+}
+
+export interface CopyFilesParams {
+  /** Working directory each item's relative paths resolve against. See {@link ReadFileParams.cwd}. */
+  cwd?: string;
+  items: CopyFileItem[];
+}
+
+export interface CopyFileResultItem {
+  error?: string;
+  sourcePath: string;
+  success: boolean;
+  /** The path the copy was written to, when it succeeded. */
+  targetPath?: string;
 }
 
 export interface GrepContentParams {

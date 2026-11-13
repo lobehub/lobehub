@@ -23,14 +23,24 @@ const mocks = vi.hoisted(() => ({
   operations: {} as Record<string, MockOperation>,
 }));
 
-vi.mock('@lobehub/ui', () => ({
-  copyToClipboard: mocks.copyToClipboard,
-}));
-
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  toast: { success: mocks.messageSuccess },
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    () => ({
+      copyToClipboard: mocks.copyToClipboard,
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      toast: { success: mocks.messageSuccess },
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('antd', async (importOriginal) => ({
   ...(await importOriginal<object>()),

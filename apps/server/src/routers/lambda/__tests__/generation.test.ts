@@ -1,3 +1,4 @@
+import { trace } from '@lobechat/observability-otel/api';
 import { TRPCError } from '@trpc/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -18,6 +19,37 @@ describe('generationRouter', () => {
   };
 
   describe('getGenerationStatus', () => {
+    it('should tag the request span with the polled task type', async () => {
+      const activeSpan = { setAttributes: vi.fn() };
+      const getActiveSpan = vi.spyOn(trace, 'getActiveSpan').mockReturnValue(activeSpan as any);
+      vi.mocked(AsyncTaskModel).mockImplementation(function () {
+        return {
+          checkTimeoutTasks: vi.fn().mockResolvedValue(undefined),
+          findById: vi.fn().mockResolvedValue({
+            error: null,
+            id: 'task-1',
+            status: AsyncTaskStatus.Processing,
+            type: 'video_generation',
+          }),
+        } as any;
+      });
+      vi.mocked(GenerationModel).mockImplementation(function () {
+        return {} as any;
+      });
+      vi.mocked(FileService).mockImplementation(function () {
+        return {} as any;
+      });
+
+      const caller = generationRouter.createCaller(mockCtx);
+      await caller.getGenerationStatus({ asyncTaskId: 'task-1', generationId: 'gen-1' });
+
+      expect(activeSpan.setAttributes).toHaveBeenCalledWith({
+        'generation.task.status': AsyncTaskStatus.Processing,
+        'generation.task.type': 'video_generation',
+      });
+      getActiveSpan.mockRestore();
+    });
+
     it('should return generation status when task is successful', async () => {
       const mockGeneration = {
         id: 'gen-1',

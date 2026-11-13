@@ -1,6 +1,8 @@
 import { formatSpeakerMessage } from '@lobechat/prompts';
 import type { BotSenderMetadata } from '@lobechat/types';
 
+import { SOURCE_MESSAGES_FIELD } from './mergeMessages';
+
 interface RawReferencedMessage {
   author?: { global_name?: string; username?: string };
   content?: string;
@@ -80,6 +82,18 @@ export const formatReferencedMessage = (
 };
 
 /**
+ * A debounced / replayed turn is merged into one message whose `raw` is only
+ * the LAST source's payload. A reply quoted by an earlier source lives on that
+ * source's `raw`, so read every source rather than the merged `raw` alone.
+ */
+const getReferenceSources = (message: MessageLike): MessageLike[] => {
+  const sources = (message as MessageLike & { [SOURCE_MESSAGES_FIELD]?: MessageLike[] })[
+    SOURCE_MESSAGES_FIELD
+  ];
+  return sources?.length ? sources : [message];
+};
+
+/**
  * Format user message into agent prompt:
  * 1. Strip platform-specific bot mentions via sanitizeUserInput
  * 2. Prepend referenced (quoted/replied) message if present
@@ -92,16 +106,22 @@ export const formatPrompt = (message: MessageLike, options?: FormatPromptOptions
     text = options.sanitizeUserInput(text, message);
   }
 
-  // Prepend referenced (quoted/replied) message if present. Mentions inside
-  // it are only *named*, never stripped: "@Bot do X" quoted back should still
-  // read as addressed to the bot.
+  // Prepend referenced (quoted/replied) messages if present. Mentions inside
+  // them are only *named*, never stripped: "@Bot do X" quoted back should
+  // still read as addressed to the bot.
   const resolveMentions = options?.resolveMentions;
-  const referencedText = formatReferencedMessage(
-    message.raw,
-    resolveMentions ? (content) => resolveMentions(content, message) : undefined,
-  );
-  if (referencedText) {
-    text = `${referencedText}\n${text}`;
+  const transformContent = resolveMentions
+    ? (content: string) => resolveMentions(content, message)
+    : undefined;
+  const referencedTexts = [
+    ...new Set(
+      getReferenceSources(message)
+        .map((source) => formatReferencedMessage(source.raw, transformContent))
+        .filter((ref): ref is string => !!ref),
+    ),
+  ];
+  if (referencedTexts.length > 0) {
+    text = `${referencedTexts.join('\n')}\n${text}`;
   }
 
   const { avatar, id, nickname, username } = resolveSpeaker(message);

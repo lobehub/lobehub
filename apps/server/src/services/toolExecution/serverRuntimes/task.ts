@@ -1,9 +1,15 @@
-import type { ListWorkspaceMembersParams } from '@lobechat/builtin-tool-task';
+import type { ListWorkspaceMembersParams, ToolLabelResolution } from '@lobechat/builtin-tool-task';
 import {
+  describeTaskModelChange,
+  MISSING_TASK_NAME_ERROR,
   normalizeListTasksParams,
   normalizeListWorkspaceMembersParams,
+  normalizeSetTaskVerifyParams,
+  resolveToolLabelIds,
   selectAssignableMembers,
   TaskIdentifier,
+  toCreateTaskModelConfig,
+  toTaskModelConfigPatch,
 } from '@lobechat/builtin-tool-task';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { TaskAssignableMember, TaskCreatedItem } from '@lobechat/prompts';
@@ -20,39 +26,27 @@ import {
   priorityLabel,
 } from '@lobechat/prompts';
 import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
-import { eq } from 'drizzle-orm';
+import { invertTaskLabelChange } from '@lobechat/types';
+import { formatInvalidScheduleMessage, validateScheduleUpdate } from '@lobechat/utils/cronEval';
+import pMap from 'p-map';
 
-import { notifyTaskAssigned } from '@/business/server/task/notifyTaskAssigned';
 import { AgentModel } from '@/database/models/agent';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
 import { TaskModel } from '@/database/models/task';
 import { UserModel } from '@/database/models/user';
 import { WorkspaceModel } from '@/database/models/workspace';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
-import { tasks } from '@/database/schemas';
 import { appEnv } from '@/envs/app';
+import { formatPgError, unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import { taskRouter } from '@/server/routers/lambda/task';
+import { taskLabelRouter } from '@/server/routers/lambda/taskLabel';
 import { TaskService } from '@/server/services/task';
-import { after } from '@/server/utils/scheduleAfterResponse';
+import { resolveTaskOrThrow, resolveTasksOrThrow } from '@/server/services/task/utils';
 
+import { resolveTaskWorkspaceId } from './resolveWorkspaceScope';
+import { createTaskAssigneeHelpers } from './taskAssignees';
+import { taskResult, taskResultLabel } from './taskResults';
 import { type ServerRuntimeRegistration } from './types';
-
-// Row-level workspace resolution: the agent runtime hasn't threaded
-// `workspaceId` into `ToolExecutionContext` yet. When the tool fires inside a
-// task we derive the workspace from that task row; otherwise we fall back to
-// personal mode.
-const resolveWorkspaceId = async (
-  db: LobeChatDatabase,
-  taskId: string | undefined,
-): Promise<string | undefined> => {
-  if (!taskId) return undefined;
-  const [row] = await db
-    .select({ workspaceId: tasks.workspaceId })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1);
-  return row?.workspaceId ?? undefined;
-};
 
 export interface TaskRuntimeDeps {
   agentId?: string;
@@ -66,6 +60,8 @@ export interface TaskRuntimeDeps {
   // back to this session. All optional — a task can be created
   // outside an agent turn (e.g. via the API).
   operationId?: string;
+  // Project the run belongs to: tasks it creates land there by default.
+  projectId?: string;
   // Resolves the base URL for task deep-links: app origin + optional `/{slug}`
   // workspace prefix. Provided by the factory (which owns db / userId / the
   // resolved workspaceId); when absent (unit tests) links fall back to the bare
@@ -76,6 +72,7 @@ export interface TaskRuntimeDeps {
   scope?: string | null;
   taskCaller: ReturnType<typeof taskRouter.createCaller>;
   taskId?: string;
+  taskLabelCaller?: ReturnType<typeof taskLabelRouter.createCaller>;
   taskModel: TaskModel;
   taskService: TaskService;
   threadId?: string | null;
@@ -100,10 +97,21 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
   } = deps;
   // Models are read through `deps` (not destructured) so callers can swap them
   // in lazily — e.g. after async workspace resolution in the runtime factory.
-  const agentModel = () => deps.agentModel;
   const taskModel = () => deps.taskModel;
   const taskService = () => deps.taskService;
   const taskCaller = () => deps.taskCaller;
+
+  /** Resolve agent-supplied label names against the registry; never creates labels. */
+  const resolveLabels = async (
+    names: string[] | undefined,
+    allowGroups = false,
+  ): Promise<ToolLabelResolution> => {
+    if (!names?.some((name) => name.trim())) return { ids: [] };
+    if (!deps.taskLabelCaller) {
+      return { error: 'Task labels are unavailable in this context.', ids: [] };
+    }
+    return resolveToolLabelIds(await deps.taskLabelCaller.list(), names, { allowGroups });
+  };
 
   // Base URL for task deep-links embedded in tool results. These results can be
   // pushed to IM / bot channels and mobile, so the link must be ABSOLUTE — and
@@ -113,63 +121,8 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
   const taskLinkBaseUrl = async (): Promise<string> =>
     (await deps.resolveLinkBaseUrl?.()) ?? appEnv.APP_URL.replace(/\/$/, '');
 
-  const resolveAssigneeAgent = async (assigneeAgentId?: string | null) => {
-    if (!assigneeAgentId) return { success: true } as const;
-
-    const exists = await agentModel().existsById(assigneeAgentId);
-    if (exists) return { success: true } as const;
-
-    return {
-      content: `Assignee agent not found: ${assigneeAgentId}`,
-      success: false,
-    } as const;
-  };
-
-  // Human-readable label for a member assignee in tool output: "Alice (usr_1)".
-  // Falls back to the bare id when no db is wired (unit tests) or lookup fails.
-  const resolveMemberLabel = async (assigneeUserId: string): Promise<string> => {
-    if (!deps.db) return assigneeUserId;
-    try {
-      const [user] = await UserModel.getDisplayInfoByIds(deps.db, [assigneeUserId]);
-      const name = user?.fullName?.trim() || user?.username?.trim();
-      return name ? `${name} (${assigneeUserId})` : assigneeUserId;
-    } catch {
-      return assigneeUserId;
-    }
-  };
-
-  // Assignment ping (Linear-style), mirroring `task.create` in the router: the
-  // runtime calls TaskService directly (to persist `context.origin`), so the
-  // router's notify hook never fires for tool-created tasks. Delivered after
-  // the response as best-effort work — the `@/business` slot defaults to a
-  // no-op, and a rejecting implementation must not become an unhandled
-  // rejection. Silent for self-assignment; the assignee lock already
-  // guarantees the member can open the task (private tasks cannot be assigned
-  // to anyone but their creator).
-  const notifyMemberAssigned = (task: {
-    assigneeUserId: string | null;
-    id: string;
-    identifier: string;
-    name: string | null;
-  }) => {
-    const { assigneeUserId } = task;
-    if (!assigneeUserId || !deps.userId || assigneeUserId === deps.userId) return;
-    const params = {
-      actorUserId: deps.userId,
-      assigneeUserId,
-      taskId: task.id,
-      taskIdentifier: task.identifier,
-      taskName: task.name,
-      workspaceId: deps.workspaceId,
-    };
-    after(async () => {
-      try {
-        await notifyTaskAssigned(params);
-      } catch (error) {
-        console.error('[task-runtime] Failed to send assignment notification', error);
-      }
-    });
-  };
+  const { notifyMemberAssigned, resolveAssigneeAgent, resolveMemberLabel } =
+    createTaskAssigneeHelpers(deps);
 
   type CreateTaskArgs = {
     instruction: string;
@@ -182,30 +135,56 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       requirement?: string | null;
       title?: string;
     };
+    labels?: string[];
+    model?: string;
     name: string;
     parentIdentifier?: string;
     priority?: number;
+    provider?: string;
     sortOrder?: number;
   };
 
   const createTaskImpl = async (
-    args: CreateTaskArgs,
+    rawArgs: CreateTaskArgs,
   ): Promise<{ content: string; identifier?: string; success: boolean; taskId?: string }> => {
+    // Models fill optional ids with "" — treat blanks as omitted so they fall
+    // back to the defaults instead of hitting the foreign keys as ''.
+    const args: CreateTaskArgs = {
+      ...rawArgs,
+      assigneeAgentId: rawArgs.assigneeAgentId?.trim() || undefined,
+      assigneeUserId: rawArgs.assigneeUserId?.trim() || undefined,
+      parentIdentifier: rawArgs.parentIdentifier?.trim() || undefined,
+    };
+    // `name` is required by the manifest but nothing enforced it: nameless
+    // tasks listed as "(unnamed)" and the receipt printed `"null"`.
+    if (!args.name?.trim()) return { content: MISSING_TASK_NAME_ERROR, success: false };
+    let modelConfig: ReturnType<typeof toCreateTaskModelConfig>;
+    try {
+      modelConfig = toCreateTaskModelConfig(args);
+    } catch (error) {
+      return { content: (error as Error).message, success: false };
+    }
     let parentLabel: string | undefined;
 
     // Pre-resolve parent identifier so we can surface a tool-friendly error
     // and label, and pass the resolved id straight through to the service.
     let parentTaskId: string | undefined;
+    let projectId = deps.projectId;
     if (args.parentIdentifier) {
       const parent = await taskModel().resolve(args.parentIdentifier);
       if (!parent)
         return { content: `Parent task not found: ${args.parentIdentifier}`, success: false };
       parentTaskId = parent.id;
       parentLabel = parent.identifier;
+      // A subtask follows its parent's project, which the service enforces.
+      projectId = parent.projectId ?? undefined;
     }
 
-    const assigneeResult = await resolveAssigneeAgent(args.assigneeAgentId);
+    const assigneeResult = await resolveAssigneeAgent(args.assigneeAgentId, projectId);
     if (!assigneeResult.success) return { content: assigneeResult.content, success: false };
+    // Resolved before the insert so a bad label name creates nothing.
+    const labelResult = await resolveLabels(args.labels);
+    if (labelResult.error) return { content: labelResult.error, success: false };
 
     // Capture where this task was spawned from so the lifecycle can later
     // bridge the handoff result back to the creator conversation.
@@ -226,18 +205,54 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
     // Executing agent and human owner are independent, coexisting sides (the
     // member owns the outcome, the agent executes) — a member owner does not
     // suppress the usual current-agent default.
-    const task = await taskService().createTask({
-      assigneeAgentId: args.assigneeAgentId ?? (scope === 'task' ? undefined : agentId),
-      assigneeUserId: args.assigneeUserId,
-      context: origin ? { origin } : undefined,
-      createdByAgentId: agentId,
-      instruction: args.instruction,
-      name: args.name,
-      parentTaskId,
-      priority: args.priority,
-      sortOrder: args.sortOrder,
-    });
+    let task: Awaited<ReturnType<TaskService['createTask']>>;
+    try {
+      task = await taskService().createTask({
+        assigneeAgentId: args.assigneeAgentId ?? (scope === 'task' ? undefined : agentId),
+        assigneeUserId: args.assigneeUserId,
+        config: modelConfig,
+        context: origin ? { origin } : undefined,
+        createdByAgentId: agentId,
+        instruction: args.instruction,
+        name: args.name,
+        parentTaskId,
+        priority: args.priority,
+        projectId: parentTaskId ? undefined : projectId,
+        sortOrder: args.sortOrder,
+      });
+    } catch (error) {
+      // Drizzle's message is only `Failed query: insert … params: …`, where
+      // null and '' both print as empty, so agents misread it (e.g. as a null
+      // workspace or a duplicate identifier). Surface the PG cause (SQLSTATE +
+      // constraint + detail) instead. Non-DB errors (TRPCError etc.) already
+      // carry an actionable message and keep propagating as before.
+      const pgError = unwrapPgError(error);
+      if (!pgError) throw error;
+      return { content: `Failed to create task: ${formatPgError(pgError)}`, success: false };
+    }
 
+    let labels: { name: string }[] | undefined;
+    if (labelResult.ids.length > 0) {
+      try {
+        labels = await deps.taskLabelCaller!.addToTask({
+          labelIds: labelResult.ids,
+          taskId: task.id,
+        });
+      } catch (error) {
+        // Roll the task back (as task.create does) so a failed call leaves
+        // nothing behind and a retry cannot produce a duplicate.
+        await taskModel()
+          .delete(task.id)
+          .catch(() => {});
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          content: `Failed to create task: its labels could not be attached (${message}). Nothing was created.`,
+          success: false,
+        };
+      }
+    }
+
+    // Only once the task is complete, so a rolled-back task never notifies.
     notifyMemberAssigned(task);
 
     return {
@@ -249,10 +264,13 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         // bot channels and mobile, where a relative path has no app origin to
         // resolve against and the `/{slug}` prefix would otherwise be lost.
         baseUrl: await taskLinkBaseUrl(),
+        id: task.id,
         identifier: task.identifier,
         instruction: args.instruction,
+        labels,
         name: task.name,
         parentLabel,
+        parentTaskId,
         priority: task.priority,
         status: task.status,
       }),
@@ -273,16 +291,22 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       }
 
       try {
+        const task = await resolveTaskOrThrow(taskModel(), id);
         const result = await taskCaller().addComment({
           authorAgentId: agentId,
           content: args.content,
-          id,
+          id: task.id,
         });
 
         return {
-          content: `Comment added to task ${id}.`,
+          content: `Comment added to task ${taskResultLabel(task)}.`,
           success: true,
-          state: { commentId: result.data.id, identifier: id, success: true },
+          state: {
+            commentId: result.data.id,
+            identifier: task.identifier,
+            taskId: task.id,
+            success: true,
+          },
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to add task comment';
@@ -317,6 +341,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
           results.push({
             error: result.success ? undefined : result.content,
             identifier: result.identifier,
+            taskId: result.taskId,
             name: item.name,
             success: result.success,
           });
@@ -345,10 +370,15 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       const task = await taskModel().resolve(args.identifier);
       if (!task) return { content: `Task not found: ${args.identifier}`, success: false };
 
-      await taskModel().delete(task.id);
+      try {
+        await taskService().deleteTask(task.id, { keepOperationId: operationId });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to delete task';
+        return { content: `Failed to delete task ${task.identifier}: ${message}`, success: false };
+      }
 
       return {
-        content: formatTaskDeleted(task.identifier, task.name),
+        content: formatTaskDeleted(taskResultLabel(task), task.name),
         // Surface the deleted task's internal id so the dispatch-layer Work
         // deletion (`work: { action: 'delete' }`) can locate the Work by
         // `works.resourceId = taskId` after the task row is gone.
@@ -373,131 +403,208 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
     editTask: async (args: {
       addDependencies?: string[];
+      addLabels?: string[];
       assigneeAgentId?: string | null;
       assigneeUserId?: string | null;
       description?: string;
       identifier: string;
       instruction?: string;
+      model?: string | null;
       name?: string;
       parentIdentifier?: string | null;
       priority?: number;
+      provider?: string | null;
       removeDependencies?: string[];
+      removeLabels?: string[];
     }) => {
       const task = await taskModel().resolve(args.identifier);
       if (!task) return { content: `Task not found: ${args.identifier}`, success: false };
+      const addLabels = await resolveLabels(args.addLabels);
+      if (addLabels.error) return { content: addLabels.error, success: false };
+      const removeLabels = await resolveLabels(args.removeLabels);
+      if (removeLabels.error) return { content: removeLabels.error, success: false };
 
-      const updateData: {
-        assigneeAgentId?: string | null;
-        assigneeUserId?: string | null;
-        description?: string;
-        instruction?: string;
-        name?: string;
-        parentTaskId?: string | null;
-        priority?: number;
-      } = {};
-      const changes: string[] = [];
-      const ops: Promise<unknown>[] = [];
-
-      if (args.name !== undefined) {
-        updateData.name = args.name;
-        changes.push(`name → "${args.name}"`);
-      }
-      if (args.assigneeAgentId !== undefined) {
-        const assigneeResult = await resolveAssigneeAgent(args.assigneeAgentId);
-        if (!assigneeResult.success) return assigneeResult;
-
-        updateData.assigneeAgentId = args.assigneeAgentId;
-        changes.push(
-          args.assigneeAgentId ? `assignee agent → ${args.assigneeAgentId}` : 'assignee cleared',
+      // Labels first, in one transaction (removals apply first, so "swap Bug
+      // for Feature" ends with Feature): a label failure then writes nothing
+      // else. If a later write of this edit fails, only this label change is
+      // undone — not the whole set replaced — so a concurrent edit survives.
+      const labelDelta = { add: addLabels.ids, remove: removeLabels.ids };
+      let undoLabels = async () => {};
+      if (labelDelta.add.length > 0 || labelDelta.remove.length > 0) {
+        const labelCaller = deps.taskLabelCaller!;
+        const { addLabels: _a, identifier: _i, removeLabels: _r, ...otherArgs } = args;
+        const hasOtherEdits = Object.values(otherArgs).some((value) => value !== undefined);
+        const readLabels = async () =>
+          (await taskCaller().detail({ id: task.id })).data?.labels ?? [];
+        const before = hasOtherEdits ? await readLabels() : undefined;
+        const after = (await labelCaller.changeForTask({ ...labelDelta, taskId: task.id })).map(
+          (label) => label.id,
         );
-      }
-      // Independent of the agent side: the member is the human owner and the
-      // two assignees coexist, so touching one never clears the other.
-      if (args.assigneeUserId !== undefined) {
-        updateData.assigneeUserId = args.assigneeUserId;
-        changes.push(
-          args.assigneeUserId
-            ? `assignee member → ${await resolveMemberLabel(args.assigneeUserId)}`
-            : 'assignee member cleared',
-        );
-      }
-      if (args.instruction !== undefined) {
-        updateData.instruction = args.instruction;
-        changes.push(`instruction updated`);
-      }
-      if (args.description !== undefined) {
-        updateData.description = args.description;
-        changes.push('description updated');
-      }
-      if (args.parentIdentifier !== undefined) {
-        const parentIdentifier = args.parentIdentifier?.trim() || null;
-        updateData.parentTaskId = parentIdentifier;
-        changes.push(parentIdentifier ? `parent → ${parentIdentifier}` : 'parent cleared');
-      }
-      if (args.priority !== undefined) {
-        updateData.priority = args.priority;
-        changes.push(`priority → ${priorityLabel(args.priority)}`);
+        if (before) {
+          undoLabels = async () => {
+            try {
+              // Re-read so a teammate's change made since is not rolled over.
+              const undo = invertTaskLabelChange(before, labelDelta, after, await readLabels());
+              if (undo.add.length === 0 && undo.remove.length === 0) return;
+              await labelCaller.changeForTask({ ...undo, taskId: task.id });
+            } catch {
+              /* best-effort: the edit already reports its own failure */
+            }
+          };
+        }
       }
 
-      if (Object.keys(updateData).length > 0) {
-        // Attribution rides the caller's context, not this payload — see
-        // `AuthContext.actingAgentId`.
-        ops.push(taskCaller().update({ id: task.id, ...updateData }));
+      // Every failure from here on — a validation exit or a rejected write —
+      // undoes this edit's label change, so the edit never half-applies.
+      try {
+        const result = await (async () => {
+          const updateData: {
+            assigneeAgentId?: string | null;
+            assigneeUserId?: string | null;
+            description?: string;
+            instruction?: string;
+            name?: string;
+            parentTaskId?: string | null;
+            priority?: number;
+          } = {};
+          const changes: string[] = [];
+          const ops: Promise<unknown>[] = [];
+
+          if (args.name !== undefined) {
+            updateData.name = args.name;
+            changes.push(`name → "${args.name}"`);
+          }
+          if (args.assigneeAgentId !== undefined) {
+            const assigneeResult = await resolveAssigneeAgent(args.assigneeAgentId, task.projectId);
+            if (!assigneeResult.success) return assigneeResult;
+
+            updateData.assigneeAgentId = args.assigneeAgentId;
+            changes.push(
+              args.assigneeAgentId
+                ? `assignee agent → ${args.assigneeAgentId}`
+                : 'assignee cleared',
+            );
+          }
+          // Independent of the agent side: the member is the human owner and the
+          // two assignees coexist, so touching one never clears the other.
+          if (args.assigneeUserId !== undefined) {
+            updateData.assigneeUserId = args.assigneeUserId;
+            changes.push(
+              args.assigneeUserId
+                ? `assignee member → ${await resolveMemberLabel(args.assigneeUserId)}`
+                : 'assignee member cleared',
+            );
+          }
+          if (args.instruction !== undefined) {
+            updateData.instruction = args.instruction;
+            changes.push(`instruction updated`);
+          }
+          if (args.description !== undefined) {
+            updateData.description = args.description;
+            changes.push('description updated');
+          }
+          if (args.parentIdentifier !== undefined) {
+            const parentIdentifier = args.parentIdentifier?.trim() || null;
+            updateData.parentTaskId = parentIdentifier
+              ? (await resolveTaskOrThrow(taskModel(), parentIdentifier)).id
+              : null;
+            changes.push(parentIdentifier ? `parent → ${parentIdentifier}` : 'parent cleared');
+          }
+          if (args.priority !== undefined) {
+            updateData.priority = args.priority;
+            changes.push(`priority → ${priorityLabel(args.priority)}`);
+          }
+
+          // Deep-merged into `config` so checkpoint / review / execution keys survive.
+          const configPatch = toTaskModelConfigPatch(args);
+          if (configPatch) changes.push(describeTaskModelChange(configPatch));
+
+          if (Object.keys(updateData).length > 0 || configPatch) {
+            // Attribution rides the caller's context, not this payload — see
+            // `AuthContext.actingAgentId`.
+            ops.push(
+              taskCaller().update({
+                id: task.id,
+                ...updateData,
+                ...(configPatch && { configPatch }),
+              }),
+            );
+          }
+
+          const applyDeps = async (
+            ids: string[],
+            apply: (depId: string) => Promise<unknown>,
+            onChange: (depIdentifier: string) => void,
+          ): Promise<string | undefined> => {
+            const resolved = await resolveTasksOrThrow(taskModel(), ids, {
+              duplicates: 'collapse',
+            });
+            await pMap(resolved.tasks, (dep) => apply(dep.id), { concurrency: 5 });
+            resolved.tasks.forEach((dep) => onChange(taskResultLabel(dep)));
+            return undefined;
+          };
+
+          const depResults: Promise<string | undefined>[] = [];
+          if (args.addDependencies?.length) {
+            depResults.push(
+              applyDeps(
+                args.addDependencies,
+                (depId) => taskModel().addDependency(task.id, depId),
+                (depIdentifier) =>
+                  changes.push(formatDependencyAdded(task.identifier, depIdentifier)),
+              ),
+            );
+          }
+          if (args.removeDependencies?.length) {
+            depResults.push(
+              applyDeps(
+                args.removeDependencies,
+                (depId) => taskModel().removeDependency(task.id, depId),
+                (depIdentifier) =>
+                  changes.push(formatDependencyRemoved(task.identifier, depIdentifier)),
+              ),
+            );
+          }
+
+          if (removeLabels.ids.length > 0) {
+            changes.push(`labels removed: ${args.removeLabels!.join(', ')}`);
+          }
+          if (addLabels.ids.length > 0) changes.push(`labels added: ${args.addLabels!.join(', ')}`);
+
+          const hasLabelEdit = labelDelta.add.length > 0 || labelDelta.remove.length > 0;
+          if (ops.length === 0 && depResults.length === 0 && !hasLabelEdit) {
+            return { content: 'No fields provided; nothing to update.', success: false };
+          }
+
+          // Settle every started write before reporting: fail-fast would return
+          // while a sibling write is still running and could commit afterwards.
+          const [opResults, depSettled] = await Promise.all([
+            Promise.allSettled(ops),
+            Promise.allSettled(depResults),
+          ]);
+          const failedOp = [...opResults, ...depSettled].find(
+            (result): result is PromiseRejectedResult => result.status === 'rejected',
+          );
+          if (failedOp) throw failedOp.reason;
+          const depErrors = depSettled.map((result) =>
+            result.status === 'fulfilled' ? result.value : undefined,
+          );
+          const firstDepError = depErrors.find((e) => e);
+          if (firstDepError) return { content: firstDepError, success: false };
+
+          return taskResult(task, formatTaskEdited(taskResultLabel(task), changes));
+        })();
+        if (!result.success) await undoLabels();
+        return result;
+      } catch (error) {
+        await undoLabels();
+        throw error;
       }
-
-      const applyDeps = async (
-        ids: string[],
-        apply: (depId: string) => Promise<unknown>,
-        onChange: (depIdentifier: string) => void,
-      ): Promise<string | undefined> => {
-        const resolved = await Promise.all(
-          ids.map((id) =>
-            taskModel()
-              .resolve(id)
-              .then((r) => ({ id, resolved: r })),
-          ),
-        );
-        const missing = resolved.find((r) => !r.resolved);
-        if (missing) return `Dependency task not found: ${missing.id}`;
-
-        await Promise.all(resolved.map(({ resolved: dep }) => apply(dep!.id)));
-        resolved.forEach(({ resolved: dep }) => onChange(dep!.identifier));
-      };
-
-      const depResults: Promise<string | undefined>[] = [];
-      if (args.addDependencies?.length) {
-        depResults.push(
-          applyDeps(
-            args.addDependencies,
-            (depId) => taskModel().addDependency(task.id, depId),
-            (depIdentifier) => changes.push(formatDependencyAdded(task.identifier, depIdentifier)),
-          ),
-        );
-      }
-      if (args.removeDependencies?.length) {
-        depResults.push(
-          applyDeps(
-            args.removeDependencies,
-            (depId) => taskModel().removeDependency(task.id, depId),
-            (depIdentifier) =>
-              changes.push(formatDependencyRemoved(task.identifier, depIdentifier)),
-          ),
-        );
-      }
-
-      if (ops.length === 0 && depResults.length === 0) {
-        return { content: 'No fields provided; nothing to update.', success: false };
-      }
-
-      const [, depErrors] = await Promise.all([Promise.all(ops), Promise.all(depResults)]);
-      const firstDepError = depErrors.find((e) => e);
-      if (firstDepError) return { content: firstDepError, success: false };
-
-      return { content: formatTaskEdited(task.identifier, changes), success: true };
     },
 
     listTasks: async (args: {
       assigneeAgentId?: string;
+      labels?: string[];
       limit?: number;
       offset?: number;
       parentIdentifier?: string;
@@ -510,10 +617,22 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       });
 
       try {
+        const labelFilter = await resolveLabels(args.labels, true);
+        if (labelFilter.error) return { content: labelFilter.error, success: false };
+        if (labelFilter.ids.length > 0) {
+          normalized.query.filter = { label: { operator: 'is', values: labelFilter.ids } };
+        }
         const result = await taskCaller().list(normalized.query);
 
         return {
           content: formatTaskList(result.data, normalized.displayFilters),
+          state: {
+            results: result.data.map((task) => ({
+              identifier: task.identifier,
+              taskId: task.id,
+              success: true,
+            })),
+          },
           success: true,
         };
       } catch (error) {
@@ -612,6 +731,20 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       const task = await taskModel().resolve(args.identifier);
       if (!task) return { content: `Task not found: ${args.identifier}`, success: false };
 
+      // Validate the schedule the task will end up with before writing anything,
+      // so an unsupported pattern is refused instead of stored and misfired.
+      const schedule = validateScheduleUpdate(
+        { pattern: task.schedulePattern, timezone: task.scheduleTimezone },
+        args,
+      );
+      if (schedule && !schedule.valid) {
+        return {
+          content: formatInvalidScheduleMessage(task.identifier, schedule.error),
+          success: false,
+        };
+      }
+      const schedulePreview = schedule?.valid ? schedule.preview : undefined;
+
       const changes: string[] = [];
       const ops: Promise<unknown>[] = [];
 
@@ -678,7 +811,9 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
       await Promise.all(ops);
 
-      return { content: formatTaskEdited(task.identifier, changes), success: true };
+      if (schedulePreview) changes.push(schedulePreview);
+
+      return taskResult(task, formatTaskEdited(taskResultLabel(task), changes));
     },
 
     setTaskVerify: async (args: {
@@ -690,6 +825,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       verifyCriteriaIds?: string[] | null;
       verifyRubricId?: string | null;
     }) => {
+      args = normalizeSetTaskVerifyParams(args);
       const task = await taskModel().resolve(args.identifier);
       if (!task) return { content: `Task not found: ${args.identifier}`, success: false };
 
@@ -758,10 +894,16 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
 
       await taskCaller().updateVerifyConfig({ id: task.id, verify });
 
-      return { content: formatTaskEdited(task.identifier, changes), success: true };
+      return taskResult(task, formatTaskEdited(taskResultLabel(task), changes));
     },
 
-    runTask: async (args: { continueTopicId?: string; identifier?: string; prompt?: string }) => {
+    runTask: async (args: {
+      continueTopicId?: string;
+      identifier?: string;
+      model?: string;
+      prompt?: string;
+      provider?: string;
+    }) => {
       const id = args.identifier?.trim() || taskId;
       if (!id) {
         return {
@@ -771,60 +913,77 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       }
 
       try {
+        const task = await resolveTaskOrThrow(taskModel(), id);
         const result = await taskCaller().run({
           continueTopicId: args.continueTopicId,
-          id,
+          id: task.id,
+          model: args.model,
           prompt: args.prompt,
+          provider: args.provider,
         });
 
         const topicId = (result as { topicId?: string } | undefined)?.topicId;
         const operationId = (result as { operationId?: string } | undefined)?.operationId;
-        const lines = [`Task ${id} started.`];
+        const lines = [`Task ${taskResultLabel(task)} started.`];
         if (topicId) lines.push(`  Topic: ${topicId}`);
         if (operationId) lines.push(`  Operation: ${operationId}`);
 
-        return { content: lines.join('\n'), success: true };
+        return taskResult(task, lines.join('\n'), { topicId, operationId });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to run task';
         return { content: `Failed to run task ${id}: ${message}`, success: false };
       }
     },
 
-    runTasks: async (args: { identifiers: string[] }) => {
+    runTasks: async (args: { identifiers: string[]; model?: string; provider?: string }) => {
       const identifiers = Array.isArray(args.identifiers)
-        ? args.identifiers.map((value) => value?.trim()).filter((value): value is string => !!value)
+        ? args.identifiers.filter(
+            (value): value is string => typeof value === 'string' && !!value.trim(),
+          )
         : [];
 
       if (identifiers.length === 0) {
         return { content: 'No task identifiers provided.', success: false };
       }
 
-      const lines: string[] = [];
-      let succeeded = 0;
-      let failed = 0;
-
-      for (const [index, identifier] of identifiers.entries()) {
+      const resolved = await taskModel().resolveRefs(identifiers);
+      if (resolved.ambiguous.length)
+        throw new Error(`Ambiguous task references: ${resolved.ambiguous.join(', ')}`);
+      const results: {
+        taskId?: string;
+        identifier?: string;
+        refs: string[];
+        success: boolean;
+        error?: string;
+      }[] = [];
+      for (const task of resolved.tasks) {
+        const refs = identifiers.filter((ref) => resolved.byRef.get(ref)?.id === task.id);
         try {
-          const result = await taskCaller().run({ id: identifier });
-          const topicId = (result as { topicId?: string } | undefined)?.topicId;
-          succeeded += 1;
-          lines.push(
-            `${index + 1}. ${identifier} — started${topicId ? ` (topic ${topicId})` : ''}`,
-          );
+          await taskCaller().run({ id: task.id, model: args.model, provider: args.provider });
+          results.push({ taskId: task.id, identifier: task.identifier, refs, success: true });
         } catch (error) {
-          failed += 1;
-          const message = error instanceof Error ? error.message : 'Unknown error';
-          lines.push(`${index + 1}. ${identifier} — failed: ${message}`);
+          results.push({
+            taskId: task.id,
+            identifier: task.identifier,
+            refs,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
         }
       }
-
-      const header =
-        failed === 0
-          ? `Started ${succeeded} task${succeeded === 1 ? '' : 's'}:`
-          : `Started ${succeeded}/${identifiers.length} tasks (${failed} failed):`;
-
+      for (const ref of resolved.missing)
+        results.push({ refs: [ref], success: false, error: `Task not found: ${ref}` });
+      const succeeded = results.filter((result) => result.success).length;
+      const failed = results.length - succeeded;
       return {
-        content: [header, ...lines].join('\n'),
+        content: [
+          `Started ${succeeded}/${results.length} tasks (${failed} failed):`,
+          ...results.map(
+            (result) =>
+              `${result.identifier ?? result.refs[0]}${result.taskId ? ` (id: ${result.taskId})` : ''} — ${result.success ? 'started' : `failed: ${result.error}`}`,
+          ),
+        ].join('\n'),
+        state: { results, succeeded, failed },
         success: failed === 0,
       };
     },
@@ -853,6 +1012,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       }
 
       try {
+        const target = await resolveTaskOrThrow(taskModel(), id);
         // Completing the task that owns the current operation is a delivery
         // request, not an external cancellation. TaskService.updateStatus
         // interrupts every still-running topic when a task leaves `running`;
@@ -860,31 +1020,35 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         // leave an `interrupted` operation / `canceled` topic. Persist the
         // intent instead and let onTopicComplete finalize it after the runtime
         // has reached `done`.
-        if (args.status === 'completed' && operationId && taskId) {
-          const target = await taskModel().resolve(id);
-          if (target?.id === taskId) {
-            await taskModel().updateContext(target.id, {
-              completion: { requestedByOperationId: operationId },
-            });
-            return {
-              content: `Task ${target.identifier} completion requested. It will be finalized when the current run finishes.`,
-              success: true,
-            };
-          }
+        if (args.status === 'completed' && operationId && taskId && target?.id === taskId) {
+          await taskModel().updateContext(target.id, {
+            completion: { requestedByOperationId: operationId },
+          });
+          return {
+            content: `Task ${target.identifier} completion requested. It will be finalized when the current run finishes.`,
+            success: true,
+            state: { taskId: target.id, identifier: target.identifier, success: true },
+          };
         }
 
         const result = await taskCaller().updateStatus({
           error: args.error,
-          id,
+          id: target.id,
           status: args.status,
         });
 
         return {
           content:
             args.status === 'failed' && args.error
-              ? `Task ${result.data.identifier} status updated to failed. Error: ${args.error}`
-              : `Task ${result.data.identifier} status updated to ${args.status}.`,
+              ? `Task ${taskResultLabel(result.data)} status updated to failed. Error: ${args.error}`
+              : `Task ${taskResultLabel(result.data)} status updated to ${args.status}.`,
           success: true,
+          state: {
+            taskId: result.data.id,
+            identifier: result.data.identifier,
+            status: result.data.status,
+            success: true,
+          },
         };
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to update task status';
@@ -905,11 +1069,13 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
         };
       }
 
-      const detail = await taskService().getTaskDetail(id);
+      const task = await resolveTaskOrThrow(taskModel(), id);
+      const detail = await taskService().getTaskDetail(task.id);
       if (!detail) return { content: `Task not found: ${id}`, success: false };
 
       return {
         content: formatTaskDetail(detail),
+        state: { taskId: detail.id, identifier: detail.identifier, success: true },
         success: true,
       };
     },
@@ -959,6 +1125,7 @@ export const taskRuntime: ServerRuntimeRegistration = {
       agentId,
       assistantMessageId,
       operationId,
+      projectId: context.projectId,
       rootOperationId: context.rootOperationId ?? operationId,
       resolveLinkBaseUrl,
       scope,
@@ -979,30 +1146,30 @@ export const taskRuntime: ServerRuntimeRegistration = {
       // reassignment activity). Server-side only by contract — it must never
       // reach the router through a client-supplied field.
       taskCaller: taskRouter.createCaller({ actingAgentId: agentId, userId }),
+      taskLabelCaller: taskLabelRouter.createCaller({ userId }),
     } as TaskRuntimeDeps;
 
-    let resolved = false;
-    const ensureModels = async () => {
-      if (resolved) return;
-      resolved = true;
-      // Prefer pipeline-threaded `context.workspaceId`. Fall back to looking
-      // up the owning task row for callers that pre-date the propagation work
-      // and still construct `ToolExecutionContext` without `workspaceId`.
-      const wsId = context.workspaceId ?? (await resolveWorkspaceId(db, taskId));
-      workspaceId = wsId;
-      deps.workspaceId = wsId;
-      deps.agentModel = new AgentModel(db, userId, wsId);
-      deps.taskModel = new TaskModel(db, userId, wsId);
-      deps.taskService = new TaskService(db, userId, wsId);
-      // MUST keep `actingAgentId`: this replaces the caller built above, and
-      // every exported method awaits `ensureModels()` first — dropping it here
-      // silently attributes every agent-driven task edit to the session user.
-      deps.taskCaller = taskRouter.createCaller({
-        actingAgentId: agentId,
-        userId,
-        workspaceId: wsId,
-      });
-    };
+    let modelsPromise: Promise<void> | undefined;
+    const ensureModels = () =>
+      (modelsPromise ??= (async () => {
+        // A present task remains the durable scope anchor even when the pipeline
+        // supplied workspaceId; validate both liveness and scope before writes.
+        const wsId = await resolveTaskWorkspaceId(db, taskId, context.workspaceId);
+        workspaceId = wsId;
+        deps.workspaceId = wsId;
+        deps.agentModel = new AgentModel(db, userId, wsId);
+        deps.taskModel = new TaskModel(db, userId, wsId);
+        deps.taskService = new TaskService(db, userId, wsId);
+        // MUST keep `actingAgentId`: this replaces the caller built above, and
+        // every exported method awaits `ensureModels()` first — dropping it here
+        // silently attributes every agent-driven task edit to the session user.
+        deps.taskCaller = taskRouter.createCaller({
+          actingAgentId: agentId,
+          userId,
+          workspaceId: wsId,
+        });
+        deps.taskLabelCaller = taskLabelRouter.createCaller({ userId, workspaceId: wsId });
+      })());
 
     const baseRuntime = createTaskRuntime(deps);
 

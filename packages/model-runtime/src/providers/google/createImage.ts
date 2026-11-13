@@ -5,7 +5,6 @@ import type {
   GoogleGenAI,
   Part,
 } from '@google/genai';
-import { imageUrlToBase64 } from '@lobechat/utils';
 
 import { convertGoogleAIUsage } from '../../core/usageConverters/google-ai';
 import { AgentRuntimeErrorType } from '../../types/error';
@@ -17,6 +16,7 @@ import type {
 import { AgentRuntimeError } from '../../utils/createError';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { parseGoogleErrorMessage } from '../../utils/googleErrorParser';
+import { referenceImageUrlToBase64 } from '../../utils/referenceImageCache';
 import { parseDataUri } from '../../utils/uriParser';
 
 // Maximum number of images allowed for processing
@@ -199,7 +199,7 @@ async function processImageForParts(imageUrl: string): Promise<Part> {
       },
     };
   } else if (type === 'url') {
-    const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(imageUrl);
+    const { base64: urlBase64, mimeType: urlMimeType } = await referenceImageUrlToBase64(imageUrl);
 
     return {
       inlineData: {
@@ -231,11 +231,13 @@ function extractImageFromResponse(response: GenerateContentResponse): CreateImag
     throw createGoogleImageNoImageError('No image generated', response);
   }
 
-  for (const part of candidate.content.parts) {
-    if (part.inlineData?.data) {
-      const imageUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
-      return { imageUrl };
-    }
+  // Thinking image models (e.g. Nano Banana 2.1 on Vertex AI) return interim draft images as
+  // `thought` parts before the final image, so prefer the final one and fall back to a draft.
+  const imageParts = candidate.content.parts.filter((part) => part.inlineData?.data);
+  const imagePart = imageParts.find((part) => !part.thought) ?? imageParts.at(-1);
+  if (imagePart?.inlineData) {
+    const imageUrl = `data:${imagePart.inlineData.mimeType || 'image/png'};base64,${imagePart.inlineData.data}`;
+    return { imageUrl };
   }
 
   const textFromParts = getTextFromParts(candidate.content.parts);

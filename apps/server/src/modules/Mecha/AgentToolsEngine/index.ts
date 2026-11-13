@@ -9,9 +9,9 @@
  * - Gets model capabilities from provided function
  * - No dependency on frontend stores (useToolStore, useAgentStore, etc.)
  */
+import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { builtinTools } from '@lobechat/builtin-tools';
-import { createEnableChecker, type LobeToolManifest } from '@lobechat/context-engine';
-import { ToolsEngine } from '@lobechat/context-engine';
+import { createEnableChecker, type LobeToolManifest, ToolsEngine } from '@lobechat/context-engine';
 import { assembleManifestPool, resolveToolRules } from '@lobechat/mecha';
 import { type RuntimePlatform } from '@lobechat/types';
 import debug from 'debug';
@@ -111,6 +111,8 @@ export const createServerAgentToolsEngine = (
     executionPlan,
     globalMemoryEnabled = false,
     hasEnabledKnowledgeBases = false,
+    hasIdentityAccount = false,
+    hasOversizedFiles = false,
     isBotConversation = false,
     isGroupSupervisor = false,
     manifestContext,
@@ -158,6 +160,8 @@ export const createServerAgentToolsEngine = (
     disabledPluginIds,
     executionTarget,
     hasEnabledKnowledgeBases,
+    hasIdentityAccount,
+    hasOversizedFiles,
     isBotConversation,
     isGroupSupervisor,
     // Local tools reach a machine only through an online, auto-activated
@@ -169,6 +173,10 @@ export const createServerAgentToolsEngine = (
       canUseFC: context.isModelSupportToolUse(model, provider),
       hasImageOutput: !!modelAbilities?.imageOutput,
     },
+    // Page scope opens the sandbox for the page agent, so it applies only when
+    // the page agent was injected (it is left out without a usable sandbox).
+    pageScope:
+      manifestContext?.scope === 'page' && !!agentConfig.plugins?.includes(PageAgentIdentifier),
     useApplicationBuiltinSearchTool,
   });
 

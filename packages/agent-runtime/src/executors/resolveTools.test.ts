@@ -5,6 +5,16 @@ import type { AgentInstruction, AgentState } from '../types';
 import { finish } from './finish';
 import { resolveAbortedTools, resolveBlockedTools } from './resolveTools';
 
+const createBlockedInstruction = (
+  toolCall: ReturnType<typeof createToolCall>,
+): Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> => ({
+  payload: {
+    parentMessageId: 'assistant-msg-1',
+    toolsCalling: [toolCall],
+  },
+  type: 'resolve_blocked_tools',
+});
+
 const createState = (overrides?: Partial<AgentState>): AgentState => ({
   cost: {
     calculatedAt: '2026-07-07T00:00:00.000Z',
@@ -115,13 +125,8 @@ describe('resolveTools executors', () => {
   );
 
   it('persists blocked tools as rejected tool messages and continues', async () => {
-    const instruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> = {
-      payload: {
-        parentMessageId: 'assistant-msg-1',
-        toolsCalling: [createToolCall()],
-      },
-      type: 'resolve_blocked_tools',
-    };
+    const instruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> =
+      createBlockedInstruction(createToolCall());
 
     const result = await resolveBlockedTools(host)(instruction, createState());
 
@@ -158,6 +163,28 @@ describe('resolveTools executors', () => {
     });
     expect(result.newState.messages).toContainEqual(
       expect.objectContaining({ id: 'tool-msg-1', role: 'tool' }),
+    );
+  });
+
+  it('writes the per-call blocked content when one is given for the call id', async () => {
+    const instruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> = {
+      payload: {
+        blockedContent: 'generic rejection',
+        blockedContentByCallId: { 'tool-call-1': 'rejection naming tool-call-1' },
+        blockedReason: 'tool_arguments_empty',
+        parentMessageId: 'assistant-msg-1',
+        toolsCalling: [createToolCall()],
+      },
+      type: 'resolve_blocked_tools',
+    };
+
+    const result = await resolveBlockedTools(host)(instruction, createState());
+
+    expect(host.transports.messages.createToolMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'rejection naming tool-call-1' }),
+    );
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ content: 'rejection naming tool-call-1', role: 'tool' }),
     );
   });
 
@@ -203,13 +230,8 @@ describe('resolveTools executors', () => {
   });
 
   it('leaves the parent untouched for ordinary blocked tools', async () => {
-    const instruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> = {
-      payload: {
-        parentMessageId: 'assistant-msg-1',
-        toolsCalling: [createToolCall()],
-      },
-      type: 'resolve_blocked_tools',
-    };
+    const instruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> =
+      createBlockedInstruction(createToolCall());
 
     const result = await resolveBlockedTools(host)(instruction, createState());
 
@@ -367,13 +389,8 @@ describe('resolveTools executors', () => {
     const error = new Error('database went away');
     createToolMessage.mockRejectedValueOnce(error);
 
-    const instruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> = {
-      payload: {
-        parentMessageId: 'assistant-msg-1',
-        toolsCalling: [createToolCall()],
-      },
-      type: 'resolve_blocked_tools',
-    };
+    const instruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> =
+      createBlockedInstruction(createToolCall());
 
     await expect(resolveBlockedTools(host)(instruction, createState())).rejects.toThrow(
       'database went away',

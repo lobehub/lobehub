@@ -2,6 +2,7 @@ import type { AcceptanceStatus } from '@lobechat/types';
 
 import type { AcceptanceListItem } from '@/services/verify';
 
+import { acceptanceListPath } from '../Viewer/routes';
 import { type AcceptanceStatusAction, getAcceptanceStatusActions } from '../Viewer/statusActions';
 
 export type AcceptanceSelectAllState = 'all' | 'none' | 'partial';
@@ -92,7 +93,9 @@ export const acceptanceBatchTargets = (
     .filter(
       (item) =>
         selectedSet.has(item.id) &&
-        getAcceptanceStatusActions(item.status as AcceptanceStatus).includes(action),
+        getAcceptanceStatusActions(item.status as AcceptanceStatus, item.subjectType).includes(
+          action,
+        ),
     )
     .map((item) => item.id);
 };
@@ -133,3 +136,13 @@ export const chunkAcceptanceBatch = (ids: string[], size = ACCEPTANCE_BATCH_CHUN
   }
   return chunks;
 };
+
+export const acceptanceRedirectAfterDelete = (
+  openId: string | undefined,
+  targets: string[],
+  failedIds: string[],
+  routeBase?: string,
+): string | undefined =>
+  openId && targets.includes(openId) && !failedIds.includes(openId)
+    ? acceptanceListPath(routeBase)
+    : undefined;

@@ -30,6 +30,64 @@ interface MessageListClientState {
 
 const messageListClientStates = new Map<string, MessageListClientState>();
 
+/**
+ * Round cursor for paging older history: the `(createdAt, id)` of the oldest
+ * loaded round's start. `createdAt` is the server's lossless microsecond ISO
+ * string, so a page boundary never drops rows sharing a millisecond.
+ */
+export interface MessageRoundCursor {
+  createdAt: string;
+  id: string;
+}
+
+/**
+ * One page of a conversation. `olderCursor` points at the next older page;
+ * `null` means the topic start is already loaded, and `undefined` means the
+ * read path cannot tell (it has no round cursor).
+ */
+export interface MessageListPage {
+  messages: UIChatMessage[];
+  olderCursor?: MessageRoundCursor | null;
+}
+
+/**
+ * A topic's mainline conversation pages by round cursor. Threads and agent-share
+ * visitor topics stay on `getMessages` — neither has a round-cursor read.
+ */
+export const supportsRoundCursor = (context: MessageListQueryContext) =>
+  !!context.topicId && !context.threadId && !context.agentShareId;
+
+/**
+ * The older-history cursor each identity's newest window came back with. Kept
+ * apart from `messageListClientStates`, which is dropped once its verification
+ * window lapses, while the rendered window (and so its cursor) stays valid.
+ * Entries are two short strings, so the cap matches the client-state cap.
+ */
+const windowOlderCursors = new Map<string, MessageRoundCursor | null>();
+
+const recordWindowOlderCursor = (
+  identity: string,
+  cursor: MessageRoundCursor | null | undefined,
+) => {
+  windowOlderCursors.delete(identity);
+  if (cursor === undefined) return;
+  windowOlderCursors.set(identity, cursor);
+  if (windowOlderCursors.size > MAX_MESSAGE_LIST_CLIENT_STATES) {
+    const oldest = windowOlderCursors.keys().next().value;
+    if (oldest !== undefined) windowOlderCursors.delete(oldest);
+  }
+};
+
+/**
+ * The older-history cursor the latest newest-first window of `context` came
+ * back with: `null` when the topic start is loaded, `undefined` when unknown
+ * (no round cursor for this read path, or no window fetched yet).
+ */
+export const getMessageListWindowOlderCursor = (
+  context: MessageListQueryContext,
+): MessageRoundCursor | null | undefined =>
+  windowOlderCursors.get(getMessageListCacheIdentity(context));
+
 export const messageListKey = (context: MessageListQueryContext) => messageKeys.list(context);
 
 export const getMessageListCacheIdentity = (
@@ -96,7 +154,9 @@ export const getMessageListFetchPolicy = (context: MessageListQueryContext) => (
   revalidateIfStale: !isMessageListServerVerified(context),
 });
 
-type MessageListQuery = (context: CanonicalMessageListContext) => Promise<UIChatMessage[]>;
+type MessageListQuery = (
+  context: CanonicalMessageListContext,
+) => Promise<MessageListPage | UIChatMessage[]>;
 
 const startCurrentGenerationQuery = (
   state: MessageListClientState,
@@ -119,9 +179,9 @@ const startCurrentGenerationQuery = (
 
   const request: Promise<UIChatMessage[]> = Promise.resolve()
     .then(async () => {
-      let messages: UIChatMessage[];
+      let result: MessageListPage | UIChatMessage[];
       try {
-        messages = await query(state.context);
+        result = await query(state.context);
       } catch (error) {
         if (state.generation !== requestGeneration) {
           return startCurrentGenerationQuery(state, query, true);
@@ -135,6 +195,9 @@ const startCurrentGenerationQuery = (
       if (state.generation !== requestGeneration) {
         return startCurrentGenerationQuery(state, query, true);
       }
+
+      const { messages, olderCursor } = Array.isArray(result) ? { messages: result } : result;
+      recordWindowOlderCursor(state.identity, olderCursor);
 
       state.verifiedAt = Date.now();
       touchState(state);
@@ -168,7 +231,17 @@ const startCurrentGenerationQuery = (
 export const runMessageListQuery = (
   context: MessageListQueryContext,
   query: MessageListQuery,
-): Promise<UIChatMessage[]> => startCurrentGenerationQuery(getOrCreateState(context), query);
+  options?: { force?: boolean },
+): Promise<UIChatMessage[]> => {
+  const state = getOrCreateState(context);
+  if (options?.force) {
+    // A read after a completion barrier must not join an earlier request.
+    // Unlike mutation invalidation, this read keeps client-held history pages.
+    state.generation += 1;
+    state.verifiedAt = undefined;
+  }
+  return startCurrentGenerationQuery(state, query);
+};
 
 /**
  * Synchronously invalidate verification and advance the request generation for
@@ -189,4 +262,5 @@ export const invalidateMessageListClientState = (
 
 export const clearMessageListClientCacheState = () => {
   messageListClientStates.clear();
+  windowOlderCursors.clear();
 };

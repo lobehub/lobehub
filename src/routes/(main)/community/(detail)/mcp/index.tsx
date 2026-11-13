@@ -11,6 +11,7 @@ import Header from '@/features/MCPPluginDetail/Header';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
+import { mcpSelectors } from '@/store/discover/selectors';
 
 import NotFound from '../components/NotFound';
 import { TocProvider } from '../features/Toc/useToc';
@@ -26,7 +27,8 @@ const McpDetailPage = memo<McpDetailPageProps>(({ mobile }) => {
 
   const { version } = useQuery() as { version?: string };
   const useMcpDetail = useDiscoverStore((s) => s.useFetchMcpDetail);
-  const { data, error, isLoading, mutate } = useMcpDetail({ identifier, version });
+  const { error, isLoading, mutate, queryKey } = useMcpDetail({ identifier, version });
+  const data = useDiscoverStore(mcpSelectors.mcpDetail(queryKey));
 
   useFetchInstalledPlugins();
   if (data === undefined) {

@@ -1,8 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Block, createStaticStyles, Flexbox, Icon, Text } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowLeftRightIcon,
@@ -93,10 +91,7 @@ const CommandsSection = memo<CommandsSectionProps>(({ platform }) => {
   const { t } = useTranslation('messenger');
   // Same gate as the workspace scope selector in `UserAgentConnection` —
   // without workspaces, `/switch` has nothing to switch between.
-  const enableWorkspaceScopes = useServerConfigStore(
-    (s) =>
-      serverConfigSelectors.enableBusinessFeatures(s) && s.featureFlags.enableWorkspace === true,
-  );
+  const enableWorkspaceScopes = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
   const commands = COMMANDS.filter(({ name }) => {
     if (platform === 'wechat' && WECHAT_HIDDEN_COMMANDS.has(name)) return false;

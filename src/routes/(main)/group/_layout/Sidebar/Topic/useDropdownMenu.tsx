@@ -1,8 +1,5 @@
-import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
-import { App, Upload } from 'antd';
-import { css, cx } from 'antd-style';
+import { type DropdownItem } from '@lobehub/ui';
+import { confirmModal, css, cx, Icon, toast, Upload } from '@lobehub/ui';
 import { Archive, Hash, Import, LucideCheck, Trash } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,9 +32,8 @@ type TopicMaintenanceScope = 'own' | 'workspace';
 
 export const useTopicActionsDropdownMenu = (
   options: UseTopicActionsDropdownMenuOptions = {},
-): MenuProps['items'] => {
+): DropdownItem[] => {
   const { t } = useTranslation(['topic', 'common']);
-  const { modal } = App.useApp();
   const { onUploadClose } = options;
   const activeWorkspaceId = useActiveWorkspaceId();
   const isWorkspaceOwner = useIsWorkspaceOwner();
@@ -115,14 +111,13 @@ export const useTopicActionsDropdownMenu = (
         JSON.parse(text);
         await importTopic(text);
       } catch {
-        modal.error({
-          content: t('importInvalidFormat'),
+        toast.error({
+          description: t('importInvalidFormat'),
           title: t('importError'),
         });
       }
-      return false; // Prevent default upload behavior
     },
-    [importTopic, modal, onUploadClose, t],
+    [importTopic, onUploadClose, t],
   );
 
   const [topicPageSize, updateSystemStatus] = useGlobalStore((s) => [
@@ -159,9 +154,8 @@ export const useTopicActionsDropdownMenu = (
         label: (
           <Upload
             accept=".json"
-            beforeUpload={handleImport}
             disabled={!canCreateTopic}
-            showUploadList={false}
+            onFiles={([file]) => handleImport(file)}
           >
             <div className={cx(hotArea)}>{t('actions.import')}</div>
           </Upload>
@@ -195,7 +189,8 @@ export const useTopicActionsDropdownMenu = (
                   cancelText: t('cancel', { ns: 'common' }),
                   okText: t('ok', { ns: 'common' }),
                   onOk: () => handleArchiveMergedPullRequests('workspace'),
-                  title: t('actions.confirmArchiveMergedPullRequestsWorkspace'),
+                  content: t('actions.confirmArchiveMergedPullRequestsWorkspace'),
+                  title: t('actions.archiveMergedPullRequestsWorkspace'),
                 });
               },
             },
@@ -204,15 +199,15 @@ export const useTopicActionsDropdownMenu = (
               disabled: !canEditTopic,
               icon: <Icon icon={Trash} />,
               key: 'deleteUnstarredWorkspace',
-              label: t('actions.removeUnstarredWorkspace'),
+              label: t('actions.removeUnpinnedWorkspace'),
               onClick: () => {
                 openWorkspaceDeleteAllModal({
-                  acknowledgeText: t('actions.confirmRemoveUnstarredWorkspaceAcknowledge'),
+                  acknowledgeText: t('actions.confirmRemoveUnpinnedWorkspaceAcknowledge'),
                   cancelText: t('cancel', { ns: 'common' }),
-                  confirmText: t('actions.removeUnstarredWorkspace'),
-                  description: t('actions.confirmRemoveUnstarredWorkspace'),
+                  confirmText: t('actions.removeUnpinnedWorkspace'),
+                  description: t('actions.confirmRemoveUnpinnedWorkspace'),
                   onConfirm: () => removeUnstarredTopic({ onlyOwn: false }),
-                  title: t('actions.removeUnstarredWorkspace'),
+                  title: t('actions.removeUnpinnedWorkspace'),
                 });
               },
             },
@@ -235,7 +230,7 @@ export const useTopicActionsDropdownMenu = (
             },
           ]
         : []),
-    ].filter(Boolean) as MenuProps['items'];
+    ].filter(Boolean) as DropdownItem[];
   }, [
     topicPageSize,
     updateSystemStatus,

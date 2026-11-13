@@ -89,7 +89,8 @@ export const buildLastSyncedAtMap = (
 export const scheduleStaleConnectorToolsRefresh = (
   connectors: StaleRefreshConnector[],
   lastSyncedAtById: Map<string, number>,
-  ctx: ConnectorToolSyncContext,
+  /** `userId` decides the `mcp_apps` flag the refresh lists tools under. */
+  ctx: ConnectorToolSyncContext & { userId?: string | null },
   now: number = Date.now(),
 ): void => {
   // This runs inline on the request/agent-run hot path. It is a best-effort

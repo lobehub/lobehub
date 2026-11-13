@@ -38,12 +38,43 @@ export const SCM_TRUSTED_ASSOCIATIONS: ReadonlySet<ScmActorAssociation> = new Se
   'owner',
 ]);
 
+/**
+ * Review bots whose feedback may steer the agent even though the provider
+ * reports them as `none` (GitHub App bots never hold an association). Only
+ * a repository admin can install such an app, and the `[bot]` suffix cannot
+ * be taken by a user account, so the login alone identifies it.
+ */
+export const SCM_TRUSTED_REVIEW_BOTS: ReadonlySet<string> = new Set([
+  'chatgpt-codex-connector[bot]',
+]);
+
+/** Whether an actor's review text may become an instruction for an unattended agent. */
+export const isTrustedScmReviewer = (actor: {
+  association?: ScmActorAssociation;
+  login?: string;
+}): boolean =>
+  (!!actor.association && SCM_TRUSTED_ASSOCIATIONS.has(actor.association)) ||
+  (!!actor.login && SCM_TRUSTED_REVIEW_BOTS.has(actor.login));
+
 /** One repository granted to an installation. Snapshot maintained from provider events. */
 export interface ScmInstallationRepository {
   externalId: string;
   /** `owner/name` as the provider prints it. */
   fullName: string;
   private?: boolean;
+}
+
+/** A repository a connected installation can read, as the "new project from GitHub" picker lists it. */
+export interface ScmRepositoryListItem {
+  defaultBranch: string;
+  description: string | null;
+  /** `owner/name` as the provider prints it. */
+  fullName: string;
+  htmlUrl: string;
+  ownerAvatarUrl: string | null;
+  private: boolean;
+  /** ISO timestamp of the latest push; what "recent" sorts by. */
+  pushedAt: string | null;
 }
 
 /**
@@ -167,6 +198,14 @@ export interface ScmChangeRequestMetadata {
    * whatever order the deliveries arrive in.
    */
   reviewers?: Record<string, { at?: string; decision: 'approved' | 'changes_requested' }>;
+  /**
+   * How the owner was decided. `author` rows point at a person's records
+   * wherever they live, so every action on them rechecks that the person
+   * can still write there; `installation` rows (and rows written before
+   * author routing, which carry nothing) belong to the installation's
+   * tenant and need no such check.
+   */
+  routedBy?: 'author' | 'installation';
 }
 
 /** Processing state of one inbound webhook delivery. */
@@ -204,6 +243,19 @@ export interface ScmChangeRequestSnapshot {
 /** The LobeHub records a change request is tied to. Only ever filled in, never cleared. */
 export interface ScmChangeRequestLinks {
   acceptanceId?: string | null;
+  /**
+   * Where `acceptanceId` came from, when the answer decides whether the model
+   * may write it.
+   *
+   * - `hand-link` — the acceptance's own `metadata.pullRequests`. Resolved
+   *   outside the change-request row lock, so the model re-checks the link
+   *   before writing: an unlink that commits in between must not be undone by
+   *   a delivery that read the link while it still stood.
+   * - `row-binding` — only echoed from the row the delivery matched. The row
+   *   under its lock is the authority on that binding, and it may have lost it
+   *   to an unlink since, so the model never lets the echo revive it.
+   */
+  acceptanceSource?: 'hand-link' | 'row-binding';
   installationId?: string | null;
   taskId?: string | null;
   topicId?: string | null;
@@ -213,6 +265,13 @@ export interface ScmChangeRequestLinks {
 export interface ScmUpsertChangeRequestParams extends ScmChangeRequestSnapshot {
   eventAt?: Date;
   eventKind?: ScmChangeRequestEventKind;
+  /**
+   * The owner below is only a fallback for a row that does not exist yet:
+   * an existing row keeps its owner, workspace and `routedBy`. Decided
+   * under the row lock, so a delivery that resolved nothing cannot move a
+   * row another delivery just routed.
+   */
+  keepOwner?: boolean;
   links?: ScmChangeRequestLinks;
   userId: string;
   workspaceId?: string | null;

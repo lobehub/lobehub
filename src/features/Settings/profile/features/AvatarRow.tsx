@@ -1,8 +1,8 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Upload } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { cssVar, Icon, Upload } from '@lobehub/ui';
+import { cssVar as sxVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Loader2Icon, PencilIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,41 +11,34 @@ import UserAvatar from '@/features/User/UserAvatar';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 import { saveToast } from '@/store/utils/saveToast';
+import { sx } from '@/styles/sx';
 import { imageToBase64 } from '@/utils/imageToBase64';
 import { createUploadImageHandler } from '@/utils/uploadFIle';
 
 import ProfileRow from './ProfileRow';
 
-const styles = createStaticStyles(({ css }) => ({
-  overlay: css`
-    cursor: pointer;
-
-    position: absolute;
-    z-index: 1;
-    inset: 0;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    border-radius: 8px;
-
-    opacity: 0;
-    background: ${cssVar.colorBgMask};
-
-    transition: opacity ${cssVar.motionDurationMid} ease;
-  `,
-  wrapper: css`
-    cursor: pointer;
-    position: relative;
-    overflow: hidden;
-    border-radius: 8px;
-
-    &:hover .avatar-edit-overlay {
-      opacity: 1;
-    }
-  `,
-}));
+const styles = stylex.create({
+  overlay: {
+    cursor: 'pointer',
+    position: 'absolute',
+    zIndex: 1,
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: '8px',
+    opacity: { default: 0, [stylex.when.ancestor(':hover')]: 1 },
+    backgroundColor: sxVar.colorBgMask,
+    backgroundImage: 'none',
+    transition: `opacity ${sxVar.motionDurationMid} ease`,
+  },
+  wrapper: {
+    cursor: 'pointer',
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: '8px',
+  },
+});
 
 const AvatarRow = () => {
   const { t } = useTranslation('auth');
@@ -85,13 +78,10 @@ const AvatarRow = () => {
   const canUpload = isLogin;
 
   const avatarContent = canUpload ? (
-    <Upload beforeUpload={handleUploadAvatar} itemRender={() => void 0} maxCount={1}>
-      <div className={styles.wrapper}>
+    <Upload maxCount={1} onFiles={([file]) => handleUploadAvatar(file)}>
+      <div {...stylex.props(styles.wrapper, stylex.defaultMarker())}>
         <UserAvatar size={40} />
-        <div
-          className={`${styles.overlay} avatar-edit-overlay`}
-          style={uploading ? { opacity: 1 } : undefined}
-        >
+        <div {...sx(styles.overlay, uploading && { opacity: 1 })}>
           <Icon
             color={cssVar.colorTextLightSolid}
             icon={uploading ? Loader2Icon : PencilIcon}

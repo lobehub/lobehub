@@ -2,13 +2,14 @@ import type { InvokeModelWithResponseStreamResponse } from '@aws-sdk/client-bedr
 
 import type { ChatStreamCallbacks } from '../../../types';
 import { nanoid } from '../../../utils/uuid';
-import { transformAnthropicStream } from '../anthropic';
-import type { StreamContext } from '../protocol';
+import { transformAnthropicStream } from '../../protocols/anthropicMessages/stream';
 import {
-  createCallbacksTransformer,
-  createSSEProtocolTransformer,
-  createTokenSpeedCalculator,
-} from '../protocol';
+  createEventCallbacksTransformer,
+  createModelEventTransformer,
+  createSSEEncoder,
+} from '../events';
+import type { StreamContext } from '../protocol';
+import { createTokenSpeedCalculator } from '../protocol';
 import { createBedrockStream } from './common';
 
 export const AWSBedrockClaudeStream = (
@@ -19,7 +20,10 @@ export const AWSBedrockClaudeStream = (
     payload?: Parameters<typeof transformAnthropicStream>[2];
   },
 ): ReadableStream<Uint8Array> => {
-  const streamStack: StreamContext = { id: 'chat_' + nanoid() };
+  const streamStack: StreamContext = {
+    id: 'chat_' + nanoid(),
+    pricingOptions: options?.payload?.pricingOptions,
+  };
 
   const stream = res instanceof ReadableStream ? res : createBedrockStream(res);
 
@@ -33,6 +37,10 @@ export const AWSBedrockClaudeStream = (
         streamStack,
       }),
     )
-    .pipeThrough(createSSEProtocolTransformer((c) => c, streamStack))
-    .pipeThrough(createCallbacksTransformer(options?.callbacks));
+    .pipeThrough(
+      // Same Messages event contract as `AnthropicStream`: closing without a terminal event is a truncation.
+      createModelEventTransformer((c) => c, streamStack, { requireTerminalEvent: true }),
+    )
+    .pipeThrough(createEventCallbacksTransformer(options?.callbacks, { streamStack }))
+    .pipeThrough(createSSEEncoder());
 };

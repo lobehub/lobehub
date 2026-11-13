@@ -66,8 +66,59 @@ afterEach(async () => {
 
 const rect = { height: 0.2, width: 0.3, x: 0.1, y: 0.1 };
 
+const ownerReplyInput = (root: {
+  id: string;
+}): Parameters<AcceptanceCommentModel['create']>[0] => ({
+  acceptanceId,
+  authorUserId: owner,
+  clientId: 'reply',
+  content: 'reply',
+  parentCommentId: root.id,
+});
+
+const reviewerRootInput = (): Parameters<AcceptanceCommentModel['create']>[0] => ({
+  acceptanceId,
+  authorUserId: reviewer,
+  clientId: 'root',
+  content: 'root',
+});
+
+const ownerRootInput = (): Parameters<AcceptanceCommentModel['create']>[0] => ({
+  acceptanceId,
+  authorUserId: owner,
+  clientId: 'root',
+  content: 'root',
+});
+
 describe('AcceptanceCommentModel', () => {
   describe('create', () => {
+    it('stores independent video times in metadata and preserves retry identity and other facts', async () => {
+      const input = {
+        acceptanceId,
+        anchor: { checkItemId: 'c2', evidenceId, rect, time: { start: 2.5 } },
+        authorUserId: reviewer,
+        clientId: 'video-frame',
+        content: 'first frame',
+        metadata: { origin: 'reviewer' },
+      };
+      const { comment } = await model.create(input);
+      expect(comment.metadata).toEqual({
+        origin: 'reviewer',
+        evidenceAnchor: { time: { start: 2.5 } },
+      });
+      const second = await model.create({
+        ...input,
+        anchor: { ...input.anchor, time: { start: 6 } },
+        clientId: 'another-video-frame',
+      });
+      const retry = await model.create(input);
+      expect(retry.isDuplicate).toBe(true);
+      expect(retry.comment.id).toBe(comment.id);
+      expect((await model.findById(comment.id))?.metadata).toEqual(comment.metadata);
+      expect(second.comment.metadata).toMatchObject({ evidenceAnchor: { time: { start: 6 } } });
+      expect(await model.listByAcceptance(acceptanceId)).toHaveLength(2);
+    });
+
     it('writes a global comment with the round it was written against', async () => {
       const { comment, isDuplicate } = await model.create({
         acceptanceId,
@@ -122,19 +173,8 @@ describe('AcceptanceCommentModel', () => {
     });
 
     it('flattens a reply to a reply onto the thread root', async () => {
-      const { comment: root } = await model.create({
-        acceptanceId,
-        authorUserId: reviewer,
-        clientId: 'root',
-        content: 'root',
-      });
-      const { comment: reply } = await model.create({
-        acceptanceId,
-        authorUserId: owner,
-        clientId: 'reply',
-        content: 'reply',
-        parentCommentId: root.id,
-      });
+      const { comment: root } = await model.create(reviewerRootInput());
+      const { comment: reply } = await model.create(ownerReplyInput(root));
       const { comment: nested } = await model.create({
         acceptanceId,
         authorUserId: reviewer,
@@ -143,6 +183,45 @@ describe('AcceptanceCommentModel', () => {
         parentCommentId: reply.id,
       });
       expect(nested.parentCommentId).toBe(root.id);
+    });
+
+    it('keeps the product page and metadata on a thread root, never on a reply', async () => {
+      const source = {
+        intent: 'comment' as const,
+        scroll: { x: 0, y: 0 },
+        targets: [
+          {
+            label: 'Status',
+            rect: { height: 20, width: 80, x: 0, y: 0 },
+            selector: '#run-status',
+          },
+        ],
+        url: 'https://product.example.com/experiments',
+        v: 1 as const,
+        viewport: { dpr: 1, height: 800, width: 1280 },
+      };
+      const { comment: root } = await model.create({
+        acceptanceId,
+        authorUserId: reviewer,
+        clientId: 'page-root',
+        content: 'Failure reason is not visible',
+        metadata: { via: 'review-toolbar' },
+        source,
+      });
+      const { comment: reply } = await model.create({
+        acceptanceId,
+        authorUserId: owner,
+        clientId: 'page-reply',
+        content: 'Agreed',
+        metadata: { via: 'viewer' },
+        parentCommentId: root.id,
+        source,
+      });
+
+      expect(root).toMatchObject({ metadata: { via: 'review-toolbar' }, source });
+      // A reply answers the page its thread was opened on; it does not name one.
+      expect(reply.source).toBeNull();
+      expect(reply.metadata).toEqual({ via: 'viewer' });
     });
 
     it('rejects a parent that belongs to another acceptance', async () => {
@@ -180,6 +259,50 @@ describe('AcceptanceCommentModel', () => {
       expect(second.comment.id).toBe(first.comment.id);
       expect(second.comment.content).toBe('once');
       expect(await model.listByAcceptance(acceptanceId)).toHaveLength(1);
+    });
+  });
+
+  describe('access requests', () => {
+    const request = (clientId: string, status = 'pending') =>
+      model.create({
+        acceptanceId,
+        authorUserId: reviewer,
+        clientId,
+        content: 'let me collaborate',
+        kind: 'access_request',
+        metadata: { accessRequest: { permission: 'collaborate', status: status as any } },
+      });
+
+    const standingRows = () =>
+      serverDB
+        .select()
+        .from(acceptanceComments)
+        .where(eq(acceptanceComments.kind, 'access_request'));
+
+    it('keeps one standing request when two tabs ask at once', async () => {
+      const [first, second] = await Promise.all([request('tab-a'), request('tab-b')]);
+
+      expect(await standingRows()).toHaveLength(1);
+      expect(first.comment.id).toBe(second.comment.id);
+      expect([first.isDuplicate, second.isDuplicate].sort()).toEqual([false, true]);
+    });
+
+    it('hands back a granted request instead of opening another', async () => {
+      const { comment: granted } = await request('earlier', 'granted');
+
+      const again = await request('later');
+
+      expect(again).toMatchObject({ comment: { id: granted.id }, isDuplicate: true });
+      expect(await standingRows()).toHaveLength(1);
+    });
+
+    it('opens a new request once the last one was declined', async () => {
+      await request('earlier', 'declined');
+
+      const again = await request('later');
+
+      expect(again.isDuplicate).toBe(false);
+      expect(await standingRows()).toHaveLength(2);
     });
   });
 
@@ -331,19 +454,8 @@ describe('AcceptanceCommentModel', () => {
     });
 
     it('tombstones a root with replies, then garbage-collects it with the last reply', async () => {
-      const { comment: root } = await model.create({
-        acceptanceId,
-        authorUserId: reviewer,
-        clientId: 'root',
-        content: 'root',
-      });
-      const { comment: reply } = await model.create({
-        acceptanceId,
-        authorUserId: owner,
-        clientId: 'reply',
-        content: 'reply',
-        parentCommentId: root.id,
-      });
+      const { comment: root } = await model.create(reviewerRootInput());
+      const { comment: reply } = await model.create(ownerReplyInput(root));
 
       expect(await model.delete(root.id, { authorUserId: reviewer })).toBe('soft');
       const tombstone = await model.findById(root.id);
@@ -435,12 +547,7 @@ describe('AcceptanceCommentModel', () => {
       });
 
     it('hangs on the exact comment, including a reply, instead of flattening', async () => {
-      const { comment: root } = await model.create({
-        acceptanceId,
-        authorUserId: owner,
-        clientId: 'root',
-        content: 'root',
-      });
+      const { comment: root } = await model.create(ownerRootInput());
       const { comment: reply } = await model.create({
         acceptanceId,
         authorUserId: reviewer,
@@ -455,12 +562,7 @@ describe('AcceptanceCommentModel', () => {
     });
 
     it('is idempotent per (comment, emoji, author) and removable', async () => {
-      const { comment: root } = await model.create({
-        acceptanceId,
-        authorUserId: owner,
-        clientId: 'root',
-        content: 'root',
-      });
+      const { comment: root } = await model.create(ownerRootInput());
 
       await react(root.id, '👍', owner);
       const second = await react(root.id, '👍', owner);
@@ -497,12 +599,7 @@ describe('AcceptanceCommentModel', () => {
     });
 
     it('does not turn a reacted-to comment into a tombstone on delete', async () => {
-      const { comment: root } = await model.create({
-        acceptanceId,
-        authorUserId: owner,
-        clientId: 'root',
-        content: 'root',
-      });
+      const { comment: root } = await model.create(ownerRootInput());
       await react(root.id, '👍', reviewer);
 
       expect(await model.delete(root.id, { authorUserId: owner })).toBe('hard');
@@ -512,19 +609,8 @@ describe('AcceptanceCommentModel', () => {
 
   describe('setResolved', () => {
     it('resolves and reopens a root, never a reply', async () => {
-      const { comment: root } = await model.create({
-        acceptanceId,
-        authorUserId: reviewer,
-        clientId: 'root',
-        content: 'root',
-      });
-      const { comment: reply } = await model.create({
-        acceptanceId,
-        authorUserId: owner,
-        clientId: 'reply',
-        content: 'reply',
-        parentCommentId: root.id,
-      });
+      const { comment: root } = await model.create(reviewerRootInput());
+      const { comment: reply } = await model.create(ownerReplyInput(root));
 
       const resolved = await model.setResolved(root.id, true, owner);
       expect(resolved?.resolvedAt).not.toBeNull();

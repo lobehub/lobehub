@@ -1,6 +1,14 @@
-import { type DropdownItem, DropdownMenu, Icon, type MenuInfo, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
-import { Loader2Icon, LockIcon, UsersIcon } from 'lucide-react';
+import {
+  createStaticStyles,
+  cssVar,
+  type DropdownItem,
+  DropdownMenu,
+  Icon,
+  type MenuInfo,
+  Spin,
+  Tooltip,
+} from '@lobehub/ui';
+import { LockIcon, UsersIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -128,7 +136,7 @@ const TaskVisibilityTag = memo<TaskVisibilityTagProps>(
     const triggerNode = children ? (
       children
     ) : loading ? (
-      <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={size} />
+      <Spin size={size} style={{ color: cssVar.colorTextDescription }} />
     ) : (
       <Tooltip title={label}>
         <span className={styles.trigger} onClick={(e) => e.stopPropagation()}>

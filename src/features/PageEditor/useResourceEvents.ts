@@ -3,10 +3,10 @@
 import { fetchEventSource } from '@lobechat/utils/client';
 import { useEffect } from 'react';
 
-import { mutate } from '@/libs/swr';
-import { documentLikeKeys, isDocumentCommentKeyForEvent } from '@/libs/swr/keys';
+import { revalidateReplica } from '@/libs/replica';
 import { documentService } from '@/services/document';
-import { documentSWRKeys } from '@/services/document/swrKeys';
+import { documentDetailResource } from '@/store/document/slices/document/projection';
+import { documentCommentActions } from '@/store/documentComment';
 import { pageSelectors, usePageStore } from '@/store/page';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
@@ -88,17 +88,16 @@ export const useResourceEvents = () => {
             if (parsed.type === 'doc.updated') {
               // Re-fetch; DocumentIdMode re-hydrates the editor on the new
               // version when the local editor isn't dirty.
-              void mutate(documentSWRKeys.editor(documentId));
-            } else if (parsed.type === 'document.commentsChanged' && workspaceId) {
-              void mutate((key) =>
-                isDocumentCommentKeyForEvent(key, {
-                  documentId,
-                  rootCommentId: parsed.data?.rootCommentId,
-                  workspaceId,
-                }),
-              );
-            } else if (parsed.type === 'document.likesChanged' && workspaceId) {
-              void mutate(documentLikeKeys.summary(workspaceId, documentId));
+              void revalidateReplica(documentDetailResource, documentId);
+            } else if (parsed.type === 'document.commentsChanged') {
+              // The replicas are partitioned by the active workspace, so only
+              // this document's (and the named thread's) entries are re-read.
+              void documentCommentActions.revalidateForCommentEvent({
+                documentId,
+                rootCommentId: parsed.data?.rootCommentId,
+              });
+            } else if (parsed.type === 'document.likesChanged') {
+              void documentCommentActions.revalidateLikeSummary(documentId);
             } else if (parsed.type === 'lock.changed') {
               // Store the holder verbatim; "locked by other" is derived against
               // the current user/session at read time (usePageLockedByOther).

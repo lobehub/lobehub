@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,31 +32,42 @@ vi.mock('react-i18next', () => ({
 }));
 vi.mock('@/hooks/useIsDark', () => ({ useIsDark: () => false }));
 
-vi.mock('antd-style', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  createStaticStyles: () => ({}),
-  cssVar: new Proxy({}, { get: () => 'var(--x)' }),
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      createStaticStyles: () => ({}),
+      cssVar: new Proxy({}, { get: () => 'var(--x)' }),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
+      Tooltip: ({ children, title }: { children: ReactNode; title?: string }) => (
+        <div data-testid="author-tooltip" data-title={title}>
+          {children}
+        </div>
+      ),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 vi.mock('@lobechat/const', () => ({ resolveConnectorCatalogItem: () => undefined }));
 vi.mock('@lobehub/ui/icons', () => ({ McpIcon: () => null }));
 vi.mock('@/components/Plugins/PluginAvatar', () => ({ default: () => null }));
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
-}));
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
-  Tooltip: ({ children, title }: { children: ReactNode; title?: string }) => (
-    <div data-testid="author-tooltip" data-title={title}>
-      {children}
-    </div>
-  ),
-}));
 
 // Run selectors against controlled state (the mocked selectors ignore state).
 vi.mock('@/store/tool', () => ({
-  useToolStore: (sel: (s: unknown) => unknown) => sel({}),
+  useToolStore: (sel: (s: unknown) => unknown) => sel({ builtinTools: [] }),
 }));
 vi.mock('@/store/tool/slices/connector/selectors', () => ({
   connectorSelectors: {
@@ -77,7 +88,7 @@ vi.mock('@/store/serverConfig', () => ({
 }));
 vi.mock('@/store/discover', () => ({
   useDiscoverStore: (sel: (s: unknown) => unknown) =>
-    sel({ usePluginDetail: () => ({ data: undefined, isLoading: false }) }),
+    sel({ useFetchPluginDetail: () => ({ isLoading: false, queryKey: undefined }) }),
 }));
 
 describe('PluginTag author attribution', () => {
@@ -124,5 +135,90 @@ describe('PluginTag author attribution', () => {
     render(<PluginTag showAuthor agentId="agt-1" pluginId="gmail" />);
 
     expect(screen.queryByTestId('author-avatar')).toBeNull();
+  });
+});
+
+describe('PluginTag row variant', () => {
+  beforeEach(() => {
+    mocks.agentConnectors = [];
+    mocks.connectorList = [];
+  });
+
+  it('names the kind of tool and shows whose credentials it runs under', () => {
+    mocks.agentConnectors = [
+      { authorizedByAvatar: null, authorizedByName: '张三', identifier: 'gmail' },
+    ];
+    render(<PluginTag showAuthor agentId="agt-1" pluginId="gmail" variant="row" />);
+
+    expect(screen.getByText('settingAgent.tools.type.custom-connector')).toBeTruthy();
+    expect(screen.getByTestId('author-avatar')).toHaveTextContent('张三');
+  });
+
+  it('names the kind as a skill when the row sits in the skills list', () => {
+    mocks.agentConnectors = [
+      { authorizedByAvatar: null, authorizedByName: '张三', identifier: 'gmail' },
+    ];
+    render(<PluginTag isSkill pluginId="gmail" variant="row" />);
+
+    expect(screen.getByText('settingAgent.tools.type.skill')).toBeTruthy();
+    expect(screen.queryByText('settingAgent.tools.type.custom-connector')).toBeNull();
+  });
+
+  it('shows how many tools an item brings, and opens its details on click', () => {
+    mocks.agentConnectors = [
+      {
+        authorizedByAvatar: null,
+        authorizedByName: null,
+        identifier: 'gmail',
+        name: 'Gmail',
+        tools: [
+          { description: 'Send a mail', displayName: null, toolName: 'send' },
+          { description: null, displayName: 'Read', toolName: 'read' },
+        ],
+      },
+    ];
+    const onOpen = vi.fn();
+    render(<PluginTag agentId="agt-1" pluginId="gmail" variant="row" onOpen={onOpen} />);
+
+    expect(screen.getByText('settingAgent.tools.toolCount')).toBeTruthy();
+    fireEvent.click(screen.getByText('Gmail'));
+    expect(onOpen).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identifier: 'gmail',
+        tools: [
+          { description: 'Send a mail', name: 'send' },
+          { description: null, name: 'Read' },
+        ],
+      }),
+    );
+  });
+
+  it('switches an item on and off without opening its details', () => {
+    const onToggle = vi.fn();
+    const onOpen = vi.fn();
+    render(
+      <PluginTag enabled pluginId="gmail" variant="row" onOpen={onOpen} onToggle={onToggle} />,
+    );
+
+    fireEvent.click(screen.getByRole('switch'));
+    expect(onToggle).toHaveBeenCalledWith(false);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('labels a row with the given source instead of the stored kind', () => {
+    render(<PluginTag isSkill pluginId="gmail" tagLabel="Community" variant="row" />);
+
+    expect(screen.getByText('Community')).toBeTruthy();
+  });
+
+  it('offers removal only when the row is removable and editable', () => {
+    const { rerender } = render(<PluginTag pluginId="gmail" variant="row" />);
+    expect(screen.queryByLabelText('settingAgent.tools.remove')).toBeTruthy();
+
+    rerender(<PluginTag disabled pluginId="gmail" variant="row" />);
+    expect(screen.queryByLabelText('settingAgent.tools.remove')).toBeNull();
+
+    rerender(<PluginTag pluginId="gmail" removable={false} variant="row" />);
+    expect(screen.queryByLabelText('settingAgent.tools.remove')).toBeNull();
   });
 });

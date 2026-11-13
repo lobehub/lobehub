@@ -1,10 +1,11 @@
+import { BRANDING_NAME } from '@lobechat/business-const';
 import debug from 'debug';
 
 import { isFailingCheck, ScmChangeRequestModel, ScmInstallationModel } from '@/database/models/scm';
 import type { ScmChangeRequestItem, ScmInstallationItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
-import { resolveChangeRequestLinks } from './links';
+import { resolveChangeRequestLinks, resolveChangeRequestOwner } from './links';
 import type { ScmInboundEvent, ScmIngestOutcome } from './types';
 
 const log = debug('lobe-server:scm:ingest');
@@ -76,7 +77,7 @@ export class ScmIngestService {
 
     if (!existing) {
       return {
-        detail: `installation ${installation.installationId} is not bound to a LobeHub scope`,
+        detail: `installation ${installation.installationId} is not bound to a ${BRANDING_NAME} scope`,
         status: 'skipped',
       };
     }
@@ -158,8 +159,16 @@ export class ScmIngestService {
       return { detail: `installation ${event.installationId} is not bound`, status: 'skipped' };
     }
 
-    const scope = { userId: installation.userId, workspaceId: installation.workspaceId };
-    const links = await resolveChangeRequestLinks(this.db, {
+    // The installation says which repositories we listen to; it does not say
+    // whose work a pull request is. An agent that opened one is not required
+    // to live in the workspace the installation is bound to, so the owner
+    // comes from the author the provider named.
+    const scope = await resolveChangeRequestOwner(this.db, {
+      authorExternalId: event.changeRequest.authorExternalId,
+      installation,
+      provider: 'github',
+    });
+    const { links, workspaceId } = await resolveChangeRequestLinks(this.db, {
       body: event.body,
       number: event.changeRequest.number,
       repoFullName: event.changeRequest.repoFullName,
@@ -167,21 +176,40 @@ export class ScmIngestService {
       url: event.changeRequest.url,
     });
 
+    // The row follows the records it matched, so the conversation is looked
+    // up where it actually lives.
+    const matched = Boolean(links.topicId || links.acceptanceId || links.workId);
+
+    // A delivery that resolves nothing — the acceptance link was edited out
+    // of the body, say — carries less context, not a new owner. The owner
+    // below then only seeds a new row; `keepOwner` leaves an existing one
+    // where it was, decided under the row lock so a concurrent delivery
+    // that did match cannot be undone by one that did not.
+    const owner =
+      scope.kind === 'author'
+        ? { userId: scope.userId, workspaceId: matched ? workspaceId : installation.workspaceId }
+        : { userId: scope.userId, workspaceId: scope.workspaceId ?? null };
+
     const row = await ScmChangeRequestModel.upsert(this.db, {
       ...event.changeRequest,
       eventAt: event.occurredAt,
       eventKind: event.kind,
       links: { ...links, installationId: installation.id },
-      userId: scope.userId,
-      workspaceId: scope.workspaceId,
+      keepOwner: !matched,
+      metadata: { ...event.changeRequest.metadata, routedBy: scope.kind },
+      userId: owner.userId,
+      workspaceId: owner.workspaceId,
     });
 
     log(
-      '%s %s#%d -> %s (acceptance=%s topic=%s)',
+      '%s %s#%d -> %s (owner=%s/%s via %s, acceptance=%s topic=%s)',
       event.kind,
       row.repoFullName,
       row.number,
       row.id,
+      owner.userId,
+      owner.workspaceId ?? 'personal',
+      scope.kind,
       row.acceptanceId ?? '-',
       row.topicId ?? '-',
     );

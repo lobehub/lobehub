@@ -1,8 +1,7 @@
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Button, Tag } from '@lobehub/ui/base-ui';
-import { Badge } from 'antd';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { BoltIcon, Loader2Icon, RotateCwIcon } from 'lucide-react';
+import { Badge, Button, cx, Flexbox, Icon, Spin, Tag, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { BoltIcon, RotateCwIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,17 +10,16 @@ import { AsyncTaskStatus } from '@/types/asyncTask';
 
 import EmbeddingStatus from './EmbeddingStatus';
 
-const styles = createStaticStyles(({ css }) => ({
-  errorReason: css`
-    padding: 4px;
-    border-radius: 4px;
-
-    font-family: monospace;
-    font-size: 12px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-}));
+const styles = stylex.create({
+  errorReason: {
+    padding: '4px',
+    borderRadius: '4px',
+    fontFamily: 'monospace',
+    fontSize: '12px',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+});
 
 interface FileParsingStatusProps extends FileParsingTask {
   className?: string;
@@ -71,7 +69,7 @@ const FileParsingStatus = memo<FileParsingStatusProps>(
               <Flexbox gap={4}>
                 {t('FileParsingStatus.chunks.status.errorResult')}
                 {chunkingError && (
-                  <Flexbox className={styles.errorReason}>
+                  <Flexbox className={stylex.props(styles.errorReason).className}>
                     [{chunkingError.name}]:{' '}
                     {chunkingError.body && typeof chunkingError.body !== 'string'
                       ? chunkingError.body.detail
@@ -107,11 +105,9 @@ const FileParsingStatus = memo<FileParsingStatusProps>(
               >
                 <Tag
                   className={cx('chunk-tag', className)}
+                  icon={preparingEmbedding ? <Spin size="small" /> : <Icon icon={BoltIcon} />}
                   style={{ cursor: 'pointer' }}
                   variant={'filled'}
-                  icon={
-                    preparingEmbedding ? <Icon spin icon={Loader2Icon} /> : <Icon icon={BoltIcon} />
-                  }
                   onClick={() => {
                     onClick?.(AsyncTaskStatus.Success);
                   }}

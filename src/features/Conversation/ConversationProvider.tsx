@@ -18,7 +18,6 @@ import {
   type ConversationContext,
   type ConversationHooks,
   createComposerTarget,
-  type MessagesChangeMeta,
   type OperationState,
 } from './types';
 
@@ -52,34 +51,15 @@ export interface ConversationProviderProps {
    */
   context: ConversationContext;
   /**
-   * Whether external messages have been initialized
-   * When false, ChatList will show skeleton loading state
-   */
-  hasInitMessages?: boolean;
-  /**
    * Lifecycle hooks for external behavior injection
    */
   hooks?: ConversationHooks;
   /**
-   * External messages to sync into the store
-   * When provided, these messages will be used as the source of truth
+   * A static transcript to render (a render gallery, a share snapshot). It is
+   * held by this conversation and never synced. Without it the conversation
+   * shows — and syncs — the chat store bucket of `context`.
    */
   messages?: UIChatMessage[];
-  /**
-   * Callback when messages are fetched or changed internally
-   * Use this to sync messages back to external state (e.g., ChatStore)
-   *
-   * @param messages - The updated messages array
-   * @param context - The context that this data belongs to (prevents race conditions)
-   * @param meta - Set when the messages are a fetched server snapshot; forward
-   *   it as `source` to ChatStore.replaceMessages so the SWR write-through can
-   *   skip fetch echoes (see MessagesChangeMeta)
-   */
-  onMessagesChange?: (
-    messages: UIChatMessage[],
-    context: ConversationContext,
-    meta?: MessagesChangeMeta,
-  ) => void;
   /**
    * External operation state (from ChatStore)
    *
@@ -89,6 +69,9 @@ export interface ConversationProviderProps {
    * When provided, this will be synced into the store for reactive updates.
    */
   operationState?: OperationState;
+  /**
+   * Do not sync the transcript, e.g. while another flow owns its rows
+   */
   skipFetch?: boolean;
 }
 
@@ -105,9 +88,7 @@ export const ConversationProvider = memo<ConversationProviderProps>(
     composerTarget,
     context,
     hooks = {},
-    hasInitMessages,
     messages,
-    onMessagesChange,
     operationState,
     skipFetch,
   }) => {
@@ -118,10 +99,9 @@ export const ConversationProvider = memo<ConversationProviderProps>(
     );
 
     log(
-      '[Provider] render | contextKey=%s | messagesCount=%d | hasInitMessages=%s | skipFetch=%s',
+      '[Provider] render | contextKey=%s | static=%s | skipFetch=%s',
       contextKey,
-      messages?.length ?? 0,
-      hasInitMessages,
+      !!messages,
       skipFetch,
     );
 
@@ -132,7 +112,7 @@ export const ConversationProvider = memo<ConversationProviderProps>(
             composerTarget: resolvedComposerTarget,
             context,
             hooks,
-            initialMessages: messages,
+            messages,
             skipFetch,
           })
         }
@@ -141,12 +121,10 @@ export const ConversationProvider = memo<ConversationProviderProps>(
           actionsBar={actionsBar}
           composerTarget={resolvedComposerTarget}
           context={context}
-          hasInitMessages={hasInitMessages}
           hooks={hooks}
           messages={messages}
           operationState={operationState}
           skipFetch={skipFetch}
-          onMessagesChange={onMessagesChange}
         />
         <AssistantTurnSettledWatcher />
         <ConversationContextPrefetcher context={context} />

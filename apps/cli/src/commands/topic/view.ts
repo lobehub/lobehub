@@ -2,8 +2,10 @@ import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../../api/client';
+import { resolveWorkspaceRef } from '../../api/workspaceRef';
 import { timeAgo } from '../../utils/format';
 import { log } from '../../utils/logger';
+import { readTopicTranscript } from './readTranscript';
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 500;
@@ -17,6 +19,7 @@ interface TopicViewOptions {
   limit?: string;
   messages?: boolean;
   to?: string;
+  workspace?: string;
 }
 
 interface PersistedToolPayload {
@@ -267,18 +270,22 @@ export function registerTopicViewCommand(topic: Command) {
     .option('--to <n>', 'Show messages up to this index (inclusive)')
     .option('--no-messages', 'Skip messages, show topic metadata only')
     .option('--json', 'Output JSON')
+    .option(
+      '--workspace <id|slug>',
+      "Read the topic from this workspace (overrides LOBEHUB_WORKSPACE_ID and 'workspace use')",
+    )
     .action(async (id: string, options: TopicViewOptions) => {
       const includeMessages = options.messages !== false;
       const pagination = includeMessages
         ? resolvePagination(options)
         : { from: 1, limit: DEFAULT_LIMIT, offset: 0 };
-      const client = await getTrpcClient();
-      const result = await client.topic.getTopicTranscript.query({
-        includeMessages,
-        limit: pagination.limit,
-        offset: pagination.offset,
-        topicId: id,
-      });
+      const workspace = await resolveWorkspaceRef(options.workspace);
+      const client = await getTrpcClient(workspace);
+      const result = await readTopicTranscript(
+        client,
+        { includeMessages, limit: pagination.limit, offset: pagination.offset, topicId: id },
+        workspace,
+      );
 
       const messages = result.items as TranscriptMessage[];
       const topicDetail = result.topic as TopicDetail;

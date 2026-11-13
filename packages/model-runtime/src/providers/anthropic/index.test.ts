@@ -2,11 +2,19 @@
 import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFactory';
-import * as anthropicHelpers from '../../core/contextBuilders/anthropic';
+import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatible';
+import * as anthropicHelpers from '../../core/protocols/anthropicMessages/messages';
 import type { ChatCompletionTool, ChatStreamPayload } from '../../types/chat';
 import * as debugStreamModule from '../../utils/debugStream';
 import { LobeAnthropicAI } from './index';
+
+const createHelloStream = () =>
+  new ReadableStream({
+    start(controller) {
+      controller.enqueue('Hello, world!');
+      controller.close();
+    },
+  });
 
 const provider = 'anthropic';
 
@@ -70,12 +78,7 @@ describe('LobeAnthropicAI', () => {
 
     it('should handle text messages correctly', async () => {
       // Arrange
-      const mockStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue('Hello, world!');
-          controller.close();
-        },
-      });
+      const mockStream = createHelloStream();
       const mockResponse = Promise.resolve(mockStream);
       (instance['client'].messages.create as Mock).mockResolvedValue(mockResponse);
 
@@ -132,12 +135,7 @@ describe('LobeAnthropicAI', () => {
 
     it('should handle system prompt correctly', async () => {
       // Arrange
-      const mockStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue('Hello, world!');
-          controller.close();
-        },
-      });
+      const mockStream = createHelloStream();
       const mockResponse = Promise.resolve(mockStream);
       (instance['client'].messages.create as Mock).mockResolvedValue(mockResponse);
 
@@ -182,12 +180,7 @@ describe('LobeAnthropicAI', () => {
 
     it('should call Anthropic API with supported opions in streaming mode', async () => {
       // Arrange
-      const mockStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue('Hello, world!');
-          controller.close();
-        },
-      });
+      const mockStream = createHelloStream();
       const mockResponse = Promise.resolve(mockStream);
       (instance['client'].messages.create as Mock).mockResolvedValue(mockResponse);
 
@@ -222,12 +215,7 @@ describe('LobeAnthropicAI', () => {
 
     it('should call Anthropic API without unsupported opions', async () => {
       // Arrange
-      const mockStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue('Hello, world!');
-          controller.close();
-        },
-      });
+      const mockStream = createHelloStream();
       const mockResponse = Promise.resolve(mockStream);
       (instance['client'].messages.create as Mock).mockResolvedValue(mockResponse);
 
@@ -264,12 +252,7 @@ describe('LobeAnthropicAI', () => {
 
     it('should call debugStream in DEBUG mode', async () => {
       // Arrange
-      const mockProdStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue('Hello, world!');
-          controller.close();
-        },
-      }) as any;
+      const mockProdStream = createHelloStream() as any;
       const mockDebugStream = new ReadableStream({
         start(controller) {
           controller.enqueue('Debug stream content');
@@ -571,7 +554,7 @@ describe('LobeAnthropicAI', () => {
         vi.spyOn(customInstance['client'].messages, 'create').mockRejectedValue(apiError);
 
         // Act & Assert
-        // anthropicCompatibleFactory normalizes the `/v1` suffix away (see #14960),
+        // anthropicCompatible normalizes the `/v1` suffix away (see #14960),
         // then desensitizeUrl reconstructs via the WHATWG URL parser which always
         // emits a trailing `/` in the pathname.
         await expect(

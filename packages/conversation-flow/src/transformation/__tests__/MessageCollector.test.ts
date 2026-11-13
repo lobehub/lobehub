@@ -592,6 +592,25 @@ describe('MessageCollector', () => {
       expect(allToolMessages.map((m) => m.id)).toEqual(['tool-1', 'tool-2']);
     });
 
+    it('breaks a createdAt tie between continuation parents by message order', () => {
+      const astRoot = mkAssistant('ast-root', { parentId: 'user-1', tools: [bashTool('tc-1')] });
+      const tool = mkTool('tool-1', { parentId: 'ast-root', tool_call_id: 'tc-1' });
+      // Same timestamp, one assistant-anchored and one tool-anchored: the one
+      // earlier in the message list wins, whichever parent it hangs off.
+      const astAnchored = mkAssistant('ast-anchored', { createdAt: 5, parentId: 'ast-root' });
+      const toolAnchored = mkAssistant('ast-tool-anchored', { createdAt: 5, parentId: 'tool-1' });
+
+      const allMessages: Message[] = [astRoot, tool, astAnchored, toolAnchored];
+      const collector = new MessageCollector(new Map(), new Map());
+
+      const assistantChain: Message[] = [];
+      const processedIds = new Set<string>();
+      collector.collectAssistantChain(astRoot, allMessages, assistantChain, [], processedIds);
+
+      expect(assistantChain.map((m) => m.id)).toEqual(['ast-root', 'ast-anchored']);
+      expect(processedIds.has('ast-tool-anchored')).toBe(true);
+    });
+
     it('uses the latest user descendant when the default resolver selects a continuation', () => {
       const astRoot = mkAssistant('ast-root', {
         parentId: 'user-root',

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { isMessageListKey, workKeys } from '@/libs/swr/keys';
+import { cacheScope, replicaKeys } from '@/libs/replica';
+import { workKeys } from '@/libs/swr/keys';
 
 const mutate = vi.fn();
 
@@ -17,6 +18,13 @@ vi.mock('@/libs/trpc/client', () => ({
     work: { deleteWork: { mutate: (...args: unknown[]) => deleteWorkMutate(...args) } },
   },
 }));
+
+/** A transcript sync key of `topicId` (the replica's default `replica:sync` shape). */
+const transcriptSync = (topicId: string) =>
+  replicaKeys.sync('conversationMessages', 1, cacheScope.get(), `p:${topicId}`, {
+    agentId: 'a1',
+    topicId,
+  });
 
 // Imported after the mocks so the service binds to the stubbed `mutate`.
 const { didToolMutateWorkView, workService } = await import('./work');
@@ -107,7 +115,8 @@ describe('workService.refreshConversation', () => {
     const matchers = mutate.mock.calls
       .map(([key]) => key)
       .filter((key): key is (cacheKey: unknown) => boolean => typeof key === 'function');
-    expect(matchers.some((matcher) => matcher(['message:list', { topicId: 't1' }, 1]))).toBe(true);
+    expect(matchers.some((matcher) => matcher(transcriptSync('t1')))).toBe(true);
+    expect(matchers.some((matcher) => matcher(transcriptSync('t2')))).toBe(false);
     expect(matchers.some((matcher) => matcher(workKeys.versions('w1')))).toBe(true);
   });
 });
@@ -138,8 +147,7 @@ describe('workService.refreshConversationViews', () => {
     const versionMatcher = mutate.mock.calls[1][0] as (key: unknown) => boolean;
     // The version matcher must not select message-list or cross-topic gallery keys —
     // Work summaries ride the message payload, and the gallery is out of scope here.
-    expect(isMessageListKey(['message:list', { topicId: 't1' }, 1])).toBe(true);
-    expect(versionMatcher(['message:list', { topicId: 't1' }, 1])).toBe(false);
+    expect(versionMatcher(transcriptSync('t1'))).toBe(false);
     expect(versionMatcher(workKeys.workspace(null, 'all', null))).toBe(false);
   });
 

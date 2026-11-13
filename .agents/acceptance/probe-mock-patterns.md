@@ -38,10 +38,10 @@ drive / probe / capture / publish. Skip a row only when its surface AND runtime 
 | P14 | web, electron | hetero          | fixture        | Seed `agency_config.heterogeneousProvider` with SQL, then cold-load; the store write drops it                                                                |
 | P15 | web           | any             | fixture        | Derive day boundaries from the browser's `resolvedOptions().timeZone`, never an assumed zone                                                                 |
 | P16 | web, electron | any             | fixture        | Clear cache tiers in the NEW document via `addScriptToEvaluateOnNewDocument`; the outgoing page re-flushes on reload                                         |
-| P17 | web           | any             | drive          | Goals live at `/agent/:aid/goals` behind the Labs toggle `enableTopicAcceptance`                                                                             |
+| P17 | web           | any             | drive          | Goals live at `/agent/:aid/goals` behind the Labs toggle `enableGoals`                                                                                       |
 | P18 | electron      | hetero          | fixture        | Local-execution CC agent plus a four-table ledger fixture keyed to the live CLI identity                                                                     |
 | P19 | web           | any             | auth           | Seed a second user and sign in from inside a run-specific session; a signed-out context hits `/signin`                                                       |
-| P20 | cli           | any             | fixture        | Strip ambient topic/agent/operation ids for a LOCAL ingest; keep them for the production publish                                                             |
+| P20 | cli           | any             | fixture        | Strip ambient conversation ids and set the local credential's workspace for LOCAL API/ingest; retain production scope for publishing                         |
 | P21 | web           | any             | drive          | Upload through the Add-menu input, poll `dockUploadFileList`, A/B the hashing worker with `window.Worker = undefined`                                        |
 | P22 | web, electron | any             | drive          | `keyboard type` emits no keydown; fire `/` (and any menu trigger) with `press`                                                                               |
 | P23 | web, electron | any             | drive          | Tag `svg.lucide-<rendered-name>` and click through agent-browser; `el.click()` on the wrapper does nothing                                                   |
@@ -108,6 +108,8 @@ drive / probe / capture / publish. Skip a row only when its surface AND runtime 
 | P89 | web           | any             | probe          | A layout before/after on one live page: swap only the changed files and let HMR settle; `getComputedStyle().bottom` is a used value, read `el.style.bottom`  |
 | P82 | web           | any             | drive          | Acceptance flow canvas through the production debug proxy: anonymous shared link, one uninterrupted script, canvas controls for clipped groups               |
 | P86 | electron, cli | any             | env, auth      | A session spawned by the desktop hetero runtime inherits `LOBEHUB_JWT` (production) and `ELECTRON_RUN_AS_NODE=1` — strip both before local Electron/CLI work |
+| P90 | any           | gateway         | env, fixture   | Closed loop through a local device-gateway with desktop + `lh connect` on ONE device: gateway worktree + `.dev.vars`, `--device-id`, Responses stub          |
+| P91 | any           | any             | env, probe     | A server-side before/after needs a dev-server restart after the file swap; never install `apps/desktop` / `apps/cli` deps while the server runs              |
 
 ## Choose the least invasive mechanism
 
@@ -247,7 +249,9 @@ agent-browser --session "$RUN_SESSION" \
 ```
 
 Then assert `get url` and `app-probe.sh auth` on that exact session before
-capturing evidence.
+capturing evidence, and close it at teardown
+(`agent-browser --session "$RUN_SESSION" close`, PROCESS.md Step 6) — a
+run-specific session is never reused, so an unclosed one is a leaked browser.
 
 A cross-wired session can also look perfectly healthy while running STALE code:
 if the other instance's Vite has since died, the browser keeps serving its last
@@ -411,7 +415,7 @@ client view model has its own `DEFAULT_LEASE_TIMEOUT_MS = 15 min` and only honor
 goal with an explicit `--operation-lease-timeout-ms`. Liveness = the newer of the
 node row and `runHeartbeats` (the running operation's `updated_at` served by
 `goal.graph`), so the A/B is: node stale + op fresh → 运行中；both stale → 失联.
-Restore the forced rows (node/task/task\_topics/operation status + timestamps) after
+Restore the forced rows (node/task/task_topics/operation status + timestamps) after
 capturing.
 
 #### P13 · A CLI-created topic has no trigger/status and is filtered out of the Agent paged view
@@ -540,7 +544,7 @@ the skeleton, the cache tier is proven to be what the render reads.
 **Doesn't work:** opening `/agent/goals` directly. The goals route is nested under
 `/agent/:aid/goals`, so `goals` is parsed as an agentId and the page reports
 "assistant unavailable". The page is also gated behind the Labs toggle
-`enableTopicAcceptance`; while it is off, the route silently replaces back to
+`enableGoals`; while it is off, the route silently replaces back to
 `/agent/:aid`.
 
 **Works:** look up the seeded user's agentId
@@ -549,7 +553,7 @@ public store action (it persists to user preferences and applies for the whole
 session):
 
 ```js
-window.__LOBE_STORES.user().updateLab({ enableTopicAcceptance: true });
+window.__LOBE_STORES.user().updateLab({ enableGoals: true });
 ```
 
 Then open `/agent/<agentId>/goals`. In the create-Goal dialog, "start from blank"
@@ -654,6 +658,20 @@ data rather than an env leak.
 (`env -u LOBEHUB_TOPIC_ID -u LOBEHUB_AGENT_ID -u LOBEHUB_OPERATION_ID …`) so it lands
 standalone. Keep them for the final PRODUCTION publish of the verification round —
 there the auto-attach to the current conversation is exactly what you want.
+
+The same leak hits a local `lh hetero exec --topic <t> --operation-id <op>` replay: the run
+also exports `LOBEHUB_ASSISTANT_MESSAGE_ID`, which the CLI forwards as the ingest's seeded
+assistant, so every batch fails with `Seeded assistantMessageId msg_… was not found for
+topic <t>`. Set it to the fixture's seeded assistant id and unset
+`LOBEHUB_HETERO_EXEC_INHERIT_PROCESS_GROUP` together with the ids above.
+
+`LOBEHUB_WORKSPACE_ID` is also inherited. A personal local seed API key with a
+production workspace header returns HTTP 401 even when its hash, enabled flag,
+and user are valid. For local API creation and native CLI replay, explicitly set
+`LOBEHUB_WORKSPACE_ID=personal` (or the verified workspace owned by the test
+credential) in that subprocess. Verify a real authenticated API call on the local
+server before creating the operation. Do not change persistent CLI workspace
+scope, and restore the production context for report publication.
 
 ### Driving the UI
 
@@ -1364,7 +1382,7 @@ second message AND ends on a tool round, so the first turn renders as an
 - Pointing the openai provider at the chat-completions `llm-stub.mjs`. The openai
   provider calls `/v1/responses` (the stub 404s and the turn dies with
   `ProviderBizError … retrying 4/6`). Side requests (topic title) hit the same endpoint
-  with `stream: false` and a `text.format` json\_schema — answer them with a JSON
+  with `stream: false` and a `text.format` json_schema — answer them with a JSON
   `{"title":…}` string, never with SSE.
 - Setting `model: 'gpt-4o'` on the agent. Only models present in
   `aiInfra().enabledAiModels` for the provider carry `abilities.functionCall`; an
@@ -1415,8 +1433,8 @@ for the `agencyConfig.heterogeneousProvider` SQL seed, and the Electron auth/por
 command: 'claude' }` and call `selectRuntimeType(ctx, { isDesktop: true })`.
 
 Line order that streams live: `system/init` → `stream_event message_start` → `assistant`
-(tool\_use Bash) → `user` (tool\_result) → `stream_event message_start` → `content_block_delta`
-text\_delta ×N → `assistant` (full text) → `result`. The op shows as `execHeterogeneousAgent`,
+(tool_use Bash) → `user` (tool_result) → `stream_event message_start` → `content_block_delta`
+text_delta ×N → `assistant` (full text) → `result`. The op shows as `execHeterogeneousAgent`,
 the bubble shows "Claude Code is running…", and the topic persists user → assistant(Bash) →
 tool → assistant(text) rows. Capture mid-turn by polling the top-level `[data-index]` rows,
 not `body.innerText`, and key turn-2 captures on the store/DOM state you assert rather than a
@@ -2520,7 +2538,7 @@ rate-limit (429) or ship JSON-disabled (HTML back).
 `SEARCH_PROVIDERS=searxng SEARXNG_URL=http://localhost:8888`. It aggregates real
 engines, so the whole product path (server search impl → result cards → tool
 message persistence) is genuine. English queries return results more reliably
-than Chinese ones. One trap when the model is a tool\_call-emitting stub AND a
+than Chinese ones. One trap when the model is a tool_call-emitting stub AND a
 synthetic context injector is active (e.g. `getGoalContext`): "last message is a
 tool result → answer" fires on the injected pair and skips the search — key the
 stub's answer-mode off the NAME of the last `function_call` instead.
@@ -2579,7 +2597,7 @@ adapter's seeded CLI profile (§4 CLI) points at the wrong backend, and cloud's
 **Doesn't work:** `dev:runtime:auth` for the CLI (cookies, not a token); an
 interactive device-code login (hijacks the user's browser and is forbidden).
 
-**Works:** insert an api\_keys row into the runtime's main database and use it as
+**Works:** insert an api_keys row into the runtime's main database and use it as
 `LOBEHUB_CLI_API_KEY`. `key_hash` is `HMAC-SHA256(key, KEY_VAULTS_SECRET)`;
 `key` is the same plaintext AES-GCM encrypted with that secret as
 `iv:authTag:ciphertext` hex — the shapes `init-dev-env.sh seed-user` uses. Read
@@ -2681,7 +2699,7 @@ the code as the variable.
 Vite server, letting HMR settle between measurements — same route, same data,
 same viewport, same injected state. In a shared working tree take the "after"
 copy with `cp` first and restore from it (never `git stash`, see
-\[\[feedback\_no\_git\_stash\_shared\_worktrees]] in the user memory); recover the
+\[\[feedback_no_git_stash_shared_worktrees]] in the user memory); recover the
 "before" with `git show HEAD:<path>`. When the tree sits on an unrelated branch,
 write the PR branch's exact file content in for the capture and record the
 sha256 of both sides in the evidence.
@@ -2694,3 +2712,78 @@ matches nothing and the overlay reads as absent. Match on the inline style
 For "does A cover B", assert the rectangles rather than eyeballing the capture:
 `!(a.bottom <= b.top || b.bottom <= a.top)`. A banner whose top sliver is still
 visible looks fine in a thumbnail and is still broken.
+
+#### P90 · A local device-gateway closed loop, with the desktop app and `lh connect` on one device
+
+**applies-to:** surface=any · runtime=gateway · phase=env, fixture
+
+**Situation:** verifying anything the server sends to a device through the device
+gateway — tool calls, system info, RPC, message API — including how the gateway
+picks a connection when one device holds several clients (`desktop` + `cli`).
+
+**Doesn't work:**
+
+- The production gateway: it verifies the device JWT against the production JWKS and
+  needs the production service token.
+- `local-device-gateway-setup.sh` from a worktree: it writes `.dev.vars` into the
+  sibling `../device-gateway`, which does not exist next to `lobehub-worktrees/`.
+- A plain `lh connect` beside the dev desktop: the CLI derives its `deviceId` from the
+  machine id, the dev Electron instance does not, so they show up as two devices.
+- Web without the local agent-gateway: a normal agent then runs in the client runtime,
+  and nothing reaches the server-side device runtimes (P03 — no `agent_operations` row).
+- The dev Electron golden profile: it is `storageMode: cloud`, and its first launch
+  auto-opens a cloud OIDC page in the default browser — approving it signs the instance
+  into the production account.
+
+**Works:**
+
+1. **Gateways.** Run the device-gateway from its own worktree with
+   `wrangler dev --port <p>`, and the agent-gateway the same way (references/agent-gateway.md).
+   Write each `.dev.vars` by hand: `JWKS_PUBLIC_KEY` is the run's
+   `.records/env/agent-testing-jwks.json` with `d,p,q,dp,dq,qi` stripped, and
+   `SERVICE_TOKEN` is a fresh token. device-gateway does not ignore `.dev.vars`, so add
+   it to `info/exclude` before anything is committed.
+2. **Server env.** Export `DEVICE_GATEWAY_URL` / `DEVICE_GATEWAY_SERVICE_TOKEN` and
+   `AGENT_GATEWAY_URL` / `AGENT_GATEWAY_SERVICE_TOKEN` / `ENABLE_AGENT_GATEWAY=1` before
+   `init-dev-env.sh dev`.
+3. **Desktop.** Start `electron-dev.sh start <id>` with `DEVICE_GATEWAY_URL` set, and with
+   `LOBE_LOGIN_STATE_DIR` / `LOBE_GOLDEN_PROFILE` pointed at empty directories. The user
+   signs in once through the self-host option (`http://localhost:3010`, the seeded
+   account) and closes any lobehub.com page that opens. Confirm
+   `lobehub-settings.json` reads `selfHost` before trusting the instance.
+4. **CLI on the same device.** From `apps/cli`, with the seeded CLI env
+   (`.records/env/agent-testing-cli.env`), run
+   `bun src/index.ts connect --gateway http://localhost:<p> --device-id <desktop deviceId>`.
+   Check `POST /api/device/devices` lists both channels (`cli`, `desktop-dev`).
+5. **Drive.** Bind an agent to the device (`agencyConfig.executionTarget: device`,
+   `boundDeviceId`), set `tool.humanIntervention.approvalMode` to `auto-run`, and point
+   openai at a Responses-API stub that emits `lobe-activator____activateTools` and then
+   the tool under test (P41 explains the SSE shape). The `lh connect -v` log
+   (`Received system_info_request`, `[TOOL]`) shows which connection served each call.
+
+`holds-while: devices pick a channel label per client (desktop / desktop-dev / cli); lh connect accepts --device-id; the gateway authenticates the device JWT with JWKS_PUBLIC_KEY.`
+
+#### P91 · A server-side before/after by file swap needs a dev-server restart
+
+**applies-to:** surface=any · runtime=any · phase=env, probe
+
+**Situation:** proving a server change against canary on the same running stack by
+swapping the changed files (`git show origin/canary:<file> > <file>`).
+
+**Doesn't work:**
+
+- Relying on HMR after the swap. Server modules reload per request chain, so one turn
+  can run the old version of one module and the new version of another. Observed: an
+  op-start system-info read still carried the fix's `clientKinds` while the swapped-back
+  `auv.ts` did not, which produced a half-fixed run that proves nothing.
+- Installing `apps/desktop` or `apps/cli` deps while the dev server runs. Every
+  `/trpc/lambda/*` request then fails 500 with `module factory is not available`
+  (es-toolkit via `packages/utils/src/merge.ts`), and the OIDC sign-in page shows
+  `HTTP ERROR 500`.
+
+**Works:** install every standalone app first, then start the server. For each side of an
+A/B, swap the files with a bash loop (zsh does not word-split `$FILES`), restart with
+`init-dev-env.sh stop-dev` and then `dev`, wait for `config.getGlobalConfig` to return
+200, and only then drive the case. Restore from a backup and check it with `cmp`.
+
+`holds-while: init-dev-env.sh dev runs next dev with Turbopack; apps/desktop and apps/cli keep standalone node_modules.`

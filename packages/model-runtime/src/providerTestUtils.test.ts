@@ -2,7 +2,7 @@
 import type { ILobeAgentRuntimeErrorType } from '@lobechat/types';
 import { describe } from 'vitest';
 
-import { createOpenAICompatibleRuntime } from './core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from './core/openaiCompatible';
 import { testProvider } from './providerTestUtils';
 
 // Provider plumbing compares error codes as strings; this suite intentionally
@@ -28,30 +28,6 @@ const createTestRuntime = () =>
 
 describe('testProvider', () => {
   describe('should run provider tests correctly', () => {
-    testProvider({
-      Runtime: createTestRuntime(),
-      bizErrorType: 'TestBizError',
-      chatDebugEnv: 'TEST_DEBUG',
-      chatModel: 'test-model',
-      defaultBaseURL: 'https://default.test',
-      invalidErrorType: 'InvalidAPIKey',
-      provider: 'TestProvider',
-    });
-  });
-
-  describe('should handle OpenAI API errors correctly', () => {
-    testProvider({
-      Runtime: createTestRuntime(),
-      bizErrorType: 'TestBizError',
-      chatDebugEnv: 'TEST_DEBUG',
-      chatModel: 'test-model',
-      defaultBaseURL: 'https://default.test',
-      invalidErrorType: 'InvalidAPIKey',
-      provider: 'TestProvider',
-    });
-  });
-
-  describe('should handle debug stream correctly', () => {
     testProvider({
       Runtime: createTestRuntime(),
       bizErrorType: 'TestBizError',

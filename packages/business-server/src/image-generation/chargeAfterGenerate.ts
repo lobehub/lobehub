@@ -1,9 +1,9 @@
-import { type ModelPricingContext } from '@lobechat/model-runtime';
-import { type SpendOrigin } from '@lobechat/types';
-
-import { type ModelPerformance, type ModelUsage } from '@/types/index';
+import { type ModelPricingContext, type RouteAttemptIdentity } from '@lobechat/model-runtime';
+import { type ModelPerformance, type ModelUsage, type SpendOrigin } from '@lobechat/types';
 
 interface ChargeParams {
+  /** Generation params, to price fixed per-image models. */
+  computePriceParams?: Record<string, unknown>;
   isError?: boolean;
   metadata: SpendOrigin & {
     asyncTaskId: string;
@@ -17,6 +17,8 @@ interface ChargeParams {
   prechargeResult?: unknown;
   pricingContext?: ModelPricingContext;
   provider: string;
+  /** Router attempt that generated the image; attributes the charge to its channel. */
+  routeAttempt?: RouteAttemptIdentity;
   userId: string;
   workspaceId?: string;
 }

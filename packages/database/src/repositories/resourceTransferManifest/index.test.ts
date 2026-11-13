@@ -11,12 +11,15 @@ import {
   agents,
   agentsFiles,
   agentsKnowledgeBases,
+  chatGroups,
   chatGroupsAgents,
   devices,
   expertiseBindings,
   expertiseDomains,
   files,
   knowledgeBases,
+  projectAgents,
+  projects,
   tasks,
   userConnectors,
   users,
@@ -148,6 +151,52 @@ describe('buildMemberTransferManifest', () => {
 
     // The binding survives recipient-aware sanitation → no false reset warning.
     expect(manifest?.deviceBindingAffected).toBe(false);
+  });
+
+  it('counts trashed group and project links that a private-agent handover will remove', async () => {
+    const agent = await ownerModel.create({ title: 'Private Agent', visibility: 'private' });
+    const coordinator = await ownerModel.create({ title: 'Coordinator', visibility: 'public' });
+    const deletedAt = new Date('2026-09-10T00:00:00Z');
+    await serverDB.insert(chatGroups).values({
+      deletedAt,
+      id: 'manifest-trashed-group',
+      isDeleted: true,
+      title: 'Trashed Group',
+      userId: teammateId,
+      workspaceId: wsId,
+    });
+    await serverDB.insert(chatGroupsAgents).values({
+      agentId: agent.id,
+      chatGroupId: 'manifest-trashed-group',
+      role: 'participant',
+      userId: teammateId,
+      workspaceId: wsId,
+    });
+    await serverDB.insert(projects).values({
+      coordinatorAgentId: coordinator.id,
+      deletedAt,
+      id: 'manifest-trashed-project',
+      identifier: 'TRSH01',
+      isDeleted: true,
+      name: 'Trashed Project',
+      userId: teammateId,
+      workspaceId: wsId,
+    });
+    await serverDB.insert(projectAgents).values({
+      agentId: agent.id,
+      projectId: 'manifest-trashed-project',
+      workspaceId: wsId,
+    });
+
+    const manifest = await buildMemberTransferManifest(serverDB, {
+      recipientId,
+      resourceId: agent.id,
+      resourceType: 'agent',
+      workspaceId: wsId,
+    });
+
+    expect(manifest?.groupsToLeave).toBe(1);
+    expect(manifest?.projectsToLeave).toBe(1);
   });
 
   it('counts only knowledge mounts the recipient cannot access', async () => {
@@ -324,6 +373,39 @@ describe('buildMemberTransferManifest', () => {
     expect(manifest?.hiddenReferencedMember).toBe(true);
     // Referenced members are not owned: nothing of theirs rides along.
     expect(manifest?.botPlatforms).toEqual([]);
+  });
+
+  it('includes a trashed private referenced member in the group manifest', async () => {
+    const groupModel = new ChatGroupModel(serverDB, ownerId, wsId);
+    const group = await groupModel.create({ title: 'Group', visibility: 'public' });
+    const [referenced] = await serverDB
+      .insert(agents)
+      .values({
+        deletedAt: new Date(),
+        isDeleted: true,
+        title: 'Trashed standalone',
+        userId: teammateId,
+        virtual: false,
+        visibility: 'private',
+        workspaceId: wsId,
+      })
+      .returning();
+    await serverDB.insert(chatGroupsAgents).values({
+      agentId: referenced.id,
+      chatGroupId: group.id,
+      role: 'participant',
+      userId: ownerId,
+      workspaceId: wsId,
+    });
+
+    const manifest = await buildMemberTransferManifest(serverDB, {
+      recipientId,
+      resourceId: group.id,
+      resourceType: 'agentGroup',
+      workspaceId: wsId,
+    });
+
+    expect(manifest?.hiddenReferencedMember).toBe(true);
   });
 
   it('returns null for a resource outside the workspace', async () => {

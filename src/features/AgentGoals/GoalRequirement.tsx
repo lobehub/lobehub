@@ -1,8 +1,7 @@
 'use client';
 
 import { useEditor } from '@lobehub/editor/react';
-import { Flexbox } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Flexbox, toast } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -54,7 +53,7 @@ const GoalRequirement = memo<GoalRequirementProps>(({ goalId, requirement }) => 
     try {
       // On the unmount flush the child editor may already be disposed; a dead
       // instance means nothing newer than the last change event to save.
-      markdown = String(editor.getDocument('markdown') ?? '').trim();
+      markdown = String(editor.getDocument('markdown', { format: false }) ?? '').trim();
     } catch {
       return;
     }

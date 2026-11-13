@@ -52,7 +52,6 @@ function setup(options: { hasConnection?: boolean; sendReturns?: boolean } = {})
               connect: vi.fn(),
               disconnect: vi.fn(),
               on: vi.fn(),
-              sendInterrupt: vi.fn(),
               sendToolResult,
             },
             status: 'connected',
@@ -364,6 +363,23 @@ describe('internal_executeClientTool', () => {
   });
 
   describe('MCP fallback', () => {
+    it("resolves connectors for the run's agent, like the agent's runs do", async () => {
+      hasExecutorMock.mockReturnValue(false);
+      invokeMcpToolCallMock.mockResolvedValue({ content: 'ok', success: true });
+      const { action } = setup();
+
+      await action.internal_executeClientTool(
+        makeData({ agentId: 'agt_1', apiName: 'echo', identifier: 'mcp-demo' } as any),
+        { operationId: 'op-1' },
+      );
+
+      // A connector linked to an agent serves only that agent
+      expect(invokeMcpToolCallMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ agentId: 'agt_1' }),
+      );
+    });
+
     it('routes to mcpService when no builtin executor registered', async () => {
       hasExecutorMock.mockReturnValue(false);
       invokeMcpToolCallMock.mockResolvedValue({
@@ -501,7 +517,6 @@ describe('internal_executeClientTool', () => {
           connect: vi.fn(),
           disconnect: vi.fn(),
           on: vi.fn(),
-          sendInterrupt: vi.fn(),
           sendToolResult: reconnectedSend,
         },
         status: 'connected',

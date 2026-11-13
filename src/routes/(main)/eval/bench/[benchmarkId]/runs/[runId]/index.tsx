@@ -1,9 +1,14 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, confirmModal, Text } from '@lobehub/ui/base-ui';
-import { Progress } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Progress,
+  Text,
+} from '@lobehub/ui';
 import { Play, RotateCcw } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -79,7 +84,7 @@ const RunDetail = memo(() => {
 
   const pollingConfig = { refreshInterval: isActive ? POLLING_INTERVAL : 0 };
 
-  const { error, isLoading, mutate } = useFetchRunDetail(runId!, pollingConfig);
+  const { error, isHydrated, isValidating, revalidate } = useFetchRunDetail(runId!, pollingConfig);
   useFetchRunResults(runId!, pollingConfig);
 
   const hasResults = !!runResults?.results?.length;
@@ -110,9 +115,9 @@ const RunDetail = memo(() => {
       error={error}
       errorVariant={'page'}
       isEmpty={!runDetail}
-      isLoading={isLoading}
+      isLoading={!isHydrated || isValidating}
       loading={<RouteLoading />}
-      onRetry={() => mutate()}
+      onRetry={() => void revalidate()}
     >
       {runDetail && (
         <Flexbox gap={24} padding={24} style={{ margin: '0 auto', maxWidth: 1440, width: '100%' }}>
@@ -129,7 +134,7 @@ const RunDetail = memo(() => {
                 <span className={styles.panelLabel}>{t('run.detail.report')}</span>
               </header>
               <div className={styles.panelBody}>
-                <StatsCards metrics={runDetail.metrics ?? undefined} />
+                <StatsCards k={k} metrics={runDetail.metrics ?? undefined} />
                 {hasResults && (
                   <BenchmarkCharts
                     benchmarkId={benchmarkId!}

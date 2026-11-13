@@ -2,6 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GatewayHttpClient } from './http';
 
+const createAgentRunInput = (): Parameters<GatewayHttpClient['dispatchAgentRun']>[0] => ({
+  agentType: 'claude-code',
+  assistantMessageId: 'asst-1',
+  jwt: 'jwt',
+  operationId: 'op-1',
+  prompt: 'run',
+  topicId: 'tpc-1',
+  userId: 'user-1',
+});
+
+const createSuccessfulToolResponse = () => ({
+  json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
+  ok: true,
+});
+
 describe('GatewayHttpClient', () => {
   let client: GatewayHttpClient;
 
@@ -383,7 +398,11 @@ describe('GatewayHttpClient', () => {
     });
 
     it('describes an unreachable gateway host', async () => {
-      vi.mocked(fetch).mockRejectedValue(new TypeError('fetch failed'));
+      vi.mocked(fetch).mockRejectedValue(
+        Object.assign(new TypeError('fetch failed'), {
+          cause: { code: 'ECONNREFUSED', message: 'connect ECONNREFUSED 10.0.0.1:443' },
+        }),
+      );
 
       const result = await client.executeToolCall(
         { userId: 'user-1' },
@@ -395,11 +414,26 @@ describe('GatewayHttpClient', () => {
       expect(result.error).toContain('DEVICE_GATEWAY_UNREACHABLE');
     });
 
+    it('does not tell the model a call never ran when the connection dropped after sending', async () => {
+      vi.mocked(fetch).mockRejectedValue(
+        Object.assign(new TypeError('fetch failed'), {
+          cause: { code: 'UND_ERR_SOCKET', message: 'other side closed' },
+        }),
+      );
+
+      const result = await client.executeToolCall(
+        { userId: 'user-1' },
+        { apiName: 'writeFile', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).not.toContain('never ran');
+      expect(result.content).toContain('unclear whether the device ran it');
+      expect(result.error).toContain('DEVICE_GATEWAY_ERROR');
+    });
+
     it('should pass optional deviceId and timeout', async () => {
-      mockFetch({
-        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
-        ok: true,
-      });
+      mockFetch(createSuccessfulToolResponse());
       const signal = AbortSignal.abort();
       const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(signal);
 
@@ -408,7 +442,7 @@ describe('GatewayHttpClient', () => {
         { apiName: 'readFile', arguments: '{}', identifier: 'test' },
       );
 
-      expect(timeoutSpy).toHaveBeenCalledWith(35_000);
+      expect(timeoutSpy).toHaveBeenCalledWith(65_000);
       expect(fetch).toHaveBeenCalledWith(
         'https://gateway.test.com/api/device/tool-call',
         expect.objectContaining({
@@ -422,11 +456,36 @@ describe('GatewayHttpClient', () => {
       expect(body.toolCall.type).toBe('tool');
     });
 
+    it("waits out the gateway's reconnect window so an offline device reads as offline", async () => {
+      // The gateway holds an undelivered call for `timeout + 45s` before it
+      // answers 503 DEVICE_OFFLINE. Aborting earlier turned every offline
+      // device into "timed out, the work may still be running".
+      const GATEWAY_RECOVERY_WINDOW_MS = 45_000;
+      mockFetch(createSuccessfulToolResponse());
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort());
+
+      await client.executeToolCall(
+        { deviceId: 'device-1', timeout: 10_000, userId: 'user-1' },
+        { apiName: 'runCommand', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(timeoutSpy.mock.calls[0][0]).toBeGreaterThan(10_000 + GATEWAY_RECOVERY_WINDOW_MS);
+    });
+
+    it('never pads a call past the agent function window', async () => {
+      mockFetch(createSuccessfulToolResponse());
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort());
+
+      await client.executeToolCall(
+        { deviceId: 'device-1', timeout: 760_000, userId: 'user-1' },
+        { apiName: 'runCommand', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(timeoutSpy).toHaveBeenCalledWith(800_000);
+    });
+
     it('should pass optional operationId', async () => {
-      mockFetch({
-        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
-        ok: true,
-      });
+      mockFetch(createSuccessfulToolResponse());
 
       await client.executeToolCall(
         { operationId: 'op-1', userId: 'user-1' },
@@ -439,10 +498,7 @@ describe('GatewayHttpClient', () => {
     });
 
     it('should use default gateway timeout plus HTTP caller padding when timeout is absent', async () => {
-      mockFetch({
-        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
-        ok: true,
-      });
+      mockFetch(createSuccessfulToolResponse());
       const signal = AbortSignal.abort();
       const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(signal);
 
@@ -451,7 +507,7 @@ describe('GatewayHttpClient', () => {
         { apiName: 'readFile', arguments: '{}', identifier: 'test' },
       );
 
-      expect(timeoutSpy).toHaveBeenCalledWith(60_000);
+      expect(timeoutSpy).toHaveBeenCalledWith(90_000);
       expect(fetch).toHaveBeenCalledWith(
         'https://gateway.test.com/api/device/tool-call',
         expect.objectContaining({ signal }),
@@ -466,15 +522,7 @@ describe('GatewayHttpClient', () => {
         ok: true,
       });
 
-      const result = await client.dispatchAgentRun({
-        agentType: 'claude-code',
-        assistantMessageId: 'asst-1',
-        jwt: 'jwt',
-        operationId: 'op-1',
-        prompt: 'run',
-        topicId: 'tpc-1',
-        userId: 'user-1',
-      });
+      const result = await client.dispatchAgentRun(createAgentRunInput());
 
       expect(result).toEqual({ success: true });
       expect(fetch).toHaveBeenCalledWith(
@@ -491,15 +539,7 @@ describe('GatewayHttpClient', () => {
         ok: true,
       });
 
-      const result = await client.dispatchAgentRun({
-        agentType: 'claude-code',
-        assistantMessageId: 'asst-1',
-        jwt: 'jwt',
-        operationId: 'op-1',
-        prompt: 'run',
-        topicId: 'tpc-1',
-        userId: 'user-1',
-      });
+      const result = await client.dispatchAgentRun(createAgentRunInput());
 
       expect(result).toEqual({ success: true });
     });
@@ -513,15 +553,7 @@ describe('GatewayHttpClient', () => {
         ok: true,
       });
 
-      const result = await client.dispatchAgentRun({
-        agentType: 'claude-code',
-        assistantMessageId: 'asst-1',
-        jwt: 'jwt',
-        operationId: 'op-1',
-        prompt: 'run',
-        topicId: 'tpc-1',
-        userId: 'user-1',
-      });
+      const result = await client.dispatchAgentRun(createAgentRunInput());
 
       expect(result).toEqual({ error: 'spawn failed', success: false });
     });
@@ -532,15 +564,7 @@ describe('GatewayHttpClient', () => {
         ok: true,
       });
 
-      const result = await client.dispatchAgentRun({
-        agentType: 'claude-code',
-        assistantMessageId: 'asst-1',
-        jwt: 'jwt',
-        operationId: 'op-1',
-        prompt: 'run',
-        topicId: 'tpc-1',
-        userId: 'user-1',
-      });
+      const result = await client.dispatchAgentRun(createAgentRunInput());
 
       expect(result).toEqual({ error: 'DEVICE_OFFLINE', success: false });
     });
@@ -552,15 +576,7 @@ describe('GatewayHttpClient', () => {
         text: vi.fn().mockResolvedValue('DEVICE_OFFLINE'),
       });
 
-      const result = await client.dispatchAgentRun({
-        agentType: 'claude-code',
-        assistantMessageId: 'asst-1',
-        jwt: 'jwt',
-        operationId: 'op-1',
-        prompt: 'run',
-        topicId: 'tpc-1',
-        userId: 'user-1',
-      });
+      const result = await client.dispatchAgentRun(createAgentRunInput());
 
       expect(result).toEqual({ error: 'DEVICE_OFFLINE', success: false });
     });
@@ -720,10 +736,7 @@ describe('GatewayHttpClient', () => {
     });
 
     it('should pass optional deviceId and timeout', async () => {
-      mockFetch({
-        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
-        ok: true,
-      });
+      mockFetch(createSuccessfulToolResponse());
 
       await client.executeMessageApi(
         { deviceId: 'device-1', timeout: 5000, userId: 'user-1' },
@@ -769,6 +782,17 @@ describe('GatewayHttpClient', () => {
       const result = await client.getDeviceSystemInfo('user-1', 'device-1');
 
       expect(result).toEqual({ success: false });
+    });
+
+    it('keeps the gateway reason on a non-ok response', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ error: 'TIMEOUT', success: false }),
+        ok: false,
+      });
+
+      const result = await client.getDeviceSystemInfo('user-1', 'device-1');
+
+      expect(result).toEqual({ error: 'TIMEOUT', success: false });
     });
 
     it('bounds the read with a timeout', async () => {
@@ -817,6 +841,21 @@ describe('GatewayHttpClient', () => {
       });
     });
 
+    it('forwards the preferred channel when one is given', async () => {
+      mockFetch({ json: vi.fn().mockResolvedValue({ data: {}, success: true }), ok: true });
+
+      await client.invokeRpc(
+        { channel: 'desktop', deviceId: 'device-1', userId: 'user-1' },
+        { method: 'getAppUpdateState' },
+      );
+
+      const [, init] = vi.mocked(fetch).mock.calls[0];
+      expect(JSON.parse((init as any).body)).toMatchObject({
+        channel: 'desktop',
+        method: 'getAppUpdateState',
+      });
+    });
+
     it('returns failure on non-ok response', async () => {
       mockFetch({ ok: false, status: 503, text: vi.fn().mockResolvedValue('offline') });
 
@@ -837,6 +876,89 @@ describe('GatewayHttpClient', () => {
       );
 
       expect(result.success).toBe(false);
+    });
+  });
+
+  describe('tunnel registry', () => {
+    it('creates a tunnel and folds the hostname into the registration', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({
+          hostname: '3000--abcdefgh.lobe.sh',
+          registration: {
+            createdAt: 1,
+            createdBy: 'user-1',
+            deviceId: 'device-1',
+            port: 3000,
+            principal: 'user:user-1',
+            slug: 'abcdefgh',
+          },
+        }),
+        ok: true,
+      });
+
+      const result = await client.createTunnel({
+        createdBy: 'user-1',
+        deviceId: 'device-1',
+        port: 3000,
+        principal: 'user:user-1',
+      });
+
+      expect(result).toMatchObject({ hostname: '3000--abcdefgh.lobe.sh', slug: 'abcdefgh' });
+      expect(fetch).toHaveBeenCalledWith(
+        'https://gateway.test.com/api/admin/tunnels',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('surfaces a rejected creation instead of returning a broken link', async () => {
+      mockFetch({ ok: false, status: 400, text: vi.fn().mockResolvedValue('INVALID_PORT') });
+
+      await expect(
+        client.createTunnel({
+          createdBy: 'user-1',
+          deviceId: 'device-1',
+          port: 3000,
+          principal: 'user:user-1',
+        }),
+      ).rejects.toThrow('INVALID_PORT');
+    });
+
+    it('lists tunnels for one principal', async () => {
+      mockFetch({ json: vi.fn().mockResolvedValue({ tunnels: [{ slug: 'abcdefgh' }] }), ok: true });
+
+      const result = await client.listTunnels('workspace:ws-1');
+
+      expect(result).toEqual([{ slug: 'abcdefgh' }]);
+      expect(fetch).toHaveBeenCalledWith(
+        'https://gateway.test.com/api/admin/tunnels?principal=workspace%3Aws-1',
+        expect.objectContaining({
+          headers: { Authorization: 'Bearer test-service-token' },
+          method: 'GET',
+        }),
+      );
+    });
+
+    it('treats an unknown slug as absent, not as an error', async () => {
+      mockFetch({ ok: false, status: 404 });
+      expect(await client.resolveTunnel('zzzzzzzz')).toBeUndefined();
+
+      mockFetch({ ok: false, status: 404 });
+      expect(await client.revokeTunnel('zzzzzzzz')).toBe(false);
+    });
+
+    it('revokes a tunnel', async () => {
+      mockFetch({ json: vi.fn().mockResolvedValue({ success: true }), ok: true });
+
+      expect(await client.revokeTunnel('abcdefgh')).toBe(true);
+      expect(fetch).toHaveBeenCalledWith(
+        'https://gateway.test.com/api/admin/tunnels/abcdefgh',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+
+    it('raises a gateway failure rather than reporting an empty list', async () => {
+      mockFetch({ ok: false, status: 500 });
+      await expect(client.listTunnels('user:user-1')).rejects.toThrow('responded 500');
     });
   });
 });

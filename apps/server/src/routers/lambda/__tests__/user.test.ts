@@ -100,6 +100,23 @@ vi.mock('@/server/workflows/onboardingUnderstanding', () => {
   };
 });
 
+const completedUnderstandingSource = () => ({
+  errors: [],
+  failedCount: 0,
+  revision: 1,
+  status: 'completed',
+  succeededCount: 2,
+});
+
+const understandingRetryInput = (): Parameters<
+  ReturnType<typeof userRouter.createCaller>['retryOnboardingUnderstandingSource']
+>[0] => ({
+  sessionId: 'session-1',
+  providerId: 'github',
+  responseLanguage: 'en-US',
+  topicId: 'topic-1',
+});
+
 describe('userRouter', () => {
   const mockUserId = 'test-user-id';
   const mockCtx = {
@@ -190,12 +207,9 @@ describe('userRouter', () => {
       );
 
       await expect(
-        userRouter.createCaller(scopedCtx).retryOnboardingUnderstandingSource({
-          sessionId: 'session-1',
-          providerId: 'github',
-          responseLanguage: 'en-US',
-          topicId: 'topic-1',
-        }),
+        userRouter
+          .createCaller(scopedCtx)
+          .retryOnboardingUnderstandingSource(understandingRetryInput()),
       ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
     });
 
@@ -252,13 +266,7 @@ describe('userRouter', () => {
       mockUnderstandingService.get.mockResolvedValueOnce({
         id: 'session-1',
         sources: {
-          github: {
-            errors: [],
-            failedCount: 0,
-            revision: 1,
-            status: 'completed',
-            succeededCount: 2,
-          },
+          github: completedUnderstandingSource(),
         },
         status: 'completed',
         writing: {
@@ -331,13 +339,7 @@ describe('userRouter', () => {
       mockUnderstandingService.get.mockResolvedValueOnce({
         id: 'session-1',
         sources: {
-          github: {
-            errors: [],
-            failedCount: 0,
-            revision: 1,
-            status: 'completed',
-            succeededCount: 2,
-          },
+          github: completedUnderstandingSource(),
         },
         status: 'processing',
       });
@@ -388,13 +390,7 @@ describe('userRouter', () => {
         mockUnderstandingService.get.mockResolvedValueOnce({
           id: 'session-1',
           sources: {
-            github: {
-              errors: [],
-              failedCount: 0,
-              revision: 1,
-              status: 'completed',
-              succeededCount: 2,
-            },
+            github: completedUnderstandingSource(),
           },
           status: 'processing',
           writing,
@@ -460,12 +456,9 @@ describe('userRouter', () => {
     it('delegates retry for only the requested provider', async () => {
       mockUnderstandingService.retry.mockResolvedValueOnce(pollingResult);
 
-      const result = await userRouter.createCaller(scopedCtx).retryOnboardingUnderstandingSource({
-        sessionId: 'session-1',
-        providerId: 'github',
-        responseLanguage: 'en-US',
-        topicId: 'topic-1',
-      });
+      const result = await userRouter
+        .createCaller(scopedCtx)
+        .retryOnboardingUnderstandingSource(understandingRetryInput());
 
       expect(mockUnderstandingService.retry).toHaveBeenCalledWith({
         providerId: 'github',
@@ -590,12 +583,9 @@ describe('userRouter', () => {
       );
 
       await expect(
-        userRouter.createCaller(scopedCtx).retryOnboardingUnderstandingSource({
-          sessionId: 'session-1',
-          providerId: 'github',
-          responseLanguage: 'en-US',
-          topicId: 'topic-1',
-        }),
+        userRouter
+          .createCaller(scopedCtx)
+          .retryOnboardingUnderstandingSource(understandingRetryInput()),
       ).rejects.toMatchObject({
         code: 'PRECONDITION_FAILED',
         message: 'Onboarding understanding action is not currently available',
@@ -980,6 +970,77 @@ describe('userRouter', () => {
           },
         }),
       );
+    });
+  });
+
+  describe('updateToolChannels', () => {
+    it('delegates to the atomic model patch with the raw input', async () => {
+      const replaceToolChannelsSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+      vi.mocked(UserModel).mockImplementation(function () {
+        return { replaceToolChannelsSetting } as any;
+      });
+
+      await userRouter
+        .createCaller({ ...mockCtx })
+        .updateToolChannels({ searchProviders: ['exa', 'searxng'] });
+
+      expect(replaceToolChannelsSetting).toHaveBeenCalledWith({
+        searchProviders: ['exa', 'searxng'],
+      });
+    });
+
+    it('rejects workspace members without content permission', async () => {
+      const { RbacModel } = await import('@/database/models/rbac');
+      vi.mocked(RbacModel).mockImplementation(function () {
+        return { hasAnyPermission: vi.fn().mockResolvedValue(false) } as any;
+      });
+
+      await expect(
+        userRouter
+          .createCaller({ ...mockCtx, workspaceId: 'ws_1' } as any)
+          .updateToolChannels({ crawlerImpls: ['jina'] }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+  });
+
+  describe('updatePersonalSystemAgent', () => {
+    it('patches only the given entry inside a workspace without a permission check', async () => {
+      const { RbacModel } = await import('@/database/models/rbac');
+      const hasPermission = vi.fn().mockResolvedValue(false);
+      vi.mocked(RbacModel).mockImplementation(function () {
+        return { hasAnyPermission: hasPermission, hasPermission } as any;
+      });
+      const mergeSystemAgentItemSetting = vi.fn().mockResolvedValue({ rowCount: 1 });
+      vi.mocked(UserModel).mockImplementation(function () {
+        return { mergeSystemAgentItemSetting } as any;
+      });
+
+      await userRouter
+        .createCaller({ ...mockCtx, workspaceId: 'ws_1' } as any)
+        .updatePersonalSystemAgent({ key: 'followUpAction', value: { enabled: false } });
+
+      expect(hasPermission).not.toHaveBeenCalled();
+      expect(mergeSystemAgentItemSetting).toHaveBeenCalledWith('followUpAction', {
+        enabled: false,
+      });
+    });
+
+    it('rejects workspace-governed service-model keys', async () => {
+      await expect(
+        userRouter.createCaller({ ...mockCtx }).updatePersonalSystemAgent({
+          key: 'topic' as any,
+          value: { model: 'gpt-4o', provider: 'openai' },
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+
+    it('rejects fields beyond the switch and the model choice', async () => {
+      await expect(
+        userRouter.createCaller({ ...mockCtx }).updatePersonalSystemAgent({
+          key: 'inputCompletion',
+          value: { customPrompt: 'x' } as any,
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     });
   });
 

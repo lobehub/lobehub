@@ -100,8 +100,17 @@ export async function readLocalFile({
           `Error: File appears to be binary (${sniff.reason}). Refusing to read as text.`,
         );
       }
-    } catch {
-      // Sniffing failures are not fatal; loadFile will surface the real error.
+    } catch (error) {
+      // A file that cannot be opened is not fatal here; loadFile reports the
+      // real IO error. Anything without an errno code is a defect in the
+      // sniffer itself, and swallowing it silently disables binary detection
+      // (lobehub/lobehub#19934), so report it instead.
+      if (!(error as NodeJS.ErrnoException).code) {
+        return buildErrorResult(
+          filePath,
+          `Error: Failed to check whether the file is binary: ${(error as Error).message}`,
+        );
+      }
     }
   }
 

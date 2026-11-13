@@ -1,9 +1,11 @@
 // @vitest-environment node
+import { randomUUID } from 'node:crypto';
+
 import { eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { acceptances, users, verifyRuns } from '../../schemas';
+import { acceptances, agentOperations, users, verifyCheckResults, verifyRuns } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentOperationModel } from '../agentOperation';
 import { VerifyRunModel } from '../verifyRun';
@@ -224,6 +226,76 @@ describe('VerifyRunModel.findStuckVerifying', () => {
     expect(restIds).toContain(interloper);
   });
 
+  it('finds dead planned repairs but excludes live, successful and unconfirmed rounds', async () => {
+    const states = [
+      ['dead', 'error', true],
+      ['interrupted', 'interrupted', true],
+      ['live', null, true],
+      ['done', 'done', true],
+      ['draft', 'error', false],
+    ] as const;
+    const ids: Record<string, string> = {};
+    for (const [name, completionReason, confirmed] of states) {
+      const operationId = `op-planned-${name}`;
+      ids[name] = await buildRun(operationId);
+      if (confirmed) await new VerifyRunModel(serverDB, userId).confirmPlan(ids[name]);
+      await serverDB
+        .update(agentOperations)
+        .set({
+          completionReason,
+          parentOperationId: 'parent-operation',
+        })
+        .where(eq(agentOperations.id, operationId));
+      await backdate(ids[name], 10 * 60 * 1000);
+    }
+    const stuck = await VerifyRunModel.findStuckVerifying(
+      serverDB,
+      new Date(Date.now() - 5 * 60 * 1000),
+      { limit: 500 },
+    );
+    const found = stuck.map((run) => run.id);
+    expect(found).toEqual(expect.arrayContaining([ids.dead, ids.interrupted]));
+    for (const name of ['live', 'done', 'draft']) expect(found).not.toContain(ids[name]);
+  });
+
+  it('finds a task round whose own run ended without delivering', async () => {
+    const [acceptance] = await serverDB
+      .insert(acceptances)
+      .values({ userId, subjectType: 'task', subjectId: 'stuck-task' })
+      .returning();
+    const states = [
+      ['offline', 'error', true],
+      ['lease', 'abandoned', true],
+      ['stopped', 'interrupted', true],
+      ['running', 'running', true],
+      ['done', 'done', true],
+      ['unattached', 'error', false],
+    ] as const;
+    const ids: Record<string, string> = {};
+    for (const [name, status, attached] of states) {
+      const operationId = `op-task-${name}`;
+      ids[name] = await buildRun(operationId);
+      await new VerifyRunModel(serverDB, userId).confirmPlan(ids[name]);
+      if (attached) {
+        await new VerifyRunModel(serverDB, userId).attachToAcceptance(ids[name], acceptance.id);
+      }
+      await serverDB
+        .update(agentOperations)
+        .set({ status })
+        .where(eq(agentOperations.id, operationId));
+      await backdate(ids[name], 10 * 60 * 1000);
+    }
+
+    const stuck = await VerifyRunModel.findStuckVerifying(
+      serverDB,
+      new Date(Date.now() - 5 * 60 * 1000),
+      { limit: 500 },
+    );
+    const found = stuck.map((run) => run.id);
+    expect(found).toEqual(expect.arrayContaining([ids.offline, ids.lease, ids.stopped]));
+    for (const name of ['running', 'done', 'unattached']) expect(found).not.toContain(ids[name]);
+  });
+
   it('ignores operation-less rounds — there is no rollup to address', async () => {
     const run = await new VerifyRunModel(serverDB, userId).create({ status: 'verifying' });
     await backdate(run.id, 10 * 60 * 1000);
@@ -288,6 +360,54 @@ describe('VerifyRunModel.foldIntoRound', () => {
     expect(await model().listByAcceptance(acceptance.id)).toHaveLength(1);
   });
 
+  /**
+   * Regression: the survivor was always written with a null status. Folding a live
+   * builder round into a leftover draft therefore produced a row no claim can move
+   * — `claimEvidenceCollection` wants `planned`, `claimVerifying` wants `planned`
+   * or `collecting_evidence` — so completion returned without collecting evidence
+   * or judging, and the Task was stranded.
+   */
+  it('keeps a live round claimable after folding it into a draft', async () => {
+    const { draft } = await draftRound();
+    const incoming = await model().create({
+      plan: [item('case-1')],
+      status: 'planned',
+      title: 'builder run',
+    });
+    await model().confirmPlan(incoming.id);
+
+    const folded = await model().foldIntoRound(incoming.id, draft.id);
+
+    expect(folded.status).toBe('planned');
+    expect(await model().claimEvidenceCollection(folded.id)).toBe(true);
+  });
+
+  /**
+   * Regression: the survivor kept the draft's operation. A draft left behind by an
+   * earlier attempt therefore swallowed the next attempt's row, and that attempt
+   * was no longer discoverable by its own operation — its verification stopped.
+   */
+  it("hands the survivor to the incoming run's operation", async () => {
+    const { draft } = await draftRound();
+    await new AgentOperationModel(serverDB, userId).recordStart({ operationId: 'fold-stale-op' });
+    await new AgentOperationModel(serverDB, userId).recordStart({ operationId: 'fold-live-op' });
+    await serverDB
+      .update(verifyRuns)
+      .set({ operationId: 'fold-stale-op' })
+      .where(eq(verifyRuns.id, draft.id));
+    const incoming = await model().create({
+      operationId: 'fold-live-op',
+      plan: [item('case-1')],
+      status: 'planned',
+      title: 'next attempt',
+    });
+
+    const folded = await model().foldIntoRound(incoming.id, draft.id);
+
+    expect(folded.operationId).toBe('fold-live-op');
+    expect((await model().findByOperation('fold-live-op'))?.id).toBe(draft.id);
+  });
+
   it('refuses to fold into a round that already executed or a run already chained', async () => {
     const { acceptance, draft } = await draftRound();
     await model().confirmPlan(draft.id);
@@ -301,5 +421,148 @@ describe('VerifyRunModel.foldIntoRound', () => {
       title: 'chained',
     });
     await expect(model().foldIntoRound(chained.id, draft.id)).rejects.toThrow('detached');
+  });
+});
+
+describe('VerifyRunModel.listByAcceptances', () => {
+  const item = (id: string) => ({
+    id,
+    index: 0,
+    onFail: 'manual' as const,
+    required: true,
+    title: id,
+    verifierConfig: {},
+    verifierType: 'llm' as const,
+  });
+
+  const buildAcceptance = async (owner = userId) => {
+    const [row] = await serverDB
+      .insert(acceptances)
+      .values({ subjectId: randomUUID(), subjectType: 'standalone', userId: owner })
+      .returning();
+    return row.id;
+  };
+
+  it('returns the rounds of several acceptances in one read', async () => {
+    const first = await buildAcceptance();
+    const second = await buildAcceptance();
+    const model = new VerifyRunModel(serverDB, userId);
+    await model.create({ acceptanceId: first, plan: [item('c1')], roundIndex: 1, title: 'a1' });
+    await model.create({ acceptanceId: first, plan: [item('c1')], roundIndex: 2, title: 'a2' });
+    await model.create({ acceptanceId: second, plan: [item('c1')], roundIndex: 1, title: 'b1' });
+
+    const runs = await model.listByAcceptances([first, second]);
+
+    expect(runs.map((run) => `${run.acceptanceId}#${run.roundIndex}`).sort()).toEqual(
+      [`${first}#1`, `${first}#2`, `${second}#1`].sort(),
+    );
+  });
+
+  it('returns nothing for an empty id list', async () => {
+    const model = new VerifyRunModel(serverDB, userId);
+
+    expect(await model.listByAcceptances([])).toEqual([]);
+  });
+
+  it('never reads another user’s rounds', async () => {
+    const mine = await buildAcceptance();
+    const theirs = await buildAcceptance(otherUserId);
+    const theirsRun = await new VerifyRunModel(serverDB, otherUserId).create({
+      acceptanceId: theirs,
+      plan: [item('c1')],
+      roundIndex: 1,
+      title: 'theirs',
+    });
+
+    const runs = await new VerifyRunModel(serverDB, userId).listByAcceptances([mine, theirs]);
+
+    expect(runs.some((run) => run.id === theirsRun.id)).toBe(false);
+    expect(runs.every((run) => run.acceptanceId === mine)).toBe(true);
+  });
+});
+
+describe('VerifyRunModel.recordAutoRepair', () => {
+  it('exposes the decision on the run state without clobbering other metadata', async () => {
+    const operationId = `op-${randomUUID()}`;
+    const runId = await buildRun(operationId);
+    const model = new VerifyRunModel(serverDB, userId);
+    await model.setMetadata(runId, { maxRepairRounds: 2 });
+
+    expect((await model.getStateByOperation(operationId))?.verifyAutoRepair).toBeNull();
+
+    await model.recordAutoRepair(runId, 'declined');
+
+    expect((await model.getStateByOperation(operationId))?.verifyAutoRepair).toBe('declined');
+    expect((await model.findById(runId))?.metadata).toMatchObject({
+      autoRepair: 'declined',
+      maxRepairRounds: 2,
+    });
+  });
+
+  it('never writes another user’s run', async () => {
+    const operationId = `op-${randomUUID()}`;
+    const runId = await buildRun(operationId);
+
+    await new VerifyRunModel(serverDB, otherUserId).recordAutoRepair(runId, 'declined');
+
+    const state = await new VerifyRunModel(serverDB, userId).getStateByOperation(operationId);
+    expect(state?.verifyAutoRepair).toBeNull();
+  });
+});
+
+describe('VerifyRunModel.detachUndeliveredRound', () => {
+  const model = () => new VerifyRunModel(serverDB, userId);
+  const attachedRound = async (operationId: string) => {
+    const [acceptance] = await serverDB
+      .insert(acceptances)
+      .values({ userId, subjectType: 'task', subjectId: `detach-${operationId}` })
+      .returning();
+    const runId = await buildRun(operationId);
+    await model().confirmPlan(runId);
+    await model().attachToAcceptance(runId, acceptance.id);
+    return { acceptanceId: acceptance.id, runId };
+  };
+  const addResult = (runId: string, status: 'failed' | 'pending') =>
+    serverDB.insert(verifyCheckResults).values({
+      checkItemId: 'item-1',
+      status,
+      userId,
+      verifierType: 'llm',
+      verifyRunId: runId,
+    });
+
+  it('takes a planned round off its acceptance and frees its index', async () => {
+    const { acceptanceId, runId } = await attachedRound('op-detach-1');
+
+    expect(await model().detachUndeliveredRound(runId)).toBe(true);
+    expect(await model().listByAcceptance(acceptanceId)).toEqual([]);
+    const [row] = await serverDB.select().from(verifyRuns).where(eq(verifyRuns.id, runId));
+    expect(row).toMatchObject({ acceptanceId: null, roundIndex: null, status: 'planned' });
+  });
+
+  it('counts evidence the builder submitted mid-run as never verified', async () => {
+    const { runId } = await attachedRound('op-detach-2');
+    await addResult(runId, 'pending');
+
+    expect(await model().detachUndeliveredRound(runId)).toBe(true);
+  });
+
+  it('keeps a round that has a judged result or left planned', async () => {
+    const judged = await attachedRound('op-detach-3');
+    await addResult(judged.runId, 'failed');
+    const verifying = await attachedRound('op-detach-4');
+    await model().updateStatus(verifying.runId, 'verifying');
+
+    expect(await model().detachUndeliveredRound(judged.runId)).toBe(false);
+    expect(await model().detachUndeliveredRound(verifying.runId)).toBe(false);
+    expect(await model().listByAcceptance(judged.acceptanceId)).toHaveLength(1);
+  });
+
+  it("never touches another owner's round", async () => {
+    const { runId } = await attachedRound('op-detach-5');
+
+    expect(await new VerifyRunModel(serverDB, otherUserId).detachUndeliveredRound(runId)).toBe(
+      false,
+    );
   });
 });

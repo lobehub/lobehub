@@ -1,14 +1,8 @@
-import type {
-  LobeAgentConfig,
-  WorkingDirConfig,
-  WorkingDirConfigValue,
-  WorkingDirEntry,
-} from '@lobechat/types';
+import type { WorkingDirConfig, WorkingDirEntry } from '@lobechat/types';
 import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal } from '@lobehub/ui';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { PartialDeep } from 'type-fest';
 
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { getHeteroSessionIdForWorkingDirectory } from '@/helpers/heteroSessionByWorkingDirectory';
@@ -18,9 +12,11 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useDeviceStore } from '@/store/device';
-import { useElectronStore } from '@/store/electron';
+import { getElectronStoreState, useElectronStore } from '@/store/electron';
 
-export interface CommitWorkingDirectoryOptions {
+import { stagedProjectDirectoryIdSelector } from './useProjectTopicDirectory';
+
+export interface CommitWorkingDirectoryOptions extends CommitAgentDefaultOptions {
   /**
    * Persist against the `local` execution target on this machine, regardless of
    * what the agent's config currently says. For callers that select the local
@@ -29,6 +25,18 @@ export interface CommitWorkingDirectoryOptions {
    * time to help.
    */
   localTarget?: boolean;
+}
+
+export interface CommitAgentDefaultOptions {
+  /**
+   * Reject when persisting the shared agent config fails. The store otherwise
+   * swallows the error (and rolls the optimistic value back), so a caller that
+   * acts on the saved directory right after — e.g. switching to a fresh topic —
+   * must opt in to learn the write never landed.
+   */
+  rethrow?: boolean;
+  /** Keep the store's generic save-failure toast. @default true */
+  showErrorMessage?: boolean;
 }
 
 const normalizeWorkingDirEntry = (entry: WorkingDirEntry): WorkingDirEntry | undefined => {
@@ -55,6 +63,9 @@ const normalizeWorkingDirEntry = (entry: WorkingDirEntry): WorkingDirEntry | und
 };
 
 const toAgentWorkingDirConfig = (entry: WorkingDirEntry): WorkingDirConfig => ({
+  // Metadata only: the code environment the folder was picked with. Nothing
+  // runs it on a device yet; it travels so the association is not lost.
+  ...(entry.environmentId ? { environmentId: entry.environmentId } : {}),
   ...(entry.git ? { git: entry.git } : {}),
   path: entry.path,
   ...(entry.repoType ? { repoType: entry.repoType } : {}),
@@ -81,18 +92,19 @@ const toAgentWorkingDirConfig = (entry: WorkingDirEntry): WorkingDirConfig => ({
  * the same metadata write — same as the legacy pickers.
  */
 export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string | null) => {
-  const { t } = useTranslation(['plugin', 'chat']);
+  const { t } = useTranslation(['plugin', 'chat', 'project']);
 
-  // The RAW shared config — every write below spreads it back into
-  // `agents.agencyConfig`, so it must never contain this member's per-user
-  // device override (spreading the merged config would leak the override's
-  // executionTarget/boundDeviceId into the workspace-shared row).
+  // The RAW shared config identifies agent-owned state. Directory writes patch
+  // only their target device, never the member's effective device override.
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
   // The EFFECTIVE config (override merged) — only for resolving
   // which device the cwd write should target, keeping it on the same machine
   // the picker/GitStatus/`useEffectiveWorkingDirectory` operate on.
-  const { agencyConfig: effectiveAgencyConfig, workspaceScoped } =
-    useEffectiveAgencyConfig(agentId);
+  const {
+    agencyConfig: effectiveAgencyConfig,
+    isPreferenceLoading,
+    workspaceScoped,
+  } = useEffectiveAgencyConfig(agentId, { topicId: routeTopicId });
   // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd, so
   // their session cwd anchors to the SOURCE repo — a worktree switch (same repo,
   // different activeWorktree) must NOT change the session cwd or reset the
@@ -109,6 +121,9 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
   const activeTopic = useChatStore((s) =>
     activeTopicId ? topicSelectors.getTopicById(activeTopicId)(s) : undefined,
   );
+  // A blank conversation staged in a project directory has no topic to record
+  // a pick on, and the agent default is not where it will run.
+  const stagedDirectoryId = useChatStore(stagedProjectDirectoryIdSelector(agentId, activeTopicId));
   const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
 
   const updateDeviceCwd = useDeviceStore((s) => s.updateDeviceCwd);
@@ -144,7 +159,13 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       // lets it state the destination it is creating, so the cwd lands in the
       // same slot the pending `local` pick will read from.
       const localTarget = options?.localTarget === true;
-      const writeDeviceId = localTarget ? currentDeviceId : targetDeviceId;
+      const writeDeviceId = localTarget
+        ? currentDeviceId
+        : (targetDeviceId ??
+          activeTopic?.metadata?.boundDeviceId ??
+          (entry && activeTopicId
+            ? await getElectronStoreState().resolveGatewayDeviceId()
+            : undefined));
       // A `local` pick on a workspace agent always means this member's own
       // machine, which routes to the per-user slot rather than the shared row.
       const writePersonalSlot = localTarget
@@ -154,6 +175,11 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       // The session cwd anchors to the source repo for hetero (stable across
       // worktree switches) and to the effective/worktree path otherwise.
       const sessionCwd = isHetero ? getWorkingDirSourcePath(entry) : effectivePath;
+      // Save the reusable device entry before changing the selection. A failed
+      // recent-directory write must not leave a chip that looks successfully saved.
+      if (entry && effectivePath && writeDeviceId) {
+        await updateDeviceCwd(writeDeviceId, entry, { setDefault: false });
+      }
       // Topic override wins once a conversation exists; otherwise persist the
       // agent's per-device choice so a new topic inherits it.
       if (activeTopicId) {
@@ -171,6 +197,13 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
           priorSessionCwd !== sessionCwd &&
           (!!activeTopic?.metadata?.heteroSessionId || !!scopedHeteroSessionId);
         await updateTopicMetadata(activeTopicId, {
+          // The pin is a bare path that only holds on the machine it was picked
+          // for, and the server skips a topic pin whose `boundDeviceId` names a
+          // different device. Re-stamp it with every write so a conversation
+          // moved to another device keeps the directory just chosen there. An
+          // unresolved target keeps the topic's own pin (or this desktop's id)
+          // rather than leaving the new path with no machine at all.
+          boundDeviceId: entry ? writeDeviceId : undefined,
           ...(shouldUpdateHeteroSession ? { heteroSessionId: scopedHeteroSessionId } : {}),
           workingDirectory: sessionCwd,
           workingDirectoryConfig: entry ? toAgentWorkingDirConfig(entry) : undefined,
@@ -188,18 +221,21 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
             workingDirectory: sessionCwd || undefined,
           });
         } else if (writeDeviceId) {
-          const prev = agencyConfig?.workingDirByDevice ?? {};
-          // Clearing sends `undefined` rather than dropping the key: deep-merge
-          // (client store + server persist) can't remove a key, so the delete is
-          // carried as an explicit `undefined` and pruned after each merge.
-          const nextMap: Record<string, WorkingDirConfigValue | undefined> = {
-            ...prev,
-            [writeDeviceId]: entry ? toAgentWorkingDirConfig(entry) : undefined,
-          };
-          const configPatch = {
-            agencyConfig: { ...agencyConfig, workingDirByDevice: nextMap },
-          } as PartialDeep<LobeAgentConfig>;
-          await updateAgentConfigById(agentId, configPatch);
+          await updateAgentConfigById(
+            agentId,
+            {
+              agencyConfig: {
+                workingDirByDevice: {
+                  [writeDeviceId]: entry ? toAgentWorkingDirConfig(entry) : undefined,
+                },
+              },
+            },
+            {
+              replaceWorkingDirDeviceIds: [writeDeviceId],
+              rethrow: options?.rethrow,
+              showErrorMessage: options?.showErrorMessage,
+            },
+          );
         }
         // Clearing the agent default must also drop the legacy per-agent value —
         // otherwise it keeps re-supplying a stale cwd from a lower precedence
@@ -210,17 +246,12 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
           await updateAgentRuntimeEnvConfigById(agentId, { workingDirectory: undefined });
         }
       }
-      // Record on the target device's recent list (not the device-wide default —
-      // a per-agent pick shouldn't repoint other agents on the same device).
-      if (entry && effectivePath && targetDeviceId) {
-        await updateDeviceCwd(targetDeviceId, entry, { setDefault: false });
-      }
     },
     [
       agentId,
-      agencyConfig,
       activeTopic,
       activeTopicId,
+      currentDeviceId,
       isHetero,
       isPersonalDeviceTarget,
       targetDeviceId,
@@ -235,31 +266,31 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
   // Clear whichever precedence level currently supplies the cwd, so the picker
   // falls back to the next level (agent default → device default → "not set").
   const clearCwd = useCallback(async () => {
+    if (activeTopic?.projectWorkingDirectoryId)
+      throw new Error(t('directories.boundRoot', { ns: 'project' }));
     // A topic override (when present) is the effective source — drop it first so
     // we fall back to the agent default rather than nuking everything.
     if (activeTopicId && activeTopic?.metadata?.workingDirectory) {
       await updateTopicMetadata(activeTopicId, {
+        // No pin left, so no device it belongs to — the next run stamps its own.
+        boundDeviceId: undefined,
         ...(activeTopic.metadata.heteroSessionId ? { heteroSessionId: undefined } : {}),
         workingDirectory: undefined,
         workingDirectoryConfig: undefined,
       });
       return;
     }
-    // No topic override: clear the agent-level default(s). Clearing sends
-    // `undefined` rather than dropping the key — deep-merge (client store +
-    // server persist) can't remove a key, so the delete is carried as an
-    // explicit `undefined` and pruned after each merge. The user can't tell the
+    // No topic override: clear the agent-level default(s). An explicit
+    // `undefined` entry carries deletion through the client and server. The user
+    // can't tell the
     // per-device map from the legacy slot, so clear both together to avoid a
     // dead second click.
     if (targetDeviceId && agencyConfig?.workingDirByDevice?.[targetDeviceId]) {
-      const nextMap: Record<string, WorkingDirConfigValue | undefined> = {
-        ...agencyConfig.workingDirByDevice,
-        [targetDeviceId]: undefined,
-      };
-      const configPatch = {
-        agencyConfig: { ...agencyConfig, workingDirByDevice: nextMap },
-      } as PartialDeep<LobeAgentConfig>;
-      await updateAgentConfigById(agentId, configPatch);
+      await updateAgentConfigById(
+        agentId,
+        { agencyConfig: { workingDirByDevice: { [targetDeviceId]: undefined } } },
+        { replaceWorkingDirDeviceIds: [targetDeviceId] },
+      );
     }
     // (Only clears the localStorage map; no network round-trip since
     // `workingDirectory` is stripped before send.)
@@ -276,6 +307,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
     updateAgentConfigById,
     updateAgentRuntimeEnvConfigById,
     updateTopicMetadata,
+    t,
   ]);
 
   /** Pick a directory (with the CC-session-reset guard). */
@@ -285,6 +317,14 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       const effectivePath = getWorkingDirEffectivePath(normalizedEntry);
       if (!normalizedEntry || !effectivePath) return;
 
+      if (stagedDirectoryId) throw new Error(t('directories.boundRoot', { ns: 'project' }));
+      if (activeTopic?.projectWorkingDirectoryId) {
+        const source = getWorkingDirSourcePath(
+          activeTopic.metadata?.workingDirectoryConfig ?? activeTopic.metadata?.workingDirectory,
+        );
+        if (getWorkingDirSourcePath(normalizedEntry) !== source)
+          throw new Error(t('directories.boundRoot', { ns: 'project' }));
+      }
       const run = () => writeCwd(normalizedEntry, options);
 
       // Warn about losing the CLI session only when the SESSION cwd changes.
@@ -308,7 +348,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       }
       await run();
     },
-    [activeTopic, isHetero, t, writeCwd],
+    [activeTopic, isHetero, stagedDirectoryId, t, writeCwd],
   );
 
   /**
@@ -320,17 +360,19 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
    * bakes this value into its own `metadata.workingDirectory` on first send.
    */
   const commitAgentDefault = useCallback(
-    async (newPath: string) => {
+    async (newPath: string, options?: CommitAgentDefaultOptions) => {
       const path = newPath.trim();
       if (!path) return;
       if (targetDeviceId && !isPersonalDeviceTarget) {
-        const prev = agencyConfig?.workingDirByDevice ?? {};
-        await updateAgentConfigById(agentId, {
-          agencyConfig: {
-            ...agencyConfig,
-            workingDirByDevice: { ...prev, [targetDeviceId]: path },
+        await updateAgentConfigById(
+          agentId,
+          {
+            agencyConfig: {
+              workingDirByDevice: { [targetDeviceId]: path },
+            },
           },
-        });
+          { ...options, replaceWorkingDirDeviceIds: [targetDeviceId] },
+        );
       } else {
         // No resolvable device (e.g. gateway id unavailable), or a workspace
         // agent targeting this member's own machine (`isPersonalDeviceTarget`,
@@ -341,7 +383,6 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
     },
     [
       agentId,
-      agencyConfig,
       isPersonalDeviceTarget,
       targetDeviceId,
       updateAgentConfigById,
@@ -368,5 +409,15 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
     await run();
   }, [activeTopic, t, clearCwd]);
 
-  return { clear, commit, commitAgentDefault };
+  return {
+    clear,
+    commit,
+    commitAgentDefault,
+    /**
+     * A workspace agent's device routing (shared row vs. this member's personal
+     * slot) is still resolving. Writers should wait: acting now can file a local
+     * path under the shared device instead of the member's own slot.
+     */
+    isPreferenceLoading,
+  };
 };

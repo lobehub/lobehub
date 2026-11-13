@@ -1,19 +1,20 @@
 'use client';
 
-import { ContextMenuTrigger, Flexbox } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
   accordionStyles,
   AccordionTrigger,
+  ContextMenuTrigger,
+  cx,
+  Flexbox,
+  Spin,
   Text,
-} from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+} from '@lobehub/ui';
 import React, { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useFetchChatTopics } from '@/hooks/useFetchChatTopics';
 import { useChatStore } from '@/store/chat';
@@ -43,7 +44,7 @@ const Topic = memo<TopicProps>(({ itemKey }) => {
               <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
                 {`${t('title')} ${topicCount > 0 ? topicCount : ''}`}
               </Text>
-              {isRevalidating && <NeuralNetworkLoading size={14} />}
+              {isRevalidating && <Spin size="small" variant="network" />}
             </Flexbox>
           </AccordionTrigger>
           <div

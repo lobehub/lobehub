@@ -1,12 +1,19 @@
 # Goal supervision (experimental)
 
-Enable on a new Goal with `lh goal create <title> --supervise` or
-`config.supervision.enabled = true` on `goal.create`. Inspect the independent
-Topic, incidents, operation links and metrics with `lh goal supervision <id>`.
-Existing Goals keep their original behavior unless explicitly enabled at creation.
+Every new Goal is supervised: the server writes `config.supervision.enabled = true`
+at creation, so there is no unsupervised Goal to create and no opt-out to pass.
+`lh goal create <title>` and the `/goal` tool both get it; tune the incident cap
+with `--max-supervision-incidents` (default 10, maximum 100). Inspect the
+independent Topic, incidents, operation links and metrics with
+`lh goal supervision <id>`. Goals created before supervision became mandatory keep
+their original behavior.
 
 The first version covers confirmed transport failures of a failed Task's latest
-error operation. It does not automatically resolve an existing human Gate,
+error operation. That includes provider capacity errors such as 429 or an
+upstream overload. It also covers a usage window that has reset: the
+coordinator holds a Task refused by a session limit until the reset its error
+reports (`waitForQuotaReset`), and only then retries it. Before this, the Task
+went straight to a human Gate. It does not automatically resolve an existing human Gate,
 recover credentials, increase budgets, replace providers, change acceptance,
 repair/deploy the platform or diagnose arbitrary failures. This is a subset of
 the proposed general Goal supervisor, not a claim of unattended long-horizon
@@ -25,7 +32,7 @@ recovery through the ordinary dispatcher. Recovery instructions require checking
 and reusing saved work and reconciling external side effects before replay. This
 instruction is not an exactly-once guarantee for arbitrary external systems.
 
-A five-second scheduled Goal advance checks the asynchronous diagnosis. Existing
+A scheduled Goal advance checks the asynchronous diagnosis, every five seconds at first and backing off to once a minute the longer it stays open. Existing
 sweep infrastructure provides the fallback if the callback is lost. Queue mode
 is required for durable wakeups; local in-process timers alone cannot survive a
 restart. A lost diagnostic dispatch response can be adopted from the dedicated

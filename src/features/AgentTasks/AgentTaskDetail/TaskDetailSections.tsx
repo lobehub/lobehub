@@ -8,6 +8,8 @@ import TaskDetailAssignee from './TaskDetailAssignee';
 import { taskDetailLayoutStyles as styles } from './taskDetailLayoutStyles';
 import TaskDetailRunPauseAction from './TaskDetailRunPauseAction';
 import TaskDetailTitleInput from './TaskDetailTitleInput';
+import TaskExecutionConfig from './TaskExecutionConfig';
+import TaskGoalBar from './TaskGoalBar';
 import TaskInstruction from './TaskInstruction';
 import TaskModelConfig from './TaskModelConfig';
 import TaskParentBar from './TaskParentBar';
@@ -23,27 +25,29 @@ import TaskSubtasks from './TaskSubtasks';
 const TaskDetailSections = memo(() => {
   return (
     <div className={styles.root}>
-      <div className={styles.header}>
+      <div className={styles.grid}>
         <Flexbox className={styles.main} gap={12}>
+          <TaskGoalBar />
           <TaskParentBar />
           <TaskDetailTitleInput />
           <Flexbox horizontal align={'center'} gap={8} style={{ maxWidth: '100%' }} wrap={'wrap'}>
             <TaskDetailRunPauseAction />
             <TaskDetailAssignee />
             <TaskModelConfig />
+            <TaskExecutionConfig />
           </Flexbox>
         </Flexbox>
         <div className={styles.side}>
           <TaskProperties />
         </div>
+        <Flexbox className={styles.body} gap={24}>
+          <TaskInstruction />
+          <TaskAcceptance />
+          <TaskSubtasks />
+          <TaskArtifacts />
+          <TaskActivities />
+        </Flexbox>
       </div>
-      <Flexbox gap={24} style={{ paddingBottom: 120 }}>
-        <TaskInstruction />
-        <TaskAcceptance />
-        <TaskSubtasks />
-        <TaskArtifacts />
-        <TaskActivities />
-      </Flexbox>
     </div>
   );
 });

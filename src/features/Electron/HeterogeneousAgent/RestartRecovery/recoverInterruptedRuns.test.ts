@@ -69,8 +69,11 @@ vi.mock('@/store/chat', () => ({
   useChatStore: { getState: () => chatStore },
 }));
 
+const { mockActiveWorkspaceId } = vi.hoisted(() => ({
+  mockActiveWorkspaceId: vi.fn((): string | null => 'ws-1'),
+}));
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
-  getActiveWorkspaceId: () => 'ws-1',
+  getActiveWorkspaceId: () => mockActiveWorkspaceId(),
 }));
 
 vi.mock('@/store/user', () => ({ getUserStoreState: () => ({}) }));
@@ -105,6 +108,7 @@ const messages = [
 describe('recoverInterruptedHeteroRuns', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockActiveWorkspaceId.mockReturnValue('ws-1');
     agentState.agentMap = {};
     mockListInterruptedRuns.mockResolvedValue([run]);
     mockGetTopicDetail.mockResolvedValue(topic);
@@ -142,6 +146,25 @@ describe('recoverInterruptedHeteroRuns', () => {
     });
   });
 
+  it('replays and resumes in the workspace the ledger was read for, not the one navigated to', async () => {
+    // The user switches workspace while recovery awaits; the run still belongs to ws-1.
+    mockListInterruptedRuns.mockImplementation(async () => {
+      mockActiveWorkspaceId.mockReturnValue('ws-2');
+      return [run];
+    });
+    mockRunHetero
+      .mockResolvedValueOnce({ assistantMessageId: 'a-new', replayComplete: false })
+      .mockResolvedValueOnce({ assistantMessageId: 'a-cont' });
+
+    await recoverInterruptedHeteroRuns();
+
+    expect(mockRunHetero).toHaveBeenCalledTimes(2);
+    expect(mockRunHetero.mock.calls.map(([, params]) => params.workspaceId)).toEqual([
+      'ws-1',
+      'ws-1',
+    ]);
+  });
+
   it('does nothing when the ledger is empty', async () => {
     mockListInterruptedRuns.mockResolvedValue([]);
 
@@ -173,10 +196,12 @@ describe('recoverInterruptedHeteroRuns', () => {
     expect(mockResolveRunContext).toHaveBeenCalled();
     expect(chatStore.updateTopicMetadata).not.toHaveBeenCalled();
     // Only the interrupted turn's own rows go; earlier turns and thread rows stay.
-    expect(mockRemoveMessages).toHaveBeenCalledWith(['a1', 't1'], {
-      agentId: 'agent-1',
-      topicId: 'topic-1',
-    });
+    expect(mockRemoveMessages).toHaveBeenCalledWith(
+      ['a1', 't1'],
+      { agentId: 'agent-1', topicId: 'topic-1' },
+      // superseded partial rows must not land in the recycle bin
+      { permanent: true },
+    );
     // The surviving rows are seeded into the store before the run, so the user
     // turn renders while the topic's own fetch is gated off by the running op.
     expect(chatStore.replaceMessages).toHaveBeenCalledWith(
@@ -414,10 +439,12 @@ describe('recoverInterruptedHeteroRuns', () => {
     const results = await recoverInterruptedHeteroRuns();
 
     expect(results).toEqual([{ outcome: 'replayed', topicId: 'topic-1' }]);
-    expect(mockRemoveMessages).toHaveBeenCalledWith(['a1', 't1'], {
-      agentId: 'agent-1',
-      topicId: 'topic-1',
-    });
+    expect(mockRemoveMessages).toHaveBeenCalledWith(
+      ['a1', 't1'],
+      { agentId: 'agent-1', topicId: 'topic-1' },
+      // superseded partial rows must not land in the recycle bin
+      { permanent: true },
+    );
   });
 
   it('leaves the topic alone when another device added a newer assistant branch', async () => {
@@ -491,10 +518,12 @@ describe('recoverInterruptedHeteroRuns', () => {
     const results = await recoverInterruptedHeteroRuns();
 
     expect(results).toEqual([{ outcome: 'replayed', topicId: 'topic-1' }]);
-    expect(mockRemoveMessages).toHaveBeenCalledWith(['a1', 't1'], {
-      agentId: 'agent-1',
-      topicId: 'topic-1',
-    });
+    expect(mockRemoveMessages).toHaveBeenCalledWith(
+      ['a1', 't1'],
+      { agentId: 'agent-1', topicId: 'topic-1' },
+      // superseded partial rows must not land in the recycle bin
+      { permanent: true },
+    );
   });
 
   it('does not settle a topic another device took over, even when the probe fails', async () => {
@@ -535,6 +564,49 @@ describe('recoverInterruptedHeteroRuns', () => {
     });
     expect(mockRunHetero).not.toHaveBeenCalled();
     expect(mockRemoveMessages).not.toHaveBeenCalled();
+  });
+
+  it('keeps a follow-up turn chained onto the run tail instead of replaying over it', async () => {
+    // Claude Code SDK: the first turn stays open waiting on background tasks,
+    // so it never leaves the ledger, while the user sends and finishes a second
+    // turn whose user row hangs off the first turn's tail.
+    mockListInterruptedRuns.mockResolvedValue([{ ...run, assistantMessageId: 'a1' }]);
+    mockGetTopicDetail.mockResolvedValue({ ...topic, status: 'active' });
+    mockGetMessages.mockResolvedValue([
+      ...messages,
+      { content: 'follow up', createdAt: 300, id: 'u2', parentId: 't1', role: 'user' },
+      { content: 'ok', createdAt: 310, id: 'a2', parentId: 'u2', role: 'assistant' },
+    ]);
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([
+      { outcome: 'skipped', reason: 'topic-taken-over', topicId: 'topic-1' },
+    ]);
+    expect(mockRemoveMessages).not.toHaveBeenCalled();
+    expect(mockRunHetero).not.toHaveBeenCalled();
+    expect(mockReleaseInterruptedRun).toHaveBeenCalledWith('ipc-1');
+  });
+
+  it('keeps a follow-up turn even when the stuck run wrote a row after it', async () => {
+    // The open SDK run finishes its background task after the follow-up turn
+    // answered, so its own late row is the newest on the topic.
+    mockListInterruptedRuns.mockResolvedValue([{ ...run, assistantMessageId: 'a1' }]);
+    mockGetTopicDetail.mockResolvedValue({ ...topic, status: 'active' });
+    mockGetMessages.mockResolvedValue([
+      ...messages,
+      { content: 'follow up', createdAt: 300, id: 'u2', parentId: 't1', role: 'user' },
+      { content: 'ok', createdAt: 310, id: 'a2', parentId: 'u2', role: 'assistant' },
+      { content: 'late', createdAt: 400, id: 'a3', parentId: 't1', role: 'assistant' },
+    ]);
+
+    const results = await recoverInterruptedHeteroRuns();
+
+    expect(results).toEqual([
+      { outcome: 'skipped', reason: 'topic-taken-over', topicId: 'topic-1' },
+    ]);
+    expect(mockRemoveMessages).not.toHaveBeenCalled();
+    expect(mockRunHetero).not.toHaveBeenCalled();
   });
 
   it('leaves a topic alone when a newer turn took it over while the app was down', async () => {
@@ -680,9 +752,11 @@ describe('recoverInterruptedHeteroRuns', () => {
     const results = await recoverInterruptedHeteroRuns();
 
     expect(results).toEqual([{ outcome: 'replayed', topicId: 'topic-1' }]);
-    expect(mockRemoveMessages).toHaveBeenCalledWith(['a1', 't1'], {
-      agentId: 'agent-1',
-      topicId: 'topic-1',
-    });
+    expect(mockRemoveMessages).toHaveBeenCalledWith(
+      ['a1', 't1'],
+      { agentId: 'agent-1', topicId: 'topic-1' },
+      // superseded partial rows must not land in the recycle bin
+      { permanent: true },
+    );
   });
 });

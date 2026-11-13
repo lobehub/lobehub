@@ -56,6 +56,9 @@ export const getLLMConfig = () => {
       ENABLED_MINIMAX: z.boolean(),
       MINIMAX_API_KEY: z.string().optional(),
 
+      ENABLED_ELEVENLABS: z.boolean(),
+      ELEVENLABS_API_KEY: z.string().optional(),
+
       ENABLED_MISTRAL: z.boolean(),
       MISTRAL_API_KEY: z.string().optional(),
 
@@ -67,6 +70,9 @@ export const getLLMConfig = () => {
 
       ENABLED_OPENROUTER: z.boolean(),
       OPENROUTER_API_KEY: z.string().optional(),
+
+      ENABLED_TYPESAFE: z.boolean(),
+      TYPESAFE_API_KEY: z.string().optional(),
 
       ENABLED_ZEROONE: z.boolean(),
       ZEROONE_API_KEY: z.string().optional(),
@@ -300,11 +306,17 @@ export const getLLMConfig = () => {
       ENABLED_MINIMAX: !!process.env.MINIMAX_API_KEY,
       MINIMAX_API_KEY: process.env.MINIMAX_API_KEY,
 
+      ENABLED_ELEVENLABS: !!process.env.ELEVENLABS_API_KEY,
+      ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
+
       ENABLED_MISTRAL: !!process.env.MISTRAL_API_KEY,
       MISTRAL_API_KEY: process.env.MISTRAL_API_KEY,
 
       ENABLED_OPENROUTER: !!process.env.OPENROUTER_API_KEY,
       OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+
+      ENABLED_TYPESAFE: !!process.env.TYPESAFE_API_KEY,
+      TYPESAFE_API_KEY: process.env.TYPESAFE_API_KEY,
 
       ENABLED_TOGETHERAI: !!process.env.TOGETHERAI_API_KEY,
       TOGETHERAI_API_KEY: process.env.TOGETHERAI_API_KEY,

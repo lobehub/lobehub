@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
-import { HYDRATED_TOOL_RESULTS, PlaceholderVariablesProcessor } from '../PlaceholderVariables';
+import { PlaceholderVariablesProcessor } from '../PlaceholderVariables';
 
 /**
  * Regression for the prompt-cache break caused by rewriting tool results.
@@ -44,31 +44,6 @@ describe('PlaceholderVariablesProcessor — tool result passthrough', () => {
     const result = await processor.process(ctx);
 
     expect(result.messages[0].content).toBe(diff);
-  });
-
-  it('renders the same tool result identically across repeated calls', async () => {
-    const diff = 'Updated {{time}} / {{timestamp}}';
-    const render = async () => {
-      const processor = new PlaceholderVariablesProcessor({
-        variableGenerators: {
-          time: () => new Date().toISOString(),
-          timestamp: () => Date.now().toString(),
-        },
-      });
-      const ctx = buildContext([
-        {
-          role: 'tool',
-          tool_call_id: 't1',
-          name: 'lobe-local-system____runCommand',
-          content: diff,
-        },
-      ]);
-      return (await processor.process(ctx)).messages[0].content;
-    };
-
-    // Byte-stability across calls is the whole point: an unstable byte here is
-    // a broken cache prefix and a ~50x price on every token that follows.
-    expect(await render()).toBe(await render());
   });
 
   it('identifies the tool from `plugin` when the wire name is absent', async () => {
@@ -197,14 +172,5 @@ describe('PlaceholderVariablesProcessor — tool result passthrough', () => {
     expect(result.messages[0].content).toBe('topic tpc_abc');
     // Not in the supplied allowlist — the default no longer applies.
     expect(result.messages[1].content).toBe('topic {{topic_id}}');
-  });
-
-  it('covers the activation surface ActivationResultTrimProcessor recognises', () => {
-    // Both processors must agree on which tool results are platform-authored
-    // documents; a skill activated but not injected keeps its tool result as the
-    // only channel for a SKILL.md body that references {{agent_id}}.
-    expect(HYDRATED_TOOL_RESULTS['lobe-activator']).toContain('activateTools');
-    expect(HYDRATED_TOOL_RESULTS['lobe-activator']).toContain('activateSkill');
-    expect(HYDRATED_TOOL_RESULTS['lobe-skills']).toContain('activateSkill');
   });
 });

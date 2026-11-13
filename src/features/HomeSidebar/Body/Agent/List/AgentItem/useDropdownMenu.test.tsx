@@ -12,7 +12,9 @@ const mocks = vi.hoisted(() => ({
   canManageResource: false,
   canManage: false,
   confirmModal: vi.fn(),
+  copyToClipboard: vi.fn(),
   toastError: vi.fn(),
+  toastSuccess: vi.fn(),
   activeWorkspaceId: 'workspace-1' as string | null,
   home: {
     duplicateAgent: vi.fn(),
@@ -21,9 +23,11 @@ const mocks = vi.hoisted(() => ({
     removeAgent: vi.fn(),
     toggleAgentLabel: vi.fn(),
     updateAgentGroup: vi.fn(),
+    updateAgentMeta: vi.fn(),
   },
   navigate: vi.fn(),
   openAgentInNewWindow: vi.fn(),
+  openRenameModal: vi.fn(),
   setSidebarItemVisible: vi.fn(),
   transferMenuItems: null as null | { key: string; label: string }[],
 }));
@@ -41,10 +45,11 @@ vi.mock('antd', async (importOriginal) => {
   };
 });
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   confirmModal: mocks.confirmModal,
-  toast: { error: mocks.toastError, success: vi.fn() },
+  copyToClipboard: mocks.copyToClipboard,
+  toast: { error: mocks.toastError, success: mocks.toastSuccess },
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
@@ -55,7 +60,7 @@ vi.mock('@/business/client/hooks/useAgentTransferMenuItem', () => ({
   useAgentTransferMenuItem: () => mocks.transferMenuItems,
 }));
 
-vi.mock('@/features/EditingPopover/store', () => ({ openEditingPopover: vi.fn() }));
+vi.mock('@/components/RenameModal', () => ({ openRenameModal: mocks.openRenameModal }));
 
 vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
   useResourceAccess: () => ({
@@ -138,6 +143,42 @@ const getMenuLayout = (items: ReturnType<ReturnType<typeof useAgentDropdownMenu>
     return [];
   });
 
+const getMenuItem = (
+  items: ReturnType<ReturnType<typeof useAgentDropdownMenu>>,
+  key: string,
+): { onClick: (info: { domEvent: { stopPropagation: () => void } }) => void } => {
+  const found = (items ?? []).find(
+    (item) => item && typeof item === 'object' && 'key' in item && item.key === key,
+  ) as { onClick: (info: { domEvent: { stopPropagation: () => void } }) => void } | undefined;
+  if (!found) throw new Error(`Expected ${key} menu item`);
+  return found;
+};
+
+type PublicAgentMenuOptions = Partial<
+  Pick<
+    Parameters<typeof useAgentDropdownMenu>[0],
+    'id' | 'labelsEnabled' | 'sidebarVisibilityEnabled'
+  >
+>;
+
+const renderPublicAgentMenu = (
+  userId: string,
+  { id = 'agent-1', labelsEnabled, sidebarVisibilityEnabled }: PublicAgentMenuOptions = {},
+) =>
+  renderHook(() =>
+    useAgentDropdownMenu({
+      group: undefined,
+      id,
+      ...(labelsEnabled === undefined ? {} : { labelsEnabled }),
+      openCreateGroupModal: vi.fn(),
+      pinned: false,
+      ...(sidebarVisibilityEnabled === undefined ? {} : { sidebarVisibilityEnabled }),
+      title: 'Public Agent',
+      userId,
+      visibility: 'public',
+    }),
+  );
+
 describe('useAgentDropdownMenu', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -151,42 +192,20 @@ describe('useAgentDropdownMenu', () => {
   });
 
   it('keeps non-config actions available to a use-only Workspace member', () => {
-    const { result } = renderHook(() =>
-      useAgentDropdownMenu({
-        anchor: null,
-        group: undefined,
-        id: 'agent-1',
-        openCreateGroupModal: vi.fn(),
-        pinned: false,
-        title: 'Public Agent',
-        userId: 'creator-1',
-        visibility: 'public',
-      }),
-    );
+    const { result } = renderPublicAgentMenu('creator-1');
 
     expect(getMenuKeys(result.current())).toEqual([
       'pin',
       'hideFromSidebar',
       'openInNewWindow',
+      'copyAgentId',
       'duplicate',
       'moveGroup',
     ]);
   });
 
   it('shows the Labels submenu only where it is enabled (the agents list page)', () => {
-    const { result } = renderHook(() =>
-      useAgentDropdownMenu({
-        anchor: null,
-        group: undefined,
-        id: 'agent-1',
-        labelsEnabled: true,
-        openCreateGroupModal: vi.fn(),
-        pinned: false,
-        title: 'Public Agent',
-        userId: 'creator-1',
-        visibility: 'public',
-      }),
-    );
+    const { result } = renderPublicAgentMenu('creator-1', { labelsEnabled: true });
 
     expect(getMenuKeys(result.current())).toContain('labels');
   });
@@ -197,19 +216,7 @@ describe('useAgentDropdownMenu', () => {
     // server agrees (role scope only, no per-resource check).
     mocks.canEditResource = false;
 
-    const { result } = renderHook(() =>
-      useAgentDropdownMenu({
-        anchor: null,
-        group: undefined,
-        id: 'agent-1',
-        labelsEnabled: true,
-        openCreateGroupModal: vi.fn(),
-        pinned: false,
-        title: 'Public Agent',
-        userId: 'creator-1',
-        visibility: 'public',
-      }),
-    );
+    const { result } = renderPublicAgentMenu('creator-1', { labelsEnabled: true });
 
     expect(getMenuKeys(result.current())).toContain('labels');
   });
@@ -219,19 +226,7 @@ describe('useAgentDropdownMenu', () => {
     // this is the line labelling still respects.
     mocks.canEdit = false;
 
-    const { result } = renderHook(() =>
-      useAgentDropdownMenu({
-        anchor: null,
-        group: undefined,
-        id: 'agent-1',
-        labelsEnabled: true,
-        openCreateGroupModal: vi.fn(),
-        pinned: false,
-        title: 'Public Agent',
-        userId: 'creator-1',
-        visibility: 'public',
-      }),
-    );
+    const { result } = renderPublicAgentMenu('creator-1', { labelsEnabled: true });
 
     expect(getMenuKeys(result.current())).not.toContain('labels');
   });
@@ -240,35 +235,28 @@ describe('useAgentDropdownMenu', () => {
     mocks.canCreate = false;
     mocks.canEdit = false;
 
-    const { result } = renderHook(() =>
-      useAgentDropdownMenu({
-        anchor: null,
-        group: undefined,
-        id: 'agent-1',
-        openCreateGroupModal: vi.fn(),
-        pinned: false,
-        title: 'Public Agent',
-        userId: 'creator-1',
-        visibility: 'public',
-      }),
-    );
+    const { result } = renderPublicAgentMenu('creator-1');
 
-    expect(getMenuKeys(result.current())).toEqual(['hideFromSidebar', 'openInNewWindow']);
+    expect(getMenuKeys(result.current())).toEqual([
+      'hideFromSidebar',
+      'openInNewWindow',
+      'copyAgentId',
+    ]);
+  });
+
+  it('copies the Agent ID from the row menu', async () => {
+    const { result } = renderPublicAgentMenu('creator-1', { id: 'agt_sidebar' });
+
+    const stopPropagation = vi.fn();
+    await getMenuItem(result.current(), 'copyAgentId').onClick({ domEvent: { stopPropagation } });
+
+    expect(stopPropagation).toHaveBeenCalled();
+    expect(mocks.copyToClipboard).toHaveBeenCalledWith('agt_sidebar');
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('agent.copyIdSuccess');
   });
 
   it('hides an Agent through the caller sidebar preference', async () => {
-    const { result } = renderHook(() =>
-      useAgentDropdownMenu({
-        anchor: null,
-        group: undefined,
-        id: 'agent-1',
-        openCreateGroupModal: vi.fn(),
-        pinned: false,
-        title: 'Public Agent',
-        userId: 'member-1',
-        visibility: 'public',
-      }),
-    );
+    const { result } = renderPublicAgentMenu('member-1');
 
     const hideItem = (result.current() ?? []).find(
       (item) => item && typeof item === 'object' && item.key === 'hideFromSidebar',
@@ -280,6 +268,15 @@ describe('useAgentDropdownMenu', () => {
     await hideItem.onClick({ domEvent: { stopPropagation: vi.fn() } } as never);
 
     expect(mocks.setSidebarItemVisible).toHaveBeenCalledWith('agent-1', false);
+  });
+
+  it('omits the hide action for lists that ignore the sidebar preference', () => {
+    const { result } = renderPublicAgentMenu('member-1', { sidebarVisibilityEnabled: false });
+
+    const keys = (result.current() ?? []).map((item) =>
+      item && typeof item === 'object' && 'key' in item ? item.key : undefined,
+    );
+    expect(keys).not.toContain('hideFromSidebar');
   });
 
   it('tells the user to wait when delete is refused by a pending history migration', async () => {
@@ -294,18 +291,7 @@ describe('useAgentDropdownMenu', () => {
       }),
     );
 
-    const { result } = renderHook(() =>
-      useAgentDropdownMenu({
-        anchor: null,
-        group: undefined,
-        id: 'agent-1',
-        openCreateGroupModal: vi.fn(),
-        pinned: false,
-        title: 'Public Agent',
-        userId: 'member-1',
-        visibility: 'public',
-      }),
-    );
+    const { result } = renderPublicAgentMenu('member-1');
 
     const deleteItem = (result.current() ?? []).find(
       (item) => item && typeof item === 'object' && 'key' in item && item.key === 'delete',
@@ -322,18 +308,7 @@ describe('useAgentDropdownMenu', () => {
   it('stays native-eligible (string labels only, including the Move to Category submenu)', () => {
     mocks.canEditResource = true;
 
-    const { result } = renderHook(() =>
-      useAgentDropdownMenu({
-        anchor: null,
-        group: undefined,
-        id: 'agent-1',
-        openCreateGroupModal: vi.fn(),
-        pinned: false,
-        title: 'Public Agent',
-        userId: 'member-1',
-        visibility: 'public',
-      }),
-    );
+    const { result } = renderPublicAgentMenu('member-1');
 
     expect(canGoNative(result.current() ?? [])).toBe(true);
   });
@@ -344,23 +319,13 @@ describe('useAgentDropdownMenu', () => {
     mocks.canManageResource = true;
     mocks.transferMenuItems = [{ key: 'copy-agent', label: 'Copy to…' }];
 
-    const { result } = renderHook(() =>
-      useAgentDropdownMenu({
-        anchor: null,
-        group: undefined,
-        id: 'agent-1',
-        openCreateGroupModal: vi.fn(),
-        pinned: false,
-        title: 'Public Agent',
-        userId: 'member-1',
-        visibility: 'public',
-      }),
-    );
+    const { result } = renderPublicAgentMenu('member-1');
 
     expect(getMenuLayout(result.current())).toEqual([
       'pin',
       'hideFromSidebar',
       'openInNewWindow',
+      'copyAgentId',
       'divider',
       'rename',
       'duplicate',
@@ -377,18 +342,7 @@ describe('useAgentDropdownMenu', () => {
   it('hides the Permission shortcut from a non-author member who can configure the agent', () => {
     mocks.canEditResource = true;
 
-    const { result } = renderHook(() =>
-      useAgentDropdownMenu({
-        anchor: null,
-        group: undefined,
-        id: 'agent-1',
-        openCreateGroupModal: vi.fn(),
-        pinned: false,
-        title: 'Public Agent',
-        userId: 'member-1',
-        visibility: 'public',
-      }),
-    );
+    const { result } = renderPublicAgentMenu('member-1');
 
     expect(getMenuKeys(result.current())).not.toContain('permission');
   });
@@ -397,18 +351,7 @@ describe('useAgentDropdownMenu', () => {
     mocks.canEditResource = true;
     mocks.canManageResource = true;
 
-    const { result } = renderHook(() =>
-      useAgentDropdownMenu({
-        anchor: null,
-        group: undefined,
-        id: 'agent-1',
-        openCreateGroupModal: vi.fn(),
-        pinned: false,
-        title: 'Public Agent',
-        userId: 'member-1',
-        visibility: 'public',
-      }),
-    );
+    const { result } = renderPublicAgentMenu('member-1');
 
     const permissionItem = (result.current() ?? []).find(
       (item) => item && typeof item === 'object' && 'key' in item && item.key === 'permission',
@@ -427,7 +370,6 @@ describe('useAgentDropdownMenu', () => {
 
     const { result } = renderHook(() =>
       useAgentDropdownMenu({
-        anchor: null,
         group: undefined,
         id: 'agent-1',
         openCreateGroupModal: vi.fn(),
@@ -439,5 +381,63 @@ describe('useAgentDropdownMenu', () => {
     );
 
     expect(getMenuKeys(result.current())).not.toContain('permission');
+  });
+  it('renames through the shared modal, writing the field the row label came from', async () => {
+    mocks.canEditResource = true;
+
+    const { result } = renderHook(() =>
+      useAgentDropdownMenu({
+        group: undefined,
+        id: 'agent-1',
+        name: 'Claude Code',
+        openCreateGroupModal: vi.fn(),
+        pinned: false,
+        title: 'Claude Code',
+        userId: 'member-1',
+        visibility: 'public',
+      }),
+    );
+
+    getMenuItem(result.current(), 'rename').onClick({ domEvent: { stopPropagation: vi.fn() } });
+
+    expect(mocks.openRenameModal).toHaveBeenCalledOnce();
+    const { defaultValue, onSave } = mocks.openRenameModal.mock.calls[0][0] as {
+      defaultValue: string;
+      onSave: (next: string) => Promise<void>;
+    };
+    expect(defaultValue).toBe('Claude Code');
+
+    await onSave('Claude Code 2');
+
+    // The row shows `name`, so that is what a rename writes — never the role.
+    expect(mocks.home.updateAgentMeta).toHaveBeenCalledWith('agent-1', { name: 'Claude Code 2' });
+  });
+
+  it('renames the role only when there is no name to show', async () => {
+    mocks.canEditResource = true;
+
+    const { result } = renderHook(() =>
+      useAgentDropdownMenu({
+        group: undefined,
+        id: 'agent-1',
+        name: null,
+        openCreateGroupModal: vi.fn(),
+        pinned: false,
+        title: 'Health Assistant',
+        userId: 'member-1',
+        visibility: 'public',
+      }),
+    );
+
+    getMenuItem(result.current(), 'rename').onClick({ domEvent: { stopPropagation: vi.fn() } });
+
+    const { onSave } = mocks.openRenameModal.mock.calls[0][0] as {
+      onSave: (next: string) => Promise<void>;
+    };
+    await onSave('Care Assistant');
+
+    expect(mocks.home.updateAgentMeta).toHaveBeenCalledWith('agent-1', {
+      title: 'Care Assistant',
+    });
   });
 });

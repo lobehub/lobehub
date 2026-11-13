@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import {
   Activity,
   Award,
@@ -21,7 +20,9 @@ import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
-import { runSelectors, useEvalStore } from '@/store/eval';
+import BenchmarkLeaderboard from '@/features/LobeBench/BenchmarkLeaderboard';
+import { useIsLobeBenchBenchmark } from '@/features/LobeBench/useIsLobeBenchBenchmark';
+import { datasetSelectors, runSelectors, useEvalStore } from '@/store/eval';
 
 import BenchmarkHeader from './features/BenchmarkHeader';
 import DatasetsTab from './features/DatasetsTab';
@@ -84,11 +85,12 @@ const BenchmarkDetail = memo(() => {
     benchmarkId ? s.benchmarkDetailMap[benchmarkId] : undefined,
   );
   const useFetchDatasets = useEvalStore((s) => s.useFetchDatasets);
-  const datasets = useEvalStore((s) => s.datasetList);
-  const isLoadingDatasets = useEvalStore((s) => s.isLoadingDatasets);
+  const datasets = useEvalStore(datasetSelectors.datasetList(benchmarkId));
+  const isLoadingDatasets = useEvalStore(datasetSelectors.isLoadingDatasetList(benchmarkId));
   const refreshDatasets = useEvalStore((s) => s.refreshDatasets);
   const useFetchRuns = useEvalStore((s) => s.useFetchRuns);
-  const runList = useEvalStore(runSelectors.runList);
+  const runList = useEvalStore(runSelectors.runList(benchmarkId));
+  const lobeBench = useIsLobeBenchBenchmark(benchmarkId);
 
   const { error, isLoading, mutate } = useFetchBenchmarkDetail(benchmarkId);
   useFetchDatasets(benchmarkId);
@@ -126,9 +128,13 @@ const BenchmarkDetail = memo(() => {
         datasets={datasets}
         runCount={runList.length}
         systemIcon={systemIcon}
+        topLabel={lobeBench ? t('benchmark.detail.stats.topModels') : undefined}
         totalCases={totalCases}
         onBenchmarkUpdate={handleBenchmarkUpdate}
       />
+
+      {/* A Lobe Bench benchmark ranks its contenders here too, as on its Lobe Bench page. */}
+      {lobeBench && <BenchmarkLeaderboard benchmarkId={benchmarkId!} />}
 
       {/* Tags */}
       {(benchmark as any).tags && (benchmark as any).tags.length > 0 && (

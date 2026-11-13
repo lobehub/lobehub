@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Divider } from 'antd';
-import { cssVar } from 'antd-style';
+import { cssVar, Divider, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -35,7 +33,7 @@ const ParameterItem = memo<ParameterItemProps>(
             {t('models.parameterList.docs')}
           </a>
         </p>
-        <Divider dashed style={{ margin: 0 }} />
+        <Divider dashed />
         <Flexbox horizontal align={'center'} gap={16} style={{ paddingBottom: 8 }} wrap={'wrap'}>
           <Statistic
             gap={4}

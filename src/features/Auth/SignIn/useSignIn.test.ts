@@ -33,7 +33,7 @@ vi.mock('react-router', () => ({
   useSearchParams: () => [{ get: mockSearchParamsGet }],
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   toast: { error: mockMessageError, success: mockMessageSuccess },
 }));
@@ -81,31 +81,17 @@ vi.mock('@/features/AuthShell/AuthServerConfigProvider', () => ({
     }),
 }));
 
-const mockSetFieldValue = vi.fn();
-const mockGetFieldValue = vi.fn();
-const mockValidateFields = vi.fn();
-const mockSetFields = vi.fn();
-const mockResetFields = vi.fn();
-const mockSubmit = vi.fn();
-vi.mock('antd', async () => {
-  const actual: any = await vi.importActual('antd');
-  return {
-    ...actual,
-    Form: {
-      ...actual.Form,
-      useForm: () => [
-        {
-          getFieldValue: mockGetFieldValue,
-          resetFields: mockResetFields,
-          setFields: mockSetFields,
-          setFieldValue: mockSetFieldValue,
-          submit: mockSubmit,
-          validateFields: mockValidateFields,
-        },
-      ],
-    },
-  };
-});
+const mockForm = vi.hoisted(() => ({
+  getValue: vi.fn(),
+  getValues: vi.fn(() => ({ email: 'user@example.com', password: 'stale' })),
+  reset: vi.fn(),
+  setErrors: vi.fn(),
+  setValue: vi.fn(),
+  validate: vi.fn(),
+}));
+vi.mock('@lobehub/ui/form', () => ({
+  useForm: () => mockForm,
+}));
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -322,16 +308,16 @@ describe('useSignIn', () => {
       });
 
       // Error is pinned inline on the password field, not shown as a toast
-      expect(mockSetFields).toHaveBeenCalledWith([
-        { errors: ['Invalid credentials'], name: 'password' },
-      ]);
+      expect(mockForm.setErrors).toHaveBeenCalledWith({ password: 'Invalid credentials' });
       expect(mockMessageError).not.toHaveBeenCalled();
     });
 
-    it('should redirect to verify-email on 403', async () => {
+    it('should redirect to verify-email when the email is not verified', async () => {
       mockSignInEmail.mockImplementation(async (_data: any, opts: any) => {
-        opts.onError({ error: { status: 403 } });
-        return { error: { message: 'Email not verified', status: 403 } };
+        opts.onError({ error: { code: 'EMAIL_NOT_VERIFIED', status: 403 } });
+        return {
+          error: { code: 'EMAIL_NOT_VERIFIED', message: 'Email not verified', status: 403 },
+        };
       });
 
       mockFetch.mockResolvedValueOnce({
@@ -352,6 +338,32 @@ describe('useSignIn', () => {
       expect(mockNavigate).toHaveBeenCalledWith(
         expect.stringContaining('/verify-email?email=user%40example.com'),
       );
+      expect(mockForm.setErrors).not.toHaveBeenCalled();
+    });
+
+    it('should surface a non-verification 403 inline instead of redirecting', async () => {
+      mockSignInEmail.mockImplementation(async (_data: any, opts: any) => {
+        opts.onError({ error: { code: 'BANNED_USER', status: 403 } });
+        return { error: { code: 'BANNED_USER', message: 'You have been banned', status: 403 } };
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        json: async () => ({ exists: true, hasPassword: true }),
+        ok: true,
+      });
+
+      const { result } = renderHook(() => useSignIn());
+
+      await act(async () => {
+        await result.current.handleCheckUser({ email: 'user@example.com' });
+      });
+
+      await act(async () => {
+        await result.current.handleSignIn({ password: 'password' });
+      });
+
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(mockForm.setErrors).toHaveBeenCalledWith({ password: 'You have been banned' });
     });
   });
 
@@ -532,7 +544,7 @@ describe('useSignIn', () => {
       expect(result.current.isSocialOnly).toBe(false);
       // The shared form's password (+ any inline error) must be cleared so the
       // next email doesn't remount pre-filled with the previous account's value.
-      expect(mockResetFields).toHaveBeenCalledWith(['password']);
+      expect(mockForm.reset).toHaveBeenCalledWith({ email: 'user@example.com', password: '' });
     });
   });
 
@@ -718,7 +730,7 @@ describe('useSignIn', () => {
       expect(result.current.step).toBe('email');
       expect(result.current.email).toBe('');
       expect(result.current.sentInfo).toBeNull();
-      expect(mockResetFields).toHaveBeenCalledWith(['password']);
+      expect(mockForm.reset).toHaveBeenCalledWith({ email: 'user@example.com', password: '' });
     });
   });
 

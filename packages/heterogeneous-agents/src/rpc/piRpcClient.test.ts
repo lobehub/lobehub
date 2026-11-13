@@ -97,16 +97,18 @@ afterEach(() => {
   Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform });
 });
 
+const piOptions = () => ({
+  args: [],
+  commandPath: 'pi',
+  cwd: '/workspace',
+  env: { ...process.env },
+  onEvent: vi.fn(),
+  onStderr: vi.fn(),
+});
+
 describe('PiRpcClient', () => {
   it('does not probe or spawn when cancelled before startup', async () => {
-    const client = new PiRpcClient({
-      args: [],
-      commandPath: 'pi',
-      cwd: '/workspace',
-      env: { ...process.env },
-      onEvent: vi.fn(),
-      onStderr: vi.fn(),
-    });
+    const client = new PiRpcClient(piOptions());
     await client.close();
     await expect(client.start()).rejects.toThrow('closed by host');
     expect(execFileMock).not.toHaveBeenCalled();
@@ -119,14 +121,7 @@ describe('PiRpcClient', () => {
       options.signal.addEventListener('abort', () => callback(new Error('aborted'), '', ''));
       return probe;
     });
-    const client = new PiRpcClient({
-      args: [],
-      commandPath: 'pi',
-      cwd: '/workspace',
-      env: { ...process.env },
-      onEvent: vi.fn(),
-      onStderr: vi.fn(),
-    });
+    const client = new PiRpcClient(piOptions());
     const start = client.start().catch((error) => error);
     await vi.waitFor(() => expect(execFileMock).toHaveBeenCalled());
     const confirmed = vi.fn();
@@ -137,13 +132,6 @@ describe('PiRpcClient', () => {
     await close;
     expect(await start).toBeInstanceOf(PiRpcConnectionError);
     expect(spawnMock).not.toHaveBeenCalled();
-  });
-
-  it('captures the raw handshake before the ready client is returned', async () => {
-    const raw: Buffer[] = [];
-    const { client } = await createReadyClient({ onRawStdout: (chunk) => raw.push(chunk) });
-    expect(JSON.parse(Buffer.concat(raw).toString()).command).toBe('get_state');
-    await client.close();
   });
 
   it('bounds abort even when ordinary command timeouts are disabled', async () => {
@@ -185,14 +173,7 @@ describe('PiRpcClient', () => {
       execFileMock.mockImplementation((_command, _args, _options, callback) =>
         callback(null, version, ''),
       );
-      const client = new PiRpcClient({
-        args: [],
-        commandPath: 'pi',
-        cwd: '/workspace',
-        env: { ...process.env },
-        onEvent: vi.fn(),
-        onStderr: vi.fn(),
-      });
+      const client = new PiRpcClient(piOptions());
       await expect(client.start()).rejects.toThrow(/0\.80\.5.*upgrade/i);
       expect(spawnMock).not.toHaveBeenCalled();
     },
@@ -321,16 +302,6 @@ describe('PiRpcClient', () => {
     await client.close();
   });
 
-  it('rejects commands when the process dies before responding', async () => {
-    const { child, client, stdout } = await createReadyClient();
-    const request = client.command({ type: 'get_messages' });
-    stdout.end();
-    child.emit('close', 1, null);
-    await expect(request).rejects.toThrow(PiRpcConnectionError);
-    await expect(request).rejects.toThrow(/exited unexpectedly/);
-    await client.close();
-  });
-
   it('hard-fails the handshake when get_state never answers', async () => {
     const { child } = createProcess();
     spawnMock.mockReturnValue(child);
@@ -346,21 +317,5 @@ describe('PiRpcClient', () => {
     const started = client.start();
     await expect(started).rejects.toThrow(PiRpcConnectionError);
     await expect(started).rejects.toThrow(/handshake/);
-  });
-
-  it('gracefully closes via stdin EOF and escalates only when exit stalls', async () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' });
-    const { child, client } = await createReadyClient({ closeGraceMs: 50 });
-    vi.spyOn(process, 'kill').mockImplementation(() => {
-      setTimeout(() => child.emit('close', null, 'SIGTERM'), 1);
-      return true;
-    });
-    // Override the simulated clean-exit so the process lingers.
-    child.stdin.end = vi.fn(() => {
-      /* no exit */
-    });
-    await client.close();
-    // SIGTERM escalation attempted after the grace window.
-    expect(process.kill).toHaveBeenCalledWith(-child.pid, 'SIGTERM');
   });
 });

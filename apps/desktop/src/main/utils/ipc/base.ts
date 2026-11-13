@@ -5,6 +5,8 @@ import { ipcMain } from 'electron';
 
 import { toIpcErrorEnvelope } from '~common/ipcError';
 
+import { isTrustedIpcSender } from './sender';
+
 // Base context for IPC methods
 export interface IpcContext {
   event: IpcMainInvokeEvent;
@@ -58,6 +60,13 @@ export class IpcHandler {
         event,
         sender: event.sender,
       };
+
+      if (!isTrustedIpcSender(event)) {
+        console.warn(
+          `Rejected IPC method ${channel} from untrusted frame: ${event.senderFrame?.url ?? '<gone>'}`,
+        );
+        return toIpcErrorEnvelope(new Error(`IPC method ${channel} rejected: untrusted sender`));
+      }
 
       return ipcContextStorage.run(context, async () => {
         try {

@@ -1,11 +1,30 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { executeDeviceRpc } from '../dispatch';
+import {
+  APP_UPDATE_UNSUPPORTED_MESSAGE,
+  CLI_UPDATE_UNSUPPORTED_MESSAGE,
+  DEVICE_RPC_METHODS,
+  deviceRpcClients,
+  executeDeviceRpc,
+  TERMINAL_UNSUPPORTED_MESSAGE,
+  TRASH_UNSUPPORTED_MESSAGE,
+} from '../dispatch';
 import type { DeviceControlDeps } from '../types';
+import { WORKSPACE_ESCAPE_MESSAGE } from '../workspaceGuard';
 
 let root: string;
 let deviceHome: string;
@@ -53,9 +72,69 @@ const makeDeps = (): DeviceControlDeps => ({
 });
 
 describe('executeDeviceRpc', () => {
+  it.each(['getCliUpdateState', 'checkCliUpdate', 'restartCli'])(
+    'rejects missing CLI handler %s with a stable reason',
+    async (method) => {
+      await expect(executeDeviceRpc(method, {}, makeDeps())).rejects.toThrow(
+        CLI_UPDATE_UNSUPPORTED_MESSAGE,
+      );
+      expect(DEVICE_RPC_METHODS).toContain(method);
+    },
+  );
+
+  it('dispatches CLI maintenance and preserves the restart idempotency key', async () => {
+    const state = {
+      activeTasks: 0,
+      currentVersion: '1.0.0',
+      instanceId: 'instance',
+      supported: true,
+    };
+    const restart = { requestId: '89d177cf-52e5-4d55-b71c-13deef4ea366', update: true };
+    const deps = {
+      ...makeDeps(),
+      checkCliUpdate: vi.fn(async () => state),
+      getCliUpdateState: vi.fn(async () => state),
+      restartCli: vi.fn(async () => state),
+    };
+    for (const method of ['getCliUpdateState', 'checkCliUpdate', 'restartCli']) {
+      await expect(executeDeviceRpc(method, restart, deps)).resolves.toEqual(state);
+    }
+    expect(deps.restartCli).toHaveBeenCalledWith(restart);
+  });
+
   it('throws on an unknown method', async () => {
     await expect(executeDeviceRpc('nope', {}, makeDeps())).rejects.toThrow(
       'Unknown device RPC method: nope',
+    );
+  });
+
+  describe('app update', () => {
+    const state = { currentVersion: '2.1.0', stage: 'downloaded' as const, targetVersion: '2.2.0' };
+
+    it('routes each app-update method to its host handler', async () => {
+      const deps: DeviceControlDeps = {
+        ...makeDeps(),
+        checkAppUpdate: vi.fn(async () => ({ ...state, stage: 'checking' as const })),
+        getAppUpdateState: vi.fn(async () => state),
+        installAppUpdate: vi.fn(async () => ({ targetVersion: '2.2.0' })),
+      };
+
+      await expect(executeDeviceRpc('getAppUpdateState', undefined, deps)).resolves.toEqual(state);
+      await expect(executeDeviceRpc('checkAppUpdate', undefined, deps)).resolves.toMatchObject({
+        stage: 'checking',
+      });
+      await expect(executeDeviceRpc('installAppUpdate', undefined, deps)).resolves.toEqual({
+        targetVersion: '2.2.0',
+      });
+    });
+
+    it.each(['getAppUpdateState', 'checkAppUpdate', 'installAppUpdate'])(
+      'rejects %s with a stable reason on a host that cannot update itself',
+      async (method) => {
+        await expect(executeDeviceRpc(method, undefined, makeDeps())).rejects.toThrow(
+          APP_UPDATE_UNSUPPORTED_MESSAGE,
+        );
+      },
     );
   });
 
@@ -146,6 +225,17 @@ describe('executeDeviceRpc', () => {
     expect(result.isDirectory).toBe(true);
   });
 
+  it('resolves directory aliases on the device before an execution can lock the path', async () => {
+    const link = path.join(root, 'channel-directory-alias');
+    const directory = path.join(root, 'channel-directory');
+    await mkdir(directory);
+    await symlink(directory, link, 'dir');
+    const direct = await executeDeviceRpc('statPath', { path: directory }, makeDeps());
+    const alias = await executeDeviceRpc('statPath', { path: link }, makeDeps());
+    expect(alias).toEqual(direct);
+    expect(alias).toMatchObject({ canonicalPath: await realpath(directory), isDirectory: true });
+  });
+
   it('browses one directory level with pagination and excludes files and hidden folders', async () => {
     const browseRoot = await mkdtemp(path.join(tmpdir(), 'device-control-browse-'));
     try {
@@ -230,6 +320,14 @@ describe('executeDeviceRpc', () => {
     expect(Array.isArray(result)).toBe(true);
   });
 
+  it('rejects a failed git status instead of reporting a clean working tree', async () => {
+    // Not a git repo → `git status` fails. The client persists this overlay, so
+    // an empty result would wipe every cached dirty marker as "clean".
+    await expect(
+      executeDeviceRpc('getGitWorkingTreeFiles', { path: root }, makeDeps()),
+    ).rejects.toThrow();
+  });
+
   it('routes moveLocalFiles to the shared local-file-shell impl', async () => {
     const oldPath = path.join(root, 'move-src.txt');
     const newPath = path.join(root, 'move-dst.txt');
@@ -273,6 +371,274 @@ describe('executeDeviceRpc', () => {
     expect(await readFile(filePath, 'utf8')).toBe('remote edit');
   });
 
+  it('refuses to overwrite an existing target when routing moveLocalFiles', async () => {
+    const oldPath = path.join(root, 'move-clash-src.txt');
+    const newPath = path.join(root, 'move-clash-dst.txt');
+    await writeFile(oldPath, 'incoming');
+    await writeFile(newPath, 'keep me');
+
+    const [result] = (await executeDeviceRpc(
+      'moveLocalFiles',
+      { items: [{ newPath, oldPath }] },
+      makeDeps(),
+    )) as { error?: string; success: boolean }[];
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('already exists');
+    expect(await readFile(newPath, 'utf8')).toBe('keep me');
+  });
+
+  it('refuses to overwrite an existing sibling when routing renameLocalFile', async () => {
+    const filePath = path.join(root, 'rename-clash-src.txt');
+    await writeFile(filePath, 'incoming');
+    await writeFile(path.join(root, 'rename-clash-dst.txt'), 'keep me');
+
+    const result = (await executeDeviceRpc(
+      'renameLocalFile',
+      { newName: 'rename-clash-dst.txt', path: filePath },
+      makeDeps(),
+    )) as { error?: string; success: boolean };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('already exists');
+    expect(await readFile(path.join(root, 'rename-clash-dst.txt'), 'utf8')).toBe('keep me');
+  });
+
+  describe('file tree mutations', () => {
+    it('exposes create / mkdir / copy / trash as device RPC methods', () => {
+      expect(DEVICE_RPC_METHODS).toEqual(
+        expect.arrayContaining([
+          'createLocalFile',
+          'createLocalDirectory',
+          'copyLocalFiles',
+          'trashLocalFiles',
+        ]),
+      );
+    });
+
+    it('routes createLocalFile and refuses an existing file', async () => {
+      const filePath = path.join(root, 'created.ts');
+
+      await expect(
+        executeDeviceRpc('createLocalFile', { path: filePath, workspaceRoot: root }, makeDeps()),
+      ).resolves.toEqual({ path: filePath, success: true });
+      await expect(
+        executeDeviceRpc(
+          'createLocalFile',
+          { content: 'x', path: filePath, workspaceRoot: root },
+          makeDeps(),
+        ),
+      ).resolves.toMatchObject({
+        error: expect.stringContaining('already exists'),
+        success: false,
+      });
+      expect(await readFile(filePath, 'utf8')).toBe('');
+    });
+
+    it('routes createLocalDirectory and refuses an existing folder', async () => {
+      const dirPath = path.join(root, 'created-dir');
+
+      await expect(
+        executeDeviceRpc(
+          'createLocalDirectory',
+          { path: dirPath, workspaceRoot: root },
+          makeDeps(),
+        ),
+      ).resolves.toEqual({ path: dirPath, success: true });
+      expect((await stat(dirPath)).isDirectory()).toBe(true);
+      await expect(
+        executeDeviceRpc(
+          'createLocalDirectory',
+          { path: dirPath, workspaceRoot: root },
+          makeDeps(),
+        ),
+      ).resolves.toMatchObject({
+        error: expect.stringContaining('already exists'),
+        success: false,
+      });
+    });
+
+    it('routes copyLocalFiles, duplicating in place when targetPath is omitted', async () => {
+      const src = path.join(root, 'dup.md');
+      await writeFile(src, 'dup');
+
+      const result = await executeDeviceRpc(
+        'copyLocalFiles',
+        { items: [{ sourcePath: src }], workspaceRoot: root },
+        makeDeps(),
+      );
+
+      expect(result).toEqual([
+        { sourcePath: src, success: true, targetPath: path.join(root, 'dup copy.md') },
+      ]);
+      expect(await readFile(path.join(root, 'dup copy.md'), 'utf8')).toBe('dup');
+    });
+
+    it('routes trashLocalFiles to the host trash handler', async () => {
+      const target = path.join(root, 'a.txt');
+      const trashLocalFiles = vi.fn(async () => ({
+        items: [{ path: target, success: true }],
+        success: true,
+      }));
+
+      await expect(
+        executeDeviceRpc(
+          'trashLocalFiles',
+          { paths: [target], workspaceRoot: root },
+          {
+            ...makeDeps(),
+            trashLocalFiles,
+          },
+        ),
+      ).resolves.toEqual({ items: [{ path: target, success: true }], success: true });
+      expect(trashLocalFiles).toHaveBeenCalledWith({ paths: [target] });
+    });
+
+    it('rejects trashLocalFiles on a host without a trash instead of hard-deleting', async () => {
+      const filePath = path.join(root, 'must-survive.txt');
+      await writeFile(filePath, 'still here');
+
+      await expect(
+        executeDeviceRpc('trashLocalFiles', { paths: [filePath], workspaceRoot: root }, makeDeps()),
+      ).rejects.toThrow(TRASH_UNSUPPORTED_MESSAGE);
+      expect(await readFile(filePath, 'utf8')).toBe('still here');
+    });
+
+    describe('workspace containment through symlinks', () => {
+      let workspace: string;
+      let outside: string;
+
+      beforeAll(async () => {
+        workspace = await mkdtemp(path.join(tmpdir(), 'device-control-ws-'));
+        outside = await mkdtemp(path.join(tmpdir(), 'device-control-outside-'));
+        await writeFile(path.join(outside, 'secret.txt'), 'secret');
+        // `<workspace>/link` passes a lexical "inside the root" check but
+        // points at a folder outside the workspace.
+        await symlink(outside, path.join(workspace, 'link'));
+      });
+
+      afterAll(async () => {
+        await rm(workspace, { force: true, recursive: true });
+        await rm(outside, { force: true, recursive: true });
+      });
+
+      it('refuses to create through a symlinked folder that leaves the workspace', async () => {
+        const escaped = path.join(workspace, 'link', 'planted.txt');
+
+        await expect(
+          executeDeviceRpc(
+            'createLocalFile',
+            { path: escaped, workspaceRoot: workspace },
+            makeDeps(),
+          ),
+        ).rejects.toThrow(WORKSPACE_ESCAPE_MESSAGE);
+        await expect(
+          executeDeviceRpc(
+            'createLocalDirectory',
+            { path: path.join(workspace, 'link', 'planted-dir'), workspaceRoot: workspace },
+            makeDeps(),
+          ),
+        ).rejects.toThrow(WORKSPACE_ESCAPE_MESSAGE);
+        await expect(readdir(outside)).resolves.toEqual(['secret.txt']);
+      });
+
+      it('refuses to copy a file out through the symlink', async () => {
+        await writeFile(path.join(workspace, 'inside.txt'), 'inside');
+
+        await expect(
+          executeDeviceRpc(
+            'copyLocalFiles',
+            {
+              items: [
+                {
+                  sourcePath: path.join(workspace, 'inside.txt'),
+                  targetPath: path.join(workspace, 'link', 'copied.txt'),
+                },
+              ],
+              workspaceRoot: workspace,
+            },
+            makeDeps(),
+          ),
+        ).rejects.toThrow(WORKSPACE_ESCAPE_MESSAGE);
+        await expect(readdir(outside)).resolves.toEqual(['secret.txt']);
+      });
+
+      it('refuses to trash a file reached through the symlink', async () => {
+        const trashLocalFiles = vi.fn();
+
+        await expect(
+          executeDeviceRpc(
+            'trashLocalFiles',
+            { paths: [path.join(workspace, 'link', 'secret.txt')], workspaceRoot: workspace },
+            { ...makeDeps(), trashLocalFiles },
+          ),
+        ).rejects.toThrow(WORKSPACE_ESCAPE_MESSAGE);
+        expect(trashLocalFiles).not.toHaveBeenCalled();
+      });
+
+      it('still lets the symlink entry itself be trashed', async () => {
+        const trashLocalFiles = vi.fn(async () => ({ items: [], success: true }));
+        const link = path.join(workspace, 'link');
+
+        await executeDeviceRpc(
+          'trashLocalFiles',
+          { paths: [link], workspaceRoot: workspace },
+          { ...makeDeps(), trashLocalFiles },
+        );
+        expect(trashLocalFiles).toHaveBeenCalledWith({ paths: [link] });
+      });
+
+      it('applies the same check to move / rename / write once the root is sent', async () => {
+        await writeFile(path.join(workspace, 'movable.txt'), 'm');
+
+        await expect(
+          executeDeviceRpc(
+            'moveLocalFiles',
+            {
+              items: [
+                {
+                  newPath: path.join(workspace, 'link', 'moved.txt'),
+                  oldPath: path.join(workspace, 'movable.txt'),
+                },
+              ],
+              workspaceRoot: workspace,
+            },
+            makeDeps(),
+          ),
+        ).rejects.toThrow(WORKSPACE_ESCAPE_MESSAGE);
+        await expect(
+          executeDeviceRpc(
+            'renameLocalFile',
+            {
+              newName: 'renamed.txt',
+              path: path.join(workspace, 'link', 'secret.txt'),
+              workspaceRoot: workspace,
+            },
+            makeDeps(),
+          ),
+        ).rejects.toThrow(WORKSPACE_ESCAPE_MESSAGE);
+        await expect(
+          executeDeviceRpc(
+            'writeLocalFile',
+            {
+              content: 'overwritten',
+              path: path.join(workspace, 'link', 'secret.txt'),
+              workspaceRoot: workspace,
+            },
+            makeDeps(),
+          ),
+        ).rejects.toThrow(WORKSPACE_ESCAPE_MESSAGE);
+        expect(await readFile(path.join(outside, 'secret.txt'), 'utf8')).toBe('secret');
+      });
+
+      it('refuses create / copy / trash that arrive without a workspace root', async () => {
+        await expect(
+          executeDeviceRpc('createLocalFile', { path: path.join(workspace, 'x.txt') }, makeDeps()),
+        ).rejects.toThrow(WORKSPACE_ESCAPE_MESSAGE);
+      });
+    });
+  });
+
   it('routes listGitWorktrees through the shared git dispatcher', async () => {
     // Not a git repo → the shared local-file-shell impl returns an empty list.
     const result = await executeDeviceRpc('listGitWorktrees', { path: root }, makeDeps());
@@ -286,5 +652,96 @@ describe('executeDeviceRpc', () => {
       makeDeps(),
     )) as { success: boolean };
     expect(result.success).toBe(false);
+  });
+
+  describe('interactive terminal', () => {
+    /** The PTY handlers a host opts into; absent they all refuse. */
+    const terminalDeps = () => ({
+      closeTerminal: vi.fn(async () => ({ closed: true })),
+      createTerminalSession: vi.fn(async () => ({
+        cwd: '/home/dev',
+        id: 'term_1',
+        pid: 4242,
+        shell: '/bin/bash',
+      })),
+      readTerminal: vi.fn(async () => ({ chunk: 'aGk=', exited: false, nextCursor: 2 })),
+      resizeTerminal: vi.fn(async () => {}),
+      writeTerminal: vi.fn(async () => {}),
+    });
+
+    it('publishes the terminal RPCs on the device surface', () => {
+      expect(DEVICE_RPC_METHODS).toEqual(
+        expect.arrayContaining([
+          'createTerminalSession',
+          'writeTerminal',
+          'readTerminal',
+          'resizeTerminal',
+          'closeTerminal',
+        ]),
+      );
+    });
+
+    it('routes each terminal RPC to its host handler', async () => {
+      const terminals = terminalDeps();
+      const deps: DeviceControlDeps = { ...makeDeps(), ...terminals };
+
+      await executeDeviceRpc('createTerminalSession', { cols: 80, rows: 24 }, deps);
+      expect(terminals.createTerminalSession).toHaveBeenCalledWith({ cols: 80, rows: 24 });
+
+      await executeDeviceRpc('writeTerminal', { data: 'bHM=', id: 'term_1' }, deps);
+      expect(terminals.writeTerminal).toHaveBeenCalledWith({ data: 'bHM=', id: 'term_1' });
+
+      await executeDeviceRpc('readTerminal', { cursor: 0, id: 'term_1' }, deps);
+      expect(terminals.readTerminal).toHaveBeenCalledWith({ cursor: 0, id: 'term_1' });
+
+      await executeDeviceRpc('resizeTerminal', { cols: 120, id: 'term_1', rows: 40 }, deps);
+      expect(terminals.resizeTerminal).toHaveBeenCalledWith({ cols: 120, id: 'term_1', rows: 40 });
+
+      await executeDeviceRpc('closeTerminal', { id: 'term_1' }, deps);
+      expect(terminals.closeTerminal).toHaveBeenCalledWith({ id: 'term_1' });
+    });
+
+    it('refuses every terminal RPC on a host that has no PTY handlers', async () => {
+      // A desktop client serves its own terminal over IPC and does not opt in,
+      // so a terminal opened against it must fail loudly rather than hang.
+      const deps = makeDeps();
+      for (const method of [
+        'createTerminalSession',
+        'writeTerminal',
+        'readTerminal',
+        'resizeTerminal',
+        'closeTerminal',
+      ] as const) {
+        await expect(executeDeviceRpc(method, { id: 'term_1' }, deps)).rejects.toThrow(
+          TERMINAL_UNSUPPORTED_MESSAGE,
+        );
+      }
+    });
+  });
+});
+
+describe('deviceRpcClients', () => {
+  const desktopOnly = [
+    'trashLocalFiles',
+    'getAppUpdateState',
+    'checkAppUpdate',
+    'installAppUpdate',
+  ];
+  const cliOnly = ['getCliUpdateState', 'checkCliUpdate', 'restartCli'];
+
+  it.each(desktopOnly)('routes %s, which the CLI rejects, to the desktop', (method) => {
+    expect(deviceRpcClients(method)).toEqual(['desktop']);
+  });
+
+  it.each(cliOnly)('routes %s, which the desktop rejects, to the CLI', (method) => {
+    expect(deviceRpcClients(method)).toEqual(['cli']);
+  });
+
+  it('lets any client serve the other methods', () => {
+    const shared = DEVICE_RPC_METHODS.filter(
+      (method) => !desktopOnly.includes(method) && !cliOnly.includes(method),
+    );
+    for (const method of shared) expect(deviceRpcClients(method)).toBeUndefined();
+    expect(deviceRpcClients('unknownMethod')).toBeUndefined();
   });
 });

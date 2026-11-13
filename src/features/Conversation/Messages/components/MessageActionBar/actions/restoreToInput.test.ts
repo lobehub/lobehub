@@ -18,7 +18,8 @@ const clearChatUploadFileList = vi.fn();
 const dispatchChatUploadFileList = vi.fn();
 
 vi.mock('../../../../store', () => ({
-  useConversationStore: (selector: (s: any) => any) => selector({ editor, updateInputMessage }),
+  useConversationStore: (selector: (s: any) => any) =>
+    selector({ context: { agentId: 'agt_1', topicId: 'tpc_1' }, editor, updateInputMessage }),
 }));
 
 vi.mock('@/store/file', () => ({
@@ -29,7 +30,7 @@ vi.mock('@/store/file', () => ({
 
 const { messageSuccess } = vi.hoisted(() => ({ messageSuccess: vi.fn() }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   toast: { success: messageSuccess },
 }));
@@ -78,8 +79,8 @@ describe('restoreToInputAction', () => {
       imageList: [{ alt: 'pic', id: 'i1', url: 'u-i1' }],
     })!.handleClick!();
 
-    expect(clearChatUploadFileList).toHaveBeenCalled();
-    expect(dispatchChatUploadFileList).toHaveBeenCalledWith({
+    expect(clearChatUploadFileList).toHaveBeenCalledWith('main_agt_1_tpc_1');
+    expect(dispatchChatUploadFileList).toHaveBeenCalledWith('main_agt_1_tpc_1', {
       files: [
         expect.objectContaining({
           fileUrl: 'u-i1',
@@ -97,7 +98,7 @@ describe('restoreToInputAction', () => {
       type: 'addFiles',
     });
 
-    const [{ files }] = dispatchChatUploadFileList.mock.calls[0];
+    const [, { files }] = dispatchChatUploadFileList.mock.calls[0];
     expect(files[0].file.type).toBe('image/*');
     expect(files[1].file).toMatchObject({ name: 'a.pdf', size: 100, type: 'application/pdf' });
   });

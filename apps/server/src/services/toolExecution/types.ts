@@ -2,10 +2,14 @@ import { type LobeToolManifest } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type AgentShareVisitorContext,
+  type CancelVirtualSubAgentResult,
   type ChatToolPayload,
+  type ChatTopicBotContext,
   type ClientSecretPayload,
   type DeviceUnavailableErrorData,
+  type EvalMemoryReference,
   type ExecSubAgentParams,
+  type ExecutionPlan,
   type StepActivatedSkill,
   type StepContextTodoItem,
   type WorkRegistrationIntent,
@@ -23,10 +27,22 @@ export interface ToolExecutionMemoryEmbeddingRuntime {
 export interface ServerSubAgentRunParams {
   /** Target agent id; defaults to the parent agent when omitted. */
   agentId?: string;
+  /**
+   * Run detached from the parent (`callSubAgent({ runInBackground })`): the
+   * placeholder is written with the start receipt as its final tool result, and
+   * the child's answer is delivered to the parent as a later message instead of
+   * resuming a parked parent. Only set by `callSubAgent`.
+   */
+  background?: boolean;
   /** Short label shown in the UI (sub-agent thread title). */
   description: string;
   /** Detailed instruction/prompt for the sub-agent run. */
   instruction: string;
+  /**
+   * Continue this earlier `callSubAgent` sub-agent (its isolation thread id)
+   * instead of starting a new one. Only set by `callSubAgent`.
+   */
+  subAgentId?: string;
   /** Optional per-run timeout in milliseconds. */
   timeout?: number;
 }
@@ -70,6 +86,11 @@ export interface ServerSubAgentRunResult {
  * the completion bridge, which backfills the placeholder and resumes the parent.
  */
 export interface ServerSubAgentRunner {
+  /**
+   * Stop a running `callSubAgent` sub-agent this run's agent dispatched in the
+   * same topic (`cancelSubAgent`). Absent when the runtime cannot cancel.
+   */
+  cancel?: (params: { subAgentId: string }) => Promise<CancelVirtualSubAgentResult>;
   run: (params: ServerSubAgentRunParams) => Promise<ServerSubAgentRunResult>;
 }
 
@@ -104,6 +125,14 @@ export interface ServerAgentMemberRunParams {
 }
 
 export interface ServerAgentMemberRunResult {
+  /**
+   * Per-member start failure reasons, parallel to the members that failed to
+   * fork. Surfaced to the supervisor's tool result so a speak/broadcast/
+   * delegate/executeAgentTask dispatch failure is diagnosable (e.g. "The model
+   * provider returned an empty completion.") instead of an opaque "failed to
+   * start" — mirrors `ServerSubAgentRunResult.error` (issue #16257).
+   */
+  errors?: string[];
   /**
    * Whether at least one member op was forked. `false` means every member
    * failed to start — no completion bridge will fire, so the caller must
@@ -194,6 +223,13 @@ export interface ToolExecutionContext {
    * `messageId`.
    */
   assistantMessageId?: string;
+  /**
+   * Who started this run from an IM conversation (`state.principal.actor.bot`): the platform
+   * sender of the message the run answers and whether they are the bot's owner. Built per inbound
+   * message by the bot / messenger routers, so it names the current speaker, not whoever opened
+   * the topic. Absent outside bot conversations.
+   */
+  botContext?: ChatTopicBotContext;
   /** Originating request IP propagated through the operation metadata. */
   clientIp?: string;
   /**
@@ -230,15 +266,35 @@ export interface ToolExecutionContext {
    */
   editingGroupId?: string;
   /**
+   * Tool ids offered to the model in this run (operation tool set plus step activations). Lets a
+   * runtime name a follow-up tool in its result only when the model can actually call it.
+   */
+  enabledToolIds?: string[];
+  /**
+   * Optional server-owned embedding runtime for memory search.
+   *
+   * Use when the acting user is synthetic and should not read user key vaults.
+   */
+  /** Server-authored isolated Memory scope of an eval trial. Never a tool argument. */
+  evalMemory?: EvalMemoryReference;
+  /**
    * Legacy agent invocation callback forwarded from RuntimeExecutorContext.
    * Kept for tool runtimes that still dispatch through exec_sub_agent style
    * flows; `lobe-agent.callSubAgent` uses the per-call `subAgent` runner below.
    */
   execSubAgent?: (params: ExecSubAgentParams) => Promise<unknown>;
+  /**
+   * The run's resolved execution plan. Lets a runtime explain a gate the plan
+   * imposes (e.g. a device-locked run has no device picker) instead of the
+   * gated tool just looking missing.
+   */
+  executionPlan?: ExecutionPlan;
   /** Per-call execution timeout resolved by the agent runtime. */
   executionTimeoutMs?: number;
   /** Current group ID for group chat context */
   groupId?: string | null;
+  /** Eval trials must run on isolated Memory; set even when the scope is missing. */
+  isEval?: boolean;
   /** Whether this tool call is executing inside an isolated sub-agent run. */
   isSubAgent?: boolean;
   /**
@@ -257,11 +313,7 @@ export interface ToolExecutionContext {
    * {@link localSandbox}.
    */
   localSandboxNetwork?: boolean;
-  /**
-   * Optional server-owned embedding runtime for memory search.
-   *
-   * Use when the acting user is synthetic and should not read user key vaults.
-   */
+  memoryEffort?: string;
   memoryEmbeddingRuntime?: ToolExecutionMemoryEmbeddingRuntime;
   /** Memory tool permission from agent chat config */
   memoryToolPermission?: 'read-only' | 'read-write';
@@ -279,6 +331,8 @@ export interface ToolExecutionContext {
   onWorkRegistration?: (intent: WorkRegistrationIntent) => void;
   /** Agent runtime operation ID for structured tool outcome identity. */
   operationId?: string;
+  /** Project the run belongs to; scopes project knowledge and created tasks. */
+  projectId?: string;
   /**
    * Filesystem skills (name + absolute SKILL.md path) discovered on the
    * execution device. Used by the Skills runtime to load them on demand via the
@@ -351,6 +405,11 @@ export interface ToolExecutionResult {
   errorData?: DeviceUnavailableErrorData;
   state?: Record<string, any>;
   success: boolean;
+  /**
+   * The tool message this call already created for itself; the agent runtime
+   * writes the result into that row instead of creating a second one.
+   */
+  toolMessageId?: string;
   /**
    * Transient Work-registration intent produced by the executor and consumed by
    * the agent runtime (`callTool` / `callToolsBatch`) once the tool call's

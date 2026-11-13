@@ -2,6 +2,8 @@ import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 import { StringDecoder } from 'node:string_decoder';
 
+import { spawnManaged } from '@lobechat/utils/managedProcess';
+
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
 
 /**
@@ -117,7 +119,7 @@ export class RpcStdioClient {
 
     const spawnPlan = await resolveCliSpawnPlan(this.options.commandPath, this.options.args);
     if (this.closed) return;
-    const child = spawn(spawnPlan.command, spawnPlan.args, {
+    const child = spawnManaged(spawnPlan.command, spawnPlan.args, {
       cwd: this.options.cwd,
       detached: process.platform !== 'win32' && (this.options.detached ?? true),
       env: this.options.env,

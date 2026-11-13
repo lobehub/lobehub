@@ -29,14 +29,26 @@ const capabilityOf = (type: string): ModelCapability => {
 };
 
 const viewOf = (provider: HeterogeneousProviderConfig) =>
-  buildSelectorView({ capability: selectorCapabilityOf(provider.type), provider, t });
+  buildSelectorView({
+    capability: selectorCapabilityOf(provider.type),
+    provider,
+    t,
+    models: [
+      {
+        id: 'gpt-5.6-sol',
+        modelId: 'gpt-5.6-sol',
+        providerId: 'codex',
+        speedModes: ['normal', 'fast'],
+      },
+    ],
+  });
 
 const dimensionKeys = (provider: HeterogeneousProviderConfig) =>
   viewOf(provider).dimensions.map((dimension) => dimension.key);
 
 describe('resolveSelectorShape', () => {
   it('renders nothing for providers with no selector', () => {
-    expect(resolveSelectorShape({ type: 'kimi-code' }, true).kind).toBe('none');
+    expect(resolveSelectorShape({ type: 'openclaw' }, true).kind).toBe('none');
     expect(resolveSelectorShape(undefined, true).kind).toBe('none');
   });
 
@@ -45,29 +57,29 @@ describe('resolveSelectorShape', () => {
   });
 
   it('gives catalog-only providers the bare picker', () => {
+    expect(resolveSelectorShape({ type: 'kimi-code' }, true).kind).toBe('catalog');
     expect(resolveSelectorShape({ type: 'opencode' }, true).kind).toBe('catalog');
     expect(resolveSelectorShape({ type: 'pi' }, true).kind).toBe('catalog');
   });
 
   it('gives a catalog provider with another dimension the full menu', () => {
     expect(resolveSelectorShape({ type: 'codebuddy' }, true).kind).toBe('menu');
+    expect(resolveSelectorShape({ type: 'codex' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'qoder' }, true).kind).toBe('menu');
   });
 
   it('gives static providers the full menu', () => {
     expect(resolveSelectorShape({ type: 'amp' }, true).kind).toBe('menu');
     expect(resolveSelectorShape({ type: 'claude-code' }, true).kind).toBe('menu');
-    expect(resolveSelectorShape({ type: 'codex' }, true).kind).toBe('menu');
   });
 });
 
 describe('dimensions per provider', () => {
-  it('offers Astra before older Codex models with five reasoning levels through max', () => {
-    const options = viewOf({ type: 'codex' }).dimensions[0].options;
-    expect(options[1]).toEqual({ label: 'GPT-6 Astra', value: 'gpt-6-astra' });
+  it('uses the Codex catalog while preserving reasoning levels through max', () => {
+    expect(viewOf({ type: 'codex' }).isCatalogModel).toBe(true);
 
     const view = viewOf({ effort: 'max', model: 'gpt-6-astra', type: 'codex' });
-    expect(view.dimensions[1].options.map((option) => option.value)).toEqual([
+    expect(view.dimensions[0].options.map((option) => option.value)).toEqual([
       'default',
       'low',
       'medium',
@@ -81,47 +93,48 @@ describe('dimensions per provider', () => {
     });
   });
 
-  it('labels Claude aliases without claiming a fixed model version', () => {
-    const options = viewOf({ type: 'claude-code' }).dimensions[0].options;
-    expect(options.slice(1)).toEqual([
-      { label: 'Fable', value: 'fable' },
-      { label: 'Opus', value: 'opus' },
-      { label: 'Sonnet', value: 'sonnet' },
-      { label: 'Haiku', value: 'haiku' },
-    ]);
-  });
-
   it('offers Amp mode without inventing a model dimension', () => {
     const dimensions = viewOf({ type: 'amp' }).dimensions;
 
     expect(dimensions.map((dimension) => dimension.key)).toEqual(['mode']);
     expect(dimensions[0].label).toBe('heteroAgent.modelSelector.mode.label');
-    expect(dimensions[0].options.map((option) => option.value)).toEqual([
-      'default',
-      'low',
-      'medium',
-      'high',
-      'ultra',
-    ]);
   });
 
-  it('offers model, reasoning and speed for a fast-capable codex model', () => {
-    expect(dimensionKeys({ model: 'gpt-5.6-sol', type: 'codex' })).toEqual([
-      'model',
+  it('keeps reasoning and speed beside the catalog for a fast-capable codex model', () => {
+    expect(dimensionKeys({ model: 'gpt-5.6-sol', type: 'codex' })).toEqual(['reasoning', 'speed']);
+  });
+
+  it('keeps Normal available for codex models without a fast tier', () => {
+    expect(dimensionKeys({ model: 'gpt-5.3-codex-spark', type: 'codex' })).toEqual([
       'reasoning',
       'speed',
     ]);
   });
 
-  it('hides speed for codex models without a fast tier', () => {
-    expect(dimensionKeys({ model: 'gpt-5.3-codex-spark', type: 'codex' })).toEqual([
-      'model',
-      'reasoning',
-    ]);
-  });
-
   it('offers model and reasoning but never speed for claude-code', () => {
     expect(dimensionKeys({ model: 'opus', type: 'claude-code' })).toEqual(['model', 'reasoning']);
+  });
+
+  it('keeps a Grok Build reasoning pick available and reflects it in the menu', () => {
+    const provider: HeterogeneousProviderConfig = { model: 'grok-4.6', type: 'grok-build' };
+    const updated = { ...provider, ...applyHeteroSelection(provider, { effort: 'xhigh' }) };
+    const reasoning = viewOf(updated).dimensions.find((dimension) => dimension.key === 'reasoning');
+
+    expect(reasoning).toMatchObject({
+      current: 'xhigh',
+      valueLabel: 'heteroAgent.modelSelector.reasoning.xhigh',
+    });
+    expect(reasoning?.options.map((option) => option.value)).toEqual([
+      'default',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+    ]);
+    expect(reasoning?.options).toContainEqual({
+      label: 'heteroAgent.modelSelector.reasoning.xhigh',
+      value: 'xhigh',
+    });
   });
 
   it('loads the CodeBuddy model dimension from its CLI catalog and keeps reasoning in the menu', () => {
@@ -139,8 +152,8 @@ describe('dimensions per provider', () => {
   });
 
   it('narrows codex reasoning levels to what the model serves', () => {
-    const solLevels = viewOf({ model: 'gpt-5.6-sol', type: 'codex' }).dimensions[1].options;
-    const lunaLevels = viewOf({ model: 'gpt-5.6-luna', type: 'codex' }).dimensions[1].options;
+    const solLevels = viewOf({ model: 'gpt-5.6-sol', type: 'codex' }).dimensions[0].options;
+    const lunaLevels = viewOf({ model: 'gpt-5.6-luna', type: 'codex' }).dimensions[0].options;
 
     expect(solLevels.map((option) => option.value)).toContain('ultra');
     expect(lunaLevels.map((option) => option.value)).toContain('max');
@@ -148,9 +161,9 @@ describe('dimensions per provider', () => {
   });
 
   it('keeps an off-catalog model pickable so the menu never drops the current value', () => {
-    const options = viewOf({ model: 'gpt-4o-legacy', type: 'codex' }).dimensions[0].options;
+    const options = viewOf({ model: 'custom-claude', type: 'claude-code' }).dimensions[0].options;
 
-    expect(options[0]).toEqual({ label: 'gpt-4o-legacy', value: 'gpt-4o-legacy' });
+    expect(options[0]).toEqual({ label: 'custom-claude', value: 'custom-claude' });
   });
 });
 
@@ -186,7 +199,7 @@ describe('current value surfaced on each dimension', () => {
   it('renames codex low effort to Light', () => {
     const view = viewOf({ effort: 'low', model: 'gpt-5.4', type: 'codex' });
 
-    expect(view.dimensions[1].valueLabel).toBe('heteroAgent.modelSelector.reasoning.light');
+    expect(view.dimensions[0].valueLabel).toBe('heteroAgent.modelSelector.reasoning.light');
   });
 
   it('keeps the plain Low wording for claude-code', () => {
@@ -200,9 +213,9 @@ describe('current value surfaced on each dimension', () => {
     expect(viewOf({ model: 'gpt-5.6-sol', type: 'codex' }).isFastSpeed).toBe(false);
   });
 
-  it('ignores a fast speed the current model cannot serve', () => {
+  it('keeps an unavailable saved tier visible for correction', () => {
     expect(viewOf({ model: 'gpt-5.3-codex-spark', speed: 'fast', type: 'codex' }).isFastSpeed).toBe(
-      false,
+      true,
     );
   });
 
@@ -227,13 +240,80 @@ describe('current value surfaced on each dimension', () => {
   });
 });
 
+describe('value source on each dimension', () => {
+  const provider = { effort: 'high', model: 'gpt-5.6-sol', speed: 'fast', type: 'codex' } as const;
+  const sourcesOf = (options: Parameters<typeof buildSelectorView>[0]) => {
+    const view = buildSelectorView(options);
+    return {
+      ...Object.fromEntries(view.dimensions.map((dimension) => [dimension.key, dimension.source])),
+      model: view.modelSource,
+    };
+  };
+
+  it('labels topic pins and inherited values separately inside a topic', () => {
+    expect(
+      sourcesOf({
+        capability: selectorCapabilityOf('codex'),
+        provider,
+        t,
+        topicPin: { model: 'gpt-5.6-sol', provider: 'codex', speed: 'fast' },
+        topicScoped: true,
+      }),
+    ).toEqual({
+      model: 'heteroAgent.modelSelector.source.topic',
+      reasoning: 'heteroAgent.modelSelector.source.inherited',
+      speed: 'heteroAgent.modelSelector.source.topic',
+    });
+  });
+
+  it('does not credit the topic with a model pin the runtime ignored', () => {
+    expect(
+      sourcesOf({
+        capability: selectorCapabilityOf('codex'),
+        provider,
+        t,
+        topicPin: { model: 'opus', provider: 'claude-code' },
+        topicScoped: true,
+      }).model,
+    ).toBe('heteroAgent.modelSelector.source.inherited');
+  });
+
+  it('leaves an unset speed to the CLI config instead of claiming Standard', () => {
+    // The Agent sets no speed and the topic pins none, so no tier flag is sent
+    // and `service_tier` in the Codex CLI config decides (it may well be fast).
+    const speed = buildSelectorView({
+      capability: selectorCapabilityOf('codex'),
+      provider: { model: 'gpt-5.6-sol', type: 'codex' },
+      t,
+      topicPin: { model: 'gpt-5.6-sol', provider: 'codex' },
+      topicScoped: true,
+    }).dimensions.find((dimension) => dimension.key === 'speed');
+
+    expect(speed).toMatchObject({
+      current: 'default',
+      source: 'heteroAgent.modelSelector.source.cli',
+      valueLabel: 'heteroAgent.modelSelector.default',
+    });
+    expect(speed?.options[0]).toMatchObject({
+      label: 'heteroAgent.modelSelector.default',
+      value: 'default',
+    });
+  });
+
+  it('labels every value as the Agent default before a topic exists', () => {
+    expect(
+      new Set(Object.values(sourcesOf({ capability: selectorCapabilityOf('codex'), provider, t }))),
+    ).toEqual(new Set(['heteroAgent.modelSelector.source.agent']));
+  });
+});
+
 describe('resolveModelSwitchSelection', () => {
   it.each(['max', 'ultra'] as const)('handles %s when switching to Astra', (effort) => {
     expect(
       resolveModelSwitchSelection({
         capability: capabilityOf('codex'),
         effort,
-        isFastSpeed: false,
+        speed: 'default',
         value: 'gpt-6-astra',
       }),
     ).toEqual(
@@ -245,17 +325,33 @@ describe('resolveModelSwitchSelection', () => {
     expect(
       resolveModelSwitchSelection({
         capability: capabilityOf('codex'),
-        isFastSpeed: true,
+        speed: 'fast',
+        models: [
+          {
+            id: 'gpt-5.4',
+            modelId: 'gpt-5.4',
+            providerId: 'codex',
+            speedModes: ['normal', 'fast'],
+          },
+        ],
         value: 'gpt-5.3-codex-spark',
       }),
-    ).toEqual({ model: 'gpt-5.3-codex-spark', speed: 'default' });
+    ).toEqual({ model: 'gpt-5.3-codex-spark', speed: 'normal' });
   });
 
   it('keeps a fast speed the newly picked codex model still serves', () => {
     expect(
       resolveModelSwitchSelection({
         capability: capabilityOf('codex'),
-        isFastSpeed: true,
+        speed: 'fast',
+        models: [
+          {
+            id: 'gpt-5.5',
+            modelId: 'gpt-5.5',
+            providerId: 'codex',
+            speedModes: ['normal', 'fast'],
+          },
+        ],
         value: 'gpt-5.5',
       }),
     ).toEqual({ model: 'gpt-5.5' });
@@ -266,7 +362,7 @@ describe('resolveModelSwitchSelection', () => {
       resolveModelSwitchSelection({
         capability: capabilityOf('codex'),
         effort: 'ultra',
-        isFastSpeed: false,
+        speed: 'default',
         value: 'gpt-5.4',
       }),
     ).toEqual({ effort: 'default', model: 'gpt-5.4' });
@@ -277,7 +373,7 @@ describe('resolveModelSwitchSelection', () => {
       resolveModelSwitchSelection({
         capability: capabilityOf('claude-code'),
         effort: 'max',
-        isFastSpeed: false,
+        speed: 'default',
         value: 'haiku',
       }),
     ).toEqual({ model: 'haiku' });
@@ -296,7 +392,7 @@ describe('what a pick persists', () => {
         provider,
         resolveModelSwitchSelection({
           capability: capabilityOf('claude-code'),
-          isFastSpeed: false,
+          speed: 'default',
           value: 'opus',
         }),
       ),
@@ -314,7 +410,7 @@ describe('what a pick persists', () => {
         provider,
         resolveModelSwitchSelection({
           capability: capabilityOf('codex'),
-          isFastSpeed: false,
+          speed: 'default',
           value: 'gpt-5.6-sol',
         }),
       ),

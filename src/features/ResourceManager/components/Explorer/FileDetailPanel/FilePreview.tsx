@@ -5,6 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileViewer from '@/features/FileViewer';
+import ImageEditTools from '@/features/FileViewer/ImageEditTools';
 import { type FileListItem } from '@/types/files';
 
 interface FilePreviewProps {
@@ -25,7 +26,7 @@ const FilePreview = memo<FilePreviewProps>(({ file }) => {
       </Center>
     );
 
-  return <FileViewer {...file} id={file.fileId ?? file.id} />;
+  return <FileViewer {...file} id={file.fileId ?? file.id} imageTools={<ImageEditTools />} />;
 });
 
 export default FilePreview;

@@ -6,8 +6,10 @@ import {
   REVIEW_PREDICTION_JSON_SCHEMA,
 } from '@lobechat/prompts';
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import { pickTrimmedString, toRecord } from '@lobechat/utils/object';
 import debug from 'debug';
+import pMap from 'p-map';
 
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
@@ -18,7 +20,15 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { FileService } from '@/server/services/file';
 
-import { resolveModelReadableFrameUrl } from './modelFrames';
+import {
+  GIF_FRAME_SHEET_NOTE,
+  inlinedFrameBytes,
+  isGifFrameSheet,
+  isGifStoredFrame,
+  isInlineableFrameSize,
+  MAX_INLINE_REQUEST_BYTES,
+  resolveModelReadableFrameUrl,
+} from './modelFrames';
 import type { ReviewEvidenceRow } from './reviewEvidence';
 import { formatTextEvidence, TEXT_EVIDENCE_TYPES } from './reviewEvidence';
 import { describeWithheldEvidence } from './reviewInspection';
@@ -42,6 +52,20 @@ const VISUAL_EVIDENCE_TYPES = new Set(['screenshot', 'gif']);
 const MAX_VISUALS = 3;
 
 /**
+ * Frame cap for a review that GATES a delivery (the Goal review) rather than
+ * proposing a card to a person. There, a withheld frame is not a cheaper
+ * opinion but a wrong outcome: the model rightly answers "I cannot see the
+ * screenshot this criterion asks for", which reads as unjudgeable and parks a
+ * passing delivery on a human. Builders routinely attach one frame per surface
+ * plus a recording and a tooltip shot, so three is well below an ordinary
+ * check; twelve covers that with room while still bounding the request.
+ */
+export const GATE_REVIEW_MAX_VISUALS = 12;
+
+/** GIF frame sheets rendered at once for one review request. */
+const GIF_SHEET_CONCURRENCY = 2;
+
+/**
  * How many checks may be judged at once when a whole acceptance is requested.
  *
  * Each prediction is a multimodal generation carrying up to three images, so
@@ -52,12 +76,16 @@ const MAX_VISUALS = 3;
 export const REVIEW_PREDICT_CONCURRENCY = 4;
 
 export interface PredictReviewParams {
+  /** The builder's `missed_evidence` dispute of the previous rejection, if any. */
+  builderRebuttal?: string;
   /** The check result to re-judge. */
   checkResultId: string;
   /** Goal reviews also inspect original nonvisual evidence. */
   includeTextEvidence?: boolean;
   /** The check's detailed judging rubric, when the criterion links one. */
   instructionDocumentId?: string | null;
+  /** Frames attached per request; defaults to the shadow-lane cap. */
+  maxVisuals?: number;
   modelConfig: { model: string; provider: string };
   /** The acceptance's requirement, used as the scope test. */
   requirement?: string | null;
@@ -188,7 +216,7 @@ export class VerifyReviewPredictorService {
     // frames to attach, which payloads to inline, and what the request had to
     // hold back — so they cannot disagree about what the check carries.
     const evidence = await this.evidenceModel.listByCheckResult(result.id);
-    const visuals = await this.resolveVisuals(evidence);
+    const visuals = await this.resolveVisuals(evidence, params.maxVisuals ?? MAX_VISUALS);
     // Nothing to look at means nothing this reviewer can honestly say. A
     // text-only opinion here would be the model paraphrasing the verifier's own
     // reasoning back at the user, which is worse than silence.
@@ -218,6 +246,7 @@ export class VerifyReviewPredictorService {
       : undefined;
 
     const chain = chainVerifyReviewPrediction({
+      builderRebuttal: params.builderRebuttal,
       instruction,
       textEvidence,
       requirement: params.requirement ?? undefined,
@@ -242,6 +271,7 @@ export class VerifyReviewPredictorService {
           schema: REVIEW_PREDICTION_JSON_SCHEMA,
         },
         {
+          metadata: { trigger: RequestTrigger.Verify },
           tracing: {
             promptVersion: REVIEW_PREDICT_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.ReviewPredict,
@@ -350,26 +380,64 @@ export class VerifyReviewPredictorService {
    * in this array, and that index is how a region gets bound back to the
    * evidence row it was drawn on.
    */
-  private async resolveVisuals(evidence: CheckEvidenceRows) {
+  private async resolveVisuals(evidence: CheckEvidenceRows, maxVisuals: number) {
     const visual = evidence
       .filter((row) => VISUAL_EVIDENCE_TYPES.has(row.type) && row.fileId)
-      .slice(0, MAX_VISUALS);
+      .slice(0, maxVisuals);
+
+    const files = await Promise.all(visual.map((row) => this.fileModel.findById(row.fileId!)));
+
+    // A GIF has no usable link (adapters that download it still drop
+    // `image/gif`), so it is always rendered to a sheet and inlined. The sheets
+    // are resolved first and spend the budget at their own size; the remaining
+    // frames then spend what is left in evidence order, and later ones are
+    // linked so a many-frame check cannot push the body past provider limits.
+    // Each sheet downloads and decodes a whole recording, so only two at a time.
+    const gifSheets = await pMap(
+      files,
+      (file) =>
+        file && isGifStoredFrame(file)
+          ? resolveModelReadableFrameUrl(this.fileService, file)
+          : undefined,
+      { concurrency: GIF_SHEET_CONCURRENCY },
+    );
+    let inlineBytes = gifSheets.reduce((sum, url) => sum + (url ? inlinedFrameBytes(url) : 0), 0);
+    const inline = files.map((file) => {
+      const size = file?.size;
+      if (!isInlineableFrameSize(size) || inlineBytes + size > MAX_INLINE_REQUEST_BYTES)
+        return false;
+      inlineBytes += size;
+      return true;
+    });
 
     const resolved = await Promise.all(
-      visual.map(async (row) => {
-        const file = await this.fileModel.findById(row.fileId!);
+      visual.map(async (row, index) => {
+        const file = files[index];
         if (!file) return null;
+        const accessUrl =
+          gifSheets[index] ??
+          (await resolveModelReadableFrameUrl(this.fileService, file, inline[index]));
+        const frameSheet = isGifFrameSheet(row.type, accessUrl);
         return {
-          accessUrl: await resolveModelReadableFrameUrl(this.fileService, file),
-          description: row.description,
+          accessUrl,
+          description: frameSheet
+            ? [row.description, GIF_FRAME_SHEET_NOTE].filter(Boolean).join(' ')
+            : row.description,
           evidenceId: row.id,
+          frameSheet,
         };
       }),
     );
 
     return resolved.filter(
-      (item): item is { accessUrl: string; description: string | null; evidenceId: string } =>
-        Boolean(item?.accessUrl),
+      (
+        item,
+      ): item is {
+        accessUrl: string;
+        description: string | null;
+        evidenceId: string;
+        frameSheet: boolean;
+      } => Boolean(item?.accessUrl),
     );
   }
 
@@ -381,14 +449,19 @@ export class VerifyReviewPredictorService {
    * A region naming an image outside the attached set is dropped rather than
    * clamped to image 0: a note pinned to the wrong screenshot is more misleading
    * than no note, because the reviewer has no way to tell it moved.
+   *
+   * A GIF is shown to the model as a frame sheet, so a region drawn on it is in
+   * sheet coordinates. The page draws annotations over the original animation,
+   * where those coordinates land on unrelated content, so they are dropped; the
+   * comment still carries the finding.
    */
   private toAnnotations(
     regions: RawReviewPrediction['regions'],
-    visuals: { evidenceId: string }[],
+    visuals: { evidenceId: string; frameSheet: boolean }[],
   ): AcceptanceReviewAnnotation[] {
     return (regions ?? []).flatMap((region) => {
       const target = visuals[region.imageIndex];
-      if (!target) return [];
+      if (!target || target.frameSheet) return [];
       return [
         {
           comment: region.comment ?? undefined,

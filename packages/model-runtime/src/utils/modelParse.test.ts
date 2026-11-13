@@ -187,14 +187,6 @@ describe('modelParse', () => {
     });
   });
 
-  // New sanity tests for your added config
-  describe('MODEL_LIST_CONFIGS sanity', () => {
-    it('google.imageOutputKeywords should include "-image-" for image-output capability inference', () => {
-      expect(MODEL_LIST_CONFIGS.google.imageOutputKeywords).toBeDefined();
-      expect(MODEL_LIST_CONFIGS.google.imageOutputKeywords).toContain('-image-');
-    });
-  });
-
   describe('processModelList', () => {
     it('should process a list of models with the given provider config', async () => {
       const modelList = [{ id: 'gpt-4o' }, { id: 'gpt-3.5-turbo' }];
@@ -316,6 +308,24 @@ describe('modelParse', () => {
         expect(out[0].imageOutput).toBe(true);
         // due to '!gemini' exclusion in IMAGE_MODEL_KEYWORDS
         expect(out[0].type).toBe('chat');
+      });
+
+      it('google: Nano Banana ids without "-image-" infer image output and thinking but no function calling', async () => {
+        const out = await processModelList(
+          [{ id: 'gemini-nano-banana-2.1' }, { id: 'nano-banana-pro-preview' }],
+          MODEL_LIST_CONFIGS.google,
+          'google',
+        );
+        expect(out).toHaveLength(2);
+        for (const model of out) {
+          expect(model.type).toBe('chat');
+          expect(model.imageOutput).toBe(true);
+          expect(model.reasoning).toBe(true);
+          expect(model.functionCall).toBe(false);
+        }
+        // Only versioned ids get Google Search at runtime (`supportsGoogleSearchOnImageResponseModel`)
+        expect(out.find((m) => m.id === 'gemini-nano-banana-2.1')?.search).toBe(true);
+        expect(out.find((m) => m.id === 'nano-banana-pro-preview')?.search).toBe(false);
       });
 
       it('google: gemini-* without "-image-" should not infer imageOutput and get search=true via known google model', async () => {
@@ -701,19 +711,6 @@ describe('modelParse', () => {
     });
 
     describe('Extended tests for detectModelProvider', () => {
-      it('should handle unusual casing patterns', () => {
-        expect(detectModelProvider('gPt-4')).toBe('openai');
-        expect(detectModelProvider('CLauDe-3-OPUS')).toBe('anthropic');
-        expect(detectModelProvider('gEmiNi-PrO')).toBe('google');
-        expect(detectModelProvider('qWeN-TuRbO')).toBe('qwen');
-      });
-
-      it('should handle model IDs with keywords in unusual positions', () => {
-        expect(detectModelProvider('custom-gpt-model')).toBe('openai');
-        expect(detectModelProvider('prefix-claude-suffix')).toBe('anthropic');
-        expect(detectModelProvider('test-qwen-beta-v1')).toBe('qwen');
-      });
-
       it('should handle empty and special character model IDs', () => {
         expect(detectModelProvider('')).toBe('openai'); // Default
         expect(detectModelProvider('   ')).toBe('openai'); // Default

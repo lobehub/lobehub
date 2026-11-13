@@ -1,11 +1,19 @@
 import type { UpdateInfo } from '@lobechat/electron-client-ipc';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Flexbox, Icon, Markdown } from '@lobehub/ui';
-import { Button as BaseButton, createModal, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Button as BaseButton,
+  createModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Markdown,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
 import { t } from 'i18next';
 import { X } from 'lucide-react';
-import React, { memo, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { autoUpdateService } from '@/services/electron/autoUpdate';
@@ -13,7 +21,12 @@ import { rendererOtaService } from '@/services/electron/rendererOta';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
+import { applyCoreUpdate } from './applyCoreUpdate';
+import { formatCoreVersion } from './coreVersion';
 import { selectUpdateInfo } from './selectUpdateInfo';
+import { useAutoDismiss } from './useAutoDismiss';
+
+const APPLIED_TOAST_DURATION = 3000;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   installLaterCloseButton: css`
@@ -142,11 +155,55 @@ export const UpdateNotification: React.FC = () => {
     'unconfirm' | 'installLater' | 'installNow' | null
   >('unconfirm');
   const [isInstalling, setIsInstalling] = useState(false);
+  const [appliedVersion, setAppliedVersion] = useState<string | null>(null);
+  const receivedUpdateEvent = useRef(false);
+  useEffect(() => {
+    let active = true;
+    rendererOtaService
+      .getStatus()
+      .then((status) => {
+        if (!active || receivedUpdateEvent.current) return;
+        setAppliedVersion((version) => version ?? status.appliedVersion ?? null);
+        if (status.staged && status.applyMode) {
+          setUpdateInfo(
+            (current) =>
+              current ?? {
+                kind: status.applyMode === 'relaunch' ? 'core-relaunch' : 'core-reload',
+                version: status.staged!,
+              },
+          );
+        }
+      })
+      .catch(console.error);
+    return () => {
+      active = false;
+    };
+  }, []);
+  useWatchBroadcast('coreUpdateApplied', (version) => {
+    receivedUpdateEvent.current = true;
+    setAppliedVersion(version);
+    setUpdateInfo((current) =>
+      current?.version === version && current.kind !== 'app' ? null : current,
+    );
+    setIsInstalling(false);
+  });
+  useWatchBroadcast('coreUpdateDeferred', () => {
+    setIsInstalling(false);
+    toast.info(tElectron('updater.rendererUpdateDeferred'));
+  });
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
+  // The "updated to version" toast only shows when no pending update takes its slot
+  const appliedToastHoverHandlers = useAutoDismiss(
+    updateInfo ? null : appliedVersion,
+    () => setAppliedVersion(null),
+    APPLIED_TOAST_DURATION,
+  );
+
   useWatchBroadcast('updateReady', (info) => {
+    receivedUpdateEvent.current = true;
     setUpdateInfo((current) => selectUpdateInfo(current, info));
-    if (info.kind === 'app') setInstallConfirmMode('unconfirm');
+    if (info.kind === 'app' || info.kind === 'core-relaunch') setInstallConfirmMode('unconfirm');
   });
 
   useWatchBroadcast('updateWillInstallLater', () => {
@@ -155,10 +212,20 @@ export const UpdateNotification: React.FC = () => {
     setTimeout(() => setInstallConfirmMode(null), 5000);
   });
 
-  if (updateInfo?.kind === 'renderer') {
+  const applyCoreUpdateNow = async (keepLoadingOnSuccess: boolean) => {
+    setIsInstalling(true);
+    const applied = await applyCoreUpdate(() =>
+      toast.error(tElectron('updater.rendererUpdateError')),
+    );
+    if (!applied || !keepLoadingOnSuccess) setIsInstalling(false);
+  };
+
+  if (updateInfo?.kind === 'renderer' || updateInfo?.kind === 'core-reload') {
     return (
       <div className={styles.installLaterToast}>
-        <span>{tElectron('updater.rendererReady', { version: updateInfo.version })}</span>
+        <span>
+          {tElectron('updater.rendererReady', { version: formatCoreVersion(updateInfo.version) })}
+        </span>
         <BaseButton size={'small'} type={'text'} onClick={() => setUpdateInfo(null)}>
           {tElectron('updater.ignore')}
         </BaseButton>
@@ -166,19 +233,7 @@ export const UpdateNotification: React.FC = () => {
           loading={isInstalling}
           size={'small'}
           type={'primary'}
-          onClick={async () => {
-            setIsInstalling(true);
-            try {
-              if (!(await rendererOtaService.applyNow())) {
-                toast.error(tElectron('updater.rendererUpdateError'));
-              }
-            } catch (error) {
-              console.error('Failed to apply renderer update:', error);
-              toast.error(tElectron('updater.rendererUpdateError'));
-            } finally {
-              setIsInstalling(false);
-            }
-          }}
+          onClick={() => applyCoreUpdateNow(false)}
         >
           {tElectron('updater.upgradeNow')}
         </BaseButton>
@@ -186,7 +241,46 @@ export const UpdateNotification: React.FC = () => {
     );
   }
 
-  if (!updateInfo) return null;
+  if (updateInfo?.kind === 'core-relaunch') {
+    return (
+      <div className={styles.installLaterToast}>
+        <span>
+          {tElectron('updater.updateReady')}
+          {isDevMode ? ` · ${formatCoreVersion(updateInfo.version)}` : ''}
+        </span>
+        <BaseButton size={'small'} type={'text'} onClick={() => setUpdateInfo(null)}>
+          {tElectron('updater.later')}
+        </BaseButton>
+        <BaseButton
+          loading={isInstalling}
+          size={'small'}
+          type={'primary'}
+          onClick={() => applyCoreUpdateNow(true)}
+        >
+          {tElectron('updater.upgradeNow')}
+        </BaseButton>
+      </div>
+    );
+  }
+
+  if (!updateInfo)
+    return appliedVersion ? (
+      <div className={styles.installLaterToast} {...appliedToastHoverHandlers}>
+        <span>
+          {tElectron('updater.rendererUpdated', { version: formatCoreVersion(appliedVersion) })}
+        </span>
+        <BaseButton
+          size={'small'}
+          type={'text'}
+          onClick={() => {
+            setAppliedVersion(null);
+            rendererOtaService.dismissAppliedNotice().catch(console.error);
+          }}
+        >
+          {tElectron('updater.ignore')}
+        </BaseButton>
+      </div>
+    ) : null;
 
   if (installConfirmMode === 'installLater') {
     return (
@@ -207,22 +301,11 @@ export const UpdateNotification: React.FC = () => {
   if (installConfirmMode === 'unconfirm')
     return (
       <div className={styles.installLaterToast}>
-        <span
-          style={{ cursor: 'pointer' }}
-          onClick={() => {
-            if (updateInfo) openUpdateDetailModal(updateInfo);
-          }}
-        >
+        <span style={{ cursor: 'pointer' }} onClick={() => openUpdateDetailModal(updateInfo)}>
           {tElectron('updater.updateReady')}
           {isDevMode && updateInfo?.version ? ` · ${updateInfo.version}` : ''}
         </span>
-        <BaseButton
-          size={'small'}
-          type={'text'}
-          onClick={() => {
-            autoUpdateService.installLater();
-          }}
-        >
+        <BaseButton size={'small'} type={'text'} onClick={() => autoUpdateService.installLater()}>
           {tElectron('updater.later')}
         </BaseButton>
         <BaseButton

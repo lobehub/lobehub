@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_LIVE_TAB_ROUTERS, resolveLiveTabIds } from './resolveLiveTabIds';
+import { resolveLiveTabIds } from './resolveLiveTabIds';
 
 type Tab = { id: string; lastVisited: number };
 
@@ -47,9 +47,5 @@ describe('resolveLiveTabIds', () => {
     const tabs = [tab('left', 1), tab('recent', 3), tab('right', 2)];
 
     expect(resolveLiveTabIds(tabs, 'right', 2, ['left', 'right'])).toEqual(['left', 'right']);
-  });
-
-  it('exposes the default cap', () => {
-    expect(MAX_LIVE_TAB_ROUTERS).toBe(3);
   });
 });

@@ -4,15 +4,19 @@ import type {
   ProviderCombine as LobeProviderCombine,
   ProviderIcon as LobeProviderIcon,
 } from '@lobehub/icons';
-import { Skeleton } from '@lobehub/ui/base-ui';
+import { Skeleton } from '@lobehub/ui';
 import type { ComponentProps } from 'react';
 import { lazy, Suspense } from 'react';
 
 // The catalog-backed features of @lobehub/icons statically import every brand
 // icon (~3 MB). Mounting them through lazy() keeps that catalog in one shared
 // chunk that loads after paint instead of inside each route's closure.
-const LazyModelIcon = lazy(() => import('@lobehub/icons/es/features/ModelIcon'));
-const LazyModelTag = lazy(() => import('@lobehub/icons/es/features/ModelTag'));
+const LazyModelIcon = lazy(() =>
+  import('@/libs/modelIcon').then(({ ModelIcon }) => ({ default: ModelIcon })),
+);
+const LazyModelTag = lazy(() =>
+  import('@/libs/modelIcon').then(({ ModelTag }) => ({ default: ModelTag })),
+);
 const LazyProviderIcon = lazy(() =>
   import('@/libs/providerIcon').then(({ ProviderIcon }) => ({ default: ProviderIcon })),
 );

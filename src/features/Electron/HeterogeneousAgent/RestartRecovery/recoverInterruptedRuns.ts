@@ -86,6 +86,14 @@ const toTime = (value: UIChatMessage['createdAt']): number => {
  * The run's own branch: its assistant row plus everything hanging off it. A
  * regenerated turn keeps several assistant branches under one user row, and
  * only this one belongs to the interrupted run.
+ *
+ * Stops at user rows: a later turn hangs its user row off this run's tail, so
+ * walking past it would claim the follow-up conversation as the run's own —
+ * and the replay would delete it. A run never writes user rows of its own
+ * (queued messages are sent as a new turn once it ends), so every user row
+ * below the root is a later turn. This happens with the Claude Code SDK, whose
+ * turn can stay open waiting on background tasks while the user sends the next
+ * one, leaving the earlier run on the ledger.
  */
 const collectBranch = (messages: UIChatMessage[], rootId: string): string[] => {
   const childrenByParent = new Map<string, UIChatMessage[]>();
@@ -104,7 +112,9 @@ const collectBranch = (messages: UIChatMessage[], rootId: string): string[] => {
     if (seen.has(id)) continue;
     seen.add(id);
     ids.push(id);
-    for (const child of childrenByParent.get(id) ?? []) queue.push(child.id);
+    for (const child of childrenByParent.get(id) ?? []) {
+      if (child.role !== 'user') queue.push(child.id);
+    }
   }
   return ids;
 };
@@ -131,7 +141,11 @@ const ensureAgentLoaded = async (agentId: string): Promise<void> => {
   );
 };
 
-const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> => {
+const recoverRun = async (
+  run: InterruptedRun,
+  /** The workspace the ledger was read for; navigation may move on during recovery. */
+  workspaceId: string | null,
+): Promise<RestartRecoveryResult> => {
   const { agentId, topicId } = run;
   if (!agentId || !topicId) return { outcome: 'skipped', reason: 'missing-context', topicId };
 
@@ -182,6 +196,15 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
     if (newest && !ownBranch.has(newest.id)) {
       return { outcome: 'skipped', reason: 'topic-taken-over', topicId };
     }
+    // The newest row alone is not enough: a run still open after the user sent
+    // the next turn (Claude Code SDK waiting on a background task) can write a
+    // late row into its own branch AFTER that turn finished. A user turn
+    // chained onto our branch means the conversation continued past this run —
+    // replaying would delete rows that turn is parented to.
+    const hasFollowUpTurn = mainChain.some(
+      (message) => message.role === 'user' && !!message.parentId && ownBranch.has(message.parentId),
+    );
+    if (hasFollowUpTurn) return { outcome: 'skipped', reason: 'topic-taken-over', topicId };
   } else {
     // Nothing of ours on the topic to anchor against. The spawn time is all
     // that is left — a cross-clock comparison, so it is only trusted to spot a
@@ -316,7 +339,10 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
     // row are somebody's history, not this run's leftovers.
     const branchRootId = ownRoot?.id ?? newestRoot?.id;
     const staleIds = branchRootId ? collectBranch(mainChain, branchRootId) : [];
-    if (staleIds.length > 0) await messageService.removeMessages(staleIds, context);
+    // Hard delete, not the recycle bin: these partial rows are superseded by
+    // the replay, and restoring them would bring back a stale branch.
+    if (staleIds.length > 0)
+      await messageService.removeMessages(staleIds, context, { permanent: true });
 
     // Seed the in-memory list ourselves: while the recovery op is running, the
     // topic's own fetch is gated off (a mid-run snapshot would clobber streamed
@@ -345,6 +371,7 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
       replayTranscriptConfigDir: run.configDir,
       replayTranscriptStartedAt: run.startedAt,
       topic: topic as ChatTopic,
+      workspaceId,
     });
 
     if (replayComplete === true) {
@@ -366,11 +393,14 @@ const recoverRun = async (run: InterruptedRun): Promise<RestartRecoveryResult> =
     );
     const continuation = await runHeterogeneousFromExistingMessage(chatStore, {
       context,
+      // Finishes the interrupted run, which already held its fee.
+      continuesRun: true,
       heterogeneousProvider,
       parentMessageId: tail?.id ?? userTurn.id,
       parentOperationId: operationId,
       prompt: HETERO_RESTART_CONTINUE_PROMPT,
       topic: topic as ChatTopic,
+      workspaceId,
     });
     // The executor persists a terminal error rather than throwing, so the call
     // resolving is not success. Reporting `resumed` here would tell the user a
@@ -410,9 +440,12 @@ export const recoverInterruptedHeteroRuns = async (): Promise<RestartRecoveryRes
   // through both, so a run recorded elsewhere stays on the ledger until the
   // launch that owns it. Personal space has no workspace, which is why the
   // account has to be part of the key.
+  // Snapshot once: every recovered run belongs to this workspace, even if the user
+  // navigates elsewhere during the awaits that follow.
+  const workspaceId = getActiveWorkspaceId();
   const runs = (await heterogeneousAgentService.listInterruptedRuns({
     userId: userProfileSelectors.userId(getUserStoreState()),
-    workspaceId: getActiveWorkspaceId() ?? undefined,
+    workspaceId: workspaceId ?? undefined,
   })) as InterruptedRun[];
   if (!runs?.length) return [];
 
@@ -438,7 +471,7 @@ export const recoverInterruptedHeteroRuns = async (): Promise<RestartRecoveryRes
   const results: RestartRecoveryResult[] = [];
   for (const run of [...byTopic.values(), ...unkeyed]) {
     try {
-      results.push(await recoverRun(run));
+      results.push(await recoverRun(run, workspaceId));
       // Recovery reached an outcome, so the ledger entry has done its job.
       // It is only released here: main hands entries over as CLAIMS, which is
       // what lets a crash in the middle of all this be retried at next launch.

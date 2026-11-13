@@ -2,11 +2,7 @@ import type { ChatErrorHeterogeneousContext, ChatMessageError } from '@lobechat/
 import { isRecord } from '@lobechat/utils/object';
 
 import { isLocalHeterogeneousType } from '../config';
-import {
-  CLI_CREDIT_LIMIT_PATTERNS,
-  CLI_SERVER_THROTTLE_PATTERNS,
-  CLI_USER_RATE_LIMIT_PATTERNS,
-} from './claudeCodeQuota';
+import { classifyCliQuotaMessage } from './cliQuota';
 import { formatHeteroErrorId, HETERO_ERROR_SPECS, type HeteroErrorKind } from './specs';
 
 const GUIDE_KINDS: Record<string, HeteroErrorKind> = {
@@ -34,18 +30,16 @@ export const normalizeHeterogeneousMessageError = (
   const message = [error.message, body.message, body.error, body.stderr]
     .filter((value): value is string => typeof value === 'string')
     .join('\n');
-  // Older local/remote producers may have sent only { message }. Never infer
-  // quota exhaustion from a bare 429 or an allowed rolling-window snapshot.
-  if (
-    !kind &&
-    agentType === 'claude-code' &&
-    !CLI_SERVER_THROTTLE_PATTERNS.some((pattern) => pattern.test(message)) &&
-    CLI_USER_RATE_LIMIT_PATTERNS.some((pattern) => pattern.test(message))
-  ) {
-    kind = CLI_CREDIT_LIMIT_PATTERNS.some((pattern) => pattern.test(message))
-      ? 'credit_limit'
-      : 'usage_limit';
-  }
+  // A CLI that dies on its own quota before any adapter saw a stream reaches
+  // here as a bare { message } — Kimi Code exits with `error: failed to run
+  // prompt: provider.auth_error: 403 You've reached your weekly (7-day) usage
+  // limit…`. Read it back for EVERY local CLI, not just CC: they all bill
+  // against their own subscription, and an unclassified quota rejection
+  // renders as the generic JSON card with no reset/schedule/transfer action.
+  // Never inferred from a bare 429 or a throttle that disclaims the plan
+  // limit — `classifyCliQuotaMessage` requires explicit user-quota wording.
+  const quota = kind ? undefined : classifyCliQuotaMessage(message);
+  if (quota) kind = quota.kind;
   kind ??=
     typeof body.code === 'string' && Object.hasOwn(GUIDE_KINDS, body.code)
       ? GUIDE_KINDS[body.code]
@@ -62,6 +56,12 @@ export const normalizeHeterogeneousMessageError = (
       details: { ...details, kind },
       message: typeof body.message === 'string' ? body.message : error.message,
       ...(spec.guideCode === 'rate_limit' ? { clearEchoedContent: true } : {}),
+      // CLIs that only print prose carry no structured `rate_limit_info`;
+      // naming the window it rejected lets the guide card say which limit
+      // ran out instead of just "quota exhausted".
+      ...(quota?.rateLimitType && !isRecord(body.rateLimitInfo)
+        ? { rateLimitInfo: { rateLimitType: quota.rateLimitType, status: 'rejected' } }
+        : {}),
     },
     category: spec.category,
     countAsFailure: spec.countAsFailure,

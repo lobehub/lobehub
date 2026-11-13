@@ -1,7 +1,7 @@
 import { type OpenAIChatMessage, type VoiceMessageRecording } from '@lobechat/types';
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
 import { type ChatInputProps } from '@lobehub/editor/react';
-import { type MenuProps } from '@lobehub/ui';
+import { type DropdownItem } from '@lobehub/ui';
 
 import { type ActionKeys } from '@/features/ChatInput';
 
@@ -19,6 +19,12 @@ export interface SendButtonProps {
   generating: boolean;
   onStop: (params: { editor: IEditor }) => void;
   shape?: 'round' | 'default';
+  /**
+   * While `generating`, render a Send button beside Stop so a follow-up can be
+   * sent without hiding the running indicator. Only hosts whose `onSend`
+   * accepts sends during generation (e.g. by queueing) should enable this.
+   */
+  showSendWhileGenerating?: boolean;
   size?: number;
 }
 
@@ -83,7 +89,7 @@ export interface PublicState {
   resolveSendBlocked?: () => boolean;
   rightActions: ActionKeys[];
   sendButtonProps?: SendButtonProps;
-  sendMenu?: MenuProps;
+  sendMenu?: { items: DropdownItem[] };
   showTypoBar?: boolean;
   /**
    * Slash menu placement: 'bottom' for home page (input in center), 'top' for page input (at bottom)
@@ -99,6 +105,13 @@ export interface PublicState {
    * topic than the surrounding page.
    */
   topicId?: string | null;
+  /**
+   * Key of this composer's upload list in the file store. Defaults to
+   * `contextSelectionKey`; a host whose text draft outlives that key (Home
+   * keeps its text across mode and agent switches) passes a steadier one so
+   * attachments stay alongside the text.
+   */
+  uploadContextKey?: string;
 }
 
 export interface State extends PublicState {
@@ -106,6 +119,8 @@ export interface State extends PublicState {
   editor?: IEditor;
   inputCompletionError?: InputCompletionError;
   inputCompletionErrorDismissed: boolean;
+  /** Market agents/skills picked from the @ menu are being installed before the send commits. */
+  installingMarketMentions: boolean;
   isContentEmpty: boolean;
   markdownContent: string;
   slashMenuRef: ChatInputProps['slashMenuRef'];
@@ -117,6 +132,7 @@ export const initialState: State = {
   expand: false,
   feature: DEFAULT_CHAT_INPUT_FEATURE,
   inputCompletionErrorDismissed: false,
+  installingMarketMentions: false,
   isContentEmpty: false,
   leftActions: [],
   markdownContent: '',

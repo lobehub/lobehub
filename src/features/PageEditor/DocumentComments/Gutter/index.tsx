@@ -1,8 +1,6 @@
 'use client';
 
-import { Empty, Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import { cx, Empty, Flexbox, Text } from '@lobehub/ui';
 import { MessageSquareTextIcon } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,9 +31,7 @@ const PanelBody = memo<{ state: DocumentCommentsState }>(({ state }) => {
     focus,
     gutterThreads,
     handleCreate,
-    handlePinnedRootUpdate,
     handleReplyFocusMissing,
-    handleUpdate,
     isAnchoredInitialError,
     isAnchoredLoading,
     isAnchoredRetrying,
@@ -44,9 +40,6 @@ const PanelBody = memo<{ state: DocumentCommentsState }>(({ state }) => {
     refresh,
     refreshPinned,
     reloadAnchored,
-    updatePinnedReplyCount,
-    updateReplyCount,
-    updateSummaryTotal,
   } = state;
   const { selectedRootId, selectRoot } = useCommentAnchors();
   const { allowed: canComment } = usePermission('create_content');
@@ -145,9 +138,6 @@ const PanelBody = memo<{ state: DocumentCommentsState }>(({ state }) => {
               root={pinnedThreadInGutter.root}
               onFocusMissing={handleReplyFocusMissing}
               onMutated={refreshPinned}
-              onReplyCountChange={updatePinnedReplyCount}
-              onRootUpdate={handlePinnedRootUpdate}
-              onSummaryChange={updateSummaryTotal}
             />,
           )}
         {gutterThreads.map(({ replyCount, root }) =>
@@ -162,9 +152,6 @@ const PanelBody = memo<{ state: DocumentCommentsState }>(({ state }) => {
               root={root}
               onFocusMissing={handleReplyFocusMissing}
               onMutated={refresh}
-              onReplyCountChange={updateReplyCount}
-              onRootUpdate={handleUpdate}
-              onSummaryChange={updateSummaryTotal}
             />,
           ),
         )}

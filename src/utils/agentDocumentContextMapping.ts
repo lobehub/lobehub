@@ -1,4 +1,4 @@
-import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
+import { CUSTOM_FOLDER_FILE_TYPE, WEB_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import {
   AGENT_DOCUMENT_INJECTION_POSITIONS,
   type AgentContextDocument,
@@ -35,6 +35,7 @@ export const normalizeAgentDocumentPosition = (
 export const toAgentContextDocument = (doc: AgentDocumentContextPayload): AgentContextDocument => ({
   content: doc.content,
   contentCharCount: doc.contentCharCount ?? doc.content.length,
+  createdAt: doc.createdAt ?? undefined,
   description: doc.description ?? undefined,
   filename: doc.filename,
   id: doc.id,
@@ -75,16 +76,27 @@ export const toAgentContextDocument = (doc: AgentDocumentContextPayload): AgentC
 export const toAgentContextDocuments = (
   docs: AgentDocumentContextPayload[],
 ): AgentContextDocument[] => {
-  const folderTitleById = new Map<string, string>();
+  // Folders and ordinary documents can both hold children (a workflow document
+  // with its run records nested under it). Skill bundles keep their own layout.
+  const parentById = new Map<string, { kind: 'document' | 'folder'; title: string }>();
   for (const doc of docs) {
-    if (doc.fileType === CUSTOM_FOLDER_FILE_TYPE) folderTitleById.set(doc.documentId, doc.title);
+    if (doc.fileType === CUSTOM_FOLDER_FILE_TYPE) {
+      parentById.set(doc.documentId, { kind: 'folder', title: doc.title });
+    } else if (
+      !doc.isFolder &&
+      // Cached client payloads can predate `fileType`; treat a missing one as a document.
+      !(doc.fileType ?? '').startsWith('skills/') &&
+      doc.sourceType !== WEB_DOCUMENT_SOURCE_TYPE
+    ) {
+      parentById.set(doc.documentId, { kind: 'document', title: doc.title });
+    }
   }
 
   return docs
     .filter((doc) => !doc.isFolder)
     .map((doc) => {
       const mapped = toAgentContextDocument(doc);
-      const folderTitle = doc.parentId ? folderTitleById.get(doc.parentId) : undefined;
-      return folderTitle ? { ...mapped, folderTitle } : mapped;
+      const parent = doc.parentId ? parentById.get(doc.parentId) : undefined;
+      return parent ? { ...mapped, folderTitle: parent.title, parentKind: parent.kind } : mapped;
     });
 };

@@ -16,6 +16,27 @@ import { buildTraeAcpPrompt, parseTraeAcpModelCatalog } from './traeAcpSession';
 
 const TRANSPORT = 'devin-acp' as const;
 
+// LobeHub 内的 Devin 会话模式不对外暴露：恒为 bypass。
+const DEVIN_FORCED_SESSION_MODE = 'bypass';
+
+// Devin's CLI exposes thinking variants, while ACP exposes one representative
+// model per family plus `thought_level`. Fusion IDs also contain a sidekick's
+// effort, so they must not be interpreted as a single-model thinking variant.
+const splitThinkingModel = (model: string) => {
+  const match = /^(?!fusion-)(.+)-(none|minimal|low|medium|high|xhigh|max)$/i.exec(model);
+  return match ? { family: match[1], thoughtLevel: match[2].toLowerCase() } : undefined;
+};
+
+const getThinkingConfig = (configOptions: unknown) =>
+  Array.isArray(configOptions)
+    ? configOptions.filter(isRecord).find((option) => option.id === 'thought_level')
+    : undefined;
+
+const getModeConfigValue = (configOptions: unknown): unknown =>
+  Array.isArray(configOptions)
+    ? configOptions.filter(isRecord).find((option) => option.id === 'mode')?.currentValue
+    : undefined;
+
 export type DevinAcpTextPromptBlock = TraeAcpTextPromptBlock;
 export type DevinAcpImagePromptBlock = TraeAcpImagePromptBlock;
 export type DevinAcpPromptBlock = TraeAcpPromptBlock;
@@ -69,8 +90,6 @@ export interface DevinAcpSessionOptions extends AcpAgentSessionOptions {
   askUserBridge?: AskUserBridge;
   initialModel?: string;
   onModel?: (model: string) => void;
-  /** Devin ACP permission mode, applied via `session/set_config_option`. */
-  permissionMode?: string;
   prompt: DevinAcpPromptBlock[];
 }
 
@@ -119,18 +138,15 @@ export class DevinAcpSession extends AcpAgentSession<
   DevinAcpSessionOptions
 > {
   private acceptUpdates = false;
-  private readonly resolvedPermissionMode?: string;
+  private modeReasserted = false;
 
   constructor(options: DevinAcpSessionOptions) {
-    const devinArgs = buildDevinAcpArgs(options.args);
     super(options, {
-      args: devinArgs,
+      args: buildDevinAcpArgs(options.args),
       pipeline: { agentType: 'devin', cwd: options.cwd },
       processLabel: 'Devin ACP',
       transport: TRANSPORT,
     });
-    this.resolvedPermissionMode =
-      devinArgs[0] === '--permission-mode' ? devinArgs[1] : (options.permissionMode ?? undefined);
   }
 
   get sessionId(): string | undefined {
@@ -183,15 +199,10 @@ export class DevinAcpSession extends AcpAgentSession<
     if (!sessionId) throw new Error('Devin ACP returned no session id');
 
     const model = await this.applyInitialModel(sessionId, sessionResult);
-    if (this.resolvedPermissionMode) {
-      await this.client.request<DevinAcpSetConfigOptionResult>('session/set_config_option', {
-        configId: 'mode',
-        sessionId,
-        value: this.resolvedPermissionMode,
-      });
-      // Permission mode should not clobber the model selected above. The model
-      // resolved from the model set_config_option is authoritative.
-    }
+    // The forced session mode is applied after the model and must not clobber
+    // the model selected above: the model resolved from the model
+    // set_config_option stays authoritative.
+    await this.applyForcedSessionMode(sessionId);
     if (model) {
       this.pipeline.configureSession({ model });
       this.options.onModel?.(model);
@@ -224,6 +235,11 @@ export class DevinAcpSession extends AcpAgentSession<
     await this.emitEvents(await this.pipeline.flush());
   }
 
+  protected async onRunCancelled(): Promise<void> {
+    this.options.askUserBridge?.cancelAll('session_ended');
+    await this.pushToPipeline({ stopReason: 'cancelled', type: 'devin_prompt_completed' });
+  }
+
   protected async handleAgentMessage(message: AcpRpcMessage): Promise<void> {
     if (!this.acceptUpdates || message.method !== 'session/update') return;
     const params = isRecord(message.params) ? message.params : undefined;
@@ -236,8 +252,53 @@ export class DevinAcpSession extends AcpAgentSession<
         this.pipeline.configureSession({ model });
         this.options.onModel?.(model);
       }
+      this.reassertForcedSessionMode(update.configOptions);
     }
     await this.pushToPipeline(update);
+  }
+
+  /**
+   * `--permission-mode` has no effect on Devin ACP sessions (they always start
+   * in `accept-edits`), so the mode is forced through `session/set_config_option`.
+   * A failure only degrades to Devin's default mode; it must never prevent the
+   * session from starting.
+   */
+  private async applyForcedSessionMode(sessionId: string): Promise<void> {
+    try {
+      await this.client.request<DevinAcpSetConfigOptionResult>('session/set_config_option', {
+        configId: 'mode',
+        sessionId,
+        value: DEVIN_FORCED_SESSION_MODE,
+      });
+    } catch (error) {
+      // Kept on console.warn rather than a `debug` namespace on purpose: a
+      // silent fallback to Devin's default (approval-gated) mode must be
+      // visible without opting into DEBUG, like the package's other degraded
+      // paths. The ids let concurrent desktop / CLI sessions be told apart.
+      console.warn(
+        `[DevinAcpSession] Failed to set session mode "${DEVIN_FORCED_SESSION_MODE}"; continuing with Devin's default mode:`,
+        { error, operationId: this.options.operationId, sessionId },
+      );
+    }
+  }
+
+  /**
+   * Devin pushes `config_option_update` whenever a config changes. If the mode
+   * drifted away from the forced value, set it back — once per session, so a
+   * peer that rejects the value but keeps echoing updates cannot cause a
+   * set → update → set loop.
+   */
+  private reassertForcedSessionMode(configOptions: unknown): void {
+    const mode = getModeConfigValue(configOptions);
+    if (mode === undefined || mode === DEVIN_FORCED_SESSION_MODE || this.modeReasserted) return;
+
+    const sessionId = this.acpSessionId;
+    if (!sessionId) return;
+
+    this.modeReasserted = true;
+    // Fire-and-forget: this runs on the ACP client's serial message queue, and
+    // the response is resolved on that same queue, so awaiting here would deadlock.
+    void this.applyForcedSessionMode(sessionId);
   }
 
   protected async handleServerRequest(message: AcpRpcMessage): Promise<unknown> {
@@ -264,7 +325,12 @@ export class DevinAcpSession extends AcpAgentSession<
   }
 
   private resolveCurrentModel(configOptions: unknown): string | undefined {
-    return parseTraeAcpModelCatalog({ configOptions })?.currentModelId;
+    const model = parseTraeAcpModelCatalog({ configOptions })?.currentModelId;
+    const thinkingModel = model ? splitThinkingModel(model) : undefined;
+    const thoughtLevel = getThinkingConfig(configOptions)?.currentValue;
+    return thinkingModel && typeof thoughtLevel === 'string'
+      ? `${thinkingModel.family}-${thoughtLevel}`
+      : model;
   }
 
   private async applyInitialModel(
@@ -289,15 +355,67 @@ export class DevinAcpSession extends AcpAgentSession<
       return this.setModelOption(sessionId, requestedModel);
     }
 
-    const selected = catalog.models.find((model) =>
+    const requestedThinking = splitThinkingModel(requestedModel);
+    const exactMatch = catalog.models.find((model) =>
       [model.id, model.label].some(
         (candidate) =>
           typeof candidate === 'string' &&
           this.normalizeModelId(candidate) === this.normalizeModelId(requestedModel),
       ),
     );
+    const selected =
+      exactMatch ??
+      (requestedThinking &&
+        catalog.models.find((model) => {
+          const thinkingModel = splitThinkingModel(model.id);
+          return (
+            thinkingModel &&
+            this.normalizeModelId(thinkingModel.family) ===
+              this.normalizeModelId(requestedThinking.family)
+          );
+        }));
 
     if (!selected) {
+      throw new Error(`Devin ACP model is unavailable: ${requestedModel}`);
+    }
+
+    const selectedThinking = splitThinkingModel(selected.id);
+    if (requestedThinking && selectedThinking) {
+      // Switching families can change the supported thinking levels. Validate
+      // against the response for the selected family, not the previous one.
+      let result =
+        catalog.currentModelId === selected.id
+          ? sessionResult
+          : await this.client.request<DevinAcpSetConfigOptionResult>('session/set_config_option', {
+              configId: 'model',
+              sessionId,
+              value: selected.id,
+            });
+      const thinking = getThinkingConfig(result.configOptions);
+      if (thinking) {
+        if (
+          !Array.isArray(thinking.options) ||
+          !thinking.options.some(
+            (option: unknown) =>
+              isRecord(option) && option.value === requestedThinking.thoughtLevel,
+          )
+        ) {
+          throw new Error(`Devin ACP thinking level is unavailable: ${requestedModel}`);
+        }
+        if (thinking.currentValue !== requestedThinking.thoughtLevel) {
+          result = await this.client.request<DevinAcpSetConfigOptionResult>(
+            'session/set_config_option',
+            {
+              configId: thinking.id,
+              sessionId,
+              value: requestedThinking.thoughtLevel,
+            },
+          );
+        }
+        return this.resolveCurrentModel(result.configOptions) ?? requestedModel;
+      }
+      // Older Devin versions may advertise each variant as a model directly.
+      if (exactMatch) return this.resolveCurrentModel(result.configOptions) ?? selected.id;
       throw new Error(`Devin ACP model is unavailable: ${requestedModel}`);
     }
 

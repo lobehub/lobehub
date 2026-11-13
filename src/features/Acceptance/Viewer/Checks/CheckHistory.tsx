@@ -1,9 +1,7 @@
 'use client';
 
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
-import { Flexbox, Icon, Image, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Icon, Image, Text, Tooltip } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { BadgeCheck, Ban, MessageSquareX } from 'lucide-react';
 import { memo } from 'react';
@@ -12,10 +10,12 @@ import { useTranslation } from 'react-i18next';
 import AudioPlayer from '@/features/AudioPlayer';
 import { useIsHydrated } from '@/hooks/useIsHydrated';
 
+import { TerminalEvidenceCard } from '../../Report/TerminalEvidence';
 import { AnnotatedImage } from '../Evidence/Annotation';
 import { AttachmentThumbs } from '../Evidence/attachments';
 import { IMAGE_EVIDENCE, imageRatio } from '../Evidence/evidence';
 import { styles as evidenceStyles } from '../Evidence/styles';
+import { VideoFeedbackNotes } from '../Evidence/Video/VideoFeedbackNotes';
 import { styles } from './styles';
 import type { AcceptanceCheck, AcceptanceCheckReviewEntry, AcceptanceEvidence } from './types';
 
@@ -67,13 +67,10 @@ export const FeedbackCard = memo<{
   if (review.action === 'accept') return <AcceptedNote review={review} />;
   if (review.action === 'ignore') return <IgnoredNote review={review} />;
 
-  const groups = new Map<
-    string,
-    { comment?: string; rect: AcceptanceReviewAnnotation['rect'] }[]
-  >();
+  const groups = new Map<string, AcceptanceReviewAnnotation[]>();
   for (const annotation of review.annotations ?? []) {
     const bucket = groups.get(annotation.evidenceId) ?? [];
-    bucket.push({ comment: annotation.comment, rect: annotation.rect });
+    bucket.push(annotation);
     groups.set(annotation.evidenceId, bucket);
   }
 
@@ -101,6 +98,8 @@ export const FeedbackCard = memo<{
                 {annotation.comment}
               </Text>
             ));
+        if (evidence.type === 'video')
+          return <VideoFeedbackNotes key={evidenceId} notes={annotations} />;
         return (
           <AnnotatedImage
             annotations={annotations}
@@ -268,6 +267,12 @@ export const IterationTimeline = memo<{
                           downloadFileName={item.fileName ?? 'audio'}
                           url={item.fileUrl}
                         />
+                      </div>
+                    ) : item.type === 'terminal' ? (
+                      // An earlier round's execution keeps its command card —
+                      // folded to one line, the same record the live row shows.
+                      <div key={item.id} style={{ width: '100%' }}>
+                        <TerminalEvidenceCard evidence={item} />
                       </div>
                     ) : item.content ? (
                       <div

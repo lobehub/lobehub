@@ -1,10 +1,12 @@
 // @vitest-environment node
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
+import { Stream } from 'openai/core/streaming';
 import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeOpenCodeCodingPlanAI, sanitizeJsonSchema } from './index';
+import * as debugStreamModule from '../../utils/debugStream';
+import { LobeOpenCodeCodingPlanAI, params, sanitizeJsonSchema } from './index';
 
 // The router pulls the cloud model-bank config for deepseek route resolution,
 // which transitively imports server-only modules (e.g. redis-client). Stub it
@@ -30,6 +32,93 @@ describe('LobeOpenCodeCodingPlanAI', () => {
       const instance = new LobeOpenCodeCodingPlanAI({ apiKey: 'test_api_key' });
       expect(instance).toBeInstanceOf(LobeOpenCodeCodingPlanAI);
     });
+  });
+
+  describe('provider configuration', () => {
+    beforeEach(() => {
+      loadModelsMock.mockResolvedValue([]);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      vi.unstubAllEnvs();
+    });
+
+    it.each([
+      [undefined, defaultBaseURL, 'https://opencode.ai/zen/go'],
+      [
+        'https://proxy.example.com/go/v1',
+        'https://proxy.example.com/go/v1',
+        'https://proxy.example.com/go',
+      ],
+      [
+        'https://proxy.example.com/v1/gateway',
+        'https://proxy.example.com/v1/gateway',
+        'https://proxy.example.com/v1/gateway',
+      ],
+    ])(
+      'configures all route endpoints with baseURL=%s',
+      async (baseURL, openaiURL, anthropicURL) => {
+        const routers = await params.routers({ apiKey: 'test', baseURL });
+
+        expect(routers).toEqual([
+          expect.objectContaining({
+            apiType: 'anthropic',
+            options: { apiKey: 'test', baseURL: anthropicURL },
+          }),
+          expect.objectContaining({
+            apiType: 'deepseek',
+            options: { apiKey: 'test', baseURL: openaiURL, sdkType: 'openai' },
+          }),
+          expect.objectContaining({
+            apiType: 'openai',
+            options: { apiKey: 'test', baseURL: openaiURL },
+          }),
+        ]);
+      },
+    );
+
+    it('identifies OpenCode Coding Plan and its default endpoint in API errors', async () => {
+      vi.spyOn(OpenAI.Chat.Completions.prototype, 'create').mockRejectedValue(
+        new OpenAI.APIError(401, { message: 'Unauthorized' }, 'Unauthorized', new Headers()),
+      );
+      const instance = new LobeOpenCodeCodingPlanAI({ apiKey: 'test' });
+
+      await expect(
+        instance.chat({ messages: [{ content: 'Hello', role: 'user' }], model: 'glm-5' }),
+      ).rejects.toMatchObject({
+        endpoint: defaultBaseURL,
+        errorType: 'InvalidProviderAPIKey',
+        provider,
+      });
+    });
+
+    it.each([undefined, '0', '1'])(
+      'enables streaming debug output only for DEBUG_OPENCODE_GO_CHAT_COMPLETION=1 (%s)',
+      async (value) => {
+        vi.stubEnv('DEBUG_OPENCODE_GO_CHAT_COMPLETION', value);
+        const debugStream = vi.spyOn(debugStreamModule, 'debugStream').mockResolvedValue();
+        vi.spyOn(debugStreamModule, 'debugPayload').mockImplementation(() => {});
+        vi.spyOn(OpenAI.Chat.Completions.prototype, 'create').mockResolvedValue(
+          Stream.fromReadableStream<OpenAI.ChatCompletionChunk>(
+            new ReadableStream({ start: (controller) => controller.close() }),
+            new AbortController(),
+          ),
+        );
+        const instance = new LobeOpenCodeCodingPlanAI({ apiKey: 'test' });
+
+        const response = await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-5',
+          stream: true,
+        });
+        await response.text();
+
+        expect(params.debug.chatCompletion()).toBe(value === '1');
+        expect(debugStream).toHaveBeenCalledTimes(value === '1' ? 1 : 0);
+      },
+    );
   });
 });
 

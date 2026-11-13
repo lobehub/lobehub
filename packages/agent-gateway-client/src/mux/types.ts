@@ -44,14 +44,77 @@ export interface MuxUserInputMessage {
   type: 'user_input';
 }
 
-export interface MuxInterruptMessage {
-  operationId: string;
-  type: 'interrupt';
+export type MuxDocClientMessage =
+  | { documentId: string; epoch?: string; stateVector?: string; type: 'doc_subscribe' }
+  | { documentId: string; type: 'doc_unsubscribe' }
+  | { bootstrap?: true; documentId: string; seq: number; type: 'doc_update'; update: string }
+  | {
+      clientID: number;
+      documentId: string;
+      state: Record<string, unknown> | null;
+      type: 'doc_awareness';
+    };
+
+export interface MuxDocAwarenessEntry {
+  clientID: number;
+  state: Record<string, unknown> | null;
 }
 
+/** How close the room's page is to its size cap; `full` refuses anything that adds content. */
+export type MuxDocCapacity = 'full' | 'near_full' | 'ok';
+
+export type MuxDocServerMessage =
+  | {
+      access: 'edit' | 'view';
+      awareness?: MuxDocAwarenessEntry[];
+      bootstrap: boolean;
+      bootstrapped: boolean;
+      /** Absent from gateways that predate the size cap. */
+      capacity?: MuxDocCapacity;
+      documentId: string;
+      epoch: string;
+      reset: boolean;
+      type: 'doc_synced';
+      update: string;
+    }
+  | { documentId: string; type: 'doc_update'; update: string }
+  | { capacity: MuxDocCapacity; documentId: string; type: 'doc_capacity' }
+  | { documentId: string; seq: number; type: 'doc_ack' }
+  /** The room's page is stored again after a `char_limit_exceeded` refusal. */
+  | { documentId: string; type: 'doc_char_limit_cleared' }
+  | ({ documentId: string; type: 'doc_awareness' } & MuxDocAwarenessEntry)
+  | {
+      /**
+       * Length the room's page would have, with `code: 'char_limit_exceeded'`:
+       * the server refused to store it for the plan's per-page limit.
+       */
+      actual?: number;
+      code: string;
+      documentId: string;
+      /** Per-page character limit, with `code: 'char_limit_exceeded'`. */
+      limit?: number;
+      message: string;
+      plan?: string;
+      type: 'doc_error';
+    };
+
+export interface DocumentChannelHandler {
+  onMessage: (message: MuxDocServerMessage) => void;
+  /** The socket (re)reached `ready`: the channel must subscribe again. */
+  onReady: () => void;
+  onStatus?: (status: GatewayMuxStatus) => void;
+}
+
+export interface DocumentChannel {
+  close: () => void;
+  isReady: () => boolean;
+  send: (message: MuxDocClientMessage) => boolean;
+}
+
+/** See `ClientMessage` in ../types for why `interrupt` is not sendable here. */
 export type MuxClientMessage =
+  | MuxDocClientMessage
   | MuxHeartbeatMessage
-  | MuxInterruptMessage
   | MuxSubscribeMessage
   | MuxToolConfirmationMessage
   | MuxToolResultMessage
@@ -149,6 +212,12 @@ export interface MuxHeartbeatAckMessage {
   type: 'heartbeat_ack';
 }
 
+/** Public-view invalidation only. Re-fetch through the membership-authorized Channel API. */
+export interface MuxChannelChangedMessage {
+  channelId: string;
+  type: 'channel_changed';
+}
+
 export interface MuxErrorMessage {
   code: string;
   message: string;
@@ -157,7 +226,9 @@ export interface MuxErrorMessage {
 }
 
 export type MuxServerMessage =
+  | MuxDocServerMessage
   | MuxAgentEventMessage
+  | MuxChannelChangedMessage
   | MuxErrorMessage
   | MuxHeartbeatAckMessage
   | MuxInputRequestMessage
@@ -181,6 +252,14 @@ export interface GatewayMuxClientOptions {
   autoReconnect?: boolean;
   /** Stable id for this tab; the hub tags the connection with it. Random when omitted. */
   clientId?: string;
+  /**
+   * Deadline for one dial, from minting the token to the hub's `ready`
+   * (default: none). An attempt that misses it — a `getToken` that never
+   * settles, a socket that opens but never gets `ready` — is abandoned and
+   * handled like a lost connection: it counts toward `maxDialFailures` while
+   * protocol v2 has not worked yet, and is redialed with backoff.
+   */
+  connectTimeoutMs?: number;
   /** Gateway URL base (e.g. https://gateway.lobehub.com); the client appends `/v2/ws`. */
   gatewayUrl: string;
   /** Called before EVERY connect attempt; must return a fresh user JWT. */
@@ -195,17 +274,33 @@ export interface GatewayMuxClientOptions {
    * even with nothing subscribed.
    */
   keepAlive?: boolean;
+  /**
+   * Consecutive dial failures after which the mux declares itself unavailable
+   * and emits `unavailable` instead of retrying forever (default: 3).
+   *
+   * Only honoured when someone listens for `unavailable`: a standalone client
+   * with no fallback keeps its original behaviour (retry with backoff).
+   */
+  maxDialFailures?: number;
 }
 
 export type GatewayMuxStatus = 'connected' | 'connecting' | 'disconnected';
 
 export interface GatewayMuxClientEvents {
+  channel_changed: (event: MuxChannelChangedMessage) => void;
   connected: () => void;
   disconnected: () => void;
   error: (error: Error) => void;
   lifecycle: (lifecycle: MuxOpLifecycleMessage) => void;
   reconnecting: (delay: number) => void;
   status_changed: (status: GatewayMuxStatus) => void;
+  /**
+   * This deployment cannot serve protocol v2 to this client: the token could
+   * not be minted, `/v2/ws` is not there, or the hub refused the token past
+   * the auth-retry budget. Terminal — the mux stops dialing and the owner is
+   * expected to fall back to the v1 per-operation socket.
+   */
+  unavailable: (reason: string) => void;
 }
 
 // ─── Operation subscription ───
@@ -246,7 +341,6 @@ export interface OperationSubscription {
     listener: OperationSubscriptionEvents[K],
   ) => () => void;
   operationId: string;
-  sendInterrupt: () => boolean;
   sendToolConfirmation: (toolCallId: string, approved: boolean) => boolean;
   /** Queued while the socket is down (TTL 120s) and flushed after resubscribe. */
   sendToolResult: (result: ToolResultPayload) => boolean;

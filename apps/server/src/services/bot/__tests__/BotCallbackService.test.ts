@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
+
 import type { BotCallbackBody } from '../BotCallbackService';
 import { BotCallbackService } from '../BotCallbackService';
 
@@ -233,6 +235,28 @@ vi.mock('../deferredReplay', async (importOriginal) => ({
   scheduleDeferredReplay: mockScheduleDeferredReplay,
 }));
 
+const completedLongEvent = (longContent: string): Partial<BotCallbackBody> => ({
+  lastAssistantContent: longContent,
+  reason: 'completed',
+  type: 'completion',
+});
+
+const llmStepEvent = (): Partial<BotCallbackBody> => ({
+  shouldContinue: true,
+  stepType: 'call_llm',
+  type: 'step',
+});
+
+const completedThreadEvent = (): Partial<BotCallbackBody> => ({
+  lastAssistantContent: 'Answer.',
+  platformThreadId: 'discord:guild:channel-id:thread-id',
+  reason: 'completed',
+  topicId: 'topic-1',
+  type: 'completion',
+  userId: 'user-1',
+  userPrompt: 'Question?',
+});
+
 describe('BotCallbackService', () => {
   let service: BotCallbackService;
 
@@ -291,11 +315,7 @@ describe('BotCallbackService', () => {
 
   describe('platform detection from platformThreadId', () => {
     it('should detect discord platform from platformThreadId prefix', async () => {
-      const body = makeBody({
-        shouldContinue: true,
-        stepType: 'call_llm',
-        type: 'step',
-      });
+      const body = makeBody(llmStepEvent());
 
       await service.handleCallback(body);
 
@@ -303,11 +323,7 @@ describe('BotCallbackService', () => {
     });
 
     it('should detect telegram platform from platformThreadId prefix', async () => {
-      const body = makeTelegramBody({
-        shouldContinue: true,
-        stepType: 'call_llm',
-        type: 'step',
-      });
+      const body = makeTelegramBody(llmStepEvent());
 
       await service.handleCallback(body);
 
@@ -428,11 +444,7 @@ describe('BotCallbackService', () => {
         decrypt: vi.fn().mockRejectedValue(new Error('decrypt failed')),
       });
 
-      const body = makeBody({
-        shouldContinue: true,
-        stepType: 'call_llm',
-        type: 'step',
-      });
+      const body = makeBody(llmStepEvent());
 
       // Should not throw because it falls back to raw JSON parse
       await service.handleCallback(body);
@@ -790,11 +802,7 @@ describe('BotCallbackService', () => {
         new Error('Telegram API sendMessage failed: 429 Too Many Requests'),
       );
 
-      const body = makeBody({
-        lastAssistantContent: longContent,
-        reason: 'completed',
-        type: 'completion',
-      });
+      const body = makeBody(completedLongEvent(longContent));
 
       await service.handleCallback(body);
 
@@ -807,11 +815,7 @@ describe('BotCallbackService', () => {
     it('should resume strict delivery after the last checkpointed chunk', async () => {
       const onChunkDelivered = vi.fn().mockResolvedValue(undefined);
       const longContent = 'A'.repeat(2000) + '\n\n' + 'B'.repeat(2000);
-      const body = makeBody({
-        lastAssistantContent: longContent,
-        reason: 'completed',
-        type: 'completion',
-      });
+      const body = makeBody(completedLongEvent(longContent));
 
       await service.handleCallback(body, {
         deliveredChunkCount: 1,
@@ -1008,11 +1012,7 @@ describe('BotCallbackService', () => {
     it('should split long messages into multiple chunks', async () => {
       const longContent = 'A'.repeat(3000);
 
-      const body = makeBody({
-        lastAssistantContent: longContent,
-        reason: 'completed',
-        type: 'completion',
-      });
+      const body = makeBody(completedLongEvent(longContent));
 
       await service.handleCallback(body);
 
@@ -1044,16 +1044,98 @@ describe('BotCallbackService', () => {
       setupCredentials(FAKE_CREDENTIALS, { settings: { charLimit: 4000 } });
       const longContent = 'C'.repeat(6000);
 
-      const body = makeTelegramBody({
-        lastAssistantContent: longContent,
-        reason: 'completed',
-        type: 'completion',
-      });
+      const body = makeTelegramBody(completedLongEvent(longContent));
 
       await service.handleCallback(body);
 
       expect(mockEditMessage).toHaveBeenCalledTimes(1);
       expect(mockCreateMessage).toHaveBeenCalled();
+    });
+  });
+
+  // ==================== Reaction mode ====================
+
+  describe('reactionMode', () => {
+    const stepBody = () =>
+      makeBody({
+        shouldContinue: true,
+        stepType: 'call_llm',
+        toolsCalling: [{ apiName: 'search', arguments: '{}', identifier: 'web' }],
+        type: 'step',
+        userMessageId: 'user-msg-1',
+      });
+
+    const completionBody = () =>
+      makeBody({
+        lastAssistantContent: 'Done.',
+        reason: 'completed',
+        type: 'completion',
+        userMessageId: 'user-msg-1',
+      });
+
+    it('defaults to minimal: no per-step swap, but still clears on completion', async () => {
+      setupCredentials(FAKE_CREDENTIALS, { settings: { displayToolCalls: true } });
+
+      await service.handleCallback(stepBody());
+      expect(mockReplaceReaction).not.toHaveBeenCalled();
+
+      await service.handleCallback(completionBody());
+      expect(mockReplaceReaction).toHaveBeenCalledTimes(1);
+      expect(mockReplaceReaction).toHaveBeenCalledWith('user-msg-1', '👀', null);
+    });
+
+    it('swaps to the working emoji on each step under full mode', async () => {
+      setupCredentials(FAKE_CREDENTIALS, {
+        settings: { displayToolCalls: true, reactionMode: 'full' },
+      });
+
+      await service.handleCallback(stepBody());
+
+      expect(mockReplaceReaction).toHaveBeenCalledWith('user-msg-1', null, '⚡');
+    });
+
+    it('never touches reactions under none, including completion cleanup', async () => {
+      setupCredentials(FAKE_CREDENTIALS, {
+        settings: { displayToolCalls: true, reactionMode: 'none' },
+      });
+
+      await service.handleCallback(stepBody());
+      await service.handleCallback(completionBody());
+
+      expect(mockReplaceReaction).not.toHaveBeenCalled();
+      expect(mockRemoveReaction).not.toHaveBeenCalled();
+    });
+
+    it('still clears a tracked reaction after the bot is switched to none mid-run', async () => {
+      const redis = {
+        del: vi.fn(),
+        get: vi
+          .fn()
+          .mockResolvedValue(JSON.stringify({ emoji: '🤔', reactionThreadId: 'thread-a' })),
+      };
+      vi.mocked(getAgentRuntimeRedisClient).mockReturnValue(redis as any);
+      try {
+        setupCredentials(FAKE_CREDENTIALS, {
+          settings: { displayToolCalls: true, reactionMode: 'none' },
+        });
+
+        await service.handleCallback(completionBody());
+
+        expect(mockReplaceReaction).toHaveBeenCalledWith('user-msg-1', '🤔', null);
+        expect(redis.del).toHaveBeenCalled();
+      } finally {
+        vi.mocked(getAgentRuntimeRedisClient).mockReturnValue(null);
+      }
+    });
+
+    it('treats an unknown persisted value as the default (minimal)', async () => {
+      setupCredentials(FAKE_CREDENTIALS, {
+        settings: { displayToolCalls: true, reactionMode: 'verbose' },
+      });
+
+      await service.handleCallback(stepBody());
+
+      expect(mockReplaceReaction).not.toHaveBeenCalled();
     });
   });
 
@@ -1242,15 +1324,7 @@ describe('BotCallbackService', () => {
       mockGenerateTopicTitle.mockResolvedValue('New Title');
       mockTopicUpdate.mockResolvedValue(undefined);
 
-      const body = makeBody({
-        lastAssistantContent: 'Answer.',
-        platformThreadId: 'discord:guild:channel-id:thread-id',
-        reason: 'completed',
-        topicId: 'topic-1',
-        type: 'completion',
-        userId: 'user-1',
-        userPrompt: 'Question?',
-      });
+      const body = makeBody(completedThreadEvent());
 
       await service.handleCallback(body);
 
@@ -1264,15 +1338,7 @@ describe('BotCallbackService', () => {
       mockGenerateTopicTitle.mockResolvedValue('');
       mockTopicUpdate.mockResolvedValue(undefined);
 
-      const body = makeBody({
-        lastAssistantContent: 'Answer.',
-        platformThreadId: 'discord:guild:channel-id:thread-id',
-        reason: 'completed',
-        topicId: 'topic-1',
-        type: 'completion',
-        userId: 'user-1',
-        userPrompt: 'Question?',
-      });
+      const body = makeBody(completedThreadEvent());
 
       await service.handleCallback(body);
 

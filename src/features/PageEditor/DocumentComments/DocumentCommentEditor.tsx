@@ -2,11 +2,11 @@ import type { DocumentCommentJson } from '@lobechat/types';
 import type { IEditor } from '@lobehub/editor';
 import type { EditorProps } from '@lobehub/editor/react';
 import { useEditor } from '@lobehub/editor/react';
-import { cx } from 'antd-style';
+import { cx } from '@lobehub/ui';
 import type { Ref } from 'react';
 import { memo, useCallback, useImperativeHandle } from 'react';
 
-import { mentionFilledClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
+import { mentionPlainClassName } from '@/features/ChatInput/InputEditor/mentionStyle';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   readTopicCommentEditorValue,
@@ -96,7 +96,7 @@ const DocumentCommentEditor = memo<DocumentCommentEditorProps>(
         className={cx(
           styles.commentEditor,
           flush && styles.commentEditorFlush,
-          mentionFilledClassName,
+          mentionPlainClassName,
         )}
       >
         <EditorCanvas

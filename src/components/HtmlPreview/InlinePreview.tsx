@@ -46,4 +46,5 @@ const InlineHtmlPreview = memo<InlineHtmlPreviewProps>(
 
 InlineHtmlPreview.displayName = 'InlineHtmlPreview';
 
+/**  Superseded by Canvas (`lobe-canvas`); kept so existing conversations keep rendering. */
 export default InlineHtmlPreview;

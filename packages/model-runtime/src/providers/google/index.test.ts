@@ -12,7 +12,27 @@ import {
   createSignatureScope,
   serializeScopedSignature,
 } from '../../utils/signatureScope';
+import { createVideoWithCompletionMode } from '../../utils/videoCompletionMode';
 import { LobeGoogleAI } from './index';
+
+const createTextStream = (modelVersion: string) =>
+  new ReadableStream({
+    start(controller) {
+      controller.enqueue({
+        text: 'test',
+        candidates: [
+          {
+            content: { parts: [{ text: 'test' }], role: 'model' },
+            finishReason: 'STOP',
+            index: 0,
+          },
+        ],
+        usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
+        modelVersion,
+      });
+      controller.close();
+    },
+  });
 
 const provider = 'google';
 const defaultBaseURL = 'https://generativelanguage.googleapis.com';
@@ -74,6 +94,94 @@ describe('LobeGoogleAI', () => {
       expect(instance).toBeInstanceOf(LobeGoogleAI);
 
       // expect(instance.baseURL).toEqual(defaultBaseURL);
+    });
+  });
+
+  describe('createVideo', () => {
+    it('should reject Gemini Omni Flash on Vertex AI', async () => {
+      const vertexInstance = new LobeGoogleAI({ apiKey: 'test', isVertexAi: true });
+
+      await expect(
+        vertexInstance.createVideo({
+          model: 'gemini-omni-1.1-flash',
+          params: { prompt: 'A cinematic sunrise' },
+        }),
+      ).rejects.toMatchObject({
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        provider: 'vertexai',
+      });
+    });
+
+    it('should default Gemini Omni Flash to polling and omit its webhook config', async () => {
+      const createInteraction = vi
+        .spyOn(instance['client'].interactions, 'create')
+        .mockResolvedValue({ id: 'interactions/omni-polling' } as any);
+
+      await expect(
+        createVideoWithCompletionMode(instance, {
+          callbackUrl: 'https://example.com/webhook',
+          model: 'gemini-omni-1.1-flash',
+          params: { prompt: 'A cinematic sunrise' },
+        }),
+      ).resolves.toEqual({
+        completionMode: 'polling',
+        inferenceId: 'interactions/omni-polling',
+      });
+      expect(createInteraction).toHaveBeenCalledWith(
+        expect.not.objectContaining({ webhook_config: expect.anything() }),
+      );
+    });
+
+    it('should use a dynamic webhook for Gemini Omni Flash when webhook mode is preferred', async () => {
+      const createInteraction = vi
+        .spyOn(instance['client'].interactions, 'create')
+        .mockResolvedValue({ id: 'interactions/omni-webhook' } as any);
+
+      await expect(
+        createVideoWithCompletionMode(
+          instance,
+          {
+            callbackUrl: 'https://example.com/webhook',
+            model: 'gemini-omni-1.1-flash',
+            params: { prompt: 'A cinematic sunrise' },
+          },
+          { preferredCompletionMode: 'webhook' },
+        ),
+      ).resolves.toEqual({
+        completionMode: 'webhook',
+        inferenceId: 'interactions/omni-webhook',
+      });
+      expect(createInteraction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          webhook_config: {
+            uris: ['https://example.com/webhook'],
+          },
+        }),
+      );
+    });
+
+    it('should keep Veo on polling when webhook mode is preferred', async () => {
+      const generateVideos = vi
+        .spyOn(instance['client'].models, 'generateVideos')
+        .mockResolvedValue({ name: 'operations/veo-1' } as any);
+
+      await expect(
+        createVideoWithCompletionMode(
+          instance,
+          {
+            callbackUrl: 'https://example.com/webhook',
+            model: 'veo-3.1-generate-preview',
+            params: { prompt: 'A cinematic sunrise' },
+          },
+          { preferredCompletionMode: 'webhook' },
+        ),
+      ).resolves.toEqual({
+        completionMode: 'polling',
+        inferenceId: 'operations/veo-1',
+      });
+      expect(generateVideos).toHaveBeenCalledWith(
+        expect.not.objectContaining({ callbackUrl: expect.anything() }),
+      );
     });
   });
 
@@ -1033,23 +1141,7 @@ describe('sampling params compatibility', () => {
 
 describe('buildGoogleToolsWithSearch', () => {
   it('should include imageSearch searchTypes for models in modelsWithImageSearch when search is enabled', async () => {
-    const mockStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          text: 'test',
-          candidates: [
-            {
-              content: { parts: [{ text: 'test' }], role: 'model' },
-              finishReason: 'STOP',
-              index: 0,
-            },
-          ],
-          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
-          modelVersion: 'gemini-3.1-flash-image-preview',
-        });
-        controller.close();
-      },
-    });
+    const mockStream = createTextStream('gemini-3.1-flash-image-preview');
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
       mockStream as any,
     );
@@ -1069,23 +1161,7 @@ describe('buildGoogleToolsWithSearch', () => {
   });
 
   it('should use plain googleSearch for non-imageSearch models when search is enabled', async () => {
-    const mockStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          text: 'test',
-          candidates: [
-            {
-              content: { parts: [{ text: 'test' }], role: 'model' },
-              finishReason: 'STOP',
-              index: 0,
-            },
-          ],
-          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
-          modelVersion: 'gemini-2.0-flash',
-        });
-        controller.close();
-      },
-    });
+    const mockStream = createTextStream('gemini-2.0-flash');
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
       mockStream as any,
     );
@@ -1103,23 +1179,7 @@ describe('buildGoogleToolsWithSearch', () => {
   });
 
   it('should drop function declarations for image response models', async () => {
-    const mockStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          text: 'test',
-          candidates: [
-            {
-              content: { parts: [{ text: 'test' }], role: 'model' },
-              finishReason: 'STOP',
-              index: 0,
-            },
-          ],
-          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
-          modelVersion: 'gemini-2.5-flash-image',
-        });
-        controller.close();
-      },
-    });
+    const mockStream = createTextStream('gemini-2.5-flash-image');
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
       mockStream as any,
     );
@@ -1138,23 +1198,7 @@ describe('buildGoogleToolsWithSearch', () => {
   });
 
   it('should drop googleSearch for image response models without search support', async () => {
-    const mockStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          text: 'test',
-          candidates: [
-            {
-              content: { parts: [{ text: 'test' }], role: 'model' },
-              finishReason: 'STOP',
-              index: 0,
-            },
-          ],
-          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
-          modelVersion: 'gemini-2.5-flash-image',
-        });
-        controller.close();
-      },
-    });
+    const mockStream = createTextStream('gemini-2.5-flash-image');
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
       mockStream as any,
     );
@@ -1173,23 +1217,7 @@ describe('buildGoogleToolsWithSearch', () => {
   });
 
   it('should only keep googleSearch for image response models', async () => {
-    const mockStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          text: 'test',
-          candidates: [
-            {
-              content: { parts: [{ text: 'test' }], role: 'model' },
-              finishReason: 'STOP',
-              index: 0,
-            },
-          ],
-          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
-          modelVersion: 'gemini-3.1-flash-image-preview',
-        });
-        controller.close();
-      },
-    });
+    const mockStream = createTextStream('gemini-3.1-flash-image-preview');
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
       mockStream as any,
     );
@@ -1212,23 +1240,7 @@ describe('buildGoogleToolsWithSearch', () => {
   });
 
   it('should combine search tools with function declarations for Gemini 3+ models', async () => {
-    const mockStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          text: 'test',
-          candidates: [
-            {
-              content: { parts: [{ text: 'test' }], role: 'model' },
-              finishReason: 'STOP',
-              index: 0,
-            },
-          ],
-          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
-          modelVersion: 'gemini-3.1-pro-preview',
-        });
-        controller.close();
-      },
-    });
+    const mockStream = createTextStream('gemini-3.1-pro-preview');
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
       mockStream as any,
     );
@@ -1265,23 +1277,7 @@ describe('buildGoogleToolsWithSearch', () => {
   });
 
   it('should combine search tools with function declarations for future Gemini 3.5 Pro models', async () => {
-    const mockStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          text: 'test',
-          candidates: [
-            {
-              content: { parts: [{ text: 'test' }], role: 'model' },
-              finishReason: 'STOP',
-              index: 0,
-            },
-          ],
-          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
-          modelVersion: 'gemini-3.5-pro',
-        });
-        controller.close();
-      },
-    });
+    const mockStream = createTextStream('gemini-3.5-pro');
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
       mockStream as any,
     );
@@ -1321,23 +1317,7 @@ describe('buildGoogleToolsWithSearch', () => {
   });
 
   it('should derive image-response payload for future Gemini image models', async () => {
-    const mockStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          text: 'test',
-          candidates: [
-            {
-              content: { parts: [{ text: 'test' }], role: 'model' },
-              finishReason: 'STOP',
-              index: 0,
-            },
-          ],
-          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
-          modelVersion: 'gemini-3.5-pro-image-preview',
-        });
-        controller.close();
-      },
-    });
+    const mockStream = createTextStream('gemini-3.5-pro-image-preview');
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
       mockStream as any,
     );
@@ -1362,11 +1342,10 @@ describe('buildGoogleToolsWithSearch', () => {
     expect(config.toolConfig).toBeUndefined();
   });
 
-  it('should keep image resolution in imageConfig when aspect ratio is auto', async () => {
+  it('should request image output and image search for Nano Banana 2.1', async () => {
     const mockStream = new ReadableStream({
       start(controller) {
         controller.enqueue({
-          text: 'test',
           candidates: [
             {
               content: { parts: [{ text: 'test' }], role: 'model' },
@@ -1375,11 +1354,38 @@ describe('buildGoogleToolsWithSearch', () => {
             },
           ],
           usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
-          modelVersion: 'gemini-3.5-pro-image-preview',
+          modelVersion: 'gemini-nano-banana-2.1',
         });
         controller.close();
       },
     });
+    vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
+      mockStream as any,
+    );
+
+    await instance.chat({
+      enabledSearch: true,
+      imageResolution: '2K',
+      messages: [{ content: 'Draw an apple', role: 'user' }],
+      model: 'gemini-nano-banana-2.1',
+      temperature: 1,
+      top_p: 0.9,
+    });
+
+    const config = (instance['client'].models.generateContentStream as any).mock.calls[0][0].config;
+    // Without the Image modality, Vertex AI answers with IMAGE_RECITATION and no image.
+    expect(config.responseModalities).toEqual(['Text', 'Image']);
+    expect(config.imageConfig).toEqual({ imageSize: '2K' });
+    expect(config.tools).toEqual([
+      { googleSearch: { searchTypes: { imageSearch: {}, webSearch: {} } } },
+    ]);
+    // Nano Banana 2.1 rejects sampling params with an API error.
+    expect(config).not.toHaveProperty('temperature');
+    expect(config).not.toHaveProperty('topP');
+  });
+
+  it('should keep image resolution in imageConfig when aspect ratio is auto', async () => {
+    const mockStream = createTextStream('gemini-3.5-pro-image-preview');
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
       mockStream as any,
     );
@@ -1398,23 +1404,7 @@ describe('buildGoogleToolsWithSearch', () => {
   });
 
   it('should omit imageConfig when aspect ratio is auto and no resolution is set', async () => {
-    const mockStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          text: 'test',
-          candidates: [
-            {
-              content: { parts: [{ text: 'test' }], role: 'model' },
-              finishReason: 'STOP',
-              index: 0,
-            },
-          ],
-          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
-          modelVersion: 'gemini-3.5-pro-image-preview',
-        });
-        controller.close();
-      },
-    });
+    const mockStream = createTextStream('gemini-3.5-pro-image-preview');
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
       mockStream as any,
     );
@@ -1432,23 +1422,7 @@ describe('buildGoogleToolsWithSearch', () => {
   });
 
   it('should not build imageConfig for non-image-response models', async () => {
-    const mockStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          text: 'test',
-          candidates: [
-            {
-              content: { parts: [{ text: 'test' }], role: 'model' },
-              finishReason: 'STOP',
-              index: 0,
-            },
-          ],
-          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
-          modelVersion: 'gemini-2.0-flash',
-        });
-        controller.close();
-      },
-    });
+    const mockStream = createTextStream('gemini-2.0-flash');
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
       mockStream as any,
     );
@@ -1469,23 +1443,7 @@ describe('buildGoogleToolsWithSearch', () => {
 
   it('should not set includeServerSideToolInvocations for Vertex AI', async () => {
     const vertexInstance = new LobeGoogleAI({ apiKey: 'test', isVertexAi: true });
-    const mockStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          text: 'test',
-          candidates: [
-            {
-              content: { parts: [{ text: 'test' }], role: 'model' },
-              finishReason: 'STOP',
-              index: 0,
-            },
-          ],
-          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
-          modelVersion: 'gemini-3.1-pro-preview',
-        });
-        controller.close();
-      },
-    });
+    const mockStream = createTextStream('gemini-3.1-pro-preview');
     vi.spyOn(vertexInstance['client'].models, 'generateContentStream').mockResolvedValue(
       mockStream as any,
     );
@@ -1505,23 +1463,7 @@ describe('buildGoogleToolsWithSearch', () => {
   });
 
   it('should not set toolConfig when Gemini 3+ has only search tools without function declarations', async () => {
-    const mockStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          text: 'test',
-          candidates: [
-            {
-              content: { parts: [{ text: 'test' }], role: 'model' },
-              finishReason: 'STOP',
-              index: 0,
-            },
-          ],
-          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
-          modelVersion: 'gemini-3.1-pro-preview',
-        });
-        controller.close();
-      },
-    });
+    const mockStream = createTextStream('gemini-3.1-pro-preview');
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
       mockStream as any,
     );
@@ -1540,23 +1482,7 @@ describe('buildGoogleToolsWithSearch', () => {
   });
 
   it('should exclude function declarations when search is enabled for pre-Gemini 3 models', async () => {
-    const mockStream = new ReadableStream({
-      start(controller) {
-        controller.enqueue({
-          text: 'test',
-          candidates: [
-            {
-              content: { parts: [{ text: 'test' }], role: 'model' },
-              finishReason: 'STOP',
-              index: 0,
-            },
-          ],
-          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
-          modelVersion: 'gemini-2.5-pro',
-        });
-        controller.close();
-      },
-    });
+    const mockStream = createTextStream('gemini-2.5-pro');
     vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
       mockStream as any,
     );
@@ -1681,6 +1607,54 @@ describe('models', () => {
       expect(parts[0].inlineData.mimeType).toBe('audio/mp4');
       expect(typeof parts[0].inlineData.data).toBe('string');
       expect(parts[1].text).toBeTruthy();
+    });
+
+    it('should report Gemini usage metadata of transcriptions', async () => {
+      vi.spyOn(instance['client'].models, 'generateContent').mockResolvedValue({
+        candidates: [{ content: { parts: [{ text: 'hi' }] }, finishReason: 'STOP' }],
+        text: 'hi',
+        usageMetadata: {
+          candidatesTokenCount: 5,
+          promptTokenCount: 160,
+          promptTokensDetails: [
+            { modality: 'AUDIO', tokenCount: 150 },
+            { modality: 'TEXT', tokenCount: 10 },
+          ],
+          totalTokenCount: 165,
+        },
+      } as any);
+      const onUsage = vi.fn();
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.m4a', { type: 'audio/mp4' });
+      const result = await instance.transcribe!(
+        { file, model: 'gemini-3.5-transcribe' },
+        { onUsage },
+      );
+
+      expect(result).toEqual({ text: 'hi' });
+      expect(onUsage).toHaveBeenCalledWith(
+        expect.objectContaining({ inputAudioTokens: 150, totalOutputTokens: 5 }),
+      );
+    });
+
+    it('should read the transcript from audioTranscription parts of dedicated ASR models', async () => {
+      vi.spyOn(instance['client'].models, 'generateContent').mockResolvedValue({
+        candidates: [
+          {
+            content: {
+              parts: [{ audioTranscription: { text: ' 帮我把登录页的按钮颜色改成蓝色。 ' } }],
+            },
+            finishReason: 'STOP',
+          },
+        ],
+        text: undefined,
+      } as any);
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.m4a', { type: 'audio/mp4' });
+
+      const result = await instance.transcribe!({ file, model: 'gemini-3.5-transcribe' });
+
+      expect(result).toEqual({ text: '帮我把登录页的按钮颜色改成蓝色。' });
     });
 
     it('should include the language hint when provided', async () => {

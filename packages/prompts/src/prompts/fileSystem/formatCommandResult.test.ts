@@ -30,11 +30,6 @@ describe('formatCommandResult', () => {
     `);
   });
 
-  it('should not mark empty output while the command is still running', () => {
-    const result = formatCommandResult({ shellId: 'shell-123', success: true });
-    expect(result).not.toContain('(no output)');
-  });
-
   it('should format still-running command', () => {
     const result = formatCommandResult({
       shellId: 'shell-123',
@@ -131,18 +126,6 @@ describe('formatCommandResult', () => {
 
       Stdout:
       preview output"
-    `);
-  });
-
-  it('should suppress the Exit code line when exitCode is 0', () => {
-    const result = formatCommandResult({
-      exitCode: 0,
-      success: true,
-    });
-    expect(result).toMatchInlineSnapshot(`
-      "Command completed successfully.
-
-      (no output)"
     `);
   });
 

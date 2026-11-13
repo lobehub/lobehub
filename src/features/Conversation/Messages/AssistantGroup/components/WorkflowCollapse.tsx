@@ -1,14 +1,11 @@
 import { type ChatToolPayloadWithResult } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Accordion, ActionIcon, Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Accordion, ActionIcon, Block, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
 import { Check, HandIcon, Maximize2, Minimize2, X } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import * as motion from 'motion/react-m';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
@@ -414,7 +411,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
           pendingInterventionPresent ? (
             <Icon color={cssVar.colorInfo} icon={HandIcon} />
           ) : (
-            <NeuralNetworkLoading size={16} />
+            <Spin size="small" variant="network" />
           ),
         );
       }

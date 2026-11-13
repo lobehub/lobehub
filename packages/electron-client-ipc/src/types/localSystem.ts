@@ -1,3 +1,5 @@
+import type { LocalFilePreviewFailure } from './localFilePreviewFailure';
+
 // Define types for local file operations
 export interface LocalFileItem {
   contentType?: string;
@@ -88,8 +90,63 @@ export interface RenameLocalFileResult {
   success: boolean;
 }
 
+export interface CreateLocalFileParams {
+  /** Initial content. Defaults to an empty file. */
+  content?: string;
+  /** Working directory a relative `path` resolves against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
+  path: string;
+}
+
+export interface CreateLocalDirectoryParams {
+  /** Working directory a relative `path` resolves against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
+  path: string;
+}
+
+/** Result of creating a file or folder. Never overwrites: an existing entry fails. */
+export interface CreateLocalEntryResult {
+  error?: string;
+  path: string;
+  success: boolean;
+}
+
+export interface CopyLocalFileItem {
+  sourcePath: string;
+  /** Omit to duplicate next to the source as `name copy.ext` / `name copy 2.ext`. */
+  targetPath?: string;
+}
+
+export interface CopyLocalFilesParams {
+  /** Working directory each item's relative paths resolve against. See {@link ListLocalFileParams.cwd}. */
+  cwd?: string;
+  items: CopyLocalFileItem[];
+}
+
+export interface LocalCopyFilesResultItem {
+  error?: string;
+  sourcePath: string;
+  success: boolean;
+  /** The path the copy was written to, when it succeeded. */
+  targetPath?: string;
+}
+
 export interface HashLocalFileParams {
   path: string;
+}
+
+export interface LocalFileStatsParams {
+  path: string;
+}
+
+/** Basic facts about a local file, so a model can plan how to read it before opening it. */
+export interface LocalFileStats {
+  /** Number of lines; omitted for binary files and files too large to scan. */
+  lineCount?: number;
+  /** Detected MIME type, when it can be determined. */
+  mimeType?: string;
+  /** Size in bytes. */
+  size: number;
 }
 
 export interface LocalReadFileParams {
@@ -149,8 +206,7 @@ export interface LocalFilePreviewUrlParams {
   workingDirectory: string;
 }
 
-export interface LocalFilePreviewUrlResult {
-  error?: string;
+export interface LocalFilePreviewUrlResult extends LocalFilePreviewFailure {
   success: boolean;
   url?: string;
 }
@@ -189,8 +245,7 @@ export type LocalFilePreview =
   | LocalFilePreviewText
   | LocalFilePreviewUnsupported;
 
-export interface LocalFilePreviewResult {
-  error?: string;
+export interface LocalFilePreviewResult extends LocalFilePreviewFailure {
   preview?: LocalFilePreview;
   success: boolean;
 }
@@ -303,7 +358,13 @@ export interface ProjectFileIndexResult {
   entries: ProjectFileIndexEntry[];
   indexedAt: string;
   root: string;
-  source: 'git' | 'glob';
+  source: 'git' | 'glob' | 'sandbox';
+  /**
+   * The host stopped short of the whole tree. Set only by hosts that cap a
+   * listing; a tree that is missing entries and does not say so is worse than
+   * one that refuses, because it reads as complete.
+   */
+  truncated?: boolean;
 }
 
 export interface ProjectDirectoryListParams {
@@ -369,6 +430,7 @@ export interface OpenLocalFolderParams {
 
 // Shell command types
 export interface RunCommandParams {
+  agentId?: string;
   command: string;
   cwd?: string;
   description?: string;
@@ -395,7 +457,18 @@ export interface RunCommandParams {
    * registries and forges and nothing else.
    */
   sandboxNetwork?: boolean;
+  /**
+   * The directory a sandboxed command may write to, when it differs from
+   * `cwd`. Ignored unless `sandbox` is true; absent means the fence is `cwd`.
+   * Skill scripts set it: they run from the device's shared skill cache, which
+   * must stay out of the fence (a fenced run could otherwise plant code that a
+   * later unfenced run executes), so the fence is the run's working directory
+   * instead. Host-owned like `sandbox` — both injection sites strip a
+   * model-supplied value.
+   */
+  sandboxRoot?: string;
   timeout?: number;
+  topicId?: string;
 }
 
 /**

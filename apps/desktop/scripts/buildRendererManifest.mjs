@@ -12,7 +12,6 @@ import { fileURLToPath } from 'node:url';
 
 import { unzipSync, zipSync } from 'fflate';
 
-import { computeMainHash } from './mainHash.mjs';
 import { candidateDeltaVersions, generateZstdPatch, pairRendererFiles } from './rendererDelta.mjs';
 
 const PACK_COMPRESSION_LEVEL = 9;
@@ -42,13 +41,14 @@ function walk(dir, files = []) {
   return files;
 }
 
-export function readRendererTree(rendererDir) {
+// Path-only indexing lets pack builders load one object at a time.
+export function readRendererTree(rendererDir, { retainContents = true } = {}) {
   const objects = new Map();
   const tree = walk(rendererDir)
     .map((full) => {
       const content = readFileSync(full);
       const sha256 = sha256Of(content);
-      if (!objects.has(sha256)) objects.set(sha256, content);
+      if (!objects.has(sha256)) objects.set(sha256, retainContents ? content : full);
       return {
         path: path.relative(rendererDir, full).replaceAll('\\', '/'),
         sha256,
@@ -352,7 +352,8 @@ async function main() {
     .export({ format: 'pem', type: 'spki' })
     .toString();
   const feedDir = path.join(outDir, channel, appVersion, 'renderer', 'v2');
-  const mainHash = args.mainHash ?? (await computeMainHash());
+  const mainHash = args.mainHash;
+  if (!/^[0-9a-f]{64}$/.test(mainHash ?? '')) throw new Error('--mainHash=<sha256> is required');
   const { objects, tree } = readRendererTree(rendererDir);
   const fullMetadata = { kind: 'full', packVersion: 1, tree, version };
   const fullPack = encodePack(fullPackEntries(objects, fullMetadata));

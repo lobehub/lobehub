@@ -1,8 +1,6 @@
 'use client';
 
-import { Center, Empty, Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Center, createStaticStyles, Empty, Flexbox, Text } from '@lobehub/ui';
 import { DnaIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,12 +32,15 @@ const ExperienceList = memo(() => {
   const { t } = useTranslation('selfLearning');
   const { domainId } = useParams();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const { data, error, isLoading, mutate } = useExpertiseOverview(activeAgentId ?? undefined);
+  const { data, error, isConfirmed, revalidate } = useExpertiseOverview(activeAgentId ?? undefined);
 
   const domain = useMemo(
     () => data?.domains.find((d) => d.id === domainId),
     [data?.domains, domainId],
   );
+  // A direction missing from a restored portrait may just be newer than it: "not found" waits for
+  // the server's answer.
+  const settled = domain || isConfirmed ? data : undefined;
   const habits = useMemo(
     () => (domain ? domain.lessons.map((l) => ({ ...l, domainId: domain.id })) : []),
     [domain],
@@ -73,18 +74,18 @@ const ExperienceList = memo(() => {
       <Flexbox className={styles.body} flex={1} width={'100%'}>
         <WideScreenContainer>
           <AsyncBoundary
-            data={data}
+            data={settled}
             error={error}
             errorVariant={'page'}
-            isEmpty={!error && !isLoading && !domain}
-            isLoading={isLoading}
+            isEmpty={isConfirmed && !error && !domain}
+            isLoading={!settled && !error}
             loading={<Loading debugId={'SelfLearningExperience'} />}
             empty={
               <Center height={'100%'} style={{ minHeight: '50vh' }} width={'100%'}>
                 <Empty icon={DnaIcon} title={t('experience.notFound')} />
               </Center>
             }
-            onRetry={() => mutate()}
+            onRetry={() => void revalidate()}
           >
             {domain && activeAgentId && (
               <Flexbox gap={20} paddingBlock={'22px 64px'}>
@@ -102,12 +103,7 @@ const ExperienceList = memo(() => {
                     title={t('experience.emptyTitle')}
                   />
                 ) : (
-                  <HabitList
-                    defaultStableOpen
-                    agentId={activeAgentId}
-                    habits={habits}
-                    onChanged={() => void mutate()}
-                  />
+                  <HabitList defaultStableOpen agentId={activeAgentId} habits={habits} />
                 )}
               </Flexbox>
             )}
