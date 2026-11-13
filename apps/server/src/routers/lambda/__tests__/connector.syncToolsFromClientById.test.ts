@@ -159,6 +159,63 @@ describe('connectorRouter.syncToolsFromClientById', () => {
     ]);
   });
 
+  // A dynamic resolver does not run on a connector: either of its outcomes counts
+  it('makes a new tool need approval when its dynamic config can require it', async () => {
+    await caller().syncToolsFromClientById({
+      id: CONNECTOR_ID,
+      tools: [
+        { humanIntervention: { dynamic: { default: 'always', type: 'x' } }, toolName: 'a' },
+        { humanIntervention: { dynamic: { default: 'never', type: 'x' } }, toolName: 'b' },
+        {
+          humanIntervention: { dynamic: { default: 'never', policy: 'required', type: 'x' } },
+          toolName: 'c',
+        },
+        {
+          humanIntervention: { dynamic: { default: 'never', policy: 'never', type: 'x' } },
+          toolName: 'd',
+        },
+      ],
+    });
+
+    expect(connectorToolModelMock.upsertMany).toHaveBeenCalledWith(CONNECTOR_ID, [
+      expect.objectContaining({ defaultPermission: 'needs_approval', toolName: 'a' }),
+      // An unset `policy` is `always` when the resolver matches
+      expect.objectContaining({ defaultPermission: 'needs_approval', toolName: 'b' }),
+      expect.objectContaining({ defaultPermission: 'needs_approval', toolName: 'c' }),
+      expect.objectContaining({ defaultPermission: 'auto', toolName: 'd' }),
+    ]);
+  });
+
+  it('drops the auto tools an install no longer lists, keeping permission tombstones', async () => {
+    connectorToolModelMock.queryByConnector = vi.fn().mockResolvedValue([
+      { permission: 'auto', toolName: 'kept' },
+      { permission: 'auto', toolName: 'removed_auto' },
+      { permission: 'needs_approval', toolName: 'removed_gated' },
+      { permission: 'disabled', toolName: 'removed_disabled' },
+    ]);
+    connectorToolModelMock.deleteToolsNotIn = vi.fn();
+
+    await caller().syncToolsFromClientById({
+      id: CONNECTOR_ID,
+      pruneMissingAutoTools: true,
+      tools: [{ toolName: 'kept' }],
+    });
+
+    expect(connectorToolModelMock.deleteToolsNotIn).toHaveBeenCalledWith(CONNECTOR_ID, [
+      'kept',
+      'removed_gated',
+      'removed_disabled',
+    ]);
+  });
+
+  it('leaves the stored tools alone without an install', async () => {
+    connectorToolModelMock.deleteToolsNotIn = vi.fn();
+
+    await caller().syncToolsFromClientById({ id: CONNECTOR_ID, tools: [{ toolName: 'kept' }] });
+
+    expect(connectorToolModelMock.deleteToolsNotIn).not.toHaveBeenCalled();
+  });
+
   it('rejects an unknown connector id', async () => {
     connectorModelMock.findById.mockResolvedValue(undefined);
 

@@ -46,7 +46,10 @@ export class CustomPluginActionImpl {
    * Add a custom MCP server from a protocol link as a `custom` connector and
    * sync its tools. Its stdio calls keep running on the desktop, as the custom
    * plugin's did. When the tool sync fails, a row this call created is removed
-   * again and a row it reinstalled over is restored.
+   * again and a row it reinstalled over is restored. Once it succeeds, a legacy
+   * custom plugin of the same identifier is removed: the connector runs its
+   * calls now, while the lists would show that plugin in its place, so their
+   * Configure and Delete would act on the plugin alone.
    */
   installCustomMcpConnector = async ({
     config,
@@ -55,7 +58,7 @@ export class CustomPluginActionImpl {
     identifier,
     name,
   }: CustomMcpConnectorParams): Promise<void> => {
-    const { createConnector, deleteConnector, syncConnectorTools } = this.#get();
+    const { createConnector, deleteConnector, syncConnectorTools, uninstallPlugin } = this.#get();
     const isHttp = config.type === 'http';
     // Set whatever the transport: it can be edited to stdio later
     const metadata: Record<string, unknown> = {
@@ -79,7 +82,8 @@ export class CustomPluginActionImpl {
       sourceType: 'custom',
     });
     try {
-      await syncConnectorTools(id);
+      // A reinstall's tool list replaces the stored one
+      await syncConnectorTools(id, { pruneMissingAutoTools: true });
     } catch (error) {
       const rollback = isNew
         ? deleteConnector(id)
@@ -91,6 +95,14 @@ export class CustomPluginActionImpl {
       });
       throw error;
     }
+
+    // The listed rows, which a cache-only list also has
+    const legacyPlugins = pluginSelectors.installedCustomPluginMetaList(this.#get());
+    if (!legacyPlugins.some((plugin) => plugin.identifier === identifier)) return;
+    // The install itself succeeded: a plugin row left behind is only logged
+    await uninstallPlugin(identifier).catch((error) => {
+      console.error('[customMcp] removing legacy custom plugin %s failed:', identifier, error);
+    });
   };
 
   /**

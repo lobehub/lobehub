@@ -50,8 +50,11 @@ export const snapshotReplacedConnector = async (
  * - the edit read withholds OAuth tokens, so an OAuth row keeps the tokens it
  *   holds now (dropped when they belong to the endpoint it moves back off),
  *   and its server answers whether it still connects;
- * - any other row's tools are untouched by a failed sync, so it is re-marked
- *   connected from its own tool list without reaching the server.
+ * - any other row is re-marked connected from its own tool list without
+ *   reaching the server.
+ *
+ * Either way the row's tool list replaces the one the install synced, so
+ * tools only the failed install listed are dropped again.
  */
 export const restoreConnector = async (snapshot: ConnectorSnapshot, get: () => ToolStore) => {
   const { credentials, id, mcpServerUrl, mcpStdioConfig, oidcConfig, status, tools } = snapshot;
@@ -86,12 +89,13 @@ export const restoreConnector = async (snapshot: ConnectorSnapshot, get: () => T
   if (tokensWithheld) {
     // Connected or `error`, as its server answers
     await get()
-      .syncConnectorTools(id)
+      .syncConnectorTools(id, { pruneMissingAutoTools: true })
       .catch(() => {});
     return;
   }
   await lambdaClient.connector.syncToolsFromClientById.mutate({
     id,
+    pruneMissingAutoTools: true,
     tools: tools.map((tool) => ({
       description: tool.description ?? undefined,
       inputSchema: (tool.inputSchema ?? undefined) as Record<string, unknown> | undefined,

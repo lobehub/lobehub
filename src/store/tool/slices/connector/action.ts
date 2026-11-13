@@ -456,7 +456,14 @@ export class ConnectorActionImpl {
     await this.#refreshConnectorLists();
   };
 
-  syncConnectorTools = async (id: string): Promise<void> => {
+  /**
+   * List the connector's tools and store them. `pruneMissingAutoTools` is for
+   * an install: the `auto` tools the server no longer lists are dropped.
+   */
+  syncConnectorTools = async (
+    id: string,
+    options: { pruneMissingAutoTools?: boolean } = {},
+  ): Promise<void> => {
     this.#set(
       (s) => ({ connectorSyncing: { ...s.connectorSyncing, [id]: true } }),
       false,
@@ -464,8 +471,9 @@ export class ConnectorActionImpl {
     );
     try {
       const synced =
-        (await this.#syncCloudConnectorTools(id)) || (await this.#syncLocalConnectorTools(id));
-      if (!synced) await lambdaClient.connector.syncTools.mutate({ id });
+        (await this.#syncCloudConnectorTools(id, options)) ||
+        (await this.#syncLocalConnectorTools(id, options));
+      if (!synced) await lambdaClient.connector.syncTools.mutate({ id, ...options });
       await this.#refreshConnectorLists();
     } finally {
       this.#set(
@@ -481,7 +489,10 @@ export class ConnectorActionImpl {
    * market serves them in the server's manifest. Returns false for any other
    * connector.
    */
-  #syncCloudConnectorTools = async (id: string): Promise<boolean> => {
+  #syncCloudConnectorTools = async (
+    id: string,
+    options: { pruneMissingAutoTools?: boolean },
+  ): Promise<boolean> => {
     const connector = connectorSelectors.connectorById(id)(this.#get());
     if (connector?.mcpConnectionType !== 'cloud') return false;
 
@@ -489,6 +500,7 @@ export class ConnectorActionImpl {
     const data = await discoverService.getMCPPluginManifest(identifier);
     await lambdaClient.connector.syncToolsFromClientById.mutate({
       id,
+      ...options,
       tools: cloudManifestTools(buildCloudMcpManifest({ data, plugin: { identifier } })),
     });
     return true;
@@ -506,7 +518,10 @@ export class ConnectorActionImpl {
    * Returns false when the connector is server-reachable (public HTTP) or when
    * not running in desktop — the caller falls back to the server-side sync.
    */
-  #syncLocalConnectorTools = async (id: string): Promise<boolean> => {
+  #syncLocalConnectorTools = async (
+    id: string,
+    options: { pruneMissingAutoTools?: boolean },
+  ): Promise<boolean> => {
     if (!isDesktop) return false;
 
     // `getForEdit` returns the decrypted user-set credentials (bearer/apikey/
@@ -553,6 +568,7 @@ export class ConnectorActionImpl {
 
     await lambdaClient.connector.syncToolsFromClientById.mutate({
       id,
+      ...options,
       tools: tools.map((tool) => ({
         description: tool.description,
         inputSchema: tool.inputSchema,

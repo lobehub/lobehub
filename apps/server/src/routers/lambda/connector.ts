@@ -48,7 +48,10 @@ import {
   generateConnectorOAuthState,
   saveConnectorOAuthState,
 } from '@/server/services/connector/stateStore';
-import { syncConnectorToolsById } from '@/server/services/connector/sync';
+import {
+  pruneMissingAutoConnectorTools,
+  syncConnectorToolsById,
+} from '@/server/services/connector/sync';
 import {
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,
@@ -64,6 +67,10 @@ import {
   getConnectorMemberManage,
   isWorkspaceConnectorAdmin,
 } from './_helpers/connectorManagePolicy';
+import {
+  resolveConnectorToolPermission,
+  resolveDefaultPermission,
+} from './_helpers/connectorToolPermission';
 import { upsertConnectorEntry } from './_helpers/upsertConnectorEntry';
 
 const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -815,7 +822,13 @@ export const connectorRouter = router({
    * user permission settings are preserved.
    */
   syncTools: connectorWriteProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        /** An install: `auto` tools the server no longer lists are dropped. */
+        pruneMissingAutoTools: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
       const target = await ctx.connectorModel.findById(input.id);
       if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
@@ -823,7 +836,9 @@ export const connectorRouter = router({
       // a maintenance operation, gated like delete/reset.
       await assertConnectorMaintainable(ctx, target);
       try {
-        return await syncConnectorToolsById(input.id, ctx);
+        return await syncConnectorToolsById(input.id, ctx, {
+          pruneMissingAutoTools: input.pruneMissingAutoTools,
+        });
       } catch (err: any) {
         // Keep actionable rejections and their structured reason for the client.
         if (err instanceof TRPCError) throw err;
@@ -1005,8 +1020,8 @@ export const connectorRouter = router({
             description: z.string().optional(),
             /**
              * A manifest tool's `humanIntervention` (cloud marketplace installs):
-             * `required` / `always`, or rules that ask for either, make a newly
-             * synced tool need approval.
+             * `required` / `always`, or rules or a dynamic config that can ask
+             * for either, make a newly synced tool need approval.
              */
             humanIntervention: z.unknown().optional(),
             inputSchema: z.record(z.string(), z.unknown()).optional(),
@@ -1015,6 +1030,8 @@ export const connectorRouter = router({
             visibility: z.array(z.string()).optional(),
           }),
         ),
+        /** An install: `auto` tools the client no longer lists are dropped. */
+        pruneMissingAutoTools: z.boolean().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -1034,6 +1051,13 @@ export const connectorRouter = router({
       }));
 
       await ctx.connectorToolModel.upsertMany(input.id, syncInputs);
+      if (input.pruneMissingAutoTools) {
+        await pruneMissingAutoConnectorTools(
+          ctx.connectorToolModel,
+          input.id,
+          syncInputs.map((tool) => tool.toolName),
+        );
+      }
       await ctx.connectorModel.updateStatus(input.id, ConnectorStatus.connected);
       return { toolCount: syncInputs.length };
     }),
@@ -1161,34 +1185,3 @@ export const connectorRouter = router({
       return { connectorId, toolCount: syncInputs.length };
     }),
 });
-
-// ── Private helpers ───────────────────────────────────────────────────────────
-
-const requiresApproval = (policy: unknown) => policy === 'required' || policy === 'always';
-
-/**
- * Map a builtin or plugin manifest's humanIntervention → default
- * ConnectorToolPermission. Their manifests keep their own rules at run time.
- */
-function resolveDefaultPermission(humanIntervention: unknown): ConnectorToolPermission {
-  return requiresApproval(humanIntervention)
-    ? ConnectorToolPermission.needs_approval
-    : ConnectorToolPermission.auto;
-}
-
-/**
- * Map a manifest tool's humanIntervention → the default permission of the
- * connector tool that carries it from now on. The connector's manifest is
- * built from that one permission, so argument rules cannot survive: rules that
- * ask for approval for any argument make every call need it.
- */
-function resolveConnectorToolPermission(humanIntervention: unknown): ConnectorToolPermission {
-  const rules = Array.isArray(humanIntervention) ? humanIntervention : [humanIntervention];
-  return rules.some((rule) =>
-    requiresApproval(
-      rule && typeof rule === 'object' ? (rule as { policy?: unknown }).policy : rule,
-    ),
-  )
-    ? ConnectorToolPermission.needs_approval
-    : ConnectorToolPermission.auto;
-}

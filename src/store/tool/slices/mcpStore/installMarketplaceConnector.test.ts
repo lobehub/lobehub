@@ -68,7 +68,9 @@ describe('installMarketplaceConnector', () => {
       name: 'Market MCP',
       sourceType: 'marketplace',
     });
-    expect(state.syncConnectorTools).toHaveBeenCalledWith('connector-1');
+    expect(state.syncConnectorTools).toHaveBeenCalledWith('connector-1', {
+      pruneMissingAutoTools: true,
+    });
     expect(state.updateConnector).toHaveBeenCalledWith('connector-1', {
       metadata: { avatar: 'icon', marketplaceInstalled: true },
     });
@@ -83,7 +85,9 @@ describe('installMarketplaceConnector', () => {
         mcpStdioConfig: { args: ['-y', 'pkg'], command: 'npx', env: { A: '1' } },
       }),
     );
-    expect(state.syncConnectorTools).toHaveBeenCalledWith('connector-1');
+    expect(state.syncConnectorTools).toHaveBeenCalledWith('connector-1', {
+      pruneMissingAutoTools: true,
+    });
   });
 
   it('syncs a cloud connector from the market manifest instead of connecting', async () => {
@@ -96,8 +100,10 @@ describe('installMarketplaceConnector', () => {
       }),
     );
     expect(state.syncConnectorTools).not.toHaveBeenCalled();
+    // A reinstall's manifest replaces the stored tools: the ones it dropped go
     expect(lambdaClient.connector.syncToolsFromClientById.mutate).toHaveBeenCalledWith({
       id: 'connector-1',
+      pruneMissingAutoTools: true,
       tools: [{ description: 'Search', inputSchema: { type: 'object' }, toolName: 'search' }],
     });
   });
@@ -121,6 +127,7 @@ describe('installMarketplaceConnector', () => {
 
     expect(lambdaClient.connector.syncToolsFromClientById.mutate).toHaveBeenCalledWith({
       id: 'connector-1',
+      pruneMissingAutoTools: true,
       tools: [
         expect.objectContaining({ humanIntervention: 'required', toolName: 'send' }),
         expect.objectContaining({ humanIntervention: 'always', toolName: 'wipe' }),
@@ -143,6 +150,32 @@ describe('installMarketplaceConnector', () => {
     expect(state.updateConnector).toHaveBeenCalledWith('oauth-1', {
       metadata: { marketplaceInstalled: true },
     });
+  });
+
+  // The authorization's own sync only adds to the tools of the row it reused
+  it('lists the tools of an OAuth reinstall again, so the ones its server dropped go', async () => {
+    state.connectors = [{ id: 'oauth-1', identifier: 'market-mcp', metadata: null }] as never;
+
+    await installMarketplaceConnector(
+      {
+        connection: { auth: { type: 'oauth2' }, type: 'http', url: 'https://mcp.example.com' },
+        identifier: 'market-mcp',
+        isOAuth: true,
+        manifest,
+        name: 'Market MCP',
+        oauthReplaced: { id: 'oauth-1', status: 'connected', tools: [] } as never,
+        signal: new AbortController().signal,
+      },
+      () => state,
+    );
+
+    expect(state.createConnector).not.toHaveBeenCalled();
+    expect(state.syncConnectorTools).toHaveBeenCalledWith('oauth-1', {
+      pruneMissingAutoTools: true,
+    });
+    expect(vi.mocked(state.syncConnectorTools).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(state.updateConnector).mock.invocationCallOrder[0],
+    );
   });
 
   it('removes the connector it created and leaves no install mark when the sync fails', async () => {
@@ -291,6 +324,7 @@ describe('installMarketplaceConnector', () => {
     });
     expect(lambdaClient.connector.syncToolsFromClientById.mutate).toHaveBeenCalledWith({
       id: 'connector-1',
+      pruneMissingAutoTools: true,
       tools: [
         {
           description: 'Search',

@@ -104,6 +104,20 @@ describe('connectorRouter.syncTools', () => {
     });
   });
 
+  it('drops the auto tools the server no longer lists only for an install', async () => {
+    sync.mockResolvedValue({ toolCount: 1 });
+
+    await caller().syncTools({ id, pruneMissingAutoTools: true });
+    await caller().syncTools({ id });
+
+    expect(sync).toHaveBeenNthCalledWith(1, id, expect.anything(), {
+      pruneMissingAutoTools: true,
+    });
+    expect(sync).toHaveBeenNthCalledWith(2, id, expect.anything(), {
+      pruneMissingAutoTools: undefined,
+    });
+  });
+
   it('still wraps unexpected upstream failures', async () => {
     sync.mockRejectedValue(new Error('connection reset'));
     await expect(caller().syncTools({ id })).rejects.toMatchObject({

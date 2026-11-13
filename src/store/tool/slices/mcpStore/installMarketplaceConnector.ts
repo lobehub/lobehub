@@ -86,10 +86,17 @@ const buildCreatePayload = ({
   }
 };
 
+/**
+ * The install's tool list replaces the stored one, as a plugin install replaced
+ * its manifest: a reinstall drops the tools the server no longer lists.
+ */
+const REPLACE_TOOLS = { pruneMissingAutoTools: true };
+
 /** A cloud server runs in the market: its tool list is the manifest the market served. */
 const syncCloudTools = async (connectorId: string, manifest: ToolManifest) => {
   await lambdaClient.connector.syncToolsFromClientById.mutate({
     id: connectorId,
+    ...REPLACE_TOOLS,
     tools: cloudManifestTools(manifest),
   });
 };
@@ -125,10 +132,12 @@ export const installMarketplaceConnector = async (
   }
 
   try {
-    if (!isOAuth) {
+    // An OAuth authorization synced a new row's tools already; over an existing
+    // row it only added to them, so a reinstall lists them again to drop the rest
+    if (!isOAuth || !isNew) {
       signal.throwIfAborted();
       if (params.connection.type === 'cloud') await syncCloudTools(connectorId, manifest);
-      else await get().syncConnectorTools(connectorId);
+      else await get().syncConnectorTools(connectorId, REPLACE_TOOLS);
     }
 
     signal.throwIfAborted();

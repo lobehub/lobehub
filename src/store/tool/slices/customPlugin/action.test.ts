@@ -107,9 +107,56 @@ describe('useToolStore:customPlugin', () => {
         name: 'My MCP',
         sourceType: 'custom',
       });
-      expect(syncConnectorTools).toHaveBeenCalledWith('conn-1');
+      // A reinstall's tool list replaces the stored one
+      expect(syncConnectorTools).toHaveBeenCalledWith('conn-1', { pruneMissingAutoTools: true });
       expect(deleteConnector).not.toHaveBeenCalled();
       expect(pluginService.updatePlugin).not.toHaveBeenCalled();
+      expect(pluginService.uninstallPlugin).not.toHaveBeenCalled();
+    });
+
+    // The lists would show the plugin in the connector's place, so their
+    // Configure and Delete would act on a row the calls no longer run on
+    it('removes a legacy custom plugin of the same identifier once the connector is synced', async () => {
+      const { syncConnectorTools } = mockConnectorActions();
+      act(() => {
+        useToolStore.setState({
+          installedPlugins: [
+            { identifier: 'my-mcp', manifest: { identifier: 'my-mcp' }, type: 'customPlugin' },
+          ] as never,
+        });
+      });
+
+      await act(async () => {
+        await useToolStore.getState().installCustomMcpConnector({
+          config: { type: 'http', url: 'https://mcp.example.com' },
+          identifier: 'my-mcp',
+        });
+      });
+
+      expect(pluginService.uninstallPlugin).toHaveBeenCalledWith('my-mcp');
+      expect(vi.mocked(pluginService.uninstallPlugin).mock.invocationCallOrder[0]).toBeGreaterThan(
+        syncConnectorTools.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('keeps the legacy custom plugin when the connector sync fails', async () => {
+      const { syncConnectorTools } = mockConnectorActions();
+      syncConnectorTools.mockRejectedValue(new Error('unreachable'));
+      act(() => {
+        useToolStore.setState({
+          installedPlugins: [
+            { identifier: 'my-mcp', manifest: { identifier: 'my-mcp' }, type: 'customPlugin' },
+          ] as never,
+        });
+      });
+
+      await expect(
+        useToolStore.getState().installCustomMcpConnector({
+          config: { type: 'http', url: 'https://mcp.example.com' },
+          identifier: 'my-mcp',
+        }),
+      ).rejects.toThrow('unreachable');
+      expect(pluginService.uninstallPlugin).not.toHaveBeenCalled();
     });
 
     it('stores a stdio MCP command on the connector', async () => {

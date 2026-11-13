@@ -116,8 +116,10 @@ describe('restoreConnector', () => {
         oidcConfig: null,
       }),
     );
+    // Its own tool list replaces the one the failed install synced
     expect(lambdaClient.connector.syncToolsFromClientById.mutate).toHaveBeenCalledWith({
       id: 'c1',
+      pruneMissingAutoTools: true,
       tools: [expect.objectContaining({ toolName: 'search' })],
     });
     expect(state.syncConnectorTools).not.toHaveBeenCalled();
@@ -136,7 +138,7 @@ describe('restoreConnector', () => {
       expect(patch).not.toHaveProperty('oidcConfig');
       // Never re-marked connected on the strength of a tool list alone
       expect(lambdaClient.connector.syncToolsFromClientById.mutate).not.toHaveBeenCalled();
-      expect(state.syncConnectorTools).toHaveBeenCalledWith('c1');
+      expect(state.syncConnectorTools).toHaveBeenCalledWith('c1', { pruneMissingAutoTools: true });
     });
 
     it('drops the tokens of the endpoint it moves back off', async () => {
