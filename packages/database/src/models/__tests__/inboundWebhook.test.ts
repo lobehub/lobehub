@@ -159,7 +159,7 @@ describe('InboundWebhookModel scope and lifecycle', () => {
     expect(await otherModel.getSecret(row.id)).toBeNull();
     expect(await otherModel.mergeState(row.id, { cursor: 'stolen' })).toBeUndefined();
     expect(await otherModel.update(row.id, { status: 'error' })).toBeUndefined();
-    expect(await otherModel.reserveWake(row.id)).toBe(false);
+    expect(await otherModel.reserveWake(row.id)).toBeUndefined();
     await otherModel.delete(row.id);
     expect((await model.findById(row.id))?.status).toBe('active');
     await model.delete(row.id);
@@ -301,6 +301,22 @@ describe('InboundWebhookModel scope and lifecycle', () => {
 });
 
 describe('InboundWebhookModel maintenance and quotas', () => {
+  it('does not refund a failed reservation into a newer hourly window', async () => {
+    const row = await model.create(input({ status: 'active' }));
+    const original = await model.reserveWake(row.id);
+    await db
+      .update(inboundWebhooks)
+      .set({
+        wakeWindowStartedAt: new Date(Date.now() - 3_600_001),
+      })
+      .where(eq(inboundWebhooks.id, row.id));
+    const current = await model.reserveWake(row.id);
+    await model.releaseWake(row.id, original!);
+    expect((await model.findById(row.id))?.wakeCount).toBe(1);
+    await model.releaseWake(row.id, current!);
+    expect((await model.findById(row.id))?.wakeCount).toBe(0);
+  });
+
   it('finds due finite leases/deletions and stale incomplete subscriptions only', async () => {
     const due = new Date(Date.now() - 1000);
     const active = await model.create(input({ status: 'active', nextMaintenanceAt: due }));
@@ -330,19 +346,43 @@ describe('InboundWebhookModel maintenance and quotas', () => {
       .update(inboundWebhooks)
       .set({ wakeWindowStartedAt: new Date(Date.now() - 3_600_001) })
       .where(eq(inboundWebhooks.id, row.id));
-    expect(await model.reserveWake(row.id, 3)).toBe(true);
+    expect(await model.reserveWake(row.id, 3)).toBeTypeOf('string');
     expect((await model.findById(row.id))?.wakeCount).toBe(1);
   });
 
   it('returns failed-start reservations without going negative or crossing user scope', async () => {
     const row = await model.create(input({ status: 'active' }));
-    expect(await model.reserveWake(row.id, 1)).toBe(true);
-    await otherModel.releaseWake(row.id);
-    expect(await model.reserveWake(row.id, 1)).toBe(false);
-    await model.releaseWake(row.id);
-    expect(await model.reserveWake(row.id, 1)).toBe(true);
-    await Promise.all(Array.from({ length: 4 }, () => model.releaseWake(row.id)));
+    const window = await model.reserveWake(row.id, 1);
+    expect(window).toBeTypeOf('string');
+    await otherModel.releaseWake(row.id, window!);
+    expect(await model.reserveWake(row.id, 1)).toBeUndefined();
+    await model.releaseWake(row.id, window!);
+    expect(await model.reserveWake(row.id, 1)).toBe(window);
+    await Promise.all(Array.from({ length: 4 }, () => model.releaseWake(row.id, window!)));
     expect((await model.findById(row.id))?.wakeCount).toBe(0);
+  });
+
+  it('applies status-guarded state/results atomically and respects ownership', async () => {
+    const row = await model.create(input({ status: 'active' }));
+    expect(
+      await otherModel.updateIfStatus(row.id, { status: 'error' }, ['active'], { truncated: true }),
+    ).toBeUndefined();
+    await model.update(row.id, { status: 'terminated', lastError: 'access_revoked' });
+    expect(
+      await model.updateIfStatus(row.id, { status: 'active' }, ['active', 'error'], {
+        remoteSubscriptionId: 'late',
+      }),
+    ).toBeUndefined();
+    expect(await model.findById(row.id)).toMatchObject({
+      status: 'terminated',
+      lastError: 'access_revoked',
+      state: {},
+    });
+    expect(
+      await model.updateIfStatus(row.id, { status: 'active', lastError: null }, ['terminated'], {
+        remoteSubscriptionId: 'manual',
+      }),
+    ).toMatchObject({ status: 'active', state: { remoteSubscriptionId: 'manual' } });
   });
 
   it('applies topic and user limits, including subscriptions being created or deleted', async () => {
