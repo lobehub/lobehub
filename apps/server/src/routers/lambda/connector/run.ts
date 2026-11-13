@@ -55,12 +55,17 @@ export const connectorRunRouter = router({
 
   /**
    * Which connector row a conversation's call of `identifier` runs on — the
-   * row `callTool` resolves — by id only, with no configuration or secret, so
-   * any member who can call the tool may ask. A client holding both a private
-   * and a shared row of the identifier asks here: only the server can tell a
-   * private agent's own topic from a group, channel or another agent's one, and
-   * the approval a view's call needs and the transport it takes must follow the
-   * row that executes, not the client's guess.
+   * row `callTool` resolves. Only the server can tell a private agent's own
+   * topic from a group, channel or another agent's one, and the approval a
+   * view's call needs and the transport it takes must follow the row that
+   * executes, not the client's guess.
+   *
+   * Besides the id it returns what routing and approval read: the row's
+   * transport and its tools, the fields a member's connector list already
+   * carries, never credentials or a stdio command, so any member who can call
+   * the tool may ask. A private agent's own topic may run its owner's personal
+   * connector, which no workspace list on the client holds; the client routes
+   * that row on this answer.
    */
   resolveForRun: connectorProcedure
     .input(
@@ -73,7 +78,18 @@ export const connectorRunRouter = router({
     )
     .query(async ({ input, ctx }) => {
       const [connector] = await resolveConnectorForRun(input, ctx);
-      return connector ? { id: connector.id } : null;
+      if (!connector) return null;
+      // A personal connector's tool rows live in the personal scope
+      const wsId = ctx.workspaceId ?? undefined;
+      const toolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId, { agentRun: true });
+      return {
+        id: connector.id,
+        identifier: connector.identifier,
+        isEnabled: connector.isEnabled,
+        mcpConnectionType: connector.mcpConnectionType,
+        mcpServerUrl: connector.mcpServerUrl,
+        tools: await toolModel.queryByConnector(connector.id),
+      };
     }),
 
   /**

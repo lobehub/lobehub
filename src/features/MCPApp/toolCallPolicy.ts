@@ -6,10 +6,9 @@ import type {
   ToolManifest,
 } from '@lobechat/types';
 
-import { resolveRunConnector } from '@/services/connectorRun';
+import { resolveRunConnector, type RunConnector } from '@/services/connectorRun';
 import { getToolStoreState } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
-import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 import { getUserStoreState } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 
@@ -89,7 +88,7 @@ const findToolIntervention = (
    * The connector the call runs on ({@link resolveRunConnector}): approval is
    * the executing row's, never a same-named row the conversation can't use.
    */
-  connector: ConnectorWithTools | undefined,
+  connector: RunConnector | undefined,
   identifier: string,
   toolName: string,
   agentId: string | undefined,
@@ -213,7 +212,7 @@ const lookUpTool = async (
   run: { agentId?: string; topicId?: string },
   revalidated: boolean,
 ): Promise<ToolLookup> => {
-  let connector: ConnectorWithTools | undefined;
+  let connector: RunConnector | undefined;
   try {
     connector = await resolveRunConnector(identifier, run);
   } catch (error) {

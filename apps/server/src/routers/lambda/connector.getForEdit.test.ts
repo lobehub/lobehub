@@ -160,8 +160,12 @@ describe('connectorRouter.resolveForRun', () => {
     vi.mocked(ConnectorModel).mockImplementation(function () {
       return { resolveByIdentifiers } as never;
     });
+    vi.mocked(ConnectorToolModel).mockImplementation(function () {
+      return { queryByConnector } as never;
+    });
     existsById.mockResolvedValue(true);
     resolveByIdentifiers.mockResolvedValue([connector]);
+    queryByConnector.mockResolvedValue(tools);
   });
 
   const caller = (userId: string) =>
@@ -174,16 +178,34 @@ describe('connectorRouter.resolveForRun', () => {
 
   const input = { agentId: 'agent-private', identifier: 'local-mcp', topicId: 'topic-group' };
 
-  it('names the row the conversation runs on, and nothing of its configuration', async () => {
-    // Any member who can call the tool may ask: the answer is an id, not the
-    // creator-gated configuration getForRun returns.
+  it('names the row the conversation runs on, with its transport but not its configuration', async () => {
+    // Any member who can call the tool may ask: the answer routes the call and
+    // judges its approval, never the creator-gated stdio command and env that
+    // getForRun returns.
     await expect(caller('another-member').resolveForRun(input)).resolves.toEqual({
       id: connector.id,
+      identifier: 'local-mcp',
+      isEnabled: true,
+      mcpConnectionType: 'stdio',
+      mcpServerUrl: undefined,
+      tools,
     });
     expect(resolveByIdentifiers).toHaveBeenCalledWith(['local-mcp'], {
       agentId: 'agent-private',
       topicId: 'topic-group',
     });
+  });
+
+  it("reads the tools of the owner's personal connector a private agent runs", async () => {
+    // Regression: the client's workspace lists never hold a personal row, so a
+    // desktop could not tell that the call runs a stdio connector and sent it
+    // to the server, which cannot run one.
+    await caller('creator').resolveForRun(input);
+
+    expect(ConnectorToolModel).toHaveBeenCalledWith(expect.anything(), 'creator', 'workspace', {
+      agentRun: true,
+    });
+    expect(queryByConnector).toHaveBeenCalledWith(connector.id);
   });
 
   it('answers null when the conversation resolves no row', async () => {
