@@ -10,7 +10,6 @@ import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
 import { RAIL_WIDTH } from '@/features/NavRail/const';
 import { useImLayout } from '@/features/NavRail/useImLayout';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { electronSystemService } from '@/services/electron/system';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import type { GlobalState } from '@/store/global/initialState';
@@ -20,9 +19,9 @@ import { electronStylish } from '@/styles/electron';
 import { getPlatform, isMacOS } from '@/utils/platform';
 
 import { useNavigationHistory } from '../navigation/useNavigationHistory';
-import { getMacTrafficLightPadding } from './layout';
 import RecentlyViewed from './RecentlyViewed';
 import { useTrayMenuSync } from './TrayMenu/useTrayMenuSync';
+import { useMacTrafficLightPadding } from './useMacTrafficLightPadding';
 import WindowsAppMenu from './WindowsAppMenu';
 
 const isMac = isMacOS();
@@ -74,15 +73,10 @@ const NavigationBar = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
   const { canGoBack, canGoForward, goBack, goForward } = useNavigationHistory();
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [isWindowFullScreen, setIsWindowFullScreen] = useState(false);
   const activeRecentScope = useElectronStore((state) => state.activeRecentScope);
 
   const leftPanelWidth = useNavPanelWidth();
   const navPanelResizing = useGlobalStore((s) => !!s.isNavPanelResizing);
-
-  useWatchBroadcast('windowFullscreenChanged', ({ isFullScreen }) => {
-    if (isMac) setIsWindowFullScreen(isFullScreen);
-  });
 
   useWatchBroadcast('openRecentlyViewed', () => setHistoryOpen(true));
 
@@ -91,27 +85,6 @@ const NavigationBar = memo(() => {
     navigate(homePath, { escape: true });
     getHomeStoreState().openAllAgentsDrawer();
   });
-
-  useEffect(() => {
-    if (!isMac) return;
-
-    let disposed = false;
-
-    const syncFullScreenState = async () => {
-      try {
-        const isFullScreen = await electronSystemService.isWindowFullScreen();
-        if (!disposed) setIsWindowFullScreen(isFullScreen);
-      } catch {
-        if (!disposed) setIsWindowFullScreen(false);
-      }
-    };
-
-    void syncFullScreenState();
-
-    return () => {
-      disposed = true;
-    };
-  }, []);
 
   // Toggle history popover
   const toggleHistoryOpen = useCallback(() => {
@@ -138,7 +111,7 @@ const NavigationBar = memo(() => {
   const tooltipContent = t('navigation.recentView');
 
   const isLeftPanelVisible = leftPanelWidth > 0;
-  const macTrafficLightPadding = getMacTrafficLightPadding(isMac, isWindowFullScreen);
+  const macTrafficLightPadding = useMacTrafficLightPadding();
   const collapsedWidth =
     (isMac ? MAC_COLLAPSED_NAVIGATION_BAR_WIDTH : COLLAPSED_NAVIGATION_BAR_WIDTH) +
     macTrafficLightPadding;

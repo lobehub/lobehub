@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { sx } from '@/styles/sx';
+
 import { useBoard } from '../BoardContext';
 import { nextQuestion, waitingQuestions } from '../data/commentModel';
 import { useArtboardComments } from '../data/useArtboardComments';
@@ -21,6 +23,9 @@ import OpenConversation from '../Gallery/OpenConversation';
 import { artboardActions, useArtboardStore } from '../store';
 import type { BoardMode } from '../types';
 import PageMenu from './PageMenu';
+import { useTitleBarInset } from './useTitleBarInset';
+
+const BAR_PADDING = 12;
 
 const styles = stylex.create({
   bar: {
@@ -30,7 +35,7 @@ const styles = stylex.create({
     flex: 'none',
     minHeight: 44,
     paddingBlock: 6,
-    paddingInline: 12,
+    paddingInline: BAR_PADDING,
   },
 });
 
@@ -43,6 +48,11 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
   const { t } = useTranslation('project');
   const board = useBoard();
   const { finalized } = board;
+  const trafficLightPadding = useTitleBarInset();
+  const bar = sx(
+    styles.bar,
+    onExitFullscreen ? { paddingInlineStart: BAR_PADDING + trafficLightPadding } : {},
+  );
   const pendingLeft = board.blockers.length;
   const hasTask = !!board.artboard.taskId;
   const { data: threads = [] } = useArtboardComments(board.artboard.id);
@@ -177,7 +187,7 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
 
   if (narrow)
     return (
-      <Flexbox gap={6} {...stylex.props(styles.bar)}>
+      <Flexbox gap={6} {...bar}>
         <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
           {identity}
           {windowActions}
@@ -190,13 +200,7 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
     );
 
   return (
-    <Flexbox
-      horizontal
-      align={'center'}
-      gap={8}
-      justify={'space-between'}
-      {...stylex.props(styles.bar)}
-    >
+    <Flexbox horizontal align={'center'} gap={8} justify={'space-between'} {...bar}>
       {identity}
       <Flexbox horizontal align={'center'} gap={8}>
         {review}
