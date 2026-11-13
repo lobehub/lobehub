@@ -5,11 +5,11 @@ import { composioToolsRouter } from './composio';
 
 const mocks = vi.hoisted(() => ({
   connectorForRow: vi.fn(),
-  connectorIdentifiersWithRows: vi.fn(),
+  connectorPickLegacyMirrors: vi.fn(),
   connectorResolveByIdentifiers: vi.fn(),
   isComposioNotFound: vi.fn(),
   markComposioUnavailable: vi.fn(),
-  pluginFindById: vi.fn(),
+  pluginQueryMirrors: vi.fn(),
   processToolCallResult: vi.fn(),
   toolsExecute: vi.fn(),
 }));
@@ -20,7 +20,7 @@ vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn().mockImplementation(function () {
     const model: Record<string, unknown> = {
       forRow: mocks.connectorForRow,
-      identifiersWithConnectorRows: mocks.connectorIdentifiersWithRows,
+      pickLegacyComposioMirrors: mocks.connectorPickLegacyMirrors,
       markComposioConnectionUnavailable: mocks.markComposioUnavailable,
       resolveByIdentifiers: mocks.connectorResolveByIdentifiers,
     };
@@ -37,7 +37,7 @@ vi.mock('@/database/models/connectorTool', () => ({
 
 vi.mock('@/database/models/plugin', () => ({
   PluginModel: vi.fn().mockImplementation(function () {
-    return { findById: mocks.pluginFindById };
+    return { queryComposioMirrors: mocks.pluginQueryMirrors };
   }),
 }));
 
@@ -57,7 +57,7 @@ const input = { identifier: 'gmail', toolArgs: { to: 'a@b.c' }, toolSlug: 'GMAIL
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.connectorResolveByIdentifiers.mockResolvedValue([]);
-  mocks.connectorIdentifiersWithRows.mockResolvedValue(new Set());
+  mocks.connectorPickLegacyMirrors.mockImplementation(async (mirrors: unknown[]) => mirrors);
   mocks.isComposioNotFound.mockImplementation(function (error: unknown) {
     return (
       typeof error === 'object' &&
@@ -67,7 +67,7 @@ beforeEach(() => {
     );
   });
   mocks.markComposioUnavailable.mockResolvedValue(false);
-  mocks.pluginFindById.mockResolvedValue(undefined);
+  mocks.pluginQueryMirrors.mockResolvedValue([]);
   mocks.toolsExecute.mockResolvedValue({ data: 'ok' });
   mocks.processToolCallResult.mockResolvedValue({ content: 'ok', success: true });
 });
@@ -86,7 +86,7 @@ describe('composioToolsRouter.executeAction', () => {
     );
     // No conversation is named, so only the rows any run may use resolve.
     expect(mocks.connectorResolveByIdentifiers).toHaveBeenCalledWith(['gmail'], {});
-    expect(mocks.pluginFindById).not.toHaveBeenCalled();
+    expect(mocks.pluginQueryMirrors).not.toHaveBeenCalled();
   });
 
   /**
@@ -136,9 +136,13 @@ describe('composioToolsRouter.executeAction', () => {
 
   it('falls back to plugin customParams when no connector projection exists', async () => {
     mocks.connectorResolveByIdentifiers.mockResolvedValue([]);
-    mocks.pluginFindById.mockResolvedValue({
-      customParams: { composio: { connectedAccountId: 'ca-plugin' } },
-    });
+    mocks.pluginQueryMirrors.mockResolvedValue([
+      {
+        customParams: { composio: { connectedAccountId: 'ca-plugin' } },
+        identifier: 'gmail',
+        userId: 'user-2',
+      },
+    ]);
 
     await caller().executeAction(input);
 
@@ -159,20 +163,29 @@ describe('composioToolsRouter.executeAction', () => {
     // that miss as a pre-connector legacy connection. The workspace-wide plugin projection
     // still mirrors the account, so any member ran it as the creator's Composio entity.
     mocks.connectorResolveByIdentifiers.mockResolvedValue([]);
-    mocks.connectorIdentifiersWithRows.mockResolvedValue(new Set(['gmail']));
-    mocks.pluginFindById.mockResolvedValue({
-      customParams: { composio: { connectedAccountId: 'ca-private', linkedByUserId: 'user-2' } },
-      userId: 'user-2',
-    });
+    mocks.connectorPickLegacyMirrors.mockResolvedValue([]);
+    mocks.pluginQueryMirrors.mockResolvedValue([
+      {
+        customParams: { composio: { connectedAccountId: 'ca-private', linkedByUserId: 'user-2' } },
+        identifier: 'gmail',
+        userId: 'user-2',
+      },
+    ]);
 
     await expect(caller().executeAction(input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
-    expect(mocks.connectorIdentifiersWithRows).toHaveBeenCalledWith(['gmail']);
+    expect(mocks.pluginQueryMirrors).toHaveBeenCalledWith(['gmail']);
+    expect(mocks.connectorPickLegacyMirrors).toHaveBeenCalledWith([
+      expect.objectContaining({
+        connectedAccountId: 'ca-private',
+        identifier: 'gmail',
+        ownerUserId: 'user-2',
+      }),
+    ]);
     expect(mocks.toolsExecute).not.toHaveBeenCalled();
   });
 
   it('throws NOT_FOUND when neither source has a connection', async () => {
     mocks.connectorResolveByIdentifiers.mockResolvedValue([]);
-    mocks.pluginFindById.mockResolvedValue(undefined);
 
     await expect(caller().executeAction(input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
     expect(mocks.toolsExecute).not.toHaveBeenCalled();

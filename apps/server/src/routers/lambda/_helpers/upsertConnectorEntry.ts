@@ -21,7 +21,8 @@ import { isWorkspaceNonOwner } from './assertWorkspaceRowManageable';
  * republishes its account to the workspace. The workspace-wide plugin
  * projection can still carry the Composio account of a teammate's private
  * connector: that account is never copied onto a row the caller sees, and no
- * row is created for it (`connectorId: null`).
+ * row is created for it (`connectorId: null`). Nor is the projection's account
+ * copied onto a private row: only display fields are refreshed there.
  */
 export async function upsertConnectorEntry(
   ctx: {
@@ -70,7 +71,15 @@ export async function upsertConnectorEntry(
     !!accountId &&
     row?.metadata?.composio?.connectedAccountId !== accountId &&
     (await ctx.connectorModel.isComposioAccountPrivateToTeammate(params.identifier, accountId));
-  if (params.composio && !accountIsTeammatePrivate) metadata.composio = params.composio;
+  // The projection is workspace-wide, so it is no source of truth for a
+  // private row's account: copying its block (with the linker it attributes
+  // the account to) onto a private row whose metadata merely names the same
+  // account id would make the row pass for that member's connection, hiding
+  // the legacy connection from everyone else. A private row's account is
+  // written by its own OAuth connect path only.
+  if (params.composio && !accountIsTeammatePrivate && row?.visibility !== 'private') {
+    metadata.composio = params.composio;
+  }
 
   if (row) {
     const writable = canWrite && (!isWorkspaceNonOwner(ctx) || row.userId === ctx.userId);

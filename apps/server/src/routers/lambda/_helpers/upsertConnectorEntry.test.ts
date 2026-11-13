@@ -89,4 +89,48 @@ describe('upsertConnectorEntry with a private connector', () => {
     expect(await syncGmail(mate)).toEqual({ connectorId: null, writable: false });
     expect(await gmailRows()).toHaveLength(1);
   });
+
+  it('never stamps the projection’s linker onto a private row naming the same account', async () => {
+    // A member writes a teammate's legacy account id (readable off the
+    // projection) into their own private row's metadata. The detail-panel sync
+    // must not then copy in the projection's attribution, or the row passes
+    // for the teammate's connection and hides it from the workspace.
+    const linker = 'uce-legacy-linker';
+    const legacy = { ...gmailAccount, connectedAccountId: 'ca-legacy', linkedByUserId: linker };
+    const [forged] = await serverDB
+      .insert(userConnectors)
+      .values({
+        identifier: 'gmail',
+        metadata: { composio: { connectedAccountId: 'ca-legacy' } },
+        name: 'Gmail',
+        sourceType: 'custom',
+        status: 'connected',
+        userId: mate,
+        visibility: 'private',
+        workspaceId,
+      })
+      .returning();
+
+    await upsertConnectorEntry(
+      {
+        connectorModel: new ConnectorModel(serverDB, mate, workspaceId),
+        serverDB,
+        userId: mate,
+        workspaceId,
+        workspaceRole: 'member',
+      },
+      { composio: legacy, identifier: 'gmail', name: 'Gmail', sourceType: 'marketplace' },
+    );
+
+    const [row] = await serverDB
+      .select({ metadata: userConnectors.metadata })
+      .from(userConnectors)
+      .where(eq(userConnectors.id, forged.id));
+    expect(row.metadata?.composio).toEqual({ connectedAccountId: 'ca-legacy' });
+    expect(
+      await new ConnectorModel(serverDB, mate, workspaceId).pickLegacyComposioMirrors([
+        { connectedAccountId: 'ca-legacy', identifier: 'gmail', ownerUserId: linker },
+      ]),
+    ).toHaveLength(1);
+  });
 });

@@ -74,7 +74,13 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
       update: vi.fn().mockResolvedValue(undefined),
     };
     connectorToolModelMock = { deleteToolsNotIn: vi.fn(), upsertMany: vi.fn() };
-    pluginModelMock = { create: vi.fn(), delete: vi.fn(), findById: vi.fn(), update: vi.fn() };
+    pluginModelMock = {
+      create: vi.fn(),
+      delete: vi.fn(),
+      deleteComposioMirrors: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+    };
     agentModelMock = { existsOwnedById: vi.fn().mockResolvedValue(true) };
     vi.mocked(ConnectorModel).mockImplementation(function () {
       return connectorModelMock;
@@ -286,6 +292,83 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
     expect(connectorModelMock.isComposioAccountPrivateToTeammate).not.toHaveBeenCalled();
     expect(composioClientMocks.deleteAccount).toHaveBeenCalledWith('acc-shared');
     expect(connectorModelMock.delete).toHaveBeenCalledWith('conn-shared');
+    // The shared connection is the workspace's projection of the app.
+    expect(pluginModelMock.delete).toHaveBeenCalledWith('gmail');
+    expect(pluginModelMock.deleteComposioMirrors).not.toHaveBeenCalled();
+  });
+
+  describe('a private connection’s plugin projection', () => {
+    // Every member's projection row of an app is in a workspace's scope. A
+    // private connection is one member's, so writing or removing the projection
+    // by identifier would replace or drop a teammate's legacy connection.
+    const privateRow = {
+      agentId: null,
+      id: 'conn-private',
+      metadata: { composio: { connectedAccountId: 'acc-private' } },
+      userId: 'user_test',
+      visibility: 'private' as const,
+    };
+    const refresh = {
+      appSlug: 'gmail',
+      authConfigId: 'auth-cfg-1',
+      connectedAccountId: 'acc-private',
+      identifier: 'gmail',
+      label: 'Gmail',
+      status: 'ACTIVE',
+      tools: [],
+    };
+
+    beforeEach(() => {
+      connectorModelMock.findManageableByIdentifier.mockResolvedValue(privateRow);
+      pluginModelMock.findById.mockResolvedValue({ identifier: 'gmail', manifest: {} });
+    });
+
+    it('refreshes only the caller’s own projection row', async () => {
+      await memberCaller().updateComposioPlugin(refresh);
+
+      expect(pluginModelMock.update).not.toHaveBeenCalled();
+      expect(pluginModelMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customParams: {
+            composio: expect.objectContaining({ connectedAccountId: 'acc-private' }),
+          },
+          identifier: 'gmail',
+        }),
+      );
+    });
+
+    it('still refreshes a shared connection across the workspace', async () => {
+      connectorModelMock.findManageableByIdentifier.mockResolvedValue({
+        ...privateRow,
+        visibility: 'public',
+      });
+
+      await memberCaller().updateComposioPlugin(refresh);
+
+      expect(pluginModelMock.update).toHaveBeenCalledWith('gmail', expect.anything());
+      expect(pluginModelMock.create).not.toHaveBeenCalled();
+    });
+
+    it('removes only the rows mirroring its account', async () => {
+      await memberCaller().deleteConnection({
+        connectedAccountId: 'acc-private',
+        identifier: 'gmail',
+      });
+      await memberCaller().removeComposioPlugin({ identifier: 'gmail' });
+
+      expect(pluginModelMock.delete).not.toHaveBeenCalled();
+      expect(pluginModelMock.deleteComposioMirrors).toHaveBeenNthCalledWith(
+        1,
+        'gmail',
+        'acc-private',
+      );
+      expect(pluginModelMock.deleteComposioMirrors).toHaveBeenNthCalledWith(
+        2,
+        'gmail',
+        'acc-private',
+      );
+      expect(connectorModelMock.delete).toHaveBeenCalledWith('conn-private');
+    });
   });
 
   it('blocks a member from connecting when admins restricted connector management', async () => {

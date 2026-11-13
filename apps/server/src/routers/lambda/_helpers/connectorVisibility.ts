@@ -49,6 +49,11 @@ export const assertPrivateConnectorTarget = async (
  *
  * - Only the creator decides: making it private takes it away from every
  *   other member, making it shared hands the creator's credentials to them.
+ * - A Composio account runs as the member who linked it, so only that member
+ *   makes it private. A row can hold someone else's account (a teammate's
+ *   legacy connection migrated into a row by whoever opened it first, an
+ *   owner's reconnect): making it private would keep that account to the
+ *   creator and take it from its own linker and the rest of the workspace.
  * - Sharing it follows the member policy for shared connectors.
  * - Agent-scoped rows follow their agent and are not switched here.
  * - At most one shared row and one private row per member per identifier.
@@ -60,6 +65,7 @@ export const resolveVisibilityChange = async (
     agentId: string | null;
     id: string;
     identifier: string;
+    metadata?: { composio?: { connectedAccountId?: string; linkedByUserId?: string } } | null;
     userId: string;
     visibility: ConnectorVisibility;
   },
@@ -76,6 +82,18 @@ export const resolveVisibilityChange = async (
     throw new TRPCError({
       code: 'FORBIDDEN',
       message: 'Only the member who added this connector can change who it is shared with',
+    });
+  }
+  const composio = target.metadata?.composio;
+  if (
+    requested === 'private' &&
+    composio?.connectedAccountId &&
+    (composio.linkedByUserId ?? target.userId) !== ctx.userId
+  ) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message:
+        'This connection was authorized by another member. Reconnect it with your own account to make it private',
     });
   }
   if (requested === 'public' && !(await canManageWorkspaceConnectors(ctx))) {

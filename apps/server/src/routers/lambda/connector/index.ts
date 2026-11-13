@@ -48,6 +48,7 @@ import {
 } from '@/server/utils/connectorAttribution';
 
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
+import { removeComposioProjection } from '../_helpers/composioProjection';
 import { toConnectorEditDetail } from '../_helpers/connectorEditDetail';
 import {
   assertConnectorCredentialsManageable,
@@ -755,7 +756,9 @@ const connectorManageRouter = router({
         // Personal Composio connections still carry the legacy plugin projection.
         // Agent-scoped connections never create one, so do not remove a base
         // plugin that may belong to a separate personal connection.
-        if (!target.agentId) await ctx.pluginModel.delete(target.identifier);
+        if (!target.agentId) {
+          await removeComposioProjection(ctx.pluginModel, { ...target, connectedAccountId });
+        }
       }
 
       await ctx.connectorModel.delete(input.id);

@@ -200,6 +200,33 @@ describe('connectorRouter visibility', () => {
       );
     });
 
+    it('lets the member who linked a Composio account make it private', async () => {
+      connectorModelMock.findById.mockResolvedValue(
+        row({ metadata: { composio: { connectedAccountId: 'acc-1', linkedByUserId: 'me' } } }),
+      );
+
+      await member().update({ id: CONNECTOR_ID, patch: { visibility: 'private' } });
+
+      expect(connectorModelMock.update).toHaveBeenCalledWith(
+        CONNECTOR_ID,
+        expect.objectContaining({ visibility: 'private' }),
+      );
+    });
+
+    it('refuses to make private a Composio account someone else linked', async () => {
+      // The creator opened a teammate's legacy connection first, so the row is
+      // theirs, but the account runs as the teammate. Making it private would
+      // take the teammate's connection from the teammate and everyone else.
+      connectorModelMock.findById.mockResolvedValue(
+        row({ metadata: { composio: { connectedAccountId: 'acc-1', linkedByUserId: 'mate' } } }),
+      );
+
+      await expect(
+        member().update({ id: CONNECTOR_ID, patch: { visibility: 'private' } }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(connectorModelMock.update).not.toHaveBeenCalled();
+    });
+
     it('never lets someone else change who a connector is shared with', async () => {
       connectorModelMock.findById.mockResolvedValue(row({ userId: 'someone-else' }));
 

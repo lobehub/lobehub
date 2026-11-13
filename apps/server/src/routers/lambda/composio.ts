@@ -25,6 +25,7 @@ import { inferCrudType } from '@/libs/mcp/utils';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
+import { removeComposioProjection } from './_helpers/composioProjection';
 import { assertConnectorMaintainable } from './_helpers/connectorManagePolicy';
 
 const composioDbProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -438,7 +439,13 @@ export const composioRouter = router({
 
       // Agent connections have no plugin-table row; only remove the base plugin
       // projection for personal connections.
-      if (!input.agentId) await ctx.pluginModel.delete(input.identifier);
+      if (!input.agentId) {
+        await removeComposioProjection(ctx.pluginModel, {
+          connectedAccountId: input.connectedAccountId,
+          identifier: input.identifier,
+          visibility: existing?.visibility,
+        });
+      }
       // Tools cascade.
       if (existing) await ctx.connectorModel.delete(existing.id);
 
@@ -508,7 +515,13 @@ export const composioRouter = router({
     .input(z.object({ agentId: z.string().optional(), identifier: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const existing = await resolveComposioWriteTarget(ctx, input);
-      if (!input.agentId) await ctx.pluginModel.delete(input.identifier);
+      if (!input.agentId) {
+        await removeComposioProjection(ctx.pluginModel, {
+          connectedAccountId: existing?.metadata?.composio?.connectedAccountId,
+          identifier: input.identifier,
+          visibility: existing?.visibility,
+        });
+      }
       if (existing) await ctx.connectorModel.delete(existing.id);
       return { success: true };
     }),
@@ -592,8 +605,11 @@ export const composioRouter = router({
 
       // Personal-only plugin projection: skip for agent connections (see
       // createConnection). The agent row's metadata is the runtime source.
+      // Updating by identifier rewrites every member's projection row of the
+      // app; a private connection is the caller's alone, so it refreshes only
+      // the caller's own row and leaves a teammate's legacy connection intact.
       if (!agentId) {
-        if (existingPlugin) {
+        if (existingPlugin && existing?.visibility !== 'private') {
           await ctx.pluginModel.update(identifier, { customParams, manifest });
         } else {
           await ctx.pluginModel.create({
