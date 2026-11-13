@@ -360,6 +360,10 @@ export interface TopicDeviceBindingResult {
  * default in turnSetup.
  *
  * The binding is this member's own run history, so it lifts `workspaceScoped`.
+ *
+ * `isHetero` flags a legacy agent identified only by `model: '<cli-type>'`
+ * (no stored provider yet): it never takes the `auto` default, so its topic
+ * keeps its machine.
  */
 export const applyTopicDeviceBinding = (
   {
@@ -368,6 +372,7 @@ export const applyTopicDeviceBinding = (
   }: { agencyConfig: LobeAgentAgencyConfig | undefined; workspaceScoped: boolean },
   topicDeviceId: string | undefined,
   currentDeviceId: string | undefined,
+  { isHetero }: { isHetero?: boolean } = {},
 ): TopicDeviceBindingResult => {
   const unchanged = { agencyConfig, workspaceScoped };
   const target = agencyConfig?.executionTarget;
@@ -377,7 +382,7 @@ export const applyTopicDeviceBinding = (
     // the conversation. An unset target takes that same `auto` default (see
     // `defaultsToAuto`), so it must not be converted into a concrete pin either.
     target === 'auto' ||
-    defaultsToAuto(agencyConfig, undefined) ||
+    defaultsToAuto(agencyConfig, isHetero) ||
     agencyConfig?.executionTargetSelectionPolicy === 'fixed'
   )
     return unchanged;

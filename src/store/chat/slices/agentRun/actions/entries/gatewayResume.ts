@@ -91,6 +91,7 @@ export const shouldUseConfiguredGatewayResume = async (
       agentId,
     ),
     getElectronStoreState().gatewayDeviceInfo?.deviceId,
+    { isHetero: isHeterogeneousAgentModelId(agentConfig?.model) },
   );
   const isGatewayMode = get().isGatewayModeEnabled(agentId);
   const heterogeneousProvider =

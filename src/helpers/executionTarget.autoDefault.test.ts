@@ -79,6 +79,16 @@ describe('unset execution target defaults to auto', () => {
       ).toBe(unset);
     });
 
+    it('keeps the topic machine for a model-only heterogeneous agent', () => {
+      // Legacy `model: 'claude-code'` agents carry no provider yet; they never
+      // take the auto default, so the topic must stay on its machine.
+      expect(
+        applyTopicDeviceBinding({ agencyConfig: cfg(), workspaceScoped: false }, 'dev-a', 'dev-b', {
+          isHetero: true,
+        }).agencyConfig,
+      ).toMatchObject({ boundDeviceId: 'dev-a', executionTarget: 'device' });
+    });
+
     it('still honours a leftover binding on a config without a stored target', () => {
       // A bound device is not an auto default — `defaultsToAuto` skips it, so the
       // topic keeps routing to its own machine.
