@@ -5,6 +5,7 @@ import type {
   ChannelReplyJob,
   ChannelVisibility,
 } from '@lobechat/types';
+import { agentDisplayName } from '@lobechat/types';
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import { TrashModel } from '../../models/trash';
@@ -546,6 +547,78 @@ export class ChannelRepository {
       replyJobs: replyJobsOf.get(channel.id) ?? [],
       unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
     }));
+  };
+
+  /**
+   * The caller's active Channels with their active Agent members, newest first: where the caller
+   * can address another Agent. Archived and trashed Channels are left out, since nothing posted
+   * there is answered.
+   */
+  directory = async (): Promise<
+    Array<{
+      agents: Array<{
+        agentId: string;
+        description: string | null;
+        memberId: string;
+        name: string;
+      }>;
+      channel: ChannelItem;
+    }>
+  > => {
+    const rows = await this.db
+      .select({ channel: channels })
+      .from(channels)
+      .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
+      .where(
+        and(this.membershipWhere(), notTrashed(channels.isDeleted), eq(channels.status, 'active')),
+      )
+      .orderBy(desc(channels.createdAt));
+    if (!rows.length) return [];
+
+    const members = await this.db
+      .select({
+        agentId: channelMembers.agentId,
+        agentName: agents.name,
+        agentTitle: agents.title,
+        channelId: channelMembers.channelId,
+        description: sql<
+          string | null
+        >`coalesce(nullif(${channelMembers.description}, ''), ${agents.description})`,
+        label: channelMembers.name,
+        memberId: channelMembers.id,
+      })
+      .from(channelMembers)
+      .innerJoin(agents, eq(agents.id, channelMembers.agentId))
+      .where(
+        and(
+          inArray(
+            channelMembers.channelId,
+            rows.map(({ channel }) => channel.id),
+          ),
+          eq(channelMembers.actorType, 'agent'),
+          eq(channelMembers.status, 'active'),
+        ),
+      )
+      .orderBy(channelMembers.createdAt);
+
+    const agentsOf = new Map<
+      string,
+      Array<{ agentId: string; description: string | null; memberId: string; name: string }>
+    >();
+    for (const member of members) {
+      const list = agentsOf.get(member.channelId) ?? [];
+      list.push({
+        agentId: member.agentId!,
+        description: member.description,
+        memberId: member.memberId,
+        // The member label is how the Channel names it, and what `@Name` in a message matches.
+        name:
+          member.label ||
+          agentDisplayName({ name: member.agentName, title: member.agentTitle }, 'Agent'),
+      });
+      agentsOf.set(member.channelId, list);
+    }
+    return rows.map(({ channel }) => ({ agents: agentsOf.get(channel.id) ?? [], channel }));
   };
 
   /** Read access. Returns undefined when the channel is missing or the caller is no member. */

@@ -1,3 +1,4 @@
+import { channelMessageReceipt, channelMessageVia } from '@lobechat/types';
 import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, lt, sql } from 'drizzle-orm';
 
 import {
@@ -57,8 +58,44 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
       name: isAgent ? senderAgentName || senderAgentTitle : senderUserName || senderUsername,
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
+    receipt: isAgent ? null : (channelMessageReceipt(message.metadata) ?? null),
+    via: isAgent
+      ? null
+      : (() => {
+          const via = channelMessageVia(message.metadata);
+          return via ? { ...via, avatar: null as string | null } : null;
+        })(),
   };
 };
+
+/**
+ * Avatars of the Agents named in `via`, which usually are not members of this Channel. An Agent
+ * deleted since keeps the name the message recorded, without an avatar.
+ */
+const relayAgentAvatars = async (tx: Transaction, rows: MessageRow[]) => {
+  const ids = [
+    ...new Set(
+      rows.flatMap((row) => {
+        const via = row.routingStatus === 'reply' ? undefined : channelMessageVia(row.metadata);
+        return via ? [via.agentId] : [];
+      }),
+    ),
+  ];
+  if (!ids.length) return new Map<string, string | null>();
+  const found = await tx
+    .select({ avatar: agents.avatar, id: agents.id })
+    .from(agents)
+    .where(inArray(agents.id, ids));
+  return new Map(found.map(({ avatar, id }) => [id, avatar] as const));
+};
+
+const withRelayAvatar = <T extends { via?: { agentId: string; avatar: string | null } | null }>(
+  message: T,
+  avatars: Map<string, string | null>,
+): T =>
+  message.via
+    ? { ...message, via: { ...message.via, avatar: avatars.get(message.via.agentId) ?? null } }
+    : message;
 
 /** Public projection only. Execution settings, drafts and internal messages never leave this boundary. */
 /**
@@ -271,9 +308,10 @@ export const readChannelView = async (
   const replyIds = [...page, ...(rootMessage ? [rootMessage] : [])].flatMap((message) =>
     message.routingStatus === 'reply' ? [message.id] : [],
   );
-  const [sourceTopics, works] = await Promise.all([
+  const [sourceTopics, works, relayAvatars] = await Promise.all([
     sourceTopicsByMessage(tx, channelId, replyIds, viewerUserId),
     externalWorksByMessage(tx, channelId, replyIds),
+    relayAgentAvatars(tx, [...page, ...(rootMessage ? [rootMessage] : [])]),
   ]);
   const ids = [...new Set([...files.values()].flat())];
   const attachments = ids.length
@@ -306,7 +344,10 @@ export const readChannelView = async (
     }),
     rootMessage: rootMessage
       ? {
-          ...publicMessage(rootMessage, files.get(rootMessage.id) ?? []),
+          ...withRelayAvatar(
+            publicMessage(rootMessage, files.get(rootMessage.id) ?? []),
+            relayAvatars,
+          ),
           sourceTopicId: sourceTopics.get(rootMessage.id)?.id ?? null,
           sourceTopicTitle: sourceTopics.get(rootMessage.id)?.title ?? null,
           works: works.get(rootMessage.id) ?? [],
@@ -314,7 +355,7 @@ export const readChannelView = async (
         }
       : null,
     messages: page.map((message) => ({
-      ...publicMessage(message, files.get(message.id) ?? []),
+      ...withRelayAvatar(publicMessage(message, files.get(message.id) ?? []), relayAvatars),
       sourceTopicId: sourceTopics.get(message.id)?.id ?? null,
       sourceTopicTitle: sourceTopics.get(message.id)?.title ?? null,
       works: works.get(message.id) ?? [],

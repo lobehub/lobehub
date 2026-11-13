@@ -247,6 +247,8 @@ export default {
   'reply.to': 'Replying to {{name}}',
   'reply.cancel': 'Cancel reply',
   'reply.attachment': 'Attachment',
+  'message.relayReplyFrom': '{{name}} replied in #{{channel}}',
+  'message.relayedBy': 'Relayed by {{name}}',
   'reply.viewOriginal': 'View original message',
   'reply.unavailable': 'Original message unavailable',
   'settings.title': 'Channel settings',

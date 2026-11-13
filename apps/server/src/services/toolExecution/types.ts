@@ -62,6 +62,12 @@ export interface ServerSubAgentRunResult {
    * instead of parking the parent — otherwise the parent hangs forever.
    */
   started: boolean;
+  /**
+   * `subAgentId` named a sub-agent that is still running: no child was forked,
+   * the instruction was queued for that run's next step instead. The caller
+   * returns a receipt rather than parking on a result.
+   */
+  steered?: boolean;
   /** The spawned child operation id. */
   subOperationId?: string;
   /** The isolation thread holding the sub-agent's full message trace. */

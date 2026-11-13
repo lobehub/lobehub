@@ -264,6 +264,27 @@ export const ChannelMessage = ({
         )}
         message={
           <Flexbox gap={8}>
+            {message.via && (
+              // Sent as this person's request, but written by an Agent in another Channel; a
+              // receipt brings that Channel's answer back, under the Agent that gave it.
+              <Flexbox horizontal align={'center'} gap={6}>
+                <AgentAvatar
+                  agentId={message.via.agentId}
+                  avatar={message.via.avatar ?? undefined}
+                  name={message.via.name}
+                  shape={'circle'}
+                  size={16}
+                />
+                <Text fontSize={12} type="secondary">
+                  {message.receipt
+                    ? t('message.relayReplyFrom', {
+                        channel: message.receipt.channelTitle,
+                        name: message.via.name,
+                      })
+                    : t('message.relayedBy', { name: message.via.name })}
+                </Text>
+              </Flexbox>
+            )}
             {!isRoot &&
               showsReplyQuote(message) &&
               (message.replyTo ? (

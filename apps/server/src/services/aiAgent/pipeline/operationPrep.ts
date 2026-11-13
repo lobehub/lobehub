@@ -1,5 +1,6 @@
 import type { AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { extractActivatedToolIdsFromMessages } from '@lobechat/agent-runtime';
+import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import type { OperationSkillSet, ProjectInstructionFile } from '@lobechat/context-engine';
@@ -741,6 +742,7 @@ export const prepareOperation = async (
     buildViewedTaskContextPrompt(deps, appContext, input.taskId),
     buildViewedGoalOverview(deps, appContext),
     buildRunProjectContextPrompt(deps, appContext?.projectId, resolvedAgentId, {
+      channelMessaging: !!toolsResult.enabledToolIds?.includes(ChannelIdentifier),
       coordinationRules: !!toolsResult.enabledToolIds?.includes(TaskIdentifier),
     }),
   ]);

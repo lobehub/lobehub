@@ -29,7 +29,12 @@ const SortDropdown = memo<SortDropdownProps>(({ iconOnly = false }) => {
   return (
     <DropdownMenu items={items}>
       {iconOnly ? (
-        <ActionIcon icon={currentSortIcon} title={currentSortLabel} />
+        // Match the 32px SearchBar and icon-only "+" Button it sits beside.
+        <ActionIcon
+          icon={currentSortIcon}
+          size={{ blockSize: 32, size: 16 }}
+          title={currentSortLabel}
+        />
       ) : (
         <ActionIconWithChevron icon={currentSortIcon} title={currentSortLabel} />
       )}

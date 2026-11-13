@@ -305,6 +305,7 @@ export const CONTENDER_SETTING_KEYS = [
   'thinkingLevel2',
   'thinkingLevel3',
   'thinkingLevel4',
+  'thinkingLevel5',
   'thinkingBudget',
   'preserveThinking',
   'textVerbosity',

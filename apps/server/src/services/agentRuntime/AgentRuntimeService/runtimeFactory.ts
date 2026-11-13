@@ -24,6 +24,7 @@ import { hookDispatcher } from '../hooks';
 import { createEvalConnectorHook } from './evalConnectorHook';
 import { createEvalToolGateHook } from './evalToolGateHook';
 import { DurableStatusUnavailableError } from './executionErrors';
+import { withGraphSteerReopen } from './graphSteerReopen';
 import type { AgentRuntimeServiceContext } from './types';
 
 const log = debug('lobe-server:agent-runtime-service');
@@ -307,7 +308,7 @@ export async function createAgentRuntime(
 
   // Create Agent Runtime instance
   const runtime = new AgentRuntime(agent as any, {
-    executors: createRuntimeExecutors(executorContext),
+    executors: withGraphSteerReopen(createRuntimeExecutors(executorContext), operationId),
   });
 
   return { agent, runtime };
