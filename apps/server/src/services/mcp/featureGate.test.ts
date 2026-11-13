@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { isMcpAppsEnabled } from './featureGate';
+import { isMcpAppsEnabled, isMcpEventsEnabled } from './featureGate';
 
 const getFlags = vi.hoisted(() => vi.fn());
 vi.mock('@/server/featureFlags', () => ({ getServerFeatureFlagsStateFromRuntimeConfig: getFlags }));
@@ -27,5 +27,23 @@ describe('isMcpAppsEnabled', () => {
     await expect(isMcpAppsEnabled('user-1')).resolves.toBe(false);
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+});
+
+describe('isMcpEventsEnabled', () => {
+  it('defaults off and follows the runtime events flag', async () => {
+    getFlags.mockResolvedValue({});
+    expect(await isMcpEventsEnabled('user-1')).toBe(false);
+    getFlags.mockResolvedValue({ enableMcpEvents: true });
+    expect(await isMcpEventsEnabled('user-1')).toBe(true);
+  });
+  it('fails closed on a flag lookup error', async () => {
+    getFlags.mockRejectedValue(new Error('unavailable'));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(await isMcpEventsEnabled('user-1')).toBe(false);
+    } finally {
+      error.mockRestore();
+    }
   });
 });
