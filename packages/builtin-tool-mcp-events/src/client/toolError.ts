@@ -52,3 +52,11 @@ export const getToolError = (
 /** `plugin` namespace key of the readable title for a failure. */
 export const toolErrorTitleKey = (code: McpEventsToolErrorCode) =>
   `builtins.lobe-mcp-events.error.${code}` as const;
+
+/**
+ * What "Show details" reveals: the server's own words, which often name the
+ * cause (the APP_URL in use, the connector's reply), then the code support
+ * needs to trace it.
+ */
+export const toolErrorDetails = ({ code, message }: McpEventsToolError) =>
+  [message?.trim(), `(${code})`].filter(Boolean).join('\n');

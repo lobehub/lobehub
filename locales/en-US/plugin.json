@@ -495,7 +495,7 @@
   "builtins.lobe-mcp-events.intervention.costTitle": "Runs the agent on every event",
   "builtins.lobe-mcp-events.intervention.filter": "Filter",
   "builtins.lobe-mcp-events.intervention.instructions": "When it fires",
-  "builtins.lobe-mcp-events.render.connectorError": "Couldn't read events from {{connector}}: {{message}}",
+  "builtins.lobe-mcp-events.render.connectorError": "Couldn't read events from {{connector}}",
   "builtins.lobe-mcp-events.render.eventTypesEmpty": "None of this agent's connectors offer events.",
   "builtins.lobe-mcp-events.render.expiresAt": "Valid until {{time}}, renewed automatically",
   "builtins.lobe-mcp-events.render.expiresNever": "Never expires",
