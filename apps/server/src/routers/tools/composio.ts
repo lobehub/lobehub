@@ -3,10 +3,10 @@ import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { ConnectorModel } from '@/database/models/connector';
-import { PluginModel } from '@/database/models/plugin';
 import { getComposioClient, isComposioConnectedAccountNotFoundError } from '@/libs/composio';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { ComposioService } from '@/server/services/composio';
 import { MCPService } from '@/server/services/mcp';
 
 // wsCompatProcedure (not authedProcedure): when a request carries X-Workspace-Id
@@ -21,9 +21,13 @@ const composioProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
   // Composio connection (workspace_id = wsId) rather than only the personal one.
   // Personal mode (wsId undefined) falls back to `workspace_id IS NULL`.
   const wsId = ctx.workspaceId ?? undefined;
-  const pluginModel = new PluginModel(ctx.serverDB, ctx.userId, wsId);
   const connectorModel = new ConnectorModel(ctx.serverDB, ctx.userId, wsId);
-  return opts.next({ ctx: { ...ctx, composioClient, connectorModel, pluginModel } });
+  const composioService = new ComposioService({
+    db: ctx.serverDB,
+    userId: ctx.userId,
+    workspaceId: wsId,
+  });
+  return opts.next({ ctx: { ...ctx, composioClient, composioService, connectorModel } });
 });
 
 export const composioToolsRouter = router({
@@ -36,34 +40,22 @@ export const composioToolsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Resolve the connected account server-side from the caller's own records
-      // (models are user-scoped). Never trust a connectedAccountId supplied by
-      // the client — that would let a user drive another user's connection.
-      // Connector metadata first (new path); plugin customParams as fallback for
-      // connections created before the connector projection existed.
-      const [connector] = await ctx.connectorModel.queryByIdentifiers([input.identifier]);
-      const connectorComposio = connector?.metadata?.composio;
-      let connectedAccountId = connectorComposio?.connectedAccountId;
-      // The Composio user entity that OWNS the account (linked it), NOT the
-      // caller. In a workspace the resolved row may belong to another member;
-      // passing the caller's id fails Composio's account/entity validation.
-      // `linkedByUserId` tracks the true linker (diverges from the row creator
-      // when a workspace owner reconnects a member's row); fall back to the row
-      // creator for legacy rows without it.
-      let ownerUserId: string | undefined = connectorComposio?.linkedByUserId ?? connector?.userId;
-      if (!connectedAccountId) {
-        const plugin = await ctx.pluginModel.findById(input.identifier);
-        const pluginComposio = plugin?.customParams?.composio;
-        connectedAccountId = pluginComposio?.connectedAccountId;
-        ownerUserId = pluginComposio?.linkedByUserId ?? plugin?.userId;
-      }
-
-      if (!connectedAccountId) {
+      // Resolve the connected account server-side, never from a client-supplied
+      // connectedAccountId (that would let a user drive another user's
+      // connection), and through the resolver the agent runtime uses: it only
+      // serves a connector this call may run (the workspace's shared ones, as
+      // no conversation is named), and never the plugin mirror of a connector
+      // row it left out — a connector its creator made private stays private
+      // here too. `ownerUserId` is the Composio entity that linked the account,
+      // not the caller.
+      const account = await ctx.composioService.resolveComposioAccount(input.identifier, {});
+      if (!account) {
         throw new TRPCError({
           code: 'NOT_FOUND',
           message: `No Composio connection found for "${input.identifier}".`,
         });
       }
+      const { connectedAccountId, connector, ownerUserId } = account;
 
       let result: unknown;
       try {
@@ -73,15 +65,14 @@ export const composioToolsRouter = router({
           // Toolkit version resolves to "latest"; allow manual execution without a
           // pinned version (Composio otherwise throws ComposioToolVersionRequiredError).
           dangerouslySkipVersionCheck: true,
-          userId: ownerUserId ?? ctx.userId,
+          userId: ownerUserId,
         });
       } catch (error) {
-        if (connector?.id && isComposioConnectedAccountNotFoundError(error)) {
+        if (connector && isComposioConnectedAccountNotFoundError(error)) {
           try {
-            await ctx.connectorModel.markComposioConnectionUnavailable(
-              connector.id,
-              connectedAccountId,
-            );
+            await ctx.connectorModel
+              .forRow(connector)
+              .markComposioConnectionUnavailable(connector.id, connectedAccountId);
           } catch {
             // Preserve the remote execution error if the secondary health write fails.
           }

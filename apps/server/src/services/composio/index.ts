@@ -229,8 +229,12 @@ export class ComposioService {
    * actually linked the current account) and falls back to the row creator
    * (`userId`) for rows written before that field existed — the two diverge when
    * a workspace owner reconnects a member-created connector.
+   *
+   * Every path that runs a Composio account resolves it here (the agent
+   * runtime and the manual `tools.composio.executeAction`), so a connector the
+   * caller may not use is not served from its plugin mirror on any of them.
    */
-  private async resolveComposioAccount(
+  async resolveComposioAccount(
     identifier: string,
     target: ConnectorRunTarget,
   ): Promise<

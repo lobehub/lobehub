@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { composioToolsRouter } from './composio';
 
 const mocks = vi.hoisted(() => ({
-  connectorQueryByIdentifiers: vi.fn(),
+  connectorForRow: vi.fn(),
+  connectorIdentifiersWithRows: vi.fn(),
+  connectorResolveByIdentifiers: vi.fn(),
   isComposioNotFound: vi.fn(),
   markComposioUnavailable: vi.fn(),
   pluginFindById: vi.fn(),
@@ -16,10 +18,20 @@ vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(async () => ({
 
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn().mockImplementation(function () {
-    return {
+    const model: Record<string, unknown> = {
+      forRow: mocks.connectorForRow,
+      identifiersWithConnectorRows: mocks.connectorIdentifiersWithRows,
       markComposioConnectionUnavailable: mocks.markComposioUnavailable,
-      queryByIdentifiers: mocks.connectorQueryByIdentifiers,
+      resolveByIdentifiers: mocks.connectorResolveByIdentifiers,
     };
+    mocks.connectorForRow.mockReturnValue(model);
+    return model;
+  }),
+}));
+
+vi.mock('@/database/models/connectorTool', () => ({
+  ConnectorToolModel: vi.fn().mockImplementation(function () {
+    return {};
   }),
 }));
 
@@ -31,6 +43,7 @@ vi.mock('@/database/models/plugin', () => ({
 
 vi.mock('@/libs/composio', () => ({
   getComposioClient: () => ({ tools: { execute: mocks.toolsExecute } }),
+  isComposioClientAvailable: () => true,
   isComposioConnectedAccountNotFoundError: mocks.isComposioNotFound,
 }));
 
@@ -43,7 +56,8 @@ const input = { identifier: 'gmail', toolArgs: { to: 'a@b.c' }, toolSlug: 'GMAIL
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.connectorQueryByIdentifiers.mockResolvedValue([]);
+  mocks.connectorResolveByIdentifiers.mockResolvedValue([]);
+  mocks.connectorIdentifiersWithRows.mockResolvedValue(new Set());
   mocks.isComposioNotFound.mockImplementation(function (error: unknown) {
     return (
       typeof error === 'object' &&
@@ -60,7 +74,7 @@ beforeEach(() => {
 
 describe('composioToolsRouter.executeAction', () => {
   it('resolves connectedAccountId from connector metadata (new path)', async () => {
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([
+    mocks.connectorResolveByIdentifiers.mockResolvedValue([
       { id: 'conn-gmail', metadata: { composio: { connectedAccountId: 'ca-connector' } } },
     ]);
 
@@ -70,6 +84,8 @@ describe('composioToolsRouter.executeAction', () => {
       'GMAIL_SEND_EMAIL',
       expect.objectContaining({ connectedAccountId: 'ca-connector', userId: 'user-1' }),
     );
+    // No conversation is named, so only the rows any run may use resolve.
+    expect(mocks.connectorResolveByIdentifiers).toHaveBeenCalledWith(['gmail'], {});
     expect(mocks.pluginFindById).not.toHaveBeenCalled();
   });
 
@@ -81,7 +97,7 @@ describe('composioToolsRouter.executeAction', () => {
     const notFound = Object.assign(new Error('connected account not found'), {
       code: 'CONNECTED_ACCOUNT_NOT_FOUND',
     });
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([
+    mocks.connectorResolveByIdentifiers.mockResolvedValue([
       { id: 'conn-gmail', metadata: { composio: { connectedAccountId: 'ca-connector' } } },
     ]);
     mocks.toolsExecute.mockRejectedValue(notFound);
@@ -90,6 +106,9 @@ describe('composioToolsRouter.executeAction', () => {
     await expect(caller().executeAction(input)).rejects.toMatchObject({
       message: 'connected account not found',
     });
+    expect(mocks.connectorForRow).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'conn-gmail' }),
+    );
     expect(mocks.markComposioUnavailable).toHaveBeenCalledWith('conn-gmail', 'ca-connector');
   });
 
@@ -102,7 +121,7 @@ describe('composioToolsRouter.executeAction', () => {
     //
     // Tool actions can return 404 for the target resource while their connected account is healthy.
     // Only Composio's explicit connected-account-not-found error may update connector health here.
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([
+    mocks.connectorResolveByIdentifiers.mockResolvedValue([
       { id: 'conn-gmail', metadata: { composio: { connectedAccountId: 'ca-connector' } } },
     ]);
     mocks.toolsExecute.mockRejectedValue(
@@ -116,7 +135,7 @@ describe('composioToolsRouter.executeAction', () => {
   });
 
   it('falls back to plugin customParams when no connector projection exists', async () => {
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([]);
+    mocks.connectorResolveByIdentifiers.mockResolvedValue([]);
     mocks.pluginFindById.mockResolvedValue({
       customParams: { composio: { connectedAccountId: 'ca-plugin' } },
     });
@@ -129,8 +148,30 @@ describe('composioToolsRouter.executeAction', () => {
     );
   });
 
+  /**
+   * @example
+   * expect(executeAction()).rejects.toMatchObject({ code: 'NOT_FOUND' });
+   */
+  it('does not run the plugin mirror of a connector the caller cannot see', async () => {
+    // ROOT CAUSE:
+    //
+    // The shared-row lookup misses a connector its creator made private, and the route read
+    // that miss as a pre-connector legacy connection. The workspace-wide plugin projection
+    // still mirrors the account, so any member ran it as the creator's Composio entity.
+    mocks.connectorResolveByIdentifiers.mockResolvedValue([]);
+    mocks.connectorIdentifiersWithRows.mockResolvedValue(new Set(['gmail']));
+    mocks.pluginFindById.mockResolvedValue({
+      customParams: { composio: { connectedAccountId: 'ca-private', linkedByUserId: 'user-2' } },
+      userId: 'user-2',
+    });
+
+    await expect(caller().executeAction(input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mocks.connectorIdentifiersWithRows).toHaveBeenCalledWith(['gmail']);
+    expect(mocks.toolsExecute).not.toHaveBeenCalled();
+  });
+
   it('throws NOT_FOUND when neither source has a connection', async () => {
-    mocks.connectorQueryByIdentifiers.mockResolvedValue([]);
+    mocks.connectorResolveByIdentifiers.mockResolvedValue([]);
     mocks.pluginFindById.mockResolvedValue(undefined);
 
     await expect(caller().executeAction(input)).rejects.toMatchObject({ code: 'NOT_FOUND' });
