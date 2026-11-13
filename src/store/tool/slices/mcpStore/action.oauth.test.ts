@@ -235,7 +235,9 @@ describe('marketplace OAuth MCP installation', () => {
       }),
     );
     // Its OAuth tokens are withheld from the edit read: its server decides its status
-    expect(state.syncConnectorTools).toHaveBeenCalledWith('connector-1');
+    expect(state.syncConnectorTools).toHaveBeenCalledWith('connector-1', {
+      pruneMissingAutoTools: true,
+    });
   });
 
   it('does not install when the provider authorization fails', async () => {
@@ -319,7 +321,9 @@ describe('marketplace OAuth MCP installation', () => {
       }),
     );
     expect(vi.mocked(state.createConnector).mock.calls[0][0]).not.toHaveProperty('oidcConfig');
-    expect(state.syncConnectorTools).toHaveBeenCalledWith('connector-1');
+    expect(state.syncConnectorTools).toHaveBeenCalledWith('connector-1', {
+      pruneMissingAutoTools: true,
+    });
     expect(state.updateConnector).toHaveBeenCalledWith('connector-1', {
       metadata: { marketplaceInstalled: true },
     });

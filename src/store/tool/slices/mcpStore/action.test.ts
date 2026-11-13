@@ -742,7 +742,9 @@ describe('mcpStore actions', () => {
         });
         expect(mcpService.checkInstallation).toHaveBeenCalled();
         expect(mcpService.getStdioMcpServerManifest).toHaveBeenCalled();
-        expect(result.current.syncConnectorTools).toHaveBeenCalledWith('connector-1');
+        expect(result.current.syncConnectorTools).toHaveBeenCalledWith('connector-1', {
+          pruneMissingAutoTools: true,
+        });
         expect(result.current.refreshPlugins).not.toHaveBeenCalled(); // no legacy plugin row
       });
 
