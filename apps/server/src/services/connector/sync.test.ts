@@ -12,12 +12,18 @@ import {
   syncConnectorToolsById,
 } from './sync';
 
-vi.mock('@/server/services/mcp', () => ({ mcpService: { listRawTools: vi.fn() } }));
+vi.mock('@/server/services/mcp', () => ({
+  mcpService: { listRawTools: vi.fn(), getEventsCapability: vi.fn() },
+}));
 const gateway = vi.hoisted(() => ({ isConfigured: false }));
 vi.mock('@/server/services/deviceGateway', () => ({ deviceGateway: gateway }));
 vi.mock('@/server/services/mcp/deviceTunnel', () => ({ listMcpToolsOnDevice: vi.fn() }));
 const mcpAppsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
-vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mcpAppsEnabled }));
+const mcpEventsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
+vi.mock('@/server/services/mcp/featureGate', () => ({
+  isMcpAppsEnabled: mcpAppsEnabled,
+  isMcpEventsEnabled: mcpEventsEnabled,
+}));
 vi.mock('./tokens', () => ({ ensureFreshConnectorToken: async (connector: unknown) => connector }));
 
 const httpConnector = (
@@ -359,7 +365,71 @@ describe('syncConnectorToolsById', () => {
       expect(mcpAppsEnabled).toHaveBeenCalledWith('user-1');
       expect(mcpService.listRawTools).toHaveBeenCalledWith(expect.anything(), {
         mcpApps: enabled,
+        mcpEvents: false,
       });
     },
   );
+});
+
+describe('events capability synchronization', () => {
+  it('persists server support without losing connector metadata', async () => {
+    mcpEventsEnabled.mockResolvedValueOnce(true);
+    vi.mocked(mcpService.listRawTools).mockResolvedValue([]);
+    vi.mocked(mcpService.getEventsCapability).mockResolvedValue({ supported: true });
+    const update = vi.fn();
+    await syncConnectorToolsById('c1', {
+      connectorModel: {
+        findById: async () => httpConnector(null, { description: 'keep', capabilities: {} }),
+        updateStatus: vi.fn(),
+        update,
+      } as any,
+      connectorToolModel: { upsertMany: vi.fn() } as any,
+      userId: 'events-user',
+    });
+    expect(update).toHaveBeenCalledWith('c1', {
+      metadata: { description: 'keep', capabilities: { events: { supported: true } } },
+    });
+  });
+
+  it('marks a connector that runs through a device as without events, without asking it', async () => {
+    gateway.isConfigured = true;
+    mcpEventsEnabled.mockResolvedValueOnce(true);
+    vi.mocked(listMcpToolsOnDevice).mockResolvedValue([]);
+    vi.mocked(mcpService.getEventsCapability).mockClear();
+    vi.mocked(mcpService.listRawTools).mockClear();
+    const update = vi.fn();
+    try {
+      await syncConnectorToolsById('c1', {
+        connectorModel: {
+          findById: async () =>
+            ({
+              credentials: null,
+              id: 'c1',
+              identifier: 'local-conn',
+              isEnabled: true,
+              mcpConnectionType: 'stdio',
+              mcpServerUrl: null,
+              mcpStdioConfig: { args: ['serve'], command: 'my-mcp' },
+              metadata: { capabilities: { events: { supported: true } } },
+              name: 'Local Connector',
+              oidcConfig: null,
+              userId: 'owner',
+              workspaceId: null,
+            }) as any,
+          update,
+          updateStatus: vi.fn(),
+        } as any,
+        connectorToolModel: { upsertMany: vi.fn() } as any,
+        serverDB: {} as any,
+        userId: 'owner',
+      });
+    } finally {
+      gateway.isConfigured = false;
+    }
+    expect(mcpService.listRawTools).not.toHaveBeenCalled();
+    expect(mcpService.getEventsCapability).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith('c1', {
+      metadata: { capabilities: { events: { supported: false } } },
+    });
+  });
 });

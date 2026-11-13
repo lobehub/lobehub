@@ -24,7 +24,7 @@ import { inferCrudType } from '@/libs/mcp/utils';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
 import { listMcpToolsOnDevice } from '@/server/services/mcp/deviceTunnel';
-import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
+import { isMcpAppsEnabled, isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
 
 import { ensureFreshConnectorToken } from './tokens';
 
@@ -211,16 +211,32 @@ export const syncConnectorToolsById = async (
 
   const mcpParams = buildConnectorMcpParams(connector);
 
-  const mcpApps = await isMcpAppsEnabled(ctx.userId);
+  const mcpOptions = {
+    mcpApps: await isMcpAppsEnabled(ctx.userId),
+    mcpEvents: await isMcpEventsEnabled(ctx.userId),
+  };
   let rawTools: Awaited<ReturnType<typeof mcpService.listRawTools>>;
   try {
     // A server may list the tools only its views call just to a client
     // announcing MCP Apps; they are synced, and kept from the model, all the same
-    rawTools =
-      (await listOnDevice(connector, mcpParams, ctx, mcpApps)) ??
-      (await mcpService.listRawTools(mcpParams, {
-        mcpApps,
-      }));
+    const deviceTools = await listOnDevice(connector, mcpParams, ctx, mcpOptions.mcpApps);
+    rawTools = deviceTools ?? (await mcpService.listRawTools(mcpParams, mcpOptions));
+    if (mcpOptions.mcpEvents) {
+      // Event webhooks need a server the cloud reaches directly; a connector that
+      // runs through a device never offers them, so it is not even asked.
+      const events = deviceTools
+        ? { supported: false }
+        : await mcpService.getEventsCapability(mcpParams, mcpOptions);
+      await ctx.connectorModel.update(connectorId, {
+        metadata: {
+          ...connector.metadata,
+          capabilities: {
+            ...connector.metadata?.capabilities,
+            events: { supported: events.supported },
+          },
+        },
+      });
+    }
   } catch (err) {
     await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.error);
     throw err;
@@ -234,7 +250,7 @@ export const syncConnectorToolsById = async (
     // while the manifest build leaves it out of the model's tool list.
     metadata: buildMcpToolMetadata(
       resolveMcpUiToolMeta(t._meta, false).visibility,
-      mcpApps
+      mcpOptions.mcpApps
         ? {
             ...resolveMcpUiToolMeta(t._meta),
             entrypoints: resolveMcpUiToolMeta(t._meta).entrypoints ?? [],
