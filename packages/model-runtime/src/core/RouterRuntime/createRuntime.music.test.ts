@@ -227,6 +227,43 @@ describe('createRouterRuntime music', () => {
     expect(pollKeys).toEqual(['music-key']);
   });
 
+  it('reports the serving channel through onRouteSuccess and onRouteAttempt', async () => {
+    class MockMusicRuntime implements LobeRuntimeAI {
+      createMusic = vi.fn(async () => ({ inferenceId: 'task-1', status: 'pending' as const }));
+    }
+    const onRouteSuccess = vi.fn();
+    const onRouteAttempt = vi.fn(async () => {});
+
+    const Runtime = createRouterRuntime({
+      id: 'music-router',
+      onRouteAttempt,
+      onRouteSuccess,
+      routers: [
+        {
+          apiType: 'openai',
+          id: 'suno-router',
+          models: ['suno-v5'],
+          options: [{ apiKey: 'channel-a', id: 'a' }],
+          runtime: MockMusicRuntime as any,
+        },
+      ],
+    } as any);
+
+    await new Runtime().createMusic(payload);
+
+    expect(onRouteSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channelId: 'a',
+        method: 'createMusic',
+        model: 'suno-v5',
+        routerId: 'suno-router',
+      }),
+    );
+    expect(onRouteAttempt).toHaveBeenCalledWith(
+      expect.objectContaining({ channelId: 'a', success: true }),
+    );
+  });
+
   it('reports runtimes without music support', async () => {
     class ChatOnlyRuntime implements LobeRuntimeAI {}
 

@@ -11,6 +11,7 @@ import type {
   CreateImagePayload,
   CreateMusicOptions,
   CreateMusicPayload,
+  CreateMusicResult,
   CreateVideoMethodOptions,
   CreateVideoPayload,
   DecisionOptions,
@@ -545,14 +546,46 @@ export const createRouterRuntime = ({
     }
 
     async createMusic(payload: CreateMusicPayload, options?: CreateMusicOptions) {
-      const { option, router } = await this.resolveMusicRoute(payload.model);
-      const { runtime } = await createRuntimeFromOption(this.deps, router, option);
-      const musicRuntime: LobeRuntimeAI = runtime;
+      // One attempt on the first sorted channel, through the normal route lifecycle so attempt
+      // reporting and `onRouteSuccess` affinity still apply; music never falls back.
+      const routeContext = { method: 'createMusic' as const };
+      const { matchedRouter: router, routerOptions } = await selectRouteOptions(
+        this.deps,
+        payload.model,
+        routeContext,
+      );
+      const option = routerOptions[0];
+      if (!option) throw new Error('The music generation channel is no longer available');
+
+      const run = createRouteRun({
+        deps: this.deps,
+        matchedRouter: router,
+        model: payload.model,
+        providerId: id,
+        routeContext,
+        routerOptions,
+        signal: options?.signal,
+      });
+      const prepared = await run.prepareAttempt(0);
+      const musicRuntime: LobeRuntimeAI = prepared.runtime;
       if (!musicRuntime.createMusic) {
         throw new Error('Music generation is not supported by the matched runtime');
       }
 
-      const result = await musicRuntime.createMusic(payload, options);
+      let result: CreateMusicResult;
+      try {
+        result = await musicRuntime.createMusic(payload, options);
+      } catch (error) {
+        run.reportFailure(prepared, error);
+        throw error;
+      }
+
+      await run.notifyRouteSuccess(prepared);
+      run.reportAttempt(prepared.attempt, {
+        durationMs: Date.now() - prepared.attempt.startedAt,
+        success: true,
+      });
+
       if (result.status !== 'pending') return result;
 
       // A channel without an id is identified by its position in the unsorted option list.
