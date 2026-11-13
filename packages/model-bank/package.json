@@ -78,6 +78,7 @@
     "./sensenova": "./src/aiModels/sensenova.ts",
     "./siliconcloud": "./src/aiModels/siliconcloud.ts",
     "./spark": "./src/aiModels/spark.ts",
+    "./steadyrouter": "./src/aiModels/steadyrouter.ts",
     "./stepfun": "./src/aiModels/stepfun.ts",
     "./straico": "./src/aiModels/straico.ts",
     "./streamlake": "./src/aiModels/streamlake.ts",

@@ -114,6 +114,9 @@ export const getLLMConfig = () => {
       ENABLED_QWEN: z.boolean(),
       QWEN_API_KEY: z.string().optional(),
 
+      ENABLED_STEADYROUTER: z.boolean(),
+      STEADYROUTER_API_KEY: z.string().optional(),
+
       ENABLED_STEPFUN: z.boolean(),
       STEPFUN_API_KEY: z.string().optional(),
 
@@ -381,6 +384,9 @@ export const getLLMConfig = () => {
 
       ENABLED_QWEN: !!process.env.QWEN_API_KEY,
       QWEN_API_KEY: process.env.QWEN_API_KEY,
+
+      ENABLED_STEADYROUTER: !!process.env.STEADYROUTER_API_KEY,
+      STEADYROUTER_API_KEY: process.env.STEADYROUTER_API_KEY,
 
       ENABLED_STEPFUN: !!process.env.STEPFUN_API_KEY,
       STEPFUN_API_KEY: process.env.STEPFUN_API_KEY,

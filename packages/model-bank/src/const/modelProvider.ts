@@ -65,6 +65,7 @@ export enum ModelProvider {
   SenseNova = 'sensenova',
   SiliconCloud = 'siliconcloud',
   Spark = 'spark',
+  SteadyRouter = 'steadyrouter',
   Stepfun = 'stepfun',
   Straico = 'straico',
   StreamLake = 'streamlake',
