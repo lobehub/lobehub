@@ -45,6 +45,33 @@ describe('inputCompletionError', () => {
         message: 'Insufficient budget for model',
       });
     });
+
+    it('keeps the runtime error type when tRPC only sends a transport code', () => {
+      // `createRuntimeTRPCError` on the server puts the runtime error type in the
+      // message and maps it onto a transport code, so a workspace without a key
+      // for the personal provider arrives as a plain UNAUTHORIZED tRPC error.
+      expect(
+        createInputCompletionError({
+          data: { code: 'UNAUTHORIZED' },
+          message: 'InvalidProviderAPIKey',
+        }),
+      ).toEqual({
+        body: undefined,
+        errorType: 'InvalidProviderAPIKey',
+        httpStatus: undefined,
+        message: 'InvalidProviderAPIKey',
+      });
+    });
+
+    it('recovers the runtime error type from a nested cause message', () => {
+      expect(
+        createInputCompletionError({
+          cause: { message: 'NoOpenAIAPIKey' },
+          data: { code: 'UNAUTHORIZED' },
+          message: 'TRPC request failed',
+        }).errorType,
+      ).toBe('NoOpenAIAPIKey');
+    });
   });
 
   describe('isInputCompletionCredentialError', () => {
@@ -60,6 +87,28 @@ describe('inputCompletionError', () => {
       expect(
         isInputCompletionCredentialError(
           createInputCompletionError(new Error('InsufficientBudgetForModel')),
+        ),
+      ).toBe(false);
+    });
+
+    it('treats the tRPC transport shape of a missing key as a credential error', () => {
+      expect(
+        isInputCompletionCredentialError(
+          createInputCompletionError({
+            data: { code: 'UNAUTHORIZED' },
+            message: 'InvalidProviderAPIKey',
+          }),
+        ),
+      ).toBe(true);
+    });
+
+    it('does not treat a transport-only unauthorized failure as a credential error', () => {
+      expect(
+        isInputCompletionCredentialError(
+          createInputCompletionError({
+            data: { code: 'UNAUTHORIZED' },
+            message: 'UNAUTHORIZED',
+          }),
         ),
       ).toBe(false);
     });
