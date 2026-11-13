@@ -38,6 +38,7 @@ import type {
   CreateMusicPayload,
   CreateMusicResult,
   MusicPollingRoute,
+  PollMusicStatusOptions,
 } from '../types/music';
 import type {
   CreateVideoMethodOptions,
@@ -578,8 +579,13 @@ export class ModelRuntime {
     return this._runtime.createMusic?.(payload, options);
   }
 
-  async handlePollMusicStatus(inferenceId: string, model?: string, route?: MusicPollingRoute) {
-    return this._runtime.handlePollMusicStatus?.(inferenceId, model, route);
+  async handlePollMusicStatus(
+    inferenceId: string,
+    model?: string,
+    route?: MusicPollingRoute,
+    options?: PollMusicStatusOptions,
+  ) {
+    return this._runtime.handlePollMusicStatus?.(inferenceId, model, route, options);
   }
 
   async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {

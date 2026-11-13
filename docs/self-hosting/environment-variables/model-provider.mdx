@@ -1,9 +1,7 @@
 ---
 title: LobeHub Model Service Providers - Environment Variables and Configuration
 description: >-
-  Learn about the environment variables and configuration settings for various
-  model service providers like OpenAI, Google AI, AWS Bedrock, Ollama,
-  Perplexity AI, Anthropic AI, Mistral AI, Groq AI, OpenRouter AI, and 01.AI.
+  Learn about the environment variables and configuration settings for various model service providers like OpenAI, Google AI, AWS Bedrock, Ollama, Perplexity AI, Anthropic AI, Mistral AI, Groq AI, OpenRouter AI, and 01.AI.
 tags:
   - Model Service Providers
   - Environment Variables
@@ -806,7 +804,7 @@ The example hides all default models and enables only `eleven_v4` and `eleven_fl
 
 ## Suno
 
-Music generation through a third-party Suno API gateway. Suno's own API is invite-only, so requests go to [kie.ai](https://docs.kie.ai/suno-api/generate-music) by default, or to [sunoapi.org](https://docs.sunoapi.org/suno-api/generate-music) or a compatible service through `SUNO_PROXY_URL`. Check the gateway's terms and Suno's terms of service before enabling it.
+Music generation through a third-party Suno API gateway. Suno's own API is invite-only, so requests go to [sunoapi.org](https://docs.sunoapi.org/suno-api/generate-music) by default, or to a service compatible with its `/api/v1/generate` API through `SUNO_PROXY_URL`. kie.ai's Suno API uses a different protocol (`/api/v1/jobs/createTask`) and is not supported yet; a kie.ai URL fails the settings check with that reason. Check the gateway's terms and Suno's terms of service before enabling it.
 
 ### `SUNO_API_KEY`
 
@@ -818,9 +816,9 @@ Music generation through a third-party Suno API gateway. Suno's own API is invit
 ### `SUNO_PROXY_URL`
 
 - Type: Optional
-- Description: Base URL of the Suno gateway. A host on `sunoapi.org` uses that gateway's endpoints; any other host uses the kie.ai endpoints.
-- Default: `https://api.kie.ai`
-- Example: `https://api.sunoapi.org`
+- Description: Base URL of a sunoapi.org-compatible Suno gateway. A trailing `/api/v1` is optional.
+- Default: `https://api.sunoapi.org`
+- Example: `https://suno-gateway.example.com`
 
 ### `SUNO_MODEL_LIST`
 

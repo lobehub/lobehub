@@ -30,6 +30,7 @@ import type {
   HandleCreateVideoWebhookResult,
   ModelRequestOptions,
   MusicPollingRoute,
+  PollMusicStatusOptions,
   PollMusicStatusResult,
   PollVideoStatusResult,
   PullModelParams,
@@ -97,6 +98,7 @@ export interface LobeRuntimeAI {
     inferenceId: string,
     model?: string,
     route?: MusicPollingRoute,
+    options?: PollMusicStatusOptions,
   ) => Promise<PollMusicStatusResult>;
 
   handlePollVideoStatus?: (

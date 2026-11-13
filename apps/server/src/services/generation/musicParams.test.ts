@@ -59,6 +59,7 @@ describe('toRuntimeMusicParams', () => {
         }),
       ),
     ).toEqual({
+      duration: 120,
       format: 'wav',
       instrumental: false,
       lyricsOptimizer: true,

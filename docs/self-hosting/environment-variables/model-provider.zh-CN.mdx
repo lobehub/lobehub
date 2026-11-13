@@ -802,7 +802,7 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 
 ## Suno
 
-通过第三方 Suno API 网关生成音乐。Suno 官方 API 仅限受邀合作伙伴，因此默认请求 [kie.ai](https://docs.kie.ai/suno-api/generate-music)，也可以通过 `SUNO_PROXY_URL` 改为 [sunoapi.org](https://docs.sunoapi.org/suno-api/generate-music) 或兼容服务。启用前请确认网关条款与 Suno 服务条款。
+通过第三方 Suno API 网关生成音乐。Suno 官方 API 仅限受邀合作伙伴，因此默认请求 [sunoapi.org](https://docs.sunoapi.org/suno-api/generate-music)，也可以通过 `SUNO_PROXY_URL` 改为兼容其 `/api/v1/generate` 接口的服务。kie.ai 的 Suno API 使用另一套协议（`/api/v1/jobs/createTask`），暂不支持；填写 kie.ai 地址时，设置页检查会直接给出这个原因。启用前请确认网关条款与 Suno 服务条款。
 
 ### `SUNO_API_KEY`
 
@@ -814,9 +814,9 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 ### `SUNO_PROXY_URL`
 
 - 类型：可选
-- 描述：Suno 网关的 Base URL。域名为 `sunoapi.org` 时使用该网关的接口，其他域名使用 kie.ai 的接口。
-- 默认值：`https://api.kie.ai`
-- 示例：`https://api.sunoapi.org`
+- 描述：兼容 sunoapi.org 的 Suno 网关 Base URL，末尾的 `/api/v1` 可省略。
+- 默认值：`https://api.sunoapi.org`
+- 示例：`https://suno-gateway.example.com`
 
 ### `SUNO_MODEL_LIST`
 

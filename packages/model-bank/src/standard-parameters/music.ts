@@ -14,12 +14,12 @@ import { z } from 'zod';
  * - `title` / `style` / `negativeStyle`: Suno `title` / `style` / `negativeTags`.
  * - `instrumental`: MiniMax `is_instrumental`; Suno `instrumental`.
  * - `autoLyrics`: MiniMax `lyrics_optimizer`.
- * - `duration`: Suno `duration` (seconds).
+ * - `duration`: Suno `duration` (seconds, custom mode only).
  * - `referenceAudioUrl`: MiniMax `audio_url` (music-cover only).
  * - `format` / `sampleRate` / `bitrate`: MiniMax `audio_setting`.
  *
  * @see https://platform.minimax.io/docs/api-reference/music-generation
- * @see https://docs.kie.ai/suno-api/generate-music
+ * @see https://docs.sunoapi.org/suno-api/generate-music
  */
 
 export const MUSIC_AUDIO_FORMATS = ['mp3', 'wav', 'pcm'] as const;

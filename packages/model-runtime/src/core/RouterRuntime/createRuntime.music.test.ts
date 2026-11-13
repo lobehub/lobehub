@@ -51,6 +51,35 @@ describe('createRouterRuntime music', () => {
     expect(pollKeys).toEqual(['channel-a']);
   });
 
+  it('forwards the poll options to the channel runtime', async () => {
+    const handlePollMusicStatus = vi.fn(async () => ({ status: 'pending' as const }));
+
+    class MockMusicRuntime implements LobeRuntimeAI {
+      handlePollMusicStatus = handlePollMusicStatus;
+    }
+
+    const Runtime = createRouterRuntime({
+      id: 'music-router',
+      routers: [
+        {
+          apiType: 'openai',
+          models: ['suno-v5'],
+          options: [{ apiKey: 'channel-a', id: 'a' }],
+          runtime: MockMusicRuntime as any,
+        },
+      ],
+    });
+    const controller = new AbortController();
+
+    await new Runtime().handlePollMusicStatus('task-1', 'suno-v5', undefined, {
+      signal: controller.signal,
+    });
+
+    expect(handlePollMusicStatus).toHaveBeenCalledWith('task-1', 'suno-v5', undefined, {
+      signal: controller.signal,
+    });
+  });
+
   it('returns the accepting channel as route and polls that pinned channel', async () => {
     const pollKeys: string[] = [];
 

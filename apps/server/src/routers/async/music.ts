@@ -117,7 +117,7 @@ export const pollMusicUntilCompletion = async (
     let result: PollMusicStatusResult | undefined;
     let threw = false;
     try {
-      result = await modelRuntime.handlePollMusicStatus(inferenceId, model, route);
+      result = await modelRuntime.handlePollMusicStatus(inferenceId, model, route, { signal });
       consecutiveErrors = 0;
     } catch (error) {
       threw = true;

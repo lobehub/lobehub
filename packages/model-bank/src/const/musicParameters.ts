@@ -41,8 +41,7 @@ export const minimaxMusicCoverSchema = {
 } satisfies MusicModelParamsSchema;
 
 // ---------------------------------------------------------------------------
-// Suno (through a Suno API gateway such as kie.ai or sunoapi.org)
-// @see https://docs.kie.ai/suno-api/generate-music
+// Suno (through a sunoapi.org-compatible Suno API gateway)
 // @see https://docs.sunoapi.org/suno-api/generate-music
 // ---------------------------------------------------------------------------
 

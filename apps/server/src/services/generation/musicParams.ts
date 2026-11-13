@@ -97,8 +97,7 @@ export const validateMusicParams = (
 };
 
 /**
- * Map the standard params to the runtime's provider-neutral params. `duration` has no runtime
- * field yet, so it is kept in the stored config only.
+ * Map the standard params to the runtime's provider-neutral params.
  */
 export const toRuntimeMusicParams = (params: MusicParamsInput): MusicGenerationParams => {
   const result: MusicGenerationParams = {};
@@ -114,6 +113,7 @@ export const toRuntimeMusicParams = (params: MusicParamsInput): MusicGenerationP
   if (params.format) result.format = params.format;
   if (params.sampleRate) result.sampleRate = params.sampleRate;
   if (params.bitrate) result.bitrate = params.bitrate;
+  if (typeof params.duration === 'number') result.duration = params.duration;
 
   return result;
 };

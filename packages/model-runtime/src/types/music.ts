@@ -7,6 +7,8 @@ import type { ILobeAgentRuntimeErrorType } from './error';
 export interface MusicGenerationParams {
   /** Output sample bitrate (MiniMax `audio_setting.bitrate`) */
   bitrate?: number;
+  /** Target song length in seconds (Suno custom mode `duration`, V5_5 and V6 series) */
+  duration?: number;
   /** Output container (MiniMax `audio_setting.format`) */
   format?: 'mp3' | 'pcm' | 'wav';
   /** Generate an instrumental track without vocals */
@@ -87,6 +89,12 @@ export interface MusicTrack {
  * Channel that accepted an asynchronous music task. Router runtimes return it with a pending
  * result; pass it back to `handlePollMusicStatus` so polling reaches the same channel.
  */
+/** Per-request options for a single status query. */
+export interface PollMusicStatusOptions {
+  /** Aborts the in-flight status request, e.g. when the caller's task deadline passes */
+  signal?: AbortSignal;
+}
+
 export interface MusicPollingRoute {
   channelId?: string;
   /** Position of an id-less channel in its router's option list */

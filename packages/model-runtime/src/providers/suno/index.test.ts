@@ -40,50 +40,77 @@ describe('LobeSunoAI', () => {
   });
 
   describe('gateway selection', () => {
-    it('defaults to kie.ai and tolerates a trailing /api/v1 or slash', () => {
+    it('defaults to sunoapi.org and tolerates a trailing /api/v1 or slash', () => {
+      expect(SUNO_DEFAULT_BASE_URL).toBe('https://api.sunoapi.org');
       expect(normalizeSunoBaseURL()).toBe(SUNO_DEFAULT_BASE_URL);
-      expect(normalizeSunoBaseURL('https://api.kie.ai/api/v1/')).toBe('https://api.kie.ai');
+      expect(normalizeSunoBaseURL('https://api.sunoapi.org/api/v1/')).toBe(
+        'https://api.sunoapi.org',
+      );
       expect(normalizeSunoBaseURL('https://gw.example.com///')).toBe('https://gw.example.com');
       expect(normalizeSunoBaseURL('   ')).toBe(SUNO_DEFAULT_BASE_URL);
-      expect(new LobeSunoAI({ apiKey: 'k' }).dialect).toBe('kie');
+      expect(new LobeSunoAI({ apiKey: 'k' }).dialect).toBe('sunoapi');
     });
 
-    it('uses the sunoapi.org dialect only for sunoapi.org hosts', () => {
+    it('treats only kie.ai hosts as the kie dialect', () => {
+      expect(resolveSunoGatewayDialect('https://api.kie.ai')).toBe('kie');
+      expect(resolveSunoGatewayDialect('https://kie.ai')).toBe('kie');
       expect(resolveSunoGatewayDialect('https://api.sunoapi.org')).toBe('sunoapi');
-      expect(resolveSunoGatewayDialect('https://sunoapi.org')).toBe('sunoapi');
-      expect(resolveSunoGatewayDialect('https://notsunoapi.org')).toBe('kie');
-      expect(resolveSunoGatewayDialect('http://localhost:3000')).toBe('kie');
-      expect(resolveSunoGatewayDialect('not a url')).toBe('kie');
+      expect(resolveSunoGatewayDialect('https://notkie.ai')).toBe('sunoapi');
+      expect(resolveSunoGatewayDialect('http://localhost:3000')).toBe('sunoapi');
+      expect(resolveSunoGatewayDialect('not a url')).toBe('sunoapi');
+    });
+
+    // Generation and polling only speak sunoapi.org's /api/v1/generate; a kie.ai key used to pass
+    // the credit check and then fail every generation against kie.ai's jobs API.
+    it('rejects a kie.ai gateway in the key check, generation and polling without calling it', async () => {
+      const runtime = new LobeSunoAI({ apiKey: 'k', baseURL: 'https://api.kie.ai' });
+      const unsupported = {
+        error: expect.objectContaining({
+          message: expect.stringContaining('/api/v1/jobs/createTask) is not supported yet'),
+          provider: 'suno',
+        }),
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+      };
+
+      await expect(runtime.checkCredentials()).rejects.toMatchObject(unsupported);
+      await expect(
+        runtime.createMusic(
+          { model: 'suno-v6', params: { prompt: 'p', style: 'pop' } },
+          { callbackUrl: 'https://example.com/hook' },
+        ),
+      ).rejects.toMatchObject(unsupported);
+      await expect(runtime.handlePollMusicStatus('task-1')).rejects.toMatchObject(unsupported);
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 
   describe('checkCredentials', () => {
-    it('reads the kie.ai credit endpoint with a bearer key and returns the balance', async () => {
+    it('reads the default sunoapi.org credit endpoint with a bearer key and returns the balance', async () => {
       fetchMock.mockResolvedValue(jsonResponse({ code: 200, data: 100.5, msg: 'success' }));
 
       const result = await new LobeSunoAI({ apiKey: ' key-1 ' }).checkCredentials();
 
       expect(result).toEqual({ balance: 100.5 });
-      expect(fetchMock).toHaveBeenCalledWith('https://api.kie.ai/api/v1/chat/credit', {
+      expect(fetchMock).toHaveBeenCalledWith('https://api.sunoapi.org/api/v1/generate/credit', {
         headers: { 'Authorization': 'Bearer key-1', 'Content-Type': 'application/json' },
         method: 'GET',
         signal: expect.any(AbortSignal),
       });
     });
 
-    it('reads the sunoapi.org credit endpoint for that gateway', async () => {
+    it('reads the same credit endpoint on a sunoapi.org-compatible gateway', async () => {
       fetchMock.mockResolvedValue(jsonResponse({ code: 200, data: 42, msg: 'success' }));
 
       await new LobeSunoAI({
         apiKey: 'k',
-        baseURL: 'https://api.sunoapi.org/api/v1',
+        baseURL: 'https://gateway.example.com/api/v1',
       }).checkCredentials();
 
-      expect(fetchMock.mock.calls[0][0]).toBe('https://api.sunoapi.org/api/v1/generate/credit');
+      expect(fetchMock.mock.calls[0][0]).toBe('https://gateway.example.com/api/v1/generate/credit');
     });
 
     it('maps the gateway 401 inside an HTTP 200 to InvalidProviderAPIKey with its message', async () => {
-      // Real kie.ai / sunoapi.org response to a bad key
+      // Real sunoapi.org response to a bad key
       fetchMock.mockResolvedValue(
         jsonResponse({
           code: 401,

@@ -211,9 +211,12 @@ describe('musicRouter.createMusic', () => {
 
     expect(result).toEqual({ stored: 2, success: true });
     expect(runtime.handlePollMusicStatus).toHaveBeenCalledTimes(2);
-    expect(runtime.handlePollMusicStatus).toHaveBeenCalledWith('suno-task-1', 'suno-v6', {
-      model: 'suno-v6',
-    });
+    expect(runtime.handlePollMusicStatus).toHaveBeenCalledWith(
+      'suno-task-1',
+      'suno-v6',
+      { model: 'suno-v6' },
+      { signal: expect.any(AbortSignal) },
+    );
     // The pending task id and polling route are recorded before polling starts
     expect(taskUpdates('task-2')[1]).toEqual({
       inferenceId: 'suno-task-1',
@@ -416,6 +419,30 @@ describe('pollMusicUntilCompletion', () => {
 
     await expect(promise).resolves.toEqual([{ audioUrl: 'https://x/a.mp3' }]);
     expect(handlePollMusicStatus).toHaveBeenCalledTimes(2);
+  });
+
+  // A stalled status request must be interrupted by the task deadline, not only the delay
+  // between polls, so the failure path can still settle task state and billing.
+  it('passes the task signal into every status request', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const handlePollMusicStatus = vi
+      .fn()
+      .mockResolvedValue({ status: 'success', tracks: [{ audioUrl: 'https://x/a.mp3' }] });
+
+    await pollMusicUntilCompletion({ handlePollMusicStatus } as any, {
+      inferenceId: 'inf',
+      model: 'suno-v6',
+      route: { channelId: 'a' },
+      signal: controller.signal,
+    });
+
+    expect(handlePollMusicStatus).toHaveBeenCalledWith(
+      'inf',
+      'suno-v6',
+      { channelId: 'a' },
+      { signal: controller.signal },
+    );
   });
 
   it('fails after repeated thrown status queries instead of idling until the timeout', async () => {

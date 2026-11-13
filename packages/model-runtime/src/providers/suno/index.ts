@@ -3,35 +3,38 @@ import { ModelProvider } from 'model-bank';
 
 import type { LobeRuntimeAI } from '../../core/BaseAI';
 import type { CheckCredentialsResult } from '../../types/credentials';
-import type { CreateMusicOptions, CreateMusicPayload } from '../../types/music';
+import type {
+  CreateMusicOptions,
+  CreateMusicPayload,
+  PollMusicStatusOptions,
+} from '../../types/music';
 import { AgentRuntimeError } from '../../utils/createError';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { createSunoMusic, pollSunoMusicStatus } from './createMusic';
 
-export const SUNO_DEFAULT_BASE_URL = 'https://api.kie.ai';
+export const SUNO_DEFAULT_BASE_URL = 'https://api.sunoapi.org';
 
 const API_V1_SUFFIX = '/api/v1';
 
 /**
- * Suno gateways speak one protocol in two dialects: kie.ai (`/api/v1/jobs/createTask`,
- * snake_case input) and sunoapi.org (`/api/v1/generate`, camelCase). The host picks the
- * dialect; anything that is not sunoapi.org is treated as kie.ai-compatible.
+ * Suno gateways speak two dialects: sunoapi.org (`/api/v1/generate` +
+ * `/api/v1/generate/record-info`, camelCase), which generation and polling implement, and
+ * kie.ai's jobs API (`/api/v1/jobs/createTask` + `/api/v1/jobs/recordInfo`, snake_case
+ * input), which they do not implement yet. A kie.ai host is detected and rejected with a clear
+ * error instead of passing the key check and then failing every generation; any other host is
+ * treated as sunoapi.org-compatible.
  */
 export type SunoGatewayDialect = 'kie' | 'sunoapi';
 
 /**
- * Credit endpoint per dialect. It is free and generates nothing, so the settings checker
- * uses it to verify the key.
- * @see https://docs.kie.ai/common-api/get-account-credits
+ * Credit endpoint of the sunoapi.org dialect. It is free and generates nothing, so the
+ * settings checker uses it to verify the key.
  * @see https://docs.sunoapi.org/suno-api/get-remaining-credits
  */
 /** A credit lookup is a single small GET; give up well before the request's own deadline. */
 const CHECK_TIMEOUT_MS = 15_000;
 
-const CREDIT_PATHS: Record<SunoGatewayDialect, string> = {
-  kie: '/api/v1/chat/credit',
-  sunoapi: '/api/v1/generate/credit',
-};
+const CREDIT_PATH = '/api/v1/generate/credit';
 
 /**
  * Gateways answer HTTP 200 with the real status in `code`, e.g.
@@ -43,7 +46,7 @@ interface SunoGatewayResponse<T> {
   msg?: string;
 }
 
-/** Strip trailing slashes and an `/api/v1` suffix so both `https://api.kie.ai` and `.../api/v1` work. */
+/** Strip trailing slashes and an `/api/v1` suffix so both `https://api.sunoapi.org` and `.../api/v1` work. */
 export const normalizeSunoBaseURL = (baseURL?: string | null) => {
   // Plain string trimming instead of a `/\/+$/` regex, which backtracks polynomially on user input.
   let url = baseURL?.trim() || SUNO_DEFAULT_BASE_URL;
@@ -56,9 +59,9 @@ export const normalizeSunoBaseURL = (baseURL?: string | null) => {
 export const resolveSunoGatewayDialect = (baseURL: string): SunoGatewayDialect => {
   try {
     const { hostname } = new URL(baseURL);
-    return hostname === 'sunoapi.org' || hostname.endsWith('.sunoapi.org') ? 'sunoapi' : 'kie';
+    return hostname === 'kie.ai' || hostname.endsWith('.kie.ai') ? 'kie' : 'sunoapi';
   } catch {
-    return 'kie';
+    return 'sunoapi';
   }
 };
 
@@ -106,7 +109,9 @@ export class LobeSunoAI implements LobeRuntimeAI {
     this.modelIdMapping = modelIdMapping;
   }
 
-  createMusic(payload: CreateMusicPayload, options?: CreateMusicOptions) {
+  async createMusic(payload: CreateMusicPayload, options?: CreateMusicOptions) {
+    this.assertSupportedGateway();
+
     return createSunoMusic(payload, {
       ...options,
       apiKey: this.apiKey,
@@ -116,16 +121,28 @@ export class LobeSunoAI implements LobeRuntimeAI {
     });
   }
 
-  handlePollMusicStatus(inferenceId: string) {
+  async handlePollMusicStatus(
+    inferenceId: string,
+    _model?: string,
+    _route?: unknown,
+    options?: PollMusicStatusOptions,
+  ) {
+    this.assertSupportedGateway();
+
     return pollSunoMusicStatus(inferenceId, {
       apiKey: this.apiKey,
       baseURL: this.baseURL,
       provider: this.id,
+      signal: options?.signal,
     });
   }
 
   async checkCredentials(): Promise<CheckCredentialsResult> {
-    const url = `${this.baseURL}${CREDIT_PATHS[this.dialect]}`;
+    // Fail the settings check up front: a kie.ai key would pass its credit endpoint and then
+    // fail every generation, because generation only speaks the sunoapi.org dialect.
+    this.assertSupportedGateway();
+
+    const url = `${this.baseURL}${CREDIT_PATH}`;
 
     let response: Response;
     try {
@@ -168,6 +185,16 @@ export class LobeSunoAI implements LobeRuntimeAI {
     }
 
     return typeof body?.data === 'number' ? { balance: body.data } : {};
+  }
+
+  /** kie.ai's jobs API is a different protocol; reject it instead of calling the wrong routes. */
+  private assertSupportedGateway() {
+    if (this.dialect === 'kie') {
+      throw AgentRuntimeError.createError(AgentRuntimeErrorType.ProviderBizError, {
+        message: `kie.ai's Suno API (/api/v1/jobs/createTask) is not supported yet. Use a sunoapi.org key, or a gateway compatible with sunoapi.org's /api/v1/generate, as the proxy URL (${this.baseURL}).`,
+        provider: this.id,
+      });
+    }
   }
 }
 

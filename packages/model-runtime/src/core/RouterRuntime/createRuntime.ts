@@ -23,6 +23,7 @@ import type {
   GenerateObjectPayload,
   HandleCreateVideoWebhookPayload,
   MusicPollingRoute,
+  PollMusicStatusOptions,
   TextToSpeechOptions,
   TextToSpeechPayload,
   VideoPollingRoute,
@@ -606,7 +607,12 @@ export const createRouterRuntime = ({
       };
     }
 
-    async handlePollMusicStatus(inferenceId: string, model?: string, route?: MusicPollingRoute) {
+    async handlePollMusicStatus(
+      inferenceId: string,
+      model?: string,
+      route?: MusicPollingRoute,
+      options?: PollMusicStatusOptions,
+    ) {
       const { option, router } = await this.resolveMusicRoute(model, route);
       const { runtime } = await createRuntimeFromOption(this.deps, router, option);
       const musicRuntime: LobeRuntimeAI = runtime;
@@ -614,7 +620,7 @@ export const createRouterRuntime = ({
         throw new Error('Music polling is not supported by the matched runtime');
       }
 
-      return musicRuntime.handlePollMusicStatus(inferenceId, model);
+      return musicRuntime.handlePollMusicStatus(inferenceId, model, undefined, options);
     }
 
     async createVideo(payload: CreateVideoPayload, options?: CreateVideoMethodOptions) {

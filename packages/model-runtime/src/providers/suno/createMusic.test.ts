@@ -147,6 +147,32 @@ describe('buildSunoMusicRequest', () => {
     });
   });
 
+  // duration exists only in custom mode (V5_5 / V6 series), so it switches the request to it
+  it('sends duration through custom mode instead of dropping it', () => {
+    expect(
+      buildSunoMusicRequest(
+        { model: 'suno-v6', params: { duration: 120, prompt: 'rain', style: 'lo-fi' } },
+        'V6',
+      ),
+    ).toEqual({
+      customMode: true,
+      duration: 120,
+      instrumental: false,
+      model: 'V6',
+      prompt: 'rain',
+      style: 'lo-fi',
+    });
+    expect(() =>
+      buildSunoMusicRequest(
+        {
+          model: 'suno-v6',
+          params: { duration: 120, referenceAudioUrl: 'https://x/ref.mp3', style: 'pop' },
+        },
+        'V6',
+      ),
+    ).toThrow(/reference audio only without title, negativeStyle, vocalGender or duration/);
+  });
+
   it('rejects requests Suno would refuse', () => {
     expect(() =>
       buildSunoMusicRequest({ model: 'suno-v5', params: { prompt: 'a happy song' } }, 'V5'),
@@ -496,8 +522,13 @@ describe('LobeSunoAI', () => {
     expect(created).toEqual({ inferenceId: 'task-1', status: 'pending' });
     expect(fetchMock.mock.calls[0][0]).toBe('https://gateway.example.com/api/v1/generate');
 
-    const polled = await runtime.handlePollMusicStatus('task-1', 'suno-v5');
+    const controller = new AbortController();
+    const polled = await runtime.handlePollMusicStatus('task-1', 'suno-v5', undefined, {
+      signal: controller.signal,
+    });
     expect(polled?.status).toBe('success');
+    // The caller's deadline reaches the status request itself, not only the delay between polls
+    expect(fetchMock.mock.calls[1][1].signal).toBe(controller.signal);
     expect(fetchMock.mock.calls[1][0]).toBe(
       'https://gateway.example.com/api/v1/generate/record-info?taskId=task-1',
     );

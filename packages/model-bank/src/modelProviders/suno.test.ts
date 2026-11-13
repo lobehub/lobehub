@@ -25,7 +25,7 @@ describe('Suno provider', () => {
     expect(SunoProviderCard).toMatchObject({ chatModels: [], enabled: false, name: 'Suno' });
     expect(SunoProviderCard.description).toBeTruthy();
     expect(SunoProviderCard.settings).toMatchObject({
-      proxyUrl: { placeholder: 'https://api.kie.ai' },
+      proxyUrl: { placeholder: 'https://api.sunoapi.org' },
       showModelFetcher: false,
     });
     expect(isProviderDisableBrowserRequest('suno')).toBe(true);

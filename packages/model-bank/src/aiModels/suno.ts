@@ -3,9 +3,8 @@ import type { AIText2MusicModelCard } from '../types/aiModel';
 
 // Each card is one Suno model version; the runtime sends the gateway's version name
 // (`suno-v6` → `V6`). Older versions (V4 – V5_5) are deprecated upstream and not listed.
-// Price: kie.ai charges 12 credits ($0.06) per request, which returns 2 songs.
-// @see https://docs.kie.ai/suno-api/generate-music
-// @see https://kie.ai/suno-api
+// Price: about $0.06 per request on Suno API gateways, which returns 2 songs.
+// @see https://docs.sunoapi.org/suno-api/generate-music
 const sunoMusicModels: AIText2MusicModelCard[] = [
   {
     description:

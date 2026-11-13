@@ -114,8 +114,10 @@ export const resolveSunoModelVersion = (model: string) =>
 
 /**
  * Map the provider-neutral payload onto a Suno generate request. `prompt`, `lyrics` and `style`
- * work in both modes; title, negativeStyle and vocalGender exist only in custom mode, so any of
- * them switches the request to custom mode. Reference audio exists only in non-custom mode.
+ * work in both modes; title, negativeStyle, vocalGender and duration exist only in custom mode,
+ * so any of them switches the request to custom mode. Reference audio exists only in
+ * non-custom mode.
+ * @see https://docs.sunoapi.org/suno-api/generate-music
  */
 export const buildSunoMusicRequest = (
   payload: CreateMusicPayload,
@@ -123,6 +125,7 @@ export const buildSunoMusicRequest = (
   callbackUrl?: string,
 ): Record<string, unknown> => {
   const {
+    duration,
     instrumental = false,
     lyrics,
     negativeStyle,
@@ -133,20 +136,21 @@ export const buildSunoMusicRequest = (
     vocalGender,
   } = payload.params;
   const has = (value?: string) => Boolean(value?.trim());
-  const customMode = has(title) || has(negativeStyle) || Boolean(vocalGender);
+  const hasDuration = typeof duration === 'number' && Number.isFinite(duration);
+  const customMode = has(title) || has(negativeStyle) || Boolean(vocalGender) || hasDuration;
 
   if (customMode) {
     // Suno custom mode needs at least one of style, lyrics or negativeTags; a prompt alone
     // does not count.
     if (!has(lyrics) && !has(style) && !has(negativeStyle)) {
       throw new SunoError(
-        'Suno custom mode (title, negativeStyle or vocalGender set) needs lyrics, a style, or a negative style',
+        'Suno custom mode (title, negativeStyle, vocalGender or duration set) needs lyrics, a style, or a negative style',
         AgentRuntimeErrorType.InvalidRequestFormat,
       );
     }
     if (referenceAudioUrl) {
       throw new SunoError(
-        'Suno accepts reference audio only without title, negativeStyle or vocalGender',
+        'Suno accepts reference audio only without title, negativeStyle, vocalGender or duration',
         AgentRuntimeErrorType.InvalidRequestFormat,
       );
     }
@@ -168,6 +172,7 @@ export const buildSunoMusicRequest = (
     ...(customMode && has(title) ? { title } : {}),
     ...(customMode && has(negativeStyle) ? { negativeTags: negativeStyle } : {}),
     ...(customMode && vocalGender ? { vocalGender } : {}),
+    ...(customMode && hasDuration ? { duration } : {}),
     ...(!customMode && referenceAudioUrl ? { audioUrls: [referenceAudioUrl] } : {}),
     ...(callbackUrl ? { callBackUrl: callbackUrl } : {}),
   };
