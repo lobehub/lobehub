@@ -11,6 +11,7 @@ import {
   projectKnowledgeBases,
   resourcePermissions,
   tasks,
+  workspaceMembers,
 } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import {
@@ -235,7 +236,25 @@ export const getKnowledgeBaseIdsMountedByBrowsers = async (
   ]);
 
   const mounts = [...agentMounts, ...projectMounts];
-  const mounters = [...new Set(mounts.flatMap(({ mountedBy }) => (mountedBy ? [mountedBy] : [])))];
+  const mountAuthors = [
+    ...new Set(mounts.flatMap(({ mountedBy }) => (mountedBy ? [mountedBy] : []))),
+  ];
+  if (mountAuthors.length === 0) return [];
+
+  // Only current members vouch for a mount: a removed member keeps their rows
+  // (membership is soft-deleted) and, as a creator, would otherwise still pass
+  // the creator exemption in `getRestrictedKnowledgeBaseIds`.
+  const activeMembers = await db
+    .select({ userId: workspaceMembers.userId })
+    .from(workspaceMembers)
+    .where(
+      and(
+        eq(workspaceMembers.workspaceId, workspaceId),
+        inArray(workspaceMembers.userId, mountAuthors),
+        isNull(workspaceMembers.deletedAt),
+      ),
+    );
+  const mounters = activeMembers.map(({ userId }) => userId);
   const restrictedByMounter = new Map(
     await pMap(
       mounters,
@@ -253,7 +272,9 @@ export const getKnowledgeBaseIdsMountedByBrowsers = async (
       mounts
         .filter(
           ({ knowledgeBaseId, mountedBy }) =>
-            !!mountedBy && !restrictedByMounter.get(mountedBy)?.has(knowledgeBaseId),
+            !!mountedBy &&
+            restrictedByMounter.has(mountedBy) &&
+            !restrictedByMounter.get(mountedBy)!.has(knowledgeBaseId),
         )
         .map(({ knowledgeBaseId }) => knowledgeBaseId),
     ),

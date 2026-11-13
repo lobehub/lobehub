@@ -749,6 +749,9 @@ describe('knowledge content read boundaries', () => {
 
   it('lets an agent read a No-access knowledge base a browser mounted, never a self-mount', async () => {
     const workspaceId = 'content-workspace';
+    await db
+      .insert(schema.workspaceMembers)
+      .values([owner, viewer].map((userId) => ({ userId, workspaceId })));
     await db.insert(schema.agents).values(
       ['agt_content_mounted', 'agt_content_self_mounted', 'agt_content_unmounted'].map((id) => ({
         id,
@@ -797,6 +800,17 @@ describe('knowledge content read boundaries', () => {
       expect(read.success).toBe(false);
       expect(read.content).toContain('Only knowledge base managers');
     }
+
+    // A creator who left the workspace no longer vouches for their mount.
+    await db
+      .update(schema.workspaceMembers)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.workspaceMembers.userId, owner));
+    expect((await readAs({ agentId: 'agt_content_mounted' })).success).toBe(false);
+    await db
+      .update(schema.workspaceMembers)
+      .set({ deletedAt: null })
+      .where(eq(schema.workspaceMembers.userId, owner));
 
     // The member's own direct read stays manager-only.
     await expect(contents(viewer, ['file_content_workspace'], workspaceId)).rejects.toMatchObject({
