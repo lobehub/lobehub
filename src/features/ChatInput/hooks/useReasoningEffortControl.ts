@@ -48,7 +48,8 @@ export const resolveReasoningEffortValue = (
     effortKey === 'thinkingLevel' ||
     effortKey === 'thinkingLevel2' ||
     effortKey === 'thinkingLevel3' ||
-    effortKey === 'thinkingLevel4'
+    effortKey === 'thinkingLevel4' ||
+    effortKey === 'thinkingLevel5'
   )
     return resolveDefaultThinkingLevelForModel(model, effortKey);
 
