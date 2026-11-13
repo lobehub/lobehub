@@ -25,6 +25,8 @@ interface Props extends AgentToolProps {
   onConfirmCopy: () => void;
   selected: Set<string>;
   toggleSelected: (id: string) => void;
+  /** `list` shows one row per tool under a heading supplied by the caller. */
+  variant?: 'chip' | 'list';
 }
 
 /**
@@ -41,6 +43,7 @@ const UserToolsSection = memo<Props>(
     onConfirmCopy,
     selected,
     toggleSelected,
+    variant = 'chip',
     ...toolProps
   }) => {
     const { t } = useTranslation('setting');
@@ -126,14 +129,17 @@ const UserToolsSection = memo<Props>(
 
     return (
       <Flexbox gap={8}>
-        <Text style={{ fontSize: 12, fontWeight: 500 }} type={'secondary'}>
-          {baseToolsLabel} · {userToolCount}
-        </Text>
+        {variant === 'chip' && (
+          <Text style={{ fontSize: 12, fontWeight: 500 }} type={'secondary'}>
+            {baseToolsLabel} · {userToolCount}
+          </Text>
+        )}
         <SharedAgentTool
           {...toolProps}
           excludeAgentConnectors
           agentId={agentId}
           showAuthor={!!activeWorkspaceId}
+          variant={variant}
         />
       </Flexbox>
     );

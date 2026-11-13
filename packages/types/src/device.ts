@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { DeviceLocalFilePreviewFailure } from './deviceFilePreviewFailure';
 import type { ManagedDevicePhase } from './managedDevice';
+import type { DeviceClient } from './tool/builtin';
 
 /** Structured context for an unavailable logical device. */
 export interface DeviceUnavailableErrorData {
@@ -333,6 +334,14 @@ export interface DeviceRunningSummary {
   /** Distinct members who started those runs, most recently active first. */
   users: DeviceEnroller[];
 }
+
+/**
+ * `metadata` key a desktop client reports when its gateway connection serves
+ * the terminal RPCs. A CLI connection always does; an older desktop answers
+ * them with a refusal, so a desktop-only row counts as a terminal host only
+ * with this key set.
+ */
+export const DEVICE_TERMINAL_METADATA_KEY = 'terminal';
 
 export interface DeviceListItem {
   architecture?: string | null;
@@ -1083,6 +1092,12 @@ export type DeviceAppUpdateInstallResult =
 
 /** Result of the `createTerminalSession` device RPC. */
 export interface DeviceCreateTerminalSessionResult {
+  /**
+   * The client hosting the session. Its later calls must reach the same
+   * client: the desktop app and `lh connect` keep separate sessions, and a
+   * device can hold both connections. Absent from hosts that predate it.
+   */
+  client?: DeviceClient;
   /** Directory the shell actually started in (a missing `cwd` falls back home). */
   cwd: string;
   id: string;

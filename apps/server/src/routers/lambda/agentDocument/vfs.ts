@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { router } from '@/libs/trpc/lambda';
+import { scheduleAgentSpaceMigration } from '@/server/services/agentSpace';
 
 import {
   agentDocumentProcedure,
@@ -71,6 +72,16 @@ export const vfsRouter = router({
           // folder tree, so the parent filter is applied in-memory here.
           const parent = await ctx.agentDocumentService.resolveParent(input.agentId, parentId);
           return await withChildCounts(docs.filter((d) => d.parentId === parent.documentId));
+        }
+
+        // Opening the agent's documents is what drives its runtime migration.
+        if (!parentId) {
+          scheduleAgentSpaceMigration({
+            agentId: input.agentId,
+            db: ctx.serverDB,
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId ?? undefined,
+          });
         }
 
         return await withChildCounts(

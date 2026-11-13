@@ -4,7 +4,7 @@ import {
   CHANNEL_DELETED_AGENT_NAME,
   CHANNEL_DELETED_USER_NAME,
 } from '@lobechat/types';
-import { and, asc, count, desc, eq, gt, isNull, lt, lte, ne, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, isNull, lt, lte, notInArray, or } from 'drizzle-orm';
 
 import type {
   ChannelJobItem,
@@ -20,14 +20,17 @@ import { fileIdsByMessage } from './attachments';
 export const buildManifest = (params: {
   job: ChannelJobItem;
   member: ChannelMemberItem;
+  /** A deferred follow-up's view of the primary responder's published reply. */
+  primaryReplyMessageId?: string;
   request: ChannelMessageItem;
   thread: ChannelThreadItem | null;
 }): ChannelInputManifest => {
-  const { job, member, request, thread } = params;
+  const { job, member, primaryReplyMessageId, request, thread } = params;
 
   return {
     // Jobs inherit the request's branch, so the request itself always sorts last.
     cutoffSequence: request.sequence,
+    ...(primaryReplyMessageId && { primaryReplyMessageId }),
     requestMessageId: request.id,
     requesterMemberId: job.requesterMemberId,
     self: { agentId: member.agentId!, memberId: member.id, name: member.name ?? 'Agent' },
@@ -54,14 +57,14 @@ const manifestScope = (channelId: string, manifest: ChannelInputManifest) => {
 };
 
 /**
- * How many messages of a manifest's branch fall strictly between two sequences, without one id:
- * what a run's recent context leaves out.
+ * How many messages of a manifest's branch fall strictly between two sequences, without some
+ * ids: what a run's recent context leaves out.
  */
 export const countManifestMessages = async (
   db: LobeChatDatabase | Transaction,
   channelId: string,
   manifest: ChannelInputManifest,
-  range: { afterSequence: number; beforeSequence: number; excludeId?: string | null },
+  range: { afterSequence: number; beforeSequence: number; excludeIds?: string[] },
 ): Promise<number> => {
   const [row] = await db
     .select({ value: count() })
@@ -71,7 +74,7 @@ export const countManifestMessages = async (
         manifestScope(channelId, manifest),
         gt(channelMessages.sequence, range.afterSequence),
         lt(channelMessages.sequence, range.beforeSequence),
-        range.excludeId ? ne(channelMessages.id, range.excludeId) : undefined,
+        range.excludeIds?.length ? notInArray(channelMessages.id, range.excludeIds) : undefined,
       ),
     );
 

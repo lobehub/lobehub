@@ -2,44 +2,8 @@ import { replicaKeys } from 'local-replica';
 import { unstable_serialize } from 'swr';
 import { describe, expect, it } from 'vitest';
 
-import {
-  documentCommentKeys,
-  isAcceptanceListKey,
-  isDocumentCommentKeyForEvent,
-  recentKeys,
-  verifyKeys,
-  workKeys,
-} from './keys';
+import { documentCommentKeys, isDocumentCommentKeyForEvent, workKeys } from './keys';
 import { CACHE_TIERS } from './localStorageProvider';
-
-describe('recentKeys', () => {
-  it('keys the Home topic-only list independently from mixed recents', () => {
-    expect(recentKeys.topicList(9, 'user-1:workspace-1', 'mine')).toEqual([
-      'recent:topicList',
-      9,
-      'user-1:workspace-1',
-      'mine',
-    ]);
-  });
-
-  it('keeps the mine and team views of the Home topic list isolated', () => {
-    expect(recentKeys.topicList(9, 'user-1:workspace-1', 'mine')).not.toEqual(
-      recentKeys.topicList(9, 'user-1:workspace-1', 'team'),
-    );
-  });
-
-  // Regression: `recent:topicList` had no CACHE_TIERS entry of its own, and the
-  // provider matches patterns as substrings — so `recent:list` never covered it.
-  // The Home recents list was memory-only and flashed a skeleton on every boot.
-  it('routes the Home topic-only recents key to a persisted cache tier', () => {
-    const serialized = unstable_serialize(recentKeys.topicList(9, 'user-1:workspace-1', 'mine'));
-    const persisted = [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) =>
-      serialized.includes(pattern),
-    );
-
-    expect(persisted).toBe(true);
-  });
-});
 
 describe('replica sync keys', () => {
   it('keeps SWR orchestration entries out of the persistence tiers', () => {
@@ -53,39 +17,6 @@ describe('replica sync keys', () => {
         [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) => serialized.includes(pattern)),
       ).toBe(false);
     }
-  });
-});
-
-describe('isAcceptanceListKey', () => {
-  it('matches every Acceptance list variant without matching detail keys', () => {
-    expect(isAcceptanceListKey(['verify:acceptances', '', '', 'active'])).toBe(true);
-    expect(isAcceptanceListKey(['verify:acceptances', '100', 'needle', 'all', 'workspace-1'])).toBe(
-      true,
-    );
-    expect(isAcceptanceListKey(['verify:acceptancePurgePreview', 'acceptance-1'])).toBe(false);
-  });
-
-  it('keeps project-scoped acceptance feeds in separate cache entries', () => {
-    expect(
-      verifyKeys.acceptances(undefined, undefined, { filter: 'all', projectId: 'project-1' }),
-    ).not.toEqual(
-      verifyKeys.acceptances(undefined, undefined, { filter: 'all', projectId: 'project-2' }),
-    );
-    expect(
-      verifyKeys.acceptancePage('workspace-1', { filter: 'all', projectId: 'project-1' }),
-    ).not.toEqual(
-      verifyKeys.acceptancePage('workspace-1', { filter: 'all', projectId: 'project-2' }),
-    );
-  });
-
-  it('keeps the unfiled, scope and source narrowings in separate cache entries', () => {
-    const base = { filter: 'all' };
-    const page = (query: Parameters<typeof verifyKeys.acceptancePage>[1]) =>
-      verifyKeys.acceptancePage('workspace-1', query);
-
-    expect(page({ ...base, projectId: null })).not.toEqual(page(base));
-    expect(page({ ...base, scope: 'participated' })).not.toEqual(page(base));
-    expect(page({ ...base, source: 'goal' })).not.toEqual(page({ ...base, source: 'task' }));
   });
 });
 

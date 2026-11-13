@@ -32,6 +32,7 @@ import { type LobeDocument } from '@/types/document';
 
 import { EditLockService } from '../editLock';
 import { FileService } from '../file';
+import { dropPageRooms } from '../pageCollab/notify';
 import { publishResourceEvent } from '../resourceEvents';
 import { countEditorDataText } from './editorData';
 import { DocumentHistoryService } from './history';
@@ -186,6 +187,17 @@ export class DocumentService {
     doc: Pick<DocumentItem, 'visibility' | 'workspaceId'> | null | undefined,
   ): boolean {
     return Boolean(this.workspaceId && doc?.workspaceId && doc.visibility !== 'private');
+  }
+
+  async assertCanWriteBody(id: string, lockOwnerId?: string) {
+    const document = await this.documentModel.findById(id);
+    if (!this.isCollaborativeDocument(document)) return;
+    if (await this.editLockService.canWrite('document', id, lockOwnerId)) return;
+    throw new TRPCError({
+      cause: { data: { code: 'DocumentLocked' } },
+      code: 'CONFLICT',
+      message: 'Document is being edited by another user',
+    });
   }
 
   private async deleteFileRecordAndStorage(fileId: string) {
@@ -700,7 +712,9 @@ export class DocumentService {
     }
 
     // Finally delete the document itself
-    return this.documentModel.delete(id);
+    const deleted = await this.documentModel.delete(id);
+    if (document.workspaceId) dropPageRooms([id]);
+    return deleted;
   }
 
   /**

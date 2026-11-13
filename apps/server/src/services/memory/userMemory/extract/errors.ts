@@ -39,6 +39,54 @@ export const serializeError = (
   }
 };
 
+/**
+ * A readable one-line message for anything an extraction step throws.
+ *
+ * Model runtimes throw plain payloads such as `{ errorType, error, provider }` rather than
+ * `Error`s, which used to surface as `[object Object]` or a generic "Extraction failed".
+ */
+export const describeError = (error: unknown, limit = 500): string => {
+  const clip = (text: string) => (text.length > limit ? `${text.slice(0, limit)}…` : text);
+  if (error instanceof Error) return clip(error.message || error.name);
+  if (typeof error === 'string') return clip(error);
+  if (!error || typeof error !== 'object') return String(error ?? 'Unknown extraction error');
+
+  const record = error as Record<string, unknown>;
+  const inner = record.error;
+  const innerMessage =
+    getStringErrorProperty(inner, 'message') ??
+    getStringErrorProperty((inner as { error?: unknown } | undefined)?.error, 'message');
+  const message = getStringErrorProperty(record, 'message') ?? innerMessage;
+  const prefix = [
+    getStringErrorProperty(record, 'provider'),
+    getStringErrorProperty(record, 'errorType'),
+  ]
+    .filter(Boolean)
+    .join(' ');
+  if (prefix || message) return clip([prefix, message].filter(Boolean).join(': '));
+
+  try {
+    return clip(JSON.stringify(error));
+  } catch {
+    return 'Unknown extraction error';
+  }
+};
+
+// Failures that are the user's situation, not ours: an exhausted budget, or content the
+// provider refuses to process. Recorded under their own type so dashboards can count them as
+// skipped rather than as extraction failures.
+const BUDGET_ERROR =
+  /InsufficientBudgetForModel|FreePlanLimit|SubscriptionPlanLimit|Budget exceeded/;
+const CONTENT_POLICY_ERROR =
+  /ProviderContentPolicyViolation|ProviderContentModeration|PROHIBITED_CONTENT|content is prohibited|内容安全/;
+
+/** The task error type for a failure that is not ours to fix, if it is one. */
+export const classifyExtractionError = (message: string): AsyncTaskErrorType | undefined => {
+  if (BUDGET_ERROR.test(message)) return AsyncTaskErrorType.SubscriptionPlanLimit;
+  if (CONTENT_POLICY_ERROR.test(message)) return AsyncTaskErrorType.ProviderContentModeration;
+  return undefined;
+};
+
 type MemoryExtractionErrorStage = 'extract' | 'persist' | 'retrieval';
 
 export interface MemoryExtractionTaskErrorItem extends AsyncTaskStructuredErrorItem {
@@ -127,12 +175,13 @@ export const buildAsyncTaskErrorFrom = (
   if (error instanceof MemoryExtractionAggregateError) {
     return {
       body: buildAsyncTaskStructuredError(error.message, error.items),
-      name: AsyncTaskErrorType.ServerError,
+      name: classifyExtractionError(error.message) ?? AsyncTaskErrorType.ServerError,
     };
   }
 
+  const message = describeError(error);
   return new AsyncTaskError(
-    AsyncTaskErrorType.ServerError,
-    error instanceof Error ? error.message : 'Extraction failed',
+    classifyExtractionError(message) ?? AsyncTaskErrorType.ServerError,
+    message,
   );
 };

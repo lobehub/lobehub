@@ -1,3 +1,5 @@
+import ts from 'typescript';
+
 import type { FileExtraction, RealComponent, StyleBinding, StyleElement } from '../extract';
 import type { ForwardElement } from '../extract/forward';
 import { elementsOf } from '../plan/descendants';
@@ -121,7 +123,10 @@ const unpairedEntry = (
   layout: Set<string>,
   config: GenerateConfig,
 ) => {
-  const expressions = chain.flatMap((item) => item.bindings.map((binding) => binding.expr));
+  const expressions = chain.flatMap((item) => [
+    ...item.bindings.map((binding) => binding.expr),
+    ...(item.inlineStyle ? [item.inlineStyle] : []),
+  ]);
   const declared = new Set<string>();
   const lines: string[] = [];
   for (const [alias, symbol] of chain.flatMap((item) => Object.entries(item.aliases ?? {}))) {
@@ -140,6 +145,77 @@ const unpairedEntry = (
     lines.push(`const ${variable.name} = ${value};`);
   }
   return `${JSON.stringify(key)}: () => { ${lines.join(' ')} return (${renderChain(chain, { exprOf: (binding) => binding.expr, layout, probed: new Set(), real: config.realComponents })}); }`;
+};
+
+const preludeNames = (prelude: string) => {
+  const sf = ts.createSourceFile(
+    'prelude.tsx',
+    prelude,
+    ts.ScriptTarget.Latest,
+    false,
+    ts.ScriptKind.TSX,
+  );
+  const names = new Set<string>();
+  for (const statement of sf.statements) {
+    if (ts.isImportDeclaration(statement)) {
+      const clause = statement.importClause;
+      if (clause?.name) names.add(clause.name.text);
+      const bindings = clause?.namedBindings;
+      if (bindings && ts.isNamespaceImport(bindings)) names.add(bindings.name.text);
+      if (bindings && ts.isNamedImports(bindings))
+        bindings.elements.forEach((element) => names.add(element.name.text));
+    } else if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations)
+        if (ts.isIdentifier(declaration.name)) names.add(declaration.name.text);
+    } else if (
+      (ts.isFunctionDeclaration(statement) ||
+        ts.isClassDeclaration(statement) ||
+        ts.isEnumDeclaration(statement)) &&
+      statement.name
+    )
+      names.add(statement.name.text);
+  }
+  return names;
+};
+
+const counterpartEntries = (
+  plan: FilePlan,
+  side: Side,
+  byId: Map<string, StyleElement>,
+  prelude: Set<string>,
+  config: GenerateConfig,
+) => {
+  const imports = new Set<string>();
+  const entries = plan.unpaired.flatMap(({ counterpart, elementId, side: own }) => {
+    if (own === side || !counterpart) return [];
+    const component = counterpart.real ? config.realComponents?.[counterpart.tag] : undefined;
+    const layout = new Set(
+      config.layoutComponents.filter((tag) => tag !== counterpart.tag || prelude.has(tag)),
+    );
+    const leaf: StyleElement = {
+      bindings: [],
+      flags: [],
+      id: elementId,
+      ...(counterpart.inlineStyle ? { inlineStyle: counterpart.inlineStyle } : {}),
+      literalProps: counterpart.literalProps,
+      owner: '',
+      ...(component ? { real: true } : {}),
+      slots: [],
+      tag: counterpart.tag,
+      variables: counterpart.variables.filter((variable) => !prelude.has(variable.name)),
+    };
+    const substituted =
+      !rendersReal(leaf, true, config.realComponents) && placementTag(leaf, layout) !== leaf.tag;
+    if (counterpart.props && !substituted)
+      leaf.bindings.push({ expr: counterpart.props, prop: '...', spread: true });
+    if (component && !prelude.has(counterpart.tag))
+      imports.add(`import { ${counterpart.tag} } from ${JSON.stringify(component.source)};`);
+    const ancestors = counterpart.ancestors.flatMap((id) => byId.get(id) ?? []);
+    return [
+      unpairedEntry(unpairedKey(plan.file, own, elementId), [...ancestors, leaf], layout, config),
+    ];
+  });
+  return { entries, imports: [...imports] };
 };
 
 export const generateModule = (
@@ -239,8 +315,17 @@ export const generateModule = (
         config,
       ),
     );
+  const counterparts = counterpartEntries(
+    plan,
+    side,
+    byId,
+    preludeNames(extraction.prelude),
+    config,
+  );
+  unpaired.push(...counterparts.entries);
   return [
     extraction.prelude,
+    ...counterparts.imports,
     ...forwardImports(plan.cases, side),
     config.cxFallback
       ? `import { ${config.cxFallback.name} as __cx } from ${JSON.stringify(config.cxFallback.source)};`

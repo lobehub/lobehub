@@ -2,20 +2,12 @@
 
 import { GOAL_BATCH_BREAK_OPTION, GOAL_BATCH_RELEASE_OPTION } from '@lobechat/const/goal';
 import type { GoalDecisionOption } from '@lobechat/types';
-import {
-  Avatar,
-  Center,
-  createStaticStyles,
-  cssVar,
-  Flexbox,
-  Icon,
-  Text,
-  toast,
-} from '@lobehub/ui';
+import { Center, createStaticStyles, cssVar, Flexbox, Icon, Text, toast } from '@lobehub/ui';
 import { MonitorCog } from 'lucide-react';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import ClarificationQuestions, {
   type ClarificationAnswer,
@@ -86,9 +78,11 @@ export const GoalDecisionAsker = ({
           <Icon icon={MonitorCog} size={size * 0.58} />
         </Center>
       ) : (
-        <Avatar
+        <AgentAvatar
+          agentId={agentId}
           avatar={meta?.avatar}
           background={meta?.backgroundColor}
+          name={meta?.title}
           shape={'circle'}
           size={size}
           style={{ flex: 'none' }}

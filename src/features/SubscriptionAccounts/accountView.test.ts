@@ -14,6 +14,31 @@ const reading = (limitType: string, utilization: number, resetsAt: number | null
 });
 
 describe('deriveAccountView', () => {
+  it('bounds a used window whose provider reported no reset by one window from its capture', () => {
+    const view = deriveAccountView(
+      { enabled: true },
+      [{ ...reading('session', 100, null, NOW - HOUR), windowMinutes: 300 }],
+      NOW,
+    );
+
+    expect(view.status).toBe('exhausted');
+    expect(view.session).toEqual({
+      latestResetAt: NOW + 4 * HOUR,
+      resetsAt: null,
+      usedPercent: 100,
+    });
+  });
+
+  it('sets no bound once such a window has aged out', () => {
+    const view = deriveAccountView(
+      { enabled: true },
+      [{ ...reading('session', 100, null, NOW - 6 * HOUR), windowMinutes: 300 }],
+      NOW,
+    );
+
+    expect(view.session).toEqual({ resetsAt: null, usedPercent: 0 });
+  });
+
   it('reports both windows and the newest sync time for an available account', () => {
     const view = deriveAccountView(
       { enabled: true },

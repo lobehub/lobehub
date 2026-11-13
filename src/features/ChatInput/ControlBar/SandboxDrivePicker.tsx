@@ -1,13 +1,13 @@
 'use client';
 
-import { Flexbox, Icon, Popover, Skeleton, Text, toast, Tooltip } from '@lobehub/ui';
+import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { Github } from '@lobehub/icons';
+import { Flexbox, Icon, Popover, Skeleton, Tag, Text, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
   ChevronDownIcon,
-  FolderClockIcon,
   FolderIcon,
-  FolderOpenIcon,
   HardDriveIcon,
   InfoIcon,
   PackageIcon,
@@ -20,11 +20,26 @@ import useSWR from 'swr';
 
 import { openSandboxStorageUpsell } from '@/business/client/features/SandboxStorageUpsell';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import RepositoryAvatar from '@/components/RepositoryAvatar';
+import { openCreateEnvironmentModal } from '@/features/EnvironmentManager/CreateEnvironmentModal';
+import { SANDBOX_STORAGE_PATH } from '@/features/ResourceHome/paths';
 import { openSandboxDirectoryModal } from '@/features/WorkingDirectory';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { environmentService } from '@/services/environment';
 import { refreshProjectFiles } from '@/services/projectFile';
 import { sandboxStorageService } from '@/services/sandboxStorage';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 
 import OptionRow from './OptionRow';
+import SandboxDriveMenu from './SandboxDriveMenu';
+import {
+  environmentChipState,
+  pickableEnvironments,
+  repositorySelection,
+  repositorySlug,
+} from './sandboxEnvironmentOptions';
+import SandboxRepositoryMenu, { type SandboxRepositoryOption } from './SandboxRepositoryMenu';
 import { isPersistentSelection, type SandboxSelection } from './useSandboxPlacement';
 import { workingDirectoryChipStyles } from './workingDirectoryChipStyles';
 
@@ -35,6 +50,7 @@ const styles = stylex.create({
     gap: 6,
     justifyContent: 'space-between',
     paddingBlock: 4,
+    paddingInline: 8,
   },
   headerInfo: {
     color: cssVar.colorTextQuaternary,
@@ -53,19 +69,27 @@ const styles = stylex.create({
     paddingBlock: 8,
     paddingInline: 8,
   },
-  // Applied after the row's defaults through xstyle.
-  option: {
-    paddingInline: 0,
-  },
   warning: {
     color: cssVar.colorWarning,
   },
 });
 
+/**
+ * A submenu's list can arrive after it opens. Left to size itself, its positioner
+ * keeps the size it was first measured at, so the popup would grow off the screen
+ * instead of being placed again.
+ */
+const SUBMENU_STYLES = {
+  content: { padding: 4 },
+  root: { height: 'auto', width: 'auto' },
+};
+
 interface SandboxDrivePickerProps {
   /** Whether this plan includes a drive. Without one the menu offers the way to a plan. */
   entitled: boolean;
   onChange: (selection: SandboxSelection) => Promise<void>;
+  /** The project the conversation belongs to; its repositories have a checkout there. */
+  projectId?: string;
   topicId?: string;
   /** Where this conversation works today. */
   value: SandboxSelection;
@@ -81,20 +105,46 @@ const folderName = (path: string) => path.split('/').pop() || path;
  * Nothing picked is the temporary sandbox; picking a folder on the drive is
  * the choice to keep files. A pick that can no longer be honoured — the
  * folder was deleted — is said on the chip itself, before the next message
- * runs somewhere the person did not choose. The environment the directory is
- * initialized from is a separate choice, beside this one, and every pick here
- * carries it along unchanged.
+ * runs somewhere the person did not choose.
+ *
+ * A repository is the third kind of place, one level down: temporary, a folder
+ * or a repository, one at a time. A checkout only lands in an empty folder, so
+ * offering it beside a folder that holds files would let a pick silently do
+ * nothing.
  *
  * A conversation from before environments became initializers may still be
  * bound to an environment directory; it is shown by name until another pick
  * replaces it.
  */
 const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
-  ({ entitled, onChange, topicId, value }) => {
+  ({ entitled, onChange, projectId, topicId, value }) => {
     const { t } = useTranslation(['chat', 'device']);
     const [open, setOpen] = useState(false);
     const workspaceId = useActiveWorkspaceId();
+    const navigate = useWorkspaceAwareNavigate();
     const persistent = isPersistentSelection(value);
+    const onRepository = !!value.environmentId;
+
+    const {
+      data: environmentList,
+      error: environmentsError,
+      mutate: refreshEnvironments,
+    } = useSWR(['sandbox-environment-chip', workspaceId ?? ''], () =>
+      environmentService.listEnvironments(),
+    );
+    const sharedAgent = useAgentStore(
+      (s) => !!workspaceId && agentSelectors.currentAgentVisibility(s) === 'public',
+    );
+    const environments = pickableEnvironments(environmentList?.environments ?? [], sharedAgent);
+    const repository = environments.find((item) => item.id === value.environmentId);
+    // Picked once but no longer readable — deleted, or unpublished by its owner
+    // — is said rather than hidden; a list that has not loaded says nothing.
+    const repositoryState = environmentChipState({
+      current: repository,
+      environmentId: value.environmentId,
+      failed: !!environmentsError,
+      loaded: !!environmentList,
+    });
 
     // A legacy environment directory's own row, for its name — from the
     // database, so the chip never waits on a sandbox.
@@ -125,9 +175,7 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
     // go on showing the old answers — "no longer exists" on the chip and an
     // unreadable tree in the working panel, for a folder just re-created and
     // picked again. Ask once more after every pick.
-    const pick = async (placement: Omit<SandboxSelection, 'environmentId'>) => {
-      // The environment is chosen beside the folder, not with it.
-      const selection = { ...placement, environmentId: value.environmentId };
+    const pick = async (selection: SandboxSelection) => {
       await onChange(selection);
       void revalidatePlacement();
       if (topicId && !selection.instanceId && selection.workingDirectory !== undefined) {
@@ -136,7 +184,7 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
       }
     };
 
-    const select = async (selection: Omit<SandboxSelection, 'environmentId'>) => {
+    const select = async (selection: SandboxSelection) => {
       setOpen(false);
       try {
         await pick(selection);
@@ -144,6 +192,36 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
         // The topic kept its old placement; said rather than left looking picked.
         toast.error(t('workingDirectory.drive.pickFailed', { ns: 'device' }));
       }
+    };
+
+    const pickRepository = async (environment: SandboxRepositoryOption) => {
+      try {
+        await onChange(
+          repositorySelection(environment, {
+            projectId,
+            published:
+              environments.find((item) => item.id === environment.id)?.visibility === 'public',
+            workspace: !!workspaceId,
+          }),
+        );
+        void revalidatePlacement();
+      } catch {
+        // The topic kept its place; said rather than left looking changed.
+        toast.error(t('sandboxEnvironment.saveFailed'));
+      }
+    };
+
+    const addRepository = () => {
+      setOpen(false);
+      openCreateEnvironmentModal(
+        // A workspace-public agent applies published environments only.
+        sharedAgent ? 'public' : undefined,
+        async (created) => {
+          await refreshEnvironments();
+          if (created?.id) await pickRepository(created);
+        },
+        t('sandboxEnvironment.add'),
+      );
     };
 
     const openBrowser = () => {
@@ -170,25 +248,33 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
           ? folderName(value.workingDirectory)
           : undefined;
     const currentIcon = value.instanceId ? PackageIcon : FolderIcon;
+    const showFolder = persistent && !onRepository;
 
     const fallbackMessage = fallback ? t(`sandboxDrive.fallback.${fallback}`) : undefined;
-    // In a workspace a folder path means nothing without its drive.
-    const driveName = workspaceId
-      ? t(`workingDirectory.drive.drives.${value.drive ?? 'public'}`, { ns: 'device' })
-      : undefined;
-
     const chipIcon = fallback ? (
       <Icon icon={TriangleAlertIcon} size={14} />
+    ) : onRepository ? (
+      <RepositoryAvatar size={14} url={repository && repositorySlug(repository)} />
     ) : persistent ? (
       <Icon icon={currentIcon} size={14} />
     ) : (
       <Icon icon={TimerIcon} size={14} />
     );
-    const chipLabel = persistent
-      ? fallback
-        ? t(`sandboxDrive.fallbackChip.${fallback}`)
-        : currentLabel
-      : t('sandboxStorage.ephemeral');
+    const repositoryLabel =
+      repositoryState.kind === 'picked'
+        ? repositoryState.name
+        : repositoryState.kind === 'missing'
+          ? t('sandboxEnvironment.missing')
+          : repositoryState.kind === 'loadFailed'
+            ? t('sandboxEnvironment.loadFailed')
+            : t('sandboxEnvironment.loading');
+    const chipLabel = fallback
+      ? t(`sandboxDrive.fallbackChip.${fallback}`)
+      : onRepository
+        ? repositoryLabel
+        : persistent
+          ? currentLabel
+          : t('sandboxStorage.ephemeral');
 
     const content = (
       <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
@@ -208,62 +294,112 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
         )}
 
         <OptionRow
-          active={!persistent}
-          desc={t('sandboxStorage.ephemeralDesc')}
+          compact
+          active={!persistent && !onRepository}
           icon={<Icon icon={TimerIcon} size={16} />}
           label={t('sandboxStorage.ephemeral')}
-          xstyle={styles.option}
           onClick={() => void select({})}
         />
 
-        {entitled && persistent && currentLabel && (
-          <OptionRow
-            active
-            icon={<Icon icon={currentIcon} size={16} />}
-            label={currentLabel}
-            xstyle={styles.option}
-            desc={
-              value.instanceId
-                ? t('sandboxDrive.environmentDesc')
-                : driveName
-                  ? t('sandboxDrive.folderOnDriveDesc', {
-                      drive: driveName,
-                      path: value.workingDirectory === '.' ? '/' : `/${value.workingDirectory}`,
-                    })
-                  : t('sandboxDrive.folderDesc', {
-                      path: value.workingDirectory === '.' ? '/' : `/${value.workingDirectory}`,
-                    })
-            }
-            onClick={() => setOpen(false)}
-          />
-        )}
+        {ENABLE_BUSINESS_FEATURES &&
+          (entitled ? (
+            <Popover
+              arrow={false}
+              closeDelay={150}
+              placement={'rightBottom'}
+              styles={SUBMENU_STYLES}
+              trigger={['hover', 'click']}
+              content={
+                <SandboxDriveMenu
+                  selectedLabel={showFolder ? currentLabel : undefined}
+                  selectedPath={showFolder ? value.workingDirectory : undefined}
+                  onBrowse={openBrowser}
+                  onPick={(folder) => void select(folder)}
+                  onOpenStorage={() => {
+                    setOpen(false);
+                    navigate(SANDBOX_STORAGE_PATH);
+                  }}
+                />
+              }
+            >
+              <div data-testid={'sandbox-drive-row'}>
+                <OptionRow
+                  arrow
+                  compact
+                  active={showFolder}
+                  icon={<Icon icon={HardDriveIcon} size={16} />}
+                  label={t('sandboxDrive.title')}
+                  onClick={() => {}}
+                />
+              </div>
+            </Popover>
+          ) : (
+            // The drive is part of a plan this account is not on. Offered in the
+            // same list, in the same shape, so the row reads as one more place
+            // files could go — and the tag says why it is not simply selectable.
+            <OptionRow
+              compact
+              icon={<Icon icon={HardDriveIcon} size={16} />}
+              label={t('sandboxDrive.title')}
+              badge={
+                <Tag color={'gold'} size={'small'} style={{ borderRadius: 999, paddingInline: 8 }}>
+                  {t('pro', { ns: 'common' })}
+                </Tag>
+              }
+              onClick={() => {
+                setOpen(false);
+                openSandboxStorageUpsell();
+              }}
+            />
+          ))}
 
-        {entitled && (
-          <OptionRow
-            desc={t('sandboxDrive.browseDesc')}
-            icon={<Icon icon={persistent ? FolderOpenIcon : HardDriveIcon} size={16} />}
-            label={t(persistent ? 'sandboxDrive.browseOther' : 'sandboxDrive.browse')}
-            xstyle={styles.option}
-            onClick={openBrowser}
-          />
-        )}
-
-        {!entitled && (
-          // The drive is part of a plan this account is not on. Offered in the
-          // same list, in the same shape, so the row reads as one more place
-          // files could go — and the tag says why it is not simply selectable.
-          <OptionRow
-            desc={t('sandboxStorage.persistentUpsellDesc')}
-            icon={<Icon icon={FolderClockIcon} size={16} />}
-            label={t('sandboxDrive.upsell')}
-            tag={t('pro', { ns: 'common' })}
-            xstyle={styles.option}
-            onClick={() => {
-              setOpen(false);
-              openSandboxStorageUpsell();
-            }}
-          />
-        )}
+        <Popover
+          arrow={false}
+          closeDelay={150}
+          placement={'rightBottom'}
+          styles={SUBMENU_STYLES}
+          trigger={['hover', 'click']}
+          content={
+            <SandboxRepositoryMenu
+              environments={environments}
+              failed={!!environmentsError}
+              loaded={!!environmentList}
+              selectedId={value.environmentId}
+              onAdd={addRepository}
+              onClose={() => setOpen(false)}
+              onPick={pickRepository}
+              onRetry={() => void refreshEnvironments()}
+              onManage={() => {
+                setOpen(false);
+                navigate('/settings/environments');
+              }}
+            />
+          }
+        >
+          <div data-testid={'sandbox-repository-row'}>
+            <OptionRow
+              arrow
+              compact
+              active={onRepository}
+              hint={onRepository && repository ? repositorySlug(repository) : undefined}
+              icon={
+                onRepository && repository ? (
+                  <RepositoryAvatar size={16} url={repositorySlug(repository)} />
+                ) : (
+                  <Github size={16} />
+                )
+              }
+              label={
+                // The repository the conversation works in, by name; the
+                // generic title only while none is picked.
+                onRepository && repositoryState.kind === 'picked'
+                  ? repositoryState.name
+                  : t('sandboxEnvironment.title')
+              }
+              onClick={() => {}}
+            />
+          </div>
+        </Popover>
       </Flexbox>
     );
 
@@ -277,6 +413,7 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
         content={content}
         open={open}
         placement={'topLeft'}
+        styles={{ content: { padding: 4 } }}
         trigger={'click'}
         onOpenChange={setOpen}
       >

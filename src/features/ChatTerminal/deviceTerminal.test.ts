@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   })),
   notifyExit: vi.fn(),
   readTerminal: vi.fn(),
+  resizeTerminal: vi.fn(async () => {}),
+  writeTerminal: vi.fn(async () => {}),
   setSessionSink: vi.fn(),
   write: vi.fn(),
 }));
@@ -25,8 +27,8 @@ vi.mock('@/services/device', () => ({
     closeTerminal: mocks.closeTerminal,
     createTerminalSession: mocks.createTerminalSession,
     readTerminal: mocks.readTerminal,
-    resizeTerminal: vi.fn(),
-    writeTerminal: vi.fn(),
+    resizeTerminal: mocks.resizeTerminal,
+    writeTerminal: mocks.writeTerminal,
   },
 }));
 
@@ -116,5 +118,31 @@ describe('DeviceTerminalSession polling', () => {
 
     expect(mocks.closeTerminal).toHaveBeenCalledWith({ deviceId: 'dev-1', id: 'term_1' });
     expect(mocks.readTerminal.mock.calls.length).toBe(before);
+  });
+
+  it('keeps every call on the client that created the session', async () => {
+    // A device can hold `lh connect` and the desktop app at once, each with its
+    // own sessions; a desktop shell's calls must not drift to the CLI.
+    mocks.createTerminalSession.mockResolvedValueOnce({
+      client: 'desktop',
+      cwd: '/root',
+      id: 'term_1',
+      pid: 4321,
+      shell: '/bin/zsh',
+    } as never);
+    mocks.readTerminal.mockResolvedValue({ chunk: '', exited: false, nextCursor: 0 });
+
+    const session = await open();
+    await vi.advanceTimersByTimeAsync(0);
+    session.sink.write('term_1', 'ls');
+    session.sink.resize('term_1', 100, 30);
+    await vi.advanceTimersByTimeAsync(0);
+    await session.dispose();
+
+    const pinned = { client: 'desktop', deviceId: 'dev-1', id: 'term_1' };
+    expect(mocks.readTerminal).toHaveBeenCalledWith(expect.objectContaining(pinned));
+    expect(mocks.writeTerminal).toHaveBeenCalledWith(expect.objectContaining(pinned));
+    expect(mocks.resizeTerminal).toHaveBeenCalledWith(expect.objectContaining(pinned));
+    expect(mocks.closeTerminal).toHaveBeenCalledWith(pinned);
   });
 });

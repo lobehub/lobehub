@@ -216,6 +216,23 @@ class SandboxStorageService {
     recursive?: boolean;
     topicId?: string;
   }) => lambdaClient.sandboxStorage.removeFile.mutate(params);
+
+  /**
+   * One step of the drive's space analysis; call again while `status` is not
+   * `done`. Works on a drive over its quota, which is what it is for.
+   */
+  analyzeStorage = async (params: { drive?: SandboxDrive; restart?: boolean; top?: number } = {}) =>
+    lambdaClient.sandboxStorage.analyzeStorage.mutate(params);
+
+  /**
+   * Delete several files or folders for good, past the quota. `done: false`
+   * means time ran out: call again with `pending`.
+   */
+  deleteFiles = async (params: {
+    drive?: SandboxDrive;
+    paths: string[];
+    regenerableOnly?: boolean;
+  }) => lambdaClient.sandboxStorage.deleteFiles.mutate(params);
 }
 
 export const sandboxStorageService = new SandboxStorageService();

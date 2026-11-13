@@ -207,7 +207,11 @@ describe('applyShareGateToToolSet', () => {
   it('strips callSubAgent and pins the dispatch-free systemRole', () => {
     const toolSet = buildToolSet([
       {
-        apis: [{ name: LobeAgentApiName.callSubAgent }, { name: LobeAgentApiName.analyzeMedia }],
+        apis: [
+          { name: LobeAgentApiName.callSubAgent },
+          { name: LobeAgentApiName.cancelSubAgent },
+          { name: LobeAgentApiName.analyzeMedia },
+        ],
         identifier: LobeAgentIdentifier,
       },
     ]);
@@ -218,11 +222,11 @@ describe('applyShareGateToToolSet', () => {
     );
 
     const manifest = toolSet.manifestMap[LobeAgentIdentifier];
-    expect(manifest.api.map((api) => api.name)).not.toContain(LobeAgentApiName.callSubAgent);
+    expect(manifest.api.map((api) => api.name)).toEqual([LobeAgentApiName.analyzeMedia]);
     expect(manifest.systemRole).toBe(systemPromptWithoutSubAgent);
-    expect(toolSet.tools!.map((tool: any) => tool.function.name)).not.toContain(
-      toolName(LobeAgentIdentifier, LobeAgentApiName.callSubAgent),
-    );
+    expect(toolSet.tools!.map((tool: any) => tool.function.name)).toEqual([
+      toolName(LobeAgentIdentifier, LobeAgentApiName.analyzeMedia),
+    ]);
   });
 
   it('drops a memory tool without allowReadMemory and strips its writes with it', () => {

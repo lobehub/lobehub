@@ -283,6 +283,8 @@
   "acceptance.gate.titleWave": "Release wave {{wave}}?",
   "acceptance.gate.unitAcceptance": "Acceptance {{passed}}/{{total}}",
   "acceptance.gate.unitAcceptanceOpen": "Open acceptance",
+  "acceptance.gate.unitArtifacts": "Outputs",
+  "acceptance.gate.unitArtifactsEmpty": "No outputs registered for this unit.",
   "acceptance.gate.unitBrief": "What this unit does",
   "acceptance.gate.unitCount": "{{count}} units",
   "acceptance.gate.unitMeta": "{{runs}} run(s) · {{tokens}} tokens",

@@ -359,8 +359,6 @@
   "channel.qq.webhookMigrationTitle": "Рекомендуем перейти на режим WebSocket",
   "channel.quickSetup.connect.desc": "Сохраняет введенные выше данные и подключает бота. Все остальное можно изменить позже.",
   "channel.quickSetup.connect.title": "Сохранить и подключить",
-  "channel.quickSetup.discord.bot.desc": "На странице бота сбросьте токен и скопируйте его, затем включите намерение содержимого сообщений.",
-  "channel.quickSetup.discord.bot.title": "Получите токен бота и разрешите содержимое сообщений",
   "channel.quickSetup.discord.create.desc": "В Портале разработчика нажмите «Новое приложение» и назовите его.",
   "channel.quickSetup.discord.create.title": "Создайте приложение",
   "channel.quickSetup.discord.credentials.desc": "Оба находятся в разделе «Общая информация».",

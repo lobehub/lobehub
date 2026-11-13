@@ -1,6 +1,11 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.76",
+  "version": "0.0.78",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lobehub/lobehub",
+    "directory": "apps/cli"
+  },
   "type": "module",
   "bin": {
     "lh": "dist/index.js",

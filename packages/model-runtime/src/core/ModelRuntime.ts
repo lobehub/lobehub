@@ -579,25 +579,33 @@ export class ModelRuntime {
 
       const startTime = Date.now();
 
+      let usage: ModelUsage | undefined;
+      let routeAttempt: UsageReportContext['routeAttempt'];
       const finalOptions = this._hooks?.onEmbeddingsFinal
         ? {
             ...hookOptions,
-            onUsage: async (usage: ModelUsage, context?: UsageReportContext) => {
-              await hookOptions?.onUsage?.(usage, context);
-              try {
-                const latencyMs = Date.now() - startTime;
-                await this._hooks!.onEmbeddingsFinal!(
-                  { latencyMs, routeAttempt: context?.routeAttempt, usage },
-                  { options, payload },
-                );
-              } catch (e) {
-                console.error('[ModelRuntime] onEmbeddingsFinal hook error:', e);
-              }
+            onUsage: async (reported: ModelUsage, context?: UsageReportContext) => {
+              usage = reported;
+              routeAttempt = context?.routeAttempt;
+              await hookOptions?.onUsage?.(reported, context);
             },
           }
         : hookOptions;
 
-      return await this._runtime.embeddings?.(payload, finalOptions);
+      const result = await this._runtime.embeddings?.(payload, finalOptions);
+
+      if (this._hooks?.onEmbeddingsFinal) {
+        try {
+          await this._hooks.onEmbeddingsFinal(
+            { latencyMs: Date.now() - startTime, routeAttempt, usage },
+            { options, payload },
+          );
+        } catch (e) {
+          console.error('[ModelRuntime] onEmbeddingsFinal hook error:', e);
+        }
+      }
+
+      return result;
     } catch (error) {
       if (this._hooks?.onEmbeddingsError) {
         await this._hooks.onEmbeddingsError(error as ChatCompletionErrorPayload, {

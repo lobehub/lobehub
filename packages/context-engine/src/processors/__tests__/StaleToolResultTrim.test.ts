@@ -3,6 +3,13 @@ import { describe, expect, it } from 'vitest';
 import type { PipelineContext } from '../../types';
 import { cacheEconomicsForProvider, StaleToolResultTrimProcessor } from '../StaleToolResultTrim';
 
+const previousTurnMessage = (createdAt: string) => ({
+  content: 'previous turn done',
+  createdAt,
+  id: 'prev',
+  role: 'assistant',
+});
+
 const createContext = (messages: any[]): PipelineContext => ({
   initialState: { messages: [] },
   isAborted: false,
@@ -408,12 +415,7 @@ describe('StaleToolResultTrimProcessor', () => {
       { content: 'filler 1', id: 'f1', role: 'assistant' },
       { content: 'filler 2', id: 'f2', role: 'assistant' },
       { content: 'filler 3', id: 'f3', role: 'assistant' },
-      {
-        content: 'previous turn done',
-        createdAt: new Date(T0).toISOString(),
-        id: 'prev',
-        role: 'assistant',
-      },
+      previousTurnMessage(new Date(T0).toISOString()),
       {
         content: 'next task',
         createdAt: new Date(T0 + gapMs).toISOString(),
@@ -508,12 +510,7 @@ describe('StaleToolResultTrimProcessor', () => {
         { content: 'filler', id: 'f1', role: 'assistant' },
         { content: 'filler', id: 'f2', role: 'assistant' },
         { content: 'filler', id: 'f3', role: 'assistant' },
-        {
-          content: 'previous turn done',
-          createdAt: new Date(T0).toISOString(),
-          id: 'prev',
-          role: 'assistant',
-        },
+        previousTurnMessage(new Date(T0).toISOString()),
         {
           content: 'next task',
           createdAt: new Date(T0 + 60_000).toISOString(), // warm: 1 min gap
@@ -668,12 +665,7 @@ describe('StaleToolResultTrimProcessor', () => {
         { content: 'filler', id: 'f1', role: 'assistant' },
         { content: 'filler', id: 'f2', role: 'assistant' },
         { content: 'filler', id: 'f3', role: 'assistant' },
-        {
-          content: 'previous turn done',
-          createdAt: new Date(T0).toISOString(),
-          id: 'prev',
-          role: 'assistant',
-        },
+        previousTurnMessage(new Date(T0).toISOString()),
         {
           content: 'next task',
           createdAt: new Date(T0 + 600_000).toISOString(),

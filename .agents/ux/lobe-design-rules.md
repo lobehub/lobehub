@@ -138,10 +138,12 @@ Reply is the primary Channel message action. Replying to a person only posts a q
 
 Source: user correction of the proposed in-channel reply semantics (2026-10-31).
 
-## LOBE-UX-020 — Conversation day dividers follow WeChat, time included
+- Long-running experiment startup belongs to the experiment page. Do not trap users in a blocking modal; route navigation must not own or cancel launch orchestration. A short pre-launch cost confirmation may remain.
 
-A Channel day divider stamps the first message of the day the way WeChat does: today is the time alone ("10:17"), not "今天"; earlier days are the day followed by the time ("昨天 01:36", "星期五 10:15", "11 月 7 日 10:15", "2025 年 11 月 7 日 10:15"). Days are calendar days in local time, not 24-hour spans. The full date stays in the hover title and the separator's accessible label.
+## LOBE-UX-020 — Conversation times follow Discord: date dividers, dated headers
 
-Enforcement: `src/features/Channels/messagePresentation.test.ts` (`channelDayLabel`) covers today, the yesterday boundary, weekdays, this year and earlier years in zh-CN and en-US.
+A Channel day divider is the full date alone ("2026 年 6 月 22 日"), not a day label with a time. Each message header carries its own day, so a message read away from its divider still says when it was sent: today is the time alone ("16:29"), not "今天"; yesterday is "昨天 16:29"; anything earlier is the numeric date and time ("2026/6/22 01:33"), never a weekday or a year-less date. Days are calendar days in local time, not 24-hour spans. A grouped continuation's hover stamp is the time alone, and every stamp keeps the full date and time in its hover title.
 
-Source: user correction on PR #22556 (2026-11-08): "今天应该显示时间", after a first version labelled today as "今天".
+Enforcement: `src/features/Channels/messagePresentation.test.ts` (`channelMessageTime`) covers today, the yesterday boundary, and earlier dates in this and previous years in zh-CN and en-US.
+
+Source: user correction (2026-11-12): headers showed only "16:29", so a scrolled message had no visible date — "应该得是像 discord 这样改". This replaces the WeChat-style divider from PR #22556 (2026-11-08), which kept today as the time alone ("今天应该显示时间").

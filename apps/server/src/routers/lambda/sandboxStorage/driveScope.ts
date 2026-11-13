@@ -165,14 +165,23 @@ export const resolveWritableScope = async (
   if (instanceId) throw new TRPCError({ code: 'FORBIDDEN', message: 'INSTANCE_READ_ONLY' });
 
   const scope = await resolveDriveScope(ctx);
+  assertWritablePath(path, scope);
+
+  return scope;
+};
+
+/** Whether `path` is a folder that holds a hidden one, which a write would carry into the open. */
+export const holdsHidden = (path: string, scope: Pick<DriveScope, 'hidden'>) =>
+  scope.hidden.some((directory) => isPathWithin(directory, path));
+
+/** Refuses a write to `path`: outside the scope, hidden, or holding something hidden. */
+export const assertWritablePath = (path: string, scope: DriveScope) => {
   assertReadable(path, scope);
   // Refused without naming what is inside: the caller can see this folder,
   // so "not found" would be false, and the hidden one stays unnamed.
-  if (scope.hidden.some((directory) => isPathWithin(directory, path))) {
+  if (holdsHidden(path, scope)) {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'PATH_HOLDS_HIDDEN' });
   }
-
-  return scope;
 };
 
 /** Names the instance a file route works in; see {@link resolveDriveScope}. */

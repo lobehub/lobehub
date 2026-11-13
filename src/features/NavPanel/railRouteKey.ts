@@ -16,21 +16,10 @@ export const NAV_PANEL_TASKS_KEY = 'tasks';
 export const NAV_PANEL_CONTACTS_KEY = 'contacts';
 
 /**
- * Agent sub-pages that edit or describe the agent itself. The rail highlights
- * Contacts for them (profile → edit); the list column stays the agent sidebar.
+ * Roots whose every page is an agent or group's own inner page — its chats,
+ * topics, profile and config — so the rail highlights Contacts for all of them.
  */
-const AGENT_CONTACT_PAGES = new Set([
-  'channel',
-  'permission',
-  'profile',
-  'self-evolving',
-  'self-learning',
-  'share',
-  'statistics',
-  'stats',
-]);
-
-const GROUP_CONTACT_PAGES = new Set(['permission', 'profile']);
+const CONTACT_ROOTS = new Set(['agent', 'group']);
 
 const TASK_ROOTS = new Set(['goal', 'goals', 'task', 'tasks']);
 
@@ -45,18 +34,15 @@ const splitRoute = (pathname: string, activeWorkspaceSlug: string | null) => {
 
 /**
  * Whether the rail highlights Contacts for this route: the all-agents page and
- * agent / group profile and config pages.
+ * every page inside an agent or group, chats included.
  */
 export const isRailContactsRoute = (
   pathname: string,
   activeWorkspaceSlug: string | null,
 ): boolean => {
-  const [rootSegment, , pageSegment] = splitRoute(pathname, activeWorkspaceSlug);
+  const [rootSegment, id] = splitRoute(pathname, activeWorkspaceSlug);
   if (rootSegment === 'agents') return true;
-  if (!pageSegment) return false;
-  if (rootSegment === 'agent') return AGENT_CONTACT_PAGES.has(pageSegment);
-  if (rootSegment === 'group') return GROUP_CONTACT_PAGES.has(pageSegment);
-  return false;
+  return !!id && !!rootSegment && CONTACT_ROOTS.has(rootSegment);
 };
 
 /**

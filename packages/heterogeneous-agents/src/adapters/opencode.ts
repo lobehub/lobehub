@@ -12,6 +12,9 @@ import type {
 
 const OPENCODE_IDENTIFIER = 'opencode';
 const OPENCODE_TODO_WRITE_API = 'todowrite';
+// OpenCode 2.x renamed `bash` to `shell` (same `command` input). Keep the 1.x
+// name so command renders and git-effect recording apply to both majors.
+const OPENCODE_TOOL_ALIASES: Record<string, string> = { shell: 'bash' };
 const OPENCODE_CLI_INSTALL_DOCS_URL =
   getHeterogeneousAgentConfigOrThrow(OPENCODE_IDENTIFIER).auth.docsUrl;
 const AUTH_REQUIRED_PATTERNS = [
@@ -179,7 +182,10 @@ export class OpenCodeAdapter implements AgentEventAdapter {
 
   private handleTool(part: any): HeterogeneousAgentEvent[] {
     const state = part?.state;
-    const callId = part?.callID;
+    // 1.x: `id` is the part id and `callID` the tool call id. 2.x drops
+    // `callID`, moving the call id into `id` and the part id into `partID`.
+    const callId = part?.callID ?? part?.id;
+    const partId = part?.partID ?? (part?.callID ? part.id : undefined);
     if (
       part?.type !== 'tool' ||
       typeof callId !== 'string' ||
@@ -189,10 +195,11 @@ export class OpenCodeAdapter implements AgentEventAdapter {
       return [];
     }
     this.completedToolCallIds.add(callId);
-    if (part.id) this.completedPartIds.add(part.id);
+    if (partId) this.completedPartIds.add(partId);
 
+    const apiName = typeof part.tool === 'string' ? part.tool : 'unknown';
     const tool: ToolCallPayload = {
-      apiName: typeof part.tool === 'string' ? part.tool : 'unknown',
+      apiName: OPENCODE_TOOL_ALIASES[apiName] ?? apiName,
       arguments: JSON.stringify(state.input ?? {}),
       id: callId,
       identifier: OPENCODE_IDENTIFIER,

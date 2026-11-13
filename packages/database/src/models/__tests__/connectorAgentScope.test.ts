@@ -4,6 +4,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import { agents, userConnectors, userConnectorTools, users, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import {
+  countAgentConnectorsAffected,
+  rehomeAgentConnectorsForScopeTransfer,
+} from '../../utils/agentConnectors';
 import { ConnectorModel } from '../connector';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -58,6 +62,51 @@ afterEach(async () => {
 });
 
 describe('ConnectorModel agent-scoped resolution', () => {
+  it('keeps legacy eval rows and credentials out of normal Agent handovers', async () => {
+    const owned = await insertConnector({
+      agentId: agentA,
+      identifier: 'eval-owned',
+      name: 'Eval',
+      credentials: 'encrypted-owned',
+      metadata: { agentEval: { datasetId: 'dataset' } },
+    });
+    const mounted = await insertConnector({
+      identifier: 'eval-mounted',
+      name: 'Eval',
+      credentials: 'encrypted-mounted',
+      metadata: { agentEval: { datasetId: 'dataset' }, mountedByAgentId: agentA },
+    });
+    const ordinary = await insertConnector({
+      agentId: agentA,
+      identifier: 'ordinary',
+      name: 'Ordinary',
+      credentials: 'ordinary-auth',
+    });
+    expect(
+      await countAgentConnectorsAffected(serverDB, {
+        agentIds: [agentA],
+        recipientId: otherUserId,
+      }),
+    ).toBe(1);
+    await rehomeAgentConnectorsForScopeTransfer(serverDB, {
+      agentIds: [agentA],
+      targetUserId: otherUserId,
+      targetWorkspaceId: workspaceId,
+    });
+    for (const row of [owned, mounted]) {
+      const [stored] = await serverDB
+        .select()
+        .from(userConnectors)
+        .where(eq(userConnectors.id, row.id));
+      expect(stored).toEqual(row);
+    }
+    const [transferred] = await serverDB
+      .select()
+      .from(userConnectors)
+      .where(eq(userConnectors.id, ordinary.id));
+    expect(transferred).toMatchObject({ credentials: null, userId: otherUserId, workspaceId });
+  });
+
   describe('resolveByIdentifiers (personal run)', () => {
     it('prefers the agent-owned row over the base personal row (Agent > Personal)', async () => {
       await insertConnector({ identifier: 'gmail', name: 'Personal Gmail' });

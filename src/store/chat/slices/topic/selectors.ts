@@ -27,6 +27,7 @@ import { type ChatStoreState } from '../../initialState';
 import { topicMapKey } from '../../utils/topicMapKey';
 import { operationSelectors } from '../operation/selectors';
 import { type TopicData } from './initialState';
+import type { TopicShareEntry } from './projection';
 
 // Helper selector: get current topic data based on session context
 const currentTopicData = (s: ChatStoreState): TopicData | undefined => {
@@ -279,6 +280,21 @@ const getTopicWorkingDirectory =
 const currentTopicWorkingDirectory = (s: ChatStoreState): string | undefined =>
   extractTopicWorkingDirectory(currentActiveTopic(s));
 
+/**
+ * Extract the device a topic's local files live on.
+ * `runningOperation.deviceId` wins over the pinned `boundDeviceId`, matching
+ * the server-side `getTopicDeviceId` used for topic listing.
+ */
+const extractTopicDeviceId = (topic: ChatTopic | undefined): string | undefined =>
+  topic?.metadata?.runningOperation?.deviceId ?? topic?.metadata?.boundDeviceId ?? undefined;
+
+/**
+ * Get the device the current topic's local files belong to.
+ * Undefined for a topic that ran on this machine, or never bound one.
+ */
+const currentTopicDeviceId = (s: ChatStoreState): string | undefined =>
+  extractTopicDeviceId(currentActiveTopic(s));
+
 const isCreatingTopic = (s: ChatStoreState) => s.creatingTopic;
 
 /**
@@ -529,6 +545,12 @@ const agentTopicsViewIsLoadingMore = (s: ChatStoreState): boolean =>
 const agentTopicsViewLoadMoreError = (s: ChatStoreState): unknown =>
   agentTopicsViewData(s)?.loadMoreError;
 
+/** The topic's share entry (`share: null` = no record), or `undefined` before its first paint. */
+const getTopicShare =
+  (topicId?: string | null) =>
+  (s: ChatStoreState): TopicShareEntry | undefined =>
+    topicId ? s.topicShareMap[topicId] : undefined;
+
 export const topicSelectors = {
   activeTopicHeteroPin,
   activeTopicModel,
@@ -540,6 +562,7 @@ export const topicSelectors = {
   currentActiveTopicSummary,
   currentTopicCount,
   currentTopicData,
+  currentTopicDeviceId,
   currentTopicLength,
   currentTopicMetadata,
   currentTopicWorkingDirectory,
@@ -554,6 +577,7 @@ export const topicSelectors = {
   getTopicModelById,
   getTopicReasoningConfigForModel,
   getTopicReasoningPinById,
+  getTopicShare,
   getTopicWorkingDirectory,
   getTopicsByAgentId,
   groupedTopicsForSidebar,

@@ -4,9 +4,8 @@ import { ActionIcon, toast } from '@lobehub/ui';
 import { PencilLine } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { mutate as globalMutate } from '@/libs/swr';
-import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
+import { useVerifyStore } from '@/store/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
@@ -39,7 +38,7 @@ const AcceptanceGoalEdit = () => {
           throw cause;
         }
         await mutate();
-        void globalMutate(isAcceptanceListKey);
+        void useVerifyStore.getState().refreshAcceptanceLists();
       },
     });
   };

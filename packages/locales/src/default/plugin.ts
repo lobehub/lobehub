@@ -99,6 +99,7 @@ export default {
   'builtins.lobe-agent.apiName.analyzeMedia.result':
     'Analyze media: <question>{{question}}</question>',
   'builtins.lobe-agent.apiName.callSubAgent': 'Call sub-agent',
+  'builtins.lobe-agent.apiName.cancelSubAgent': 'Cancel sub-agent',
   'builtins.lobe-agent.subAgent.backgroundHint':
     'The result will be sent to this conversation when it finishes.',
   'builtins.lobe-agent.subAgent.backgroundRunning': 'Running in background',
@@ -270,6 +271,8 @@ export default {
   'builtins.github.render.updatedAt': 'Updated {{time}}',
   'builtins.linear.render.empty': 'No {{collection}} found',
   'builtins.linear.render.updatedAt': 'Updated {{time}}',
+  'builtins.lobe-cloud-sandbox.apiName.analyzeStorage': 'Analyze drive space',
+  'builtins.lobe-cloud-sandbox.apiName.deleteFiles': 'Delete files',
   'builtins.lobe-cloud-sandbox.apiName.editFile': 'Edit file',
   'builtins.lobe-cloud-sandbox.apiName.executeCode': 'Execute code',
   'builtins.lobe-cloud-sandbox.apiName.exportFile': 'Export file',
@@ -292,6 +295,10 @@ export default {
   'builtins.lobe-cloud-sandbox.apiName.renameLocalFile': 'Rename',
   'builtins.lobe-cloud-sandbox.apiName.searchLocalFiles': 'Search files',
   'builtins.lobe-cloud-sandbox.apiName.writeLocalFile': 'Write file',
+  'builtins.lobe-cloud-sandbox.deleteFiles.irreversible':
+    'Deleted files can’t be recovered. The drive has no trash.',
+  'builtins.lobe-cloud-sandbox.deleteFiles.title':
+    'Permanently delete {{count}} items from the drive:',
   'builtins.lobe-cloud-sandbox.inspector.noResults': 'No results',
   'builtins.lobe-cloud-sandbox.title': 'Cloud Sandbox',
   'builtins.lobe-group-agent-builder.apiName.batchCreateAgents': 'Batch create agents',

@@ -4,6 +4,32 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { type MessageDispatch } from './reducer';
 import { messagesReducer } from './reducer';
 
+const defaultToolPayload = (): ChatToolPayload => ({
+  id: 'tc_1',
+  type: 'default',
+  identifier: 'tool1',
+  apiName: 'testFunction',
+  arguments: '{"arg1": "value1"}',
+});
+
+const userRootMessage = (): UIChatMessage => ({
+  id: 'A',
+  content: 'A',
+  role: 'user',
+  createdAt: 1,
+  updatedAt: 1,
+  parentId: undefined,
+});
+
+const assistantChildMessage = (): UIChatMessage => ({
+  id: 'B',
+  content: 'B',
+  role: 'assistant',
+  createdAt: 2,
+  updatedAt: 2,
+  parentId: 'A',
+});
+
 describe('messagesReducer', () => {
   let initialState: UIChatMessage[];
 
@@ -327,13 +353,7 @@ describe('messagesReducer', () => {
         } as UIChatMessage,
       ];
 
-      const toolPayload: ChatToolPayload = {
-        id: 'tc_1',
-        type: 'default',
-        identifier: 'tool1',
-        apiName: 'testFunction',
-        arguments: '{"arg1": "value1"}',
-      };
+      const toolPayload: ChatToolPayload = defaultToolPayload();
 
       const payload: MessageDispatch = {
         type: 'addMessageTool',
@@ -350,13 +370,7 @@ describe('messagesReducer', () => {
     });
 
     it('should add a tool to the specified assistant message', () => {
-      const toolPayload: ChatToolPayload = {
-        id: 'tc_1',
-        type: 'default',
-        identifier: 'tool1',
-        apiName: 'testFunction',
-        arguments: '{"arg1": "value1"}',
-      };
+      const toolPayload: ChatToolPayload = defaultToolPayload();
 
       const payload: MessageDispatch = {
         type: 'addMessageTool',
@@ -371,13 +385,7 @@ describe('messagesReducer', () => {
     });
 
     it('should not modify the state if the message is not found', () => {
-      const toolPayload: ChatToolPayload = {
-        id: 'tc_1',
-        type: 'default',
-        identifier: 'tool1',
-        apiName: 'testFunction',
-        arguments: '{"arg1": "value1"}',
-      };
+      const toolPayload: ChatToolPayload = defaultToolPayload();
 
       const payload: MessageDispatch = {
         type: 'addMessageTool',
@@ -390,13 +398,7 @@ describe('messagesReducer', () => {
     });
 
     it('should not add a tool if the message is not an assistant message', () => {
-      const toolPayload: ChatToolPayload = {
-        id: 'tc_1',
-        type: 'default',
-        identifier: 'tool1',
-        apiName: 'testFunction',
-        arguments: '{"arg1": "value1"}',
-      };
+      const toolPayload: ChatToolPayload = defaultToolPayload();
 
       const payload: MessageDispatch = {
         type: 'addMessageTool',
@@ -554,22 +556,8 @@ describe('messagesReducer', () => {
     it('should update child parentId when deleting parent chain', () => {
       // Create a tree: A -> B -> C -> D
       const treeState: UIChatMessage[] = [
-        {
-          id: 'A',
-          content: 'A',
-          role: 'user',
-          createdAt: 1,
-          updatedAt: 1,
-          parentId: undefined,
-        },
-        {
-          id: 'B',
-          content: 'B',
-          role: 'assistant',
-          createdAt: 2,
-          updatedAt: 2,
-          parentId: 'A',
-        },
+        userRootMessage(),
+        assistantChildMessage(),
         {
           id: 'C',
           content: 'C',
@@ -609,22 +597,8 @@ describe('messagesReducer', () => {
     it('should set child parentId to undefined when deleting entire parent chain from root', () => {
       // Create a tree: A -> B -> C -> D
       const treeState: UIChatMessage[] = [
-        {
-          id: 'A',
-          content: 'A',
-          role: 'user',
-          createdAt: 1,
-          updatedAt: 1,
-          parentId: undefined,
-        },
-        {
-          id: 'B',
-          content: 'B',
-          role: 'assistant',
-          createdAt: 2,
-          updatedAt: 2,
-          parentId: 'A',
-        },
+        userRootMessage(),
+        assistantChildMessage(),
         {
           id: 'C',
           content: 'C',
@@ -662,22 +636,8 @@ describe('messagesReducer', () => {
     it('should handle multiple independent trees when batch deleting', () => {
       // Tree 1: A -> B -> C, Tree 2: X -> Y -> Z
       const treeState: UIChatMessage[] = [
-        {
-          id: 'A',
-          content: 'A',
-          role: 'user',
-          createdAt: 1,
-          updatedAt: 1,
-          parentId: undefined,
-        },
-        {
-          id: 'B',
-          content: 'B',
-          role: 'assistant',
-          createdAt: 2,
-          updatedAt: 2,
-          parentId: 'A',
-        },
+        userRootMessage(),
+        assistantChildMessage(),
         {
           id: 'C',
           content: 'C',

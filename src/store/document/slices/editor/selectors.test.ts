@@ -3,6 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { type DocumentStore } from '../../store';
 import { editorSelectors } from './selectors';
 
+const dirtyNotebookInput = () => ({
+  content: '',
+  editorData: null,
+  isDirty: true,
+  lastSavedContent: '',
+  lastUpdatedTime: null,
+  saveStatus: 'idle' as const,
+  sourceType: 'notebook' as const,
+});
+
 describe('DocumentStore - Editor Selectors', () => {
   const createMockState = (overrides?: Partial<DocumentStore>): DocumentStore =>
     ({
@@ -93,15 +103,7 @@ describe('DocumentStore - Editor Selectors', () => {
     it('should return isDirty status', () => {
       const state = createMockState({
         documents: {
-          'doc-1': {
-            content: '',
-            editorData: null,
-            isDirty: true,
-            lastSavedContent: '',
-            lastUpdatedTime: null,
-            saveStatus: 'idle' as const,
-            sourceType: 'notebook' as const,
-          },
+          'doc-1': dirtyNotebookInput(),
         },
       });
       expect(editorSelectors.isDirty('doc-1')(state)).toBe(true);
@@ -215,15 +217,7 @@ describe('DocumentStore - Editor Selectors', () => {
       const state = createMockState({
         activeDocumentId: 'doc-1',
         documents: {
-          'doc-1': {
-            content: '',
-            editorData: null,
-            isDirty: true,
-            lastSavedContent: '',
-            lastUpdatedTime: null,
-            saveStatus: 'idle' as const,
-            sourceType: 'notebook' as const,
-          },
+          'doc-1': dirtyNotebookInput(),
         },
       });
       expect(editorSelectors.activeIsDirty(state)).toBe(true);
@@ -301,15 +295,7 @@ describe('DocumentStore - Editor Selectors', () => {
       const state = createMockState({
         activeDocumentId: 'doc-1',
         documents: {
-          'doc-1': {
-            content: '',
-            editorData: null,
-            isDirty: true,
-            lastSavedContent: '',
-            lastUpdatedTime: null,
-            saveStatus: 'idle' as const,
-            sourceType: 'notebook' as const,
-          },
+          'doc-1': dirtyNotebookInput(),
         },
       });
       expect(editorSelectors.canSave(state)).toBe(true);
