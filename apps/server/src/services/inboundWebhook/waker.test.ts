@@ -106,7 +106,7 @@ beforeEach(async () => {
   intervention.mockResolvedValue({ approvalMode: 'manual', allowList: ['safe-read'] });
   await db.insert(users).values({ id: userId });
   await db.insert(agents).values({ id: agentId, userId });
-  await db.insert(topics).values({ id: topicId, userId, agentId });
+  await db.insert(topics).values({ id: topicId, userId, agentId, status: 'active' });
   await db.insert(userConnectors).values({
     id: connectorId,
     userId,
@@ -167,6 +167,7 @@ describe('durable inbound webhook wakes', () => {
     const params = execute.mock.calls[0][0];
     expect(params.appContext?.topicId).toBe(topicId);
     expect(params.trigger).toBe(RequestTrigger.McpEvent);
+    expect(params.markTopicRunning).toBe(true);
     expect(params.userInterventionConfig).toEqual({
       approvalMode: 'manual',
       allowList: ['safe-read'],
@@ -197,6 +198,9 @@ describe('durable inbound webhook wakes', () => {
       if (mode === 'thrown') execute.mockRejectedValueOnce(new Error('TopicStartReservationError'));
       else execute.mockResolvedValueOnce({ ...success, error: 'TopicStartReservationError: busy' });
       expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'deferred' });
+      expect((await db.select().from(topics).where(eq(topics.id, topicId)))[0].status).toBe(
+        'active',
+      );
       expect((await signalRows())[0]).toMatchObject({
         status: 'pending',
         error: 'topic_busy',
@@ -234,6 +238,7 @@ describe('durable inbound webhook wakes', () => {
     await seedSignal();
     execute.mockResolvedValueOnce({ ...success, error: 'upstream unavailable' });
     expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'failed' });
+    expect((await db.select().from(topics).where(eq(topics.id, topicId)))[0].status).toBe('active');
     expect((await signalRows())[0]).toMatchObject({
       status: 'failed',
       error: 'agent_start_failed',

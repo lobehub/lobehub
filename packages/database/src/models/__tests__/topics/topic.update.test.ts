@@ -79,6 +79,61 @@ describe('TopicModel - Update', () => {
   });
 
   describe('updateMetadata', () => {
+    it('atomically commits the running marker and status, and rolls both back together', async () => {
+      const topicId = 'atomic-running-start';
+      await serverDB.insert(topics).values({ id: topicId, userId, status: 'active' });
+      await expect(
+        serverDB.transaction(async (tx) => {
+          const transactionalModel = new TopicModel(tx as unknown as LobeChatDatabase, userId);
+          await transactionalModel.updateMetadata(
+            topicId,
+            { runningOperation: { operationId: 'rolled-back' } },
+            { status: 'running' },
+          );
+          throw new Error('rollback startup');
+        }),
+      ).rejects.toThrow('rollback startup');
+      expect(await topicModel.findById(topicId)).toMatchObject({ status: 'active' });
+      expect((await topicModel.findById(topicId))?.metadata?.runningOperation).toBeUndefined();
+      await topicModel.updateMetadata(
+        topicId,
+        { runningOperation: { operationId: 'committed' } },
+        { status: 'running' },
+      );
+      expect(await topicModel.findById(topicId)).toMatchObject({
+        status: 'running',
+        metadata: { runningOperation: { operationId: 'committed' } },
+      });
+    });
+
+    it('cannot write the opted-in running status when ownership or onlyIf rejects the marker', async () => {
+      const ownId = 'conditional-running-start';
+      const foreignId = 'foreign-running-start';
+      await serverDB.insert(users).values({ id: 'different-owner' });
+      await serverDB.insert(topics).values([
+        { id: ownId, userId, status: 'active' },
+        { id: foreignId, userId: 'different-owner', status: 'active' },
+      ]);
+      expect(
+        await topicModel.updateMetadata(
+          ownId,
+          { runningOperation: { operationId: 'rejected' } },
+          { status: 'running', onlyIf: () => false },
+        ),
+      ).toEqual([]);
+      expect(
+        await topicModel.updateMetadata(
+          foreignId,
+          { runningOperation: { operationId: 'foreign' } },
+          { status: 'running' },
+        ),
+      ).toEqual([]);
+      expect((await topicModel.findById(ownId))?.status).toBe('active');
+      expect((await serverDB.select().from(topics).where(eq(topics.id, foreignId)))[0].status).toBe(
+        'active',
+      );
+    });
+
     it('should update metadata on a topic with no existing metadata', async () => {
       const topicId = 'metadata-test-1';
       await serverDB.insert(topics).values({ userId, id: topicId, title: 'Test' });

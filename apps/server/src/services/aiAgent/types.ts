@@ -223,6 +223,13 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * relays on (`channelOperationId`), which a client never can.
    */
   llmExecutor?: AgentRunLlmExecutor;
+  /**
+   * Explicit server-only opt-in for an unattended topic run to surface in Inbox.
+   * Set running atomically with its operation marker before dispatch; existing
+   * terminal settlement then projects done to unread and errors to active.
+   * Never inferred from trigger or accepted from client/API parameters.
+   */
+  markTopicRunning?: boolean;
   /** Maximum steps for the agent operation */
   maxSteps?: number;
   /**

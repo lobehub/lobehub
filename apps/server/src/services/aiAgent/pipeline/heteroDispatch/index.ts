@@ -42,7 +42,7 @@ const log = debug('lobe-server:ai-agent-service');
  * Always returns a terminal {@link ExecAgentResult} — the caller's `execAgent`
  * returns it directly and never continues to the normal-agent stages.
  */
-export const dispatchHeteroAgent = async (
+const dispatchHeteroAgentImpl = async (
   deps: HeteroDispatchDeps,
   ctx: ExecRunContext,
   input: HeteroDispatchInput,
@@ -278,12 +278,12 @@ export const dispatchHeteroAgent = async (
     // while retaining the previous operation's displayed configuration.
     // Task drawer follow-ups can omit taskId; receipt ownership is independent
     // of Task lifecycle association, while isolated children keep the root receipt.
-    await traceHeteroStage('running_marker', () =>
-      deps.topicModel.updateMetadata(topicId, {
-        heteroRuntimeConfig: runtimeConfig,
-        runningOperation: childOperation,
-      }),
-    );
+    await traceHeteroStage('running_marker', () => {
+      const metadata = { heteroRuntimeConfig: runtimeConfig, runningOperation: childOperation };
+      return input.markTopicRunning && !appContext?.threadId
+        ? deps.topicModel.updateMetadata(topicId, metadata, { status: 'running' })
+        : deps.topicModel.updateMetadata(topicId, metadata);
+    });
   }
 
   // Always persist operation metadata (userId/workspaceId) to the state
@@ -464,4 +464,36 @@ export const dispatchHeteroAgent = async (
     topicId,
     userMessageId: userMessageId ?? parentMessageId ?? '',
   };
+};
+
+/** Only opted-in unattended starts add startup rollback; other producers retain their behavior. */
+export const dispatchHeteroAgent = async (
+  deps: HeteroDispatchDeps,
+  ctx: ExecRunContext,
+  input: HeteroDispatchInput,
+): Promise<ExecAgentResult> => {
+  if (!input.markTopicRunning) return dispatchHeteroAgentImpl(deps, ctx, input);
+  let createdOperationId: string | undefined;
+  const settleFailedStart = async () => {
+    if (!createdOperationId) return;
+    try {
+      await deps.topicModel.settleRunningOperation(ctx.topicId, createdOperationId, 'active');
+    } catch (error) {
+      console.error('[heteroDispatch] Failed to settle an opted-in startup', error);
+    }
+  };
+  try {
+    const result = await dispatchHeteroAgentImpl(deps, ctx, {
+      ...input,
+      onOperationCreated: async (operationId) => {
+        createdOperationId = operationId;
+        await input.onOperationCreated?.(operationId);
+      },
+    });
+    if (result.error || !result.success) await settleFailedStart();
+    return result;
+  } catch (error) {
+    await settleFailedStart();
+    throw error;
+  }
 };
