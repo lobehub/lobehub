@@ -121,16 +121,14 @@ beforeEach(async () => {
     { id: projectTopicId, projectId, title: '需求讨论', userId },
     { id: looseTopicId, title: '随便聊聊', userId },
   ]);
-  await db
-    .insert(files)
-    .values({
-      fileType: 'image/png',
-      id: 'file_shot',
-      name: 'shot.png',
-      size: 1,
-      url: 's',
-      userId,
-    });
+  await db.insert(files).values({
+    fileType: 'image/png',
+    id: 'file_shot',
+    name: 'shot.png',
+    size: 1,
+    url: 's',
+    userId,
+  });
   await registerCanvas('cvs_a', '空项目');
   await registerCanvas('cvs_b', '接入资料');
 });
@@ -328,6 +326,85 @@ describe('ArtboardService.update and read', () => {
     expect(next.content.boards.map((b) => b.rect.x)).toEqual([-720, 720]);
   });
 
+  it('keeps sibling page positions when a board lands above, changes group, or leaves', async () => {
+    const { artboard } = await createJourney();
+    const [empty, ingest] = artboard.content.boards;
+    const journey = artboard.content.groups[0];
+
+    const above = await service().update(artboard.id, 1, [
+      {
+        board: {
+          groupId: journey.id,
+          source: { canvasId: 'cvs_a', kind: 'canvas' },
+          title: 'top',
+          x: 0,
+          y: -500,
+        },
+        ref: 'top',
+        type: 'addBoard',
+      },
+      { group: { kind: 'other', title: '其他' }, ref: 'x', type: 'addGroup' },
+    ]);
+    const at = (item: typeof above, id: string) =>
+      item.artboard.content.boards.find((b) => b.id === id)!.rect;
+    expect(above.artboard.content.groups[0].rect).toMatchObject({ x: -48, y: -644 });
+    expect(at(above, empty.id)).toMatchObject({ x: 0, y: 0 });
+    expect(at(above, ingest.id)).toMatchObject({ x: 720, y: 0 });
+
+    const other = above.artboard.content.groups[1];
+    expect(other.rect).toEqual({ h: 0, w: 0, x: 0, y: 0 });
+    const top = above.artboard.content.boards.find((b) => b.title === 'top')!;
+    const moved = await service().update(artboard.id, 2, [
+      { id: top.id, patch: { groupId: other.id }, type: 'updateBoard' },
+    ]);
+    expect(moved.artboard.content.groups[0].rect).toMatchObject({ x: -48, y: -144 });
+    expect(moved.artboard.content.groups[1].rect).toMatchObject({ x: -48, y: -644 });
+    expect(at(moved, top.id)).toMatchObject({ x: 0, y: -500 });
+    expect(at(moved, ingest.id)).toMatchObject({ x: 720, y: 0 });
+
+    const emptied = await service().update(artboard.id, 3, [{ id: top.id, type: 'removeBoard' }]);
+    expect(emptied.artboard.content.groups[1].rect).toEqual({ h: 0, w: 0, x: 0, y: 0 });
+  });
+
+  it('hides a board from another account on every entry point', async () => {
+    const { artboard } = await createJourney(optionOps());
+    const [round] = artboard.content.rounds;
+    const [board] = artboard.content.boards;
+    const thread = await service().addComment(artboard.id, { clientId: 'c1', content: 'hi' });
+    await db.insert(users).values({ id: 'artboard_stranger' });
+    const stranger = new ArtboardService(db, 'artboard_stranger', undefined, { sources });
+
+    try {
+      const attempts = [
+        () => stranger.read(artboard.id),
+        () => stranger.get(artboard.id),
+        () => stranger.update(artboard.id, 1, [{ id: board.id, type: 'removeBoard' }]),
+        () => stranger.chooseBoard(artboard.id, round.id, board.id),
+        () => stranger.submitRound(artboard.id, round.id),
+        () => stranger.listComments(artboard.id),
+        () => stranger.addComment(artboard.id, { clientId: 'c2', content: 'x' }),
+        () => stranger.replyComment(thread.id, { clientId: 'c3', content: 'x' }),
+        () => stranger.resolveComment(thread.id),
+        () => stranger.finalize(artboard.id, 1),
+      ];
+      for (const attempt of attempts) expect((await errorOf(attempt())).code).toBe('not_found');
+    } finally {
+      await db.delete(users).where(eq(users.id, 'artboard_stranger'));
+    }
+  });
+
+  it('refuses a comment or reply with no text', async () => {
+    const { artboard } = await createJourney();
+    const thread = await service().addComment(artboard.id, { clientId: 'c1', content: 'hi' });
+
+    const blank = await errorOf(
+      service().addComment(artboard.id, { clientId: 'c2', content: '  ' }),
+    );
+    expect(blank.code).toBe('invalid');
+    const reply = await errorOf(service().replyComment(thread.id, { content: '' }));
+    expect(reply.code).toBe('invalid');
+  });
+
   it('shows no source for a board whose Canvas went to the trash', async () => {
     const { artboard } = await createJourney();
     const canvas = await new WorkModel(db, userId).findCanvas('cvs_a');
@@ -420,6 +497,43 @@ describe('ArtboardService rounds', () => {
       service().update(artboard.id, 1, [{ id: options[1].id, type: 'removeBoard' }]),
     );
     expect(removal.code).toBe('locked');
+  });
+
+  it('keeps a draft pick from the agent-facing read until the round is submitted', async () => {
+    const { artboard } = await createJourney(optionOps());
+    const [round] = artboard.content.rounds;
+    const options = artboard.content.boards.filter((b) => b.roundId === round.id);
+    await service().chooseBoard(artboard.id, round.id, options[1].id);
+
+    expect((await service().read(artboard.id)).artboard.content.rounds[0].chosenBoardId).toBeNull();
+    expect((await service().get(artboard.id)).artboard.content.rounds[0].chosenBoardId).toBe(
+      options[1].id,
+    );
+
+    await service().submitRound(artboard.id, round.id);
+    expect((await service().read(artboard.id)).artboard.content.rounds[0].chosenBoardId).toBe(
+      options[1].id,
+    );
+  });
+
+  it('answers not_found for an id that is not a row id', async () => {
+    const { artboard } = await createJourney(optionOps());
+    const [round] = artboard.content.rounds;
+
+    const pick = await errorOf(service().chooseBoard(artboard.id, round.id, 'login'));
+    expect(pick.code).toBe('not_found');
+    const submit = await errorOf(service().submitRound(artboard.id, 'round-1'));
+    expect(submit.code).toBe('not_found');
+    const reply = await errorOf(
+      service().replyComment('thread-1', { clientId: 'c1', content: 'ok' }),
+    );
+    expect(reply.code).toBe('not_found');
+    const resolve = await errorOf(service().resolveComment('thread-1'));
+    expect(resolve.code).toBe('not_found');
+    const comment = await errorOf(
+      service().addComment(artboard.id, { boardId: 'login', clientId: 'c2', content: 'hi' }),
+    );
+    expect(comment.code).toBe('not_found');
   });
 
   it('refuses a round of another board', async () => {

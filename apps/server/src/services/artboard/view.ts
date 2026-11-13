@@ -129,3 +129,13 @@ export const toArtboardContent = (
     })),
   };
 };
+
+export const withoutDraftPicks = (artboard: ArtboardItem): ArtboardItem => ({
+  ...artboard,
+  content: {
+    ...artboard.content,
+    rounds: artboard.content.rounds.map((round) =>
+      round.status === 'open' ? { ...round, chosenBoardId: null } : round,
+    ),
+  },
+});

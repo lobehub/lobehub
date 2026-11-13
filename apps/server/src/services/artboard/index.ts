@@ -21,7 +21,13 @@ import { WorkModel } from '@/database/models/work';
 import type { LobeChatDatabase } from '@/database/type';
 import { TaskService } from '@/server/services/task';
 
-import { artboardConflict, ArtboardServiceError, guardArtboard } from './errors';
+import {
+  artboardConflict,
+  ArtboardServiceError,
+  guardArtboard,
+  requireRowId,
+  requireText,
+} from './errors';
 import { buildJourneyFlow } from './finalize';
 import { applyArtboardOps } from './ops';
 import {
@@ -36,6 +42,7 @@ import {
   toArtboardItem,
   toCommentThreadView,
   toCommentView,
+  withoutDraftPicks,
 } from './view';
 
 export type { ArtboardServiceErrorCode } from './errors';
@@ -225,8 +232,7 @@ export class ArtboardService {
     };
   }
 
-  // The task is created after the board so a refused op leaves no task behind; a board whose
-  // task could not be created is removed again.
+  // The task is created after the board so a refused op leaves no task behind.
   private async createTaskFor(
     row: ArtboardRow,
     input: ArtboardCreateInput,
@@ -263,7 +269,7 @@ export class ArtboardService {
   }
 
   async read(id: string): Promise<ArtboardReadResult> {
-    const artboard = await this.item(await this.require(id));
+    const artboard = withoutDraftPicks(await this.item(await this.require(id)));
     const sourced = artboard.content.boards.flatMap((board) =>
       board.source?.kind === 'canvas' ? [{ id: board.id, source: board.source }] : [],
     );
@@ -339,6 +345,7 @@ export class ArtboardService {
 
   async chooseBoard(id: string, roundId: string, boardId: string) {
     await this.requireRound(id, roundId);
+    requireRowId(boardId, 'board');
     await guardArtboard(() => this.structure.chooseBoard(roundId, boardId));
     return { artboard: await this.item(await this.require(id)) };
   }
@@ -378,6 +385,8 @@ export class ArtboardService {
     authorAgentId: string | null,
   ): Promise<ArtboardCommentThreadView> {
     await this.require(id);
+    requireText(input.content);
+    if (input.boardId) requireRowId(input.boardId, 'board');
     const pageId = input.pageId ?? (await this.anchorPageId(id, input));
     const root = await guardArtboard(() =>
       this.comments.create(id, {
@@ -405,6 +414,8 @@ export class ArtboardService {
     commentId: string,
     input: { clientId?: string; content: string },
   ): Promise<ArtboardCommentView> {
+    requireRowId(commentId, 'comment');
+    requireText(input.content);
     const reply = await guardArtboard(() =>
       this.comments.reply(commentId, {
         authorAgentId: input.clientId ? null : this.agentId,
@@ -416,6 +427,7 @@ export class ArtboardService {
   }
 
   private async settleComment(commentId: string, resolved: boolean) {
+    requireRowId(commentId, 'comment');
     const root = await guardArtboard(() =>
       resolved ? this.comments.resolve(commentId) : this.comments.reopen(commentId),
     );
@@ -460,7 +472,6 @@ export class ArtboardService {
           flow.definition,
         );
 
-        // Written after publish: publishing deletes and reinserts the flow's nodes and edges.
         const structure = this.structure.withTransaction(tx);
         for (const [boardId, acceptanceFlowNodeId] of Object.entries(flow.boardNodeIds))
           await structure.updateBoard(boardId, { acceptanceFlowNodeId });

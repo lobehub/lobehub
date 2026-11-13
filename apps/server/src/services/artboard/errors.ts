@@ -68,3 +68,13 @@ export const guardArtboard = async <T>(action: () => Promise<T>): Promise<T> => 
     throw toArtboardServiceError(error);
   }
 };
+
+const ROW_UUID = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
+
+export const requireRowId = (id: string, what: string) => {
+  if (!ROW_UUID.test(id)) throw new ArtboardServiceError('not_found', `No ${what} ${id}.`);
+};
+
+export const requireText = (content: string) => {
+  if (!content.trim()) throw new ArtboardServiceError('invalid', 'A comment needs some text.');
+};

@@ -133,7 +133,6 @@ export interface ArtboardContent {
   edges: ArtboardEdgeView[];
   groups: ArtboardGroupView[];
   pages: ArtboardPageView[];
-  // Unresolved threads an agent opened; they block finalize.
   questions: ArtboardQuestionView[];
   rounds: ArtboardRoundView[];
 }
