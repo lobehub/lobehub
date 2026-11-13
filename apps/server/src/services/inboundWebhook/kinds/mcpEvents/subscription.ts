@@ -125,6 +125,11 @@ export async function maintainMcpSubscription(ctx: InboundWebhookContext): Promi
       );
       await connectorModel.updateStatus(ctx.row.connectorId, ConnectorStatus.error);
     }
+    // The server ended this subscription, and only an explicit check reaches here for it. A
+    // failed check leaves it ended: relabelling it "reconnect needed" made the same revocation
+    // end in two different states depending on whether the check or the termination notice came
+    // first, and scheduling retries would resubscribe something the server told us to stop.
+    if (ctx.row.status === 'terminated') return;
     const failures = ctx.row.maintenanceFailures + 1;
     await ctx.model.update(ctx.row.id, {
       lastError: authFailure ? 'auth' : 'server_unreachable',

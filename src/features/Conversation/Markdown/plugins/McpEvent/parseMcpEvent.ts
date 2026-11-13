@@ -140,5 +140,7 @@ export const formatEventTime = (timestamp: string | undefined, now: Dayjs = dayj
   if (!timestamp) return undefined;
   const time = dayjs(timestamp);
   if (!time.isValid()) return timestamp;
-  return time.format(time.isSame(now, 'day') ? 'HH:mm:ss' : 'YYYY-MM-DD HH:mm');
+  // Seconds stay on other days too: events of one burst are seconds apart, and a card read the
+  // next day would otherwise show the same minute on every row.
+  return time.format(time.isSame(now, 'day') ? 'HH:mm:ss' : 'YYYY-MM-DD HH:mm:ss');
 };
