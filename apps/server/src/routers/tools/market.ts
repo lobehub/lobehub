@@ -179,19 +179,72 @@ export interface ExportAndUploadFileResult {
 }
 
 // ============================== Sandbox Handler ==============================
+type SandboxHandlerCtx = {
+  fileService: FileService;
+  marketAccessToken?: string;
+  marketService: MarketService;
+  marketUserInfo?: TrustedClientUserInfo;
+  serverDB: any;
+  userId: string;
+  workspaceId?: string | null;
+};
+
+/**
+ * The sandbox session a topic's client-side tool calls run in. Every procedure
+ * that reaches the sandbox has to open it through here: the session binds to
+ * the mode, directory and claim of its calls, so a call that opens it bare runs
+ * in a different, disposable sandbox from its siblings — `exportFile` did, and
+ * could not see a file `runCommand` had just written to `/mnt/workspace`.
+ */
+const createTopicSandboxService = async (ctx: SandboxHandlerCtx, topicId: string) => {
+  const userId = ctx.userId;
+
+  // The persistent workspace, resolved the same way the server runtimes do.
+  // This route is the client-side executor's way into the sandbox — the one a
+  // conversation uses when its tool calls are not dispatched server-side —
+  // and it used to open a session with no mode, no directory and no claim.
+  // Every run through here was therefore ephemeral: the composer showed the
+  // instance the topic had chosen while `pwd` answered `/workspace`, and
+  // whatever the run wrote went nowhere the file browser reads.
+  const sandbox = await resolveSandboxSessionConfig({
+    // Direct client call, so the caller is always acting as themselves.
+    isShareVisitorRun: false,
+    serverDB: ctx.serverDB,
+    topicId,
+    userId,
+    workspaceId: ctx.workspaceId ?? undefined,
+  });
+
+  // The claim has to ride on the identity this call is signed with, not just
+  // on the request: the execution plane reads the entitlement off the trusted
+  // client token, and `ctx.marketService` was built before it was known.
+  const marketService = sandbox.claim
+    ? new MarketService({
+        accessToken: ctx.marketAccessToken,
+        userInfo: { ...ctx.marketUserInfo, sandboxStorage: sandbox.claim, userId: ctx.userId },
+      })
+    : ctx.marketService;
+
+  return createSandboxService({
+    fileService: ctx.fileService,
+    marketService,
+    sandboxCwd: sandbox.cwd,
+    sandboxInitialization: sandbox.initialization,
+    sandboxInstanceId: sandbox.environment,
+    sandboxMode: sandbox.mode,
+    sandboxSpecification: sandbox.specification,
+    sandboxWorkingDir: sandbox.workingDir,
+    serverDB: ctx.serverDB,
+    topicId,
+    userId,
+  });
+};
+
 const execInSandboxHandler = async ({
   input,
   ctx,
 }: {
-  ctx: {
-    fileService: FileService;
-    marketAccessToken?: string;
-    marketService: MarketService;
-    marketUserInfo?: TrustedClientUserInfo;
-    serverDB: any;
-    userId: string;
-    workspaceId?: string | null;
-  };
+  ctx: SandboxHandlerCtx;
   input: ExecInSandboxInput;
 }): Promise<CallToolResult> => {
   const { toolName, params, topicId } = input;
@@ -277,45 +330,7 @@ const execInSandboxHandler = async ({
       }
     }
 
-    // The persistent workspace, resolved the same way the server runtimes do.
-    // This route is the client-side executor's way into the sandbox — the one a
-    // conversation uses when its tool calls are not dispatched server-side —
-    // and it used to open a session with no mode, no directory and no claim.
-    // Every run through here was therefore ephemeral: the composer showed the
-    // instance the topic had chosen while `pwd` answered `/workspace`, and
-    // whatever the run wrote went nowhere the file browser reads.
-    const sandbox = await resolveSandboxSessionConfig({
-      // Direct client call, so the caller is always acting as themselves.
-      isShareVisitorRun: false,
-      serverDB: ctx.serverDB,
-      topicId,
-      userId,
-      workspaceId: ctx.workspaceId ?? undefined,
-    });
-
-    // The claim has to ride on the identity this call is signed with, not just
-    // on the request: the execution plane reads the entitlement off the trusted
-    // client token, and `ctx.marketService` was built before it was known.
-    const marketService = sandbox.claim
-      ? new MarketService({
-          accessToken: ctx.marketAccessToken,
-          userInfo: { ...ctx.marketUserInfo, sandboxStorage: sandbox.claim, userId: ctx.userId },
-        })
-      : ctx.marketService;
-
-    const sandboxService = createSandboxService({
-      fileService: ctx.fileService,
-      marketService,
-      sandboxCwd: sandbox.cwd,
-      sandboxInitialization: sandbox.initialization,
-      sandboxInstanceId: sandbox.environment,
-      sandboxMode: sandbox.mode,
-      sandboxSpecification: sandbox.specification,
-      sandboxWorkingDir: sandbox.workingDir,
-      serverDB: ctx.serverDB,
-      topicId,
-      userId,
-    });
+    const sandboxService = await createTopicSandboxService(ctx, topicId);
 
     const response = await sandboxService.callTool(toolName, enhancedParams);
 
@@ -746,12 +761,7 @@ export const marketRouter = router({
       log('Exporting and uploading file: %s from path: %s in topic: %s', filename, path, topicId);
 
       try {
-        const sandboxService = createSandboxService({
-          fileService: ctx.fileService,
-          marketService: ctx.marketService,
-          topicId,
-          userId: ctx.userId,
-        });
+        const sandboxService = await createTopicSandboxService(ctx, topicId);
         const result = await sandboxService.exportAndUploadFile(path, filename);
 
         if (!result.success && isSandboxAuthError(result.error)) {
