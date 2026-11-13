@@ -218,14 +218,19 @@ export class InboundWebhookModel {
     return row ? validateView(row) : undefined;
   };
 
-  /** Clear only delivery failures, using current database values so concurrent auth/runtime errors survive. */
+  /**
+   * Record a real event delivery. Control envelopes (gap, terminated) are not events: they
+   * neither move "last event" nor prove that event delivery works.
+   *
+   * Clears only delivery failures, using current database values so concurrent auth/runtime
+   * errors survive.
+   */
   recordDelivery = async (id: string, isEvent: boolean): Promise<void> => {
-    const recovered = isEvent
-      ? and(
-          eq(inboundWebhooks.status, 'error'),
-          inArray(inboundWebhooks.lastError, [...INBOUND_WEBHOOK_DELIVERY_ERRORS]),
-        )
-      : sql`false`;
+    if (!isEvent) return;
+    const recovered = and(
+      eq(inboundWebhooks.status, 'error'),
+      inArray(inboundWebhooks.lastError, [...INBOUND_WEBHOOK_DELIVERY_ERRORS]),
+    );
     await this.db
       .update(inboundWebhooks)
       .set({

@@ -576,6 +576,7 @@ export const execAgentTurn = async (
           operationTaskId,
           // The hetero run settles its fee on `heteroFinish` under this id, so the
           // fee moves to it as soon as the durable operation row exists.
+          markTopicRunning: params.markTopicRunning,
           onOperationCreated: async (operationId) => {
             await bindRunFee(runFee, deps.userId, operationId);
             await params.onOperationCreated?.(operationId);
@@ -800,6 +801,7 @@ export const execAgentTurn = async (
         approvalSourceToolMessageIds,
         autoStart,
         onOperationCreated: params.onOperationCreated,
+        markTopicRunning: params.markTopicRunning,
         // From here the run's completion releases the slot and settles the
         // fee; a run that never started (failed, or created without
         // auto-start) gives both back.

@@ -10,12 +10,18 @@ import { connectorRouter } from '../connector';
 
 const mocks = vi.hoisted(() => ({
   connectedAccountsDelete: vi.fn(),
+  refreshSubscriptions: vi.fn(),
+  removeSubscriptions: vi.fn(),
 }));
 
 // `vi.mock` is hoisted by vitest's transformer above all imports at runtime,
 // so the relative import order doesn't matter functionally — the mocks below
 // are still active when the router module is evaluated. They live below the
 // imports to satisfy `import-x/first` without disabling the rule.
+vi.mock('@/server/services/inboundWebhook/lifecycle', () => ({
+  refreshByConnector: mocks.refreshSubscriptions,
+  removeByConnector: mocks.removeSubscriptions,
+}));
 vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
 vi.mock('@/database/models/connector', () => ({ ConnectorModel: vi.fn() }));
 vi.mock('@/database/models/connectorTool', () => ({ ConnectorToolModel: vi.fn() }));
@@ -394,6 +400,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
     };
     pluginModelMock = { delete: vi.fn().mockResolvedValue(undefined) };
     mocks.connectedAccountsDelete.mockResolvedValue(undefined);
+    mocks.removeSubscriptions.mockResolvedValue(undefined);
     vi.mocked(ConnectorModel).mockImplementation(function () {
       return connectorModelMock;
     });
@@ -430,6 +437,37 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
     expect(agentModelMock.getAgentConfigById).toHaveBeenCalledWith('agent-1');
     // 'gmail' removed, 'notion' preserved.
     expect(agentModelMock.update).toHaveBeenCalledWith('agent-1', { plugins: ['notion'] });
+  });
+
+  it('waits for remote subscription cleanup before deleting the connector foreign key', async () => {
+    connectorModelMock.findById.mockResolvedValueOnce({
+      agentId: null,
+      id: DELETE_ID,
+      identifier: 'linear',
+      userId: 'user_test',
+    });
+    let finishCleanup!: () => void;
+    mocks.removeSubscriptions.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishCleanup = resolve;
+      }),
+    );
+    const deleting = caller().delete({ id: DELETE_ID });
+    await vi.waitFor(() =>
+      expect(mocks.removeSubscriptions).toHaveBeenCalledWith(
+        {},
+        { userId: 'user_test', workspaceId: undefined },
+        DELETE_ID,
+      ),
+    );
+    expect(connectorModelMock.delete).not.toHaveBeenCalled();
+
+    finishCleanup();
+    await deleting;
+    expect(connectorModelMock.delete).toHaveBeenCalledWith(DELETE_ID);
+    expect(mocks.removeSubscriptions.mock.invocationCallOrder[0]).toBeLessThan(
+      connectorModelMock.delete.mock.invocationCallOrder[0],
+    );
   });
 
   it('leaves the agent config untouched for a base (non-agent) connector', async () => {
@@ -516,6 +554,7 @@ describe('connectorRouter.delete — agent connector unpins from the owning agen
 
     expect(connectorModelMock.delete).not.toHaveBeenCalled();
     expect(agentModelMock.update).not.toHaveBeenCalled();
+    expect(mocks.removeSubscriptions).not.toHaveBeenCalled();
   });
 });
 

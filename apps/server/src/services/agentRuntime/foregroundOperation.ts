@@ -19,6 +19,7 @@ export const BACKGROUND_OPERATION_TRIGGERS: ReadonlySet<string> = new Set<string
   RequestTrigger.Openapi,
   RequestTrigger.Scheduled,
   RequestTrigger.Scm,
+  RequestTrigger.McpEvent,
   RequestTrigger.Task,
   RequestTrigger.TaskCallback,
   RequestTrigger.Verify,

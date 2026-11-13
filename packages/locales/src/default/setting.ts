@@ -5203,4 +5203,67 @@ When I am ___, I need ___
   'taskLabels.tabs.task': 'Task labels',
   'taskLabels.usage': '{{count}} tasks',
   'taskLabels.actions.more': 'More actions',
+  'tab.automations': 'Automations',
+  'settingsSearch.tabKeywords.automations':
+    'automations, events, event subscriptions, triggers, webhooks',
+  'automations.desc':
+    'Connector events your agents subscribed to. Each event runs the agent in its topic and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
+  'automations.descWorkspace':
+    'Connector events the agents in this workspace subscribed to. Each event runs the agent in its topic and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery. Only the member who approved a subscription or a workspace admin can check or delete it.',
+  'automations.columns.subscription': 'Subscription',
+  'automations.columns.status': 'Status',
+  'automations.columns.target': 'Agent & topic',
+  'automations.columns.lastDelivery': 'Last event',
+  'automations.source.moreArgs': '{{text}} +{{count}}',
+  'automations.untitledTopic': 'Untitled topic',
+  'automations.lastDelivery.never': 'No events yet',
+  'automations.status.active': 'Active',
+  'automations.status.reconnect': 'Reconnect needed',
+  'automations.status.deliveryError': 'Delivery failing',
+  'automations.status.terminated': 'Ended',
+  'automations.error.auth': "The connector's authorization has expired.",
+  'automations.error.connection_refused':
+    'The connector could not connect to LobeHub to deliver events.',
+  'automations.error.timeout': 'The connector timed out delivering events to LobeHub.',
+  'automations.error.tls_error': 'The connector could not open a secure connection to LobeHub.',
+  'automations.error.http_4xx': "LobeHub rejected the connector's deliveries.",
+  'automations.error.http_5xx': "LobeHub failed while receiving the connector's deliveries.",
+  'automations.error.challenge_failed':
+    "The connector could not verify LobeHub's callback address.",
+  'automations.error.delivery_suspended':
+    'The connector had paused delivery after repeated failures and has been asked to resume. This clears when the next event arrives.',
+  'automations.error.wake_cap': 'Events arrived too often, so some runs this hour were skipped.',
+  'automations.error.insufficient_budget':
+    'Not enough credits to run the agent. Later events run once you top up.',
+  'automations.error.access_revoked':
+    'Access was revoked; the subscription ended. Delete it and ask the agent to resubscribe.',
+  'automations.error.event_unavailable':
+    'The connector no longer offers this event, so the subscription ended.',
+  'automations.error.server_unreachable': "Could not reach the connector's server.",
+  'automations.error.unknown':
+    'The subscription reported an error without details. Check to retry.',
+  'automations.error.terminated': 'The connector ended this subscription.',
+  'automations.remedy.reconnect': 'Reconnect',
+  'automations.actions.check': 'Check',
+  'automations.actions.checkTooltip':
+    'Confirm with the connector that events are still delivered; paused delivery resumes',
+  'automations.actions.delete': 'Delete',
+  'automations.actions.noPermission':
+    'Only the member who approved it or a workspace admin can do this',
+  'automations.check.healthy': 'Subscription is working',
+  'automations.check.problem': 'Checked: {{reason}}',
+  'automations.check.tooSoon': 'Just checked. Try again in 30 seconds',
+  'automations.check.notFound': 'This subscription no longer exists',
+  'automations.check.unsupported': "This automation can't be checked",
+  'automations.check.failed': "Couldn't finish the check. Try again",
+  'automations.delete.title': 'Delete this subscription?',
+  'automations.delete.content':
+    '{{event}} events from {{connector}} will no longer run "{{agent}}". To get them again, ask the agent to subscribe in a conversation.',
+  'automations.delete.ok': 'Delete',
+  'automations.delete.cancel': 'Cancel',
+  'automations.delete.failed': "Couldn't delete the subscription. Try again",
+  'automations.delete.alreadyGone': 'This subscription was already removed',
+  'automations.empty.title': 'No automations yet',
+  'automations.empty.desc':
+    'Ask an agent to keep an eye on a connector for you, like "Tell me when CI fails on this PR". Subscriptions you approve show up here.',
 };

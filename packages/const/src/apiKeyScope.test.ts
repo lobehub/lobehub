@@ -252,6 +252,19 @@ describe('requiredApiKeyScopeForTrpc', () => {
     });
   });
 
+  it('categorizes credential-backed webhook management as blocked for restricted keys', () => {
+    expect(TRPC_NAMESPACE_API_KEY_RULES.inboundWebhook).toBe('blocked');
+    for (const [procedure, type] of [
+      ['list', 'query'],
+      ['check', 'mutation'],
+      ['delete', 'mutation'],
+    ] as const) {
+      expect(requiredApiKeyScopeForTrpc(`inboundWebhook.${procedure}`, type)).toEqual({
+        blocked: true,
+      });
+    }
+  });
+
   it('keeps bootstrap namespaces open', () => {
     expect(requiredApiKeyScopeForTrpc('healthcheck', 'query')).toEqual({ open: true });
     expect(requiredApiKeyScopeForTrpc('config.getGlobalConfig', 'query')).toEqual({ open: true });

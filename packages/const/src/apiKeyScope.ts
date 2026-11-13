@@ -273,6 +273,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // whole-account backup import can overwrite credential-bearing settings,
   // provider/model config and agents
   importer: 'blocked',
+  // Checks and deletion use stored connector credentials to call external MCP servers.
+  inboundWebhook: 'blocked',
   klavis: 'blocked',
   knowledge: rw('knowledge:read', 'knowledge:write'),
   knowledgeBase: rw('knowledge:read', 'knowledge:write'),

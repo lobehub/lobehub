@@ -88,6 +88,8 @@ export type IFeatureFlagsState = {
    * that declare a `ui://` view render as plain results.
    */
   enableMcpApps: boolean | undefined;
+  /** MCP Events webhook subscriptions (`mcp_events`), off by default. */
+  enableMcpEvents: boolean | undefined;
   /**
    * Agent documents move into a dedicated knowledge base at runtime
    * (`agent_knowledge_space`). Off by default.

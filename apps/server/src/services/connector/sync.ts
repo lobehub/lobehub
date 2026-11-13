@@ -7,7 +7,7 @@ import { ConnectorMcpConnectionType, ConnectorStatus } from '@/database/schemas'
 import type { AuthConfig } from '@/libs/mcp';
 import { inferCrudType } from '@/libs/mcp/utils';
 import { mcpService } from '@/server/services/mcp';
-import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
+import { isMcpAppsEnabled, isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
 
 import { ensureFreshConnectorToken } from './tokens';
 
@@ -116,13 +116,27 @@ export const syncConnectorToolsById = async (
 
   const mcpParams = buildConnectorMcpParams(connector);
 
+  const mcpOptions = {
+    mcpApps: await isMcpAppsEnabled(ctx.userId),
+    mcpEvents: await isMcpEventsEnabled(ctx.userId),
+  };
   let rawTools: Awaited<ReturnType<typeof mcpService.listRawTools>>;
   try {
     // A server may list the tools only its views call just to a client
     // announcing MCP Apps; they are synced, and kept from the model, all the same
-    rawTools = await mcpService.listRawTools(mcpParams, {
-      mcpApps: await isMcpAppsEnabled(ctx.userId),
-    });
+    rawTools = await mcpService.listRawTools(mcpParams, mcpOptions);
+    if (mcpOptions.mcpEvents) {
+      const events = await mcpService.getEventsCapability(mcpParams, mcpOptions);
+      await ctx.connectorModel.update(connectorId, {
+        metadata: {
+          ...connector.metadata,
+          capabilities: {
+            ...connector.metadata?.capabilities,
+            events: { supported: events.supported },
+          },
+        },
+      });
+    }
   } catch (err) {
     await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.error);
     throw err;

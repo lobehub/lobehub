@@ -6,6 +6,7 @@ import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { McpEventsManifest } from '@lobechat/builtin-tool-mcp-events';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest } from '@lobechat/builtin-tool-message';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
@@ -110,6 +111,7 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
     // on-demand action half and only costs a schema when the agent owns an
     // account. Replaces the always-on mailbox slot the channel design paid.
     [AgentAccountManifest.identifier]: request.hasIdentityAccount ?? false,
+    [McpEventsManifest.identifier]: request.hasEventConnector ?? false,
     ...(request.isGroupSupervisor && enableAll(groupSupervisorToolIds)),
     // The device picker: only for device-capable targets behind a gateway,
     // and only while the run still has a device decision to make. The wall
@@ -121,6 +123,9 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
   // Walls follow the policy and the plan, with or without a gateway; the
   // Computer Use opt-in is a gateway device's own report.
   const excludedIdentifiers = new Set(request.disabledPluginIds ?? []);
+  // The flag and connector capability are authoritative, including explicit
+  // activation and custom-mode pinning. Browser runtimes omit this server fact.
+  if (!request.hasEventConnector) excludedIdentifiers.add(McpEventsManifest.identifier);
   if (device && !device.supportedTools?.includes(AuvManifest.identifier))
     excludedIdentifiers.add(AuvManifest.identifier);
   if (deviceAccess) {
@@ -141,6 +146,7 @@ export const resolveToolRules = (request: ToolRuleRequest): ResolvedToolRules =>
           : [
               ...defaultToolIds,
               ...(request.hasIdentityAccount ? [AgentAccountManifest.identifier] : []),
+              ...(request.hasEventConnector ? [McpEventsManifest.identifier] : []),
               ...(request.isGroupSupervisor ? groupSupervisorToolIds : []),
             ],
     deviceCapable,

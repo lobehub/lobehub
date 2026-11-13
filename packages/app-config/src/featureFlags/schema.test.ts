@@ -570,3 +570,13 @@ describe('mapFeatureFlagsEnvToState', () => {
     });
   });
 });
+
+describe('mcp_events flag', () => {
+  it('defaults off and only enables allowlisted users', () => {
+    expect(DEFAULT_FEATURE_FLAGS.mcp_events).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'u1').enableMcpEvents).toBe(false);
+    expect(mapFeatureFlagsEnvToState({ mcp_events: true }, 'u1').enableMcpEvents).toBe(true);
+    expect(mapFeatureFlagsEnvToState({ mcp_events: ['u1'] }, 'u1').enableMcpEvents).toBe(true);
+    expect(mapFeatureFlagsEnvToState({ mcp_events: ['u1'] }, 'u2').enableMcpEvents).toBe(false);
+  });
+});

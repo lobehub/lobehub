@@ -11,9 +11,15 @@ import {
   syncConnectorToolsById,
 } from './sync';
 
-vi.mock('@/server/services/mcp', () => ({ mcpService: { listRawTools: vi.fn() } }));
+vi.mock('@/server/services/mcp', () => ({
+  mcpService: { listRawTools: vi.fn(), getEventsCapability: vi.fn() },
+}));
 const mcpAppsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
-vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mcpAppsEnabled }));
+const mcpEventsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
+vi.mock('@/server/services/mcp/featureGate', () => ({
+  isMcpAppsEnabled: mcpAppsEnabled,
+  isMcpEventsEnabled: mcpEventsEnabled,
+}));
 vi.mock('./tokens', () => ({ ensureFreshConnectorToken: async (connector: unknown) => connector }));
 
 const httpConnector = (
@@ -244,7 +250,29 @@ describe('syncConnectorToolsById', () => {
       expect(mcpAppsEnabled).toHaveBeenCalledWith('user-1');
       expect(mcpService.listRawTools).toHaveBeenCalledWith(expect.anything(), {
         mcpApps: enabled,
+        mcpEvents: false,
       });
     },
   );
+});
+
+describe('events capability synchronization', () => {
+  it('persists server support without losing connector metadata', async () => {
+    mcpEventsEnabled.mockResolvedValueOnce(true);
+    vi.mocked(mcpService.listRawTools).mockResolvedValue([]);
+    vi.mocked(mcpService.getEventsCapability).mockResolvedValue({ supported: true });
+    const update = vi.fn();
+    await syncConnectorToolsById('c1', {
+      connectorModel: {
+        findById: async () => httpConnector(null, { description: 'keep', capabilities: {} }),
+        updateStatus: vi.fn(),
+        update,
+      } as any,
+      connectorToolModel: { upsertMany: vi.fn() } as any,
+      userId: 'events-user',
+    });
+    expect(update).toHaveBeenCalledWith('c1', {
+      metadata: { description: 'keep', capabilities: { events: { supported: true } } },
+    });
+  });
 });

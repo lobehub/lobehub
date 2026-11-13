@@ -18,3 +18,16 @@ export const isMcpAppsEnabled = async (userId?: string | null): Promise<boolean>
     return false;
   }
 };
+
+/** An unreadable runtime flag is off, matching MCP Apps. */
+export const isMcpEventsEnabled = async (userId?: string | null): Promise<boolean> => {
+  try {
+    return (
+      (await getServerFeatureFlagsStateFromRuntimeConfig(userId ?? undefined)).enableMcpEvents ===
+      true
+    );
+  } catch (error) {
+    console.error('[MCPEvents] Failed to read the mcp_events feature flag:', error);
+    return false;
+  }
+};

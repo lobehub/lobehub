@@ -32,31 +32,32 @@ tags:
   关键字，你需要手动控制所有的功能标志（否则它们会采用对应的默认值）。
 </Callout>
 
-| 配置项 | 解释 | 默认值 |
-| --- | --- | --- |
-| `check_updates` | 允许检查更新。 | 开启 |
-| `provider_settings` | 控制模型供应商设置的显示。 | 开启 |
-| `openai_api_key` | 允许用户自定义 OpenAI API Key。 | 开启 |
-| `openai_proxy_url` | 允许用户自定义 OpenAI 代理 URL。 | 开启 |
-| `api_key_manage` | 控制 API 密钥管理页面 (/profile/apikey) 的访问。 | 关闭 |
-| `agent_share` | 控制新建或重新启用交互式助理分享；还需部署支持，详见下文边界。 | 关闭 |
-| `agent_llm_relay` | 对只有用户设备能访问的模型服务商（本地 Ollama / LM Studio、私网地址），由发起运行的客户端执行单次模型调用，助理循环仍在服务端运行；这类运行需要有打开的 LobeHub 客户端。 | 关闭 |
-| `agent_deferred_init` | 普通聊天发送在消息落库后立即返回，工具发现和上下文组装放到第一个助理步骤中执行，发送不再等待。需要队列模式的助理运行时。 | 关闭 |
-| `agent_deferred_hetero_dispatch` | 普通聊天发给在线设备上的异构助理（Claude Code、Codex 等）时，不等设备接收任务就立即返回；派发在响应后执行，失败会显示在助理消息上。 | 关闭 |
-| `dashboard` | 看板：首页与项目看板页面、监控组件侧边栏、对话内的组件预览，以及用于搭建监控组件的 `builtin-dashboard` 助理工具。关闭时以上入口均隐藏，组件与看板相关接口返回 FORBIDDEN；已发布的组件仍按计划刷新。 | 关闭 |
-| `mcp_apps` | MCP Apps：MCP 服务器为工具结果声明了交互页面（`ui://`）时，在对话中渲染该页面（服务器提供的 HTML，运行在沙箱 iframe 中）。关闭时按普通工具结果显示，服务端也不再向 MCP 服务器声明支持 MCP Apps。 | 关闭 |
-| `edit_agent` | 允许用户编辑助手。 | 开启 |
-| `ai_image` | 控制 AI 图像生成功能和页面 (/image)。 | 开启 |
-| `speech_to_text` | 启用语音转文本功能。 | 开启 |
-| `token_counter` | 保留用于令牌计数器显示。 | 开启 |
-| `welcome_suggest` | 显示欢迎建议。 | 开启 |
-| `changelog` | 控制更新日志弹窗 / 页面的显示。 | 开启 |
-| `market` | 启用助手市场功能。 | 开启 |
-| `knowledge_base` | 启用知识库功能。 | 开启 |
-| `rag_eval` | 控制 RAG 评估功能 (/repos/\[id]/evals)。 | 关闭 |
-| `cloud_promotion` | 控制用户菜单中云服务推广链接的显示。 | 关闭 |
-| `commercial_hide_github` | 隐藏设置页面底部的 GitHub 相关链接（需要商业授权）。 | 关闭 |
-| `commercial_hide_docs` | 隐藏文档和帮助菜单，包括更新日志、文档和反馈（需要商业授权）。 | 关闭 |
+| 配置项                              | 解释                                                                                                                      | 默认值 |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --- |
+| `check_updates`                  | 允许检查更新。                                                                                                                 | 开启  |
+| `provider_settings`              | 控制模型供应商设置的显示。                                                                                                           | 开启  |
+| `openai_api_key`                 | 允许用户自定义 OpenAI API Key。                                                                                                 | 开启  |
+| `openai_proxy_url`               | 允许用户自定义 OpenAI 代理 URL。                                                                                                  | 开启  |
+| `api_key_manage`                 | 控制 API 密钥管理页面 (/profile/apikey) 的访问。                                                                                    | 关闭  |
+| `agent_share`                    | 控制新建或重新启用交互式助理分享；还需部署支持，详见下文边界。                                                                                         | 关闭  |
+| `agent_llm_relay`                | 对只有用户设备能访问的模型服务商（本地 Ollama / LM Studio、私网地址），由发起运行的客户端执行单次模型调用，助理循环仍在服务端运行；这类运行需要有打开的 LobeHub 客户端。                      | 关闭  |
+| `agent_deferred_init`            | 普通聊天发送在消息落库后立即返回，工具发现和上下文组装放到第一个助理步骤中执行，发送不再等待。需要队列模式的助理运行时。                                                            | 关闭  |
+| `agent_deferred_hetero_dispatch` | 普通聊天发给在线设备上的异构助理（Claude Code、Codex 等）时，不等设备接收任务就立即返回；派发在响应后执行，失败会显示在助理消息上。                                              | 关闭  |
+| `dashboard`                      | 看板：首页与项目看板页面、监控组件侧边栏、对话内的组件预览，以及用于搭建监控组件的 `builtin-dashboard` 助理工具。关闭时以上入口均隐藏，组件与看板相关接口返回 FORBIDDEN；已发布的组件仍按计划刷新。       | 关闭  |
+| `mcp_apps`                       | MCP Apps：MCP 服务器为工具结果声明了交互页面（`ui://`）时，在对话中渲染该页面（服务器提供的 HTML，运行在沙箱 iframe 中）。关闭时按普通工具结果显示，服务端也不再向 MCP 服务器声明支持 MCP Apps。 | 关闭  |
+| `mcp_events`                     | MCP Events：让 Agent 订阅远程连接器事件，并在原 Topic 中运行。创建订阅需每次审批；每次事件触发会消耗额度。需公网 HTTPS 回调地址、密钥加密配置与支持 webhook 事件的已认证 MCP 服务器。       | 关闭  |
+| `edit_agent`                     | 允许用户编辑助手。                                                                                                               | 开启  |
+| `ai_image`                       | 控制 AI 图像生成功能和页面 (/image)。                                                                                               | 开启  |
+| `speech_to_text`                 | 启用语音转文本功能。                                                                                                              | 开启  |
+| `token_counter`                  | 保留用于令牌计数器显示。                                                                                                            | 开启  |
+| `welcome_suggest`                | 显示欢迎建议。                                                                                                                 | 开启  |
+| `changelog`                      | 控制更新日志弹窗 / 页面的显示。                                                                                                       | 开启  |
+| `market`                         | 启用助手市场功能。                                                                                                               | 开启  |
+| `knowledge_base`                 | 启用知识库功能。                                                                                                                | 开启  |
+| `rag_eval`                       | 控制 RAG 评估功能 (/repos/\[id]/evals)。                                                                                       | 关闭  |
+| `cloud_promotion`                | 控制用户菜单中云服务推广链接的显示。                                                                                                      | 关闭  |
+| `commercial_hide_github`         | 隐藏设置页面底部的 GitHub 相关链接（需要商业授权）。                                                                                          | 关闭  |
+| `commercial_hide_docs`           | 隐藏文档和帮助菜单，包括更新日志、文档和反馈（需要商业授权）。                                                                                         | 关闭  |
 
 ## 交互式助理分享：部署与灰度边界
 
@@ -82,3 +83,18 @@ tags:
 [分享路由](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/apps/server/src/routers/lambda/agentShare.ts)在 `enableShare` 和将 `updateVisibility` 设为 `link` 时检查创建者门控。改为 `private` 不要求灰度开关，但会阻止访客访问。因此，关闭 `agent_share` 不能替代关闭某个具体分享。
 
 你可以随时检查 [featureFlags](https://github.com/lobehub/lobehub/blob/main/packages/app-config/src/featureFlags/schema.ts) 以获取最新的特性标志列表。
+
+## MCP Events：部署前提
+
+`mcp_events` 默认关闭。启用前：
+
+1. 将 `APP_URL` 设置为 MCP 服务器能访问的公网 HTTPS 地址。localhost、私有域名和 IP 字面量不支持。
+2. 配置 `KEY_VAULTS_SECRET`，用于加密 webhook 签名密钥。按[环境变量说明](/docs/self-hosting/platform/docker)生成密钥，并在部署更新时保留它。
+3. 配置 QStash，确保续订、退订重试和积压事件恢复有定时触发。Docker 启动器每五分钟注册一次 sweep；其他部署需自行配置定时任务。没有 QStash 时，这些维护依赖应用请求触发，执行时机没有保证。
+4. 设置 `FEATURE_FLAGS="+mcp_events"` 并重启应用。连接已认证、支持 SEP-3415 webhook 事件的远程 HTTP MCP 服务器，然后刷新连接器工具。
+
+在对话里请求订阅事件并批准后，打开设置 → 自动化，确认状态为生效中，再从上游触发一次事件，确认原 Topic 收到事件与 Agent 回复。永不过期订阅不做定时健康检查；投递中断时，在自动化列表点击「检查」恢复投递。
+
+关闭开关后，工具与自动化入口会隐藏，受影响用户的事件不再触发 Agent 运行，也不再续订。入站事件仍会验签和入库，但会被跳过，不消耗额度。订阅记录保留，有限有效期的订阅可能在关闭期间过期。
+
+重新开启后，有效订阅会恢复事件触发，定时续订会尝试从保存的 cursor 恢复过期订阅。不再需要的订阅可以在关闭开关前后任意时刻删除。

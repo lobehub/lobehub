@@ -34,6 +34,7 @@ export const RedisKeyNamespace = {
    * shared by every instance that may receive a delivery.
    */
   AGENT_IDENTITY: 'agent-identity',
+  INBOUND_WEBHOOK: 'inbound-webhook',
   /**
    * Bot-wake channel state: when the bot and its owner last spoke, the follow-up window, the
    * silent-wake budget and the per-channel wake scheduler.
@@ -74,6 +75,12 @@ export const RedisKeyNamespace = {
  * ```
  */
 export const RedisKeys = {
+  inboundWebhook: {
+    wake: (id: string) => `wake:v1:${id}`,
+    check: (id: string) => `check:v1:${id}`,
+    maintenance: (id: string) => `maintenance:v1:${id}`,
+    sweep: () => 'sweep:v1:slot',
+  },
   /**
    * Agent Signal spend bounds — see {@link RedisKeyNamespace.AGENT_SIGNAL}. Per-user
    * counters and quotas that keep background self-iteration work within its limits.
@@ -292,6 +299,7 @@ export const RedisKeys = {
  * land under another scope's prefix. Every scope must be mapped.
  */
 export const RedisKeyScopeNamespace = {
+  inboundWebhook: RedisKeyNamespace.INBOUND_WEBHOOK,
   agentIdentity: RedisKeyNamespace.AGENT_IDENTITY,
   agentRun: RedisKeyNamespace.AGENT_RUN,
   agentSignal: RedisKeyNamespace.AGENT_SIGNAL,

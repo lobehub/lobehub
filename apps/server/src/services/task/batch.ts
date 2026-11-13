@@ -11,6 +11,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { EditLockService } from '@/server/services/editLock';
 
 import { AiAgentService } from '../aiAgent';
+import { removeByTopics } from '../inboundWebhook/lifecycle';
 import { TaskRunnerService } from '../taskRunner';
 import { trashTasksInTransaction } from '../trash';
 import { assertArchivedTaskStaysIdle, findTasksInOpenGoals } from './archiveGuard';
@@ -603,6 +604,7 @@ export class TaskBatchService {
     ]);
 
     const idle = tasks.filter((task) => !busy.has(task.id));
+    let removedTopicIds: string[] = [];
     const deletedIdle = await this.db.transaction(async (tx) => {
       const model = new TaskModel(tx, this.userId, this.workspaceId);
       const txTopics = new TaskTopicModel(tx, this.userId, this.workspaceId);
@@ -640,9 +642,20 @@ export class TaskBatchService {
           topicIds: topicIdsByTask.get(row.id) ?? [],
         })),
       );
+      // Only successful status-CAS targets contribute endpoints for post-commit cleanup.
+      removedTopicIds = deleted.flatMap((id) => topicIdsByTask.get(id) ?? []);
       return deleted;
     });
     result.updated.push(...deletedIdle);
+    if (removedTopicIds.length > 0) {
+      try {
+        await removeByTopics(this.db, { userId: this.userId, workspaceId: this.workspaceId }, [
+          ...new Set(removedTopicIds),
+        ]);
+      } catch (error) {
+        console.error('[task:batchDelete] Inbound webhook cleanup failed', error);
+      }
+    }
 
     const taskService = new TaskService(this.db, this.userId, this.workspaceId);
     await pMap(

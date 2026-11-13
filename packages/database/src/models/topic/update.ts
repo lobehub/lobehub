@@ -123,6 +123,8 @@ export interface UpdateMetadataOptions {
    * earlier write without clobbering one that landed after it.
    */
   onlyIf?: (metadata: ChatTopicMetadata | null | undefined) => boolean;
+  /** Internal run startup: install its marker and running state in the same row-locked write. */
+  status?: 'running';
 }
 
 export const updateMetadata = async (
@@ -168,7 +170,7 @@ export const updateMetadata = async (
 
     return tx
       .update(topics)
-      .set({ metadata: mergedMetadata })
+      .set({ metadata: mergedMetadata, ...(options?.status ? { status: options.status } : {}) })
       .where(and(eq(topics.id, id), ctx.ownership()))
       .returning();
   });
