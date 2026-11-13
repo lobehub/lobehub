@@ -24,9 +24,9 @@ const flexaiChatModels: AIChatModelCard[] = [
     organization: 'DeepSeek',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.0225, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.08, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.605, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0055, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -44,9 +44,9 @@ const flexaiChatModels: AIChatModelCard[] = [
     organization: 'DeepSeek',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.119, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.238, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.0178, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.13, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.26, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0195, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -65,9 +65,9 @@ const flexaiChatModels: AIChatModelCard[] = [
     organization: 'Zhipu',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.08, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.012, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.088, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0132, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -84,9 +84,9 @@ const flexaiChatModels: AIChatModelCard[] = [
     organization: 'Zhipu',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.105, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.09, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -184,9 +184,9 @@ const flexaiChatModels: AIChatModelCard[] = [
     organization: 'Qwen',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.045, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.025, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -204,9 +204,9 @@ const flexaiChatModels: AIChatModelCard[] = [
     organization: 'Qwen',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.12, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.18, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.018, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.015, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -263,9 +263,9 @@ const flexaiChatModels: AIChatModelCard[] = [
     organization: 'OpenAI',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.0075, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0045, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -283,9 +283,9 @@ const flexaiChatModels: AIChatModelCard[] = [
     organization: 'OpenAI',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.003, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.018, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.09, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0027, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -323,9 +323,9 @@ const flexaiChatModels: AIChatModelCard[] = [
     organization: 'Google',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.07, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.24, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.0105, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.067, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.29, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.01, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -361,9 +361,9 @@ const flexaiChatModels: AIChatModelCard[] = [
     organization: 'Meta',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.003, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.08, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0075, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -380,9 +380,9 @@ const flexaiChatModels: AIChatModelCard[] = [
     organization: 'Meta',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.045, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.35, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.04, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -403,7 +403,7 @@ const flexaiChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.0225, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.015, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -421,9 +421,9 @@ const flexaiChatModels: AIChatModelCard[] = [
     organization: 'Xiaomi',
     pricing: {
       units: [
-        { name: 'textInput', rate: 0.13, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 0.28, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.0195, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0037, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
