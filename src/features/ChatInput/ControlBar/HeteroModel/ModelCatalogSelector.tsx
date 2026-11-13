@@ -42,7 +42,7 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useMenuContentLifecycle } from '../useMenuContentLifecycle';
-import { getModelLabel } from './labels';
+import { getModelLabel, getModelOptionDescription } from './labels';
 import { useModelCatalogView } from './useModelCatalogView';
 import { useTargetModelCatalog } from './useTargetModelCatalog';
 
@@ -301,7 +301,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
                         <DropdownMenuItemDesc
                           className={isStale ? stylex.props(styles.stale).className : undefined}
                         >
-                          {item.id}
+                          {getModelOptionDescription(item.id)}
                           {isStale ? ` · ${t('heteroAgent.cliModel.stale')}` : ''}
                         </DropdownMenuItemDesc>
                       </DropdownMenuItemLabelGroup>

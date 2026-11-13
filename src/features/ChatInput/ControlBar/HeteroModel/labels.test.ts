@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getModelLabel } from './labels';
+import { getModelLabel, getModelOptionDescription } from './labels';
 
 describe('getModelLabel', () => {
   it('shows the model half of a persisted provider/model tuple', () => {
@@ -20,5 +20,18 @@ describe('getModelLabel', () => {
   it('falls back to the raw value when the tuple is malformed', () => {
     expect(getModelLabel('["only-one-element"]', 'Default')).toBe('["only-one-element"]');
     expect(getModelLabel('[not json', 'Default')).toBe('[not json');
+  });
+});
+
+describe('getModelOptionDescription', () => {
+  it('renders a provider/model tuple as provider/model', () => {
+    expect(getModelOptionDescription('["deepseek-official","deepseek-v4-flash"]')).toBe(
+      'deepseek-official/deepseek-v4-flash',
+    );
+  });
+
+  it('leaves plain ids and malformed tuples untouched', () => {
+    expect(getModelOptionDescription('deepseek-v4-flash')).toBe('deepseek-v4-flash');
+    expect(getModelOptionDescription('["only-one-element"]')).toBe('["only-one-element"]');
   });
 });

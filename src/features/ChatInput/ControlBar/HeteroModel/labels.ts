@@ -41,6 +41,16 @@ export const getEffortLabelKeys = (
 
 export const getModeLabelKey = (mode: HeterogeneousAgentMode) => MODE_LABEL_KEYS[mode];
 
+/**
+ * Menu description for a catalog option. Synthetic ids (deepseek-harness's
+ * `[provider, model]` tuples) read better as `provider/model`; plain ids stay
+ * untouched so other catalog providers keep their current copy.
+ */
+export const getModelOptionDescription = (model: string): string => {
+  const tuple = parseModelTuple(model);
+  return tuple ? `${tuple.providerId}/${tuple.modelId}` : model;
+};
+
 export const getModelLabel = (model: string, defaultLabel: string) => {
   if (model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION) return defaultLabel;
 
