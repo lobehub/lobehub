@@ -81,6 +81,7 @@
     "./stepfun": "./src/aiModels/stepfun.ts",
     "./straico": "./src/aiModels/straico.ts",
     "./streamlake": "./src/aiModels/streamlake.ts",
+    "./suno": "./src/aiModels/suno.ts",
     "./superGrok": "./src/aiModels/superGrok.ts",
     "./taichu": "./src/aiModels/taichu.ts",
     "./tencentcloud": "./src/aiModels/tencentcloud.ts",

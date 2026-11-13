@@ -1,4 +1,4 @@
-import { ElevenLabs, modelMappings, providerMappings } from '@lobehub/icons';
+import { ElevenLabs, Minimax, modelMappings, providerMappings, Suno } from '@lobehub/icons';
 
 /**
  * Brands @lobehub/icons ships artwork for but does not map to an id yet (checked against
@@ -8,11 +8,14 @@ import { ElevenLabs, modelMappings, providerMappings } from '@lobehub/icons';
  */
 const LOCAL_PROVIDER_MAPPINGS = [
   { Icon: ElevenLabs, keywords: ['elevenlabs'], probe: 'elevenlabs' },
+  { Icon: Suno, keywords: ['suno'], probe: 'suno' },
 ];
 
 /** `ModelIcon` tests each keyword as a case-insensitive regex against the model id. */
 const LOCAL_MODEL_MAPPINGS = [
   { Icon: ElevenLabs, keywords: ['^eleven_'], probe: 'eleven_multilingual_v2' },
+  // MiniMax music models (`music-3.0`, `music-2.6`, `music-cover`)
+  { Icon: Minimax, keywords: ['^music-'], probe: 'music-3.0' },
 ];
 
 let registered = false;

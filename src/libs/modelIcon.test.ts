@@ -16,6 +16,24 @@ describe('local icon mappings', () => {
     },
   );
 
+  it.each(['music-3.0', 'music-2.6', 'music-cover'])(
+    'renders the MiniMax avatar for the %s music model',
+    (model) => {
+      const avatar = renderToStaticMarkup(createElement(ModelIcon, { model, type: 'avatar' }));
+
+      expect(avatar).toContain('<title>Minimax</title>');
+    },
+  );
+
+  it.each(['suno-v6', 'suno-v6-wild', 'suno-v6-mini'])(
+    'renders the Suno avatar for the %s model',
+    (model) => {
+      const avatar = renderToStaticMarkup(createElement(ModelIcon, { model, type: 'avatar' }));
+
+      expect(avatar).toContain('<title>Suno</title>');
+    },
+  );
+
   it('leaves models of other vendors alone', () => {
     const avatar = renderToStaticMarkup(
       createElement(ModelIcon, { model: 'speech-2.8-hd', type: 'avatar' }),

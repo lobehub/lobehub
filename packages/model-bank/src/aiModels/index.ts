@@ -69,6 +69,7 @@ import { default as spark } from './spark';
 import { default as stepfun } from './stepfun';
 import { default as straico } from './straico';
 import { default as streamlake } from './streamlake';
+import { default as suno } from './suno';
 import { default as supergrok } from './superGrok';
 import { default as taichu } from './taichu';
 import { default as tencentcloud } from './tencentcloud';
@@ -184,6 +185,7 @@ const staticModelMap: ModelsMap = {
   stepfun,
   straico,
   streamlake,
+  suno,
   supergrok,
   taichu,
   tencentcloud,
@@ -305,6 +307,7 @@ export { default as spark } from './spark';
 export { default as stepfun } from './stepfun';
 export { default as straico } from './straico';
 export { default as streamlake } from './streamlake';
+export { default as suno, SUNO_MODEL_VERSIONS } from './suno';
 export { default as supergrok } from './superGrok';
 export { default as taichu } from './taichu';
 export { default as tencentcloud } from './tencentcloud';

@@ -37,4 +37,13 @@ describe('provider artwork', () => {
       expect(wordmark).not.toContain('lucide-provider');
     },
   );
+
+  it('renders the official Suno avatar', () => {
+    const avatar = renderToStaticMarkup(
+      createElement(ProviderIcon, { provider: 'suno', type: 'avatar' }),
+    );
+
+    expect(avatar).toContain('<title>Suno</title>');
+    expect(avatar).not.toContain('lucide-provider');
+  });
 });

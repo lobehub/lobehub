@@ -66,4 +66,26 @@ describe('formatModelPricingLabels', () => {
   it('returns nothing without pricing', () => {
     expect(formatModelPricingLabels('tts', undefined, t)).toEqual([]);
   });
+
+  describe('text2music', () => {
+    it('shows the per-song price of MiniMax music models', () => {
+      const model = findModel(minimaxModels as AITTSModelCard[], 'music-3.0');
+
+      const labels = formatModelPricingLabels('text2music', model.pricing, t);
+
+      // ¥1 per song, displayed in USD like the other CNY-priced models.
+      expect(labels).toHaveLength(1);
+      expect(labels[0]).toMatch(/^song:\d/);
+    });
+
+    it('shows the per-song price of Suno models in USD', () => {
+      const labels = formatModelPricingLabels(
+        'text2music',
+        { units: [{ name: 'musicGeneration', rate: 0.03, strategy: 'fixed', unit: 'song' }] },
+        t,
+      );
+
+      expect(labels).toEqual(['song:0.03']);
+    });
+  });
 });

@@ -568,6 +568,14 @@ export class ModelRuntime {
     return this._runtime.handlePollVideoStatus?.(inferenceId, model, route);
   }
 
+  /**
+   * Verify the provider key without a chat model. `undefined` when the runtime has no
+   * credential check, so callers can fall back to a chat check.
+   */
+  async checkCredentials() {
+    return this._runtime.checkCredentials?.();
+  }
+
   async models() {
     return this._runtime.models?.();
   }

@@ -7,6 +7,7 @@ import type {
   ASRResponse,
   ChatMethodOptions,
   ChatStreamPayload,
+  CheckCredentialsResult,
   CreateImageMethodOptions,
   CreateImagePayload,
   CreateImageResponse,
@@ -37,6 +38,14 @@ import type {
 export interface LobeRuntimeAI {
   baseURL?: string;
   chat?: (payload: ChatStreamPayload, options?: ChatMethodOptions) => Promise<Response>;
+
+  /**
+   * Verify the configured key without generating anything (e.g. a balance endpoint).
+   * Used by the provider settings checker for providers that serve no chat model
+   * (`settings.checkMode: 'credentials'`). Throws an `AgentRuntimeError` on a rejected key.
+   */
+  checkCredentials?: () => Promise<CheckCredentialsResult>;
+
   createImage?: (
     payload: CreateImagePayload,
     options?: CreateImageMethodOptions,

@@ -70,6 +70,7 @@ import SparkProvider from './spark';
 import StepfunProvider from './stepfun';
 import StraicoProvider from './straico';
 import StreamLakeProvider from './streamlake';
+import SunoProvider from './suno';
 import SuperGrokProvider from './superGrok';
 import TaichuProvider from './taichu';
 import TencentcloudProvider from './tencentcloud';
@@ -174,6 +175,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   OpenRouterProvider,
   FalProvider,
   ElevenLabsProvider,
+  SunoProvider,
   OllamaProvider,
   OllamaCloudProvider,
   VLLMProvider,
@@ -376,6 +378,7 @@ export { default as SparkProviderCard } from './spark';
 export { default as StepfunProviderCard } from './stepfun';
 export { default as StraicoProviderCard } from './straico';
 export { default as StreamLakeProviderCard } from './streamlake';
+export { default as SunoProviderCard } from './suno';
 export { default as SuperGrokProviderCard } from './superGrok';
 export { default as TaichuProviderCard } from './taichu';
 export { default as TencentCloudProviderCard } from './tencentcloud';

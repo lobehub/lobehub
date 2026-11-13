@@ -804,6 +804,31 @@ The example hides all default models and enables only `eleven_v4` and `eleven_fl
   authentication-related environment variables.
 </Callout>
 
+## Suno
+
+Music generation through a third-party Suno API gateway. Suno's own API is invite-only, so requests go to [kie.ai](https://docs.kie.ai/suno-api/generate-music) by default, or to [sunoapi.org](https://docs.sunoapi.org/suno-api/generate-music) or a compatible service through `SUNO_PROXY_URL`. Check the gateway's terms and Suno's terms of service before enabling it.
+
+### `SUNO_API_KEY`
+
+- Type: Optional for the deployment; required when providing a shared server key. Users can instead enter their own gateway key in Suno provider settings, which takes precedence.
+- Description: An API key from the Suno gateway, sent as `Authorization: Bearer <key>`. Setting a non-empty key automatically enables Suno in the server configuration. `ENABLED_SUNO` is derived from this key, not a separate environment switch. The provider settings check verifies the key against the gateway's credit endpoint without generating music.
+- Default: Unset; no shared server key.
+- Example: `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+### `SUNO_PROXY_URL`
+
+- Type: Optional
+- Description: Base URL of the Suno gateway. A host on `sunoapi.org` uses that gateway's endpoints; any other host uses the kie.ai endpoints.
+- Default: `https://api.kie.ai`
+- Example: `https://api.sunoapi.org`
+
+### `SUNO_MODEL_LIST`
+
+- Type: Optional
+- Description: Customizes the Suno model list using the shared [model-list syntax][model-list]: `+` adds a model, `-` hides a model, and `model_id=display_name` renames a model. Separate entries with commas.
+- Default: Unset; uses the built-in model list.
+- Example: `-all,+suno-v6`
+
 ## BFL
 
 ### `BFL_API_KEY`
