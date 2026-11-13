@@ -174,8 +174,15 @@ describe('formatEventTime', () => {
   it('shows a time today and a date otherwise', () => {
     expect(formatEventTime(dayjs('2026-11-13T08:00:04').toISOString(), now)).toBe('08:00:04');
     expect(formatEventTime(dayjs('2026-11-12T23:59:00').toISOString(), now)).toBe(
-      '2026-11-12 23:59',
+      '2026-11-12 23:59:00',
     );
+  });
+
+  it('keeps seconds on other days so a burst read later is still told apart', () => {
+    const burst = ['2026-11-12T22:13:06', '2026-11-12T22:13:07', '2026-11-12T22:13:08'].map(
+      (stamp) => formatEventTime(dayjs(stamp).toISOString(), now),
+    );
+    expect(new Set(burst).size).toBe(3);
   });
 
   it('keeps an unparsable stamp and skips a missing one', () => {

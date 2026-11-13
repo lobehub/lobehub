@@ -279,6 +279,38 @@ describe('subscription maintenance', () => {
     expect(stored.state.deliveryStatus).toEqual(deliveryStatus);
   });
 
+  it.each([
+    [{ status: 401 }, true],
+    [new Error('socket hang up'), false],
+  ])(
+    'keeps an ended subscription ended when an explicit check fails: %j',
+    async (error, flagsConnector) => {
+      mocks.subscribe.mockRejectedValue(error);
+      const { ctx, model, stored } = createContext({
+        lastError: 'access_revoked',
+        status: 'terminated',
+      });
+      await maintainMcpSubscription(ctx);
+      // The server ended it: a failed check must neither relabel it nor schedule retries.
+      expect(stored).toMatchObject({
+        lastError: 'access_revoked',
+        maintenanceFailures: 0,
+        nextMaintenanceAt: null,
+        status: 'terminated',
+      });
+      expect(model.update).not.toHaveBeenCalled();
+      // Broken credentials are still surfaced where the user fixes them.
+      if (flagsConnector) expect(mocks.updateStatus).toHaveBeenCalledWith('connector', 'error');
+      else expect(mocks.updateStatus).not.toHaveBeenCalled();
+    },
+  );
+
+  it('revives an ended subscription when an explicit check succeeds', async () => {
+    const { ctx, stored } = createContext({ lastError: 'access_revoked', status: 'terminated' });
+    await maintainMcpSubscription(ctx);
+    expect(stored).toMatchObject({ lastError: null, status: 'active' });
+  });
+
   it('clears a previous error once a manual check resumes delivery', async () => {
     const { ctx, stored } = createContext({
       status: 'error',
