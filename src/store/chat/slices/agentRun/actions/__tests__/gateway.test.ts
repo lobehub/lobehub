@@ -124,6 +124,7 @@ vi.mock('@/store/agent/selectors', () => ({
   agentByIdSelectors: {
     getAgencyConfigById: (agentId: string) => (state: any) =>
       state.agentMap?.[agentId]?.agencyConfig,
+    getAgentModelById: (agentId: string) => (state: any) => state.agentMap?.[agentId]?.model ?? '',
     getAgentById: (agentId: string) => (state: any) => state.agentMap?.[agentId],
   },
   agentSelectors: { currentAgentWorkingDirectory: () => () => undefined },
