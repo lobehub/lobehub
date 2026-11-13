@@ -296,12 +296,13 @@ describe('inboundWebhook tRPC resource contract', () => {
   it('limits checking the same row to once per 30 seconds', async () => {
     const row = await seed();
     const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
     await caller().check({ id: row.id });
     await expect(caller().check({ id: row.id })).rejects.toMatchObject({
       code: 'TOO_MANY_REQUESTS',
     });
     expect(maintain).toHaveBeenCalledTimes(1);
-    vi.spyOn(Date, 'now').mockReturnValue(now + 30_001);
+    clock.mockReturnValue(now + 30_001);
     await expect(caller().check({ id: row.id })).resolves.toMatchObject({ id: row.id });
     expect(maintain).toHaveBeenCalledTimes(2);
   });
