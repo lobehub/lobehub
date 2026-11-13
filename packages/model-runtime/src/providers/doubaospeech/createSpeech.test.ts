@@ -226,6 +226,7 @@ describe('createDoubaoSpeech', () => {
       ['an empty voice', { voice: ' ' }],
       ['empty input', { input: '  ' }],
       ['input over the limit', { input: 'a'.repeat(DOUBAO_SPEECH_MAX_INPUT_CHARACTERS + 1) }],
+      ['an unknown model', { model: 'seed-tts-9.9' }],
     ])('%s', async (_, override) => {
       await expect(
         createDoubaoSpeech(
@@ -236,6 +237,15 @@ describe('createDoubaoSpeech', () => {
       expect(fetchMock).not.toHaveBeenCalled();
     });
   });
+
+  it.each(['seed-tts-1.0', 'seed-tts-1.0-concurr', 'seed-icl-2.0'])(
+    'passes the documented resource %s through',
+    async (model) => {
+      await createDoubaoSpeech({ input: 'Hi', model, voice: VOICE }, options);
+
+      expect(lastRequest(fetchMock).headers['X-Api-Resource-Id']).toBe(model);
+    },
+  );
 
   describe('maps upstream errors', () => {
     it.each([

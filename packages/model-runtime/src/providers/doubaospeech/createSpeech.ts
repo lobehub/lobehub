@@ -114,6 +114,16 @@ const DOUBAO_SPEECH_CLONE_RESOURCES: Record<string, string> = {
   'seed-tts-2.0': 'seed-icl-2.0',
 };
 
+/**
+ * Documented `X-Api-Resource-Id` values. Anything else is a typo or an invented id, so it is
+ * refused before the request instead of spending a round trip on an upstream rejection.
+ * @see https://www.volcengine.com/docs/6561/1598757
+ */
+export const DOUBAO_SPEECH_RESOURCES: ReadonlySet<string> = new Set([
+  ...Object.keys(DOUBAO_SPEECH_CLONE_RESOURCES),
+  ...Object.values(DOUBAO_SPEECH_CLONE_RESOURCES),
+]);
+
 /** `X-Api-Resource-Id` for a model and voice: the cloning resource for a voice clone. */
 export const resolveDoubaoSpeechResource = (model: string, speaker: string) =>
   speaker.startsWith('S_') ? (DOUBAO_SPEECH_CLONE_RESOURCES[model] ?? model) : model;
@@ -376,6 +386,13 @@ export async function createDoubaoSpeech(
       throw new DoubaoSpeechError(
         DOUBAO_SPEECH_MISSING_CREDENTIALS_MESSAGE,
         AgentRuntimeErrorType.InvalidProviderAPIKey,
+      );
+    }
+
+    if (!DOUBAO_SPEECH_RESOURCES.has(requestModel)) {
+      throw new DoubaoSpeechError(
+        `Unknown Doubao Speech model "${requestModel}"; expected one of ${[...DOUBAO_SPEECH_RESOURCES].join(', ')}`,
+        AgentRuntimeErrorType.ProviderBizError,
       );
     }
 
