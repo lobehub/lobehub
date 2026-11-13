@@ -71,7 +71,11 @@ describe('BrowserSidebarCtr retained webview registration', () => {
   const invokeIpc = async <T>(channel: string, payload: unknown): Promise<T> => {
     const handler = ipcHandlers.get(channel);
     if (!handler) throw new Error(`IPC handler for ${channel} not found`);
-    return handler({ sender: {} }, payload) as Promise<T>;
+    return handler(
+      // IpcHandler only serves the renderer's top-level frame.
+      { sender: {}, senderFrame: { parent: null, url: 'app://renderer/' } },
+      payload,
+    ) as Promise<T>;
   };
 
   beforeEach(() => {

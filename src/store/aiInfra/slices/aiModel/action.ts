@@ -72,6 +72,12 @@ export interface AiProviderModelsSyncResult extends ReplicaSyncResult {
 }
 
 type Setter = StoreSetter<AiInfraStore>;
+
+interface ReasoningConfigSeed {
+  apply: () => AiModelReasoningConfigEntry;
+  key: string;
+}
+
 export const createAiModelSlice = (set: Setter, get: () => AiInfraStore, _api?: unknown) =>
   new AiModelActionImpl(set, get, _api);
 
@@ -79,6 +85,10 @@ export class AiModelActionImpl {
   readonly #get: () => AiInfraStore;
   readonly #list;
   readonly #reasoningConfig;
+  /** Keys whose post-save refresh is in flight; older snapshots must not touch them. */
+  readonly #refreshingSavedKeys: string[] = [];
+  /** Bumped per key by a snapshot seed, so a read started earlier can tell it lost. */
+  readonly #seedGenerations = new Map<string, number>();
   readonly #set: Setter;
 
   constructor(set: Setter, get: () => AiInfraStore, _api?: unknown) {
@@ -96,9 +106,16 @@ export class AiModelActionImpl {
     });
     this.#reasoningConfig = createReplicaSlice(aiModelReasoningConfigResource, {
       actionPrefix: 'aiModelReasoningConfig',
-      fetcher: async ({ model, provider }) => ({
-        value: (await aiModelService.getAiModelReasoningConfig(model, provider)) ?? undefined,
-      }),
+      fetcher: async ({ model, provider }) => {
+        const key = modelReasoningConfigKey(provider, model);
+        const generation = this.#seedGenerations.get(key);
+        const value =
+          (await aiModelService.getAiModelReasoningConfig(model, provider)) ?? undefined;
+        // A snapshot seeded while this read was in flight is the newer answer.
+        return this.#seedGenerations.get(key) === generation
+          ? { value }
+          : { value: this.#get().modelReasoningConfigMap[key] };
+      },
       get,
       // Don't clobber an in-flight optimistic value with a stale response
       prepareHead: (incoming, _current, { model, provider }) =>
@@ -244,29 +261,46 @@ export class AiModelActionImpl {
    * response would treat memory as empty and repaint an older persisted row over
    * the confirmed snapshot. Routing the seed through `updateMany` writes those
    * values as confirmed entries: they persist, and a later hydration keeps them.
+   * A key confirmed as nothing saved still gets an entry so hydration cannot
+   * repaint it, but only in memory unless it changed a value: a full model list
+   * of empty rows would evict real ones under the resource's `maxEntries`.
    *
-   * Keys with an in-flight save keep their optimistic value (`seedModelReasoningConfigMap`
-   * skips them), and unchanged keys are left alone so a revalidation costs no writes.
+   * Per-model reads already in flight lose to the snapshot (see `#seedGenerations`).
+   * Keys with an in-flight save or post-save refresh are skipped entirely, since
+   * the snapshot may predate that save. Settled, unchanged keys are left alone
+   * so a revalidation costs no writes.
    */
   seedModelReasoningConfigs = (
     configs: Record<string, AiModelReasoningConfig>,
     models: Pick<EnabledAiModel, 'id' | 'providerId'>[],
   ): void => {
     const state = this.#get();
-    const next = seedModelReasoningConfigMap(
-      state.modelReasoningConfigMap,
-      configs,
-      models,
-      state.modelReasoningConfigUpdatingKeys,
-    );
+    const current = state.modelReasoningConfigMap;
+    const replicaEntries = state.modelReasoningConfigReplica.entries;
+    const skippedKeys = [...state.modelReasoningConfigUpdatingKeys, ...this.#refreshingSavedKeys];
+    const next = seedModelReasoningConfigMap(current, configs, models, skippedKeys);
 
-    const entries = Object.keys(next)
-      .filter((key) => !isEqual(next[key], state.modelReasoningConfigMap[key]))
-      .map((key) => ({ apply: () => ({ value: next[key] }), key }));
+    const persisted: ReasoningConfigSeed[] = [];
+    const memoryOnly: ReasoningConfigSeed[] = [];
+    const coveredKeys = new Set([
+      ...models.map((model) => modelReasoningConfigKey(model.providerId, model.id)),
+      ...Object.keys(configs),
+    ]);
 
-    if (entries.length === 0) return;
+    for (const key of coveredKeys) {
+      if (skippedKeys.includes(key)) continue;
+      this.#seedGenerations.set(key, (this.#seedGenerations.get(key) ?? 0) + 1);
 
-    this.#reasoningConfig.updateMany(entries);
+      const changed = !isEqual(next[key], current[key]);
+      const source = replicaEntries[key]?.source;
+      if (!changed && source && source !== 'storage') continue;
+
+      const seed = { apply: () => ({ value: next[key] }), key };
+      (changed || next[key] !== undefined ? persisted : memoryOnly).push(seed);
+    }
+
+    if (persisted.length > 0) this.#reasoningConfig.updateMany(persisted);
+    if (memoryOnly.length > 0) this.#reasoningConfig.updateMany(memoryOnly, { persist: false });
   };
 
   /**
@@ -374,10 +408,13 @@ export class AiModelActionImpl {
     // responses while the key is marked updating — refreshing inside the try
     // block would drop server-preserved sibling fields whenever the optimistic
     // base (`previous`) had not been fetched yet.
+    this.#refreshingSavedKeys.push(key);
     try {
       await this.#reasoningConfig.fetch({ model: id, provider }, { fresh: true, scope });
     } catch {
       // best-effort: the saved value above stays
+    } finally {
+      this.#refreshingSavedKeys.splice(this.#refreshingSavedKeys.indexOf(key), 1);
     }
   };
 

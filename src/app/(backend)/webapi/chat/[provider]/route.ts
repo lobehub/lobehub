@@ -1,6 +1,6 @@
 import { REQUEST_TOPIC_ID_HEADER } from '@lobechat/const';
 import { type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
-import { AGENT_RUNTIME_ERROR_SET } from '@lobechat/model-runtime';
+import { AGENT_RUNTIME_ERROR_SET, awaitFirstResponseChunk } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
@@ -44,12 +44,16 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
         traceOptions = createTraceOptions(data, { provider, trace: tracePayload });
       }
 
-      return await modelRuntime.chat(data, {
+      const response = await modelRuntime.chat(data, {
         user: userId,
         ...traceOptions,
         metadata: { topicId: req.headers.get(REQUEST_TOPIC_ID_HEADER) ?? undefined },
         signal: req.signal,
       });
+
+      // A routed chat can fail before its first byte (e.g. an empty completion); surface that
+      // as the structured error below instead of the framework's 500 page.
+      return await awaitFirstResponseChunk(response);
     });
   } catch (e) {
     const {

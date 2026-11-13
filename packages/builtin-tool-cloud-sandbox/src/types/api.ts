@@ -2,6 +2,8 @@
  * API names for Cloud Sandbox tool
  */
 export const CloudSandboxApiName = {
+  analyzeStorage: 'analyzeStorage',
+  deleteFiles: 'deleteFiles',
   editFile: 'editFile',
   executeCode: 'executeCode',
   exportFile: 'exportFile',

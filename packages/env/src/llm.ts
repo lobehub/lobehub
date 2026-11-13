@@ -56,6 +56,9 @@ export const getLLMConfig = () => {
       ENABLED_MINIMAX: z.boolean(),
       MINIMAX_API_KEY: z.string().optional(),
 
+      ENABLED_ELEVENLABS: z.boolean(),
+      ELEVENLABS_API_KEY: z.string().optional(),
+
       ENABLED_MISTRAL: z.boolean(),
       MISTRAL_API_KEY: z.string().optional(),
 
@@ -302,6 +305,9 @@ export const getLLMConfig = () => {
 
       ENABLED_MINIMAX: !!process.env.MINIMAX_API_KEY,
       MINIMAX_API_KEY: process.env.MINIMAX_API_KEY,
+
+      ENABLED_ELEVENLABS: !!process.env.ELEVENLABS_API_KEY,
+      ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
 
       ENABLED_MISTRAL: !!process.env.MISTRAL_API_KEY,
       MISTRAL_API_KEY: process.env.MISTRAL_API_KEY,

@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
-import { realpath } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -171,8 +172,10 @@ export const removeGitWorktree = async (payload: {
  * Add a linked worktree checked out on a fresh branch, mirroring the branch
  * switcher's "create branch" flow (`git worktree add -b <branch> <path>`). The
  * new branch forks from the repo's current HEAD; the caller supplies the target
- * directory (an absolute sibling path the renderer derives from the source
- * repo). Returns the created path on success so the UI can switch into it.
+ * directory (`deriveWorktreePath`, under `~/.lobehub/worktrees/`). The missing
+ * parent folders are created first, and an existing target or an unwritable
+ * root is reported as such instead of git's generic failure. Returns the
+ * created path on success so the UI can switch into it.
  */
 export const addGitWorktree = async (payload: {
   branch: string;
@@ -185,6 +188,19 @@ export const addGitWorktree = async (payload: {
   if (!worktreePath?.trim()) return { error: 'Worktree path is required', success: false };
   if (isInvalidBranchRef(branch))
     return { error: `Invalid branch name: ${branch}`, success: false };
+
+  if (!path.isAbsolute(worktreePath))
+    return { error: `Worktree path must be absolute: ${worktreePath}`, success: false };
+  if (existsSync(worktreePath))
+    return { error: `Worktree folder already exists: ${worktreePath}`, success: false };
+
+  const parent = path.dirname(worktreePath);
+  try {
+    await mkdir(parent, { recursive: true });
+  } catch (error: any) {
+    const reason = error?.code ?? error?.message ?? 'unknown error';
+    return { error: `Cannot create worktree folder ${parent}: ${reason}`, success: false };
+  }
 
   try {
     await execFileAsync('git', ['worktree', 'add', '-b', branch, worktreePath], {

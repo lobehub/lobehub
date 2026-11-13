@@ -24,20 +24,22 @@ const withHealthyOracle = (registry: ChaosRegistry) =>
     name: 'healthy',
   });
 
+const cleanupAdapter = (
+  cleanup: () => Promise<void>,
+): Parameters<ChaosRegistry['registerAdapter']>[0] => ({
+  cancelInjection: async () => {},
+  cleanup,
+  inject: async ({ runId }) => ({ adapter: 'test', injectionId: runId }),
+  name: 'test',
+});
+
 describe('runChaosExperiment', () => {
   it('runs injection, exercise, oracle and cleanup with a structured timeline', async () => {
     const cleanup = vi.fn(async () => {});
-    const registry = new ChaosRegistry()
-      .registerAdapter({
-        cancelInjection: async () => {},
-        cleanup,
-        inject: async ({ runId }) => ({ adapter: 'test', injectionId: runId }),
-        name: 'test',
-      })
-      .registerOracle({
-        evaluate: async () => ({ message: 'healthy', name: 'healthy', status: 'passed' }),
-        name: 'healthy',
-      });
+    const registry = new ChaosRegistry().registerAdapter(cleanupAdapter(cleanup)).registerOracle({
+      evaluate: async () => ({ message: 'healthy', name: 'healthy', status: 'passed' }),
+      name: 'healthy',
+    });
     const result = await runChaosExperiment({
       environment: 'test',
       exercise: async () => {},
@@ -60,17 +62,10 @@ describe('runChaosExperiment', () => {
 
   it('defaults programmatic experiments to always cleanup', async () => {
     const cleanup = vi.fn(async () => {});
-    const registry = new ChaosRegistry()
-      .registerAdapter({
-        cancelInjection: async () => {},
-        cleanup,
-        inject: async ({ runId }) => ({ adapter: 'test', injectionId: runId }),
-        name: 'test',
-      })
-      .registerOracle({
-        evaluate: async () => ({ message: 'healthy', name: 'healthy', status: 'passed' }),
-        name: 'healthy',
-      });
+    const registry = new ChaosRegistry().registerAdapter(cleanupAdapter(cleanup)).registerOracle({
+      evaluate: async () => ({ message: 'healthy', name: 'healthy', status: 'passed' }),
+      name: 'healthy',
+    });
     const { cleanup: _cleanup, ...withoutCleanup } = experiment;
     await runChaosExperiment({ environment: 'test', experiment: withoutCleanup, registry });
     expect(cleanup).toHaveBeenCalledOnce();
@@ -78,17 +73,10 @@ describe('runChaosExperiment', () => {
 
   it('does not run on_success cleanup when an oracle fails', async () => {
     const cleanup = vi.fn(async () => {});
-    const registry = new ChaosRegistry()
-      .registerAdapter({
-        cancelInjection: async () => {},
-        cleanup,
-        inject: async ({ runId }) => ({ adapter: 'test', injectionId: runId }),
-        name: 'test',
-      })
-      .registerOracle({
-        evaluate: async () => ({ message: 'unhealthy', name: 'healthy', status: 'failed' }),
-        name: 'healthy',
-      });
+    const registry = new ChaosRegistry().registerAdapter(cleanupAdapter(cleanup)).registerOracle({
+      evaluate: async () => ({ message: 'unhealthy', name: 'healthy', status: 'failed' }),
+      name: 'healthy',
+    });
     const result = await runChaosExperiment({
       environment: 'test',
       experiment: { ...experiment, cleanup: 'on_success' },

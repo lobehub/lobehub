@@ -1,6 +1,8 @@
 'use client';
 
-import { Block, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDownIcon } from 'lucide-react';
 import { memo } from 'react';
 
@@ -17,11 +19,7 @@ import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 // name) paints the system text-selection highlight across the whole row;
 // that bright blue is heavier than the Sidebar's active-route fill below
 // and inverts the visual hierarchy.
-const styles = createStaticStyles(({ css }) => ({
-  trigger: css`
-    user-select: none;
-  `,
-}));
+const styles = stylex.create({ trigger: { userSelect: 'none' } });
 
 const User = memo<{ lite?: boolean }>(({ lite }) => {
   const [nickname, username, isSignedIn] = useUserStore((s) => [
@@ -43,7 +41,7 @@ const User = memo<{ lite?: boolean }>(({ lite }) => {
         clickable
         horizontal
         align={'center'}
-        className={styles.trigger}
+        className={stylex.props(styles.trigger).className}
         gap={8}
         paddingBlock={2}
         variant={'borderless'}

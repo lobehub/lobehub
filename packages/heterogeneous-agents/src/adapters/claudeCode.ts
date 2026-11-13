@@ -1812,12 +1812,12 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
    * not main-agent-scoped).
    */
   private handleUser(raw: any): HeterogeneousAgentEvent[] {
-    // A replayed user message (`--replay-user-messages`) is input the host
-    // delivered into a live session: the turn it opens answers the user, not a
-    // background task — even if a task notification lands before it opens.
+    // A replayed user message (`--replay-user-messages`) is host input to the live session: its
+    // turn answers the user (even after a task notification); its uuid names the delivery taken.
     if (raw.isReplay && !raw.parent_tool_use_id) {
       this.hasUnhandledUserInput = true;
-      return [];
+      if (typeof raw.uuid !== 'string' || !raw.uuid) return [];
+      return [this.makeEvent('step_complete', { phase: 'user_message', uuid: raw.uuid })];
     }
 
     const content = raw.message?.content;

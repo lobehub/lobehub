@@ -691,6 +691,66 @@ describe('AgentOperationModel', () => {
     });
   });
 
+  describe('claimForAbandonment', () => {
+    const park = async (
+      model: AgentOperationModel,
+      operationId: string,
+      status: 'waiting_for_async_tool' | 'waiting_for_client' | 'waiting_for_human',
+    ) => {
+      await model.recordStart({ operationId });
+      await model.recordCompletion(operationId, { completionReason: status, status });
+    };
+
+    it('claims every live status, including a client wait', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      await model.recordStart({ operationId: 'op-claim-running' });
+      await park(model, 'op-claim-human', 'waiting_for_human');
+      await park(model, 'op-claim-async', 'waiting_for_async_tool');
+      await park(model, 'op-claim-client', 'waiting_for_client');
+
+      for (const id of ['op-claim-running', 'op-claim-human', 'op-claim-async', 'op-claim-client']) {
+        expect(await model.claimForAbandonment(id, 'inactivity_watchdog')).toBe(true);
+        expect(await model.findById(id)).toMatchObject({
+          completionReason: 'error',
+          status: 'error',
+        });
+      }
+    });
+
+    it('stamps the claim provenance so a retry can tell it apart', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      await park(model, 'op-claim-mark', 'waiting_for_client');
+
+      await model.claimForAbandonment('op-claim-mark', 'inactivity_watchdog');
+
+      expect((await model.findById('op-claim-mark'))?.metadata).toMatchObject({
+        abandonment: { phase: 'claimed', reason: 'inactivity_watchdog' },
+      });
+    });
+
+    it('never re-claims a row that already settled on its own', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      await model.recordStart({ operationId: 'op-claim-done' });
+      await model.settleRunning('op-claim-done', 'done');
+
+      expect(await model.claimForAbandonment('op-claim-done', 'inactivity_watchdog')).toBe(false);
+      expect(await model.findById('op-claim-done')).toMatchObject({ status: 'done' });
+    });
+
+    it("does not claim another user's parked client wait", async () => {
+      const owner = new AgentOperationModel(serverDB, userId);
+      await park(owner, 'op-claim-foreign', 'waiting_for_client');
+
+      expect(
+        await new AgentOperationModel(serverDB, otherUserId).claimForAbandonment(
+          'op-claim-foreign',
+          'inactivity_watchdog',
+        ),
+      ).toBe(false);
+      expect((await owner.findById('op-claim-foreign'))?.status).toBe('waiting_for_client');
+    });
+  });
+
   describe('client wait resume claim', () => {
     const park = async (model: AgentOperationModel, operationId: string) => {
       await model.recordStart({ operationId });

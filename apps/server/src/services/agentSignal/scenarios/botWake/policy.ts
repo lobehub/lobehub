@@ -1,8 +1,14 @@
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
 
+import { aggregateWakeVerdictsAsync } from '@/server/services/conversationWake/aggregator';
+import type {
+  WakeDecision,
+  WakePolicy,
+  WakeSignal,
+  WakeStateSnapshot,
+} from '@/server/services/conversationWake/types';
+
 import { defineAgentSignalHandlers, defineSourceHandler } from '../../runtime/middleware';
-import { aggregateWakeVerdictsAsync } from './aggregator';
-import type { WakeDecision, WakePolicy, WakeSignal, WakeStateSnapshot } from './types';
 
 export const EMPTY_WAKE_STATE: WakeStateSnapshot = {
   explicitMention: false,

@@ -19,6 +19,7 @@ import {
   SUBSCRIPTION_PROVIDERS,
   type SubscriptionProvider,
 } from './accountView';
+import QuotaCalendar from './QuotaCalendar';
 
 type ProviderAccount = QuotaAccount & { provider: SubscriptionProvider };
 
@@ -91,24 +92,32 @@ const SubscriptionAccounts = () => {
       title={t('subscriptionAccounts.empty.title')}
     />
   ) : (
-    // The settings pane hides horizontal overflow, so a narrow pane scrolls the
-    // list sideways rather than clipping the switch and menu off the row.
-    <div style={{ overflowX: 'auto' }}>
-      <Flexbox gap={2} style={{ minWidth: LIST_MIN_WIDTH }}>
-        <AccountListHeader />
-        {visible.map((account) => (
-          <AccountRow
-            account={account}
-            active={account.id === openId}
-            key={account.id}
-            onOpen={() => setOpenId(account.id)}
-          />
-        ))}
-        {visible.length === 0 && (
-          <Empty description={t('subscriptionAccounts.filterEmpty')} style={{ paddingBlock: 40 }} />
-        )}
-      </Flexbox>
-    </div>
+    <Flexbox gap={16}>
+      {visible.length > 0 && (
+        <QuotaCalendar accounts={visible} activeId={openId} onOpen={setOpenId} />
+      )}
+      {/* The settings pane hides horizontal overflow, so a narrow pane scrolls the
+          list sideways rather than clipping the switch and menu off the row. */}
+      <div style={{ overflowX: 'auto' }}>
+        <Flexbox gap={2} style={{ minWidth: LIST_MIN_WIDTH }}>
+          <AccountListHeader />
+          {visible.map((account) => (
+            <AccountRow
+              account={account}
+              active={account.id === openId}
+              key={account.id}
+              onOpen={() => setOpenId(account.id)}
+            />
+          ))}
+          {visible.length === 0 && (
+            <Empty
+              description={t('subscriptionAccounts.filterEmpty')}
+              style={{ paddingBlock: 40 }}
+            />
+          )}
+        </Flexbox>
+      </div>
+    </Flexbox>
   );
 
   return (

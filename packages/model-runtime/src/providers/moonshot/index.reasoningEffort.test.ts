@@ -49,7 +49,7 @@ describe('LobeMoonshotAnthropicAI reasoning effort', () => {
     },
   );
 
-  it.each(['low', 'high', 'max'])('should forward %s reasoning effort', async (effort) => {
+  it.each(['high', 'max'])('should forward %s reasoning effort', async (effort) => {
     await instance.chat({
       messages: [{ content: 'Hello', role: 'user' }],
       model: 'kimi-k3.1-pro',

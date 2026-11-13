@@ -47,9 +47,9 @@ vi.mock('@/services/topic', () => ({
   },
 }));
 
-const moveChatContextSelections = vi.hoisted(() => vi.fn());
+const moveChatComposerAttachments = vi.hoisted(() => vi.fn());
 vi.mock('@/store/file/store', () => ({
-  getFileStoreState: () => ({ moveChatContextSelections }),
+  getFileStoreState: () => ({ moveChatComposerAttachments }),
 }));
 
 const mockUserDefaultConfig = vi.hoisted(() => ({
@@ -192,6 +192,7 @@ const startRun = async (
     connectToGateway: vi.fn(),
     getOperationAbortSignal: vi.fn(() => AbortSignal.abort()),
     internal_pinTopicStatus: vi.fn(),
+    internal_dispatchMessage: vi.fn(),
     internal_dispatchTopic: vi.fn(),
     moveQueuedMessages: vi.fn(),
     moveVoiceMessages: vi.fn(),

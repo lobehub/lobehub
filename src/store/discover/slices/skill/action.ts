@@ -54,6 +54,25 @@ export interface SkillSyncResult extends ReplicaSyncResult {
 
 type Setter = StoreSetter<DiscoverStore>;
 
+export interface SkillListSyncOptions {
+  /** Collapse mounts of the same query within this window (ms). */
+  dedupingInterval?: number;
+  enabled?: boolean;
+  revalidateOnFocus?: boolean;
+}
+
+/**
+ * The params a skill list query is stored under: the UI language and the page
+ * / page size defaults the market endpoint applies. A reader that walks several
+ * pages builds each page's `skillListQueryKey` from this.
+ */
+export const normalizeSkillListParams = (params: SkillQueryParams = {}): SkillListParams => ({
+  ...params,
+  locale: globalHelpers.getCurrentLanguage(),
+  page: params.page ? Number(params.page) : 1,
+  pageSize: params.pageSize ? Number(params.pageSize) : 21,
+});
+
 export const createSkillSlice = (set: Setter, get: () => DiscoverStore, _api?: unknown) =>
   new SkillActionImpl(set, get, _api);
 
@@ -133,17 +152,12 @@ export class SkillActionImpl {
    */
   useFetchSkillList = (
     params: SkillQueryParams = {},
-    options: { enabled?: boolean } = {},
+    options: SkillListSyncOptions = {},
   ): SkillSyncResult => {
-    const { enabled = true } = options;
-    const normalized: SkillListParams = {
-      ...params,
-      locale: globalHelpers.getCurrentLanguage(),
-      page: params.page ? Number(params.page) : 1,
-      pageSize: params.pageSize ? Number(params.pageSize) : 21,
-    };
+    const { enabled = true, ...schedule } = options;
+    const normalized = normalizeSkillListParams(params);
     const queryKey = skillListQueryKey(normalized);
-    const sync = this.#list.useSync(normalized, { enabled });
+    const sync = this.#list.useSync(normalized, { enabled, ...schedule });
     return this.#toSyncResult(sync, queryKey, !!this.#get().skillListMap[queryKey], enabled);
   };
 

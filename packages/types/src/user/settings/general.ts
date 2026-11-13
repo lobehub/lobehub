@@ -22,6 +22,12 @@ export interface UserGeneralConfig {
    */
   enableMessageLinkIcon?: boolean;
   /**
+   * Whether Markdown pasted into the chat input is converted into rich text.
+   * Off keeps the pasted text verbatim.
+   * @default true
+   */
+  enablePasteAutoConvert?: boolean;
+  /**
    * Whether a turn's tool workflow starts expanded while the agent is still
    * running. Off keeps the running turn to a single live headline row.
    * @default false

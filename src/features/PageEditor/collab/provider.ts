@@ -2,6 +2,7 @@ import type {
   DocumentChannel,
   GatewayMuxClient,
   GatewayMuxStatus,
+  MuxDocCapacity,
   MuxDocServerMessage,
 } from '@lobechat/agent-gateway-client';
 import * as Y from 'yjs';
@@ -26,10 +27,46 @@ export interface PageCollabFailure {
 /** How long a subscription may wait for the room's first sync before it counts as failed. */
 export const PAGE_ROOM_SYNC_TIMEOUT_MS = 10_000;
 
+// The room keeps awareness only in memory and loses it whenever it is evicted while idle,
+// so every client re-sends its own state and drops peers that stopped renewing (y-protocols timing).
+export const AWARENESS_RENEW_INTERVAL_MS = 15_000;
+export const AWARENESS_TIMEOUT_MS = 30_000;
+
+/** The server refused to store the room's page for the plan's per-page character limit. */
+export interface PageCollabCharLimitRefusal {
+  actual: number;
+  limit: number;
+  plan?: string;
+}
+
+/** `doc_error` code the room sends when the server refuses its page for its length. */
+export const PAGE_ROOM_CHAR_LIMIT_CODE = 'char_limit_exceeded';
+
+export type PageCollabBlockedReason = 'deleted' | 'too_large';
+
+const BLOCKED_REASON: Record<string, PageCollabBlockedReason> = {
+  doc_deleted: 'deleted',
+  doc_too_large: 'too_large',
+};
+
 export interface PageCollabProviderEvents {
   onAccess?: (access: PageCollabAccess) => void;
+  onBlocked?: (reason: PageCollabBlockedReason) => void;
   onBootstrap?: () => void;
+  onCapacity?: (capacity: MuxDocCapacity) => void;
+  /**
+   * The server stored the room's page again after refusing it. A page already
+   * over the limit is stored when it does not grow, so only the server knows.
+   */
+  onCharLimitCleared?: () => void;
+  /**
+   * The page grew past the plan's per-page limit: the room keeps the edits, but
+   * the stored page stays at its last accepted version until it is shortened.
+   */
+  onCharLimitExceeded?: (refusal: PageCollabCharLimitRefusal) => void;
   onFailure?: (failure: PageCollabFailure) => void;
+  /** This member changed the page, as opposed to the editor syncing or bootstrapping it. */
+  onLocalEdit?: () => void;
   onPendingChange?: (pending: number) => void;
   onReset?: (reason: PageCollabResetReason) => void;
   onStatus?: (status: PageCollabStatus) => void;
@@ -65,6 +102,7 @@ class Emitter {
 class PageCollabAwareness extends Emitter {
   private localState: UserState | null = null;
   private states = new Map<number, UserState>();
+  private lastSeen = new Map<number, number>();
 
   constructor(
     private readonly clientID: number,
@@ -95,14 +133,36 @@ class PageCollabAwareness extends Emitter {
 
   setRemoteState(clientID: number, state: UserState | null) {
     if (clientID === this.clientID) return;
-    if (state) this.states.set(clientID, state);
-    else this.states.delete(clientID);
+    if (state) {
+      this.states.set(clientID, state);
+      this.lastSeen.set(clientID, Date.now());
+    } else {
+      this.states.delete(clientID);
+      this.lastSeen.delete(clientID);
+    }
     this.emit('update');
   }
 
   clearRemote() {
     this.states.clear();
+    this.lastSeen.clear();
     this.emit('update');
+  }
+
+  renewLocal() {
+    if (this.localState) this.publish(this.localState);
+  }
+
+  expireRemote(timeoutMs: number) {
+    const cutoff = Date.now() - timeoutMs;
+    let expired = false;
+    for (const [clientID, seenAt] of this.lastSeen) {
+      if (seenAt > cutoff) continue;
+      this.states.delete(clientID);
+      this.lastSeen.delete(clientID);
+      expired = true;
+    }
+    if (expired) this.emit('update');
   }
 }
 
@@ -118,12 +178,14 @@ export class PageCollabProvider extends Emitter {
   private bootstrapping = false;
   private conflicted = false;
   private synced = false;
+  private acceptsEdits = false;
   // The hub refuses anything for the document until its subscribe settles, and a
   // refusal before the first sync fails the join.
   private subscribed = false;
   private failed = false;
   private subscribedAt = 0;
   private syncTimer: ReturnType<typeof setTimeout> | undefined;
+  private awarenessTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(
     private readonly documentId: string,
@@ -159,10 +221,16 @@ export class PageCollabProvider extends Emitter {
       onReady: this.subscribe,
       onStatus: this.handleStatus,
     });
+    this.awarenessTimer = setInterval(() => {
+      if (!this.subscribed) return;
+      this.awareness.renewLocal();
+      this.awareness.expireRemote(AWARENESS_TIMEOUT_MS);
+    }, AWARENESS_RENEW_INTERVAL_MS);
   }
 
   disconnect() {
     if (!this.channel) return;
+    clearInterval(this.awarenessTimer);
     this.awareness.setLocalState(null);
     this.channel.close();
     this.channel = null;
@@ -219,6 +287,7 @@ export class PageCollabProvider extends Emitter {
 
   private handleLocalUpdate = (update: Uint8Array, origin: unknown) => {
     if (origin === this) return;
+    if (this.acceptsEdits && !this.bootstrapping) this.events.onLocalEdit?.();
     const seq = ++this.seq;
     this.pending.add(seq);
     this.events.onPendingChange?.(this.pending.size);
@@ -239,6 +308,7 @@ export class PageCollabProvider extends Emitter {
     this.waitingForBootstrap = false;
     this.emit('status', { status: 'connected' });
     this.emit('sync', true);
+    this.acceptsEdits = true;
     this.events.onStatus?.('synced');
   }
 
@@ -260,6 +330,11 @@ export class PageCollabProvider extends Emitter {
     this.handleLocalUpdate(update, null);
   }
 
+  private reportCapacity(capacity: MuxDocCapacity) {
+    this.events.onCapacity?.(capacity);
+    if (capacity === 'full') this.events.onBlocked?.('too_large');
+  }
+
   private handleMessage = (message: MuxDocServerMessage) => {
     switch (message.type) {
       case 'doc_synced': {
@@ -279,6 +354,7 @@ export class PageCollabProvider extends Emitter {
           this.awareness.setLocalState(this.awareness.getLocalState());
         }
         this.resendPending();
+        if (message.capacity) this.reportCapacity(message.capacity);
         if (message.bootstrap || message.bootstrapped) {
           // The binding seeds an empty root as soon as it hears `sync`, before
           // the bootstrap below runs; that write is part of our bootstrap too.
@@ -309,6 +385,16 @@ export class PageCollabProvider extends Emitter {
         return;
       }
 
+      case 'doc_char_limit_cleared': {
+        this.events.onCharLimitCleared?.();
+        return;
+      }
+
+      case 'doc_capacity': {
+        this.reportCapacity(message.capacity);
+        return;
+      }
+
       case 'doc_error': {
         // Our doc now holds a second copy of the page; the room refuses it until we rejoin with a fresh one.
         if (message.code === 'bootstrap_conflict') {
@@ -316,6 +402,25 @@ export class PageCollabProvider extends Emitter {
             this.conflicted = true;
             this.events.onReset?.('bootstrap_conflict');
           }
+          return;
+        }
+        // Not a join failure: the room still syncs, only storing the page is refused.
+        if (message.code === PAGE_ROOM_CHAR_LIMIT_CODE) {
+          if (typeof message.limit === 'number') {
+            this.events.onCharLimitExceeded?.({
+              actual: message.actual ?? 0,
+              limit: message.limit,
+              plan: message.plan,
+            });
+          } else {
+            console.warn('[PageCollabProvider] char limit refusal without a limit', message);
+          }
+          return;
+        }
+        // Not a sync failure: retrying cannot help, the page stays read-only.
+        const blocked = BLOCKED_REASON[message.code];
+        if (blocked) {
+          this.events.onBlocked?.(blocked);
           return;
         }
         // A view-only member is still in the room; only their writes are refused.

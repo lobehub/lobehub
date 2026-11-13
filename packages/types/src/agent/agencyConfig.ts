@@ -1,7 +1,7 @@
 import type { WorkingDirConfigValue } from '../device';
 import type { LobeAgentChatConfig } from './chatConfig';
 import type { AgentGraph } from './graph';
-import { hasAnyCliFlag, hasCliConfigKey, hasCliFlag } from './heteroCliArgs';
+import { hasAnyCliFlag, hasCliConfigKey } from './heteroCliArgs';
 import type { HeterogeneousAgentType, LocalHeterogeneousAgentType } from './heterogeneousAgent';
 import {
   HETEROGENEOUS_AGENT_CONFIGS,
@@ -9,33 +9,21 @@ import {
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './heterogeneousAgent';
 import type {
-  AmpAgentMode,
-  ClaudeCodeReasoningEffort,
-  CodexReasoningEffort,
   CodexSpeedMode,
-  GrokBuildReasoningEffort,
-  HeteroCliEncoding,
   HeterogeneousAgentMode,
+  HeterogeneousCatalogAgentType,
   HeterogeneousReasoningEffort,
   HeterogeneousSpeedMode,
-  QoderReasoningEffort,
 } from './heteroSelectorCapabilities';
 import {
   applyHeteroSelection,
-  CODEX_REASONING_EFFORT_CONFIG_KEY,
-  CODEX_SERVICE_TIER_CONFIG_KEY,
+  buildHeteroExecArgs,
+  buildHeteroSpawnArgs,
   getHeteroSelectorCapability,
-  GROK_BUILD_REASONING_EFFORT_FLAGS,
-  HETERO_SELECTOR_CAPABILITIES,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
-  isAmpAgentMode,
-  isClaudeCodeReasoningEffort,
-  isCodexFastServiceTier,
-  isCodexReasoningEffort,
-  isGrokBuildReasoningEffort,
-  isQoderReasoningEffort,
-  QODER_REASONING_EFFORT_FLAG,
 } from './heteroSelectorCapabilities';
+
+export { buildHeteroExecArgs, buildHeteroSpawnArgs };
 
 export type HeterogeneousAgentModelCatalogErrorCode =
   | 'cli_not_found'
@@ -49,12 +37,16 @@ export type HeterogeneousAgentModelCatalogErrorCode =
 export interface HeterogeneousAgentModel {
   /** Exact value accepted by the provider's native model selector. Treat as opaque. */
   id: string;
+  /** Whether the CLI resolves its default model to this entry. */
+  isDefault?: boolean;
   /** Optional human-readable model label. */
   label?: string;
   /** Model identifier shown when the CLI does not provide a separate display label. */
   modelId: string;
   /** Provider or CLI family, used only for display grouping. */
   providerId: string;
+  /** Account-specific speed options reported by the execution device. */
+  speedModes?: CodexSpeedMode[];
 }
 
 export interface ListHeterogeneousAgentModelsParams {
@@ -62,18 +54,7 @@ export interface ListHeterogeneousAgentModelsParams {
   command?: string;
   cwd?: string;
   env?: Record<string, string>;
-  type:
-    | 'codebuddy'
-    | 'codex'
-    | 'cursor'
-    | 'devin'
-    | 'droid'
-    | 'grok-build'
-    | 'kimi-code'
-    | 'opencode'
-    | 'pi'
-    | 'qoder'
-    | 'trae';
+  type: HeterogeneousCatalogAgentType;
 }
 
 export interface HeterogeneousAgentModelCatalogSuccess {
@@ -387,9 +368,7 @@ export const applyTopicModelToHeterogeneousProvider = (
         : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
   }
   if (speed !== undefined && capability.speed) {
-    selection.speed = capability.speed.supported(model)
-      ? speed
-      : HETEROGENEOUS_AGENT_DEFAULT_SELECTION;
+    selection.speed = speed;
   }
   if (Object.keys(selection).length === 0) return withModel;
 
@@ -464,437 +443,6 @@ const normalizeAgencyConfigHeterogeneousProvider = (
     : { ...base, heterogeneousProvider };
 };
 
-interface ClaudeCodeSelectionSource {
-  args?: string[];
-  effort?: string | null;
-  model?: string | null;
-}
-
-interface AmpSelectionSource {
-  args?: string[];
-  mode?: string | null;
-}
-
-interface CodexSelectionSource {
-  args?: string[];
-  effort?: string | null;
-  model?: string | null;
-  speed?: string | null;
-}
-
-interface GrokBuildSelectionSource {
-  args?: string[];
-  effort?: string | null;
-  model?: string | null;
-}
-
-interface QoderSelectionSource {
-  args?: string[];
-  effort?: string | null;
-  model?: string | null;
-}
-
-const HETERO_EXEC_AGENT_ARG_FLAG = '--agent-arg';
-
-const modelFlagsOf = (
-  type: 'codex' | 'grok-build' | 'kimi-code' | 'opencode' | 'pi' | 'qoder',
-): readonly string[] =>
-  HETERO_SELECTOR_CAPABILITIES[type].model.encodings.flatMap((encoding: HeteroCliEncoding) =>
-    encoding.kind === 'flag' ? encoding.flags : [],
-  );
-
-const CODEX_MODEL_FLAGS = modelFlagsOf('codex');
-const CURSOR_MODEL_FLAGS = ['--model'] as const;
-const GROK_BUILD_MODEL_FLAGS = modelFlagsOf('grok-build');
-const KIMI_CODE_MODEL_FLAGS = modelFlagsOf('kimi-code');
-const OPENCODE_MODEL_FLAGS = modelFlagsOf('opencode');
-const PI_MODEL_FLAGS = modelFlagsOf('pi');
-const QODER_MODEL_FLAGS = modelFlagsOf('qoder');
-
-const getExplicitAmpAgentMode = (
-  source: AmpSelectionSource | null | undefined,
-): AmpAgentMode | undefined => {
-  const mode = source?.mode?.trim();
-  return isAmpAgentMode(mode) ? mode : undefined;
-};
-
-const getExplicitClaudeCodeModel = (
-  source: ClaudeCodeSelectionSource | null | undefined,
-): string | undefined => {
-  const model = source?.model?.trim();
-  return model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION ? model : undefined;
-};
-
-const getExplicitClaudeCodeReasoningEffort = (
-  source: ClaudeCodeSelectionSource | null | undefined,
-): ClaudeCodeReasoningEffort | undefined => {
-  const effort = source?.effort?.trim();
-  return isClaudeCodeReasoningEffort(effort) ? effort : undefined;
-};
-
-const getExplicitCodexModel = (
-  source: CodexSelectionSource | null | undefined,
-): string | undefined => {
-  const model = source?.model?.trim();
-  return model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION ? model : undefined;
-};
-
-const getExplicitCodexReasoningEffort = (
-  source: CodexSelectionSource | null | undefined,
-): CodexReasoningEffort | undefined => {
-  const effort = source?.effort?.trim();
-  return isCodexReasoningEffort(effort) ? effort : undefined;
-};
-
-const getExplicitGrokBuildReasoningEffort = (
-  source: GrokBuildSelectionSource | null | undefined,
-): GrokBuildReasoningEffort | undefined => {
-  const effort = source?.effort?.trim();
-  return isGrokBuildReasoningEffort(effort) ? effort : undefined;
-};
-
-const getExplicitQoderReasoningEffort = (
-  source: QoderSelectionSource | null | undefined,
-): QoderReasoningEffort | undefined => {
-  const effort = source?.effort?.trim();
-  return isQoderReasoningEffort(effort) ? effort : undefined;
-};
-
-const getExplicitCodexSpeedMode = (
-  source: CodexSelectionSource | null | undefined,
-): CodexSpeedMode | undefined => {
-  const speed = source?.speed?.trim();
-  return isCodexFastServiceTier(speed) ? 'fast' : undefined;
-};
-
-/**
- * Resolve the effective native CLI args for a heterogeneous spawn.
- *
- * For Amp, Claude Code, CodeBuddy, and Codex, explicit mode/model/effort
- * selections are persisted on the provider config; this is the single place
- * that maps those stored settings onto provider-specific argv for direct local
- * desktop spawns. OpenCode, Pi, and Qoder use their device-local model catalogs
- * and forward the selected model using the native `--model` flag.
- * Missing/default settings are resolved by the UI helpers for display only.
- * They are not appended here because CLI overrides must not mask each CLI's
- * own settings/env/account defaults. User-authored `args` win, so there is
- * never a duplicate flag/config override.
- *
- * Returns `provider.args` unchanged (possibly `undefined`) when there is
- * nothing to inject, preserving the prior `args: provider.args` behavior for
- * every other provider type.
- */
-export const buildHeteroSpawnArgs = (
-  provider: HeterogeneousProviderConfig | undefined | null,
-): string[] | undefined => {
-  if (!provider) return undefined;
-  if (
-    provider.type !== 'amp' &&
-    provider.type !== 'claude-code' &&
-    provider.type !== 'codebuddy' &&
-    provider.type !== 'codex' &&
-    provider.type !== 'cursor' &&
-    provider.type !== 'droid' &&
-    provider.type !== 'devin' &&
-    provider.type !== 'grok-build' &&
-    provider.type !== 'kimi-code' &&
-    provider.type !== 'opencode' &&
-    provider.type !== 'pi' &&
-    provider.type !== 'qoder' &&
-    provider.type !== 'trae'
-  ) {
-    return provider.args;
-  }
-
-  const baseArgs = provider.args ?? [];
-  const extraArgs: string[] = [];
-
-  if (provider.type === 'amp') {
-    const mode = getExplicitAmpAgentMode(provider);
-    if (mode && !hasCliFlag(baseArgs, '--mode')) extraArgs.push('--mode', mode);
-  }
-
-  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
-    const model = getExplicitClaudeCodeModel(provider);
-    if (model && !hasCliFlag(baseArgs, '--model')) extraArgs.push('--model', model);
-    const effort = getExplicitClaudeCodeReasoningEffort(provider);
-    if (effort && !hasCliFlag(baseArgs, '--effort')) extraArgs.push('--effort', effort);
-  }
-
-  if (provider.type === 'codex') {
-    const model = getExplicitCodexModel(provider);
-    if (
-      model &&
-      !hasAnyCliFlag(baseArgs, CODEX_MODEL_FLAGS) &&
-      !hasCliConfigKey(baseArgs, 'model')
-    ) {
-      extraArgs.push('--model', model);
-    }
-
-    const effort = getExplicitCodexReasoningEffort(provider);
-    if (effort && !hasCliConfigKey(baseArgs, CODEX_REASONING_EFFORT_CONFIG_KEY)) {
-      extraArgs.push('-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${effort}"`);
-    }
-
-    const speed = getExplicitCodexSpeedMode(provider);
-    if (speed && !hasCliConfigKey(baseArgs, CODEX_SERVICE_TIER_CONFIG_KEY)) {
-      extraArgs.push('-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${speed}"`);
-    }
-  }
-
-  if (provider.type === 'grok-build') {
-    const model = provider.model?.trim();
-    if (
-      model &&
-      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasAnyCliFlag(baseArgs, GROK_BUILD_MODEL_FLAGS)
-    ) {
-      extraArgs.push('--model', model);
-    }
-    const effort = getExplicitGrokBuildReasoningEffort(provider);
-    if (effort && !hasAnyCliFlag(baseArgs, GROK_BUILD_REASONING_EFFORT_FLAGS)) {
-      extraArgs.push('--effort', effort);
-    }
-  }
-
-  if (provider.type === 'opencode') {
-    const model = provider.model?.trim();
-    if (
-      model &&
-      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasAnyCliFlag(baseArgs, OPENCODE_MODEL_FLAGS)
-    ) {
-      extraArgs.push('--model', model);
-    }
-  }
-
-  if (provider.type === 'cursor' || provider.type === 'devin') {
-    const model = provider.model?.trim();
-    if (
-      model &&
-      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasAnyCliFlag(baseArgs, CURSOR_MODEL_FLAGS)
-    ) {
-      extraArgs.push('--model', model);
-    }
-  }
-
-  if (provider.type === 'kimi-code') {
-    const model = provider.model?.trim();
-    if (
-      model &&
-      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasAnyCliFlag(baseArgs, KIMI_CODE_MODEL_FLAGS)
-    ) {
-      extraArgs.push('--model', model);
-    }
-  }
-
-  if (provider.type === 'pi') {
-    const model = provider.model?.trim();
-    if (
-      model &&
-      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasAnyCliFlag(baseArgs, PI_MODEL_FLAGS)
-    ) {
-      extraArgs.push('--model', model);
-    }
-  }
-
-  if (provider.type === 'qoder') {
-    const model = provider.model?.trim();
-    if (
-      model &&
-      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasAnyCliFlag(baseArgs, QODER_MODEL_FLAGS)
-    ) {
-      extraArgs.push('--model', model);
-    }
-    const effort = getExplicitQoderReasoningEffort(provider);
-    if (effort && !hasCliFlag(baseArgs, QODER_REASONING_EFFORT_FLAG)) {
-      extraArgs.push(QODER_REASONING_EFFORT_FLAG, effort);
-    }
-  }
-
-  if (extraArgs.length === 0) return provider.args;
-  return [...baseArgs, ...extraArgs];
-};
-
-/**
- * Resolve args for the `lh hetero exec` wrapper.
- *
- * Unlike `buildHeteroSpawnArgs`, these args are consumed by the LobeHub CLI
- * wrapper first, not by the native agent binary. Native provider args are
- * encoded with `--agent-arg=<arg>` so wrapper flags such as `-c, --command`
- * never collide with provider flags. Keep selector overrides in the wrapper's
- * structured `--model` / `--effort` form; `lh hetero exec` translates them
- * into native provider arguments immediately before `spawnAgent`. Amp mode is
- * encoded as a native argument because older device CLIs predate the wrapper's
- * structured `--mode` option but already support `--agent-arg`.
- */
-export const buildHeteroExecArgs = (
-  provider: HeterogeneousProviderConfig | undefined | null,
-): string[] | undefined => {
-  if (!provider) return undefined;
-  if (
-    provider.type !== 'amp' &&
-    provider.type !== 'claude-code' &&
-    provider.type !== 'codebuddy' &&
-    provider.type !== 'codex' &&
-    provider.type !== 'cursor' &&
-    provider.type !== 'droid' &&
-    provider.type !== 'devin' &&
-    provider.type !== 'grok-build' &&
-    provider.type !== 'kimi-code' &&
-    provider.type !== 'opencode' &&
-    provider.type !== 'pi' &&
-    provider.type !== 'qoder' &&
-    provider.type !== 'trae'
-  ) {
-    return provider.args;
-  }
-
-  const baseArgs = provider.args ?? [];
-  const wrapperArgs = baseArgs.map((arg) => `${HETERO_EXEC_AGENT_ARG_FLAG}=${arg}`);
-  const selectorArgs: string[] = [];
-
-  if (provider.type === 'amp') {
-    const mode = getExplicitAmpAgentMode(provider);
-    if (mode && !hasCliFlag(baseArgs, '--mode')) {
-      wrapperArgs.push(
-        `${HETERO_EXEC_AGENT_ARG_FLAG}=--mode`,
-        `${HETERO_EXEC_AGENT_ARG_FLAG}=${mode}`,
-      );
-    }
-  }
-
-  if (provider.type === 'claude-code' || provider.type === 'codebuddy') {
-    const model = getExplicitClaudeCodeModel(provider);
-    if (model && !hasCliFlag(baseArgs, '--model')) selectorArgs.push('--model', model);
-    const effort = getExplicitClaudeCodeReasoningEffort(provider);
-    if (effort && !hasCliFlag(baseArgs, '--effort')) selectorArgs.push('--effort', effort);
-  }
-
-  if (provider.type === 'codex') {
-    const model = getExplicitCodexModel(provider);
-    if (
-      model &&
-      !hasAnyCliFlag(baseArgs, CODEX_MODEL_FLAGS) &&
-      !hasCliConfigKey(baseArgs, 'model')
-    ) {
-      selectorArgs.push('--model', model);
-    }
-
-    const effort = getExplicitCodexReasoningEffort(provider);
-    if (
-      effort &&
-      !hasCliFlag(baseArgs, '--effort') &&
-      !hasCliConfigKey(baseArgs, CODEX_REASONING_EFFORT_CONFIG_KEY)
-    ) {
-      selectorArgs.push('--effort', effort);
-    }
-
-    const speed = getExplicitCodexSpeedMode(provider);
-    if (
-      speed &&
-      !hasCliFlag(baseArgs, '--speed') &&
-      !hasCliConfigKey(baseArgs, CODEX_SERVICE_TIER_CONFIG_KEY)
-    ) {
-      selectorArgs.push('--speed', speed);
-    }
-  }
-
-  if (provider.type === 'grok-build') {
-    const model = provider.model?.trim();
-    if (
-      model &&
-      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasAnyCliFlag(baseArgs, GROK_BUILD_MODEL_FLAGS)
-    ) {
-      wrapperArgs.push(
-        `${HETERO_EXEC_AGENT_ARG_FLAG}=--model`,
-        `${HETERO_EXEC_AGENT_ARG_FLAG}=${model}`,
-      );
-    }
-    const effort = getExplicitGrokBuildReasoningEffort(provider);
-    if (effort && !hasAnyCliFlag(baseArgs, GROK_BUILD_REASONING_EFFORT_FLAGS)) {
-      wrapperArgs.push(
-        `${HETERO_EXEC_AGENT_ARG_FLAG}=--effort`,
-        `${HETERO_EXEC_AGENT_ARG_FLAG}=${effort}`,
-      );
-    }
-  }
-
-  if (provider.type === 'opencode') {
-    const model = provider.model?.trim();
-    if (
-      model &&
-      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasAnyCliFlag(baseArgs, OPENCODE_MODEL_FLAGS)
-    ) {
-      selectorArgs.push('--model', model);
-    }
-  }
-
-  if (provider.type === 'cursor' || provider.type === 'devin') {
-    const model = provider.model?.trim();
-    if (
-      model &&
-      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasAnyCliFlag(baseArgs, CURSOR_MODEL_FLAGS)
-    ) {
-      selectorArgs.push('--model', model);
-    }
-  }
-
-  if (provider.type === 'kimi-code') {
-    const model = provider.model?.trim();
-    if (
-      model &&
-      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasAnyCliFlag(baseArgs, KIMI_CODE_MODEL_FLAGS)
-    ) {
-      selectorArgs.push('--model', model);
-    }
-  }
-
-  if (provider.type === 'pi') {
-    const model = provider.model?.trim();
-    if (
-      model &&
-      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasAnyCliFlag(baseArgs, PI_MODEL_FLAGS)
-    ) {
-      selectorArgs.push('--model', model);
-    }
-  }
-
-  if (provider.type === 'qoder') {
-    const model = provider.model?.trim();
-    if (
-      model &&
-      model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !hasAnyCliFlag(baseArgs, QODER_MODEL_FLAGS)
-    ) {
-      selectorArgs.push('--model', model);
-    }
-    const effort = getExplicitQoderReasoningEffort(provider);
-    if (effort && !hasCliFlag(baseArgs, QODER_REASONING_EFFORT_FLAG)) {
-      selectorArgs.push('--effort', effort);
-    }
-  }
-
-  if (provider.type === 'droid' || provider.type === 'trae') {
-    const model = provider.model?.trim();
-    if (model && model !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION) {
-      selectorArgs.push('--model', model);
-    }
-  }
-
-  const args = [...wrapperArgs, ...selectorArgs];
-  return args.length > 0 ? args : undefined;
-};
-
 /**
  * Where an agent runs.
  * - `none`    : no execution environment — plain chat, no built-in run tools
@@ -943,6 +491,12 @@ export type ExecutionPlan = { target: DeviceExecutionTarget } &
      * (hetero dispatch).
      */
     | { kind: 'device-unrouted'; reason: ExecutionPlanUnroutedReason }
+    /**
+     * Bound to a managed cloud device that is not online yet but can be woken.
+     * The run stays on this device: callers wake it before they dispatch to it,
+     * and tool calls that reach it while it starts answer `DEVICE_WAKING`.
+     */
+    | { deviceId: string; kind: 'device-wakeable' }
     /** plain chat — no execution environment, no run tools, no device ever */
     | { kind: 'none' }
     /** ephemeral cloud sandbox */

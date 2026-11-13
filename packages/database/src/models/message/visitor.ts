@@ -1,5 +1,4 @@
 import type {
-  AssistantContentBlock,
   ChatMessageError,
   ChatMessageExtra,
   MessageMetadata,
@@ -266,16 +265,6 @@ const sanitizeVisitorSignalCallbacks = (
   }));
 
 /**
- * `taskCompletions[]` blocks are denormalized post-task-summary snapshots built
- * by `FlatListBuilder`, each carrying its own `usage` — the same class of
- * creator spend data as the top-level `usage` field.
- */
-const sanitizeVisitorTaskCompletions = (
-  taskCompletions: AssistantContentBlock[] | undefined,
-): AssistantContentBlock[] | undefined =>
-  taskCompletions?.map(({ usage: _usage, ...rest }) => rest);
-
-/**
  * `metadata.usage` / `metadata.cost` are the pre-migration duplicates of the
  * (denied) top-level `usage` field — kept on the type only so legacy rows
  * written before the dedicated `usage` column still type-check.
@@ -358,7 +347,6 @@ export const toVisitorMessage = (
           model: undefined,
           provider: undefined,
           signalCallbacks: sanitizeVisitorSignalCallbacks(message.signalCallbacks),
-          taskCompletions: sanitizeVisitorTaskCompletions(message.taskCompletions),
           taskDetail: sanitizeVisitorTaskDetail(message.taskDetail),
           usage: undefined,
         }
@@ -366,7 +354,6 @@ export const toVisitorMessage = (
           model: message.model,
           provider: message.provider,
           signalCallbacks: message.signalCallbacks,
-          taskCompletions: message.taskCompletions,
           taskDetail: message.taskDetail,
           usage: message.usage,
         }),

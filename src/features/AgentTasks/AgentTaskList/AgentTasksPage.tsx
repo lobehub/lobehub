@@ -25,11 +25,12 @@ import { useGlobalStore } from '@/store/global';
 import type { TaskViewMode } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useTaskStore } from '@/store/task';
-import { taskListSelectors } from '@/store/task/selectors';
+import { taskLabelSelectors, taskListSelectors } from '@/store/task/selectors';
 import { TASK_COLLECTION_PAGE_SIZE } from '@/store/task/slices/list/action';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { createTaskModal } from '../CreateTaskModal';
+import { useTaskProjectList } from '../features/useTaskProjectList';
 import Breadcrumb from '../shared/Breadcrumb';
 import { taskDetailPath } from '../shared/taskDetailPath';
 import CreateTaskInlineEntry from './CreateTaskInlineEntry';
@@ -45,6 +46,8 @@ import {
 import KanbanBoard from './KanbanBoard';
 import type { TaskListViewOptions } from './listViewOptions';
 import {
+  dropMissingLabelGroupings,
+  dropProjectGrouping,
   getCompletedWithin,
   getVisibleTaskStatuses,
   normalizeTaskListViewOptions,
@@ -185,6 +188,20 @@ export const getScheduledTaskViewOptions = (
 });
 
 /**
+ * Whether a collection's project groups need the project list to be told apart.
+ * Judged on what the collection renders: the scheduled tab replaces the stored
+ * grouping, so a stored `project` must not hold it behind the project request.
+ */
+export const collectionGroupsByProject = (
+  collection: TaskCollection,
+  viewOptions: TaskListViewOptions,
+): boolean => {
+  const { groupBy, subGroupBy } =
+    collection === 'scheduled' ? getScheduledTaskViewOptions(viewOptions) : viewOptions;
+  return groupBy === 'project' || subGroupBy === 'project';
+};
+
+/**
  * "My tasks" additionally sends `completedTasks` as a server filter
  * (`getVisibleTaskStatuses` / `getCompletedWithin`) rather than applying it to
  * the fetched page.
@@ -254,7 +271,43 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   );
   const hasFilter = !!filter;
   const rawViewOptions = useGlobalStore(systemStatusSelectors.taskListViewOptions);
-  const viewOptions = useMemo(() => normalizeTaskListViewOptions(rawViewOptions), [rawViewOptions]);
+  // Joined into a string so the selector returns a stable primitive.
+  const labelGroupIdsKey = useTaskStore((s) =>
+    taskLabelSelectors.isLabelsInit(s)
+      ? taskLabelSelectors
+          .labelGroups(s)
+          .map((group) => group.id)
+          .join(',')
+      : undefined,
+  );
+  // The one read of the project list for this page; rows map ids through its cache.
+  const {
+    enabled: projectsEnabled,
+    error: projectsError,
+    projects,
+    retry: retryProjects,
+  } = useTaskProjectList();
+  const canGroupByProject = projectsEnabled && !projectId;
+  const viewOptions = useMemo(() => {
+    const options = dropMissingLabelGroupings(
+      normalizeTaskListViewOptions(rawViewOptions),
+      labelGroupIdsKey === undefined
+        ? undefined
+        : new Set(labelGroupIdsKey.split(',').filter(Boolean)),
+    );
+    return canGroupByProject ? options : dropProjectGrouping(options);
+  }, [canGroupByProject, rawViewOptions, labelGroupIdsKey]);
+  // Project groups cannot be told apart until the list that names them loads, so
+  // a list view holds its skeleton, or surfaces the failure, instead of
+  // flashing every task under "No project".
+  const needsProjectList = !projects && collectionGroupsByProject(collection, viewOptions);
+  const projectListError = needsProjectList ? projectsError : undefined;
+  const isProjectListPending = needsProjectList && !projectsError;
+  // Group headers of the ordinary list offer the board's column create entry.
+  const groupCreateScope = useMemo(
+    () => (canCreateTask ? { agentId, projectId } : undefined),
+    [agentId, canCreateTask, projectId],
+  );
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   // Keep the sync handle for `error` + `mutate` (the error/Retry state) and the
   // `queryKey` the rows are read by. Every scope splits automated work out of the ordinary tab — it is the
@@ -522,6 +575,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
             )}
             {!isScheduledCollection && headerVisibility.showViewOptions && (
               <TasksGroupConfig
+                canGroupByProject={canGroupByProject}
                 options={viewOptions}
                 pinnedOptions={isMineCollection ? PAGINATED_COLLECTION_PINNED_OPTIONS : undefined}
                 setOptions={setViewOptions}
@@ -571,9 +625,9 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
         >
           <TaskList
             data={isCollectionListInit || undefined}
-            error={collectionSWR.error}
+            error={collectionSWR.error ?? projectListError}
             filter={filter}
-            isLoading={collectionSWR.isLoading || (!isCollectionListInit && !collectionSWR.error)}
+            hideProject={!!projectId}
             items={collectionTasks}
             options={isMineCollection ? myTaskViewOptions : scheduledViewOptions}
             routeScope={routeScope}
@@ -595,6 +649,11 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
                   )
                 : t('taskList.scheduled.empty'))
             }
+            isLoading={
+              collectionSWR.isLoading ||
+              isProjectListPending ||
+              (!isCollectionListInit && !collectionSWR.error)
+            }
             selectionScope={[
               collection,
               isMineCollection ? myTaskScope : '',
@@ -602,7 +661,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
               agentId ?? '',
               projectId ?? '',
             ].join(':')}
-            onRetry={() => collectionSWR.mutate()}
+            onRetry={() => (projectListError ? retryProjects() : collectionSWR.mutate())}
           />
           {(collectionTasksTotal > COLLECTION_PAGE_SIZE || collectionPage > 1) && (
             <Flexbox horizontal justify={'center'} paddingBlock={8}>
@@ -645,16 +704,18 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
             />
           )}
           <TaskList
+            createScope={groupCreateScope}
             data={isTaskListInit || undefined}
             emptyAction={filterEmptyAction}
             emptyDescription={filterEmptyDescription}
-            error={error}
+            error={error ?? projectListError}
             filter={filter}
-            isLoading={isLoading || (!isTaskListInit && !error)}
+            hideProject={!!projectId}
+            isLoading={isLoading || isProjectListPending || (!isTaskListInit && !error)}
             options={viewOptions}
             queryKey={queryKey}
             routeScope={routeScope}
-            onRetry={() => mutate()}
+            onRetry={() => (projectListError ? retryProjects() : mutate())}
             onShowHiddenCompleted={handleShowHiddenCompleted}
           />
         </WideScreenContainer>

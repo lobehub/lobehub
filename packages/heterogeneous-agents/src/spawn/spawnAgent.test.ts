@@ -569,7 +569,7 @@ describe('spawnAgent', () => {
     await expect(handle.exit).resolves.toEqual({ code: 0, signal: null });
 
     expect(spawnCalls[0]).toMatchObject({
-      args: ['--model', 'sonnet', '--mode', 'plan', 'acp'],
+      args: ['--model', 'sonnet', '--mode', 'plan', '--force', 'acp'],
       command: 'agent',
     });
     expect(fake.requests.map(({ method }) => method).filter(Boolean)).toEqual([
@@ -616,6 +616,7 @@ describe('spawnAgent', () => {
         'initialize',
         'session/new',
         'session/set_config_option',
+        'session/set_config_option',
         'session/prompt',
       ]);
       expect(
@@ -632,7 +633,7 @@ describe('spawnAgent', () => {
     }
   });
 
-  it('applies a permission mode through ACP session/set_config_option', async () => {
+  it('forces the Devin bypass session mode through ACP session/set_config_option', async () => {
     const fake = createFakeAcpProc({
       responseText: 'Devin response',
       sessionId: 'devin-session-1',
@@ -647,7 +648,6 @@ describe('spawnAgent', () => {
         extraArgs: ['--model', 'sonnet'],
         initialModel: 'sonnet',
         operationId: 'op-devin',
-        permissionMode: 'bypass',
         prompt: 'do a thing',
       });
       const events = [];

@@ -1,4 +1,4 @@
-import type { AcceptanceCommentItem, ReviewComment } from '@lobechat/types';
+import type { AcceptanceCommentItem, AcceptanceReviewComment } from '@lobechat/types';
 
 const MAX_THREADS = 200;
 
@@ -6,7 +6,10 @@ interface Viewer {
   userId: string;
 }
 
-export const toReviewComment = (item: AcceptanceCommentItem, viewer: Viewer): ReviewComment => {
+export const toReviewComment = (
+  item: AcceptanceCommentItem,
+  viewer: Viewer,
+): AcceptanceReviewComment => {
   const mine = item.authorUserId === viewer.userId;
   const screenshot = item.attachments[0]?.url;
   return {
@@ -31,7 +34,7 @@ export const toReviewComment = (item: AcceptanceCommentItem, viewer: Viewer): Re
 
 export const toReviewThreads = (items: AcceptanceCommentItem[], viewer: Viewer) => {
   const visible = items.filter((item) => item.kind === 'comment' && !item.deletedAt);
-  const replies = new Map<string, ReviewComment[]>();
+  const replies = new Map<string, AcceptanceReviewComment[]>();
   for (const item of visible) {
     if (!item.parentCommentId) continue;
     const thread = replies.get(item.parentCommentId) ?? [];

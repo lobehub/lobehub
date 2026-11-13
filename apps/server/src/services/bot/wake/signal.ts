@@ -1,8 +1,6 @@
-import {
-  parseDiscordMentions,
-  resolveChannelKeys,
-} from '@/server/services/agentSignal/scenarios/botWake/facts';
-import type { WakeAuthor, WakeSignal } from '@/server/services/agentSignal/scenarios/botWake/types';
+import type { WakeAuthor, WakeSignal } from '@/server/services/conversationWake/types';
+
+import { parseDiscordMentions, resolveChannelKeys } from './platformFacts';
 
 /** The part of a chat-sdk `Message` the wake pipeline reads. */
 export interface WakeMessageLike {

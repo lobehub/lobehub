@@ -40,6 +40,7 @@ const stageMaps = {
     installers: 'installer-upload-failed',
     shell: 'shell-json-failed',
     base: 'core-r0-upload-failed',
+    manifests: 'installer-manifest-upload-failed',
   },
 };
 

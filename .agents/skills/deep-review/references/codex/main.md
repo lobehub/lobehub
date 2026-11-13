@@ -144,10 +144,10 @@ Ask one finding at a time for confirmed `can_auto_fix: false` items and `needsCo
 P1 → P2 and blocking first. Exclude legacy hand-offs. Skip low-likelihood, non-blocking items on
 repeat review unless requested.
 
-## Step 8 — Offer legacy hand-off issues
+## Step 8 — Offer legacy hand-off tasks
 
-When legacy hand-offs exist, ask once whether to create all, some, or no Linear issues. Create
-nothing before approval. On approval, use the `linear` skill and include location, culprit,
+When legacy hand-offs exist, ask once whether to create all, some, or no LobeHub tasks. Create
+nothing before approval. On approval, create them with `lh task create` and include location, culprit,
 scenario, likelihood, and verification evidence.
 
 ## Notes

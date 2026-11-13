@@ -17,6 +17,7 @@ import {
   parseDriveDownloadOutput,
   prepareDriveDownload,
 } from '../driveDownload';
+import { SandboxStorageFilesError } from '../storageFiles';
 
 const hasPython = spawnSync('python3', ['--version']).status === 0;
 
@@ -424,5 +425,144 @@ describe('prepareDriveDownload', () => {
       prepareDriveDownload({ fileService, hidden: [], path: 'a', sandbox }),
     ).rejects.toMatchObject({ code: 'DOWNLOAD_UNAVAILABLE' });
     expect(sandbox.callTool).not.toHaveBeenCalled();
+  });
+
+  describe('through the storage service', () => {
+    const storageAnswering = (answer: () => Promise<any>) => ({ exportFile: vi.fn(answer) });
+
+    it('exports without a sandbox and links the copy', async () => {
+      const storage = storageAnswering(async () => ({
+        contentType: 'application/zip',
+        kind: 'directory',
+        size: 9,
+      }));
+      const sandbox = sandboxAnswering(undefined);
+
+      const result = await prepareDriveDownload({
+        fileService,
+        hidden: ['project/private'],
+        path: 'project',
+        sandbox,
+        storage,
+      });
+
+      const [key] = fileService.createPreSignedUpload.mock.calls[0] as unknown as [string];
+      expect(storage.exportFile).toHaveBeenCalledWith(
+        {
+          fileOnly: undefined,
+          hidden: ['project/private'],
+          maxBytes: DRIVE_DOWNLOAD_MAX_BYTES,
+          maxFiles: expect.any(Number),
+          path: 'project',
+          uploadHeaders: { 'x-amz-acl': 'public-read' },
+          uploadUrl: `https://upload/${key}`,
+        },
+        { signal: expect.any(AbortSignal) },
+      );
+      expect(result).toMatchObject({ fileName: 'project.zip', kind: 'directory', size: 9 });
+      expect(sandbox.callTool).not.toHaveBeenCalled();
+    });
+
+    it('bounds the export, and fails it without a sandbox when it runs out of time', async () => {
+      const storage = storageAnswering(async () => {
+        throw new DOMException('The operation timed out.', 'TimeoutError');
+      });
+      const sandbox = sandboxAnswering(undefined);
+
+      await expect(
+        prepareDriveDownload({ fileService, hidden: [], path: 'big', sandbox, storage }),
+      ).rejects.toMatchObject({
+        code: 'DOWNLOAD_FAILED',
+        message: 'DOWNLOAD_FAILED: EXPORT_TIMEOUT',
+      });
+
+      const [, options] = storage.exportFile.mock.calls[0] as unknown as [unknown, any];
+      expect(options.signal).toBeInstanceOf(AbortSignal);
+      expect(sandbox.callTool).not.toHaveBeenCalled();
+      expect(fileService.deleteFile).toHaveBeenCalled();
+    });
+
+    it('works on a deployment whose sandbox has no shell', async () => {
+      const storage = storageAnswering(async () => ({
+        contentType: 'text/plain',
+        kind: 'file',
+        size: 1,
+      }));
+
+      await expect(
+        prepareDriveDownload({
+          fileService,
+          hidden: [],
+          path: 'a.txt',
+          purpose: 'preview',
+          sandbox: sandboxAnswering('', false),
+          storage,
+        }),
+      ).resolves.toMatchObject({ fileName: 'a.txt' });
+      expect(storage.exportFile).toHaveBeenCalledWith(
+        expect.objectContaining({ fileOnly: true }),
+        expect.anything(),
+      );
+    });
+
+    it('packs in a sandbox when the storage service cannot export', async () => {
+      for (const error of [
+        new SandboxStorageFilesError('no function', 501, 'EXPORT_UNAVAILABLE'),
+        // A storage service from before the route: Not Found, with no code of ours.
+        new SandboxStorageFilesError('Not Found', 404),
+        new SandboxStorageFilesError('Method Not Allowed', 405),
+      ]) {
+        const sandbox = sandboxAnswering(
+          'LOBE_DRIVE_DOWNLOAD_RESULT {"ok":true,"kind":"file","size":1,"contentType":"text/plain"}',
+        );
+
+        await expect(
+          prepareDriveDownload({
+            fileService,
+            hidden: [],
+            path: 'a.txt',
+            sandbox,
+            storage: storageAnswering(async () => {
+              throw error;
+            }),
+          }),
+        ).resolves.toMatchObject({ fileName: 'a.txt' });
+        expect(sandbox.callTool).toHaveBeenCalledOnce();
+      }
+    });
+
+    it('answers a refusal in the codes the client translates, and deletes the copy', async () => {
+      const cases = [
+        ['EXPORT_NOT_FOUND', 404, 'PATH_NOT_FOUND'],
+        ['EXPORT_TOO_LARGE', 413, 'DOWNLOAD_TOO_LARGE'],
+        ['EXPORT_NOT_A_FILE', 400, 'PREVIEW_NOT_A_FILE'],
+        ['EXPORT_UPLOAD_FAILED', 500, 'DOWNLOAD_FAILED'],
+        ['EXPORT_READ_FAILED', 500, 'DOWNLOAD_FAILED'],
+        ['EXPORT_INTERNAL', 500, 'DOWNLOAD_FAILED'],
+        // A request the storage service rejected is ours to fix, not a reason
+        // to retry the same copy in a sandbox.
+        ['EXPORT_INVALID_PARAMS', 400, 'DOWNLOAD_FAILED'],
+        [undefined, 502, 'DOWNLOAD_FAILED'],
+      ] as const;
+
+      for (const [code, status, expected] of cases) {
+        fileService.deleteFile.mockClear();
+        const sandbox = sandboxAnswering(undefined);
+
+        await expect(
+          prepareDriveDownload({
+            fileService,
+            hidden: [],
+            path: 'a',
+            sandbox,
+            storage: storageAnswering(async () => {
+              throw new SandboxStorageFilesError('refused', status, code);
+            }),
+          }),
+        ).rejects.toMatchObject({ code: expected });
+        expect(sandbox.callTool).not.toHaveBeenCalled();
+        expect(fileService.deleteFile).toHaveBeenCalledOnce();
+      }
+    });
   });
 });

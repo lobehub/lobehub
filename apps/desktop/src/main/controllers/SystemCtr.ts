@@ -1,10 +1,16 @@
 import { access, readdir } from 'node:fs/promises';
 import process from 'node:process';
 
-import type { ElectronAppState, ThemeMode } from '@lobechat/electron-client-ipc';
+import type {
+  DebugLoggingSettings,
+  ElectronAppState,
+  RemoteDebuggingSettings,
+  ThemeMode,
+} from '@lobechat/electron-client-ipc';
 import { app, dialog, nativeTheme, shell } from 'electron';
 
 import { legacyLocalDbDir } from '@/const/dir';
+import { getRemoteDebuggingLaunchState, REMOTE_DEBUGGING_PORT } from '@/modules/remoteDebugging';
 import { createLogger } from '@/utils/logger';
 import {
   getAccessibilityStatus,
@@ -16,6 +22,7 @@ import {
   requestScreenCaptureAccess,
 } from '@/utils/permissions';
 import * as electronIs from '@/utils/platform';
+import { applyDebugLogging, getStructuredLogDirectory } from '@/utils/structuredLog';
 import { getSystemLanguage, resolveUILocale } from '@/utils/system-language';
 import { safeGetPath } from '@/utils/user-path';
 
@@ -196,6 +203,52 @@ export default class SystemController extends ControllerModule {
   async openFullDiskAccessSettings() {
     if (await this.app.permissionGuide.open('fullDisk')) return;
     return openFullDiskAccessSettings();
+  }
+
+  /**
+   * Settings → About → Debug logs. `alwaysOn` is true in dev, which records
+   * `debug` regardless of the setting.
+   */
+  @IpcMethod()
+  getDebugLoggingSettings(): DebugLoggingSettings {
+    return {
+      alwaysOn: !app.isPackaged,
+      enabled: this.app.storeManager.get('debugLoggingEnabled', false),
+    };
+  }
+
+  @IpcMethod()
+  setDebugLoggingEnabled(enabled: boolean): DebugLoggingSettings {
+    this.app.storeManager.set('debugLoggingEnabled', enabled);
+    applyDebugLogging(enabled);
+    logger.info(`Debug logging ${enabled ? 'enabled' : 'disabled'}`);
+    return this.getDebugLoggingSettings();
+  }
+
+  @IpcMethod()
+  getRemoteDebuggingSettings(): RemoteDebuggingSettings {
+    return {
+      ...getRemoteDebuggingLaunchState(),
+      enabled: this.app.storeManager.get('remoteDebuggingEnabled', false),
+      port: REMOTE_DEBUGGING_PORT,
+    };
+  }
+
+  /** Persists the toggle; Chromium reads the CDP switch only at startup, so it applies on restart. */
+  @IpcMethod()
+  setRemoteDebuggingEnabled(enabled: boolean): RemoteDebuggingSettings {
+    this.app.storeManager.set('remoteDebuggingEnabled', enabled);
+    logger.info(`Remote debugging ${enabled ? 'enabled' : 'disabled'} for the next launch`);
+    return this.getRemoteDebuggingSettings();
+  }
+
+  /** Reveals `<userData>/logs/` so a user can attach the files to a bug report. */
+  @IpcMethod()
+  async openLogDirectory(): Promise<void> {
+    const directory = getStructuredLogDirectory();
+    if (!directory) return;
+    const error = await shell.openPath(directory);
+    if (error) logger.warn(`Failed to open log directory: ${error}`);
   }
 
   @IpcMethod()

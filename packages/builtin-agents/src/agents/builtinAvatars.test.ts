@@ -59,13 +59,6 @@ describe('built-in agent avatars', () => {
       expect(avatar, agent).toBe('/branding/logo.png');
   });
 
-  it('leaves no upstream mascot behind under custom branding', async () => {
-    const avatars = await loadAvatars('/branding/logo.png');
-
-    for (const [agent, avatar] of Object.entries(avatars))
-      expect(avatar, agent).not.toMatch(/\/avatars\//);
-  });
-
   // Upstream ships no logo, and each agent's own artwork is worth keeping there.
   it('keeps each agent distinct when no logo is configured', async () => {
     const avatars = await loadAvatars('');

@@ -50,7 +50,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   preview: css`
     padding-block: 12px;
-    padding-inline: 14px;
+    padding-inline: 16px;
     border-radius: 12px;
     background: ${cssVar.colorFillQuaternary};
   `,

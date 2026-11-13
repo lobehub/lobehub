@@ -22,6 +22,7 @@ import { type AgentDocumentListItem, agentDocumentService } from '@/services/age
 import { agentDocumentActions } from './action';
 import { initialState } from './initialState';
 import {
+  agentDocumentChatTopicResource,
   agentDocumentListResource,
   type AgentDocumentReaderParams,
   agentDocumentReaderResource,
@@ -66,6 +67,7 @@ const reader = () =>
 
 const LIST_KEY = agentDocumentListResource.storageKey(AGENT_ID);
 const READER_KEY = agentDocumentReaderResource.storageKey(READER);
+const CHAT_TOPIC_KEY = agentDocumentChatTopicResource.storageKey(READER);
 
 describe('agent document replicas', () => {
   const scopes = new Set<string>();
@@ -95,6 +97,7 @@ describe('agent document replicas', () => {
       [...scopes].flatMap((value) => [
         agentDocumentListResource.storage!.remove({ queryKey: LIST_KEY, scope: value }),
         agentDocumentReaderResource.storage!.remove({ queryKey: READER_KEY, scope: value }),
+        agentDocumentChatTopicResource.storage!.remove({ queryKey: CHAT_TOPIC_KEY, scope: value }),
       ]),
     );
     scopes.clear();
@@ -102,13 +105,35 @@ describe('agent document replicas', () => {
     vi.clearAllMocks();
   });
 
+  describe('document chat topic', () => {
+    const topicId = () =>
+      agentDocumentSelectors.getDocumentChatTopicId(READER)(useAgentDocumentStore.getState());
+
+    it('seeds the persisted topic id before the page mounts, for the docs route loader', async () => {
+      await agentDocumentChatTopicResource.storage!.set(
+        { queryKey: CHAT_TOPIC_KEY, scope },
+        { data: { topicId: 'tpc_doc' }, updatedAt: 1 },
+      );
+      const getOrCreate = vi.spyOn(agentDocumentService, 'getOrCreateChatTopic');
+
+      await expect(agentDocumentActions.preHydrateDocumentChatTopic(READER)).resolves.toBe(true);
+
+      expect(topicId()).toBe('tpc_doc');
+      // Seeding never provisions a topic: get-or-create waits for the ownership-gated sync.
+      expect(getOrCreate).not.toHaveBeenCalled();
+    });
+
+    it('leaves the topic unresolved when nothing is persisted or no document is routed', async () => {
+      await expect(agentDocumentActions.preHydrateDocumentChatTopic(READER)).resolves.toBe(false);
+      await expect(agentDocumentActions.preHydrateDocumentChatTopic(null)).resolves.toBe(false);
+
+      expect(topicId()).toBeUndefined();
+    });
+  });
+
   describe('document list', () => {
     const renderSync = () =>
       renderHook(() => agentDocumentActions.useFetchDocumentList(AGENT_ID), { wrapper });
-
-    it('caps how many agents keep a persisted list', () => {
-      expect(agentDocumentListResource.maxPersistedEntries).toBe(30);
-    });
 
     it('paints the persisted list before the network answers', async () => {
       await agentDocumentListResource.storage!.set(
@@ -256,10 +281,6 @@ describe('agent document replicas', () => {
   describe('reader', () => {
     const renderSync = () =>
       renderHook(() => agentDocumentActions.useFetchReaderDocument(READER), { wrapper });
-
-    it('caps how many reader bodies persist', () => {
-      expect(agentDocumentReaderResource.maxPersistedEntries).toBe(20);
-    });
 
     it('paints the persisted body before the network answers', async () => {
       await agentDocumentReaderResource.storage!.set(

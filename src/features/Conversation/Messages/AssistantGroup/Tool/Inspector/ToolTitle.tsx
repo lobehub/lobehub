@@ -114,7 +114,7 @@ const ToolTitle = memo<ToolTitleProps>(
       const status = isLoading ? 'loading' : failed ? 'failed' : 'completed';
       return (
         <div {...stylex.props(styles.root, isAborted && styles.aborted)}>
-          <span {...sx([styles.label], isLoading ? shinyTextStyles.shinyText : undefined)}>
+          <span {...sx(styles.label, isLoading ? shinyTextStyles.shinyText : undefined)}>
             {t(`builtins.goalCommand.${goalCommand.kind}.${status}`)}
           </span>
           {goalTitle && <span {...stylex.props(styles.standalone)}>{goalTitle}</span>}
@@ -125,12 +125,12 @@ const ToolTitle = memo<ToolTitleProps>(
     return (
       <div {...stylex.props(styles.root, isAborted && styles.aborted)}>
         {isStandaloneDescription ? (
-          <span {...sx([styles.standalone], isLoading ? shinyTextStyles.shinyText : undefined)}>
+          <span {...sx(styles.standalone, isLoading ? shinyTextStyles.shinyText : undefined)}>
             {keyword}
           </span>
         ) : (
           <>
-            <span {...sx([styles.label], isLoading ? shinyTextStyles.shinyText : undefined)}>
+            <span {...sx(styles.label, isLoading ? shinyTextStyles.shinyText : undefined)}>
               {actionLabel || (
                 <>
                   {pluginTitle && (

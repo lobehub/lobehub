@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
+import { type ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { useChatStore } from '../../../../../store';
@@ -41,6 +42,7 @@ beforeEach(() => {
     useChatStore.setState({
       activeAgentId: agentId,
       activeTopicId: topicId,
+      topicDataMap: {},
       dbMessagesMap: { [key]: originalMessages },
       messagesMap: { [key]: originalMessages },
     });
@@ -175,5 +177,88 @@ describe('executeCompression', () => {
     });
     expect(messageService.cancelCompression).not.toHaveBeenCalled();
     expect(getMessageIds()).toEqual(['group-1']);
+  });
+
+  describe('summary model', () => {
+    const runWithSummary = async (options?: Parameters<ChatStore['executeCompression']>[2]) => {
+      vi.spyOn(messageService, 'finalizeCompression').mockResolvedValue({ messages: [] });
+      const fetchSpy = vi
+        .spyOn(chatService, 'fetchPresetTaskResult')
+        .mockImplementation(async ({ onMessageHandle }) => {
+          onMessageHandle?.({ text: 'summary', type: 'text' });
+        });
+      await act(async () => {
+        await useChatStore.getState().executeCompression(context, '', options);
+      });
+      return fetchSpy.mock.calls[0][0].params;
+    };
+
+    const pinTopicModel = () =>
+      act(() => {
+        useChatStore.setState({
+          topicDataMap: {
+            [agentId]: {
+              items: [{ id: topicId, model: 'claude-opus-4-8', provider: 'anthropic' }],
+            } as any,
+          },
+        });
+      });
+
+    it('uses the model pinned to the topic over the agent default', async () => {
+      pinTopicModel();
+
+      const params = await runWithSummary();
+
+      expect(params).toMatchObject({ model: 'claude-opus-4-8', provider: 'anthropic' });
+    });
+
+    it('uses the pinned model for the exceeded-context compact-and-retry', async () => {
+      pinTopicModel();
+
+      // Same options the ExceededContextWindowError card passes.
+      const params = await runWithSummary({ beforeMessageId: 'assistant-1', onRetry: vi.fn() });
+
+      expect(params).toMatchObject({ model: 'claude-opus-4-8', provider: 'anthropic' });
+    });
+
+    it('falls back to the agent default when the topic has no pinned model', async () => {
+      act(() => {
+        useChatStore.setState({
+          topicDataMap: { [agentId]: { items: [{ id: topicId }] } as any },
+        });
+      });
+
+      const params = await runWithSummary();
+
+      expect(params).toMatchObject({ model: 'gpt-4o-mini', provider: 'openai' });
+    });
+
+    it('ignores a heterogeneous runtime pin, which the chat endpoint cannot serve', async () => {
+      vi.spyOn(agentByIdSelectors, 'isAgentHeterogeneousById').mockImplementation(() => () => true);
+      // snapshotAgentModel pins the CLI runtime type as the topic provider.
+      act(() => {
+        useChatStore.setState({
+          topicDataMap: {
+            [agentId]: { items: [{ id: topicId, model: 'default', provider: 'cursor' }] } as any,
+          },
+        });
+      });
+
+      const params = await runWithSummary();
+
+      expect(params).toMatchObject({ model: 'gpt-4o-mini', provider: 'openai' });
+    });
+
+    it('falls back to the agent default when the topic pin has no provider', async () => {
+      act(() => {
+        useChatStore.setState({
+          topicDataMap: { [agentId]: { items: [{ id: topicId, model: 'gpt-5' }] } as any },
+        });
+      });
+
+      const params = await runWithSummary();
+
+      expect(params).toMatchObject({ model: 'gpt-4o-mini', provider: 'openai' });
+    });
   });
 });

@@ -65,7 +65,13 @@ export const groupAccessFields = (fields: FieldSchema[]): AccessSectionGroup[] =
 };
 
 /** What a reply looks like in the chat. These save themselves as soon as they change. */
-export const REPLY_KEYS = ['replyPlacement', 'displayToolCalls', 'showUsageStats', 'reactionMode'];
+export const REPLY_KEYS = [
+  'replyPlacement',
+  'displayToolCalls',
+  'processingMessage',
+  'showUsageStats',
+  'reactionMode',
+];
 
 /**
  * How the bot talks: its style everywhere, a style per channel, and the emoji it may use. Long

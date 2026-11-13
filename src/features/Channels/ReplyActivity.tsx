@@ -6,19 +6,12 @@ import { useTranslation } from 'react-i18next';
 import AgentAvatar from '@/components/AgentAvatar';
 
 import { activityLabel } from './activityLabel';
-import { channelJobStatus, memberCurrentJob, replyActivityJobs } from './jobStatus';
+import { channelJobStatus, conversationReplies, memberCurrentJob } from './jobStatus';
 import { replyEntries, ReplyList } from './MessageReceipts';
 import { activityStyles, styles } from './styles';
+import { TypingDots } from './TypingDots';
 
 const MAX_AVATARS = 3;
-
-const TypingDots = () => (
-  <span aria-hidden {...stylex.props(activityStyles.dots)}>
-    {[0, 1, 2].map((index) => (
-      <span key={index} {...stylex.props(activityStyles.typingDot, activityStyles.delay(index))} />
-    ))}
-  </span>
-);
 
 /**
  * Who is replying in this conversation, above the composer like a chat app's typing line.
@@ -32,9 +25,7 @@ export function ReplyActivity({
   threadId: string | null;
 }) {
   const { t, i18n } = useTranslation('channel');
-  const { jobs: allJobs = [], messages = [] } = detail;
-  const jobs = replyActivityJobs(allJobs.filter((job) => (job.threadId ?? null) === threadId));
-  const receiving = messages.some((message) => message.routingStatus === 'pending');
+  const { jobs, receiving } = conversationReplies(detail, threadId);
   if (!jobs.length)
     return receiving ? (
       <span role="status" {...stylex.props(activityStyles.line, styles.muted)}>

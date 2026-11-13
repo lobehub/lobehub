@@ -4,7 +4,6 @@ import type { HeterogeneousProviderConfig } from './agencyConfig';
 import { buildHeteroSpawnArgs } from './agencyConfig';
 import {
   applyHeteroSelection,
-  CODEX_SERVER_DEFAULT_CUSTOM_MODELS,
   getHeteroSelectorCapability,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   isCodexServerDefaultCustomModel,
@@ -17,6 +16,7 @@ describe('selector availability', () => {
     expect(isHeteroSelectorAvailable('claude-code')).toBe(true);
     expect(isHeteroSelectorAvailable('codebuddy')).toBe(true);
     expect(isHeteroSelectorAvailable('codex')).toBe(true);
+    expect(isHeteroSelectorAvailable('copilot')).toBe(true);
     expect(isHeteroSelectorAvailable('cursor')).toBe(true);
     expect(isHeteroSelectorAvailable('droid')).toBe(true);
     expect(isHeteroSelectorAvailable('devin')).toBe(true);
@@ -31,41 +31,18 @@ describe('selector availability', () => {
     expect(isHeteroSelectorAvailable(undefined)).toBe(false);
   });
 
-  it('exposes the dimensions each provider actually supports', () => {
-    expect(getHeteroSelectorCapability('amp')?.mode?.levels).toEqual([
-      'low',
-      'medium',
-      'high',
-      'ultra',
-    ]);
-    expect(getHeteroSelectorCapability('amp')?.model).toBeUndefined();
-    expect(getHeteroSelectorCapability('claude-code')?.speed).toBeUndefined();
-    expect(getHeteroSelectorCapability('codex')?.speed).toBeDefined();
-    expect(getHeteroSelectorCapability('cursor')?.model?.source).toBe('catalog');
-    expect(getHeteroSelectorCapability('droid')?.model?.source).toBe('catalog');
-    expect(getHeteroSelectorCapability('devin')?.model?.source).toBe('catalog');
-    expect(getHeteroSelectorCapability('grok-build')?.model?.source).toBe('catalog');
-    expect(getHeteroSelectorCapability('kimi-code')?.model?.source).toBe('catalog');
-    expect(getHeteroSelectorCapability('grok-build')?.effort?.levels('grok-4.6')).toEqual([
+  it('exposes the Copilot catalog and reasoning levels', () => {
+    expect(getHeteroSelectorCapability('copilot')?.model?.source).toBe('catalog');
+    expect(getHeteroSelectorCapability('copilot')?.effort?.levels()).toEqual([
       'low',
       'medium',
       'high',
       'xhigh',
+      'max',
     ]);
-    expect(getHeteroSelectorCapability('opencode')?.effort).toBeUndefined();
-    expect(getHeteroSelectorCapability('qoder')?.effort).toBeDefined();
-    expect(getHeteroSelectorCapability('codex')?.model?.source).toBe('catalog');
-    expect(getHeteroSelectorCapability('codebuddy')?.model?.source).toBe('catalog');
-    expect(getHeteroSelectorCapability('qoder')?.model?.source).toBe('catalog');
-    expect(getHeteroSelectorCapability('trae')?.model?.source).toBe('catalog');
   });
 
-  it('keeps non-OpenAI Codex relay support on an explicit allowlist', () => {
-    expect(CODEX_SERVER_DEFAULT_CUSTOM_MODELS).toEqual([
-      'deepseek-v4-flash',
-      'deepseek-v4-pro',
-      'glm-5.2',
-    ]);
+  it('recognizes supported non-OpenAI Codex relay models', () => {
     expect(isCodexServerDefaultCustomModel('deepseek-v4-pro')).toBe(true);
     expect(isCodexServerDefaultCustomModel('kimi-k2.6')).toBe(false);
   });

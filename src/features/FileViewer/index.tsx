@@ -9,8 +9,9 @@ import AsyncError from '@/components/AsyncError';
 import { isHtmlFile } from '@/components/HtmlPreview';
 import { type FileListItem } from '@/types/files';
 
-import { isPdfFile } from './fileType';
+import { isAudioFile, isPdfFile } from './fileType';
 import NotSupport from './NotSupport';
+import AudioViewer from './Renderer/Audio';
 import CodeViewer from './Renderer/Code';
 import HTMLViewer from './Renderer/HTML';
 import ImageViewer from './Renderer/Image';
@@ -191,6 +192,11 @@ const FileViewer = memo<FileViewerProps>((props) => {
         onClose={onClose}
       />
     );
+  }
+
+  // Audio files - checked before video so `audio/ogg` / `audio/webm` play as audio.
+  if (isAudioFile({ fileName: name, fileType })) {
+    return <AudioViewer fileId={id} fileName={name} key={url} url={url} />;
   }
 
   // Video files

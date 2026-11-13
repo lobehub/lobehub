@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveHomeChatContentState } from './homeChatContentState';
+import { isRecentsSnapshotSettled, resolveHomeChatContentState } from './homeChatContentState';
 
 const baseState = {
   activityCount: 0,
@@ -70,5 +70,20 @@ describe('resolveHomeChatContentState', () => {
         recentsCount: 0,
       }),
     ).toBe('ready');
+  });
+});
+
+describe('isRecentsSnapshotSettled', () => {
+  it('waits while nothing is hydrated or fetched', () => {
+    expect(isRecentsSnapshotSettled(undefined, false)).toBe(false);
+  });
+
+  it('paints hydrated rows before the server answers', () => {
+    expect(isRecentsSnapshotSettled([{}], false)).toBe(true);
+  });
+
+  it('keeps a hydrated empty snapshot loading until the server confirms it', () => {
+    expect(isRecentsSnapshotSettled([], false)).toBe(false);
+    expect(isRecentsSnapshotSettled([], true)).toBe(true);
   });
 });

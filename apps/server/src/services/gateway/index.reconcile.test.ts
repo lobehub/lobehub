@@ -12,6 +12,13 @@ import {
   resetGatewayServiceMocks,
 } from './testUtils';
 
+const createConnectedDiscordConnection = () => ({
+  connectionId: 'prov-1',
+  platform: 'discord',
+  state: { status: 'connected' },
+  userId: 'u1',
+});
+
 vi.mock('@/envs/gateway', () => import('./testUtils').then((m) => m.envsGatewayModule()));
 vi.mock('./MessageGatewayClient', () =>
   import('./testUtils').then((m) => m.messageGatewayClientModule()),
@@ -71,12 +78,7 @@ describe('GatewayService', () => {
       mockGatewayClient.getStats.mockResolvedValue({
         byPlatform: {},
         connections: [
-          {
-            connectionId: 'prov-1',
-            platform: 'discord',
-            state: { status: 'connected' },
-            userId: 'u1',
-          },
+          createConnectedDiscordConnection(),
           {
             connectionId: 'stale-1',
             platform: 'wechat',
@@ -317,14 +319,7 @@ describe('GatewayService', () => {
       );
       mockGatewayClient.getStats.mockResolvedValue({
         byPlatform: {},
-        connections: [
-          {
-            connectionId: 'prov-1',
-            platform: 'discord',
-            state: { status: 'connected' },
-            userId: 'u1',
-          },
-        ],
+        connections: [createConnectedDiscordConnection()],
         total: 1,
       });
 
@@ -361,14 +356,7 @@ describe('GatewayService', () => {
       );
       mockGatewayClient.getStats.mockResolvedValue({
         byPlatform: {},
-        connections: [
-          {
-            connectionId: 'prov-1',
-            platform: 'discord',
-            state: { status: 'connected' },
-            userId: 'u1',
-          },
-        ],
+        connections: [createConnectedDiscordConnection()],
         total: 1,
       });
 

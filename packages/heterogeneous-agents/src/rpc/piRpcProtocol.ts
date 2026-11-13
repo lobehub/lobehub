@@ -66,6 +66,18 @@ export interface PiRpcResponse<T = any> {
   type: 'response';
 }
 
+/**
+ * What Pi did with a `prompt` / `steer` / `follow_up` (Pi >= 0.99). `handled`
+ * means an extension command consumed it and no run starts. Older releases
+ * omit it; treat absence as `started`.
+ */
+export type PiRpcPromptDisposition = 'handled' | 'queued' | 'started';
+
+/** `data` of a successful `prompt` / `steer` / `follow_up` response. */
+export interface PiRpcPromptResponseData {
+  disposition?: PiRpcPromptDisposition;
+}
+
 /** Subset of `get_state` data the host uses for handshake / diagnostics. */
 export interface PiRpcStateData {
   isCompacting?: boolean;
@@ -136,6 +148,8 @@ export interface PiSessionEvent extends PiRpcEvent {
 
 /** The `agent_settled` event — the whole prompt (incl. recovery) is done. */
 export interface PiAgentSettledEvent extends PiRpcEvent {
+  /** Pi >= 1.1: the run ended because it was aborted. */
+  aborted?: boolean;
   type: 'agent_settled';
 }
 

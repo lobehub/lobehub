@@ -1,6 +1,6 @@
 'use client';
 
-import { readEvidenceChapters } from '@lobechat/const/verify';
+import { isCheckWaivedByDispute, readEvidenceChapters } from '@lobechat/const/verify';
 import {
   ActionIcon,
   Button,
@@ -31,6 +31,7 @@ import {
   MessageSquareX,
   Repeat,
   Route,
+  Scale,
 } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -61,6 +62,9 @@ import {
 } from './CheckHistory';
 import { shouldCollapseAfterReview, userReviewState } from './checkState';
 import { STATE_META } from './checkStatus';
+import { readCheckDispute } from './dispute';
+import DisputeNote from './DisputeNote';
+import FoldedText from './FoldedText';
 import { hasCheckHistory, splitCheckReviews } from './readPresentation';
 import { checkRowDisclosure } from './rowDisclosure';
 import { styles } from './styles';
@@ -127,6 +131,10 @@ export const AcceptanceCheckRow = memo<{
     const title = checkDisplayTitle(check.title, t('acceptance.checks.holisticTitle'));
     const counts = evidenceCounts(check.evidence);
     const visualization = readVisualizationManifest(check.result?.metadata);
+    const dispute = readCheckDispute(check.result?.metadata);
+    // An upheld `invalid_criterion` dispute takes the check out of the rollup,
+    // so its failed mark must not keep reading as a blocker.
+    const waived = isCheckWaivedByDispute(check.result?.metadata);
 
     const reviewState = userReviewState(check);
     // The decision is stamped on the check's result row — a never-executed
@@ -297,13 +305,15 @@ export const AcceptanceCheckRow = memo<{
         ? MessageSquareX
         : reviewState === 'ignored'
           ? Ban
-          : check.state === 'passed' && reviewState === 'accepted'
-            ? CheckCheck
-            : meta.icon;
+          : waived
+            ? Scale
+            : check.state === 'passed' && reviewState === 'accepted'
+              ? CheckCheck
+              : meta.icon;
     const headColor =
       reviewState === 'rejected'
         ? cssVar.colorError
-        : reviewState === 'ignored'
+        : reviewState === 'ignored' || waived
           ? cssVar.colorTextQuaternary
           : meta.color;
 
@@ -377,6 +387,11 @@ export const AcceptanceCheckRow = memo<{
               {!check.required && (
                 <Tooltip title={t('acceptance.checks.notRequiredHint')}>
                   <Tag size={'small'}>{t('acceptance.checks.notRequired')}</Tag>
+                </Tooltip>
+              )}
+              {waived && (
+                <Tooltip title={t('acceptance.checks.waivedHint')}>
+                  <Tag size={'small'}>{t('acceptance.checks.waived')}</Tag>
                 </Tooltip>
               )}
               {/* The verdict pair travels WITH the title, not adrift at the row's
@@ -548,13 +563,12 @@ export const AcceptanceCheckRow = memo<{
                 onToggle={setProposalOpen}
               />
             )}
-            {/* The verifier's account of what it saw. Clamping it to two lines
-              hid the middle of the argument behind an ellipsis with no way to
-              open it — in a detail view there is nothing to preview. */}
+            {/* The verifier's account of what it saw. Folded to one line that
+              opens in place: shown in full, it and the reasoning below turned an
+              expanded check into a wall of text; an earlier clamp failed because
+              it had no way to open. */}
             {check.result?.toulmin?.evidence && (
-              <Text fontSize={12} style={{ whiteSpace: 'pre-wrap' }} type={'secondary'}>
-                {check.result.toulmin.evidence}
-              </Text>
+              <FoldedText secondary text={check.result.toulmin.evidence} />
             )}
             {/* An agent judge's argument is its run, not a paragraph — link the
               trace instead of trying to summarize it inline. `onOpenTrace`
@@ -639,8 +653,7 @@ export const AcceptanceCheckRow = memo<{
               check.result &&
               (check.result.toulmin?.reasoning ? (
                 <Flexbox
-                  gap={4}
-                  paddingBlock={8}
+                  paddingBlock={6}
                   paddingInline={10}
                   style={{
                     background: cssVar.colorFillQuaternary,
@@ -648,12 +661,10 @@ export const AcceptanceCheckRow = memo<{
                     width: '100%',
                   }}
                 >
-                  <Text fontSize={11} type={'secondary'}>
-                    {t('acceptance.checks.judgeReason')}
-                  </Text>
-                  <Text fontSize={12} style={{ whiteSpace: 'pre-wrap' }}>
-                    {check.result.toulmin.reasoning}
-                  </Text>
+                  <FoldedText
+                    label={t('acceptance.checks.judgeReason')}
+                    text={check.result.toulmin.reasoning}
+                  />
                 </Flexbox>
               ) : !hasRenderableEvidence(check.evidence.length, visualization) ? (
                 <Flexbox
@@ -670,6 +681,8 @@ export const AcceptanceCheckRow = memo<{
                   </Text>
                 </Flexbox>
               ) : null)}
+            {/* The builder's objection sits under the verdict it argues with. */}
+            {dispute && <DisputeNote dispute={dispute} />}
 
             {/* The user's standing feedback hangs right under the evidence it
               judges. BOTH verdicts keep an undo path — a mis-click is the most

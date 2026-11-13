@@ -8,6 +8,8 @@ interface InputSchema {
 }
 
 export interface McpTool {
+  /** Server metadata, e.g. MCP Apps `ui.resourceUri` / `ui.visibility` */
+  _meta?: Record<string, unknown>;
   description: string;
   inputSchema: InputSchema;
   name: string;

@@ -1,9 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorCredentials } from '@/database/schemas';
+import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
+import { mcpService } from '@/server/services/mcp';
 
-import { buildConnectorMcpParams, buildHttpAuthFromCredentials } from './sync';
+import {
+  buildConnectorMcpParams,
+  buildHttpAuthFromCredentials,
+  syncConnectorToolsById,
+} from './sync';
+
+vi.mock('@/server/services/mcp', () => ({ mcpService: { listRawTools: vi.fn() } }));
+const mcpAppsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
+vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mcpAppsEnabled }));
+vi.mock('./tokens', () => ({ ensureFreshConnectorToken: async (connector: unknown) => connector }));
 
 const httpConnector = (
   credentials: ConnectorCredentials | null,
@@ -27,7 +38,7 @@ describe('buildHttpAuthFromCredentials', () => {
     expect(buildHttpAuthFromCredentials(null)).toEqual({});
   });
 
-  it('maps oauth2 to bearer auth with refresh metadata', () => {
+  it('maps oauth2 to the access token alone, already refreshed by the caller', () => {
     const result = buildHttpAuthFromCredentials({
       accessToken: 'access',
       clientSecret: 'secret',
@@ -36,16 +47,7 @@ describe('buildHttpAuthFromCredentials', () => {
       type: 'oauth2',
     });
 
-    expect(result).toEqual({
-      auth: {
-        accessToken: 'access',
-        clientId: undefined,
-        clientSecret: 'secret',
-        refreshToken: 'refresh',
-        tokenExpiresAt: 123,
-        type: 'oauth2',
-      },
-    });
+    expect(result).toEqual({ auth: { accessToken: 'access', type: 'oauth2' } });
     expect(result.headers).toBeUndefined();
   });
 
@@ -73,11 +75,41 @@ describe('buildHttpAuthFromCredentials', () => {
 });
 
 describe('buildConnectorMcpParams', () => {
+  it('matches the params agent runs use for an OAuth connector too', () => {
+    const connector = httpConnector({
+      accessToken: 'access',
+      clientSecret: 'secret',
+      expiresAt: 123,
+      refreshToken: 'refresh',
+      type: 'oauth2',
+    });
+    const [manifest] = buildConnectorManifests(
+      [connector],
+      [{ toolName: 'do_thing', userConnectorId: 'c1' } as any],
+    );
+
+    expect(buildConnectorMcpParams(connector)).toEqual((manifest as any).mcpParams);
+  });
+
+  it('matches the params agent runs use, so a view reaches the same MCP session', () => {
+    // Display name differs from the identifier: the session key must not depend on it
+    const connector = httpConnector(
+      { token: 'tok', type: 'bearer' },
+      { customHeaders: { x: '1' } },
+    );
+    const [manifest] = buildConnectorManifests(
+      [connector],
+      [{ toolName: 'do_thing', userConnectorId: 'c1' } as any],
+    );
+
+    expect(buildConnectorMcpParams(connector)).toEqual((manifest as any).mcpParams);
+  });
+
   it('builds http params with bearer auth', () => {
     expect(buildConnectorMcpParams(httpConnector({ token: 'tok', type: 'bearer' }))).toEqual({
       auth: { token: 'tok', type: 'bearer' },
       headers: undefined,
-      name: 'My Connector',
+      name: 'my-conn',
       type: 'http',
       url: 'https://mcp.example.com',
     });
@@ -91,7 +123,7 @@ describe('buildConnectorMcpParams', () => {
     ).toEqual({
       auth: undefined,
       headers: { Authorization: 'Token x' },
-      name: 'My Connector',
+      name: 'my-conn',
       type: 'http',
       url: 'https://mcp.example.com',
     });
@@ -100,15 +132,12 @@ describe('buildConnectorMcpParams', () => {
   it('merges metadata.customHeaders alongside bearer auth', () => {
     expect(
       buildConnectorMcpParams(
-        httpConnector(
-          { token: 'tok', type: 'bearer' },
-          { customHeaders: { 'X-Tenant': 't1' } },
-        ),
+        httpConnector({ token: 'tok', type: 'bearer' }, { customHeaders: { 'X-Tenant': 't1' } }),
       ),
     ).toEqual({
       auth: { token: 'tok', type: 'bearer' },
       headers: { 'X-Tenant': 't1' },
-      name: 'My Connector',
+      name: 'my-conn',
       type: 'http',
       url: 'https://mcp.example.com',
     });
@@ -116,13 +145,11 @@ describe('buildConnectorMcpParams', () => {
 
   it('applies metadata.customHeaders with no auth credential', () => {
     expect(
-      buildConnectorMcpParams(
-        httpConnector(null, { customHeaders: { 'X-Api-Key': 'abc' } }),
-      ),
+      buildConnectorMcpParams(httpConnector(null, { customHeaders: { 'X-Api-Key': 'abc' } })),
     ).toEqual({
       auth: undefined,
       headers: { 'X-Api-Key': 'abc' },
-      name: 'My Connector',
+      name: 'my-conn',
       type: 'http',
       url: 'https://mcp.example.com',
     });
@@ -139,7 +166,7 @@ describe('buildConnectorMcpParams', () => {
     ).toEqual({
       auth: undefined,
       headers: { Authorization: 'Token new' },
-      name: 'My Connector',
+      name: 'my-conn',
       type: 'http',
       url: 'https://mcp.example.com',
     });
@@ -149,7 +176,7 @@ describe('buildConnectorMcpParams', () => {
     expect(buildConnectorMcpParams(httpConnector(null))).toEqual({
       auth: undefined,
       headers: undefined,
-      name: 'My Connector',
+      name: 'my-conn',
       type: 'http',
       url: 'https://mcp.example.com',
     });
@@ -169,8 +196,55 @@ describe('buildConnectorMcpParams', () => {
       args: ['serve'],
       command: 'my-mcp',
       env: { FOO: 'bar' },
-      name: 'Local Connector',
+      name: 'local-conn',
       type: 'stdio',
     });
   });
+});
+
+describe('syncConnectorToolsById', () => {
+  it("syncs view-only tools too, recording each tool's MCP Apps visibility", async () => {
+    vi.mocked(mcpService.listRawTools).mockResolvedValue([
+      { description: 'Show', inputSchema: { type: 'object' }, name: 'show_dashboard' },
+      {
+        _meta: { ui: { visibility: ['app'] } },
+        description: 'Page',
+        inputSchema: { type: 'object' },
+        name: 'load_page',
+      },
+    ]);
+    const upsertMany = vi.fn();
+    const updateStatus = vi.fn();
+
+    const result = await syncConnectorToolsById('c1', {
+      connectorModel: { findById: async () => httpConnector(null), updateStatus } as any,
+      connectorToolModel: { upsertMany } as any,
+    });
+
+    expect(result).toEqual({ toolCount: 2 });
+    expect(upsertMany).toHaveBeenCalledWith('c1', [
+      expect.objectContaining({ metadata: null, toolName: 'show_dashboard' }),
+      expect.objectContaining({ metadata: { visibility: ['app'] }, toolName: 'load_page' }),
+    ]);
+  });
+
+  it.each([true, false])(
+    "lists on a session announcing MCP Apps under the user's flag (%s)",
+    async (enabled) => {
+      // A server may list the tools only its views call just to such a client
+      mcpAppsEnabled.mockResolvedValueOnce(enabled);
+      vi.mocked(mcpService.listRawTools).mockResolvedValue([]);
+
+      await syncConnectorToolsById('c1', {
+        connectorModel: { findById: async () => httpConnector(null), updateStatus: vi.fn() } as any,
+        connectorToolModel: { upsertMany: vi.fn() } as any,
+        userId: 'user-1',
+      });
+
+      expect(mcpAppsEnabled).toHaveBeenCalledWith('user-1');
+      expect(mcpService.listRawTools).toHaveBeenCalledWith(expect.anything(), {
+        mcpApps: enabled,
+      });
+    },
+  );
 });

@@ -4,5 +4,6 @@ export {
   type AcceptanceCriterionSummary,
   AcceptanceEvidenceApiName,
   type AcceptanceEvidenceType,
+  type DisputeAcceptanceCriterionParams,
   type SubmitAcceptanceEvidenceParams,
 } from './types';

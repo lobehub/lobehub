@@ -14,6 +14,30 @@ const mockBuiltinSkill = {
   source: 'builtin' as const,
 };
 
+const hiddenToolsState = () => ({
+  ...initialState,
+  builtinTools: [
+    {
+      hidden: true,
+      identifier: 'lobe-task',
+      manifest: {
+        api: [],
+        identifier: 'lobe-task',
+        meta: { title: 'Task Tools' },
+        systemRole: '',
+      },
+      type: 'builtin',
+    },
+    {
+      hidden: true,
+      identifier: 'tool-1',
+      manifest: { api: [], identifier: 'tool-1', meta: { title: 'Tool 1' }, systemRole: '' },
+      type: 'builtin',
+    },
+  ],
+  uninstalledBuiltinTools: [],
+});
+
 describe('builtinToolSelectors', () => {
   describe('metaList', () => {
     it('should return meta list with builtin tools and skills', () => {
@@ -79,29 +103,7 @@ describe('builtinToolSelectors', () => {
 
   describe('metaListIncludingHidden', () => {
     it('should surface hidden tools so users can toggle them', () => {
-      const state = {
-        ...initialState,
-        builtinTools: [
-          {
-            hidden: true,
-            identifier: 'lobe-task',
-            manifest: {
-              api: [],
-              identifier: 'lobe-task',
-              meta: { title: 'Task Tools' },
-              systemRole: '',
-            },
-            type: 'builtin',
-          },
-          {
-            hidden: true,
-            identifier: 'tool-1',
-            manifest: { api: [], identifier: 'tool-1', meta: { title: 'Tool 1' }, systemRole: '' },
-            type: 'builtin',
-          },
-        ],
-        uninstalledBuiltinTools: [],
-      } as ToolStoreState;
+      const state = hiddenToolsState() as ToolStoreState;
 
       const result = builtinToolSelectors.metaListIncludingHidden(state);
 
@@ -181,29 +183,7 @@ describe('builtinToolSelectors', () => {
 
   describe('installedAllMetaList', () => {
     it('should include all non-uninstalled tools in agent profile configuration', () => {
-      const state = {
-        ...initialState,
-        builtinTools: [
-          {
-            hidden: true,
-            identifier: 'lobe-task',
-            manifest: {
-              api: [],
-              identifier: 'lobe-task',
-              meta: { title: 'Task Tools' },
-              systemRole: '',
-            },
-            type: 'builtin',
-          },
-          {
-            hidden: true,
-            identifier: 'tool-1',
-            manifest: { api: [], identifier: 'tool-1', meta: { title: 'Tool 1' }, systemRole: '' },
-            type: 'builtin',
-          },
-        ],
-        uninstalledBuiltinTools: [],
-      } as ToolStoreState;
+      const state = hiddenToolsState() as ToolStoreState;
 
       const result = builtinToolSelectors.installedAllMetaList(state);
 

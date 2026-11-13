@@ -39,7 +39,7 @@ export function registerLifecycleCommands(task: Command) {
 
   task
     .command('start <id>')
-    .description('Start a task (pending → running)')
+    .description('Start a task (backlog → running)')
     .option('--no-run', 'Only update status, do not trigger agent execution')
     .option('-p, --prompt <text>', 'Additional context for the agent')
     .option('-f, --follow', 'Follow agent output in real-time (default: run in background)')

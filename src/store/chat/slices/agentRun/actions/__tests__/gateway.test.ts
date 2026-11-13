@@ -54,9 +54,9 @@ vi.mock('@/services/topic', () => ({
   },
 }));
 
-const moveChatContextSelections = vi.hoisted(() => vi.fn());
+const moveChatComposerAttachments = vi.hoisted(() => vi.fn());
 vi.mock('@/store/file/store', () => ({
-  getFileStoreState: () => ({ moveChatContextSelections }),
+  getFileStoreState: () => ({ moveChatComposerAttachments }),
 }));
 
 const mockUserDefaultConfig = vi.hoisted(() => ({
@@ -188,7 +188,7 @@ function createTestAction() {
 
 describe('GatewayActionImpl', () => {
   beforeEach(() => {
-    moveChatContextSelections.mockClear();
+    moveChatComposerAttachments.mockClear();
     vi.mocked(topicService.getTopicDetail).mockResolvedValue(null as never);
     vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
     mockAgentStore.state = { activeAgentId: undefined, agentMap: {} };
@@ -1854,7 +1854,7 @@ describe('GatewayActionImpl', () => {
           title: '666',
         },
       });
-      expect(moveChatContextSelections).toHaveBeenCalledWith(
+      expect(moveChatComposerAttachments).toHaveBeenCalledWith(
         messageMapKey({
           agentId: 'agent-1',
           scope: 'main',
@@ -2163,8 +2163,7 @@ describe('GatewayActionImpl', () => {
       // task exists and this client already knows its operation id.
       const onMessageAccepted = vi.fn(() => controller.abort('user cancelled'));
       const replaceMessages = vi.fn();
-
-      const mockClient = createMockClient();
+      const internalDispatchMessage = vi.fn();
       const internalDispatchTopic = vi.fn();
       const internalPinTopicStatus = vi.fn();
       // `refreshTopic` has already pulled in the server's running row: this
@@ -2198,6 +2197,7 @@ describe('GatewayActionImpl', () => {
         completeOperation,
         connectToGateway,
         getOperationAbortSignal: vi.fn(() => controller.signal),
+        internal_dispatchMessage: internalDispatchMessage,
         internal_dispatchTopic: internalDispatchTopic,
         internal_pinTopicStatus: internalPinTopicStatus,
         moveQueuedMessages,
@@ -2207,15 +2207,13 @@ describe('GatewayActionImpl', () => {
         startOperation,
         switchTopic: vi.fn(),
       })) as any;
-
       (globalThis as any).window = {
         global_serverConfigStore: {
           getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
         },
       };
-
       const action = new GatewayActionImpl(set as any, get, undefined);
-      action.createClient = vi.fn(() => mockClient);
+      action.createClient = vi.fn(() => createMockClient());
       const interruptTaskSpy = vi
         .mocked(aiAgentService.interruptTask)
         .mockResolvedValue({ operationId: 'server-op-cancel', success: true });
@@ -2279,6 +2277,8 @@ describe('GatewayActionImpl', () => {
           value: { metadata: { runningOperation: null } },
         }),
       );
+      const [mirrored] = internalDispatchMessage.mock.calls[0];
+      expect(mirrored).toMatchObject({ id: 'ast-1', value: { interruptedMidStream: true } });
     });
 
     /**
@@ -2333,6 +2333,7 @@ describe('GatewayActionImpl', () => {
         completeOperation: vi.fn(),
         connectToGateway: vi.fn(),
         getOperationAbortSignal: vi.fn(() => controller.signal),
+        internal_dispatchMessage: vi.fn(),
         internal_dispatchTopic: internalDispatchTopic,
         internal_pinTopicStatus: internalPinTopicStatus,
         internal_replaceTopicId: vi.fn(),
@@ -2344,13 +2345,11 @@ describe('GatewayActionImpl', () => {
         startOperation: vi.fn(),
         switchTopic: vi.fn(),
       })) as any;
-
       (globalThis as any).window = {
         global_serverConfigStore: {
           getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
         },
       };
-
       const action = new GatewayActionImpl(set as any, get, undefined);
       action.createClient = vi.fn(() => createMockClient());
       vi.mocked(aiAgentService.interruptTask).mockResolvedValue({
@@ -2410,7 +2409,7 @@ describe('GatewayActionImpl', () => {
     });
 
     /**
-     * @example A Stop while the start request is in flight still stops the run the server creates.
+     * @example A Stop while the start request is in flight stops the run and keeps the turn.
      */
     it.each(['owner', 'share'] as const)(
       'interrupts the %s server run when cancel aborts the in-flight start request',
@@ -2425,11 +2424,11 @@ describe('GatewayActionImpl', () => {
         // thread failed with "already has an active writer".
         //
         // Before: no interrupt ever reached the orphaned server run.
-        // After: the send still rejects at once, and the run is interrupted
-        // when the server result arrives.
+        // After: it is interrupted when the result arrives, and the send keeps the
+        // persisted turn (rejecting it put the sent text back in the composer).
         const controller = new AbortController();
         const connectToGateway = vi.fn();
-        const onMessageAccepted = vi.fn();
+        const [onMessageAccepted, onStartRequestSent] = [vi.fn(), vi.fn()];
         const state: Record<string, any> = { gatewayConnections: {}, topicDataMap: {} };
         const set = vi.fn((updater: any) => {
           if (typeof updater === 'function') Object.assign(state, updater(state));
@@ -2441,6 +2440,7 @@ describe('GatewayActionImpl', () => {
           completeOperation: vi.fn(),
           connectToGateway,
           getOperationAbortSignal: vi.fn(() => controller.signal),
+          internal_dispatchMessage: vi.fn(),
           internal_dispatchTopic: vi.fn(),
           internal_pinTopicStatus: vi.fn(),
           moveQueuedMessages: vi.fn(),
@@ -2504,19 +2504,19 @@ describe('GatewayActionImpl', () => {
           },
           message: 'Hello',
           onMessageAccepted,
+          onStartRequestSent,
           parentOperationId: 'parent-send-msg-op',
         });
         const start =
           surface === 'share' ? shareChatService.execAgentTask : aiAgentService.execAgentTask;
         await vi.waitFor(() => expect(start).toHaveBeenCalledOnce());
+        expect(onStartRequestSent).toHaveBeenCalledOnce();
 
         controller.abort('user cancelled');
-        /** @example The send still settles as cancelled right away. */
-        await expect(execution).rejects.toMatchObject({ name: 'AbortError' });
-        expect(connectToGateway).not.toHaveBeenCalled();
-        expect(onMessageAccepted).not.toHaveBeenCalled();
-
         finishOnServer();
+        await expect(execution).resolves.toEqual(persisted);
+        expect(connectToGateway).not.toHaveBeenCalled();
+        expect(onMessageAccepted).toHaveBeenCalledOnce();
         /** @example The orphaned server run is interrupted by its real operation id. */
         if (surface === 'share') {
           await vi.waitFor(() =>
@@ -4769,31 +4769,14 @@ describe('GatewayActionImpl', () => {
       expect(connectToGateway).toHaveBeenCalled();
     });
 
-    // The operation is created optimistically off the marker, so every bail-out
-    // has to retire it — otherwise a stale marker leaves the composer spinning
-    // on a run that nothing will ever settle.
-    it('retires the optimistic operation when refreshGatewayToken returns NOT_FOUND', async () => {
-      const { action, completeOperation } = createSeededReconnectHarness();
-      vi.mocked(aiAgentService.refreshGatewayToken).mockRejectedValueOnce({
-        data: { code: 'NOT_FOUND' },
-      });
-
-      await action.reconnectToGatewayOperation({
-        assistantMessageId: 'ast-1',
-        operationId: 'server-op-1',
-        topicId: 'topic-1',
-      });
-
-      expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
-    });
-
     // Regression: a stale local runningOperation fires a reconnect,
     // but the server already cleared its marker and answers refreshGatewayToken
     // with TRPC NOT_FOUND. The reconnect must clear the local marker and bail
     // silently (no connect, no throw) so the SWR fetcher resolves instead of
     // looping 404s.
-    it('clears the local marker and bails when refreshGatewayToken returns NOT_FOUND', async () => {
-      const { action, connectToGateway, internalDispatchTopic } = createSeededReconnectHarness();
+    it('retires the local operation and clears the marker on NOT_FOUND', async () => {
+      const { action, completeOperation, connectToGateway, internalDispatchTopic } =
+        createSeededReconnectHarness();
       vi.mocked(aiAgentService.refreshGatewayToken).mockRejectedValueOnce({
         data: { code: 'NOT_FOUND' },
       });
@@ -4805,6 +4788,11 @@ describe('GatewayActionImpl', () => {
           topicId: 'topic-1',
         }),
       ).resolves.toBeUndefined();
+
+      // The operation is created optimistically off the marker, so every bail-out
+      // has to retire it — otherwise a stale marker leaves the composer spinning
+      // on a run that nothing will ever settle.
+      expect(completeOperation).toHaveBeenCalledWith('gw-op-reconnect');
 
       expect(internalDispatchTopic).toHaveBeenCalledWith({
         id: 'topic-1',

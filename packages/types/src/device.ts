@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 import type { DeviceLocalFilePreviewFailure } from './deviceFilePreviewFailure';
+import type { ManagedDevicePhase } from './managedDevice';
+import type { DeviceClient } from './tool/builtin';
 
 /** Structured context for an unavailable logical device. */
 export interface DeviceUnavailableErrorData {
@@ -184,7 +186,7 @@ export const getWorkingDirEffectivePath = (
   return entry.git?.activeWorktree || entry.path;
 };
 
-export { deriveWorktreePath } from './worktreePath';
+export { deriveWorktreePath, type DeriveWorktreePathOptions } from './worktreePath';
 
 export interface WorkingDirEntry extends WorkingDirConfig {
   /**
@@ -333,6 +335,14 @@ export interface DeviceRunningSummary {
   users: DeviceEnroller[];
 }
 
+/**
+ * `metadata` key a desktop client reports when its gateway connection serves
+ * the terminal RPCs. A CLI connection always does; an older desktop answers
+ * them with a refusal, so a desktop-only row counts as a terminal host only
+ * with this key set.
+ */
+export const DEVICE_TERMINAL_METADATA_KEY = 'terminal';
+
 export interface DeviceListItem {
   architecture?: string | null;
   channels: DeviceChannel[];
@@ -353,6 +363,14 @@ export interface DeviceListItem {
   hostname: string | null;
   identitySource: string | null;
   lastSeen: string;
+  /**
+   * Managed cloud devices only: the lifecycle phase the managed device
+   * provider reports, so a sleeping device reads as sleeping instead of as an
+   * offline machine. `undefined` for other devices, and for a managed device
+   * whose phase is unknown (provider unavailable or the device not in its
+   * answer).
+   */
+  managedPhase?: ManagedDevicePhase;
   /**
    * What the client reported about itself on its last connect — the desktop
    * app sends `appVersion` (plus runtime versions), the CLI `cliVersion`.
@@ -1074,6 +1092,12 @@ export type DeviceAppUpdateInstallResult =
 
 /** Result of the `createTerminalSession` device RPC. */
 export interface DeviceCreateTerminalSessionResult {
+  /**
+   * The client hosting the session. Its later calls must reach the same
+   * client: the desktop app and `lh connect` keep separate sessions, and a
+   * device can hold both connections. Absent from hosts that predate it.
+   */
+  client?: DeviceClient;
   /** Directory the shell actually started in (a missing `cwd` falls back home). */
   cwd: string;
   id: string;

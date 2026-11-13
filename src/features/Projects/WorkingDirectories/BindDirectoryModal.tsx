@@ -85,7 +85,7 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
               ...projects.map((project) => ({
                 label: (
                   <Flexbox horizontal align="center" gap={8}>
-                    <ProjectAvatar avatar={project.avatar} name={project.name} />
+                    <ProjectAvatar avatar={project.avatar} id={project.id} name={project.name} />
                     {project.name}
                   </Flexbox>
                 ),

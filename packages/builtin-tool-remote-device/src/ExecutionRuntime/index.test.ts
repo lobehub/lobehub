@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { RemoteDeviceExecutionRuntime } from './index';
 
@@ -65,6 +65,36 @@ describe('RemoteDeviceExecutionRuntime', () => {
 
     it('returns the same recovery hint for an unknown device id', async () => {
       const runtime = makeRuntime([]);
+
+      const result = await runtime.activateDevice({ deviceId: 'ghost' });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('listOnlineDevices');
+    });
+
+    it('reports what the host answers for an offline device it can start', async () => {
+      const waking = {
+        content: 'Device "managed-a" is starting now. Retry the same call.',
+        error: { code: 'DEVICE_WAKING', message: 'starting' },
+        success: false,
+      };
+      const resolveOfflineDevice = vi.fn().mockResolvedValue(waking);
+      const runtime = new RemoteDeviceExecutionRuntime({
+        queryDeviceList: async () => [],
+        resolveOfflineDevice,
+      });
+
+      const result = await runtime.activateDevice({ deviceId: 'managed-a' });
+
+      expect(resolveOfflineDevice).toHaveBeenCalledWith('managed-a');
+      expect(result).toEqual(waking);
+    });
+
+    it('keeps the default answer when the host cannot start the device', async () => {
+      const runtime = new RemoteDeviceExecutionRuntime({
+        queryDeviceList: async () => [],
+        resolveOfflineDevice: async () => undefined,
+      });
 
       const result = await runtime.activateDevice({ deviceId: 'ghost' });
 

@@ -180,6 +180,8 @@ export interface ToolStateChunkData {
  */
 export interface StreamStartAssistantMessage {
   agentId?: string | null;
+  /** Server creation time (epoch ms). Absent from older servers. */
+  createdAt?: number;
   groupId?: string | null;
   id: string;
   model?: string | null;
@@ -190,9 +192,27 @@ export interface StreamStartAssistantMessage {
   topicId?: string | null;
 }
 
+/**
+ * A follow-up the server joined into the running turn: the user message this
+ * step's assistant row hangs off. It is created mid-run, after the
+ * `step_start` snapshot, so without it the client has no copy until the step
+ * ends and the queued message vanishes from both the tray and the chat.
+ */
+export interface StreamStartParentMessage {
+  content: string;
+  /** Server creation time (epoch ms). Absent from older servers. */
+  createdAt?: number;
+  id: string;
+  metadata?: Record<string, unknown> | null;
+  parentId?: string | null;
+  role: 'user';
+}
+
 export interface StreamStartData {
   assistantMessage: StreamStartAssistantMessage;
   model?: string;
+  /** Sent only when the parent is a steer user message. */
+  parentMessage?: StreamStartParentMessage;
   provider?: string;
 }
 
@@ -262,7 +282,7 @@ export type AgentInterventionInteractionKind = 'permission' | 'plan' | 'question
 
 /** Producer that owns the blocked interaction. */
 export type AgentInterventionProvider =
-  'claude-code' | 'cursor' | 'devin' | 'droid' | 'opencode' | 'qoder';
+  'claude-code' | 'codex' | 'copilot' | 'cursor' | 'devin' | 'droid' | 'opencode' | 'qoder';
 
 /** Whitelisted option surface that may be persisted for cold-start review. */
 export interface AgentInterventionRenderOption {

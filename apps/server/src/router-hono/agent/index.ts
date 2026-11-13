@@ -1,10 +1,18 @@
 import { Hono } from 'hono';
 
+import { agentAccountDigestFlush } from './handlers/agentAccountDigestFlush';
+import { agentAccountWebhook, agentAccountWebhookBodyLimit } from './handlers/agentAccountWebhook';
+import { agentInboxReport } from './handlers/agentInboxReport';
 import { botCallback } from './handlers/botCallback';
 import { botReplay } from './handlers/botReplay';
 import { botWakeFlush } from './handlers/botWakeFlush';
 import { channelAdvance, channelCallback } from './handlers/channel';
-import { documentAccess, documentProjection } from './handlers/documentCollab';
+import {
+  documentAccess,
+  documentProjection,
+  documentRoomStatus,
+  documentSeed,
+} from './handlers/documentCollab';
 import { execAgent } from './handlers/execAgent';
 import { finalizeAbandoned } from './handlers/finalizeAbandoned';
 import { gatewayCallback } from './handlers/gatewayCallback';
@@ -46,6 +54,10 @@ app.get('/run', runStepHealth);
 app.post('/channel/advance', qstashAuth(), channelAdvance);
 app.post('/webhooks/channel-callback', qstashAuth(), channelCallback);
 
+// POST /api/agent/webhooks/inbox-report — a mail-woken run finished: post its answer to the
+// owner's direct Channel (QStash)
+app.post('/webhooks/inbox-report', qstashAuth(), agentInboxReport);
+
 // POST /api/agent/tool-result — gateway-side tool result LPUSH'd to Redis
 app.post('/tool-result', serviceTokenAuth(), toolResult);
 
@@ -57,6 +69,8 @@ app.get('/llm-relay/:callId/payload', llmRelayPayload);
 app.post('/llm-relay/:callId/chunks', llmRelayChunks);
 app.get('/document-access', serviceTokenAuth(), documentAccess);
 app.post('/document-projection', serviceTokenAuth(), documentProjection);
+app.post('/document-seed', serviceTokenAuth(), documentSeed);
+app.get('/document-room-status', serviceTokenAuth(), documentRoomStatus);
 
 // POST /api/agent/finalize-abandoned — watchdog reverse-trigger finalize
 app.post('/finalize-abandoned', serviceTokenAuth(), finalizeAbandoned);
@@ -120,6 +134,16 @@ app.post('/webhooks/group-member-callback', qstashAuth(), groupMemberCallback);
 
 // POST /api/agent/webhooks/:platform[/:appId] — Chat SDK bot platform webhooks
 app.post('/webhooks/:platform/:appId?', platformWebhook);
+
+// POST /api/agent/accounts/webhooks/:provider — inbound mail deliveries
+// for the agent's own accounts. Auth is the provider signature, verified inside
+// the handler, so the only middleware is a body cap that runs before anything
+// is buffered.
+app.post('/accounts/webhooks/:provider', agentAccountWebhookBodyLimit, agentAccountWebhook);
+
+// POST /api/agent/accounts/digest-flush — delayed run of the mail held for one
+// account's digest (QStash)
+app.post('/accounts/digest-flush', qstashAuth(), agentAccountDigestFlush);
 
 // GET /api/agent/messenger/:platform/install — start per-tenant OAuth install
 app.get('/messenger/:platform/install', messengerInstall);

@@ -221,6 +221,13 @@ describe('isShareBlockedBuiltinDispatch', () => {
         LobeAgentApiName.callSubAgent,
       ),
     ).toBe(true);
+    expect(
+      isShareBlockedBuiltinDispatch(
+        { toolGrants: [{ identifier: LobeAgentIdentifier }] },
+        LobeAgentIdentifier,
+        LobeAgentApiName.cancelSubAgent,
+      ),
+    ).toBe(true);
   });
 
   it('still applies the data-tool rules after the enable check', () => {

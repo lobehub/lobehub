@@ -369,6 +369,7 @@ const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
         provider.type === 'claude-code' ||
         provider.type === 'codebuddy' ||
         provider.type === 'codex' ||
+        provider.type === 'copilot' ||
         provider.type === 'cursor' ||
         provider.type === 'droid' ||
         provider.type === 'devin' ||

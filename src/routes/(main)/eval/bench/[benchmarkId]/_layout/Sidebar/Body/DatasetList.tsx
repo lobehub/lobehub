@@ -12,6 +12,8 @@ import { Database } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { benchmarkDatasetPath } from '@/features/LobeBench/experimentNavigation';
+import { useIsLobeBenchBenchmark } from '@/features/LobeBench/useIsLobeBenchBenchmark';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -29,6 +31,7 @@ const DatasetList = memo<DatasetListProps>(({ activeKey, benchmarkId, itemKey })
   const navigate = useWorkspaceAwareNavigate();
   const datasetList = useEvalStore(datasetSelectors.datasetList(benchmarkId));
   const isLoading = useEvalStore(datasetSelectors.isLoadingDatasetList(benchmarkId));
+  const lobeBench = useIsLobeBenchBenchmark(benchmarkId);
 
   return (
     <AccordionItem value={itemKey}>
@@ -54,10 +57,10 @@ const DatasetList = memo<DatasetListProps>(({ activeKey, benchmarkId, itemKey })
             datasetList.map((ds: any) => (
               <WorkspaceLink
                 key={ds.id}
-                to={`/eval/bench/${benchmarkId}/datasets/${ds.id}`}
+                to={benchmarkDatasetPath(ds.id, lobeBench)}
                 onClick={(e) => {
                   e.preventDefault();
-                  navigate(`/eval/bench/${benchmarkId}/datasets/${ds.id}`);
+                  navigate(benchmarkDatasetPath(ds.id, lobeBench));
                 }}
               >
                 <NavItem

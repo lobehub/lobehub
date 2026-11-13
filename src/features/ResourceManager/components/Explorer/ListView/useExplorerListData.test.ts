@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
     status: {},
   },
   resourceManagerState: {
+    libraryId: undefined as string | undefined,
     sorter: 'createdAt' as const,
     sortType: 'desc' as const,
   },

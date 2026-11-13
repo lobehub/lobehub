@@ -109,11 +109,36 @@ export interface TokenLookupReport {
 }
 
 /**
+ * Whether this process runs inside a LobeHub agent run: the app stamps the run's ids into the
+ * environment of every agent it launches, and every shell that agent opens inherits them.
+ */
+export const isInsideAgentRun = (env: NodeJS.ProcessEnv = process.env): boolean =>
+  !!(env.LOBEHUB_TOPIC_ID || env.LOBEHUB_OPERATION_ID);
+
+/**
+ * The missing-login report for a command run by an agent inside LobeHub.
+ *
+ * Read by the agent, not by a person at a terminal, and a bare "run `lh login`" there got turned
+ * into guesses — restart the app, set a workspace id — because nothing said why a conversation the
+ * user is signed in to has no credential. Spell out the cause and hand the login to the user:
+ * `lh login` rewrites this machine's CLI credentials and registers the device, which is not the
+ * agent's call to make.
+ */
+export const agentRunMissingLoginReport = (): TokenLookupReport => ({
+  detail:
+    'This command runs inside a LobeHub agent conversation, but the run passed no LobeHub sign-in to the CLI and this machine has no CLI login of its own.',
+  fix: `Ask the user to run '${CLI_PRIMARY_BIN} login' in a terminal on this machine and approve it in the browser, then retry. Do not run it yourself; restarting LobeHub does not fix this. Updating LobeHub Desktop lets local agents use the app's own sign-in.`,
+});
+
+/**
  * How to explain a lookup that produced no token, or `undefined` when there is nothing to
  * diagnose and the caller's own "log in first" message fits.
  */
 export function describeTokenLookup(lookup: TokenLookup): TokenLookupReport | undefined {
   switch (lookup.status) {
+    case 'no-login': {
+      return isInsideAgentRun() ? agentRunMissingLoginReport() : undefined;
+    }
     case 'spent': {
       return {
         detail: `The stored login is no longer valid (${lookup.detail}).`,

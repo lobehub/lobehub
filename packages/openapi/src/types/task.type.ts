@@ -71,6 +71,8 @@ export const UpdateTaskRequestSchema = z
     name: z.string().optional(),
     parentTaskId: z.string().nullish(),
     priority: z.number().int().min(0).max(4).optional(),
+    // `null` takes the task out of its project; omitted leaves it untouched.
+    projectId: z.string().nullish(),
     schedulePattern: schedulePatternSchema.nullish(),
     scheduleTimezone: scheduleTimezoneSchema.nullish(),
   })

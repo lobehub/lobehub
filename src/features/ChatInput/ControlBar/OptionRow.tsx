@@ -3,7 +3,7 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { CheckIcon } from 'lucide-react';
+import { CheckIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 
 /**
@@ -55,6 +55,7 @@ const styles = stylex.create({
     backgroundColor: { 'default': null, ':hover': 'transparent' },
     backgroundImage: { 'default': null, ':hover': 'none' },
   },
+  optionCompact: { gap: '8px', paddingBlock: '6px' },
   /* Dims the row's own content rather than the row. Its trailing action is the
      way OUT of that state — dimming it would read as "also unavailable" — and
      opacity on the row cannot be undone by a child, so the action is left out
@@ -75,6 +76,12 @@ const styles = stylex.create({
     backgroundColor: cssVar.colorBgElevated,
     backgroundImage: 'none',
   },
+  optionIconCompact: {
+    width: '16px',
+    height: '16px',
+    borderStyle: 'none',
+    backgroundColor: 'transparent',
+  },
   optionMeta: {
     display: 'flex',
     flex: '1',
@@ -87,6 +94,14 @@ const styles = stylex.create({
     fontSize: '13px',
     fontWeight: 500,
     color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  hint: {
+    overflow: 'hidden',
+    minWidth: '0',
+    fontSize: '11px',
+    color: cssVar.colorTextDescription,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
@@ -105,10 +120,18 @@ const styles = stylex.create({
 
 export interface OptionRowProps {
   active?: boolean;
+  /** The row opens a second level, so it ends in an arrow instead of a check. */
+  arrow?: boolean;
+  /** A ready-made mark beside the title, shown as it is rather than in a neutral pill. */
+  badge?: ReactNode;
+  /** A dense row for long lists: no icon frame, so its icon lines up with the menu's text. */
+  compact?: boolean;
   desc?: ReactNode;
   disabled?: boolean;
   /** Trailing action, kept live while the row itself is disabled. */
   extra?: ReactNode;
+  /** A short muted note beside the title, such as the owner/name of a repository. */
+  hint?: ReactNode;
   icon: ReactNode;
   label: ReactNode;
   onClick: () => void;
@@ -121,23 +144,49 @@ export interface OptionRowProps {
 }
 
 const OptionRow = memo<OptionRowProps>(
-  ({ active, desc, disabled, extra, icon, label, onClick, tag, tags, xstyle }) => (
+  ({
+    active,
+    arrow,
+    badge,
+    compact,
+    desc,
+    disabled,
+    extra,
+    hint,
+    icon,
+    label,
+    onClick,
+    tag,
+    tags,
+    xstyle,
+  }) => (
     <div
       onClick={() => {
         if (!disabled) onClick();
       }}
       {...stylex.props(
         styles.option,
+        compact && styles.optionCompact,
         active && styles.optionActive,
         disabled && styles.optionDisabled,
         active && disabled && styles.optionActiveDisabled,
         xstyle,
       )}
     >
-      <div {...stylex.props(styles.optionIcon, disabled && styles.dimmed)}>{icon}</div>
+      <div
+        {...stylex.props(
+          styles.optionIcon,
+          compact && styles.optionIconCompact,
+          disabled && styles.dimmed,
+        )}
+      >
+        {icon}
+      </div>
       <div {...stylex.props(styles.optionMeta, disabled && styles.dimmed)}>
         <Flexbox horizontal align={'center'} gap={6}>
           <span {...stylex.props(styles.optionTitle)}>{label}</span>
+          {hint ? <span {...stylex.props(styles.hint)}>{hint}</span> : null}
+          {badge}
           {tag ? <span {...stylex.props(styles.tag)}>{tag}</span> : null}
           {tags?.map((item, index) => (
             <span key={index} {...stylex.props(styles.tag)}>
@@ -158,7 +207,8 @@ const OptionRow = memo<OptionRowProps>(
           {extra}
         </div>
       ) : null}
-      {active ? (
+      {arrow ? <Icon icon={ChevronRightIcon} size={14} /> : null}
+      {active && !arrow ? (
         <Icon
           className={stylex.props(styles.check, disabled && styles.dimmed).className}
           icon={CheckIcon}

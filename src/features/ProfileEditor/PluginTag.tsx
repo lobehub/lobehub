@@ -2,7 +2,18 @@
 
 import type { ComposioAppType, LobehubSkillProviderType } from '@lobechat/const';
 import { resolveConnectorCatalogItem } from '@lobechat/const';
-import { Avatar, createStaticStyles, cssVar, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Switch,
+  Tag,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { McpIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
 import { AlertCircle, Loader2, Square, SquareCheckBig, SquareMinus, X } from 'lucide-react';
@@ -23,6 +34,9 @@ import {
 } from '@/store/tool/selectors';
 import { type LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
+
+import { type ItemDetail } from './ItemDetailPanel';
+import ItemRow from './ItemRow';
 
 /**
  * Composio server icon component
@@ -91,6 +105,10 @@ export interface PluginTagProps {
    */
   agentId?: string;
   disabled?: boolean;
+  /** In a row, an on/off switch for the item; `onToggle` makes it appear. */
+  enabled?: boolean;
+  /** Trailing controls of a `row` (e.g. a link to manage the tool); ignored by the chip. */
+  extra?: React.ReactNode;
   /**
    * Renders the `selectable` checkbox in the "some but not all" state (a minus
    * box instead of a tick), the antd `indeterminate` / Gmail select-all
@@ -99,9 +117,14 @@ export interface PluginTagProps {
    * tool granted for some of its APIs but not all.
    */
   indeterminate?: boolean;
+  /** In a row, name the kind as a skill rather than by how the item is stored. */
+  isSkill?: boolean;
+  /** In a row, opens the item's details. */
+  onOpen?: (detail: ItemDetail) => void;
   onRemove?: (e: React.MouseEvent) => void;
   /** Fires when the checkbox/tag is toggled in `selectable` mode. */
   onSelect?: () => void;
+  onToggle?: (next: boolean) => void;
   pluginId: string | { enabled: boolean; identifier: string; settings: Record<string, any> };
   /**
    * Whether the remove (×) button is shown. Default true. Set false to keep the
@@ -131,11 +154,19 @@ export interface PluginTagProps {
    * @default false
    */
   showDesktopOnlyLabel?: boolean;
+  /** In a row, replaces the kind label, e.g. where a skill comes from. */
+  tagLabel?: string;
   /**
    * Whether to use allMetaList (includes hidden tools) or metaList
    * @default false
    */
   useAllMetaList?: boolean;
+  /**
+   * `chip` is the compact tag used inside menus and inline lists; `row` is one line of a
+   * list — icon, name, what kind of tool it is, and the remove action.
+   * @default 'chip'
+   */
+  variant?: 'chip' | 'row';
 }
 
 const PluginTag = memo<PluginTagProps>(
@@ -152,6 +183,13 @@ const PluginTag = memo<PluginTagProps>(
     showAuthor = false,
     showDesktopOnlyLabel = false,
     useAllMetaList = false,
+    variant = 'chip',
+    extra,
+    isSkill = false,
+    enabled = true,
+    onToggle,
+    onOpen,
+    tagLabel,
   }) => {
     const isDarkMode = useIsDark();
     const { t } = useTranslation('setting');
@@ -267,6 +305,7 @@ const PluginTag = memo<PluginTagProps>(
         return {
           availableInWeb,
           avatar: builtinMeta.meta.avatar,
+          description: builtinMeta.meta.description,
           isInstalled: true,
           title: builtinMeta.meta.title,
           type: 'builtin' as const,
@@ -278,6 +317,7 @@ const PluginTag = memo<PluginTagProps>(
         return {
           availableInWeb: true,
           avatar: installedMeta.avatar,
+          description: installedMeta.description,
           isInstalled: true,
           title: installedMeta.title,
           type: 'plugin' as const,
@@ -289,6 +329,10 @@ const PluginTag = memo<PluginTagProps>(
       if (agentConn) {
         return {
           availableInWeb: true,
+          description:
+            typeof agentConn.metadata?.description === 'string'
+              ? agentConn.metadata.description
+              : undefined,
           icon: McpIcon,
           isInstalled: true,
           label: agentConn.name || identifier,
@@ -389,6 +433,97 @@ const PluginTag = memo<PluginTagProps>(
 
     // Only show error state when not installed and not loading
     const showErrorState = !meta.isInstalled && !isLoading;
+
+    // The tools an item brings, for its count and its details.
+    const builtinApi = useToolStore(
+      (s) => s.builtinTools.find((tool) => tool.identifier === identifier)?.manifest.api,
+      isEqual,
+    );
+    const connectorTools = (
+      agentConnectors.find((c) => c.identifier === identifier) ??
+      customConnectors.find((c) => c.identifier === identifier)
+    )?.tools;
+    const toolList: ItemDetail['tools'] = connectorTools?.length
+      ? connectorTools.map((tool) => ({
+          description: tool.description,
+          name: tool.displayName || tool.toolName,
+        }))
+      : (builtinApi ?? []).map((api) => ({ description: api.description, name: api.name }));
+
+    if (variant === 'row') {
+      const description =
+        'description' in meta && typeof meta.description === 'string'
+          ? meta.description
+          : undefined;
+
+      const kindLabel = tagLabel ?? t(`settingAgent.tools.type.${isSkill ? 'skill' : meta.type}`);
+      const title = getDisplayText() ?? identifier;
+
+      return (
+        <ItemRow
+          danger={showErrorState}
+          description={description}
+          icon={renderIcon()}
+          tag={kindLabel}
+          title={title}
+          actions={
+            <>
+              {extra}
+              {onToggle ? (
+                <Switch
+                  checked={enabled}
+                  disabled={disabled}
+                  size={'small'}
+                  title={t(enabled ? 'settingAgent.tools.disable' : 'settingAgent.tools.enable')}
+                  onChange={(next) => onToggle(next)}
+                />
+              ) : null}
+              {removable && !disabled ? (
+                <ActionIcon
+                  aria-label={t('settingAgent.tools.remove')}
+                  icon={X}
+                  size={'small'}
+                  title={t('settingAgent.tools.remove')}
+                  onClick={(e) => onRemove?.(e)}
+                />
+              ) : null}
+            </>
+          }
+          meta={
+            <>
+              {toolList.length > 0 ? (
+                <Text fontSize={12} style={{ flex: 'none' }} type={'secondary'}>
+                  {t('settingAgent.tools.toolCount', { count: toolList.length })}
+                </Text>
+              ) : null}
+              {author ? (
+                <Tooltip title={t('settingAgent.agentTools.authorizedBy', { name: author.name })}>
+                  <Avatar
+                    avatar={author.avatar}
+                    size={20}
+                    style={{ flexShrink: 0 }}
+                    title={author.name}
+                  />
+                </Tooltip>
+              ) : null}
+            </>
+          }
+          onClick={
+            onOpen
+              ? () =>
+                  onOpen({
+                    description,
+                    icon: renderIcon(),
+                    identifier,
+                    tag: kindLabel,
+                    title,
+                    tools: toolList,
+                  })
+              : undefined
+          }
+        />
+      );
+    }
 
     return (
       <Tag

@@ -1,6 +1,6 @@
 import type { CreateThreadParams, ThreadMetadata } from '@lobechat/types';
-import { IN_FLIGHT_OPERATION_STATUS_LIST, RequestTrigger, ThreadStatus } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull, ne, notExists, sql } from 'drizzle-orm';
+import { RequestTrigger, ThreadStatus } from '@lobechat/types';
+import { and, desc, eq, inArray, isNull, notExists, sql } from 'drizzle-orm';
 
 import type { ThreadItem } from '../schemas';
 import { agentOperations, messages, threads } from '../schemas';
@@ -138,6 +138,8 @@ export class ThreadModel {
           // Internal Agent Signal and onboarding Understanding runs create
           // isolation threads that must stay out of the user-facing sub-agent
           // attachment list. Ordinary onboarding threads remain visible.
+          // Sub-agents of a task-result wakeup inherit its `task_callback`
+          // trigger: server-started follow-ups, kept out of the list the same way.
           notExists(
             this.db
               .select({ id: agentOperations.id })
@@ -145,7 +147,10 @@ export class ThreadModel {
               .where(
                 and(
                   eq(agentOperations.threadId, threads.id),
-                  eq(agentOperations.trigger, RequestTrigger.AgentSignal),
+                  inArray(agentOperations.trigger, [
+                    RequestTrigger.AgentSignal,
+                    RequestTrigger.TaskCallback,
+                  ]),
                 ),
               ),
           ),
@@ -199,56 +204,49 @@ export class ThreadModel {
   };
 
   /**
-   * Move the thread an operation ran in out of its running status once that
-   * operation settles.
-   *
-   * Only a `processing` / `inReview` row moves, and only while no other
-   * operation on the thread is still in flight — a late completion must not
-   * settle a thread a newer follow-up run has already claimed.
-   *
-   * @returns the settled thread id, or undefined when nothing changed
+   * Record the operation id of a run that just started. The run is scheduled
+   * before its id is known here, so it may already have settled the thread;
+   * that metadata holds its final usage and error and must not be replaced.
    */
-  settleForOperation = async (
-    operationId: string,
-    status: ThreadStatus,
-    metadata: Pick<ThreadMetadata, 'completedAt' | 'error'> = {},
-  ): Promise<string | undefined> => {
-    const [op] = await this.db
-      .select({ threadId: agentOperations.threadId })
-      .from(agentOperations)
-      .where(eq(agentOperations.id, operationId))
-      .limit(1);
-    if (!op?.threadId) return undefined;
+  attachRunOperation = async (id: string, metadata: ThreadMetadata) => {
+    return this.db
+      .update(threads)
+      .set({ metadata, updatedAt: new Date() })
+      .where(
+        and(eq(threads.id, id), this.ownership(), eq(threads.status, ThreadStatus.Processing)),
+      );
+  };
 
+  /**
+   * Compare-and-set a `processing` thread into the terminal status of its run.
+   *
+   * `value.metadata.startedAt` must be the value the caller read: every claim
+   * rewrites it, so an earlier run cannot close a follow-up that claimed the
+   * thread after that read. The operation id is written after the run starts,
+   * so it may still be empty; the caller decides whether an empty id is its own.
+   *
+   * @returns whether this caller settled the thread
+   */
+  settleRun = async (
+    id: string,
+    operationId: string,
+    value: { metadata: ThreadMetadata; status: ThreadStatus },
+  ): Promise<boolean> => {
     const rows = await this.db
       .update(threads)
-      .set({
-        metadata: sql`COALESCE(${threads.metadata}, '{}'::jsonb) || ${JSON.stringify(metadata)}::jsonb`,
-        status,
-        updatedAt: new Date(),
-      })
+      .set({ ...value, updatedAt: new Date() })
       .where(
         and(
-          eq(threads.id, op.threadId),
+          eq(threads.id, id),
           this.ownership(),
-          inArray(threads.status, [ThreadStatus.Processing, ThreadStatus.InReview]),
-          notExists(
-            this.db
-              .select({ id: agentOperations.id })
-              .from(agentOperations)
-              .where(
-                and(
-                  eq(agentOperations.threadId, threads.id),
-                  ne(agentOperations.id, operationId),
-                  inArray(agentOperations.status, [...IN_FLIGHT_OPERATION_STATUS_LIST]),
-                ),
-              ),
-          ),
+          eq(threads.status, ThreadStatus.Processing),
+          sql`COALESCE(${threads.metadata} ->> 'operationId', '') IN ('', ${operationId})`,
+          sql`COALESCE(${threads.metadata} ->> 'startedAt', '') = ${value.metadata.startedAt ?? ''}`,
         ),
       )
       .returning({ id: threads.id });
 
-    return rows[0]?.id;
+    return rows.length > 0;
   };
 
   update = async (id: string, value: Partial<ThreadItem>) => {
