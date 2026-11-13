@@ -253,6 +253,15 @@ export const ModelParamsMetaSchema = z.object({
     })
     .optional(),
 
+  background: z
+    .object({
+      default: z.string(),
+      description: z.string().optional(),
+      enum: z.array(z.string()),
+      type: z.literal('string').optional(),
+    })
+    .optional(),
+
   /**
    * Output file format, e.g. `png` or `gif`. `gif` produces an animated image whose
    * frames are controlled by `frameCount` and `frameDurationMs`.

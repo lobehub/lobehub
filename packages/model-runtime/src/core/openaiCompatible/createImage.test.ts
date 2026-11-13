@@ -598,6 +598,94 @@ describe('createOpenAICompatibleImage', () => {
     });
   });
 
+  describe('image mode - background parameter', () => {
+    const mockImageResponse = { data: [{ b64_json: 'backgroundResult' }] };
+
+    it('should omit background when it is auto', async () => {
+      vi.mocked(mockClient.images.generate).mockResolvedValue(mockImageResponse as any);
+
+      const payload: CreateImagePayload = {
+        model: 'gpt-image-2',
+        params: { background: 'auto', prompt: 'A red apple' },
+      };
+
+      await createOpenAICompatibleImage(mockClient, payload, 'openai');
+
+      const requestArgs = vi.mocked(mockClient.images.generate).mock.calls[0][0];
+      expect(requestArgs).not.toHaveProperty('background');
+    });
+
+    it('should forward opaque and transparent to images.generate', async () => {
+      vi.mocked(mockClient.images.generate).mockResolvedValue(mockImageResponse as any);
+
+      for (const background of ['opaque', 'transparent']) {
+        vi.mocked(mockClient.images.generate).mockClear();
+        const payload: CreateImagePayload = {
+          model: 'gpt-image-2',
+          params: { background, prompt: 'A red apple' },
+        };
+
+        await createOpenAICompatibleImage(mockClient, payload, 'openai');
+
+        expect(vi.mocked(mockClient.images.generate).mock.calls[0][0]).toMatchObject({
+          background,
+        });
+      }
+    });
+
+    it('should omit background auto on the edit path too', async () => {
+      const mockArrayBuffer = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer;
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => mockArrayBuffer,
+        headers: {
+          get: (name: string) => (name === 'content-type' ? 'image/jpeg' : null),
+        },
+      } as any);
+      vi.mocked(mockClient.images.edit).mockResolvedValue(mockImageResponse as any);
+
+      const payload: CreateImagePayload = {
+        model: 'gpt-image-2',
+        params: {
+          background: 'auto',
+          imageUrl: 'https://example.com/reference.jpg',
+          prompt: 'Adjust the subject',
+        },
+      };
+
+      await createOpenAICompatibleImage(mockClient, payload, 'openai');
+
+      expect(vi.mocked(mockClient.images.edit).mock.calls[0][0]).not.toHaveProperty('background');
+    });
+
+    it('should forward the background parameter on the edit path', async () => {
+      const mockArrayBuffer = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer;
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => mockArrayBuffer,
+        headers: {
+          get: (name: string) => (name === 'content-type' ? 'image/jpeg' : null),
+        },
+      } as any);
+      vi.mocked(mockClient.images.edit).mockResolvedValue(mockImageResponse as any);
+
+      const payload: CreateImagePayload = {
+        model: 'gpt-image-2',
+        params: {
+          background: 'transparent',
+          imageUrl: 'https://example.com/reference.jpg',
+          prompt: 'Cut out the subject',
+        },
+      };
+
+      await createOpenAICompatibleImage(mockClient, payload, 'openai');
+
+      expect(vi.mocked(mockClient.images.edit).mock.calls[0][0]).toMatchObject({
+        background: 'transparent',
+      });
+    });
+  });
+
   describe('image mode - parameter mapping', () => {
     it('should map single imageUrl string parameter to image array', async () => {
       const mockImageResponse = {
