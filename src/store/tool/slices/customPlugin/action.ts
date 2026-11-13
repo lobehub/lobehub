@@ -93,8 +93,13 @@ export class CustomPluginActionImpl {
     }
   };
 
-  reinstallCustomPlugin = async (id: string): Promise<void> => {
-    const plugin = pluginSelectors.getCustomPluginById(id)(this.#get());
+  /**
+   * Rediscover a legacy custom MCP's tools. `saved` is the configuration an
+   * edit just stored: the loaded row still holds the previous server until the
+   * list refreshes, so reading it would list the old server's tools.
+   */
+  reinstallCustomPlugin = async (id: string, saved?: LobeToolCustomPlugin): Promise<void> => {
+    const plugin = saved ?? pluginSelectors.getCustomPluginById(id)(this.#get());
     if (!plugin) return;
 
     const { refreshPlugins, updateInstallError, updateInstallLoadingState } = this.#get();
@@ -135,8 +140,8 @@ export class CustomPluginActionImpl {
     // 1. Update list item information
     await pluginService.updatePlugin(id, value);
 
-    // 2. Reinstall plugin
-    await reinstallCustomPlugin(id);
+    // 2. Reinstall plugin from the values just saved
+    await reinstallCustomPlugin(id, value);
   };
 
   updateNewCustomPlugin = (newCustomPlugin: Partial<LobeToolCustomPlugin>): void => {

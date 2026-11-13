@@ -277,6 +277,48 @@ describe('useToolStore:customPlugin', () => {
 
       expect(pluginService.updatePlugin).toHaveBeenCalledWith(pluginId, updatedPlugin);
     });
+
+    // The loaded row still points at the old server until the list refreshes
+    it('lists the tools of the server the edit saved, not the one the row had', async () => {
+      const pluginId = 'moved-mcp';
+      act(() => {
+        useToolStore.setState({
+          installedPlugins: [
+            {
+              customParams: {
+                mcp: { headers: { 'x-env': 'a' }, url: 'https://a.example.com/mcp' },
+              },
+              identifier: pluginId,
+              type: 'customPlugin',
+            } as LobeToolCustomPlugin,
+          ],
+        });
+      });
+      vi.mocked(mcpService.getStreamableMcpServerManifest).mockResolvedValueOnce({} as never);
+      const { result } = renderHook(() => useToolStore());
+
+      await act(async () => {
+        await result.current.updateCustomPlugin(pluginId, {
+          customParams: {
+            mcp: {
+              auth: { token: 'b-token', type: 'bearer' },
+              headers: { 'x-env': 'b' },
+              url: 'https://b.example.com/mcp',
+            },
+          },
+          identifier: pluginId,
+          type: 'customPlugin',
+        } as LobeToolCustomPlugin);
+      });
+
+      expect(mcpService.getStreamableMcpServerManifest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          auth: { token: 'b-token', type: 'bearer' },
+          headers: { 'x-env': 'b' },
+          url: 'https://b.example.com/mcp',
+        }),
+      );
+    });
   });
 
   describe('reinstallCustomPlugin', () => {
