@@ -1,5 +1,7 @@
 import { DEFAULT_SECURITY_BLACKLIST, InterventionChecker } from '@lobechat/agent-runtime';
 import { isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import { mayRequireMandatoryApproval } from '@lobechat/const/plugin';
+import { connectorToolIntervention } from '@lobechat/mecha';
 import type {
   HumanInterventionConfig,
   HumanInterventionPolicy,
@@ -109,8 +111,8 @@ const findToolIntervention = (
     if (!tool) return { missingFrom: connector.id };
     // A tool only the model may call is refused before anyone is asked about it
     if (tool.permission === 'disabled' || !isSyncedMcpToolVisibleTo(tool, 'app')) return null;
-    // Same mapping as the connector manifest (`patchManifestWithPermissions`)
-    return { intervention: tool.permission === 'needs_approval' ? 'required' : undefined };
+    // Same mapping as the connector manifest (`buildConnectorManifest`)
+    return { intervention: connectorToolIntervention(tool) };
   }
 
   const plugin =
@@ -140,7 +142,15 @@ const findToolIntervention = (
   if (!confirmed) return { intervention: 'required' };
   const permission = connector?.tools.find((t) => t.toolName === toolName)?.permission;
   if (permission === 'disabled') return null;
-  if (permission === 'needs_approval') return { intervention: 'required' };
+  // Never looser than the tool's own `always` (`patchManifestWithPermissions`)
+  if (permission === 'needs_approval')
+    return {
+      intervention: mayRequireMandatoryApproval(
+        api?.humanIntervention ?? manifest?.humanIntervention,
+      )
+        ? 'always'
+        : 'required',
+    };
 
   // A manifest stored before MCP Apps was on lacks the tools its server offers
   // only to views. Ask rather than refuse: the session the call runs on still

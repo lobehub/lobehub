@@ -186,6 +186,45 @@ describe('connectorRouter.syncToolsFromClientById', () => {
     ]);
   });
 
+  // The connector manifest maps `needs_approval` to `required`, which auto-run
+  // and headless skip; a manifest's `always` must survive as its own mark
+  it('marks a tool whose manifest can ask for always approval, on every sync', async () => {
+    await caller().syncToolsFromClientById({
+      id: CONNECTOR_ID,
+      tools: [
+        { humanIntervention: 'always', toolName: 'delete_file' },
+        { humanIntervention: 'always', toolName: 'wipe', visibility: ['model'] },
+        {
+          humanIntervention: [
+            { match: { path: '/tmp/*' }, policy: 'never' },
+            { match: { recursive: 'true' }, policy: 'always' },
+          ],
+          toolName: 'remove_path',
+        },
+        { humanIntervention: { dynamic: { default: 'never', type: 'x' } }, toolName: 'audited' },
+        { humanIntervention: 'required', toolName: 'send_mail' },
+        {
+          humanIntervention: { dynamic: { default: 'never', policy: 'required', type: 'x' } },
+          toolName: 'publish',
+        },
+        { toolName: 'read_file', visibility: ['app'] },
+      ],
+    });
+
+    expect(connectorToolModelMock.upsertMany).toHaveBeenCalledWith(CONNECTOR_ID, [
+      expect.objectContaining({ metadata: { mandatoryApproval: true }, toolName: 'delete_file' }),
+      expect.objectContaining({
+        metadata: { mandatoryApproval: true, visibility: ['model'] },
+        toolName: 'wipe',
+      }),
+      expect.objectContaining({ metadata: { mandatoryApproval: true }, toolName: 'remove_path' }),
+      expect.objectContaining({ metadata: { mandatoryApproval: true }, toolName: 'audited' }),
+      expect.objectContaining({ metadata: null, toolName: 'send_mail' }),
+      expect.objectContaining({ metadata: null, toolName: 'publish' }),
+      expect.objectContaining({ metadata: { visibility: ['app'] }, toolName: 'read_file' }),
+    ]);
+  });
+
   it('drops the auto tools an install no longer lists, keeping permission tombstones', async () => {
     connectorToolModelMock.queryByConnector = vi.fn().mockResolvedValue([
       { permission: 'auto', toolName: 'kept' },

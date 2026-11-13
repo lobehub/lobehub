@@ -124,3 +124,62 @@ export const isMarketplaceInstallRunnable = (
   !hasCallableMcpEndpoint(connector) ||
   (connector.status === 'connected' &&
     (hasPluginRow || isMarketplaceInstallCompleted(connector.metadata)));
+
+/**
+ * Whether a manifest tool's `humanIntervention` can resolve to one of
+ * `policies`: the policy itself, any of its rules, or either outcome of a
+ * dynamic config (its `policy`, `always` when unset, on a match; its `default`
+ * otherwise). Callers that carry one policy per tool, where rules and
+ * resolvers cannot run, read the strictest outcome from this.
+ */
+export const humanInterventionMayResolveTo = (
+  humanIntervention: unknown,
+  policies: readonly string[],
+): boolean => {
+  const matches = (policy: unknown) => typeof policy === 'string' && policies.includes(policy);
+  const rules = Array.isArray(humanIntervention) ? humanIntervention : [humanIntervention];
+
+  return rules.some((rule) => {
+    if (!rule || typeof rule !== 'object') return matches(rule);
+
+    const { dynamic, policy } = rule as { dynamic?: unknown; policy?: unknown };
+    if (dynamic && typeof dynamic === 'object') {
+      const { default: fallback, policy: onMatch = 'always' } = dynamic as {
+        default?: unknown;
+        policy?: unknown;
+      };
+      return matches(onMatch) || matches(fallback);
+    }
+    return matches(policy);
+  });
+};
+
+/**
+ * Whether a manifest tool can ask for `always` approval, the one no approval
+ * mode waives (auto-run and headless skip `required`).
+ */
+export const mayRequireMandatoryApproval = (humanIntervention: unknown): boolean =>
+  humanInterventionMayResolveTo(humanIntervention, ['always']);
+
+/**
+ * `user_connector_tools.metadata` key a synced tool sets when its manifest can
+ * ask for `always` approval (a cloud marketplace MCP the market marks so). The
+ * connector's manifest is built from the row, whose `needs_approval` becomes a
+ * `required` that auto-run skips: the mark keeps the tool on `always`, whatever
+ * its permission, as the plugin manifest kept it.
+ */
+export const MANDATORY_APPROVAL_KEY = 'mandatoryApproval';
+
+export const hasMandatoryApproval = (metadata: unknown): boolean =>
+  !!metadata &&
+  typeof metadata === 'object' &&
+  (metadata as Record<string, unknown>)[MANDATORY_APPROVAL_KEY] === true;
+
+/** A synced tool's `metadata`, marked when its manifest `humanIntervention` can ask for `always`. */
+export const withMandatoryApprovalMark = (
+  metadata: Record<string, unknown> | null,
+  humanIntervention: unknown,
+): Record<string, unknown> | null =>
+  mayRequireMandatoryApproval(humanIntervention)
+    ? { ...metadata, [MANDATORY_APPROVAL_KEY]: true }
+    : metadata;

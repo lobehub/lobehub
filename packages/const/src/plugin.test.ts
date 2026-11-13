@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ARTIFACT_TAG_REGEX,
+  hasMandatoryApproval,
+  humanInterventionMayResolveTo,
   isMarketplaceInstallRunnable,
   keepsDesktopStdioExecution,
+  mayRequireMandatoryApproval,
+  withMandatoryApprovalMark,
 } from './plugin';
 
 describe('ARTIFACT_TAG_REGEX', () => {
@@ -137,5 +141,64 @@ describe('isMarketplaceInstallRunnable', () => {
     { case: 'a custom connector', connector: { ...pending, sourceType: 'custom' }, ok: true },
   ])('is $ok for $case', ({ connector, ok, plugin }) => {
     expect(isMarketplaceInstallRunnable(connector, !!plugin)).toBe(ok);
+  });
+});
+
+describe('mayRequireMandatoryApproval', () => {
+  it('reads a static always', () => {
+    expect(mayRequireMandatoryApproval('always')).toBe(true);
+    expect(mayRequireMandatoryApproval('required')).toBe(false);
+    expect(mayRequireMandatoryApproval('never')).toBe(false);
+    expect(mayRequireMandatoryApproval(undefined)).toBe(false);
+    expect(mayRequireMandatoryApproval(null)).toBe(false);
+  });
+
+  it('counts a rule that can ask for always, whatever its match', () => {
+    expect(
+      mayRequireMandatoryApproval([
+        { match: { path: '/tmp/*' }, policy: 'never' },
+        { match: { recursive: 'true' }, policy: 'always' },
+      ]),
+    ).toBe(true);
+    expect(mayRequireMandatoryApproval([{ policy: 'never' }, { policy: 'required' }])).toBe(false);
+  });
+
+  it('counts either outcome of a dynamic config, whose unset policy is always', () => {
+    expect(mayRequireMandatoryApproval({ dynamic: { default: 'never', type: 'x' } })).toBe(true);
+    expect(
+      mayRequireMandatoryApproval({ dynamic: { default: 'always', policy: 'never', type: 'x' } }),
+    ).toBe(true);
+    expect(
+      mayRequireMandatoryApproval({ dynamic: { default: 'never', policy: 'required', type: 'x' } }),
+    ).toBe(false);
+  });
+});
+
+describe('humanInterventionMayResolveTo', () => {
+  it('matches any of the given policies', () => {
+    expect(humanInterventionMayResolveTo('required', ['required', 'always'])).toBe(true);
+    expect(humanInterventionMayResolveTo([{ policy: 'never' }], ['required', 'always'])).toBe(
+      false,
+    );
+  });
+});
+
+describe('withMandatoryApprovalMark', () => {
+  it('marks the metadata only for a manifest that can ask for always', () => {
+    expect(withMandatoryApprovalMark(null, 'always')).toEqual({ mandatoryApproval: true });
+    expect(withMandatoryApprovalMark({ visibility: ['model'] }, 'always')).toEqual({
+      mandatoryApproval: true,
+      visibility: ['model'],
+    });
+    expect(withMandatoryApprovalMark(null, 'required')).toBeNull();
+    expect(withMandatoryApprovalMark({ visibility: ['app'] }, undefined)).toEqual({
+      visibility: ['app'],
+    });
+  });
+
+  it('is read back by hasMandatoryApproval', () => {
+    expect(hasMandatoryApproval(withMandatoryApprovalMark(null, 'always'))).toBe(true);
+    expect(hasMandatoryApproval({ mandatoryApproval: 'true' })).toBe(false);
+    expect(hasMandatoryApproval(null)).toBe(false);
   });
 });

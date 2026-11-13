@@ -1,4 +1,8 @@
-import { getComposioAppByIdentifier, hasCallableMcpEndpoint } from '@lobechat/const';
+import {
+  getComposioAppByIdentifier,
+  hasCallableMcpEndpoint,
+  withMandatoryApprovalMark,
+} from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { buildMcpToolMetadata } from '@lobechat/const/mcpApp';
 import { upsertPluginMode } from '@lobechat/types';
@@ -1021,7 +1025,9 @@ export const connectorRouter = router({
             /**
              * A manifest tool's `humanIntervention` (cloud marketplace installs):
              * `required` / `always`, or rules or a dynamic config that can ask
-             * for either, make a newly synced tool need approval.
+             * for either, make a newly synced tool need approval. One that can
+             * ask for `always` keeps it on every sync, since no approval mode
+             * waives it.
              */
             humanIntervention: z.unknown().optional(),
             inputSchema: z.record(z.string(), z.unknown()).optional(),
@@ -1046,7 +1052,12 @@ export const connectorRouter = router({
         defaultPermission: resolveConnectorToolPermission(t.humanIntervention),
         description: t.description,
         inputSchema: t.inputSchema,
-        metadata: buildMcpToolMetadata(t.visibility),
+        // Refreshed on every sync, unlike the permission: an `always` the
+        // manifest asks for stays mandatory whatever the permission is
+        metadata: withMandatoryApprovalMark(
+          buildMcpToolMetadata(t.visibility),
+          t.humanIntervention,
+        ),
         toolName: t.toolName,
       }));
 

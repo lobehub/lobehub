@@ -12,6 +12,8 @@ import type { UserConnectorToolItem } from '@/database/schemas';
  * - 'auto'           → humanIntervention: undefined (AI calls freely)
  * - 'needs_approval' → humanIntervention: 'required' (human must confirm)
  * - 'disabled'       → tool included with blocking description; AI knows it exists but is told it cannot be called
+ * A tool whose manifest made approval mandatory (`metadata.mandatoryApproval`)
+ * is `humanIntervention: 'always'` unless disabled: auto-run cannot skip it.
  */
 export function buildConnectorManifests(
   connectors: DecryptedConnector[],
