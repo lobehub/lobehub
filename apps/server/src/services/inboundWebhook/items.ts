@@ -4,6 +4,7 @@ import { inArray } from 'drizzle-orm';
 import type { InboundWebhookView } from '@/database/models/inboundWebhook';
 import { agents, topics, userConnectors } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { normalizeInboxAgentMeta } from '@/database/utils/inboxAgent';
 
 export interface InboundWebhookActor {
   userId: string;
@@ -26,6 +27,7 @@ export async function inboundWebhookItems(
   const [connectorRows, agentRows, topicRows] = await Promise.all([
     db
       .select({
+        agentId: userConnectors.agentId,
         id: userConnectors.id,
         identifier: userConnectors.identifier,
         metadata: userConnectors.metadata,
@@ -43,6 +45,7 @@ export async function inboundWebhookItems(
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         id: agents.id,
+        slug: agents.slug,
         title: agents.title,
       })
       .from(agents)
@@ -62,16 +65,24 @@ export async function inboundWebhookItems(
         ),
       ),
   ]);
+  // The default agent is stored without a title or avatar. Resolve it the way
+  // every other agent read path does, so the list shows the same name and
+  // avatar as the sidebar; the slug only serves that lookup.
+  const toAgentItem = ({ slug, ...agent }: (typeof agentRows)[number]) =>
+    normalizeInboxAgentMeta(agent, { slug });
+
   return rows
     .filter((r) => ['active', 'error', 'terminated'].includes(r.status))
     .map((row) => {
       const connector = connectorRows.find((c) => c.id === row.connectorId);
+      const agentRow = agentRows.find((a) => a.id === row.agentId);
       return {
-        agent: agentRows.find((a) => a.id === row.agentId) ?? null,
+        agent: agentRow ? toAgentItem(agentRow) : null,
         canCheck: row.kind === 'mcp_events',
         canManage: canManageInboundWebhook(actor, row),
         connector: connector
           ? {
+              agentId: connector.agentId,
               avatar: connector.metadata?.avatar ?? null,
               id: connector.id,
               identifier: connector.identifier,

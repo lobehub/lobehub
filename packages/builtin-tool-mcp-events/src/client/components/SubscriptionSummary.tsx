@@ -10,6 +10,9 @@ import {
   AutomationStatusTag,
 } from '@/features/Automations/AutomationStatus';
 import { summarizeArguments } from '@/features/Automations/formatArguments';
+import { useAgentStore } from '@/store/agent';
+import { useToolStore } from '@/store/tool';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 
 import type { McpEventSubscriptionSummary } from '../../types';
 import ConnectorEventLabel from './ConnectorEventLabel';
@@ -27,6 +30,14 @@ interface SubscriptionSummaryProps {
  */
 const SubscriptionSummary = memo<SubscriptionSummaryProps>(({ detailed, subscription }) => {
   const { t } = useTranslation('plugin');
+  const { identifier } = subscription.connector;
+  // The tool result names the connector only by identifier. Resolve the row the
+  // way the server does for this agent, so "Reconnect" opens the connector this
+  // subscription actually uses — the agent's own copy when it has one.
+  const agentId = useAgentStore((s) => s.activeAgentId);
+  const connectorAgentId = useToolStore(
+    (s) => connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s)?.agentId,
+  );
   const args = summarizeArguments(subscription.arguments, 3);
   const filter = args
     ? args.more > 0
@@ -52,7 +63,12 @@ const SubscriptionSummary = memo<SubscriptionSummaryProps>(({ detailed, subscrip
       <Text style={{ fontSize: 12 }} type={'secondary'}>
         {filter} · {lifetime}
       </Text>
-      {detailed && <AutomationStatusReason item={subscription} />}
+      {detailed && (
+        <AutomationStatusReason
+          connector={{ agentId: connectorAgentId, identifier }}
+          item={subscription}
+        />
+      )}
     </Flexbox>
   );
 });

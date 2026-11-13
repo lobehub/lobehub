@@ -76,7 +76,14 @@ export interface InboundWebhookItem {
   canCheck: boolean;
   /** 当前用户能否删除 / 检查这一行 */
   canManage: boolean;
-  connector: { avatar: string | null; id: string; identifier: string; name: string } | null;
+  connector: {
+    /** Set when the connector is owned by an agent rather than the user (`user_connectors.agent_id`). */
+    agentId: string | null;
+    avatar: string | null;
+    id: string;
+    identifier: string;
+    name: string;
+  } | null;
   createdAt: string;
   creatorId: string;
   /** mcp_events：server 授予的到期时间；null = 永不过期 */
