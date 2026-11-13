@@ -7,6 +7,12 @@ import { getDraft, saveDraft } from '../draftStorage';
 import { createStore, Provider } from '../store';
 import { useChatInputDraft } from './useChatInputDraft';
 
+const platform = vi.hoisted(() => ({ isMobileSurface: false }));
+
+vi.mock('@/utils/mobileSurface', () => ({
+  isMobileSurface: () => platform.isMobileSurface,
+}));
+
 const createFakeEditor = () => {
   let json: Record<string, unknown> | undefined;
 
@@ -32,6 +38,7 @@ describe('useChatInputDraft', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     localStorage.clear();
+    platform.isMobileSurface = false;
   });
 
   afterEach(() => {
@@ -290,6 +297,7 @@ describe('useChatInputDraft', () => {
   });
 
   it('does not auto-focus on mobile after switching draft key', () => {
+    platform.isMobileSurface = true;
     const focus = vi.fn();
     const editor = {
       cleanDocument: vi.fn(),
@@ -299,7 +307,7 @@ describe('useChatInputDraft', () => {
       isEmpty: true,
       setDocument: vi.fn(),
     } as unknown as IEditor;
-    const store = createStore({ draftKey: 'main_agt_a_tpc_1', editor, mobile: true });
+    const store = createStore({ draftKey: 'main_agt_a_tpc_1', editor });
     const wrapper = ({ children }: { children: ReactNode }) => (
       <Provider createStore={() => store}>{children}</Provider>
     );

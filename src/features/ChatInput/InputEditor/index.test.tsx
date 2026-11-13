@@ -363,6 +363,25 @@ describe('ChatInput InputEditor', () => {
     expect((await getEditorStyle())?.fontSize).toBe(16);
   });
 
+  it('does not auto-focus the editor on mobile', async () => {
+    permission.allowed = true;
+    platform.isMobile = true;
+
+    render(<InputEditor />);
+
+    const { Editor } = await import('@lobehub/editor/react');
+    expect(vi.mocked(Editor).mock.lastCall?.[0].autoFocus).toBe(false);
+  });
+
+  it('auto-focuses the editor on desktop', async () => {
+    permission.allowed = true;
+
+    render(<InputEditor />);
+
+    const { Editor } = await import('@lobehub/editor/react');
+    expect(vi.mocked(Editor).mock.lastCall?.[0].autoFocus).toBe(true);
+  });
+
   it('keeps the editor font size unchanged on desktop', async () => {
     permission.allowed = true;
 

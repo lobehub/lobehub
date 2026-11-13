@@ -34,6 +34,7 @@ import { composerHoverMarker } from '../markers.stylex';
 import SendArea from '../SendArea';
 import TypoBar from '../TypoBar';
 import ContextContainer from './ContextContainer';
+import { useFocusOnChatSwitch } from './useFocusOnChatSwitch';
 
 const styles = stylex.create({
   footnote: { fontSize: '10px' },
@@ -167,8 +168,9 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
       workspaceFileDrop.onDrop(event);
     };
 
+    useFocusOnChatSwitch(editor, chatKey);
+
     useEffect(() => {
-      if (editor) editor.focus();
       setExpand(false);
     }, [chatKey, editor, setExpand]);
 
