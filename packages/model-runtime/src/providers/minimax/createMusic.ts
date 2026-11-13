@@ -247,11 +247,17 @@ const readMiniMaxMusicStream = async (response: Response): Promise<MiniMaxMusicR
     }
   }
 
-  const audio = final?.data?.audio || chunks.join('');
+  // Without the terminal event the connection dropped mid-song: the chunks are incomplete.
+  if (!final) {
+    throw new MiniMaxMusicError(
+      'MiniMax music stream ended before the song finished',
+      AgentRuntimeErrorType.ProviderNetworkError,
+    );
+  }
 
   return {
     ...final,
-    data: { audio, status: final?.data?.status ?? MINIMAX_MUSIC_STATUS_DONE },
+    data: { audio: final.data?.audio || chunks.join(''), status: final.data?.status },
   };
 };
 

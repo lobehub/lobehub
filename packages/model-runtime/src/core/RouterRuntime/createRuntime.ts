@@ -484,22 +484,41 @@ export const createRouterRuntime = ({
      * falls back to another channel, and a pending result carries the channel as `route` so
      * polling reaches the same router and credential even if routing changes in between.
      */
+    /** Router for a model without channel sorting: model match, then base URL, then last. */
+    private async resolveDefaultMusicRouter(model?: string): Promise<RouterInstance> {
+      if (model) return resolveMatchedRouter(this.deps, model);
+
+      const resolvedRouters = await resolveRouters(this.deps);
+      const { baseURL } = this._options;
+      return (
+        (baseURL
+          ? resolvedRouters.find((item) => item.baseURLPattern?.test(baseURL))
+          : undefined) ?? resolvedRouters.at(-1)!
+      );
+    }
+
     private async resolveMusicRoute(model?: string, route?: MusicPollingRoute) {
-      if (route?.routerId || route?.channelId) {
-        const resolvedRouters = await resolveRouters(this.deps, { model });
-        const router = route.routerId
-          ? resolvedRouters.find((item) => item.id === route.routerId)
-          : resolvedRouters.find((item) =>
-              normalizeRouterOptions(this.deps, item).some(
-                (option) => option.id === route.channelId,
-              ),
-            );
+      const pinned = route?.routerId || route?.channelId || route?.channelIndex !== undefined;
+
+      if (route && pinned) {
+        let router: RouterInstance | undefined;
+        if (route.routerId) {
+          const resolvedRouters = await resolveRouters(this.deps, { model });
+          router = resolvedRouters.find((item) => item.id === route.routerId);
+        } else if (route.channelId) {
+          const resolvedRouters = await resolveRouters(this.deps, { model });
+          router = resolvedRouters.find((item) =>
+            normalizeRouterOptions(this.deps, item).some((option) => option.id === route.channelId),
+          );
+        } else {
+          router = await this.resolveDefaultMusicRouter(model);
+        }
         if (!router) throw new Error('The music generation route is no longer available');
 
         const options = normalizeRouterOptions(this.deps, router);
         const option = route.channelId
           ? options.find((item) => item.id === route.channelId)
-          : options[0];
+          : options[route.channelIndex ?? 0];
         if (!option) throw new Error('The music generation channel is no longer available');
 
         return { option, router };
@@ -517,13 +536,7 @@ export const createRouterRuntime = ({
         return { option, router: matchedRouter };
       }
 
-      const resolvedRouters = await resolveRouters(this.deps);
-      const { baseURL } = this._options;
-      const router =
-        (baseURL
-          ? resolvedRouters.find((item) => item.baseURLPattern?.test(baseURL))
-          : undefined) ?? resolvedRouters.at(-1)!;
-
+      const router = await this.resolveDefaultMusicRouter();
       const option = normalizeRouterOptions(this.deps, router)[0];
       if (!option) throw new Error('The music generation channel is no longer available');
 
@@ -541,10 +554,18 @@ export const createRouterRuntime = ({
       const result = await musicRuntime.createMusic(payload, options);
       if (result.status !== 'pending') return result;
 
+      // A channel without an id is identified by its position in the unsorted option list.
+      const channelIndex = option.id
+        ? undefined
+        : normalizeRouterOptions(this.deps, router).findIndex(
+            (item) => item === option || JSON.stringify(item) === JSON.stringify(option),
+          );
+
       return {
         ...result,
         route: {
           ...(option.id ? { channelId: option.id } : {}),
+          ...(channelIndex !== undefined && channelIndex >= 0 ? { channelIndex } : {}),
           ...(router.id ? { routerId: router.id } : {}),
         },
       };

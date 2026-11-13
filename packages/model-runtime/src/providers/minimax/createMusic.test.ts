@@ -250,6 +250,22 @@ describe('createMiniMaxMusic', () => {
     });
   });
 
+  it('rejects a stream that closes before the terminal event', async () => {
+    fetchMock.mockResolvedValue(
+      sseResponse([
+        { base_resp: { status_code: 0 }, data: { audio: '4944', status: 1 } },
+        { base_resp: { status_code: 0 }, data: { audio: '3303', status: 1 } },
+      ]),
+    );
+
+    await expect(
+      createMiniMaxMusic({ model: 'music-2.6', params: { prompt: 'lofi', stream: true } }, options),
+    ).rejects.toMatchObject({
+      error: { message: 'MiniMax music stream ended before the song finished' },
+      errorType: AgentRuntimeErrorType.ProviderNetworkError,
+    });
+  });
+
   it('fails when the task is still synthesizing', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({ base_resp: { status_code: 0 }, data: { audio: '', status: 1 } }),

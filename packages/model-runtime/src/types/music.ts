@@ -89,6 +89,8 @@ export interface MusicTrack {
  */
 export interface MusicPollingRoute {
   channelId?: string;
+  /** Position of an id-less channel in its router's option list */
+  channelIndex?: number;
   routerId?: string;
 }
 

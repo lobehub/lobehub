@@ -137,6 +137,46 @@ describe('createRouterRuntime music', () => {
     expect(submitKeys).toEqual(['channel-b']);
   });
 
+  it('pins an id-less sorted channel by its position', async () => {
+    const pollKeys: string[] = [];
+
+    class MockMusicRuntime implements LobeRuntimeAI {
+      private apiKey: string;
+      constructor({ apiKey }: { apiKey: string }) {
+        this.apiKey = apiKey;
+      }
+      createMusic = vi.fn(async () => ({ inferenceId: 'task-1', status: 'pending' as const }));
+      handlePollMusicStatus = vi.fn(async () => {
+        pollKeys.push(this.apiKey);
+        return { status: 'pending' as const };
+      });
+    }
+
+    const Runtime = createRouterRuntime({
+      id: 'music-router',
+      routers: [
+        {
+          apiType: 'openai',
+          models: ['suno-v5'],
+          options: [{ apiKey: 'channel-a' }, { apiKey: 'channel-b' }],
+          runtime: MockMusicRuntime as any,
+        },
+      ],
+      sortRouterOptions: async ({ options }: { options: unknown[] }) => [...options].reverse(),
+    } as any);
+    const runtime = new Runtime();
+
+    const created = await runtime.createMusic(payload);
+    expect(created).toMatchObject({ route: { channelIndex: 1 }, status: 'pending' });
+
+    await runtime.handlePollMusicStatus(
+      'task-1',
+      'suno-v5',
+      created?.status === 'pending' ? created.route : undefined,
+    );
+    expect(pollKeys).toEqual(['channel-b']);
+  });
+
   it('reports runtimes without music support', async () => {
     class ChatOnlyRuntime implements LobeRuntimeAI {}
 
