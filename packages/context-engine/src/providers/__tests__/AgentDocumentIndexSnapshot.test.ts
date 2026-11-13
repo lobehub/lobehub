@@ -285,6 +285,45 @@ describe('noteAgentDocumentChanges', () => {
     });
   });
 
+  // Regression: a move keeps the timestamp and size, so a folded folder in the
+  // index kept pointing the model at the old parent with no note.
+  it('reports a document moved to another folder', () => {
+    const inFolder = (parentId: string, folderTitle: string) =>
+      progressiveDoc({ ...report(), folderTitle, parentId });
+    const base = takeAgentDocumentIndexSnapshot([inFolder('f1', 'Drafts')], {
+      takenAt: new Date(at(0)),
+    });
+
+    const next = noteAgentDocumentChanges(base, [inFolder('f2', 'Final')], {
+      messageId: 'u2',
+      presentMessageIds: present('u2'),
+    });
+
+    expect(next.notes.at(-1)!.changes).toMatchObject([
+      { folderTitle: 'Final', id: REPORT_ID, kind: 'edited' },
+    ]);
+  });
+
+  // Regression: renaming back to the snapshot title left an empty diff, so the
+  // earlier note — which overrides the index — kept the intermediate title.
+  it('corrects an earlier edit note once the document matches its snapshot again', () => {
+    const renamed = progressiveDoc({ ...report(), title: 'Interim report' });
+    const noted = noteAgentDocumentChanges(snapshot(), [renamed], {
+      messageId: 'u2',
+      presentMessageIds: present('u2'),
+    });
+
+    const next = noteAgentDocumentChanges(noted, [report()], {
+      messageId: 'u3',
+      presentMessageIds: present('u2', 'u3'),
+    });
+
+    expect(next.notes.at(-1)).toEqual({
+      changes: [expect.objectContaining({ id: REPORT_ID, kind: 'edited', title: 'Draft report' })],
+      messageId: 'u3',
+    });
+  });
+
   it('repeats the difference when the message carrying it is gone', () => {
     const noted = noteAgentDocumentChanges(snapshot(), [report(), plan()], {
       messageId: 'u2',

@@ -126,7 +126,7 @@ export function takeAgentDocumentIndexSnapshot(
 
 /**
  * Every listed document that differs from its snapshot row: created since,
- * edited since (size, date or title changed), or deleted since. Cumulative —
+ * edited since (size, date, title or folder changed), or deleted since. Cumulative —
  * a note always states the full difference, so a reader that only sees the
  * newest note (older ones truncated away) still has the whole picture.
  */
@@ -153,7 +153,11 @@ export function diffAgentDocumentIndex(
     if (
       current.contentCharCount !== row.contentCharCount ||
       current.updatedAt !== row.updatedAt ||
-      titleOf(current) !== titleOf(row)
+      titleOf(current) !== titleOf(row) ||
+      // A move changes neither the timestamp nor the size, but a folded folder
+      // in the index would keep pointing at the old parent.
+      (current.parentId ?? null) !== (row.parentId ?? null) ||
+      current.folderTitle !== row.folderTitle
     ) {
       changes.push(toChange(current, 'edited'));
     }
@@ -205,6 +209,29 @@ const deletedSinceNoted = (
   return [...deleted.values()];
 };
 
+/**
+ * Documents an earlier note reported as edited that now match their snapshot
+ * row again (renamed back, say). The row diff no longer lists them, so without
+ * this the earlier note — which overrides the index — would stay the last word.
+ */
+const revertedSinceNoted = (
+  snapshot: AgentDocumentIndexSnapshot,
+  docs: AgentContextDocument[],
+  diffed: AgentDocumentChange[],
+): AgentDocumentChange[] => {
+  const live = new Map(indexedDocs(docs).map((doc) => [doc.id, doc]));
+  const inDiff = new Set(diffed.map((change) => change.id));
+  const reverted = new Map<string, AgentDocumentChange>();
+  for (const note of snapshot.notes) {
+    for (const change of note.changes) {
+      const doc = live.get(change.id);
+      if (change.kind !== 'edited' || !doc || inDiff.has(change.id)) continue;
+      reverted.set(change.id, toChange(toRow(doc), 'edited'));
+    }
+  }
+  return [...reverted.values()];
+};
+
 const sameChanges = (a: AgentDocumentChange[], b: AgentDocumentChange[]) =>
   JSON.stringify(a) === JSON.stringify(b);
 
@@ -225,10 +252,11 @@ export function noteAgentDocumentChanges(
 ): AgentDocumentIndexSnapshot {
   if (snapshot.notes.some((note) => note.messageId === messageId)) return snapshot;
 
-  const changes = [
+  const diffed = [
     ...diffAgentDocumentIndex(snapshot.rows, docs),
     ...deletedSinceNoted(snapshot, docs),
   ];
+  const changes = [...diffed, ...revertedSinceNoted(snapshot, docs, diffed)];
   if (changes.length === 0) return snapshot;
 
   const newestPresent = snapshot.notes.findLast((note) => presentMessageIds.has(note.messageId));
