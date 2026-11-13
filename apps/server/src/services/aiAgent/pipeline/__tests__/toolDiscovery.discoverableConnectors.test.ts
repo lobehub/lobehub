@@ -262,6 +262,18 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
     expect(result.toolSourceMap[YINGMI]).not.toBe('mcp');
   });
 
+  // An OAuth re-authorization leaves a finished install disconnected until its
+  // callback connects it: the client already hides it, so must a server run
+  it('rejects a finished install while it is not connected', async () => {
+    const result = await run({
+      installed: false,
+      metadata: { marketplaceInstalled: true },
+      sourceType: 'marketplace',
+      status: 'disconnected',
+    });
+    expect(result.toolManifestMap[YINGMI]).toBeUndefined();
+  });
+
   it('rejects an unfinished cloud marketplace install that has no plugin row', async () => {
     const result = await run({
       connection: { mcpConnectionType: 'cloud', mcpServerUrl: null },

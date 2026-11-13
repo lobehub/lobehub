@@ -2,6 +2,7 @@ import {
   CURRENT_VERSION,
   hasCallableMcpEndpoint,
   isDesktop,
+  isMarketplaceInstallRunnable,
   keepsDesktopStdioExecution,
 } from '@lobechat/const';
 import {
@@ -228,11 +229,16 @@ class MCPService {
     // skills synced into the connector store have no mcpServerUrl and keep their
     // original executor path.
     const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
-    const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
     const installPlugin = pluginSelectors.getInstalledPluginById(identifier)(s);
     const customPlugin = pluginSelectors.getCustomPluginById(identifier)(s);
 
     const plugin = installPlugin || customPlugin;
+    // An unfinished marketplace install (an interrupted reinstall over a plugin
+    // row, a late OAuth callback after a cancel) is not routed to: its tool rows
+    // may not match its endpoint. A plugin row still serves the call.
+    const resolved = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
+    const connector =
+      resolved && isMarketplaceInstallRunnable(resolved, !!plugin) ? resolved : undefined;
 
     // An agent's own connectors may not be loaded on the client yet; with no
     // plugin to fall back to, let the server resolve the identifier for the agent.
@@ -529,21 +535,28 @@ class MCPService {
     }
 
     const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
-    const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
+    const resolved = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
     // Same test as `invokeMcpToolCall`: only an enabled connector with its own
-    // endpoint serves the view. Any other (e.g. the endpoint-less row a plugin's
-    // tools are synced to) leaves it to the plugin.
-    const connectorServes =
-      !!connector?.isEnabled &&
-      (!!connector.mcpServerUrl || connector.mcpConnectionType === 'stdio');
+    // endpoint and a finished install serves the view. Any other (e.g. the
+    // endpoint-less row a plugin's tools are synced to) leaves it to the plugin.
+    const serves = (c: typeof resolved, hasPluginRow: boolean) =>
+      !!c?.isEnabled &&
+      (!!c.mcpServerUrl || c.mcpConnectionType === 'stdio') &&
+      isMarketplaceInstallRunnable(c, hasPluginRow);
 
     // A conversation opened cold has not loaded the installed plugins yet, and an
     // unloaded list would lose a plugin's view or send it to the connector route.
     // Load the server's records first, as the tool call did before it ran.
-    if (!connectorServes && !pluginSelectors.isInstalledPluginsServerConfirmed(s)) {
+    if (!serves(resolved, false) && !pluginSelectors.isInstalledPluginsServerConfirmed(s)) {
       await s.refreshPlugins();
       s = getToolStoreState();
     }
+
+    const plugin =
+      pluginSelectors.getInstalledPluginById(identifier)(s) ||
+      pluginSelectors.getCustomPluginById(identifier)(s);
+    const connectorServes = serves(resolved, !!plugin);
+    const connector = connectorServes ? resolved : undefined;
 
     // Stdio connectors run on a desktop app, never on the server, so only the
     // desktop can read their view: it spawns the same command over IPC.
@@ -581,10 +594,6 @@ class MCPService {
       );
       return deserializeMcpIpcPayload(result) as ReadResourceResult;
     }
-
-    const plugin =
-      pluginSelectors.getInstalledPluginById(identifier)(s) ||
-      pluginSelectors.getCustomPluginById(identifier)(s);
 
     // Same resolution as `invokeMcpToolCall`: the view comes from the connector
     // the tool ran on. The agent's lists are loaded by now, so an identifier

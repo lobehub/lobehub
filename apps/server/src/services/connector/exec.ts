@@ -1,8 +1,10 @@
+import { isMarketplaceInstallRunnable } from '@lobechat/const';
 import { getMcpServerFingerprint, isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 
 import type { AgentModel } from '@/database/models/agent';
 import type { DecryptedConnector } from '@/database/models/connector';
+import type { PluginModel } from '@/database/models/plugin';
 import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/schemas';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
@@ -30,6 +32,11 @@ export interface ConnectorExecContext extends ConnectorToolSyncContext {
   /** Visibility-aware: decides whether the caller may act as the given agent. */
   agentModel: Pick<AgentModel, 'existsById'>;
   /**
+   * The caller's legacy plugin rows, which stand in for an unmarked marketplace
+   * install made before installs used connectors. None: no such row counts.
+   */
+  pluginModel?: Pick<PluginModel, 'findById'>;
+  /**
    * Who a market-hosted (`cloud`) connector's tool runs as, resolved only for
    * such a call. `undefined` (or no resolver): no Market credential to run as.
    */
@@ -56,6 +63,22 @@ const findConnector = async (
   if (!(await ctx.agentModel.existsById(params.agentId))) return [];
 
   return ctx.connectorModel.resolveByIdentifiers([params.identifier], params.agentId);
+};
+
+/**
+ * An unfinished marketplace install (an interrupted reinstall, an OAuth
+ * callback that connected after a cancel) must not run: its tool rows may not
+ * match its endpoint. The same rule as tool discovery's.
+ */
+const assertInstallFinished = async (connector: DecryptedConnector, ctx: ConnectorExecContext) => {
+  if (isMarketplaceInstallRunnable(connector, false)) return;
+  const pluginRow = await ctx.pluginModel?.findById(connector.identifier);
+  if (isMarketplaceInstallRunnable(connector, !!pluginRow)) return;
+
+  throw new ConnectorToolCallError(
+    'FORBIDDEN',
+    `Connector '${connector.name}' has not finished installing. Install it again to use its tools.`,
+  );
 };
 
 /**
@@ -106,6 +129,7 @@ export const callConnectorToolById = async (
   if (!connector.isEnabled) {
     throw new ConnectorToolCallError('FORBIDDEN', 'Connector is disabled');
   }
+  await assertInstallFinished(connector, ctx);
   // A view open since the connector was pointed elsewhere must not drive the new server
   if (params.fromApp && !(await reachesServer(connector, params.server))) {
     throw new ConnectorToolCallError(
@@ -227,6 +251,7 @@ export const readConnectorUiResourceById = async (
   if (!connector.isEnabled) {
     throw new ConnectorToolCallError('FORBIDDEN', 'Connector is disabled');
   }
+  await assertInstallFinished(connector, ctx);
   if (
     connector.mcpConnectionType === ConnectorMcpConnectionType.stdio ||
     connector.mcpConnectionType === ConnectorMcpConnectionType.cloud

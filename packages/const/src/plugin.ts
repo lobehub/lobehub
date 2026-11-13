@@ -98,3 +98,29 @@ export const hasCallableMcpEndpoint = (connector: {
   !!connector.mcpServerUrl ||
   connector.mcpConnectionType === 'stdio' ||
   connector.mcpConnectionType === 'cloud';
+
+/**
+ * Whether a connector's tools may run as far as its marketplace install goes.
+ * A base marketplace row with an endpoint needs a finished install (its own
+ * mark, or a pre-connector plugin row: `hasPluginRow`) and a connected status.
+ * A reinstall or an OAuth re-authorization rewrites the endpoint and leaves the
+ * row disconnected until its tools sync, so neither the plugin row nor the mark
+ * may run the old tools against the new endpoint meanwhile. Other rows and
+ * agent-owned copies pass.
+ */
+export const isMarketplaceInstallRunnable = (
+  connector: {
+    agentId?: string | null;
+    mcpConnectionType?: string | null;
+    mcpServerUrl?: string | null;
+    metadata?: unknown;
+    sourceType?: string | null;
+    status?: string | null;
+  },
+  hasPluginRow: boolean,
+): boolean =>
+  !!connector.agentId ||
+  connector.sourceType !== 'marketplace' ||
+  !hasCallableMcpEndpoint(connector) ||
+  (connector.status === 'connected' &&
+    (hasPluginRow || isMarketplaceInstallCompleted(connector.metadata)));

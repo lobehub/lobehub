@@ -1,4 +1,8 @@
-import { hasCallableMcpEndpoint, isMarketplaceInstallCompleted } from '@lobechat/const';
+import {
+  hasCallableMcpEndpoint,
+  isMarketplaceInstallCompleted,
+  isMarketplaceInstallRunnable,
+} from '@lobechat/const';
 
 import type { ToolStoreState } from '../../initialState';
 import type { ToolStore } from '../../store';
@@ -89,16 +93,15 @@ const userMcpConnectors = (s: ToolStoreState): ConnectorWithTools[] => [
 /** Remote marketplace OAuth MCPs also execute with server-held credentials. */
 const executableMcpConnectors = (s: ToolStore): ConnectorWithTools[] => {
   // A late OAuth callback may connect after the user canceled installation.
-  // Marketplace tools enter the runtime only after the install completes: the
-  // connector's own mark, or a plugin row from before installs used connectors.
+  // Marketplace tools enter the runtime only once the install has finished and
+  // the row is connected, the rule every call path applies.
   const installed = new Set((s.installedPlugins ?? []).map((plugin) => plugin.identifier));
   return (s.connectors ?? []).filter(
     (c) =>
       c.sourceType === 'custom' ||
       (c.sourceType === 'marketplace' &&
         hasCallableMcpEndpoint(c) &&
-        c.status === 'connected' &&
-        (isMarketplaceInstallCompleted(c.metadata) || installed.has(c.identifier))),
+        isMarketplaceInstallRunnable(c, installed.has(c.identifier))),
   );
 };
 

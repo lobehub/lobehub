@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { ARTIFACT_TAG_REGEX, keepsDesktopStdioExecution } from './plugin';
+import {
+  ARTIFACT_TAG_REGEX,
+  isMarketplaceInstallRunnable,
+  keepsDesktopStdioExecution,
+} from './plugin';
 
 describe('ARTIFACT_TAG_REGEX', () => {
   it('should match a simple lobeArtifact tag', () => {
@@ -93,5 +97,45 @@ describe('keepsDesktopStdioExecution', () => {
     { connector: { metadata: null, sourceType: 'custom' }, expected: false },
   ])('is $expected for $connector', ({ connector, expected }) => {
     expect(keepsDesktopStdioExecution(connector)).toBe(expected);
+  });
+});
+
+describe('isMarketplaceInstallRunnable', () => {
+  const pending = {
+    mcpConnectionType: 'http',
+    mcpServerUrl: 'https://mcp.example.com',
+    metadata: {},
+    sourceType: 'marketplace',
+    status: 'disconnected',
+  };
+
+  it.each([
+    { case: 'a pending reinstall over a plugin row', connector: pending, plugin: true, ok: false },
+    { case: 'an unfinished install', connector: { ...pending, status: 'connected' }, ok: false },
+    {
+      case: 'a connected row with a plugin row',
+      connector: { ...pending, status: 'connected' },
+      ok: true,
+      plugin: true,
+    },
+    {
+      case: 'a finished install',
+      connector: { ...pending, metadata: { marketplaceInstalled: true }, status: 'connected' },
+      ok: true,
+    },
+    {
+      case: 'a finished install waiting on its authorization',
+      connector: { ...pending, metadata: { marketplaceInstalled: true } },
+      ok: false,
+    },
+    { case: 'an agent-owned copy', connector: { ...pending, agentId: 'agt_1' }, ok: true },
+    {
+      case: 'an endpoint-less projection',
+      connector: { ...pending, mcpConnectionType: null, mcpServerUrl: null },
+      ok: true,
+    },
+    { case: 'a custom connector', connector: { ...pending, sourceType: 'custom' }, ok: true },
+  ])('is $ok for $case', ({ connector, ok, plugin }) => {
+    expect(isMarketplaceInstallRunnable(connector, !!plugin)).toBe(ok);
   });
 });

@@ -85,6 +85,50 @@ describe('callConnectorToolById', () => {
     expect(mcpService.callTool).not.toHaveBeenCalled();
   });
 
+  describe('an unfinished marketplace install', () => {
+    // A reinstall over a plugin row rewrites the endpoint and resets the row to
+    // disconnected until its tools sync: the old tool rows must not run on it
+    const pending = {
+      ...connector,
+      metadata: {},
+      sourceType: 'marketplace',
+      status: 'disconnected',
+    };
+    const call = (row: any, pluginRow?: unknown) =>
+      callConnectorToolById(
+        { identifier: 'my-conn', toolName: 'do_thing' },
+        {
+          ...makeCtx([row], [tool()]),
+          pluginModel: { findById: vi.fn().mockResolvedValue(pluginRow) },
+        },
+      );
+
+    it('refuses a pending reinstall over a plugin row', async () => {
+      await expect(call(pending, { identifier: 'my-conn' })).rejects.toHaveProperty(
+        'code',
+        'FORBIDDEN',
+      );
+      expect(mcpService.callTool).not.toHaveBeenCalled();
+    });
+
+    it('refuses a connected row with neither its install mark nor a plugin row', async () => {
+      await expect(call({ ...pending, status: 'connected' })).rejects.toHaveProperty(
+        'code',
+        'FORBIDDEN',
+      );
+      expect(mcpService.callTool).not.toHaveBeenCalled();
+    });
+
+    it('runs a connected row once a plugin row or its install mark finishes it', async () => {
+      vi.mocked(mcpService.callTool).mockResolvedValue({ ok: true } as any);
+
+      await call({ ...pending, status: 'connected' }, { identifier: 'my-conn' });
+      await call({ ...pending, metadata: { marketplaceInstalled: true }, status: 'connected' });
+
+      expect(mcpService.callTool).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('rejects an unknown tool name not in the synced list', async () => {
     const ctx = makeCtx([connector], [tool({ toolName: 'other' })]);
     await expect(

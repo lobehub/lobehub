@@ -1,5 +1,5 @@
 import type { DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
-import { hasCallableMcpEndpoint, isMarketplaceInstallCompleted } from '@lobechat/const';
+import { hasCallableMcpEndpoint, isMarketplaceInstallRunnable } from '@lobechat/const';
 import type { LobeToolManifest } from '@lobechat/context-engine';
 import { FILE_PREVIEW_CHARS, isOversizedFileContent } from '@lobechat/prompts';
 import type { FrozenCredentialFacts } from '@lobechat/types';
@@ -117,25 +117,13 @@ const refreshConnectorTokens = async (
   );
 };
 
-/**
- * Base marketplace rows with an endpoint require a finished install: the
- * connector's own mark, or a pre-connector plugin row on a connected row. A
- * reinstall over a plugin row rewrites the endpoint and resets the row to
- * disconnected until its tools sync, so the plugin row alone must not make the
- * old tools callable against the new endpoint. Agent-owned copies are
- * independent.
- */
+/** Drop unfinished marketplace installs (see `isMarketplaceInstallRunnable`). */
 const filterInstalledMarketplaceConnectors = (
   connectors: DecryptedConnector[],
   installedIds: Set<string>,
 ) =>
-  connectors.filter(
-    (connector) =>
-      !!connector.agentId ||
-      connector.sourceType !== 'marketplace' ||
-      !hasCallableMcpEndpoint(connector) ||
-      isMarketplaceInstallCompleted(connector.metadata) ||
-      (installedIds.has(connector.identifier) && connector.status === 'connected'),
+  connectors.filter((connector) =>
+    isMarketplaceInstallRunnable(connector, installedIds.has(connector.identifier)),
   );
 
 const readConnectors = async (
