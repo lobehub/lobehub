@@ -1,8 +1,15 @@
+import type { CommentTarget } from '../data/commentActions';
 import type { BoardMode, BoardTool, CameraTarget, VerifyView } from '../types';
+
+export interface CommentDraft extends CommentTarget {
+  x: number;
+  y: number;
+}
 
 export interface ArtboardState {
   boardId: string | null;
   camera: CameraTarget | null;
+  draft: CommentDraft | null;
   flash: string[];
   fullscreen: boolean;
   gallery: boolean;
@@ -22,6 +29,7 @@ export interface ArtboardState {
 export const initialState: ArtboardState = {
   boardId: null,
   camera: null,
+  draft: null,
   flash: [],
   fullscreen: false,
   gallery: false,

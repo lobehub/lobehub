@@ -1,13 +1,15 @@
 import * as stylex from '@stylexjs/stylex';
 import { useSize } from 'ahooks';
-import { memo, useMemo, useRef } from 'react';
+import { memo, type MouseEvent, useMemo, useRef } from 'react';
 
 import { sx } from '@/styles/sx';
 
 import { useBoard } from '../BoardContext';
+import { commentTargetAt } from '../data/commentActions';
 import type { BoardModel } from '../model';
-import { artboardActions } from '../store';
+import { artboardActions, useArtboardStore } from '../store';
 import BoardNode from './BoardNode';
+import CommentLayer from './CommentLayer';
 import Edges from './Edges';
 import Groups from './Groups';
 import { SelectionBar, ZoomBar } from './Overlays';
@@ -37,7 +39,11 @@ const Content = memo<ContentProps>(({ board, k, live }) => {
 
 Content.displayName = 'ArtboardCanvasContent';
 
-const clearSelection = () => artboardActions.select(null);
+const clearSelection = () => {
+  artboardActions.select(null);
+  const { draft, openThreadId } = useArtboardStore.getState();
+  if (draft || openThreadId) artboardActions.openThread(null);
+};
 
 const Canvas = ({ narrow }: { narrow: boolean }) => {
   const board = useBoard();
@@ -49,13 +55,38 @@ const Canvas = ({ narrow }: { narrow: boolean }) => {
     clearSelection,
   );
   const live = size ? liveBoardKey(board.boards, { ...view, ...size }) : '';
+  const discussing = useArtboardStore((s) => s.mode === 'discuss');
+  const commenting = useArtboardStore((s) => s.mode === 'discuss' && s.tool === 'comment');
+
+  const onClickCapture = (event: MouseEvent<HTMLDivElement>) => {
+    let suppressed = false;
+    handlers.onClickCapture({
+      stopPropagation: () => {
+        suppressed = true;
+        event.stopPropagation();
+      },
+    });
+    if (suppressed || !commenting) return;
+    event.stopPropagation();
+    const box = event.currentTarget.getBoundingClientRect();
+    const point = {
+      x: (event.clientX - box.left - view.x) / view.k,
+      y: (event.clientY - box.top - view.y) / view.k,
+    };
+    artboardActions.placeDraft({ ...commentTargetAt(board, point), ...point });
+  };
 
   return (
     <>
       <div
         ref={ref}
-        {...stylex.props(canvasStyles.viewport, panning && canvasStyles.panning)}
+        {...stylex.props(
+          canvasStyles.viewport,
+          commenting && canvasStyles.commenting,
+          panning && canvasStyles.panning,
+        )}
         {...handlers}
+        onClickCapture={onClickCapture}
       >
         <div
           {...sx([canvasStyles.world, flying && canvasStyles.worldFlying], undefined, {
@@ -66,6 +97,7 @@ const Canvas = ({ narrow }: { narrow: boolean }) => {
         </div>
       </div>
       {!narrow && <SelectionBar view={view} />}
+      {discussing && <CommentLayer size={size} view={view} />}
       <ZoomBar k={view.k} onFit={fitAll} onZoom={zoomBy} />
     </>
   );

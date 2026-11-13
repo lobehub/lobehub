@@ -130,4 +130,20 @@ describe('artboardActions', () => {
 
     expect(useArtboardStore.getState().gallery).toBe(true);
   });
+  it('keeps one of a new-comment draft or an open thread, and drops the draft with the tool', () => {
+    const draft = { anchor: { type: 'canvas' as const, x: 1, y: 2 }, pageId: 'p1', x: 1, y: 2 };
+    artboardActions.bindBoard('art_1');
+    artboardActions.setTool('comment');
+    artboardActions.openThread('t1');
+
+    artboardActions.placeDraft(draft);
+    expect(useArtboardStore.getState()).toMatchObject({ draft, openThreadId: null });
+
+    artboardActions.openThread('t2');
+    expect(useArtboardStore.getState()).toMatchObject({ draft: null, openThreadId: 't2' });
+
+    artboardActions.placeDraft(draft);
+    artboardActions.setTool('select');
+    expect(useArtboardStore.getState().draft).toBeNull();
+  });
 });

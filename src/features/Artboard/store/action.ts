@@ -2,7 +2,7 @@ import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { BoardMode, BoardTool, CameraTarget, VerifyView } from '../types';
-import { type ArtboardState, initialState } from './initialState';
+import { type ArtboardState, type CommentDraft, initialState } from './initialState';
 import { useArtboardStore } from './store';
 
 const n = setNamespace('artboard');
@@ -66,6 +66,7 @@ export class ArtboardActionImpl {
     if (pageId === current) return;
     this.#set(
       {
+        draft: null,
         openThreadId: null,
         pageByBoard: boardId ? { ...pageByBoard, [boardId]: pageId } : pageByBoard,
         pageId,
@@ -83,14 +84,19 @@ export class ArtboardActionImpl {
     this.focus({ id: target.id, kind: 'group' });
   };
 
-  setTool = (tool: BoardTool) => this.#set({ selected: null, tool }, false, n('setTool'));
+  setTool = (tool: BoardTool) =>
+    this.#set({ draft: null, selected: null, tool }, false, n('setTool'));
 
-  openThread = (openThreadId: string | null) => this.#set({ openThreadId }, false, n('openThread'));
+  placeDraft = (draft: CommentDraft | null) =>
+    this.#set({ draft, openThreadId: null }, false, n('placeDraft'));
+
+  openThread = (openThreadId: string | null) =>
+    this.#set({ draft: null, openThreadId }, false, n('openThread'));
 
   showThread = (thread: { boardId: string | null; id: string; pageId: string | null }) => {
     if (this.#get().mode !== 'discuss') this.setMode('discuss');
     if (thread.pageId) this.setPage(thread.pageId);
-    this.#set({ openThreadId: thread.id, selected: null }, false, n('showThread'));
+    this.#set({ draft: null, openThreadId: thread.id, selected: null }, false, n('showThread'));
     if (thread.boardId) this.focus({ id: thread.boardId, kind: 'item' });
   };
 
@@ -126,7 +132,11 @@ export class ArtboardActionImpl {
   };
 
   setMode = (mode: BoardMode) => {
-    this.#set({ mode, openThreadId: null, selected: null, tool: 'select' }, false, n('setMode'));
+    this.#set(
+      { draft: null, mode, openThreadId: null, selected: null, tool: 'select' },
+      false,
+      n('setMode'),
+    );
     if (mode === 'verify') {
       this.#set({ outlineOpen: false, verifyOpen: !this.#narrow }, false, n('verifyEnter'));
       this.focus({ kind: 'journey' });

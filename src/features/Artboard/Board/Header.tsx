@@ -6,12 +6,16 @@ import {
   ListTreeIcon,
   LockIcon,
   Maximize2Icon,
+  MessageCirclePlusIcon,
   Minimize2Icon,
+  MousePointer2Icon,
   StampIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { useBoard } from '../BoardContext';
+import { nextQuestion, waitingQuestions } from '../data/commentModel';
+import { useArtboardComments } from '../data/useArtboardComments';
 import { createFinalizeModal } from '../Finalize';
 import OpenConversation from '../Gallery/OpenConversation';
 import { artboardActions, useArtboardStore } from '../store';
@@ -40,12 +44,20 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
   const board = useBoard();
   const { finalized } = board;
   const pendingLeft = board.blockers.length;
-  const { gallery, mode, outlineOpen, verifyOpen } = useArtboardStore((s) => ({
+  const { data: threads = [] } = useArtboardComments(board.artboard.id);
+  const waiting = waitingQuestions(threads).length;
+  const { gallery, mode, outlineOpen, tool, verifyOpen } = useArtboardStore((s) => ({
     gallery: s.gallery,
     mode: s.mode,
     outlineOpen: s.outlineOpen,
+    tool: s.tool,
     verifyOpen: s.verifyOpen,
   }));
+
+  const showNextQuestion = () => {
+    const next = nextQuestion(threads, useArtboardStore.getState().openThreadId);
+    if (next) artboardActions.showThread(next);
+  };
 
   return (
     <Flexbox
@@ -76,6 +88,34 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
         </Tag>
       </Flexbox>
       <Flexbox horizontal align={'center'} gap={8}>
+        {waiting > 0 && (
+          <Tag
+            color={'warning'}
+            size={'small'}
+            style={{ cursor: 'pointer', flex: 'none' }}
+            onClick={showNextQuestion}
+          >
+            {t('artboard.header.questions', { count: waiting })}
+          </Tag>
+        )}
+        {mode === 'discuss' && (
+          <Flexbox horizontal gap={2}>
+            <ActionIcon
+              active={tool === 'select'}
+              icon={MousePointer2Icon}
+              size={'small'}
+              title={t('artboard.tool.select')}
+              onClick={() => artboardActions.setTool('select')}
+            />
+            <ActionIcon
+              active={tool === 'comment'}
+              icon={MessageCirclePlusIcon}
+              size={'small'}
+              title={t('artboard.tool.comment')}
+              onClick={() => artboardActions.setTool('comment')}
+            />
+          </Flexbox>
+        )}
         <Segmented
           size={'small'}
           value={mode}

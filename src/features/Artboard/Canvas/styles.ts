@@ -42,6 +42,9 @@ export const canvasStyles = stylex.create({
     justifyContent: 'center',
     position: 'absolute',
   },
+  commenting: {
+    cursor: 'crosshair',
+  },
   cursor: {
     pointerEvents: 'none',
     position: 'absolute',
