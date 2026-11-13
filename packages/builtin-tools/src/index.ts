@@ -37,6 +37,7 @@ import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest, resolveLobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import { McpEventsManifest } from '@lobechat/builtin-tool-mcp-events';
 import { MemoryManifest, resolveMemoryRestrictedManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest, resolveMessageManifest } from '@lobechat/builtin-tool-message';
 import { PageAgentManifest } from '@lobechat/builtin-tool-page-agent';
@@ -178,6 +179,7 @@ export const groupSupervisorToolIds = [GroupManagementManifest.identifier];
  * `src/helpers/toolEngineering/index.ts`.
  */
 export const runtimeManagedToolIds = [
+  McpEventsManifest.identifier,
   AttachmentsManifest.identifier,
   // Enabled by a runtime rule (`hasIdentityAccount`) rather than by user
   // selection: the identity/inbox state reaches the model as context, so this
@@ -449,6 +451,12 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     hidden: true,
     identifier: AgentAccountManifest.identifier,
     manifest: AgentAccountManifest,
+    type: 'builtin',
+  },
+  {
+    hidden: true,
+    identifier: McpEventsManifest.identifier,
+    manifest: McpEventsManifest,
     type: 'builtin',
   },
   {
