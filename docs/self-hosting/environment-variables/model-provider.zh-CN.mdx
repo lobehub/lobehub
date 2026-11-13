@@ -800,6 +800,31 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 
 上述示例表示隐藏所有默认模型，只启用 `eleven_v4` 和 `eleven_flash_v2_5`。
 
+## Suno
+
+通过第三方 Suno API 网关生成音乐。Suno 官方 API 仅限受邀合作伙伴，因此默认请求 [kie.ai](https://docs.kie.ai/suno-api/generate-music)，也可以通过 `SUNO_PROXY_URL` 改为 [sunoapi.org](https://docs.sunoapi.org/suno-api/generate-music) 或兼容服务。启用前请确认网关条款与 Suno 服务条款。
+
+### `SUNO_API_KEY`
+
+- 类型：部署时可选；提供共享服务端密钥时必填。用户也可以在 Suno 服务商设置中填写自己的网关密钥，用户密钥优先。
+- 描述：Suno 网关的 API 密钥，以 `Authorization: Bearer <key>` 发送。设置非空密钥后，服务端配置会自动启用 Suno。`ENABLED_SUNO` 由此密钥派生，不是独立的环境变量开关。服务商设置页的「检查」会调用网关的余额接口校验密钥，不会生成音乐。
+- 默认值：未设置，不提供共享服务端密钥。
+- 示例：`xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+### `SUNO_PROXY_URL`
+
+- 类型：可选
+- 描述：Suno 网关的 Base URL。域名为 `sunoapi.org` 时使用该网关的接口，其他域名使用 kie.ai 的接口。
+- 默认值：`https://api.kie.ai`
+- 示例：`https://api.sunoapi.org`
+
+### `SUNO_MODEL_LIST`
+
+- 类型：可选
+- 描述：使用通用的 [模型列表语法][model-list] 自定义 Suno 模型列表：`+` 增加模型，`-` 隐藏模型，`模型 ID=展示名` 自定义展示名，用英文逗号隔开。
+- 默认值：未设置，使用内置模型列表。
+- 示例：`-all,+suno-v6`
+
 ## BFL
 
 ### `BFL_API_KEY`

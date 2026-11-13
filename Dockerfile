@@ -329,6 +329,8 @@ ENV \
     SPARK_API_KEY="" SPARK_MODEL_LIST="" SPARK_PROXY_URL="" SPARK_SEARCH_MODE="" \
     # Stepfun
     STEPFUN_API_KEY="" STEPFUN_MODEL_LIST="" \
+    # Suno
+    SUNO_API_KEY="" SUNO_MODEL_LIST="" SUNO_PROXY_URL="" \
     # Taichu
     TAICHU_API_KEY="" TAICHU_MODEL_LIST="" \
     # TogetherAI

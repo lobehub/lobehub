@@ -1,3 +1,4 @@
+import { minimaxMusicCoverSchema, minimaxMusicSchema } from '../const/musicParameters';
 import {
   minimaxSpeech02Schema,
   minimaxSpeech26Schema,
@@ -7,6 +8,7 @@ import {
 import {
   type AIChatModelCard,
   type AIImageModelCard,
+  type AIText2MusicModelCard,
   type AITTSModelCard,
   type AIVideoModelCard,
 } from '../types/aiModel';
@@ -736,11 +738,62 @@ const minimaxTTSModels: AITTSModelCard[] = [
   },
 ];
 
+// MiniMax stopped selling the music API to new accounts on 2026-08-20; existing paying
+// accounts keep access, so these cards ship disabled by default.
+// Price: ¥1.0 per song (≤ 5 minutes) for Music-3.0 / 2.6, the same tier covers music-cover.
+// @see https://platform.minimax.io/docs/api-reference/music-generation
+// @see https://platform.minimax.cn/docs/pricing/overview
+const minimaxMusicModels: AIText2MusicModelCard[] = [
+  {
+    description:
+      'MiniMax’s latest music model: writes a full song with vocals from lyrics and a style prompt, or an instrumental track. Available only to accounts with existing paid music API access.',
+    displayName: 'Music 3.0',
+    id: 'music-3.0',
+    isOfficial: true,
+    outputsPerRequest: 1,
+    parameters: minimaxMusicSchema,
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'musicGeneration', rate: 1, strategy: 'fixed', unit: 'song' }],
+    },
+    type: 'text2music',
+  },
+  {
+    description:
+      'Previous-generation MiniMax music model for songs with vocals or instrumental tracks. Available only to accounts with existing paid music API access.',
+    displayName: 'Music 2.6',
+    id: 'music-2.6',
+    isOfficial: true,
+    outputsPerRequest: 1,
+    parameters: minimaxMusicSchema,
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'musicGeneration', rate: 1, strategy: 'fixed', unit: 'song' }],
+    },
+    type: 'text2music',
+  },
+  {
+    description:
+      'Covers a reference track (6 seconds to 6 minutes) in the style the prompt describes, optionally with new lyrics. Available only to accounts with existing paid music API access.',
+    displayName: 'Music Cover',
+    id: 'music-cover',
+    isOfficial: true,
+    outputsPerRequest: 1,
+    parameters: minimaxMusicCoverSchema,
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'musicGeneration', rate: 1, strategy: 'fixed', unit: 'song' }],
+    },
+    type: 'text2music',
+  },
+];
+
 export const allModels = [
   ...minimaxChatModels,
   ...minimaxImageModels,
   ...minimaxVideoModels,
   ...minimaxTTSModels,
+  ...minimaxMusicModels,
 ];
 
 export default allModels;

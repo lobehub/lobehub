@@ -160,6 +160,7 @@ export const providerRuntimeMap = {
   suno: LobeSunoAI,
   straico: LobeStraicoAI,
   streamlake: LobeStreamLakeAI,
+  suno: LobeSunoAI,
   supergrok: LobeSuperGrokAI,
   taichu: LobeTaichuAI,
   tencentcloud: LobeTencentCloudAI,
