@@ -6,7 +6,14 @@ import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
-import { agents, signals, topics, userConnectors, users } from '@/database/schemas';
+import {
+  agents,
+  signalDecisions,
+  signals,
+  topics,
+  userConnectors,
+  users,
+} from '@/database/schemas';
 import {
   inboundWebhook,
   inboundWebhookBodyLimit,
@@ -16,6 +23,7 @@ import { receiverTestSecret, signedWebhookHeaders } from './receiverTestUtils';
 import { wakeInboundWebhook } from './waker';
 
 const boundary = vi.hoisted(() => ({
+  enabled: vi.fn(),
   listEvents: vi.fn(),
   subscribe: vi.fn(),
   gate: {
@@ -23,6 +31,7 @@ const boundary = vi.hoisted(() => ({
     decrypt: async (s: string) => ({ plaintext: s.slice(7) }),
   },
 }));
+vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpEventsEnabled: boundary.enabled }));
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: async () => db }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => boundary.gate },
@@ -64,6 +73,7 @@ const deferred = () => {
 let id: string;
 beforeEach(async () => {
   vi.clearAllMocks();
+  boundary.enabled.mockResolvedValue(true);
   await db.insert(users).values({ id: userId });
   await db.insert(agents).values({ id: agentId, userId });
   await db.insert(topics).values({ id: topicId, agentId, userId });
@@ -98,9 +108,9 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-const delivery = () => {
+const delivery = (eventId = 'new-event') => {
   const body = JSON.stringify({
-    eventId: 'new-event',
+    eventId,
     name: 'issue.created',
     data: { issue: 2 },
     timestamp: new Date().toISOString(),
@@ -124,6 +134,46 @@ const seed = async (terminated: boolean) => {
 };
 
 describe('wake and ingress concurrency', () => {
+  it('persists and acknowledges disabled-owner events, skips the batch with decisions, then wakes after re-enabling', async () => {
+    boundary.enabled.mockResolvedValue(false);
+    const execute = vi.fn(async () => success);
+    const deps = { execute, intervention: async () => ({ approvalMode: 'manual' as const }) };
+    expect((await delivery('disabled-1')).status).toBe(200);
+    expect((await delivery('disabled-1')).status).toBe(200);
+    expect((await delivery('disabled-2')).status).toBe(200);
+    expect(await db.select().from(signals)).toHaveLength(2);
+    expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'ignored' });
+    expect(execute).not.toHaveBeenCalled();
+    expect(boundary.enabled).toHaveBeenCalledExactlyOnceWith(userId);
+    expect(
+      (await db.select().from(signals)).every(
+        (row) => row.status === 'ignored' && row.error === 'feature_disabled',
+      ),
+    ).toBe(true);
+    const decisions = await db.select().from(signalDecisions);
+    expect(decisions).toHaveLength(2);
+    expect(
+      decisions.every((row) => row.outcome === 'skip' && row.finalReason === 'feature_disabled'),
+    ).toBe(true);
+    expect(await model.findById(id)).toMatchObject({
+      wakeCount: 0,
+      status: 'active',
+      lastError: null,
+    });
+
+    boundary.enabled.mockResolvedValue(true);
+    expect((await delivery('enabled-3')).status).toBe(200);
+    expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'processed' });
+    expect(execute).toHaveBeenCalledOnce();
+    expect(
+      (await db.select().from(signals)).filter((row) => row.status === 'processed'),
+    ).toHaveLength(1);
+    expect(
+      (await db.select().from(signals)).filter((row) => row.status === 'ignored'),
+    ).toHaveLength(2);
+    expect(await model.findById(id)).toMatchObject({ wakeCount: 1, status: 'active' });
+  });
+
   it.each(['agent start', 'event rediscovery', 'remote resubscribe'] as const)(
     'acknowledges a new event while %s is suspended',
     async (phase) => {

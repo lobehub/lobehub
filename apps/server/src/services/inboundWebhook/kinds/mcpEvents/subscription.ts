@@ -10,6 +10,7 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { buildConnectorMcpParams } from '@/server/services/connector/sync';
 import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
 import { mcpService } from '@/server/services/mcp';
+import { isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
 
 import type { InboundWebhookContext } from '../types';
 import { isMcpAuthError } from './errors';
@@ -54,16 +55,8 @@ export async function applySubscriptionResult(
     refreshBefore: result.refreshBefore,
     remoteSubscriptionId: result.id,
   };
-  // Compare-and-swap in SQL: an in-flight receipt's newer watermark always wins.
-  if (result.cursor !== undefined)
-    await ctx.model.mergeStateIf(
-      ctx.row.id,
-      { cursor: result.cursor },
-      { cursor: ctx.row.state.cursor },
-    );
   if (result.deliveryStatus !== undefined) state.deliveryStatus = result.deliveryStatus;
   if (result.truncated) state.truncated = true;
-  await ctx.model.mergeState(ctx.row.id, state);
   const reported = result.deliveryStatus?.lastError;
   const lastError: InboundWebhookError | null =
     result.deliveryStatus?.active === false
@@ -72,24 +65,40 @@ export async function applySubscriptionResult(
         ? (INBOUND_WEBHOOK_ERRORS.find((value) => value === reported) ?? 'unknown')
         : null;
   const now = Date.now();
-  await ctx.model.update(ctx.row.id, {
-    lastError,
-    maintenanceFailures: 0,
-    nextMaintenanceAt:
-      result.refreshBefore === null
-        ? null
-        : new Date(now + Math.max(1000, (Date.parse(result.refreshBefore) - now) / 2)),
-    status: lastError ? 'error' : 'active',
-  });
+  const updated = await ctx.model.updateIfStatus(
+    ctx.row.id,
+    {
+      lastError,
+      maintenanceFailures: 0,
+      nextMaintenanceAt:
+        result.refreshBefore === null
+          ? null
+          : new Date(now + Math.max(1000, (Date.parse(result.refreshBefore) - now) / 2)),
+      status: lastError ? 'error' : 'active',
+    },
+    ctx.row.status === 'terminated' ? ['terminated'] : ['pending', 'active', 'error'],
+    state,
+  );
+  // Only an explicitly checked ended subscription can resume. A late result from an active
+  // subscription cannot revive a concurrent termination or deletion.
+  if (updated && result.cursor !== undefined)
+    await ctx.model.mergeStateIf(
+      ctx.row.id,
+      { cursor: result.cursor },
+      { cursor: ctx.row.state.cursor },
+    );
 }
 
 export async function refreshSubscription(ctx: InboundWebhookContext): Promise<void> {
+  if (!(ctx.featureEnabled ?? (await isMcpEventsEnabled(ctx.row.userId)))) return;
   const { connector, connectorModel } = await connectorForWebhook(ctx);
   if (!connector.isEnabled) {
     // Preserve the remote subscription while disabled; finite subscriptions resume via the sweep.
-    await ctx.model.update(ctx.row.id, {
-      nextMaintenanceAt: ctx.row.state.refreshBefore ? new Date(Date.now() + 300_000) : null,
-    });
+    await ctx.model.updateIfStatus(
+      ctx.row.id,
+      { nextMaintenanceAt: ctx.row.state.refreshBefore ? new Date(Date.now() + 300_000) : null },
+      ['pending', 'active', 'error'],
+    );
     return;
   }
   const fresh = await ensureFreshConnectorToken(connector, connectorModel);
@@ -129,14 +138,17 @@ export async function maintainMcpSubscription(ctx: InboundWebhookContext): Promi
     // failed check leaves it ended: relabelling it "reconnect needed" made the same revocation
     // end in two different states depending on whether the check or the termination notice came
     // first, and scheduling retries would resubscribe something the server told us to stop.
-    if (ctx.row.status === 'terminated') return;
     const failures = ctx.row.maintenanceFailures + 1;
-    await ctx.model.update(ctx.row.id, {
-      lastError: authFailure ? 'auth' : 'server_unreachable',
-      maintenanceFailures: failures,
-      nextMaintenanceAt: new Date(Date.now() + maintenanceBackoff(failures)),
-      status: 'error',
-    });
+    await ctx.model.updateIfStatus(
+      ctx.row.id,
+      {
+        lastError: authFailure ? 'auth' : 'server_unreachable',
+        maintenanceFailures: failures,
+        nextMaintenanceAt: new Date(Date.now() + maintenanceBackoff(failures)),
+        status: 'error',
+      },
+      ['pending', 'active', 'error'],
+    );
   }
 }
 

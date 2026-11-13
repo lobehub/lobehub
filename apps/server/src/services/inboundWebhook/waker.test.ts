@@ -18,11 +18,10 @@ import {
 } from '@/database/schemas';
 
 import type { WebhookWakeDeps } from './waker';
-import { classifyWakeError, scheduleInboundWebhookWake, wakeInboundWebhook } from './waker';
+import { classifyWakeError, wakeInboundWebhook } from './waker';
 
 const boundary = vi.hoisted(() => ({
-  claimWakeWindow: vi.fn(),
-  triggerWake: vi.fn(),
+  enabled: vi.fn(),
   unsubscribe: vi.fn(),
   subscribe: vi.fn(),
   listEvents: vi.fn(),
@@ -31,14 +30,9 @@ const boundary = vi.hoisted(() => ({
     decrypt: async (value: string) => ({ plaintext: value.slice(7) }),
   },
 }));
+vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpEventsEnabled: boundary.enabled }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => boundary.gateKeeper },
-}));
-vi.mock('@/server/services/redis', () => ({
-  redisService: { inboundWebhook: { claimWakeWindow: boundary.claimWakeWindow } },
-}));
-vi.mock('@/server/workflows/inboundWebhook', () => ({
-  InboundWebhookWorkflow: { triggerWake: boundary.triggerWake },
 }));
 vi.mock('@/server/services/mcp', () => ({
   mcpService: {
@@ -96,9 +90,8 @@ const signalRows = () =>
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  boundary.enabled.mockResolvedValue(true);
   vi.spyOn(console, 'error').mockImplementation(() => {});
-  boundary.claimWakeWindow.mockResolvedValue(true);
-  boundary.triggerWake.mockResolvedValue(undefined);
   boundary.unsubscribe.mockResolvedValue({});
   boundary.subscribe.mockResolvedValue({ id: 'remote', refreshBefore: null });
   boundary.listEvents.mockResolvedValue([]);
@@ -138,12 +131,6 @@ afterEach(async () => {
 });
 
 describe('wake scheduling and failure classification', () => {
-  it('debounces multiple deliveries into one delayed run', async () => {
-    boundary.claimWakeWindow.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
-    await scheduleInboundWebhookWake(id);
-    await scheduleInboundWebhookWake(id);
-    expect(boundary.triggerWake).toHaveBeenCalledExactlyOnceWith({ id }, 10);
-  });
   it('recognizes both thrown errors and nested returned error shapes', () => {
     expect(classifyWakeError(new Error('TopicStartReservationError: occupied'))).toBe('busy');
     expect(classifyWakeError({ body: { type: 'InsufficientBudgetForAgentRunFee' } })).toBe(

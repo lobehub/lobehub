@@ -85,6 +85,13 @@ vi.mock('@/database/models/inboundWebhook', () => ({
     async update(id: string, update: object) {
       Object.assign(mocks.rows.get(id)!, update);
     }
+    async updateIfStatus(id: string, update: object, statuses: string[], state: object = {}) {
+      const stored = mocks.rows.get(id)!;
+      if (!statuses.includes(stored.status)) return undefined;
+      Object.assign(stored, update);
+      stored.state = { ...stored.state, ...state };
+      return structuredClone(stored);
+    }
   },
 }));
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://lobehub.example.com' } }));
@@ -383,6 +390,25 @@ describe('creating an event subscription', () => {
 });
 
 describe('event type discovery', () => {
+  it('bounds connector reads while returning every topic subscription in order', async () => {
+    for (let i = 0; i < 16; i++) {
+      const stored = row({ id: `webhook-${i}`, status: 'active' });
+      mocks.rows.set(stored.id, stored);
+    }
+    let active = 0;
+    let maximum = 0;
+    mocks.publicConnector.mockImplementation(async () => {
+      active++;
+      maximum = Math.max(maximum, active);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      active--;
+      return connector();
+    });
+    const result = await service().listSubscriptions({ agentId: 'agent', topicId: 'topic' });
+    expect(result.subscriptions.map((entry) => entry.id)).toEqual([...mocks.rows.keys()]);
+    expect(maximum).toBeLessThanOrEqual(5);
+  });
+
   it('marks nonwebhook events unsubscribable and skips connectors without event capability', async () => {
     mocks.resolveAll.mockResolvedValue([
       connector(),

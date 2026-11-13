@@ -1,4 +1,7 @@
+import { getServerDB } from '@/database/core/db-adaptor';
 import { appEnv } from '@/envs/app';
+import { qstashClient } from '@/libs/qstash';
+import { wakeInboundWebhook } from '@/server/services/inboundWebhook/waker';
 
 const localTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -6,7 +9,6 @@ const localTimers = new Map<string, ReturnType<typeof setTimeout>>();
 export class InboundWebhookWorkflow {
   static async triggerWake(payload: { id: string }, delaySeconds = 10) {
     if (appEnv.enableQueueAgentRuntime) {
-      const { qstashClient } = await import('@/libs/qstash');
       return qstashClient.publishJSON({
         body: payload,
         delay: Math.max(0, delaySeconds),
@@ -22,8 +24,6 @@ export class InboundWebhookWorkflow {
     const timer = setTimeout(async () => {
       localTimers.delete(payload.id);
       try {
-        const { getServerDB } = await import('@/database/core/db-adaptor');
-        const { wakeInboundWebhook } = await import('@/server/services/inboundWebhook/waker');
         const result = await wakeInboundWebhook(await getServerDB(), payload.id);
         if (result.outcome === 'deferred') await InboundWebhookWorkflow.triggerWake(payload, 30);
       } catch (error) {

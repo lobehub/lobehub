@@ -1,22 +1,31 @@
 import { and, eq, inArray, lt, or } from 'drizzle-orm';
+import { memoize } from 'es-toolkit';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
 import { signals } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
 import { redisService } from '@/server/services/redis';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import { getInboundWebhookKind } from './kinds';
 import { removeInboundWebhook } from './lifecycle';
-import { scheduleInboundWebhookWake } from './waker';
+import { scheduleInboundWebhookWake } from './scheduler';
 
 export async function sweepInboundWebhooks(db: LobeChatDatabase) {
+  const eventsEnabledFor = memoize(isMcpEventsEnabled);
   const rows = await InboundWebhookModel.queryMaintenance(db);
   const gateKeeper = rows.length ? await KeyVaultsGateKeeper.initWithEnvKey() : undefined;
   let maintained = 0;
   for (const row of rows) {
+    if (
+      row.status !== 'deleting' &&
+      row.kind === 'mcp_events' &&
+      !(await eventsEnabledFor(row.userId))
+    )
+      continue;
     if (!(await redisService.inboundWebhook.claimMaintenance(row.id))) continue;
     try {
       if (row.status === 'deleting') await removeInboundWebhook(db, row);
@@ -27,7 +36,7 @@ export async function sweepInboundWebhooks(db: LobeChatDatabase) {
           row.workspaceId ?? undefined,
           gateKeeper,
         );
-        await getInboundWebhookKind(row.kind)?.maintain?.({ db, model, row });
+        await getInboundWebhookKind(row.kind)?.maintain?.({ db, featureEnabled: true, model, row });
       }
       maintained++;
     } catch {

@@ -32,18 +32,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const claim = (
-  method: 'claimDelivery' | 'claimWakeWindow' | 'claimCheck' | 'claimMaintenance' | 'claimSweep',
-) =>
-  method === 'claimDelivery'
-    ? domain.claimDelivery('webhook', 'event')
-    : method === 'claimSweep'
-      ? domain.claimSweep()
-      : domain[method]('webhook');
+const claim = (method: 'claimWakeWindow' | 'claimCheck' | 'claimMaintenance' | 'claimSweep') =>
+  method === 'claimSweep' ? domain.claimSweep() : domain[method]('webhook');
 
 describe('inbound webhook Redis claim policy', () => {
   it.each([
-    ['claimDelivery', 'delivery:v1:webhook:event', 86_400_000],
     ['claimWakeWindow', 'wake:v1:webhook', 10_000],
     ['claimCheck', 'check:v1:webhook', 30_000],
     ['claimMaintenance', 'maintenance:v1:webhook', 60_000],
@@ -59,48 +52,29 @@ describe('inbound webhook Redis claim policy', () => {
     expect(await claim(method)).toBe(true);
   });
 
-  it('isolates subscriptions, deliveries and claim purposes', async () => {
-    expect(await domain.claimDelivery('webhook-a', 'event')).toBe(true);
-    expect(await domain.claimDelivery('webhook-b', 'event')).toBe(true);
-    expect(await domain.claimDelivery('webhook-a', 'next-event')).toBe(true);
+  it('isolates subscriptions and claim purposes', async () => {
     expect(await domain.claimWakeWindow('webhook-a')).toBe(true);
+    expect(await domain.claimWakeWindow('webhook-b')).toBe(true);
     expect(await domain.claimCheck('webhook-a')).toBe(true);
     expect(await domain.claimMaintenance('webhook-a')).toBe(true);
     expect(await domain.claimSweep()).toBe(true);
-    expect(await domain.claimDelivery('webhook-a', 'event')).toBe(false);
+    expect(await domain.claimWakeWindow('webhook-a')).toBe(false);
   });
 
-  it('releases only the failed delivery so retries can claim it immediately', async () => {
-    await domain.claimDelivery('webhook', 'event');
-    await domain.claimDelivery('webhook', 'next-event');
-    await domain.claimWakeWindow('webhook');
-    await domain.releaseDelivery('webhook', 'event');
-    expect(redis.del).toHaveBeenCalledWith('delivery:v1:webhook:event');
-    expect(await domain.claimDelivery('webhook', 'event')).toBe(true);
-    expect(await domain.claimDelivery('webhook', 'next-event')).toBe(false);
-    expect(await domain.claimWakeWindow('webhook')).toBe(false);
-  });
-
-  it('uses real process-local claims while Redis is unavailable, including expiry and release', async () => {
+  it('keeps process-local leases with expiry while Redis is unavailable', async () => {
     getRedisServiceClient.mockResolvedValue(null);
-    expect(await domain.claimDelivery('fallback', 'event')).toBe(true);
-    expect(await domain.claimDelivery('fallback', 'event')).toBe(false);
     expect(await domain.claimWakeWindow('fallback')).toBe(true);
+    expect(await domain.claimWakeWindow('fallback')).toBe(false);
     vi.advanceTimersByTime(10_000);
     expect(await domain.claimWakeWindow('fallback')).toBe(true);
-    expect(await domain.claimDelivery('fallback', 'event')).toBe(false);
-    await domain.releaseDelivery('fallback', 'event');
-    expect(await domain.claimDelivery('fallback', 'event')).toBe(true);
     expect(redis.set).not.toHaveBeenCalled();
-    expect(redis.del).not.toHaveBeenCalled();
   });
 
-  it('retains local deduplication after Redis command failures and releases it even if DEL fails', async () => {
+  it('keeps fallback leases even after Redis command failures', async () => {
     redis.set.mockRejectedValue(new Error('Redis unavailable'));
-    redis.del.mockRejectedValue(new Error('Redis unavailable'));
-    expect(await domain.claimDelivery('unavailable', 'event')).toBe(true);
-    expect(await domain.claimDelivery('unavailable', 'event')).toBe(false);
-    await expect(domain.releaseDelivery('unavailable', 'event')).resolves.toBeUndefined();
-    expect(await domain.claimDelivery('unavailable', 'event')).toBe(true);
+    expect(await domain.claimCheck('unavailable')).toBe(true);
+    expect(await domain.claimCheck('unavailable')).toBe(false);
+    vi.advanceTimersByTime(30_000);
+    expect(await domain.claimCheck('unavailable')).toBe(true);
   });
 });

@@ -1,7 +1,10 @@
+import { memoize } from 'es-toolkit';
+
 import type { InboundWebhookQuery, InboundWebhookView } from '@/database/models/inboundWebhook';
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
 
 import { getInboundWebhookKind } from './kinds';
 import { maintenanceBackoff } from './kinds/mcpEvents/subscription';
@@ -67,13 +70,15 @@ export async function refreshByConnector(
   scope: { userId: string; workspaceId?: string },
   connectorId: string,
 ) {
+  const eventsEnabledFor = memoize(isMcpEventsEnabled);
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
   const rows = await new InboundWebhookModel(db, scope.userId, scope.workspaceId).query({
     connectorId,
   });
   for (const row of rows) {
     if (row.status === 'terminated') continue;
+    if (row.kind === 'mcp_events' && !(await eventsEnabledFor(row.userId))) continue;
     const model = new InboundWebhookModel(db, row.userId, row.workspaceId ?? undefined, gateKeeper);
-    await getInboundWebhookKind(row.kind)?.maintain?.({ db, model, row });
+    await getInboundWebhookKind(row.kind)?.maintain?.({ db, featureEnabled: true, model, row });
   }
 }

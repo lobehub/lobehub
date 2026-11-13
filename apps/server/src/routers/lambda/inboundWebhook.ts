@@ -15,6 +15,7 @@ import { inboundWebhookItems } from '@/server/services/inboundWebhook/items';
 import { getInboundWebhookKind } from '@/server/services/inboundWebhook/kinds';
 import { removeInboundWebhook } from '@/server/services/inboundWebhook/lifecycle';
 import { scheduleInboundWebhookSweep } from '@/server/services/inboundWebhook/sweep';
+import { isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
 import { redisService } from '@/server/services/redis';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
@@ -38,6 +39,11 @@ export const inboundWebhookRouter = router({
       if (!row || row.status === 'pending' || row.status === 'deleting')
         throw new TRPCError({ code: 'NOT_FOUND' });
       assertWorkspaceRowManageable(ctx, row.userId, 'webhook', { allowAdmin: true });
+      if (row.kind === 'mcp_events' && !(await isMcpEventsEnabled(row.userId)))
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'MCP Events is disabled for this subscription owner.',
+        });
       const kind = getInboundWebhookKind(row.kind);
       if (!kind?.maintain)
         throw new TRPCError({
@@ -57,7 +63,7 @@ export const inboundWebhookRouter = router({
         row.workspaceId ?? undefined,
         gateKeeper,
       );
-      await kind.maintain({ db: ctx.serverDB, model, row });
+      await kind.maintain({ db: ctx.serverDB, featureEnabled: true, model, row });
       const updated = await model.findById(row.id);
       if (!updated || updated.status === 'deleting') throw new TRPCError({ code: 'NOT_FOUND' });
       return (await inboundWebhookItems(ctx.serverDB, [updated], ctx))[0];

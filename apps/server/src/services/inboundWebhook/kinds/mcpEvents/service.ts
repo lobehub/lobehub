@@ -11,6 +11,7 @@ import type {
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 import { isPlainRecord } from '@lobechat/utils/object';
 import Ajv from 'ajv';
+import pMap from 'p-map';
 
 import { AgentModel } from '@/database/models/agent';
 import type { DecryptedConnector } from '@/database/models/connector';
@@ -260,7 +261,9 @@ export class McpEventsService {
     const { connectorModel, model } = await this.context(input.agentId, input.topicId);
     const rows = await model.query(input);
     return {
-      subscriptions: await Promise.all(rows.map((row) => this.summary(row, connectorModel))),
+      subscriptions: await pMap(rows, (row) => this.summary(row, connectorModel), {
+        concurrency: 5,
+      }),
     };
   }
 

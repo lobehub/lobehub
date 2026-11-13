@@ -11,6 +11,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { EditLockService } from '@/server/services/editLock';
 
 import { AiAgentService } from '../aiAgent';
+import { removeByTopics } from '../inboundWebhook/lifecycle';
 import { TaskRunnerService } from '../taskRunner';
 import { trashTasksInTransaction } from '../trash';
 import { assertArchivedTaskStaysIdle, findTasksInOpenGoals } from './archiveGuard';
@@ -648,7 +649,6 @@ export class TaskBatchService {
     result.updated.push(...deletedIdle);
     if (removedTopicIds.length > 0) {
       try {
-        const { removeByTopics } = await import('../inboundWebhook/lifecycle');
         await removeByTopics(this.db, { userId: this.userId, workspaceId: this.workspaceId }, [
           ...new Set(removedTopicIds),
         ]);

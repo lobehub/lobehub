@@ -25,7 +25,8 @@ interface RouterTestContext {
   workspaceRole?: string;
 }
 
-const { checkClaims, gateKeeper, maintain, teardown } = vi.hoisted(() => ({
+const { checkClaims, enabled, gateKeeper, maintain, teardown } = vi.hoisted(() => ({
+  enabled: vi.fn(),
   checkClaims: new Map<string, number>(),
   gateKeeper: {
     encrypt: async (value: string) => `cipher:${value}`,
@@ -36,6 +37,7 @@ const { checkClaims, gateKeeper, maintain, teardown } = vi.hoisted(() => ({
   teardown:
     vi.fn<(ctx: { model: InboundWebhookModel; row: InboundWebhookView }) => Promise<void>>(),
 }));
+vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpEventsEnabled: enabled }));
 
 // Exercise the real router and DB while replacing platform authentication with a bounded test context.
 vi.mock('@/libs/trpc/lambda', async () => {
@@ -162,6 +164,7 @@ const seed = async (
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  enabled.mockResolvedValue(true);
   checkClaims.clear();
   maintain.mockReset().mockImplementation(async ({ model, row }) => {
     await model.update(row.id, { status: 'active', lastError: null });
@@ -187,6 +190,37 @@ afterEach(async () => {
 });
 
 describe('inboundWebhook tRPC resource contract', () => {
+  it('rejects checks for a disabled subscription owner before contacting the server or consuming cooldown', async () => {
+    const row = await seed({ workspaceId });
+    enabled.mockImplementation(async (userId: string) => userId !== creator);
+    await expect(scoped('admin', colleague).check({ id: row.id })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'MCP Events is disabled for this subscription owner.',
+    });
+    expect(enabled).toHaveBeenCalledExactlyOnceWith(creator);
+    expect(maintain).not.toHaveBeenCalled();
+    expect(checkClaims.size).toBe(0);
+  });
+
+  it('keeps listing and deletion available while the subscription owner flag is disabled', async () => {
+    const row = await seed();
+    enabled.mockResolvedValue(false);
+    expect((await caller().list()).map((item) => item.id)).toEqual([row.id]);
+    await expect(caller().delete({ id: row.id })).resolves.toEqual({ success: true });
+    expect(teardown).toHaveBeenCalledOnce();
+    expect(maintain).not.toHaveBeenCalled();
+  });
+
+  it('uses the enabled creator flag even when the checking workspace admin is disabled', async () => {
+    const row = await seed({ workspaceId });
+    enabled.mockImplementation(async (userId: string) => userId === creator);
+    await expect(scoped('admin', colleague).check({ id: row.id })).resolves.toMatchObject({
+      id: row.id,
+    });
+    expect(enabled).toHaveBeenCalledExactlyOnceWith(creator);
+    expect(maintain).toHaveBeenCalledOnce();
+  });
+
   it('lists only the caller personal rows and excludes internal lifecycle states and secrets', async () => {
     const row = await seed();
     await seed({ userId: colleague });
