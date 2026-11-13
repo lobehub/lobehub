@@ -17,8 +17,8 @@ export const FISH_AUDIO_DRAMA_3_PROMOTION_END = Date.UTC(2026, 11, 1, 8);
 
 /**
  * Drama 3 price per million UTF-8 bytes at `now`: Fish Audio bills the $10 launch price until
- * the promotion ends, then the $50 list price. Evaluated when the catalog loads, so a
- * process started after the promotion picks up the list price without a code change.
+ * the promotion ends, then the $50 list price. The card reads it on every pricing lookup,
+ * so a long-running process switches to the list price at the cutoff without a code change.
  */
 export const getFishAudioDrama3Rate = (now = Date.now()) =>
   now < FISH_AUDIO_DRAMA_3_PROMOTION_END ? 10 : 50;
@@ -50,7 +50,10 @@ const fishAudioTTSModels: AITTSModelCard[] = [
       units: [
         {
           name: 'textInput',
-          rate: getFishAudioDrama3Rate(),
+          // A getter, so a process loaded before the cutoff reads $50 after it.
+          get rate() {
+            return getFishAudioDrama3Rate();
+          },
           strategy: 'fixed',
           unit: 'millionCharacters',
         },

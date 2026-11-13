@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { loadModels } from '../../aiModels';
 import doubaospeechModels from '../../aiModels/doubaospeech';
 import fishaudioModels, {
   FISH_AUDIO_DRAMA_3_PROMOTION_END,
@@ -76,6 +77,42 @@ describe('Fish Audio TTS model cards', () => {
     expect(getFishAudioDrama3Rate(FISH_AUDIO_DRAMA_3_PROMOTION_END - 1)).toBe(10);
     expect(getFishAudioDrama3Rate(FISH_AUDIO_DRAMA_3_PROMOTION_END)).toBe(50);
     expect(getFishAudioDrama3Rate(Date.parse('2027-01-01T00:00:00Z'))).toBe(50);
+  });
+
+  describe('Drama 3 card rate across the promotion cutoff', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('reads the rate at lookup time, so a catalog loaded before the cutoff bills $50 after it', () => {
+      const unit = fishCards.find((card) => card.id === 'drama-3')!.pricing!.units[0] as {
+        rate: number;
+      };
+
+      vi.useFakeTimers();
+      vi.setSystemTime(FISH_AUDIO_DRAMA_3_PROMOTION_END - 60_000);
+      expect(unit.rate).toBe(10);
+      expect({ ...unit }.rate).toBe(10);
+
+      vi.setSystemTime(FISH_AUDIO_DRAMA_3_PROMOTION_END);
+      expect(unit.rate).toBe(50);
+      expect(JSON.parse(JSON.stringify(unit)).rate).toBe(50);
+    });
+
+    it('keeps the rate live through loadModels()', async () => {
+      const models = await loadModels();
+      const rateOf = () =>
+        (
+          models.find((card) => card.providerId === 'fishaudio' && card.id === 'drama-3')!.pricing!
+            .units[0] as { rate: number }
+        ).rate;
+
+      vi.useFakeTimers();
+      vi.setSystemTime(FISH_AUDIO_DRAMA_3_PROMOTION_END - 1);
+      expect(rateOf()).toBe(10);
+      vi.setSystemTime(FISH_AUDIO_DRAMA_3_PROMOTION_END + 1);
+      expect(rateOf()).toBe(50);
+    });
   });
 
   it('bundles no community voices, only the Fish Audio default', () => {
