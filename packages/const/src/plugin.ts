@@ -51,3 +51,5 @@ export const MENTION_TAG_REGEX = /<mention\b[^>]*>([\S\s]*?)(?:<\/mention>|$)/;
 
 export const AGENTS_TAG = 'lobeAgents';
 export const AGENTS_TAG_REGEX = /<lobeAgents\b[^>]*(?:\/>|>([\S\s]*?)(?:<\/lobeAgents>|$))/;
+
+export const MCP_EVENT_TAG = 'mcpEvent';

@@ -8,16 +8,16 @@ import { ConnectorToolModel } from '@/database/models/connectorTool';
 
 import { GET } from './route';
 
-const { mockConsume, mockDiscover, mockExchange, mockFindById, mockSync, mockUpdate } = vi.hoisted(
-  () => ({
+const { mockConsume, mockDiscover, mockExchange, mockFindById, mockRefresh, mockSync, mockUpdate } =
+  vi.hoisted(() => ({
     mockConsume: vi.fn(),
     mockDiscover: vi.fn().mockResolvedValue({ token_endpoint: 'https://as/token' }),
     mockExchange: vi.fn(),
     mockFindById: vi.fn(),
+    mockRefresh: vi.fn(),
     mockSync: vi.fn(),
     mockUpdate: vi.fn(),
-  }),
-);
+  }));
 
 vi.mock('@/database/server', () => ({ serverDB: {} }));
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://app.example.com' } }));
@@ -49,6 +49,7 @@ vi.mock('@/database/models/connectorTool', () => ({
   ConnectorToolModel: vi.fn(function () {}),
 }));
 vi.mock('@/server/services/connector/sync', () => ({ syncConnectorToolsById: mockSync }));
+vi.mock('@/server/services/inboundWebhook/lifecycle', () => ({ refreshByConnector: mockRefresh }));
 
 const makeReq = (query = 'code=abc&state=xyz') =>
   ({ nextUrl: { searchParams: new URLSearchParams(query) } }) as any;
@@ -70,6 +71,7 @@ beforeEach(() => {
     },
   });
   mockUpdate.mockResolvedValue(undefined);
+  mockRefresh.mockResolvedValue(undefined);
   mockExchange.mockResolvedValue({ tokens: { access_token: 'tok' } });
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
@@ -114,6 +116,7 @@ describe('connector OAuth callback', () => {
 
     expect(body).toContain('"success":true');
     expect(body).toContain('"synced":false');
+    expect(mockRefresh).toHaveBeenCalledWith({}, { userId: 'u1', workspaceId: undefined }, 'c1');
   });
 
   it('reports synced:true when auth and tool sync both succeed', async () => {
@@ -123,6 +126,17 @@ describe('connector OAuth callback', () => {
 
     expect(body).toContain('"success":true');
     expect(body).toContain('"synced":true');
+  });
+
+  it('refreshes subscriptions after persisting the newly authorized credentials', async () => {
+    mockSync.mockResolvedValue({ toolCount: 5 });
+    await GET(makeReq());
+
+    expect(mockRefresh).toHaveBeenCalledOnce();
+    expect(mockRefresh).toHaveBeenCalledWith({}, { userId: 'u1', workspaceId: undefined }, 'c1');
+    expect(mockUpdate.mock.invocationCallOrder[0]).toBeLessThan(
+      mockRefresh.mock.invocationCallOrder[0],
+    );
   });
 
   it('looks the connector up in the workspace it was started from', async () => {
@@ -140,6 +154,7 @@ describe('connector OAuth callback', () => {
     expect(body).toContain('"success":true');
     expect(ConnectorModel).toHaveBeenCalledWith({}, 'u1', 'ws1', {});
     expect(ConnectorToolModel).toHaveBeenCalledWith({}, 'u1', 'ws1');
+    expect(mockRefresh).toHaveBeenCalledWith({}, { userId: 'u1', workspaceId: 'ws1' }, 'c1');
   });
 
   it('keeps the failure page open and shows the escaped reason', async () => {
@@ -149,6 +164,7 @@ describe('connector OAuth callback', () => {
 
     expect(body).toContain('Authorization failed.');
     expect(body).toContain('>connector_not_found</p>');
+    expect(mockRefresh).not.toHaveBeenCalled();
     expect(body).not.toContain('window.close');
     expect(console.error).toHaveBeenCalled();
   });
@@ -161,6 +177,7 @@ describe('connector OAuth callback', () => {
     expect(body).toContain('access_denied: &lt;img src=x&gt;');
     expect(body).not.toContain('<img');
     expect(mockConsume).not.toHaveBeenCalled();
+    expect(mockRefresh).not.toHaveBeenCalled();
   });
 
   it('remembers the client auth method that the token endpoint accepted', async () => {
@@ -213,6 +230,7 @@ describe('SDK v2 OAuth callback regressions', () => {
       expect(body).toContain('issuer_mismatch');
       expect(body).not.toContain('attacker.example');
       expect(mockUpdate).not.toHaveBeenCalled();
+      expect(mockRefresh).not.toHaveBeenCalled();
     },
   );
   it('renders a failure page when discovery has a network error', async () => {

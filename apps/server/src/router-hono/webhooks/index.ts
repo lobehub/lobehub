@@ -4,6 +4,7 @@ import { casdoorWebhook } from './handlers/casdoor';
 import { githubWebhook } from './handlers/github';
 import { githubInstall } from './handlers/githubInstall';
 import { githubSetup } from './handlers/githubSetup';
+import { inboundWebhook, inboundWebhookBodyLimit } from './handlers/inbound';
 import { linearCallback } from './handlers/linearCallback';
 import { linearInstall } from './handlers/linearInstall';
 import { logtoWebhook } from './handlers/logto';
@@ -20,6 +21,7 @@ const app = new Hono().basePath('/api/webhooks');
 // Identity provider webhooks — each verifies its own provider signature.
 app.post('/casdoor', casdoorWebhook);
 app.post('/logto', logtoWebhook);
+app.post('/inbound/:id', inboundWebhookBodyLimit, inboundWebhook);
 
 // Memory pipeline webhooks — share the configured static-header guard.
 app.post('/memory-extraction', memoryWebhookAuth(), memoryExtractionWebhook);

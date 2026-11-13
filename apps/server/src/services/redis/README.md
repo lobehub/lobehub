@@ -49,3 +49,7 @@ This foundation does not migrate existing runtime, bot or OAuth stores.
   per UTC hour, and the per-channel wake scheduler state (updated under a short lock). Channel
   state is written under both the channel and a Discord thread key. Every read returns
   `undefined` without Redis; the caller waits for nothing and falls back to its existing wake.
+
+- `inboundWebhook`: delivery replay claims (24 hours), wake debounce (10 seconds), manual checks
+  (30 seconds), maintenance/sweep slots (one minute). Claims fall back to a process-local map;
+  durable signal uniqueness remains the event deduplication boundary across instances.

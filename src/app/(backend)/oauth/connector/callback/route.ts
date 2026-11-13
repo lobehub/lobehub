@@ -15,6 +15,7 @@ import {
 import { consumeConnectorOAuthState } from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 import { tokensToCredentials } from '@/server/services/connector/tokens';
+import { refreshByConnector } from '@/server/services/inboundWebhook/lifecycle';
 
 const log = debug('lobe-server:connector:oauth-callback');
 
@@ -185,6 +186,11 @@ export const GET = async (req: NextRequest) => {
       log('post-OAuth tool sync failed for connector=%s: %O', payload.connectorId, err);
     }
 
+    await refreshByConnector(
+      serverDB,
+      { userId: payload.lobeUserId, workspaceId: payload.workspaceId },
+      payload.connectorId,
+    );
     return renderResultPage({ connectorId: payload.connectorId, success: true, synced });
   } catch (err) {
     if (IssuerMismatchError.isInstance(err)) return renderFailure('issuer_mismatch', err);

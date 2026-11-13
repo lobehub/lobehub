@@ -78,6 +78,7 @@ import { goalShareRouter } from './goalShare';
 import { homeRouter } from './home';
 import { imageRouter } from './image';
 import { importerRouter } from './importer';
+import { inboundWebhookRouter } from './inboundWebhook';
 import { klavisRouter } from './klavis';
 import { knowledgeRouter } from './knowledge';
 import { knowledgeBaseRouter } from './knowledgeBase';
@@ -186,6 +187,7 @@ export const lambdaRouter = router({
   healthcheck: publicProcedure.query(() => "i'm live!"),
   home: homeRouter,
   image: imageRouter,
+  inboundWebhook: inboundWebhookRouter,
   importer: importerRouter,
   composio: composioRouter,
 

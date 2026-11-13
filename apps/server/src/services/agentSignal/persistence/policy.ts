@@ -43,6 +43,7 @@ export const AGENT_SIGNAL_SOURCE_PERSISTENCE: Readonly<
  * authenticated, low-volume events and are the reason the table exists.
  */
 export const SIGNAL_ORACLE_PERSISTENCE: Readonly<Record<string, SignalPersistencePolicy>> = {
+  'mcp-events': 'always',
   'agent-mail': 'always',
 };
 

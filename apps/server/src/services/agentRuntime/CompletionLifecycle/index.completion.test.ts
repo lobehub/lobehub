@@ -270,18 +270,20 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
 
   // Scheduled = a user-deferred chat turn; Cron = the rate-limit auto-resume of
   // a user's chat turn. Both are "user walked away" runs the recall exists for.
-  it.each([RequestTrigger.Chat, RequestTrigger.Scheduled, RequestTrigger.Cron])(
-    'notifies for a user-recallable %s-triggered completion',
-    async (trigger) => {
-      const lifecycle = buildLifecycle();
-      stubSideEffects(lifecycle);
+  it.each([
+    RequestTrigger.Chat,
+    RequestTrigger.Scheduled,
+    RequestTrigger.Cron,
+    RequestTrigger.McpEvent,
+  ])('notifies for a user-recallable %s-triggered completion', async (trigger) => {
+    const lifecycle = buildLifecycle();
+    stubSideEffects(lifecycle);
 
-      await lifecycle.dispatchHooks('op-1', buildDoneState({ trigger }), 'done');
-      await flushMicrotasks();
+    await lifecycle.dispatchHooks('op-1', buildDoneState({ trigger }), 'done');
+    await flushMicrotasks();
 
-      expect(mockNotifyAgentRunCompleted).toHaveBeenCalledTimes(1);
-    },
-  );
+    expect(mockNotifyAgentRunCompleted).toHaveBeenCalledTimes(1);
+  });
 
   it('falls back to the op row trigger when metadata carries none (synthetic hetero path)', async () => {
     const lifecycle = buildLifecycle();

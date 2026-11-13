@@ -14,7 +14,7 @@ describe('foreground operation triggers', () => {
     },
   );
 
-  it.each([RequestTrigger.Task, RequestTrigger.Cron])(
+  it.each([RequestTrigger.Task, RequestTrigger.Cron, RequestTrigger.McpEvent])(
     'leaves %s runs to finish when the user sends',
     (trigger) => {
       expect(isForegroundOperationTrigger(trigger)).toBe(false);
