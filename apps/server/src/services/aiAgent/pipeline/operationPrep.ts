@@ -772,8 +772,9 @@ export const prepareOperation = async (
     };
   }
 
-  // Project skills + the root AGENTS.md are discovered server-side by
-  // scanning the device's bound project directory ("workspace init"), cached
+  // Project skills + AGENTS.md are discovered server-side by scanning the
+  // device's bound project directory and its parents up to the repository
+  // root ("workspace init"), cached
   // on `devices.workingDirs` and reused within the TTL. Skills surface in
   // `<available_skills>` (metadata only — SKILL.md bodies are read lazily at
   // activation via `local-system` readFile, which `serverRuntimes/skills.ts`
@@ -819,8 +820,9 @@ export const prepareOperation = async (
   // concatenate them. Returning them rather than stamping `agentConfig` keeps
   // run context off the agent's configuration.
   if (workspaceInit.workspace.instructions.length) {
-    projectInstructions = workspaceInit.workspace.instructions.map(({ content, source }) => ({
+    projectInstructions = workspaceInit.workspace.instructions.map(({ content, path, source }) => ({
       content,
+      path,
       source,
     }));
     log(
