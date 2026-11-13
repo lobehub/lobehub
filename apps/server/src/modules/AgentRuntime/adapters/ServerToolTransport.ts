@@ -34,6 +34,7 @@ import {
 } from '@/server/services/aiAgent/deviceToolAudit';
 import { resolveRunWorkAccessScope } from '@/server/services/workRegistration';
 
+import { parkAsyncShell } from '../asyncShellPark';
 import type { RuntimeExecutorContext } from '../context';
 import { dispatchClientTool } from '../dispatchClientTool';
 import {
@@ -236,7 +237,15 @@ export class ServerToolTransport implements ToolTransport {
           timeoutMs,
           topicId: context.state.origin?.topicId ?? this.ctx.topicId,
         });
-        execution = { attempts: 1, result: dispatchResult };
+        execution = (await parkAsyncShell(
+          this.ctx,
+          {
+            parentMessageId: context.parentMessageId,
+            state: context.state,
+            toolCall: chatToolPayload,
+          },
+          dispatchResult,
+        )) ?? { attempts: 1, result: dispatchResult };
       } else {
         if (context.toolSource && !chatToolPayload.source) {
           chatToolPayload.source = context.toolSource as any;
