@@ -44,6 +44,7 @@ export { planAttachmentPreviews } from './tokenAccounting/attachmentBudget';
 export type { PlaceholderValue, PlaceholderValueMap } from './processors';
 export {
   buildPlaceholderGenerators,
+  cacheEconomicsForProvider,
   formatPlaceholderValues,
   getSlicedMessages,
   GroupMessageFlattenProcessor,
