@@ -11,7 +11,7 @@ import { useOpenArtboardFromRoute } from './useOpenArtboardFromRoute';
 const openBoardPanel = vi.fn();
 let resolveLoad: () => void = () => {};
 const { board, feature } = vi.hoisted(() => ({
-  board: { originTopicId: 't' },
+  board: { topicId: 't' },
   feature: { enabled: true, ready: true },
 }));
 
@@ -38,7 +38,7 @@ const wrapper = ({ children }: { children: ReactNode }) =>
 beforeEach(() => {
   openBoardPanel.mockReset();
   Object.assign(feature, { enabled: true, ready: true });
-  board.originTopicId = 't';
+  board.topicId = 't';
   useChatStore.setState({
     activeTopicId: 't',
     dbMessagesMap: {

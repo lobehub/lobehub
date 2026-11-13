@@ -2,12 +2,6 @@ import type { ArtboardReference } from '@/features/ChatInput/InputEditor/ReferAr
 
 import type { BoardMode, CameraTarget, VerifyView } from '../types';
 
-export interface DragPosition {
-  id: string;
-  x: number;
-  y: number;
-}
-
 export interface GalleryConversation {
   agentId: string;
   topicId: string;
@@ -16,7 +10,6 @@ export interface GalleryConversation {
 export interface ArtboardState {
   boardId: string | null;
   camera: CameraTarget | null;
-  drag: DragPosition | null;
   flash: string[];
   fullscreen: boolean;
   gallery: GalleryConversation | null;
@@ -35,7 +28,6 @@ export interface ArtboardState {
 export const initialState: ArtboardState = {
   boardId: null,
   camera: null,
-  drag: null,
   flash: [],
   fullscreen: false,
   gallery: null,

@@ -1,7 +1,7 @@
-import type { ArtboardFrame } from '@lobechat/types';
+import type { ArtboardBoardView } from '@lobechat/types';
 import { Icon, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { ImageOffIcon, LayoutTemplateIcon } from 'lucide-react';
+import { GitForkIcon, ImageOffIcon, LayoutTemplateIcon, type LucideIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -25,57 +25,46 @@ const styles = stylex.create({
   },
 });
 
-const Placeholder = ({
-  missing,
-  title,
-  unavailable,
-}: {
-  missing?: boolean;
-  title: string;
-  unavailable?: boolean;
-}) => {
-  const { t } = useTranslation('project');
-  return (
-    <div {...stylex.props(canvasStyles.noShot)}>
-      <Icon icon={missing || unavailable ? ImageOffIcon : LayoutTemplateIcon} size={22} />
-      <Text ellipsis style={{ maxWidth: '80%' }} type="secondary">
-        {unavailable
-          ? t('artboard.verify.noShot')
-          : missing
-            ? t('artboard.frame.missingImage')
-            : title}
-      </Text>
-    </div>
-  );
-};
+const Placeholder = ({ icon, text }: { icon: LucideIcon; text: string }) => (
+  <div {...stylex.props(canvasStyles.noShot)}>
+    <Icon icon={icon} size={22} />
+    <Text ellipsis style={{ maxWidth: '80%' }} type="secondary">
+      {text}
+    </Text>
+  </div>
+);
 
-interface FrameBodyProps {
-  frame: ArtboardFrame;
+interface BoardBodyProps {
+  board: ArtboardBoardView;
   imageUrl?: string;
   live: boolean;
   screenshotUrl?: string | null;
 }
 
-const FrameBody = memo<FrameBodyProps>(({ frame, imageUrl, live, screenshotUrl }) => {
-  if (screenshotUrl === null) return <Placeholder unavailable title={frame.title} />;
+const BoardBody = memo<BoardBodyProps>(({ board, imageUrl, live, screenshotUrl }) => {
+  const { t } = useTranslation('project');
+  if (screenshotUrl === null)
+    return <Placeholder icon={ImageOffIcon} text={t('artboard.verify.noShot')} />;
   if (screenshotUrl)
     return (
       <img
-        alt={frame.title}
+        alt={board.title}
         draggable={false}
         src={screenshotUrl}
         {...stylex.props(styles.image)}
       />
     );
-  const { source } = frame;
+
+  const { source } = board;
+  if (board.type === 'decision') return <Placeholder icon={GitForkIcon} text={board.title} />;
+  if (!source || (source.kind === 'image' && !imageUrl))
+    return <Placeholder icon={ImageOffIcon} text={t('artboard.board.sourceMissing')} />;
   if (source.kind === 'image')
-    return imageUrl ? (
-      <img alt={frame.title} draggable={false} src={imageUrl} {...stylex.props(styles.image)} />
-    ) : (
-      <Placeholder missing title={frame.title} />
+    return (
+      <img alt={board.title} draggable={false} src={imageUrl} {...stylex.props(styles.image)} />
     );
 
-  if (!live) return <Placeholder title={frame.title} />;
+  if (!live) return <Placeholder icon={LayoutTemplateIcon} text={board.title} />;
   return (
     <div {...stylex.props(styles.canvas, canvasStyles.inert)}>
       <CanvasFrame canvasId={source.canvasId} path={source.path} version={source.version} />
@@ -83,6 +72,6 @@ const FrameBody = memo<FrameBodyProps>(({ frame, imageUrl, live, screenshotUrl }
   );
 });
 
-FrameBody.displayName = 'ArtboardFrameBody';
+BoardBody.displayName = 'ArtboardBoardBody';
 
-export default FrameBody;
+export default BoardBody;

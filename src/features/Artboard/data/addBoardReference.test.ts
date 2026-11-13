@@ -11,9 +11,7 @@ vi.mock('@/features/ChatInput/InputEditor/ReferArtboard', () => ({
 const ref = {
   artboardId: 'art_1',
   itemId: 'f1',
-  itemKind: 'frame' as const,
   itemTitle: 'A',
-  kind: 'comment' as const,
   text: 'x',
 };
 

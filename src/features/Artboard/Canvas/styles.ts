@@ -17,7 +17,7 @@ export const canvasStyles = stylex.create({
     animationName: appear,
     animationTimingFunction: 'ease-out',
   },
-  arrowLabel: {
+  edgeLabel: {
     backgroundColor: cssVar.colorBgContainer,
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: 999,
@@ -71,15 +71,13 @@ export const canvasStyles = stylex.create({
     animationName: flash,
     animationTimingFunction: 'ease-out',
   },
-  frame: {
+  board: {
     cursor: 'pointer',
-    height: 400,
     position: 'absolute',
     transitionDuration: '0.25s',
     transitionProperty: 'opacity',
-    width: 640,
   },
-  frameCard: {
+  boardCard: {
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: 12,
     borderStyle: 'solid',
@@ -90,13 +88,13 @@ export const canvasStyles = stylex.create({
     position: 'relative',
     width: '100%',
   },
-  frameRelated: {
+  boardRelated: {
     outlineColor: cssVar.colorPrimaryBorder,
     outlineOffset: 4,
     outlineStyle: 'dashed',
     outlineWidth: 2,
   },
-  frameSelected: {
+  boardSelected: {
     outlineColor: cssVar.colorPrimary,
     outlineOffset: 4,
     outlineStyle: 'solid',
@@ -158,42 +156,6 @@ export const canvasStyles = stylex.create({
     paddingBlock: 2,
     paddingInline: 8,
     position: 'absolute',
-  },
-  sticky: {
-    backgroundColor: cssVar.colorFillSecondary,
-    borderRadius: 6,
-    boxShadow: '0 2px 8px rgb(0 0 0 / 8%)',
-    color: cssVar.colorText,
-    fontSize: 20,
-    lineHeight: 1.5,
-    paddingBlock: 18,
-    paddingInline: 20,
-    position: 'absolute',
-    transitionDuration: '0.25s',
-    transitionProperty: 'opacity',
-  },
-  stickyGood: {
-    backgroundColor: cssVar.colorSuccessBg,
-  },
-  stickyPending: {
-    backgroundColor: cssVar.colorWarningBg,
-    cursor: 'pointer',
-    outlineColor: cssVar.colorWarningBorder,
-    outlineStyle: 'dashed',
-    outlineWidth: 2,
-  },
-  subtitle: {
-    color: cssVar.colorTextSecondary,
-    fontSize: 26,
-    position: 'absolute',
-    whiteSpace: 'nowrap',
-  },
-  title: {
-    fontSize: 64,
-    fontWeight: 700,
-    lineHeight: 1.15,
-    position: 'absolute',
-    whiteSpace: 'nowrap',
   },
   viewport: {
     backgroundColor: cssVar.colorBgLayout,

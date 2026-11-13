@@ -28,10 +28,10 @@ export const useOpenArtboardFromRoute = () => {
   const messageId = useChatStore(artboardId ? findBoardToolMessage(artboardId) : () => undefined);
   const topicId = useChatStore((s) => s.activeTopicId);
   const { data } = useArtboard(artboardId && !messageId ? artboardId : undefined);
-  const originTopicId = data?.artboard.originTopicId;
+  const boardTopicId = data?.artboard.topicId;
 
   useEffect(() => {
-    if (!enabled || !artboardId || (!messageId && (!topicId || originTopicId !== topicId))) return;
+    if (!enabled || !artboardId || (!messageId && (!topicId || boardTopicId !== topicId))) return;
     let cancelled = false;
     void loadArtboardTool().then(() => {
       if (cancelled) return;
@@ -49,5 +49,5 @@ export const useOpenArtboardFromRoute = () => {
     return () => {
       cancelled = true;
     };
-  }, [artboardId, enabled, messageId, originTopicId, setParams, topicId]);
+  }, [artboardId, boardTopicId, enabled, messageId, setParams, topicId]);
 };

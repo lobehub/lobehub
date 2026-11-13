@@ -1,68 +1,70 @@
-import type { ArtboardItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { buildBoardModel } from '../model';
 import { draftJourneyView, nodeState } from './flow';
+import { testBoard, testEdge, testModel } from './testBoard';
 
-const frame = (id: string, x: number, groupId = 'g1') => ({
-  check: { expected: `${id} works` },
-  groupId,
-  id,
-  source: { canvasId: `cvs_${id}`, kind: 'canvas' as const, version: 1 },
-  title: id,
-  x,
-  y: 0,
+const board = testModel({
+  boards: [testBoard('b1'), testBoard('b2'), testBoard('b3'), testBoard('o1', { groupId: 'g2' })],
+  edges: [
+    testEdge('e1', 'b1', 'b2', { label: '下一步' }),
+    testEdge('e2', 'b1', 'b3', { label: '失败' }),
+    testEdge('e3', 'b3', 'b2', { label: '重试' }),
+    testEdge('e4', 'b1', 'o1', { label: '看方案' }),
+  ],
 });
-
-const board = buildBoardModel(
-  {
-    content: {
-      arrows: [
-        { from: 'f1', id: 'a1', label: '下一步', to: 'f2' },
-        { from: 'f1', id: 'a2', label: '失败', to: 'f3' },
-        { from: 'f3', id: 'a3', label: '重试', to: 'f2' },
-        { from: 'f1', id: 'a4', label: '看方案', to: 'o1' },
-      ],
-      frames: [frame('f1', 0), frame('f2', 840), frame('f3', 1680), frame('o1', 0, 'g2')],
-      groups: [
-        { desc: '', id: 'g1', kind: 'journey', title: '旅程' },
-        { desc: '', id: 'g2', kind: 'options', title: '方案' },
-      ],
-      notes: [],
-    },
-    id: 'art_1',
-    phase: 'discuss',
-    revision: 1,
-  } as ArtboardItem,
-  {},
-);
 
 describe('draftJourneyView', () => {
   const view = draftJourneyView(board)!;
 
-  it('turns the journey into flow nodes keyed by frame, with only its own arrows', () => {
-    expect(view.version.entryNodeKey).toBe('f1');
-    expect(view.version.nodes.map((n) => n.nodeKey)).toEqual(['f1', 'f2', 'f3']);
+  it('turns the journey into flow nodes keyed by board, with only its own edges', () => {
+    expect(view.version.entryNodeKey).toBe('b1');
+    expect(view.version.nodes.map((n) => n.nodeKey)).toEqual(['b1', 'b2', 'b3']);
     expect(view.version.edges.map((e) => [e.sourceNodeKey, e.targetNodeKey, e.trigger])).toEqual([
-      ['f1', 'f2', '下一步'],
-      ['f1', 'f3', '失败'],
-      ['f3', 'f2', '重试'],
+      ['b1', 'b2', '下一步'],
+      ['b1', 'b3', '失败'],
+      ['b3', 'b2', '重试'],
     ]);
   });
 
   it('plans one check item for the entry and one per incoming path', () => {
     expect(
       Object.fromEntries(view.version.nodes.map((n) => [n.nodeKey, n.checkItemIds.length])),
-    ).toEqual({ f1: 1, f2: 2, f3: 1 });
+    ).toEqual({ b1: 1, b2: 2, b3: 1 });
   });
 
-  it('leaves every frame pending before any acceptance run', () => {
-    expect(['f1', 'f2', 'f3', 'o1'].map((id) => nodeState(view, id))).toEqual([
+  it('leaves every board pending before any acceptance run', () => {
+    expect(['b1', 'b2', 'b3', 'o1'].map((id) => nodeState(view, id))).toEqual([
       undefined,
       undefined,
       undefined,
       undefined,
     ]);
     expect(view.nodeOf('o1')).toBeUndefined();
+  });
+
+  it('folds a decision board into one edge per branch', () => {
+    const branched = draftJourneyView(
+      testModel({
+        boards: [
+          testBoard('b1'),
+          testBoard('d1', { expected: null, source: null, type: 'decision' }),
+          testBoard('b2'),
+          testBoard('b3'),
+        ],
+        edges: [
+          testEdge('e1', 'b1', 'd1', { label: '提交' }),
+          testEdge('e2', 'd1', 'b2', { condition: '已付费' }),
+          testEdge('e3', 'd1', 'b3', { isDefault: true, label: '否则' }),
+        ],
+      }),
+    )!;
+
+    expect(branched.version.nodes.map((n) => n.nodeKey)).toEqual(['b1', 'b2', 'b3']);
+    expect(
+      branched.version.edges.map((e) => [e.sourceNodeKey, e.targetNodeKey, e.trigger, e.condition]),
+    ).toEqual([
+      ['b1', 'b2', '提交', '已付费'],
+      ['b1', 'b3', '提交', '否则'],
+    ]);
   });
 });

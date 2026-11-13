@@ -8,14 +8,14 @@ import { artboardActions, useArtboardStore } from '../store';
 
 interface AnnounceParams {
   acceptanceUrl: string;
-  artboard: Pick<ArtboardItem, 'originTopicId' | 'title'>;
+  artboard: Pick<ArtboardItem, 'title' | 'topicId'>;
   count: number;
 }
 
 const translate = (key: string, options?: Record<string, unknown>) =>
   t(key as 'artboard.chat.quote', { ...options, ns: 'project' }) as string;
 
-const resolveTarget = (originTopicId: string | null) => {
+const resolveTarget = (topicId: string | null) => {
   const { gallery, galleryRefs, galleryText } = useArtboardStore.getState();
   if (gallery)
     return {
@@ -32,7 +32,7 @@ const resolveTarget = (originTopicId: string | null) => {
     };
 
   const { activeAgentId, activeTopicId, mainInputEditor } = useChatStore.getState();
-  if (!activeAgentId || !activeTopicId || activeTopicId !== originTopicId) return;
+  if (!activeAgentId || !activeTopicId || activeTopicId !== topicId) return;
   return {
     clear: () => mainInputEditor?.clearContent(),
     context: { agentId: activeAgentId, topicId: activeTopicId },
@@ -42,7 +42,7 @@ const resolveTarget = (originTopicId: string | null) => {
 };
 
 export const announceFinalized = async ({ acceptanceUrl, artboard, count }: AnnounceParams) => {
-  const target = resolveTarget(artboard.originTopicId);
+  const target = resolveTarget(artboard.topicId);
   if (!target) return;
 
   const line = translate('artboard.finalize.message', { count, title: artboard.title });

@@ -1,96 +1,130 @@
-import type { ArtboardContent, ArtboardItem } from '@lobechat/types';
+import type {
+  ArtboardBoardView,
+  ArtboardContent,
+  ArtboardEdgeView,
+  ArtboardItem,
+} from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { buildBoardModel, computeArrowPath } from './model';
+import { buildBoardModel, computeEdgePath } from './model';
 
-const at = (x: number, y: number) => ({ x, y });
+const rect = (x: number, y: number, w = 640, h = 400) => ({ h, w, x, y });
 
-describe('computeArrowPath', () => {
+describe('computeEdgePath', () => {
   it('leaves the right edge and enters the left edge when the target is to the right', () => {
-    expect(computeArrowPath(at(0, 0), at(840, 0))).toEqual({
+    expect(computeEdgePath(rect(0, 0), rect(840, 0))).toEqual({
       d: 'M640 200 H740 V200 H840',
       lx: 740,
       ly: 200,
     });
   });
 
-  it('bends at the gap midpoint when the target sits lower to the right', () => {
-    expect(computeArrowPath(at(0, 0), at(840, 600))).toEqual({
-      d: 'M640 200 H740 V800 H840',
-      lx: 740,
-      ly: 500,
-    });
-  });
-
   it('runs right to left when the target is to the left', () => {
-    expect(computeArrowPath(at(1680, 0), at(840, 0))).toEqual({
+    expect(computeEdgePath(rect(1680, 0), rect(840, 0))).toEqual({
       d: 'M1680 200 H1580 V200 H1480',
       lx: 1580,
       ly: 200,
     });
   });
 
-  it('goes vertical when the frames overlap horizontally', () => {
-    expect(computeArrowPath(at(0, 0), at(100, 600))).toEqual({
+  it('goes vertical when the boards overlap horizontally', () => {
+    expect(computeEdgePath(rect(0, 0), rect(100, 600))).toEqual({
       d: 'M320 400 V500 H420 V600',
       lx: 370,
       ly: 500,
     });
-    expect(computeArrowPath(at(0, 600), at(0, 0))).toEqual({
-      d: 'M320 600 V500 H320 V400',
-      lx: 320,
-      ly: 500,
+  });
+
+  it('anchors on each board’s own size', () => {
+    expect(computeEdgePath(rect(0, 0, 200, 100), rect(400, 0, 300, 300))).toEqual({
+      d: 'M200 50 H300 V150 H400',
+      lx: 300,
+      ly: 100,
     });
   });
 });
 
+const board = (id: string, patch: Partial<ArtboardBoardView> = {}): ArtboardBoardView => ({
+  expected: null,
+  flowNodeId: null,
+  groupId: 'g2',
+  id,
+  pageId: 'p1',
+  rect: rect(0, 0),
+  roundId: null,
+  source: { canvasId: 'cvs_1', kind: 'canvas', version: 2 },
+  title: id,
+  type: 'html',
+  ...patch,
+});
+
+const edge = (id: string, from: string, to: string): ArtboardEdgeView => ({
+  condition: null,
+  flowEdgeId: null,
+  from,
+  id,
+  isDefault: false,
+  label: id,
+  to,
+});
+
 const content: ArtboardContent = {
-  arrows: [
-    { from: 'f1', id: 'a1', label: '开始', to: 'f2' },
-    { from: 'f1', id: 'a2', label: '丢了', to: 'gone' },
+  boards: [
+    board('b1', { expected: '能看到入口' }),
+    board('b2', { rect: rect(840, 0), source: { fileId: 'file_1', kind: 'image' } }),
+    board('b3', { groupId: 'g1', rect: rect(0, 1000), roundId: 'r1' }),
+    board('b4', { groupId: null, pageId: 'p2', rect: rect(9000, 9000) }),
   ],
-  frames: [
-    {
-      check: { expected: '能看到入口' },
-      groupId: 'g2',
-      id: 'f1',
-      source: { canvasId: 'cvs_1', kind: 'canvas', version: 2 },
-      title: '空项目',
-      x: 0,
-      y: 0,
-    },
-    {
-      groupId: 'g2',
-      id: 'f2',
-      source: { fileId: 'file_1', kind: 'image' },
-      title: '接入资料',
-      x: 840,
-      y: 0,
-    },
-    {
-      groupId: 'g1',
-      id: 'f3',
-      source: { canvasId: 'cvs_2', kind: 'canvas', version: 1 },
-      title: '方案 A',
-      x: 0,
-      y: 1000,
-    },
-  ],
+  edges: [edge('e1', 'b1', 'b2'), edge('e2', 'b1', 'gone'), edge('e3', 'b1', 'b4')],
   groups: [
-    { desc: '', id: 'g1', kind: 'options', title: '方案' },
-    { desc: '', id: 'g2', kind: 'journey', title: '旅程' },
-    { desc: '', id: 'g3', kind: 'references', title: '参考' },
-  ],
-  notes: [
-    { id: 'n1', kind: 'title', text: '首次进入', x: 0, y: -300 },
-    { id: 'n2', kind: 'sticky', question: { status: 'open' }, text: '要保留吗？', x: 0, y: 1600 },
     {
-      id: 'n3',
-      kind: 'sticky',
-      question: { decision: '保留', status: 'decided' },
-      text: '要提示吗？',
-      x: 400,
-      y: 1600,
+      desc: '',
+      id: 'g1',
+      kind: 'options',
+      pageId: 'p1',
+      rect: rect(-48, 856, 736, 592),
+      title: '方案',
+    },
+    {
+      desc: '',
+      id: 'g2',
+      kind: 'journey',
+      pageId: 'p1',
+      rect: rect(-48, -144, 1576, 592),
+      title: '旅程',
+    },
+    {
+      desc: '',
+      id: 'g3',
+      kind: 'references',
+      pageId: 'p2',
+      rect: rect(0, 0, 10, 10),
+      title: '参考',
+    },
+  ],
+  pages: [
+    { id: 'p1', name: 'Page 1', sortOrder: 0 },
+    { id: 'p2', name: 'Page 2', sortOrder: 1 },
+  ],
+  questions: [{ boardId: 'b1', content: '要保留吗？', groupId: null, id: 'c1', pageId: 'p1' }],
+  rounds: [
+    {
+      batchId: null,
+      chosenBoardId: null,
+      id: 'r1',
+      pageId: 'p1',
+      recommendedBoardId: 'b3',
+      status: 'open',
+      title: '布局',
+    },
+    {
+      batchId: null,
+      chosenBoardId: 'b3',
+      id: 'r2',
+      pageId: 'p1',
+      recommendedBoardId: null,
+      status: 'submitted',
+      title: '配色',
     },
   ],
 };
@@ -108,11 +142,22 @@ const item = {
 describe('buildBoardModel', () => {
   const model = buildBoardModel(item, { file_1: 'https://cdn/1.png' });
 
-  it('finds the single journey, its frames, arrows and entry', () => {
+  it('shows the boards, groups and edges of the first page only', () => {
+    expect(model.pageId).toBe('p1');
+    expect(model.boards.map((b) => b.id)).toEqual(['b1', 'b2', 'b3']);
+    expect(model.groups.map((g) => g.id)).toEqual(['g1', 'g2']);
+    expect(model.edges.map((e) => e.id)).toEqual(['e1']);
+  });
+
+  it('still finds a board of another page by id', () => {
+    expect(model.boardById.b4.pageId).toBe('p2');
+  });
+
+  it('finds the single journey, its boards, edges and entry', () => {
     expect(model.journeyGroupId).toBe('g2');
-    expect(model.journeyFrames.map((f) => f.id)).toEqual(['f1', 'f2']);
-    expect(model.journeyArrows.map((a) => a.id)).toEqual(['a1']);
-    expect(model.journeyEntryId).toBe('f1');
+    expect(model.journeyBoards.map((b) => b.id)).toEqual(['b1', 'b2']);
+    expect(model.journeyEdges.map((e) => e.id)).toEqual(['e1']);
+    expect(model.journeyEntryId).toBe('b1');
   });
 
   it('has no journey when the board holds two', () => {
@@ -121,40 +166,42 @@ describe('buildBoardModel', () => {
         ...item,
         content: {
           ...content,
-          groups: [...content.groups, { desc: '', id: 'g4', kind: 'journey', title: '另一条' }],
+          groups: [...content.groups, { ...content.groups[1], id: 'g4', title: '另一条' }],
         },
       },
       {},
     );
     expect(twice.journeyGroupId).toBeUndefined();
-    expect(twice.journeyFrames).toEqual([]);
+    expect(twice.journeyBoards).toEqual([]);
   });
 
-  it('wraps each group around its frames and skips empty groups', () => {
-    expect(model.groupRects.g2).toEqual({ h: 512, w: 1576, x: -48, y: -64 });
-    expect(model.groupRects.g3).toBeUndefined();
+  it('lays an edge out between its two boards', () => {
+    expect(model.edges[0]).toMatchObject({ d: 'M640 200 H740 V200 H840', lx: 740, ly: 200 });
   });
 
-  it('drops arrows whose ends are gone and lays out the rest', () => {
-    expect(model.arrows).toEqual([
-      {
-        d: 'M640 200 H740 V200 H840',
-        from: 'f1',
-        id: 'a1',
-        label: '开始',
-        lx: 740,
-        ly: 200,
-        to: 'f2',
-      },
+  it('marks the board a round recommends', () => {
+    expect([...model.recommendedIds]).toEqual(['b3']);
+  });
+
+  it('lists open rounds and unanswered agent questions as what blocks finalizing', () => {
+    expect(model.blockers).toEqual([
+      { id: 'r1', kind: 'round', text: '布局' },
+      { boardId: 'b1', id: 'c1', kind: 'question', text: '要保留吗？' },
     ]);
   });
 
-  it('counts only open questions as pending', () => {
-    expect(model.questions.map((n) => n.id)).toEqual(['n2', 'n3']);
-    expect(model.openQuestions.map((n) => n.id)).toEqual(['n2']);
-  });
-
-  it('bounds every frame, note and group', () => {
-    expect(model.bounds).toEqual({ maxX: 1528, maxY: 1712, minX: -48, minY: -300 });
+  it('bounds the groups and the boards outside any group on the page', () => {
+    expect(model.bounds).toEqual({ maxX: 1528, maxY: 1448, minX: -48, minY: -144 });
+    const loose = buildBoardModel(
+      {
+        ...item,
+        content: {
+          ...content,
+          boards: [board('x', { groupId: null, rect: rect(3000, 0, 100, 50) })],
+        },
+      },
+      {},
+    );
+    expect(loose.bounds.maxX).toBe(3100);
   });
 });

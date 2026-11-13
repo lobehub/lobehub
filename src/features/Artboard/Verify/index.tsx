@@ -48,9 +48,9 @@ const styles = stylex.create({
   },
 });
 
-const resultCounts = (view: JourneyView | undefined, frameIds: string[]) => {
+const resultCounts = (view: JourneyView | undefined, boardIds: string[]) => {
   const counts = { blocked: 0, failed: 0, passed: 0, pending: 0 };
-  for (const id of frameIds) {
+  for (const id of boardIds) {
     const state = nodeState(view, id);
     if (state === 'passed' || state === 'failed') counts[state] += 1;
     else if (state) counts.blocked += 1;
@@ -64,9 +64,10 @@ const CheckList = () => {
   const board = useBoard();
   const journey = useJourneyView();
   const run = journey?.run;
+  const checks = board.journeyBoards.filter((item) => item.type !== 'decision');
   const counts = resultCounts(
     journey,
-    board.journeyFrames.map((f) => f.id),
+    checks.map((item) => item.id),
   );
 
   return (
@@ -74,22 +75,22 @@ const CheckList = () => {
       <Text style={{ fontSize: 12 }} type="secondary">
         {run ? t('artboard.verify.summary', counts) : t('artboard.verify.waiting')}
       </Text>
-      {board.journeyFrames.map((frame) => {
-        const review = nodeReview(journey, frame.id);
+      {checks.map((item) => {
+        const review = nodeReview(journey, item.id);
         return (
           <Flexbox
             gap={8}
-            key={frame.id}
+            key={item.id}
             {...stylex.props(styles.check)}
-            onClick={() => artboardActions.focusItem(frame.id)}
+            onClick={() => artboardActions.focusItem(item.id)}
           >
             <Flexbox horizontal align="flex-start" gap={8}>
-              <StatusTag state={nodeState(journey, frame.id)} />
-              <Text style={{ flex: 1, minWidth: 0 }}>{frame.check?.expected}</Text>
+              <StatusTag state={nodeState(journey, item.id)} />
+              <Text style={{ flex: 1, minWidth: 0 }}>{item.expected}</Text>
             </Flexbox>
             <Flexbox horizontal align="center" gap={8}>
               <Tag icon={<Icon icon={Link2Icon} />} size={'small'}>
-                {frame.title}
+                {item.title}
               </Tag>
               {review && (
                 <Text style={{ fontSize: 12 }} type="secondary">
@@ -111,7 +112,7 @@ const CheckList = () => {
 const VerifyPanel = ({ onClose }: { onClose?: () => void }) => {
   const { t } = useTranslation('project');
   const board = useBoard();
-  const selected = useArtboardStore(artboardSelectors.selectedCheckFrame(board));
+  const selected = useArtboardStore(artboardSelectors.selectedCheckBoard(board));
 
   return (
     <div {...stylex.props(styles.panel)}>
@@ -129,7 +130,7 @@ const VerifyPanel = ({ onClose }: { onClose?: () => void }) => {
         )}
       </Flexbox>
       <div {...stylex.props(styles.scroll)}>
-        {selected ? <CheckDetail frameId={selected} /> : <CheckList />}
+        {selected ? <CheckDetail boardId={selected} /> : <CheckList />}
       </div>
     </div>
   );

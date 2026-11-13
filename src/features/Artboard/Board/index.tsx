@@ -52,7 +52,7 @@ const Stage = ({ narrow }: { narrow: boolean }) => {
     verifyView: s.verifyView,
   }));
 
-  if (!board.frames.length && !board.notes.length)
+  if (!board.boards.length)
     return (
       <div {...stylex.props(styles.stage)}>
         <BoardEmpty />

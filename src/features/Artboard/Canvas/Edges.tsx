@@ -3,7 +3,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import { sx } from '@/styles/sx';
 
 import { useBoard } from '../BoardContext';
-import { type BoardArrow, computeArrowPath } from '../model';
+import type { BoardEdge } from '../model';
 import { useArtboardStore } from '../store';
 import { type FlowNodeState, nodeState } from '../Verify/flow';
 import { useJourneyView } from '../Verify/useJourneyView';
@@ -16,18 +16,18 @@ interface EdgeTone {
 }
 
 const toneOf = (
-  arrow: BoardArrow,
+  edge: BoardEdge,
   verify: boolean,
   states: Record<string, FlowNodeState>,
   hot: string | null,
 ): EdgeTone => {
   if (verify) {
-    const ends = [states[arrow.from], states[arrow.to]];
+    const ends = [states[edge.from], states[edge.to]];
     if (ends.includes('failed')) return { color: cssVar.colorError, strong: true };
     if (ends.every((x) => x === 'passed')) return { color: cssVar.colorSuccess, strong: true };
     return { color: cssVar.colorTextQuaternary, dash: '8 6', strong: false };
   }
-  if (hot && (arrow.from === hot || arrow.to === hot))
+  if (hot && (edge.from === hot || edge.to === hot))
     return { color: cssVar.colorPrimary, strong: true };
   return { color: cssVar.colorTextTertiary, strong: false };
 };
@@ -35,22 +35,14 @@ const toneOf = (
 const Edges = ({ k }: { k: number }) => {
   const board = useBoard();
   const journey = useJourneyView();
-  const { drag, hot, verify } = useArtboardStore((s) => ({
-    drag: s.drag,
+  const { hot, verify } = useArtboardStore((s) => ({
     hot: s.mode === 'discuss' ? s.selected : null,
     verify: s.mode === 'verify',
   }));
-  const arrows = drag
-    ? board.arrows.map((a) => {
-        if (a.from !== drag.id && a.to !== drag.id) return a;
-        const at = (id: string) => (id === drag.id ? drag : board.frameById[id]);
-        return { ...a, ...computeArrowPath(at(a.from), at(a.to)) };
-      })
-    : board.arrows;
   const states = Object.fromEntries(
-    board.arrows.flatMap((a) => [a.from, a.to]).map((id) => [id, nodeState(journey, id)]),
+    board.edges.flatMap((e) => [e.from, e.to]).map((id) => [id, nodeState(journey, id)]),
   );
-  const shown = arrows.map((a) => ({ arrow: a, tone: toneOf(a, verify, states, hot) }));
+  const shown = board.edges.map((edge) => ({ edge, tone: toneOf(edge, verify, states, hot) }));
 
   return (
     <>
@@ -65,10 +57,10 @@ const Edges = ({ k }: { k: number }) => {
           top: 0,
         }}
       >
-        {shown.map(({ arrow, tone }) => {
-          const markerId = `artboard-edge-${arrow.id}`;
+        {shown.map(({ edge, tone }) => {
+          const markerId = `artboard-edge-${edge.id}`;
           return (
-            <g key={arrow.id}>
+            <g key={edge.id}>
               <defs>
                 <marker
                   id={markerId}
@@ -83,7 +75,7 @@ const Edges = ({ k }: { k: number }) => {
                 </marker>
               </defs>
               <path
-                d={arrow.d}
+                d={edge.d}
                 fill="none"
                 markerEnd={`url(#${markerId})`}
                 stroke={tone.color}
@@ -98,18 +90,18 @@ const Edges = ({ k }: { k: number }) => {
         })}
       </svg>
       {k >= 0.3 &&
-        shown.map(({ arrow, tone }) => (
+        shown.map(({ edge, tone }) => (
           <div
-            key={arrow.id}
-            {...sx(canvasStyles.arrowLabel, undefined, {
+            key={edge.id}
+            {...sx(canvasStyles.edgeLabel, undefined, {
               borderColor: tone.strong ? tone.color : undefined,
               color: tone.strong ? tone.color : undefined,
-              left: arrow.lx,
-              top: arrow.ly,
+              left: edge.lx,
+              top: edge.ly,
               transform: `translate(-50%, -50%) scale(${1 / k})`,
             })}
           >
-            {arrow.label}
+            {edge.condition ? `${edge.label} · ${edge.condition}` : edge.label}
           </div>
         ))}
     </>

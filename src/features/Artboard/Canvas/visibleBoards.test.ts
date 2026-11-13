@@ -1,21 +1,27 @@
-import type { ArtboardFrame } from '@lobechat/types';
+import type { ArtboardBoardView } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { liveFrameKey } from './visibleFrames';
+import { liveBoardKey } from './visibleBoards';
 
-const frame = (id: string, x: number, y = 0) =>
-  ({ groupId: 'g', id, source: { fileId: 'f', kind: 'image' }, title: id, x, y }) as ArtboardFrame;
+const board = (id: string, x: number, w = 640) =>
+  ({ id, rect: { h: 400, w, x, y: 0 } }) as ArtboardBoardView;
 
-const frames = [frame('a', 0), frame('b', 840), frame('c', 4000)];
+const boards = [board('a', 0), board('b', 840), board('c', 4000)];
 const screen = { height: 800, width: 1200 };
 
-describe('liveFrameKey', () => {
-  it('loads only the frames that overlap the viewport', () => {
-    expect(liveFrameKey(frames, { ...screen, k: 1, x: 0, y: 0 })).toBe('a b');
-    expect(liveFrameKey(frames, { ...screen, k: 1, x: -700, y: 0 })).toBe('b');
+describe('liveBoardKey', () => {
+  it('loads only the boards that overlap the viewport', () => {
+    expect(liveBoardKey(boards, { ...screen, k: 1, x: 0, y: 0 })).toBe('a b');
+    expect(liveBoardKey(boards, { ...screen, k: 1, x: -700, y: 0 })).toBe('b');
   });
 
-  it('loads nothing while frames are too small to read', () => {
-    expect(liveFrameKey(frames, { ...screen, k: 0.3, x: 0, y: 0 })).toBe('');
+  it('loads nothing while boards are too small to read', () => {
+    expect(liveBoardKey(boards, { ...screen, k: 0.3, x: 0, y: 0 })).toBe('');
+  });
+
+  it('judges readability by each board’s own width', () => {
+    expect(
+      liveBoardKey([board('wide', 0, 1600), board('a', 0)], { ...screen, k: 0.3, x: 0, y: 0 }),
+    ).toBe('wide');
   });
 });

@@ -26,7 +26,7 @@ vi.mock('../useArtboardFeature', () => ({
 }));
 vi.mock('@/services/artboard', () => ({
   artboardService: {
-    get: async () => ({ artboard: { originTopicId: 'topic_1' } }),
+    get: async () => ({ artboard: { topicId: 'topic_1' } }),
     getConversation: async () => ({ agentId: 'agent_1', projectId: 'project_1', title: 'Origin' }),
   },
 }));
@@ -34,9 +34,7 @@ vi.mock('@/services/artboard', () => ({
 const refs = ['f1', 'f2'].map((itemId) => ({
   artboardId: 'art_1',
   itemId,
-  itemKind: 'frame' as const,
   itemTitle: itemId,
-  kind: 'comment' as const,
   text: `Comment on ${itemId}`,
 }));
 

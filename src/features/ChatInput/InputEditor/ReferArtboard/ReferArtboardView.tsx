@@ -1,9 +1,8 @@
 import { Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { CheckIcon, MessageSquareQuoteIcon, XIcon } from 'lucide-react';
+import { MessageSquareQuoteIcon, XIcon } from 'lucide-react';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import type { ArtboardReference } from './serialize';
 
@@ -47,35 +46,23 @@ interface ReferArtboardViewProps {
   reference: ArtboardReference;
 }
 
-export const ReferArtboardView = memo<ReferArtboardViewProps>(({ onRemove, reference }) => {
-  const { t } = useTranslation('project');
-  const target =
-    reference.itemKind === 'frame'
-      ? reference.itemTitle
-      : t('artboard.chat.stickyTarget', { text: reference.itemTitle });
-  const body =
-    reference.kind === 'decision'
-      ? t('artboard.chat.decided', { text: reference.text })
-      : reference.text;
-
-  return (
-    <span {...stylex.props(styles.root)}>
-      <Icon icon={reference.kind === 'decision' ? CheckIcon : MessageSquareQuoteIcon} size={12} />
-      <span {...stylex.props(styles.target)}>{target}</span>
-      <span {...stylex.props(styles.body)}>{body}</span>
-      {onRemove && (
-        <span
-          {...stylex.props(styles.close)}
-          onClick={(event) => {
-            event.stopPropagation();
-            onRemove();
-          }}
-        >
-          <Icon icon={XIcon} size={12} />
-        </span>
-      )}
-    </span>
-  );
-});
+export const ReferArtboardView = memo<ReferArtboardViewProps>(({ onRemove, reference }) => (
+  <span {...stylex.props(styles.root)}>
+    <Icon icon={MessageSquareQuoteIcon} size={12} />
+    <span {...stylex.props(styles.target)}>{reference.itemTitle}</span>
+    <span {...stylex.props(styles.body)}>{reference.text}</span>
+    {onRemove && (
+      <span
+        {...stylex.props(styles.close)}
+        onClick={(event) => {
+          event.stopPropagation();
+          onRemove();
+        }}
+      >
+        <Icon icon={XIcon} size={12} />
+      </span>
+    )}
+  </span>
+));
 
 ReferArtboardView.displayName = 'ReferArtboardView';

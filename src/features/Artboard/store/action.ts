@@ -2,7 +2,7 @@ import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { BoardMode, CameraTarget, VerifyView } from '../types';
-import { type ArtboardState, type DragPosition, initialState } from './initialState';
+import { type ArtboardState, initialState } from './initialState';
 import { useArtboardStore } from './store';
 
 const n = setNamespace('artboard');
@@ -59,8 +59,6 @@ export class ArtboardActionImpl {
     this.#set({ flash: ids }, false, n('flash'));
     this.#flashTimer = setTimeout(() => this.#set({ flash: [] }, false, n('flashDone')), FLASH_MS);
   };
-
-  setDrag = (drag: DragPosition | null) => this.#set({ drag }, false, n('drag'));
 
   setGallery = (gallery: ArtboardState['gallery']) => {
     const state = this.#get();

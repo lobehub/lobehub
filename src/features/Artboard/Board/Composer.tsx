@@ -28,13 +28,8 @@ const Composer = () => {
   const [text, setText] = useState('');
   const selected = useArtboardStore((s) => (s.mode === 'discuss' ? s.selected : null));
   const locked = useArtboardStore(artboardSelectors.isQuoteLocked(board));
-  const reference = selected ? boardReference(board, selected, 'comment', text) : undefined;
+  const reference = selected ? boardReference(board, selected, text) : undefined;
   if (!selected || !reference) return null;
-
-  const target =
-    reference.itemKind === 'frame'
-      ? reference.itemTitle
-      : t('artboard.chat.stickyTarget', { text: reference.itemTitle });
 
   const send = () => {
     if (!reference.text) return;
@@ -53,7 +48,7 @@ const Composer = () => {
           style={{ maxWidth: '100%' }}
           onClose={() => artboardActions.select(null)}
         >
-          {t('artboard.chat.quote', { target })}
+          {t('artboard.chat.quote', { target: reference.itemTitle })}
         </Tag>
       </Flexbox>
       {locked && (

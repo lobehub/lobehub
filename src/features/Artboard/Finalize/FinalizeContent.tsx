@@ -31,15 +31,18 @@ const styles = stylex.create({
   },
 });
 
-type StructureIssue = Exclude<ArtboardFinalizeIssue, { code: 'missing_check' | 'open_question' }>;
+type StructureIssue = Exclude<
+  ArtboardFinalizeIssue,
+  { code: 'missing_check' | 'open_question' | 'open_round' }
+>;
 
 const isStructureIssue = (issue: ArtboardFinalizeIssue): issue is StructureIssue =>
-  issue.code !== 'missing_check' && issue.code !== 'open_question';
+  issue.code !== 'missing_check' && issue.code !== 'open_question' && issue.code !== 'open_round';
 
 const issueText = (board: BoardModel, t: TFunction<'project'>, issue: StructureIssue) =>
   issue.code === 'unreachable'
     ? t('artboard.finalize.issue.unreachable', {
-        title: board.frameById[issue.frameId]?.title ?? issue.frameId,
+        title: board.boardById[issue.boardId]?.title ?? issue.boardId,
       })
     : t(`artboard.finalize.issue.${issue.code}`);
 
@@ -53,8 +56,7 @@ const FinalizeContent = ({ artboardId }: { artboardId: string }) => {
 
   const issues = checkFinalizeReadiness(board.artboard.content);
   const structureIssues = issues.filter(isStructureIssue);
-  const pendingLeft = board.openQuestions.length;
-  const checks = board.journeyFrames;
+  const checks = board.journeyBoards.filter((item) => item.type !== 'decision');
   const { artboard } = board;
 
   const confirm = async () => {
@@ -96,7 +98,7 @@ const FinalizeContent = ({ artboardId }: { artboardId: string }) => {
         <Flexbox gap={4}>
           {structureIssues.map((issue) => (
             <Text
-              key={issue.code === 'unreachable' ? `${issue.code}:${issue.frameId}` : issue.code}
+              key={issue.code === 'unreachable' ? `${issue.code}:${issue.boardId}` : issue.code}
               type="warning"
             >
               {issueText(board, t, issue)}
@@ -104,35 +106,33 @@ const FinalizeContent = ({ artboardId }: { artboardId: string }) => {
           ))}
         </Flexbox>
       )}
-      {board.questions.length > 0 && (
+      {board.blockers.length > 0 && (
         <Flexbox gap={8}>
           <Text strong>
-            {pendingLeft
-              ? t('artboard.finalize.pendingTitle', { count: pendingLeft })
-              : t('artboard.finalize.pendingDone')}
+            {t('artboard.finalize.pendingTitle', { count: board.blockers.length })}
           </Text>
-          {board.questions.map((note) => (
-            <PendingItem artboardId={artboardId} key={note.id} noteId={note.id} onDiscuss={close} />
+          {board.blockers.map((blocker) => (
+            <PendingItem blocker={blocker} key={blocker.id} onDiscuss={close} />
           ))}
         </Flexbox>
       )}
       {checks.length > 0 && (
         <Flexbox gap={4}>
           <Text strong>{t('artboard.finalize.checksTitle', { count: checks.length })}</Text>
-          {checks.map((frame) => (
+          {checks.map((item) => (
             <Flexbox
               horizontal
               align="center"
               gap={8}
-              key={frame.id}
+              key={item.id}
               {...stylex.props(styles.check)}
             >
-              <Text style={{ flex: 1, minWidth: 0 }} type={frame.check ? undefined : 'warning'}>
-                {frame.check?.expected || t('artboard.finalize.missingCheck')}
+              <Text style={{ flex: 1, minWidth: 0 }} type={item.expected ? undefined : 'warning'}>
+                {item.expected || t('artboard.finalize.missingCheck')}
               </Text>
               <Tag size={'small'}>
-                {frame.title}
-                {frame.source.kind === 'canvas' ? ` · v${frame.source.version}` : ''}
+                {item.title}
+                {item.source?.kind === 'canvas' ? ` · v${item.source.version}` : ''}
               </Tag>
             </Flexbox>
           ))}

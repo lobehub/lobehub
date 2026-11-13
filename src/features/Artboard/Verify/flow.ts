@@ -7,101 +7,127 @@ export type FlowRun = FlowVersion['runs'][number];
 export type FlowNodeState = ReturnType<typeof getFlowNodeState>;
 
 export interface JourneyView {
-  edgeOf: (arrowId: string) => string | undefined;
-  frameOf: (nodeKey: string) => string | undefined;
-  nodeOf: (frameId: string) => string | undefined;
+  boardOf: (nodeKey: string) => string | undefined;
+  nodeOf: (boardId: string) => string | undefined;
   run: FlowRun | undefined;
   version: FlowVersion;
 }
 
+const foldDecisions = (board: BoardModel) => {
+  const decisions = new Set(
+    board.journeyBoards.filter((item) => item.type === 'decision').map((item) => item.id),
+  );
+  return board.journeyEdges.flatMap((edge) => {
+    if (decisions.has(edge.from)) return [];
+    if (!decisions.has(edge.to))
+      return [
+        {
+          condition: edge.condition ?? undefined,
+          from: edge.from,
+          id: edge.id,
+          to: edge.to,
+          trigger: edge.label,
+        },
+      ];
+    return board.journeyEdges
+      .filter((branch) => branch.from === edge.to && !decisions.has(branch.to))
+      .map((branch) => ({
+        condition: branch.condition ?? branch.label,
+        from: edge.from,
+        id: `${edge.id}:${branch.id}`,
+        to: branch.to,
+        trigger: edge.label,
+      }));
+  });
+};
+
 export const draftJourneyView = (board: BoardModel): JourneyView | undefined => {
   const entry = board.journeyEntryId;
-  if (!entry || !board.journeyFrames.length) return;
+  const steps = board.journeyBoards.filter((item) => item.type !== 'decision');
+  if (!entry || !steps.length) return;
 
-  const edges = board.journeyArrows.map((arrow) => ({
-    condition: undefined,
-    edgeKey: arrow.id,
-    id: arrow.id,
+  const edges = foldDecisions(board).map((edge) => ({
+    condition: edge.condition,
+    edgeKey: edge.id,
+    id: edge.id,
     required: true,
-    sourceNodeId: arrow.from,
-    sourceNodeKey: arrow.from,
-    targetNodeId: arrow.to,
-    targetNodeKey: arrow.to,
-    trigger: arrow.label,
+    sourceNodeId: edge.from,
+    sourceNodeKey: edge.from,
+    targetNodeId: edge.to,
+    targetNodeKey: edge.to,
+    trigger: edge.trigger,
   }));
-  const ids = new Set(board.journeyFrames.map((f) => f.id));
+  const ids = new Set(steps.map((item) => item.id));
 
   const version: FlowVersion = {
     edges,
     entryNodeKey: entry,
     flowId: board.artboard.id,
     id: board.artboard.id,
-    nodes: board.journeyFrames.map((frame) => {
+    nodes: steps.map((item) => {
       const items = [
-        ...(frame.id === entry ? [`${frame.id}:entry`] : []),
-        ...edges.filter((e) => e.targetNodeKey === frame.id).map((e) => `${frame.id}:${e.id}`),
+        ...(item.id === entry ? [`${item.id}:entry`] : []),
+        ...edges.filter((e) => e.targetNodeKey === item.id).map((e) => `${item.id}:${e.id}`),
       ];
-      const expected = frame.check?.expected ?? '';
+      const expected = item.expected ?? '';
       return {
         checkItemIds: items,
         criterionId: undefined,
         definition: { expected },
         entryRequired: true,
         expected,
-        id: frame.id,
+        id: item.id,
         instruction: '',
-        isEntry: frame.id === entry,
-        nodeKey: frame.id,
+        isEntry: item.id === entry,
+        nodeKey: item.id,
         parentNodeId: undefined,
         requiredCheckItemIds: items,
         resourceSnapshot: undefined,
         subFlowId: undefined,
-        title: frame.title,
+        title: item.title,
       };
     }),
     runs: [],
-    title: board.groups.find((g) => g.id === board.journeyGroupId)?.title ?? '',
+    title: board.artboard.content.groups.find((g) => g.id === board.journeyGroupId)?.title ?? '',
     version: 1,
   };
 
-  const arrowIds = new Set(edges.map((e) => e.id));
   return {
-    edgeOf: (arrowId) => (arrowIds.has(arrowId) ? arrowId : undefined),
-    frameOf: (nodeKey) => (ids.has(nodeKey) ? nodeKey : undefined),
-    nodeOf: (frameId) => (ids.has(frameId) ? frameId : undefined),
+    boardOf: (nodeKey) => (ids.has(nodeKey) ? nodeKey : undefined),
+    nodeOf: (boardId) => (ids.has(boardId) ? boardId : undefined),
     run: undefined,
     version,
   };
 };
 
-export const nodeAttempts = (view: JourneyView | undefined, frameId: string) => {
-  const nodeKey = view?.nodeOf(frameId);
+export const nodeAttempts = (view: JourneyView | undefined, boardId: string) => {
+  const nodeKey = view?.nodeOf(boardId);
   if (!view?.run || !nodeKey) return [];
   const node = view.version.nodes.find((n) => n.nodeKey === nodeKey);
   return view.run.attempts.filter((attempt) => attempt.nodeId === node?.id);
 };
 
-export const nodeState = (view: JourneyView | undefined, frameId: string): FlowNodeState => {
-  const nodeKey = view?.nodeOf(frameId);
+export const nodeState = (view: JourneyView | undefined, boardId: string): FlowNodeState => {
+  const nodeKey = view?.nodeOf(boardId);
   if (!view || !nodeKey) return undefined;
   return getFlowNodeState(
     nodeKey,
     view.version.entryNodeKey,
     view.version.edges,
-    nodeAttempts(view, frameId),
+    nodeAttempts(view, boardId),
   );
 };
 
-export const nodeReview = (view: JourneyView | undefined, frameId: string) =>
-  nodeAttempts(view, frameId)[0]?.review ?? undefined;
+export const nodeReview = (view: JourneyView | undefined, boardId: string) =>
+  nodeAttempts(view, boardId)[0]?.review ?? undefined;
 
-export const framePreview = (
+export const boardPreview = (
   view: JourneyView | undefined,
-  frameId: string,
+  boardId: string,
   showReal: boolean,
 ): { kind: 'reference' | 'unavailable' } | { kind: 'screenshot'; url: string } => {
   if (!showReal) return { kind: 'reference' };
-  const url = nodeAttempts(view, frameId)
+  const url = nodeAttempts(view, boardId)
     .flatMap((attempt) => attempt.evidence)
     .find((evidence) => evidence.type === 'screenshot' && evidence.fileUrl)?.fileUrl;
   return url ? { kind: 'screenshot', url } : { kind: 'unavailable' };

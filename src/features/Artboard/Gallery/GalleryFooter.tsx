@@ -56,9 +56,7 @@ const GalleryFooter = ({ artboardId, onLeave }: GalleryFooterProps) => {
               size={'small'}
               onClose={() => artboardActions.removeGalleryRef(index)}
             >
-              {ref.kind === 'decision'
-                ? t('artboard.chat.decided', { text: ref.text })
-                : `${ref.itemTitle} · ${ref.text}`}
+              {`${ref.itemTitle} · ${ref.text}`}
             </Tag>
           ))}
         </Flexbox>

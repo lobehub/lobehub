@@ -27,32 +27,37 @@ const styles = stylex.create({
   },
 });
 
-const CheckDetail = ({ frameId }: { frameId: string }) => {
+const CheckDetail = ({ boardId }: { boardId: string }) => {
   const { t } = useTranslation('project');
   const board = useBoard();
   const { acceptanceId, journey, refresh } = useBoardAcceptance();
   const [saving, setSaving] = useState(false);
-  const frame = board.frameById[frameId];
-  if (!frame) return null;
+  const item = board.boardById[boardId];
+  if (!item) return null;
 
-  const state = nodeState(journey, frameId);
-  const attempts = nodeAttempts(journey, frameId);
+  const state = nodeState(journey, boardId);
+  const attempts = nodeAttempts(journey, boardId);
+  const nodeKey = journey?.nodeOf(boardId);
   const verdictOf = (edgeId: string | null) =>
     attempts.find((attempt) => attempt.incomingEdgeId === edgeId)?.verdict;
   const paths = [
-    ...(frameId === board.journeyEntryId ? [{ edgeId: null, label: null }] : []),
-    ...board.journeyArrows
-      .filter((arrow) => arrow.to === frameId)
-      .map((arrow) => ({
-        edgeId: journey?.edgeOf(arrow.id) ?? arrow.id,
-        label: `${board.frameById[arrow.from]?.title} → ${arrow.label}`,
-      })),
+    ...(boardId === board.journeyEntryId ? [{ edgeId: null, label: null }] : []),
+    ...(journey && nodeKey ? journey.version.edges : [])
+      .filter((edge) => edge.targetNodeKey === nodeKey)
+      .map((edge) => {
+        const from = journey?.boardOf(edge.sourceNodeKey);
+        const step = edge.condition ? `${edge.trigger} · ${edge.condition}` : edge.trigger;
+        return {
+          edgeId: edge.id,
+          label: `${(from && board.boardById[from]?.title) ?? ''} → ${step}`,
+        };
+      }),
   ];
   const observation = attempts[0]?.observation;
   const shot = attempts
     .flatMap((attempt) => attempt.evidence)
     .find((e) => e.type === 'screenshot' && e.fileUrl)?.fileUrl;
-  const review = nodeReview(journey, frameId);
+  const review = nodeReview(journey, boardId);
   const reviewable = attempts.filter((a) => a.verdict === 'passed' || a.verdict === 'failed');
 
   const submitReview = async (verdict: 'accepted' | 'rejected') => {
@@ -72,7 +77,7 @@ const CheckDetail = ({ frameId }: { frameId: string }) => {
       await refresh();
       toast.success(
         t(verdict === 'accepted' ? 'artboard.verify.accepted' : 'artboard.verify.rejected', {
-          id: frame.title,
+          id: item.title,
         }),
       );
     } catch (error) {
@@ -99,11 +104,11 @@ const CheckDetail = ({ frameId }: { frameId: string }) => {
       <Flexbox horizontal align="center" gap={8}>
         <StatusTag state={state} />
         <Text ellipsis style={{ fontSize: 12 }} type="secondary">
-          {frame.title}
+          {item.title}
         </Text>
       </Flexbox>
       <Text strong style={{ fontSize: 15, marginTop: 6 }}>
-        {frame.check?.expected}
+        {item.expected}
       </Text>
       <Flexbox gap={6} {...stylex.props(styles.section)}>
         <Text style={{ fontSize: 12 }} type="secondary">
@@ -123,10 +128,10 @@ const CheckDetail = ({ frameId }: { frameId: string }) => {
           <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
             <Text style={{ fontSize: 12 }} type="secondary">
               {t('artboard.verify.reference', {
-                rev: frame.source.kind === 'canvas' ? frame.source.version : 1,
+                rev: item.source?.kind === 'canvas' ? item.source.version : 1,
               })}
             </Text>
-            <Thumb frame={frame} />
+            <Thumb board={item} />
           </Flexbox>
           <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
             <Text style={{ fontSize: 12 }} type="secondary">
@@ -135,7 +140,7 @@ const CheckDetail = ({ frameId }: { frameId: string }) => {
             {shot ? (
               <div {...stylex.props(thumbStyles.box)}>
                 <img
-                  alt={frame.title}
+                  alt={item.title}
                   src={shot}
                   style={{ height: '100%', objectFit: 'cover', width: '100%' }}
                 />

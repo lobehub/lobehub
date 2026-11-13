@@ -1,7 +1,7 @@
 import { type PointerEvent, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 
-import { type BoardModel, frameRect, noteRect, type Rect } from '../model';
-import { artboardActions, useArtboardStore } from '../store';
+import { type BoardModel, type Rect, toBounds } from '../model';
+import { useArtboardStore } from '../store';
 
 export interface ViewState {
   k: number;
@@ -25,28 +25,28 @@ const zoomAround = (v: ViewState, k: number, px: number, py: number): ViewState 
 const LABEL_SPACE = 40;
 
 const itemRect = (board: BoardModel, id: string): Rect | undefined => {
-  const frame = board.frameById[id];
-  const note = board.noteById[id];
-  const rect = frame ? frameRect(frame) : note ? noteRect(note) : undefined;
-  return rect && { ...rect, minY: rect.minY - LABEL_SPACE };
+  const item = board.boardById[id];
+  if (!item) return;
+  const rect = toBounds(item.rect);
+  return { ...rect, minY: rect.minY - LABEL_SPACE };
 };
 
 const groupBounds = (board: BoardModel, id: string | undefined): Rect | undefined => {
-  const r = id ? board.groupRects[id] : undefined;
-  return r && { maxX: r.x + r.w, maxY: r.y + r.h, minX: r.x, minY: r.y - LABEL_SPACE };
+  const group = id ? board.groups.find((g) => g.id === id) : undefined;
+  if (!group) return;
+  const rect = toBounds(group.rect);
+  return { ...rect, minY: rect.minY - LABEL_SPACE };
 };
 
 export const useViewport = (
   ref: RefObject<HTMLDivElement | null>,
   board: BoardModel,
   onBackgroundClick: () => void,
-  onItemDrop: (id: string, x: number, y: number) => void,
 ) => {
   const [view, setView] = useState<ViewState>({ k: 0.3, x: 40, y: 200 });
   const [flying, setFlying] = useState(false);
   const [panning, setPanning] = useState(false);
   const drag = useRef<{
-    item?: { id: string; x: number; y: number };
     moved: boolean;
     onItem: boolean;
     pointerId: number;
@@ -166,16 +166,9 @@ export const useViewport = (
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0 || drag.current) return;
-    const itemEl = (e.target as HTMLElement).closest<HTMLElement>('[data-board-item]');
-    const itemId = itemEl?.dataset.itemId;
-    const movable =
-      itemId && useArtboardStore.getState().mode === 'discuss'
-        ? (board.frameById[itemId] ?? board.noteById[itemId])
-        : undefined;
     drag.current = {
-      item: movable && { id: movable.id, x: movable.x, y: movable.y },
       moved: false,
-      onItem: !!itemEl,
+      onItem: !!(e.target as HTMLElement).closest('[data-board-item]'),
       pointerId: e.pointerId,
       sx: e.clientX,
       sy: e.clientY,
@@ -194,18 +187,8 @@ export const useViewport = (
     if (!d.moved) {
       d.moved = true;
       e.currentTarget.setPointerCapture(e.pointerId);
-      if (!d.item) {
-        target.current = null;
-        setPanning(true);
-      }
-    }
-    if (d.item) {
-      artboardActions.setDrag({
-        id: d.item.id,
-        x: Math.round(d.item.x + dx / view.k),
-        y: Math.round(d.item.y + dy / view.k),
-      });
-      return;
+      target.current = null;
+      setPanning(true);
     }
     setView((v) => ({ ...v, x: d.vx + dx, y: d.vy + dy }));
   };
@@ -216,8 +199,6 @@ export const useViewport = (
     drag.current = null;
     setPanning(false);
     if (d?.moved) suppressClick.current = true;
-    const dropped = useArtboardStore.getState().drag;
-    if (d?.item && d.moved && dropped) onItemDrop(dropped.id, dropped.x, dropped.y);
     if (d && !d.moved && !d.onItem) onBackgroundClick();
   };
 

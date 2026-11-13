@@ -37,7 +37,7 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
   const { t } = useTranslation('project');
   const board = useBoard();
   const { finalized } = board;
-  const pendingLeft = board.openQuestions.length;
+  const pendingLeft = board.blockers.length;
   const { mode, outlineOpen, verifyOpen } = useArtboardStore((s) => ({
     mode: s.mode,
     outlineOpen: s.outlineOpen,

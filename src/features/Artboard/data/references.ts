@@ -4,19 +4,15 @@ import type { BoardModel } from '../model';
 
 export const boardReference = (
   board: BoardModel,
-  itemId: string,
-  kind: ArtboardReference['kind'],
+  boardId: string,
   text: string,
 ): ArtboardReference | undefined => {
-  const frame = board.frameById[itemId];
-  const note = frame ? undefined : board.noteById[itemId];
-  if (!frame && !note) return;
+  const target = board.boardById[boardId];
+  if (!target) return;
   return {
     artboardId: board.artboard.id,
-    itemId,
-    itemKind: frame ? 'frame' : 'note',
-    itemTitle: frame ? frame.title : note!.text,
-    kind,
+    itemId: boardId,
+    itemTitle: target.title,
     text: text.trim(),
   };
 };

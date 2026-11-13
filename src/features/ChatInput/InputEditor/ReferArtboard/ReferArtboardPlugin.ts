@@ -32,7 +32,7 @@ export interface ReferArtboardPluginOptions {
   decorator: (node: ReferArtboardNode, editor: LexicalEditor) => any;
 }
 
-const ATTRS = ['artboardId', 'itemId', 'itemKind', 'itemTitle', 'kind', 'text'] as const;
+const ATTRS = ['artboardId', 'itemId', 'itemTitle', 'text'] as const;
 
 const isReferenceParagraph = (node: LexicalNode) =>
   $isElementNode(node) && node.getChildren().some((child) => $isReferArtboardNode(child));

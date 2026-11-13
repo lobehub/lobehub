@@ -1,4 +1,3 @@
-import { toast } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import { useSize } from 'ahooks';
 import { memo, useMemo, useRef } from 'react';
@@ -6,17 +5,15 @@ import { memo, useMemo, useRef } from 'react';
 import { sx } from '@/styles/sx';
 
 import { useBoard } from '../BoardContext';
-import { moveBoardItem } from '../data/moveBoardItem';
 import type { BoardModel } from '../model';
 import { artboardActions } from '../store';
+import BoardNode from './BoardNode';
 import Edges from './Edges';
-import FrameNode from './FrameNode';
 import Groups from './Groups';
-import Notes from './Notes';
 import { SelectionBar, ZoomBar } from './Overlays';
 import { canvasStyles } from './styles';
 import { useViewport } from './useViewport';
-import { liveFrameKey } from './visibleFrames';
+import { liveBoardKey } from './visibleBoards';
 
 interface ContentProps {
   board: BoardModel;
@@ -30,10 +27,9 @@ const Content = memo<ContentProps>(({ board, k, live }) => {
   return (
     <>
       <Groups k={k} />
-      <Notes />
       <Edges k={k} />
-      {board.frames.map((frame) => (
-        <FrameNode frame={frame} k={k} key={frame.id} live={liveIds.has(frame.id)} />
+      {board.boards.map((item) => (
+        <BoardNode board={item} k={k} key={item.id} live={liveIds.has(item.id)} />
       ))}
     </>
   );
@@ -42,31 +38,17 @@ const Content = memo<ContentProps>(({ board, k, live }) => {
 Content.displayName = 'ArtboardCanvasContent';
 
 const clearSelection = () => artboardActions.select(null);
-const clearDrag = () => artboardActions.setDrag(null);
 
 const Canvas = ({ narrow }: { narrow: boolean }) => {
   const board = useBoard();
   const ref = useRef<HTMLDivElement>(null);
   const size = useSize(ref);
-  const dropItem = (id: string, x: number, y: number) => {
-    moveBoardItem(
-      { artboard: board.artboard, imageUrls: board.imageUrls },
-      id,
-      x,
-      y,
-      clearDrag,
-    ).catch((error: Error) => {
-      clearDrag();
-      toast.error(error.message);
-    });
-  };
   const { fitAll, flying, handlers, panning, view, zoomBy } = useViewport(
     ref,
     board,
     clearSelection,
-    dropItem,
   );
-  const live = size ? liveFrameKey(board.frames, { ...view, ...size }) : '';
+  const live = size ? liveBoardKey(board.boards, { ...view, ...size }) : '';
 
   return (
     <>

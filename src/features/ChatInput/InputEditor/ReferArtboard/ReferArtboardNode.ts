@@ -31,15 +31,10 @@ export class ReferArtboardNode extends DecoratorNode<any> implements HeadlessRen
   }
 
   static importJSON(serialized: SerializedReferArtboardNode): ReferArtboardNode {
-    const { artboardId, itemId, itemKind, itemTitle, kind, text } = serialized;
-    return $createReferArtboardNode({
-      artboardId,
-      itemId,
-      itemKind,
-      itemTitle,
-      kind,
-      text,
-    }).updateFromJSON(serialized);
+    const { artboardId, itemId, itemTitle, text } = serialized;
+    return $createReferArtboardNode({ artboardId, itemId, itemTitle, text }).updateFromJSON(
+      serialized,
+    );
   }
 
   static importDOM(): null {

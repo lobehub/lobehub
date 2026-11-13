@@ -8,28 +8,25 @@ const board = buildBoardModel(
   {
     acceptanceId: null,
     content: {
-      arrows: [],
-      frames: [
+      boards: [
         {
+          expected: null,
+          flowNodeId: null,
           groupId: 'g1',
-          id: 'f1',
+          id: 'b1',
+          pageId: 'p1',
+          rect: { h: 400, w: 640, x: 0, y: 0 },
+          roundId: null,
           source: { canvasId: 'cvs_1', kind: 'canvas', version: 1 },
           title: '空项目',
-          x: 0,
-          y: 0,
+          type: 'html',
         },
       ],
-      groups: [{ desc: '', id: 'g1', kind: 'journey', title: '旅程' }],
-      notes: [
-        {
-          id: 'n1',
-          kind: 'sticky',
-          question: { status: 'open', suggestion: '保留' },
-          text: '要保留吗？',
-          x: 0,
-          y: 0,
-        },
-      ],
+      edges: [],
+      groups: [],
+      pages: [{ id: 'p1', name: 'Page 1', sortOrder: 0 }],
+      questions: [],
+      rounds: [],
     },
     id: 'art_1',
     phase: 'discuss',
@@ -39,26 +36,16 @@ const board = buildBoardModel(
 );
 
 describe('boardReference', () => {
-  it('names a frame by its title', () => {
-    expect(boardReference(board, 'f1', 'comment', ' 改短 ')).toEqual({
+  it('names a board by its title', () => {
+    expect(boardReference(board, 'b1', ' 改短 ')).toEqual({
       artboardId: 'art_1',
-      itemId: 'f1',
-      itemKind: 'frame',
+      itemId: 'b1',
       itemTitle: '空项目',
-      kind: 'comment',
       text: '改短',
     });
   });
 
-  it('names a sticky by its text', () => {
-    expect(boardReference(board, 'n1', 'decision', '保留')).toMatchObject({
-      itemKind: 'note',
-      itemTitle: '要保留吗？',
-      kind: 'decision',
-    });
-  });
-
-  it('refers to nothing for an item that is gone', () => {
-    expect(boardReference(board, 'f9', 'comment', 'x')).toBeUndefined();
+  it('refers to nothing for a board that is gone', () => {
+    expect(boardReference(board, 'b9', 'x')).toBeUndefined();
   });
 });

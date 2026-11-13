@@ -6,7 +6,7 @@ import { sx } from '@/styles/sx';
 
 import { useBoard } from '../BoardContext';
 import { useArtboardStore } from '../store';
-import { ScaledLabel } from './FrameLabel';
+import { ScaledLabel } from './BoardLabel';
 import { canvasStyles } from './styles';
 
 const Groups = ({ k }: { k: number }) => {
@@ -15,8 +15,8 @@ const Groups = ({ k }: { k: number }) => {
   const verify = useArtboardStore((s) => s.mode === 'verify');
 
   return board.groups.map((group) => {
-    const rect = board.groupRects[group.id];
-    if (!rect) return null;
+    const { rect } = group;
+    if (!rect.w || !rect.h) return null;
     const journey = group.id === board.journeyGroupId;
     const locked = board.finalized && journey;
     const desc = locked

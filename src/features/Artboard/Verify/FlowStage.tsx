@@ -84,7 +84,7 @@ const FlowStage = () => {
           viewKey={`${viewId}:${Math.round(width)}`}
           onSelect={(id) => {
             const nodeKey = graph.checks.get(id)?.node.nodeKey;
-            artboardActions.select((nodeKey && journey.frameOf(nodeKey)) ?? null);
+            artboardActions.select((nodeKey && journey.boardOf(nodeKey)) ?? null);
           }}
         />
       </ReactFlowProvider>

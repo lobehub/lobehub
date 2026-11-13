@@ -1,6 +1,4 @@
-import type { ArtboardFrame } from '@lobechat/types';
-
-import { FRAME_H, FRAME_W } from '../model';
+import type { ArtboardBoardView } from '@lobechat/types';
 
 export const LIVE_MIN_WIDTH = 240;
 
@@ -12,19 +10,18 @@ interface Viewport {
   y: number;
 }
 
-export const liveFrameKey = (frames: ArtboardFrame[], view: Viewport) => {
-  if (FRAME_W * view.k < LIVE_MIN_WIDTH) return '';
-  return frames
-    .filter((f) => {
-      const left = f.x * view.k + view.x;
-      const top = f.y * view.k + view.y;
+export const liveBoardKey = (boards: ArtboardBoardView[], view: Viewport) =>
+  boards
+    .filter(({ rect }) => {
+      if (rect.w * view.k < LIVE_MIN_WIDTH) return false;
+      const left = rect.x * view.k + view.x;
+      const top = rect.y * view.k + view.y;
       return (
         left < view.width &&
         top < view.height &&
-        left + FRAME_W * view.k > 0 &&
-        top + FRAME_H * view.k > 0
+        left + rect.w * view.k > 0 &&
+        top + rect.h * view.k > 0
       );
     })
-    .map((f) => f.id)
+    .map((b) => b.id)
     .join(' ');
-};

@@ -44,7 +44,7 @@ const BoardCard = ({ apiName, args, messageId, pluginError, pluginState }: Board
         </Text>
         <Text ellipsis style={{ fontSize: 12 }} type={'secondary'}>
           {t('artboard.card.summary', {
-            frames: pluginState.frameCount,
+            boards: pluginState.boardCount,
             groups: pluginState.groupCount,
           })}
         </Text>

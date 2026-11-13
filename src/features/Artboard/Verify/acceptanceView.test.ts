@@ -1,33 +1,15 @@
-import type { ArtboardItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { buildBoardModel } from '../model';
 import { acceptanceJourneyView } from './acceptanceView';
-import { framePreview, nodeState } from './flow';
+import { boardPreview, nodeState } from './flow';
+import { testBoard, testEdge, testModel } from './testBoard';
 
-const board = buildBoardModel(
+const board = testModel(
   {
-    acceptanceId: 'acc_1',
-    content: {
-      arrows: [{ flowEdgeId: 'edge-k1', from: 'f1', id: 'a1', label: '下一步', to: 'f2' }],
-      frames: ['f1', 'f2'].map((id, i) => ({
-        check: { expected: `${id} works` },
-        flowNodeId: `node-k${i + 1}`,
-        groupId: 'g1',
-        id,
-        source: { canvasId: `cvs_${id}`, kind: 'canvas' as const, version: 1 },
-        title: id,
-        x: i * 840,
-        y: 0,
-      })),
-      groups: [{ desc: '', id: 'g1', kind: 'journey', title: '旅程' }],
-      notes: [],
-    },
-    id: 'art_1',
-    phase: 'finalized',
-    revision: 2,
-  } as ArtboardItem,
-  {},
+    boards: ['b1', 'b2'].map((id, i) => testBoard(id, { flowNodeId: `node-k${i + 1}` })),
+    edges: [testEdge('e1', 'b1', 'b2', { flowEdgeId: 'edge-k1', label: '下一步' })],
+  },
+  { acceptanceId: 'acc_1', phase: 'finalized', revision: 2 },
 );
 
 const attempt = (nodeId: string, incomingEdgeId: string | null, verdict: string) => ({
@@ -63,8 +45,8 @@ const version = {
   flowId: 'flow_1',
   id: 'ver_1',
   nodes: [
-    { id: 'node_db_1', nodeKey: 'node-k1', title: 'f1' },
-    { id: 'node_db_2', nodeKey: 'node-k2', title: 'f2' },
+    { id: 'node_db_1', nodeKey: 'node-k1', title: 'b1' },
+    { id: 'node_db_2', nodeKey: 'node-k2', title: 'b2' },
   ],
   runs: [
     {
@@ -86,39 +68,38 @@ const bundle = {
 describe('acceptanceJourneyView', () => {
   const view = acceptanceJourneyView(board, bundle)!;
 
-  it('maps flow nodes and edges back to frames and arrows by their flow ids', () => {
-    expect(view.nodeOf('f2')).toBe('node-k2');
-    expect(view.frameOf('node-k1')).toBe('f1');
-    expect(view.edgeOf('a1')).toBe('edge_db_1');
+  it('maps flow nodes back to boards by their flow ids', () => {
+    expect(view.nodeOf('b2')).toBe('node-k2');
+    expect(view.boardOf('node-k1')).toBe('b1');
   });
 
-  it('reads each frame’s verdict from the latest round', () => {
-    expect(nodeState(view, 'f1')).toBe('passed');
-    expect(nodeState(view, 'f2')).toBe('failed');
+  it('reads each board’s verdict from the latest round', () => {
+    expect(nodeState(view, 'b1')).toBe('passed');
+    expect(nodeState(view, 'b2')).toBe('failed');
   });
 
-  it('finds nothing for a board whose frames are not in the bundle', () => {
+  it('finds nothing for a board whose boards are not in the bundle', () => {
     expect(acceptanceJourneyView(board, { flows: [], rounds: [] } as any)).toBeUndefined();
   });
 
-  it('switches from the pinned reference to the actual screenshot for the journey frame', () => {
+  it('switches from the pinned reference to the actual screenshot for the journey board', () => {
     const withEvidence = structuredClone(bundle);
     withEvidence.flows[0].versions[0].runs[0].attempts[0].evidence = [
       { fileUrl: 'https://evidence.test/log.txt', type: 'log' },
-      { fileUrl: 'https://evidence.test/f1.png', type: 'screenshot' },
+      { fileUrl: 'https://evidence.test/b1.png', type: 'screenshot' },
     ];
     const journey = acceptanceJourneyView(board, withEvidence);
 
-    expect(framePreview(journey, 'f1', false)).toEqual({ kind: 'reference' });
-    expect(framePreview(journey, 'f1', true)).toEqual({
+    expect(boardPreview(journey, 'b1', false)).toEqual({ kind: 'reference' });
+    expect(boardPreview(journey, 'b1', true)).toEqual({
       kind: 'screenshot',
-      url: 'https://evidence.test/f1.png',
+      url: 'https://evidence.test/b1.png',
     });
-    expect(framePreview(journey, 'f1', false)).toEqual({ kind: 'reference' });
+    expect(boardPreview(journey, 'b1', false)).toEqual({ kind: 'reference' });
   });
 
-  it('shows unavailable evidence rather than the reference or another frame screenshot', () => {
-    expect(framePreview(view, 'f2', true)).toEqual({ kind: 'unavailable' });
-    expect(framePreview(undefined, 'f1', true)).toEqual({ kind: 'unavailable' });
+  it('shows unavailable evidence rather than the reference or another board screenshot', () => {
+    expect(boardPreview(view, 'b2', true)).toEqual({ kind: 'unavailable' });
+    expect(boardPreview(undefined, 'b1', true)).toEqual({ kind: 'unavailable' });
   });
 });

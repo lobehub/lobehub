@@ -15,7 +15,6 @@ import { sx } from '@/styles/sx';
 
 import { focusComposer } from '../Board/focusComposer';
 import { useBoard } from '../BoardContext';
-import { FRAME_W } from '../model';
 import { useArtboardStore } from '../store';
 import type { ViewState } from './useViewport';
 
@@ -40,15 +39,15 @@ export const floatStyles = stylex.create({
 export const SelectionBar = ({ view }: { view: ViewState }) => {
   const { t } = useTranslation('project');
   const board = useBoard();
-  const frame = useArtboardStore((s) =>
-    s.mode === 'discuss' && s.selected ? board.frameById[s.selected] : undefined,
+  const selected = useArtboardStore((s) =>
+    s.mode === 'discuss' && s.selected ? board.boardById[s.selected] : undefined,
   );
-  if (!frame) return null;
+  if (!selected || selected.pageId !== board.pageId) return null;
 
-  const { source } = frame;
-  const imageUrl = source.kind === 'image' ? board.imageUrls[source.fileId] : undefined;
+  const { rect, source } = selected;
+  const imageUrl = source?.kind === 'image' ? board.imageUrls[source.fileId] : undefined;
   const openFull = () => {
-    if (source.kind === 'canvas') void openCanvasModal(source.canvasId, source.version);
+    if (source?.kind === 'canvas') void openCanvasModal(source.canvasId, source.version);
     else if (imageUrl) window.open(imageUrl, '_blank', 'noopener');
   };
 
@@ -58,12 +57,12 @@ export const SelectionBar = ({ view }: { view: ViewState }) => {
       gap={2}
 
       {...sx([floatStyles.float, floatStyles.selectionBar], undefined, {
-        left: (frame.x + FRAME_W) * view.k + view.x,
-        top: frame.y * view.k + view.y,
+        left: (rect.x + rect.w) * view.k + view.x,
+        top: rect.y * view.k + view.y,
       })}
     >
       <ActionIcon
-        disabled={source.kind === 'image' && !imageUrl}
+        disabled={source?.kind === 'canvas' ? false : !imageUrl}
         icon={Maximize2Icon}
         size={'small'}
         title={t('artboard.selection.view')}

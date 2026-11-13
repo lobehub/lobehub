@@ -53,8 +53,8 @@ const Outline = () => {
         {t('artboard.outline.title')}
       </Text>
       {board.groups.map((group) => {
-        const frames = board.frames.filter((f) => f.groupId === group.id);
-        if (!frames.length) return null;
+        const members = board.boards.filter((b) => b.groupId === group.id);
+        if (!members.length) return null;
         return (
           <Flexbox key={group.id}>
             <div
@@ -63,13 +63,13 @@ const Outline = () => {
             >
               {group.title}
             </div>
-            {frames.map((frame) => (
+            {members.map((member) => (
               <div
-                key={frame.id}
-                {...stylex.props(styles.item, selected === frame.id && styles.itemActive)}
-                onClick={() => artboardActions.focusItem(frame.id)}
+                key={member.id}
+                {...stylex.props(styles.item, selected === member.id && styles.itemActive)}
+                onClick={() => artboardActions.focusItem(member.id)}
               >
-                {frame.title}
+                {member.title}
               </div>
             ))}
           </Flexbox>

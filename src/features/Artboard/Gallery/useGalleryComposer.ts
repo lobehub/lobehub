@@ -25,7 +25,7 @@ export const useGalleryComposer = (artboardId: string, onLeave: () => void) => {
   const refs = useArtboardStore((s) => s.galleryRefs);
   const { data } = useArtboard(artboardId);
   const artboard = data?.artboard;
-  const topicId = artboard?.originTopicId ?? null;
+  const topicId = artboard?.topicId ?? null;
   const { data: topic } = useClientDataSWR(topicId ? ['artboard-topic', topicId] : null, () =>
     artboardService.getConversation(topicId!),
   );

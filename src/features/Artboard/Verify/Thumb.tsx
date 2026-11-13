@@ -1,4 +1,4 @@
-import type { ArtboardFrame } from '@lobechat/types';
+import type { ArtboardBoardView } from '@lobechat/types';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
@@ -6,8 +6,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { sx } from '@/styles/sx';
 
 import { useBoard } from '../BoardContext';
-import FrameBody from '../Canvas/FrameBody';
-import { FRAME_H, FRAME_W } from '../model';
+import BoardBody from '../Canvas/BoardBody';
 
 export const thumbStyles = stylex.create({
   box: {
@@ -33,17 +32,19 @@ export const thumbStyles = stylex.create({
   },
 });
 
-export const Thumb = ({ frame, tone }: { frame: ArtboardFrame; tone?: string }) => {
+export const Thumb = ({ board: item, tone }: { board: ArtboardBoardView; tone?: string }) => {
   const board = useBoard();
+  const { h, w } = item.rect;
+  const { source } = item;
   const ref = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.3);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const observer = new ResizeObserver(() => setScale(el.clientWidth / FRAME_W));
+    const observer = new ResizeObserver(() => setScale(el.clientWidth / w));
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [w]);
 
   return (
     <div
@@ -52,19 +53,17 @@ export const Thumb = ({ frame, tone }: { frame: ArtboardFrame; tone?: string }) 
     >
       <div
         style={{
-          height: FRAME_H,
+          height: h,
           pointerEvents: 'none',
           transform: `scale(${scale})`,
           transformOrigin: '0 0',
-          width: FRAME_W,
+          width: w,
         }}
       >
-        <FrameBody
+        <BoardBody
           live
-          frame={frame}
-          imageUrl={
-            frame.source.kind === 'image' ? board.imageUrls[frame.source.fileId] : undefined
-          }
+          board={item}
+          imageUrl={source?.kind === 'image' ? board.imageUrls[source.fileId] : undefined}
         />
       </div>
     </div>

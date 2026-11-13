@@ -8,29 +8,22 @@ export const acceptanceJourneyView = (
   board: BoardModel,
   bundle: Pick<AcceptanceBundle, 'flows' | 'rounds'>,
 ): JourneyView | undefined => {
-  const frameByNode = new Map(
-    board.journeyFrames.flatMap((f) => (f.flowNodeId ? [[f.flowNodeId, f.id] as const] : [])),
+  const boardByNode = new Map(
+    board.journeyBoards.flatMap((b) => (b.flowNodeId ? [[b.flowNodeId, b.id] as const] : [])),
   );
-  if (!frameByNode.size) return;
+  if (!boardByNode.size) return;
 
   const views = getFlowRoundViews(bundle.flows, bundle.rounds).filter((view) =>
-    view.version.nodes.some((node) => frameByNode.has(node.nodeKey)),
+    view.version.nodes.some((node) => boardByNode.has(node.nodeKey)),
   );
   const view = views.find((v) => v.roundIndex !== undefined) ?? views[0];
   if (!view) return;
 
-  const nodeByFrame = new Map([...frameByNode].map(([node, frame]) => [frame, node]));
-  const edgeByKey = new Map(view.version.edges.map((edge) => [edge.edgeKey, edge.id]));
-  const arrowEdge = new Map(
-    board.journeyArrows.flatMap((a) =>
-      a.flowEdgeId && edgeByKey.has(a.flowEdgeId) ? [[a.id, edgeByKey.get(a.flowEdgeId)!]] : [],
-    ),
-  );
+  const nodeByBoard = new Map([...boardByNode].map(([node, id]) => [id, node]));
 
   return {
-    edgeOf: (arrowId) => arrowEdge.get(arrowId),
-    frameOf: (nodeKey) => frameByNode.get(nodeKey),
-    nodeOf: (frameId) => nodeByFrame.get(frameId),
+    boardOf: (nodeKey) => boardByNode.get(nodeKey),
+    nodeOf: (boardId) => nodeByBoard.get(boardId),
     run: view.run,
     version: view.version,
   };

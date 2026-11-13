@@ -1,4 +1,4 @@
-import type { ArtboardFrame } from '@lobechat/types';
+import type { ArtboardBoardView } from '@lobechat/types';
 import { Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { ImageIcon, LockIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -7,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 import { flowStateColor } from '@/features/Acceptance/Viewer/Flow/FlowNode';
 import { sx } from '@/styles/sx';
 
-import { FRAME_W } from '../model';
 import StatusTag, { stateIcon } from '../StatusTag';
 import type { FlowNodeState } from '../Verify/flow';
 import { canvasStyles } from './styles';
@@ -31,64 +30,65 @@ export const ScaledLabel = ({ children, gap = 8, k, width }: ScaledLabelProps) =
   </div>
 );
 
-interface FrameLabelProps {
-  frame: ArtboardFrame;
+interface BoardLabelProps {
+  board: ArtboardBoardView;
   k: number;
   linked: boolean;
+  recommended: boolean;
   state?: FlowNodeState;
   verify: boolean;
 }
 
-const FrameLabel = ({ frame, k, linked, state, verify }: FrameLabelProps) => {
+const BoardLabel = ({ board, k, linked, recommended, state, verify }: BoardLabelProps) => {
   const { t } = useTranslation('project');
-  const screenWidth = FRAME_W * k;
+  const { source } = board;
+  const width = board.rect.w;
+  const screenWidth = width * k;
   if (screenWidth < 90) return null;
 
   if (screenWidth < 320)
     return (
-      <ScaledLabel gap={4} k={k} width={FRAME_W}>
+      <ScaledLabel gap={4} k={k} width={width}>
         <Flexbox horizontal align="center" gap={4} style={{ minWidth: 0 }}>
           {verify && linked && (
             <Icon color={flowStateColor(state)} icon={stateIcon(state)} size={12} />
           )}
           <Text ellipsis strong style={{ fontSize: 12 }}>
-            {frame.title}
+            {board.title}
           </Text>
         </Flexbox>
       </ScaledLabel>
     );
 
   return (
-    <ScaledLabel k={k} width={FRAME_W}>
+    <ScaledLabel k={k} width={width}>
       <Flexbox
         horizontal
         align="center"
         gap={6}
         style={{ minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap' }}
       >
-        <Text code style={{ flex: 'none', fontSize: 11 }} type="secondary">
-          {frame.id}
-        </Text>
         <Text ellipsis strong style={{ fontSize: 13 }}>
-          {frame.title}
+          {board.title}
         </Text>
-        {frame.recommended && (
+        {recommended && (
           <Tag color="success" size={'small'}>
-            {t('artboard.frame.recommended')}
+            {t('artboard.board.recommended')}
           </Tag>
         )}
-        {frame.source.kind === 'image' && (
+        {board.type === 'decision' && <Tag size={'small'}>{t('artboard.board.decision')}</Tag>}
+        {source?.kind === 'image' && (
           <Tag icon={<Icon icon={ImageIcon} />} size={'small'}>
-            {t('artboard.frame.image')}
+            {t('artboard.board.image')}
           </Tag>
         )}
-        {frame.source.kind === 'canvas' && frame.source.version > 1 && (
-          <Tag size={'small'}>v{frame.source.version}</Tag>
+        {source?.kind === 'canvas' && source.version > 1 && (
+          <Tag size={'small'}>v{source.version}</Tag>
         )}
         <div style={{ flex: 1 }} />
         {linked && !verify && (
           <Tag icon={<Icon icon={LockIcon} />} size={'small'}>
-            {t('artboard.frame.locked')}
+            {t('artboard.board.locked')}
           </Tag>
         )}
         {verify && linked && <StatusTag state={state} />}
@@ -97,4 +97,4 @@ const FrameLabel = ({ frame, k, linked, state, verify }: FrameLabelProps) => {
   );
 };
 
-export default FrameLabel;
+export default BoardLabel;
