@@ -106,7 +106,9 @@ export class ChannelCoordinator {
               claim = await claimNow();
             await Promise.all([
               notifyChannel(this.db, channelId),
-              claim ? this.dispatch(claim, channel.workspaceId) : undefined,
+              claim
+                ? this.dispatch(claim, channel.workspaceId, channel.projectId)
+                : undefined,
             ]);
           }
         },
@@ -139,7 +141,17 @@ export class ChannelCoordinator {
     return this.executions.assignWorktree(channelId, candidate, created.path);
   }
 
-  private async dispatch({ job, member, topic }: ChannelClaim, workspaceId: string | null) {
+  /**
+   * `projectId` is the Channel's own project (`channels.projectId`), not one inferred
+   * from the Agent: a Channel that belongs to a project runs inside it. It travels as
+   * `appContext.projectId` so the run gets the project prompt, is recognised as the
+   * project coordinator, and files the tasks it creates under the project.
+   */
+  private async dispatch(
+    { job, member, topic }: ChannelClaim,
+    workspaceId: string | null,
+    projectId?: string | null,
+  ) {
     if (
       !job.operationId ||
       !job.leaseOwner ||
@@ -225,7 +237,7 @@ export class ChannelCoordinator {
         additionalPluginIds: [ChannelIdentifier],
         agentId: member.agentId,
         agentConfigSnapshot: config,
-        appContext: { topicId: topic.id },
+        appContext: { ...(projectId ? { projectId } : {}), topicId: topic.id },
         deviceId: config.deviceId,
         disableLocalSystem: !config.deviceId,
         ...attachments,
