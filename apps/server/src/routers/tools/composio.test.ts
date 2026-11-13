@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { composioToolsRouter } from './composio';
 
 const mocks = vi.hoisted(() => ({
+  agentExistsById: vi.fn(),
   connectorForRow: vi.fn(),
   connectorPickLegacyMirrors: vi.fn(),
   connectorResolveByIdentifiers: vi.fn(),
@@ -15,6 +16,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(async () => ({})) }));
+
+vi.mock('@/database/models/agent', () => ({
+  AgentModel: vi.fn().mockImplementation(function () {
+    return { existsById: mocks.agentExistsById };
+  }),
+}));
 
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn().mockImplementation(function () {
@@ -56,6 +63,7 @@ const input = { identifier: 'gmail', toolArgs: { to: 'a@b.c' }, toolSlug: 'GMAIL
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.agentExistsById.mockResolvedValue(true);
   mocks.connectorResolveByIdentifiers.mockResolvedValue([]);
   mocks.connectorPickLegacyMirrors.mockImplementation(async (mirrors: unknown[]) => mirrors);
   mocks.isComposioNotFound.mockImplementation(function (error: unknown) {
@@ -198,6 +206,7 @@ describe('composioToolsRouter.executeAction', () => {
 
     await caller().executeAction({ ...input, agentId: 'agt-private', topicId: 'tpc-direct' });
 
+    expect(mocks.agentExistsById).toHaveBeenCalledWith('agt-private');
     expect(mocks.connectorResolveByIdentifiers).toHaveBeenCalledWith(['gmail'], {
       agentId: 'agt-private',
       topicId: 'tpc-direct',
@@ -206,6 +215,31 @@ describe('composioToolsRouter.executeAction', () => {
       'GMAIL_SEND_EMAIL',
       expect.objectContaining({ connectedAccountId: 'ca-private' }),
     );
+  });
+
+  /**
+   * @example
+   * expect(executeAction({ agentId: hiddenAgent })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+   */
+  it('refuses to run as an agent the caller cannot see', async () => {
+    // ROOT CAUSE:
+    //
+    // The route forwarded the client's agentId to the resolver unchecked, and an agent's own
+    // rows (`agent_id = agentId`) are scoped by workspace only. A teammate who kept the id of
+    // an agent made private since ran its agent-owned Composio account with any tool and
+    // arguments. Connector calls check the agent first (`resolveConnectorForRun`).
+    mocks.agentExistsById.mockResolvedValue(false);
+    mocks.connectorResolveByIdentifiers.mockResolvedValue([
+      { id: 'conn-agent', metadata: { composio: { connectedAccountId: 'ca-agent' } } },
+    ]);
+
+    await expect(
+      caller().executeAction({ ...input, agentId: 'agt-hidden', topicId: 'tpc-any' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mocks.agentExistsById).toHaveBeenCalledWith('agt-hidden');
+    expect(mocks.connectorResolveByIdentifiers).not.toHaveBeenCalled();
+    expect(mocks.pluginQueryMirrors).not.toHaveBeenCalled();
+    expect(mocks.toolsExecute).not.toHaveBeenCalled();
   });
 
   it('throws NOT_FOUND when neither source has a connection', async () => {

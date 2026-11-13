@@ -2,6 +2,7 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { getComposioClient, isComposioConnectedAccountNotFoundError } from '@/libs/composio';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
@@ -21,13 +22,17 @@ const composioProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
   // Composio connection (workspace_id = wsId) rather than only the personal one.
   // Personal mode (wsId undefined) falls back to `workspace_id IS NULL`.
   const wsId = ctx.workspaceId ?? undefined;
+  // Visibility-aware: decides whether the caller may run a call as an agent.
+  const agentModel = new AgentModel(ctx.serverDB, ctx.userId, wsId);
   const connectorModel = new ConnectorModel(ctx.serverDB, ctx.userId, wsId);
   const composioService = new ComposioService({
     db: ctx.serverDB,
     userId: ctx.userId,
     workspaceId: wsId,
   });
-  return opts.next({ ctx: { ...ctx, composioClient, composioService, connectorModel } });
+  return opts.next({
+    ctx: { ...ctx, agentModel, composioClient, composioService, connectorModel },
+  });
 });
 
 export const composioToolsRouter = router({
@@ -49,25 +54,34 @@ export const composioToolsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const notFound = () =>
+        new TRPCError({
+          code: 'NOT_FOUND',
+          message: `No Composio connection found for "${input.identifier}".`,
+        });
+
+      // The agent comes from the client, and an agent's own rows
+      // (`agent_id = agentId`) are scoped by workspace only: a teammate who
+      // kept the id of an agent made private since would otherwise run its
+      // agent-owned Composio account. Only an agent the caller can see may be
+      // resolved, as a connector call checks (`resolveConnectorForRun`); any
+      // other id reads as not found.
+      if (input.agentId && !(await ctx.agentModel.existsById(input.agentId))) throw notFound();
+
       // Resolve the connected account server-side, never from a client-supplied
       // connectedAccountId (that would let a user drive another user's
       // connection), and through the resolver the agent runtime uses, in the
       // conversation the call came from: it only serves a connector that run
       // may use (the workspace's shared ones, plus the owner's private ones in
-      // their private agent's own direct topic — proven in SQL, so naming an
-      // agent or topic the caller does not own widens nothing), and never the
-      // plugin mirror of a connector row it left out. `ownerUserId` is the
-      // Composio entity that linked the account, not the caller.
+      // their private agent's own direct topic — proven in SQL, so naming a
+      // topic the caller does not own widens nothing), and never the plugin
+      // mirror of a connector row it left out. `ownerUserId` is the Composio
+      // entity that linked the account, not the caller.
       const account = await ctx.composioService.resolveComposioAccount(input.identifier, {
         agentId: input.agentId,
         topicId: input.topicId,
       });
-      if (!account) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: `No Composio connection found for "${input.identifier}".`,
-        });
-      }
+      if (!account) throw notFound();
       const { connectedAccountId, connector, ownerUserId } = account;
 
       let result: unknown;
