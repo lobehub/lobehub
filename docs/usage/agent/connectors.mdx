@@ -258,6 +258,35 @@ LobeHub’s community offers many third-party skills and MCP integrations. Go to
 
 Review the description and required permissions before installing, and use extensions from sources you trust. Configure account access or an execution environment for extensions that need external services or scripts.
 
+<a id="event-subscriptions" />
+
+## Event subscriptions
+
+Some connectors can tell an agent when something happens: a CI check fails, an issue is filed, a deployment finishes. Ask in a conversation, for example "Tell me when CI fails on this PR". The agent looks up the matching event on the connector and asks you to approve a subscription.
+
+The approval card shows the connector and event, the filter (which repository, team, or resource), and what the agent will do each time the event arrives. **Each event runs the agent once in this topic and uses credits, and the subscription stays active until you delete it.** To change the filter or the instruction, reject the request and tell the agent what you want instead.
+
+After you approve, events arrive in the same topic as a message from the connector, with the event data and the instruction you approved. Events that arrive close together are handled in one run. The agent handles them without you; tools set to require approval still wait for you in the conversation. Event data comes from outside LobeHub, so the agent treats it as information, not as instructions.
+
+A connector supports event subscriptions when its detail page shows **Event subscriptions supported** under Connection. It also needs a remote MCP server that offers events, and an authorized account.
+
+### Manage subscriptions
+
+Open **Settings → Automations**, or the Automations tab in workspace settings. Each row shows the subscription, its status, the agent and topic it runs in, and when the last event arrived.
+
+| Status           | Meaning                                                          | What to do                                                       |
+| ---------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Active           | Events are delivered                                             | Nothing. A note under the status explains a skipped run.         |
+| Reconnect needed | The connector's authorization has expired                        | Reconnect the connector in **Settings → Connectors**             |
+| Delivery failing | The connector reported delivery problems or paused delivery      | Click **Check**                                                  |
+| Ended            | The connector ended the subscription, for example access revoked | Delete it, then ask the agent to subscribe again if still needed |
+
+**Check** asks the connector whether the subscription is still delivering, and resumes delivery the connector has paused. Subscriptions are not checked automatically, so use Check when events you expect stop arriving.
+
+Deleting a subscription stops its events from running the agent. Moving the topic or the agent to the trash, or deleting the connector, also removes its subscriptions; restoring the topic does not bring them back. In a workspace, every member can see the list, and only the member who approved a subscription or a workspace admin can check or delete it.
+
+On a self-hosted deployment, an administrator must enable event subscriptions first. See [Feature flags](/docs/self-hosting/advanced/feature-flags).
+
 <a id="import-skills" />
 
 ## Import your own skills
