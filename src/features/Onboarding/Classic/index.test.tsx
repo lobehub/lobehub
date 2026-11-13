@@ -1,7 +1,7 @@
 import { CLASSIC_ONBOARDING_MAX_STEP } from '@lobechat/types';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ClassicOnboardingPage from './index';
@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   enableComposio: true,
   goToNextStep: vi.fn(),
   goToPreviousStep: vi.fn(),
+  isFinished: false,
   isUserStateInit: true,
   serverConfigInit: true,
   setOnboardingStep: vi.fn(),
@@ -35,14 +36,30 @@ vi.mock('@/features/Onboarding/Layout', () => ({
 }));
 
 vi.mock('@/features/Onboarding/steps/AgentPickerStep', () => ({
-  default: ({ onBack }: { onBack: () => void }) => (
+  default: ({
+    onBack,
+    onFinished,
+  }: {
+    onBack: () => void;
+    onFinished?: (targetUrl: string) => void;
+  }) => (
     <div>
       AgentPickerStep
       <button type="button" onClick={onBack}>
         agent-back
       </button>
+      <button type="button" onClick={() => onFinished?.('/')}>
+        agent-finish-home
+      </button>
+      <button type="button" onClick={() => onFinished?.('/invite/abc')}>
+        agent-finish-callback
+      </button>
     </div>
   ),
+}));
+
+vi.mock('@/features/Onboarding/steps/TaskKickoffStep', () => ({
+  default: () => <div>TaskKickoffStep</div>,
 }));
 
 vi.mock('@/features/Onboarding/steps/FullNameStep', () => ({
@@ -115,6 +132,7 @@ vi.mock('@/store/user', () => ({
       commonStepsCompleted: boolean;
       currentStep: number;
       goToNextStep: () => void;
+      isFinished: boolean;
       goToPreviousStep: () => void;
       isUserStateInit: boolean;
       setOnboardingStep: (step: number) => void;
@@ -125,6 +143,7 @@ vi.mock('@/store/user', () => ({
       currentStep: mocks.currentStep,
       goToNextStep: mocks.goToNextStep,
       goToPreviousStep: mocks.goToPreviousStep,
+      isFinished: mocks.isFinished,
       isUserStateInit: mocks.isUserStateInit,
       setOnboardingStep: mocks.setOnboardingStep,
     }),
@@ -134,13 +153,20 @@ vi.mock('@/store/user/selectors', () => ({
   onboardingSelectors: {
     commonStepsCompleted: (s: { commonStepsCompleted: boolean }) => s.commonStepsCompleted,
     currentStep: (s: { currentStep: number }) => s.currentStep,
+    isFinished: (s: { isFinished: boolean }) => s.isFinished,
   },
 }));
 
-const renderClassic = () =>
+const LocationProbe = () => {
+  const location = useLocation();
+  return <div data-testid="location">{location.pathname + location.search}</div>;
+};
+
+const renderClassic = (entry = '/onboarding/classic') =>
   render(
-    <MemoryRouter initialEntries={['/onboarding/classic']}>
+    <MemoryRouter initialEntries={[entry]}>
       <ClassicOnboardingPage />
+      <LocationProbe />
     </MemoryRouter>,
   );
 
@@ -150,6 +176,7 @@ beforeEach(() => {
   mocks.enableComposio = true;
   mocks.goToNextStep.mockReset();
   mocks.goToPreviousStep.mockReset();
+  mocks.isFinished = false;
   mocks.isUserStateInit = true;
   mocks.serverConfigInit = true;
   mocks.setOnboardingStep.mockReset();
@@ -295,5 +322,56 @@ describe('ClassicOnboardingPage', () => {
       stepIndex: 3,
     });
     expect(mocks.goToNextStep).toHaveBeenCalled();
+  });
+
+  describe('task kickoff hand-off', () => {
+    it('hands a plain finish off to the kickoff step', async () => {
+      mocks.currentStep = CLASSIC_ONBOARDING_MAX_STEP;
+
+      renderClassic();
+      fireEvent.click(screen.getByText('agent-finish-home'));
+      mocks.isFinished = true;
+
+      expect(screen.getByTestId('location').textContent).toBe('/onboarding/classic?kickoff=1');
+    });
+
+    it('goes straight to a signup callback target', () => {
+      mocks.currentStep = CLASSIC_ONBOARDING_MAX_STEP;
+
+      renderClassic();
+      fireEvent.click(screen.getByText('agent-finish-callback'));
+
+      expect(screen.getByTestId('location').textContent).toBe('/invite/abc');
+    });
+
+    it('keeps the agent skip entry navigating to its target', () => {
+      mocks.currentStep = CLASSIC_ONBOARDING_MAX_STEP;
+
+      renderClassic('/onboarding/classic?entry=skip');
+      fireEvent.click(screen.getByText('agent-finish-home'));
+
+      expect(screen.getByTestId('location').textContent).toBe('/');
+    });
+
+    it('renders the kickoff step once onboarding is finished', async () => {
+      mocks.currentStep = CLASSIC_ONBOARDING_MAX_STEP;
+      mocks.isFinished = true;
+
+      renderClassic('/onboarding/classic?kickoff=1');
+
+      expect(screen.getByText('TaskKickoffStep')).toBeTruthy();
+      expect(screen.queryByText('AgentPickerStep')).toBeNull();
+      // The agentpicker view is not re-tracked under the kickoff step.
+      await waitFor(() => expect(metrics.trackOnboardingStepViewed).not.toHaveBeenCalled());
+    });
+
+    it('ignores the kickoff param before onboarding is finished', () => {
+      mocks.currentStep = CLASSIC_ONBOARDING_MAX_STEP;
+
+      renderClassic('/onboarding/classic?kickoff=1');
+
+      expect(screen.getByText('AgentPickerStep')).toBeTruthy();
+      expect(screen.queryByText('TaskKickoffStep')).toBeNull();
+    });
   });
 });
