@@ -328,6 +328,7 @@ export class ServerToolTransport implements ToolTransport {
               ),
               taskId: context.state.origin?.taskId,
               threadId: context.state.origin?.threadId,
+              todoCallStreak: context.todoCallStreak,
               toolCallId: chatToolPayload.id,
               enabledToolIds,
               toolManifestMap: context.effectiveManifestMap,

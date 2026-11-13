@@ -272,6 +272,7 @@ class LobeAgentExecutionRuntime {
   private planContext = (ctx?: ToolExecutionContext) => ({
     currentTodos: ctx?.currentTodos,
     messageId: this.messageId,
+    todoCallStreak: ctx?.todoCallStreak,
     topicId: this.topicId,
   });
 
