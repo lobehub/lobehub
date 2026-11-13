@@ -33,6 +33,7 @@ const log = debug('lobe-server:agent-runtime-service');
 export type RuntimeFactoryDeps = Pick<
   AgentRuntimeServiceContext,
   | 'agentFactory'
+  | 'baseURL'
   | 'completeGroupMemberBarrier'
   | 'coordinator'
   | 'delegate'
@@ -298,6 +299,19 @@ export async function createAgentRuntime(
     messageModel: deps.messageModel,
     modelRuntimeConfig,
     operationId,
+    scheduleShellExpiry: deps.queueService
+      ? async ({ delayMs, operationId: expiryOperationId, toolCallId, toolMessageId }) => {
+          await deps.queueService!.scheduleMessage({
+            context: undefined,
+            delay: delayMs,
+            endpoint: `${deps.baseURL}/shell-expire`,
+            operationId: expiryOperationId,
+            payload: { expireShell: true, toolCallId, toolMessageId },
+            priority: 'low',
+            stepIndex: 0,
+          });
+        }
+      : undefined,
     serverDB: deps.serverDB,
     stepIndex,
     stream: plan?.stream,
