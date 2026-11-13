@@ -240,6 +240,11 @@ const PluginTag = memo<PluginTagProps>(
 
     // Custom connector state
     const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+    // Marketplace MCPs installed on the connector path, without a legacy plugin row
+    const marketplaceConnectors = useToolStore(
+      connectorSelectors.marketplaceMcpConnectors,
+      isEqual,
+    );
 
     // Check if plugin is installed
     const isInstalled = useToolStore(pluginSelectors.isPluginInstalled(identifier));
@@ -324,6 +329,21 @@ const PluginTag = memo<PluginTagProps>(
         };
       }
 
+      // A marketplace MCP installed as a connector alone: listed as the plugin it
+      // replaces, as Settings lists it
+      const marketplaceConnector = marketplaceConnectors.find((c) => c.identifier === identifier);
+      if (marketplaceConnector) {
+        const { avatar, description } = marketplaceConnector.metadata ?? {};
+        return {
+          availableInWeb: true,
+          avatar: typeof avatar === 'string' ? avatar : undefined,
+          description: typeof description === 'string' ? description : undefined,
+          isInstalled: true,
+          title: marketplaceConnector.name || identifier,
+          type: 'plugin' as const,
+        };
+      }
+
       // Agent-only connector not found in any user store: use its own row + MCP
       // icon so it renders installed (not a warning "Not Installed" chip).
       if (agentConn) {
@@ -353,6 +373,7 @@ const PluginTag = memo<PluginTagProps>(
       isLobehubSkillEnabled,
       allLobehubSkillServers,
       customConnectors,
+      marketplaceConnectors,
       useAllMetaList,
     ]);
 
@@ -441,7 +462,8 @@ const PluginTag = memo<PluginTagProps>(
     );
     const connectorTools = (
       agentConnectors.find((c) => c.identifier === identifier) ??
-      customConnectors.find((c) => c.identifier === identifier)
+      customConnectors.find((c) => c.identifier === identifier) ??
+      marketplaceConnectors.find((c) => c.identifier === identifier)
     )?.tools;
     const toolList: ItemDetail['tools'] = connectorTools?.length
       ? connectorTools.map((tool) => ({
