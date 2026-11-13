@@ -1,5 +1,7 @@
 import type { ArtboardBoardView } from '@lobechat/types';
 import { Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ImageIcon, LockIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +12,30 @@ import { sx } from '@/styles/sx';
 import StatusTag, { stateIcon } from '../StatusTag';
 import type { FlowNodeState } from '../Verify/flow';
 import { canvasStyles } from './styles';
+
+const styles = stylex.create({
+  radio: {
+    backgroundColor: cssVar.colorBgContainer,
+    borderColor: cssVar.colorBorder,
+    borderRadius: '50%',
+    borderStyle: 'solid',
+    borderWidth: 1,
+    cursor: 'pointer',
+    flex: 'none',
+    height: 14,
+    pointerEvents: 'auto',
+    width: 14,
+  },
+  radioChecked: {
+    borderColor: cssVar.colorPrimary,
+    borderWidth: 4,
+    cursor: 'default',
+  },
+  radioDisabled: {
+    cursor: 'not-allowed',
+    opacity: 0.6,
+  },
+});
 
 interface ScaledLabelProps {
   children: ReactNode;
@@ -30,8 +56,32 @@ export const ScaledLabel = ({ children, gap = 8, k, width }: ScaledLabelProps) =
   </div>
 );
 
+export interface BoardChoice {
+  checked: boolean;
+  disabled: boolean;
+  onPick: () => void;
+}
+
+const ChoiceRadio = ({ checked, disabled, onPick }: BoardChoice) => (
+  <span
+    aria-checked={checked}
+    aria-disabled={disabled}
+    role="radio"
+    {...stylex.props(
+      styles.radio,
+      checked && styles.radioChecked,
+      disabled && styles.radioDisabled,
+    )}
+    onClick={(event) => {
+      event.stopPropagation();
+      if (!disabled && !checked) onPick();
+    }}
+  />
+);
+
 interface BoardLabelProps {
   board: ArtboardBoardView;
+  choice?: BoardChoice;
   k: number;
   linked: boolean;
   recommended: boolean;
@@ -39,7 +89,7 @@ interface BoardLabelProps {
   verify: boolean;
 }
 
-const BoardLabel = ({ board, k, linked, recommended, state, verify }: BoardLabelProps) => {
+const BoardLabel = ({ board, choice, k, linked, recommended, state, verify }: BoardLabelProps) => {
   const { t } = useTranslation('project');
   const { source } = board;
   const width = board.rect.w;
@@ -53,6 +103,7 @@ const BoardLabel = ({ board, k, linked, recommended, state, verify }: BoardLabel
           {verify && linked && (
             <Icon color={flowStateColor(state)} icon={stateIcon(state)} size={12} />
           )}
+          {choice && <ChoiceRadio {...choice} />}
           <Text ellipsis strong style={{ fontSize: 12 }}>
             {board.title}
           </Text>
@@ -68,6 +119,7 @@ const BoardLabel = ({ board, k, linked, recommended, state, verify }: BoardLabel
         gap={6}
         style={{ minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap' }}
       >
+        {choice && <ChoiceRadio {...choice} />}
         <Text ellipsis strong style={{ fontSize: 13 }}>
           {board.title}
         </Text>

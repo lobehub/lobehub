@@ -7,3 +7,8 @@ export const finalizeArtboard = async (id: string, revision: number) => {
   await mutateArtboard(id);
   return result;
 };
+
+export const chooseOption = async (id: string, roundId: string, boardId: string) => {
+  await artboardService.chooseBoard(id, roundId, boardId);
+  await mutateArtboard(id);
+};

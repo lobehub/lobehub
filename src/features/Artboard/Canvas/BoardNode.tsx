@@ -1,9 +1,11 @@
 import type { ArtboardBoardView } from '@lobechat/types';
+import { toast } from '@lobehub/ui';
 
 import { flowStateColor } from '@/features/Acceptance/Viewer/Flow/FlowNode';
 import { sx } from '@/styles/sx';
 
 import { useBoard } from '../BoardContext';
+import { chooseOption } from '../data/actions';
 import type { BoardModel } from '../model';
 import { artboardActions, useArtboardStore } from '../store';
 import { boardPreview, nodeState } from '../Verify/flow';
@@ -44,6 +46,9 @@ const BoardNode = ({ board: item, k, live }: BoardNodeProps) => {
   const border = s.verify && inJourney ? flowStateColor(state) : undefined;
   const preview = boardPreview(journey, item.id, s.verify && inJourney && s.showReal);
   const { rect, source } = item;
+  const round = item.groupId ? board.roundByGroupId[item.groupId] : undefined;
+  const option = !s.verify && round && round.id === item.roundId ? round : undefined;
+  const picked = option?.chosenBoardId === item.id;
 
   return (
     <div
@@ -67,11 +72,22 @@ const BoardNode = ({ board: item, k, live }: BoardNodeProps) => {
         recommended={board.recommendedIds.has(item.id)}
         state={state}
         verify={s.verify}
+        choice={
+          option && {
+            checked: picked,
+            disabled: option.status !== 'open' || board.finalized,
+            onPick: () =>
+              void chooseOption(board.artboard.id, option.id, item.id).catch((error) =>
+                toast.error((error as Error).message),
+              ),
+          }
+        }
       />
       <div
         {...sx(
           [
             canvasStyles.boardCard,
+            picked && canvasStyles.boardPicked,
             s.selected && canvasStyles.boardSelected,
             !s.selected && s.related && canvasStyles.boardRelated,
             s.flash && canvasStyles.flash,

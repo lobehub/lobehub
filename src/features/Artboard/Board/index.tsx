@@ -19,6 +19,7 @@ import Outline from './Outline';
 import { VerifyBar } from './StageBars';
 import StaleBanner from './StaleBanner';
 import { BoardEmpty, BoardError, BoardLoading } from './States';
+import SubmitBar from './SubmitBar';
 
 const NARROW_WIDTH = 768;
 
@@ -63,6 +64,7 @@ const Stage = ({ narrow }: { narrow: boolean }) => {
       {mode === 'verify' && verifyView === 'flow' ? <FlowStage /> : <Canvas narrow={narrow} />}
       {outlineOpen && !narrow && mode === 'discuss' && <Outline />}
       {mode === 'verify' && <VerifyBar />}
+      {mode === 'discuss' && <SubmitBar narrow={narrow} />}
     </div>
   );
 };

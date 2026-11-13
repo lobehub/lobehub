@@ -88,6 +88,10 @@ export const canvasStyles = stylex.create({
     position: 'relative',
     width: '100%',
   },
+  boardPicked: {
+    borderColor: cssVar.colorPrimary,
+    boxShadow: `0 0 0 1px ${cssVar.colorPrimary}`,
+  },
   boardRelated: {
     outlineColor: cssVar.colorPrimaryBorder,
     outlineOffset: 4,

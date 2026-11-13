@@ -19,9 +19,12 @@ const Groups = ({ k }: { k: number }) => {
     if (!rect.w || !rect.h) return null;
     const journey = group.id === board.journeyGroupId;
     const locked = board.finalized && journey;
+    const round = board.roundByGroupId[group.id];
     const desc = locked
       ? t(verify ? 'artboard.group.verifyDesc' : 'artboard.group.lockedDesc')
-      : group.desc;
+      : round
+        ? round.title || t('artboard.group.choose')
+        : group.desc;
     return (
       <div
         key={group.id}
