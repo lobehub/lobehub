@@ -13,6 +13,7 @@ export type ApiType =
   | 'meta'
   | 'minimax'
   | 'moonshot'
+  | 'nace'
   | 'openai'
   | 'qwen'
   | 'typesafe'
