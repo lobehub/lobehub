@@ -38,6 +38,7 @@ import AgentConnectorItem from './AgentConnectorItem';
 import AgentSkillItem from './AgentSkillItem';
 import BuiltinSkillItem from './BuiltinSkillItem';
 import ComposioSkillItem from './ComposioSkillItem';
+import { AccountsNeedReauth, countAccountsNeedingReauth } from './ConnectorRowFeedback';
 import LobehubSkillItem from './LobehubSkillItem';
 import McpSkillItem from './McpSkillItem';
 import type { ToolDetailType } from './SkillDetail';
@@ -382,17 +383,23 @@ const SkillList = memo<SkillListProps>(
 
     // Custom connectors from the connector store (user-added OAuth MCP servers)
     const renderCustomConnectors = () =>
-      customConnectors.map((c) => (
-        <McpSkillItem
-          identifier={c.identifier}
-          isSelected={selectedIdentifier === c.identifier}
-          key={c.id}
-          runtimeType="mcp"
-          title={c.name || c.identifier}
-          type={'customPlugin' as LobeToolType}
-          onSelect={onSelect ? () => onSelect(c.identifier, 'mcp-connector') : undefined}
-        />
-      ));
+      customConnectors.map((c) => {
+        const brokenAccounts = countAccountsNeedingReauth(c.links);
+        return (
+          <McpSkillItem
+            identifier={c.identifier}
+            isSelected={selectedIdentifier === c.identifier}
+            key={c.id}
+            runtimeType="mcp"
+            title={c.name || c.identifier}
+            type={'customPlugin' as LobeToolType}
+            description={
+              brokenAccounts > 0 ? <AccountsNeedReauth count={brokenAccounts} /> : undefined
+            }
+            onSelect={onSelect ? () => onSelect(c.identifier, 'mcp-connector') : undefined}
+          />
+        );
+      });
 
     // Split integrations into builtin tools vs builtin skills
     const builtinToolItems = integrations.filter((i) => i.type === 'builtin');

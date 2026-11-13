@@ -1,5 +1,14 @@
 import { type LobeToolCustomPlugin } from '@lobechat/types';
-import { Alert, Button, Divider, Flexbox, Input, InputPassword, RadioGroup } from '@lobehub/ui';
+import {
+  Alert,
+  Button,
+  Divider,
+  Flexbox,
+  Input,
+  InputPassword,
+  RadioGroup,
+  Text,
+} from '@lobehub/ui';
 import { type FieldPath, Form, type FormInstance, useWatch } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { useEffect, useState } from 'react';
@@ -27,12 +36,22 @@ interface MCPManifestFormProps {
   enableOAuth?: boolean;
   form: FormInstance<LobeToolCustomPlugin>;
   isEditMode?: boolean;
+  /** What saving the OAuth settings will do to the connected accounts. */
+  oauthNotice?: OAuthNotice;
   /**
    * Run the connector OAuth authorize flow. Called instead of the token-less
    * manifest test when the OAuth auth type is selected (testing an OAuth server
-   * without authorizing first only ever 401s).
+   * without authorizing first only ever 401s). Omitted while saving would not
+   * authorize (an edit that keeps the connected accounts), which hides the
+   * button: there is nothing to authorize or test.
    */
   onAuthorizeOAuth?: () => void;
+}
+
+export interface OAuthNotice {
+  text: string;
+  /** `warning` when saving removes accounts; `info` when it keeps them. */
+  type: 'info' | 'warning';
 }
 
 const HTTP_URL_KEY = 'customParams.mcp.url';
@@ -54,6 +73,7 @@ const MCPManifestForm = ({
   isEditMode,
   enableOAuth,
   onAuthorizeOAuth,
+  oauthNotice,
 }: MCPManifestFormProps) => {
   const { t } = useTranslation('plugin');
   const mcpType = useWatch(form, MCP_TYPE);
@@ -340,17 +360,28 @@ const MCPManifestForm = ({
               </Form.Field>
             </>
           )}
-          <Form.Field label={t('dev.mcp.testConnectionTip')} layout={'horizontal'}>
-            <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'}>
-              <Button
-                loading={isTesting}
-                type={!!mcpType ? 'primary' : undefined}
-                onClick={isOAuth ? onAuthorizeOAuth : handleTestConnection}
-              >
-                {isOAuth ? t('dev.mcp.auth.oauth.authorize') : t('dev.mcp.testConnection')}
-              </Button>
-            </Flexbox>
-          </Form.Field>
+          {isOAuth &&
+            oauthNotice &&
+            (oauthNotice.type === 'warning' ? (
+              <Alert showIcon title={oauthNotice.text} type={'warning'} />
+            ) : (
+              <Text fontSize={12} type={'secondary'}>
+                {oauthNotice.text}
+              </Text>
+            ))}
+          {(!isOAuth || onAuthorizeOAuth) && (
+            <Form.Field label={t('dev.mcp.testConnectionTip')} layout={'horizontal'}>
+              <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'}>
+                <Button
+                  loading={isTesting}
+                  type={!!mcpType ? 'primary' : undefined}
+                  onClick={isOAuth ? onAuthorizeOAuth : handleTestConnection}
+                >
+                  {isOAuth ? t('dev.mcp.auth.oauth.authorize') : t('dev.mcp.testConnection')}
+                </Button>
+              </Flexbox>
+            </Form.Field>
+          )}
           {(connectionError || testState.error) && (
             <Alert
               closable
