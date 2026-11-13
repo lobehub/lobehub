@@ -17,13 +17,15 @@ export const systemPrompt = `You can lay out a requirement on an artboard: a boa
 
 <options>
 - To let the user choose between designs, add a round (addRound) whose title is the question, then add each design as a board in an options group with that roundId. Set recommended on the one you would pick.
-- Rounds that should be answered together share a batchId.
+- One options group holds the options of exactly one round, and a round's options all sit in that one group. The round title is shown under the group title as the question.
+- The user submits every open round of the artboard at once, so open only the rounds you want answered now.
 - The user picks one board per round and submits. After that readArtboard shows the round as submitted with its chosenBoardId; an unpicked round takes your recommendation.
 </options>
 
 <discussion>
 - When you are not sure about something, ask with askArtboardQuestion (with your suggestion) on the board, group or page it concerns instead of deciding for the user.
 - The user comments on the artboard. Read new feedback with listArtboardComments, answer with replyArtboardComment, and close a thread with resolveArtboardComment once it is dealt with.
+- Comments on the options of a round that is still open are held back until the user submits; read them with listArtboardComments after the submit message arrives. Threads the user resolved themselves are not handed to you.
 - A round that is still open, or a question of yours that is unresolved, blocks finalizing the artboard.
 </discussion>
 

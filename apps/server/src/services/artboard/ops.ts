@@ -96,6 +96,7 @@ class Draft {
     pageId: string,
     group: ArtboardGroupRow | undefined,
     round: ArtboardRoundRow | undefined,
+    boardId?: string,
   ) {
     if (group && group.pageId !== pageId)
       failArtboard('invalid', 'A board is on the page of its group');
@@ -108,6 +109,12 @@ class Draft {
       );
     if (round && group?.kind !== 'options')
       failArtboard('invalid', 'Only a board in an options group can be an option of a round');
+    if (!round || !group) return;
+    const others = this.boards.filter((b) => b.id !== boardId);
+    if (others.some((b) => b.roundId === round.id && b.groupId !== group.id))
+      failArtboard('invalid', `Round ${round.id} already has options in another group`);
+    if (others.some((b) => b.groupId === group.id && b.roundId && b.roundId !== round.id))
+      failArtboard('invalid', `Group ${group.id} already holds the options of another round`);
   }
 
   private replaceRound(row: ArtboardRoundRow) {
@@ -345,7 +352,7 @@ class Draft {
         failArtboard('locked', `Round ${round.id} is submitted; its options can no longer change`);
     }
     if (roundChanges || (group?.id ?? null) !== board.groupId)
-      this.assertPlacement(board.pageId, group, round);
+      this.assertPlacement(board.pageId, group, round, board.id);
 
     const type =
       patch.source === undefined

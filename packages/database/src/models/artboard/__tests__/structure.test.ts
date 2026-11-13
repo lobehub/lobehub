@@ -334,6 +334,23 @@ describe('ArtboardStructureModel', () => {
     expect((await readRound(solo.id)).status).toBe('open');
   });
 
+  it('submits every open round of the artboard at once, unpicked ones by recommendation', async () => {
+    const { a, artboard, page, round } = await seedOptions();
+    const second = await structure.createRound(artboard.id, { pageId: page.id, title: '首页布局' });
+    const c = await structure.createBoard(artboard.id, board(page.id, null, '双栏', 0, second.id));
+    await structure.chooseBoard(round.id, a.id);
+
+    await expectCode(structure.submitOpenRounds(artboard.id), 'missing_choice');
+    expect((await readRound(round.id)).status).toBe('open');
+
+    await structure.updateRound(second.id, { recommendedBoardId: c.id });
+    const submitted = await structure.submitOpenRounds(artboard.id);
+
+    expect(submitted.map((item) => item.id).sort()).toEqual([round.id, second.id].sort());
+    expect(await readRound(second.id)).toMatchObject({ chosenBoardId: c.id, status: 'submitted' });
+    expect(await structure.submitOpenRounds(artboard.id)).toEqual([]);
+  });
+
   it('stores a decision board and its conditional branches', async () => {
     const { artboard, page } = await seedArtboard();
     const entry = await structure.createBoard(artboard.id, board(page.id, null, '商品页'));

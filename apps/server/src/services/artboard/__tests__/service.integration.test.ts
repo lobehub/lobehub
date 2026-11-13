@@ -536,6 +536,67 @@ describe('ArtboardService rounds', () => {
     expect(comment.code).toBe('not_found');
   });
 
+  it('submits all open rounds in one call and reports how many', async () => {
+    const { artboard } = await createJourney([
+      ...optionOps(),
+      { ref: 'r2', round: { title: '命名' }, type: 'addRound' },
+      { group: { kind: 'options', title: '命名方案' }, ref: 'o2', type: 'addGroup' },
+      {
+        board: {
+          groupId: 'o2',
+          recommended: true,
+          roundId: 'r2',
+          source: { canvasId: 'cvs_a', kind: 'canvas' },
+          title: 'N1',
+          x: 0,
+          y: 1400,
+        },
+        type: 'addBoard',
+      },
+    ]);
+
+    const result = await service().submitOpenRounds(artboard.id);
+
+    expect(result.submitted).toBe(2);
+    expect(result.artboard.content.rounds.every((round) => round.status === 'submitted')).toBe(
+      true,
+    );
+    expect((await service().submitOpenRounds(artboard.id)).submitted).toBe(0);
+  });
+
+  it('keeps one round per options group', async () => {
+    const { artboard } = await createJourney(optionOps());
+    const [round] = artboard.content.rounds;
+    const group = artboard.content.groups.find((g) => g.kind === 'options')!;
+    const option = (ref: string, groupId: string, roundId: string, y: number): ArtboardOp => ({
+      board: {
+        groupId,
+        roundId,
+        source: { canvasId: 'cvs_a', kind: 'canvas' },
+        title: ref,
+        x: 0,
+        y,
+      },
+      type: 'addBoard',
+    });
+
+    const split = await errorOf(
+      service().update(artboard.id, artboard.revision, [
+        { group: { kind: 'options', title: '另一组' }, ref: 'o2', type: 'addGroup' },
+        option('C', 'o2', round.id, 1400),
+      ]),
+    );
+    expect(split.code).toBe('invalid');
+
+    const mixed = await errorOf(
+      service().update(artboard.id, artboard.revision, [
+        { ref: 'r2', round: { title: '命名' }, type: 'addRound' },
+        option('D', group.id, 'r2', 1400),
+      ]),
+    );
+    expect(mixed.code).toBe('invalid');
+  });
+
   it('refuses a round of another board', async () => {
     const { artboard } = await createJourney(optionOps());
     const other = await service().create({ title: '另一块' }, context);

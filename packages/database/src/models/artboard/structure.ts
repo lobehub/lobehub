@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, ne, or, type SQL, sql } from 'drizzle-orm';
 
 import {
   artboardBoards,
@@ -400,53 +400,68 @@ export class ArtboardStructureModel {
       return row;
     });
 
+  private roundsReachableIn = (tx: Transaction) =>
+    inArray(
+      artboardRounds.artboardId,
+      accessibleArtboardIds(tx, { userId: this.userId, workspaceId: this.workspaceId }),
+    );
+
+  private settleRounds = async (tx: Transaction, scope: SQL | undefined) => {
+    const members = await tx.select().from(artboardRounds).where(scope).for('update');
+    const undecided = members.find((item) => !item.chosenBoardId && !item.recommendedBoardId);
+    if (undecided)
+      fail('missing_choice', `Round ${undecided.id} has no pick and no recommendation`);
+
+    const now = new Date();
+    await tx
+      .update(artboardRounds)
+      .set({
+        chosenBoardId: artboardRounds.recommendedBoardId,
+        selectedAt: now,
+        selectedBy: this.userId,
+      })
+      .where(and(scope, isNull(artboardRounds.chosenBoardId)));
+    return tx
+      .update(artboardRounds)
+      .set({ status: 'submitted', updatedAt: now })
+      .where(scope)
+      .returning();
+  };
+
   submitRound = (roundId: string): Promise<ArtboardRoundRow[]> =>
     this.db.transaction(async (tx) => {
       const [round] = await tx
         .select()
         .from(artboardRounds)
-        .where(
-          and(
-            eq(artboardRounds.id, roundId),
-            inArray(
-              artboardRounds.artboardId,
-              accessibleArtboardIds(tx, { userId: this.userId, workspaceId: this.workspaceId }),
-            ),
-          ),
-        )
+        .where(and(eq(artboardRounds.id, roundId), this.roundsReachableIn(tx)))
         .for('update');
       if (!round) return fail('not_found', `No round ${roundId}`);
       if (round.status !== 'open') fail('round_submitted', `Round ${roundId} is already submitted`);
 
       const batchId = round.metadata?.batchId;
-      const batch = and(
-        eq(artboardRounds.artboardId, round.artboardId),
-        eq(artboardRounds.status, 'open'),
-        batchId
-          ? sql`${artboardRounds.metadata}->>'batchId' = ${batchId}`
-          : eq(artboardRounds.id, roundId),
+      return this.settleRounds(
+        tx,
+        and(
+          eq(artboardRounds.artboardId, round.artboardId),
+          eq(artboardRounds.status, 'open'),
+          batchId
+            ? sql`${artboardRounds.metadata}->>'batchId' = ${batchId}`
+            : eq(artboardRounds.id, roundId),
+        ),
       );
-      const members = await tx.select().from(artboardRounds).where(batch).for('update');
-
-      const undecided = members.find((item) => !item.chosenBoardId && !item.recommendedBoardId);
-      if (undecided)
-        fail('missing_choice', `Round ${undecided.id} has no pick and no recommendation`);
-
-      const now = new Date();
-      await tx
-        .update(artboardRounds)
-        .set({
-          chosenBoardId: artboardRounds.recommendedBoardId,
-          selectedAt: now,
-          selectedBy: this.userId,
-        })
-        .where(and(batch, isNull(artboardRounds.chosenBoardId)));
-      return tx
-        .update(artboardRounds)
-        .set({ status: 'submitted', updatedAt: now })
-        .where(batch)
-        .returning();
     });
+
+  submitOpenRounds = (artboardId: string): Promise<ArtboardRoundRow[]> =>
+    this.db.transaction((tx) =>
+      this.settleRounds(
+        tx,
+        and(
+          eq(artboardRounds.artboardId, artboardId),
+          eq(artboardRounds.status, 'open'),
+          this.roundsReachableIn(tx),
+        ),
+      ),
+    );
 
   listBoardsByProject = (projectId: string): Promise<ArtboardBoardRow[]> =>
     this.db

@@ -334,6 +334,12 @@ export class ArtboardService {
     return { artboard: await this.item(await this.require(id)) };
   }
 
+  async submitOpenRounds(id: string) {
+    await this.require(id);
+    const rounds = await guardArtboard(() => this.structure.submitOpenRounds(id));
+    return { artboard: await this.item(await this.require(id)), submitted: rounds.length };
+  }
+
   listComments = (id: string) => this.commentService.list(id);
 
   countUndeliveredComments = (id: string) => this.commentService.countUndelivered(id);
