@@ -113,9 +113,9 @@ export const resolveSunoModelVersion = (model: string) =>
   SUNO_MODEL_VERSIONS[model.toLowerCase()] ?? model;
 
 /**
- * Map the provider-neutral payload onto a Suno generate request. Lyrics, style, title,
- * negativeStyle or vocalGender switch the request to custom mode, where `prompt` carries the
- * lyrics and the custom controls apply; otherwise `prompt` and/or reference audio describe it.
+ * Map the provider-neutral payload onto a Suno generate request. `prompt`, `lyrics` and `style`
+ * work in both modes; title, negativeStyle and vocalGender exist only in custom mode, so any of
+ * them switches the request to custom mode. Reference audio exists only in non-custom mode.
  */
 export const buildSunoMusicRequest = (
   payload: CreateMusicPayload,
@@ -133,43 +133,39 @@ export const buildSunoMusicRequest = (
     vocalGender,
   } = payload.params;
   const has = (value?: string) => Boolean(value?.trim());
-  // Custom-only controls switch to custom mode, so they are applied instead of dropped.
-  const customMode =
-    has(lyrics) || has(style) || has(title) || has(negativeStyle) || Boolean(vocalGender);
+  const customMode = has(title) || has(negativeStyle) || Boolean(vocalGender);
 
   if (customMode) {
-    // Suno custom mode needs at least one of style, lyrics or negativeTags; a prompt is sung as
-    // lyrics when no lyrics are given.
-    if (!has(lyrics) && !has(style) && !has(negativeStyle) && !has(prompt)) {
+    // Suno custom mode needs at least one of style, lyrics or negativeTags; a prompt alone
+    // does not count.
+    if (!has(lyrics) && !has(style) && !has(negativeStyle)) {
       throw new SunoError(
-        'Suno custom mode needs lyrics, a style, or a negative style',
+        'Suno custom mode (title, negativeStyle or vocalGender set) needs lyrics, a style, or a negative style',
         AgentRuntimeErrorType.InvalidRequestFormat,
       );
     }
     if (referenceAudioUrl) {
       throw new SunoError(
-        'Suno accepts reference audio only without lyrics, style, title, negativeStyle or vocalGender',
+        'Suno accepts reference audio only without title, negativeStyle or vocalGender',
         AgentRuntimeErrorType.InvalidRequestFormat,
       );
     }
-  } else if (!has(prompt) && !referenceAudioUrl) {
+  } else if (!has(lyrics) && !has(style) && !referenceAudioUrl) {
+    // A prompt is only the core idea: non-custom mode needs a style, lyrics or an attachment.
     throw new SunoError(
-      'Suno music generation needs a prompt or reference audio',
+      'Suno needs a style, lyrics, or reference audio; a prompt alone is not accepted',
       AgentRuntimeErrorType.InvalidRequestFormat,
     );
   }
-
-  // In custom mode `prompt` is sung verbatim, so lyrics take precedence over the description.
-  const songLyrics = has(lyrics) ? lyrics : undefined;
-  const songPrompt = customMode ? (songLyrics ?? (instrumental ? undefined : prompt)) : prompt;
 
   return {
     customMode,
     instrumental,
     model: modelVersion,
-    ...(has(songPrompt) ? { prompt: songPrompt } : {}),
-    ...(customMode && has(style) ? { style } : {}),
-    ...(customMode ? { title: title ?? '' } : {}),
+    ...(has(prompt) ? { prompt } : {}),
+    ...(has(lyrics) ? { lyrics } : {}),
+    ...(has(style) ? { style } : {}),
+    ...(customMode && has(title) ? { title } : {}),
     ...(customMode && has(negativeStyle) ? { negativeTags: negativeStyle } : {}),
     ...(customMode && vocalGender ? { vocalGender } : {}),
     ...(!customMode && referenceAudioUrl ? { audioUrls: [referenceAudioUrl] } : {}),
@@ -258,7 +254,16 @@ export async function pollSunoMusicStatus(
       method: 'GET',
       signal: options.signal,
     });
-    const status = record?.status ?? 'PENDING';
+    const status = record?.status;
+
+    // record-info always reports one of its task statuses; anything else is not a pending task.
+    if (!status) {
+      return {
+        error: 'Suno status response is missing the task status',
+        errorType: AgentRuntimeErrorType.UpstreamMalformedResponse,
+        status: 'failed',
+      };
+    }
 
     log('record-info: taskId=%s status=%s', taskId, status);
 

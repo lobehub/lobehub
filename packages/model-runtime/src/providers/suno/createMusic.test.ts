@@ -57,7 +57,7 @@ describe('resolveSunoModelVersion', () => {
 });
 
 describe('buildSunoMusicRequest', () => {
-  it('uses custom mode with lyrics, style, title, instrumental flag and model version', () => {
+  it('uses custom mode for custom-only controls and keeps lyrics, style and prompt', () => {
     expect(
       buildSunoMusicRequest(
         {
@@ -65,7 +65,7 @@ describe('buildSunoMusicRequest', () => {
           params: {
             lyrics: '[Verse]\nneon lights',
             negativeStyle: 'metal',
-            prompt: 'ignored description',
+            prompt: 'night drive',
             style: 'city pop, female vocals',
             title: 'Night Drive',
             vocalGender: 'f',
@@ -78,16 +78,17 @@ describe('buildSunoMusicRequest', () => {
       callBackUrl: 'https://example.com/hook',
       customMode: true,
       instrumental: false,
+      lyrics: '[Verse]\nneon lights',
       model: 'V5',
       negativeTags: 'metal',
-      prompt: '[Verse]\nneon lights',
+      prompt: 'night drive',
       style: 'city pop, female vocals',
       title: 'Night Drive',
       vocalGender: 'f',
     });
   });
 
-  it('sends an instrumental custom track without lyrics', () => {
+  it('sends an instrumental custom track with a style and title', () => {
     expect(
       buildSunoMusicRequest(
         { model: 'suno-v5', params: { instrumental: true, style: 'ambient', title: 'Drift' } },
@@ -102,43 +103,22 @@ describe('buildSunoMusicRequest', () => {
     });
   });
 
-  it('uses description mode for a bare prompt', () => {
+  it('uses non-custom mode for prompt with style, lyrics or reference audio', () => {
     expect(
       buildSunoMusicRequest(
-        {
-          model: 'suno-v4.5',
-          params: { prompt: 'a happy song', referenceAudioUrl: 'https://x/ref.mp3' },
-        },
+        { model: 'suno-v4.5', params: { prompt: 'a happy song', style: 'pop' } },
         'V4_5',
       ),
     ).toEqual({
-      audioUrls: ['https://x/ref.mp3'],
       customMode: false,
       instrumental: false,
       model: 'V4_5',
       prompt: 'a happy song',
+      style: 'pop',
     });
-  });
-
-  it('keeps the prompt as the sung text when lyrics are blank', () => {
-    expect(
-      buildSunoMusicRequest(
-        { model: 'suno-v5', params: { lyrics: '  ', prompt: 'a song about cats', style: 'pop' } },
-        'V5',
-      ),
-    ).toMatchObject({ customMode: true, prompt: 'a song about cats', style: 'pop' });
-  });
-
-  it('accepts lyrics-only custom requests and reference-audio-only requests', () => {
     expect(
       buildSunoMusicRequest({ model: 'suno-v5', params: { lyrics: '[Verse]\nla la' } }, 'V5'),
-    ).toEqual({
-      customMode: true,
-      instrumental: false,
-      model: 'V5',
-      prompt: '[Verse]\nla la',
-      title: '',
-    });
+    ).toEqual({ customMode: false, instrumental: false, lyrics: '[Verse]\nla la', model: 'V5' });
     expect(
       buildSunoMusicRequest(
         { model: 'suno-v5', params: { referenceAudioUrl: 'https://x/ref.mp3' } },
@@ -152,13 +132,10 @@ describe('buildSunoMusicRequest', () => {
     });
   });
 
-  it('switches to custom mode for custom-only controls instead of dropping them', () => {
+  it('applies negativeStyle / vocalGender through custom mode instead of dropping them', () => {
     expect(
       buildSunoMusicRequest(
-        {
-          model: 'suno-v5',
-          params: { negativeStyle: 'metal', prompt: 'a happy song', vocalGender: 'm' },
-        },
+        { model: 'suno-v5', params: { negativeStyle: 'metal', vocalGender: 'm' } },
         'V5',
       ),
     ).toEqual({
@@ -166,22 +143,26 @@ describe('buildSunoMusicRequest', () => {
       instrumental: false,
       model: 'V5',
       negativeTags: 'metal',
-      prompt: 'a happy song',
-      title: '',
       vocalGender: 'm',
     });
   });
 
-  it('rejects incomplete or incompatible requests', () => {
+  it('rejects requests Suno would refuse', () => {
+    expect(() =>
+      buildSunoMusicRequest({ model: 'suno-v5', params: { prompt: 'a happy song' } }, 'V5'),
+    ).toThrow(/a prompt alone is not accepted/);
     expect(() => buildSunoMusicRequest({ model: 'suno-v5', params: {} }, 'V5')).toThrow(
-      /needs a prompt or reference audio/,
+      /needs a style, lyrics, or reference audio/,
     );
     expect(() =>
-      buildSunoMusicRequest({ model: 'suno-v5', params: { title: 'x', vocalGender: 'f' } }, 'V5'),
+      buildSunoMusicRequest({ model: 'suno-v5', params: { prompt: 'cats', title: 'Song' } }, 'V5'),
     ).toThrow(/needs lyrics, a style, or a negative style/);
     expect(() =>
       buildSunoMusicRequest(
-        { model: 'suno-v5', params: { referenceAudioUrl: 'https://x/ref.mp3', style: 'pop' } },
+        {
+          model: 'suno-v5',
+          params: { referenceAudioUrl: 'https://x/ref.mp3', title: 'Song', style: 'pop' },
+        },
         'V5',
       ),
     ).toThrow(/reference audio only without/);
@@ -221,8 +202,8 @@ describe('createSunoMusic', () => {
       callBackUrl: 'https://example.com/hook',
       customMode: true,
       instrumental: false,
+      lyrics: 'la la',
       model: 'V5',
-      prompt: 'la la',
       style: 'pop',
       title: 'Song',
     });
@@ -237,7 +218,7 @@ describe('createSunoMusic', () => {
       .mockResolvedValueOnce(succeeded());
 
     const result = await createSunoMusic(
-      { model: 'suno-v5', params: { prompt: 'a happy song' } },
+      { model: 'suno-v5', params: { prompt: 'a happy song', style: 'pop' } },
       { ...options, pollIntervalMs: 0, waitForCompletion: true },
     );
 
@@ -274,7 +255,7 @@ describe('createSunoMusic', () => {
 
     await expect(
       createSunoMusic(
-        { model: 'suno-v5', params: { prompt: 'a happy song' } },
+        { model: 'suno-v5', params: { prompt: 'a happy song', style: 'pop' } },
         { ...options, maxAttempts: 3, pollIntervalMs: 0, waitForCompletion: true },
       ),
     ).rejects.toMatchObject({
@@ -291,7 +272,7 @@ describe('createSunoMusic', () => {
 
     await expect(
       createSunoMusic(
-        { model: 'suno-v5', params: { prompt: 'a happy song' } },
+        { model: 'suno-v5', params: { prompt: 'a happy song', style: 'pop' } },
         { ...options, pollIntervalMs: 50, timeoutMs: 10, waitForCompletion: true },
       ),
     ).rejects.toMatchObject({
@@ -310,7 +291,7 @@ describe('createSunoMusic', () => {
 
     await expect(
       createSunoMusic(
-        { model: 'suno-v5', params: { prompt: 'a happy song' } },
+        { model: 'suno-v5', params: { prompt: 'a happy song', style: 'pop' } },
         { ...options, pollIntervalMs: 0, waitForCompletion: true },
       ),
     ).rejects.toMatchObject({
@@ -355,14 +336,17 @@ describe('createSunoMusic', () => {
     fetchMock.mockResolvedValue(response());
 
     await expect(
-      createSunoMusic({ model: 'suno-v5', params: { prompt: 'a happy song' } }, options),
+      createSunoMusic(
+        { model: 'suno-v5', params: { prompt: 'a happy song', style: 'pop' } },
+        options,
+      ),
     ).rejects.toMatchObject({ errorType, provider: 'suno' });
   });
 
   it('rejects a submission without a callback URL before calling Suno', async () => {
     await expect(
       createSunoMusic(
-        { model: 'suno-v5', params: { prompt: 'a happy song' } },
+        { model: 'suno-v5', params: { prompt: 'a happy song', style: 'pop' } },
         { ...options, callbackUrl: undefined },
       ),
     ).rejects.toMatchObject({
@@ -383,7 +367,7 @@ describe('createSunoMusic', () => {
 
     await expect(
       createSunoMusic(
-        { model: 'suno-v5', params: { prompt: 'a happy song' } },
+        { model: 'suno-v5', params: { prompt: 'a happy song', style: 'pop' } },
         { ...options, pollIntervalMs: 0, timeoutMs: 50, waitForCompletion: true },
       ),
     ).rejects.toMatchObject({
@@ -397,7 +381,10 @@ describe('createSunoMusic', () => {
     fetchMock.mockResolvedValue(envelope({}));
 
     await expect(
-      createSunoMusic({ model: 'suno-v5', params: { prompt: 'a happy song' } }, options),
+      createSunoMusic(
+        { model: 'suno-v5', params: { prompt: 'a happy song', style: 'pop' } },
+        options,
+      ),
     ).rejects.toMatchObject({ errorType: AgentRuntimeErrorType.UpstreamMalformedResponse });
   });
 });
@@ -447,6 +434,18 @@ describe('pollSunoMusicStatus', () => {
     });
   });
 
+  it.each([
+    ['data: null', () => envelope(null)],
+    ['missing status', () => envelope({ taskId: 'task-1' })],
+  ])('reports a response with %s as malformed instead of pending', async (_label, response) => {
+    fetchMock.mockResolvedValue(response());
+
+    await expect(pollSunoMusicStatus('task-1', options)).resolves.toMatchObject({
+      errorType: AgentRuntimeErrorType.UpstreamMalformedResponse,
+      status: 'failed',
+    });
+  });
+
   it('reports a success without audio as a malformed response', async () => {
     fetchMock.mockResolvedValue(record('SUCCESS', { response: { sunoData: [] } }));
 
@@ -491,7 +490,7 @@ describe('LobeSunoAI', () => {
     });
 
     const created = await runtime.createMusic(
-      { model: 'suno-v5', params: { prompt: 'a happy song' } },
+      { model: 'suno-v5', params: { prompt: 'a happy song', style: 'pop' } },
       { callbackUrl: 'https://example.com/hook' },
     );
     expect(created).toEqual({ inferenceId: 'task-1', status: 'pending' });

@@ -115,7 +115,7 @@ const main = async () => {
     });
     await run('suno invalid key', () =>
       badKey.createMusic(
-        { model: 'suno-v5', params: { prompt: 'a happy song' } },
+        { model: 'suno-v5', params: { prompt: 'a happy song', style: 'pop' } },
         { callbackUrl: 'https://example.com/suno-callback' },
       ),
     );
