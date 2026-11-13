@@ -1,6 +1,18 @@
 import { type ChildProcess, execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { lstat, mkdir, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import {
+  copyFile,
+  lstat,
+  mkdir,
+  readdir,
+  rename,
+  rm,
+  rmdir,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
@@ -16,6 +28,12 @@ import {
 } from '@lobechat/heterogeneous-agents/quota-sampler';
 
 const DIRECTORY_MODE = 0o700;
+
+/**
+ * Where transcripts that could not join the shared tree are kept, inside the
+ * default config dir (never a profile, which is removed once retired).
+ */
+export const UNSHARED_PROJECTS_DIR = 'lobehub-unshared-projects';
 
 /**
  * A profile replaced by a newer sign-in of the same account is retired, not
@@ -125,6 +143,114 @@ const forgetProfile = async (configDir: string) => {
 const linkTypeFor = async (source: string): Promise<'junction' | undefined> => {
   if (process.platform !== 'win32') return undefined;
   return (await stat(source)).isDirectory() ? 'junction' : undefined;
+};
+
+/**
+ * Move one entry to a path that does not exist yet. Across filesystems (an
+ * inherited CLAUDE_CONFIG_DIR on another volume) a rename fails with EXDEV, so
+ * a directory is rebuilt entry by entry and a file is first staged under a new
+ * name on its own volume (an append by path then lands in a fresh file at the
+ * original name, which a later resolve picks up), copied, and the staged
+ * original removed only if it did not change during the copy. Returns how many
+ * entries stayed.
+ */
+const moveEntry = async (source: string, target: string, isDirectory: boolean) => {
+  try {
+    await rename(source, target);
+    return 0;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
+  }
+  if (isDirectory) {
+    await mkdir(target, { recursive: true });
+    return mergeInto(source, target);
+  }
+  const staged = `${source}.lobehub-moving-${randomUUID()}`;
+  await rename(source, staged);
+  const before = await lstat(staged);
+  await copyFile(staged, target, fsConstants.COPYFILE_EXCL);
+  const after = await lstat(staged);
+  if (after.size === before.size && after.mtimeMs === before.mtimeMs) {
+    await rm(staged, { force: true });
+    return 0;
+  }
+  // Written to mid-copy: the copy is stale. Put the original back when its name
+  // is still free; otherwise it stays staged, next to the newer file.
+  await rm(target, { force: true });
+  if (!(await exists(source))) await rename(staged, source);
+  return 1;
+};
+
+/**
+ * Move every entry of `from` into `to` that `to` does not have yet, descending
+ * into directories both sides hold. Transcripts are named by session id, so a
+ * name both sides hold is the same conversation; the shared copy is kept.
+ * Returns how many entries could not be moved (left behind in `from`).
+ */
+const mergeInto = async (from: string, to: string): Promise<number> => {
+  let leftBehind = 0;
+  for (const entry of await readdir(from, { withFileTypes: true })) {
+    const source = path.join(from, entry.name);
+    const target = path.join(to, entry.name);
+    try {
+      if (!(await exists(target))) {
+        leftBehind += await moveEntry(source, target, entry.isDirectory());
+      } else if (entry.isDirectory() && (await lstat(target)).isDirectory()) {
+        leftBehind += await mergeInto(source, target);
+      } else {
+        leftBehind += 1;
+      }
+    } catch {
+      leftBehind += 1;
+    }
+  }
+  return leftBehind;
+};
+
+/** Remove `dir` if it holds nothing but empty directories; false when anything is left. */
+const removeEmptyTree = async (dir: string): Promise<boolean> => {
+  try {
+    for (const entry of await readdir(dir, { withFileTypes: true }))
+      if (!entry.isDirectory() || !(await removeEmptyTree(path.join(dir, entry.name))))
+        return false;
+    await rmdir(dir);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * A profile whose `projects` is a real directory (signed in before transcripts
+ * were shared, or a link that once failed) keeps its conversations to itself, so
+ * a run that switches onto or off that account cannot `--resume` them. Fold its
+ * transcripts into the shared tree and put the link in its place. Anything that
+ * cannot be moved is kept aside next to the shared tree, not in the profile: a
+ * profile is retired and removed when its account signs in again, and the kept
+ * copy must outlive it.
+ */
+const adoptProfileProjects = async (profileProjects: string, sharedProjects: string) => {
+  const info = await lstat(profileProjects);
+  if (info.isSymbolicLink() || !info.isDirectory()) return;
+
+  const leftBehind = await mergeInto(profileProjects, sharedProjects);
+  if (leftBehind > 0) {
+    // Same-name conflicts (and anything else that could not join) go to a fresh,
+    // empty kept-aside dir, so every remaining entry can move there.
+    const profileName = path.basename(path.dirname(profileProjects));
+    const kept = path.join(
+      path.dirname(sharedProjects),
+      UNSHARED_PROJECTS_DIR,
+      `${profileName}-${Date.now()}`,
+    );
+    await mkdir(kept, { recursive: true });
+    await mergeInto(profileProjects, kept);
+  }
+  // Only empty directories are removed: a run on this account may have written
+  // a new transcript after the listing. That file must survive, so the profile
+  // keeps its own `projects` until a later resolve can move it.
+  if (!(await removeEmptyTree(profileProjects))) return;
+  await symlink(sharedProjects, profileProjects, await linkTypeFor(sharedProjects));
 };
 
 const retireProfile = async (configDir: string) => {
@@ -302,6 +428,13 @@ export class ClaudeCodeAccountProfiles {
   #linkSharedEntries = async (configDir: string) => {
     const defaultDir = this.#defaultConfigDir;
     await mkdir(path.join(defaultDir, 'projects'), { recursive: true });
+
+    // Transcripts must be one tree for resume to survive an account switch.
+    const profileProjects = path.join(configDir, 'projects');
+    if (await exists(profileProjects))
+      await adoptProfileProjects(profileProjects, path.join(defaultDir, 'projects')).catch(
+        () => {},
+      );
 
     for (const name of SHARED_ENTRIES) {
       const source = path.join(defaultDir, name);

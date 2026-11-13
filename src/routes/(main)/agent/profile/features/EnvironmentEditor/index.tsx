@@ -10,10 +10,14 @@ import {
 import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
 import { Alert, Flexbox, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { Fingerprint, MonitorSmartphone } from 'lucide-react';
+import { Fingerprint, MonitorSmartphone, Scale, UsersRound } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { scrollToAgentQuotaAccounts } from '@/features/AgentQuotaAccounts/anchor';
+import AgentAuthorizedAccounts from '@/features/AgentQuotaAccounts/AuthorizedAccounts';
+import { balancesAccountsOn } from '@/features/AgentQuotaAccounts/loadBalancingTarget';
+import QuotaAccountManager from '@/features/ChatInput/ControlBar/HeteroControlBar/QuotaMenu/QuotaAccountManagerModal';
 import { ClaudeCodeEntrypointSetting } from '@/features/HeterogeneousAgent/ClaudeCodeEntrypointSetting';
 import { ApiAuthLocalOnlyNotice } from '@/features/HeterogeneousAgent/ExecutionEnvironment/ApiAuthLocalOnlyNotice';
 import { DeviceCliStatusCard } from '@/features/HeterogeneousAgent/ExecutionEnvironment/DeviceCliStatusCard';
@@ -31,7 +35,7 @@ import WorkspaceAgentDevicePolicy from '../ProfileEditor/WorkspaceAgentDevicePol
 import { WorkspaceAgentPolicyCard } from '../ProfileEditor/WorkspaceAgentPolicyCard';
 
 const EnvironmentEditor = memo(() => {
-  const { t } = useTranslation(['setting', 'agent']);
+  const { t } = useTranslation(['setting', 'agent', 'chat']);
   const { allowed: canEdit } = usePermission('edit_own_content');
   const agentId = useAgentStore((s) => s.activeAgentId || '');
   const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
@@ -272,6 +276,34 @@ const EnvironmentEditor = memo(() => {
                     onEnvChange={updateHeterogeneousEnv}
                   />
                 </WorkspaceAgentPolicyCard>
+              )}
+            {/* Subscription accounts this agent may be scheduled on, then how
+                runs are balanced across exactly those accounts. */}
+            {heterogeneousProvider.type === 'claude-code' &&
+              (heterogeneousProvider.authMode ?? 'subscription') === 'subscription' && (
+                <>
+                  <WorkspaceAgentPolicyCard
+                    fullWidth
+                    icon={UsersRound}
+                    title={t('heteroAgent.agentAccounts.title', { ns: 'chat' })}
+                  >
+                    <AgentAuthorizedAccounts agentId={agentId} disabled={!canEdit} />
+                  </WorkspaceAgentPolicyCard>
+                  {balancesAccountsOn(executionTarget.target, executionTarget.deviceId) && (
+                    <WorkspaceAgentPolicyCard
+                      fullWidth
+                      icon={Scale}
+                      title={t('heteroAgent.agentAccounts.loadBalance', { ns: 'chat' })}
+                    >
+                      <QuotaAccountManager
+                        agentId={agentId}
+                        deviceId={executionTarget.deviceId}
+                        disabled={!canEdit}
+                        onManageAccounts={() => void scrollToAgentQuotaAccounts()}
+                      />
+                    </WorkspaceAgentPolicyCard>
+                  )}
+                </>
               )}
           </>
         ) : null}
