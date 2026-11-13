@@ -45,3 +45,16 @@ export type WorkspaceApiKeyMemberCreation = 'admins_only' | 'all_members';
  * member's stored credentials stays with that creator and the workspace owner.
  */
 export type WorkspaceConnectorMemberManage = 'admins_only' | 'all_members';
+
+/**
+ * Who may see and use a workspace connector (`user_connectors.visibility`),
+ * mirroring devices / agents:
+ * - `public` — shared with the workspace: every member sees it and every agent
+ *   in the workspace may load it.
+ * - `private` — the creator's own (私人): only the creator sees it, and only the
+ *   creator's private agents load it.
+ * Ignored for personal connectors (`workspace_id IS NULL`), which are
+ * implicitly private to their owner.
+ */
+export const CONNECTOR_VISIBILITIES = ['private', 'public'] as const;
+export type ConnectorVisibility = (typeof CONNECTOR_VISIBILITIES)[number];

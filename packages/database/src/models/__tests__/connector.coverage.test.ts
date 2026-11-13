@@ -49,7 +49,7 @@ describe('ConnectorModel coverage edges', () => {
         metadata: { mountedByAgentId: agentId },
       });
 
-      const resolved = await model.resolveByIdentifiers(['linear'], agentId);
+      const resolved = await model.resolveByIdentifiers(['linear'], { agentId });
 
       expect(resolved.map((row) => row.id)).toEqual([mounted.id]);
       // Without an agent, only the free row is a candidate.

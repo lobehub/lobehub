@@ -17,6 +17,7 @@ export * from './auth';
 export * from './brief';
 export * from './channel';
 export * from './chunk';
+export * from './connector';
 export * from './conversation';
 export * from './creds';
 export * from './dashboard';
