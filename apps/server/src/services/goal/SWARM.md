@@ -215,11 +215,22 @@ Each PR's acceptance includes the EdgeBench harness on `k12_math_recommendation`
 - output tokens are at most 0.75× best-of-3;
 - the 30-minute score is no worse than best-of-3, which the warm-up phase must buy back.
 
-## Open questions
+## Decisions
 
-- Should the planner pick swarm mode on its own when a requirement names a metric and a
-  command, or only when the user asks for it?
-- Should the champion's promotion back to the root workspace be automatic (unpack the
-  champion archive over the root) or always a user action?
-- Evaluator contention: one lock per device serialises heavy judges. Do lanes on several
-  devices need a shared queue?
+Everything defaults to automatic.
+
+- **The planner selects swarm mode on its own** when the requirement names a score or metric
+  to push and a command that produces it (an evaluator script, a benchmark, a test that
+  prints a number). It infers the evaluator, the direction and the deadline from the
+  requirement. The lane count is `min(3, maxConcurrentTasks)` unless the user sets it.
+  `--swarm` / `--no-swarm` override the choice.
+- **The champion is promoted automatically at wrap-up.** The best valid archive is
+  unpacked over the root workspace, after the root's previous state has been kept as a
+  snapshot: a Work version, plus `.lanes/_before_promote` on devices. A one-click restore
+  undoes the promotion. The Goal report states what was promoted and from which lane.
+- **Evaluations queue per machine, not globally.** Each device (or sandbox) evaluates only
+  its own lanes, and a per-machine lock keeps heavy evaluators from running at the same
+  time on one host. A global limit is needed only when the evaluator calls a shared
+  external resource, such as a rate-limited judge API. For that case
+  `config.swarm.maxConcurrentEvaluations` (default: unlimited) is enforced by the server
+  through a short lease taken by `lh goal evaluate`.
