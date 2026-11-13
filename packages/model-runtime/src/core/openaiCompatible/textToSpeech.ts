@@ -83,6 +83,14 @@ const readSpeechEventStream = async (response: Response): Promise<SpeechEventStr
 };
 
 /**
+ * Text a gateway bills for a Fish Audio model: OpenRouter writes `instructions` into the
+ * input as a leading `[direction]`, the way Fish takes delivery directions, and bills it.
+ * @see https://openrouter.ai/docs/guides/overview/multimodal/tts
+ */
+const fishAudioBilledText = (input: string, params: { instructions?: string }) =>
+  params.instructions ? `[${params.instructions}] ${input}` : input;
+
+/**
  * `POST /audio/speech` with the standard TTS params. Token-billed models (e.g.
  * `gpt-4o-mini-tts`) are requested as SSE because only the `speech.audio.done` event
  * reports token usage; character-billed models (`tts-1`) return the raw audio body.
@@ -144,7 +152,7 @@ export const createOpenAICompatibleSpeech = async (
   const billedCharacters = streamUsage
     ? undefined
     : fishAudio
-      ? { inputCharacters: countFishAudioBilledBytes(payload.input) }
+      ? { inputCharacters: countFishAudioBilledBytes(fishAudioBilledText(payload.input, params)) }
       : isMiniMaxSpeechModel(payload.model) || isMiniMaxSpeechModel(context.requestModel)
         ? { inputCharacters: countMiniMaxSpeechCharacters(payload.input) }
         : undefined;

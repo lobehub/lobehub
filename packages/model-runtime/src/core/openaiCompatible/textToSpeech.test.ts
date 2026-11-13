@@ -174,6 +174,21 @@ describe('createOpenAICompatibleSpeech', () => {
     expect(result.usage?.inputCharacters).toBe(6);
   });
 
+  it('bills the instructions a gateway writes in front of a Fish Audio input', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+
+    const result = await createOpenAICompatibleSpeech(
+      client,
+      { input: '你好', model: 's2.1-pro', params: { instructions: 'whisper' }, voice: 'default' },
+      undefined,
+      { ...context, requestModel: 'fish-audio/s2.1-pro' },
+    );
+
+    expect(create.mock.calls[0][0]).toMatchObject({ instructions: 'whisper' });
+    // "[whisper] " (10) + 2 Han × 3 bytes = 16 billed bytes
+    expect(result.usage?.inputCharacters).toBe(16);
+  });
+
   it('keeps a voice named "default" for non-Fish models', async () => {
     create.mockResolvedValue(audioResponse([0]));
 
