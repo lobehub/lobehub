@@ -1,7 +1,11 @@
 import type { LobeAgentAgencyConfig } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { resolveExecutionPlan, resolveExecutionTarget } from './executionTarget';
+import {
+  applyTopicDeviceBinding,
+  resolveExecutionPlan,
+  resolveExecutionTarget,
+} from './executionTarget';
 
 const cfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig => ({ ...over });
 
@@ -60,5 +64,31 @@ describe('unset execution target defaults to auto', () => {
     expect(
       resolveExecutionPlan({ ...params, agencyConfig: cfg({ executionTarget: 'none' }) }),
     ).toEqual({ kind: 'none', target: 'none' });
+  });
+
+  describe('applyTopicDeviceBinding', () => {
+    it('leaves an agent with no stored target to the auto default', () => {
+      // An unset target already resolves to `auto`, so converting the topic's
+      // machine into a concrete pin here would make the default stricter than an
+      // explicit `auto` (which re-picks a device every run).
+      const unset = cfg();
+
+      expect(
+        applyTopicDeviceBinding({ agencyConfig: unset, workspaceScoped: false }, 'dev-a', undefined)
+          .agencyConfig,
+      ).toBe(unset);
+    });
+
+    it('still honours a leftover binding on a config without a stored target', () => {
+      // A bound device is not an auto default — `defaultsToAuto` skips it, so the
+      // topic keeps routing to its own machine.
+      expect(
+        applyTopicDeviceBinding(
+          { agencyConfig: cfg({ boundDeviceId: 'dev-b' }), workspaceScoped: false },
+          'dev-a',
+          undefined,
+        ).agencyConfig,
+      ).toMatchObject({ boundDeviceId: 'dev-a', executionTarget: 'device' });
+    });
   });
 });
