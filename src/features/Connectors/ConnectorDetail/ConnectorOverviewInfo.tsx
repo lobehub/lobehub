@@ -7,9 +7,12 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ConnectorSourceType, ConnectorStatus } from '@/database/schemas';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
+
+import { connectorSupportsEvents } from '../connectorCapabilities';
 
 const styles = stylex.create({
   label: {
@@ -67,12 +70,13 @@ interface ConnectorOverviewInfoProps {
 }
 
 /**
- * Overview facts of a connector: whether it is authorized and who authorized
- * it. The kind of object sits under the page title; tool permissions live in
- * the Tools tab.
+ * Overview facts of a connector: whether it is authorized, who authorized
+ * it, and whether agents can subscribe to its events. The kind of object sits
+ * under the page title; tool permissions live in the Tools tab.
  */
 const ConnectorOverviewInfo = memo<ConnectorOverviewInfoProps>(({ connector }) => {
   const { t } = useTranslation('tool');
+  const enableMcpEvents = useServerConfigStore(serverConfigSelectors.enableMcpEvents);
 
   const kind = getConnectorKind(connector);
   const isBuiltin = kind === 'builtin';
@@ -106,6 +110,14 @@ const ConnectorOverviewInfo = memo<ConnectorOverviewInfoProps>(({ connector }) =
             <Avatar avatar={connector.authorizedByAvatar} shape={'circle'} size={20} />
           )}
           <Text ellipsis>{connector.authorizedByName}</Text>
+        </Row>
+      )}
+      {/* Tells the user which connectors an agent can subscribe to, so asking
+          for "tell me when …" is not a guess. Absent, not "unsupported", when
+          it cannot: most connectors never will, and a row of negatives is noise. */}
+      {enableMcpEvents && connectorSupportsEvents(connector) && (
+        <Row label={t('connector.overview.events')}>
+          <Tag color={'processing'}>{t('connector.eventsSupported')}</Tag>
         </Row>
       )}
     </div>

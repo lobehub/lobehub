@@ -43,6 +43,14 @@ const wrapper = ({ children }: { children: ReactNode }) => (
   <Provider createStore={() => initServerConfigStore({})}>{children}</Provider>
 );
 
+const wrapperWithMcpEvents = ({ children }: { children: ReactNode }) => (
+  <Provider
+    createStore={() => initServerConfigStore({ featureFlags: { enableMcpEvents: true } as never })}
+  >
+    {children}
+  </Provider>
+);
+
 const initialUserStoreState = useUserStore.getState();
 
 const getItemKeys = () => {
@@ -253,5 +261,34 @@ describe('workspace settings useCategory', () => {
     expect(itemKeys).not.toContain(WorkspaceSettingsTabs.Billing);
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Plans);
     expect(itemKeys).toContain(WorkspaceSettingsTabs.Usage);
+  });
+});
+
+describe('workspace settings useCategory automations', () => {
+  const connectionKeys = (withFlag: boolean) => {
+    const { result } = renderHook(() => useWorkspaceSettingCategory(), {
+      wrapper: withFlag ? wrapperWithMcpEvents : wrapper,
+    });
+
+    return result.current
+      .find((group) => group.key === WorkspaceSettingsGroupKey.Connection)
+      ?.items.map((item) => item.key);
+  };
+
+  // Unreleased: the tab follows the `mcp_events` flag (LOBE-UX-015).
+  it('hides Automations while MCP Events is off', () => {
+    expect(connectionKeys(false)).not.toContain(WorkspaceSettingsTabs.Automations);
+  });
+
+  // Every role sees it: the list is how members learn what fires shared agents.
+  it('lists Automations after the connectors for every role', () => {
+    mocks.canCreateContent = false;
+    mocks.canManageWorkspace = false;
+    mocks.canViewBilling = false;
+    const keys = connectionKeys(true) ?? [];
+
+    expect(keys.indexOf(WorkspaceSettingsTabs.Automations)).toBe(
+      keys.indexOf(WorkspaceSettingsTabs.Connector) + 1,
+    );
   });
 });

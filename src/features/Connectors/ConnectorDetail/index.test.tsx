@@ -10,6 +10,7 @@ import { ConnectorSourceType } from '@/database/schemas';
 import ConnectorDetail from './index';
 
 const mocks = vi.hoisted(() => ({
+  enableMcpEvents: false,
   toolState: {
     connectorTools: {
       createTools: [],
@@ -22,7 +23,10 @@ const mocks = vi.hoisted(() => ({
       id: string;
       identifier: string;
       isEnabled?: boolean;
-      metadata?: { description?: string };
+      metadata?: {
+        capabilities?: { events?: { supported: boolean } };
+        description?: string;
+      };
       mcpConnectionType?: string;
       mcpServerUrl?: string;
       name: string;
@@ -71,6 +75,16 @@ vi.mock('@/hooks/useConnectorManagePolicy', () => ({
 // tests, and it drags heavy module graphs into the unit env.
 vi.mock('@/hooks/useResourceManageable', () => ({
   useResourceManageable: () => true,
+}));
+
+// The overview reads the MCP Events flag; the real store pulls in the user
+// store chain, which the `@lobechat/const` mock above cannot satisfy.
+vi.mock('@/store/serverConfig', () => ({
+  serverConfigSelectors: {
+    enableMcpEvents: (state: { enableMcpEvents: boolean }) => state.enableMcpEvents,
+  },
+  useServerConfigStore: <T,>(selector: (state: { enableMcpEvents: boolean }) => T): T =>
+    selector({ enableMcpEvents: mocks.enableMcpEvents }),
 }));
 
 vi.mock('@/store/tool', () => ({
@@ -127,6 +141,7 @@ describe('ConnectorDetail', () => {
     mocks.toolState.syncing = false;
     mocks.toolState.uninstalledBuiltinTools = [];
     mocks.manageable.canManageCredentials = true;
+    mocks.enableMcpEvents = false;
   });
 
   describe('Refresh', () => {
@@ -202,6 +217,39 @@ describe('ConnectorDetail', () => {
     render(<ConnectorDetail connectorId="connector-1" />);
 
     expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+  });
+
+
+  it('says the connector supports event subscriptions when its server does and the feature is on', () => {
+    mocks.toolState.connectors[0] = {
+      ...mocks.toolState.connectors[0],
+      metadata: { capabilities: { events: { supported: true } } },
+    };
+    mocks.enableMcpEvents = true;
+
+    render(<ConnectorDetail connectorId="connector-1" />);
+
+    expect(screen.getByText('connector.overview.events')).toBeInTheDocument();
+    expect(screen.getByText('connector.eventsSupported')).toBeInTheDocument();
+  });
+
+  it('leaves the events row out while the feature is off or the server has no events', () => {
+    mocks.toolState.connectors[0] = {
+      ...mocks.toolState.connectors[0],
+      metadata: { capabilities: { events: { supported: true } } },
+    };
+
+    const { unmount } = render(<ConnectorDetail connectorId="connector-1" />);
+    expect(screen.queryByText('connector.eventsSupported')).not.toBeInTheDocument();
+    unmount();
+
+    mocks.enableMcpEvents = true;
+    mocks.toolState.connectors[0] = {
+      ...mocks.toolState.connectors[0],
+      metadata: { capabilities: { events: { supported: false } } },
+    };
+    render(<ConnectorDetail connectorId="connector-1" />);
+    expect(screen.queryByText('connector.eventsSupported')).not.toBeInTheDocument();
   });
 
   it('uses lifecycle actions instead of the generic marketplace uninstall action', () => {
