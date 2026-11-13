@@ -14,6 +14,7 @@ import { AgentRuntimeError } from '../../utils/createError';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { resolveMappedModelId } from '../../utils/modelIdMapping';
 import { waitForMusicCompletion } from '../../utils/musicPolling';
+import { trimTrailingSlashes } from '../../utils/trimTrailingSlashes';
 
 const log = createDebug('lobe-music:suno');
 
@@ -243,7 +244,7 @@ export async function pollSunoMusicStatus(
   options: Pick<SunoMusicOptions, 'apiKey' | 'baseURL' | 'provider' | 'signal'>,
 ): Promise<PollMusicStatusResult> {
   try {
-    const url = new URL(`${options.baseURL.replace(/\/+$/, '')}/api/v1/generate/record-info`);
+    const url = new URL(`${trimTrailingSlashes(options.baseURL)}/api/v1/generate/record-info`);
     url.searchParams.set('taskId', taskId);
 
     const record = await sunoFetch<SunoRecordInfo>(url.toString(), {
@@ -297,7 +298,7 @@ export async function createSunoMusic(
     log('generate request: model=%s customMode=%s', modelVersion, body.customMode);
 
     const data = await sunoFetch<{ taskId?: string }>(
-      `${baseURL.replace(/\/+$/, '')}/api/v1/generate`,
+      `${trimTrailingSlashes(baseURL)}/api/v1/generate`,
       {
         apiKey,
         body: JSON.stringify(body),

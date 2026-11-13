@@ -13,6 +13,7 @@ import type {
 import { AgentRuntimeError } from '../../utils/createError';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { resolveMappedModelId } from '../../utils/modelIdMapping';
+import { trimTrailingSlashes } from '../../utils/trimTrailingSlashes';
 import { decodeMiniMaxHexAudio, getMiniMaxSpeechErrorType } from './createSpeech';
 
 const log = createDebug('lobe-music:minimax');
@@ -279,7 +280,7 @@ export async function createMiniMaxMusic(
 
     log('music_generation request: model=%s stream=%s', requestModel, !!body.stream);
 
-    const response = await fetch(`${baseURL.replace(/\/+$/, '')}/music_generation`, {
+    const response = await fetch(`${trimTrailingSlashes(baseURL)}/music_generation`, {
       body: JSON.stringify(body),
       headers: {
         ...options.headers,

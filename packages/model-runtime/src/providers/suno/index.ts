@@ -4,6 +4,7 @@ import type { LobeRuntimeAI } from '../../core/BaseAI';
 import type { CreateMusicOptions, CreateMusicPayload } from '../../types/music';
 import { AgentRuntimeError } from '../../utils/createError';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
+import { trimTrailingSlashes } from '../../utils/trimTrailingSlashes';
 import { createSunoMusic, DEFAULT_SUNO_BASE_URL, pollSunoMusicStatus } from './createMusic';
 
 const SUNO_PROVIDER_ID = 'suno';
@@ -30,7 +31,7 @@ export class LobeSunoAI implements LobeRuntimeAI {
       throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidProviderAPIKey);
 
     this.apiKey = apiKey.trim();
-    this.baseURL = (baseURL || DEFAULT_SUNO_BASE_URL).replace(/\/+$/, '');
+    this.baseURL = trimTrailingSlashes(baseURL || DEFAULT_SUNO_BASE_URL);
     this.id = id || SUNO_PROVIDER_ID;
     this.modelIdMapping = modelIdMapping;
   }
