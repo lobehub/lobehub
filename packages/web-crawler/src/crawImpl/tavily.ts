@@ -24,13 +24,14 @@ interface TavilyResponse {
 export const tavily: CrawlImpl = async (url) => {
   // Get API key from environment variable
   const apiKey = process.env.TAVILY_API_KEY;
+  const baseUrl = process.env.TAVILY_URL || 'https://api.tavily.com';
 
   let res: Response;
 
   try {
     res = await withTimeout(
       (signal) =>
-        fetch('https://api.tavily.com/extract', {
+        fetch(`${baseUrl}/extract`, {
           body: JSON.stringify({
             extract_depth: process.env.TAVILY_EXTRACT_DEPTH || 'basic', // basic or advanced
             include_images: false,

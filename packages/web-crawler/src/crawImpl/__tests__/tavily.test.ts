@@ -14,6 +14,7 @@ describe('tavily crawler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.TAVILY_API_KEY;
+    delete process.env.TAVILY_URL;
     delete process.env.TAVILY_EXTRACT_DEPTH;
   });
 
@@ -327,5 +328,30 @@ describe('tavily crawler', () => {
     );
 
     consoleSpy.mockRestore();
+  });
+
+  it('should use TAVILY_URL from env when set', async () => {
+    process.env.TAVILY_URL = 'https://tavily-proxy.example.com';
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      createMockResponse({
+        base_url: 'https://tavily-proxy.example.com',
+        response_time: 1,
+        results: [{ raw_content: 'Proxy content. '.repeat(10), url: 'https://example.com' }],
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { withTimeout } = await import('../../utils/withTimeout');
+    vi.mocked(withTimeout).mockImplementation((fn) => fn(new AbortController().signal));
+
+    await tavily('https://example.com', { filterOptions: {} });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://tavily-proxy.example.com/extract',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    vi.unstubAllGlobals();
   });
 });
