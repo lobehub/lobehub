@@ -46,8 +46,10 @@ export const minimaxMusicCoverSchema = {
 // ---------------------------------------------------------------------------
 
 /**
- * Suno V6 family. Filling `lyrics`, `title` or `style` switches the request to custom mode;
- * otherwise Suno writes the song (and its lyrics) from `prompt` alone.
+ * Suno V6 family. `prompt` is the core idea of the song, not enough on its own: the gateway
+ * needs a `style`, `lyrics` or reference audio with it. Setting `title`, `negativeStyle` or
+ * `duration` switches the request to custom mode, which needs lyrics, a style or a negative
+ * style and takes no reference audio.
  */
 export const sunoV6MusicSchema = {
   duration: { default: null, max: 360, min: 10, step: 1 },
