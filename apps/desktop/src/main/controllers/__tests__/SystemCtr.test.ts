@@ -59,6 +59,7 @@ vi.mock('electron', () => ({
     getLocale: vi.fn(() => 'en-US'),
     getPath: vi.fn((name: string) => `/mock/path/${name}`),
     getPreferredSystemLanguages: vi.fn(() => ['en-US']),
+    getVersion: vi.fn(() => '2.0.0'),
     isPackaged: false,
   },
   desktopCapturer: {
@@ -78,6 +79,7 @@ vi.mock('electron', () => ({
   shell: {
     openExternal: vi.fn().mockResolvedValue(undefined),
     openPath: vi.fn().mockResolvedValue(''),
+    showItemInFolder: vi.fn(),
   },
   systemPreferences: {
     askForMediaAccess: vi.fn(async () => true),
@@ -87,10 +89,23 @@ vi.mock('electron', () => ({
 }));
 
 const structuredLogMock = vi.hoisted(() => ({
-  applyDebugLogging: vi.fn(),
+  flushStructuredLogs: vi.fn(async () => {}),
   getStructuredLogDirectory: vi.fn(() => '/mock/path/userData/logs'),
 }));
 vi.mock('@/utils/structuredLog', () => structuredLogMock);
+
+const debugLoggingMock = vi.hoisted(() => ({ setDebugLogging: vi.fn() }));
+vi.mock('@/modules/debugLogging', () => debugLoggingMock);
+
+const diagnosticsBundleMock = vi.hoisted(() => ({
+  writeDiagnosticsBundle: vi.fn(async ({ outputDirectory }: { outputDirectory: string }) => ({
+    fileName: 'LobeHub-diagnostics-20261113-080000.zip',
+    filePath: `${outputDirectory}/LobeHub-diagnostics-20261113-080000.zip`,
+    size: 2048,
+  })),
+}));
+vi.mock('@/modules/diagnostics/bundle', () => diagnosticsBundleMock);
+vi.mock('@/modules/updater/configs', () => ({ BUILD_CHANNEL: 'stable' }));
 
 const remoteDebuggingMock = vi.hoisted(() => ({
   REMOTE_DEBUGGING_PORT: 9222,
@@ -246,14 +261,61 @@ describe('SystemController', () => {
       });
     });
 
-    it('persists the switch and applies it to the running log sink', async () => {
+    it('reports when a timed setting turns itself off', async () => {
+      mockStoreManager.get.mockReturnValueOnce(true).mockReturnValueOnce(1_800_000_000_000);
+
+      expect(await invokeIpc('system.getDebugLoggingSettings')).toEqual({
+        alwaysOn: false,
+        enabled: true,
+        expiresAt: 1_800_000_000_000,
+      });
+    });
+
+    it('applies the chosen duration and returns the new state', async () => {
       mockStoreManager.get.mockReturnValueOnce(true);
 
-      const result = await invokeIpc('system.setDebugLoggingEnabled', true);
+      const result = await invokeIpc('system.setDebugLogging', '24h');
 
-      expect(mockStoreManager.set).toHaveBeenCalledWith('debugLoggingEnabled', true);
-      expect(structuredLogMock.applyDebugLogging).toHaveBeenCalledWith(true);
-      expect(result).toEqual({ alwaysOn: false, enabled: true });
+      expect(debugLoggingMock.setDebugLogging).toHaveBeenCalledWith(mockStoreManager, '24h');
+      expect(result).toMatchObject({ alwaysOn: false, enabled: true });
+    });
+
+    it('exports the diagnostics zip to Downloads and selects it', async () => {
+      const { shell } = await import('electron');
+
+      const result = await invokeIpc('system.exportDiagnostics');
+
+      expect(structuredLogMock.flushStructuredLogs).toHaveBeenCalled();
+      expect(diagnosticsBundleMock.writeDiagnosticsBundle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          logDirectory: '/mock/path/userData/logs',
+          outputDirectory: '/mock/path/downloads',
+          systemInfo: expect.objectContaining({
+            app: expect.objectContaining({ isPackaged: true }),
+            os: expect.objectContaining({ platform: process.platform }),
+          }),
+        }),
+      );
+      expect(shell.showItemInFolder).toHaveBeenCalledWith(
+        '/mock/path/downloads/LobeHub-diagnostics-20261113-080000.zip',
+      );
+      expect(result).toMatchObject({ size: 2048 });
+    });
+
+    it('falls back to the log folder when Downloads cannot be written', async () => {
+      const { shell } = await import('electron');
+      diagnosticsBundleMock.writeDiagnosticsBundle.mockRejectedValueOnce(
+        Object.assign(new Error('EACCES'), { code: 'EACCES' }),
+      );
+
+      await invokeIpc('system.exportDiagnostics');
+
+      expect(diagnosticsBundleMock.writeDiagnosticsBundle).toHaveBeenLastCalledWith(
+        expect.objectContaining({ outputDirectory: '/mock/path/userData/logs' }),
+      );
+      expect(shell.showItemInFolder).toHaveBeenCalledWith(
+        '/mock/path/userData/logs/LobeHub-diagnostics-20261113-080000.zip',
+      );
     });
 
     it('opens the structured log directory', async () => {

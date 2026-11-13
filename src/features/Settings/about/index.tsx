@@ -4,7 +4,6 @@ import SettingHeader from '@/features/Settings/features/SettingHeader';
 
 import About from './features/About';
 import Analytics from './features/Analytics';
-import DebugLogs from './features/DebugLogs';
 
 interface PageProps {
   mobile?: boolean;
@@ -18,7 +17,6 @@ const Page = ({ mobile, showSettingHeader = true }: PageProps) => {
       {showSettingHeader && <SettingHeader title={t('tab.about')} />}
       <About mobile={mobile} />
       <Analytics />
-      <DebugLogs />
     </>
   );
 };

@@ -2,7 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import { confirmModal, Switch } from '@lobehub/ui';
-import { type FormFieldProps } from '@lobehub/ui/form';
+import { type FormFieldProps, type FormValues } from '@lobehub/ui/form';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -11,12 +11,14 @@ import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { desktopSettingsService } from '@/services/electron/settings';
 
 /**
- * Desktop-only Diagnostics row: persist the Chromium DevTools protocol (CDP) port for
+ * Desktop-only Settings → Advanced row (kept out of About, where everyday users look
+ * for logs): persist the Chromium DevTools protocol (CDP) port for
  * every launch, so agents can drive a packaged build. Chromium reads the switch only at
  * startup, so the row says when a change still needs a restart. A launch option that
  * already opened CDP shows the switch on and locked.
  */
-export const useRemoteDebuggingItem = (): FormFieldProps | undefined => {
+export const useRemoteDebuggingItem = <Values extends FormValues>():
+  FormFieldProps<Values> | undefined => {
   const { t } = useTranslation('setting');
   const [updating, setUpdating] = useState(false);
 
@@ -43,7 +45,9 @@ export const useRemoteDebuggingItem = (): FormFieldProps | undefined => {
     ? t('settingAbout.remoteDebugging.launchOptionDesc')
     : data && data.enabled !== data.active
       ? t('settingAbout.remoteDebugging.restartToApply')
-      : t('settingAbout.remoteDebugging.desc', { port });
+      : data?.active
+        ? t('settingAbout.remoteDebugging.activeDesc', { port })
+        : t('settingAbout.remoteDebugging.desc');
 
   return {
     children: (
@@ -70,7 +74,7 @@ export const useRemoteDebuggingItem = (): FormFieldProps | undefined => {
     ),
     desc,
     label: (
-      <SettingsSearchAnchor id={'about-remote-debugging'}>
+      <SettingsSearchAnchor id={'advanced-remote-debugging'}>
         {t('settingAbout.remoteDebugging.title')}
       </SettingsSearchAnchor>
     ),
