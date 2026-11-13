@@ -85,23 +85,24 @@ lh goal create "Raise k12 score" \
 
 ### 1. Lanes and workspaces
 
-- **Lanes are graph nodes.** Each lane is an `experiment` container node holding one lane
-  Task, and `config.swarm` records the lanes. This reuses the containment, collapse and
-  drill-down graph UI.
-- **Each lane gets its own working directory.** The coordinator dispatches the lane Task
-  with `initialTopicMetadata.workingDirectory = <workspace>/.lanes/<lane>`. Topic metadata
-  already overrides the agent's per-device default (`topicWorkingDirectory.ts`), so the
-  cwd-resolution rules need no change.
-- **The device forks the workspace.** On the first run of a lane, `lh hetero exec`
-  creates `.lanes/<lane>`:
-  - `git worktree add` when the workspace is a git repo;
-  - otherwise a copy-on-write copy (`cp -c` on APFS, `cp --reflink=auto` on Linux).
-
-  Lanes may read each other's directories but never write to them. This is a prompt rule,
-  as in the benchmark.
-- **The device can adopt another lane.** `lh goal lane adopt <lane>` replaces the calling
-  lane's files with another lane's current files. It keeps a snapshot, so the adopting
-  lane can roll back. The coordinator's "lagging" directive tells a lane to run it.
+- Lanes are `experiment` container nodes, one lane Task inside each; `config.swarm` records
+  the lanes. This reuses containment, collapse and drill-down in the graph UI.
+- **Where a lane runs** decides how it gets its own workspace:
+  - **Device**: a plain directory copy, no git worktree. On the lane's first run
+    `lh hetero exec` copies the workspace into `<workspace>/.lanes/<lane>` — `cp -c`
+    (APFS clone) / `cp --reflink=auto`, falling back to a normal copy — `.git` included, so
+    each lane is a self-contained repo that nothing else writes to. The coordinator
+    dispatches the lane Task with `initialTopicMetadata.workingDirectory` set to that
+    directory; topic metadata already wins over the agent's per-device default
+    (`topicWorkingDirectory.ts`), so cwd resolution is unchanged.
+  - **Sandbox**: nothing to split. Every lane is its own sandbox started from the same
+    workspace source, so isolation comes for free.
+- **Sharing between lanes goes through the server, never through another lane's files.**
+  Each `lh goal evaluate` uploads the archive of the deliverables it just graded (the
+  evaluator's declared paths, small by construction) as a Work version linked to the lane.
+  `lh goal lane adopt <lane>` downloads that lane's latest valid archive into the calling
+  lane, keeping a local snapshot for rollback. Devices and sandboxes use the same path, and
+  the champion is simply the best valid archive.
 
 ### 2. Evaluator and objective
 
@@ -112,12 +113,14 @@ lh goal create "Raise k12 score" \
 2. Runs `config.swarm.evaluator` in the lane directory. Evaluations are serialised per
    device by a lock, because evaluators are often heavy.
 3. Parses the score.
-4. Writes a metric point on the Goal's objective series:
+4. Uploads the graded deliverables archive as a Work version on the lane (what `lane adopt`
+   and the champion read).
+5. Writes a metric point on the Goal's objective series:
    - `actorType: agent`, `sourceType: probe`;
    - `metadata: {lane, taskId, operationId, fingerprint, valid, summary}`;
    - `fingerprint` is a hash of the evaluator's declared deliverable paths, or of
      `git diff HEAD` in the lane.
-5. Prints the score and feedback to the agent.
+6. Prints the score and feedback to the agent.
 
 The objective is a north-star criterion, so the existing metric gate (#19133) and the
 metric UI apply without new storage. The leaderboard is a read model over the series
@@ -201,7 +204,7 @@ below holds.
 |---|---|---|
 | 1 | Goal marks (done, 0f5d9bb672a) | — |
 | 2 | `lh goal evaluate`, objective series with lane metadata, operation-token write path, leaderboard read model | 1 |
-| 3 | `config.swarm`, lane containers, per-lane working directory, device-side fork / adopt, timeboxed lane Tasks, deadline wrap-up and champion | 2 |
+| 3 | `config.swarm`, lane containers, per-lane directory (device) / per-lane sandbox, archive-based `lane adopt`, timeboxed lane Tasks, deadline wrap-up and champion | 2 |
 | 4 | Coordinator policy in tick, `directive` marks, prompt pinning | 3 |
 | 5 | Goal page leaderboard and champion promote (web) | 2 (reads), 4 |
 
@@ -216,9 +219,7 @@ Each PR's acceptance includes the EdgeBench harness on `k12_math_recommendation`
 
 - Should the planner pick swarm mode on its own when a requirement names a metric and a
   command, or only when the user asks for it?
-- Remote and sandbox execution: forking `.lanes/` needs a device filesystem. For cloud
-  sandboxes, a lane would be a sandbox snapshot instead.
-- Should the champion's promotion back to the root workspace be automatic (a git branch
-  per lane plus a merge) or always a user action?
+- Should the champion's promotion back to the root workspace be automatic (unpack the
+  champion archive over the root) or always a user action?
 - Evaluator contention: one lock per device serialises heavy judges. Do lanes on several
   devices need a shared queue?
