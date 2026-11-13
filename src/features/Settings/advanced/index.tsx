@@ -18,6 +18,8 @@ import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { type UserGeneralConfig } from '@/types/user/settings';
 
+import { useRemoteDebuggingItem } from './useRemoteDebuggingItem';
+
 type UpdateChannelValue = 'canary' | 'stable';
 
 const Page = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader = true }) => {
@@ -47,6 +49,7 @@ const Page = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader = true }
   });
 
   const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
+  const remoteDebuggingItem = useRemoteDebuggingItem<UserGeneralConfig>();
 
   const [channel, setChannel] = useState<UpdateChannelValue>('stable');
 
@@ -124,6 +127,7 @@ const Page = memo<{ showSettingHeader?: boolean }>(({ showSettingHeader = true }
             } satisfies FormFieldProps<UserGeneralConfig>,
           ]
         : []),
+      ...(remoteDebuggingItem ? [remoteDebuggingItem] : []),
     ],
     extra: loading && <Spin size="small" style={{ opacity: 0.5 }} />,
     title: t('tab.advanced.toolsAndDiagnostics.title'),

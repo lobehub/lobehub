@@ -1,6 +1,7 @@
 'use client';
 
 import { BRANDING_EMAIL } from '@lobechat/business-const';
+import { isDesktop } from '@lobechat/const';
 import { Button, Flexbox, Icon, Input, toast, Upload, useModalContext } from '@lobehub/ui';
 import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { ImagePlus, Send } from 'lucide-react';
@@ -13,6 +14,7 @@ import { useFileStore } from '@/store/file';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { useUserStore } from '@/store/user/store';
 
+import DiagnosticsField from './DiagnosticsField';
 import type { FeedbackInitialValues } from './types';
 
 interface FeedbackContentProps {
@@ -184,6 +186,8 @@ const FeedbackContent = memo<FeedbackContentProps>(({ initialValues }) => {
             {t('feedback.fields.screenshot.hint')}
           </p>
         </Form.Field>
+
+        {isDesktop && <DiagnosticsField />}
       </Form>
 
       <Flexbox horizontal gap={8} justify="flex-end">

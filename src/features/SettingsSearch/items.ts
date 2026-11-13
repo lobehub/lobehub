@@ -359,6 +359,14 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     visible: (ctx) => ctx.isDesktop,
   },
   {
+    anchor: 'about-diagnostics',
+    descKey: 'settingAbout.diagnostics.bundle.desc',
+    keywords: ['diagnostics', 'export', 'logs', 'report', 'bug', 'feedback', 'zip'],
+    labelKey: 'settingAbout.diagnostics.bundle.title',
+    tab: SettingsTabs.About,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
     anchor: 'about-debug-logs',
     descKey: 'settingAbout.debugLogs.desc',
     keywords: ['debug', 'logs', 'log level', 'diagnostics', 'troubleshoot'],
@@ -367,10 +375,11 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     visible: (ctx) => ctx.isDesktop,
   },
   {
-    anchor: 'about-remote-debugging',
+    anchor: 'advanced-remote-debugging',
+    descKey: 'settingAbout.remoteDebugging.desc',
     keywords: ['remote debugging', 'cdp', 'devtools', 'diagnostics', 'debug port'],
     labelKey: 'settingAbout.remoteDebugging.title',
-    tab: SettingsTabs.About,
+    tab: SettingsTabs.Advanced,
     visible: (ctx) => ctx.isDesktop,
   },
   {
