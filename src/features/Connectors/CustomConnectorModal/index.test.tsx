@@ -5,13 +5,15 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import CustomConnectorModal from './index';
+import { saveOAuthConnectorEdit } from './oauthEdit';
 
 const mocks = vi.hoisted(() => ({
-  onSave: undefined as undefined | ((value: unknown) => Promise<void>),
+  onSave: undefined as undefined | ((value: unknown, ctx?: unknown) => Promise<void>),
   state: {
     connector: undefined as unknown,
     createConnector: vi.fn(),
     deleteConnector: vi.fn(),
+    fetchConnectors: vi.fn(),
     getConnectorForEdit: vi.fn(),
     startConnectorOAuth: vi.fn(),
     syncConnectorTools: vi.fn(),
@@ -28,7 +30,10 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/store/tool', () => ({
-  useToolStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state),
+  useToolStore: Object.assign(
+    (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state),
+    { getState: () => mocks.state },
+  ),
 }));
 
 vi.mock('@/store/tool/slices/connector', () => ({
@@ -47,6 +52,7 @@ vi.mock('@/features/PluginDevModal', () => ({
 }));
 
 vi.mock('@/utils/connectorOAuth', () => ({ waitForConnectorOAuth: vi.fn() }));
+vi.mock('./oauthEdit', () => ({ saveOAuthConnectorEdit: vi.fn() }));
 
 /**
  * The persisted list projection strips `mcpStdioConfig.env` and
@@ -246,5 +252,41 @@ describe('CustomConnectorModal edit save', () => {
       }),
     );
     expect(mocks.state.syncConnectorTools).toHaveBeenCalledWith('c1');
+  });
+
+  // Stored before its popup opens: the helper undoes it when authorization fails
+  it('authorizes an OAuth edit through the helper that can undo it', async () => {
+    mocks.state.connector = {
+      ...(mocks.state.connector as object),
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://old.example.com',
+    };
+    const popup = { close: vi.fn() };
+    render(<CustomConnectorModal open connectorId="c1" onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('seed').textContent).not.toBe('null'));
+
+    await mocks.onSave!(
+      {
+        customParams: {
+          mcp: { auth: { type: 'oauth2' }, type: 'http', url: 'https://new.example.com' },
+        },
+        identifier: 'my-mcp',
+      },
+      { oauthPopup: popup },
+    );
+
+    expect(saveOAuthConnectorEdit).toHaveBeenCalledWith(
+      'c1',
+      expect.objectContaining({
+        credentials: null,
+        mcpServerUrl: 'https://new.example.com',
+        oidcConfig: expect.objectContaining({ scheme: 'dcr' }),
+      }),
+      popup,
+      expect.any(Function),
+    );
+    expect(mocks.state.updateConnector).not.toHaveBeenCalled();
+    expect(mocks.state.syncConnectorTools).not.toHaveBeenCalled();
+    expect(popup.close).toHaveBeenCalled();
   });
 });

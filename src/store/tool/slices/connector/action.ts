@@ -441,11 +441,12 @@ export class ConnectorActionImpl {
       mcpStdioConfig?: { args?: string[]; command: string; env?: Record<string, string> };
       metadata?: Record<string, unknown>;
       name?: string;
+      /** A new client leaves the row disconnected until it is authorized; `null` drops it. */
       oidcConfig?: {
         clientId?: string;
         clientSecret?: string;
         scheme?: 'pre_registration' | 'dcr' | 'client_id_metadata_document';
-      };
+      } | null;
     },
   ): Promise<void> => {
     await lambdaClient.connector.update.mutate({ id, patch: patch as any });

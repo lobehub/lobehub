@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { snapshotReplacedConnector } from './replaceConnector';
+import { lambdaClient } from '@/libs/trpc/client';
+
+import { restoreConnector, snapshotReplacedConnector } from './replaceConnector';
 
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: { connector: { syncToolsFromClientById: { mutate: vi.fn() } } },
@@ -80,5 +82,83 @@ describe('snapshotReplacedConnector', () => {
       id: 'c1',
       snapshot: true,
     });
+  });
+});
+
+describe('restoreConnector', () => {
+  const snapshot = (over: Record<string, unknown> = {}) =>
+    ({
+      credentials: null,
+      id: 'c1',
+      isEnabled: true,
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://old.example.com',
+      mcpStdioConfig: null,
+      metadata: { marketplaceInstalled: true },
+      name: 'Old MCP',
+      oidcConfig: null,
+      status: 'connected',
+      tools: [{ description: null, inputSchema: null, metadata: null, toolName: 'search' }],
+      ...over,
+    }) as never;
+
+  it('puts back a non-OAuth row, drops the OAuth client it gained and re-marks it connected', async () => {
+    const { get, state } = makeStore([{ id: 'c1', mcpServerUrl: 'https://new.example.com' }]);
+    const bearer = { token: 'old', type: 'bearer' };
+
+    await restoreConnector(snapshot({ credentials: bearer }), get);
+
+    expect(state.updateConnector).toHaveBeenCalledWith(
+      'c1',
+      expect.objectContaining({
+        credentials: bearer,
+        mcpServerUrl: 'https://old.example.com',
+        oidcConfig: null,
+      }),
+    );
+    expect(lambdaClient.connector.syncToolsFromClientById.mutate).toHaveBeenCalledWith({
+      id: 'c1',
+      tools: [expect.objectContaining({ toolName: 'search' })],
+    });
+    expect(state.syncConnectorTools).not.toHaveBeenCalled();
+  });
+
+  describe('an OAuth row, whose tokens the edit read withholds', () => {
+    const oauth = { oidcConfig: { clientId: 'client', scheme: 'dcr' } };
+
+    it('keeps the tokens it holds on the same endpoint and asks its server', async () => {
+      const { get, state } = makeStore([{ id: 'c1', mcpServerUrl: 'https://old.example.com' }]);
+
+      await restoreConnector(snapshot(oauth), get);
+
+      const patch = state.updateConnector.mock.calls[0][1];
+      expect(patch).not.toHaveProperty('credentials');
+      expect(patch).not.toHaveProperty('oidcConfig');
+      // Never re-marked connected on the strength of a tool list alone
+      expect(lambdaClient.connector.syncToolsFromClientById.mutate).not.toHaveBeenCalled();
+      expect(state.syncConnectorTools).toHaveBeenCalledWith('c1');
+    });
+
+    it('drops the tokens of the endpoint it moves back off', async () => {
+      const { get, state } = makeStore([{ id: 'c1', mcpServerUrl: 'https://new.example.com' }]);
+      state.syncConnectorTools.mockRejectedValue(new Error('401'));
+
+      await expect(restoreConnector(snapshot(oauth), get)).resolves.toBeUndefined();
+
+      expect(state.updateConnector).toHaveBeenCalledWith(
+        'c1',
+        expect.objectContaining({ credentials: null, mcpServerUrl: 'https://old.example.com' }),
+      );
+    });
+  });
+
+  it('leaves a row that was not connected disconnected', async () => {
+    const { get, state } = makeStore([{ id: 'c1', mcpServerUrl: 'https://old.example.com' }]);
+
+    await restoreConnector(snapshot({ status: 'disconnected' }), get);
+
+    expect(state.updateConnector).toHaveBeenCalled();
+    expect(lambdaClient.connector.syncToolsFromClientById.mutate).not.toHaveBeenCalled();
+    expect(state.syncConnectorTools).not.toHaveBeenCalled();
   });
 });

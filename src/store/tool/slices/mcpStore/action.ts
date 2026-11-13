@@ -35,7 +35,11 @@ import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
-import { type ConnectorSnapshot, snapshotReplacedConnector } from '../connector/replaceConnector';
+import {
+  type ConnectorSnapshot,
+  restoreConnector,
+  snapshotReplacedConnector,
+} from '../connector/replaceConnector';
 import { buildCloudMcpManifest } from './cloudManifest';
 import { type MCPPluginListData, type MCPStoreState } from './initialState';
 import { installMarketplaceConnector } from './installMarketplaceConnector';
@@ -532,7 +536,8 @@ export class PluginMCPStoreActionImpl {
             progress: 70,
             step: MCPInstallStep.AUTHORIZING,
           });
-          oauthReplaced = await snapshotReplacedConnector(identifier, 'marketplace', this.#get);
+          const replaced = await snapshotReplacedConnector(identifier, 'marketplace', this.#get);
+          oauthReplaced = replaced;
           manifest = await installOAuthPlugin(
             {
               connection: { ...connection, headers: mergedHttpHeaders },
@@ -544,7 +549,17 @@ export class PluginMCPStoreActionImpl {
               signal: abortController.signal,
             },
             this.#get,
-          );
+          ).catch(async (error: unknown) => {
+            // The row was rewritten before the popup opened: an authorization
+            // that is denied, dismissed, timed out or canceled puts back the one
+            // it replaced. A row it created stays unmarked, so uncallable.
+            if (replaced) {
+              await restoreConnector(replaced, this.#get).catch((restoreError) => {
+                log('restore of connector %s failed: %O', identifier, restoreError);
+              });
+            }
+            throw error;
+          });
         } else {
           manifest = await mcpService.getStreamableMcpServerManifest(
             {

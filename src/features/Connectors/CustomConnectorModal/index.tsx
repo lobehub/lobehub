@@ -10,6 +10,7 @@ import { waitForConnectorOAuth } from '@/utils/connectorOAuth';
 import { executeOAuthCreate } from '@/utils/connectorOAuthCreate';
 
 import { executeLegacyMigrationSave } from './legacyPluginMigration';
+import { saveOAuthConnectorEdit } from './oauthEdit';
 
 interface CustomConnectorModalProps {
   connectorId?: string;
@@ -314,20 +315,19 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
           };
         }
 
-        await updateConnector(connectorId, patch);
-        // A changed endpoint, command or credential can expose different tools:
-        // list them again. An OAuth connector is synced by its callback instead.
-        if (!(isHttp && authType === 'oauth2')) await syncConnectorTools(connectorId);
-
-        if (authType === 'oauth2' && isHttp) {
+        if (isHttp && authType === 'oauth2') {
+          // Synced by its callback; a failed authorization undoes the edit
           const popup = ctx?.oauthPopup;
           try {
-            const authorizationUrl = await startConnectorOAuth(connectorId);
-            await waitForConnectorOAuth(popup, connectorId, authorizationUrl);
+            await saveOAuthConnectorEdit(connectorId, patch, popup, useToolStore.getState);
           } finally {
             popup?.close();
             await fetchConnectors();
           }
+        } else {
+          await updateConnector(connectorId, patch);
+          // A changed endpoint, command or credential can expose different tools
+          await syncConnectorTools(connectorId);
         }
 
         onEditSuccess?.();

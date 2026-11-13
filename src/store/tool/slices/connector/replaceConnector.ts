@@ -44,17 +44,27 @@ export const snapshotReplacedConnector = async (
 };
 
 /**
- * Put a reinstalled connector back the way it was before `create` overwrote
- * it. Its tools are untouched by a failed sync, so a row that was connected is
- * re-marked connected from its own tool list without reaching the server.
+ * Put a connector back the way it was before an install's `create` or an
+ * OAuth edit overwrote it. A row that was connected is connected again:
+ *
+ * - the edit read withholds OAuth tokens, so an OAuth row keeps the tokens it
+ *   holds now (dropped when they belong to the endpoint it moves back off),
+ *   and its server answers whether it still connects;
+ * - any other row's tools are untouched by a failed sync, so it is re-marked
+ *   connected from its own tool list without reaching the server.
  */
 export const restoreConnector = async (snapshot: ConnectorSnapshot, get: () => ToolStore) => {
   const { credentials, id, mcpServerUrl, mcpStdioConfig, oidcConfig, status, tools } = snapshot;
+  const tokensWithheld = !!oidcConfig && !credentials;
+  const current = connectorSelectors.connectorById(id)(get());
+  const movesEndpoint = (current?.mcpServerUrl ?? null) !== (mcpServerUrl ?? null);
+
   await get().updateConnector(id, {
-    // The edit read withholds OAuth tokens; never clear them with that `null`.
-    ...(credentials || !oidcConfig
+    ...(!tokensWithheld
       ? { credentials: (credentials ?? null) as ConnectorPatch['credentials'] }
-      : {}),
+      : movesEndpoint
+        ? { credentials: null }
+        : {}),
     isEnabled: snapshot.isEnabled,
     mcpConnectionType: (snapshot.mcpConnectionType ??
       undefined) as ConnectorPatch['mcpConnectionType'],
@@ -62,8 +72,18 @@ export const restoreConnector = async (snapshot: ConnectorSnapshot, get: () => T
     mcpStdioConfig: mcpStdioConfig ?? undefined,
     metadata: snapshot.metadata ?? {},
     name: snapshot.name,
+    // A row without an OAuth client drops the one the failed attempt stored.
+    // One that had a client keeps the stored one: its secret is withheld too.
+    ...(oidcConfig ? {} : { oidcConfig: null }),
   });
   if (status !== 'connected') return;
+  if (tokensWithheld) {
+    // Connected or `error`, as its server answers
+    await get()
+      .syncConnectorTools(id)
+      .catch(() => {});
+    return;
+  }
   await lambdaClient.connector.syncToolsFromClientById.mutate({
     id,
     tools: tools.map((tool) => ({

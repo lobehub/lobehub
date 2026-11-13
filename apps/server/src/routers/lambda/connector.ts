@@ -704,8 +704,12 @@ export const connectorRouter = router({
           // agent scope must go through bindAgent/unbindAgent (agent edit-rights
           // + uniqueness guards), not the generic update patch.
           .omit({ agentId: true, identifier: true, sourceType: true })
-          // Allow `null` here so an edit can clear credentials (switch to no-auth).
-          .extend({ credentials: connectorCredentialsInputSchema.nullish() }),
+          // Allow `null` here so an edit can clear credentials (switch to no-auth),
+          // or drop an OAuth client (undoing a failed switch to OAuth).
+          .extend({
+            credentials: connectorCredentialsInputSchema.nullish(),
+            oidcConfig: oidcConfigSchema.nullish(),
+          }),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -725,6 +729,10 @@ export const connectorRouter = router({
         await ctx.connectorModel.update(input.id, {
           ...patch,
           ...(patch.metadata === undefined ? {} : { metadata }),
+          // A new OAuth client needs a new authorization: the row stays
+          // disconnected until the callback connects it, so a client can tell
+          // a successful callback from a canceled one
+          ...(patch.oidcConfig ? { status: ConnectorStatus.disconnected } : {}),
           // undefined → leave untouched; null → clear; object → encrypt the JSON string.
           // When credentials are cleared, also drop the cached expiry timestamp so
           // token-refresh logic doesn't act on a stale value for the new server.

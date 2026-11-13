@@ -287,6 +287,7 @@ describe('installMarketplaceConnector', () => {
       mcpStdioConfig: undefined,
       metadata: { avatar: 'old', marketplaceInstalled: true },
       name: 'Old MCP',
+      oidcConfig: null,
     });
     expect(lambdaClient.connector.syncToolsFromClientById.mutate).toHaveBeenCalledWith({
       id: 'connector-1',

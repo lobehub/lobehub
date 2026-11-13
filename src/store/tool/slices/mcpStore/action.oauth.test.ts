@@ -53,6 +53,8 @@ const manifestData = {
 };
 let state: ToolStore;
 let actions: ReturnType<typeof createMCPPluginStoreSlice>;
+/** Whether the server holds the marketplace row: a fresh install has none until `create`. */
+let stored: boolean;
 const connected = () => ({
   id: 'connector-1',
   identifier: 'market-mcp',
@@ -81,20 +83,27 @@ const connected = () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, 'error').mockImplementation(() => {});
+  stored = false;
   state = {
     mcpInstallProgress: {},
     mcpInstallAbortControllers: {},
     connectors: [],
     installedPlugins: [],
     createConnector: vi.fn(async () => {
+      const isNew = !stored;
+      stored = true;
       state.connectors = [connected() as never];
-      return { id: 'connector-1', isNew: true };
+      return { id: 'connector-1', isNew };
     }),
-    deleteConnector: vi.fn().mockResolvedValue(undefined),
-    getConnectorForEdit: vi.fn(async () => connected()),
+    deleteConnector: vi.fn(async () => {
+      stored = false;
+      state.connectors = [];
+    }),
+    // An OAuth row's edit read: its client config, never its tokens
+    getConnectorForEdit: vi.fn(async () => ({ ...connected(), oidcConfig: { scheme: 'dcr' } })),
     startConnectorOAuth: vi.fn().mockResolvedValue('https://oauth.example/authorize'),
     fetchConnectors: vi.fn(async () => {
-      state.connectors = [connected() as never];
+      state.connectors = stored ? [connected() as never] : [];
     }),
     refreshPlugins: vi.fn().mockResolvedValue(undefined),
     syncConnectorTools: vi.fn().mockResolvedValue(undefined),
@@ -190,11 +199,43 @@ describe('marketplace OAuth MCP installation', () => {
   });
 
   it('keeps an existing connector if authorization cannot start', async () => {
+    stored = true;
     await prepare();
-    vi.mocked(state.createConnector).mockResolvedValue({ id: 'connector-1', isNew: false });
     vi.mocked(state.startConnectorOAuth).mockRejectedValueOnce(new Error('Registration rejected'));
     await actions.authorizeMCPPlugin('market-mcp');
     expect(state.deleteConnector).not.toHaveBeenCalled();
+  });
+
+  // `create` rewrote the installed row before the popup opened: a reinstall
+  // whose authorization fails must not leave it on the unauthorized endpoint
+  it.each([
+    ['dismissed', new ConnectorOAuthError('dismissed')],
+    ['denied', new ConnectorOAuthError('failed')],
+    ['timed out', new ConnectorOAuthError('timeout')],
+  ])('restores the row a reinstall replaced when authorization is %s', async (_, error) => {
+    stored = true;
+    vi.mocked(state.getConnectorForEdit).mockResolvedValue({
+      ...connected(),
+      metadata: { marketplaceInstalled: true },
+      mcpServerUrl: 'https://old.example/mcp',
+      oidcConfig: { scheme: 'dcr' },
+    } as never);
+    vi.mocked(waitForConnectorOAuth).mockRejectedValueOnce(error);
+    await prepare();
+
+    await actions.authorizeMCPPlugin('market-mcp');
+
+    expect(state.deleteConnector).not.toHaveBeenCalled();
+    expect(state.updateConnector).toHaveBeenCalledTimes(1);
+    expect(state.updateConnector).toHaveBeenCalledWith(
+      'connector-1',
+      expect.objectContaining({
+        metadata: { marketplaceInstalled: true },
+        mcpServerUrl: 'https://old.example/mcp',
+      }),
+    );
+    // Its OAuth tokens are withheld from the edit read: its server decides its status
+    expect(state.syncConnectorTools).toHaveBeenCalledWith('connector-1');
   });
 
   it('does not install when the provider authorization fails', async () => {
@@ -293,7 +334,7 @@ describe('marketplace OAuth MCP installation', () => {
         },
       } as never,
     ];
-    state.connectors = [connected() as never];
+    stored = true;
     await actions.uninstallMCPPlugin('market-mcp');
     expect(state.deleteConnector).toHaveBeenCalledWith('connector-1');
     expect(state.uninstallPlugin).toHaveBeenCalledWith('market-mcp');
