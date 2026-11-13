@@ -5,8 +5,11 @@ import {
 } from '@lobechat/model-runtime/providers/deepseek/modelId';
 import { isKimiAlwaysPreserveThinkingModel } from '@lobechat/model-runtime/providers/moonshot/modelId';
 import {
-  applyModelExtendParams,
   resolveContextCachingTTL,
+  resolveRequestContextCachingTTL,
+} from '@lobechat/model-runtime/utils/contextCachingTTL';
+import {
+  applyModelExtendParams,
   resolveEffectiveReasoningChatConfig,
 } from '@lobechat/model-runtime/utils/modelExtendParams';
 import type { LobeAgentChatConfig } from '@lobechat/types';
@@ -315,22 +318,25 @@ export const resolveModelParams = async (
   const { searchDecision } = request;
   const enabledSearch =
     searchDecision?.enabledSearch && searchDecision.useModelSearch ? true : undefined;
-  // Anthropic's prompt-cache TTL (1h unless the agent picked 5m). It rides on the payload
-  // (which writes the breakpoints) and hosts hand the same value to the context engine
-  // (which prices the stale-tool-result trim's warmth check), so the two can never
-  // disagree. `5m` is the API default and is not written out, so those requests stay
-  // byte-identical to before the option existed.
-  const contextCachingTTL =
-    resolveContextCachingTTL({ chatConfig: effectiveChatConfig, modelExtendParams, provider }) ===
-    '1h'
-      ? ('1h' as const)
-      : undefined;
+  // The model's prompt-cache lifetime, set in the provider's model config: the user's pick,
+  // else the provider card's, else the provider default (Anthropic 1h, DeepSeek 72h). Hosts
+  // hand it to the context engine, which tells warm prefixes from cold ones with it, and the
+  // payload carries it where the API takes a TTL, so the two can never disagree. The API
+  // default (`5m` on Anthropic) is not written out, so those requests stay byte-identical to
+  // before the setting existed.
+  const contextCachingTTL = resolveContextCachingTTL({
+    chatConfig: effectiveChatConfig,
+    modelExtendParams,
+    provider,
+    ttl: userModelRow?.contextCachingTTL ?? modelCard?.contextCachingTTL,
+  });
+  const requestContextCachingTTL = resolveRequestContextCachingTTL(provider, contextCachingTTL);
   const resolvedExtendParams =
-    resolvedModelExtendParams || enabledSearch || contextCachingTTL
+    resolvedModelExtendParams || enabledSearch || requestContextCachingTTL
       ? {
           ...resolvedModelExtendParams,
           ...(enabledSearch && { enabledSearch }),
-          ...(contextCachingTTL && { contextCachingTTL }),
+          ...(requestContextCachingTTL && { contextCachingTTL: requestContextCachingTTL }),
         }
       : undefined;
 
@@ -372,6 +378,7 @@ export const resolveModelParams = async (
       isCanUseVideo: (m, p) => findMediaCapabilities(m, p)?.video ?? false,
       isCanUseVision: (m, p) => findMediaCapabilities(m, p)?.vision ?? false,
     },
+    contextCachingTTL,
     enableAgentMode: chatConfig?.enableAgentMode ?? undefined,
     historyCount: resolveHistoryCount(chatConfig?.historyCount),
     modelDisplayName,

@@ -567,14 +567,6 @@ export default {
   'editedFiles.viewChanges': 'View changes',
   'emptyAgent': 'No Agents yet. Start with your first Agent—build your system over time.',
   'emptyAgentAction': 'Create Agent',
-  'extendParams.contextCachingTTL.cachingOff': 'Context caching is off, so nothing is cached',
-  'extendParams.contextCachingTTL.desc':
-    'How long the prompt cache is kept. Writing a 1-hour cache costs 2× the input price, a 5-minute cache 1.25×. Cache reads cost about 0.1× and restart the timer. Choose 1 hour when replies are often more than 5 minutes apart.',
-  'extendParams.contextCachingTTL.effective': 'In effect: {{ttl}}',
-  'extendParams.contextCachingTTL.effectiveDefault': 'In effect: {{ttl}} (default)',
-  'extendParams.contextCachingTTL.options.1h': '1 hour',
-  'extendParams.contextCachingTTL.options.5m': '5 min',
-  'extendParams.contextCachingTTL.title': 'Cache Duration',
   'extendParams.disableContextCaching.desc':
     'Reduce by up to 90% of the cost of generating a single conversation and bring a max of 4x speed. <1>Learn more</1>',
   'extendParams.disableContextCaching.title': 'Enable Context Caching',

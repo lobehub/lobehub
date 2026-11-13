@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
-import { cacheEconomicsForProvider, StaleToolResultTrimProcessor } from '../StaleToolResultTrim';
+import {
+  cacheEconomicsForProvider,
+  cacheTTLToMs,
+  StaleToolResultTrimProcessor,
+} from '../StaleToolResultTrim';
 
 const previousTurnMessage = (createdAt: string) => ({
   content: 'previous turn done',
@@ -738,7 +742,7 @@ describe('StaleToolResultTrimProcessor', () => {
       });
     });
 
-    it('uses the 1h window only when the Anthropic request opts into the 1h TTL', async () => {
+    it("uses Anthropic's 1h window only when the model's TTL is 1h", async () => {
       const gap = 30 * 60_000;
 
       const fiveMinute = await run(cacheEconomicsForProvider('anthropic'), gap);
@@ -754,14 +758,38 @@ describe('StaleToolResultTrimProcessor', () => {
       });
     });
 
-    it('ignores the 1h TTL for providers that do not write 1h breakpoints', () => {
+    it("sets the window from the model's cache TTL for any provider", () => {
+      // 5m on Anthropic is its default: unchanged economics.
       expect(cacheEconomicsForProvider('anthropic', { cacheTTL: '5m' })).toEqual(
         cacheEconomicsForProvider('anthropic'),
       );
-      expect(cacheEconomicsForProvider('bedrock', { cacheTTL: '1h' })).toEqual(
-        cacheEconomicsForProvider('anthropic'),
-      );
-      expect(cacheEconomicsForProvider('deepseek', { cacheTTL: '1h' }).ttlMs).toBe(72 * HOUR);
+      // A DeepSeek model the user set to 24h keeps DeepSeek's prices with a 24h window.
+      expect(cacheEconomicsForProvider('deepseek', { cacheTTL: '24h' })).toEqual({
+        ...cacheEconomicsForProvider('deepseek'),
+        ttlMs: 24 * HOUR,
+      });
+      expect(cacheEconomicsForProvider('openai', { cacheTTL: '24h' })).toEqual({
+        ...cacheEconomicsForProvider('openai'),
+        ttlMs: 24 * HOUR,
+      });
+      // Only Anthropic bills the 1h tier at 2× writes; elsewhere 1h only moves the window.
+      expect(cacheEconomicsForProvider('anthropic', { cacheTTL: '1h' }).writePrice).toBe(2);
+      expect(cacheEconomicsForProvider('bedrock', { cacheTTL: '1h' })).toEqual({
+        ...cacheEconomicsForProvider('bedrock'),
+        ttlMs: HOUR,
+      });
+    });
+
+    it('keeps the provider window when no TTL is given or it does not parse', () => {
+      expect(cacheEconomicsForProvider('deepseek').ttlMs).toBe(72 * HOUR);
+      expect(cacheTTLToMs('72h')).toBe(72 * HOUR);
+      expect(cacheTTLToMs('5m')).toBe(300_000);
+      expect(cacheTTLToMs(undefined)).toBeUndefined();
+      expect(cacheTTLToMs('0m')).toBeUndefined();
+      expect(cacheTTLToMs('1d')).toBeUndefined();
+      expect(
+        cacheEconomicsForProvider('deepseek', { cacheTTL: 'soon' as unknown as '1h' }).ttlMs,
+      ).toBe(72 * HOUR);
     });
   });
 });

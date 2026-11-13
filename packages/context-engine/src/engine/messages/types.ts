@@ -13,6 +13,7 @@ import type {
 import type { OpenAIChatMessage, UIChatMessage } from '@/types/index';
 
 import type { AgentInfo } from '../../processors/GroupRoleTransform';
+import type { CacheTTL } from '../../processors/StaleToolResultTrim';
 import type { AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
 import type { AgentContextDocument } from '../../providers/AgentDocumentInjector';
 import type { AgentManagementContext } from '../../providers/AgentManagementContextInjector';
@@ -257,11 +258,11 @@ export interface MessagesEngineParams {
    */
   enableStaleToolResultTrim?: boolean;
   /**
-   * Prompt-cache TTL requested from the provider (mirrors
-   * `ChatStreamPayload.contextCachingTTL`). Prices the stale-tool-result trim's
-   * warmth check; undefined → the provider's default TTL.
+   * The model's prompt-cache lifetime (`ResolvedModelParams.contextCachingTTL`, e.g. `1h` on
+   * Anthropic, `72h` on DeepSeek). Sets the stale-tool-result trim's warmth window and, for
+   * Anthropic `1h`, its write price; undefined → the provider's default window.
    */
-  contextCachingTTL?: '5m' | '1h';
+  contextCachingTTL?: CacheTTL;
   /** Whether to inject the operation expertise snapshot */
   enableExpertise?: boolean;
   /** Force finish flag: when true, injects summary prompt for max-steps completion */

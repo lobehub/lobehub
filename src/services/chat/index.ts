@@ -239,8 +239,9 @@ class ChatService {
       groupId,
       additionalContexts,
       attachmentPreviewFileIds,
-      // The TTL the payload below writes, so the trim prices warmth against it.
-      contextCachingTTL: modelParams.resolvedExtendParams?.contextCachingTTL,
+      // The model's cache lifetime, resolved with the TTL the payload below writes, so the
+      // trim prices warmth against the cache actually kept.
+      contextCachingTTL: modelParams.contextCachingTTL,
       // History messages + the current turn; unset means no truncation.
       historyCount: modelParams.historyCount,
       // Page editor context from agent runtime

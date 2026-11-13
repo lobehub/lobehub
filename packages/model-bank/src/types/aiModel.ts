@@ -425,15 +425,6 @@ export const AiModelReasoningConfigSchema = z.object({
  * ExtendParamsType value and the AiModelReasoningConfig key it reads from —
  * used to filter which model-instance defaults a given model actually supports.
  */
-/** Prompt-cache lifetimes the first-party Anthropic runtime can request. */
-export const CONTEXT_CACHING_TTL_OPTIONS = ['5m', '1h'] as const;
-export type ContextCachingTTL = (typeof CONTEXT_CACHING_TTL_OPTIONS)[number];
-/**
- * Cache lifetime used when an agent has not picked one. 1h breakpoints cost 2× base input to
- * write (5m: 1.25×) but keep a prefix warm across 5–60 minute gaps between turns.
- */
-export const DEFAULT_CONTEXT_CACHING_TTL: ContextCachingTTL = '1h';
-
 export const MODEL_REASONING_EXTEND_PARAMS = Object.keys(
   AiModelReasoningConfigSchema.shape,
 ) as (keyof AiModelReasoningConfig)[];
@@ -544,7 +535,6 @@ export type ExtendParamsType =
   | 'preserveThinking'
   | 'enableAdaptiveThinking'
   | 'disableContextCaching'
-  | 'contextCachingTTL'
   | 'effort'
   | 'deepseekV4GAReasoningEffort'
   | 'deepseekV4ReasoningEffort'
@@ -586,7 +576,23 @@ export type ExtendParamsType =
 
 export type DisabledParamType = 'temperature' | 'top_p' | 'frequency_penalty' | 'presence_penalty';
 
+/**
+ * Prompt-cache lifetimes a model can declare, shortest first: `5m` (Anthropic's default, and the
+ * order of OpenAI / Gemini implicit caches), `1h` (Anthropic's extended TTL), `24h` (OpenAI's
+ * extended retention), `72h` (the upper bound of DeepSeek's "a few hours to a few days").
+ */
+export const CONTEXT_CACHING_TTL_OPTIONS = ['5m', '1h', '24h', '72h'] as const;
+export type ContextCachingTTL = (typeof CONTEXT_CACHING_TTL_OPTIONS)[number];
+export const ContextCachingTTLSchema = z.enum(CONTEXT_CACHING_TTL_OPTIONS);
+
 export interface AiModelSettings {
+  /**
+   * How long the provider keeps this model's prompt cache. Where the API lets a request choose
+   * (Anthropic `cache_control.ttl`), the request asks for it; for automatic caches it only tells
+   * context engineering how long a prefix stays warm. Users set it in the provider's model config;
+   * absent → the provider default (see `resolveContextCachingTTL` in model-runtime).
+   */
+  contextCachingTTL?: ContextCachingTTL;
   /**
    * Chat params that should be hidden from the agent config UI and stripped from
    * outbound requests. Use this for models whose API rejects specific sampling
@@ -609,7 +615,6 @@ export const ExtendParamsTypeSchema = z.enum([
   'preserveThinking',
   'enableAdaptiveThinking',
   'disableContextCaching',
-  'contextCachingTTL',
   'effort',
   'deepseekV4GAReasoningEffort',
   'deepseekV4ReasoningEffort',
@@ -660,6 +665,7 @@ export const DisabledParamTypeSchema = z.enum([
 ]);
 
 export const AiModelSettingsSchema = z.object({
+  contextCachingTTL: ContextCachingTTLSchema.optional(),
   disabledParams: z.array(DisabledParamTypeSchema).optional(),
   extendParams: z.array(ExtendParamsTypeSchema).optional(),
   searchImpl: ModelSearchImplementTypeSchema.optional(),

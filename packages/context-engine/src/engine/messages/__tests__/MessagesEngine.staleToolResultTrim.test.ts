@@ -111,8 +111,8 @@ describe('MessagesEngine — prompt-cache TTL for the stale tool result trim', (
   const T0 = Date.parse('2026-11-10T08:00:00Z');
   const GAP = 30 * 60_000;
 
-  // A 30-minute turn gap over a large live prefix: cold under Anthropic's
-  // default 5m cache (the trim is free), warm under the opt-in 1h cache, where
+  // A 30-minute turn gap over a large live prefix: cold under a 5m cache (the
+  // trim is free), warm under the 1h cache (Anthropic's provider default), where
   // rewriting the 500k prefix at the 2× write price cannot pay off.
   const turnAfterGap = (): UIChatMessage[] => [
     { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' } as UIChatMessage,
@@ -134,13 +134,13 @@ describe('MessagesEngine — prompt-cache TTL for the stale tool result trim', (
       ...overrides,
     });
 
-  it('treats the gap as cold and trims on the default 5m cache', async () => {
+  it('treats the gap as cold and trims when no TTL is given (5m window)', async () => {
     const result = await new MessagesEngine(anthropicParams()).process();
 
     expect(payloadText(result.messages)).toContain('superseded by a later write');
   });
 
-  it('keeps the warm prefix intact when the request writes 1h breakpoints', async () => {
+  it("keeps the warm prefix intact when the model's cache TTL is 1h", async () => {
     const result = await new MessagesEngine(anthropicParams({ contextCachingTTL: '1h' })).process();
 
     const payload = payloadText(result.messages);

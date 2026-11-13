@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   applyModelExtendParams,
-  resolveContextCachingTTL,
   resolveDefaultEnableAdaptiveThinkingForModel,
   resolveDefaultThinkingLevelForModel,
   resolveEffectiveReasoningChatConfig,
@@ -537,41 +536,5 @@ describe('resolveEffectiveReasoningChatConfig', () => {
     });
 
     expect(params.reasoning_effort).toBe('max');
-  });
-});
-
-describe('resolveContextCachingTTL', () => {
-  const claude = ['disableContextCaching', 'contextCachingTTL'];
-
-  it('defaults to 1h for Anthropic models that declare the param', () => {
-    expect(resolveContextCachingTTL({ modelExtendParams: claude, provider: 'anthropic' })).toBe(
-      '1h',
-    );
-    expect(
-      resolveContextCachingTTL({
-        chatConfig: { contextCachingTTL: '5m' },
-        modelExtendParams: claude,
-        provider: 'anthropic',
-      }),
-    ).toBe('5m');
-  });
-
-  it('applies no TTL when caching is off, the model lacks the param, or the runtime is not Anthropic', () => {
-    expect(
-      resolveContextCachingTTL({
-        chatConfig: { contextCachingTTL: '1h', disableContextCaching: true },
-        modelExtendParams: claude,
-        provider: 'anthropic',
-      }),
-    ).toBeUndefined();
-    expect(
-      resolveContextCachingTTL({
-        modelExtendParams: ['disableContextCaching'],
-        provider: 'anthropic',
-      }),
-    ).toBeUndefined();
-    expect(
-      resolveContextCachingTTL({ modelExtendParams: claude, provider: 'bedrock' }),
-    ).toBeUndefined();
   });
 });

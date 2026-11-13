@@ -4,6 +4,7 @@ import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { isDesktop } from '@lobechat/const';
 import type {
   AgentGroupConfig,
+  CacheTTL,
   LobeToolManifest,
   MemoryContext,
   OperationSkillSet,
@@ -68,10 +69,10 @@ interface ContextEngineeringContext {
    */
   attachmentPreviewFileIds?: string[];
   /**
-   * Prompt-cache TTL the payload writes (from the resolved extend params). Prices the
-   * stale-tool-result trim's warmth check; undefined → the provider's default TTL.
+   * The model's prompt-cache lifetime (`ResolvedModelParams.contextCachingTTL`). Sets the
+   * stale-tool-result trim's warmth window; undefined → the provider's default window.
    */
-  contextCachingTTL?: '5m' | '1h';
+  contextCachingTTL?: CacheTTL;
   /**
    * Identifiers the agent has explicitly disabled (`agents.plugins` tri-state).
    * Excluded from the client skill candidate pool entirely — not just left

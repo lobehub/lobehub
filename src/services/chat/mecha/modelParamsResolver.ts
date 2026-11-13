@@ -21,6 +21,7 @@ export { resolveDefaultEnableAdaptiveThinkingForModel, resolveDefaultThinkingLev
 
 const toModelCard = (item: EnabledAiModel | LobeDefaultAiModelListItem) => ({
   abilities: item.abilities,
+  contextCachingTTL: item.settings?.contextCachingTTL,
   deploymentName: item.config?.deploymentName,
   displayName: item.displayName,
   extendParams: item.settings?.extendParams,
@@ -79,7 +80,14 @@ export const createBrowserModelParamsProviders = ({
     const own = aiModelSelectors.getEnabledModelById(m, p)(state);
     const extendParams = aiModelSelectors.modelExtendParams(m, p)(state);
     if (!own && extendParams === undefined) return null;
-    return { displayName: own?.displayName, extendParams };
+    // The enabled list merges the user's settings over the card, so this is the
+    // user's pick when they made one and the card's otherwise; the rules read it
+    // first either way.
+    return {
+      contextCachingTTL: own?.settings?.contextCachingTTL,
+      displayName: own?.displayName,
+      extendParams,
+    };
   },
   listModelCards: () => {
     const state = getAiInfraStoreState();

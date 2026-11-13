@@ -1,3 +1,5 @@
+import type { ContextCachingTTL } from 'model-bank/aiModel';
+
 import type { LLMRoleType } from '../llm';
 import type { MessageToolCall, ModelReasoning } from '../message';
 import type { OpenAIFunctionCall } from './functionCall';
@@ -83,10 +85,10 @@ export interface OpenAIChatMessage {
  */
 export interface ChatStreamPayload {
   /**
-   * Anthropic `1h` prompt-cache TTL, resolved from `chatConfig.contextCachingTTL`
-   * (`resolveContextCachingTTL`). Undefined → the API default `5m`.
+   * Anthropic `1h` prompt-cache TTL, resolved from the model's `settings.contextCachingTTL`
+   * (`resolveRequestContextCachingTTL`). Undefined → the API default `5m`.
    */
-  contextCachingTTL?: '5m' | '1h';
+  contextCachingTTL?: ContextCachingTTL;
   /**
    * Provider deployment name
    */

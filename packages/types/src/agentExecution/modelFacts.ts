@@ -3,6 +3,8 @@ import type { AiModelReasoningConfig, ModelAbilities } from 'model-bank';
 /** The subset of a model card the model-parameter rules read (bundled bank or user-enabled list). */
 export interface ModelCardFacts {
   abilities?: ModelAbilities | null;
+  /** The card's `settings.contextCachingTTL`; absent → the provider default. */
+  contextCachingTTL?: string | null;
   /** Deployment alias some providers address the model by. */
   deploymentName?: string | null;
   displayName?: string | null;
@@ -16,6 +18,11 @@ export interface ModelCardFacts {
 export interface UserModelRowFacts {
   /** Stored as untyped JSON; a non-empty object replaces the card's abilities. */
   abilities?: unknown;
+  /**
+   * Prompt-cache lifetime the user picked in the provider's model config
+   * (`ai_models.settings.contextCachingTTL`); wins over the provider card's.
+   */
+  contextCachingTTL?: string | null;
   /**
    * User-configured deployment alias (`ai_models.config.deploymentName`).
    * Deployment-catalog providers (Azure, Volcengine Ark, Spark) address the

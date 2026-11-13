@@ -307,43 +307,74 @@ describe('resolveModelParams', () => {
       expect(off.resolvedExtendParams?.enabledSearch).toBeUndefined();
     });
 
-    it('resolves the prompt-cache TTL only where the Anthropic runtime writes it', async () => {
-      const claudeCards: ModelCardFacts[] = ['anthropic', 'bedrock', 'openrouter'].map(
-        (providerId) => ({
-          abilities: { functionCall: true },
-          extendParams: ['disableContextCaching', 'contextCachingTTL'],
-          id: 'claude-sonnet-4-6',
-          providerId,
-        }),
-      );
-      const resolveTTL = async (
-        provider: string,
-        chatConfig: Record<string, unknown>,
-        modelCards = claudeCards,
-      ) =>
-        (
-          await resolveModelParams(
-            request({ agent: { chatConfig, id: 'agt_1' }, model: 'claude-sonnet-4-6', provider }),
-            providers({ listModelCards: () => modelCards }),
-          )
-        ).resolvedExtendParams?.contextCachingTTL;
+    it('resolves the cache TTL from the model setting and writes it only where the API takes one', async () => {
+      const claudeCard = (providerId: string, contextCachingTTL?: string): ModelCardFacts => ({
+        abilities: { functionCall: true },
+        contextCachingTTL,
+        extendParams: ['disableContextCaching'],
+        id: 'claude-sonnet-4-6',
+        providerId,
+      });
+      const resolveTTL = async ({
+        cardTTL,
+        chatConfig = {},
+        model = 'claude-sonnet-4-6',
+        provider,
+        userTTL,
+      }: {
+        cardTTL?: string;
+        chatConfig?: Record<string, unknown>;
+        model?: string;
+        provider: string;
+        userTTL?: string;
+      }) => {
+        const resolved = await resolveModelParams(
+          request({ agent: { chatConfig, id: 'agt_1' }, model, provider }),
+          providers({
+            getUserModelRow: async () => (userTTL ? { contextCachingTTL: userTTL } : null),
+            listModelCards: () => [claudeCard(provider, cardTTL)],
+          }),
+        );
+        return {
+          effective: resolved.contextCachingTTL,
+          request: resolved.resolvedExtendParams?.contextCachingTTL,
+        };
+      };
 
-      // An agent that never picked a TTL gets the 1h default.
-      expect(await resolveTTL('anthropic', {})).toBe('1h');
-      expect(await resolveTTL('anthropic', { contextCachingTTL: '1h' })).toBe('1h');
-      // 5m is the API default: nothing is written, keeping the payload byte-identical.
-      expect(await resolveTTL('anthropic', { contextCachingTTL: '5m' })).toBeUndefined();
-      // A model that does not declare the param keeps the 5m default.
-      expect(
-        await resolveTTL('anthropic', {}, [{ ...claudeCards[0], extendParams: [] }]),
-      ).toBeUndefined();
+      // Nobody picked one: Anthropic's provider default is 1h, written on the request.
+      expect(await resolveTTL({ provider: 'anthropic' })).toEqual({
+        effective: '1h',
+        request: '1h',
+      });
+      // The user's 5m in the provider's model config wins over the card; 5m is the API
+      // default, so nothing is written and the payload stays byte-identical.
+      expect(await resolveTTL({ cardTTL: '1h', provider: 'anthropic', userTTL: '5m' })).toEqual({
+        effective: '5m',
+        request: undefined,
+      });
+      // A card-declared value applies when the user set none.
+      expect(await resolveTTL({ cardTTL: '5m', provider: 'anthropic' })).toEqual({
+        effective: '5m',
+        request: undefined,
+      });
       // No breakpoints without caching, so no TTL either.
       expect(
-        await resolveTTL('anthropic', { contextCachingTTL: '1h', disableContextCaching: true }),
-      ).toBeUndefined();
-      // Other runtimes would forward the field into their request body.
-      expect(await resolveTTL('bedrock', { contextCachingTTL: '1h' })).toBeUndefined();
-      expect(await resolveTTL('openrouter', { contextCachingTTL: '1h' })).toBeUndefined();
+        await resolveTTL({ chatConfig: { disableContextCaching: true }, provider: 'anthropic' }),
+      ).toEqual({ effective: undefined, request: undefined });
+      // DeepSeek's automatic cache: 72h by default, adjustable, never written on the request.
+      expect(await resolveTTL({ provider: 'deepseek' })).toEqual({
+        effective: '72h',
+        request: undefined,
+      });
+      expect(await resolveTTL({ provider: 'deepseek', userTTL: '24h' })).toEqual({
+        effective: '24h',
+        request: undefined,
+      });
+      // Anthropic-compatible endpoints would forward the field into their request body.
+      expect(await resolveTTL({ provider: 'bedrock', userTTL: '1h' })).toEqual({
+        effective: '1h',
+        request: undefined,
+      });
     });
   });
 });

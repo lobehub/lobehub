@@ -4,7 +4,7 @@ import type {
   ContextCachingTTL,
   ExtendParamsType,
 } from 'model-bank/aiModel';
-import { DEFAULT_CONTEXT_CACHING_TTL, MODEL_REASONING_EXTEND_PARAMS } from 'model-bank/aiModel';
+import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank/aiModel';
 
 import { isAdaptiveThinkingDefaultOnModel } from '../providers/anthropic/modelId';
 
@@ -65,8 +65,12 @@ export const resolveEffectiveReasoningChatConfig = (
  * Extended parameters for model runtime
  */
 export interface ModelExtendParams {
-  /** Anthropic `1h` prompt-cache TTL; absent → `5m` (see `resolveContextCachingTTL`). */
-  contextCachingTTL?: '5m' | '1h';
+  /**
+   * Prompt-cache TTL the request writes, from the model's `settings.contextCachingTTL`
+   * (`resolveContextCachingTTL`). Only set where the API takes a TTL and the value is not the
+   * API default, so today only `1h` on the first-party Anthropic runtime.
+   */
+  contextCachingTTL?: ContextCachingTTL;
   deepseekV4ReasoningEffort?: string;
   effort?: string;
   enabledContextCaching?: boolean;
@@ -206,33 +210,6 @@ export interface ApplyModelExtendParamsContext {
  * forward the same runtime params (thinking level, reasoning effort, url context, …)
  * to the model. Callers are responsible for looking up the `extendParams` list.
  */
-export interface ResolveContextCachingTTLContext {
-  chatConfig?: Pick<LobeAgentChatConfig, 'contextCachingTTL' | 'disableContextCaching'> | null;
-  /** The extend params the model declares (user row ← provider card ← canonical card). */
-  modelExtendParams?: readonly string[] | null;
-  provider: string;
-}
-
-/**
- * The prompt-cache TTL a request actually gets, shared by the payload resolver and the
- * params panel so the value shown is the value sent. Undefined → no TTL applies: only the
- * first-party Anthropic runtime writes `ttl`, only for models that declare
- * `contextCachingTTL`, and only while context caching is on (elsewhere the field would land
- * in an OpenAI-style request body). An agent that never picked one gets
- * {@link DEFAULT_CONTEXT_CACHING_TTL}.
- */
-export const resolveContextCachingTTL = ({
-  chatConfig,
-  modelExtendParams,
-  provider,
-}: ResolveContextCachingTTLContext): ContextCachingTTL | undefined => {
-  if (provider !== 'anthropic' || !modelExtendParams?.includes('contextCachingTTL')) return;
-  if (modelExtendParams.includes('disableContextCaching') && chatConfig?.disableContextCaching)
-    return;
-
-  return chatConfig?.contextCachingTTL ?? DEFAULT_CONTEXT_CACHING_TTL;
-};
-
 export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): ModelExtendParams => {
   const { extendParams: modelExtendParams, chatConfig, model } = ctx;
   const extendParams: ModelExtendParams = {};

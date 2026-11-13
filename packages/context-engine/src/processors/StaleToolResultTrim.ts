@@ -137,7 +137,7 @@ export const ANTHROPIC_CACHE_ECONOMICS: CacheEconomics = {
   writePrice: 1.25, // cache write = 1.25× input
 };
 
-/** Anthropic with the 1-hour TTL (the default when the model declares it): same reads, 2× writes. */
+/** Anthropic with the 1-hour TTL (the provider default): same reads, 2× writes. */
 export const ANTHROPIC_1H_CACHE_ECONOMICS: CacheEconomics = {
   readPrice: 0.1,
   ttlMs: 3_600_000,
@@ -182,21 +182,41 @@ const PROVIDER_CACHE_ECONOMICS: Record<string, CacheEconomics> = {
   },
 };
 
+/** A prompt-cache lifetime such as `5m`, `1h` or `72h` (a model's `settings.contextCachingTTL`). */
+export type CacheTTL = `${number}${'m' | 'h'}`;
+
+const TTL_UNIT_MS = { h: 3_600_000, m: 60_000 } as const;
+
+/** Milliseconds of a {@link CacheTTL}; undefined when it does not parse. */
+export const cacheTTLToMs = (ttl?: string): number | undefined => {
+  const match = ttl?.match(/^(\d+)([hm])$/);
+  if (!match) return;
+  const ms = Number(match[1]) * TTL_UNIT_MS[match[2] as keyof typeof TTL_UNIT_MS];
+  return ms > 0 ? ms : undefined;
+};
+
 export interface CacheEconomicsOptions {
   /**
-   * Prompt-cache TTL the request asks for (`ChatStreamPayload.contextCachingTTL`).
-   * Only the Anthropic provider writes `1h` breakpoints; elsewhere it is ignored.
+   * The model's prompt-cache lifetime (`ResolvedModelParams.contextCachingTTL`): what the
+   * request asks for where the API takes a TTL (Anthropic), how long the provider keeps an
+   * unused prefix elsewhere. Replaces the provider's default window; undefined keeps it.
    */
-  cacheTTL?: '5m' | '1h';
+  cacheTTL?: CacheTTL;
 }
 
-/** Cache economics for a provider id; falls back to Anthropic's (most conservative TTL). */
+/**
+ * Cache economics for a provider id, with the window set to the model's cache TTL when one is
+ * given. Prices stay the provider's (falling back to Anthropic's, the most conservative), except
+ * that Anthropic bills `1h` writes at 2× instead of 1.25×.
+ */
 export const cacheEconomicsForProvider = (
   provider?: string,
   options: CacheEconomicsOptions = {},
 ): CacheEconomics => {
   if (provider === 'anthropic' && options.cacheTTL === '1h') return ANTHROPIC_1H_CACHE_ECONOMICS;
-  return PROVIDER_CACHE_ECONOMICS[provider ?? ''] ?? ANTHROPIC_CACHE_ECONOMICS;
+  const economics = PROVIDER_CACHE_ECONOMICS[provider ?? ''] ?? ANTHROPIC_CACHE_ECONOMICS;
+  const ttlMs = cacheTTLToMs(options.cacheTTL);
+  return ttlMs ? { ...economics, ttlMs } : economics;
 };
 
 const READ_APIS = new Set(['readFile']);

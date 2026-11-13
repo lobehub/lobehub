@@ -34,6 +34,7 @@ export {
 export { ReactionFeedbackProcessor } from './ReactionFeedback';
 export {
   cacheEconomicsForProvider,
+  type CacheTTL,
   type StaleToolResultTrimConfig,
   StaleToolResultTrimProcessor,
 } from './StaleToolResultTrim';
