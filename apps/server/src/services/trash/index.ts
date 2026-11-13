@@ -15,6 +15,7 @@ import type { TrashItemRow } from '@/database/schemas';
 import type { LobeChatDatabase, Transaction } from '@/database/type';
 import type { SoftDeleteOptions } from '@/database/utils/softDelete';
 import { FileService } from '@/server/services/file';
+import { removeByAgent, removeByTopics } from '@/server/services/inboundWebhook/lifecycle';
 
 import {
   resolveTrashHandler,
@@ -172,8 +173,6 @@ export class TrashService {
     // A rollback never removes live subscriptions; a missing remote cannot undo the trash operation.
     if (removedTopics.length || removedAgents.length) {
       try {
-        const { removeByAgent, removeByTopics } =
-          await import('@/server/services/inboundWebhook/lifecycle');
         const scope = { userId: this.userId, workspaceId: this.workspaceId };
         for (const agentId of removedAgents) await removeByAgent(this.db, scope, agentId);
         await removeByTopics(this.db, scope, removedTopics);

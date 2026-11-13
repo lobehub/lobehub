@@ -4,13 +4,12 @@ import { InboundWebhookModel } from '@/database/models/inboundWebhook';
 import { SignalModel } from '@/database/models/signal';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { redisService } from '@/server/services/redis';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import { getInboundWebhookKind } from './kinds';
 import { isVerificationEnvelope } from './kinds/mcpEvents/delivery';
+import { scheduleInboundWebhookWake } from './scheduler';
 import { verifyInboundWebhook } from './verification';
-import { scheduleInboundWebhookWake } from './waker';
 
 const wakeAfterDelivery = (id: string) =>
   afterUnscoped(async () => {
@@ -56,16 +55,12 @@ export async function receiveInboundWebhook(
   const gateKeeper = await getGateKeeper();
   const model = new InboundWebhookModel(db, row.userId, row.workspaceId ?? undefined, gateKeeper);
   const deliveryId = input.headers.get('webhook-id')!;
-  // A duplicate verification must still echo the challenge, even after the subscription is active.
-  if (!verification && !(await redisService.inboundWebhook.claimDelivery(row.id, deliveryId)))
-    return { body: {}, status: 200 };
   try {
     const remoteId = input.headers.get('x-mcp-subscription-id');
     if (remoteId && remoteId !== row.state.remoteSubscriptionId)
       await model.mergeState(row.id, { remoteSubscriptionId: remoteId });
     const handled = await kind.handleDelivery({ db, model, row }, body, deliveryId);
     if (handled.status === 400 || handled.status === 410) {
-      await redisService.inboundWebhook.releaseDelivery(row.id, deliveryId);
       return { body: handled.response ?? {}, status: handled.status };
     }
     if (handled.event) {
@@ -81,7 +76,9 @@ export async function receiveInboundWebhook(
           wakeAfterDelivery(row.id);
         return { body: {}, status: 200 };
       }
-      await signalModel.record({
+      // The ledger's unique (source, external_id) constraint arbitrates concurrent writers.
+      // A Redis claim is not evidence of persistence and must never justify an acknowledgement.
+      const persisted = await signalModel.record({
         agentId: row.agentId,
         externalId: `${row.id}:${event.eventId}`,
         metadata: {
@@ -95,17 +92,18 @@ export async function receiveInboundWebhook(
         source: 'mcp-events',
         type: event.name,
       });
+      if (!persisted) throw new Error('Signal could not be persisted');
       if (event.cursor !== undefined)
         await model.mergeStateIf(row.id, { cursor: event.cursor }, { cursor: row.state.cursor });
       if (event.control === 'gap') await model.mergeState(row.id, { truncated: true });
       await model.recordDelivery(row.id, !event.control);
       // Queue publication happens after the response. A slow queue cannot make a
       // persisted delivery miss the server's acknowledgement deadline; sweep repairs failures.
-      wakeAfterDelivery(row.id);
+      if (persisted.status === 'pending' || persisted.status === 'failed')
+        wakeAfterDelivery(row.id);
     }
     return { body: handled.response ?? {}, status: handled.status ?? 200 };
   } catch {
-    await redisService.inboundWebhook.releaseDelivery(row.id, deliveryId);
     console.error('[inboundWebhook:receive] Failed to persist or schedule delivery', row.id);
     return { body: { error: 'Delivery temporarily unavailable' }, status: 503 };
   }

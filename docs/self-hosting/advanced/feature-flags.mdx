@@ -95,4 +95,8 @@ You can always check the [featureFlags](https://github.com/lobehub/lobehub/blob/
 3. Configure QStash for scheduled renewal, unsubscribe retries and pending-event recovery. The Docker launcher registers a sweep every five minutes; other deployments need their own schedule. Without QStash, maintenance depends on application requests and has no guaranteed timing.
 4. Set `FEATURE_FLAGS="+mcp_events"` and restart. Connect an authenticated remote HTTP MCP server offering SEP-3415 webhook events, then refresh its connector tools.
 
-Ask the Agent to subscribe in a conversation and approve it. Open Settings → Automations and confirm the subscription is active. Trigger an upstream event and confirm an event message and Agent reply appear in the original Topic. No-expiry subscriptions have no scheduled health check; use **Check** in Automations to restore interrupted delivery. Turning the flag off hides the tools and settings entry but retains existing subscriptions; delete unwanted subscriptions before disabling it.
+Ask the Agent to subscribe in a conversation and approve it. Open Settings → Automations and confirm the subscription is active. Trigger an upstream event and confirm an event message and Agent reply appear in the original Topic. No-expiry subscriptions have no scheduled health check; use **Check** in Automations to restore interrupted delivery.
+
+Turning the flag off hides the tools and Automations entry, and stops event-triggered Agent runs and subscription renewals for affected users. Incoming events are still verified and stored, but are skipped without using credits. Subscription records remain; finite subscriptions may expire while the flag is off.
+
+Re-enabling the flag restores event runs for valid subscriptions and lets scheduled renewals attempt to recover expired subscriptions from the saved cursor. You can delete unwanted subscriptions before or after disabling the flag.

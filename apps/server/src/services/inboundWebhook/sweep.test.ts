@@ -10,9 +10,11 @@ import { InboundWebhookModel } from '@/database/models/inboundWebhook';
 import { agents, signals, topics, userConnectors, users } from '@/database/schemas';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 
+import { maintainMcpSubscription } from './kinds/mcpEvents/subscription';
 import { sweepInboundWebhooks } from './sweep';
 
 const boundary = vi.hoisted(() => ({
+  enabled: vi.fn(),
   subscribe: vi.fn(),
   listTools: vi.fn(),
   unsubscribe: vi.fn(),
@@ -42,9 +44,9 @@ vi.mock('@/server/services/connector/tokens', () => ({
 }));
 vi.mock('@/server/services/mcp/featureGate', () => ({
   isMcpAppsEnabled: async () => false,
-  isMcpEventsEnabled: async () => true,
+  isMcpEventsEnabled: boundary.enabled,
 }));
-vi.mock('./waker', () => ({ scheduleInboundWebhookWake: boundary.schedule }));
+vi.mock('./scheduler', () => ({ scheduleInboundWebhookWake: boundary.schedule }));
 const db = await getTestDB();
 const userId = 'sweep-user';
 const agentId = 'sweep-agent';
@@ -66,6 +68,7 @@ const seed = (patch: Partial<CreateInboundWebhook> = {}) =>
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  boundary.enabled.mockResolvedValue(true);
   vi.spyOn(console, 'error').mockImplementation(() => {});
   boundary.listTools.mockResolvedValue([]);
   boundary.subscribe.mockResolvedValue({ id: 'remote', refreshBefore: null });
@@ -92,6 +95,125 @@ afterEach(async () => {
 });
 
 describe('connector status after webhook maintenance authentication', () => {
+  it('evaluates each creator separately when one sweep contains enabled and disabled owners', async () => {
+    const other = 'sweep-disabled-owner';
+    const due = new Date(Date.now() - 1000);
+    try {
+      await db.insert(users).values({ id: other });
+      await db.insert(agents).values({ id: other, userId: other });
+      await db.insert(topics).values({ id: other, agentId: other, userId: other });
+      const otherConnector = crypto.randomUUID();
+      await db.insert(userConnectors).values({
+        id: otherConnector,
+        userId: other,
+        identifier: 'other-fixture',
+        name: 'Other',
+        sourceType: 'custom',
+        status: 'connected',
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://mcp.example.com',
+      });
+      const otherModel = new InboundWebhookModel(db, other, undefined, boundary.gateKeeper);
+      const suspended = await otherModel.create({
+        agentId: other,
+        topicId: other,
+        connectorId: otherConnector,
+        kind: 'mcp_events',
+        config: { eventName: 'issue.created', arguments: {} },
+        verification: { scheme: 'standard_webhooks' },
+        secret: 'whsec_other',
+        status: 'active',
+        nextMaintenanceAt: due,
+      });
+      await seed({ nextMaintenanceAt: due });
+      await seed({ nextMaintenanceAt: due });
+      boundary.enabled.mockImplementation(async (owner: string) => owner === userId);
+      await sweepInboundWebhooks(db);
+      expect(boundary.subscribe).toHaveBeenCalledTimes(2);
+      expect(boundary.enabled.mock.calls.map(([owner]) => owner).sort()).toEqual(
+        [userId, other].sort(),
+      );
+      expect(await otherModel.findById(suspended.id)).toEqual(suspended);
+    } finally {
+      await db.delete(users).where(eq(users.id, other));
+    }
+  });
+
+  it('skips renewal without changing disabled-owner rows, caches per sweep and resumes from cursor when enabled', async () => {
+    const due = new Date(Date.now() - 1000);
+    const a = await seed({
+      nextMaintenanceAt: due,
+      maintenanceFailures: 2,
+      state: { cursor: 'last-cursor', refreshBefore: due.toISOString() },
+    });
+    const b = await seed({ nextMaintenanceAt: due });
+    boundary.enabled.mockResolvedValue(false);
+    await sweepInboundWebhooks(db);
+    expect(boundary.subscribe).not.toHaveBeenCalled();
+    expect(boundary.enabled).toHaveBeenCalledExactlyOnceWith(userId);
+    expect(await model.findById(a.id)).toEqual(a);
+    expect(await model.findById(b.id)).toEqual(b);
+    boundary.enabled.mockClear().mockResolvedValue(true);
+    await sweepInboundWebhooks(db);
+    expect(boundary.enabled).toHaveBeenCalledExactlyOnceWith(userId);
+    expect(boundary.subscribe).toHaveBeenCalledTimes(2);
+    expect(boundary.subscribe.mock.calls[0][1]).toMatchObject({ cursor: 'last-cursor' });
+    expect(await model.findById(a.id)).toMatchObject({ status: 'active', maintenanceFailures: 0 });
+  });
+
+  it('still retries remote teardown while the owner flag is disabled', async () => {
+    const row = await seed({ status: 'deleting', nextMaintenanceAt: new Date(Date.now() - 1000) });
+    boundary.enabled.mockResolvedValue(false);
+    await sweepInboundWebhooks(db);
+    expect(boundary.unsubscribe).toHaveBeenCalledOnce();
+    expect(await model.findById(row.id)).toBeUndefined();
+  });
+
+  it.each(['terminated', 'deleting'] as const)(
+    'preserves concurrent %s during failed maintenance',
+    async (status) => {
+      const row = await seed();
+      boundary.subscribe.mockImplementationOnce(async () => {
+        await model.update(row.id, {
+          status,
+          lastError: 'access_revoked',
+          nextMaintenanceAt: null,
+        });
+        throw new Error('upstream unavailable');
+      });
+      await maintainMcpSubscription({ db, model, row });
+      expect(await model.findById(row.id)).toMatchObject({
+        status,
+        lastError: 'access_revoked',
+        nextMaintenanceAt: null,
+        maintenanceFailures: 0,
+      });
+    },
+  );
+
+  it.each(['terminated', 'deleting'] as const)(
+    'preserves concurrent %s during successful maintenance',
+    async (status) => {
+      const row = await seed();
+      boundary.subscribe.mockImplementationOnce(async () => {
+        await model.update(row.id, {
+          status,
+          lastError: 'access_revoked',
+          nextMaintenanceAt: null,
+        });
+        return { id: 'late-result', refreshBefore: new Date(Date.now() + 60_000).toISOString() };
+      });
+      await maintainMcpSubscription({ db, model, row });
+      expect(await model.findById(row.id)).toMatchObject({
+        status,
+        lastError: 'access_revoked',
+        nextMaintenanceAt: null,
+        state: {},
+      });
+      expect((await model.findById(row.id))?.state).toEqual({});
+    },
+  );
+
   it.each([
     { status: 401 },
     { cause: { data: { type: 'AUTHORIZATION_ERROR' } } },

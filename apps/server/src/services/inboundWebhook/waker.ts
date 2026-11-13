@@ -10,13 +10,15 @@ import { signals } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { getMcpEventErrorName } from '@/libs/mcp/events/errors';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import type { AiAgentService } from '@/server/services/aiAgent';
+import { AiAgentService } from '@/server/services/aiAgent';
 import { resolveForegroundInterventionConfig } from '@/server/services/aiAgent/foregroundIntervention';
-import { redisService } from '@/server/services/redis';
-import { InboundWebhookWorkflow } from '@/server/workflows/inboundWebhook';
+import { buildConnectorMcpParams } from '@/server/services/connector/sync';
+import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
+import { mcpService } from '@/server/services/mcp';
+import { isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
 
 import { getInboundWebhookKind } from './kinds';
-import { refreshSubscription } from './kinds/mcpEvents/subscription';
+import { connectorForWebhook, refreshSubscription } from './kinds/mcpEvents/subscription';
 import { removeInboundWebhook } from './lifecycle';
 import {
   claimWebhookSignals,
@@ -25,17 +27,6 @@ import {
   settleWebhookSignals,
   WEBHOOK_WAKE_RENEW_MS,
 } from './wakeClaim';
-
-export async function scheduleInboundWebhookWake(id: string, delaySeconds = 10): Promise<void> {
-  if (!(await redisService.inboundWebhook.claimWakeWindow(id))) return;
-  try {
-    await InboundWebhookWorkflow.triggerWake({ id }, delaySeconds);
-  } catch (error) {
-    console.error('[inboundWebhook:schedule] Could not enqueue wake', id);
-    // The durable pending signal is retried by sweep even while the debounce claim is held.
-    throw error;
-  }
-}
 
 export interface WebhookWakeDeps {
   execute?: AiAgentService['execAgent'];
@@ -142,6 +133,10 @@ export async function wakeInboundWebhook(
     operationId?: string,
   ) => settleWebhookSignals(db, claim, batch, status, reason, operationId);
   try {
+    if (row.kind === 'mcp_events' && !(await isMcpEventsEnabled(row.userId))) {
+      await settle('ignored', 'feature_disabled');
+      return { outcome: 'ignored' };
+    }
     if (!connector?.isEnabled) {
       await settle('ignored', 'connector_disabled');
       return { outcome: 'ignored' };
@@ -155,11 +150,7 @@ export async function wakeInboundWebhook(
       if (name === 'NotFound' || name === 'Unsupported') {
         if (!(await ownsClaim())) return { outcome: 'deferred' };
         try {
-          const { connectorForWebhook } = await import('./kinds/mcpEvents/subscription');
-          const { buildConnectorMcpParams } = await import('@/server/services/connector/sync');
-          const { ensureFreshConnectorToken } = await import('@/server/services/connector/tokens');
-          const { mcpService } = await import('@/server/services/mcp');
-          const ctx = { db, model, row: claim.row };
+          const ctx = { db, featureEnabled: true, model, row: claim.row };
           const { connector: c, connectorModel } = await connectorForWebhook(ctx);
           const fresh = await ensureFreshConnectorToken(c, connectorModel);
           const available = await mcpService.listEvents(buildConnectorMcpParams(fresh));
@@ -196,14 +187,13 @@ export async function wakeInboundWebhook(
       const execute =
         deps.execute ??
         (async (params) => {
-          const { AiAgentService } = await import('@/server/services/aiAgent');
           return new AiAgentService(db, row.userId, { workspaceId: scope }).execAgent(params);
         });
       const userInterventionConfig = await (
         deps.intervention ?? resolveForegroundInterventionConfig
       )(db, row.userId);
       if (!(await ownsClaim())) {
-        await model.releaseWake(id);
+        await model.releaseWake(id, reserved);
         return { outcome: 'deferred' };
       }
       const result = await execute({
@@ -227,7 +217,7 @@ export async function wakeInboundWebhook(
       return { outcome: 'processed' };
     } catch (error) {
       const category = classifyWakeError(error);
-      if (category === 'budget' || category === 'busy') await model.releaseWake(id);
+      if (category === 'budget' || category === 'busy') await model.releaseWake(id, reserved);
       if (category === 'budget') {
         await model.update(id, { lastError: 'insufficient_budget' });
         await settle('failed', 'insufficient_budget');

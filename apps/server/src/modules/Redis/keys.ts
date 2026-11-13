@@ -76,7 +76,6 @@ export const RedisKeyNamespace = {
  */
 export const RedisKeys = {
   inboundWebhook: {
-    delivery: (id: string, deliveryId: string) => `delivery:v1:${id}:${deliveryId}`,
     wake: (id: string) => `wake:v1:${id}`,
     check: (id: string) => `check:v1:${id}`,
     maintenance: (id: string) => `maintenance:v1:${id}`,

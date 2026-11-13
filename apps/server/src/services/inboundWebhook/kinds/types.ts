@@ -4,6 +4,8 @@ import type { LobeChatDatabase } from '@/database/type';
 
 export interface InboundWebhookContext {
   db: LobeChatDatabase;
+  /** Request-local kind gate snapshot, evaluated for row.userId by a batch/check caller. */
+  featureEnabled?: boolean;
   model: InboundWebhookModel;
   row: InboundWebhookView;
 }

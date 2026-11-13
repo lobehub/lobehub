@@ -16,6 +16,7 @@ import {
 } from './lifecycle';
 
 const boundary = vi.hoisted(() => ({
+  enabled: vi.fn(),
   unsubscribe: vi.fn(),
   subscribe: vi.fn(),
   gateKeeper: {
@@ -23,6 +24,7 @@ const boundary = vi.hoisted(() => ({
     decrypt: async (value: string) => ({ plaintext: value.slice(7) }),
   },
 }));
+vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpEventsEnabled: boundary.enabled }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => boundary.gateKeeper },
 }));
@@ -57,6 +59,7 @@ const seed = (patch: Partial<CreateInboundWebhook> = {}) =>
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  boundary.enabled.mockResolvedValue(true);
   vi.spyOn(console, 'error').mockImplementation(() => {});
   boundary.unsubscribe.mockResolvedValue({});
   boundary.subscribe.mockResolvedValue({ id: 'remote-refreshed', refreshBefore: null });
@@ -88,6 +91,17 @@ afterEach(async () => {
 });
 
 describe('inbound webhook lifecycle', () => {
+  it('does not re-register after credentials change while disabled, but allows lifecycle teardown', async () => {
+    const row = await seed();
+    boundary.enabled.mockResolvedValue(false);
+    await refreshByConnector(db, scope, connectorId);
+    expect(boundary.subscribe).not.toHaveBeenCalled();
+    expect(await model.findById(row.id)).toEqual(row);
+    await removeByConnector(db, scope, connectorId);
+    expect(boundary.unsubscribe).toHaveBeenCalledOnce();
+    expect(await model.findById(row.id)).toBeUndefined();
+  });
+
   it('removes a subscription only after attempting remote teardown', async () => {
     const row = await seed();
     let wasHiddenDuringTeardown = false;
@@ -128,6 +142,21 @@ describe('inbound webhook lifecycle', () => {
     if (!deleting) throw new Error('Expected durable teardown');
     await removeInboundWebhook(db, deleting);
     expect(await model.findById(row.id)).toBeUndefined();
+  });
+
+  it('retires the local endpoint when the user deletes credentials after failed teardown', async () => {
+    const row = await seed();
+    boundary.unsubscribe.mockRejectedValueOnce(new Error('upstream offline'));
+    await removeByConnector(db, scope, connectorId);
+    expect(await model.findById(row.id)).toMatchObject({ status: 'deleting' });
+    expect(
+      await InboundWebhookModel.findForDelivery(db, row.id, boundary.gateKeeper),
+    ).toBeUndefined();
+    await db.delete(userConnectors).where(eq(userConnectors.id, connectorId));
+    expect(await model.findById(row.id)).toBeUndefined();
+    expect(
+      await InboundWebhookModel.findForDelivery(db, row.id, boundary.gateKeeper),
+    ).toBeUndefined();
   });
 
   it.each(['connector', 'agent', 'topic'] as const)(

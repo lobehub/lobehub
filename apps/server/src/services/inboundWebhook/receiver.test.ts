@@ -55,7 +55,7 @@ vi.mock('@/server/services/redis', () => ({
     },
   },
 }));
-vi.mock('@/server/services/inboundWebhook/waker', () => ({
+vi.mock('@/server/services/inboundWebhook/scheduler', () => ({
   scheduleInboundWebhookWake: scheduleWake,
 }));
 // Receiver integration exercises actual kind parsing while isolating remote connection maintenance.
@@ -117,6 +117,49 @@ afterEach(async () => {
 });
 
 describe('inbound webhook receiving with real persistence', () => {
+  it('never confirms a delivery lost after a worker claimed it but before persistence', async () => {
+    const row = await seed();
+    // A dead worker left a Redis claim, but there is no durable event to acknowledge.
+    claims.add(`${row.id}:delivery-1`);
+    expect((await deliver(row.id, event())).status).toBe(200);
+    expect(await db.select().from(signals)).toHaveLength(1);
+  });
+
+  it('does not acknowledge an unpersisted concurrent retry while the first writer is blocked', async () => {
+    const row = await seed();
+    const started = Promise.withResolvers<void>();
+    const blocked = Promise.withResolvers<void>();
+    const spy = vi.spyOn(db, 'insert').mockImplementationOnce(
+      () =>
+        ({
+          values: () => ({
+            onConflictDoNothing: () => ({
+              returning: async () => {
+                started.resolve();
+                await blocked.promise;
+                throw new Error('First worker failed before writing');
+              },
+            }),
+          }),
+        }) as never,
+    );
+    const first = deliver(row.id, event());
+    await started.promise;
+    // The second writer cannot persist either. It must get a retryable response, never a 200.
+    spy.mockImplementationOnce(() => {
+      throw new Error('Persistence temporarily unavailable');
+    });
+    try {
+      expect((await deliver(row.id, event())).status).toBe(503);
+      expect(await db.select().from(signals)).toHaveLength(0);
+    } finally {
+      blocked.resolve();
+      await first;
+    }
+    expect((await deliver(row.id, event())).status).toBe(200);
+    expect(await db.select().from(signals)).toHaveLength(1);
+  });
+
   it('returns 410 for removed endpoints and deleting rows', async () => {
     expect((await deliver('00000000-0000-0000-0000-000000000000', event())).status).toBe(410);
     const row = await seed('deleting');
@@ -223,7 +266,7 @@ describe('inbound webhook receiving with real persistence', () => {
     const row = await seed();
     expect((await deliver(row.id, event())).status).toBe(200);
     expect((await deliver(row.id, event({ data: { changed: true } }))).status).toBe(200);
-    expect(scheduleWake).toHaveBeenCalledTimes(1);
+    expect(scheduleWake).toHaveBeenCalledTimes(2);
     expect((await deliver(row.id, event(), { deliveryId: 'redelivery-new-id' })).status).toBe(200);
     const ledger = await db.select().from(signals);
     expect(ledger).toHaveLength(1);
@@ -284,7 +327,7 @@ describe('inbound webhook receiving with real persistence', () => {
     const ledger = await db.select().from(signals);
     expect(ledger).toHaveLength(1);
     expect(ledger[0]).toMatchObject({ payload, metadata: { extra: { control: 'terminated' } } });
-    expect(scheduleWake).toHaveBeenCalledTimes(1);
+    expect(scheduleWake).toHaveBeenCalledTimes(2);
   });
 
   it('ignores unknown top-level control types, including bodies shaped like events', async () => {
@@ -374,7 +417,7 @@ describe('inbound webhook receiving with real persistence', () => {
     expect((await deliver(row.id, event())).status).toBe(200);
   });
 
-  it('releases the dedupe claim when persistence fails, enabling retry', async () => {
+  it('allows retries after persistence fails', async () => {
     const row = await seed();
     vi.spyOn(db, 'insert').mockImplementationOnce(() => {
       throw new Error('DB unavailable');
@@ -392,10 +435,10 @@ describe('inbound webhook receiving with real persistence', () => {
     const ledger = await db.select().from(signals);
     expect(ledger).toHaveLength(1);
     expect(ledger[0]).toMatchObject({ status: 'pending', attempts: 0 });
-    expect(claims.has(`${row.id}:delivery-1`)).toBe(true);
+    expect(claims.has(`${row.id}:delivery-1`)).toBe(false);
     expect((await deliver(row.id, event())).status).toBe(200);
     expect(await db.select().from(signals)).toHaveLength(1);
-    expect(scheduleWake).toHaveBeenCalledTimes(1);
+    expect(scheduleWake).toHaveBeenCalledTimes(2);
   });
 
   it.each(['new', 'pending duplicate'] as const)(

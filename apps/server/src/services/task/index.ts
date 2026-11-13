@@ -13,6 +13,7 @@ import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AiAgentService } from '../aiAgent';
+import { removeByTopics } from '../inboundWebhook/lifecycle';
 import { displaySubtaskPlan, type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
 import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
@@ -338,7 +339,6 @@ export class TaskService {
     }
 
     try {
-      const { removeByTopics } = await import('../inboundWebhook/lifecycle');
       await removeByTopics(this.db, { userId: this.userId, workspaceId: this.workspaceId }, [
         topicId,
       ]);
@@ -446,7 +446,6 @@ export class TaskService {
     // Remote teardown follows commit: conflicts and rollbacks preserve the live endpoints.
     if (outcome === 'deleted' && removedTopicIds.length > 0) {
       try {
-        const { removeByTopics } = await import('../inboundWebhook/lifecycle');
         await removeByTopics(
           this.db,
           { userId: this.userId, workspaceId: this.workspaceId },

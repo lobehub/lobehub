@@ -15,6 +15,7 @@ import {
 } from './subscription';
 
 const mocks = vi.hoisted(() => ({
+  enabled: vi.fn(),
   connector: vi.fn(),
   fresh: vi.fn(),
   subscribe: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock('@/database/models/connector', () => ({
   },
 }));
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://lobehub.example.com' } }));
+vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpEventsEnabled: mocks.enabled }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => ({}) },
 }));
@@ -107,6 +109,12 @@ const createContext = (patch: Partial<InboundWebhookView> = {}) => {
       Object.assign(stored, update);
       return stored;
     }),
+    updateIfStatus: vi.fn(async (_id, update, statuses: string[], state = {}) => {
+      if (!statuses.includes(stored.status)) return undefined;
+      Object.assign(stored, update);
+      stored.state = { ...stored.state, ...state };
+      return stored;
+    }),
   };
   const ctx: InboundWebhookContext = {
     db: {} as never,
@@ -118,6 +126,7 @@ const createContext = (patch: Partial<InboundWebhookView> = {}) => {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.enabled.mockResolvedValue(true);
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
   mocks.connector.mockResolvedValue({
@@ -172,6 +181,17 @@ describe('remote event subscription compatibility', () => {
 });
 
 describe('subscription maintenance', () => {
+  it('does not renew or record a failure while the owner flag is disabled', async () => {
+    const { ctx, stored } = createContext({ maintenanceFailures: 2 });
+    const before = structuredClone(stored);
+    mocks.enabled.mockResolvedValue(false);
+    await maintainMcpSubscription(ctx);
+    expect(mocks.enabled).toHaveBeenCalledExactlyOnceWith(ctx.row.userId);
+    expect(mocks.connector).not.toHaveBeenCalled();
+    expect(mocks.subscribe).not.toHaveBeenCalled();
+    expect(stored).toEqual(before);
+  });
+
   it('keeps an indefinite subscription out of maintenance and merges its identity/cursor', async () => {
     const { ctx, stored } = createContext();
     await applySubscriptionResult(ctx, { id: 'remote', cursor: 'cursor-new', refreshBefore: null });
@@ -328,6 +348,13 @@ describe('subscription maintenance', () => {
 });
 
 describe('remote teardown', () => {
+  it('allows cleanup without consulting a disabled feature flag', async () => {
+    mocks.enabled.mockResolvedValue(false);
+    await teardownMcpSubscription(createContext().ctx);
+    expect(mocks.unsubscribe).toHaveBeenCalledOnce();
+    expect(mocks.enabled).not.toHaveBeenCalled();
+  });
+
   it('treats an already missing subscription as successfully removed', async () => {
     mocks.unsubscribe.mockRejectedValueOnce({ code: -32023 });
     await expect(teardownMcpSubscription(createContext().ctx)).resolves.toBeUndefined();
