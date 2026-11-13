@@ -40,8 +40,7 @@ export default {
   'builtins.lobe-mcp-events.render.eventTypesEmpty':
     "None of this agent's connectors offer events.",
   'builtins.lobe-mcp-events.render.notSubscribable': 'No webhook delivery',
-  'builtins.lobe-mcp-events.render.connectorError':
-    "Couldn't read events from {{connector}}: {{message}}",
+  'builtins.lobe-mcp-events.render.connectorError': "Couldn't read events from {{connector}}",
   'builtins.lobe-mcp-events.render.unsubscribed':
     'Unsubscribed. These events no longer run the agent.',
   'builtins.lobe-mcp-events.error.feature_disabled':

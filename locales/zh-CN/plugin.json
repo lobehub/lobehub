@@ -495,7 +495,7 @@
   "builtins.lobe-mcp-events.intervention.costTitle": "每次事件都会运行助理",
   "builtins.lobe-mcp-events.intervention.filter": "订阅范围",
   "builtins.lobe-mcp-events.intervention.instructions": "事件到达时",
-  "builtins.lobe-mcp-events.render.connectorError": "无法读取 {{connector}} 的事件：{{message}}",
+  "builtins.lobe-mcp-events.render.connectorError": "无法读取 {{connector}} 的事件",
   "builtins.lobe-mcp-events.render.eventTypesEmpty": "这个助理的连接器都不提供事件。",
   "builtins.lobe-mcp-events.render.expiresAt": "有效期至 {{time}}，到期前自动续订",
   "builtins.lobe-mcp-events.render.expiresNever": "永不过期",

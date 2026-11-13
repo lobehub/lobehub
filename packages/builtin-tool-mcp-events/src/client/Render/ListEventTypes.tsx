@@ -7,6 +7,8 @@ import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
+
 import type { ListEventTypesArgs, ListEventTypesState, McpEventTypeItem } from '../../types';
 import ConnectorEventLabel from '../components/ConnectorEventLabel';
 import ToolError from '../components/ToolError';
@@ -23,7 +25,6 @@ const styles = stylex.create({
     borderBlockEndColor: { 'default': cssVar.colorBorderSecondary, ':last-child': 'transparent' },
   },
   list: { maxBlockSize: '360px', overflowY: 'auto' },
-  warning: { fontSize: '12px', color: cssVar.colorWarning },
 });
 
 const groupByConnector = (items: McpEventTypeItem[]) => {
@@ -90,13 +91,18 @@ const ListEventTypesRender = memo<BuiltinRenderProps<ListEventTypesArgs, ListEve
             ))}
           </Flexbox>
         )}
+        {/* A connector that did not answer is named in one line; what it said
+            is folded behind "Show details", like every other tool failure. */}
         {failures.map((failure) => (
-          <span key={failure.connector} {...stylex.props(styles.warning)}>
-            {t('builtins.lobe-mcp-events.render.connectorError', {
+          <AsyncError
+            align={'start'}
+            details={failure.message}
+            key={failure.connector}
+            variant={'inline'}
+            title={t('builtins.lobe-mcp-events.render.connectorError', {
               connector: failure.connector,
-              message: failure.message,
             })}
-          </span>
+          />
         ))}
       </Flexbox>
     );
