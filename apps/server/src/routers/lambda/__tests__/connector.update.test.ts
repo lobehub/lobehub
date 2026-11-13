@@ -63,6 +63,23 @@ describe('connectorRouter.update', () => {
     expect(stored).not.toHaveProperty('status');
   });
 
+  // Undoing a failed custom install over a legacy marketplace projection: the
+  // install's `create` made the row `custom`, the rollback makes it marketplace
+  it('puts a row back on the install source it came from', async () => {
+    await update({ mcpConnectionType: null, mcpServerUrl: null, sourceType: 'marketplace' });
+
+    expect(connectorModelMock.update).toHaveBeenCalledWith(
+      CONNECTOR_ID,
+      expect.objectContaining({ mcpServerUrl: null, sourceType: 'marketplace' }),
+    );
+  });
+
+  it('refuses to turn a row into a builtin tool', async () => {
+    await expect(update({ sourceType: 'builtin' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+    expect(connectorModelMock.update).not.toHaveBeenCalled();
+  });
+
   it('keeps the status of an edit that brings no OAuth client', async () => {
     await update({ name: 'Renamed' });
 

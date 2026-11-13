@@ -714,6 +714,12 @@ export const connectorRouter = router({
             mcpServerUrl: mcpServerUrlSchema.nullish(),
             mcpStdioConfig: mcpStdioConfigSchema.nullish(),
             oidcConfig: oidcConfigSchema.nullish(),
+            // `create` re-sources the row it upserts, so undoing a failed custom
+            // install over a legacy marketplace projection puts its source back.
+            // Only between the two install sources `create` moves a row across.
+            sourceType: z
+              .enum([ConnectorSourceType.custom, ConnectorSourceType.marketplace])
+              .optional(),
           }),
       }),
     )

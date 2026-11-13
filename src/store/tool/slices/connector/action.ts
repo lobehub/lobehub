@@ -448,6 +448,8 @@ export class ConnectorActionImpl {
         clientSecret?: string;
         scheme?: 'pre_registration' | 'dcr' | 'client_id_metadata_document';
       } | null;
+      /** Puts back the source a failed install's `createConnector` moved the row off. */
+      sourceType?: 'custom' | 'marketplace';
     },
   ): Promise<void> => {
     await lambdaClient.connector.update.mutate({ id, patch: patch as any });

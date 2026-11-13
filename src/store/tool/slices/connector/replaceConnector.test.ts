@@ -170,6 +170,26 @@ describe('restoreConnector', () => {
     );
   });
 
+  it('puts back the marketplace source a failed custom install moved the row off', async () => {
+    const { get, state } = makeStore([
+      { id: 'c1', mcpServerUrl: 'https://new.example.com', sourceType: 'custom' },
+    ]);
+
+    await restoreConnector(
+      snapshot({
+        mcpConnectionType: null,
+        mcpServerUrl: null,
+        sourceType: 'marketplace',
+      }),
+      get,
+    );
+
+    expect(state.updateConnector).toHaveBeenCalledWith(
+      'c1',
+      expect.objectContaining({ mcpServerUrl: null, sourceType: 'marketplace' }),
+    );
+  });
+
   it('leaves a row that was not connected disconnected', async () => {
     const { get, state } = makeStore([{ id: 'c1', mcpServerUrl: 'https://old.example.com' }]);
 

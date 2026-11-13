@@ -73,6 +73,11 @@ export const restoreConnector = async (snapshot: ConnectorSnapshot, get: () => T
     mcpStdioConfig: mcpStdioConfig ?? null,
     metadata: snapshot.metadata ?? {},
     name: snapshot.name,
+    // `create` re-sources the row: a custom install over a legacy marketplace
+    // projection left it `custom`, which a marketplace reinstall would refuse
+    ...(snapshot.sourceType === 'custom' || snapshot.sourceType === 'marketplace'
+      ? { sourceType: snapshot.sourceType }
+      : {}),
     // A row without an OAuth client drops the one the failed attempt stored.
     // One that had a client keeps the stored one: its secret is withheld too.
     ...(oidcConfig ? {} : { oidcConfig: null }),
