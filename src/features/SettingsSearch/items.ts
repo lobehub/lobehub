@@ -74,6 +74,7 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
   ],
   [SettingsTabs.Billing]: ['billing', 'payment', 'invoice', 'card', 'transaction'],
   [SettingsTabs.Connector]: ['connectors', 'integrations', 'mcp', 'oauth'],
+  [SettingsTabs.Credits]: ['credits', 'balance', 'top up', 'recharge', 'buy credits'],
   [SettingsTabs.Creds]: ['credentials', 'secrets', 'oauth'],
   [SettingsTabs.Devices]: ['devices', 'sessions', 'logged in devices'],
   [SettingsTabs.Hotkey]: ['hotkey', 'shortcut', 'keyboard'],
@@ -173,19 +174,7 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
     'cli',
     'environment',
   ],
-  // Usage and balance share one page, so the tab answers both vocabularies.
-  [SettingsTabs.Usage]: [
-    'usage',
-    'consumption',
-    'quota',
-    'spend',
-    'statistics',
-    'credits',
-    'balance',
-    'top up',
-    'recharge',
-    'buy credits',
-  ],
+  [SettingsTabs.Usage]: ['usage', 'consumption', 'quota', 'spend', 'statistics'],
   [WorkspaceSettingsTabs.ChatPreference]: [
     'chat preferences',
     'follow up',
@@ -203,13 +192,14 @@ export const TAB_SEARCH_EN_KEYWORDS: Partial<Record<string, string[]>> = {
  * "积分", and "文件" (files) should hit Storage ("数据存储"). Each locale
  * carries its own synonym set, layered on top of TAB_SEARCH_EN_KEYWORDS.
  */
-export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<string, string | string[]>> = {
+export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<string, string>> = {
   [SettingsTabs.About]: 'settingsSearch.tabKeywords.about',
   [SettingsTabs.Advanced]: 'settingsSearch.tabKeywords.advanced',
   [SettingsTabs.APIKey]: 'settingsSearch.tabKeywords.apikey',
   [SettingsTabs.Appearance]: 'settingsSearch.tabKeywords.appearance',
   [SettingsTabs.Billing]: 'settingsSearch.tabKeywords.billing',
   [SettingsTabs.Connector]: 'settingsSearch.tabKeywords.connector',
+  [SettingsTabs.Credits]: 'settingsSearch.tabKeywords.credits',
   [SettingsTabs.Creds]: 'settingsSearch.tabKeywords.creds',
   [SettingsTabs.Devices]: 'settingsSearch.tabKeywords.devices',
   [SettingsTabs.Labels]: 'settingsSearch.tabKeywords.labels',
@@ -231,8 +221,7 @@ export const TAB_SEARCH_KEYWORDS_KEYS: Partial<Record<string, string | string[]>
   [SettingsTabs.Storage]: 'settingsSearch.tabKeywords.storage',
   [SettingsTabs.SystemTools]: 'settingsSearch.tabKeywords.systemTools',
   [SettingsTabs.Trash]: 'settingsSearch.tabKeywords.trash',
-  // The balance keywords stay their own key: they are translated per locale.
-  [SettingsTabs.Usage]: ['settingsSearch.tabKeywords.usage', 'settingsSearch.tabKeywords.credits'],
+  [SettingsTabs.Usage]: 'settingsSearch.tabKeywords.usage',
   [WorkspaceSettingsTabs.ChatPreference]: 'settingsSearch.tabKeywords.chatPreference',
 };
 
