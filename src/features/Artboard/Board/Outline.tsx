@@ -8,6 +8,12 @@ import { floatStyles } from '../Canvas/Overlays';
 import { artboardActions, useArtboardStore } from '../store';
 
 const styles = stylex.create({
+  divider: {
+    backgroundColor: cssVar.colorBorderSecondary,
+    flex: 'none',
+    height: 1,
+    marginBlock: 6,
+  },
   group: {
     color: cssVar.colorTextSecondary,
     cursor: 'pointer',
@@ -49,6 +55,23 @@ const Outline = () => {
 
   return (
     <Flexbox gap={2} {...stylex.props(floatStyles.float, styles.panel)}>
+      {board.pages.length > 1 && (
+        <>
+          <Text style={{ fontSize: 12, padding: '6px 8px 2px' }} type="secondary">
+            {t('artboard.pages.title')}
+          </Text>
+          {board.pages.map((page) => (
+            <div
+              key={page.id}
+              {...stylex.props(styles.item, page.id === board.pageId && styles.itemActive)}
+              onClick={() => artboardActions.setPage(page.id)}
+            >
+              {page.name}
+            </div>
+          ))}
+          <div {...stylex.props(styles.divider)} />
+        </>
+      )}
       <Text style={{ fontSize: 12, padding: '6px 8px 2px' }} type="secondary">
         {t('artboard.outline.title')}
       </Text>

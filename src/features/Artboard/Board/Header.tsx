@@ -13,8 +13,10 @@ import { useTranslation } from 'react-i18next';
 
 import { useBoard } from '../BoardContext';
 import { createFinalizeModal } from '../Finalize';
+import OpenConversation from '../Gallery/OpenConversation';
 import { artboardActions, useArtboardStore } from '../store';
 import type { BoardMode } from '../types';
+import PageMenu from './PageMenu';
 
 const styles = stylex.create({
   bar: {
@@ -38,7 +40,8 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
   const board = useBoard();
   const { finalized } = board;
   const pendingLeft = board.blockers.length;
-  const { mode, outlineOpen, verifyOpen } = useArtboardStore((s) => ({
+  const { gallery, mode, outlineOpen, verifyOpen } = useArtboardStore((s) => ({
+    gallery: s.gallery,
     mode: s.mode,
     outlineOpen: s.outlineOpen,
     verifyOpen: s.verifyOpen,
@@ -67,6 +70,7 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
         <Text ellipsis strong style={{ minWidth: 0 }}>
           {board.artboard.title}
         </Text>
+        {(narrow || !outlineOpen || mode === 'verify') && <PageMenu />}
         <Tag size={'small'} style={{ flex: 'none' }}>
           {finalized ? t('artboard.header.phaseFinalized') : t('artboard.header.phaseDraft')}
         </Tag>
@@ -113,6 +117,7 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
             onClick={() => artboardActions.setVerifyOpen(!verifyOpen)}
           />
         )}
+        {gallery && <OpenConversation onLeave={onExitFullscreen} />}
         <ActionIcon
           icon={onExitFullscreen ? Minimize2Icon : Maximize2Icon}
           size={'small'}
