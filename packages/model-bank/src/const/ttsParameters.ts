@@ -363,3 +363,63 @@ export const elevenlabsExpressiveTTSSchema: TTSModelParamsSchema = {
   format: { default: 'mp3', enum: ELEVENLABS_TTS_FORMATS },
   voice: { default: ELEVENLABS_DEFAULT_VOICE },
 };
+
+/**
+ * Gemini TTS prebuilt voices, shared by every Gemini TTS model. Descriptions are Google's
+ * own one-word characterizations; genders follow the matching Chirp 3 HD voices.
+ * @see https://ai.google.dev/gemini-api/docs/speech-generation#voices
+ */
+export const googleTTSVoices: TTSVoice[] = (
+  [
+    ['Achernar', 'female', 'Soft'],
+    ['Achird', 'male', 'Friendly'],
+    ['Algenib', 'male', 'Gravelly'],
+    ['Algieba', 'male', 'Smooth'],
+    ['Alnilam', 'male', 'Firm'],
+    ['Aoede', 'female', 'Breezy'],
+    ['Autonoe', 'female', 'Bright'],
+    ['Callirrhoe', 'female', 'Easy-going'],
+    ['Charon', 'male', 'Informative'],
+    ['Despina', 'female', 'Smooth'],
+    ['Enceladus', 'male', 'Breathy'],
+    ['Erinome', 'female', 'Clear'],
+    ['Fenrir', 'male', 'Excitable'],
+    ['Gacrux', 'female', 'Mature'],
+    ['Iapetus', 'male', 'Clear'],
+    ['Kore', 'female', 'Firm'],
+    ['Laomedeia', 'female', 'Upbeat'],
+    ['Leda', 'female', 'Youthful'],
+    ['Orus', 'male', 'Firm'],
+    ['Puck', 'male', 'Upbeat'],
+    ['Pulcherrima', 'female', 'Forward'],
+    ['Rasalgethi', 'male', 'Informative'],
+    ['Sadachbia', 'male', 'Lively'],
+    ['Sadaltager', 'male', 'Knowledgeable'],
+    ['Schedar', 'male', 'Even'],
+    ['Sulafat', 'female', 'Warm'],
+    ['Umbriel', 'male', 'Easy-going'],
+    ['Vindemiatrix', 'female', 'Gentle'],
+    ['Zephyr', 'female', 'Bright'],
+    ['Zubenelgenubi', 'male', 'Casual'],
+  ] as const
+).map(([id, gender, description]) => ({
+  description,
+  displayName: id,
+  gender,
+  id,
+  language: 'multilingual',
+}));
+
+/**
+ * Gemini returns 16-bit PCM, which the runtime encodes to MP3 or wraps as WAV. Gemini has no
+ * numeric speed, pitch or volume control: pace and tone come from the style `instructions`
+ * (e.g. "speak slowly and calmly"), so only those are declared.
+ */
+export const googleTTSSchema: TTSModelParamsSchema = {
+  format: { default: 'mp3', enum: ['mp3', 'wav', 'pcm'] },
+  instructions: {
+    default: '',
+    description: 'Style, tone or pace, e.g. "speak slowly in a warm, calm voice"',
+  },
+  voice: { default: 'Kore' },
+};
