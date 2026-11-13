@@ -70,6 +70,7 @@
   "streamlake.description": "快手万擎是企业级模型服务与AI算力云平台，集成高性能模型推理、低成本模型定制与全托管服务，助力企业专注于AI应用创新，无需担忧底层算力的复杂性与成本。",
   "supergrok.description": "通过您的 SuperGrok 或 X 高级订阅访问 Grok 模型，无需 API 密钥。",
   "taichu.description": "太初是中科院自动化所与武汉人工智能研究院联合研发的新一代多模态模型，支持多轮问答、写作、图像生成、3D 理解与信号分析，具备更强的认知与创造力。",
+  "teapot-router.description": "Teapot Router 是面向 coding agent 的双协议 API 网关：一个 Key 同时接入 Anthropic 协议（Claude Code 直连）与 OpenAI 协议（/v1）。",
   "tencentcloud.description": "腾讯云大模型知识引擎原子能力为企业与开发者提供端到端知识问答服务，支持文档解析、切分、向量化、多轮重写等模块化服务，助力构建定制 AI 方案。",
   "togetherai.description": "Together AI 提供领先性能的创新模型，支持广泛定制、快速扩展与简便部署，满足企业需求。",
   "typesafe.description": "TypeSafe 提供 System One 模型，可通过校准概率回答类型化问题，以支持可靠的应用决策。",

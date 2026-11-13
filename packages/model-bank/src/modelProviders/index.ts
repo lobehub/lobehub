@@ -72,6 +72,7 @@ import StraicoProvider from './straico';
 import StreamLakeProvider from './streamlake';
 import SuperGrokProvider from './superGrok';
 import TaichuProvider from './taichu';
+import TeapotRouterProvider from './teapotrouter';
 import TencentcloudProvider from './tencentcloud';
 import TogetherAIProvider from './togetherai';
 import { TypeSafeProvider } from './typesafe';
@@ -190,6 +191,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   Ai302Provider,
   NvidiaProvider,
   TogetherAIProvider,
+  TeapotRouterProvider,
   TypeSafeProvider,
   FireworksAIProvider,
   GroqProvider,
@@ -378,6 +380,7 @@ export { default as StraicoProviderCard } from './straico';
 export { default as StreamLakeProviderCard } from './streamlake';
 export { default as SuperGrokProviderCard } from './superGrok';
 export { default as TaichuProviderCard } from './taichu';
+export { default as TeapotRouterProviderCard } from './teapotrouter';
 export { default as TencentCloudProviderCard } from './tencentcloud';
 export { default as TogetherAIProviderCard } from './togetherai';
 export { default as UnslothProviderCard } from './unsloth';

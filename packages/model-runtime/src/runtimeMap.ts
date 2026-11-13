@@ -69,6 +69,7 @@ import { LobeStraicoAI } from './providers/straico';
 import { LobeStreamLakeAI } from './providers/streamlake';
 import { LobeSuperGrokAI } from './providers/superGrok';
 import { LobeTaichuAI } from './providers/taichu';
+import { LobeTeapotRouterAI } from './providers/teapotrouter';
 import { LobeTencentCloudAI } from './providers/tencentcloud';
 import { LobeTogetherAI } from './providers/togetherai';
 import { LobeTypeSafeAI } from './providers/typesafe';
@@ -160,6 +161,7 @@ export const providerRuntimeMap = {
   streamlake: LobeStreamLakeAI,
   supergrok: LobeSuperGrokAI,
   taichu: LobeTaichuAI,
+  'teapot-router': LobeTeapotRouterAI,
   tencentcloud: LobeTencentCloudAI,
   togetherai: LobeTogetherAI,
   typesafe: LobeTypeSafeAI,
