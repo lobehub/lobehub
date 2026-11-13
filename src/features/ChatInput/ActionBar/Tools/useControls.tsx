@@ -82,6 +82,7 @@ import SkillRow from './SkillRow';
 import ToolItem from './ToolItem';
 import ToolItemDetailPopover from './ToolItemDetailPopover';
 import { styles } from './useControls.styles';
+import { usePluginRowUninstall } from './usePluginRowUninstall';
 
 const officialTag = (
   <Tooltip placement={'top'} title={'LobeHub'}>
@@ -158,19 +159,14 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const [autoModeLoading, setAutoModeLoading] = useState(false);
   const { allowed: canEdit } = usePermission('edit_own_content');
   const list = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
-  const [
-    uninstallPlugin,
-    removeComposioConnection,
-    deleteAgentSkill,
-    uninstallBuiltinTool,
-    deleteConnector,
-  ] = useToolStore((s) => [
-    s.uninstallCustomPlugin,
-    s.removeComposioConnection,
-    s.deleteAgentSkill,
-    s.uninstallBuiltinTool,
-    s.deleteConnector,
-  ]);
+  const uninstallPluginRow = usePluginRowUninstall();
+  const [removeComposioConnection, deleteAgentSkill, uninstallBuiltinTool, deleteConnector] =
+    useToolStore((s) => [
+      s.removeComposioConnection,
+      s.deleteAgentSkill,
+      s.uninstallBuiltinTool,
+      s.deleteConnector,
+    ]);
   const [checked, togglePlugin, setPluginMode] = useAgentStore((s) => [
     // Pinned identifiers only (getAgentPluginsById already excludes disabled).
     agentByIdSelectors.getAgentPluginsById(agentId)(s),
@@ -1299,7 +1295,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         : undefined,
       deleteConfig: {
         displayName: title,
-        onDelete: () => uninstallPlugin(item.identifier),
+        onDelete: () => uninstallPluginRow(item),
       },
       extraTag: isCustom ? (
         <Tag color={'warning'} icon={<Icon icon={Package} />} size={'small'}>
