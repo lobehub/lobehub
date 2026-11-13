@@ -259,6 +259,56 @@ describe('createServerContextFactProviders', () => {
     );
   });
 
+  // A document the run edits must keep the index row it first had,
+  // or the cached conversation behind the index is written to the cache again.
+  describe('listAgentDocuments index facts', () => {
+    const reportRow = (contentCharCount: number, updatedAt: string) => ({
+      content: '',
+      contentCharCount,
+      documentId: 'doc-1',
+      filename: 'report.md',
+      id: 'agent-doc-1',
+      policyLoad: 'progressive',
+      title: 'Report',
+      updatedAt: new Date(updatedAt),
+    });
+
+    it('freezes the rows on first sight and hands them to the host', async () => {
+      getAgentContextDocuments.mockResolvedValue([reportRow(9400, '2026-05-01T00:00:00.000Z')]);
+      const bindAgentDocumentIndex = vi.fn();
+      const providers = createServerContextFactProviders({
+        ctx: { bindAgentDocumentIndex, serverDB: {}, userId: 'owner-1' } as never,
+        state: {} as never,
+      });
+
+      await providers.listAgentDocuments!('agent-1');
+
+      expect(bindAgentDocumentIndex).toHaveBeenCalledWith({
+        'agent-doc-1': { contentCharCount: 9400, updatedAt: '2026-05-01T00:00:00.000Z' },
+      });
+    });
+
+    it('renders an edited document from the facts bound earlier in the run', async () => {
+      getAgentContextDocuments.mockResolvedValue([reportRow(14_100, '2026-11-13T00:10:50.000Z')]);
+      const bindAgentDocumentIndex = vi.fn();
+      const providers = createServerContextFactProviders({
+        ctx: { bindAgentDocumentIndex, serverDB: {}, userId: 'owner-1' } as never,
+        state: {
+          binding: {
+            agentDocumentIndex: {
+              'agent-doc-1': { contentCharCount: 9400, updatedAt: '2026-05-01T00:00:00.000Z' },
+            },
+          },
+        } as never,
+      });
+
+      const [doc] = (await providers.listAgentDocuments!('agent-1'))!;
+
+      expect(doc).toMatchObject({ contentCharCount: 9400, updatedAt: '2026-05-01T00:00:00.000Z' });
+      expect(bindAgentDocumentIndex).not.toHaveBeenCalled();
+    });
+  });
+
   describe('resolveSandboxPersistence', () => {
     // Regression: this provider read the raw context id while every other fact
     // here is scoped to the run's workspace. On the paths that do not carry it,

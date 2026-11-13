@@ -1,4 +1,5 @@
 import { type AgentRuntimeContext, getLlmCallCount } from '@lobechat/agent-runtime';
+import type { AgentDocumentIndexFacts } from '@lobechat/context-engine/agent-document';
 import { context as otelContext, trace as otelTrace } from '@lobechat/observability-otel/api';
 import {
   buildInvokeAgentAttributes,
@@ -298,6 +299,9 @@ export async function executeStep(
       // hitting Upstash Redis 10MB limit. Bypassing events keeps the heavy
       // payload in trace only, reducing per-step Redis state by ~500x.
       let contextEnginePayload: { input: unknown; metadata?: unknown; output: unknown } | undefined;
+      // Agent-document index facts the step froze, written into the state it
+      // saves so the next step renders the same index rows.
+      let agentDocumentIndex: AgentDocumentIndexFacts | undefined;
 
       // Create Agent and Runtime instances
       // Use agentState.metadata which contains the full app context (topicId, agentId, etc.)
@@ -307,6 +311,9 @@ export async function executeStep(
       const { runtime } = await deps.createAgentRuntime({
         abortSignal: abortPoll.signal,
         agentState,
+        bindAgentDocumentIndex: (facts) => {
+          agentDocumentIndex = facts;
+        },
         operationId,
         stepIndex,
         tracingContextEngine: (input, output, metadata) => {
@@ -329,6 +336,12 @@ export async function executeStep(
         runtime,
         stepIndex,
       });
+      if (agentDocumentIndex) {
+        stepResult.newState.binding = {
+          ...stepResult.newState.binding,
+          agentDocumentIndex,
+        };
+      }
 
       const { content, shouldContinue, stepPresentationData, toolsCalling } =
         await saveAndPublishStep(deps, {
