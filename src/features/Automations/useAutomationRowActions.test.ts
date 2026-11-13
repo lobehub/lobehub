@@ -28,7 +28,7 @@ const row = (patch: Partial<InboundWebhookItem> = {}): InboundWebhookItem => ({
   agent: { avatar: null, backgroundColor: null, id: 'agt_1', title: 'Release bot' },
   canCheck: true,
   canManage: true,
-  connector: { avatar: null, id: 'con_1', identifier: 'github', name: 'GitHub' },
+  connector: { agentId: null, avatar: null, id: 'con_1', identifier: 'github', name: 'GitHub' },
   createdAt: '2026-11-13T08:00:00.000Z',
   creatorId: 'user_1',
   expiresAt: null,

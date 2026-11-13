@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE, INBOX_SESSION_ID } from '@lobechat/const';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -200,12 +201,51 @@ describe('inboundWebhook tRPC resource contract', () => {
       expiresAt: null,
       agent: { title: 'Test Agent' },
       topic: { title: 'Event topic' },
-      connector: { identifier: 'linear', name: 'Linear', avatar: 'https://example.com/linear.png' },
+      connector: {
+        agentId: null,
+        identifier: 'linear',
+        name: 'Linear',
+        avatar: 'https://example.com/linear.png',
+      },
       source: { arguments: { team: 'ENG' }, eventName: 'issue.created', kind: 'mcp_events' },
     });
     expect(listed[0]).not.toHaveProperty('secret');
     expect(listed[0]).not.toHaveProperty('state');
     expect(JSON.stringify(listed)).not.toContain('whsec_router_secret');
+  });
+
+  // The default agent is stored without a title or avatar; the list must show it
+  // the way the sidebar does, while an agent the user left unnamed stays unnamed.
+  it.each([
+    [
+      'the default agent',
+      INBOX_SESSION_ID,
+      null,
+      { avatar: DEFAULT_INBOX_AVATAR, title: DEFAULT_INBOX_TITLE },
+    ],
+    [
+      'a renamed default agent',
+      INBOX_SESSION_ID,
+      'My helper',
+      { avatar: DEFAULT_INBOX_AVATAR, title: 'My helper' },
+    ],
+    ['an unnamed agent of the user', null, null, { avatar: null, title: null }],
+  ] as const)('shows %s by its resolved name and avatar', async (_, slug, title, expected) => {
+    const agentId = `identity-${slug ?? 'custom'}-${title ?? 'untitled'}`;
+    await db.insert(agents).values({ id: agentId, slug, title, userId: creator });
+    await new InboundWebhookModel(db, creator, undefined, gateKeeper).create({
+      agentId,
+      config: { arguments: {}, eventName: 'issue.created' },
+      kind: 'mcp_events',
+      secret: 'whsec_identity',
+      state: { refreshBefore: null },
+      status: 'active',
+      verification: { scheme: 'standard_webhooks' },
+    });
+
+    const [item] = await caller().list();
+
+    expect(item.agent).toEqual({ backgroundColor: null, id: agentId, ...expected });
   });
 
   it('lists all workspace creators newest first and excludes other scopes', async () => {

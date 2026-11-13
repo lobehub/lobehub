@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
+import { type ConnectorRef, connectorSettingsPath } from './connectorSettingsPath';
 import { type AutomationTone, resolveAutomationStatus } from './status';
 
 const styles = stylex.create({
@@ -24,15 +25,12 @@ const styles = stylex.create({
     textDecorationLine: 'underline',
     textUnderlineOffset: '2px',
   },
+  // Wraps, never clamps: the second half of a reason is usually what to do
+  // next, and touch screens have no hover to reveal a cut-off line.
   reason: {
-    display: '-webkit-box',
-    overflow: 'hidden',
-    WebkitBoxOrient: 'vertical',
-    // Three lines: the remedy often comes last, and touch screens cannot hover
-    // for the rest.
-    WebkitLineClamp: 3,
     fontSize: '12px',
     lineHeight: 1.5,
+    overflowWrap: 'anywhere',
   },
   reasonError: { color: cssVar.colorError },
   reasonWarning: { color: cssVar.colorWarning },
@@ -57,12 +55,18 @@ export const AutomationStatusTag = memo<{ item: StatusItem }>(({ item }) => {
 
 AutomationStatusTag.displayName = 'AutomationStatusTag';
 
+interface AutomationStatusReasonProps {
+  /** The connector to open when the fix is reconnecting it. */
+  connector?: ConnectorRef | null;
+  item: StatusItem;
+}
+
 /**
  * Why a subscription is in its state and the way out, when something is off;
- * nothing when it is healthy. A credential problem links to the connector
- * settings, since nothing on the subscription itself fixes it.
+ * nothing when it is healthy. A credential problem links to that connector's
+ * detail, since nothing on the subscription itself fixes it.
  */
-export const AutomationStatusReason = memo<{ item: StatusItem }>(({ item }) => {
+export const AutomationStatusReason = memo<AutomationStatusReasonProps>(({ connector, item }) => {
   const { t } = useTranslation('setting');
   const status = resolveAutomationStatus(item);
   if (!status.reasonKey) return null;
@@ -71,7 +75,6 @@ export const AutomationStatusReason = memo<{ item: StatusItem }>(({ item }) => {
 
   return (
     <span
-      title={reason}
       {...stylex.props(
         styles.reason,
         status.reasonTone === 'warning' ? styles.reasonWarning : styles.reasonError,
@@ -81,7 +84,7 @@ export const AutomationStatusReason = memo<{ item: StatusItem }>(({ item }) => {
       {status.remedy === 'reconnect' && (
         <>
           {' '}
-          <WorkspaceLink to={'/settings/connector'} {...stylex.props(styles.link)}>
+          <WorkspaceLink to={connectorSettingsPath(connector)} {...stylex.props(styles.link)}>
             {t('automations.remedy.reconnect')}
           </WorkspaceLink>
         </>
@@ -97,10 +100,10 @@ AutomationStatusReason.displayName = 'AutomationStatusReason';
  * when something is off. The settings list and the conversation's
  * subscription card read the same, both from {@link resolveAutomationStatus}.
  */
-const AutomationStatus = memo<{ item: StatusItem }>(({ item }) => (
+const AutomationStatus = memo<{ item: InboundWebhookItem }>(({ item }) => (
   <Flexbox gap={4} {...stylex.props(styles.cell)}>
     <AutomationStatusTag item={item} />
-    <AutomationStatusReason item={item} />
+    <AutomationStatusReason connector={item.connector} item={item} />
   </Flexbox>
 ));
 
