@@ -373,8 +373,18 @@ export class GoalActionImpl {
   };
 
   closeGoal = async (goalId: string, status: 'achieved' | 'canceled'): Promise<void> => {
-    await goalService.close(goalId, status);
-    await this.refreshGoalGraph(goalId);
+    let refused: unknown;
+    try {
+      await goalService.close(goalId, status);
+    } catch (error) {
+      refused = error;
+    }
+    // Refresh either way — a refused close has still paused the goal on the
+    // server — but a failed refresh must not read as a failed close.
+    await this.refreshGoalGraph(goalId).catch((error) =>
+      console.error('[goal:close] refresh failed after closing', error),
+    );
+    if (refused) throw refused;
   };
 
   refreshGoalGraph = async (goalId: string): Promise<void> => {

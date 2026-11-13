@@ -26,7 +26,7 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { goalModelOverride } from '../modelConfig';
 import { countUnchargedRuns, DEFAULT_MANAGER_MAX_TURNS } from '../recoveryPolicy';
-import { scheduleGoalAdvance } from '../scheduler';
+import { goalPollDelay, scheduleGoalAdvance } from '../scheduler';
 import { recoveryEligibility } from '../supervisor/policy';
 import { GoalWaitService } from '../wait';
 import { assertOperationOwnsTurn, planAdmission } from './admission';
@@ -63,6 +63,12 @@ export {
 } from './turnState';
 
 const TIMEOUT_MS = 20 * 60_000;
+/**
+ * How old a turn whose dispatch outcome was never recorded must be before its
+ * owner may settle it: far beyond any request that could still be running
+ * `execAgent`. Covers receipts recorded before `dispatchReturnedWithoutRun`.
+ */
+const STRANDED_DISPATCH_MS = 24 * 60 * 60_000;
 /** Task comments listed in one planning turn's message; older ones are counted, not shown. */
 const FEEDBACK_NOTE_LIMIT = 20;
 
@@ -106,12 +112,17 @@ export class GoalManagerService {
       type: 'system',
     });
 
-  private wait = async (goalId: string, message: string): Promise<GoalTickResult> => {
+  private wait = async (
+    goalId: string,
+    message: string,
+    since?: string,
+  ): Promise<GoalTickResult> => {
     await scheduleGoalAdvance({
       goalId,
       userId: this.userId,
       workspaceId: this.workspaceId,
-      delay: 5,
+      delay: goalPollDelay(since),
+      poll: true,
     });
     return { goalId, outcome: 'waiting_external', message };
   };
@@ -138,13 +149,60 @@ export class GoalManagerService {
     return { goalId, outcome: 'no_progress', message };
   };
 
-  stop = async (graph: GoalGraphSnapshot) => {
+  /**
+   * Interrupt the main Agent turn the Goal is on.
+   *
+   * `ownerConfirmsExit` is a person ending or deleting the Goal themselves. A
+   * turn with no operation id and no operation row is one nothing here can
+   * interrupt — its dispatch failed before the run was written, e.g. a database
+   * timeout in `execAgent`. That person's decision settles it the way
+   * `confirmTurnExit` does once the dispatch is known to be over: it returned
+   * without a run (`dispatchReturnedWithoutRun`) and the turn is past the turn
+   * timeout, or no outcome was recorded and the turn is older than any request
+   * could run. Otherwise such a Goal could never be closed from the product. A
+   * turn that did get an operation id (or was adopted from a local run) may be
+   * live without a row, so it keeps refusing; should a dispatch still return
+   * late, `startTurn` stops its run.
+   */
+  stop = async (graph: GoalGraphSnapshot, options?: { ownerConfirmsExit?: boolean }) => {
     const state = graph.goal.config?.managerState;
     if (!state || state.consumed) return;
-    const operations = new AgentOperationModel(this.db, this.userId, this.workspaceId);
-    const op = state.operationId
-      ? await operations.findById(state.operationId)
-      : await operations.findByTopicSourceMessage(state.topicId, `msg_goal_manager_${state.token}`);
+    const findRun = (db: LobeChatDatabase, receipt: GoalManagerState) => {
+      const operations = new AgentOperationModel(db, this.userId, this.workspaceId);
+      return receipt.operationId
+        ? operations.findById(receipt.operationId)
+        : operations.findByTopicSourceMessage(receipt.topicId, `msg_goal_manager_${receipt.token}`);
+    };
+    let op = await findRun(this.db, state);
+    if (
+      !op &&
+      options?.ownerConfirmsExit &&
+      !state.operationId &&
+      !state.adopted &&
+      Date.now() - Date.parse(state.startedAt) >
+        (state.dispatchReturnedWithoutRun ? TIMEOUT_MS : STRANDED_DISPATCH_MS)
+    ) {
+      // Decide again under the goal row lock the dispatch records its
+      // operation id under: a straggling `execAgent` may have written its run
+      // since the read above, and that run must be interrupted, not settled.
+      const settled = await this.db.transaction(async (db) => {
+        const fresh = await new GoalRepository(db, this.userId, this.workspaceId).lockById(
+          graph.goal.id,
+        );
+        const current = fresh?.config?.managerState;
+        if (current?.token !== state.token || current.consumed) return { done: true as const };
+        const run = await findRun(db, current);
+        if (run || current.operationId || current.adopted) return { done: false as const, run };
+        await saveManagerState(db, graph.goal.id, { ...current, consumed: true });
+        console.warn('[goal:manager] owner settled a main Agent turn that never wrote a run', {
+          goalId: graph.goal.id,
+          token: state.token,
+        });
+        return { done: true as const };
+      });
+      if (settled.done) return;
+      op = settled.run;
+    }
     if (!op)
       throw new TRPCError({
         code: 'CONFLICT',
@@ -316,7 +374,7 @@ export class GoalManagerService {
         (!operation || isAgentOperationInFlight(operation.status))
       ) {
         if (operation?.status === 'waiting_for_human') {
-          await this.wait(goal.id, 'Main Agent is waiting for a human decision');
+          await this.wait(goal.id, 'Main Agent is waiting for a human decision', state.startedAt);
           return {
             goalId: goal.id,
             outcome: 'waiting_human',
@@ -329,7 +387,7 @@ export class GoalManagerService {
             `Main Agent execution is unconfirmed or timed out; no replacement was dispatched. Once its run has ended, confirm and resume with: lh goal resume ${goal.id} --confirm-exit`,
           );
         }
-        return this.wait(goal.id, 'Waiting for main Agent CLI planning turn');
+        return this.wait(goal.id, 'Waiting for main Agent CLI planning turn', state.startedAt);
       }
       const failed = await this.db.transaction(async (db) => {
         const fresh = await new GoalRepository(db, this.userId, this.workspaceId).lockById(goal.id);
@@ -613,6 +671,8 @@ export class GoalManagerService {
       };
     });
     if (!claimed) return this.wait(goal.id, 'Another advance owns the planning turn');
+    let lateRun: string | undefined;
+    let returned = false;
     try {
       const result = await new AiAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
@@ -645,15 +705,21 @@ export class GoalManagerService {
               : undefined),
         }),
       });
-      await this.db.transaction(async (db) => {
+      returned = true;
+      const orphaned = await this.db.transaction(async (db) => {
         const fresh = await new GoalRepository(db, this.userId, this.workspaceId).lockById(goal.id);
-        if (fresh?.config?.managerState?.token === claimed.token) {
-          await saveManagerState(db, goal.id, {
-            ...fresh.config.managerState,
-            operationId: result.operationId,
-          });
-        }
+        // The other half of the owner's settle in `stop`: a dispatch that
+        // returns after the owner settled this turn as never started — and the
+        // Goal was ended, deleted, or moved on to a newer turn — has a run
+        // nothing else will stop. Whichever side takes the lock second stops it:
+        // `stop` when the id is already recorded here, this dispatch otherwise.
+        if (!fresh) return true;
+        const current = fresh.config?.managerState;
+        if (current?.token !== claimed.token) return true;
+        await saveManagerState(db, goal.id, { ...current, operationId: result.operationId });
+        return !!current.consumed && !current.operationId;
       });
+      if (orphaned && result.operationId) lateRun = result.operationId;
     } catch (error) {
       console.error(
         '[goal:manager] dispatch failed; next wakeup adopts any persisted operation',
@@ -674,8 +740,13 @@ export class GoalManagerService {
           return false;
         });
         if (recorded && declineRefused) return null;
+      } else if (!returned) {
+        await this.recordReturnedWithoutRun(goal.id, claimed.token).catch((saveError) =>
+          console.error('[goal:manager] failed to record the failed dispatch', saveError),
+        );
       }
     }
+    if (lateRun) await this.stopLateRun(goal.id, claimed.token, lateRun, claimed.topicId);
     return this.wait(goal.id, 'Main Agent dispatched with CLI planning access');
   };
 
@@ -703,6 +774,58 @@ export class GoalManagerService {
       await saveManagerState(db, goalId, { ...state, consumed: true });
       return true;
     });
+
+  /** The dispatch call is over without an operation id; see `stop`. */
+  private recordReturnedWithoutRun = async (goalId: string, token: string) =>
+    this.db.transaction(async (db) => {
+      const fresh = await new GoalRepository(db, this.userId, this.workspaceId).lockById(goalId);
+      const current = fresh?.config?.managerState;
+      if (current?.token !== token || current.operationId) return;
+      await saveManagerState(db, goalId, { ...current, dispatchReturnedWithoutRun: true });
+    });
+
+  /**
+   * Stop a run whose dispatch returned after its turn was settled. When the
+   * stop is not confirmed and the Goal still holds that turn, the run is put
+   * back on the receipt and an ended Goal is paused, so closing it again
+   * interrupts the run the confirmed way through `stop`.
+   */
+  private stopLateRun = async (
+    goalId: string,
+    token: string,
+    operationId: string,
+    topicId: string,
+  ) => {
+    const result = await new AiAgentService(this.db, this.userId, {
+      workspaceId: this.workspaceId,
+    })
+      .interruptTask({ operationId, topicId })
+      .catch((error) => {
+        console.error('[goal:manager] failed to stop a run its turn no longer owns', error);
+        return undefined;
+      });
+    if (result?.success && result.deviceCancellationConfirmed !== false) return;
+    console.error('[goal:manager] stop of a late planning run was not confirmed', {
+      goalId,
+      operationId,
+    });
+    await this.db
+      .transaction(async (db) => {
+        const model = new GoalRepository(db, this.userId, this.workspaceId);
+        const fresh = await model.lockById(goalId);
+        const current = fresh?.config?.managerState;
+        if (!fresh || current?.token !== token) return;
+        await saveManagerState(db, goalId, { ...current, consumed: false, operationId });
+        if (!['achieved', 'canceled', 'failed'].includes(fresh.status)) return;
+        const message =
+          'A planning run that started after the Goal was closed could not be stopped; close the Goal again to stop it';
+        await model.updateStatus(goalId, 'paused');
+        await this.coordinatorGraph(db).recordGoalStatus(goalId, fresh.status, 'paused', message);
+      })
+      .catch((error) =>
+        console.error('[goal:manager] failed to keep a late planning run stoppable', error),
+      );
+  };
 
   /**
    * Mark a turn whose dispatch was refused its topic reservation as never

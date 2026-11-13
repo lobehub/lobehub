@@ -185,6 +185,7 @@ table agent_accounts {
   credentials text
   credential_hint jsonb
   metadata jsonb [default: `{}`]
+  settings jsonb [not null, default: `{}`]
   revoked_at "timestamp with time zone"
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -606,6 +607,7 @@ table agent_inbox_messages {
     (account_id, created_at) [name: 'agent_inbox_messages_account_created_at_idx']
     (account_id, sender, created_at) [name: 'agent_inbox_messages_account_sender_created_at_idx']
     (account_id, thread_key) [name: 'agent_inbox_messages_account_thread_idx']
+    topic_id [name: 'agent_inbox_messages_topic_id_idx']
     user_id [name: 'agent_inbox_messages_user_id_idx']
   }
 }
@@ -847,6 +849,7 @@ table agent_operations {
     parent_operation_id [name: 'agent_operations_parent_operation_id_idx']
     status [name: 'agent_operations_status_idx']
     (user_id, created_at) [name: 'agent_operations_user_id_created_at_idx']
+    (workspace_id, created_at) [name: 'agent_operations_workspace_id_created_at_idx']
     metadata [name: 'agent_operations_metadata_idx']
   }
 }
@@ -1193,28 +1196,202 @@ table api_keys {
   }
 }
 
-table artboards {
-  id text [pk, not null]
-  task_id text [not null]
+table artboard_boards {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  artboard_id text [not null]
+  page_id text [not null]
+  group_id text
+  round_id uuid
   user_id text [not null]
   workspace_id text
   project_id text
-  acceptance_id uuid
-  origin_topic_id text
+  acceptance_flow_node_id uuid
+  type text [not null]
   title text [not null]
   description text
-  phase text [not null, default: 'discuss']
-  content jsonb [not null]
-  revision integer [not null, default: 1]
+  expected text
+  rect jsonb [not null]
+  source_work_version_id uuid
+  source_path text
+  source_file_id text
+  metadata jsonb
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    task_id [name: 'artboards_task_id_unique', unique]
-    project_id [name: 'artboards_project_id_idx']
+    
+    
+    artboard_id [name: 'artboard_boards_artboard_id_idx']
+    page_id [name: 'artboard_boards_page_id_idx']
+    group_id [name: 'artboard_boards_group_id_idx']
+    round_id [name: 'artboard_boards_round_id_idx']
+    project_id [name: 'artboard_boards_project_id_idx']
+    acceptance_flow_node_id [name: 'artboard_boards_acceptance_flow_node_id_unique', unique]
+    source_work_version_id [name: 'artboard_boards_source_work_version_id_idx']
+    user_id [name: 'artboard_boards_user_id_idx']
+    workspace_id [name: 'artboard_boards_workspace_id_idx']
+  }
+}
+
+table artboard_comments {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  artboard_id text [not null]
+  parent_comment_id uuid
+  author_user_id text
+  author_agent_id text
+  user_id text [not null]
+  workspace_id text
+  page_id text
+  group_id text
+  board_id uuid
+  content text [not null]
+  client_id text [not null]
+  anchor jsonb
+  delivered_at "timestamp with time zone"
+  resolved_at "timestamp with time zone"
+  resolved_by_user_id text
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (artboard_id, author_user_id, client_id) [name: 'artboard_comments_artboard_id_author_user_id_client_id_unique', unique]
+    (artboard_id, created_at) [name: 'artboard_comments_artboard_id_created_at_idx']
+    parent_comment_id [name: 'artboard_comments_parent_comment_id_idx']
+    board_id [name: 'artboard_comments_board_id_idx']
+    user_id [name: 'artboard_comments_user_id_idx']
+    workspace_id [name: 'artboard_comments_workspace_id_idx']
+    page_id [name: 'artboard_comments_page_id_idx']
+    group_id [name: 'artboard_comments_group_id_idx']
+  }
+}
+
+table artboard_edges {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  artboard_id text [not null]
+  source_board_id uuid [not null]
+  target_board_id uuid [not null]
+  user_id text [not null]
+  workspace_id text
+  acceptance_flow_edge_id uuid
+  label text [not null, default: '']
+  condition text
+  is_default boolean [not null, default: false]
+  sort_order integer [not null, default: 0]
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    artboard_id [name: 'artboard_edges_artboard_id_idx']
+    source_board_id [name: 'artboard_edges_source_board_id_idx']
+    source_board_id [name: 'artboard_edges_source_board_id_default_unique', unique]
+    target_board_id [name: 'artboard_edges_target_board_id_idx']
+    acceptance_flow_edge_id [name: 'artboard_edges_acceptance_flow_edge_id_unique', unique]
+    user_id [name: 'artboard_edges_user_id_idx']
+    workspace_id [name: 'artboard_edges_workspace_id_idx']
+  }
+}
+
+table artboard_groups {
+  id text [pk, not null]
+  artboard_id text [not null]
+  page_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  kind text [not null]
+  title text [not null]
+  description text
+  rect jsonb [not null]
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    artboard_id [name: 'artboard_groups_artboard_id_idx']
+    page_id [name: 'artboard_groups_page_id_idx']
+    user_id [name: 'artboard_groups_user_id_idx']
+    workspace_id [name: 'artboard_groups_workspace_id_idx']
+  }
+}
+
+table artboard_pages {
+  id text [pk, not null]
+  artboard_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  name text [not null]
+  sort_order integer [not null, default: 0]
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    artboard_id [name: 'artboard_pages_artboard_id_idx']
+    user_id [name: 'artboard_pages_user_id_idx']
+    workspace_id [name: 'artboard_pages_workspace_id_idx']
+  }
+}
+
+table artboard_rounds {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  artboard_id text [not null]
+  page_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  title text [not null]
+  status text [not null, default: 'open']
+  recommended_board_id uuid
+  chosen_board_id uuid
+  selected_by text
+  selected_at "timestamp with time zone"
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    artboard_id [name: 'artboard_rounds_artboard_id_idx']
+    page_id [name: 'artboard_rounds_page_id_idx']
+    user_id [name: 'artboard_rounds_user_id_idx']
+    workspace_id [name: 'artboard_rounds_workspace_id_idx']
+    recommended_board_id [name: 'artboard_rounds_recommended_board_id_idx']
+    chosen_board_id [name: 'artboard_rounds_chosen_board_id_idx']
+  }
+}
+
+table artboards {
+  id text [pk, not null]
+  user_id text [not null]
+  workspace_id text
+  topic_id text
+  task_id text
+  project_id text
+  acceptance_id uuid
+  title text [not null]
+  description text
+  content text
+  phase text [not null, default: 'discuss']
+  revision integer [not null, default: 1]
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
     user_id [name: 'artboards_user_id_idx']
     workspace_id [name: 'artboards_workspace_id_idx']
+    topic_id [name: 'artboards_topic_id_idx']
+    task_id [name: 'artboards_task_id_idx']
+    project_id [name: 'artboards_project_id_idx']
+    phase [name: 'artboards_phase_idx']
+    created_at [name: 'artboards_created_at_idx']
+    updated_at [name: 'artboards_updated_at_idx']
   }
 }
 
@@ -1350,6 +1527,7 @@ table channel_jobs {
   claimed_at "timestamp with time zone"
   topic_id text
   operation_id text [unique]
+  wake jsonb
   manifest jsonb
   execution_config jsonb
   device_id varchar(64)
@@ -2185,6 +2363,7 @@ table documents {
   editor_data jsonb
   slug varchar(255)
   workspace_id text
+  created_by_agent_id text
   visibility text [not null, default: 'public']
   deleted_at "timestamp with time zone"
   is_deleted boolean
@@ -2759,6 +2938,88 @@ table llm_generation_tracing {
     validation_failed [name: 'llm_generation_tracing_validation_failed_idx']
     feedback_signal [name: 'llm_generation_tracing_feedback_signal_idx']
     created_at [name: 'llm_generation_tracing_created_at_idx']
+  }
+}
+
+table meeting_minutes {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  meeting_id uuid [not null]
+  summary text
+  chapters jsonb [not null, default: `[]`]
+  decisions jsonb [not null, default: `[]`]
+  action_items jsonb [not null, default: `[]`]
+  keywords jsonb [not null, default: `[]`]
+  document_id text
+  model text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    meeting_id [name: 'meeting_minutes_meeting_id_unique', unique]
+    document_id [name: 'meeting_minutes_document_id_idx']
+  }
+}
+
+table meeting_segments {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  meeting_id uuid [not null]
+  speaker_id uuid
+  source text [not null]
+  seq integer [not null]
+  start_ms integer [not null]
+  end_ms integer [not null]
+  text text [not null]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (meeting_id, source, seq) [name: 'meeting_segments_meeting_id_source_seq_unique', unique]
+    (meeting_id, source, start_ms) [name: 'meeting_segments_meeting_id_source_start_ms_idx']
+    speaker_id [name: 'meeting_segments_speaker_id_idx']
+  }
+}
+
+table meeting_speakers {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  meeting_id uuid [not null]
+  label text [not null]
+  display_name text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (meeting_id, label) [name: 'meeting_speakers_meeting_id_label_unique', unique]
+  }
+}
+
+table meetings {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  workspace_id text
+  title text [not null]
+  status text [not null, default: 'recording']
+  platform text [not null]
+  realtime_provider text [not null]
+  refine_provider text [not null]
+  language text [not null, default: 'auto']
+  started_at "timestamp with time zone" [not null, default: `now()`]
+  ended_at "timestamp with time zone"
+  duration_ms integer
+  audio_file_id text
+  local_audio_path text
+  error jsonb
+  visibility text [not null, default: 'private']
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, workspace_id, created_at) [name: 'meetings_user_id_workspace_id_created_at_idx']
+    (workspace_id, created_at) [name: 'meetings_workspace_id_created_at_idx']
+    audio_file_id [name: 'meetings_audio_file_id_idx']
   }
 }
 
@@ -5625,6 +5886,7 @@ table workspace_members {
   role text [not null, default: 'member']
   title text
   responsibilities text
+  config jsonb [not null, default: `{}`]
   joined_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
   deleted_at "timestamp with time zone"

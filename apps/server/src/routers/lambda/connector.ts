@@ -11,6 +11,10 @@ import {
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
+import {
+  EvalConnectorUpdateError,
+  withoutEvalConnectorMarker,
+} from '@/database/models/connectorEval';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
 import { WorkspaceModel } from '@/database/models/workspace';
@@ -37,6 +41,7 @@ import {
   discoverConnectorOAuth,
   getConnectorRedirectUri,
   resolveConnectorClient,
+  resolveConnectorOAuthScopes,
   toClientInformation,
 } from '@/server/services/connector/oauth';
 import {
@@ -373,7 +378,8 @@ export const connectorRouter = router({
       // (written by the OAuth connect path), and trusting it here would let a
       // member spoof connector attribution. No existing row on create → the
       // field is simply removed.
-      metadata: withTrustedLinkedByUserId(input.metadata, undefined) ?? null,
+      metadata:
+        withoutEvalConnectorMarker(withTrustedLinkedByUserId(input.metadata, undefined)) ?? null,
       name: input.name,
       oidcConfig: input.oidcConfig ?? null,
     };
@@ -618,21 +624,18 @@ export const connectorRouter = router({
       // Discovery and registration failures below are server-compatibility
       // problems the user must fix in their OAuth setup, not internal errors —
       // surface them as BAD_REQUEST with the reason so the form can show it.
-      const { authorizationServerUrl, metadata } = await discoverConnectorOAuth(
-        connector.mcpServerUrl,
-      ).catch((error: unknown) => {
-        throw new TRPCError({
-          cause: error,
-          code: 'BAD_REQUEST',
-          message: (error as Error)?.message ?? String(error),
-        });
-      });
+      const discovery = await discoverConnectorOAuth(connector.mcpServerUrl).catch(
+        (error: unknown) => {
+          throw new TRPCError({
+            cause: error,
+            code: 'BAD_REQUEST',
+            message: (error as Error)?.message ?? String(error),
+          });
+        },
+      );
 
-      // Default to the scopes advertised by the server when the user did not
-      // specify any — many MCP authorization servers reject (or issue a useless
-      // token for) a scope-less request.
-      const scopes =
-        existing.scopes && existing.scopes.length > 0 ? existing.scopes : metadata.scopes_supported;
+      const { authorizationServerUrl, metadata } = discovery;
+      const scopes = resolveConnectorOAuthScopes({ discovery, existingScopes: existing.scopes });
 
       // 2. Resolve the OAuth client: pre-registration, CIMD, then DCR.
       const { clientId, clientSecret, scheme, tokenEndpointAuthMethod } =
@@ -717,19 +720,25 @@ export const connectorRouter = router({
       // silently clear) the connector's authorizer. Untouched when the patch
       // omits metadata.
       const metadata = withTrustedLinkedByUserId(patch.metadata, target.metadata);
-      await ctx.connectorModel.update(input.id, {
-        ...patch,
-        ...(patch.metadata === undefined ? {} : { metadata }),
-        // undefined → leave untouched; null → clear; object → encrypt the JSON string.
-        // When credentials are cleared, also drop the cached expiry timestamp so
-        // token-refresh logic doesn't act on a stale value for the new server.
-        ...(credentials === undefined
-          ? {}
-          : {
-              credentials: credentials ? JSON.stringify(credentials) : null,
-              ...(credentials === null ? { tokenExpiresAt: null } : {}),
-            }),
-      } as any);
+      try {
+        await ctx.connectorModel.update(input.id, {
+          ...patch,
+          ...(patch.metadata === undefined ? {} : { metadata }),
+          // undefined → leave untouched; null → clear; object → encrypt the JSON string.
+          // When credentials are cleared, also drop the cached expiry timestamp so
+          // token-refresh logic doesn't act on a stale value for the new server.
+          ...(credentials === undefined
+            ? {}
+            : {
+                credentials: credentials ? JSON.stringify(credentials) : null,
+                ...(credentials === null ? { tokenExpiresAt: null } : {}),
+              }),
+        } as any);
+      } catch (error) {
+        if (error instanceof EvalConnectorUpdateError)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
+        throw error;
+      }
     }),
 
   delete: connectorWriteProcedure

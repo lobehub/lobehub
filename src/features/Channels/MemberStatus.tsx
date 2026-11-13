@@ -2,12 +2,21 @@ import { CHANNEL_URL } from '@lobechat/const';
 import type { ChannelDetail } from '@lobechat/types';
 import { ActionIcon, Button, DropdownMenu, Flexbox, Popover, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { Bot, FolderCog, MoreHorizontal, UserPlus, Users } from 'lucide-react';
+import {
+  Bot,
+  CircleUserRound,
+  FolderCog,
+  MoreHorizontal,
+  Settings,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useCloseOnNavigate } from '@/hooks/useCloseOnNavigate';
+import { sx } from '@/styles/sx';
 
 import { openChannelAgentEnvironment } from './AgentEnvironment';
 import { canInviteMembers } from './channelAccess';
@@ -20,8 +29,11 @@ import { useChannelMenu } from './useChannelMenu';
 /** Header avatars before the rest fold into a count; the list shows everyone. */
 const MAX_VISIBLE = 5;
 
-/** Channel actions a direct conversation keeps; renaming would drift from the Agent's name. */
-const DIRECT_MENU_KEYS = new Set(['copyId', 'archive', 'unarchive', 'delete']);
+/**
+ * Channel actions a direct conversation keeps. It is the chat with one Agent, so it cannot be
+ * renamed, archived or trashed; `unarchive` only frees one that was archived earlier.
+ */
+const DIRECT_MENU_KEYS = new Set(['copyId', 'unarchive']);
 
 /**
  * Members as avatars with live status dots. One click lists everyone by name, because
@@ -47,7 +59,6 @@ export function MemberStatus({
   const overflow = entries.length - MAX_VISIBLE;
   const title = t('membersCount', { count: entries.length });
   const direct = !!channel.agentId;
-  const inviteSize = direct ? undefined : 'small';
   // A direct conversation is a chat with one Agent: no roster to show, only its actions, like an
   // IM header. Its title is the Agent's name, so it cannot be renamed here.
   const directMenu = () => [
@@ -75,21 +86,52 @@ export function MemberStatus({
           { type: 'divider' as const },
         ]
       : []),
+    // Keyed items only: the menu's own dividers separate actions a direct conversation does not have.
     ...channelMenu(channel).filter(
-      (item) => !('key' in item) || DIRECT_MENU_KEYS.has(String(item.key)),
+      (item) => 'key' in item && DIRECT_MENU_KEYS.has(String(item.key)),
     ),
+  ];
+
+  // Managing a group lives on its settings page; deleting it is not one click from the header.
+  const groupMenu = () => [
+    ...channelMenu(channel).filter((item) => 'key' in item && item.key === 'copyId'),
+    ...(channel.canDelete
+      ? [
+          { type: 'divider' as const },
+          {
+            icon: Settings,
+            key: 'settings',
+            label: t('settings.title'),
+            onClick: () => navigate(`${CHANNEL_URL(channel.id, null, channel.projectId)}/settings`),
+          },
+        ]
+      : []),
   ];
 
   return (
     <Flexbox horizontal align="center" gap={4}>
       <FailureIndicator detail={detail} />
-      {direct ? null : memberPanel ? (
+      {direct ? (
+        memberPanel && (
+          <ActionIcon
+            active={memberPanel.open}
+            aria-controls={memberPanel.open ? memberPanel.id : undefined}
+            aria-expanded={memberPanel.open}
+            aria-label={t(memberPanel.open ? 'profile.hide' : 'profile.show')}
+            icon={CircleUserRound}
+            size="small"
+            title={t(memberPanel.open ? 'profile.hide' : 'profile.show')}
+            onClick={memberPanel.onToggle}
+          />
+        )
+      ) : memberPanel ? (
         <ActionIcon
           active={memberPanel.open}
           aria-controls={memberPanel.open ? memberPanel.id : undefined}
           aria-expanded={memberPanel.open}
           aria-label={t(memberPanel.open ? 'members.hide' : 'members.show')}
           icon={Users}
+          size="small"
           title={t(memberPanel.open ? 'members.hide' : 'members.show')}
           onClick={memberPanel.onToggle}
         />
@@ -115,9 +157,17 @@ export function MemberStatus({
             type="text"
             {...stylex.props(statusStyles.memberButton)}
           >
-            {entries.slice(0, MAX_VISIBLE).map((entry) => (
-              <StatusAvatar entry={entry} key={entry.member.id} size={24} />
-            ))}
+            <span {...stylex.props(statusStyles.memberStack)}>
+              {entries.slice(0, MAX_VISIBLE).map((entry, index) => (
+                // Earlier avatars sit on top, or each one would cover the previous status dot.
+                <span
+                  key={entry.member.id}
+                  {...sx(statusStyles.memberStackItem, { zIndex: MAX_VISIBLE - index })}
+                >
+                  <StatusAvatar entry={entry} size={20} />
+                </span>
+              ))}
+            </span>
             {overflow > 0 && <span {...stylex.props(styles.muted)}>+{overflow}</span>}
           </Button>
         </Popover>
@@ -126,7 +176,7 @@ export function MemberStatus({
         <ActionIcon
           aria-label={t('invite.title')}
           icon={UserPlus}
-          size={inviteSize}
+          size="small"
           title={t('invite.title')}
           onClick={() =>
             openInviteMembers(
@@ -144,15 +194,14 @@ export function MemberStatus({
           }
         />
       )}
-      {direct && (
-        <DropdownMenu items={directMenu()}>
-          <ActionIcon
-            aria-label={t('more', { ns: 'common' })}
-            icon={MoreHorizontal}
-            title={t('more', { ns: 'common' })}
-          />
-        </DropdownMenu>
-      )}
+      <DropdownMenu items={direct ? directMenu() : groupMenu()}>
+        <ActionIcon
+          aria-label={t('more', { ns: 'common' })}
+          icon={MoreHorizontal}
+          size="small"
+          title={t('more', { ns: 'common' })}
+        />
+      </DropdownMenu>
     </Flexbox>
   );
 }

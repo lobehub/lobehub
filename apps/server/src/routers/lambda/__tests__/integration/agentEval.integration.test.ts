@@ -65,6 +65,7 @@ describe('Agent Eval Router Integration Tests', () => {
 
   afterEach(async () => {
     await cleanupTestUser(serverDB, userId);
+    await cleanupTestUser(serverDB, 'user-2');
   });
 
   describe('Benchmark Operations', () => {
@@ -755,14 +756,11 @@ describe('Agent Eval Router Integration Tests', () => {
         expect(deleted).toBeUndefined();
       });
 
-      it('should return error when test case not found', async () => {
+      it('does not reject when a test case is missing', async () => {
         const caller = agentEvalRouter.createCaller(createTestContext(userId));
 
+        // PGlite may omit rowCount, so only non-rejection is verified here.
         await caller.deleteTestCase({ id: 'non-existent' });
-
-        // In PGlite, rowCount may be undefined, so we can't reliably detect non-existent deletes
-        // This test just verifies no error is thrown
-        expect(true).toBe(true);
       });
     });
   });
@@ -837,6 +835,7 @@ describe('Agent Eval Router Integration Tests', () => {
 
   describe('Run Operations', () => {
     let datasetId: string;
+    let testCaseId: string;
 
     beforeEach(async () => {
       const [benchmark] = await serverDB
@@ -860,6 +859,11 @@ describe('Agent Eval Router Integration Tests', () => {
         })
         .returning();
       datasetId = dataset.id;
+      const [testCase] = await serverDB
+        .insert(agentEvalTestCases)
+        .values({ content: { input: 'Test question' }, datasetId, sortOrder: 1, userId })
+        .returning();
+      testCaseId = testCase.id;
     });
 
     describe('createRun', () => {
@@ -998,36 +1002,6 @@ describe('Agent Eval Router Integration Tests', () => {
           name: 'Details Test Run',
         });
 
-        // Create test case
-        const [testCase] = await serverDB
-          .insert(agentEvalTestCases)
-          .values({
-            datasetId,
-            content: { input: 'Test question' },
-            sortOrder: 1,
-            userId,
-          })
-          .returning();
-
-        // Create topic
-        const [topic] = await serverDB
-          .insert(topics)
-          .values({
-            userId,
-            title: 'Test Topic',
-            trigger: 'eval',
-            mode: 'test',
-          })
-          .returning();
-
-        // Link run, topic, and test case
-        await serverDB.insert(agentEvalRunTopics).values({
-          userId,
-          runId: run.id,
-          topicId: topic.id,
-          testCaseId: testCase.id,
-        });
-
         // Get details
         const result = await caller.getRunDetails({ id: run.id });
 
@@ -1037,8 +1011,11 @@ describe('Agent Eval Router Integration Tests', () => {
         expect(result.dataset).toBeDefined();
         expect(result.dataset?.id).toBe(datasetId);
         expect(result.topics).toHaveLength(1);
-        expect((result.topics[0].topic as any).id).toBe(topic.id);
-        expect((result.topics[0].testCase as any).id).toBe(testCase.id);
+        expect(result.topics[0]).toMatchObject({
+          status: 'pending',
+          testCase: { id: testCaseId },
+          topic: { id: expect.any(String), trigger: 'eval' },
+        });
       });
 
       it('should throw NOT_FOUND when run does not exist', async () => {
@@ -1110,14 +1087,11 @@ describe('Agent Eval Router Integration Tests', () => {
         await cleanupTestUser(serverDB, user2Id);
       });
 
-      it('should return error when run not found', async () => {
+      it('does not reject when a run is missing', async () => {
         const caller = agentEvalRouter.createCaller(createTestContext(userId));
 
+        // PGlite may omit rowCount, so only non-rejection is verified here.
         await caller.deleteRun({ id: 'non-existent' });
-
-        // In PGlite, rowCount may be undefined, so we can't reliably detect non-existent deletes
-        // This test just verifies no error is thrown
-        expect(true).toBe(true);
       });
     });
 

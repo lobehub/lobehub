@@ -214,6 +214,22 @@ export const projectWorkingDirectoryRouter = router({
           { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
           input.topicIds,
         );
+      // A binding pairs a device with a path on that device. Legacy topic
+      // metadata can pair one machine's device with another machine's path, and
+      // persisting that leaves every topic under it failing with
+      // `working_directory_not_found`. An unreachable device can't be verified
+      // and stays bindable; only a definite "not there" is rejected.
+      const stat = await deviceGateway.statPath({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      if (stat && (!stat.exists || !stat.isDirectory))
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Working directory does not exist on this device',
+        });
       return { data: await ctx.directoryRepo.bind(input), success: true };
     }),
   list: procedure
@@ -265,6 +281,48 @@ export const projectWorkingDirectoryRouter = router({
         success: true,
       };
     }),
+  /** Repoint a directory bound with the wrong device or path; its topics follow it. */
+  relocate: write
+    .input(
+      idInput.extend({
+        deviceId: z.string().min(1),
+        path: z.string().min(1),
+        projectId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // The same gate as `moveTopic`: the conversations move with the directory,
+      // so a destination the device cannot see must fail before anything moves.
+      const stat = await deviceGateway.statPath({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      if (!stat?.exists || !stat.isDirectory)
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Device is offline or working directory is unavailable',
+        });
+      // Relocating rewrites each topic's execution target and drops its CLI
+      // session, which is a write to every one of them: the caller needs `use`
+      // access to each, as `moveTopic` requires for one.
+      const topicIds = (await ctx.directoryModel.listTopics(input.id)).map((topic) => topic.id);
+      await assertCanUseTopicTargets(
+        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        topicIds,
+      );
+      return {
+        data: await ctx.directoryRepo.relocate({ ...input, authorizedTopicIds: topicIds }),
+        success: true,
+      };
+    }),
+  remove: write
+    .input(idInput.extend({ projectId: z.string() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.directoryRepo.remove(input.projectId, input.id),
+      success: true,
+    })),
   resolve: procedure.input(idInput).query(async ({ ctx, input }) => ({
     data: await ctx.directoryModel.resolve(input.id),
     success: true,

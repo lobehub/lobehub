@@ -1,8 +1,22 @@
-import type { CreatableAcceptanceSubjectType } from '@lobechat/types';
+import type { AcceptanceCommentList, CreatableAcceptanceSubjectType } from '@lobechat/types';
 
 import type { VerifyCheckResultItem } from '@/database/schemas/verify';
-import { AppIndexedDBStorage, defineReplica } from '@/libs/replica';
-import type { AcceptanceBundle, AcceptanceBySubject, VerifyStateResponse } from '@/services/verify';
+import {
+  AppIndexedDBStorage,
+  arrayEntity,
+  definePagedReplica,
+  defineReplica,
+  type ReplicaEntityAdapter,
+  type ReplicaPagedData,
+} from '@/libs/replica';
+import type {
+  AcceptanceBundle,
+  AcceptanceBySubject,
+  AcceptanceListFilter,
+  AcceptanceListItem,
+  AcceptanceListQuery,
+  VerifyStateResponse,
+} from '@/services/verify';
 
 /**
  * The Acceptance aggregate of one acceptance id (`acceptanceBundleMap[id]`):
@@ -136,4 +150,108 @@ export const verifyRunResource = defineReplica<string, VerifyRunSnapshot>({
     namespace: `replica:${VERIFY_RUN_NAME}:v${VERIFY_RUN_VERSION}`,
   }),
   version: VERIFY_RUN_VERSION,
+});
+
+/** The list narrowing a list entry was read under (everything but search and paging). */
+export interface AcceptanceListParams extends AcceptanceListQuery {
+  /** Widen the recency window (server-capped) — the merge picker asks for more. */
+  limit?: number;
+  /** A search term; search entries stay in memory only. */
+  q?: string;
+}
+
+/** `null` (no project) and `undefined` (any project) are different reads. */
+const acceptanceProjectKey = (projectId: string | null | undefined) =>
+  projectId === null ? '~none' : (projectId ?? '');
+
+/**
+ * Entry key of one acceptance list read (`acceptanceListMap[key]`): every
+ * dimension the server filters on. The scope (user + workspace) partitions the
+ * replica itself, so a key never carries the workspace.
+ */
+export const acceptanceListKey = ({
+  filter,
+  limit,
+  projectId,
+  q,
+  scope,
+  source,
+}: AcceptanceListParams = {}): string =>
+  [
+    filter ?? '',
+    acceptanceProjectKey(projectId),
+    scope ?? '',
+    source ?? '',
+    limit === undefined ? '' : String(limit),
+    q ? `q:${q}` : '',
+  ].join('|');
+
+/** Search results answer one typed query; they are never repainted after a reload. */
+const isSearchListKey = (key: string) => key.includes('|q:');
+
+/** Acceptance list rows are addressed by the acceptance id. */
+export const acceptanceListEntity: ReplicaEntityAdapter<AcceptanceListItem[], AcceptanceListItem> =
+  arrayEntity<AcceptanceListItem>((item) => item.id);
+
+/**
+ * The caller's recent acceptances under one narrowing (`acceptanceListMap`):
+ * the workspace shell's onboarding probe, the merge target picker and the list
+ * panel's search. A reload paints the last browse from IndexedDB, then
+ * revalidates; search entries are memory-only.
+ */
+export const acceptanceListResource = defineReplica<AcceptanceListParams, AcceptanceListItem[]>({
+  key: acceptanceListKey,
+  name: 'acceptanceList',
+  persist: { maxEntries: 20 },
+  persistKey: (key) => !isSearchListKey(key),
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** One view of the list panel's scroll feed: the status split and the narrowing. */
+export type AcceptancePageParams = Omit<AcceptanceListQuery, 'filter'> & {
+  filter: AcceptanceListFilter;
+};
+
+export type AcceptancePageData = ReplicaPagedData<AcceptanceListItem, string>;
+
+/** Entry key of one scroll feed (`acceptancePageMap[key]`). */
+export const acceptancePageKey = ({ filter, projectId, scope, source }: AcceptancePageParams) =>
+  [filter, acceptanceProjectKey(projectId), scope ?? '', source ?? ''].join('|');
+
+/**
+ * The list panel's keyset feed, newest first (`acceptancePageMap`). Only the
+ * head page survives a reload, so the first frame shows what the first network
+ * page would, never a stale tail.
+ */
+export const acceptancePageResource = definePagedReplica<
+  AcceptancePageParams,
+  AcceptanceListItem,
+  string,
+  AcceptancePageData
+>({
+  key: acceptancePageKey,
+  name: 'acceptancePage',
+  paging: {
+    direction: 'forward',
+    getId: (item) => item.id,
+    mode: 'cursor',
+    persist: { pages: 1 },
+  },
+  persist: { maxEntries: 20 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/**
+ * The discussion of one acceptance (`acceptanceCommentMap[acceptanceId]`):
+ * comments, approvals, reactions and the caller's comment permissions. LRU-capped
+ * because every opened acceptance would otherwise keep its thread.
+ */
+export const acceptanceCommentResource = defineReplica<string, AcceptanceCommentList>({
+  key: (acceptanceId) => acceptanceId,
+  name: 'acceptanceComment',
+  persist: { maxEntries: 30 },
+  storage: 'indexedDB',
+  version: 1,
 });

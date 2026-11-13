@@ -196,6 +196,7 @@ export default {
   'goalBatch.round.reviseEdge': 'Sent back · revise',
   'goalBatch.round.title': 'Round {{revision}}',
   'goalBatch.status.done': 'All done',
+  'goalBatch.status.held': 'Waiting for your release',
   'goalBatch.status.human': '{{count}} need you',
   'goalBatch.status.pending': 'Not started',
   'goalBatch.status.running': 'In progress',
@@ -323,7 +324,6 @@ export default {
   'agentProfile.skills_one': '{{count}} skill',
   'agentProfile.skills_other': '{{count}} skills',
   'agentSender.sourceTopic': 'Source topic',
-  'agentSignal.receipts.agentSignalLabel': 'Agent Signal',
   'agentSignal.receipts.memory.detail': 'Saved this for future replies',
   'agentSignal.receipts.memory.openInMemory': 'Open in Memory',
   'agentSignal.receipts.memory.title': 'Memory saved',
@@ -982,6 +982,15 @@ export default {
   'input.addUser': 'Add a user message',
   'input.agentModeUnsupportedModel':
     'The current model doesn’t support agentic tool calling. Switch to a model with agent capability for the best experience.',
+  'input.agentRunFeeUnfunded.desc':
+    'Each agent run carries a fee, even on your own API key. Top up or upgrade your plan, then send again.',
+  'input.agentRunFeeUnfunded.descOverflow':
+    'Each agent run carries a fee, even on your own API key. Your balance covers it: use your balance, then send again.',
+  'input.agentRunFeeUnfunded.descSubscribe':
+    'Each agent run carries a fee, even on your own API key. Subscribe to a plan, then send again.',
+  'input.agentRunFeeUnfunded.descTopUp':
+    'Each agent run carries a fee, even on your own API key. Top up, then send again.',
+  'input.agentRunFeeUnfunded.title': 'Not enough credits to pay the agent run fee',
   'input.agentSlugMoved':
     'This link now opens a different agent. Switching to it — try again once it opens. Your draft is kept.',
   'input.agentSlugUnconfirmed':
@@ -1668,9 +1677,7 @@ export default {
   'gatewayMode.desc':
     "Run agents in the cloud through LobeHub's Agent Gateway. Tasks keep running even after you close the page.",
   'sandboxStorage.ephemeral': 'Temporary working directory',
-  'sandboxStorage.ephemeralDesc': 'Cleaned up when the sandbox is recycled',
   'sandboxStorage.persistentUpsell': 'Persistent working directory',
-  'sandboxStorage.persistentUpsellDesc': 'Keep files across runs and topics',
   'sandboxStorage.setUpEnvironmentDesc': 'A persistent directory lives in an environment',
   'sandboxStorage.setUpEnvironment': 'Set up an environment',
   'sandboxStorage.manage': 'Manage',
@@ -1970,7 +1977,10 @@ export default {
   'supervisor.todoList.allComplete': 'All tasks completed',
   'supervisor.todoList.title': 'Tasks Completed',
   'tab.groupProfile': 'Group Profile',
+  'tab.backToChat': 'Back to chat',
+  'tab.group.identity': 'Identity',
   'tab.integration': 'IM Bots',
+  'tab.mail': 'Mail',
   'tab.profile': 'Agent Profile',
   'tab.profileBasic': 'Profile',
   'tab.search': 'Search',
@@ -2183,6 +2193,9 @@ export default {
     'The task moves to the trash with its runs and can be restored within 30 days.',
   'taskDetail.deleteConfirm.ok': 'Delete',
   'taskDetail.deleteConfirm.title': 'Delete this task?',
+  'taskDetail.foreignWorkspace.notice':
+    'This task belongs to {{workspace}}. It is shown read-only here.',
+  'taskDetail.foreignWorkspace.open': 'Open in {{workspace}}',
   'taskDetail.instruction': 'Instruction',
   'taskDetail.modelConfig': 'Model Override',
   'taskDetail.saveModelConfig': 'Save',
@@ -2534,6 +2547,7 @@ export default {
     'Runs still in progress will be stopped and no new tasks will start. You can reopen the goal from this menu.',
   'goalDetail.closeConfirm.canceled.ok': 'Cancel goal',
   'goalDetail.closeConfirm.canceled.title': 'Cancel this goal?',
+  'goalDetail.closeConfirm.failed': 'Couldn’t close this goal. Try again in a moment.',
   'goalDetail.deleteConfirm.content':
     'This goal and its task plan will be permanently deleted. Conversation history is retained.',
   'goalDetail.deleteConfirm.ok': 'Delete goal',
@@ -3783,12 +3797,6 @@ export default {
   'workingPanel.overview.empty':
     'Workspace activity and outputs will appear here as the agent works.',
   'workingPanel.overview.emptyTitle': 'Ready to work',
-  'workingPanel.overview.profile.view': 'View profile',
-  'workingPanel.profile.description': 'About',
-  'workingPanel.profile.model': 'Model',
-  'workingPanel.profile.noDescription': 'No description yet',
-  'workingPanel.profile.tabs.detail': 'Details',
-  'workingPanel.profile.tabs.workspace': 'Workspace',
   'workingPanel.overview.deviceError': 'Could not load the device status',
   'workingPanel.overview.environmentError': 'Could not load the repository status',
   'workingPanel.overview.execution.device': 'Connected device',
@@ -4353,31 +4361,25 @@ export default {
   'userFeedbackCard.count_other': '{{count}} comments',
   'userFeedbackCard.title': 'User feedback',
   'you': 'You',
-  'sandboxDrive.pickerTitle': 'Working directory',
-  'sandboxDrive.pickerInfoTooltip':
-    'Pick a folder on your drive and its files are kept across conversations. Without one, the sandbox is temporary.',
-  'sandboxDrive.manageEnvironments': 'Environments',
-  'sandboxEnvironment.title': 'Environment',
-  'sandboxEnvironment.hint':
-    'Cloned and set up once in the working directory before the first command. A folder that already has files is left as it is.',
-  'sandboxEnvironment.none': 'No environment',
-  'sandboxEnvironment.noneDesc': 'Start from an empty working directory',
-  'sandboxEnvironment.empty': 'No environments yet. Create one in Environments.',
+  'sandboxDrive.manageEnvironments': 'Settings',
   'sandboxEnvironment.missing': 'Environment unavailable',
   'sandboxEnvironment.loading': 'Loading environment…',
+  'sandboxDrive.pickerTitle': 'Work location',
+  'sandboxDrive.pickerInfoTooltip':
+    'A temporary directory is cleaned up with the sandbox. A folder on your cloud drive is kept across conversations. A repository is cloned before the first command.',
+  'sandboxEnvironment.title': 'Repository',
+  'sandboxEnvironment.hint': 'Cloned and set up once before the first command.',
+  'sandboxEnvironment.empty': 'No repositories yet. Add one to get started.',
+  'sandboxEnvironment.add': 'Add repository',
   'sandboxEnvironment.loadFailed': "Couldn't load environments",
   'sandboxEnvironment.retry': 'Retry',
   'sandboxEnvironment.saveFailed': 'Could not change the environment. Try again.',
-  'sandboxDrive.root': 'Drive root',
+  'sandboxDrive.root': 'Root',
   'sandboxDrive.building': '{{name}} · building',
-  'sandboxDrive.browse': 'Choose a folder on your drive…',
+  'sandboxDrive.title': 'Cloud drive',
   'sandboxDrive.browseOther': 'Choose another folder…',
-  'sandboxDrive.browseDesc': 'Files in it are kept across conversations',
-  'sandboxDrive.folderDesc': 'Folder on your drive · {{path}}',
-  'sandboxDrive.environmentDesc': 'Environment directory · installed packages are kept too',
   'sandboxDrive.environmentBuildingDesc':
     'Environment directory · building, usable once it finishes',
-  'sandboxDrive.upsell': 'Keep files on a drive',
   'sandboxDrive.fallback.directoryMissing':
     'This folder no longer exists on the drive. Runs use a temporary sandbox until you pick another folder.',
   'sandboxDrive.fallback.instanceUnavailable':
@@ -4390,7 +4392,6 @@ export default {
   'sandboxDrive.fallback.instanceRebuildRequired':
     'This private environment directory is still on the public drive and needs to be rebuilt on your personal drive. This run will use a temporary sandbox.',
   'sandboxDrive.fallbackChip.instanceRebuildRequired': 'Rebuild on personal drive',
-  'sandboxDrive.folderOnDriveDesc': '{{drive}} · {{path}}',
   'input.costEstimate.hintUsd': 'Estimated cost: about {{amount}}',
   'input.costEstimate.usdPerMillionTokens': '{{amount}} / 1M tokens',
   'taskLabel.add': 'Add labels',

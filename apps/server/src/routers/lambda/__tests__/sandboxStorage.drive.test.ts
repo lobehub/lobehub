@@ -41,6 +41,7 @@ const plane = vi.hoisted(() => ({
   createDirectory: vi.fn(),
   deleteFile: vi.fn(),
   deleteInstance: vi.fn(),
+  exportFile: vi.fn(),
   getStorage: vi.fn(),
   listFiles: vi.fn(),
   readOccupancy: vi.fn(),
@@ -150,6 +151,11 @@ beforeEach(async () => {
   plane.createDirectory.mockReset().mockImplementation(async ({ path }) => ({ path }));
   plane.deleteFile.mockReset().mockImplementation(async ({ path }) => ({ path }));
   plane.deleteInstance.mockReset().mockResolvedValue(undefined);
+  // A storage service that cannot export, so a download packs in a sandbox
+  // unless a case says otherwise.
+  plane.exportFile
+    .mockReset()
+    .mockRejectedValue(new SandboxStorageFilesError('no', 501, 'EXPORT_UNAVAILABLE'));
   plane.listFiles.mockReset().mockRejectedValue(notFound());
   plane.readOccupancy.mockReset().mockResolvedValue({ held: [], unavailable: false });
   plane.renameFile.mockReset().mockImplementation(async ({ newPath }) => ({ path: newPath }));
@@ -632,6 +638,47 @@ describe('downloading from the drive', () => {
       }),
     );
     expect(packed()).toMatchObject({ hidden: ['projects/secret'], path: 'projects' });
+  });
+
+  it('exports a public folder through the storage service, without a sandbox', async () => {
+    await legacyPrivateFolder(ownerId, 'projects/secret');
+    plane.exportFile.mockResolvedValue({
+      contentType: 'application/zip',
+      kind: 'directory',
+      size: 7,
+    });
+
+    const result = await drive(memberId).prepareDownload({ drive: 'public', path: 'projects' });
+
+    expect(result).toMatchObject({ fileName: 'projects.zip', kind: 'directory', size: 7 });
+    expect(plane.exportFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hidden: ['projects/secret'],
+        path: 'projects',
+        uploadUrl: expect.stringContaining('sandbox-drive-downloads/'),
+      }),
+      { signal: expect.any(AbortSignal) },
+    );
+    expect(reached.at(-1)).toBe(STORAGE_KEY);
+    expect(downloads.callTool).not.toHaveBeenCalled();
+  });
+
+  it('says what an export refused in codes the client translates', async () => {
+    plane.exportFile.mockRejectedValue(
+      new SandboxStorageFilesError('gone', 404, 'EXPORT_NOT_FOUND'),
+    );
+    await expect(
+      drive(memberId).prepareDownload({ drive: 'public', path: 'gone' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'PATH_NOT_FOUND' });
+
+    plane.exportFile.mockRejectedValue(
+      new SandboxStorageFilesError('upload', 500, 'EXPORT_UPLOAD_FAILED'),
+    );
+    // A 500, never a 502: the edge replaces a 502's body and the code is lost.
+    await expect(
+      drive(memberId).prepareDownload({ drive: 'public', path: 'projects' }),
+    ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR', message: 'DOWNLOAD_FAILED' });
+    expect(downloads.callTool).not.toHaveBeenCalled();
   });
 
   it("downloads from the caller's own personal drive", async () => {

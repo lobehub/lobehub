@@ -82,6 +82,14 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+const aliceActiveAgentLink = () => ({
+  activeAgentId: 'agt_main',
+  id: 'link_1',
+  platformUserId: 'U_ALICE',
+  tenantId: 'T_ACME',
+  userId: 'user_alice',
+});
+
 describe('MessengerRouter channel @mention', () => {
   it('dispatches a linked user mention to the active agent (in-thread reply)', async () => {
     await loadSlackBot();
@@ -359,13 +367,7 @@ describe('MessengerRouter channel @mention', () => {
 describe('MessengerRouter onSubscribedMessage gating', () => {
   it('passes DM follow-ups straight through to handle()', async () => {
     await loadSlackBot();
-    mockFindLink.mockResolvedValue({
-      activeAgentId: 'agt_main',
-      id: 'link_1',
-      platformUserId: 'U_ALICE',
-      tenantId: 'T_ACME',
-      userId: 'user_alice',
-    });
+    mockFindLink.mockResolvedValue(aliceActiveAgentLink());
 
     const handler = mockChatBot.onSubscribedMessage.mock.calls[0][0] as (
       thread: any,
@@ -386,13 +388,7 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
     // `onSubscribedMessage` the thread is still 1-human, so the bot should
     // reply without requiring a re-mention.
     await loadSlackBot();
-    mockFindLink.mockResolvedValue({
-      activeAgentId: 'agt_main',
-      id: 'link_1',
-      platformUserId: 'U_ALICE',
-      tenantId: 'T_ACME',
-      userId: 'user_alice',
-    });
+    mockFindLink.mockResolvedValue(aliceActiveAgentLink());
     mockGetList.mockResolvedValue(['U_ALICE']); // alice already tracked
 
     const handler = mockChatBot.onSubscribedMessage.mock.calls[0][0] as (
@@ -507,13 +503,7 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
 
   it('responds to a re-mention in a subscribed channel thread', async () => {
     await loadSlackBot();
-    mockFindLink.mockResolvedValue({
-      activeAgentId: 'agt_main',
-      id: 'link_1',
-      platformUserId: 'U_ALICE',
-      tenantId: 'T_ACME',
-      userId: 'user_alice',
-    });
+    mockFindLink.mockResolvedValue(aliceActiveAgentLink());
 
     const handler = mockChatBot.onSubscribedMessage.mock.calls[0][0] as (
       thread: any,
@@ -534,13 +524,7 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
     // After the mode switch, a fresh @mention still gets a reply — the
     // gate keys off `isMention || count <= 1`.
     await loadSlackBot();
-    mockFindLink.mockResolvedValue({
-      activeAgentId: 'agt_main',
-      id: 'link_1',
-      platformUserId: 'U_ALICE',
-      tenantId: 'T_ACME',
-      userId: 'user_alice',
-    });
+    mockFindLink.mockResolvedValue(aliceActiveAgentLink());
     mockGetList.mockResolvedValue(['U_ALICE', 'U_BOB']);
 
     const handler = mockChatBot.onSubscribedMessage.mock.calls[0][0] as (

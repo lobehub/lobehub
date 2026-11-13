@@ -302,6 +302,7 @@
   "providerModels.item.modelConfig.video.title": "Поддържа разпознаване на видео",
   "providerModels.item.modelConfig.vision.extra": "Активира възможност за качване на изображения. Поддръжката зависи от модела. Моля, тествайте.",
   "providerModels.item.modelConfig.vision.title": "Поддръжка на визуално разпознаване",
+  "providerModels.item.pricing.audioOutputTokens": "Аудио изход ${{amount}}/М",
   "providerModels.item.pricing.image": "${{amount}}/Изображение",
   "providerModels.item.pricing.inputCharts": "${{amount}}/М символа",
   "providerModels.item.pricing.inputMinutes": "${{amount}}/Минута",

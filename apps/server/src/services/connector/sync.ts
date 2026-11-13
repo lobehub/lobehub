@@ -102,6 +102,7 @@ export const syncConnectorToolsById = async (
   connectorId: string,
   /** `userId` decides the `mcp_apps` flag: with it on, view-only tools are listed too. */
   ctx: ConnectorToolSyncContext & { userId?: string | null },
+  options: { pruneMissingAutoTools?: boolean } = {},
 ): Promise<{ toolCount: number }> => {
   let connector = await ctx.connectorModel.findById(connectorId);
   if (!connector) throw new Error('Connector not found');
@@ -138,6 +139,17 @@ export const syncConnectorToolsById = async (
   }));
 
   await ctx.connectorToolModel.upsertMany(connectorId, syncInputs);
+  if (options.pruneMissingAutoTools) {
+    // Eval contracts exclude vanished auto tools. Retain denied/approval rows as
+    // permission tombstones so a later upstream listing cannot auto-approve them.
+    const restricted = (await ctx.connectorToolModel.queryByConnector(connectorId))
+      .filter((tool) => tool.permission !== 'auto')
+      .map((tool) => tool.toolName);
+    await ctx.connectorToolModel.deleteToolsNotIn(connectorId, [
+      ...syncInputs.map((tool) => tool.toolName),
+      ...restricted,
+    ]);
+  }
   await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.connected);
 
   return { toolCount: syncInputs.length };

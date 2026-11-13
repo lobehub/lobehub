@@ -1,9 +1,16 @@
-import type { AnswerExtractor, EvalBenchmarkRubric, EvalTestCaseContent } from '@lobechat/types';
+import type {
+  AnswerExtractor,
+  EvalBenchmarkRubric,
+  EvalRuleVerdict,
+  EvalTestCaseContent,
+} from '@lobechat/types';
 
 import { extract } from './extractors';
 import { match, type MatchContext, type MatchResult } from './matchers';
 
 export interface EvaluateResult {
+  /** Any grading failure makes this evaluation incomplete; do not use its score as a verdict. */
+  judgeError?: string;
   passed: boolean;
   reason?: string;
   rubricResults: RubricResult[];
@@ -11,10 +18,12 @@ export interface EvaluateResult {
 }
 
 export interface RubricResult {
+  judgeError?: string;
   passed: boolean;
   reason?: string;
   rubricId: string;
   score: number;
+  verdicts?: EvalRuleVerdict[];
 }
 
 export interface EvaluateOptions {
@@ -63,13 +72,22 @@ export const evaluate = async (
         },
       ];
     } else {
-      return { passed: false, reason: 'No rubrics configured', rubricResults: [], score: 0 };
+      return {
+        judgeError: 'No rubrics configured',
+        passed: false,
+        reason: 'No rubrics configured',
+        rubricResults: [],
+        score: 0,
+      };
     }
   }
 
   const rubricResults: RubricResult[] = [];
   let totalWeight = 0;
   let weightedScore = 0;
+  // A gating rubric (rule checklist) fails the case on its own: the threshold
+  // only applies to scored rubrics.
+  let gateFailed = false;
 
   for (const rubric of rubrics) {
     // Step 1: Extract answer if extractor is configured
@@ -95,7 +113,11 @@ export const evaluate = async (
         );
       }
       const best = results.reduce((a, b) => (a.score >= b.score ? a : b));
-      result = best;
+      // A successful alternative cannot hide a Judge outage on another candidate.
+      const judgeError = results
+        .flatMap((item) => (item.judgeError ? [item.judgeError] : []))
+        .join('\n');
+      result = judgeError ? { ...best, judgeError, passed: false } : best;
     } else {
       result = await match(
         { input: testCase.input, actual: extracted, expected, rubric },
@@ -104,20 +126,27 @@ export const evaluate = async (
     }
 
     rubricResults.push({
+      ...(result.judgeError && { judgeError: result.judgeError }),
       passed: result.passed,
       reason: result.reason,
       rubricId: rubric.id,
       score: result.score,
+      ...(result.verdicts && { verdicts: result.verdicts }),
     });
+    if (result.gating && !result.passed) gateFailed = true;
 
     totalWeight += rubric.weight;
     weightedScore += result.score * rubric.weight;
   }
 
   const score = totalWeight > 0 ? weightedScore / totalWeight : 0;
-  const passed = score >= passThreshold;
+  const judgeError = rubricResults
+    .flatMap((result) => (result.judgeError ? [`${result.rubricId}: ${result.judgeError}`] : []))
+    .join('\n');
+  const passed = !judgeError && score >= passThreshold && !gateFailed;
 
   return {
+    ...(judgeError && { judgeError }),
     passed,
     rubricResults,
     score,

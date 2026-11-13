@@ -4,8 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStepRunner } from '@/server/workflows/testing/stepContext';
 
 import { processTopicHandler } from '../processTopic';
+import { checkGuard, ensureWorkflowStarted } from '../runGuard';
 
 const mocks = vi.hoisted(() => ({
+  incrementProgress: vi.fn(),
+  isBanned: vi.fn(),
+  spanEnd: vi.fn(),
   createExecutor: vi.fn(),
   extractTopic: vi.fn(),
   isHourlyMemoryExtractionCancellationRequested: vi.fn(),
@@ -18,7 +22,7 @@ vi.mock('@lobechat/observability-otel/modules/upstash-workflow', () => ({
   tracer: {
     startActiveSpan: vi.fn(function (_name: string, callback: (span: unknown) => unknown) {
       return callback({
-        end: vi.fn(),
+        end: mocks.spanEnd,
         recordException: vi.fn(),
         setAttributes: vi.fn(),
         setStatus: vi.fn(),
@@ -49,8 +53,14 @@ vi.mock('@/database/models/asyncTask', () => ({
     return {
       isHourlyMemoryExtractionCancellationRequested:
         mocks.isHourlyMemoryExtractionCancellationRequested,
+      incrementUserMemoryExtractionProgress: mocks.incrementProgress,
+      isUserMemoryExtractionCancellationRequested: vi.fn(async () => false),
     };
   }),
+}));
+
+vi.mock('@/database/models/user', () => ({
+  UserModel: { isBanned: mocks.isBanned },
 }));
 
 vi.mock('@/database/server', () => ({
@@ -78,6 +88,7 @@ describe('processTopicHandler hourly task behavior', () => {
     vi.clearAllMocks();
     mocks.createExecutor.mockResolvedValue({ extractTopic: mocks.extractTopic });
     mocks.extractTopic.mockResolvedValue(undefined);
+    mocks.isBanned.mockResolvedValue(false);
     mocks.isHourlyMemoryExtractionCancellationRequested.mockResolvedValue(false);
   });
 
@@ -101,6 +112,47 @@ describe('processTopicHandler hourly task behavior', () => {
 
     expect(mocks.isHourlyMemoryExtractionCancellationRequested).toHaveBeenCalledTimes(2);
     expect(mocks.extractTopic).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not extract for a banned user, including runs queued before the ban', async () => {
+    mocks.isBanned.mockResolvedValue(true);
+    const context = createContext({
+      baseUrl: 'https://app.example.com',
+      sources: [MemorySourceType.ChatTopic],
+      topicIds: ['t1'],
+      userIds: ['u1'],
+    });
+
+    await expect(processTopicHandler(context as never)).resolves.toMatchObject({ skipped: true });
+
+    // Ends before any persisted step, so nothing is queued on the shared flow-control key. The
+    // startup helpers are mocked, so assert they were never reached rather than `context.run`.
+    expect(ensureWorkflowStarted).not.toHaveBeenCalled();
+    expect(checkGuard).not.toHaveBeenCalled();
+    expect(context.run).not.toHaveBeenCalled();
+    expect(mocks.spanEnd).toHaveBeenCalledTimes(1);
+    expect(mocks.extractTopic).not.toHaveBeenCalled();
+  });
+
+  it('still reports progress for a banned user tracked task, without extracting', async () => {
+    mocks.isBanned.mockResolvedValue(true);
+    const context = createContext({
+      asyncTaskId: '00000000-0000-4000-8000-000000000002',
+      baseUrl: 'https://app.example.com',
+      sources: [MemorySourceType.ChatTopic],
+      topicIds: ['t1'],
+      userIds: ['u1'],
+      userInitiated: true,
+    });
+
+    await processTopicHandler(context as never);
+
+    // The extraction steps stay in the sequence, so a ban during replay cannot shift it.
+    const steps = (context.run as ReturnType<typeof vi.fn>).mock.calls.map(([name]) => name);
+    expect(steps.some((name: string) => name.endsWith(':cepa'))).toBe(true);
+    expect(steps.some((name: string) => name.endsWith(':identity'))).toBe(true);
+    expect(mocks.extractTopic).not.toHaveBeenCalled();
+    expect(mocks.incrementProgress).toHaveBeenCalledWith('00000000-0000-4000-8000-000000000002');
   });
 
   it('never asks the extractor for the retired experience layer', async () => {

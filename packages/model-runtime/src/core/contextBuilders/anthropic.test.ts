@@ -1,8 +1,8 @@
-import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import type { OpenAI } from 'openai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { OpenAIChatMessage, UserMessageContentPart } from '../../types/chat';
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { parseDataUri } from '../../utils/uriParser';
 import {
   buildAnthropicBlock,
@@ -10,6 +10,57 @@ import {
   buildAnthropicMessages,
   buildAnthropicTools,
 } from './anthropic';
+
+const createAssistantToolMessage = (): OpenAIChatMessage => ({
+  content: '正在搜索...',
+  role: 'assistant',
+  tool_calls: [
+    {
+      function: {
+        arguments: '{"location": "Singapore"}',
+        name: 'search_people',
+      },
+      id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+      type: 'function',
+    },
+  ],
+});
+
+const createWeatherToolCalls = (): NonNullable<OpenAIChatMessage['tool_calls']> => [
+  {
+    function: {
+      arguments: '{"city": "\\u676d\\u5dde"}',
+      name: 'realtime-weather____fetchCurrentWeather',
+    },
+    id: 'toolu_018PNQkH8ChbjoJz4QBiFVod',
+    type: 'function',
+  },
+  {
+    function: {
+      arguments: '{"city": "\\u5317\\u4eac"}',
+      name: 'realtime-weather____fetchCurrentWeather',
+    },
+    id: 'toolu_018VQTQ6fwAEC3eppuEfMxPp',
+    type: 'function',
+  },
+];
+
+const createSearchTools = (): OpenAI.ChatCompletionTool[] => [
+  {
+    type: 'function',
+    function: {
+      name: 'search',
+      description: 'Searches the web',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+];
 
 // Mock the parseDataUri function since it's an implementation detail
 vi.mock('../../utils/uriParser');
@@ -749,24 +800,7 @@ describe('anthropicHelpers', () => {
             content:
               '好的,我会为您查询杭州和北京的天气信息。我现在就开始查询这两个城市的当前天气情况。',
             role: 'assistant',
-            tool_calls: [
-              {
-                function: {
-                  arguments: '{"city": "\\u676d\\u5dde"}',
-                  name: 'realtime-weather____fetchCurrentWeather',
-                },
-                id: 'toolu_018PNQkH8ChbjoJz4QBiFVod',
-                type: 'function',
-              },
-              {
-                function: {
-                  arguments: '{"city": "\\u5317\\u4eac"}',
-                  name: 'realtime-weather____fetchCurrentWeather',
-                },
-                id: 'toolu_018VQTQ6fwAEC3eppuEfMxPp',
-                type: 'function',
-              },
-            ],
+            tool_calls: createWeatherToolCalls(),
           },
           {
             content:
@@ -909,20 +943,7 @@ describe('anthropicHelpers', () => {
             content: '搜索人员',
             role: 'user',
           },
-          {
-            content: '正在搜索...',
-            role: 'assistant',
-            tool_calls: [
-              {
-                function: {
-                  arguments: '{"location": "Singapore"}',
-                  name: 'search_people',
-                },
-                id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
-                type: 'function',
-              },
-            ],
-          },
+          createAssistantToolMessage(),
           {
             content: null as any,
             name: 'search_people',
@@ -966,20 +987,7 @@ describe('anthropicHelpers', () => {
             content: '搜索人员',
             role: 'user',
           },
-          {
-            content: '正在搜索...',
-            role: 'assistant',
-            tool_calls: [
-              {
-                function: {
-                  arguments: '{"location": "Singapore"}',
-                  name: 'search_people',
-                },
-                id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
-                type: 'function',
-              },
-            ],
-          },
+          createAssistantToolMessage(),
           {
             content: '',
             name: 'search_people',
@@ -1023,20 +1031,7 @@ describe('anthropicHelpers', () => {
             content: '搜索人员',
             role: 'user',
           },
-          {
-            content: '正在搜索...',
-            role: 'assistant',
-            tool_calls: [
-              {
-                function: {
-                  arguments: '{"location": "Singapore"}',
-                  name: 'search_people',
-                },
-                id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
-                type: 'function',
-              },
-            ],
-          },
+          createAssistantToolMessage(),
           {
             content: [
               { type: 'text', text: 'Found 5 candidates' },
@@ -1303,24 +1298,7 @@ describe('anthropicHelpers', () => {
             },
           ],
           role: 'assistant',
-          tool_calls: [
-            {
-              function: {
-                arguments: '{"city": "\\u676d\\u5dde"}',
-                name: 'realtime-weather____fetchCurrentWeather',
-              },
-              id: 'toolu_018PNQkH8ChbjoJz4QBiFVod',
-              type: 'function',
-            },
-            {
-              function: {
-                arguments: '{"city": "\\u5317\\u4eac"}',
-                name: 'realtime-weather____fetchCurrentWeather',
-              },
-              id: 'toolu_018VQTQ6fwAEC3eppuEfMxPp',
-              type: 'function',
-            },
-          ],
+          tool_calls: createWeatherToolCalls(),
         },
         {
           content:
@@ -1440,22 +1418,7 @@ describe('anthropicHelpers', () => {
 
   describe('buildAnthropicTools', () => {
     it('should correctly convert OpenAI tools to Anthropic format', () => {
-      const tools: OpenAI.ChatCompletionTool[] = [
-        {
-          type: 'function',
-          function: {
-            name: 'search',
-            description: 'Searches the web',
-            parameters: {
-              type: 'object',
-              properties: {
-                query: { type: 'string' },
-              },
-              required: ['query'],
-            },
-          },
-        },
-      ];
+      const tools: OpenAI.ChatCompletionTool[] = createSearchTools();
 
       const result = buildAnthropicTools(tools);
 
@@ -1474,22 +1437,7 @@ describe('anthropicHelpers', () => {
       ]);
     });
     it('should enable cache control', () => {
-      const tools: OpenAI.ChatCompletionTool[] = [
-        {
-          type: 'function',
-          function: {
-            name: 'search',
-            description: 'Searches the web',
-            parameters: {
-              type: 'object',
-              properties: {
-                query: { type: 'string' },
-              },
-              required: ['query'],
-            },
-          },
-        },
-      ];
+      const tools: OpenAI.ChatCompletionTool[] = createSearchTools();
 
       const result = buildAnthropicTools(tools, { enabledContextCaching: true });
 

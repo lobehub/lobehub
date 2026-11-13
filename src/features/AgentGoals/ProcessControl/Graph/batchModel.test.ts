@@ -14,12 +14,14 @@ import { describe, expect, it } from 'vitest';
 
 import { buildGoalGraphView } from '../goalGraphViewModel';
 import { batchGroupId, layoutBatch } from './batchLayout';
+import type { BatchCellState } from './batchModel';
 import {
   batchPlanTitleKey,
   buildBatchModel,
   findBatchGate,
   findBatchPlan,
   reopenedRows,
+  unitsPhase,
   verdictChecks,
 } from './batchModel';
 import {
@@ -791,5 +793,21 @@ describe('batchStages', () => {
       revision: 2,
     });
     expect(parseBatchStageId('batch-1')).toBeUndefined();
+  });
+});
+
+describe('unitsPhase', () => {
+  const cells = (...states: BatchCellState[]) => states.map((state) => ({ state }));
+
+  it('reads a round its gate holds for a person as waiting, not in progress', () => {
+    const roster = cells('done', 'backlog', 'backlog', 'backlog');
+    expect(unitsPhase(roster, true)).toBe('running');
+    expect(unitsPhase(roster, true, true)).toBe('held');
+  });
+
+  it('keeps live work, units needing a person and finished rounds ahead of the hold', () => {
+    expect(unitsPhase(cells('done', 'running', 'backlog'), true, true)).toBe('running');
+    expect(unitsPhase(cells('human', 'backlog'), true, true)).toBe('human');
+    expect(unitsPhase(cells('done', 'done'), true, true)).toBe('done');
   });
 });

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import type { NewUserConnector } from '../../schemas';
 import {
+  agentEvalDatasets,
   ConnectorToolPermission,
   ToolCRUDType,
   userConnectors,
@@ -64,6 +65,29 @@ const tool = (overrides: Partial<SyncToolInput>): SyncToolInput => ({
 });
 
 describe('ConnectorToolModel', () => {
+  it('isolates eval tool IDs and mutations behind their owned Dataset scope', async () => {
+    await serverDB
+      .insert(agentEvalDatasets)
+      .values({ id: 'eval-dataset', identifier: 'eval-dataset', name: 'Eval', userId });
+    const id = await insertConnector({ metadata: { agentEval: { datasetId: 'eval-dataset' } } });
+    const evaluation = ConnectorToolModel.forEvaluation(serverDB, userId, 'eval-dataset');
+    const normal = new ConnectorToolModel(serverDB, userId);
+    await evaluation.upsertMany(id, [tool({ toolName: 'private-read' })]);
+    const [row] = await evaluation.queryByConnector(id);
+    expect(await normal.findById(row.id)).toBeUndefined();
+    expect(await normal.queryByConnector(id)).toEqual([]);
+    await expect(normal.upsertMany(id, [tool({ toolName: 'injected' })])).rejects.toThrow(
+      'Connection not available',
+    );
+    await normal.deleteToolsNotIn(id, []);
+    expect(await evaluation.queryByConnector(id)).toHaveLength(1);
+    expect(
+      await ConnectorToolModel.forEvaluation(serverDB, userId, 'wrong-dataset').queryByConnector(
+        id,
+      ),
+    ).toEqual([]);
+  });
+
   describe('upsertMany', () => {
     it('returns early without inserting when the tool list is empty', async () => {
       const model = new ConnectorToolModel(serverDB, userId);
@@ -484,6 +508,14 @@ describe('ConnectorToolModel', () => {
 
       const otherModel = new ConnectorToolModel(serverDB, otherUserId);
       expect(await otherModel.findById(stored.id)).toBeUndefined();
+    });
+  });
+
+  describe('forEvaluation', () => {
+    it('requires a dataset id', () => {
+      expect(() => ConnectorToolModel.forEvaluation(serverDB, userId, '')).toThrow(
+        'A Dataset is required for evaluation tools',
+      );
     });
   });
 });

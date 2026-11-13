@@ -208,6 +208,15 @@ function setupMocks() {
 
 const { videoRouter } = await import('../video');
 
+const compatibleVideoEditInput = (): Parameters<
+  ReturnType<typeof videoRouter.createCaller>['createVideo']
+>[0] => ({
+  ...defaultInput,
+  model: 'gemini-omni-1.1-flash',
+  previousGenerationId: 'source-generation',
+  provider: 'google',
+});
+
 // ---- tests ----
 
 describe('videoRouter', () => {
@@ -379,12 +388,7 @@ describe('videoRouter', () => {
       });
 
       const caller = videoRouter.createCaller(mockCtx);
-      await caller.createVideo({
-        ...defaultInput,
-        model: 'gemini-omni-1.1-flash',
-        previousGenerationId: 'source-generation',
-        provider: 'google',
-      });
+      await caller.createVideo(compatibleVideoEditInput());
 
       expect(mockCreateVideo).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -429,12 +433,7 @@ describe('videoRouter', () => {
       });
 
       const caller = videoRouter.createCaller(mockCtx);
-      await caller.createVideo({
-        ...defaultInput,
-        model: 'gemini-omni-1.1-flash',
-        previousGenerationId: 'source-generation',
-        provider: 'google',
-      });
+      await caller.createVideo(compatibleVideoEditInput());
 
       expect(mockFindTask).toHaveBeenCalledWith('source-task');
       expect(mockCreateVideo).toHaveBeenCalledWith(
@@ -477,14 +476,7 @@ describe('videoRouter', () => {
 
       const caller = videoRouter.createCaller(mockCtx);
 
-      await expect(
-        caller.createVideo({
-          ...defaultInput,
-          model: 'gemini-omni-1.1-flash',
-          previousGenerationId: 'source-generation',
-          provider: 'google',
-        }),
-      ).rejects.toMatchObject({
+      await expect(caller.createVideo(compatibleVideoEditInput())).rejects.toMatchObject({
         code: 'BAD_REQUEST',
         message: 'Previous video generation cannot be edited with the selected model',
       });

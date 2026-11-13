@@ -302,6 +302,7 @@
   "providerModels.item.modelConfig.video.title": "Video Tanıma Desteği",
   "providerModels.item.modelConfig.vision.extra": "Bu yapılandırma yalnızca uygulama içinde görsel yükleme yeteneğini etkinleştirir. Tanıma desteği tamamen modele bağlıdır. Lütfen modelin görsel tanıma yeteneklerini test edin.",
   "providerModels.item.modelConfig.vision.title": "Görsel Tanıma Desteği",
+  "providerModels.item.pricing.audioOutputTokens": "Ses çıktısı ${{amount}}/M",
   "providerModels.item.pricing.image": "${{amount}}/Görsel",
   "providerModels.item.pricing.inputCharts": "${{amount}}/M Karakter",
   "providerModels.item.pricing.inputMinutes": "${{amount}}/Dakika",

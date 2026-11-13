@@ -3,11 +3,13 @@ import { type ToolManifest } from '@lobechat/types';
 import { type PluginItem } from '@lobehub/market-sdk';
 import { type TRPCClientError } from '@trpc/client';
 import debug from 'debug';
+import { omit } from 'es-toolkit/compat';
 import { produce } from 'immer';
 import { gt, valid } from 'semver';
 
 import { type MCPErrorData } from '@/libs/mcp/types';
 import { parseStdioErrorMessage } from '@/libs/mcp/types';
+import { renderMcpArgs, renderMcpUrlTemplate } from '@/libs/mcp/urlTemplate';
 import {
   createReplicaSlice,
   type ReplicaLens,
@@ -361,7 +363,15 @@ export class PluginMCPStoreActionImpl {
         // Web: endpoint only (stdio not supported)
         const shouldUseHttpDeployment = !!httpOption;
 
-        if (hasCloudEndpoint) {
+        // The cloud gateway sends a hosted runtime only the tool call, never the user's config.
+        // On desktop, a hosted plugin that needs config runs its package locally instead, where
+        // the config is passed as env.
+        const runHostedPackageLocally =
+          isDesktop &&
+          !!hasCloudEndpoint &&
+          doesConfigSchemaRequireInput(stdioOption?.connection?.configSchema);
+
+        if (hasCloudEndpoint && !runHostedPackageLocally) {
           // Use cloudEndPoint, create cloud type connection
           log('Using cloudEndPoint for stdio plugin: %s', haveCloudEndpoint);
 
@@ -393,7 +403,7 @@ export class PluginMCPStoreActionImpl {
             updateInstallLoadingState(identifier, undefined);
             return false;
           }
-        } else if (shouldUseHttpDeployment && httpOption) {
+        } else if (shouldUseHttpDeployment && httpOption && !runHostedPackageLocally) {
           // HTTP type: skip system dependency check, use URL directly
           log('HTTP MCP detected, skipping system dependency check');
 
@@ -436,7 +446,17 @@ export class PluginMCPStoreActionImpl {
             return;
           }
 
-          result = await mcpService.checkInstallation(data, abortController.signal);
+          // A hosted plugin's `none` option is its runtime URL, not callable directly: check
+          // only the package options
+          result = await mcpService.checkInstallation(
+            runHostedPackageLocally
+              ? {
+                  ...data,
+                  deploymentOptions: deploymentOptions.filter((option) => !option?.connection?.url),
+                }
+              : data,
+            abortController.signal,
+          );
 
           if (!result.success) {
             updateMCPInstallProgress(identifier, undefined);
@@ -482,16 +502,23 @@ export class PluginMCPStoreActionImpl {
       }
 
       let mergedHttpHeaders: Record<string, string> | undefined;
+      let httpUrl: string | undefined;
       let mergedStdioEnv: Record<string, string> | undefined;
       let mergedCloudHeaders: Record<string, string> | undefined;
 
       if (connection?.type === 'http') {
         const baseHeaders = toNonEmptyStringRecord(connection.headers);
+        // Config values the URL asks for (`{{KEY}}`) go into the URL; the rest are headers
+        const rendered = renderMcpUrlTemplate(connection.url ?? '', normalizedConfig);
+        httpUrl = rendered.url;
+        const headerConfig = toNonEmptyStringRecord(
+          normalizedConfig && omit(normalizedConfig, rendered.usedKeys),
+        );
 
-        if (baseHeaders || normalizedConfig) {
+        if (baseHeaders || headerConfig) {
           mergedHttpHeaders = {
             ...baseHeaders,
-            ...normalizedConfig,
+            ...headerConfig,
           };
         }
       }
@@ -537,7 +564,8 @@ export class PluginMCPStoreActionImpl {
       if (connection?.type === 'stdio') {
         manifest = await mcpService.getStdioMcpServerManifest(
           {
-            args: connection.args,
+            // Config placeholders in args are filled here; the stored connection keeps them
+            args: renderMcpArgs(connection.args, normalizedConfig),
             command: connection.command!,
             env: mergedStdioEnv,
             name: identifier, // Pass config as environment variables (in resume mode)
@@ -586,7 +614,7 @@ export class PluginMCPStoreActionImpl {
                 avatar: plugin.icon,
                 description: plugin.description,
               },
-              url: connection.url!,
+              url: httpUrl!,
             },
             abortController.signal,
           );

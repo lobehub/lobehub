@@ -3,11 +3,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { knowledgeBaseRouter } from '@/server/routers/lambda/knowledgeBase';
 import { TransferErrorCode } from '@/types/transferError';
 
+const publicMemberKnowledgeBase = () => ({
+  id: 'kb-1',
+  userId: 'another-member',
+  visibility: 'public',
+  workspaceId: 'workspace-active',
+});
+
 const routerMocks = vi.hoisted(() => ({
   assertContentsNotInRestrictedKnowledgeBase: vi.fn(),
   assertKnowledgeBaseBrowsable: vi.fn(),
   assertCanPerformResourceAction: vi.fn(),
   businessFileTransferStorageCheck: vi.fn(),
+  filterRestrictedKnowledgeBases: vi.fn(async (_ctx: unknown, items: unknown) => items),
   hasWorkspaceScopedPermission: vi.fn(),
 }));
 
@@ -23,6 +31,18 @@ const mockKnowledgeBaseModelHasForeignLinkedRows = vi.fn().mockResolvedValue(fal
 const mockKnowledgeBaseModelUpdate = vi.fn();
 const mockDocumentModelFindByIds = vi.fn();
 const mockFileModelFindByIds = vi.fn();
+
+const agentSpaceMocks = vi.hoisted(() => ({ flags: vi.fn(), list: vi.fn() }));
+
+vi.mock('@/server/featureFlags', () => ({
+  getServerFeatureFlagsStateFromRuntimeConfig: agentSpaceMocks.flags,
+}));
+
+vi.mock('@/database/repositories/agentSpace', () => ({
+  AgentSpaceRepository: class {
+    list = agentSpaceMocks.list;
+  },
+}));
 
 vi.mock('@/business/server/lambda-routers/file', () => ({
   businessFileTransferStorageCheck: routerMocks.businessFileTransferStorageCheck,
@@ -40,7 +60,7 @@ vi.mock('@/server/routers/lambda/_helpers/knowledgeBaseAccess', () => ({
   assertContentsNotInRestrictedKnowledgeBase:
     routerMocks.assertContentsNotInRestrictedKnowledgeBase,
   assertKnowledgeBaseBrowsable: routerMocks.assertKnowledgeBaseBrowsable,
-  filterRestrictedKnowledgeBases: vi.fn(async (_ctx, items) => items),
+  filterRestrictedKnowledgeBases: routerMocks.filterRestrictedKnowledgeBases,
   getUseLevelKnowledgeBaseIds: vi.fn().mockResolvedValue([]),
 }));
 
@@ -123,12 +143,7 @@ describe('knowledgeBaseRouter', () => {
 
   describe('updateKnowledgeBase', () => {
     it("lets a member update another member's visible shared library", async () => {
-      mockKnowledgeBaseModelFindById.mockResolvedValue({
-        id: 'kb-1',
-        userId: 'another-member',
-        visibility: 'public',
-        workspaceId: 'workspace-active',
-      });
+      mockKnowledgeBaseModelFindById.mockResolvedValue(publicMemberKnowledgeBase());
 
       await caller.updateKnowledgeBase({ id: 'kb-1', value: { name: 'Updated library' } });
 
@@ -146,12 +161,7 @@ describe('knowledgeBaseRouter', () => {
     // so a member with collaborative `edit` access could reassign the row, move
     // it to another workspace, or take it private through the rename endpoint.
     it('drops identity and scope fields from the update payload', async () => {
-      mockKnowledgeBaseModelFindById.mockResolvedValue({
-        id: 'kb-1',
-        userId: 'another-member',
-        visibility: 'public',
-        workspaceId: 'workspace-active',
-      });
+      mockKnowledgeBaseModelFindById.mockResolvedValue(publicMemberKnowledgeBase());
 
       await caller.updateKnowledgeBase({
         id: 'kb-1',
@@ -253,14 +263,35 @@ describe('knowledgeBaseRouter', () => {
     });
   });
 
+  describe('getAgentSpaces', () => {
+    it('stays empty while the rollout flag is off', async () => {
+      agentSpaceMocks.flags.mockResolvedValue({ enableAgentKnowledgeSpace: false });
+
+      await expect(caller.getAgentSpaces()).resolves.toEqual([]);
+      expect(agentSpaceMocks.list).not.toHaveBeenCalled();
+    });
+
+    it('lists agent spaces once the flag is on', async () => {
+      agentSpaceMocks.flags.mockResolvedValue({ enableAgentKnowledgeSpace: true });
+      agentSpaceMocks.list.mockResolvedValue([{ id: 'kb-agent' }]);
+
+      await expect(caller.getAgentSpaces()).resolves.toEqual([{ id: 'kb-agent' }]);
+    });
+
+    it('drops spaces the caller is restricted from browsing', async () => {
+      agentSpaceMocks.flags.mockResolvedValue({ enableAgentKnowledgeSpace: true });
+      agentSpaceMocks.list.mockResolvedValue([{ id: 'kb-agent' }, { id: 'kb-restricted' }]);
+      routerMocks.filterRestrictedKnowledgeBases.mockImplementationOnce(async (_ctx, items) =>
+        (items as { id: string }[]).filter((item) => item.id !== 'kb-restricted'),
+      );
+
+      await expect(caller.getAgentSpaces()).resolves.toEqual([{ id: 'kb-agent' }]);
+    });
+  });
+
   describe('removeKnowledgeBase', () => {
     it("lets a member delete another creator's visible library", async () => {
-      mockKnowledgeBaseModelFindById.mockResolvedValue({
-        id: 'kb-1',
-        userId: 'another-member',
-        visibility: 'public',
-        workspaceId: 'workspace-active',
-      });
+      mockKnowledgeBaseModelFindById.mockResolvedValue(publicMemberKnowledgeBase());
 
       await caller.removeKnowledgeBase({ id: 'kb-1' });
 
@@ -269,10 +300,22 @@ describe('knowledgeBaseRouter', () => {
         expect.any(Boolean),
       );
     });
+
+    it("refuses to delete an agent's dedicated space", async () => {
+      mockKnowledgeBaseModelFindById.mockResolvedValue({
+        ...publicMemberKnowledgeBase(),
+        type: 'agent',
+      });
+
+      await expect(caller.removeKnowledgeBase({ id: 'kb-1' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      expect(mockKnowledgeBaseModelDeleteWithFiles).not.toHaveBeenCalled();
+    });
   });
 
   describe('transferKnowledgeBase', () => {
-    it('checks target storage before transferring a library', async () => {
+    it('checks storage and clears source permissions when transferring to personal scope', async () => {
       await caller.transferKnowledgeBase({
         id: 'kb-1',
         targetWorkspaceId: null,
@@ -290,6 +333,8 @@ describe('knowledgeBaseRouter', () => {
         'test-user',
         undefined,
       );
+      expect(mockPermissionRemoveAll).toHaveBeenCalledWith('knowledgeBase', 'kb-1');
+      expect(mockPermissionSetAccessLevel).not.toHaveBeenCalled();
     });
 
     it('returns a stable error code when the library no longer exists', async () => {
@@ -325,16 +370,6 @@ describe('knowledgeBaseRouter', () => {
         'edit',
         'test-user',
       );
-    });
-
-    it('only clears the source row when moving to personal scope', async () => {
-      await caller.transferKnowledgeBase({
-        id: 'kb-1',
-        targetWorkspaceId: null,
-      });
-
-      expect(mockPermissionRemoveAll).toHaveBeenCalledWith('knowledgeBase', 'kb-1');
-      expect(mockPermissionSetAccessLevel).not.toHaveBeenCalled();
     });
   });
 

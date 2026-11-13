@@ -6,6 +6,23 @@ import type { MarketService } from '@/server/services/market';
 import type { SandboxInitialization } from '../environmentInit';
 import type { SandboxProvider, SandboxProviderKind } from '../types';
 
+const pythonSandboxCapabilities = (): SandboxProvider['capabilities'] => ({
+  backgroundCommands: true,
+  exportFile: true,
+  files: true,
+  languages: ['python'],
+  persistentSession: true,
+  shell: true,
+  skillScripts: true,
+});
+
+const uploadServiceOptions = (fileService: FileService) => ({
+  fileService,
+  marketService: {} as MarketService,
+  topicId: 'topic-1',
+  userId: 'user-1',
+});
+
 describe('normalizeSandboxCommandResult', () => {
   it('preserves recreation when the command fails inside a successful response', async () => {
     const { normalizeSandboxCommandResult } = await import('../service');
@@ -58,15 +75,7 @@ describe('SandboxMiddlewareService', () => {
   });
 
   describe('initializing from an environment', () => {
-    const capabilities = {
-      backgroundCommands: true,
-      exportFile: true,
-      files: true,
-      languages: ['python'],
-      persistentSession: true,
-      shell: true,
-      skillScripts: true,
-    };
+    const capabilities = pythonSandboxCapabilities();
     const init = {
       environmentId: 'env-1',
       name: 'Hello',
@@ -217,15 +226,7 @@ describe('SandboxMiddlewareService', () => {
       success: true,
     }));
     const provider = {
-      capabilities: {
-        backgroundCommands: true,
-        exportFile: true,
-        files: true,
-        languages: ['python'],
-        persistentSession: true,
-        shell: true,
-        skillScripts: true,
-      },
+      capabilities: pythonSandboxCapabilities(),
       callTool: vi.fn(),
       exportFileToUploadUrl,
       kind: 'onlyboxes',
@@ -243,12 +244,7 @@ describe('SandboxMiddlewareService', () => {
       })),
     } as unknown as FileService;
 
-    const service = new TestSandboxMiddlewareService(provider, {
-      fileService,
-      marketService: {} as MarketService,
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    const service = new TestSandboxMiddlewareService(provider, uploadServiceOptions(fileService));
 
     const result = await service.exportAndUploadFile('/workspace/result.csv', 'result.csv');
 
@@ -285,15 +281,7 @@ describe('SandboxMiddlewareService', () => {
       success: true,
     }));
     const provider = {
-      capabilities: {
-        backgroundCommands: true,
-        exportFile: true,
-        files: true,
-        languages: ['python'],
-        persistentSession: true,
-        shell: true,
-        skillScripts: true,
-      },
+      capabilities: pythonSandboxCapabilities(),
       callTool: vi.fn(),
       exportFileToUploadUrl,
       kind: 'onlyboxes',
@@ -308,12 +296,7 @@ describe('SandboxMiddlewareService', () => {
       getFileMetadata: vi.fn(async () => ({ contentLength: 42, contentType: 'text/csv' })),
     } as unknown as FileService;
 
-    const service = new TestSandboxMiddlewareService(provider, {
-      fileService,
-      marketService: {} as MarketService,
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    const service = new TestSandboxMiddlewareService(provider, uploadServiceOptions(fileService));
 
     const result = await service.exportAndUploadFile('/workspace/result.csv', 'result.csv', {
       storageName: 'deadbeefdeadbeef-result.csv',
@@ -342,15 +325,7 @@ describe('SandboxMiddlewareService', () => {
 
   it('normalizes provider export failures before storage metadata is read', async () => {
     const provider = {
-      capabilities: {
-        backgroundCommands: true,
-        exportFile: true,
-        files: true,
-        languages: ['python'],
-        persistentSession: true,
-        shell: true,
-        skillScripts: true,
-      },
+      capabilities: pythonSandboxCapabilities(),
       callTool: vi.fn(),
       exportFileToUploadUrl: vi.fn(async () => ({
         error: { message: 'no such file', name: 'not_found' },
@@ -366,12 +341,7 @@ describe('SandboxMiddlewareService', () => {
       getFileMetadata: vi.fn(),
     } as unknown as FileService;
 
-    const service = new SandboxMiddlewareService(provider, {
-      fileService,
-      marketService: {} as MarketService,
-      topicId: 'topic-1',
-      userId: 'user-1',
-    });
+    const service = new SandboxMiddlewareService(provider, uploadServiceOptions(fileService));
 
     const result = await service.exportAndUploadFile('/workspace/missing.txt', 'missing.txt');
 

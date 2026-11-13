@@ -148,6 +148,24 @@ describe('MessageList Body', () => {
     expect(screen.queryByText('Loading agents')).not.toBeInTheDocument();
     expect(screen.getByText('# Team')).toBeInTheDocument();
   });
+
+  // Each pinned row used to paint its own tinted card, so the pinned rows read as separate items.
+  it('renders the pinned rows together in one block', () => {
+    home.isInit = true;
+    home.items = [
+      { id: 'p1', pinned: true, title: 'Pinned 1', type: 'agent', updatedAt: new Date() },
+      { id: 'p2', pinned: true, title: 'Pinned 2', type: 'agent', updatedAt: new Date() },
+      { id: 'a', pinned: false, title: 'Agent A', type: 'agent', updatedAt: new Date() },
+    ];
+
+    render(createElement(Body));
+
+    const group = screen.getByRole('group', { name: 'navPanel.pinned' });
+    expect(group).toHaveTextContent('Pinned 1');
+    expect(group).toHaveTextContent('Pinned 2');
+    expect(group).not.toHaveTextContent('Agent A');
+    expect(group).not.toHaveTextContent('Lobe AI row');
+  });
 });
 
 describe('MessageList Body Channel rows', () => {

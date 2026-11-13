@@ -28,9 +28,8 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { GoalDecisionAsker } from '@/features/AgentGoals/GoalDecision';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
-import { mutate as globalMutate } from '@/libs/swr';
-import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
+import { useVerifyStore } from '@/store/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { useAcceptanceComments } from '../Comments/hooks';
@@ -385,7 +384,7 @@ const GateDecision = memo<{
     try {
       await action();
       await mutate();
-      void globalMutate(isAcceptanceListKey);
+      void useVerifyStore.getState().refreshAcceptanceLists();
       onDecided?.(decision);
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
@@ -494,7 +493,10 @@ interface GateReviewProps {
 const GateReview = memo<GateReviewProps>(({ dossier, inModal, onClose, onDecided }) => {
   const { t } = useTranslation('verify');
   const [selected, setSelected] = useState<Selection>();
-  const { extraFiles, filesOpen, toggleFiles } = usePlanFiles(dossier.plan.skillId);
+  const { extraFiles, filesOpen, toggleFiles } = usePlanFiles(
+    dossier.plan.skillId,
+    dossier.plan.revision,
+  );
   const average =
     dossier.units.reduce((sum, unit) => sum + unit.tokens, 0) / Math.max(1, dossier.units.length);
   const probes = dossier.kind === 'probes';

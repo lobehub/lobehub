@@ -45,6 +45,7 @@ export * from './goalSubscription';
 export * from './goalTrace';
 export * from './linear';
 export * from './llmGenerationTracing';
+export * from './meeting';
 export * from './message';
 export * from './messengerAccountLink';
 export * from './messengerInstallation';

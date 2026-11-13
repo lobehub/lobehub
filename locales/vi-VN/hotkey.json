@@ -27,6 +27,8 @@
   "openChatSettings.title": "Mở Cài Đặt Trò Chuyện",
   "openHotkeyHelper.desc": "Xem hướng dẫn cho tất cả phím tắt",
   "openHotkeyHelper.title": "Mở Trợ Giúp Phím Tắt",
+  "openTaskFilter.desc": "Mở menu bộ lọc trên trang Nhiệm Vụ",
+  "openTaskFilter.title": "Lọc Nhiệm Vụ",
   "prevTab.desc": "Chuyển sang tab trước đó trong ứng dụng Desktop; quay lại tab cuối cùng khi bắt đầu",
   "prevTab.title": "Tab Trước",
   "regenerateMessage.desc": "Tạo lại tin nhắn cuối cùng",

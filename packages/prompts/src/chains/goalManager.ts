@@ -27,8 +27,10 @@ import { GOAL_TURN_TAG } from '@lobechat/const';
  * v14 lets that distill turn send probes back: a probe whose delivery falls
  * short of the distilled plan is named in `rerun` and runs again on it before
  * the gate judges the round.
+ * v15 adds the retry_after_reset effect, for an answer that
+ * promises to wait out a usage limit.
  */
-export const GOAL_MANAGER_PROMPT_VERSION = 'v14';
+export const GOAL_MANAGER_PROMPT_VERSION = 'v15';
 
 export interface GoalManagerFeedbackNote {
   /** `user`, or `agent <id>` for an agent-written comment. */
@@ -218,7 +220,7 @@ const contract = (input: GoalManagerPromptInput) =>
     '{"action":"verify","reason":"why the existing evidence warrants independent Goal verification"}',
     '{"action":"retry","taskId":"failed Task ID","failedOperationId":"latest confirmed failure ID","reason":"diagnosis and checkpoint-aware recovery instruction"}',
     '{"action":"escalate","reason":"what you found and why only the owner can unblock it","ask":{"question":"the one decision the owner has to make, in the Goal language","options":[{"id":"waive","label":"short answer","description":"what happens if they choose it","effect":"retry"},{"id":"keep","label":"short answer","description":"what happens if they choose it","effect":"retire"}],"recommendedOptionId":"waive"}}',
-    'When you escalate, ask the actual decision with 2-4 concrete answers in "ask" instead of burying it in reason: the owner sees the question with your answers as buttons, your reason as the evidence, and your recommendation marked. When you are taking over a blocked Task, every option needs an effect: "retry" sends the Task back with the chosen answer as guidance, "retire" drops it. On an ordinary planning turn options need no effect; the owner\'s answer appears as a resolved decision in lh goal show on your next turn, and you plan from it. Name each option id after the answer itself (e.g. "waive"); retry, retire, fail, assume and answer are reserved for the coordinator and will be refused.',
+    'When you escalate, ask the actual decision with 2-4 concrete answers in "ask" instead of burying it in reason: the owner sees the question with your answers as buttons, your reason as the evidence, and your recommendation marked. When you are taking over a blocked Task, every option needs an effect: "retry" sends the Task back now with the chosen answer as guidance, "retry_after_reset" keeps a Task stopped by a usage limit held and reruns it once the limit resets (use it for any answer that promises to wait, since "retry" starts a run immediately), "retire" drops it. On an ordinary planning turn options need no effect; the owner\'s answer appears as a resolved decision in lh goal show on your next turn, and you plan from it. Name each option id after the answer itself (e.g. "waive"); retry, retire, fail, assume and answer are reserved for the coordinator and will be refused.',
   ].join('\n');
 
 export const buildGoalManagerPrompt = (input: GoalManagerPromptInput) => {

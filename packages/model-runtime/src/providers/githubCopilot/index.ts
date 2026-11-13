@@ -5,13 +5,13 @@ import OpenAI from 'openai';
 
 import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFactory';
 import { type LobeRuntimeAI } from '../../core/BaseAI';
-import {
-  convertOpenAIMessages,
-  convertOpenAIResponseInputs,
-  pruneReasoningPayload,
-} from '../../core/contextBuilders/openai';
+import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
 import { transformResponseAPIToStream } from '../../core/openaiCompatibleFactory';
-import { AnthropicStream, OpenAIResponsesStream, OpenAIStream } from '../../core/streams';
+import { convertOpenAIMessages } from '../../core/protocols/openaiChatCompletions/messages';
+import { OpenAIStream } from '../../core/protocols/openaiChatCompletions/stream';
+import { convertOpenAIResponseInputs } from '../../core/protocols/openaiResponses/inputs';
+import { OpenAIResponsesStream } from '../../core/protocols/openaiResponses/stream';
+import { AnthropicStream } from '../../core/streams';
 import { type ChatMethodOptions, type ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';

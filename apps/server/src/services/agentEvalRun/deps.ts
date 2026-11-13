@@ -3,6 +3,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import {
   AgentEvalBenchmarkModel,
   AgentEvalDatasetModel,
+  AgentEvalEnvironmentModel,
   AgentEvalExperimentModel,
   AgentEvalRunModel,
   AgentEvalRunTopicModel,
@@ -11,6 +12,7 @@ import {
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
+import { AgentEvalExecutionRepo } from '@/database/repositories/agentEvalExecution';
 import { AgentService } from '@/server/services/agent';
 
 import type { EvalRunDeps } from './types';
@@ -29,6 +31,7 @@ export const createEvalRunDeps = (
   const runModel = new AgentEvalRunModel(db, userId, workspaceId);
   const benchmarkModel = new AgentEvalBenchmarkModel(db, userId, workspaceId);
   const datasetModel = new AgentEvalDatasetModel(db, userId, workspaceId);
+  const environmentModel = new AgentEvalEnvironmentModel(db, userId, workspaceId);
   const experimentModel = new AgentEvalExperimentModel(db, userId, workspaceId);
   const runTopicModel = new AgentEvalRunTopicModel(db, userId, workspaceId);
   const testCaseModel = new AgentEvalTestCaseModel(db, userId, workspaceId);
@@ -42,7 +45,9 @@ export const createEvalRunDeps = (
     benchmarkModel,
     datasetModel,
     db,
+    environmentModel,
     experimentModel,
+    executionRepo: new AgentEvalExecutionRepo(db, userId, workspaceId),
     messageModel,
     runModel,
     runTopicModel,

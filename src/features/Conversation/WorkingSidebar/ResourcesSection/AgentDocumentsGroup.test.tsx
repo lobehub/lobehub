@@ -273,6 +273,34 @@ const webDocRow = {
   updatedAt: new Date(),
 };
 
+const mixedDocumentListState = () => ({
+  data: [skillBundleRow, skillIndexRow, fileDocRow, webDocRow],
+  error: undefined,
+  isLoading: false,
+  mutate: vi.fn(),
+});
+
+const skillDocumentListState = () => ({
+  data: [skillBundleRow, skillIndexRow],
+  error: undefined,
+  isLoading: false,
+  mutate: vi.fn(),
+});
+
+const fileDocumentListState = () => ({
+  data: [fileDocRow, webDocRow],
+  error: undefined,
+  isLoading: false,
+  mutate: vi.fn(),
+});
+
+const singleFileListState = () => ({
+  data: [fileDocRow],
+  error: undefined,
+  isLoading: false,
+  mutate: vi.fn(),
+});
+
 describe('AgentDocumentsGroup', () => {
   beforeEach(() => {
     documentListMock.mockReset();
@@ -301,12 +329,7 @@ describe('AgentDocumentsGroup', () => {
   });
 
   it('defaults to the Skills tab and renders skill bundles via SkillsList', () => {
-    documentListMock.mockReturnValue({
-      data: [skillBundleRow, skillIndexRow, fileDocRow, webDocRow],
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
-    });
+    documentListMock.mockReturnValue(mixedDocumentListState());
 
     render(<AgentDocumentsGroup />);
 
@@ -345,12 +368,7 @@ describe('AgentDocumentsGroup', () => {
       projectItems: [projectItem],
       raw: undefined,
     });
-    documentListMock.mockReturnValue({
-      data: [fileDocRow, webDocRow],
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
-    });
+    documentListMock.mockReturnValue(fileDocumentListState());
 
     render(<AgentDocumentsGroup showLocalProjectSkills workingDirectory="/repo" />);
 
@@ -397,12 +415,7 @@ describe('AgentDocumentsGroup', () => {
   });
 
   it('opens the SKILL.md document in the portal when clicking a skill bundle row', () => {
-    documentListMock.mockReturnValue({
-      data: [skillBundleRow, skillIndexRow],
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
-    });
+    documentListMock.mockReturnValue(skillDocumentListState());
 
     render(<AgentDocumentsGroup />);
 
@@ -427,12 +440,7 @@ describe('AgentDocumentsGroup', () => {
   });
 
   it('opens a child file by relative path through onOpenFile', () => {
-    documentListMock.mockReturnValue({
-      data: [skillBundleRow, skillIndexRow],
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
-    });
+    documentListMock.mockReturnValue(skillDocumentListState());
 
     render(<AgentDocumentsGroup />);
 
@@ -443,12 +451,7 @@ describe('AgentDocumentsGroup', () => {
 
   it('routes directly when opening a skill from document mode', () => {
     useParamsMock.mockReturnValue({ docId: 'doc-content-1' });
-    documentListMock.mockReturnValue({
-      data: [skillBundleRow, skillIndexRow],
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
-    });
+    documentListMock.mockReturnValue(skillDocumentListState());
 
     render(<AgentDocumentsGroup activeFilter="skills" />);
 
@@ -458,12 +461,7 @@ describe('AgentDocumentsGroup', () => {
   });
 
   it('renders the document tree when switching to the Documents tab', () => {
-    documentListMock.mockReturnValue({
-      data: [skillBundleRow, skillIndexRow, fileDocRow, webDocRow],
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
-    });
+    documentListMock.mockReturnValue(mixedDocumentListState());
 
     render(<AgentDocumentsGroup />);
 
@@ -478,12 +476,7 @@ describe('AgentDocumentsGroup', () => {
 
   it('contains document tree render failures in an alert boundary', () => {
     documentExplorerShouldThrow.current = true;
-    documentListMock.mockReturnValue({
-      data: [fileDocRow],
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
-    });
+    documentListMock.mockReturnValue(singleFileListState());
 
     render(<AgentDocumentsGroup activeFilter="documents" />);
 
@@ -492,12 +485,7 @@ describe('AgentDocumentsGroup', () => {
   });
 
   it('opens document tree files in the portal by default', () => {
-    documentListMock.mockReturnValue({
-      data: [skillBundleRow, skillIndexRow, fileDocRow, webDocRow],
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
-    });
+    documentListMock.mockReturnValue(mixedDocumentListState());
 
     render(<AgentDocumentsGroup />);
 
@@ -510,12 +498,7 @@ describe('AgentDocumentsGroup', () => {
 
   it('routes document tree files directly in document mode', () => {
     useParamsMock.mockReturnValue({ docId: 'doc-content-1' });
-    documentListMock.mockReturnValue({
-      data: [skillBundleRow, skillIndexRow, fileDocRow, webDocRow],
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
-    });
+    documentListMock.mockReturnValue(mixedDocumentListState());
 
     render(<AgentDocumentsGroup />);
 
@@ -527,12 +510,7 @@ describe('AgentDocumentsGroup', () => {
 
   it('defaults to Documents first in document mode and keeps Skills as the second tab', () => {
     useParamsMock.mockReturnValue({ docId: 'doc-content-1' });
-    documentListMock.mockReturnValue({
-      data: [skillBundleRow, skillIndexRow, fileDocRow, webDocRow],
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
-    });
+    documentListMock.mockReturnValue(mixedDocumentListState());
 
     render(<AgentDocumentsGroup />);
 
@@ -553,12 +531,7 @@ describe('AgentDocumentsGroup', () => {
 
   it('can be controlled by an outer page-mode tab bar', () => {
     useParamsMock.mockReturnValue({ docId: 'doc-content-1' });
-    documentListMock.mockReturnValue({
-      data: [skillBundleRow, skillIndexRow, fileDocRow, webDocRow],
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
-    });
+    documentListMock.mockReturnValue(mixedDocumentListState());
 
     const { rerender } = render(
       <AgentDocumentsGroup activeFilter="skills" showFilterTabs={false} />,
@@ -576,12 +549,7 @@ describe('AgentDocumentsGroup', () => {
   });
 
   it('resets to Documents when entering document mode', () => {
-    documentListMock.mockReturnValue({
-      data: [fileDocRow, webDocRow],
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
-    });
+    documentListMock.mockReturnValue(fileDocumentListState());
 
     const { rerender } = render(<AgentDocumentsGroup />);
     fireEvent.click(screen.getByText('Web'));
@@ -636,12 +604,7 @@ describe('AgentDocumentsGroup', () => {
   });
 
   it('falls back to a single empty placeholder when every skill source is empty', () => {
-    documentListMock.mockReturnValue({
-      data: [fileDocRow, webDocRow],
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
-    });
+    documentListMock.mockReturnValue(fileDocumentListState());
 
     render(<AgentDocumentsGroup />);
 
@@ -659,12 +622,7 @@ describe('AgentDocumentsGroup', () => {
       });
 
     beforeEach(() => {
-      documentListMock.mockReturnValue({
-        data: [skillBundleRow, skillIndexRow],
-        error: undefined,
-        isLoading: false,
-        mutate: vi.fn(),
-      });
+      documentListMock.mockReturnValue(skillDocumentListState());
     });
 
     it('filters skills and shows a no-match state while keeping the input', async () => {
@@ -702,12 +660,7 @@ describe('AgentDocumentsGroup', () => {
     });
 
     it('hides the search bar when there are no skills at all', () => {
-      documentListMock.mockReturnValue({
-        data: [fileDocRow],
-        error: undefined,
-        isLoading: false,
-        mutate: vi.fn(),
-      });
+      documentListMock.mockReturnValue(singleFileListState());
       render(<AgentDocumentsGroup />);
 
       expect(
@@ -717,12 +670,7 @@ describe('AgentDocumentsGroup', () => {
   });
 
   it('shows the web empty state when no web items are present', () => {
-    documentListMock.mockReturnValue({
-      data: [fileDocRow],
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
-    });
+    documentListMock.mockReturnValue(singleFileListState());
 
     render(<AgentDocumentsGroup />);
     fireEvent.click(screen.getByText('Web'));

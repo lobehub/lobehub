@@ -10,6 +10,7 @@ import pMap from 'p-map';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
+import { TopicModel } from '@/database/models/topic';
 import type { ChannelClaim } from '@/database/repositories/channel';
 import { ChannelExecutionRepository } from '@/database/repositories/channel';
 import { agentOperations, channelJobs, channelMembers, channels } from '@/database/schemas';
@@ -17,9 +18,11 @@ import { getServerDefaultAgentConfig } from '@/server/globalConfig';
 import { extractTextFromMessage } from '@/server/services/agentRuntime/CompletionLifecycle/messageContent';
 import type { AgentHook } from '@/server/services/agentRuntime/hooks/types';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { detectNoReply } from '@/server/services/conversationWake/noReply';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
+import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { resolveChannelAttachments } from './attachments';
 import { ChannelRoutingService } from './ChannelRoutingService';
@@ -194,7 +197,11 @@ export class ChannelCoordinator {
         hooks: [completion],
         instructions: CHANNEL_INSTRUCTIONS,
         maxSteps: 32,
-        prompt: buildChannelPrompt(job.manifest, input, { context }),
+        prompt: buildChannelPrompt(job.manifest, input, {
+          context: context.messages,
+          omitted: context.omitted,
+          wake: job.wake,
+        }),
         reservedOperationId: job.operationId,
         trigger: 'channel',
         userInterventionConfig: { approvalMode: 'headless' },
@@ -248,10 +255,16 @@ export class ChannelCoordinator {
       return;
     }
     if (operation.status === 'done') {
+      // Already settled in silence: there is no draft to publish, only the writer to release.
+      if (job.status === 'silent') {
+        await this.stopWriters([job]);
+        return;
+      }
       if (job.publicationRevoked) {
         await this.stopWriters([job]);
         return;
       }
+      let reply = job.draft;
       if (job.draft === null) {
         if (!operation.userId || !job.topicId) return;
         const final = await new MessageModel(
@@ -260,6 +273,16 @@ export class ChannelCoordinator {
           operation.workspaceId ?? undefined,
         ).findLatestAssistantByOperationId({ operationId, topicId: job.topicId });
         const content = final?.tools?.length ? undefined : extractTextFromMessage(final);
+        // A wake nobody asked for may end in silence. Settled like a reply, not a failure.
+        // A run that stopped on a tool call (out of steps) did not choose silence: it failed.
+        const silence = final?.tools?.length
+          ? undefined
+          : detectNoReply({ content, wakeKind: job.wake?.kind });
+        if (silence && (await this.executions.silence(channelId, jobId, silence.reason))) {
+          await this.stopWriters([job]);
+          await notifyChannel(this.db, channelId);
+          return;
+        }
         if (!content?.trim()) {
           await this.stopWriters([job]);
           await notifyChannel(this.db, channelId);
@@ -267,10 +290,17 @@ export class ChannelCoordinator {
         }
         await this.executions.accepted(channelId, jobId);
         await this.executions.saveDraft(channelId, jobId, content);
+        reply = content;
       }
       await this.executions.publish(channelId, jobId);
       await this.stopWriters([job]);
       await notifyChannel(this.db, channelId);
+      this.summarizeTopicTitle(channelId, jobId, {
+        lastAssistantContent: reply,
+        topicId: job.topicId,
+        userId: operation.userId,
+        workspaceId: operation.workspaceId,
+      });
     } else if (['error', 'interrupted', 'abandoned'].includes(operation.status)) {
       await this.executions.fail(channelId, jobId, {
         message: 'Agent execution ended without a reply',
@@ -279,6 +309,54 @@ export class ChannelCoordinator {
       // Device cancellation/unknown outcomes keep the physical writer until confirmed by stop.
     }
   };
+
+  /**
+   * Names a responder's topic after its first published reply, as the bot callback does. The
+   * title comes from the request itself: the topic's user message is the wrapped Channel prompt.
+   * Best-effort, so it never affects delivery.
+   */
+  private summarizeTopicTitle(
+    channelId: string,
+    jobId: string,
+    {
+      lastAssistantContent,
+      topicId,
+      userId,
+      workspaceId,
+    }: {
+      lastAssistantContent: string | null;
+      topicId: string | null;
+      userId: string | null;
+      workspaceId: string | null;
+    },
+  ): void {
+    if (!lastAssistantContent || !topicId || !userId) return;
+
+    const topicModel = new TopicModel(this.db, userId, workspaceId ?? undefined);
+    topicModel
+      .findById(topicId)
+      .then(async (topic) => {
+        if (topic?.title) return;
+
+        const input = await this.executions.input(channelId, jobId);
+        const userPrompt = input.map((message) => message.content).join('\n');
+        if (!userPrompt) return;
+
+        const title = await new SystemAgentService(
+          this.db,
+          userId,
+          workspaceId ?? undefined,
+        ).generateTopicTitle({ lastAssistantContent, topicId, userPrompt });
+        if (!title) return;
+
+        await topicModel.update(topicId, { title });
+        // Viewers read the title from the Channel view, which was sent before it existed.
+        await notifyChannel(this.db, channelId);
+      })
+      .catch((error) => {
+        console.error('[channel:summarizeTopicTitle]', error);
+      });
+  }
 
   stopWriters = async (
     jobs: Array<{ channelId: string; id: string; operationId: string | null }>,

@@ -4,6 +4,52 @@ import { createEnableChecker } from '../enableCheckerFactory';
 import { ToolsEngine } from '../ToolsEngine';
 import type { LobeToolManifest } from '../types';
 
+const manifestOptions = (manifestSchemas: LobeToolManifest[]) => ({
+  manifestSchemas,
+});
+
+const defaultToolOptions = (manifestSchemas: LobeToolManifest[], defaultToolIds: string[]) => ({
+  manifestSchemas,
+  defaultToolIds,
+  enableChecker: () => true,
+  functionCallChecker: () => true,
+});
+
+const webSearchInput = () => ({
+  toolIds: ['lobe-web-browsing'],
+  model: 'gpt-4',
+  provider: 'openai',
+});
+
+const withoutDefaultTools = (toolIds: string[]) => ({
+  toolIds,
+  model: 'gpt-4',
+  provider: 'openai',
+  skipDefaultTools: true,
+});
+
+const firstPluginManifest = (): LobeToolManifest => ({
+  identifier: 'plugin-1',
+  api: [{ name: 'api-1', description: 'API 1', parameters: {} }],
+  meta: {
+    title: 'Plugin 1',
+    description: 'Plugin 1 description',
+    avatar: '🔧',
+  },
+  type: 'default',
+});
+
+const secondPluginManifest = (): LobeToolManifest => ({
+  identifier: 'plugin-2',
+  api: [{ name: 'api-2', description: 'API 2', parameters: {} }],
+  meta: {
+    title: 'Plugin 2',
+    description: 'Plugin 2 description',
+    avatar: '⚙️',
+  },
+  type: 'default',
+});
+
 // Mock manifest schemas for testing
 const mockWebBrowsingManifest: LobeToolManifest = {
   api: [
@@ -52,9 +98,7 @@ const mockDalleManifest: LobeToolManifest = {
 describe('ToolsEngine', () => {
   describe('constructor', () => {
     it('should initialize with manifest schemas', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
-      });
+      const engine = new ToolsEngine(manifestOptions([mockWebBrowsingManifest, mockDalleManifest]));
 
       expect(engine.hasPlugin('lobe-web-browsing')).toBe(true);
       expect(engine.hasPlugin('dalle')).toBe(true);
@@ -62,9 +106,7 @@ describe('ToolsEngine', () => {
     });
 
     it('should store available plugins', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
-      });
+      const engine = new ToolsEngine(manifestOptions([mockWebBrowsingManifest, mockDalleManifest]));
 
       const availablePlugins = engine.getAvailablePlugins();
       expect(availablePlugins).toEqual(['lobe-web-browsing', 'dalle']);
@@ -96,11 +138,7 @@ describe('ToolsEngine', () => {
         functionCallChecker: () => true,
       });
 
-      const result = engine.generateTools({
-        toolIds: ['lobe-web-browsing'],
-        model: 'gpt-4',
-        provider: 'openai',
-      });
+      const result = engine.generateTools(webSearchInput());
 
       expect(result).toBeUndefined();
       expect(mockEnableChecker).toHaveBeenCalledWith({
@@ -119,11 +157,7 @@ describe('ToolsEngine', () => {
         functionCallChecker: () => true,
       });
 
-      const result = engine.generateTools({
-        toolIds: ['lobe-web-browsing'],
-        model: 'gpt-4',
-        provider: 'openai',
-      });
+      const result = engine.generateTools(webSearchInput());
 
       expect(result).toEqual([
         {
@@ -349,9 +383,7 @@ describe('ToolsEngine', () => {
 
   describe('plugin management', () => {
     it('should allow adding new plugin manifest', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest],
-      });
+      const engine = new ToolsEngine(manifestOptions([mockWebBrowsingManifest]));
 
       expect(engine.hasPlugin('dalle')).toBe(false);
 
@@ -362,9 +394,7 @@ describe('ToolsEngine', () => {
     });
 
     it('should allow removing plugin manifest', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
-      });
+      const engine = new ToolsEngine(manifestOptions([mockWebBrowsingManifest, mockDalleManifest]));
 
       expect(engine.hasPlugin('dalle')).toBe(true);
 
@@ -375,9 +405,7 @@ describe('ToolsEngine', () => {
     });
 
     it('should allow updating all manifest schemas', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest],
-      });
+      const engine = new ToolsEngine(manifestOptions([mockWebBrowsingManifest]));
 
       expect(engine.getAvailablePlugins()).toEqual(['lobe-web-browsing']);
 
@@ -389,9 +417,7 @@ describe('ToolsEngine', () => {
 
   describe('getEnabledPluginManifests', () => {
     it('should return empty Map when no tool IDs provided', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
-      });
+      const engine = new ToolsEngine(manifestOptions([mockWebBrowsingManifest, mockDalleManifest]));
 
       const result = engine.getEnabledPluginManifests([]);
 
@@ -399,9 +425,7 @@ describe('ToolsEngine', () => {
     });
 
     it('should return Map with plugin manifests for given tool IDs', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
-      });
+      const engine = new ToolsEngine(manifestOptions([mockWebBrowsingManifest, mockDalleManifest]));
 
       const result = engine.getEnabledPluginManifests(['lobe-web-browsing', 'dalle']);
 
@@ -424,9 +448,7 @@ describe('ToolsEngine', () => {
     });
 
     it('should handle non-existent plugins gracefully', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest],
-      });
+      const engine = new ToolsEngine(manifestOptions([mockWebBrowsingManifest]));
 
       const result = engine.getEnabledPluginManifests(['lobe-web-browsing', 'non-existent']);
 
@@ -463,9 +485,7 @@ describe('ToolsEngine', () => {
 
   describe('getAllPluginManifests', () => {
     it('should return all plugin manifests', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
-      });
+      const engine = new ToolsEngine(manifestOptions([mockWebBrowsingManifest, mockDalleManifest]));
 
       const result = engine.getAllPluginManifests();
 
@@ -485,9 +505,7 @@ describe('ToolsEngine', () => {
     });
 
     it('should return a new Map instance (not the internal one)', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest],
-      });
+      const engine = new ToolsEngine(manifestOptions([mockWebBrowsingManifest]));
 
       const result1 = engine.getAllPluginManifests();
       const result2 = engine.getAllPluginManifests();
@@ -501,9 +519,7 @@ describe('ToolsEngine', () => {
     });
 
     it('should reflect changes after adding a plugin', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest],
-      });
+      const engine = new ToolsEngine(manifestOptions([mockWebBrowsingManifest]));
 
       let result = engine.getAllPluginManifests();
       expect(result.size).toBe(1);
@@ -516,9 +532,7 @@ describe('ToolsEngine', () => {
     });
 
     it('should reflect changes after removing a plugin', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
-      });
+      const engine = new ToolsEngine(manifestOptions([mockWebBrowsingManifest, mockDalleManifest]));
 
       let result = engine.getAllPluginManifests();
       expect(result.size).toBe(2);
@@ -538,11 +552,7 @@ describe('ToolsEngine', () => {
         functionCallChecker: () => true,
       });
 
-      const result = engine.generateTools({
-        toolIds: ['lobe-web-browsing'],
-        model: 'gpt-4',
-        provider: 'openai',
-      });
+      const result = engine.generateTools(webSearchInput());
 
       expect(result).toBeDefined();
       expect(result).toHaveLength(1);
@@ -554,11 +564,7 @@ describe('ToolsEngine', () => {
         enableChecker: () => true,
       });
 
-      const result = engine.generateTools({
-        toolIds: ['lobe-web-browsing'],
-        model: 'gpt-4',
-        provider: 'openai',
-      });
+      const result = engine.generateTools(webSearchInput());
 
       expect(result).toBeDefined();
       expect(result).toHaveLength(1);
@@ -568,26 +574,8 @@ describe('ToolsEngine', () => {
   describe('ToolsEngine Integration Tests (migrated from enabledSchema)', () => {
     // Mock manifest data similar to the original tool selector tests
     const mockManifests: LobeToolManifest[] = [
-      {
-        identifier: 'plugin-1',
-        api: [{ name: 'api-1', description: 'API 1', parameters: {} }],
-        meta: {
-          title: 'Plugin 1',
-          description: 'Plugin 1 description',
-          avatar: '🔧',
-        },
-        type: 'default',
-      },
-      {
-        identifier: 'plugin-2',
-        api: [{ name: 'api-2', description: 'API 2', parameters: {} }],
-        meta: {
-          title: 'Plugin 2',
-          description: 'Plugin 2 description',
-          avatar: '⚙️',
-        },
-        type: 'default',
-      },
+      firstPluginManifest(),
+      secondPluginManifest(),
       {
         identifier: 'plugin-3',
         api: [
@@ -854,28 +842,7 @@ describe('ToolsEngine', () => {
    */
   describe('enabledSchema Migration to ToolsEngine', () => {
     // Sample manifest data that mimics the old toolSelectors test data
-    const sampleManifests: LobeToolManifest[] = [
-      {
-        identifier: 'plugin-1',
-        api: [{ name: 'api-1', description: 'API 1', parameters: {} }],
-        meta: {
-          title: 'Plugin 1',
-          description: 'Plugin 1 description',
-          avatar: '🔧',
-        },
-        type: 'default',
-      },
-      {
-        identifier: 'plugin-2',
-        api: [{ name: 'api-2', description: 'API 2', parameters: {} }],
-        meta: {
-          title: 'Plugin 2',
-          description: 'Plugin 2 description',
-          avatar: '⚙️',
-        },
-        type: 'default',
-      },
-    ];
+    const sampleManifests: LobeToolManifest[] = [firstPluginManifest(), secondPluginManifest()];
 
     describe('advantages of ToolsEngine over enabledSchema', () => {
       it('provides detailed filtering information that enabledSchema could not', () => {
@@ -1042,12 +1009,9 @@ describe('ToolsEngine', () => {
     });
 
     it('should deduplicate between toolIds and defaultToolIds', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
-        defaultToolIds: ['lobe-web-browsing'],
-        enableChecker: () => true,
-        functionCallChecker: () => true,
-      });
+      const engine = new ToolsEngine(
+        defaultToolOptions([mockWebBrowsingManifest, mockDalleManifest], ['lobe-web-browsing']),
+      );
 
       const result = engine.generateTools({
         toolIds: ['lobe-web-browsing', 'dalle'],
@@ -1082,12 +1046,12 @@ describe('ToolsEngine', () => {
     });
 
     it('should handle complex deduplication scenarios', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
-        defaultToolIds: ['lobe-web-browsing', 'dalle'],
-        enableChecker: () => true,
-        functionCallChecker: () => true,
-      });
+      const engine = new ToolsEngine(
+        defaultToolOptions(
+          [mockWebBrowsingManifest, mockDalleManifest],
+          ['lobe-web-browsing', 'dalle'],
+        ),
+      );
 
       const result = engine.generateTools({
         toolIds: ['dalle', 'lobe-web-browsing', 'dalle', 'lobe-web-browsing'],
@@ -1238,12 +1202,7 @@ describe('ToolsEngine', () => {
       });
 
       // skipDefaultTools should still skip ALL defaults
-      const result = engine.generateToolsDetailed({
-        toolIds: [],
-        model: 'gpt-4',
-        provider: 'openai',
-        skipDefaultTools: true,
-      });
+      const result = engine.generateToolsDetailed(withoutDefaultTools([]));
 
       expect(result.enabledToolIds).toEqual([]);
       expect(result.tools).toBeUndefined();
@@ -1252,19 +1211,11 @@ describe('ToolsEngine', () => {
 
   describe('skipDefaultTools', () => {
     it('should not include default tools when skipDefaultTools is true in generateTools', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
-        defaultToolIds: ['lobe-web-browsing'],
-        enableChecker: () => true,
-        functionCallChecker: () => true,
-      });
+      const engine = new ToolsEngine(
+        defaultToolOptions([mockWebBrowsingManifest, mockDalleManifest], ['lobe-web-browsing']),
+      );
 
-      const result = engine.generateTools({
-        toolIds: ['dalle'],
-        model: 'gpt-4',
-        provider: 'openai',
-        skipDefaultTools: true,
-      });
+      const result = engine.generateTools(withoutDefaultTools(['dalle']));
 
       // Should only include dalle, not the default lobe-web-browsing
       expect(result).toHaveLength(1);
@@ -1272,19 +1223,11 @@ describe('ToolsEngine', () => {
     });
 
     it('should not include default tools when skipDefaultTools is true in generateToolsDetailed', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
-        defaultToolIds: ['lobe-web-browsing'],
-        enableChecker: () => true,
-        functionCallChecker: () => true,
-      });
+      const engine = new ToolsEngine(
+        defaultToolOptions([mockWebBrowsingManifest, mockDalleManifest], ['lobe-web-browsing']),
+      );
 
-      const result = engine.generateToolsDetailed({
-        toolIds: ['dalle'],
-        model: 'gpt-4',
-        provider: 'openai',
-        skipDefaultTools: true,
-      });
+      const result = engine.generateToolsDetailed(withoutDefaultTools(['dalle']));
 
       // Should only include dalle, not the default lobe-web-browsing
       expect(result.tools).toHaveLength(1);
@@ -1294,38 +1237,28 @@ describe('ToolsEngine', () => {
     });
 
     it('should return undefined when skipDefaultTools is true and toolIds is empty', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
-        defaultToolIds: ['lobe-web-browsing', 'dalle'],
-        enableChecker: () => true,
-        functionCallChecker: () => true,
-      });
+      const engine = new ToolsEngine(
+        defaultToolOptions(
+          [mockWebBrowsingManifest, mockDalleManifest],
+          ['lobe-web-browsing', 'dalle'],
+        ),
+      );
 
-      const result = engine.generateTools({
-        toolIds: [],
-        model: 'gpt-4',
-        provider: 'openai',
-        skipDefaultTools: true,
-      });
+      const result = engine.generateTools(withoutDefaultTools([]));
 
       // Should return undefined when no tools are available
       expect(result).toBeUndefined();
     });
 
     it('should return empty results when skipDefaultTools is true and toolIds is empty in generateToolsDetailed', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
-        defaultToolIds: ['lobe-web-browsing', 'dalle'],
-        enableChecker: () => true,
-        functionCallChecker: () => true,
-      });
+      const engine = new ToolsEngine(
+        defaultToolOptions(
+          [mockWebBrowsingManifest, mockDalleManifest],
+          ['lobe-web-browsing', 'dalle'],
+        ),
+      );
 
-      const result = engine.generateToolsDetailed({
-        toolIds: [],
-        model: 'gpt-4',
-        provider: 'openai',
-        skipDefaultTools: true,
-      });
+      const result = engine.generateToolsDetailed(withoutDefaultTools([]));
 
       // Should return empty results
       expect(result.tools).toBeUndefined();
@@ -1334,12 +1267,9 @@ describe('ToolsEngine', () => {
     });
 
     it('should include default tools when skipDefaultTools is false', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
-        defaultToolIds: ['lobe-web-browsing'],
-        enableChecker: () => true,
-        functionCallChecker: () => true,
-      });
+      const engine = new ToolsEngine(
+        defaultToolOptions([mockWebBrowsingManifest, mockDalleManifest], ['lobe-web-browsing']),
+      );
 
       const result = engine.generateTools({
         toolIds: ['dalle'],
@@ -1353,12 +1283,9 @@ describe('ToolsEngine', () => {
     });
 
     it('should include default tools when skipDefaultTools is undefined (default behavior)', () => {
-      const engine = new ToolsEngine({
-        manifestSchemas: [mockWebBrowsingManifest, mockDalleManifest],
-        defaultToolIds: ['lobe-web-browsing'],
-        enableChecker: () => true,
-        functionCallChecker: () => true,
-      });
+      const engine = new ToolsEngine(
+        defaultToolOptions([mockWebBrowsingManifest, mockDalleManifest], ['lobe-web-browsing']),
+      );
 
       const result = engine.generateTools({
         toolIds: ['dalle'],
@@ -1379,12 +1306,7 @@ describe('ToolsEngine', () => {
         functionCallChecker: () => true,
       });
 
-      const result = engine.generateTools({
-        toolIds: ['dalle'],
-        model: 'gpt-4',
-        provider: 'openai',
-        skipDefaultTools: true,
-      });
+      const result = engine.generateTools(withoutDefaultTools(['dalle']));
 
       // Should only include dalle
       expect(result).toHaveLength(1);

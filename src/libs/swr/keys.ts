@@ -1,6 +1,10 @@
 /**
  * Central SWR key registry
  *
+ * Frozen: do not add keys. New server data the UI paints goes through
+ * `local-replica` (`@/libs/replica`). `keys.frozen.test.ts` fails on any added
+ * key; when a key is migrated or removed, delete its entry there too.
+ *
  * Single source of truth for SWR cache keys, organized by business domain and
  * named with one convention: the first array element is `'<domain>:<resource>'`
  * (lowerCamel resource), followed by parameters.
@@ -46,6 +50,10 @@ export const channelKeys = {
     'channel:agentEnvironment',
     (channelId: string, memberId: string) =>
       ['channel:agentEnvironment', channelId, memberId] as const,
+  ),
+  wakeConfig: def(
+    'channel:wakeConfig',
+    (channelId: string) => ['channel:wakeConfig', channelId] as const,
   ),
   userCandidates: def(
     'channel:userCandidates',
@@ -153,14 +161,6 @@ export const topicKeys = {
   ),
 };
 
-// ---- acceptance comment -------------------------------------------------
-export const acceptanceCommentKeys = {
-  list: def('acceptanceComment:list', (acceptanceId: string) => [
-    'acceptanceComment:list',
-    acceptanceId,
-  ]),
-};
-
 // ---- acceptance collaboration -------------------------------------------
 export const acceptanceCollaborationKeys = {
   conversation: def('acceptanceCollaboration:conversation', (acceptanceId: string) => [
@@ -243,22 +243,6 @@ export const groupKeys = {
 // ---- thread -------------------------------------------------------------
 export const threadKeys = {
   list: def('thread:list', (topicId: string) => ['thread:list', topicId]),
-};
-
-// ---- recent -------------------------------------------------------------
-export const recentKeys = {
-  /** Home chat-only list; filtering happens before the server-side limit. */
-  topicList: def('recent:topicList', (limit: number, scope: string, view: 'mine' | 'team') => [
-    'recent:topicList',
-    limit,
-    scope,
-    view,
-  ]),
-  trayList: def('recent:trayList', (limit: number, scope: string) => [
-    'recent:trayList',
-    limit,
-    scope,
-  ]),
 };
 
 /**
@@ -635,6 +619,10 @@ export const scmKeys = {
     'scm:installations',
     workspaceId ?? null,
   ]),
+  repositories: def('scm:repositories', (workspaceId: string | null | undefined) => [
+    'scm:repositories',
+    workspaceId ?? null,
+  ]),
   wakeTarget: def('scm:wakeTarget', (topicId: string) => ['scm:wakeTarget', topicId]),
 };
 
@@ -658,59 +646,11 @@ export const expertiseKeys = {
   rules: def('expertise:rules', () => ['expertise:rules']),
 };
 
-/** The Acceptance list narrowing as key parts — mirrors `AcceptanceListQuery`. */
-interface AcceptanceListKeyQuery {
-  filter?: string;
-  projectId?: string | null;
-  scope?: string;
-  source?: string;
-}
-
-const acceptanceListKeyParts = ({ filter, projectId, scope, source }: AcceptanceListKeyQuery) => [
-  filter ?? '',
-  // `null` (no project) and `undefined` (any project) are different reads.
-  projectId === null ? '~none' : (projectId ?? ''),
-  scope ?? '',
-  source ?? '',
-];
-
 export const verifyKeys = {
-  /** Statuses for a known subject set. Ids are sorted+joined so the key is order-free. */
-  acceptanceStatuses: def(
-    'verify:acceptanceStatuses',
-    (subjectType: string, subjectIds: string[]) => [
-      'verify:acceptanceStatuses',
-      subjectType,
-      [...subjectIds].sort().join(','),
-    ],
-  ),
-  /**
-   * One scroll page of the list panel. Keyed by workspace + the status split +
-   * the cursor.
-   */
   acceptancePurgePreview: def('verify:acceptancePurgePreview', (acceptanceId: string) => [
     'verify:acceptancePurgePreview',
     acceptanceId,
   ]),
-  acceptancePage: def(
-    'verify:acceptancePage',
-    (workspaceId: string | undefined, query: AcceptanceListKeyQuery, cursor?: string) => [
-      'verify:acceptancePage',
-      workspaceId ?? '',
-      ...acceptanceListKeyParts(query),
-      cursor ?? '',
-    ],
-  ),
-  /** Query inputs are part of the key so server-side list filtering never reuses stale rows. */
-  acceptances: def(
-    'verify:acceptances',
-    (limit?: number, q?: string, query: AcceptanceListKeyQuery = {}) => [
-      'verify:acceptances',
-      String(limit ?? ''),
-      q ?? '',
-      ...acceptanceListKeyParts(query),
-    ],
-  ),
   criteria: def('verify:criteria', () => ['verify:criteria']),
   instruction: def('verify:instruction', (documentId: string) => [
     'verify:instruction',
@@ -734,32 +674,8 @@ export const verifyKeys = {
   tracing: def('verify:tracing', (tracingId: string) => ['verify:tracing', tracingId]),
 };
 
-/**
- * Match every cached Acceptance list read — the flat window's filter / limit /
- * search variants AND every loaded page of the panel's scroll feed. A write has
- * no idea how deep the panel has scrolled, so it invalidates the whole family.
- */
-export const isAcceptanceListKey = (key: unknown): boolean =>
-  Array.isArray(key) &&
-  (key[0] === verifyKeys.acceptances.root || key[0] === verifyKeys.acceptancePage.root);
-
 // ---- inbox / notifications ----------------------------------------------
 export const inboxKeys = {
-  navigationCounts: def('inbox:navigationCounts', (workspaceId: string | null) => [
-    'inbox:navigationCounts',
-    workspaceId,
-  ]),
-  notifications: def(
-    'inbox:notifications',
-    // Keyed by context: the server scopes the inbox to the active workspace
-    // (null = personal), so cached pages must never be reused across contexts.
-    (
-      workspaceId: string | null,
-      cursor: string | undefined,
-      category: string | undefined,
-      isRead: boolean | undefined,
-    ) => ['inbox:notifications', workspaceId, cursor, category, isRead],
-  ),
   unreadCount: def('inbox:unreadCount', (workspaceId: string | null) => [
     'inbox:unreadCount',
     workspaceId,
@@ -1061,7 +977,6 @@ export const swrKeys = {
   onboarding: onboardingKeys,
   openInApp: openInAppKeys,
   ragEval: ragEvalKeys,
-  recent: recentKeys,
   recommendations: recommendationsKeys,
   resource: resourceKeys,
   serverConfig: serverConfigKeys,
@@ -1072,7 +987,6 @@ export const swrKeys = {
   tool: toolKeys,
   topic: topicKeys,
   acceptanceCollaboration: acceptanceCollaborationKeys,
-  acceptanceComment: acceptanceCommentKeys,
   documentComment: documentCommentKeys,
   documentLike: documentLikeKeys,
   topicAction: topicActionKeys,

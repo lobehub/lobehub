@@ -38,7 +38,7 @@ import { useChannelMenu } from './useChannelMenu';
 import { useChannelsEnabled } from './useChannelsEnabled';
 import { useThreadMenu } from './useThreadMenu';
 
-// The connector runs down from the centre of the Channel's 18px icon (4px row padding + half
+// The connector runs down from the centre of the Channel's icon (4px row padding + half
 // its 28px slot) and bends into each thread row, the way Discord nests threads. A 2px line
 // centres on that axis; Chromium floors fractional border widths, so 1.5px drew as 1px.
 const SPINE_X = 17;
@@ -188,6 +188,8 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
           data-channel-id={channel.id}
           href={buildWorkspaceAwarePath(path, slug)}
           icon={Hash}
+          // The glyph fills its whole box, so it reads larger than other nav icons at 18px.
+          iconSize={14}
           title={channel.title}
           actions={() => (
             <DropdownMenu items={menuItems(channel)}>

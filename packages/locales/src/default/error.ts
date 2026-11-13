@@ -1,6 +1,8 @@
 export default {
   'asyncState.desc': 'Something went wrong while loading. Please try again.',
+  'asyncState.hideDetails': 'Hide details',
   'asyncState.metricLabel': 'Failed to load',
+  'asyncState.showDetails': 'Show details',
   'asyncState.title': 'Failed to load',
   'otherScope.desc': 'It belongs to {{name}}, not the space you are in now.',
   'otherScope.personal': 'your personal space',
@@ -129,6 +131,8 @@ export default {
     'The model service is currently under heavy load. Please try again later or switch to another model.',
   'response.FreePlanLimit':
     'You are currently a free user and cannot use this feature. Please upgrade to a paid plan to continue using it.',
+  'response.InsufficientBudgetForAgentRunFee':
+    'Not enough credits to pay the agent run fee. Each agent run carries a fee, even on your own CLI account. Top up or upgrade your plan, then try again.',
   'response.InsufficientBudgetForModel':
     'Your remaining balance is insufficient for this model. Please top up, upgrade your plan, or try a less expensive model.',
   'response.GoogleAIBlockReason.BLOCKLIST':

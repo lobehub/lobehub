@@ -3,7 +3,7 @@ import type { PropsWithChildren } from 'react';
 import { createElement } from 'react';
 import type { Cache } from 'swr';
 import { SWRConfig } from 'swr';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { verifyService } from '@/services/verify';
 
@@ -15,20 +15,12 @@ import {
   useVerifyReportBundle,
 } from './hooks';
 
-const useSWRInfiniteMock = vi.hoisted(() => vi.fn());
-
-vi.mock('swr/infinite', () => ({ default: useSWRInfiniteMock }));
-
 const createSWRWrapper = (cache: Cache) =>
   function SWRTestWrapper({ children }: PropsWithChildren) {
     return createElement(SWRConfig, { value: { provider: () => cache } }, children);
   };
 
 describe('Verify data hooks', () => {
-  beforeEach(() => {
-    useSWRInfiniteMock.mockReset();
-  });
-
   afterEach(() => {
     vi.restoreAllMocks();
   });

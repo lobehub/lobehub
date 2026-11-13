@@ -8,7 +8,6 @@ export interface ProbeStreamEvent {
   dataKeys?: string[];
   /** ServerMessage.id — gateway WS frames carry an event-id we may resume from */
   eventId?: string | null;
-  message?: string;
   /** Last 10 chars of the operationId (full id is excessively long) */
   opIdTail: string;
   raw?: string;
@@ -16,13 +15,11 @@ export interface ProbeStreamEvent {
   rawLen?: number;
   /** For non-agent_event server frames (auth_success, heartbeat_ack, …) */
   serverType?: string;
-  sseEvent?: string;
-  status?: number;
   stepIndex?: number;
   /** Milliseconds since the probe's t0 (install time). */
   t: number;
-  /** 'ws' for gateway WebSocket frames, 'sse' for direct /api/agent/stream */
-  transport: 'ws' | 'sse';
+  /** Gateway WebSocket frames are the only captured transport */
+  transport: 'ws';
   /** Either the AgentStreamEvent.type, or a probe sentinel like `_WS_OPEN_` */
   type: string;
   url?: string;
@@ -104,7 +101,6 @@ declare global {
     __PROBE_ACTION_CALLS?: ProbeActionCall[];
     __PROBE_EVENT?: (label: string) => void;
     __PROBE_MSG_TIMELINE?: ProbeTimelineSample[];
-    __PROBE_ORIG_FETCH?: typeof fetch;
     __PROBE_ORIG_WEBSOCKET?: typeof WebSocket;
     __PROBE_STREAM_EVENTS?: ProbeStreamEvent[];
     __PROBE_T0?: number;

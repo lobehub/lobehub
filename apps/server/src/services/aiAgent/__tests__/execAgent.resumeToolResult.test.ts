@@ -4,6 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
 
+const blueToolResumeInput = (): NonNullable<
+  Parameters<AiAgentService['execAgent']>[0]['resumeToolResult']
+> => ({
+  content: 'blue',
+  parentMessageId: 'tool-msg-1',
+  toolCallId: 'call_ask',
+});
+
 const {
   mockControlToolResult,
   mockCreateOperation,
@@ -557,11 +565,7 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
   it('does not persist pluginState when omitted', async () => {
     await service.execAgent({
       ...baseParams,
-      resumeToolResult: {
-        content: 'blue',
-        parentMessageId: 'tool-msg-1',
-        toolCallId: 'call_ask',
-      },
+      resumeToolResult: blueToolResumeInput(),
     });
 
     expect(mockResolveHumanApproval).toHaveBeenCalledWith(
@@ -577,11 +581,7 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
       await expect(
         service.execAgent({
           ...baseParams,
-          resumeToolResult: {
-            content: 'blue',
-            parentMessageId: 'tool-msg-1',
-            toolCallId: 'call_ask',
-          },
+          resumeToolResult: blueToolResumeInput(),
         }),
       ).rejects.toThrow(/role='tool'/);
     });
@@ -592,11 +592,7 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
       await expect(
         service.execAgent({
           ...baseParams,
-          resumeToolResult: {
-            content: 'blue',
-            parentMessageId: 'tool-msg-1',
-            toolCallId: 'call_ask',
-          },
+          resumeToolResult: blueToolResumeInput(),
         }),
       ).rejects.toThrow(/toolCallId mismatch/);
     });
@@ -607,11 +603,7 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
       await expect(
         service.execAgent({
           ...baseParams,
-          resumeToolResult: {
-            content: 'blue',
-            parentMessageId: 'tool-msg-1',
-            toolCallId: 'call_ask',
-          },
+          resumeToolResult: blueToolResumeInput(),
         }),
       ).rejects.toThrow(/no plugin row/);
     });

@@ -10,6 +10,14 @@ import {
 
 import { AiAgentService } from '../index';
 
+const approvedResumeInput = (): NonNullable<
+  Parameters<AiAgentService['execAgent']>[0]['resumeApproval']
+> => ({
+  decision: 'approved',
+  parentMessageId: 'tool-msg-1',
+  toolCallId: 'call_xyz',
+});
+
 const {
   mockCompleteGroupActionMember,
   mockLoadGroupMemberBridge,
@@ -292,11 +300,7 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
     it('persists intervention=approved and seeds initialContext for human_approved_tool', async () => {
       await service.execAgent({
         ...baseParams,
-        resumeApproval: {
-          decision: 'approved',
-          parentMessageId: 'tool-msg-1',
-          toolCallId: 'call_xyz',
-        },
+        resumeApproval: approvedResumeInput(),
       });
 
       expect(mockResolveHumanApproval).toHaveBeenCalledWith(
@@ -340,11 +344,7 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
       await service.execAgent({
         ...baseParams,
         approvalResolutionRequestId,
-        resumeApproval: {
-          decision: 'approved',
-          parentMessageId: 'tool-msg-1',
-          toolCallId: 'call_xyz',
-        },
+        resumeApproval: approvedResumeInput(),
       });
 
       expect(mockResolveHumanApproval).toHaveBeenCalledWith(
@@ -378,11 +378,7 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
       await service.execAgent({
         ...baseParams,
         approvalSourceOperationId: 'op-parked',
-        resumeApproval: {
-          decision: 'approved',
-          parentMessageId: 'tool-msg-1',
-          toolCallId: 'call_xyz',
-        },
+        resumeApproval: approvedResumeInput(),
       });
 
       expect(mockCreateOperation.mock.invocationCallOrder[0]).toBeLessThan(
@@ -411,11 +407,7 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
         ...baseParams,
         approvalResolutionRequestId: '018fbd8e-7baf-7c6d-8000-000000000098',
         approvalSourceOperationId: 'op-parked',
-        resumeApproval: {
-          decision: 'approved',
-          parentMessageId: 'tool-msg-1',
-          toolCallId: 'call_xyz',
-        },
+        resumeApproval: approvedResumeInput(),
       });
 
       expect(result.success).toBe(true);
@@ -440,11 +432,7 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
       const result = await service.execAgent({
         ...baseParams,
         approvalSourceOperationId: 'op-parked',
-        resumeApproval: {
-          decision: 'approved',
-          parentMessageId: 'tool-msg-1',
-          toolCallId: 'call_xyz',
-        },
+        resumeApproval: approvedResumeInput(),
       });
 
       expect(mockCreateOperation).toHaveBeenCalledTimes(1);
@@ -533,11 +521,7 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
     await expect(
       service.execAgent({
         ...baseParams,
-        resumeApproval: {
-          decision: 'approved',
-          parentMessageId: 'tool-msg-1',
-          toolCallId: 'call_xyz',
-        },
+        resumeApproval: approvedResumeInput(),
       }),
     ).rejects.toThrow('history unavailable');
 
@@ -582,11 +566,7 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
       ...baseParams,
       approvalResolutionRequestId,
       approvalSourceOperationId: 'op-parked',
-      resumeApproval: {
-        decision: 'approved',
-        parentMessageId: 'tool-msg-1',
-        toolCallId: 'call_xyz',
-      },
+      resumeApproval: approvedResumeInput(),
     });
 
     expect(mockEnsureInterventionContinuationStarted).not.toHaveBeenCalled();
@@ -650,11 +630,7 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
         ...baseParams,
         approvalResolutionRequestId,
         approvalSourceOperationId: 'op-parked',
-        resumeApproval: {
-          decision: 'approved',
-          parentMessageId: 'tool-msg-1',
-          toolCallId: 'call_xyz',
-        },
+        resumeApproval: approvedResumeInput(),
       }),
     ).resolves.toMatchObject({
       heteroType: null,
@@ -681,11 +657,7 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
       ...baseParams,
       approvalResolutionRequestId,
       approvalSourceOperationId: 'op-parked',
-      resumeApproval: {
-        decision: 'approved',
-        parentMessageId: 'tool-msg-1',
-        toolCallId: 'call_xyz',
-      },
+      resumeApproval: approvedResumeInput(),
       topicStartReservationId: reservationId,
     });
 
@@ -984,11 +956,7 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
       await expect(
         service.execAgent({
           ...baseParams,
-          resumeApproval: {
-            decision: 'approved',
-            parentMessageId: 'tool-msg-1',
-            toolCallId: 'call_xyz',
-          },
+          resumeApproval: approvedResumeInput(),
         }),
       ).rejects.toThrow(/role='tool'/);
     });
@@ -1002,11 +970,7 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
       await expect(
         service.execAgent({
           ...baseParams,
-          resumeApproval: {
-            decision: 'approved',
-            parentMessageId: 'tool-msg-1',
-            toolCallId: 'call_xyz',
-          },
+          resumeApproval: approvedResumeInput(),
         }),
       ).rejects.toThrow(/toolCallId mismatch/);
     });
@@ -1017,11 +981,7 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
       await expect(
         service.execAgent({
           ...baseParams,
-          resumeApproval: {
-            decision: 'approved',
-            parentMessageId: 'tool-msg-1',
-            toolCallId: 'call_xyz',
-          },
+          resumeApproval: approvedResumeInput(),
         }),
       ).rejects.toThrow(/no plugin row/);
     });

@@ -1,24 +1,11 @@
-import type { ChatModelCard } from '@lobechat/types';
-import dayjs from 'dayjs';
-import utc from 'dayjs/plugin/utc';
 import debug from 'debug';
-import type { AiModelType } from 'model-bank';
-import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
 import type OpenAI from 'openai';
-import type { Stream } from 'openai/streaming';
 
-import { ErrorClassifier, refineErrorCode } from '../../errors';
-import {
-  isGPTProResponsesModel,
-  isResponsesAPIModel,
-  supportsGPTResponsesReasoningEffortNone,
-} from '../../providers/openai/modelId';
 import type {
   ASROptions,
   ASRPayload,
   ASRResponse,
   ChatCompletionErrorPayload,
-  ChatCompletionTool,
   ChatMethodOptions,
   ChatStreamPayload,
   Embeddings,
@@ -29,7 +16,6 @@ import type {
   TextToSpeechOptions,
   TextToSpeechPayload,
 } from '../../types';
-import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImageMethodOptions, CreateImagePayload } from '../../types/image';
 import type {
   CreateVideoPayload,
@@ -38,22 +24,11 @@ import type {
   PollVideoStatusResult,
   VideoGenerationCapabilities,
 } from '../../types/video';
-import { respondJsonAfterStream } from '../../utils/consumeStream';
 import { AgentRuntimeError } from '../../utils/createError';
-import { debugPayload, debugResponse, debugStream } from '../../utils/debugStream';
-import { desensitizeUrl } from '../../utils/desensitizeUrl';
-import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { getModelPricing } from '../../utils/getModelPricing';
-import { handleOpenAIError } from '../../utils/handleOpenAIError';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { resolveMappedModelId, withMappedModelId } from '../../utils/modelIdMapping';
-import { detectModelProvider } from '../../utils/modelParse';
-import { postProcessModelList } from '../../utils/postProcessModelList';
-import {
-  assertContextWithinWindow,
-  ContextExceededPreFlightError,
-} from '../../utils/resolveSafeMaxTokens';
-import { StreamingResponse } from '../../utils/response';
+import { assertContextWithinWindow } from '../../utils/resolveSafeMaxTokens';
 import {
   createSignatureChannelId,
   createSignatureScope,
@@ -62,50 +37,34 @@ import {
 } from '../../utils/signatureScope';
 import type { LobeRuntimeAI } from '../BaseAI';
 import { normalizeToolsParameters } from '../contextBuilders/normalizeToolSchema';
-import { convertOpenAIMessages, convertOpenAIResponseInputs } from '../contextBuilders/openai';
-import { resolveModelSamplingParameters } from '../parameterResolver';
-import type { OpenAIStreamOptions } from '../streams';
-import { OpenAIResponsesStream, OpenAIStream } from '../streams';
-import { type ChatPayloadForTransformStream, readableFromAsyncIterable } from '../streams/protocol';
+import { chatViaChatCompletions } from '../protocols/openaiChatCompletions/chat';
+import { chatViaResponses } from '../protocols/openaiResponses/chat';
+import { convertOpenAITranscriptionUsage, convertOpenAIUsage } from '../usageConverters/openai';
 import {
-  convertOpenAIResponseUsage,
-  convertOpenAITranscriptionUsage,
-  convertOpenAIUsage,
-} from '../usageConverters/openai';
+  resolvePromptCacheKey,
+  shouldUseResponsesAPI,
+  type ShouldUseResponsesAPIParams,
+} from './apiMode';
 import { OpenAICompatibleClient } from './client';
+import type { OpenAICompatibleRuntimeContext } from './context';
 import { createOpenAICompatibleImage } from './createImage';
 import { createOpenAICompatibleVideo, pollOpenAICompatibleVideoStatus } from './createVideo';
 import { createDecision } from './decide';
+import { mapOpenAICompatibleError, resolveErrorTypes } from './errors';
 import type {
-  ChatCompletionCreateParamsWithPromptCacheKey,
   ConstructorOptions,
   LobeClientOptions,
   OpenAICompatibleFactoryOptions,
-  OpenAIExtraParams,
   ResponseCreateParamsWithPromptCacheKey,
 } from './factoryOptions';
-import { transformResponseAPIToStream, transformResponseToStream } from './nonStreamToStream';
-import {
-  initializeOpenAIDiagnostics,
-  observeOpenAIChatCompletionStream,
-  observeOpenAIResponsesStream,
-  recordOpenAIChatCompletionResponse,
-  recordOpenAIResponseMetadata,
-  recordOpenAIResponsesResponse,
-  resolveOpenAIResponseWithMetadata,
-} from './providerDiagnostics';
-import {
-  convertChatCompletionToolToResponseTool,
-  stripChatCompletionParameters,
-} from './responseTools';
-import {
-  parseStructuredOutputText,
-  parseStructuredToolArguments,
-  StructuredOutputError,
-} from './structuredOutput';
+import { generateObject as runGenerateObject } from './generateObject';
+import { listOpenAICompatibleModels } from './models';
 import { createOpenAICompatibleSpeech } from './textToSpeech';
 
 export type { PollVideoStatusResult };
+export { isResponseFormatUnsupportedError } from '../protocols/openaiChatCompletions/generateObject';
+export * from '../protocols/openaiChatCompletions/nonStreamToStream';
+export * from '../protocols/openaiResponses/nonStreamToStream';
 export * from './createVideo';
 export type {
   CreateImageOptions,
@@ -113,90 +72,28 @@ export type {
   CustomClientOptions,
   OpenAICompatibleFactoryOptions,
 } from './factoryOptions';
-export * from './nonStreamToStream';
+export { CHAT_MODELS_BLOCK_LIST } from './models';
 
-/**
- * Detect provider 400/422 errors that reject `response_format: { type: 'json_schema' }`.
- * Known message variants from the DeepSeek family (official API and gateways proxying it):
- * - `This response_format type is unavailable now`
- * - `response_format.type \`json_schema\` is unavailable now`
- */
-export const isResponseFormatUnsupportedError = (error: unknown): boolean => {
-  const err = error as { error?: { message?: unknown }; message?: unknown };
-  const message = [err?.message, err?.error?.message]
-    .filter((value): value is string => typeof value === 'string')
-    .join('\n');
-  if (!message) return false;
-
-  return /(?:response_format|json_schema)[^]*?(?:unavailable|not +support)/i.test(message);
-};
-
-// the model contains the following keywords is not a chat model, so we should filter them out
-export const CHAT_MODELS_BLOCK_LIST = [
-  'embedding',
-  'davinci',
-  'curie',
-  'moderation',
-  'ada',
-  'babbage',
-  'tts',
-  'whisper',
-  'dall-e',
-];
-
-type GenerateObjectReasoningParams = Pick<GenerateObjectPayload, 'reasoning_effort' | 'thinking'>;
-const getGenerateObjectReasoningParams = ({
-  reasoning_effort,
-  thinking,
-}: GenerateObjectReasoningParams) => ({
-  // `thinking` is a Lobe runtime abstraction, not a generic OpenAI-compatible API field.
-  // Use it here only to suppress `reasoning_effort`; providers that support thinking
-  // must translate it via `generateObject.handlePayload`.
-  ...(reasoning_effort && thinking?.type !== 'disabled' ? { reasoning_effort } : {}),
-});
-
-const getGenerateObjectResponsesReasoningParams = ({
-  model,
-  reasoning_effort,
-  thinking,
-}: GenerateObjectReasoningParams & { model: string }) => {
-  if (isGPTProResponsesModel(model)) {
-    return reasoning_effort && reasoning_effort !== 'max' ? { reasoning: { effort: 'high' } } : {};
-  }
-
-  if (thinking?.type === 'disabled') {
-    return supportsGPTResponsesReasoningEffortNone(model) ? { reasoning: { effort: 'none' } } : {};
-  }
-
-  return reasoning_effort && reasoning_effort !== 'max'
-    ? { reasoning: { effort: reasoning_effort } }
-    : {};
-};
-
-export const createOpenAICompatibleRuntime = <T extends Record<string, any> = any>({
-  provider,
-  baseURL: DEFAULT_BASE_URL,
-  apiKey: DEFAULT_API_KEY,
-  errorType,
-  debug: debugParams,
-  constructorOptions,
-  chatCompletion,
-  models,
-  customClient,
-  responses,
-  promptCacheKeyModels,
-  createImage: customCreateImage,
-  createVideo: customCreateVideo,
-  decide: decideConfig,
-  videoGenerationCapabilities,
-  handleCreateVideoWebhook: customHandleCreateVideoWebhook,
-  handlePollVideoStatus: customHandlePollVideoStatus,
-  generateObject: generateObjectConfig,
-}: OpenAICompatibleFactoryOptions<T>) => {
-  const ErrorType = {
-    bizError: errorType?.bizError || AgentRuntimeErrorType.ProviderBizError,
-    invalidAPIKey: errorType?.invalidAPIKey || AgentRuntimeErrorType.InvalidProviderAPIKey,
-  };
+export const createOpenAICompatibleRuntime = <T extends Record<string, any> = any>(
+  factory: OpenAICompatibleFactoryOptions<T>,
+) => {
+  const {
+    provider,
+    baseURL: DEFAULT_BASE_URL,
+    apiKey: DEFAULT_API_KEY,
+    constructorOptions,
+    chatCompletion,
+    customClient,
+    responses,
+    promptCacheKeyModels,
+    createImage: customCreateImage,
+    createVideo: customCreateVideo,
+    decide: decideConfig,
+    videoGenerationCapabilities,
+    handleCreateVideoWebhook: customHandleCreateVideoWebhook,
+    handlePollVideoStatus: customHandlePollVideoStatus,
+  } = factory;
+  const ErrorType = resolveErrorTypes(factory);
 
   return class LobeOpenAICompatibleAI implements LobeRuntimeAI {
     client!: OpenAI;
@@ -329,120 +226,34 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       );
     }
 
-    /**
-     * Determine if should use Responses API based on various configuration options
-     * @param params - Configuration parameters
-     * @returns true if should use Responses API, false otherwise
-     */
-    private shouldUseResponsesAPI(params: {
-      /** Context for logging (e.g., 'chat', 'generateObject', 'tool calling') */
-      context?: string;
-      /** Factory/instance level useResponse flag */
-      flagUseResponse?: boolean;
-      /** Factory/instance level model patterns for Responses API */
-      flagUseResponseModels?: Array<string | RegExp>;
-      /** The model ID to check */
-      model?: string;
-      /** Explicit responseApi flag */
-      responseApi?: boolean;
-      /** User-specified API mode (highest priority) */
-      userApiMode?: string;
-    }): boolean {
-      const {
-        model,
-        userApiMode,
-        responseApi,
-        flagUseResponse,
-        flagUseResponseModels,
-        context = 'operation',
-      } = params;
-
-      const log = debug(`${this.logPrefix}:shouldUseResponsesAPI`);
-
-      // Priority 0: Check built-in Responses API model rules FIRST (highest priority)
-      // These models MUST use Responses API regardless of user settings.
-      if (model && isResponsesAPIModel(model)) {
-        log('using Responses API: model %s matches built-in Responses API model rules', model);
-        return true;
-      }
-
-      // Priority 1: userApiMode is explicitly set to 'chatCompletion' (user disabled the switch)
-      if (userApiMode === 'chatCompletion') {
-        log('using Chat Completions API: userApiMode=%s', userApiMode);
-        return false;
-      }
-
-      // Priority 2: When user enables the switch (userApiMode === 'responses')
-      // Check if useResponseModels is configured - if so, only matching models use Responses API
-      // If useResponseModels is not configured, all models use Responses API
-      if (userApiMode === 'responses') {
-        if (model && flagUseResponseModels?.length) {
-          const matches = flagUseResponseModels.some((m: string | RegExp) =>
-            typeof m === 'string' ? model.includes(m) : (m as RegExp).test(model),
-          );
-          if (matches) {
-            log(
-              'using Responses API: userApiMode=responses and model %s matches useResponseModels',
-              model,
-            );
-            return true;
-          }
-          log(
-            'using Chat Completions API: userApiMode=responses but model %s does not match useResponseModels',
-            model,
-          );
-          return false;
-        }
-        // No useResponseModels configured, use Responses API for all models
-        log('using Responses API: userApiMode=responses (no useResponseModels filter)');
-        return true;
-      }
-
-      // Priority 3: Explicit responseApi flag
-      if (responseApi) {
-        log('using Responses API: explicit responseApi flag for %s', context);
-        return true;
-      }
-
-      // Priority 4: Factory/instance level useResponse flag
-      if (flagUseResponse) {
-        log('using Responses API: flagUseResponse=true for %s', context);
-        return true;
-      }
-
-      // Priority 5: Check if model matches useResponseModels patterns (without user switch)
-      if (model && flagUseResponseModels?.length) {
-        const matches = flagUseResponseModels.some((m: string | RegExp) =>
-          typeof m === 'string' ? model.includes(m) : (m as RegExp).test(model),
-        );
-        if (matches) {
-          log('using Responses API: model %s matches useResponseModels config', model);
-          return true;
-        }
-      }
-
-      log('using Chat Completions API for %s', context);
-      return false;
+    private resolvePromptCacheKey(model?: string, user?: string) {
+      return resolvePromptCacheKey(model, user, promptCacheKeyModels);
     }
 
-    private resolvePromptCacheKey(model?: string, user?: string) {
-      if (!user) return;
+    private shouldUseResponsesAPI(params: ShouldUseResponsesAPIParams) {
+      return shouldUseResponsesAPI(params, this.logPrefix);
+    }
 
-      // Keep the default key at {userId}:{model}; {agentId/topicId} can be added later if a narrower cache bucket is needed.
-      if (model?.startsWith('gpt-') || /^o\d/.test(model || '') || model === 'chat-latest') {
-        return `lobe:${user}:${model}`;
-      }
-
-      const matchesProviderPromptCacheModel = promptCacheKeyModels?.some((item) => {
-        if (!model) return false;
-        if (typeof item === 'string') return model.includes(item);
-
-        item.lastIndex = 0;
-        return item.test(model);
-      });
-      if (matchesProviderPromptCacheModel) {
-        return `lobe:${user}:${model}`;
-      }
+    /** What the protocol modules read; built per call so it always reflects current state. */
+    private get context(): OpenAICompatibleRuntimeContext {
+      return {
+        _options: this._options,
+        baseURL: this.baseURL,
+        client: this.client,
+        getMappedModelId: (model) => this.getMappedModelId(model),
+        getSignatureScope: (model, kind, protocol) => this.getSignatureScope(model, kind, protocol),
+        handleError: (error) => this.handleError(error),
+        id: this.id,
+        instance: this,
+        logPrefix: this.logPrefix,
+        prepareResponsesRequest: (payload, logicalModel) =>
+          this.prepareResponsesRequest(payload, logicalModel),
+        resolvePromptCacheKeyParams: (model, user, existing) =>
+          this.resolvePromptCacheKeyParams(model, user, existing),
+        shouldUseResponsesAPI: (params) => this.shouldUseResponsesAPI(params),
+        withMappedRequestModel: (payload, logicalModel) =>
+          this.withMappedRequestModel(payload, logicalModel),
+      };
     }
 
     private resolvePromptCacheKeyParams(
@@ -457,13 +268,56 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       return promptCacheKey ? { prompt_cache_key: promptCacheKey } : {};
     }
 
-    private handleGenerateObjectPayload(
-      payload: GenerateObjectPayload,
-      requestPayload: ChatCompletionCreateParamsWithPromptCacheKey,
-    ) {
-      return generateObjectConfig?.handlePayload
-        ? generateObjectConfig.handlePayload(payload, requestPayload, this._options)
-        : requestPayload;
+    /**
+     * `handlePayload` receives `this._options` and may retarget `baseURL` for a
+     * specific model — Spark moves `spark-x2-flash` / `spark-x2` / `spark-x1.5`
+     * to `/agent/v1`, `/x2` and `/v2`. Re-point the cached client at that URL
+     * before the request, otherwise those models keep hitting the
+     * constructor's `/v1`.
+     */
+    private syncClientWithPayloadBaseURL() {
+      const computedBaseURL =
+        typeof this._options.baseURL === 'string' && this._options.baseURL
+          ? this._options.baseURL.trim()
+          : typeof DEFAULT_BASE_URL === 'string'
+            ? DEFAULT_BASE_URL
+            : undefined;
+      const targetBaseURL = computedBaseURL || this.baseURL;
+
+      if (targetBaseURL === this.baseURL) return;
+
+      const restOptions = {
+        ...(this._options as ConstructorOptions<T> & Record<string, any>),
+      } as Record<string, any>;
+      const optionApiKey = restOptions.apiKey;
+      delete restOptions.apiKey;
+      delete restOptions.baseURL;
+      delete restOptions.modelIdMapping;
+
+      const sanitizedApiKey = optionApiKey?.toString().trim() || DEFAULT_API_KEY;
+
+      const nextOptions = {
+        ...restOptions,
+        apiKey: sanitizedApiKey,
+        baseURL: targetBaseURL,
+      } as ConstructorOptions<T>;
+
+      const initOptions = {
+        apiKey: sanitizedApiKey,
+        baseURL: targetBaseURL,
+        ...constructorOptions,
+        ...restOptions,
+      } as ConstructorOptions<T> & Record<string, any>;
+
+      this._options = nextOptions;
+
+      if (customClient?.createClient) {
+        this.client = customClient.createClient(initOptions);
+      } else {
+        this.client = new OpenAICompatibleClient(initOptions);
+      }
+
+      this.baseURL = targetBaseURL;
     }
 
     async chat({ responseMode, ...payload }: ChatStreamPayload, options?: ChatMethodOptions) {
@@ -522,255 +376,27 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             } as OpenAI.ChatCompletionCreateParamsStreaming);
 
         if ((handledPayload as any).apiMode === 'responses') {
-          return await this.handleResponseAPIMode(processedPayload, options, payload.model);
-        }
-
-        // Sanitize temperature/top_p conflict for Claude 4+ models routed via OpenAI-compatible API.
-        // normalizeTemperature is false here because OpenAI-compatible providers use the raw range.
-        const postPayload = {
-          ...handledPayload,
-          ...resolveModelSamplingParameters(handledPayload.model, handledPayload, {
-            normalizeTemperature: false,
-            preferTemperature: true,
-          }),
-        };
-
-        const computedBaseURL =
-          typeof this._options.baseURL === 'string' && this._options.baseURL
-            ? this._options.baseURL.trim()
-            : typeof DEFAULT_BASE_URL === 'string'
-              ? DEFAULT_BASE_URL
-              : undefined;
-        const targetBaseURL = computedBaseURL || this.baseURL;
-
-        if (targetBaseURL !== this.baseURL) {
-          const restOptions = {
-            ...(this._options as ConstructorOptions<T> & Record<string, any>),
-          } as Record<string, any>;
-          const optionApiKey = restOptions.apiKey;
-          delete restOptions.apiKey;
-          delete restOptions.baseURL;
-          delete restOptions.modelIdMapping;
-
-          const sanitizedApiKey = optionApiKey?.toString().trim() || DEFAULT_API_KEY;
-
-          const nextOptions = {
-            ...restOptions,
-            apiKey: sanitizedApiKey,
-            baseURL: targetBaseURL,
-          } as ConstructorOptions<T>;
-
-          const initOptions = {
-            apiKey: sanitizedApiKey,
-            baseURL: targetBaseURL,
-            ...constructorOptions,
-            ...restOptions,
-          } as ConstructorOptions<T> & Record<string, any>;
-
-          this._options = nextOptions;
-
-          if (customClient?.createClient) {
-            this.client = customClient.createClient(initOptions);
-          } else {
-            this.client = new OpenAICompatibleClient(initOptions);
-          }
-
-          this.baseURL = targetBaseURL;
-        }
-
-        const requestModel =
-          this.withMappedRequestModel({ model: postPayload.model }, payload.model).model ??
-          payload.model;
-        const thoughtSignatureScope = await this.getSignatureScope(
-          requestModel,
-          'thought_signature',
-          'chat_completions',
-        );
-        const messages = await convertOpenAIMessages(postPayload.messages, {
-          forceImageBase64: chatCompletion?.forceImageBase64,
-          forceVideoBase64: chatCompletion?.forceVideoBase64,
-          model: postPayload.model,
-          supportsAudioInput: chatCompletion?.supportsAudioInput,
-          thoughtSignatureScope,
-        });
-        const includeUsageRequested = Boolean(postPayload.stream && !chatCompletion?.excludeUsage);
-
-        let response:
-          | OpenAI.ChatCompletion
-          | ReadableStream<OpenAI.Chat.Completions.ChatCompletionChunk>
-          | Stream<OpenAI.Chat.Completions.ChatCompletionChunk>;
-        let providerResponseDiagnostics;
-
-        const streamOptions: OpenAIStreamOptions = {
-          bizErrorTypeTransformer: chatCompletion?.handleStreamBizErrorType,
-          callbacks: options?.callback,
-          payload: {
-            apiMode: 'chat_completions',
-            includeUsageRequested,
-            model: payload.model,
-            pricing: await getModelPricing(payload.model, this.id, options?.pricingContext),
-            provider: this.id,
-            thoughtSignatureScope,
-          },
-        };
-
-        if (customClient?.createChatCompletionStream) {
-          log('using custom client for chat completion stream');
-          // Apply sampling sanitization to processedPayload for the custom client path.
-          // We use processedPayload (ChatStreamPayload type) here because
-          // createChatCompletionStream expects ChatStreamPayload, not the OpenAI SDK format.
-          // Strip LobeHub-internal fields that should never reach downstream APIs.
-          const {
-            apiMode: _apiMode,
-            preserveThinking: _preserveThinking,
-            ...cleanProcessedPayload
-          } = processedPayload as any;
-          const customRequestPayload = {
-            ...cleanProcessedPayload,
-            ...resolveModelSamplingParameters(cleanProcessedPayload.model, cleanProcessedPayload, {
-              normalizeTemperature: false,
-              preferTemperature: true,
-            }),
-          };
-          const requestPayload = this.withMappedRequestModel(customRequestPayload, payload.model);
-          providerResponseDiagnostics = initializeOpenAIDiagnostics({
-            apiMode: 'chat_completions',
-            diagnostics: options?.diagnostics,
-            endpoint: desensitizeUrl(this.baseURL),
-            payload: requestPayload,
-            sentAt: Date.now(),
-          });
-
-          response = customClient.createChatCompletionStream(
-            this.client,
-            requestPayload,
-            this,
-          ) as any;
-          recordOpenAIResponseMetadata(providerResponseDiagnostics, {});
-        } else {
-          // Remove LobeHub-internal fields before sending to downstream API.
-          // `preserveThinking` is only consumed by Qwen/Zhipu handlePayload (which runs above)
-          // and must not leak to other providers' APIs as an unknown parameter.
-          const { apiMode: _, preserveThinking: _pt, ...cleanedPayload } = postPayload as any;
-          const finalPayload = {
-            ...cleanedPayload,
-            messages,
-            ...(chatCompletion?.noUserId ? {} : { user: options?.user }),
-            ...this.resolvePromptCacheKeyParams(
-              cleanedPayload.model,
-              options?.user,
-              cleanedPayload.prompt_cache_key,
-            ),
-            stream_options: includeUsageRequested ? { include_usage: true } : undefined,
-          };
-          const requestPayload = this.withMappedRequestModel(finalPayload, payload.model);
-
-          log('sending chat completion request with %d messages', messages.length);
-
-          if (debugParams?.chatCompletion?.()) {
-            debugPayload(requestPayload);
-          }
-
-          providerResponseDiagnostics = initializeOpenAIDiagnostics({
-            apiMode: 'chat_completions',
-            diagnostics: options?.diagnostics,
-            endpoint: desensitizeUrl(this.baseURL),
-            payload: requestPayload,
-            sentAt: Date.now(),
-          });
-          const responsePromise = this.client.chat.completions.create(requestPayload, {
-            // https://github.com/lobehub/lobe-chat/pull/318
-            headers: { Accept: '*/*', ...options?.requestHeaders },
-            signal: options?.signal,
-          });
-          const responseWithMetadata = await resolveOpenAIResponseWithMetadata(responsePromise);
-          response = responseWithMetadata.data as
-            OpenAI.ChatCompletion | Stream<OpenAI.Chat.Completions.ChatCompletionChunk>;
-          recordOpenAIResponseMetadata(providerResponseDiagnostics, {
-            requestId: responseWithMetadata.request_id,
-            response: responseWithMetadata.response,
-          });
-        }
-
-        if (postPayload.stream) {
-          log('processing streaming response');
-          let prod = response as
-            | ReadableStream<OpenAI.Chat.Completions.ChatCompletionChunk>
-            | Stream<OpenAI.Chat.Completions.ChatCompletionChunk>;
-
-          if (debugParams?.chatCompletion?.()) {
-            const [productionStream, useForDebug] = prod.tee();
-            prod = productionStream;
-            const useForDebugStream =
-              useForDebug instanceof ReadableStream ? useForDebug : useForDebug.toReadableStream();
-
-            debugStream(useForDebugStream).catch(console.error);
-          }
-
-          if (providerResponseDiagnostics) {
-            /** Observe provider-native chunks before the OpenAI protocol adapter transforms them. */
-            const observedStream = observeOpenAIChatCompletionStream(
-              prod,
-              providerResponseDiagnostics,
-              options?.signal,
-            );
-            prod =
-              observedStream instanceof ReadableStream
-                ? observedStream
-                : readableFromAsyncIterable(observedStream, {
-                    model: payload.model,
-                    provider: this.id,
-                  });
-          }
-
-          return StreamingResponse(
-            chatCompletion?.handleStream
-              ? chatCompletion.handleStream(prod, {
-                  callbacks: streamOptions.callbacks,
-                  inputStartAt,
-                  payload: streamOptions.payload,
-                })
-              : OpenAIStream(prod, {
-                  ...streamOptions,
-                  inputStartAt,
-                }),
-            {
-              headers: options?.headers,
-            },
+          return await chatViaResponses(
+            this.context,
+            factory,
+            processedPayload,
+            options,
+            payload.model,
           );
         }
 
-        if (debugParams?.chatCompletion?.()) {
-          debugResponse(response);
-        }
+        // `handlePayload` may have retargeted the base URL for this model.
+        this.syncClientWithPayloadBaseURL();
 
-        await recordOpenAIChatCompletionResponse(
-          providerResponseDiagnostics,
-          response as OpenAI.ChatCompletion,
-          options?.signal,
-        );
-
-        log('transforming non-streaming response to stream');
-        // Snapshot first: provider transform handlers may rewrite the completion in place
-        const jsonBody = responseMode === 'json' ? structuredClone(response) : undefined;
-        const transformHandler =
-          chatCompletion?.handleTransformResponseToStream || transformResponseToStream;
-        const stream = transformHandler(response as unknown as OpenAI.ChatCompletion);
-
-        const streamingResponse = StreamingResponse(
-          chatCompletion?.handleStream
-            ? chatCompletion.handleStream(stream, {
-                callbacks: streamOptions.callbacks,
-                inputStartAt,
-                payload: streamOptions.payload,
-              })
-            : OpenAIStream(stream, { ...streamOptions, enableStreaming: false, inputStartAt }),
-          {
-            headers: options?.headers,
-          },
-        );
-        if (jsonBody) return await respondJsonAfterStream(streamingResponse, jsonBody);
-        return streamingResponse;
+        return await chatViaChatCompletions(this.context, factory, {
+          handledPayload,
+          inputStartAt,
+          log,
+          options,
+          payload,
+          processedPayload,
+          responseMode,
+        });
       } catch (error) {
         throw this.handleError(error);
       }
@@ -856,280 +482,11 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     }
 
     async models() {
-      const log = debug(`${this.logPrefix}:models`);
-      log('fetching available models');
-
-      let resultModels: ChatModelCard[];
-      if (typeof models === 'function') {
-        log('using custom models function');
-        resultModels = await models({ client: this.client, options: this._options });
-      } else {
-        log('fetching models from client API');
-        const list = await this.client.models.list();
-        resultModels = list.data
-          .filter((model) => {
-            return CHAT_MODELS_BLOCK_LIST.every(
-              (keyword) => !model.id.toLowerCase().includes(keyword),
-            );
-          })
-          .map((item) => {
-            if (models?.transformModel) {
-              return models.transformModel(item);
-            }
-
-            const toReleasedAt = () => {
-              if (!item.created) return;
-              dayjs.extend(utc);
-
-              // guarantee item.created in Date String format
-              if (
-                typeof (item.created as any) === 'string' ||
-                // or in milliseconds
-                item.created.toFixed(0).length === 13
-              ) {
-                return dayjs.utc(item.created).format('YYYY-MM-DD');
-              }
-
-              // by default, the created time is in seconds
-              return dayjs.utc(item.created * 1000).format('YYYY-MM-DD');
-            };
-
-            // TODO: should refactor after remove v1 user/modelList code
-            const knownModel = LOBE_DEFAULT_MODEL_LIST.find((model) => model.id === item.id);
-
-            if (knownModel) {
-              const releasedAt = knownModel.releasedAt ?? toReleasedAt();
-
-              return { ...knownModel, releasedAt };
-            }
-
-            return {
-              id: item.id,
-              releasedAt: toReleasedAt(),
-            };
-          })
-
-          .filter(Boolean) as ChatModelCard[];
-      }
-
-      log('fetched %d models', resultModels.length);
-
-      return await postProcessModelList(resultModels, (modelId) =>
-        getModelPropertyWithFallback<AiModelType>(modelId, 'type'),
-      );
-    }
-
-    /**
-     * Simulate schema-based structured output through a forced tool call, for
-     * providers that do not support `response_format: { type: 'json_schema' }`.
-     * Returns the parsed schema object — the same shape as the json_schema path.
-     */
-    private async generateObjectViaToolCalling(
-      payload: GenerateObjectPayload,
-      options: GenerateObjectOptions | undefined,
-      usagePayload: Parameters<typeof convertOpenAIUsage>[1],
-    ) {
-      const { messages, schema, model } = payload;
-
-      // Apply schema transformation if configured
-      const processedSchema = generateObjectConfig?.handleSchema
-        ? { ...schema!, schema: generateObjectConfig.handleSchema(schema!.schema) }
-        : schema!;
-
-      const tool: ChatCompletionTool = {
-        function: {
-          description:
-            processedSchema.description ||
-            'Generate structured output according to the provided schema',
-          name: processedSchema.name || 'structured_output',
-          parameters: processedSchema.schema,
-        },
-        type: 'function',
-      };
-
-      const res = await this.client.chat.completions.create(
-        this.withMappedRequestModel(
-          this.handleGenerateObjectPayload(payload, {
-            ...getGenerateObjectReasoningParams(payload),
-            messages,
-            model,
-            ...this.resolvePromptCacheKeyParams(model, options?.user),
-            tool_choice: { function: { name: tool.function.name }, type: 'function' },
-            tools: [tool],
-            user: options?.user,
-          }),
-          payload.model,
-        ) as OpenAI.ChatCompletionCreateParamsNonStreaming,
-        { headers: options?.headers, signal: options?.signal },
-      );
-
-      if (res.usage) {
-        await options?.onUsage?.(convertOpenAIUsage(res.usage, usagePayload));
-      }
-
-      // Structural type keeps this compatible across openai SDK majors (v6
-      // widened tool_calls to a function/custom union).
-      const toolCalls = res.choices?.[0]?.message?.tool_calls as
-        { function?: { arguments: string; name: string } }[] | undefined;
-      const toolCall =
-        toolCalls?.find((item) => item.function?.name === tool.function.name) ?? toolCalls?.[0];
-
-      if (!toolCall?.function) throw new StructuredOutputError('no tool calls returned');
-
-      return parseStructuredToolArguments(toolCall.function.arguments);
+      return listOpenAICompatibleModels(this.context, factory);
     }
 
     async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
-      try {
-        const { messages, schema, model, responseApi, tools } = payload;
-
-        const log = debug(`${this.logPrefix}:generateObject`);
-        log(
-          'generateObject called with model: %s, hasTools: %s, hasSchema: %s',
-          model,
-          !!tools,
-          !!schema,
-        );
-
-        const pricing = await getModelPricing(model, this.id, options?.pricingContext);
-        const usagePayload = { model, pricing, provider: this.id };
-
-        if (tools) {
-          log('using tools-based generation');
-          return await this.generateObjectWithTools(payload, options, usagePayload);
-        }
-
-        if (!schema) throw new Error('tools or schema is required');
-
-        // Use tool calling fallback if configured, or when the model is known to
-        // reject `response_format: { type: 'json_schema' }`. The DeepSeek API only
-        // supports `json_object` and replies `400 This response_format type is
-        // unavailable now` to json_schema requests, so DeepSeek-family models served
-        // through generic OpenAI-compatible providers (aggregator gateways, custom
-        // endpoints) must simulate structured output via forced tool calling.
-        if (generateObjectConfig?.useToolsCalling || detectModelProvider(model) === 'deepseek') {
-          log('using tool calling fallback for structured output');
-          return await this.generateObjectViaToolCalling(payload, options, usagePayload);
-        }
-
-        // Factory-level Responses API routing control (supports instance override)
-        const instanceGenerateObject = ((this._options as any).generateObject || {}) as {
-          useResponse?: boolean;
-          useResponseModels?: Array<string | RegExp>;
-        };
-        const flagUseResponse =
-          instanceGenerateObject.useResponse ??
-          (generateObjectConfig ? generateObjectConfig.useResponse : undefined);
-        const flagUseResponseModels =
-          instanceGenerateObject.useResponseModels ?? generateObjectConfig?.useResponseModels;
-
-        const shouldUseResponses = this.shouldUseResponsesAPI({
-          context: 'generateObject',
-          flagUseResponse,
-          flagUseResponseModels,
-          model,
-          responseApi,
-        });
-
-        // Apply schema transformation if configured
-        const processedSchema = generateObjectConfig?.handleSchema
-          ? { ...schema, schema: generateObjectConfig.handleSchema(schema.schema) }
-          : schema;
-
-        if (shouldUseResponses) {
-          log('calling responses.create for structured output');
-          // Chat Completions content parts are not valid Responses input: a `text` part must
-          // become `input_text` and an `image_url` part `input_image`, or the API rejects the
-          // whole request. String content survives untouched, which is why text-only callers
-          // never hit this.
-          const input = await convertOpenAIResponseInputs(messages as any, {
-            forceImageBase64: chatCompletion?.forceImageBase64,
-            forceVideoBase64: chatCompletion?.forceVideoBase64,
-            provider: this.id,
-            strictToolPairing: true,
-          });
-          const preparedRequest = this.prepareResponsesRequest(
-            {
-              input,
-              model,
-              ...getGenerateObjectResponsesReasoningParams(payload),
-              ...this.resolvePromptCacheKeyParams(model, options?.user),
-              text: { format: { strict: true, type: 'json_schema', ...processedSchema } },
-              // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
-              safety_identifier: options?.user,
-            } as any,
-            model,
-          );
-          const res = await this.client!.responses.create(
-            preparedRequest.payload as OpenAI.Responses.ResponseCreateParamsNonStreaming,
-            {
-              headers: preparedRequest.headers
-                ? { ...options?.headers, ...preparedRequest.headers }
-                : options?.headers,
-              signal: options?.signal,
-            },
-          );
-
-          if (res.usage) {
-            await options?.onUsage?.(convertOpenAIResponseUsage(res.usage, usagePayload));
-          }
-
-          const text = res.output_text;
-          log('received structured output from Responses API, length: %d', text?.length || 0);
-          return parseStructuredOutputText(text);
-        }
-
-        log('calling chat.completions.create for structured output');
-        let res: OpenAI.ChatCompletion;
-        try {
-          res = await this.client.chat.completions.create(
-            this.withMappedRequestModel(
-              this.handleGenerateObjectPayload(payload, {
-                ...getGenerateObjectReasoningParams(payload),
-                messages,
-                model,
-                response_format: { json_schema: processedSchema, type: 'json_schema' },
-                ...this.resolvePromptCacheKeyParams(model, options?.user),
-                user: options?.user,
-              }),
-              model,
-            ) as OpenAI.ChatCompletionCreateParamsNonStreaming,
-            { headers: options?.headers, signal: options?.signal },
-          );
-        } catch (error) {
-          // Gateways can serve json_schema-incapable upstreams under arbitrary
-          // model ids (e.g. OpenCode Zen's `big-pickle` proxies DeepSeek), which
-          // the model-id detection above cannot catch. Retry once via forced
-          // tool calling when the upstream rejects the response_format type.
-          if (!isResponseFormatUnsupportedError(error)) throw error;
-
-          log('provider rejected json_schema response_format, retrying via tool calling');
-          return await this.generateObjectViaToolCalling(payload, options, usagePayload);
-        }
-        if (res.usage) {
-          await options?.onUsage?.(convertOpenAIUsage(res.usage, usagePayload));
-        }
-
-        const text = res.choices?.[0]?.message?.content;
-
-        log('received structured output from Chat Completions API, length: %d', text?.length || 0);
-
-        return parseStructuredOutputText(text);
-      } catch (error) {
-        // Provider HTTP normalization must not hide the structured-output recovery signal.
-        if (error instanceof StructuredOutputError) throw error;
-
-        const handledError = this.handleError(error);
-
-        if (
-          handledError.errorType === AgentRuntimeErrorType.AgentRuntimeError ||
-          handledError.errorType === ErrorType.bizError
-        ) {
-          throw error;
-        }
-
-        throw handledError;
-      }
+      return runGenerateObject(this.context, factory, payload, options);
     }
 
     async embeddings(
@@ -1226,487 +583,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     }
 
     protected handleError(error: any): ChatCompletionErrorPayload {
-      const log = debug(`${this.logPrefix}:error`);
-      log('handling error: %O', error);
-
-      let desensitizedEndpoint = this.baseURL;
-
-      // refs: https://github.com/lobehub/lobe-chat/issues/842
-      if (this.baseURL !== DEFAULT_BASE_URL) {
-        desensitizedEndpoint = desensitizeUrl(this.baseURL);
-      }
-
-      // Pre-flight context-window failures get a structured payload so the
-      // UI can offer fork / switch-model affordances instead of surfacing a
-      // raw provider 400. See .
-      if (error instanceof ContextExceededPreFlightError) {
-        log('pre-flight context exceeded: %s', error.message);
-        return AgentRuntimeError.chat({
-          endpoint: desensitizedEndpoint,
-          error: error.toPayload(),
-          errorType: AgentRuntimeErrorType.ExceededContextWindow,
-          message: error.message,
-          provider: this.id,
-        });
-      }
-
-      if (chatCompletion?.handleError) {
-        log('using custom error handler');
-        const errorResult = chatCompletion.handleError(error, this._options);
-
-        if (errorResult)
-          return AgentRuntimeError.chat({
-            ...errorResult,
-            provider: this.id,
-          } as ChatCompletionErrorPayload);
-      }
-
-      if ('status' in (error as any)) {
-        const status = (error as Response).status;
-        log('HTTP error with status: %d', status);
-
-        switch (status) {
-          case 401: {
-            log('invalid API key error');
-            return AgentRuntimeError.chat({
-              endpoint: desensitizedEndpoint,
-              error: error as any,
-              errorType: ErrorType.invalidAPIKey,
-              provider: this.id,
-            });
-          }
-
-          case 413: {
-            return AgentRuntimeError.chat({
-              endpoint: desensitizedEndpoint,
-              error: error as any,
-              errorType: AgentRuntimeErrorType.RequestBodyTooLarge,
-              provider: this.id,
-            });
-          }
-
-          default: {
-            break;
-          }
-        }
-      }
-
-      const { errorResult, RuntimeError, message } = handleOpenAIError(error);
-
-      log('error code: %s, message: %s', errorResult.code, errorResult.message);
-
-      switch (errorResult.code) {
-        case 'insufficient_quota': {
-          log('insufficient quota error');
-          return AgentRuntimeError.chat({
-            endpoint: desensitizedEndpoint,
-            error: errorResult,
-            errorType: AgentRuntimeErrorType.InsufficientQuota,
-            message,
-            provider: this.id,
-          });
-        }
-
-        case 'model_not_found': {
-          log('model not found error');
-          return AgentRuntimeError.chat({
-            endpoint: desensitizedEndpoint,
-            error: errorResult,
-            errorType: AgentRuntimeErrorType.ModelNotFound,
-            message,
-            provider: this.id,
-          });
-        }
-
-        // content too long
-        case 'context_length_exceeded':
-        case 'string_above_max_length': {
-          log('context length exceeded error');
-          return AgentRuntimeError.chat({
-            endpoint: desensitizedEndpoint,
-            error: errorResult,
-            errorType: AgentRuntimeErrorType.ExceededContextWindow,
-            message,
-            provider: this.id,
-          });
-        }
-      }
-
-      const errorMsg = errorResult.error?.message || errorResult.message;
-
-      if (ErrorClassifier.isAccountDeactivated(errorMsg)) {
-        log('account deactivated error detected from message');
-        return AgentRuntimeError.chat({
-          endpoint: desensitizedEndpoint,
-          error: errorResult,
-          errorType: AgentRuntimeErrorType.AccountDeactivated,
-          message,
-          provider: this.id,
-        });
-      }
-
-      if (ErrorClassifier.isInsufficientQuota(errorMsg)) {
-        log('insufficient quota error detected from message');
-        return AgentRuntimeError.chat({
-          endpoint: desensitizedEndpoint,
-          error: errorResult,
-          errorType: AgentRuntimeErrorType.InsufficientQuota,
-          message,
-          provider: this.id,
-        });
-      }
-
-      if (ErrorClassifier.isExceededContextWindow(errorMsg)) {
-        log('context length exceeded detected from message');
-        return AgentRuntimeError.chat({
-          endpoint: desensitizedEndpoint,
-          error: errorResult,
-          errorType: AgentRuntimeErrorType.ExceededContextWindow,
-          message,
-          provider: this.id,
-        });
-      }
-
-      if (ErrorClassifier.isRateLimitExceeded(errorMsg)) {
-        log('quota limit reached detected from message');
-        return AgentRuntimeError.chat({
-          endpoint: desensitizedEndpoint,
-          error: errorResult,
-          errorType: AgentRuntimeErrorType.RateLimitExceeded,
-          message,
-          provider: this.id,
-        });
-      }
-
-      const fallbackErrorType = RuntimeError || ErrorType.bizError;
-      const refinedErrorType = refineErrorCode({
-        errorType: String(fallbackErrorType),
-        message: typeof errorMsg === 'string' ? errorMsg : undefined,
-        provider: this.id,
-      });
-
-      log('returning generic error');
-      return AgentRuntimeError.chat({
-        endpoint: desensitizedEndpoint,
-        error: errorResult,
-        errorType: refinedErrorType ?? fallbackErrorType,
-        message,
-        provider: this.id,
-      });
-    }
-
-    private async handleResponseAPIMode(
-      payload: ChatStreamPayload,
-      options?: ChatMethodOptions,
-      usageModel = payload.model,
-    ): Promise<Response> {
-      const log = debug(`${this.logPrefix}:handleResponseAPIMode`);
-      log('handleResponseAPIMode called with model: %s', payload.model);
-
-      const inputStartAt = Date.now();
-
-      const {
-        messages,
-        reasoning_effort,
-        tools,
-        responsesTools,
-        reasoning,
-        responseMode,
-        max_tokens,
-        ...res
-      } = responses?.handlePayload
-        ? (responses?.handlePayload(payload, this._options) as ChatStreamPayload)
-        : payload;
-      const requestModel =
-        this.withMappedRequestModel({ model: res.model }, usageModel).model ?? usageModel;
-      const reasoningSignatureScope = await this.getSignatureScope(
-        requestModel,
-        'reasoning',
-        'responses',
-      );
-
-      const input = await convertOpenAIResponseInputs(messages as any, {
-        forceImageBase64: chatCompletion?.forceImageBase64,
-        forceVideoBase64: chatCompletion?.forceVideoBase64,
-        provider: this.id,
-        reasoningSignatureScope,
-        strictToolPairing: true,
-      });
-
-      const isStreaming = payload.stream !== false;
-      log(
-        'isStreaming: %s, hasTools: %s, hasReasoning: %s',
-        isStreaming,
-        !!tools,
-        !!(reasoning || reasoning_effort),
-      );
-
-      const postPayload = {
-        ...stripChatCompletionParameters(res),
-        ...(reasoning || reasoning_effort
-          ? {
-              reasoning: {
-                ...reasoning,
-                ...(reasoning_effort && { effort: reasoning_effort }),
-              },
-            }
-          : {}),
-        input,
-        ...(max_tokens && { max_output_tokens: max_tokens }),
-        store: false,
-        stream: isStreaming || undefined,
-        tools: responsesTools ?? tools?.map(convertChatCompletionToolToResponseTool),
-        ...this.resolvePromptCacheKeyParams(
-          res.model,
-          options?.user,
-          (res as OpenAIExtraParams).prompt_cache_key,
-        ),
-        // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
-        safety_identifier: options?.user,
-        // Sanitize sampling params for Responses API path
-        ...resolveModelSamplingParameters(res.model, res, {
-          normalizeTemperature: false,
-          preferTemperature: true,
-        }),
-      } as ResponseCreateParamsWithPromptCacheKey;
-      const preparedRequest = this.prepareResponsesRequest(postPayload, usageModel);
-      const requestPayload = preparedRequest.payload;
-      const providerResponseDiagnostics = initializeOpenAIDiagnostics({
-        apiMode: 'responses',
-        diagnostics: options?.diagnostics,
-        endpoint: desensitizeUrl(this.baseURL),
-        payload: requestPayload,
-        sentAt: Date.now(),
-      });
-
-      if (debugParams?.responses?.()) {
-        debugPayload(requestPayload);
-      }
-
-      log('sending responses.create request');
-
-      const responsePromise = this.client.responses.create(requestPayload, {
-        headers: {
-          ...options?.requestHeaders,
-          ...preparedRequest?.headers,
-        },
-        signal: options?.signal,
-      });
-      const responseWithMetadata = await resolveOpenAIResponseWithMetadata(responsePromise);
-      const response = responseWithMetadata.data;
-      recordOpenAIResponseMetadata(providerResponseDiagnostics, {
-        requestId: responseWithMetadata.request_id,
-        response: responseWithMetadata.response,
-      });
-
-      const streamOptions: OpenAIStreamOptions = {
-        bizErrorTypeTransformer: chatCompletion?.handleStreamBizErrorType,
-        callbacks: options?.callback,
-        payload: {
-          apiMode: 'responses',
-          model: usageModel,
-          pricing: await getModelPricing(usageModel, this.id, options?.pricingContext),
-          provider: this.id,
-          reasoningSignatureScope,
-        },
-      };
-
-      if (isStreaming) {
-        log('processing streaming Responses API response');
-        let prod = response as
-          | ReadableStream<OpenAI.Responses.ResponseStreamEvent>
-          | Stream<OpenAI.Responses.ResponseStreamEvent>;
-
-        if (debugParams?.responses?.()) {
-          const [productionStream, useForDebug] = prod.tee();
-          prod = productionStream;
-          const useForDebugStream =
-            useForDebug instanceof ReadableStream ? useForDebug : useForDebug.toReadableStream();
-
-          debugStream(useForDebugStream).catch(console.error);
-        }
-
-        if (providerResponseDiagnostics) {
-          /** Observe provider-native events before the Responses protocol adapter transforms them. */
-          const observedStream = observeOpenAIResponsesStream(
-            prod,
-            providerResponseDiagnostics,
-            options?.signal,
-          );
-          prod =
-            observedStream instanceof ReadableStream
-              ? observedStream
-              : readableFromAsyncIterable(observedStream, {
-                  model: usageModel,
-                  provider: this.id,
-                });
-        }
-
-        return StreamingResponse(OpenAIResponsesStream(prod, { ...streamOptions, inputStartAt }), {
-          headers: options?.headers,
-        });
-      }
-
-      log('processing non-streaming Responses API response');
-
-      // Handle non-streaming response
-      if (debugParams?.responses?.()) {
-        debugResponse(response);
-      }
-
-      await recordOpenAIResponsesResponse(
-        providerResponseDiagnostics,
-        response as OpenAI.Responses.Response,
-        options?.signal,
-      );
-
-      if (responseMode === 'json') {
-        log('returning JSON response mode');
-        return Response.json(response);
-      }
-
-      log('transforming non-streaming Responses API response to stream');
-      const stream = transformResponseAPIToStream(response as OpenAI.Responses.Response);
-
-      return StreamingResponse(
-        OpenAIResponsesStream(stream, { ...streamOptions, enableStreaming: false, inputStartAt }),
-        {
-          headers: options?.headers,
-        },
-      );
-    }
-
-    private async generateObjectWithTools(
-      payload: GenerateObjectPayload,
-      options?: GenerateObjectOptions,
-      usagePayload?: ChatPayloadForTransformStream,
-    ) {
-      const { messages, model, tools, responseApi } = payload;
-      const log = debug(`${this.logPrefix}:generateObject`);
-
-      log(
-        'generateObjectWithTools called with model: %s, toolsCount: %d',
-        model,
-        tools?.length || 0,
-      );
-
-      // Factory-level Responses API routing control (supports instance override)
-      const instanceGenerateObject = ((this._options as any).generateObject || {}) as {
-        useResponse?: boolean;
-        useResponseModels?: Array<string | RegExp>;
-      };
-      const flagUseResponse =
-        instanceGenerateObject.useResponse ??
-        (generateObjectConfig ? generateObjectConfig.useResponse : undefined);
-      const flagUseResponseModels =
-        instanceGenerateObject.useResponseModels ?? generateObjectConfig?.useResponseModels;
-
-      const shouldUseResponses = this.shouldUseResponsesAPI({
-        context: 'tool calling',
-        flagUseResponse,
-        flagUseResponseModels,
-        model,
-        responseApi,
-      });
-      const requestModel = this.getMappedModelId(payload.model);
-
-      if (shouldUseResponses) {
-        log('calling responses.create for tool calling');
-        const reasoningSignatureScope = await this.getSignatureScope(
-          requestModel,
-          'reasoning',
-          'responses',
-        );
-        const input = await convertOpenAIResponseInputs(messages as any, {
-          forceImageBase64: chatCompletion?.forceImageBase64,
-          forceVideoBase64: chatCompletion?.forceVideoBase64,
-          provider: this.id,
-          reasoningSignatureScope,
-          strictToolPairing: true,
-        });
-
-        const preparedRequest = this.prepareResponsesRequest(
-          {
-            input,
-            model,
-            ...this.resolvePromptCacheKeyParams(model, options?.user),
-            tool_choice: 'required',
-            tools: tools!.map(convertChatCompletionToolToResponseTool),
-            // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
-            safety_identifier: options?.user,
-          } as any,
-          payload.model,
-        );
-        const res = await this.client.responses.create(
-          preparedRequest.payload as OpenAI.Responses.ResponseCreateParamsNonStreaming,
-          {
-            headers: preparedRequest.headers
-              ? { ...options?.headers, ...preparedRequest.headers }
-              : options?.headers,
-            signal: options?.signal,
-          },
-        );
-
-        if (res.usage) {
-          await options?.onUsage?.(convertOpenAIResponseUsage(res.usage, usagePayload));
-        }
-
-        const functionCalls = res.output?.filter((item) => item.type === 'function_call');
-
-        log('received %d function calls from Responses API', functionCalls?.length || 0);
-
-        if (!functionCalls?.length) throw new StructuredOutputError('no tool calls returned');
-        return functionCalls.map((item) => ({
-          arguments: parseStructuredToolArguments(item.arguments),
-          name: item.name,
-        }));
-      }
-
-      log('calling chat.completions.create for tool calling');
-      const thoughtSignatureScope = await this.getSignatureScope(
-        requestModel,
-        'thought_signature',
-        'chat_completions',
-      );
-      const msgs = await convertOpenAIMessages(messages as any, {
-        forceImageBase64: chatCompletion?.forceImageBase64,
-        forceVideoBase64: chatCompletion?.forceVideoBase64,
-        model,
-        thoughtSignatureScope,
-      });
-
-      const res = await this.client.chat.completions.create(
-        this.withMappedRequestModel(
-          this.handleGenerateObjectPayload(payload, {
-            ...getGenerateObjectReasoningParams(payload),
-            messages: msgs,
-            model,
-            ...this.resolvePromptCacheKeyParams(model, options?.user),
-            tool_choice: 'required',
-            tools,
-            user: options?.user,
-          }),
-          payload.model,
-        ) as OpenAI.ChatCompletionCreateParamsNonStreaming,
-        { headers: options?.headers, signal: options?.signal },
-      );
-
-      if (res.usage) {
-        await options?.onUsage?.(convertOpenAIUsage(res.usage, usagePayload));
-      }
-
-      const toolCalls = res.choices?.[0]?.message?.tool_calls;
-      if (!toolCalls?.length) throw new StructuredOutputError('no tool calls returned');
-
-      return toolCalls.map((item) => {
-        if (!('function' in item) || !item.function) {
-          throw new StructuredOutputError('function tool call required');
-        }
-        return {
-          arguments: parseStructuredToolArguments(item.function.arguments),
-          name: item.function.name,
-        };
-      });
+      return mapOpenAICompatibleError(this.context, factory, error);
     }
   };
 };

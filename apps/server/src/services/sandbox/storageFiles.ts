@@ -26,6 +26,12 @@ export interface SandboxStorageFileEntry {
   size?: number;
 }
 
+export interface SandboxStorageExportResult {
+  contentType: string;
+  kind: 'directory' | 'file';
+  size: number;
+}
+
 export interface SandboxStorageFileList {
   entries: SandboxStorageFileEntry[];
   path: string;
@@ -232,6 +238,32 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
   };
 
   return {
+    /**
+     * Copy one file as it is, or one folder as a zip, to a presigned upload
+     * URL — read off the volume by the storage service itself, without a
+     * sandbox session. A refusal carries an `EXPORT_*` code; a deployment
+     * that cannot export answers 501 `EXPORT_UNAVAILABLE`, and one that
+     * predates the route answers 404 with no code.
+     */
+    exportFile: async (
+      params: {
+        fileOnly?: boolean;
+        hidden?: string[];
+        maxBytes?: number;
+        maxFiles?: number;
+        path: string;
+        uploadHeaders?: Record<string, string>;
+        uploadUrl: string;
+      },
+      options: { signal?: AbortSignal } = {},
+    ): Promise<SandboxStorageExportResult> =>
+      request(`${CURRENT_STORAGE}/export`, {
+        body: JSON.stringify(params),
+        signal: options.signal,
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
+
     /**
      * Create a directory, parents included. Idempotent — an existing directory
      * is a success, so a picker can offer "new folder" without first proving

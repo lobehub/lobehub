@@ -27,7 +27,14 @@ export enum FileSource {
   /** Attachment sent in a public agent's conversation; shared with the conversation, not the library. */
   ChatAttachment = 'chat-attachment',
   ImageGeneration = 'image_generation',
+  /** Audio recording owned by a meeting (`meetings.audio_file_id`), not the resource library. */
+  Meeting = 'meeting',
   PageEditor = 'page-editor',
+  /**
+   * A file a skill package holds: a binary file beside its `SKILL.md`, or a
+   * published version's archive. Owned by the skill, not by the library.
+   */
+  Skill = 'skill',
   /**
    * Image an agent's tool returned — a Claude Code `Read` on an image file —
    * uploaded so the tool card can preview it. Owned by that message, not by
@@ -47,14 +54,16 @@ export enum FileSource {
  *
  * The one way back in is an explicit `ResourceSourceFilter.Acceptance` request:
  * the user asked for evidence, so burying it no longer applies.
- * That exception only reveals acceptance evidence; agent uploads stay hidden.
+ * That exception only reveals acceptance evidence; agent uploads and meeting audio stay hidden.
  */
 export const LIBRARY_HIDDEN_FILE_SOURCES: FileSource[] = [
   FileSource.Acceptance,
   FileSource.AgentDocument,
   FileSource.Canvas,
+  FileSource.Meeting,
   FileSource.ToolResult,
   FileSource.ChatAttachment,
+  FileSource.Skill,
 ];
 
 /** Sources a generation model wrote, as opposed to anything a human put there. */

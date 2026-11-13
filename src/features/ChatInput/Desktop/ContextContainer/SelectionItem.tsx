@@ -1,76 +1,57 @@
 import type { ChatContextContent } from '@lobechat/types';
-import { createStaticStyles, cssVar, Tag, Tooltip } from '@lobehub/ui';
+import { Tag, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Code2Icon, TextIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 
 import { useChatInputStore } from '@/features/ChatInput/store';
 import { useFileStore } from '@/store/file';
 
-const styles = createStaticStyles(({ css }) => ({
-  codeLine: css`
-    display: grid;
-    grid-template-columns: 36px minmax(0, 1fr);
-    gap: 10px;
-  `,
-  codePreview: css`
-    overflow: auto;
-
-    max-width: min(560px, 80vw);
-    max-height: 220px;
-    margin: 0;
-    padding-block: 8px;
-    padding-inline: 0;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    line-height: 1.55;
-  `,
-  content: css`
-    overflow: hidden;
-
-    min-width: 0;
-
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: pre;
-  `,
-  lineNumber: css`
-    user-select: none;
-    color: ${cssVar.colorTextQuaternary};
-    text-align: end;
-  `,
-  meta: css`
-    overflow: hidden;
-
-    max-width: min(560px, 80vw);
-    padding-block-end: 6px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  name: css`
-    overflow: hidden;
-    flex: 1;
-
-    min-width: 0;
-
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  textPreview: css`
-    max-width: min(420px, 70vw);
-    color: ${cssVar.colorText};
-    white-space: pre-wrap;
-  `,
-  truncated: css`
-    padding-block-start: 4px;
-    color: ${cssVar.colorTextQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  codeLine: { display: 'grid', gridTemplateColumns: '36px minmax(0, 1fr)', gap: '10px' },
+  codePreview: {
+    overflow: 'auto',
+    maxWidth: 'min(560px, 80vw)',
+    maxHeight: '220px',
+    margin: '0',
+    paddingBlock: '8px',
+    paddingInline: '0',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    lineHeight: 1.55,
+  },
+  content: {
+    overflow: 'hidden',
+    minWidth: '0',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'pre',
+  },
+  lineNumber: { userSelect: 'none', color: cssVar.colorTextQuaternary, textAlign: 'end' },
+  meta: {
+    overflow: 'hidden',
+    maxWidth: 'min(560px, 80vw)',
+    paddingBlockEnd: '6px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  name: {
+    overflow: 'hidden',
+    flex: '1',
+    minWidth: '0',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  textPreview: { maxWidth: 'min(420px, 70vw)', color: cssVar.colorText, whiteSpace: 'pre-wrap' },
+  truncated: { paddingBlockStart: '4px', color: cssVar.colorTextQuaternary },
+});
 
 const MAX_PREVIEW_LENGTH = 8;
 const MAX_CODE_PREVIEW_LINES = 8;
@@ -115,7 +96,7 @@ const SelectionItem = memo<ChatContextContent>(
 
     const tooltip = useMemo(() => {
       if (!isCodeSelection) {
-        return <div className={styles.textPreview}>{preview || content}</div>;
+        return <div {...stylex.props(styles.textPreview)}>{preview || content}</div>;
       }
 
       const lines = content.split('\n');
@@ -124,20 +105,20 @@ const SelectionItem = memo<ChatContextContent>(
 
       return (
         <div>
-          <div className={styles.meta}>
+          <div {...stylex.props(styles.meta)}>
             {getLocationText({ filePath, lineRange, title }) || preview || title}
           </div>
-          <pre className={styles.codePreview}>
+          <pre {...stylex.props(styles.codePreview)}>
             {previewLines.map((line, index) => (
-              <div className={styles.codeLine} key={`${index}-${line}`}>
-                <span className={styles.lineNumber}>{startLine + index}</span>
-                <code className={styles.content}>{line || ' '}</code>
+              <div {...stylex.props(styles.codeLine)} key={`${index}-${line}`}>
+                <span {...stylex.props(styles.lineNumber)}>{startLine + index}</span>
+                <code {...stylex.props(styles.content)}>{line || ' '}</code>
               </div>
             ))}
             {lines.length > MAX_CODE_PREVIEW_LINES && (
-              <div className={`${styles.codeLine} ${styles.truncated}`}>
-                <span className={styles.lineNumber}>...</span>
-                <code className={styles.content}>...</code>
+              <div {...stylex.props(styles.codeLine, styles.truncated)}>
+                <span {...stylex.props(styles.lineNumber)}>...</span>
+                <code {...stylex.props(styles.content)}>...</code>
               </div>
             )}
           </pre>
@@ -155,7 +136,7 @@ const SelectionItem = memo<ChatContextContent>(
         }}
       >
         <Tooltip title={tooltip}>
-          <span className={styles.name}>{displayText}</span>
+          <span {...stylex.props(styles.name)}>{displayText}</span>
         </Tooltip>
       </Tag>
     );

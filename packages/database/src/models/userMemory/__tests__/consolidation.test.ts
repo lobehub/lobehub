@@ -15,6 +15,16 @@ import type { LobeChatDatabase } from '../../../type';
 import { deriveContextStatus, UserMemoryConsolidationModel } from '../consolidation';
 import { UserMemoryContextModel } from '../context';
 
+const createInitialContextPlan = (
+  contextId: string,
+): Parameters<UserMemoryConsolidationModel['applyContextPlan']>[1] => ({
+  dossiers: [{ memberIds: [contextId], now: 'v1', title: 'Scheduler' }],
+  nextSteps: [],
+  now: 'v1',
+  openQuestions: [],
+  title: 'Task system',
+});
+
 const userId = 'consolidation-test-user';
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -164,13 +174,7 @@ describe('UserMemoryConsolidationModel', () => {
 
   it('extends an existing context and dossier in a later run', async () => {
     const a = await createLegacy('scheduler backend', '2026-05-01');
-    const first = await model.applyContextPlan('run_3', {
-      dossiers: [{ memberIds: [a.context.id], now: 'v1', title: 'Scheduler' }],
-      nextSteps: [],
-      now: 'v1',
-      openQuestions: [],
-      title: 'Task system',
-    });
+    const first = await model.applyContextPlan('run_3', createInitialContextPlan(a.context.id));
     // Written by current extraction: has a single parent, but is still legacy, not consolidated.
     const b = await createLegacy('scheduler cron mode', '2026-06-01', { singleParent: true });
     const consolidated = await model.listConsolidated();
@@ -220,13 +224,7 @@ describe('UserMemoryConsolidationModel', () => {
 
   it('reverts a run that updated the same context and dossier in several chunks', async () => {
     const a = await createLegacy('scheduler backend', '2026-05-01');
-    const first = await model.applyContextPlan('run_5', {
-      dossiers: [{ memberIds: [a.context.id], now: 'v1', title: 'Scheduler' }],
-      nextSteps: [],
-      now: 'v1',
-      openQuestions: [],
-      title: 'Task system',
-    });
+    const first = await model.applyContextPlan('run_5', createInitialContextPlan(a.context.id));
     const chunk = async (title: string, day: string, version: string) => {
       const legacy = await createLegacy(title, day);
       await model.applyContextPlan('run_6', {
@@ -290,13 +288,7 @@ describe('UserMemoryConsolidationModel', () => {
 
   it('ignores evidence a committed plan already filed when a step is retried', async () => {
     const a = await createLegacy('scheduler backend', '2026-05-01');
-    const plan = {
-      dossiers: [{ memberIds: [a.context.id], now: 'v1', title: 'Scheduler' }],
-      nextSteps: [],
-      now: 'v1',
-      openQuestions: [],
-      title: 'Task system',
-    };
+    const plan = createInitialContextPlan(a.context.id);
     const first = await model.applyContextPlan('run_9', plan);
     expect(first.activities).toBe(1);
     expect(await model.getLegacyContextsByIds([a.context.id])).toEqual([]);
@@ -316,13 +308,7 @@ describe('UserMemoryConsolidationModel', () => {
 
   it('keeps parent summaries in step with extended contexts and dossiers', async () => {
     const a = await createLegacy('scheduler backend', '2026-05-01');
-    const first = await model.applyContextPlan('run_10', {
-      dossiers: [{ memberIds: [a.context.id], now: 'v1', title: 'Scheduler' }],
-      nextSteps: [],
-      now: 'v1',
-      openQuestions: [],
-      title: 'Task system',
-    });
+    const first = await model.applyContextPlan('run_10', createInitialContextPlan(a.context.id));
     const b = await createLegacy('scheduler cron mode', '2026-06-01');
     await model.applyContextPlan('run_11', {
       dossiers: [
@@ -363,13 +349,7 @@ describe('UserMemoryConsolidationModel', () => {
 
   it('refuses to revert a run a later run extended, until the later one is reverted', async () => {
     const a = await createLegacy('scheduler backend', '2026-05-01');
-    const first = await model.applyContextPlan('run_12', {
-      dossiers: [{ memberIds: [a.context.id], now: 'v1', title: 'Scheduler' }],
-      nextSteps: [],
-      now: 'v1',
-      openQuestions: [],
-      title: 'Task system',
-    });
+    const first = await model.applyContextPlan('run_12', createInitialContextPlan(a.context.id));
     expect(await model.listFiledContextIds('run_12', [a.context.id])).toEqual([first.contextId]);
     const b = await createLegacy('scheduler cron mode', '2026-06-01');
     await model.applyContextPlan('run_13', {
@@ -412,13 +392,7 @@ describe('UserMemoryConsolidationModel', () => {
       { id: a.context.id, key: 'product/tasks', route: 'evidence' },
       { id: b.context.id, key: 'product/tasks', route: 'evidence' },
     ]);
-    const filed = await model.applyContextPlan('run_a', {
-      dossiers: [{ memberIds: [a.context.id], now: 'v1', title: 'Scheduler' }],
-      nextSteps: [],
-      now: 'v1',
-      openQuestions: [],
-      title: 'Task system',
-    });
+    const filed = await model.applyContextPlan('run_a', createInitialContextPlan(a.context.id));
     // run_a stops here: b is still queued.
     expect(await model.findResumableQueue()).toEqual({
       count: 1,
@@ -435,10 +409,16 @@ describe('UserMemoryConsolidationModel', () => {
     expect(evidence).toHaveLength(2);
     expect(evidence).toEqual(
       expect.arrayContaining([
-        { contextId: filed.contextId, count: 1, key: 'product/tasks' },
-        { contextId: null, count: 1, key: 'product/tasks' },
+        { contextId: filed.contextId, count: 1, domain: null, key: 'product/tasks' },
+        { contextId: null, count: 1, domain: null, key: 'product/tasks' },
       ]),
     );
+
+    await model.saveQueueDomains('run_a', { 'product/tasks': 'product/task-system' });
+    expect((await model.listQueueEvidence('run_a')).map((e) => e.domain)).toEqual([
+      'product/task-system',
+      'product/task-system',
+    ]);
   });
 });
 

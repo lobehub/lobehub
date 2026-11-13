@@ -35,7 +35,7 @@
   "jina.description": "Jina AI 成立于 2020 年，是领先的搜索 AI 公司，其搜索技术栈包括向量模型、重排序器与小型语言模型，支持构建高质量的生成式与多模态搜索应用。",
   "kimicodingplan.description": "Kimi Code Plan 由 Moonshot AI 提供，通过固定月费订阅方式访问 Kimi 模型（包括 K2.5）用于编程任务。",
   "lmstudio.description": "LM Studio 是一款桌面应用，支持在本地开发与实验大语言模型。",
-  "lobehub.description": "LobeHub Cloud 通过官方 API 接入 AI 模型，并按模型令牌用量以美元计费。",
+  "lobehub.description": "LobeHub Cloud 使用官方 API 访问 AI 模型，并根据模型 token 用量以美元计费。",
   "longcat.description": "LongCat 是由美团自主研发的生成式 AI 大模型系列，旨在通过高效的计算架构和强大的多模态能力，提升企业内部工作效率并推动创新应用的发展。",
   "magpie.description": "magpie 是一个 LLM 网关：您拥有的每个模型和订阅都通过一个端点提供服务。",
   "meta.description": "Meta 构建 AI 模型与产品，帮助人们交流、创作和完成任务，旗下包括 Llama 和 Muse 模型系列。",

@@ -106,6 +106,22 @@ const createService = (
   return { agentOperationModel, manager, persistenceHandler, published, service, topicModel };
 };
 
+const codexIngestInput = (
+  events: AgentStreamEvent[],
+): Parameters<HeterogeneousAgentService['heteroIngest']>[0] => ({
+  agentType: 'codex',
+  events,
+  operationId: 'op-test',
+  topicId: 'topic-1',
+});
+
+const queuedFinishInput = (): Parameters<HeterogeneousAgentService['heteroFinish']>[0] => ({
+  agentType: 'claude-code',
+  operationId: 'op-q',
+  result: 'success',
+  topicId: 'topic-q',
+});
+
 describe('HeterogeneousAgentService', () => {
   describe('normalizeHeterogeneousFinishError', () => {
     it('enriches a flattened weekly limit with the stable quota fields', () => {
@@ -263,7 +279,7 @@ describe('HeterogeneousAgentService', () => {
         buildEvent('stream_chunk', 1, { chunkType: 'text', content: 'hi' }),
         buildEvent('tool_start', 2, { parentMessageId: 'asst-1' }),
         buildEvent('tool_result', 3, { toolCallId: 'tc-1' }),
-        buildEvent('agent_runtime_end', 4, { reason: 'success' }),
+        buildEvent('agent_runtime_end', 4, { reason: 'interrupted' }),
       ];
 
       await service.heteroIngest({
@@ -342,20 +358,10 @@ describe('HeterogeneousAgentService', () => {
         buildEvent('tool_start', 1, { toolCallId: 'tc-1' }),
       ];
 
-      await service.heteroIngest({
-        agentType: 'codex',
-        events,
-        operationId: 'op-test',
-        topicId: 'topic-1',
-      });
+      await service.heteroIngest(codexIngestInput(events));
       expect(published).toHaveLength(2);
 
-      await service.heteroIngest({
-        agentType: 'codex',
-        events,
-        operationId: 'op-test',
-        topicId: 'topic-1',
-      });
+      await service.heteroIngest(codexIngestInput(events));
 
       expect(manager.publishStreamEvent).toHaveBeenCalledTimes(2);
       expect(published).toHaveLength(2);
@@ -392,25 +398,13 @@ describe('HeterogeneousAgentService', () => {
       const events: AgentStreamEvent[] = [
         buildEvent('stream_start', 0, { assistantMessage: { id: 'asst-1' } }),
         buildEvent('stream_chunk', 1, { chunkType: 'text', content: 'hello' }),
-        buildEvent('agent_runtime_end', 2, { reason: 'success' }),
+        buildEvent('agent_runtime_end', 2, { reason: 'interrupted' }),
       ];
 
-      await expect(
-        service.heteroIngest({
-          agentType: 'codex',
-          events,
-          operationId: 'op-test',
-          topicId: 'topic-1',
-        }),
-      ).rejects.toThrow('redis down');
+      await expect(service.heteroIngest(codexIngestInput(events))).rejects.toThrow('redis down');
       expect(published.map((event) => event.type)).toEqual(['stream_start']);
 
-      await service.heteroIngest({
-        agentType: 'codex',
-        events,
-        operationId: 'op-test',
-        topicId: 'topic-1',
-      });
+      await service.heteroIngest(codexIngestInput(events));
 
       // Every event delivered exactly once across both attempts.
       expect(published.map((event) => event.type)).toEqual([
@@ -1018,12 +1012,7 @@ describe('HeterogeneousAgentService', () => {
     it('delivers the task-on-complete webhook read from runningOperation.hooks (reason=done)', async () => {
       const { service } = makeService([taskHook]);
 
-      await service.heteroFinish({
-        agentType: 'claude-code',
-        operationId: 'op-q',
-        result: 'success',
-        topicId: 'topic-q',
-      });
+      await service.heteroFinish(queuedFinishInput());
 
       expect(mockPublishJSON).toHaveBeenCalledTimes(1);
       const arg = mockPublishJSON.mock.calls[0][0];
@@ -1043,12 +1032,7 @@ describe('HeterogeneousAgentService', () => {
         topicStatus: 'missing',
       });
 
-      await service.heteroFinish({
-        agentType: 'claude-code',
-        operationId: 'op-q',
-        result: 'success',
-        topicId: 'topic-q',
-      });
+      await service.heteroFinish(queuedFinishInput());
 
       expect(mockPublishJSON).toHaveBeenCalledTimes(1);
       expect(mockPublishJSON.mock.calls[0][0].body).toMatchObject({
@@ -1060,12 +1044,7 @@ describe('HeterogeneousAgentService', () => {
     it('negative control: delivers nothing when runningOperation.hooks is empty', async () => {
       const { service } = makeService([]);
 
-      await service.heteroFinish({
-        agentType: 'claude-code',
-        operationId: 'op-q',
-        result: 'success',
-        topicId: 'topic-q',
-      });
+      await service.heteroFinish(queuedFinishInput());
 
       expect(mockPublishJSON).not.toHaveBeenCalled();
     });

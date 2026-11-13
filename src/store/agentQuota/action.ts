@@ -142,7 +142,14 @@ export class ActionImpl {
     });
     this.#readings = createReplicaSlice(quotaReadingsResource, {
       actionPrefix: 'quotaReadings',
-      effects: confirmOn('readings'),
+      // Track failures per account: an entry that never loads must not read as "still loading".
+      effects: {
+        onApplied: (_data, accountId, context) => {
+          this.#markApplied('readings', context);
+          this.#setReadingsFailed(accountId, false);
+        },
+        onError: (_error, accountId) => this.#setReadingsFailed(accountId, true),
+      },
       fetcher: (accountId) => agentQuotaService.getLatestReadings(accountId),
       get,
       merge: sameValue,
@@ -215,8 +222,19 @@ export class ActionImpl {
     return this.#deviceAccount.useSync(key, this.#syncOptions('deviceAccount', key));
   };
 
-  useFetchQuotaReadings = (accountId?: string | null): ReplicaSyncResult =>
-    this.#readings.useSync(accountId || null, this.#syncOptions('readings', accountId));
+  /**
+   * Sync one account's newest readings. A view that stays open while others
+   * spend the account (the team capacity calendar) passes a `refreshInterval`
+   * so it keeps up; SWR pauses the polling while the tab is hidden.
+   */
+  useFetchQuotaReadings = (
+    accountId?: string | null,
+    schedule?: { refreshInterval?: number },
+  ): ReplicaSyncResult =>
+    this.#readings.useSync(accountId || null, {
+      ...this.#syncOptions('readings', accountId),
+      ...schedule,
+    });
 
   useFetchQuotaHistory = (accountId?: string | null): ReplicaSyncResult =>
     this.#history.useSync(accountId || null, this.#syncOptions('history', accountId));
@@ -472,6 +490,17 @@ export class ActionImpl {
   };
 
   // ---- internals ----
+
+  #setReadingsFailed = (accountId: string, failed: boolean) => {
+    const current = this.#get().quotaReadingsFailed;
+    if (!!current[accountId] === failed) return;
+    const { [accountId]: _cleared, ...rest } = current;
+    this.#set(
+      { quotaReadingsFailed: failed ? { ...rest, [accountId]: true } : rest },
+      false,
+      'quotaReadingsFailed',
+    );
+  };
 
   #syncClaudeLocalAccounts = async (): Promise<ClaudeCodeLocalAccount[]> => {
     const accounts = await heterogeneousAgentService.listClaudeCodeAccounts();

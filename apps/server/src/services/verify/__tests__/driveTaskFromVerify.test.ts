@@ -278,6 +278,35 @@ describe('driveTaskFromVerify', () => {
     );
   });
 
+  it('leaves a check waived by an upheld dispute out of the failure summary', async () => {
+    runFindByOperation.mockResolvedValue({ id: 'run-1', status: 'failed' });
+    checkResultsListByRun.mockResolvedValueOnce([
+      {
+        checkItemTitle: 'Exports a PDF',
+        metadata: { dispute: { arbitration: { outcome: 'upheld' }, kind: 'invalid_criterion' } },
+        required: true,
+        status: 'failed',
+        suggestion: 'Export a PDF.',
+        toulmin: null,
+        verdict: 'failed',
+      },
+      {
+        checkItemTitle: 'Shows totals',
+        required: true,
+        status: 'failed',
+        suggestion: 'Add a total row.',
+        toulmin: null,
+        verdict: 'failed',
+      },
+    ]);
+
+    await driveTaskFromVerify(db, 'u1', 'op-1');
+
+    const message = deliverMock.mock.calls[0][0].errorMessage;
+    expect(message).toContain('- Shows totals: Add a total row.');
+    expect(message).not.toContain('Exports a PDF');
+  });
+
   it('explains a failure from stored evidence when the verifier gave no reasoning', async () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', status: 'failed' });
     checkResultsListByRun.mockResolvedValueOnce([
@@ -510,6 +539,7 @@ describe('driveTaskFromVerify', () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'passed' });
     await driveTaskFromVerify(db, 'u1', 'op-1');
     expect(serviceUpdateStatus).toHaveBeenCalledWith({ id: 'task-1', status: 'completed' });
+    expect(briefCreate).not.toHaveBeenCalled();
     // Deferred creator callback fires here (not in onTopicComplete), reason 'done'.
     expect(deliverMock).toHaveBeenCalledTimes(1);
     expect(deliverMock.mock.calls[0][0]).toMatchObject({
@@ -821,15 +851,6 @@ describe('driveTaskFromVerify', () => {
     taskFindById.mockResolvedValue({ id: 'task-1', status: 'completed' });
     await driveTaskFromVerify(db, 'u1', 'op-1');
     expect(serviceUpdateStatus).not.toHaveBeenCalled();
-  });
-
-  it('completes the task on a passing verify', async () => {
-    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'passed' });
-
-    await driveTaskFromVerify(db, 'u1', 'op-1');
-
-    expect(serviceUpdateStatus).toHaveBeenCalledWith({ id: 'task-1', status: 'completed' });
-    expect(briefCreate).not.toHaveBeenCalled();
   });
 });
 

@@ -3,6 +3,21 @@ import { describe, expect, it } from 'vitest';
 import type { PipelineContext } from '../../types';
 import { GroupOrchestrationFilterProcessor } from '../GroupOrchestrationFilter';
 
+const createGroupManagementTool = (apiName: string, args: string, callId: string) => ({
+  apiName,
+  arguments: args,
+  id: callId,
+  identifier: 'lobe-group-management',
+});
+
+const createSupervisorOrchestrationMessage = () => ({
+  agentId: 'supervisor',
+  content: 'Orchestration message',
+  id: 'msg_1',
+  role: 'assistant',
+  tools: [createGroupManagementTool('broadcast', '{}', 'call_1')],
+});
+
 describe('GroupOrchestrationFilterProcessor', () => {
   const createContext = (messages: any[]): PipelineContext => ({
     initialState: { messages: [] },
@@ -31,12 +46,11 @@ describe('GroupOrchestrationFilterProcessor', () => {
           id: 'msg_2',
           role: 'assistant',
           tools: [
-            {
-              apiName: 'broadcast',
-              arguments: '{"agentIds": ["agent-a", "agent-b"], "instruction": "Please respond"}',
-              id: 'call_1',
-              identifier: 'lobe-group-management',
-            },
+            createGroupManagementTool(
+              'broadcast',
+              '{"agentIds": ["agent-a", "agent-b"], "instruction": "Please respond"}',
+              'call_1',
+            ),
           ],
         },
         { content: 'Agent response', id: 'msg_3', role: 'assistant' },
@@ -58,12 +72,11 @@ describe('GroupOrchestrationFilterProcessor', () => {
           id: 'msg_1',
           role: 'assistant',
           tools: [
-            {
-              apiName: 'speak',
-              arguments: '{"agentId": "agent-a", "instruction": "Please help"}',
-              id: 'call_1',
-              identifier: 'lobe-group-management',
-            },
+            createGroupManagementTool(
+              'speak',
+              '{"agentId": "agent-a", "instruction": "Please help"}',
+              'call_1',
+            ),
           ],
         },
       ]);
@@ -81,14 +94,7 @@ describe('GroupOrchestrationFilterProcessor', () => {
           content: 'Executing task',
           id: 'msg_1',
           role: 'assistant',
-          tools: [
-            {
-              apiName: 'executeTask',
-              arguments: '{"task": "do something"}',
-              id: 'call_1',
-              identifier: 'lobe-group-management',
-            },
-          ],
+          tools: [createGroupManagementTool('executeTask', '{"task": "do something"}', 'call_1')],
         },
       ]);
 
@@ -106,12 +112,7 @@ describe('GroupOrchestrationFilterProcessor', () => {
           id: 'msg_1',
           role: 'assistant',
           tools: [
-            {
-              apiName: 'executeTasks',
-              arguments: '{"tasks": ["task1", "task2"]}',
-              id: 'call_1',
-              identifier: 'lobe-group-management',
-            },
+            createGroupManagementTool('executeTasks', '{"tasks": ["task1", "task2"]}', 'call_1'),
           ],
         },
       ]);
@@ -242,14 +243,7 @@ describe('GroupOrchestrationFilterProcessor', () => {
           content: 'Participant response',
           id: 'msg_1',
           role: 'assistant',
-          tools: [
-            {
-              apiName: 'broadcast',
-              arguments: '{}',
-              id: 'call_1',
-              identifier: 'lobe-group-management',
-            },
-          ],
+          tools: [createGroupManagementTool('broadcast', '{}', 'call_1')],
         },
         {
           agentId: 'agent-b',
@@ -294,14 +288,7 @@ describe('GroupOrchestrationFilterProcessor', () => {
           content: 'Assistant without agentId',
           id: 'msg_2',
           role: 'assistant',
-          tools: [
-            {
-              apiName: 'broadcast',
-              arguments: '{}',
-              id: 'call_1',
-              identifier: 'lobe-group-management',
-            },
-          ],
+          tools: [createGroupManagementTool('broadcast', '{}', 'call_1')],
         },
       ]);
 
@@ -317,22 +304,7 @@ describe('GroupOrchestrationFilterProcessor', () => {
         ...defaultConfig,
         enabled: false,
       });
-      const context = createContext([
-        {
-          agentId: 'supervisor',
-          content: 'Orchestration message',
-          id: 'msg_1',
-          role: 'assistant',
-          tools: [
-            {
-              apiName: 'broadcast',
-              arguments: '{}',
-              id: 'call_1',
-              identifier: 'lobe-group-management',
-            },
-          ],
-        },
-      ]);
+      const context = createContext([createSupervisorOrchestrationMessage()]);
 
       const result = await processor.process(context);
 
@@ -345,20 +317,7 @@ describe('GroupOrchestrationFilterProcessor', () => {
         currentAgentId: 'supervisor', // Supervisor as current agent
       });
       const context = createContext([
-        {
-          agentId: 'supervisor',
-          content: 'Orchestration message',
-          id: 'msg_1',
-          role: 'assistant',
-          tools: [
-            {
-              apiName: 'broadcast',
-              arguments: '{}',
-              id: 'call_1',
-              identifier: 'lobe-group-management',
-            },
-          ],
-        },
+        createSupervisorOrchestrationMessage(),
         {
           agentId: 'supervisor',
           content: 'Tool result',
@@ -380,22 +339,7 @@ describe('GroupOrchestrationFilterProcessor', () => {
 
     it('should skip processing when no agentMap provided', async () => {
       const processor = new GroupOrchestrationFilterProcessor({});
-      const context = createContext([
-        {
-          agentId: 'supervisor',
-          content: 'Orchestration message',
-          id: 'msg_1',
-          role: 'assistant',
-          tools: [
-            {
-              apiName: 'broadcast',
-              arguments: '{}',
-              id: 'call_1',
-              identifier: 'lobe-group-management',
-            },
-          ],
-        },
-      ]);
+      const context = createContext([createSupervisorOrchestrationMessage()]);
 
       const result = await processor.process(context);
 
@@ -407,22 +351,7 @@ describe('GroupOrchestrationFilterProcessor', () => {
         agentMap: defaultConfig.agentMap,
         // No currentAgentId
       });
-      const context = createContext([
-        {
-          agentId: 'supervisor',
-          content: 'Orchestration message',
-          id: 'msg_1',
-          role: 'assistant',
-          tools: [
-            {
-              apiName: 'broadcast',
-              arguments: '{}',
-              id: 'call_1',
-              identifier: 'lobe-group-management',
-            },
-          ],
-        },
-      ]);
+      const context = createContext([createSupervisorOrchestrationMessage()]);
 
       const result = await processor.process(context);
 
@@ -456,14 +385,7 @@ describe('GroupOrchestrationFilterProcessor', () => {
           content: 'Default orchestration - should not be filtered',
           id: 'msg_2',
           role: 'assistant',
-          tools: [
-            {
-              apiName: 'broadcast',
-              arguments: '{}',
-              id: 'call_2',
-              identifier: 'lobe-group-management',
-            },
-          ],
+          tools: [createGroupManagementTool('broadcast', '{}', 'call_2')],
         },
       ]);
 
@@ -484,28 +406,14 @@ describe('GroupOrchestrationFilterProcessor', () => {
           content: 'Custom api name',
           id: 'msg_1',
           role: 'assistant',
-          tools: [
-            {
-              apiName: 'customBroadcast',
-              arguments: '{}',
-              id: 'call_1',
-              identifier: 'lobe-group-management',
-            },
-          ],
+          tools: [createGroupManagementTool('customBroadcast', '{}', 'call_1')],
         },
         {
           agentId: 'supervisor',
           content: 'Default broadcast - should not be filtered',
           id: 'msg_2',
           role: 'assistant',
-          tools: [
-            {
-              apiName: 'broadcast',
-              arguments: '{}',
-              id: 'call_2',
-              identifier: 'lobe-group-management',
-            },
-          ],
+          tools: [createGroupManagementTool('broadcast', '{}', 'call_2')],
         },
       ]);
 
@@ -602,14 +510,7 @@ describe('GroupOrchestrationFilterProcessor', () => {
           content: 'Broadcast',
           id: 'msg_1',
           role: 'assistant',
-          tools: [
-            {
-              apiName: 'broadcast',
-              arguments: '{}',
-              id: 'call_1',
-              identifier: 'lobe-group-management',
-            },
-          ],
+          tools: [createGroupManagementTool('broadcast', '{}', 'call_1')],
         },
         {
           agentId: 'supervisor',
@@ -627,14 +528,7 @@ describe('GroupOrchestrationFilterProcessor', () => {
           content: 'Speak',
           id: 'msg_3',
           role: 'assistant',
-          tools: [
-            {
-              apiName: 'speak',
-              arguments: '{}',
-              id: 'call_2',
-              identifier: 'lobe-group-management',
-            },
-          ],
+          tools: [createGroupManagementTool('speak', '{}', 'call_2')],
         },
       ]);
 
@@ -668,12 +562,11 @@ describe('GroupOrchestrationFilterProcessor', () => {
           id: 'msg_2',
           role: 'assistant',
           tools: [
-            {
-              apiName: 'broadcast',
-              arguments: '{"agentIds": ["agent-a", "agent-b"], "instruction": "请给建议"}',
-              id: 'call_1',
-              identifier: 'lobe-group-management',
-            },
+            createGroupManagementTool(
+              'broadcast',
+              '{"agentIds": ["agent-a", "agent-b"], "instruction": "请给建议"}',
+              'call_1',
+            ),
           ],
         },
         // 3. Broadcast tool result - SHOULD BE FILTERED
@@ -701,12 +594,11 @@ describe('GroupOrchestrationFilterProcessor', () => {
           id: 'msg_7',
           role: 'assistant',
           tools: [
-            {
-              apiName: 'speak',
-              arguments: '{"agentId": "agent-a", "instruction": "请总结"}',
-              id: 'call_2',
-              identifier: 'lobe-group-management',
-            },
+            createGroupManagementTool(
+              'speak',
+              '{"agentId": "agent-a", "instruction": "请总结"}',
+              'call_2',
+            ),
           ],
         },
         // 8. Speak tool result - SHOULD BE FILTERED
