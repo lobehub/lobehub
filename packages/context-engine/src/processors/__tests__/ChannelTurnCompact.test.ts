@@ -147,6 +147,29 @@ describe('ChannelTurnCompactProcessor', () => {
     expect(result.metadata.channelTurnCompact?.compactedMessages).toBe(1);
   });
 
+  it('keeps the turn being answered whole when a synthetic tail user trails it', async () => {
+    // `TodoInjector` appends a virtual last-user message after the real request; locking onto it
+    // would compact away the public context, quote and wake hint of the turn being answered.
+    const first = channelTurn('Fix the parser', ['a'.repeat(300)], 'aaa111');
+    const latest = channelTurn('Now add tests', ['b'.repeat(300)], 'bbb222');
+    const todos = { content: '<todo_list>ship it</todo_list>', id: 'todo', role: 'user' as const };
+    (todos as any).meta = { systemInjection: true, virtualLastUser: true };
+    const result = await new ChannelTurnCompactProcessor({ enabled: true }).process(
+      createContext([user('1', first), assistant('2', 'Fixed.'), user('3', latest), todos]) as any,
+    );
+
+    expect(result.messages[0].content).toBe(
+      [
+        '<channel_request from="Mia" type="user" to="Codex" boundary="aaa111">',
+        'Fix the parser',
+        '</channel_request boundary="aaa111">',
+      ].join('\n'),
+    );
+    expect(result.messages[2].content).toBe(latest);
+    expect(result.messages[3].content).toBe(todos.content);
+    expect(result.metadata.channelTurnCompact?.compactedMessages).toBe(1);
+  });
+
   it.each([undefined, false])(
     'does nothing unless the run is a Channel run (%s)',
     async (enabled) => {

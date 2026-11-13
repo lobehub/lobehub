@@ -1,7 +1,7 @@
 import debug from 'debug';
 
 import { BaseProcessor } from '../base/BaseProcessor';
-import type { PipelineContext, ProcessorOptions } from '../types';
+import type { Message, PipelineContext, ProcessorOptions } from '../types';
 
 declare module '../types' {
   interface PipelineContextMetadataOverrides {
@@ -45,6 +45,18 @@ export const extractChannelRequest = (content: string): string | undefined => {
   return end < 0 ? undefined : text.slice(start, end + closing.length);
 };
 
+/**
+ * A user turn the conversation actually answered.
+ *
+ * `TodoInjector` and the first-user context providers append synthetic `role: 'user'` messages at
+ * the tail and mark them; locking onto one would take the real request being answered — its public
+ * context, quote, acknowledgement and wake hint — for a past turn and compact it away.
+ */
+const isRealUserTurn = (message: Message): boolean =>
+  message.role === 'user' &&
+  message.meta?.virtualLastUser !== true &&
+  message.meta?.systemInjection !== true;
+
 export interface ChannelTurnCompactConfig {
   /**
    * Only a Channel run's history is made of Channel prompts; the engine turns this on for those
@@ -80,7 +92,7 @@ export class ChannelTurnCompactProcessor extends BaseProcessor {
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
     if (this.config.enabled !== true) return this.markAsExecuted(context);
 
-    const lastUser = context.messages.findLastIndex((message) => message.role === 'user');
+    const lastUser = context.messages.findLastIndex((message) => isRealUserTurn(message));
     if (lastUser <= 0) return this.markAsExecuted(context);
 
     const clonedContext = this.cloneContext(context);
@@ -88,7 +100,7 @@ export class ChannelTurnCompactProcessor extends BaseProcessor {
     let savedChars = 0;
     for (let index = 0; index < lastUser; index++) {
       const message = clonedContext.messages[index];
-      if (message.role !== 'user' || typeof message.content !== 'string') continue;
+      if (!isRealUserTurn(message) || typeof message.content !== 'string') continue;
 
       const request = extractChannelRequest(message.content);
       if (!request || request.length === message.content.length) continue;
