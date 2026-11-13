@@ -23,6 +23,17 @@ describe('artboardActions', () => {
     expect(useArtboardStore.getState()).toMatchObject({ outlineOpen: false, verifyOpen: false });
   });
 
+  it('forgets the remembered page of a board opened from a link', () => {
+    artboardActions.bindBoard('art_1');
+    artboardActions.setPage('p2');
+    artboardActions.bindBoard('art_2');
+
+    artboardActions.forgetPage('art_1');
+    artboardActions.bindBoard('art_1');
+
+    expect(useArtboardStore.getState().pageId).toBeNull();
+  });
+
   it('drops the selection and mode of the previous board when another board opens', () => {
     artboardActions.bindBoard('art_1');
     artboardActions.setMode('verify');

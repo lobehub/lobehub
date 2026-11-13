@@ -8,13 +8,14 @@ import { useBoard } from '../BoardContext';
 import { floatStyles } from '../Canvas/Overlays';
 import { sendToBoardConversation } from '../data/boardConversation';
 import { submitBoardRounds, summarizeRounds } from '../data/submitRounds';
+import { mutateArtboard } from '../data/useArtboard';
 import { artboardActions } from '../store';
 
 const styles = stylex.create({
   bar: {
     insetBlockEnd: 'calc(12px + env(safe-area-inset-bottom, 0px))',
     insetInlineStart: '50%',
-    maxWidth: 'calc(100% - 24px)',
+    maxWidth: 'calc(100% - 320px)',
     paddingBlock: 6,
     paddingInlineEnd: 6,
     paddingInlineStart: 16,
@@ -23,6 +24,16 @@ const styles = stylex.create({
   },
   raised: {
     insetBlockEnd: 'calc(60px + env(safe-area-inset-bottom, 0px))',
+    maxWidth: 'calc(100% - 24px)',
+  },
+  status: {
+    fontSize: 12,
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  title: {
+    flex: 'none',
   },
   undecided: {
     cursor: 'pointer',
@@ -39,7 +50,9 @@ const SubmitBar = ({ narrow }: { narrow: boolean }) => {
 
   const { artboard } = board;
   const resend = (message: string) =>
-    sendToBoardConversation(artboard.topicId, message).catch(() => notifyFailed(message));
+    sendToBoardConversation(artboard.topicId, message)
+      .then((status) => status === 'messageFailed' && notifyFailed(message))
+      .catch(() => notifyFailed(message));
   const notifyFailed = (message: string) =>
     toast.error({
       actions: [{ label: t('artboard.submit.resend'), onClick: () => void resend(message) }],
@@ -49,7 +62,8 @@ const SubmitBar = ({ narrow }: { narrow: boolean }) => {
   const submit = async () => {
     setSubmitting(true);
     try {
-      const { message, status } = await submitBoardRounds(artboard, (count) =>
+      const roundIds = board.openRounds.map((round) => round.id);
+      const { message, status } = await submitBoardRounds(artboard, roundIds, (count) =>
         [
           t('artboard.submit.message', { count }),
           `> artboard ${artboard.id} · ${artboard.title}`,
@@ -58,6 +72,7 @@ const SubmitBar = ({ narrow }: { narrow: boolean }) => {
       if (status === 'noConversation') toast.info(t('artboard.submit.noConversation'));
       if (status === 'messageFailed') notifyFailed(message);
     } catch (error) {
+      void mutateArtboard(artboard.id);
       toast.error({
         description: (error as Error).message,
         title: t('artboard.submit.failed'),
@@ -83,13 +98,15 @@ const SubmitBar = ({ narrow }: { narrow: boolean }) => {
       gap={12}
       {...stylex.props(floatStyles.float, styles.bar, narrow && styles.raised)}
     >
-      <Text strong>{t('artboard.submit.title', { count: summary.total })}</Text>
+      <Text strong {...stylex.props(styles.title)}>
+        {t('artboard.submit.title', { count: summary.total })}
+      </Text>
       {summary.undecided > 0 ? (
         <Text type="warning" {...stylex.props(styles.undecided)} onClick={showUndecided}>
           {t('artboard.submit.undecided', { count: summary.undecided })}
         </Text>
       ) : (
-        <Text style={{ fontSize: 12 }} type="secondary">
+        <Text type="secondary" {...stylex.props(styles.status)}>
           {summary.byRecommendation
             ? t('artboard.submit.status', {
                 picked: summary.picked,

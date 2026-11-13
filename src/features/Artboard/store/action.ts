@@ -77,6 +77,12 @@ export class ArtboardActionImpl {
     );
   };
 
+  forgetPage = (boardId: string) => {
+    const { [boardId]: _, ...pageByBoard } = this.#get().pageByBoard;
+    const bound = this.#get().boardId === boardId;
+    this.#set({ pageByBoard, ...(bound ? { pageId: null } : {}) }, false, n('forgetPage'));
+  };
+
   goTo = (target: { id: string; kind: 'group' | 'item'; pageId?: string | null }) => {
     if (this.#get().mode !== 'discuss') this.setMode('discuss');
     if (target.pageId) this.setPage(target.pageId);

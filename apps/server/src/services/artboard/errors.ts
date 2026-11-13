@@ -48,6 +48,12 @@ export const toArtboardServiceError = (error: unknown, opIndex?: number): unknow
       : new ArtboardServiceError(error.code, error.message, { ...error.data, opIndex });
   if (error instanceof ArtboardRevisionConflictError) return artboardConflict();
   if (error instanceof ArtboardStructureError) {
+    if (error.code === 'rounds_changed')
+      return new ArtboardServiceError(
+        'conflict',
+        'The questions on this artboard changed. Check them and submit again.',
+        data,
+      );
     const code =
       error.code === 'not_found'
         ? 'not_found'

@@ -156,6 +156,32 @@ describe('ArtboardService comment delivery', () => {
     expect((await threadOf(artboard.id, quiet.id)).unread).toBe(false);
   });
 
+  it('tells the agent which of the threads it takes carry something new', async () => {
+    const { artboard } = await create();
+    const old = await asUser().addComment(artboard.id, { clientId: 'c1', content: '旧的' });
+    await asAgent().takeUndeliveredComments(artboard.id);
+    const fresh = await asUser().addComment(artboard.id, { clientId: 'c2', content: '新的' });
+
+    const taken = await asAgent().takeUndeliveredComments(artboard.id);
+
+    expect(Object.fromEntries(taken.map((thread) => [thread.id, thread.unread]))).toEqual({
+      [old.id]: false,
+      [fresh.id]: true,
+    });
+    expect((await threadOf(artboard.id, fresh.id)).unread).toBe(false);
+  });
+
+  it('refuses a submit when the open rounds are not the ones the user saw', async () => {
+    const { artboard, round } = await create();
+
+    const error = await errorOf(asUser().submitOpenRounds(artboard.id, ['rnd_gone']));
+
+    expect(error.code).toBe('conflict');
+    const { artboard: after } = await asUser().get(artboard.id);
+    expect(after.content.rounds[0].status).toBe('open');
+    expect((await asUser().submitOpenRounds(artboard.id, [round.id])).submitted).toBe(1);
+  });
+
   it('counts threads, not messages', async () => {
     const { artboard } = await create();
     const thread = await asUser().addComment(artboard.id, { clientId: 'c1', content: '一' });
@@ -204,6 +230,32 @@ describe('ArtboardService comment anchors', () => {
 
     expect((await threadOf(artboard.id, onBoard.id)).stale).toBe(true);
     expect((await threadOf(artboard.id, onCanvas.id)).stale).toBe(false);
+  });
+
+  it('drops the anchor of a thread whose board was removed', async () => {
+    const { artboard, journey } = await create();
+    const thread = await asUser().addComment(artboard.id, {
+      anchor: { type: 'canvas', x: 0.5, y: 0.25 },
+      boardId: journey.id,
+      clientId: 'c1',
+      content: '按钮颜色',
+    });
+    const free = await asUser().addComment(artboard.id, {
+      anchor: { type: 'canvas', x: 900, y: 40 },
+      clientId: 'c2',
+      content: '空白处',
+    });
+
+    await asUser().update(artboard.id, artboard.revision, [
+      { id: journey.id, type: 'removeBoard' },
+    ]);
+
+    expect(await threadOf(artboard.id, thread.id)).toMatchObject({ anchor: null, boardId: null });
+    expect((await threadOf(artboard.id, free.id)).anchor).toEqual({
+      type: 'canvas',
+      x: 900,
+      y: 40,
+    });
   });
 
   it('refuses a board anchor outside the board', async () => {

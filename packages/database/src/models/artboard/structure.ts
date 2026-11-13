@@ -11,6 +11,7 @@ import {
 } from '../../schemas/artboard';
 import type { Transaction } from '../../type';
 import { accessibleArtboardIds, type ArtboardDatabase } from './index';
+import { fail } from './structureError';
 import type {
   ArtboardBoardRow,
   ArtboardEdgeRow,
@@ -24,21 +25,7 @@ import type {
   NewArtboardRoundRow,
 } from './types';
 
-export type ArtboardStructureErrorCode =
-  'invalid' | 'last_page' | 'missing_choice' | 'not_empty' | 'not_found' | 'round_submitted';
-
-export class ArtboardStructureError extends Error {
-  constructor(
-    public code: ArtboardStructureErrorCode,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-const fail = (code: ArtboardStructureErrorCode, message: string): never => {
-  throw new ArtboardStructureError(code, message);
-};
+export { ArtboardStructureError, type ArtboardStructureErrorCode } from './structureError';
 
 // now() is frozen for a whole transaction, so a batch of rows would tie on created_at and read
 // back in random order.
@@ -406,8 +393,19 @@ export class ArtboardStructureModel {
       accessibleArtboardIds(tx, { userId: this.userId, workspaceId: this.workspaceId }),
     );
 
-  private settleRounds = async (tx: Transaction, scope: SQL | undefined) => {
+  private settleRounds = async (
+    tx: Transaction,
+    scope: SQL | undefined,
+    expectedIds?: string[],
+  ) => {
     const members = await tx.select().from(artboardRounds).where(scope).for('update');
+    const ids = members.map((item) => item.id);
+    if (
+      expectedIds &&
+      (expectedIds.length !== ids.length || ids.some((id) => !expectedIds.includes(id)))
+    )
+      fail('rounds_changed', 'The open rounds are not the ones that were submitted');
+    if (!ids.length) return [];
     const undecided = members.find((item) => !item.chosenBoardId && !item.recommendedBoardId);
     if (undecided)
       fail('missing_choice', `Round ${undecided.id} has no pick and no recommendation`);
@@ -420,11 +418,11 @@ export class ArtboardStructureModel {
         selectedAt: now,
         selectedBy: this.userId,
       })
-      .where(and(scope, isNull(artboardRounds.chosenBoardId)));
+      .where(and(inArray(artboardRounds.id, ids), isNull(artboardRounds.chosenBoardId)));
     return tx
       .update(artboardRounds)
       .set({ status: 'submitted', updatedAt: now })
-      .where(scope)
+      .where(inArray(artboardRounds.id, ids))
       .returning();
   };
 
@@ -451,7 +449,7 @@ export class ArtboardStructureModel {
       );
     });
 
-  submitOpenRounds = (artboardId: string): Promise<ArtboardRoundRow[]> =>
+  submitOpenRounds = (artboardId: string, expectedIds?: string[]): Promise<ArtboardRoundRow[]> =>
     this.db.transaction((tx) =>
       this.settleRounds(
         tx,
@@ -460,6 +458,7 @@ export class ArtboardStructureModel {
           eq(artboardRounds.status, 'open'),
           this.roundsReachableIn(tx),
         ),
+        expectedIds,
       ),
     );
 

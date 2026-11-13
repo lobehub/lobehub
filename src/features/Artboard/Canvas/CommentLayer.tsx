@@ -2,7 +2,7 @@ import { Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { BotIcon, MessageCircleIcon } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import { sx } from '@/styles/sx';
 
@@ -11,6 +11,7 @@ import { useBoard } from '../BoardContext';
 import { isQuestion, pagePins } from '../data/commentModel';
 import { useArtboardComments } from '../data/useArtboardComments';
 import { artboardActions, useArtboardStore } from '../store';
+import { ownsEscape } from './escapeScope';
 import { floatStyles } from './Overlays';
 import type { ViewState } from './useViewport';
 
@@ -98,12 +99,15 @@ const CommentLayer = ({ size, view }: CommentLayerProps) => {
     tool: s.tool,
   }));
   const pins = useMemo(() => pagePins(threads ?? [], board), [threads, board]);
-  const active = !!draft || !!openThreadId;
+  const open = pins.find((pin) => pin.thread.id === openThreadId);
+  const active = !!draft || !!open;
+  const marker = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     if (!active) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      const root = marker.current?.closest('[data-artboard-root]') ?? null;
+      if (!ownsEscape(event, root)) return;
       event.stopImmediatePropagation();
       artboardActions.openThread(null);
     };
@@ -112,11 +116,11 @@ const CommentLayer = ({ size, view }: CommentLayerProps) => {
   }, [active]);
 
   const toScreen = (x: number, y: number) => ({ x: x * view.k + view.x, y: y * view.k + view.y });
-  const open = pins.find((pin) => pin.thread.id === openThreadId);
   const anchor = open ? toScreen(open.x, open.y) : draft ? toScreen(draft.x, draft.y) : undefined;
 
   return (
     <>
+      <span hidden ref={marker} />
       {pins.map(({ thread, x, y }) => {
         const resolved = !!thread.resolvedAt;
         const current = thread.id === openThreadId;

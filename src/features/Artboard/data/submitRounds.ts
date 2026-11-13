@@ -30,9 +30,10 @@ export type SubmitStatus = 'messageFailed' | 'noConversation' | 'nothing' | 'sen
 
 export const submitBoardRounds = async (
   artboard: Pick<ArtboardItem, 'id' | 'topicId'>,
+  roundIds: string[],
   messageOf: (count: number) => string,
 ): Promise<{ message: string; status: SubmitStatus }> => {
-  const { submitted } = await artboardService.submitRounds(artboard.id);
+  const { submitted } = await artboardService.submitRounds(artboard.id, roundIds);
   void mutateArtboard(artboard.id);
   void mutateArtboardComments(artboard.id);
   const message = messageOf(submitted);

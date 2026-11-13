@@ -45,7 +45,7 @@ const clearSelection = () => {
   if (draft || openThreadId) artboardActions.openThread(null);
 };
 
-const Canvas = ({ narrow }: { narrow: boolean }) => {
+const Canvas = () => {
   const board = useBoard();
   const ref = useRef<HTMLDivElement>(null);
   const size = useSize(ref);
@@ -96,7 +96,7 @@ const Canvas = ({ narrow }: { narrow: boolean }) => {
           <Content board={board} k={view.k} live={flying ? '' : live} />
         </div>
       </div>
-      {!narrow && <SelectionBar view={view} />}
+      <SelectionBar view={view} />
       {discussing && <CommentLayer size={size} view={view} />}
       <ZoomBar k={view.k} onFit={fitAll} onZoom={zoomBy} />
     </>

@@ -64,8 +64,11 @@ class ArtboardService {
   submitRound = (id: string, roundId: string): Promise<{ artboard: ArtboardItem }> =>
     lambdaClient.artboard.submitRound.mutate({ id, roundId });
 
-  submitRounds = (id: string): Promise<{ artboard: ArtboardItem; submitted: number }> =>
-    lambdaClient.artboard.submitRounds.mutate({ id });
+  submitRounds = (
+    id: string,
+    roundIds: string[],
+  ): Promise<{ artboard: ArtboardItem; submitted: number }> =>
+    lambdaClient.artboard.submitRounds.mutate({ id, roundIds });
 }
 
 export const artboardService = new ArtboardService();

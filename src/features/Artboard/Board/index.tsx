@@ -61,7 +61,7 @@ const Stage = ({ narrow }: { narrow: boolean }) => {
 
   return (
     <div {...stylex.props(styles.stage)}>
-      {mode === 'verify' && verifyView === 'flow' ? <FlowStage /> : <Canvas narrow={narrow} />}
+      {mode === 'verify' && verifyView === 'flow' ? <FlowStage /> : <Canvas />}
       {outlineOpen && !narrow && mode === 'discuss' && <Outline />}
       {mode === 'verify' && <VerifyBar />}
       {mode === 'discuss' && <SubmitBar narrow={narrow} />}
@@ -110,7 +110,7 @@ const BoardLayout = ({ onExitFullscreen }: { onExitFullscreen?: () => void }) =>
   }, [narrow, size]);
 
   return (
-    <Flexbox flex={1} height={'100%'} ref={rootRef} style={{ minWidth: 0 }}>
+    <Flexbox data-artboard-root flex={1} height={'100%'} ref={rootRef} style={{ minWidth: 0 }}>
       <Header narrow={narrow} onExitFullscreen={onExitFullscreen} />
       <StaleBanner />
       <div {...stylex.props(styles.body)}>

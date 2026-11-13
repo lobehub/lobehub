@@ -29,6 +29,28 @@ describe('onArtboardToolResult', () => {
     expect(useArtboardStore.getState().flash).toEqual(['f2']);
   });
 
+  it('refreshes the board and its comments when the agent asks a question', async () => {
+    await onArtboardToolResult({
+      apiName: 'askArtboardQuestion',
+      result: { state: { artboardId: 'art_1', commentId: 'c1' }, success: true },
+    });
+
+    expect(mutate).toHaveBeenCalledWith(['artboard', 'art_1']);
+    expect(mutate).toHaveBeenCalledWith(['artboard-comments', 'art_1']);
+  });
+
+  it('refreshes the open board when the agent replies in or resolves a thread', async () => {
+    artboardActions.bindBoard('art_9');
+
+    await onArtboardToolResult({
+      apiName: 'resolveArtboardComment',
+      result: { state: { commentId: 'c1' }, success: true },
+    });
+
+    expect(mutate).toHaveBeenCalledWith(['artboard', 'art_9']);
+    expect(mutate).toHaveBeenCalledWith(['artboard-comments', 'art_9']);
+  });
+
   it('ignores failed writes and reads', async () => {
     await onArtboardToolResult({ apiName: 'updateArtboard', result: { state, success: false } });
     await onArtboardToolResult({ apiName: 'readArtboard', result: { state, success: true } });

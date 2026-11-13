@@ -334,9 +334,9 @@ export class ArtboardService {
     return { artboard: await this.item(await this.require(id)) };
   }
 
-  async submitOpenRounds(id: string) {
+  async submitOpenRounds(id: string, roundIds?: string[]) {
     await this.require(id);
-    const rounds = await guardArtboard(() => this.structure.submitOpenRounds(id));
+    const rounds = await guardArtboard(() => this.structure.submitOpenRounds(id, roundIds));
     return { artboard: await this.item(await this.require(id)), submitted: rounds.length };
   }
 

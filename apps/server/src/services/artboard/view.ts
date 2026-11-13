@@ -43,12 +43,18 @@ export const isThreadUnread = ({ replies, root }: ArtboardCommentThread) =>
   !root.resolvedAt &&
   [root, ...replies].some((comment) => !comment.authorAgentId && !comment.deliveredAt);
 
+const anchorOf = ({ anchor, boardId, groupId, metadata }: ArtboardCommentThread['root']) => {
+  const space = metadata?.anchorSpace ?? (metadata?.sourceVersionId ? 'board' : undefined);
+  const orphaned = (space === 'board' && !boardId) || (space === 'group' && !groupId);
+  return orphaned ? null : (anchor ?? null);
+};
+
 export const toCommentThreadView = (
   thread: ArtboardCommentThread,
   stale: boolean,
 ): ArtboardCommentThreadView => ({
   ...toCommentView(thread.root),
-  anchor: thread.root.anchor ?? null,
+  anchor: anchorOf(thread.root),
   boardId: thread.root.boardId,
   groupId: thread.root.groupId,
   pageId: thread.root.pageId,

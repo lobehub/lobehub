@@ -179,9 +179,9 @@ export const artboardRouter = router({
     ),
 
   submitRounds: artboardProcedureWrite
-    .input(idInput)
+    .input(idInput.extend({ roundIds: z.array(z.string().min(1)).max(200).optional() }))
     .mutation(({ ctx, input }) =>
-      run('submitRounds', () => ctx.artboardService.submitOpenRounds(input.id)),
+      run('submitRounds', () => ctx.artboardService.submitOpenRounds(input.id, input.roundIds)),
     ),
 
   update: artboardProcedureWrite

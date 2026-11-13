@@ -94,14 +94,8 @@ export class ArtboardCommentService {
     const pending = threads.flatMap(({ replies, root }) =>
       [root, ...replies].filter((comment) => !comment.deliveredAt).map((comment) => comment.id),
     );
-    const at = new Date();
-    await this.deps.comments.markDelivered(pending, at);
-    const taken = new Set(pending);
-    const delivered = threads.map(({ replies, root }) => ({
-      replies: replies.map((r) => (taken.has(r.id) ? { ...r, deliveredAt: at } : r)),
-      root: taken.has(root.id) ? { ...root, deliveredAt: at } : root,
-    }));
-    return delivered.map(this.view(structure));
+    await this.deps.comments.markDelivered(pending, new Date());
+    return threads.map(this.view(structure));
   }
 
   async open(
@@ -129,9 +123,10 @@ export class ArtboardCommentService {
         clientId: input.clientId,
         content: input.content,
         groupId: input.groupId ?? null,
-        metadata: board?.sourceWorkVersionId
-          ? { sourceVersionId: board.sourceWorkVersionId }
-          : undefined,
+        metadata: {
+          anchorSpace: board ? 'board' : group ? 'group' : 'page',
+          ...(board?.sourceWorkVersionId ? { sourceVersionId: board.sourceWorkVersionId } : {}),
+        },
         pageId: input.pageId ?? board?.pageId ?? group?.pageId ?? structure.pages[0].id,
       }),
     );

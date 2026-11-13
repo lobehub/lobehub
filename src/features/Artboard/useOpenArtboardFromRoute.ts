@@ -7,6 +7,7 @@ import { openBoardPanel } from './Conversation/openBoardPanel';
 import { ARTBOARD_TOOL } from './Conversation/tool';
 import { useArtboard } from './data/useArtboard';
 import { loadArtboardTool } from './loadArtboardTool';
+import { artboardActions } from './store';
 import { useArtboardFeature } from './useArtboardFeature';
 
 export const ARTBOARD_SEARCH_PARAM = 'artboard';
@@ -35,6 +36,7 @@ export const useOpenArtboardFromRoute = () => {
     let cancelled = false;
     void loadArtboardTool().then(() => {
       if (cancelled) return;
+      artboardActions.forgetPage(artboardId);
       if (messageId) openBoardPanel(messageId);
       else openBoardPanel(undefined, artboardId);
       setParams(

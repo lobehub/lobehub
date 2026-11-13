@@ -40,6 +40,7 @@ export interface ArtboardRoundMetadata {
 export interface ArtboardGroupMetadata {}
 export interface ArtboardBoardMetadata {}
 export interface ArtboardCommentMetadata {
+  anchorSpace?: 'board' | 'group' | 'page';
   sourceVersionId?: string;
 }
 

@@ -37,6 +37,9 @@ export const floatStyles = stylex.create({
   },
 });
 
+const SELECTION_BAR_MIN_LEFT = 80;
+const SELECTION_BAR_MIN_TOP = 80;
+
 export const SelectionBar = ({ view }: { view: ViewState }) => {
   const { t } = useTranslation('project');
   const board = useBoard();
@@ -65,8 +68,8 @@ export const SelectionBar = ({ view }: { view: ViewState }) => {
       gap={2}
 
       {...sx([floatStyles.float, floatStyles.selectionBar], undefined, {
-        left: (rect.x + rect.w) * view.k + view.x,
-        top: rect.y * view.k + view.y,
+        left: Math.max(SELECTION_BAR_MIN_LEFT, (rect.x + rect.w) * view.k + view.x),
+        top: Math.max(SELECTION_BAR_MIN_TOP, rect.y * view.k + view.y),
       })}
     >
       <ActionIcon

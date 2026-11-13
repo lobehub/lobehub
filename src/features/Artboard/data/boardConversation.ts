@@ -17,9 +17,18 @@ export const resolveBoardConversation = async (
 export const sendToBoardConversation = async (
   topicId: string | null,
   message: string,
-): Promise<'noConversation' | 'sent'> => {
+): Promise<'messageFailed' | 'noConversation' | 'sent'> => {
   const context = await resolveBoardConversation(topicId);
   if (!context) return 'noConversation';
-  await useChatStore.getState().sendMessage({ context, inputEditor: null, message });
-  return 'sent';
+  let accepted = false;
+  // sendMessage reports a failed send through the chat store and still resolves.
+  await useChatStore.getState().sendMessage({
+    context,
+    inputEditor: null,
+    message,
+    onMessageAccepted: () => {
+      accepted = true;
+    },
+  });
+  return accepted ? 'sent' : 'messageFailed';
 };
