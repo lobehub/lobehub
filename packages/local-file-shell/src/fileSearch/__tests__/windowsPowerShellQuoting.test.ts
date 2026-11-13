@@ -17,13 +17,14 @@ const { WindowsSearchServiceImpl } = await import('../impl/windows');
 /**
  * The PowerShell backend builds one `-Command` string, so `onlyIn` and `keywords` are
  * parsed as PowerShell source rather than passed as argv. Two Windows path shapes broke
- * that, and both fell through the `exitCode !== 0 && !stdout.trim()` guard — so callers
- * saw an empty result instead of a failure:
+ * that, in different ways:
  *
  * - `-Path` reads its value as a wildcard expression, so a directory named `[v2] builds`
- *   matched nothing and the search answered "0 files" with exit code 0.
+ *   matched nothing. PowerShell exits 0 with empty stdout, so the
+ *   `exitCode !== 0 && !stdout.trim()` guard never fired and the caller got `[]`.
  * - A `'` in either value ended the quoted literal early, so `C:\Users\o'brien` failed
- *   the whole call with "The string is missing the terminator".
+ *   the whole call with "The string is missing the terminator" (exit 1). That one takes
+ *   the fast-glob fallback and pins `currentTool` there for the session.
  *
  * `windowsPowerShellReal.test.ts` covers the same shapes against the real engine.
  */

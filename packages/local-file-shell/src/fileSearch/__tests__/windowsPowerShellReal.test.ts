@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { ToolDetector } from '../../toolDetector';
 import { WindowsSearchServiceImpl } from '../impl/windows';
@@ -29,11 +29,16 @@ describe.skipIf(process.platform !== 'win32')(
   'WindowsSearchServiceImpl against real PowerShell',
   () => {
     // Not under os.tmpdir(): the impl excludes **/AppData/Local/Temp/** on Windows.
-    const root = fs.mkdtempSync(path.join(process.cwd(), '.winsearch-e2e-'));
+    // Under the package directory, so it is cleaned up with the rest of the workspace.
+    const root = path.join(process.cwd(), `.winsearch-e2e-${process.pid}`);
 
     beforeEach(() => {
       fs.rmSync(root, { force: true, recursive: true });
       fs.mkdirSync(root, { recursive: true });
+    });
+
+    afterAll(() => {
+      fs.rmSync(root, { force: true, recursive: true });
     });
 
     const search = (onlyIn: string, keywords = 'alpha') =>
