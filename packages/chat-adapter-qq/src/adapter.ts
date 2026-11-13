@@ -440,6 +440,19 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
       if (sent) this.logger?.info('QQ delivered a deferred reply in %s', threadId);
     } catch (error) {
       this.logger?.error('QQ failed to deliver a deferred reply in %s: %O', threadId, error);
+      await this.restoreDeferred(threadId, text);
+    }
+  }
+
+  /**
+   * Put a claimed reply back after its delivery failed. `takePending()` deletes the text before
+   * the send, so without this a transient QQ 5xx or a network error loses the answer for good.
+   */
+  private async restoreDeferred(threadId: string, text: string): Promise<void> {
+    try {
+      await this.passive.restorePending(this.passiveKey(threadId), text);
+    } catch (error) {
+      this.logger?.error('QQ failed to restore a deferred reply for %s: %O', threadId, error);
     }
   }
 

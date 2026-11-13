@@ -56,8 +56,13 @@ const createMemoryState = (): StateAdapter => {
 const SEND_PATH = '/v2/groups/group_1/messages';
 
 /** QQ's auth and bot-info endpoints; send calls are recorded so the body can be asserted. */
-const stubQQHttp = ({ activeLimited = false }: { activeLimited?: boolean } = {}) => {
+const stubQQHttp = ({
+  activeLimited = false,
+  failContent,
+  failNext = 0,
+}: { activeLimited?: boolean; failContent?: string; failNext?: number } = {}) => {
   const sent: Array<Record<string, any>> = [];
+  let failuresLeft = failNext;
 
   vi.stubGlobal(
     'fetch',
@@ -67,6 +72,18 @@ const stubQQHttp = ({ activeLimited = false }: { activeLimited?: boolean } = {})
 
       if (url.includes(SEND_PATH)) {
         const body = JSON.parse(String(init?.body ?? '{}'));
+        // `failNext` mimics a transient QQ 5xx for the first N sends carrying `failContent`.
+        const shouldFail =
+          failContent !== undefined &&
+          failuresLeft > 0 &&
+          String(body.content ?? '').includes(failContent);
+        if (shouldFail) {
+          failuresLeft -= 1;
+          return new Response(JSON.stringify({ message: '所有server busy' }), {
+            headers: json,
+            status: 500,
+          });
+        }
         sent.push(body);
         // `activeLimited` mimics QQ's frequency cap: an uncoupled send is refused.
         if (activeLimited && !body.msg_id) {
@@ -200,6 +217,42 @@ describe('QQ passive replies', () => {
     expect(sent.at(-1)).toMatchObject({
       content: `${QQ_DEFERRED_PREFIX}最后一段`,
       msg_id: 'msg_2',
+      msg_seq: 1,
+    });
+  });
+
+  it('retries a deferred reply when its delivery fails instead of losing it', async () => {
+    const sent = stubQQHttp({
+      activeLimited: true,
+      failContent: QQ_DEFERRED_PREFIX,
+      failNext: 1,
+    });
+    const adapter = createQQAdapter({ appId: 'app', clientSecret: 'secret' });
+    const chat = new Chat({
+      adapters: { qq: adapter },
+      state: createMemoryState(),
+      userName: 'qq-bot',
+    });
+    await chat.initialize();
+
+    // Spend the window, then park the sixth answer on the active-quota cap.
+    await adapter.handleWebhook(makeRequest(inbound('msg_1')));
+    for (let i = 0; i < 5; i++) {
+      await adapter.postMessage('qq:group:group_1', `chunk ${i}`);
+    }
+    await adapter.postMessage('qq:group:group_1', '最后一段');
+
+    // The flush on msg_2 hits a transient 5xx: the webhook still succeeds, the text stays parked.
+    await adapter.handleWebhook(makeRequest(inbound('msg_2')));
+    expect(sent.filter((body) => String(body.content).includes(QQ_DEFERRED_PREFIX))).toHaveLength(
+      0,
+    );
+
+    // The next inbound message retries the restored text.
+    await adapter.handleWebhook(makeRequest(inbound('msg_3')));
+    expect(sent.at(-1)).toMatchObject({
+      content: `${QQ_DEFERRED_PREFIX}最后一段`,
+      msg_id: 'msg_3',
       msg_seq: 1,
     });
   });

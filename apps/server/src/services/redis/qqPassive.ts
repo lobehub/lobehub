@@ -117,6 +117,11 @@ const createLocalStore = (): QQPassiveStore => {
 
       return text;
     },
+
+    restorePending: async (key: string, text: string) => {
+      if (pending.has(key)) return;
+      pending.set(key, text);
+    },
   };
 };
 
@@ -206,6 +211,21 @@ export const qqPassive: QQPassiveStore = {
       return typeof text === 'string' && text ? text : undefined;
     } catch {
       return local.takePending(key);
+    }
+  },
+
+  async restorePending(key, text) {
+    const redis = await getClient();
+    if (!redis) {
+      await local.restorePending(key, text);
+      return;
+    }
+
+    try {
+      // `NX`: a reply parked while this one was in flight is newer and must win.
+      await redis.set(RedisKeys.qqPassive.pending(key), text, 'EX', PENDING_TTL_SECONDS, 'NX');
+    } catch {
+      await local.restorePending(key, text);
     }
   },
 };

@@ -67,6 +67,22 @@ describe('QQ passive window', () => {
     expect(await store.reserve('app:unknown', LIMITS, AT)).toBeNull();
   });
 
+  it('puts a claimed text back when delivery failed, but never over a newer reply', async () => {
+    const store = createMemoryQQPassiveStore();
+    await store.savePending('app:thread', 'claimed');
+
+    expect(await store.takePending('app:thread')).toBe('claimed');
+    await store.restorePending('app:thread', 'claimed');
+
+    expect(await store.takePending('app:thread')).toBe('claimed');
+
+    // A newer answer was parked while the claimed one was in flight: keep the newer one.
+    await store.savePending('app:thread', 'newer');
+    await store.restorePending('app:thread', 'claimed');
+
+    expect(await store.takePending('app:thread')).toBe('newer');
+  });
+
   it('keeps only the newest deferred text and hands it over once', async () => {
     const store = createMemoryQQPassiveStore();
     await store.savePending('app:thread', 'first');

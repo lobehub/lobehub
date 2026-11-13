@@ -57,6 +57,11 @@ export interface QQPassiveStore {
   takePending(key: string): Promise<string | undefined>;
   /** Park text that could not be delivered. Only the newest one is kept. */
   savePending(key: string, text: string): Promise<void>;
+  /**
+   * Put a claimed text back after its delivery failed, so the next inbound message retries it.
+   * Never replaces a pending reply parked afterwards: the newer answer is the one the reader wants.
+   */
+  restorePending(key: string, text: string): Promise<void>;
 }
 
 interface Window {
@@ -103,6 +108,12 @@ export const createMemoryQQPassiveStore = (): QQPassiveStore => {
       const text = pending.get(key);
       pending.delete(key);
       return text;
+    },
+
+    restorePending: async (key, text) => {
+      // A reply parked after this one was claimed is newer; keep it and drop the older text.
+      if (pending.has(key)) return;
+      pending.set(key, text);
     },
   };
 };
