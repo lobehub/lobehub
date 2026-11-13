@@ -9,6 +9,7 @@ import {
 } from './tabOptions';
 
 const labels = {
+  'accounts': 'tab.accounts',
   'automations': 'tab.automations',
   'channel': 'tab.integration',
   'engine': 'tab.engine',
@@ -241,6 +242,34 @@ describe('instruction, knowledge, engine, environment, tools and skills tabs', (
     ]);
   });
 
+  it('adds subscription accounts after environment for an agent that runs on subscription logins', () => {
+    const options = buildAgentProfileTabOptions({
+      ...base,
+      accountsSupported: true,
+      heterogeneous: true,
+    });
+
+    expect(options.map((option) => option.value)).toEqual([
+      'profile',
+      'engine',
+      'environment',
+      'accounts',
+      'channel',
+      'statistics',
+    ]);
+  });
+
+  it('drops subscription accounts for a member without edit access unless it is the current page', () => {
+    const readOnly = { ...base, accountsSupported: true, canConfigure: false, heterogeneous: true };
+
+    expect(
+      buildAgentProfileTabOptions({ ...readOnly, active: 'statistics' }).map((o) => o.value),
+    ).not.toContain('accounts');
+    expect(
+      buildAgentProfileTabOptions({ ...readOnly, active: 'accounts' }).map((o) => o.value),
+    ).toContain('accounts');
+  });
+
   it('keeps tools when it owns the current page even if the agent has none', () => {
     const options = buildAgentProfileTabOptions({
       ...base,
@@ -265,6 +294,7 @@ describe('instruction, knowledge, engine, environment, tools and skills tabs', (
   it.each([
     ['/agent/agt_1/engine', 'engine'],
     ['/agent/agt_1/environment', 'environment'],
+    ['/acme/agent/agt_1/accounts', 'accounts'],
     ['/acme/agent/agt_1/tools', 'tools'],
     ['/agent/agt_1/instruction', 'instruction'],
     ['/agent/agt_1/skills', 'skills'],
@@ -289,6 +319,7 @@ describe('groupAgentProfileTabOptions', () => {
           'knowledge',
           'engine',
           'environment',
+          'accounts',
           'tools',
           'skills',
           'mail',
@@ -303,7 +334,7 @@ describe('groupAgentProfileTabOptions', () => {
     expect(groups.map((group) => [group.key, group.options.map((item) => item.value)])).toEqual([
       ['profile', ['profile']],
       ['shape', ['instruction', 'knowledge']],
-      ['setup', ['engine', 'environment', 'tools', 'skills']],
+      ['setup', ['engine', 'environment', 'accounts', 'tools', 'skills']],
       ['identity', ['mail', 'channel']],
       ['general', ['self-evolving', 'statistics', 'share']],
     ]);

@@ -1,3 +1,5 @@
+import { isAuthorizedQuotaBinding } from '@lobechat/types';
+
 import { quotaConfirmedKey, type Store } from './action';
 import { hashQuotaSourceKey, QUOTA_ACCOUNTS_KEY, quotaDeviceAccountKey } from './projection';
 
@@ -5,6 +7,24 @@ const accounts = (s: Store) => s.quotaAccountsMap[QUOTA_ACCOUNTS_KEY];
 
 const bindings = (agentId?: string | null) => (s: Store) =>
   agentId ? s.quotaBindingsMap[agentId] : undefined;
+
+/**
+ * Ids of the accounts an agent is authorized to schedule (enabled `pool` /
+ * `pinned` bindings), optionally limited to one provider's listed accounts.
+ * `undefined` until the agent's bindings are loaded.
+ */
+const authorizedAccountIds =
+  (agentId?: string | null, provider?: string) =>
+  (s: Store): string[] | undefined => {
+    const agentBindings = agentId ? s.quotaBindingsMap[agentId] : undefined;
+    if (!agentBindings) return undefined;
+    const providerOf = new Map((accounts(s) ?? []).map((a) => [a.id, a.provider]));
+    return agentBindings
+      .filter(isAuthorizedQuotaBinding)
+      .filter((b) => providerOf.has(b.accountId))
+      .filter((b) => !provider || providerOf.get(b.accountId) === provider)
+      .map((b) => b.accountId);
+  };
 
 const deviceAccount = (agentId?: string | null, deviceId?: string | null) => (s: Store) =>
   agentId && deviceId
@@ -46,6 +66,7 @@ const isHistoryConfirmed = (scope: string, accountId?: string | null) => (s: Sto
 
 export const agentQuotaSelectors = {
   accounts,
+  authorizedAccountIds,
   bindings,
   deviceAccount,
   history,

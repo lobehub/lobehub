@@ -43,6 +43,7 @@ const styles = StyleSheet.create({
 });
 
 // One editor per route: the shell stays small and each page loads only its own editor.
+const AccountsEditor = lazy(() => import('./features/AccountsEditor'));
 const EngineEditor = lazy(() => import('./features/EngineEditor'));
 const EnvironmentEditor = lazy(() => import('./features/EnvironmentEditor'));
 const InstructionEditor = lazy(() => import('./features/InstructionEditor'));
@@ -53,9 +54,17 @@ const ToolsEditor = lazy(() => import('./features/ToolsEditor'));
 
 /** Which page of the profile group the shell renders. They share one editing session. */
 export type AgentProfileViewKey =
-  'engine' | 'environment' | 'instruction' | 'knowledge' | 'profile' | 'skills' | 'tools';
+  | 'accounts'
+  | 'engine'
+  | 'environment'
+  | 'instruction'
+  | 'knowledge'
+  | 'profile'
+  | 'skills'
+  | 'tools';
 
 const VIEWS: Record<AgentProfileViewKey, FC> = {
+  accounts: AccountsEditor,
   engine: EngineEditor,
   environment: EnvironmentEditor,
   instruction: InstructionEditor,
@@ -133,7 +142,7 @@ const AgentBuilderSlot = memo(() => {
 });
 
 /**
- * Profile, Instruction, Knowledge, Engine, Environment, Tools and Skills are separate routes but one editing session: the same
+ * Profile, Instruction, Knowledge, Engine, Environment, Accounts, Tools and Skills are separate routes but one editing session: the same
  * lock, hydration, store and Agent Builder serve all three, so a prompt edited on
  * Context is the prompt the Builder sees from Profile.
  */

@@ -47,7 +47,7 @@ const checkedOption = () =>
   screen.getByRole('radio', { checked: true }).closest('label')?.textContent;
 
 const binding = (id: string, accountId: string, role: string) =>
-  ({ accountId, agentId: 'agent-1', id, role }) as unknown as QuotaBinding;
+  ({ accountId, agentId: 'agent-1', enabled: true, id, role }) as unknown as QuotaBinding;
 
 describe('QuotaAccountManager', () => {
   beforeEach(() => {
@@ -72,18 +72,113 @@ describe('QuotaAccountManager', () => {
 
     render(<QuotaAccountManager agentId={'agent-1'} />);
 
-    expect(screen.getByText('a1@example.com')).toBeTruthy();
-    expect(screen.queryByText('heteroAgent.claudeQuota.manage.autoNoAccount')).toBeNull();
-    expect(screen.getByRole('switch').hasAttribute('disabled')).toBe(true);
+    // Which accounts this agent may use is unknown until its bindings load.
+    expect(screen.queryByText('a1@example.com')).toBeNull();
+    expect(screen.queryByText('heteroAgent.claudeQuota.manage.autoNoAuthorizedAccount')).toBeNull();
+    expect(screen.queryByTestId('quota-pool-hint')).toBeNull();
     expect(screen.queryByRole('radio', { checked: true })).toBeNull();
 
     await act(async () => answerBindings([binding('b1', 'a1', 'pool')]));
 
-    expect(screen.queryByText('heteroAgent.claudeQuota.manage.autoNoAccount')).toBeNull();
+    expect(screen.getByText('a1@example.com')).toBeTruthy();
+    expect(screen.queryByText('heteroAgent.claudeQuota.manage.autoNoAuthorizedAccount')).toBeNull();
     expect(screen.getByText(/heteroAgent\.claudeQuota\.manage\.autoRoutingTo/)).toBeTruthy();
-    expect(screen.getByRole('switch').hasAttribute('disabled')).toBe(false);
     // Auto is the confirmed mode now, and the group shows it.
     expect(checkedOption()).toContain('heteroAgent.claudeQuota.manage.modeAuto');
+  });
+
+  it('lists only the accounts this agent is authorized to schedule', async () => {
+    vi.spyOn(agentQuotaService, 'listAccounts').mockResolvedValue([
+      account('a1'),
+      account('a2'),
+      account('off'),
+      account('unbound'),
+      account('switched'),
+    ]);
+    vi.spyOn(agentQuotaService, 'listBindings').mockResolvedValue([
+      binding('b1', 'a1', 'pool'),
+      binding('b2', 'a2', 'pinned'),
+      binding('b3', 'off', 'disabled'),
+      { ...binding('b4', 'switched', 'pool'), enabled: false } as QuotaBinding,
+    ]);
+
+    render(<QuotaAccountManager agentId={'agent-1'} />);
+
+    await screen.findByText('a1@example.com');
+    expect(screen.getByText('a2@example.com')).toBeTruthy();
+    for (const hidden of ['off', 'unbound', 'switched'])
+      expect(screen.queryByText(`${hidden}@example.com`)).toBeNull();
+    // Two accounts already form a pool: no "add more" prompt.
+    expect(screen.queryByTestId('quota-pool-hint')).toBeNull();
+  });
+
+  it('points an agent with a single schedulable account at its subscription accounts', async () => {
+    vi.spyOn(agentQuotaService, 'listAccounts').mockResolvedValue([account('a1'), account('a2')]);
+    vi.spyOn(agentQuotaService, 'listBindings').mockResolvedValue([binding('b1', 'a1', 'pool')]);
+    const onManageAccounts = vi.fn();
+
+    render(<QuotaAccountManager agentId={'agent-1'} onManageAccounts={onManageAccounts} />);
+
+    const hint = await screen.findByTestId('quota-pool-hint');
+    expect(hint.textContent).toContain('heteroAgent.claudeQuota.manage.poolSingleHint');
+    expect(screen.queryByText('a2@example.com')).toBeNull();
+    fireEvent.click(screen.getByText('heteroAgent.claudeQuota.manage.addAccounts'));
+    expect(onManageAccounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for accounts when the agent has none authorized', async () => {
+    vi.spyOn(agentQuotaService, 'listBindings').mockResolvedValue([]);
+
+    render(<QuotaAccountManager agentId={'agent-1'} onManageAccounts={vi.fn()} />);
+
+    const hint = await screen.findByTestId('quota-pool-hint');
+    expect(hint.textContent).toContain('heteroAgent.claudeQuota.manage.poolEmptyHint');
+    expect(screen.getByText('heteroAgent.claudeQuota.manage.autoNoAuthorizedAccount')).toBeTruthy();
+  });
+
+  it('takes no writes in a read-only view', async () => {
+    vi.spyOn(agentQuotaService, 'listBindings').mockResolvedValue([binding('b1', 'a1', 'pool')]);
+
+    render(<QuotaAccountManager disabled agentId={'agent-1'} />);
+
+    await screen.findByText(/heteroAgent\.claudeQuota\.manage\.autoRoutingTo/);
+    for (const radio of screen.getAllByRole('radio'))
+      expect(radio.getAttribute('aria-disabled')).toBe('true');
+    // No way to rename (or remove) the account from here.
+    expect(
+      screen.queryByRole('button', { name: 'heteroAgent.claudeQuota.manage.more' }),
+    ).toBeNull();
+  });
+
+  // Regression: an account staged for Manual and then unchecked in the profile
+  // was bound back into the pool on Confirm, undoing the deauthorization.
+  it('drops a staged account once it leaves the authorized set', async () => {
+    vi.spyOn(agentQuotaService, 'listAccounts').mockResolvedValue([account('a1'), account('a2')]);
+    vi.spyOn(agentQuotaService, 'listBindings').mockResolvedValue([
+      binding('b1', 'a1', 'pool'),
+      binding('b2', 'a2', 'pool'),
+    ]);
+    const bindAccount = vi.spyOn(agentQuotaService, 'bindAccount');
+
+    render(<QuotaAccountManager agentId={'agent-1'} />);
+    await screen.findByText('a2@example.com');
+    await waitFor(() =>
+      expect(
+        screen.getByRole('radio', { name: /a2@example\.com/ }).getAttribute('aria-disabled'),
+      ).not.toBe('true'),
+    );
+    fireEvent.click(screen.getByRole('radio', { name: /a2@example\.com/ }));
+    expect(screen.getByText('heteroAgent.claudeQuota.manage.confirmSwitch')).toBeTruthy();
+
+    // a2 is unchecked in the Subscription accounts card.
+    act(() =>
+      useAgentQuotaStore.setState({
+        quotaBindingsMap: { 'agent-1': [binding('b1', 'a1', 'pool')] },
+      }),
+    );
+
+    expect(screen.queryByText('heteroAgent.claudeQuota.manage.confirmSwitch')).toBeNull();
+    expect(bindAccount).not.toHaveBeenCalled();
   });
 
   it('treats another coding agent’s pin as Auto for Claude and leaves it alone', async () => {
@@ -136,14 +231,12 @@ describe('QuotaAccountManager', () => {
     render(<QuotaAccountManager agentId={'agent-1'} />);
 
     expect(checkedOption()).toContain('a1@example.com');
-    expect(screen.getByRole('switch').hasAttribute('disabled')).toBe(true);
     for (const radio of screen.getAllByRole('radio'))
       expect(radio.getAttribute('aria-disabled')).toBe('true');
 
     await act(async () => answerBindings([binding('b1', 'a1', 'pool')]));
 
     expect(checkedOption()).toContain('heteroAgent.claudeQuota.manage.modeAuto');
-    expect(screen.getByRole('switch').hasAttribute('disabled')).toBe(false);
     expect(
       screen
         .getByRole('radio', { name: /heteroAgent\.claudeQuota\.manage\.modeAuto/ })
@@ -349,8 +442,6 @@ describe('QuotaAccountManager on the desktop', () => {
     );
     for (const radio of screen.getAllByRole('radio'))
       expect(radio.getAttribute('aria-disabled')).toBe('true');
-    for (const toggle of screen.getAllByRole('switch'))
-      expect(toggle.hasAttribute('disabled')).toBe(true);
     expect(switchAccount).not.toHaveBeenCalled();
     expect(setDeviceAccount).not.toHaveBeenCalled();
   });
@@ -398,7 +489,9 @@ describe('QuotaAccountManager on the desktop', () => {
     renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
 
     await screen.findByText('heteroAgent.claudeQuota.manage.notSignedIn');
-    expect(screen.getByText('heteroAgent.claudeQuota.manage.autoNoAccount')).toBeTruthy();
+    // The agent has an account; what it lacks is a login on this device.
+    expect(screen.getByText('heteroAgent.claudeQuota.manage.autoNoSignedInAccount')).toBeTruthy();
+    expect(screen.queryByText('heteroAgent.claudeQuota.manage.autoNoAuthorizedAccount')).toBeNull();
     expect(screen.queryByText(/heteroAgent\.claudeQuota\.manage\.autoRoutingTo/)).toBeNull();
   });
 

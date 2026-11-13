@@ -1,0 +1,1 @@
+ALTER TABLE "agent_account_bindings" ADD COLUMN IF NOT EXISTS "last_selected_at" timestamp with time zone;

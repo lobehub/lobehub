@@ -102,6 +102,7 @@ export const ProfileDynamicMeta = createAgentSectionDynamicMeta('navigation.prof
 export const EngineDynamicMeta = createAgentSectionDynamicMeta('navigation.engine');
 export const InstructionDynamicMeta = createAgentSectionDynamicMeta('navigation.instruction');
 export const EnvironmentDynamicMeta = createAgentSectionDynamicMeta('navigation.environment');
+export const AccountsDynamicMeta = createAgentSectionDynamicMeta('navigation.accounts');
 export const ToolsDynamicMeta = createAgentSectionDynamicMeta('navigation.tools');
 export const KnowledgeDynamicMeta = createAgentSectionDynamicMeta('navigation.knowledge');
 export const SkillsDynamicMeta = createAgentSectionDynamicMeta('navigation.skills');
