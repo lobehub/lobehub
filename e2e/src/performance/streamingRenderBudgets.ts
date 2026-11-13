@@ -1,0 +1,108 @@
+import type { RunnerKind, ScenarioBudget } from './renderBudget';
+import { RENDER_REGIONS, type RenderRegion } from './renderProfile';
+import type { StreamingWorkload } from './streamingWorkloads';
+
+export type StreamingScenario =
+  | StreamingWorkload
+  /** `bigstream` streaming in another topic while the user reads a finished one. */
+  | 'background';
+
+export interface StreamingBudget extends ScenarioBudget {
+  /** Ceiling for the p50 of JS heap growth across one reply, after forced GC, in MB. */
+  heapGrowthMb: number;
+}
+
+/**
+ * Render and memory budgets while a reply streams, gated on the p50 of each
+ * scenario's samples (`renders` / `actualDurationMs` per region, ms for the
+ * frame gap, MB for heap growth).
+ *
+ * Local baseline (2026-11-13, M5 Max, headless Chromium, 3 runs, p50 range):
+ *
+ * | scenario   | sidebar        | conversation       | messages           | frame gap | heap        |
+ * | ---------- | -------------- | ------------------ | ------------------ | --------- | ----------- |
+ * | bigstream  | 32–33× 18–41ms | 358–364× 286–588ms | 251–257× 203–407ms | 67–233ms  | 10.9–11.7MB |
+ * | toolstorm  | 21–23× 18–34ms | 101–107× 101–219ms | 83–84× 47–105ms    | 67–183ms  | 23.4–23.6MB |
+ * | richreply  | 28× 23–32ms    | 216–224× 341–496ms | 162–172× 260–381ms | 283–400ms | 11.0–13.2MB |
+ * | background | 18× 5–7ms      | 9–10× 7–10ms       | 5× 1–2ms           | 17ms      | 1.8–2.7MB   |
+ *
+ * Render counts barely move between runs because the mock streams on a
+ * wall-clock schedule, so their ceilings sit about 20% above the highest p50
+ * and catch a new re-render loop. Durations and frame gaps move with machine
+ * load, so they allow about twice it; heap allows about 30% more. Re-measure
+ * with `bun run test:perf` (receipts in `reports/render-budget/stream-*.json`)
+ * before changing a number, and after changing a reply or its pacing in
+ * `streamingWorkloads.ts`.
+ */
+const LOCAL: Record<StreamingScenario, StreamingBudget> = {
+  background: {
+    heapGrowthMb: 5,
+    maxFrameGapMs: 100,
+    regions: {
+      conversation: { actualDurationMs: 20, renders: 12 },
+      messages: { actualDurationMs: 5, renders: 6 },
+      sidebar: { actualDurationMs: 15, renders: 22 },
+    },
+  },
+  bigstream: {
+    heapGrowthMb: 16,
+    maxFrameGapMs: 470,
+    regions: {
+      conversation: { actualDurationMs: 1200, renders: 440 },
+      messages: { actualDurationMs: 820, renders: 310 },
+      sidebar: { actualDurationMs: 85, renders: 40 },
+    },
+  },
+  richreply: {
+    heapGrowthMb: 18,
+    maxFrameGapMs: 800,
+    regions: {
+      conversation: { actualDurationMs: 1000, renders: 270 },
+      messages: { actualDurationMs: 770, renders: 210 },
+      sidebar: { actualDurationMs: 65, renders: 34 },
+    },
+  },
+  toolstorm: {
+    heapGrowthMb: 31,
+    maxFrameGapMs: 370,
+    regions: {
+      conversation: { actualDurationMs: 440, renders: 130 },
+      messages: { actualDurationMs: 210, renders: 101 },
+      sidebar: { actualDurationMs: 70, renders: 28 },
+    },
+  },
+};
+
+/**
+ * GitHub-hosted `ubuntu-latest` runners. Counts and heap reuse the local
+ * ceilings; durations and frame gaps start at 2.5 times local, the ratio the
+ * chat switch budgets measured on CI, until a CI receipt calibrates them
+ * (the `render-budget` artifact of the `Render Budget` job).
+ */
+const CI_TIMING_FACTOR = 2.5;
+
+const withCiTiming = (budget: StreamingBudget): StreamingBudget => ({
+  ...budget,
+  maxFrameGapMs: Math.round(budget.maxFrameGapMs * CI_TIMING_FACTOR),
+  regions: Object.fromEntries(
+    RENDER_REGIONS.map((region: RenderRegion) => [
+      region,
+      {
+        actualDurationMs: Math.round(budget.regions[region].actualDurationMs * CI_TIMING_FACTOR),
+        renders: budget.regions[region].renders,
+      },
+    ]),
+  ) as StreamingBudget['regions'],
+});
+
+const CI = Object.fromEntries(
+  Object.entries(LOCAL).map(([scenario, budget]) => [scenario, withCiTiming(budget)]),
+) as Record<StreamingScenario, StreamingBudget>;
+
+export const STREAMING_RENDER_BUDGETS: Record<
+  RunnerKind,
+  Record<StreamingScenario, StreamingBudget>
+> = {
+  ci: CI,
+  local: LOCAL,
+};
