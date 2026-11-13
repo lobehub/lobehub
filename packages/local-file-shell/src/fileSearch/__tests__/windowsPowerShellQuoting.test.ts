@@ -101,4 +101,18 @@ describe('WindowsSearchServiceImpl PowerShell command shape', () => {
     expect(command).toContain("-LiteralPath 'C:\\projects\\app'");
     expect(command).toContain("-Filter '*alpha*'");
   });
+
+  it('sets the console output encoding before searching', async () => {
+    usePowerShell();
+
+    await new WindowsSearchServiceImpl(powershellDetector).search({
+      keywords: 'alpha',
+      onlyIn: 'C:\\projects\\app',
+    });
+
+    const command = commandArg();
+    expect(command).toContain('[Console]::OutputEncoding = [System.Text.Encoding]::UTF8');
+    // It has to run before the search, or the mojibake is already on the wire.
+    expect(command.indexOf('OutputEncoding')).toBeLessThan(command.indexOf('Get-ChildItem'));
+  });
 });
