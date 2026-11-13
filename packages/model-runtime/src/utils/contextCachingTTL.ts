@@ -73,14 +73,13 @@ export const resolveContextCachingTTL = ({
 };
 
 /**
- * The TTL the request payload carries: only where the API takes one, and only when it is not the
- * API default (`5m` on Anthropic), so a default request stays byte-identical to one sent before
- * the setting existed.
+ * The TTL the request payload carries: only where the API takes one, so the request states the
+ * lifetime the model config chose (`5m` included, which behaves like the API default).
  */
 export const resolveRequestContextCachingTTL = (
   provider: string,
   ttl: ContextCachingTTL | undefined,
 ): ContextCachingTTL | undefined => {
   const options = PROVIDER_REQUESTABLE_CONTEXT_CACHING_TTLS[provider];
-  return options && ttl && ttl !== options[0] && options.includes(ttl) ? ttl : undefined;
+  return options && ttl && options.includes(ttl) ? ttl : undefined;
 };

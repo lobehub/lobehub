@@ -89,7 +89,9 @@ describe('ChatService — prompt-cache TTL', () => {
   });
 
   it('drops a caller-supplied TTL the resolver did not grant', async () => {
-    vi.spyOn(mechaModule, 'resolveBrowserModelParams').mockResolvedValue(resolvedModelParams('5m'));
+    vi.spyOn(mechaModule, 'resolveBrowserModelParams').mockResolvedValue(
+      resolvedModelParams('5m', '5m'),
+    );
     const contextEngineeringSpy = vi.spyOn(mechaModule, 'contextEngineering').mockResolvedValue([]);
 
     const prepared = await chatService.buildAssistantMessageContext({
@@ -105,6 +107,6 @@ describe('ChatService — prompt-cache TTL', () => {
     expect(contextEngineeringSpy).toHaveBeenCalledWith(
       expect.objectContaining({ contextCachingTTL: '5m' }),
     );
-    expect(prepared.params.contextCachingTTL).toBeUndefined();
+    expect(prepared.params.contextCachingTTL).toBe('5m');
   });
 });

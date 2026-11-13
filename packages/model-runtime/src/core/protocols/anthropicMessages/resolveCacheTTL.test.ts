@@ -29,12 +29,12 @@ const breakpoints = (payload: any) => [
 ];
 
 describe('buildCacheControl', () => {
-  it('omits ttl for the 5m default so the default payload stays byte-identical', () => {
+  it('omits ttl when none was resolved (the API default 5m)', () => {
     expect(buildCacheControl()).toEqual({ type: 'ephemeral' });
-    expect(buildCacheControl('5m')).toEqual({ type: 'ephemeral' });
   });
 
-  it('writes ttl only for the opt-in 1h lifetime', () => {
+  it('writes the resolved ttl, 5m included', () => {
+    expect(buildCacheControl('5m')).toEqual({ ttl: '5m', type: 'ephemeral' });
     expect(buildCacheControl('1h')).toEqual({ ttl: '1h', type: 'ephemeral' });
   });
 });
@@ -76,6 +76,20 @@ describe('buildDefaultAnthropicPayload cache TTL', () => {
       { type: 'ephemeral' },
     ]);
     expect(resolveDefaultAnthropicPricingOptions(basePayload, payload)).toEqual({
+      lookupParams: { ttl: '5m' },
+    });
+  });
+
+  it('writes an explicit 5m on every breakpoint when the model config picks 5m', async () => {
+    const request = { ...basePayload, contextCachingTTL: '5m' as const };
+    const payload = await buildDefaultAnthropicPayload(request, { allowExtendedCacheTTL: true });
+
+    expect(breakpoints(payload)).toEqual([
+      { ttl: '5m', type: 'ephemeral' },
+      { ttl: '5m', type: 'ephemeral' },
+      { ttl: '5m', type: 'ephemeral' },
+    ]);
+    expect(resolveDefaultAnthropicPricingOptions(request, payload)).toEqual({
       lookupParams: { ttl: '5m' },
     });
   });

@@ -27,11 +27,21 @@ afterEach(() => {
 });
 
 describe('LobeAnthropicAI prompt cache TTL', () => {
-  it('sends 5m breakpoints (no ttl field) when the advanced option is not set', async () => {
+  it('sends breakpoints without a ttl (API default 5m) when no TTL was resolved', async () => {
     const sent = await sentPayload(payload);
 
     expect(sent.system[0].cache_control).toEqual({ type: 'ephemeral' });
     expect(sent.messages.at(-1).content.at(-1).cache_control).toEqual({ type: 'ephemeral' });
+  });
+
+  it('sends explicit 5m breakpoints when contextCachingTTL is 5m', async () => {
+    const sent = await sentPayload({ ...payload, contextCachingTTL: '5m' });
+
+    expect(sent.system[0].cache_control).toEqual({ ttl: '5m', type: 'ephemeral' });
+    expect(sent.messages.at(-1).content.at(-1).cache_control).toEqual({
+      ttl: '5m',
+      type: 'ephemeral',
+    });
   });
 
   it('sends 1h breakpoints when contextCachingTTL is 1h', async () => {
