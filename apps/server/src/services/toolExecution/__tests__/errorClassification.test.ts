@@ -85,6 +85,38 @@ describe('getToolAccessDeniedError', () => {
     });
   });
 
+  it.each([
+    Object.assign(new Error('no_permission_to_act_as'), { status: 403 }),
+    Object.assign(new Error('Forbidden'), {
+      errorBody: {
+        error: 'no_permission_to_act_as',
+        error_description:
+          'Authenticated user is not allowed to act on behalf of the requested owner account',
+      },
+      status: 403,
+    }),
+    {
+      error: 'no_permission_to_act_as',
+      message: 'Authenticated user is not allowed to act on behalf of the requested owner account',
+      status: 403,
+    },
+  ])('explains how to recover from a marketplace act-as refusal', (error) => {
+    const denial = getToolAccessDeniedError(error, 'Command execution failed');
+
+    expect(denial).toMatchObject({ code: 'FORBIDDEN', kind: 'stop', status: 403 });
+    expect(denial?.hint).toContain('resync the workspace members');
+    expect(denial?.hint).not.toContain('did not identify the blocking rule');
+  });
+
+  it('prefers upstream guidance over the act-as recovery hint', () => {
+    const error = Object.assign(new Error('no_permission_to_act_as'), {
+      errorBody: { error: { hint: 'Rejoin the workspace.' } },
+      status: 403,
+    });
+
+    expect(getToolAccessDeniedError(error, error.message)?.hint).toBe('Rejoin the workspace.');
+  });
+
   it('accepts numeric HTTP error codes without throwing', () => {
     expect(getToolAccessDeniedError({ code: 403, message: 'Request blocked' }, '')).toMatchObject({
       code: 'FORBIDDEN',
