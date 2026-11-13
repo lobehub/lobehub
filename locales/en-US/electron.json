@@ -1,4 +1,5 @@
 {
+  "gateway.autoEnroll.success": "This computer was added to this workspace as your private device. Only you can run agents on it.",
   "gateway.enableConnection": "Connect to Gateway",
   "gateway.error.authRejected": "Device Gateway rejected this sign-in. Retry or sign in again. If it persists, ask your server administrator to check the gateway configuration.",
   "gateway.error.configUnavailable": "Couldn't load this server's configuration. Check your connection and retry.",

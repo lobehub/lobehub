@@ -123,6 +123,8 @@ export default {
   'proxy.validation.serverRequired': 'Server address is required when proxy is enabled',
   'proxy.validation.typeRequired': 'Proxy type is required when proxy is enabled',
   'proxy.validation.usernameRequired': 'Username is required when authentication is enabled',
+  'gateway.autoEnroll.success':
+    'This computer was added to this workspace as your private device. Only you can run agents on it.',
   'gateway.enableConnection': 'Connect to Gateway',
   'gateway.error.authRejected':
     'Device Gateway rejected this sign-in. Retry or sign in again. If it persists, ask your server administrator to check the gateway configuration.',
