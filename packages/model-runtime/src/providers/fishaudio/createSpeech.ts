@@ -161,6 +161,13 @@ export const buildFishAudioSpeechRequest = (
   }
 
   const voice = payload.voice?.trim();
+  // Every Fish voice is a 32-hex model id, so a malformed one can only fail upstream.
+  if (voice && voice !== FISH_AUDIO_DEFAULT_VOICE_ID && !FISH_AUDIO_REFERENCE_ID.test(voice)) {
+    throw new FishAudioSpeechError(
+      `"${voice}" is not a Fish Audio voice id (32 hex characters, as in fish.audio/m/<id>). ${FISH_AUDIO_VOICE_HINT}`,
+      AgentRuntimeErrorType.ProviderBizError,
+    );
+  }
   const text = buildFishAudioText(payload.input, requestModel, params.instructions);
 
   return {

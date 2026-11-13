@@ -184,6 +184,7 @@ describe('createFishAudioSpeech', () => {
         { model: 's1', params: { instructions: 'x' } },
       ],
       ['empty input', { input: '   ' }],
+      ['a voice id that is not a Fish model id', { voice: 'not_a_real_voice_xyz' }],
     ])('%s', async (_, override) => {
       await expect(
         createFishAudioSpeech(
