@@ -166,10 +166,10 @@ export const useSettingsSearch = (
 
     // English floor + localized enrichment (deduped: on en-US they overlap)
     const getTabKeywords = (tab: SettingsSearchTab) => {
-      const keywordsKey = TAB_SEARCH_KEYWORDS_KEYS[tab];
+      const keywordsKeys = [TAB_SEARCH_KEYWORDS_KEYS[tab] ?? []].flat();
       return [
         ...(TAB_SEARCH_EN_KEYWORDS[tab] ?? []),
-        ...(keywordsKey ? splitKeywords(t(keywordsKey as never) as string) : []),
+        ...keywordsKeys.flatMap((key) => splitKeywords(t(key as never) as string)),
       ];
     };
     const ownerTabs = new Set(keywordOwnerTabs);

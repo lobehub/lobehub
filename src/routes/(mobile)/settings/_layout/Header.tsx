@@ -27,6 +27,7 @@ const TAB_TITLE_KEY: Partial<Record<SettingsTabs, string>> = {
   [SettingsTabs.ServiceModel]: 'setting:tab.serviceModel',
   [SettingsTabs.Stats]: 'auth:tab.stats',
   [SettingsTabs.SystemTools]: 'setting:tab.systemTools',
+  [SettingsTabs.Usage]: 'subscription:tab.usageAndBalance',
 };
 
 const WORKSPACE_TAB_TITLE_KEY: Record<string, string> = {
