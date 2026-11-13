@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { projects, tasks } from '../../../schemas';
 import { ArtboardModel } from '../../artboard';
 import { WorkModel } from '..';
-import { parseArtboardShellCreate } from '../artboardShellResult';
+import { parseArtboardShellChange } from '../artboardShellResult';
 import { cleanupWorkTestData, seedWorkTestData, serverDB, topicId, userId } from './_fixtures';
 
 const projectId = 'prj_artboard_shell';
@@ -36,41 +36,72 @@ afterEach(async () => {
 
 const line = () => `artboard ${artboardId} · revision 1 · 0 groups · 0 boards`;
 
-describe('parseArtboardShellCreate', () => {
+describe('parseArtboardShellChange', () => {
   it('reads the board id from a successful lh artboard create', () => {
     expect(
-      parseArtboardShellCreate({
+      parseArtboardShellChange({
         command: `lh artboard create --title '首次进入'`,
         exitCode: 0,
         output: 'art_1 created\nartboard art_1 · revision 1 · 2 groups · 4 boards\n',
       }),
-    ).toEqual({ artboardId: 'art_1' });
+    ).toEqual({ artboardId: 'art_1', changeType: 'created' });
   });
 
   it('unwraps the codex shell wrapper and reads --json output', () => {
     expect(
-      parseArtboardShellCreate({
+      parseArtboardShellChange({
         command: `/bin/zsh -lc "lh artboard create --title x --json"`,
         exitCode: 0,
         output: JSON.stringify({ artboard: { id: 'art_2', revision: 1 }, changedIds: [] }),
       }),
-    ).toEqual({ artboardId: 'art_2' });
+    ).toEqual({ artboardId: 'art_2', changeType: 'created' });
   });
 
-  it('ignores failed runs, reads and updates', () => {
-    const output = 'artboard art_3 · revision 2 · 1 groups · 1 boards';
+  it('recognises the CLI path the app hands to an agent', () => {
+    const output = 'artboard art_4 · revision 1 · 0 groups · 0 boards';
+    for (const program of [
+      '"$LOBEHUB_CLI"',
+      '"${LOBEHUB_CLI}"',
+      '"${LOBEHUB_CLI:-lh}"',
+      '/tmp/app/bin/lobehub',
+      'lobe',
+    ])
+      expect(
+        parseArtboardShellChange({
+          command: `/bin/zsh -lc '${program} artboard create --title x'`,
+          exitCode: 0,
+          output,
+        }),
+      ).toEqual({ artboardId: 'art_4', changeType: 'created' });
+  });
+
+  it('reads an update as a new version of the board named in the command', () => {
     expect(
-      parseArtboardShellCreate({ command: 'lh artboard create --title x', exitCode: 1, output }),
-    ).toBeNull();
-    expect(
-      parseArtboardShellCreate({ command: 'lh artboard read art_3', exitCode: 0, output }),
-    ).toBeNull();
-    expect(
-      parseArtboardShellCreate({
+      parseArtboardShellChange({
         command: `lh artboard update art_3 --revision 1 --ops '[]'`,
         exitCode: 0,
+        output: 'artboard art_3 · revision 2 · 1 groups · 1 boards',
+      }),
+    ).toEqual({ artboardId: 'art_3', changeType: 'updated' });
+  });
+
+  it('ignores failed runs, reads and other programs', () => {
+    const output = 'artboard art_3 · revision 2 · 1 groups · 1 boards';
+    expect(
+      parseArtboardShellChange({ command: 'lh artboard create --title x', exitCode: 1, output }),
+    ).toBeNull();
+    expect(
+      parseArtboardShellChange({
+        command: `lh artboard update art_3 --revision 1 --ops '[]'`,
+        exitCode: 1,
         output,
       }),
+    ).toBeNull();
+    expect(
+      parseArtboardShellChange({ command: 'lh artboard read art_3', exitCode: 0, output }),
+    ).toBeNull();
+    expect(
+      parseArtboardShellChange({ command: 'echo artboard create', exitCode: 0, output }),
     ).toBeNull();
   });
 });
@@ -107,5 +138,34 @@ describe('WorkModel.registerShellArtboardResult', () => {
         toolName: 'command_execution',
       }),
     ).toBeNull();
+  });
+
+  it('moves the card to the later run when the board is updated', async () => {
+    const model = new WorkModel(serverDB, userId);
+    const base = { toolIdentifier: 'codex', toolName: 'command_execution', topicId };
+    await model.registerShellArtboardResult({
+      ...base,
+      data: { command: `lh artboard create --title '首次进入'`, exitCode: 0, output: line() },
+      rootOperationId: 'op-hetero-1',
+      toolCallId: 'call-shell-1',
+    });
+    await model.registerShellArtboardResult({
+      ...base,
+      data: {
+        command: `"$LOBEHUB_CLI" artboard update ${artboardId} --revision 1 --ops '[]'`,
+        exitCode: 0,
+        output: line(),
+      },
+      rootOperationId: 'op-hetero-2',
+      toolCallId: 'call-shell-2',
+    });
+
+    const summaries = await model.listSummariesByRootOperations({
+      includeArtboardWorks: true,
+      rootOperationIds: ['op-hetero-1', 'op-hetero-2'],
+    });
+    expect(summaries['op-hetero-1']).toHaveLength(0);
+    expect(summaries['op-hetero-2']).toHaveLength(1);
+    expect(summaries['op-hetero-2'][0]).toMatchObject({ resourceId: artboardId });
   });
 });

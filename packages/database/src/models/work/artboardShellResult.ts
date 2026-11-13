@@ -19,13 +19,21 @@ interface ShellRecord {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
-const isArtboardCreate = (segment: string[]) =>
-  segment.some(
-    (token, index) =>
-      token.split('/').at(-1) === 'lh' &&
-      segment[index + 1] === 'artboard' &&
-      segment[index + 2] === 'create',
-  );
+const CLI_NAMES = new Set(['lh', 'lobe', 'lobehub']);
+const CLI_VARIABLE = /^\$\{?LOBEHUB_CLI\b/;
+
+const isCli = (token: string) =>
+  CLI_VARIABLE.test(token) || CLI_NAMES.has(token.split('/').at(-1)!);
+
+type ArtboardShellChange = Pick<RegisterArtboardWorkParams, 'artboardId' | 'changeType'>;
+
+const artboardCallOf = (segment: string[]) => {
+  const index = segment.findIndex((token, at) => isCli(token) && segment[at + 1] === 'artboard');
+  if (index < 0) return undefined;
+  const [verb, target] = segment.slice(index + 2);
+  if (verb === 'create') return { changeType: 'created' as const };
+  if (verb === 'update' && target) return { artboardId: target, changeType: 'updated' as const };
+};
 
 const idFromJson = (output: string) => {
   try {
@@ -37,14 +45,18 @@ const idFromJson = (output: string) => {
   }
 };
 
-export const parseArtboardShellCreate = (record: ShellRecord): { artboardId: string } | null => {
+export const parseArtboardShellChange = (record: ShellRecord): ArtboardShellChange | null => {
   if (record.exitCode !== undefined && record.exitCode !== 0) return null;
-  const segments = parseShellCommandSegments(record.command);
-  if (!segments?.some(isArtboardCreate) || !record.output) return null;
+  const call = parseShellCommandSegments(record.command)
+    ?.map(artboardCallOf)
+    .find((found) => !!found);
+  if (!call || !record.output) return null;
 
   const artboardId =
-    parseArtboardResultLine(record.output)?.artboardId ?? idFromJson(record.output.trim());
-  return artboardId ? { artboardId } : null;
+    call.artboardId ??
+    parseArtboardResultLine(record.output)?.artboardId ??
+    idFromJson(record.output.trim());
+  return artboardId ? { artboardId, changeType: call.changeType } : null;
 };
 
 const asShellRecord = (data: unknown): ShellRecord | undefined =>
@@ -61,7 +73,7 @@ export const registerShellArtboardResult = async (
   params: SkillToolResultWorkInput & { toolIdentifier: string },
 ): Promise<WorkItem | null> => {
   const record = asShellRecord(params.data);
-  const parsed = record && parseArtboardShellCreate(record);
+  const parsed = record && parseArtboardShellChange(record);
   if (!parsed) return null;
 
   const board = await new ArtboardModel(ctx.db, ctx.userId, ctx.workspaceId).findById(
@@ -72,7 +84,7 @@ export const registerShellArtboardResult = async (
   const work: RegisterArtboardWorkParams = {
     agentId: params.agentId,
     artboardId: board.id,
-    changeType: 'created',
+    changeType: parsed.changeType,
     cumulativeCost: params.cumulativeCost,
     cumulativeUsage: params.cumulativeUsage,
     description: board.description,
