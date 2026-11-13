@@ -129,16 +129,62 @@ describe('buildSunoMusicRequest', () => {
     ).toMatchObject({ customMode: true, prompt: 'a song about cats', style: 'pop' });
   });
 
-  it('rejects incomplete requests', () => {
+  it('accepts lyrics-only custom requests and reference-audio-only requests', () => {
+    expect(
+      buildSunoMusicRequest({ model: 'suno-v5', params: { lyrics: '[Verse]\nla la' } }, 'V5'),
+    ).toEqual({
+      customMode: true,
+      instrumental: false,
+      model: 'V5',
+      prompt: '[Verse]\nla la',
+      title: '',
+    });
+    expect(
+      buildSunoMusicRequest(
+        { model: 'suno-v5', params: { referenceAudioUrl: 'https://x/ref.mp3' } },
+        'V5',
+      ),
+    ).toEqual({
+      audioUrls: ['https://x/ref.mp3'],
+      customMode: false,
+      instrumental: false,
+      model: 'V5',
+    });
+  });
+
+  it('switches to custom mode for custom-only controls instead of dropping them', () => {
+    expect(
+      buildSunoMusicRequest(
+        {
+          model: 'suno-v5',
+          params: { negativeStyle: 'metal', prompt: 'a happy song', vocalGender: 'm' },
+        },
+        'V5',
+      ),
+    ).toEqual({
+      customMode: true,
+      instrumental: false,
+      model: 'V5',
+      negativeTags: 'metal',
+      prompt: 'a happy song',
+      title: '',
+      vocalGender: 'm',
+    });
+  });
+
+  it('rejects incomplete or incompatible requests', () => {
     expect(() => buildSunoMusicRequest({ model: 'suno-v5', params: {} }, 'V5')).toThrow(
-      /needs a prompt/,
+      /needs a prompt or reference audio/,
     );
     expect(() =>
-      buildSunoMusicRequest({ model: 'suno-v5', params: { lyrics: 'la' } }, 'V5'),
-    ).toThrow(/needs a style/);
+      buildSunoMusicRequest({ model: 'suno-v5', params: { title: 'x', vocalGender: 'f' } }, 'V5'),
+    ).toThrow(/needs lyrics, a style, or a negative style/);
     expect(() =>
-      buildSunoMusicRequest({ model: 'suno-v5', params: { style: 'pop', title: 'x' } }, 'V5'),
-    ).toThrow(/needs lyrics/);
+      buildSunoMusicRequest(
+        { model: 'suno-v5', params: { referenceAudioUrl: 'https://x/ref.mp3', style: 'pop' } },
+        'V5',
+      ),
+    ).toThrow(/reference audio only without/);
   });
 });
 

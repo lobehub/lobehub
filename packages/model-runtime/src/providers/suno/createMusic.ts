@@ -113,8 +113,9 @@ export const resolveSunoModelVersion = (model: string) =>
   SUNO_MODEL_VERSIONS[model.toLowerCase()] ?? model;
 
 /**
- * Map the provider-neutral payload onto a Suno generate request. Lyrics, style or title switch
- * the request to custom mode, where `prompt` carries the lyrics and `style` / `title` apply.
+ * Map the provider-neutral payload onto a Suno generate request. Lyrics, style, title,
+ * negativeStyle or vocalGender switch the request to custom mode, where `prompt` carries the
+ * lyrics and the custom controls apply; otherwise `prompt` and/or reference audio describe it.
  */
 export const buildSunoMusicRequest = (
   payload: CreateMusicPayload,
@@ -131,40 +132,45 @@ export const buildSunoMusicRequest = (
     title,
     vocalGender,
   } = payload.params;
-  const customMode = Boolean(lyrics?.trim() || style?.trim() || title?.trim());
+  const has = (value?: string) => Boolean(value?.trim());
+  // Custom-only controls switch to custom mode, so they are applied instead of dropped.
+  const customMode =
+    has(lyrics) || has(style) || has(title) || has(negativeStyle) || Boolean(vocalGender);
 
   if (customMode) {
-    if (!style?.trim()) {
+    // Suno custom mode needs at least one of style, lyrics or negativeTags; a prompt is sung as
+    // lyrics when no lyrics are given.
+    if (!has(lyrics) && !has(style) && !has(negativeStyle) && !has(prompt)) {
       throw new SunoError(
-        'Suno custom mode (lyrics or title set) needs a style',
+        'Suno custom mode needs lyrics, a style, or a negative style',
         AgentRuntimeErrorType.InvalidRequestFormat,
       );
     }
-    if (!instrumental && !lyrics?.trim() && !prompt?.trim()) {
+    if (referenceAudioUrl) {
       throw new SunoError(
-        'Suno needs lyrics for a song with vocals; set instrumental for an instrumental track',
+        'Suno accepts reference audio only without lyrics, style, title, negativeStyle or vocalGender',
         AgentRuntimeErrorType.InvalidRequestFormat,
       );
     }
-  } else if (!prompt?.trim()) {
+  } else if (!has(prompt) && !referenceAudioUrl) {
     throw new SunoError(
-      'Suno music generation needs a prompt',
+      'Suno music generation needs a prompt or reference audio',
       AgentRuntimeErrorType.InvalidRequestFormat,
     );
   }
 
   // In custom mode `prompt` is sung verbatim, so lyrics take precedence over the description.
-  const songLyrics = lyrics?.trim() ? lyrics : undefined;
+  const songLyrics = has(lyrics) ? lyrics : undefined;
   const songPrompt = customMode ? (songLyrics ?? (instrumental ? undefined : prompt)) : prompt;
 
   return {
     customMode,
     instrumental,
     model: modelVersion,
-    ...(songPrompt ? { prompt: songPrompt } : {}),
-    ...(customMode && style ? { style } : {}),
+    ...(has(songPrompt) ? { prompt: songPrompt } : {}),
+    ...(customMode && has(style) ? { style } : {}),
     ...(customMode ? { title: title ?? '' } : {}),
-    ...(customMode && negativeStyle ? { negativeTags: negativeStyle } : {}),
+    ...(customMode && has(negativeStyle) ? { negativeTags: negativeStyle } : {}),
     ...(customMode && vocalGender ? { vocalGender } : {}),
     ...(!customMode && referenceAudioUrl ? { audioUrls: [referenceAudioUrl] } : {}),
     ...(callbackUrl ? { callBackUrl: callbackUrl } : {}),

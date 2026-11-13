@@ -505,16 +505,24 @@ export const createRouterRuntime = ({
         return { option, router };
       }
 
-      let router = model ? await resolveMatchedRouter(this.deps, model) : undefined;
+      // Honor channel sorting (affinity, demoted channels) and take its first choice; music
+      // never falls back after submission.
+      if (model) {
+        const { matchedRouter, routerOptions } = await selectRouteOptions(this.deps, model, {
+          method: 'createMusic',
+        });
+        const option = routerOptions[0];
+        if (!option) throw new Error('The music generation channel is no longer available');
 
-      if (!router) {
-        const resolvedRouters = await resolveRouters(this.deps, { model });
-        const { baseURL } = this._options;
-        router =
-          (baseURL
-            ? resolvedRouters.find((item) => item.baseURLPattern?.test(baseURL))
-            : undefined) ?? resolvedRouters.at(-1)!;
+        return { option, router: matchedRouter };
       }
+
+      const resolvedRouters = await resolveRouters(this.deps);
+      const { baseURL } = this._options;
+      const router =
+        (baseURL
+          ? resolvedRouters.find((item) => item.baseURLPattern?.test(baseURL))
+          : undefined) ?? resolvedRouters.at(-1)!;
 
       const option = normalizeRouterOptions(this.deps, router)[0];
       if (!option) throw new Error('The music generation channel is no longer available');

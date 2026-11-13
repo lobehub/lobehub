@@ -98,6 +98,45 @@ describe('createRouterRuntime music', () => {
     ).rejects.toThrow('The music generation route is no longer available');
   });
 
+  it('submits to the first channel after sorting, without falling back', async () => {
+    const submitKeys: string[] = [];
+
+    class MockMusicRuntime implements LobeRuntimeAI {
+      private apiKey: string;
+      constructor({ apiKey }: { apiKey: string }) {
+        this.apiKey = apiKey;
+      }
+      createMusic = vi.fn(async () => {
+        submitKeys.push(this.apiKey);
+        return { inferenceId: 'task-1', status: 'pending' as const };
+      });
+    }
+
+    const Runtime = createRouterRuntime({
+      id: 'music-router',
+      routers: [
+        {
+          apiType: 'openai',
+          id: 'suno-router',
+          models: ['suno-v5'],
+          options: [
+            { apiKey: 'channel-a', id: 'a' },
+            { apiKey: 'channel-b', id: 'b' },
+          ],
+          runtime: MockMusicRuntime as any,
+        },
+      ],
+      // Demote channel A, e.g. after it was marked unhealthy.
+      sortRouterOptions: async ({ options }: { options: { id?: string }[] }) =>
+        [...options].reverse(),
+    } as any);
+
+    await expect(new Runtime().createMusic(payload)).resolves.toMatchObject({
+      route: { channelId: 'b', routerId: 'suno-router' },
+    });
+    expect(submitKeys).toEqual(['channel-b']);
+  });
+
   it('reports runtimes without music support', async () => {
     class ChatOnlyRuntime implements LobeRuntimeAI {}
 
