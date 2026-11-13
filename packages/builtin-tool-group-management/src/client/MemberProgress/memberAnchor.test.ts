@@ -1,7 +1,12 @@
 import { ThreadStatus, type UIChatMessage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { resolveMemberStatus, resolveMemberThreadId, selectMemberAnchors } from './memberAnchor';
+import {
+  resolveMemberStatus,
+  resolveMemberThreadId,
+  selectMemberAnchors,
+  shouldShowGroupResult,
+} from './memberAnchor';
 
 const row = (message: Partial<UIChatMessage>) => message as UIChatMessage;
 
@@ -77,5 +82,26 @@ describe('resolveMemberThreadId', () => {
     ).toBe('thd_a');
     expect(resolveMemberThreadId(row({ pluginState: { threadId: 'thd_b' } }))).toBe('thd_b');
     expect(resolveMemberThreadId(row({}))).toBeUndefined();
+  });
+});
+
+describe('shouldShowGroupResult', () => {
+  const anchors = selectMemberAnchors(messages, 'call_1');
+
+  it('shows a client run result, which has no member anchors', () => {
+    expect(shouldShowGroupResult('Members replied', {})).toBe(true);
+  });
+
+  // The server result repeats every member answer already shown per task.
+  it('hides a server run result that repeats the member answers', () => {
+    expect(shouldShowGroupResult('All 2 agent members completed. ...', anchors)).toBe(false);
+  });
+
+  it('shows a server run result a hook replaced with its reason', () => {
+    expect(shouldShowGroupResult('Blocked by policy.', anchors, { type: 'blocked' })).toBe(true);
+  });
+
+  it('hides an empty result', () => {
+    expect(shouldShowGroupResult('', {})).toBe(false);
   });
 });
