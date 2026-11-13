@@ -12,6 +12,7 @@ import type { ChannelStatusTone } from './jobStatus';
 import { channelJobTone, memberCurrentJob, memberJobStatus } from './jobStatus';
 import { MemberAvatar } from './MemberAvatar';
 import { memberName } from './memberName';
+import { MemberProfileTrigger } from './MemberProfileTrigger';
 import { statusStyles, styles, toneStyles } from './styles';
 import { getVisibleStatusMembers } from './visibleMembers';
 
@@ -88,7 +89,9 @@ export function MemberList({
     <Flexbox gap={4}>
       {entries.map((entry) => (
         <Flexbox horizontal align="center" gap={8} key={entry.member.id} paddingBlock={6}>
-          <StatusAvatar entry={entry} size={28} />
+          <MemberProfileTrigger member={entry.member}>
+            <StatusAvatar entry={entry} size={28} />
+          </MemberProfileTrigger>
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
             <Text ellipsis title={entry.name} weight={500}>
               {entry.name}

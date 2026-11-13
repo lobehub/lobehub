@@ -169,7 +169,7 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
           taskVisibility={task.visibility}
         >
           {task.assigneeUserId ? (
-            <AssigneeUserAvatar tooltip userId={task.assigneeUserId} />
+            <AssigneeUserAvatar profileCard userId={task.assigneeUserId} />
           ) : (
             <Tooltip title={tChat('taskList.assignTo')}>
               <UnassignedAssigneeIcon kind={'human'} />
@@ -185,7 +185,7 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
         taskVisibility={task.visibility}
       >
         {task.assigneeAgentId ? (
-          <AssigneeAvatar agentId={task.assigneeAgentId} tooltip={status !== 'running'} />
+          <AssigneeAvatar agentId={task.assigneeAgentId} profileCard={status !== 'running'} />
         ) : (
           <Tooltip title={status === 'running' ? undefined : tChat('taskList.assignTo')}>
             <AssigneeAvatar agentId={task.assigneeAgentId} />

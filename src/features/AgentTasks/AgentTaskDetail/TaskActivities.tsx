@@ -32,6 +32,7 @@ import { Trans, useTranslation } from 'react-i18next';
 
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import type { BriefItem } from '@/features/DailyBrief/types';
+import MemberProfilePopup from '@/features/MemberProfileCard/MemberProfilePopup';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useTaskStore } from '@/store/task';
 import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
@@ -130,7 +131,13 @@ const ActivityAuthor = memo<{
     : fallbackName;
 
   if (!name) return null;
-  if (!isAgent || !author?.id) return <span>{name}</span>;
+  if (!author?.id) return <span>{name}</span>;
+  if (!isAgent)
+    return (
+      <MemberProfilePopup fallback={<span>{name}</span>} userId={author.id}>
+        <span className={styles.profileAuthorName}>{name}</span>
+      </MemberProfilePopup>
+    );
 
   return (
     <AgentProfilePopup
@@ -138,7 +145,7 @@ const ActivityAuthor = memo<{
       agentId={author.id}
       trigger={'hover'}
     >
-      <span className={styles.agentAuthorName}>{name}</span>
+      <span className={styles.profileAuthorName}>{name}</span>
     </AgentProfilePopup>
   );
 });
