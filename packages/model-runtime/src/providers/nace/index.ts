@@ -1,8 +1,8 @@
 import { CURRENT_VERSION } from '@lobechat/const';
 
 import type { LobeRuntimeAI } from '../../core/BaseAI';
-import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatible';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 import type { DecisionContent, DecisionQuestion, DecisionQuestions } from '../../types';
 
 /**
