@@ -16,6 +16,12 @@ const mocks = vi.hoisted(() => ({
 // so the relative import order doesn't matter functionally — the mocks below
 // are still active when the router module is evaluated. They live below the
 // imports to satisfy `import-x/first` without disabling the rule.
+vi.mock('@/database/models/connectorLink', () => ({
+  ConnectorLinkModel: vi.fn(function () {
+    return { adoptLegacyCredentials: async () => {}, listByConnectorIds: async () => [] };
+  }),
+}));
+
 vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
 vi.mock('@/database/models/connector', () => ({ ConnectorModel: vi.fn() }));
 vi.mock('@/database/models/connectorTool', () => ({ ConnectorToolModel: vi.fn() }));

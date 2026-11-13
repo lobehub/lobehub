@@ -1,6 +1,7 @@
 import { buildMcpToolMetadata, getMcpToolVisibility } from '@lobechat/const/mcpApp';
 
 import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
+import type { ConnectorLinkModel } from '@/database/models/connectorLink';
 import type { ConnectorToolModel } from '@/database/models/connectorTool';
 import type { ConnectorCredentials } from '@/database/schemas';
 import { ConnectorMcpConnectionType, ConnectorStatus } from '@/database/schemas';
@@ -9,9 +10,16 @@ import { inferCrudType } from '@/libs/mcp/utils';
 import { mcpService } from '@/server/services/mcp';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
-import { ensureFreshConnectorToken } from './tokens';
+import {
+  getConnectorLinkModel,
+  loadConnectorLinksMap,
+  pickPrimaryLink,
+  withLinkCredentials,
+} from './links';
+import { ensureFreshConnectorToken, ensureFreshLinkToken } from './tokens';
 
 export interface ConnectorToolSyncContext {
+  connectorLinkModel?: ConnectorLinkModel;
   connectorModel: ConnectorModel;
   connectorToolModel: ConnectorToolModel;
 }
@@ -102,7 +110,7 @@ export const syncConnectorToolsById = async (
   connectorId: string,
   /** `userId` decides the `mcp_apps` flag: with it on, view-only tools are listed too. */
   ctx: ConnectorToolSyncContext & { userId?: string | null },
-  options: { pruneMissingAutoTools?: boolean } = {},
+  options: { pruneMissingAutoTools?: boolean; linkId?: string } = {},
 ): Promise<{ toolCount: number }> => {
   let connector = await ctx.connectorModel.findById(connectorId);
   if (!connector) throw new Error('Connector not found');
@@ -112,7 +120,15 @@ export const syncConnectorToolsById = async (
   }
 
   // Refresh the OAuth access token if it has expired before connecting.
-  connector = await ensureFreshConnectorToken(connector, ctx.connectorModel);
+  const links = (await loadConnectorLinksMap([connector], ctx)).get(connector.id) ?? [];
+  const link = options.linkId ? links.find((l) => l.id === options.linkId) : pickPrimaryLink(links);
+  if (options.linkId && !link) throw new Error('Connector account no longer exists');
+  connector = link
+    ? withLinkCredentials(
+        connector,
+        await ensureFreshLinkToken(connector, link, getConnectorLinkModel(ctx), ctx.connectorModel),
+      )
+    : await ensureFreshConnectorToken(connector, ctx.connectorModel);
 
   const mcpParams = buildConnectorMcpParams(connector);
 
@@ -124,7 +140,8 @@ export const syncConnectorToolsById = async (
       mcpApps: await isMcpAppsEnabled(ctx.userId),
     });
   } catch (err) {
-    await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.error);
+    if (link) await getConnectorLinkModel(ctx).updateStatus(link.id, 'error');
+    if (links.length < 2) await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.error);
     throw err;
   }
 
@@ -150,6 +167,7 @@ export const syncConnectorToolsById = async (
       ...restricted,
     ]);
   }
+  if (link) await getConnectorLinkModel(ctx).updateStatus(link.id, 'connected');
   await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.connected);
 
   return { toolCount: syncInputs.length };

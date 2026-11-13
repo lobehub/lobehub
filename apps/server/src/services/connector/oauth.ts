@@ -177,6 +177,7 @@ export const discoverConnectorOAuth = async (mcpServerUrl: string): Promise<Disc
 export const resolveConnectorOAuthScopes = (params: {
   discovery: DiscoveredOAuth;
   existingScopes?: string[];
+  preRegistered?: boolean;
 }): string[] | undefined => {
   if (params.existingScopes?.length) return params.existingScopes;
   const { metadata, scopes: resourceScopes } = params.discovery;
@@ -189,6 +190,12 @@ export const resolveConnectorOAuthScopes = (params: {
     !scopes.includes('offline_access')
   ) {
     scopes.push('offline_access');
+  }
+  if (scopes?.length && !params.preRegistered) {
+    for (const identityScope of ['openid', 'profile', 'email']) {
+      if (metadata.scopes_supported?.includes(identityScope) && !scopes.includes(identityScope))
+        scopes.push(identityScope);
+    }
   }
   return scopes;
 };
@@ -334,6 +341,7 @@ export const buildAuthorizationUrl = async (params: {
   clientInformation: OAuthClientInformationMixed;
   metadata: AuthorizationServerMetadata;
   redirectUri: string;
+  prompt?: string;
   resource?: string;
   scopes?: string[];
   state: string;
@@ -349,6 +357,17 @@ export const buildAuthorizationUrl = async (params: {
       state: params.state,
     },
   );
+  if (params.prompt) {
+    const prompts = authorizationUrl.searchParams
+      .getAll('prompt')
+      .join(' ')
+      .split(/\s+/)
+      .filter(Boolean);
+    authorizationUrl.searchParams.set(
+      'prompt',
+      [...new Set([...prompts, ...params.prompt.split(/\s+/)])].join(' '),
+    );
+  }
   return { authorizationUrl: authorizationUrl.toString(), codeVerifier };
 };
 

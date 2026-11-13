@@ -45,6 +45,10 @@ const makeCtx = (connectors: any[], tools: any[], { agentVisible = true } = {}) 
   ({
     agentModel: { existsById: vi.fn().mockResolvedValue(agentVisible) },
     connectorModel: {
+      getLinkModel: () => ({
+        adoptLegacyCredentials: async () => {},
+        listByConnectorIds: async () => [],
+      }),
       queryByIdentifiers: vi.fn().mockResolvedValue(connectors),
       resolveByIdentifiers: vi.fn().mockResolvedValue(connectors),
     },

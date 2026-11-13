@@ -12,7 +12,15 @@ import { FileModel } from '@/database/models/file';
 import type { UserConnectorToolItem } from '@/database/schemas';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { refreshExpiredConnectorTokens } from '@/server/services/connector/tokens';
+import {
+  loadConnectorLinksMap,
+  pickPrimaryLink,
+  withLinkCredentials,
+} from '@/server/services/connector/links';
+import {
+  refreshExpiredConnectorTokens,
+  refreshExpiredLinkTokens,
+} from '@/server/services/connector/tokens';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 
@@ -107,12 +115,37 @@ const refreshConnectorTokens = async (
   gateKeeper: KeyVaultsGateKeeper | undefined,
   connectors: DecryptedConnector[],
   onTimeout: () => void,
+  anonymous = false,
 ): Promise<DecryptedConnector[]> => {
   if (!gateKeeper || connectors.length === 0) return connectors;
-  return refreshExpiredConnectorTokens(
-    connectors,
-    new ConnectorModel(deps.db, deps.userId, deps.workspaceId, gateKeeper),
-    { onTimeout },
+  const model = new ConnectorModel(deps.db, deps.userId, deps.workspaceId, gateKeeper);
+  const linkModel = model.getLinkModel();
+  const map = await loadConnectorLinksMap(connectors, {
+    connectorModel: model,
+    connectorLinkModel: linkModel,
+  });
+  return Promise.all(
+    connectors.map(async (connector) => {
+      const links = map.get(connector.id) ?? [];
+      const choices = links.map(({ id, name, userId }, index) => ({
+        id,
+        name: anonymous ? `Account ${index + 1}` : name,
+        userId,
+      }));
+      if (links.length > 1) return { ...connector, credentials: null, links: choices };
+      const primary = pickPrimaryLink(links);
+      if (primary)
+        return {
+          ...withLinkCredentials(
+            connector,
+            (
+              await refreshExpiredLinkTokens(connector, [primary], linkModel, model, { onTimeout })
+            )[0],
+          ),
+          links: choices,
+        };
+      return (await refreshExpiredConnectorTokens([connector], model, { onTimeout }))[0];
+    }),
   );
 };
 
@@ -170,6 +203,7 @@ const readConnectors = async (
       connectorGateKeeper,
       connectors.filter((c) => c.mcpServerUrl || c.mcpConnectionType === 'stdio'),
       onRefreshTimeout,
+      !!ctx.shareGate,
     );
 
     // Fetch ALL tools for all real-MCP connectors (including disabled tools) so that
@@ -255,6 +289,7 @@ const readDiscoverableConnectors = async (
       gateKeeper,
       connectorsMcp,
       onRefreshTimeout,
+      !!ctx.shareGate,
     );
     return {
       connectorsMcp: refreshed,

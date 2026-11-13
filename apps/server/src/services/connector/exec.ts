@@ -7,7 +7,12 @@ import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
+import {
+  buildMcpAuthorizationErrorContent,
+  isMcpAuthorizationError,
+} from '@/server/services/toolExecution/mcpAuthError';
 
+import { ConnectorLinkSelectionError, resolveLinkedCall } from './links';
 import { buildLastSyncedAtMap, scheduleStaleConnectorToolsRefresh } from './refresh';
 import { buildConnectorMcpParams, type ConnectorToolSyncContext } from './sync';
 import { ensureFreshConnectorToken } from './tokens';
@@ -86,6 +91,7 @@ export const callConnectorToolById = async (
     args?: string;
     /** An MCP App view's `tools/call`: only tools visible to the app run. */
     fromApp?: boolean;
+    linkId?: string;
     identifier: string;
     /** With `fromApp`: the server the view came from; its calls reach no other. */
     server?: string;
@@ -172,15 +178,46 @@ export const callConnectorToolById = async (
     );
   }
 
-  const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);
+  let resolved;
+  try {
+    resolved = await resolveLinkedCall(
+      {
+        connector,
+        argsStr: params.args,
+        linkId: params.linkId,
+        fromApp: params.fromApp,
+        schemas: tools.map((t) => t.inputSchema),
+      },
+      ctx,
+    );
+  } catch (error) {
+    if (error instanceof ConnectorLinkSelectionError)
+      return { content: error.message, success: false };
+    throw error;
+  }
+  const fresh = resolved.linkId
+    ? resolved.connector
+    : await ensureFreshConnectorToken(connector, ctx.connectorModel);
 
-  return mcpService.callTool({
-    argsStr: params.args ?? '{}',
-    clientParams: buildConnectorMcpParams(fresh),
-    fromApp: params.fromApp,
-    mcpApps: await isMcpAppsEnabled(ctx.userId),
-    toolName: params.toolName,
-  });
+  try {
+    return await mcpService.callTool({
+      argsStr: resolved.argsStr,
+      clientParams: buildConnectorMcpParams(fresh),
+      fromApp: params.fromApp,
+      mcpApps: await isMcpAppsEnabled(ctx.userId),
+      toolName: params.toolName,
+    });
+  } catch (error) {
+    if (isMcpAuthorizationError(error))
+      return {
+        success: false,
+        content: buildMcpAuthorizationErrorContent(connector.identifier, {
+          isShareVisitor: false,
+          linkName: resolved.linkName,
+        }),
+      };
+    throw error;
+  }
 };
 
 /**
@@ -191,7 +228,7 @@ export const callConnectorToolById = async (
  */
 export const readConnectorUiResourceById = async (
   /** `server`: the server the result came from; the view is read from no other. */
-  params: { agentId?: string; identifier: string; server: string; uri: string },
+  params: { agentId?: string; identifier: string; server: string; uri: string; linkId?: string },
   ctx: ConnectorExecContext,
 ) => {
   if (!(await isMcpAppsEnabled(ctx.userId))) {
@@ -233,7 +270,13 @@ export const readConnectorUiResourceById = async (
     );
   }
 
-  const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);
+  const resolved = await resolveLinkedCall(
+    { connector, linkId: params.linkId, fromApp: true },
+    ctx,
+  );
+  const fresh = resolved.linkId
+    ? resolved.connector
+    : await ensureFreshConnectorToken(connector, ctx.connectorModel);
 
   return mcpService.readUiResource(buildConnectorMcpParams(fresh), params.uri);
 };

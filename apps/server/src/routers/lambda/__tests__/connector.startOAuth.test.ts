@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorLinkModel } from '@/database/models/connectorLink';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 
 import { connectorRouter } from '../connector';
@@ -10,6 +11,11 @@ const mocks = vi.hoisted(() => ({ saveState: vi.fn() }));
 
 vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
 vi.mock('@/database/models/connector', () => ({ ConnectorModel: vi.fn() }));
+vi.mock('@/database/models/connectorLink', () => ({
+  ConnectorLinkModel: vi.fn(function () {
+    return { adoptLegacyCredentials: vi.fn(), listByConnectorIds: vi.fn().mockResolvedValue([]) };
+  }),
+}));
 vi.mock('@/database/models/connectorTool', () => ({ ConnectorToolModel: vi.fn() }));
 vi.mock('@/database/models/plugin', () => ({ PluginModel: vi.fn() }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
@@ -170,7 +176,7 @@ describe('connectorRouter.startOAuth client registration', () => {
 
     const url = new URL((await startOAuth()).authorizationUrl);
 
-    expect(url.searchParams.get('scope')).toBe('openid offline_access');
+    expect(url.searchParams.get('scope')).toBe('openid offline_access profile email');
     expect(url.searchParams.get('prompt')).toBe('consent');
   });
 
@@ -182,7 +188,9 @@ describe('connectorRouter.startOAuth client registration', () => {
 
     const url = new URL((await startOAuth()).authorizationUrl);
 
-    expect(url.searchParams.get('scope')).toBe('tools:read tools:write offline_access');
+    expect(url.searchParams.get('scope')).toBe(
+      'tools:read tools:write offline_access openid profile email',
+    );
   });
 
   it.each([undefined, {}])(
@@ -270,5 +278,77 @@ describe('connectorRouter.startOAuth client registration', () => {
 
     expect(registrations).toHaveLength(1);
     expect(registrations[0]).not.toHaveProperty('scope');
+  });
+  it('merges select_account with SDK consent only when the AS advertises it for a new account', async () => {
+    stubAuthorizationServer(
+      { ...vercelMetadata, prompt_values_supported: ['select_account', 'consent'] },
+      { scopes: ['tools'] },
+    );
+    connectorModelMock.findById.mockResolvedValue({
+      id: CONNECTOR_ID,
+      userId: 'me',
+      sourceType: 'custom',
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://mcp.example.com/mcp',
+      oidcConfig: { scheme: 'dcr' },
+    });
+    const result = await connectorRouter
+      .createCaller({ serverDB: {}, userId: 'me' } as any)
+      .startOAuth({ id: CONNECTOR_ID, link: { mode: 'add' } });
+    expect(new URL(result.authorizationUrl).searchParams.get('prompt')).toBe(
+      'consent select_account',
+    );
+    expect(mocks.saveState.mock.calls.at(-1)?.[1].linkTarget).toEqual({ kind: 'new' });
+  });
+
+  it('rejects add on a non-custom connector and reauthorization of an unknown account', async () => {
+    connectorModelMock.findById.mockResolvedValue({
+      id: CONNECTOR_ID,
+      userId: 'me',
+      sourceType: 'marketplace',
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://mcp.example.com/mcp',
+    });
+    const caller = connectorRouter.createCaller({ serverDB: {}, userId: 'me' } as any);
+    await expect(
+      caller.startOAuth({ id: CONNECTOR_ID, link: { mode: 'add' } }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(
+      caller.startOAuth({ id: CONNECTOR_ID, link: { mode: 'reauthorize', linkId: 'missing' } }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('defaults to the earliest account and honors an explicit reauthorization target', async () => {
+    stubAuthorizationServer(vercelMetadata);
+    vi.mocked(ConnectorLinkModel).mockImplementationOnce(function () {
+      return {
+        adoptLegacyCredentials: vi.fn(),
+        listByConnectorIds: async () => [
+          { id: 'lnk_early', userConnectorId: CONNECTOR_ID },
+          { id: 'lnk_late', userConnectorId: CONNECTOR_ID },
+        ],
+      } as any;
+    });
+    await startOAuth();
+    expect(mocks.saveState.mock.calls.at(-1)?.[1].linkTarget).toEqual({
+      kind: 'existing',
+      linkId: 'lnk_early',
+    });
+    vi.mocked(ConnectorLinkModel).mockImplementationOnce(function () {
+      return {
+        adoptLegacyCredentials: vi.fn(),
+        listByConnectorIds: async () => [
+          { id: 'lnk_early', userConnectorId: CONNECTOR_ID },
+          { id: 'lnk_late', userConnectorId: CONNECTOR_ID },
+        ],
+      } as any;
+    });
+    await connectorRouter
+      .createCaller({ serverDB: {}, userId: 'me' } as any)
+      .startOAuth({ id: CONNECTOR_ID, link: { mode: 'reauthorize', linkId: 'lnk_late' } });
+    expect(mocks.saveState.mock.calls.at(-1)?.[1].linkTarget).toEqual({
+      kind: 'existing',
+      linkId: 'lnk_late',
+    });
   });
 });
