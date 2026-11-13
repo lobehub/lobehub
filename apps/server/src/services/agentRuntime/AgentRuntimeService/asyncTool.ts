@@ -2,8 +2,10 @@ import type { AgentState } from '@lobechat/agent-runtime';
 import { asyncToolResumeCounter } from '@lobechat/observability-otel/modules/agent-runtime';
 import { type ChatToolPayload } from '@lobechat/types';
 import debug from 'debug';
+import { and, desc, eq, or, type SQL, sql } from 'drizzle-orm';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { messagePlugins, messages } from '@/database/schemas';
 
 import { type GroupActionOnComplete } from '../types';
 import { ASYNC_TOOL_VERIFY_MAX_ATTEMPTS } from './constants';
@@ -15,11 +17,10 @@ const log = debug('lobe-server:agent-runtime-service');
 /** What this module reads off the service. */
 export type AsyncToolDeps = Pick<
   AgentRuntimeServiceContext,
-  | 'allPendingToolsFulfilled'
+  | 'checkPendingToolsBarrier'
   | 'baseURL'
   | 'coordinator'
   | 'maybeScheduleAsyncToolVerify'
-  | 'messageModel'
   | 'queueService'
   | 'resolveAsyncToolOnComplete'
   | 'serverDB'
@@ -99,6 +100,7 @@ export async function tryResumeParentFromAsyncTool(
   }
 
   const pending = (state.pendingToolsCalling ?? []) as ChatToolPayload[];
+  const scope = pendingToolScope(state);
   if (pending.length === 0) {
     // Parked but no pending tools recorded — usually the parked snapshot's
     // `pendingToolsCalling` hasn't finished persisting yet. Warn, report, and
@@ -113,13 +115,26 @@ export async function tryResumeParentFromAsyncTool(
   }
 
   // Barrier: every pending tool must have a fulfilled tool_result message.
-  const allFulfilled = await deps.allPendingToolsFulfilled(
+  const barrier = await deps.checkPendingToolsBarrier(
     pending,
+    scope,
     options?.knownFulfilledMessageId,
   );
-  if (!allFulfilled) {
-    log('[%s] async-tool barrier not yet satisfied, holding', parentOperationId);
-    asyncToolResumeCounter.add(1, { outcome: 'barrier_held' });
+  if (barrier !== 'fulfilled') {
+    log(
+      '[%s] async-tool barrier not yet satisfied (%s), holding (anchor: %s)',
+      parentOperationId,
+      barrier,
+      scope.parentMessageId ?? `legacy topic ${scope.topicId ?? 'none'}`,
+    );
+    // `reason: missing` — no row in this turn's scope, which a stranded parent
+    // shows as opposed to a tool still running; `scope: topic` marks ops parked
+    // before the anchor existed (legacy fallback).
+    asyncToolResumeCounter.add(1, {
+      outcome: 'barrier_held',
+      reason: barrier,
+      scope: scope.parentMessageId ? 'anchor' : 'topic',
+    });
     await deps.maybeScheduleAsyncToolVerify(parentOperationId, state, options);
     return false;
   }
@@ -131,7 +146,7 @@ export async function tryResumeParentFromAsyncTool(
   // verify watchdog resolves it correctly: the option (if any) wins, else the
   // hint persisted on the parked tool message's pluginState, else resume.
   const onComplete: GroupActionOnComplete =
-    options?.onComplete ?? (await deps.resolveAsyncToolOnComplete(pending));
+    options?.onComplete ?? (await deps.resolveAsyncToolOnComplete(pending, scope));
 
   // Single-fire guard: only one concurrent completion flips the op.
   const won = await new AgentOperationModel(deps.serverDB, deps.userId).tryResumeFromAsyncTool(
@@ -241,63 +256,116 @@ export async function maybeScheduleAsyncToolVerify(
   }
 }
 
+/** Where the parked turn's pending tool rows live; see {@link findPendingToolRow}. */
+export interface PendingToolScope {
+  parentMessageId?: string;
+  topicId?: string;
+}
+
+export const pendingToolScope = (state: AgentState): PendingToolScope => ({
+  parentMessageId: state.pendingToolsParentMessageId,
+  topicId: state.origin?.topicId ?? undefined,
+});
+
+/**
+ * The parked turn's tool row for `toolCallId`. A `tool_call_id` is not unique:
+ * providers repeat ids across turns (`call_0`, a function name, a mock's fixed
+ * id), so an unscoped lookup can match a completed row from an earlier turn,
+ * another run, or another user and release the barrier early.
+ *
+ * Scoped to the operation's user and to the message the pending rows hang
+ * under: the emitting assistant, or the tool row itself when a resume reuses
+ * it (preferred over its children). Ops parked before that anchor was recorded
+ * fall back to the newest row in the topic.
+ */
+async function findPendingToolRow(
+  deps: AsyncToolDeps,
+  toolCallId: string,
+  scope: PendingToolScope,
+) {
+  const conditions: SQL[] = [
+    eq(messagePlugins.toolCallId, toolCallId),
+    eq(messagePlugins.userId, deps.userId),
+  ];
+  const order: SQL[] = [];
+  if (scope.parentMessageId) {
+    conditions.push(
+      or(eq(messages.parentId, scope.parentMessageId), eq(messages.id, scope.parentMessageId))!,
+    );
+    order.push(sql`${messages.id} = ${scope.parentMessageId} desc`);
+  } else if (scope.topicId) {
+    conditions.push(eq(messages.topicId, scope.topicId));
+  }
+  order.push(desc(messages.createdAt));
+
+  const [row] = await deps.serverDB
+    .select({ content: messages.content, id: messagePlugins.id, state: messagePlugins.state })
+    .from(messagePlugins)
+    .innerJoin(messages, eq(messages.id, messagePlugins.id))
+    .where(and(...conditions))
+    .orderBy(...order)
+    .limit(1);
+  return row;
+}
+
 /**
  * Whether every pending tool call has a fulfilled tool_result message — i.e.
- * a tool message exists for its `tool_call_id` with non-empty content or a
- * terminal pluginState. Looks up by `tool_call_id` (plugin id === message id).
+ * the parked turn's row for its `tool_call_id` has non-empty content or a
+ * terminal pluginState. Otherwise reports why the barrier holds: `missing`
+ * (no row in scope) or `pending` (a row is still running).
  *
- * `knownFulfilledMessageId` short-circuits the per-tool content/state read for
- * a placeholder the caller just backfilled in the same request: its terminal
+ * `knownFulfilledMessageId` short-circuits the content/state check for a
+ * placeholder the caller just backfilled in the same request: its terminal
  * write is a local fact, so re-reading it (possibly from a lagging read
- * replica) would only risk a false negative that strands the parent. The
- * plugin row itself predates the park, so the `tool_call_id → plugin.id`
- * lookup still resolves; only the freshly written content/state is trusted.
+ * replica) would only risk a false negative that strands the parent. The row
+ * itself predates the park, so the lookup still resolves; only the freshly
+ * written content/state is trusted.
  */
-export async function allPendingToolsFulfilled(
+export async function checkPendingToolsBarrier(
   deps: AsyncToolDeps,
   pending: ChatToolPayload[],
+  scope: PendingToolScope,
   knownFulfilledMessageId?: string,
-): Promise<boolean> {
+): Promise<'fulfilled' | 'missing' | 'pending'> {
   for (const tc of pending) {
-    const plugin = await deps.serverDB.query.messagePlugins.findFirst({
-      where: (mp, { eq }) => eq(mp.toolCallId, tc.id),
-    });
-    if (!plugin) return false;
+    const row = await findPendingToolRow(deps, tc.id, scope);
+    if (!row) {
+      log('async-tool barrier: no row for tool_call_id %s in scope %o', tc.id, scope);
+      return 'missing';
+    }
 
     // Trust the caller's own just-committed backfill (read-your-writes).
-    if (knownFulfilledMessageId && plugin.id === knownFulfilledMessageId) continue;
+    if (knownFulfilledMessageId && row.id === knownFulfilledMessageId) continue;
 
-    const message = await deps.messageModel.findById(plugin.id);
-    const pluginState = plugin.state as { status?: string } | null;
+    const pluginState = row.state as { status?: string } | null;
     const fulfilled =
-      (!!message?.content && message.content.length > 0) ||
+      (!!row.content && row.content.length > 0) ||
       pluginState?.status === 'completed' ||
       pluginState?.status === 'error';
-    if (!fulfilled) return false;
+    if (!fulfilled) return 'pending';
   }
-  return true;
+  return 'fulfilled';
 }
 
 /**
  * Resolve the resume disposition for a parked op from the disposition hint
- * persisted on its first pending tool message's pluginState. Group
- * orchestration stamps `onComplete: 'finish'` there for skipCallSupervisor /
- * delegate; everything else (sub-agents, client tools) resolves to `resume`.
+ * persisted on its pending tool messages' pluginState. Group orchestration
+ * stamps `onComplete: 'finish'` there for skipCallSupervisor / delegate;
+ * everything else (sub-agents, client tools) resolves to `resume`.
  * Self-describing so the generic verify watchdog finishes the right ops.
  */
 export async function resolveAsyncToolOnComplete(
   deps: AsyncToolDeps,
   pending: ChatToolPayload[],
+  scope: PendingToolScope,
 ): Promise<GroupActionOnComplete> {
   // A batched turn can park multiple deferred/client tools. If ANY of them is
   // a group action requesting finish (skipCallSupervisor / delegate), the
   // orchestration must finish — reading only pending[0] would miss a group
   // finish call that isn't the first pending tool and wrongly resume.
   for (const tool of pending) {
-    const plugin = await deps.serverDB.query.messagePlugins.findFirst({
-      where: (mp, { eq }) => eq(mp.toolCallId, tool.id),
-    });
-    const pluginState = plugin?.state as { onComplete?: string } | null;
+    const row = await findPendingToolRow(deps, tool.id, scope);
+    const pluginState = row?.state as { onComplete?: string } | null;
     if (pluginState?.onComplete === 'finish') return 'finish';
   }
   return 'resume';

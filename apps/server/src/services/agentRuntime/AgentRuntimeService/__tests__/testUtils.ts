@@ -235,6 +235,38 @@ export const buildPersistedToolChain = (
   },
 ];
 
+/** A pending tool row as the async-tool barrier reads it (message joined with its plugin). */
+export interface PendingToolRowStub {
+  content?: string | null;
+  id: string;
+  state?: Record<string, unknown> | null;
+}
+
+/**
+ * Stub the barrier's pending-tool row lookup (`serverDB.select()…limit(1)`).
+ * Each lookup consumes the next row; once exhausted, every lookup returns the
+ * last one. `null` means no row matched.
+ */
+export const stubPendingToolRows = (
+  service: AgentRuntimeService,
+  ...rows: (PendingToolRowStub | null)[]
+) => {
+  let index = 0;
+  const limit = vi.fn(async () => {
+    const row = rows[Math.min(index++, rows.length - 1)];
+    return row ? [{ content: null, state: null, ...row }] : [];
+  });
+  const chain = {
+    from: () => chain,
+    innerJoin: () => chain,
+    limit,
+    orderBy: () => chain,
+    where: () => chain,
+  };
+  (service as any).serverDB.select = vi.fn(() => chain);
+  return limit;
+};
+
 export interface ServiceTestContext {
   mockCoordinator: any;
   mockDb: any;

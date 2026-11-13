@@ -26,7 +26,7 @@ import type { HumanInterventionHandler } from '../HumanInterventionHandler';
 import type { OperationTraceRecorder } from '../OperationTraceRecorder';
 import { type ExecGroupMemberParams, type ExecGroupMemberResult } from '../types';
 import type {
-  allPendingToolsFulfilled,
+  checkPendingToolsBarrier,
   maybeScheduleAsyncToolVerify,
   resolveAsyncToolOnComplete,
   tryResumeParentFromAsyncTool,
@@ -297,11 +297,11 @@ export interface AgentRuntimeServiceContext {
   acceptsMemberRuntimeEnd: Bound<typeof acceptsMemberRuntimeEnd>;
   readonly agentFactory: ((config: GeneralAgentConfig) => Agent) | undefined;
   readonly agentOperationModel: AgentOperationModel;
-  allPendingToolsFulfilled: Bound<typeof allPendingToolsFulfilled>;
   readonly baseURL: string;
   buildShareAbortResult: Bound<typeof buildShareAbortResult>;
   calculatePriority: typeof calculatePriority;
   calculateStepDelay: typeof calculateStepDelay;
+  checkPendingToolsBarrier: Bound<typeof checkPendingToolsBarrier>;
   completeGroupActionMember: Bound<typeof completeGroupActionMember>;
   completeGroupMemberBarrier: Bound<typeof completeGroupMemberBarrier>;
   completeSubAgentBridge: Bound<typeof completeSubAgentBridge>;

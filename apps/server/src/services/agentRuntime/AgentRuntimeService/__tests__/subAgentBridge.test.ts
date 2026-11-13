@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { hookDispatcher } from '../../hooks';
 import { AgentRuntimeService } from '..';
-import { buildPersistedToolChain, setUpService } from './testUtils';
+import { buildPersistedToolChain, setUpService, stubPendingToolRows } from './testUtils';
 
 vi.mock('@lobechat/model-runtime', (...args) =>
   import('./testUtils').then((m) =>
@@ -828,34 +828,27 @@ describe('AgentRuntimeService', () => {
     it('returns finish when ANY pending tool requests finish (not just the first)', async () => {
       // First pending tool resumes; a later one is a group finish action. The
       // disposition must scan all pending tools, not only pending[0].
-      (service as any).serverDB.query = {
-        messagePlugins: {
-          findFirst: vi
-            .fn()
-            .mockResolvedValueOnce({ state: { status: 'completed' } })
-            .mockResolvedValueOnce({ state: { onComplete: 'finish', status: 'completed' } }),
-        },
-      };
+      stubPendingToolRows(
+        service,
+        { id: 'msg-tc1', state: { status: 'completed' } },
+        { id: 'msg-tc2', state: { onComplete: 'finish', status: 'completed' } },
+      );
 
-      const result = await (service as any).resolveAsyncToolOnComplete([
-        { id: 'tc1' },
-        { id: 'tc2' },
-      ]);
+      const result = await (service as any).resolveAsyncToolOnComplete(
+        [{ id: 'tc1' }, { id: 'tc2' }],
+        { parentMessageId: 'msg-assistant' },
+      );
 
       expect(result).toBe('finish');
     });
 
     it('returns resume when no pending tool requests finish', async () => {
-      (service as any).serverDB.query = {
-        messagePlugins: {
-          findFirst: vi.fn().mockResolvedValue({ state: { status: 'completed' } }),
-        },
-      };
+      stubPendingToolRows(service, { id: 'msg-tc1', state: { status: 'completed' } });
 
-      const result = await (service as any).resolveAsyncToolOnComplete([
-        { id: 'tc1' },
-        { id: 'tc2' },
-      ]);
+      const result = await (service as any).resolveAsyncToolOnComplete(
+        [{ id: 'tc1' }, { id: 'tc2' }],
+        { parentMessageId: 'msg-assistant' },
+      );
 
       expect(result).toBe('resume');
     });
