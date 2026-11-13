@@ -12,6 +12,7 @@ import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type LocalMcpTool, mcpService } from '@/services/mcp';
 import type { StoreSetter } from '@/store/types';
+import { ConnectorOAuthError, waitForConnectorOAuth } from '@/utils/connectorOAuth';
 
 import type { ToolStore } from '../../store';
 import {
@@ -23,7 +24,12 @@ import {
   connectorsResource,
   withoutConnectorSecrets,
 } from './projection';
-import type { AgentBoundConnector, ConnectorWithTools } from './types';
+import type {
+  AgentBoundConnector,
+  ConnectorAccountFlowOptions,
+  ConnectorAccountFlowResult,
+  ConnectorWithTools,
+} from './types';
 
 type Setter = StoreSetter<ToolStore>;
 
@@ -380,6 +386,89 @@ export class ConnectorActionImpl {
     } finally {
       this.#set({ connectorCreating: false }, false, 'createConnector/end');
     }
+  };
+
+  /** Connect an additional account and refresh all connector lists after authorization. */
+  connectConnectorAccount = (
+    connectorId: string,
+    options?: ConnectorAccountFlowOptions,
+  ): Promise<ConnectorAccountFlowResult> =>
+    this.#authorizeAccount(connectorId, { mode: 'add' }, options);
+
+  /** Reauthorize the selected account and return the actual server-resolved outcome. */
+  reauthorizeConnectorAccount = (
+    connectorId: string,
+    linkId: string,
+    options?: ConnectorAccountFlowOptions,
+  ): Promise<ConnectorAccountFlowResult> =>
+    this.#authorizeAccount(connectorId, { mode: 'reauthorize', linkId }, options);
+
+  #authorizeAccount = async (
+    connectorId: string,
+    link: { mode: 'add' } | { mode: 'reauthorize'; linkId: string },
+    options: ConnectorAccountFlowOptions = {},
+  ): Promise<ConnectorAccountFlowResult> => {
+    const before =
+      [
+        ...(this.#get().connectors ?? []),
+        ...(this.#get().agentBoundConnectors ?? []),
+        ...Object.values(this.#get().agentConnectors ?? {}).flat(),
+      ].find((c) => c.id === connectorId)?.links ?? [];
+    try {
+      options.signal?.throwIfAborted();
+      const { authorizationUrl, flowId } = await lambdaClient.connector.startOAuth.mutate(
+        {
+          id: connectorId,
+          link,
+        },
+        { signal: options.signal },
+      );
+      await waitForConnectorOAuth(
+        options.popup,
+        connectorId,
+        authorizationUrl,
+        options.signal,
+        link.mode === 'add',
+      );
+      await this.#refreshConnectorLists();
+      const after =
+        [
+          ...(this.#get().connectors ?? []),
+          ...(this.#get().agentBoundConnectors ?? []),
+          ...Object.values(this.#get().agentConnectors ?? {}).flat(),
+        ].find((c) => c.id === connectorId)?.links ?? [];
+      if (flowId) return await lambdaClient.connector.oauthResult.query({ flowId });
+      const created = after.find((item) => !before.some((old) => old.id === item.id));
+      return created
+        ? { outcome: 'created', linkId: created.id }
+        : {
+            outcome: link.mode === 'add' ? 'matchedExisting' : 'reauthorized',
+            linkId: link.mode === 'reauthorize' ? link.linkId : undefined,
+          };
+    } catch (error) {
+      if (options.signal?.aborted) throw new ConnectorOAuthError('dismissed');
+      // Server rejections (a 403, an OAuth server that refuses registration)
+      // carry the reason the caller shows; only the window flow is an OAuth error.
+      throw error;
+    } finally {
+      options.popup?.close();
+    }
+  };
+
+  /** Rename an account and refresh every loaded connector list. */
+  renameConnectorAccount = async (
+    _connectorId: string,
+    linkId: string,
+    name: string,
+  ): Promise<void> => {
+    await lambdaClient.connector.renameLink.mutate({ linkId, name });
+    await this.#refreshConnectorLists();
+  };
+
+  /** Remove an account and refresh its connector, including last-account disconnection. */
+  removeConnectorAccount = async (_connectorId: string, linkId: string): Promise<void> => {
+    await lambdaClient.connector.deleteLink.mutate({ linkId });
+    await this.#refreshConnectorLists();
   };
 
   /**

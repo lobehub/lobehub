@@ -410,6 +410,22 @@ describe('mcpService MCP App calls for agents', () => {
     connectorCall.mockResolvedValue({ content: 'ok', success: true });
   });
 
+  it('resolves the originating account after loading cold agent connector schemas', async () => {
+    toolState.ensureConfirmedConnectors.mockImplementationOnce(async () => {
+      connectors.set('agt_1:cold', {
+        isEnabled: true,
+        mcpServerUrl: 'https://mcp.example.com/mcp',
+        tools: [{ inputSchema: { properties: { link_id: {} } } }],
+      });
+    });
+    await mcpService.readMcpAppResource('cold', 'ui://app', {
+      agentId: 'agt_1',
+      server: REMOTE,
+      toolArguments: '{"connector_link_id":"lnk_bob","link_id":"business"}',
+    });
+    expect(connectorRead).toHaveBeenCalledWith(expect.objectContaining({ linkId: 'lnk_bob' }));
+  });
+
   it("reads an agent's connector view on the server, which checks the result's server", async () => {
     connectors.set('agt_1:agent-app', {
       isEnabled: true,

@@ -90,3 +90,27 @@ describe('connectorSelectors.connectorByIdentifierForAgent', () => {
     ).toBe('c1');
   });
 });
+
+describe('connector link names across replica pools', () => {
+  it('resolves base, aggregate and per-agent links and preserves unknown IDs', () => {
+    const make = (id: string) => connector({ id, links: [{ id: `lnk_${id}`, name: id } as any] });
+    const state = {
+      connectors: [make('base')],
+      agentBoundConnectors: [make('aggregate')],
+      agentConnectors: { agent: [make('agent')] },
+    } as unknown as ToolStore;
+    for (const name of ['base', 'aggregate', 'agent'])
+      expect(connectorSelectors.connectorLinkNameById(`lnk_${name}`)(state)).toBe(name);
+    expect(connectorSelectors.connectorLinkNameById('missing')(state)).toBeUndefined();
+    expect(
+      buildClientConnectorManifests([
+        connector({
+          links: [
+            { id: 'a', name: 'Alice' },
+            { id: 'b', name: 'Bob' },
+          ] as any,
+        }),
+      ])[0].api[0].parameters.required,
+    ).toContain('link_id');
+  });
+});

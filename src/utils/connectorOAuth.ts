@@ -21,6 +21,7 @@ export const waitForConnectorOAuth = async (
   connectorId: string,
   authorizationUrl: string,
   signal?: AbortSignal,
+  freshSession?: boolean,
 ): Promise<void> => {
   signal?.throwIfAborted();
   if (isDesktop) {
@@ -34,7 +35,12 @@ export const waitForConnectorOAuth = async (
     };
     signal?.addEventListener('abort', onAbort, { once: true });
     try {
-      const result = await oauth.authorize({ authorizationUrl, connectorId, requestId });
+      const result = await oauth.authorize({
+        authorizationUrl,
+        connectorId,
+        requestId,
+        freshSession,
+      });
       if (signal?.aborted) throw new ConnectorOAuthError('dismissed');
       if (result !== 'success') throw new ConnectorOAuthError(result);
     } finally {

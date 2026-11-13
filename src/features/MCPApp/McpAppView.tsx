@@ -10,7 +10,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation/store';
 import { useIsDark } from '@/hooks/useIsDark';
-import { useToolStore } from '@/store/tool';
+import { useClientDataSWR } from '@/libs/swr';
+import { mcpService } from '@/services/mcp';
 
 import { type AppViewSession, connectAppView, getAppViewPhase } from './appHost';
 import { buildHostContext } from './bridge';
@@ -89,12 +90,17 @@ const McpAppView = memo<McpAppViewProps>(
     const agentId = useConversationStore(mcpAppAgentIdSelector(messageId));
     const { t } = useTranslation('plugin');
 
-    const useFetchMcpAppResource = useToolStore((s) => s.useFetchMcpAppResource);
-    const { data, error, isLoading } = useFetchMcpAppResource(identifier, resourceUri, {
-      agentId,
-      onThisDevice,
-      server,
-    });
+    const { data, error, isLoading } = useClientDataSWR(
+      ['mcpAppResource', identifier, resourceUri, agentId, onThisDevice, server, toolCallId],
+      () =>
+        mcpService.readMcpAppResource(identifier, resourceUri, {
+          agentId,
+          onThisDevice,
+          server,
+          toolArguments: args,
+        }),
+      { revalidateOnFocus: false, revalidateOnReconnect: false },
+    );
 
     const resource = pickAppResource(data, resourceUri);
     // A string: the effects below compare it by value, so no memo is needed
