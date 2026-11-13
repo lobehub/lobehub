@@ -1,6 +1,6 @@
 import { Checkbox, Input, Select } from '@lobehub/ui';
 import { Form, type FormInstance, type FormValues, useForm } from '@lobehub/ui/form';
-import type { AiModelType } from 'model-bank';
+import type { AiModelType, AiProviderModelListItem } from 'model-bank';
 import { memo, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,13 +8,14 @@ import MaxTokenSlider from '@/components/MaxTokenSlider';
 import { type ChatModelCard } from '@/types/llm';
 
 import ExtendParamsSelect from './ExtendParamsSelect';
+import TTSVoiceSelect from './TTSVoiceSelect';
 import { CUSTOM_MODEL_TYPES, hasDuplicateModelId } from './utils';
 
 interface ModelConfigFormProps {
   disabled?: boolean;
   existingModelIds?: string[];
   idEditable?: boolean;
-  initialValues?: ChatModelCard;
+  initialValues?: ChatModelCard & Pick<AiProviderModelListItem, 'parameters' | 'voices'>;
   onFormInstanceReady: (instance: FormInstance) => void;
   showDeployName?: boolean;
   type?: AiModelType;
@@ -28,6 +29,7 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
     initialValues,
     disabled,
     existingModelIds = [],
+    type,
   }) => {
     const { t } = useTranslation('modelProvider');
 
@@ -97,6 +99,22 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
               placeholder={t('providerModels.item.modelConfig.displayName.placeholder')}
             />
           </Form.Field>
+          {type === 'tts' && (
+            <Form.Field
+              extra={t('providerModels.item.modelConfig.ttsVoice.extra')}
+              label={t('providerModels.item.modelConfig.ttsVoice.title')}
+              name={'settings.ttsVoice'}
+            >
+              <TTSVoiceSelect
+                disabled={disabled}
+                voices={initialValues?.voices}
+                defaultVoice={
+                  (initialValues?.parameters as { voice?: { default?: string } } | undefined)?.voice
+                    ?.default
+                }
+              />
+            </Form.Field>
+          )}
           <Form.Field
             extra={t('providerModels.item.modelConfig.tokens.extra')}
             label={t('providerModels.item.modelConfig.tokens.title')}

@@ -7,6 +7,7 @@ import { LOBE_DEFAULT_MODEL_LIST, TTS_AUDIO_MIME_TYPES, validateTTSParams } from
 import { ModelProvider } from 'model-bank/modelProvider';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
+import { AiModelModel } from '@/database/models/aiModel';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
@@ -217,7 +218,9 @@ export class TTSService {
       }
     }
 
-    const voice = request.voice ?? card?.parameters?.voice?.default ?? 'alloy';
+    const savedVoice =
+      request.voice === undefined ? await this.findSavedVoice(provider, model, card) : undefined;
+    const voice = request.voice ?? savedVoice ?? card?.parameters?.voice?.default ?? 'alloy';
 
     let runtime: ModelRuntime;
     try {
@@ -235,7 +238,13 @@ export class TTSService {
     let result: Awaited<ReturnType<typeof runtime.textToSpeech>>;
     try {
       result = await runtime.textToSpeech(
-        { input, model, params, voice, voiceIsDefault: request.voice === undefined },
+        {
+          input,
+          model,
+          params,
+          voice,
+          voiceIsDefault: request.voice === undefined && savedVoice === undefined,
+        },
         { metadata: { trigger: RequestTrigger.Tts }, user: this.userId },
       );
     } catch (error) {
@@ -257,5 +266,33 @@ export class TTSService {
       mimeType: TTS_AUDIO_MIME_TYPES[result.format],
       usage: result.usage,
     };
+  }
+
+  /**
+   * The default voice the user saved for this model in Settings → AI Providers. A voice that
+   * is no longer in the card's catalog (renamed or retired upstream) is ignored, so a stale
+   * preference falls back to the card default instead of failing every request. Reading the
+   * preference never blocks synthesis.
+   */
+  private async findSavedVoice(
+    provider: string,
+    model: string,
+    card: AITTSModelCard | undefined,
+  ): Promise<string | undefined> {
+    try {
+      const row = await new AiModelModel(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      ).findByIdAndProvider(model, provider);
+      const saved = row?.settings?.ttsVoice?.trim();
+      if (!saved) return undefined;
+      if (card?.voices?.length && !card.voices.some((item) => item.id === saved)) return undefined;
+
+      return saved;
+    } catch (error) {
+      console.error('[TTSService] failed to read the saved default voice:', error);
+      return undefined;
+    }
   }
 }
