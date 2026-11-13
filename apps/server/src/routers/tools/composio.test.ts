@@ -184,6 +184,30 @@ describe('composioToolsRouter.executeAction', () => {
     expect(mocks.toolsExecute).not.toHaveBeenCalled();
   });
 
+  it('resolves the account in the conversation the call came from', async () => {
+    // ROOT CAUSE:
+    //
+    // The client runtime ran every Composio call with no conversation named, so the server
+    // resolved the workspace's shared rows only. A private agent's own Composio connection,
+    // which the server runtime runs in that agent's direct topic, came back NOT_FOUND or ran
+    // the shared account of the same app. The scope proof (the caller's own private agent and
+    // its own direct topic) stays in SQL, in `connectorRunScope`.
+    mocks.connectorResolveByIdentifiers.mockResolvedValue([
+      { id: 'conn-private', metadata: { composio: { connectedAccountId: 'ca-private' } } },
+    ]);
+
+    await caller().executeAction({ ...input, agentId: 'agt-private', topicId: 'tpc-direct' });
+
+    expect(mocks.connectorResolveByIdentifiers).toHaveBeenCalledWith(['gmail'], {
+      agentId: 'agt-private',
+      topicId: 'tpc-direct',
+    });
+    expect(mocks.toolsExecute).toHaveBeenCalledWith(
+      'GMAIL_SEND_EMAIL',
+      expect.objectContaining({ connectedAccountId: 'ca-private' }),
+    );
+  });
+
   it('throws NOT_FOUND when neither source has a connection', async () => {
     mocks.connectorResolveByIdentifiers.mockResolvedValue([]);
 

@@ -34,21 +34,34 @@ export const composioToolsRouter = router({
   executeAction: composioProcedure
     .input(
       z.object({
+        /** The agent the call runs for (its agent-owned connection first). */
+        agentId: z.string().optional(),
         identifier: z.string(),
         toolArgs: z.record(z.string(), z.unknown()).optional(),
         toolSlug: z.string(),
+        /**
+         * The conversation the call belongs to. A private agent's own topic
+         * lets it use its owner's private Composio connection, as the server
+         * runtime does; without it the call resolves the workspace's shared
+         * connections only.
+         */
+        topicId: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       // Resolve the connected account server-side, never from a client-supplied
       // connectedAccountId (that would let a user drive another user's
-      // connection), and through the resolver the agent runtime uses: it only
-      // serves a connector this call may run (the workspace's shared ones, as
-      // no conversation is named), and never the plugin mirror of a connector
-      // row it left out — a connector its creator made private stays private
-      // here too. `ownerUserId` is the Composio entity that linked the account,
-      // not the caller.
-      const account = await ctx.composioService.resolveComposioAccount(input.identifier, {});
+      // connection), and through the resolver the agent runtime uses, in the
+      // conversation the call came from: it only serves a connector that run
+      // may use (the workspace's shared ones, plus the owner's private ones in
+      // their private agent's own direct topic — proven in SQL, so naming an
+      // agent or topic the caller does not own widens nothing), and never the
+      // plugin mirror of a connector row it left out. `ownerUserId` is the
+      // Composio entity that linked the account, not the caller.
+      const account = await ctx.composioService.resolveComposioAccount(input.identifier, {
+        agentId: input.agentId,
+        topicId: input.topicId,
+      });
       if (!account) {
         throw new TRPCError({
           code: 'NOT_FOUND',
