@@ -1,4 +1,4 @@
-import type { QuotaDeviceAccount } from '@lobechat/types';
+import { QUOTA_ACCOUNT_PROVIDERS, type QuotaDeviceAccount } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -11,7 +11,11 @@ import {
 import { DeviceModel } from '@/database/models/device';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { AccountNotSignedInOnDeviceError, AgentQuotaService } from '@/server/services/agentQuota';
+import {
+  AccountNotSignedInOnDeviceError,
+  AgentQuotaService,
+  QuotaAccountNotFoundError,
+} from '@/server/services/agentQuota';
 import { resolveDeviceRowId } from '@/server/services/agentQuota/resolveDeviceRowId';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
@@ -31,7 +35,7 @@ const quotaProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   });
 });
 
-const providerSchema = z.enum(['claude-code', 'codex', 'kimi-code']);
+const providerSchema = z.enum(QUOTA_ACCOUNT_PROVIDERS);
 /** `devices.id` of a device the client names by its gateway id; see `resolveDeviceRowId`. */
 const deviceRowIdOf = (
   ctx: { deviceModel: DeviceModel; workspaceId?: string | null },
@@ -321,6 +325,61 @@ export const agentQuotaRouter = router({
   unbindAccount: quotaProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => ctx.bindingModel.remove(input.id)),
+
+  // ── authorized accounts (which accounts an agent may schedule) ───────────
+  /**
+   * The global account pool (optionally one provider's), each account marked
+   * `authorized` when this agent may schedule it. Authorization is not
+   * exclusive: other agents can authorize the same account.
+   */
+  listAgentAccounts: quotaProcedure
+    .input(z.object({ agentId: z.string(), provider: providerSchema.optional() }))
+    .query(async ({ ctx, input }) =>
+      ctx.quotaService.listAgentAccounts(input.agentId, input.provider),
+    ),
+
+  /**
+   * Replace the agent's authorized account set (within `provider` when given).
+   * Returns the resulting load-balancing configuration.
+   */
+  setAgentAccounts: quotaProcedure
+    .input(
+      z.object({
+        accountIds: z.array(z.string()).max(200),
+        agentId: z.string(),
+        provider: providerSchema.optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.quotaService.setAgentAccounts(
+          input.agentId,
+          input.accountIds,
+          input.provider,
+        );
+      } catch (error) {
+        if (error instanceof QuotaAccountNotFoundError)
+          throw new TRPCError({ cause: error, code: 'NOT_FOUND', message: 'Account not found' });
+        throw error;
+      }
+    }),
+
+  /** Auto / Manual mode and the candidates (= the authorized, usable accounts). */
+  getLoadBalanceConfig: quotaProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        /** Gateway id of the device whose per-device pick counts. */
+        deviceId: z.string().optional(),
+        provider: providerSchema.optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) =>
+      ctx.quotaService.getLoadBalanceConfig(input.agentId, {
+        deviceId: await deviceRowIdOf(ctx, input.deviceId),
+        provider: input.provider,
+      }),
+    ),
 
   // ── per-device account choice (a login only exists on its machine) ───────
   /** The account an agent uses on one device; `accountId: null` = Auto there. */

@@ -17,6 +17,7 @@
   "gateway.workspaceStatusConnections_other": "工作空间 · {{count}} 个连接在线",
   "gateway.workspaceStatusDisconnected": "当前没有工作空间设备连接在线",
   "gateway.workspaceStatusUnavailable": "暂时无法获取工作空间设备状态",
+  "navigation.accounts": "助理订阅账号",
   "navigation.agentShare": "分享",
   "navigation.agents": "助手",
   "navigation.appMenu": "应用菜单",

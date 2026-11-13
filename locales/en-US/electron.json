@@ -17,6 +17,7 @@
   "gateway.workspaceStatusConnections_other": "Workspace · {{count}} connections online",
   "gateway.workspaceStatusDisconnected": "No workspace device connection is online",
   "gateway.workspaceStatusUnavailable": "Workspace device status is temporarily unavailable",
+  "navigation.accounts": "Agent Subscription Accounts",
   "navigation.agentShare": "Share",
   "navigation.agents": "Agents",
   "navigation.appMenu": "App menu",

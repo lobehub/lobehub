@@ -8,10 +8,13 @@ import { CalendarDaysIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import {
+  agentLoadBalancingUrl,
+  scrollToAgentLoadBalancing,
+} from '@/features/AgentQuotaAccounts/anchor';
 import { openQuotaCalendarModal, type QuotaCalendarProvider } from '@/features/AgentQuotaCalendar';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
-
-import { openQuotaAccountManagerModal } from './QuotaAccountManagerModal';
+import { stableWorkspaceAwareNavigate } from '@/features/Workspace/stableWorkspaceAwareNavigate';
 
 const styles = stylex.create({
   bottom: {
@@ -30,28 +33,26 @@ const styles = stylex.create({
 
 /**
  * Compact account line in the quota panel: shows the account this quota belongs
- * to and a "Manage" entry into the full account-pool modal (mode / rotation /
- * per-account controls). The heavy lifting lives in QuotaAccountManagerModal.
+ * to and a "Manage" entry that opens the agent's load balancing, where each
+ * authorized account's load is shown and Auto or one account is picked.
  */
 const QuotaAccountSwitcher = memo<{
-  /** Bound execution device the panel samples; the manager checks logins there, not here. */
-  deviceId?: string;
   placement?: 'top' | 'bottom';
   provider: QuotaCalendarProvider;
   snapshot: { identity?: QuotaAccountIdentity | null };
-}>(({ deviceId, snapshot, provider, placement = 'top' }) => {
+}>(({ snapshot, provider, placement = 'top' }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const identity = snapshot.identity;
-  // Only rendered inside the quota popover; hand off to each modal without
-  // leaving the popover open underneath it.
+  // Only rendered inside the quota popover; close it before handing off.
   const { close } = usePopoverContext();
 
   const openManager = useCallback(() => {
     if (!agentId) return;
     close();
-    openQuotaAccountManagerModal(agentId, { deviceId });
-  }, [agentId, close, deviceId]);
+    // Already on that page (the panel is in the chat bar beside it): just scroll.
+    if (!scrollToAgentLoadBalancing()) stableWorkspaceAwareNavigate(agentLoadBalancingUrl(agentId));
+  }, [agentId, close]);
 
   if (!agentId) return null;
 

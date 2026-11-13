@@ -8,6 +8,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { openQuotaCalendarModal } from '@/features/AgentQuotaCalendar';
+import { stableWorkspaceAwareNavigate } from '@/features/Workspace/stableWorkspaceAwareNavigate';
 import { cacheScope } from '@/libs/replica';
 import { hashQuotaSourceKey, quotaPanelResource } from '@/store/agentQuota/projection';
 import { useElectronStore } from '@/store/electron';
@@ -46,6 +47,9 @@ vi.mock('@/features/AgentQuotaCalendar', () => ({
 }));
 
 vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({ useAgentId: () => 'agent-1' }));
+vi.mock('@/features/Workspace/stableWorkspaceAwareNavigate', () => ({
+  stableWorkspaceAwareNavigate: vi.fn(),
+}));
 
 const { confirmModalMock, toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
   confirmModalMock: vi.fn(),
@@ -359,6 +363,16 @@ describe('ClaudeCodeQuotaMenu', () => {
       await screen.findByText('heteroAgent.claudeQuota.unavailableRequestBlocked'),
     ).toBeTruthy();
     expect(screen.getByText('heteroAgent.claudeQuota.manage.entry')).toBeTruthy();
+  });
+
+  it('opens the agent’s load balancing page from Manage', async () => {
+    render(<ClaudeCodeQuotaMenu />);
+
+    fireEvent.click(await screen.findByText('heteroAgent.claudeQuota.manage.entry'));
+
+    expect(stableWorkspaceAwareNavigate).toHaveBeenCalledWith(
+      '/agent/agent-1/accounts#agent-load-balancing',
+    );
   });
 
   it('explains a network-blocked sample instead of reporting an expired login', async () => {

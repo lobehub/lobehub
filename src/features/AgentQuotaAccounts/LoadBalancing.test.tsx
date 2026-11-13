@@ -3,9 +3,11 @@
  */
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { type ReactElement } from 'react';
+import { MemoryRouter } from 'react-router';
 import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { isolateQuotaReplica } from '@/features/ChatInput/ControlBar/HeteroControlBar/QuotaMenu/testUtils';
 import { createReplicaState } from '@/libs/replica';
 import { agentQuotaService } from '@/services/agentQuota';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
@@ -18,8 +20,7 @@ import {
 } from '@/store/agentQuota/projection';
 import { useElectronStore } from '@/store/electron';
 
-import QuotaAccountManager from './QuotaAccountManagerModal';
-import { isolateQuotaReplica } from './testUtils';
+import LoadBalancing from './LoadBalancing';
 
 const desktop = vi.hoisted(() => ({ value: false }));
 
@@ -42,14 +43,16 @@ const account = (id: string) =>
     provider: 'claude-code',
   }) as unknown as QuotaAccount;
 
-/** The label of the option the radio group shows as selected. */
-const checkedOption = () =>
-  screen.getByRole('radio', { checked: true }).closest('label')?.textContent;
+/** The text of the card the radio group shows as selected. */
+const checkedOption = () => screen.getByRole('radio', { checked: true }).textContent;
+
+/** The page reads the URL hash to scroll here when linked from the chat bar. */
+const renderPage = (ui: ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
 
 const binding = (id: string, accountId: string, role: string) =>
-  ({ accountId, agentId: 'agent-1', id, role }) as unknown as QuotaBinding;
+  ({ accountId, agentId: 'agent-1', enabled: true, id, role }) as unknown as QuotaBinding;
 
-describe('QuotaAccountManager', () => {
+describe('LoadBalancing', () => {
   beforeEach(() => {
     isolateQuotaReplica();
     vi.spyOn(agentQuotaService, 'listAccounts').mockResolvedValue([account('a1')]);
@@ -70,20 +73,115 @@ describe('QuotaAccountManager', () => {
       useAgentQuotaStore.setState({ quotaAccountsMap: { [QUOTA_ACCOUNTS_KEY]: [account('a1')] } }),
     );
 
-    render(<QuotaAccountManager agentId={'agent-1'} />);
+    renderPage(<LoadBalancing agentId={'agent-1'} />);
 
-    expect(screen.getByText('a1@example.com')).toBeTruthy();
-    expect(screen.queryByText('heteroAgent.claudeQuota.manage.autoNoAccount')).toBeNull();
-    expect(screen.getByRole('switch').hasAttribute('disabled')).toBe(true);
+    // Which accounts this agent may use is unknown until its bindings load.
+    expect(screen.queryByText('a1@example.com')).toBeNull();
+    expect(screen.queryByText('heteroAgent.claudeQuota.manage.autoNoAuthorizedAccount')).toBeNull();
+    expect(screen.queryByTestId('quota-pool-hint')).toBeNull();
     expect(screen.queryByRole('radio', { checked: true })).toBeNull();
 
     await act(async () => answerBindings([binding('b1', 'a1', 'pool')]));
 
-    expect(screen.queryByText('heteroAgent.claudeQuota.manage.autoNoAccount')).toBeNull();
+    expect(screen.getByText('a1@example.com')).toBeTruthy();
+    expect(screen.queryByText('heteroAgent.claudeQuota.manage.autoNoAuthorizedAccount')).toBeNull();
     expect(screen.getByText(/heteroAgent\.claudeQuota\.manage\.autoRoutingTo/)).toBeTruthy();
-    expect(screen.getByRole('switch').hasAttribute('disabled')).toBe(false);
     // Auto is the confirmed mode now, and the group shows it.
     expect(checkedOption()).toContain('heteroAgent.claudeQuota.manage.modeAuto');
+  });
+
+  it('lists only the accounts this agent is authorized to schedule', async () => {
+    vi.spyOn(agentQuotaService, 'listAccounts').mockResolvedValue([
+      account('a1'),
+      account('a2'),
+      account('off'),
+      account('unbound'),
+      account('switched'),
+    ]);
+    vi.spyOn(agentQuotaService, 'listBindings').mockResolvedValue([
+      binding('b1', 'a1', 'pool'),
+      binding('b2', 'a2', 'pinned'),
+      binding('b3', 'off', 'disabled'),
+      { ...binding('b4', 'switched', 'pool'), enabled: false } as QuotaBinding,
+    ]);
+
+    renderPage(<LoadBalancing agentId={'agent-1'} />);
+
+    await screen.findByText('a1@example.com');
+    expect(screen.getByText('a2@example.com')).toBeTruthy();
+    for (const hidden of ['off', 'unbound', 'switched'])
+      expect(screen.queryByText(`${hidden}@example.com`)).toBeNull();
+    // Two accounts already form a pool: no "add more" prompt.
+    expect(screen.queryByTestId('quota-pool-hint')).toBeNull();
+  });
+
+  it('points an agent with a single schedulable account at its subscription accounts', async () => {
+    vi.spyOn(agentQuotaService, 'listAccounts').mockResolvedValue([account('a1'), account('a2')]);
+    vi.spyOn(agentQuotaService, 'listBindings').mockResolvedValue([binding('b1', 'a1', 'pool')]);
+    const onManageAccounts = vi.fn();
+
+    renderPage(<LoadBalancing agentId={'agent-1'} onManageAccounts={onManageAccounts} />);
+
+    const hint = await screen.findByTestId('quota-pool-hint');
+    expect(hint.textContent).toContain('heteroAgent.claudeQuota.manage.poolSingleHint');
+    expect(screen.queryByText('a2@example.com')).toBeNull();
+    fireEvent.click(screen.getByText('heteroAgent.claudeQuota.manage.addAccounts'));
+    expect(onManageAccounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for accounts when the agent has none authorized', async () => {
+    vi.spyOn(agentQuotaService, 'listBindings').mockResolvedValue([]);
+
+    renderPage(<LoadBalancing agentId={'agent-1'} onManageAccounts={vi.fn()} />);
+
+    const hint = await screen.findByTestId('quota-pool-hint');
+    expect(hint.textContent).toContain('heteroAgent.claudeQuota.manage.poolEmptyHint');
+    expect(screen.getByText('heteroAgent.claudeQuota.manage.autoNoAuthorizedAccount')).toBeTruthy();
+  });
+
+  it('takes no writes in a read-only view', async () => {
+    vi.spyOn(agentQuotaService, 'listBindings').mockResolvedValue([binding('b1', 'a1', 'pool')]);
+
+    renderPage(<LoadBalancing disabled agentId={'agent-1'} />);
+
+    await screen.findByText(/heteroAgent\.claudeQuota\.manage\.autoRoutingTo/);
+    for (const radio of screen.getAllByRole('radio'))
+      expect(radio.getAttribute('aria-disabled')).toBe('true');
+    // No way to rename (or remove) the account from here.
+    expect(
+      screen.queryByRole('button', { name: 'heteroAgent.claudeQuota.manage.more' }),
+    ).toBeNull();
+  });
+
+  // Regression: an account staged for Manual and then unchecked in the profile
+  // was bound back into the pool on Confirm, undoing the deauthorization.
+  it('drops a staged account once it leaves the authorized set', async () => {
+    vi.spyOn(agentQuotaService, 'listAccounts').mockResolvedValue([account('a1'), account('a2')]);
+    vi.spyOn(agentQuotaService, 'listBindings').mockResolvedValue([
+      binding('b1', 'a1', 'pool'),
+      binding('b2', 'a2', 'pool'),
+    ]);
+    const bindAccount = vi.spyOn(agentQuotaService, 'bindAccount');
+
+    renderPage(<LoadBalancing agentId={'agent-1'} />);
+    await screen.findByText('a2@example.com');
+    await waitFor(() =>
+      expect(
+        screen.getByRole('radio', { name: /a2@example\.com/ }).getAttribute('aria-disabled'),
+      ).not.toBe('true'),
+    );
+    fireEvent.click(screen.getByRole('radio', { name: /a2@example\.com/ }));
+    expect(screen.getByText('heteroAgent.claudeQuota.manage.confirmSwitch')).toBeTruthy();
+
+    // a2 is unchecked in the Subscription accounts card.
+    act(() =>
+      useAgentQuotaStore.setState({
+        quotaBindingsMap: { 'agent-1': [binding('b1', 'a1', 'pool')] },
+      }),
+    );
+
+    expect(screen.queryByText('heteroAgent.claudeQuota.manage.confirmSwitch')).toBeNull();
+    expect(bindAccount).not.toHaveBeenCalled();
   });
 
   it('treats another coding agent’s pin as Auto for Claude and leaves it alone', async () => {
@@ -96,7 +194,7 @@ describe('QuotaAccountManager', () => {
       binding('b2', 'kimi', 'pinned'),
     ]);
 
-    render(<QuotaAccountManager agentId={'agent-1'} />);
+    renderPage(<LoadBalancing agentId={'agent-1'} />);
 
     // Claude routing skips the Kimi pin, so for Claude this agent is on Auto.
     await vi.waitFor(() =>
@@ -114,7 +212,7 @@ describe('QuotaAccountManager', () => {
       useAgentQuotaStore.setState({ quotaAccountsMap: { [QUOTA_ACCOUNTS_KEY]: [account('a1')] } }),
     );
 
-    render(<QuotaAccountManager agentId={'agent-1'} />);
+    renderPage(<LoadBalancing agentId={'agent-1'} />);
     await act(async () => answerBindings([binding('b1', 'a1', 'pinned')]));
 
     expect(checkedOption()).toContain('a1@example.com');
@@ -133,17 +231,15 @@ describe('QuotaAccountManager', () => {
       }),
     );
 
-    render(<QuotaAccountManager agentId={'agent-1'} />);
+    renderPage(<LoadBalancing agentId={'agent-1'} />);
 
     expect(checkedOption()).toContain('a1@example.com');
-    expect(screen.getByRole('switch').hasAttribute('disabled')).toBe(true);
     for (const radio of screen.getAllByRole('radio'))
       expect(radio.getAttribute('aria-disabled')).toBe('true');
 
     await act(async () => answerBindings([binding('b1', 'a1', 'pool')]));
 
     expect(checkedOption()).toContain('heteroAgent.claudeQuota.manage.modeAuto');
-    expect(screen.getByRole('switch').hasAttribute('disabled')).toBe(false);
     expect(
       screen
         .getByRole('radio', { name: /heteroAgent\.claudeQuota\.manage\.modeAuto/ })
@@ -163,9 +259,9 @@ describe('QuotaAccountManager', () => {
       }),
     );
     const removeItem = () =>
-      screen.findByRole('menuitem', { name: /heteroAgent\.claudeQuota\.manage\.remove/ });
+      screen.findByRole('menuitem', { name: /heteroAgent\.agentAccounts\.remove/ });
 
-    render(<QuotaAccountManager agentId={'agent-1'} />);
+    renderPage(<LoadBalancing agentId={'agent-1'} />);
     fireEvent.click(screen.getByRole('button', { name: 'heteroAgent.claudeQuota.manage.more' }));
 
     expect((await removeItem()).getAttribute('aria-disabled')).toBe('true');
@@ -182,15 +278,13 @@ const localLogin = (externalAccountId: string, configDir: string | null) => ({
 });
 
 const radioFor = (email: string) =>
-  screen
-    .getAllByRole('radio')
-    .find((radio) => radio.closest('label')?.textContent?.includes(email))!;
+  screen.getAllByRole('radio').find((radio) => radio.textContent?.includes(email))!;
 
 /** The local-login list is device data in the SWR cache: give each case its own. */
 const renderWithFreshCache = (ui: ReactElement) =>
-  render(<SWRConfig value={{ provider: () => new Map() }}>{ui}</SWRConfig>);
+  renderPage(<SWRConfig value={{ provider: () => new Map() }}>{ui}</SWRConfig>);
 
-describe('QuotaAccountManager on the desktop', () => {
+describe('LoadBalancing on the desktop', () => {
   beforeEach(() => {
     desktop.value = true;
     isolateQuotaReplica();
@@ -231,7 +325,7 @@ describe('QuotaAccountManager on the desktop', () => {
   });
 
   it('marks an account with no login on this device and keeps it from being picked', async () => {
-    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
+    renderWithFreshCache(<LoadBalancing agentId={'agent-1'} />);
 
     await screen.findByText('heteroAgent.claudeQuota.manage.notSignedIn');
     expect(radioFor('away@example.com').getAttribute('aria-disabled')).toBe('true');
@@ -243,7 +337,7 @@ describe('QuotaAccountManager on the desktop', () => {
     act(() =>
       useElectronStore.setState({ gatewayDeviceInfo: { deviceId: 'this-desktop' } } as never),
     );
-    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} deviceId={'device-1'} />);
+    renderWithFreshCache(<LoadBalancing agentId={'agent-1'} deviceId={'device-1'} />);
 
     // The device holds its own logins: `away` may well be signed in there.
     await screen.findByText('away@example.com');
@@ -263,7 +357,7 @@ describe('QuotaAccountManager on the desktop', () => {
     act(() =>
       useElectronStore.setState({ gatewayDeviceInfo: { deviceId: 'this-desktop' } } as never),
     );
-    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} deviceId={'this-desktop'} />);
+    renderWithFreshCache(<LoadBalancing agentId={'agent-1'} deviceId={'this-desktop'} />);
 
     // A gateway run on this device spawns on this desktop's logins.
     await screen.findByText('heteroAgent.claudeQuota.manage.notSignedIn');
@@ -281,7 +375,7 @@ describe('QuotaAccountManager on the desktop', () => {
     ]);
     vi.mocked(agentQuotaService.getDeviceAccount).mockResolvedValue({ accountId: 'away' });
 
-    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} deviceId={'device-1'} />);
+    renderWithFreshCache(<LoadBalancing agentId={'agent-1'} deviceId={'device-1'} />);
 
     await waitFor(() => expect(checkedOption()).toContain('away@example.com'));
     expect(agentQuotaService.getDeviceAccount).toHaveBeenCalledWith('agent-1', 'device-1');
@@ -298,7 +392,7 @@ describe('QuotaAccountManager on the desktop', () => {
       binding('b2', 'away', 'pinned'),
     ]);
 
-    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
+    renderWithFreshCache(<LoadBalancing agentId={'agent-1'} />);
 
     await screen.findByText('heteroAgent.claudeQuota.manage.notSignedIn');
     await waitFor(() =>
@@ -316,7 +410,7 @@ describe('QuotaAccountManager on the desktop', () => {
       .mockResolvedValue(undefined as never);
     const switchAccount = vi.spyOn(agentQuotaService, 'switchAccount');
 
-    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
+    renderWithFreshCache(<LoadBalancing agentId={'agent-1'} />);
     await waitFor(() =>
       expect(radioFor('here@example.com').getAttribute('aria-disabled')).not.toBe('true'),
     );
@@ -342,15 +436,13 @@ describe('QuotaAccountManager on the desktop', () => {
     const switchAccount = vi.spyOn(agentQuotaService, 'switchAccount');
     const setDeviceAccount = vi.spyOn(agentQuotaService, 'setDeviceAccount');
 
-    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
+    renderWithFreshCache(<LoadBalancing agentId={'agent-1'} />);
 
     await waitFor(() =>
       expect(checkedOption()).toContain('heteroAgent.claudeQuota.manage.modeAuto'),
     );
     for (const radio of screen.getAllByRole('radio'))
       expect(radio.getAttribute('aria-disabled')).toBe('true');
-    for (const toggle of screen.getAllByRole('switch'))
-      expect(toggle.hasAttribute('disabled')).toBe(true);
     expect(switchAccount).not.toHaveBeenCalled();
     expect(setDeviceAccount).not.toHaveBeenCalled();
   });
@@ -361,7 +453,7 @@ describe('QuotaAccountManager on the desktop', () => {
       { ...account('kimi'), provider: 'kimi-code' } as QuotaAccount,
     ]);
 
-    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
+    renderWithFreshCache(<LoadBalancing agentId={'agent-1'} />);
 
     await screen.findByText('here@example.com');
     expect(screen.queryByText('kimi@example.com')).toBeNull();
@@ -378,7 +470,7 @@ describe('QuotaAccountManager on the desktop', () => {
       .spyOn(agentQuotaService, 'ingestClaudeSnapshot')
       .mockResolvedValue({} as never);
 
-    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
+    renderWithFreshCache(<LoadBalancing agentId={'agent-1'} />);
 
     await waitFor(() =>
       expect(ingest).toHaveBeenCalledWith({
@@ -395,19 +487,21 @@ describe('QuotaAccountManager on the desktop', () => {
       binding('b2', 'away', 'pool'),
     ]);
 
-    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
+    renderWithFreshCache(<LoadBalancing agentId={'agent-1'} />);
 
     await screen.findByText('heteroAgent.claudeQuota.manage.notSignedIn');
-    expect(screen.getByText('heteroAgent.claudeQuota.manage.autoNoAccount')).toBeTruthy();
+    // The agent has an account; what it lacks is a login on this device.
+    expect(screen.getByText('heteroAgent.claudeQuota.manage.autoNoSignedInAccount')).toBeTruthy();
+    expect(screen.queryByText('heteroAgent.claudeQuota.manage.autoNoAuthorizedAccount')).toBeNull();
     expect(screen.queryByText(/heteroAgent\.claudeQuota\.manage\.autoRoutingTo/)).toBeNull();
   });
 
-  it('signs the account in on this device from its row', async () => {
+  it('signs the account in on this device from its card', async () => {
     const login = vi
       .spyOn(heterogeneousAgentService, 'loginClaudeCodeAccount')
       .mockResolvedValue(localLogin('ext-away', '/profiles/away') as never);
 
-    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
+    renderWithFreshCache(<LoadBalancing agentId={'agent-1'} />);
     fireEvent.click(await screen.findByText('heteroAgent.claudeQuota.manage.signIn'));
 
     await waitFor(() => expect(login).toHaveBeenCalledWith({ email: 'away@example.com' }));
@@ -423,7 +517,7 @@ describe('QuotaAccountManager on the desktop', () => {
       .mockResolvedValue(binding('b3', 'new', 'pool') as never);
     vi.spyOn(agentQuotaService, 'ingestClaudeSnapshot').mockResolvedValue({} as never);
 
-    renderWithFreshCache(<QuotaAccountManager agentId={'agent-1'} />);
+    renderWithFreshCache(<LoadBalancing agentId={'agent-1'} />);
     fireEvent.click(
       await screen.findByRole('button', { name: /heteroAgent\.claudeQuota\.manage\.add/ }),
     );

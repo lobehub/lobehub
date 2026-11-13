@@ -337,12 +337,7 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
       title={t('heteroAgent.claudeQuota.title')}
       tooltip={t('heteroAgent.claudeQuota.tooltip')}
       renderHeader={(quota) => (
-        <QuotaAccountSwitcher
-          deviceId={deviceId}
-          placement="top"
-          provider="claude-code"
-          snapshot={quota}
-        />
+        <QuotaAccountSwitcher placement="top" provider="claude-code" snapshot={quota} />
       )}
     />
   );

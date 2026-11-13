@@ -716,7 +716,41 @@ export default {
   'heteroAgent.claudeQuota.calendar.windowUtilization': '{{percent}}% used',
   'heteroAgent.claudeQuota.manage.addHint':
     'Sign in to the Claude Code CLI and the account shows up here automatically.',
-  'heteroAgent.claudeQuota.manage.autoNoAccount': 'No eligible account — enable one below.',
+  'heteroAgent.agentAccounts.add': 'Add account',
+  'heteroAgent.agentAccounts.addConfirm': 'Add',
+  'heteroAgent.agentAccounts.addDesc':
+    'Pick accounts from Settings → Subscription Accounts for this agent to run on. Other agents can use the same accounts.',
+  'heteroAgent.agentAccounts.addTitle': 'Add subscription accounts',
+  'heteroAgent.agentAccounts.allSelected':
+    'Every account in Settings is already added. Add more accounts there.',
+  'heteroAgent.agentAccounts.askAdmin': 'Ask a workspace admin to add accounts in Settings.',
+  'heteroAgent.agentAccounts.desc':
+    'Subscription accounts this agent may run on. Adding an account only grants scheduling: other agents can use the same account.',
+  'heteroAgent.agentAccounts.emptyPool':
+    'No subscription accounts yet. Add them in Settings first.',
+  'heteroAgent.agentAccounts.loadBalance': 'Load balancing',
+  'heteroAgent.agentAccounts.loadFailed': 'Couldn’t load which accounts this agent can use.',
+  'heteroAgent.agentAccounts.noUsage': 'No usage reported yet',
+  'heteroAgent.agentAccounts.noneLinked':
+    'No accounts added yet. This agent cannot run on a subscription until you add one.',
+  'heteroAgent.agentAccounts.openSettings': 'Open Subscription Accounts',
+  'heteroAgent.agentAccounts.pageDesc':
+    'Choose which subscription accounts this agent may run on, and how its runs are spread across them.',
+  'heteroAgent.agentAccounts.remove': 'Remove from this agent',
+  'heteroAgent.agentAccounts.retry': 'Retry',
+  'heteroAgent.agentAccounts.routingNow': 'Next run',
+  'heteroAgent.agentAccounts.saveFailed': 'Couldn’t save the account selection. Try again.',
+  'heteroAgent.agentAccounts.selected': '{{count}} of {{total}} selected',
+  'heteroAgent.agentAccounts.title': 'Subscription accounts',
+  'heteroAgent.claudeQuota.manage.addAccounts': 'Add accounts',
+  'heteroAgent.claudeQuota.manage.autoNoSignedInAccount':
+    'None of this agent’s accounts is signed in on this device. Sign one in below.',
+  'heteroAgent.claudeQuota.manage.autoNoAuthorizedAccount':
+    'No account to route to. Add accounts to this agent first.',
+  'heteroAgent.claudeQuota.manage.poolEmptyHint':
+    'This agent has no subscription accounts yet. Add some so its runs can be balanced.',
+  'heteroAgent.claudeQuota.manage.poolSingleHint':
+    'Only 1 account to schedule. Add more in Subscription accounts to form a pool.',
   'heteroAgent.claudeQuota.manage.autoRoutingTo': 'Now routing to {{account}}',
   'heteroAgent.claudeQuota.manage.confirmSwitch': 'Confirm switch',
   'heteroAgent.claudeQuota.manage.disable': 'Remove from rotation',
@@ -736,7 +770,6 @@ export default {
   'heteroAgent.claudeQuota.manage.modeManual': 'Pin one',
   'heteroAgent.claudeQuota.manage.modeManualHint': 'Always run this agent on the account you pick.',
   'heteroAgent.claudeQuota.manage.remove': 'Remove account',
-  'heteroAgent.claudeQuota.manage.title': 'Claude Code accounts',
   'heteroAgent.claudeQuota.manage.use': 'Use',
   'heteroAgent.claudeQuota.manage.weeklyLeft': '{{percent}}% weekly',
   'heteroAgent.claudeQuota.errorGeneric': "Couldn't reach the quota service. Tap refresh to retry.",
@@ -2032,6 +2065,7 @@ export default {
   'tab.knowledge': 'Knowledge Base',
   'tab.tools': 'Tools & Connectors',
   'tab.integration': 'IM Bots',
+  'tab.accounts': 'Subscription accounts',
   'tab.automations': 'Automations',
   'tab.mail': 'Mail',
   'tab.webhook': 'Webhook',

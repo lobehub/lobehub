@@ -15,6 +15,7 @@ import {
   Share2Icon,
   SparklesIcon,
   UserRoundIcon,
+  UsersRoundIcon,
   WebhookIcon,
   WrenchIcon,
   ZapIcon,
@@ -37,6 +38,7 @@ import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import Agent from './Header/Agent';
 
 const TAB_ICONS: Record<AgentProfileTab, LucideIcon> = {
+  'accounts': UsersRoundIcon,
   'automations': ZapIcon,
   'channel': RadioTowerIcon,
   'engine': CpuIcon,
