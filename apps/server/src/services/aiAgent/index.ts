@@ -87,6 +87,7 @@ import { resolveAgentSenderFromOperation } from './sourceAttribution';
 import { startQueuedFollowUp } from './steerQueue';
 import { injectQueuedFollowUp } from './steerQueue/inject';
 import { findOwnLiveRuns } from './steerQueue/liveRuns';
+import { queueSubAgentSteer } from './steerQueue/subAgent';
 import type { SubAgentLlmRelayRequest } from './subAgentLlmRelay';
 import { closeSubAgentLlmRelay, openSubAgentLlmRelay } from './subAgentLlmRelay';
 import type { SubAgentRunDeps } from './subAgentRuns';
@@ -227,6 +228,8 @@ export class AiAgentService {
       agentRuntimeService: this.agentRuntimeService,
       execAgent: (p) => this.execAgent(p),
       messageModel: this.messageModel,
+      queueSubAgentSteer: (p) =>
+        queueSubAgentSteer({ db: this.db, userId: this.userId, workspaceId: this.workspaceId }, p),
       threadModel: this.threadModel,
       userId: this.userId,
     };

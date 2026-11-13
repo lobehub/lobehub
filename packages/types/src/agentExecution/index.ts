@@ -737,6 +737,12 @@ export interface ExecSubAgentResult {
   error?: string;
   /** Operation ID for tracking execution status */
   operationId: string;
+  /**
+   * The thread's previous run was still going, so no run was started: the
+   * instruction was queued behind that run (`operationId`) and joins it before
+   * its next LLM call.
+   */
+  steered?: boolean;
   /** Whether the execution was created successfully */
   success: boolean;
   /** The Thread ID where the execution is isolated */
