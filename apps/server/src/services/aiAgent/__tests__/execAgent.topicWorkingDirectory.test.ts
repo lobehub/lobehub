@@ -1,3 +1,4 @@
+import { MessagesEngine } from '@lobechat/context-engine';
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -332,6 +333,50 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
       workingDirectory: '/repo/default',
       workingDirectoryConfig: { path: '/repo/default' },
     });
+  });
+
+  it('preserves device instruction scope from the workspace scan through system-message assembly', async () => {
+    mockFindByDeviceId.mockResolvedValue({
+      defaultCwd: '/repo/default',
+      deviceId: DEVICE_ID,
+      workingDirs: [],
+    });
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+    );
+    mockInitWorkspace.mockResolvedValue({
+      instructions: [
+        {
+          content: 'Personal rules.',
+          path: '/home/test/.agents/AGENTS.md',
+          scope: 'device',
+          source: 'AGENTS.md',
+        },
+        { content: 'Project rules.', path: '/repo/default/AGENTS.md', source: 'AGENTS.md' },
+      ],
+      skills: [],
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    const { projectInstructions } = mockCreateOperation.mock.calls[0][0];
+    const { messages } = await new MessagesEngine({
+      enableSystemDate: false,
+      messages: [],
+      model: 'gpt-4',
+      projectInstructions,
+      provider: 'openai',
+      systemRole: 'You are helpful.',
+    }).process();
+
+    const system = String(messages.find((message) => message.role === 'system')?.content);
+    expect(system).toContain(
+      '<device_instructions source="AGENTS.md" path="/home/test/.agents/AGENTS.md">\nPersonal rules.\n</device_instructions>',
+    );
+    expect(system).toContain(
+      '<project_instructions source="AGENTS.md" path="/repo/default/AGENTS.md">\nProject rules.\n</project_instructions>',
+    );
+    expect(system.indexOf('Personal rules.')).toBeLessThan(system.indexOf('Project rules.'));
   });
 
   it('serves a stale workspace scan and refreshes it after the response', async () => {

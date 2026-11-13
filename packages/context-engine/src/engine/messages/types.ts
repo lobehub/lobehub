@@ -335,7 +335,7 @@ export interface MessagesEngineParams {
   /** Borrowed-connector attribution note, already rendered by the caller. */
   connectorOwnershipNote?: string;
   evalContext?: EvalContext;
-  /** A project's root instruction files (`AGENTS.md` / `CLAUDE.md`). */
+  /** Device and project instruction files (`AGENTS.md` / `CLAUDE.md`). */
   projectInstructions?: ProjectInstructionFile[];
   /** Onboarding context for injecting phase guidance and documents */
   onboardingContext?: OnboardingContext;

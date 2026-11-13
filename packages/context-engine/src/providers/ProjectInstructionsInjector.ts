@@ -18,6 +18,8 @@ export interface ProjectInstructionFile {
    * cover when several levels of a repository contribute one.
    */
   path?: string;
+  /** Instruction scope. Absent in older scans; defaults to project. */
+  scope?: 'device' | 'project';
   /** Where the file came from, e.g. `AGENTS.md` — surfaced to the model. */
   source: string;
 }
@@ -28,8 +30,8 @@ export interface ProjectInstructionsInjectorConfig {
 }
 
 /**
- * Injects a project's instruction files (`AGENTS.md` / `CLAUDE.md`, from the
- * working directory up to the repository root) into the system message.
+ * Injects device and project instruction files (`AGENTS.md` / `CLAUDE.md`)
+ * into the system message, preserving their scan order and scope.
  *
  * Takes the files rather than a rendered block: wrapping them is presentation,
  * which belongs to the pipeline that owns the system message. The server used
@@ -54,15 +56,15 @@ export class ProjectInstructionsInjector extends BaseSystemRoleProvider {
   protected buildSystemRoleContent(_context: PipelineContext): string | null {
     const { enabled, instructions } = this.config;
     if (enabled === false || !instructions?.length) {
-      log('No project instructions to inject, skipping');
+      log('No workspace instructions to inject, skipping');
       return null;
     }
 
     return instructions
-      .map(
-        ({ content, path, source }) =>
-          `<project_instructions source="${source}"${path ? ` path="${path}"` : ''}>\n${content}\n</project_instructions>`,
-      )
+      .map(({ content, path, scope, source }) => {
+        const tag = scope === 'device' ? 'device_instructions' : 'project_instructions';
+        return `<${tag} source="${source}"${path ? ` path="${path}"` : ''}>\n${content}\n</${tag}>`;
+      })
       .join('\n\n');
   }
 
