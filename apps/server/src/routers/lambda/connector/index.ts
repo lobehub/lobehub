@@ -1,8 +1,10 @@
+import { builtinTools } from '@lobechat/builtin-tools';
 import { getComposioAppByIdentifier } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { buildMcpToolMetadata } from '@lobechat/const/mcpApp';
 import { CONNECTOR_VISIBILITIES, upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import {
@@ -143,8 +145,9 @@ const connectorManageRouter = router({
       connectors.map((c) => resolveConnectorAuthorizerId(c)),
     );
 
-    const toolsByConnector = await Promise.all(
-      connectors.map(async (c) => {
+    const toolsByConnector = await pMap(
+      connectors,
+      async (c) => {
         const tools = await ctx.connectorToolModel.queryByConnector(c.id);
         // Never ship decrypted OAuth tokens or the client secret to the browser.
         const { credentials: _credentials, oidcConfig, ...rest } = c;
@@ -157,7 +160,8 @@ const connectorManageRouter = router({
           oidcConfig: safeOidcConfig,
           tools,
         };
-      }),
+      },
+      { concurrency: 5 },
     );
 
     return toolsByConnector;
@@ -180,8 +184,9 @@ const connectorManageRouter = router({
         connectors.map((c) => resolveConnectorAuthorizerId(c)),
       );
 
-      return Promise.all(
-        connectors.map(async (c) => {
+      return pMap(
+        connectors,
+        async (c) => {
           const tools = await ctx.connectorToolModel.queryByConnector(c.id);
           const { credentials: _credentials, oidcConfig, ...rest } = c;
           const safeOidcConfig = oidcConfig
@@ -195,7 +200,8 @@ const connectorManageRouter = router({
             oidcConfig: safeOidcConfig,
             tools,
           };
-        }),
+        },
+        { concurrency: 5 },
       );
     }),
 
@@ -227,25 +233,23 @@ const connectorManageRouter = router({
     const agentMetas = agentIds.length > 0 ? await agentModel.getAgentAvatarsByIds(agentIds) : [];
     const agentMetaById = new Map(agentMetas.map((m) => [m.id, m]));
 
-    return Promise.all(
-      connectors
-        .filter((c) => !!c.agentId && agentMetaById.has(c.agentId))
-        .map(async (c) => {
-          const tools = await ctx.connectorToolModel.queryByConnector(c.id);
-          const { credentials: _credentials, oidcConfig, ...rest } = c;
-          const safeOidcConfig = oidcConfig
-            ? { ...oidcConfig, clientSecret: undefined }
-            : oidcConfig;
-          const meta = agentMetaById.get(c.agentId!);
-          return {
-            ...rest,
-            agentAvatar: meta?.avatar ?? null,
-            agentName: meta?.name ?? null,
-            agentTitle: meta?.title ?? null,
-            oidcConfig: safeOidcConfig,
-            tools,
-          };
-        }),
+    return pMap(
+      connectors.filter((c) => !!c.agentId && agentMetaById.has(c.agentId)),
+      async (c) => {
+        const tools = await ctx.connectorToolModel.queryByConnector(c.id);
+        const { credentials: _credentials, oidcConfig, ...rest } = c;
+        const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
+        const meta = agentMetaById.get(c.agentId!);
+        return {
+          ...rest,
+          agentAvatar: meta?.avatar ?? null,
+          agentName: meta?.name ?? null,
+          agentTitle: meta?.title ?? null,
+          oidcConfig: safeOidcConfig,
+          tools,
+        };
+      },
+      { concurrency: 5 },
     );
   }),
 
@@ -815,10 +819,10 @@ const connectorManageRouter = router({
       await assertConnectorMaintainable(ctx, target);
 
       const tools = await ctx.connectorToolModel.queryByConnector(input.id);
-      await Promise.all(
-        tools.map((t) =>
-          ctx.connectorToolModel.updatePermission(t.id, ConnectorToolPermission.auto),
-        ),
+      await pMap(
+        tools,
+        (t) => ctx.connectorToolModel.updatePermission(t.id, ConnectorToolPermission.auto),
+        { concurrency: 5 },
       );
       return { toolCount: tools.length };
     }),
@@ -944,7 +948,6 @@ const connectorManageRouter = router({
   syncBuiltinTool: connectorProcedure
     .input(z.object({ identifier: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
-      const { builtinTools } = await import('@lobechat/builtin-tools');
       const tool = builtinTools.find((t) => t.identifier === input.identifier);
 
       if (!tool) {
