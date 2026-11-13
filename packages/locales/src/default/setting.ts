@@ -1450,7 +1450,6 @@ export default {
   'settingAbout.debugLogs.devDesc': 'Development builds always record debug logs.',
   'settingAbout.debugLogs.openDirectory': 'Open Log Folder',
   'settingAbout.debugLogs.title': 'Debug Logs',
-  'settingAbout.diagnostics.title': 'Diagnostics',
   'settingAbout.debugLogs.option.24h': 'On for 24 hours',
   'settingAbout.debugLogs.option.always': 'Always on',
   'settingAbout.debugLogs.option.off': 'Off',

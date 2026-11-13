@@ -359,19 +359,19 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     visible: (ctx) => ctx.isDesktop,
   },
   {
-    anchor: 'about-diagnostics',
+    anchor: 'advanced-diagnostics',
     descKey: 'settingAbout.diagnostics.bundle.desc',
     keywords: ['diagnostics', 'export', 'logs', 'report', 'bug', 'feedback', 'zip'],
     labelKey: 'settingAbout.diagnostics.bundle.title',
-    tab: SettingsTabs.About,
+    tab: SettingsTabs.Advanced,
     visible: (ctx) => ctx.isDesktop,
   },
   {
-    anchor: 'about-debug-logs',
+    anchor: 'advanced-debug-logs',
     descKey: 'settingAbout.debugLogs.desc',
     keywords: ['debug', 'logs', 'log level', 'diagnostics', 'troubleshoot'],
     labelKey: 'settingAbout.debugLogs.title',
-    tab: SettingsTabs.About,
+    tab: SettingsTabs.Advanced,
     visible: (ctx) => ctx.isDesktop,
   },
   {

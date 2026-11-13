@@ -1444,7 +1444,6 @@
   "settingAbout.debugLogs.updateFailed": "调试日志设置失败，请重试。",
   "settingAbout.diagnostics.bundle.desc": "把最近 24 小时的日志、应用版本和系统信息打包成一个文件，反馈问题时附上它。",
   "settingAbout.diagnostics.bundle.title": "诊断包",
-  "settingAbout.diagnostics.title": "诊断",
   "settingAbout.remoteDebugging.activeDesc": "已开启：本机程序可以通过端口 {{port}} 控制 LobeHub。调试结束后请关闭。",
   "settingAbout.remoteDebugging.confirm.content": "重启 LobeHub 后，本机上的程序可以通过端口 {{port}} 控制 LobeHub 窗口，并读取你的登录状态和数据。关闭前每次启动都会开放该端口，请仅在调试时开启。",
   "settingAbout.remoteDebugging.confirm.ok": "允许",

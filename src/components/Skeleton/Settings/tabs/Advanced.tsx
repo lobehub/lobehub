@@ -8,7 +8,7 @@ import { SettingsFormSkeleton, SWITCH_CONTROL } from '../Section';
 import { useSkeletonText } from '../useSkeletonText';
 import type { SettingsTabSkeleton } from './types';
 
-/** Tools group (dev mode, gateway mode when enabled, remote debugging on desktop) and, on desktop, the update channel. */
+/** Tools group (dev mode, gateway mode when enabled; on desktop the diagnostics package, debug logs and remote debugging) and, on desktop, the update channel. */
 const Body = () => {
   const text = useSkeletonText('setting');
   const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
@@ -36,6 +36,18 @@ const Body = () => {
               : []),
             ...(isDesktop
               ? [
+                  {
+                    control: { height: 32, width: 300 },
+                    desc: text('settingAbout.diagnostics.bundle.desc', 280, 12),
+                    label: text('settingAbout.diagnostics.bundle.title', 96),
+                    minWidth: undefined,
+                  },
+                  {
+                    control: { height: 32, width: 160 },
+                    desc: text('settingAbout.debugLogs.desc', 280, 12),
+                    label: text('settingAbout.debugLogs.title', 96),
+                    minWidth: undefined,
+                  },
                   {
                     control: SWITCH_CONTROL,
                     desc: text('settingAbout.remoteDebugging.desc', 280, 12),

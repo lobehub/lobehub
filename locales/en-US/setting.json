@@ -1444,7 +1444,6 @@
   "settingAbout.debugLogs.updateFailed": "Couldn't change debug logs. Try again.",
   "settingAbout.diagnostics.bundle.desc": "Packs the last 24 hours of logs with the app version and system details into one file. Attach it when you report a problem.",
   "settingAbout.diagnostics.bundle.title": "Diagnostics Package",
-  "settingAbout.diagnostics.title": "Diagnostics",
   "settingAbout.remoteDebugging.activeDesc": "On: programs on this computer can control LobeHub through port {{port}}. Turn it off when you finish debugging.",
   "settingAbout.remoteDebugging.confirm.content": "After you restart LobeHub, programs on this computer can connect to port {{port}}, control LobeHub windows, and read your signed-in session and data. The port opens on every launch until you turn this off. Turn it on only while debugging.",
   "settingAbout.remoteDebugging.confirm.ok": "Allow",
