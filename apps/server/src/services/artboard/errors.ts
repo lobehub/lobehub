@@ -1,4 +1,8 @@
-import type { ArtboardFinalizeIssue } from './content/finalize';
+import type { ArtboardFinalizeIssue } from '@lobechat/types';
+
+import { ArtboardRevisionConflictError } from '@/database/models/artboard';
+import { ArtboardCommentError } from '@/database/models/artboard/comment';
+import { ArtboardStructureError } from '@/database/models/artboard/structure';
 
 export type ArtboardServiceErrorCode =
   | 'conflict'
@@ -25,3 +29,42 @@ export class ArtboardServiceError extends Error {
     super(message);
   }
 }
+
+export const failArtboard = (code: ArtboardServiceErrorCode, message: string): never => {
+  throw new ArtboardServiceError(code, message);
+};
+
+export const artboardConflict = () =>
+  new ArtboardServiceError(
+    'conflict',
+    'The board changed since you read it. Call readArtboard for the latest revision, then retry.',
+  );
+
+export const toArtboardServiceError = (error: unknown, opIndex?: number): unknown => {
+  const data = opIndex === undefined ? {} : { opIndex };
+  if (error instanceof ArtboardServiceError)
+    return opIndex === undefined || error.data.opIndex !== undefined
+      ? error
+      : new ArtboardServiceError(error.code, error.message, { ...error.data, opIndex });
+  if (error instanceof ArtboardRevisionConflictError) return artboardConflict();
+  if (error instanceof ArtboardStructureError) {
+    const code =
+      error.code === 'not_found'
+        ? 'not_found'
+        : error.code === 'round_submitted'
+          ? 'locked'
+          : 'invalid';
+    return new ArtboardServiceError(code, error.message, data);
+  }
+  if (error instanceof ArtboardCommentError)
+    return new ArtboardServiceError(error.code, error.message, data);
+  return error;
+};
+
+export const guardArtboard = async <T>(action: () => Promise<T>): Promise<T> => {
+  try {
+    return await action();
+  } catch (error) {
+    throw toArtboardServiceError(error);
+  }
+};

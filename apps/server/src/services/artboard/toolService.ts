@@ -55,6 +55,11 @@ export const createArtboardToolService = (
   const service = new ArtboardService(db, userId, workspaceId, { context });
 
   return {
+    askQuestion: ({ id, ...question }) =>
+      guard(async () => ({
+        commentId: (await service.askQuestion(id, question)).id,
+        ok: true as const,
+      })),
     create: (params) =>
       guard(async () => {
         const result = await service.create(
@@ -84,6 +89,11 @@ export const createArtboardToolService = (
         })),
         ok: true as const,
       })),
+    listComments: (params) =>
+      guard(async () => ({
+        ok: true as const,
+        threads: await service.takeUndeliveredComments(params.id),
+      })),
     read: (params) =>
       guard(async () => {
         const result = await service.read(params.id);
@@ -91,9 +101,19 @@ export const createArtboardToolService = (
           artboard: toSnapshot(result.artboard),
           canvases: result.canvases,
           ok: true as const,
-          staleFrameIds: result.staleFrameIds,
+          staleBoardIds: result.staleBoardIds,
         };
       }),
+    replyComment: (params) =>
+      guard(async () => ({
+        commentId: (await service.replyComment(params.commentId, { content: params.content })).id,
+        ok: true as const,
+      })),
+    resolveComment: (params) =>
+      guard(async () => ({
+        commentId: (await service.resolveComment(params.commentId)).id,
+        ok: true as const,
+      })),
     update: (params) =>
       guard(async () => {
         const result = await service.update(params.id, params.revision, parseOps(params.ops));

@@ -1,37 +1,46 @@
 import { randomUUID } from 'node:crypto';
 
 import type {
-  ArtboardContent,
+  ArtboardCommentAnchor,
+  ArtboardCommentThreadView,
+  ArtboardCommentView,
   ArtboardItem,
   ArtboardOp,
-  ArtboardUserOp,
-  ResolvedArtboardOp,
 } from '@lobechat/types';
-import { EMPTY_ARTBOARD_CONTENT } from '@lobechat/types';
+import { checkFinalizeReadiness } from '@lobechat/types';
 import pMap from 'p-map';
 
 import { AcceptanceModel } from '@/database/models/acceptance';
 import { AcceptanceFlowModel } from '@/database/models/acceptanceFlow';
-import { ArtboardModel, ArtboardRevisionConflictError } from '@/database/models/artboard';
+import { ArtboardModel, type ArtboardRow } from '@/database/models/artboard';
+import { ArtboardCommentModel } from '@/database/models/artboard/comment';
+import { ArtboardStructureModel } from '@/database/models/artboard/structure';
 import { TaskModel } from '@/database/models/task';
 import { TopicModel } from '@/database/models/topic';
 import { WorkModel } from '@/database/models/work';
-import type { ArtboardRow } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { TaskService } from '@/server/services/task';
 
-import { applyArtboardOps, applyArtboardUserOps, ArtboardOpError } from './content/applyOps';
-import { buildJourneyFlow, checkFinalizeReadiness } from './content/finalize';
-import { ArtboardServiceError } from './errors';
+import { artboardConflict, ArtboardServiceError, guardArtboard } from './errors';
+import { buildJourneyFlow } from './finalize';
+import { applyArtboardOps } from './ops';
 import {
   ARTBOARD_SOURCE_CONCURRENCY,
   type ArtboardSourceResolver,
   createArtboardSourceResolver,
   resolveOpSources,
 } from './sources';
+import {
+  describeArtboard,
+  toArtboardContent,
+  toArtboardItem,
+  toCommentThreadView,
+  toCommentView,
+} from './view';
 
 export type { ArtboardServiceErrorCode } from './errors';
 export { ArtboardServiceError } from './errors';
+export { describeArtboard } from './view';
 
 export const ARTBOARD_TOOL_IDENTIFIER = 'lobe-artboard';
 
@@ -62,7 +71,7 @@ export interface ArtboardCreateResult extends ArtboardWriteResult {
 export interface ArtboardReadResult {
   artboard: ArtboardItem;
   canvases: Record<string, { latestVersion: number; title: string } | null>;
-  staleFrameIds: string[];
+  staleBoardIds: string[];
 }
 
 export interface ArtboardViewResult {
@@ -75,47 +84,36 @@ export interface ArtboardFinalizeResult {
   artboard: ArtboardItem;
 }
 
+export interface ArtboardCommentInput {
+  anchor?: ArtboardCommentAnchor | null;
+  boardId?: string | null;
+  clientId: string;
+  content: string;
+  groupId?: string | null;
+  pageId?: string | null;
+}
+
+export interface ArtboardQuestionInput {
+  boardId?: string | null;
+  content: string;
+  groupId?: string | null;
+  pageId?: string | null;
+}
+
 export interface ArtboardServiceOptions {
   context?: ArtboardContext;
   sources?: ArtboardSourceResolver;
 }
 
-export const describeArtboard = (content: ArtboardContent) =>
-  `${content.groups.length} groups · ${content.frames.length} frames`;
-
-const toItem = (row: ArtboardRow): ArtboardItem => ({
-  acceptanceId: row.acceptanceId,
-  content: row.content,
-  createdAt: row.createdAt,
-  description: row.description,
-  id: row.id,
-  originTopicId: row.originTopicId,
-  phase: row.phase,
-  projectId: row.projectId,
-  revision: row.revision,
-  taskId: row.taskId,
-  title: row.title,
-  updatedAt: row.updatedAt,
-});
-
-const conflict = () =>
-  new ArtboardServiceError(
-    'conflict',
-    'The board changed since you read it. Call readArtboard for the latest revision, then retry.',
-  );
-
-const fromOpError = (error: unknown): never => {
-  if (error instanceof ArtboardOpError)
-    throw new ArtboardServiceError(error.code === 'locked' ? 'locked' : 'invalid', error.message, {
-      opIndex: error.opIndex,
-    });
-  if (error instanceof ArtboardRevisionConflictError) throw conflict();
-  throw error;
-};
+const notFound = (id: string) =>
+  new ArtboardServiceError('not_found', `Artboard "${id}" was not found.`);
 
 export class ArtboardService {
   private artboards: ArtboardModel;
+  private structure: ArtboardStructureModel;
+  private comments: ArtboardCommentModel;
   private sources: ArtboardSourceResolver;
+  private agentId: string | null;
 
   constructor(
     private db: LobeChatDatabase,
@@ -124,6 +122,9 @@ export class ArtboardService {
     options: ArtboardServiceOptions = {},
   ) {
     this.artboards = new ArtboardModel(db, userId, workspaceId);
+    this.structure = new ArtboardStructureModel(db, userId, workspaceId);
+    this.comments = new ArtboardCommentModel(db, userId, workspaceId);
+    this.agentId = options.context?.agentId ?? null;
     this.sources =
       options.sources ??
       createArtboardSourceResolver(db, { ...options.context, userId, workspaceId });
@@ -131,9 +132,26 @@ export class ArtboardService {
 
   private async require(id: string) {
     const row = await this.artboards.findById(id);
-    if (!row) throw new ArtboardServiceError('not_found', `Artboard "${id}" was not found.`);
+    if (!row) throw notFound(id);
     return row;
   }
+
+  private async content(id: string) {
+    const [structure, openThreads] = await Promise.all([
+      this.structure.getStructure(id),
+      this.comments.listThreads(id, { unresolvedOnly: true }),
+    ]);
+    if (!structure) throw notFound(id);
+    const versionIds = [
+      ...new Set(structure.boards.flatMap((board) => board.sourceWorkVersionId ?? [])),
+    ];
+    return toArtboardContent(structure, openThreads, await this.sources.canvasVersions(versionIds));
+  }
+
+  private item = async (row: ArtboardRow) => toArtboardItem(row, await this.content(row.id));
+
+  private items = (rows: ArtboardRow[]) =>
+    pMap(rows, this.item, { concurrency: ARTBOARD_SOURCE_CONCURRENCY });
 
   private async resolveTask(ref: string) {
     const task = await new TaskModel(this.db, this.userId, this.workspaceId).resolve(ref);
@@ -157,29 +175,6 @@ export class ArtboardService {
     return this.topicProjectId(context.topicId);
   }
 
-  private apply(content: ArtboardContent, ops: ResolvedArtboardOp[], phase: ArtboardRow['phase']) {
-    try {
-      return applyArtboardOps(content, ops, { phase });
-    } catch (error) {
-      return fromOpError(error);
-    }
-  }
-
-  private async write(
-    row: ArtboardRow,
-    revision: number,
-    build: () => Promise<{ changedIds: string[]; content: ArtboardContent }>,
-  ): Promise<ArtboardWriteResult> {
-    if (row.revision !== revision) throw conflict();
-    const { changedIds, content } = await build();
-    try {
-      const next = await this.artboards.update(row.id, { content, expectedRevision: revision });
-      return { artboard: toItem(next), changedIds };
-    } catch (error) {
-      return fromOpError(error);
-    }
-  }
-
   async create(
     input: ArtboardCreateInput,
     context: ArtboardContext,
@@ -196,7 +191,7 @@ export class ArtboardService {
       );
 
     if (existingTask) {
-      const existing = await this.artboards.findByTaskId(existingTask.id);
+      const [existing] = await this.artboards.listByTaskId(existingTask.id);
       if (existing)
         throw new ArtboardServiceError(
           'exists',
@@ -205,74 +200,74 @@ export class ArtboardService {
         );
     }
 
-    const resolved = await resolveOpSources(input.ops ?? [], this.sources);
-    const { changedIds, content } = this.apply(EMPTY_ARTBOARD_CONTENT, resolved, 'discuss');
+    const ops = await resolveOpSources(input.ops ?? [], this.sources);
+    const { changedIds, row } = await guardArtboard(() =>
+      this.db.transaction(async (tx) => {
+        const created = await this.artboards.withTransaction(tx).create({
+          description: input.description ?? null,
+          projectId,
+          taskId: existingTask?.id ?? null,
+          title: input.title,
+          topicId: context.topicId ?? null,
+        });
+        const changed = await applyArtboardOps(this.structure.withTransaction(tx), created, ops);
+        return { changedIds: changed, row: created };
+      }),
+    );
 
-    const task =
-      existingTask ??
-      (await new TaskService(this.db, this.userId, this.workspaceId).createTask({
+    const task = existingTask ?? (await this.createTaskFor(row, input, context));
+    const attached = existingTask ? row : ((await this.artboards.setTask(row.id, task.id)) ?? row);
+    return {
+      artboard: await this.item(attached),
+      changedIds,
+      createdTask: !existingTask,
+      task: { id: task.id, identifier: task.identifier },
+    };
+  }
+
+  // The task is created after the board so a refused op leaves no task behind; a board whose
+  // task could not be created is removed again.
+  private async createTaskFor(
+    row: ArtboardRow,
+    input: ArtboardCreateInput,
+    context: ArtboardContext,
+  ) {
+    try {
+      return await new TaskService(this.db, this.userId, this.workspaceId).createTask({
         createdByAgentId: context.agentId ?? undefined,
         instruction: input.description || input.title,
         name: input.title,
-        projectId,
-      }));
-
-    try {
-      const row = await this.artboards.create({
-        content,
-        description: input.description ?? null,
-        originTopicId: context.topicId ?? null,
-        projectId,
-        taskId: task.id,
-        title: input.title,
+        projectId: row.projectId ?? undefined,
       });
-      return {
-        artboard: toItem(row),
-        changedIds,
-        createdTask: !existingTask,
-        task: { id: task.id, identifier: task.identifier },
-      };
     } catch (error) {
-      const raced = await this.artboards.findByTaskId(task.id);
-      if (raced)
-        throw new ArtboardServiceError(
-          'exists',
-          `Task ${task.identifier} already has artboard "${raced.id}". Read and update it instead.`,
-          { artboardId: raced.id },
-        );
+      await this.artboards.delete(row.id);
       throw error;
     }
   }
 
   async update(id: string, revision: number, ops: ArtboardOp[]): Promise<ArtboardWriteResult> {
     const row = await this.require(id);
-    return this.write(row, revision, async () =>
-      this.apply(row.content, await resolveOpSources(ops, this.sources), row.phase),
-    );
-  }
+    if (row.revision !== revision) throw artboardConflict();
+    const resolved = await resolveOpSources(ops, this.sources);
 
-  async applyUserOps(
-    id: string,
-    revision: number,
-    ops: ArtboardUserOp[],
-  ): Promise<ArtboardWriteResult> {
-    const row = await this.require(id);
-    return this.write(row, revision, async () => {
-      try {
-        return applyArtboardUserOps(row.content, ops, { phase: row.phase });
-      } catch (error) {
-        return fromOpError(error);
-      }
-    });
+    const { changedIds, next } = await guardArtboard(() =>
+      this.db.transaction(async (tx) => {
+        const bumped = await this.artboards
+          .withTransaction(tx)
+          .update(id, { expectedRevision: revision });
+        const changed = await applyArtboardOps(this.structure.withTransaction(tx), row, resolved);
+        return { changedIds: changed, next: bumped };
+      }),
+    );
+    return { artboard: await this.item(next), changedIds };
   }
 
   async read(id: string): Promise<ArtboardReadResult> {
-    const row = await this.require(id);
-    const canvasIds = [
-      ...new Set(
-        row.content.frames.flatMap((f) => (f.source.kind === 'canvas' ? [f.source.canvasId] : [])),
-      ),
-    ];
+    const artboard = await this.item(await this.require(id));
+    const sourced = artboard.content.boards.flatMap((board) =>
+      board.source?.kind === 'canvas' ? [{ id: board.id, source: board.source }] : [],
+    );
+    const canvasIds = [...new Set(sourced.map((board) => board.source.canvasId))];
     const infos = await pMap(canvasIds, (canvasId) => this.sources.canvas(canvasId), {
       concurrency: ARTBOARD_SOURCE_CONCURRENCY,
     });
@@ -282,21 +277,22 @@ export class ArtboardService {
         return [canvasId, info ? { latestVersion: info.version, title: info.title } : null];
       }),
     );
-    const staleFrameIds = row.content.frames
-      .filter((frame) => {
-        if (frame.source.kind !== 'canvas') return false;
-        const latest = canvases[frame.source.canvasId]?.latestVersion;
-        return latest !== undefined && frame.source.version < latest;
+    const staleBoardIds = sourced
+      .filter(({ source }) => {
+        const latest = canvases[source.canvasId]?.latestVersion;
+        return latest !== undefined && source.version < latest;
       })
-      .map((frame) => frame.id);
-    return { artboard: toItem(row), canvases, staleFrameIds };
+      .map((board) => board.id);
+    return { artboard, canvases, staleBoardIds };
   }
 
   async get(id: string): Promise<ArtboardViewResult> {
-    const row = await this.require(id);
+    const artboard = await this.item(await this.require(id));
     const fileIds = [
       ...new Set(
-        row.content.frames.flatMap((f) => (f.source.kind === 'image' ? [f.source.fileId] : [])),
+        artboard.content.boards.flatMap((board) =>
+          board.source?.kind === 'image' ? [board.source.fileId] : [],
+        ),
       ),
     ];
     const urls = await pMap(fileIds, (fileId) => this.sources.imageUrl(fileId), {
@@ -305,24 +301,23 @@ export class ArtboardService {
     const imageUrls = Object.fromEntries(
       fileIds.flatMap((fileId, index) => (urls[index] ? [[fileId, urls[index]!]] : [])),
     );
-    return { artboard: toItem(row), imageUrls };
+    return { artboard, imageUrls };
   }
 
   async getRevision(id: string): Promise<number> {
     const revision = await this.artboards.getRevision(id);
-    if (revision === undefined)
-      throw new ArtboardServiceError('not_found', `Artboard "${id}" was not found.`);
+    if (revision === undefined) throw notFound(id);
     return revision;
   }
 
   async getByTask(taskRef: string): Promise<ArtboardItem | null> {
     const task = await this.resolveTask(taskRef);
-    const row = await this.artboards.findByTaskId(task.id);
-    return row ? toItem(row) : null;
+    const [row] = await this.artboards.listByTaskId(task.id);
+    return row ? this.item(row) : null;
   }
 
   async listByProject(projectId: string): Promise<ArtboardItem[]> {
-    return (await this.artboards.listByProject(projectId)).map(toItem);
+    return this.items(await this.artboards.listByProject(projectId));
   }
 
   async list(context: ArtboardContext): Promise<ArtboardItem[]> {
@@ -335,52 +330,145 @@ export class ArtboardService {
     return this.listByProject(projectId);
   }
 
+  private async requireRound(id: string, roundId: string) {
+    await this.require(id);
+    const structure = await this.structure.getStructure(id);
+    if (!structure?.rounds.some((round) => round.id === roundId))
+      throw new ArtboardServiceError('not_found', `Artboard "${id}" has no round ${roundId}.`);
+  }
+
+  async chooseBoard(id: string, roundId: string, boardId: string) {
+    await this.requireRound(id, roundId);
+    await guardArtboard(() => this.structure.chooseBoard(roundId, boardId));
+    return { artboard: await this.item(await this.require(id)) };
+  }
+
+  async submitRound(id: string, roundId: string) {
+    await this.requireRound(id, roundId);
+    await guardArtboard(() => this.structure.submitRound(roundId));
+    return { artboard: await this.item(await this.require(id)) };
+  }
+
+  async listComments(id: string): Promise<ArtboardCommentThreadView[]> {
+    await this.require(id);
+    return (await this.comments.listThreads(id)).map(toCommentThreadView);
+  }
+
+  async takeUndeliveredComments(id: string): Promise<ArtboardCommentThreadView[]> {
+    await this.require(id);
+    const threads = await this.comments.listThreads(id, { unresolvedOnly: true });
+    const pending = threads.flatMap(({ replies, root }) =>
+      [root, ...replies].filter((comment) => !comment.deliveredAt).map((comment) => comment.id),
+    );
+    await this.comments.markDelivered(pending, new Date());
+    return threads.map(toCommentThreadView);
+  }
+
+  private async anchorPageId(id: string, input: Pick<ArtboardCommentInput, 'boardId' | 'groupId'>) {
+    const structure = await this.structure.getStructure(id);
+    if (!structure) throw notFound(id);
+    const board = structure.boards.find((item) => item.id === input.boardId);
+    const group = structure.groups.find((item) => item.id === input.groupId);
+    return board?.pageId ?? group?.pageId ?? structure.pages[0].id;
+  }
+
+  private async openThread(
+    id: string,
+    input: ArtboardCommentInput,
+    authorAgentId: string | null,
+  ): Promise<ArtboardCommentThreadView> {
+    await this.require(id);
+    const pageId = input.pageId ?? (await this.anchorPageId(id, input));
+    const root = await guardArtboard(() =>
+      this.comments.create(id, {
+        anchor: input.anchor ?? null,
+        authorAgentId,
+        boardId: input.boardId ?? null,
+        clientId: input.clientId,
+        content: input.content,
+        groupId: input.groupId ?? null,
+        pageId,
+      }),
+    );
+    return toCommentThreadView({ replies: [], root });
+  }
+
+  addComment = (id: string, input: ArtboardCommentInput) => this.openThread(id, input, null);
+
+  askQuestion(id: string, input: ArtboardQuestionInput) {
+    if (!this.agentId)
+      throw new ArtboardServiceError('invalid', 'Only an agent run can open a question thread.');
+    return this.openThread(id, { ...input, clientId: randomUUID() }, this.agentId);
+  }
+
+  async replyComment(
+    commentId: string,
+    input: { clientId?: string; content: string },
+  ): Promise<ArtboardCommentView> {
+    const reply = await guardArtboard(() =>
+      this.comments.reply(commentId, {
+        authorAgentId: input.clientId ? null : this.agentId,
+        clientId: input.clientId ?? randomUUID(),
+        content: input.content,
+      }),
+    );
+    return toCommentView(reply);
+  }
+
+  private async settleComment(commentId: string, resolved: boolean) {
+    const root = await guardArtboard(() =>
+      resolved ? this.comments.resolve(commentId) : this.comments.reopen(commentId),
+    );
+    return toCommentThreadView({ replies: [], root });
+  }
+
+  resolveComment = (commentId: string) => this.settleComment(commentId, true);
+
+  reopenComment = (commentId: string) => this.settleComment(commentId, false);
+
   async finalize(id: string, revision: number): Promise<ArtboardFinalizeResult> {
     const row = await this.require(id);
     if (row.phase === 'finalized' && row.acceptanceId)
-      return { acceptanceId: row.acceptanceId, artboard: toItem(row) };
-    if (row.revision !== revision) throw conflict();
+      return { acceptanceId: row.acceptanceId, artboard: await this.item(row) };
+    if (row.revision !== revision) throw artboardConflict();
+    const { taskId } = row;
+    if (!taskId)
+      throw new ArtboardServiceError('invalid', 'The board has no task to accept against.');
 
-    const issues = checkFinalizeReadiness(row.content);
+    const content = await this.content(id);
+    const issues = checkFinalizeReadiness(content);
     if (issues.length)
       throw new ArtboardServiceError('finalize_blocked', 'The board is not ready to finalize.', {
         issues,
       });
 
-    try {
-      const next = await this.db.transaction(async (tx) => {
+    const next = await guardArtboard(() =>
+      this.db.transaction(async (tx) => {
         const txDb = tx as unknown as LobeChatDatabase;
         const acceptance = await new AcceptanceModel(
           txDb,
           this.userId,
           this.workspaceId,
-        ).ensureForSubject('task', row.taskId, {
+        ).ensureForSubject('task', taskId, {
           metadata: { title: row.title },
           projectId: row.projectId,
           requirement: row.title,
         });
-        const flow = buildJourneyFlow(row.content, randomUUID);
+        const flow = buildJourneyFlow(content, randomUUID);
         await new AcceptanceFlowModel(txDb, acceptance.userId).publish(
           acceptance.id,
           flow.definition,
         );
 
-        const content: ArtboardContent = {
-          ...row.content,
-          arrows: row.content.arrows.map((arrow) =>
-            flow.arrowEdgeIds[arrow.id]
-              ? { ...arrow, flowEdgeId: flow.arrowEdgeIds[arrow.id] }
-              : arrow,
-          ),
-          frames: row.content.frames.map((frame) =>
-            flow.frameNodeIds[frame.id]
-              ? { ...frame, flowNodeId: flow.frameNodeIds[frame.id] }
-              : frame,
-          ),
-        };
+        // Written after publish: publishing deletes and reinserts the flow's nodes and edges.
+        const structure = this.structure.withTransaction(tx);
+        for (const [boardId, acceptanceFlowNodeId] of Object.entries(flow.boardNodeIds))
+          await structure.updateBoard(boardId, { acceptanceFlowNodeId });
+        for (const [edgeId, acceptanceFlowEdgeId] of Object.entries(flow.edgeFlowIds))
+          await structure.updateEdge(edgeId, { acceptanceFlowEdgeId });
+
         const updated = await this.artboards.withTransaction(tx).update(id, {
           acceptanceId: acceptance.id,
-          content,
           expectedRevision: revision,
           phase: 'finalized',
         });
@@ -394,10 +482,8 @@ export class ArtboardService {
           toolName: 'finalizeArtboard',
         });
         return updated;
-      });
-      return { acceptanceId: next.acceptanceId!, artboard: toItem(next) };
-    } catch (error) {
-      return fromOpError(error);
-    }
+      }),
+    );
+    return { acceptanceId: next.acceptanceId!, artboard: await this.item(next) };
   }
 }

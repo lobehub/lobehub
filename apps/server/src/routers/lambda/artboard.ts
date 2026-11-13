@@ -1,4 +1,4 @@
-import { artboardOpSchema, artboardUserOpSchema } from '@lobechat/types';
+import { artboardOpSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -53,12 +53,40 @@ const artboardProcedureWrite = artboardProcedure.use(withScopedPermission('agent
 const idInput = z.object({ id: z.string().min(1) });
 const revisionInput = idInput.extend({ revision: z.number().int().positive() });
 
+const commentInput = z.object({ commentId: z.string().min(1) });
+const commentContent = z.string().trim().min(1).max(10_000);
+const commentAnchor = z.union([
+  z.object({ type: z.literal('canvas'), x: z.number().finite(), y: z.number().finite() }),
+  z.object({
+    nodePath: z.string().min(1),
+    offsetX: z.number().min(0).max(1),
+    offsetY: z.number().min(0).max(1),
+    type: z.literal('node'),
+  }),
+]);
+
 export const artboardRouter = router({
-  applyUserOps: artboardProcedureWrite
-    .input(revisionInput.extend({ ops: z.array(artboardUserOpSchema).min(1).max(100) }))
+  addComment: artboardProcedureWrite
+    .input(
+      idInput.extend({
+        anchor: commentAnchor.nullish(),
+        boardId: z.string().nullish(),
+        clientId: z.string().min(1),
+        content: commentContent,
+        groupId: z.string().nullish(),
+        pageId: z.string().nullish(),
+      }),
+    )
+    .mutation(({ ctx, input }) => {
+      const { id, ...comment } = input;
+      return run('addComment', () => ctx.artboardService.addComment(id, comment));
+    }),
+
+  chooseBoard: artboardProcedureWrite
+    .input(idInput.extend({ boardId: z.string().min(1), roundId: z.string().min(1) }))
     .mutation(({ ctx, input }) =>
-      run('applyUserOps', () =>
-        ctx.artboardService.applyUserOps(input.id, input.revision, input.ops),
+      run('chooseBoard', () =>
+        ctx.artboardService.chooseBoard(input.id, input.roundId, input.boardId),
       ),
     ),
 
@@ -99,6 +127,12 @@ export const artboardRouter = router({
     .input(z.object({ taskId: z.string().nullish(), topicId: z.string().nullish() }))
     .query(({ ctx, input }) => run('list', () => ctx.artboardService.list(input))),
 
+  listComments: artboardProcedure
+    .input(idInput)
+    .query(({ ctx, input }) =>
+      run('listComments', () => ctx.artboardService.listComments(input.id)),
+    ),
+
   listByProject: artboardProcedure
     .input(z.object({ projectId: z.string().min(1) }))
     .query(({ ctx, input }) =>
@@ -108,6 +142,35 @@ export const artboardRouter = router({
   read: artboardProcedure
     .input(idInput)
     .query(({ ctx, input }) => run('read', () => ctx.artboardService.read(input.id))),
+
+  reopenComment: artboardProcedureWrite
+    .input(commentInput)
+    .mutation(({ ctx, input }) =>
+      run('reopenComment', () => ctx.artboardService.reopenComment(input.commentId)),
+    ),
+
+  replyComment: artboardProcedureWrite
+    .input(commentInput.extend({ clientId: z.string().min(1), content: commentContent }))
+    .mutation(({ ctx, input }) =>
+      run('replyComment', () =>
+        ctx.artboardService.replyComment(input.commentId, {
+          clientId: input.clientId,
+          content: input.content,
+        }),
+      ),
+    ),
+
+  resolveComment: artboardProcedureWrite
+    .input(commentInput)
+    .mutation(({ ctx, input }) =>
+      run('resolveComment', () => ctx.artboardService.resolveComment(input.commentId)),
+    ),
+
+  submitRound: artboardProcedureWrite
+    .input(idInput.extend({ roundId: z.string().min(1) }))
+    .mutation(({ ctx, input }) =>
+      run('submitRound', () => ctx.artboardService.submitRound(input.id, input.roundId)),
+    ),
 
   update: artboardProcedureWrite
     .input(revisionInput.extend({ ops: z.array(artboardOpSchema).min(1).max(200) }))

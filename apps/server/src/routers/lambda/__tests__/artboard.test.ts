@@ -29,10 +29,7 @@ describe('artboardRouter', () => {
 
   const createBoard = () =>
     caller().create({
-      ops: [
-        { group: { kind: 'journey', title: '旅程' }, ref: 'j', type: 'addGroup' },
-        { note: { kind: 'sticky', question: {}, text: '要跳过吗？', x: 0, y: 0 }, type: 'addNote' },
-      ],
+      ops: [{ group: { kind: 'journey', title: '旅程' }, ref: 'j', type: 'addGroup' }],
       title: '首次进入',
       topicId,
     });
@@ -45,19 +42,47 @@ describe('artboardRouter', () => {
 
   it('maps a stale revision to CONFLICT', async () => {
     const { artboard } = await createBoard();
-    await caller().applyUserOps({
+    const groupId = artboard.content.groups[0].id;
+    await caller().update({
       id: artboard.id,
-      ops: [{ id: 'n1', text: '可以跳过吗？', type: 'updateNoteText' }],
+      ops: [{ id: groupId, patch: { title: '主流程' }, type: 'updateGroup' }],
       revision: 1,
     });
 
     await expect(
-      caller().applyUserOps({
+      caller().update({
         id: artboard.id,
-        ops: [{ id: 'n1', type: 'moveItem', x: 10, y: 10 }],
+        ops: [{ id: groupId, patch: { title: '旅程' }, type: 'updateGroup' }],
         revision: 1,
       }),
     ).rejects.toMatchObject({ code: 'CONFLICT' });
+  });
+
+  it('threads a comment through the router without touching the revision', async () => {
+    const { artboard } = await createBoard();
+    const thread = await caller().addComment({
+      anchor: { type: 'canvas', x: 12, y: 40 },
+      clientId: 'c1',
+      content: '要跳过吗？',
+      id: artboard.id,
+    });
+    await caller().replyComment({ clientId: 'c2', commentId: thread.id, content: '可以' });
+    await caller().resolveComment({ commentId: thread.id });
+
+    const [listed] = await caller().listComments({ id: artboard.id });
+    expect(listed).toMatchObject({
+      anchor: { type: 'canvas', x: 12, y: 40 },
+      replies: [{ content: '可以' }],
+    });
+    expect(listed.resolvedAt).toBeInstanceOf(Date);
+    expect(await caller().getRevision({ id: artboard.id })).toBe(1);
+  });
+
+  it('maps a round that is not on the board to NOT_FOUND', async () => {
+    const { artboard } = await createBoard();
+    await expect(
+      caller().submitRound({ id: artboard.id, roundId: '00000000-0000-4000-8000-000000000000' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
   it('maps a blocked finalize to PRECONDITION_FAILED with what is missing', async () => {
@@ -67,9 +92,6 @@ describe('artboardRouter', () => {
       .catch((caught) => caught);
 
     expect(error).toMatchObject({ code: 'PRECONDITION_FAILED' });
-    expect(error.cause.data.issues).toEqual([
-      { code: 'empty_journey' },
-      { code: 'open_question', noteId: 'n1' },
-    ]);
+    expect(error.cause.data.issues).toEqual([{ code: 'empty_journey' }]);
   });
 });

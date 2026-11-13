@@ -1,10 +1,5 @@
 import { createMediaFileItemsFromMessage } from '@lobechat/builtin-tool-lobe-agent';
-import type {
-  ArtboardFrameSource,
-  ArtboardFrameSourceInput,
-  ArtboardOp,
-  ResolvedArtboardOp,
-} from '@lobechat/types';
+import type { ArtboardBoardSourceInput, ArtboardOp } from '@lobechat/types';
 import pMap from 'p-map';
 
 import { FileModel } from '@/database/models/file';
@@ -22,8 +17,15 @@ export interface ArtboardCanvasInfo {
   version: number;
 }
 
+export interface ArtboardCanvasRef {
+  canvasId: string;
+  version: number;
+}
+
 export interface ArtboardSourceResolver {
   canvas: (canvasId: string) => Promise<ArtboardCanvasInfo | undefined>;
+  canvasVersionId: (canvasId: string, version: number) => Promise<string | undefined>;
+  canvasVersions: (versionIds: string[]) => Promise<Record<string, ArtboardCanvasRef>>;
   image: (fileRef: string) => Promise<string | undefined>;
   imageUrl: (fileId: string) => Promise<string | undefined>;
 }
@@ -36,6 +38,18 @@ export interface ArtboardSourceScope {
   workspaceId?: string;
 }
 
+export type ResolvedBoardSource =
+  | { kind: 'canvas'; path: string | null; workVersionId: string }
+  | { fileId: string; kind: 'image' };
+
+type WithResolvedSource<T> = T extends { board: infer B }
+  ? Omit<T, 'board'> & { board: Omit<B, 'source'> & { source?: ResolvedBoardSource } }
+  : T extends { patch: infer P; type: 'updateBoard' }
+    ? Omit<T, 'patch'> & { patch: Omit<P, 'source'> & { source?: ResolvedBoardSource } }
+    : T;
+
+export type ResolvedArtboardOp = WithResolvedSource<ArtboardOp>;
+
 const MEDIA_REF_PATTERN = /^msg_[\da-z]+\.(?:audio|image|video)_\d+$/;
 
 export const createArtboardSourceResolver = (
@@ -44,6 +58,7 @@ export const createArtboardSourceResolver = (
 ): ArtboardSourceResolver => {
   const { userId, workspaceId } = scope;
   const files = new FileModel(db, userId, workspaceId);
+  const works = new WorkModel(db, userId, workspaceId);
   let mediaFileIds: Promise<Map<string, string>> | undefined;
 
   const listMediaFileIds = async () => {
@@ -63,11 +78,14 @@ export const createArtboardSourceResolver = (
 
   return {
     canvas: async (canvasId) => {
-      const found = await new WorkModel(db, userId, workspaceId).findCanvas(canvasId);
+      const found = await works.findCanvas(canvasId);
       return found
         ? { title: found.work.title ?? canvasId, version: found.version.version }
         : undefined;
     },
+    canvasVersionId: async (canvasId, version) =>
+      (await works.findCanvasVersionId(canvasId, version)) ?? undefined,
+    canvasVersions: (versionIds) => works.findCanvasSourcesByVersionIds(versionIds),
     image: async (fileRef) => {
       let fileId: string | undefined = fileRef;
       if (MEDIA_REF_PATTERN.test(fileRef)) {
@@ -90,10 +108,10 @@ export const createArtboardSourceResolver = (
 };
 
 const resolveSource = async (
-  source: ArtboardFrameSourceInput,
+  source: ArtboardBoardSourceInput,
   sources: ArtboardSourceResolver,
   opIndex: number,
-): Promise<ArtboardFrameSource> => {
+): Promise<ResolvedBoardSource> => {
   if (source.kind === 'image') {
     const fileId = await sources.image(source.fileRef);
     if (!fileId)
@@ -112,18 +130,16 @@ const resolveSource = async (
       `Canvas "${source.canvasId}" was not found or you cannot access it.`,
       { opIndex },
     );
-  if (source.version !== undefined && source.version > canvas.version)
+  const version = source.version ?? canvas.version;
+  const workVersionId =
+    version > canvas.version ? undefined : await sources.canvasVersionId(source.canvasId, version);
+  if (!workVersionId)
     throw new ArtboardServiceError(
       'invalid',
-      `Canvas "${source.canvasId}" has no version ${source.version}; its latest is ${canvas.version}.`,
+      `Canvas "${source.canvasId}" has no version ${version}; its latest is ${canvas.version}.`,
       { opIndex },
     );
-  return {
-    canvasId: source.canvasId,
-    kind: 'canvas',
-    ...(source.path ? { path: source.path } : {}),
-    version: source.version ?? canvas.version,
-  };
+  return { kind: 'canvas', path: source.path ?? null, workVersionId };
 };
 
 export const resolveOpSources = (
@@ -133,17 +149,21 @@ export const resolveOpSources = (
   pMap(
     ops,
     async (op, index): Promise<ResolvedArtboardOp> => {
-      if (op.type === 'addFrame')
+      if (op.type === 'addBoard') {
+        const { source, ...board } = op.board;
         return {
           ...op,
-          frame: { ...op.frame, source: await resolveSource(op.frame.source, sources, index) },
+          board: source ? { ...board, source: await resolveSource(source, sources, index) } : board,
         };
-      if (op.type === 'updateFrame' && op.patch.source)
+      }
+      if (op.type === 'updateBoard') {
+        const { source, ...patch } = op.patch;
         return {
           ...op,
-          patch: { ...op.patch, source: await resolveSource(op.patch.source, sources, index) },
+          patch: source ? { ...patch, source: await resolveSource(source, sources, index) } : patch,
         };
-      return op as ResolvedArtboardOp;
+      }
+      return op;
     },
     { concurrency: ARTBOARD_SOURCE_CONCURRENCY },
   );
