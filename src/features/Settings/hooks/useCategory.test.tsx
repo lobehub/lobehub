@@ -160,3 +160,36 @@ describe('settings useCategory', () => {
     expect(systemGroup?.items.map((item) => item.key)).toContain(SettingsTabs.OAuthApps);
   });
 });
+
+describe('settings useCategory automations', () => {
+  const connectionKeys = (enableMcpEvents: boolean) => {
+    const Wrapper = ({ children }: { children: ReactNode }) => (
+      <Provider
+        createStore={() =>
+          initServerConfigStore({
+            featureFlags: { ...mapFeatureFlagsEnvToState({}), enableMcpEvents },
+            serverConfig: { aiProvider: {}, telemetry: {} },
+          })
+        }
+      >
+        {children}
+      </Provider>
+    );
+    const { result } = renderHook(() => useCategory(), { wrapper: Wrapper });
+
+    return result.current
+      .find((group) => group.key === SettingsGroupKey.Connection)
+      ?.items.map((item) => item.key);
+  };
+
+  // Unreleased: the tab follows the `mcp_events` flag (LOBE-UX-015).
+  it('hides Automations while MCP Events is off', () => {
+    expect(connectionKeys(false)).not.toContain(SettingsTabs.Automations);
+  });
+
+  it('lists Automations right after the connectors it comes from', () => {
+    const keys = connectionKeys(true) ?? [];
+
+    expect(keys.indexOf(SettingsTabs.Automations)).toBe(keys.indexOf(SettingsTabs.Connector) + 1);
+  });
+});

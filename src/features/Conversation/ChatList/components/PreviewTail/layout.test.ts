@@ -163,4 +163,16 @@ describe('resolveWholeTopicLeading', () => {
       resolveWholeTopicLeading(preview({ leading: [fromBot] as TopicPreview['leading'] })),
     ).toBeUndefined();
   });
+
+  it('keeps the history skeleton for an MCP event wake-up, whose sender is the connector', () => {
+    const fromEvent = {
+      ...question,
+      content:
+        '<mcpEvent connector="linear" connectorName="Linear" event="issue.created" webhookId="w">\n<instruction>x</instruction>\n</mcpEvent>',
+    };
+
+    expect(
+      resolveWholeTopicLeading(preview({ leading: [fromEvent] as TopicPreview['leading'] })),
+    ).toBeUndefined();
+  });
 });

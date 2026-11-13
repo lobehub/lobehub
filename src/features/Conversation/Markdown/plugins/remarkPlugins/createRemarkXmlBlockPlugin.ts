@@ -2,8 +2,23 @@ import { SKIP, visit } from 'unist-util-visit';
 
 import { treeNodeToString } from './getNodeContent';
 
-const unescapeAttribute = (value: string) =>
+const fromCodePoint = (code: number, entity: string) =>
+  Number.isInteger(code) && code >= 0 && code <= 0x10_ff_ff ? String.fromCodePoint(code) : entity;
+
+/**
+ * Text the server escaped for an XML block: `&quot; &lt; &gt;`, numeric
+ * references (`&#10;` is how a line break stays on one line), and `&amp;`
+ * last, so an escaped reference in the original (`&amp;lt;`, `&amp;#10;`)
+ * comes back as that literal text rather than as `<` or a line break.
+ */
+export const unescapeXmlText = (value: string) =>
   value
+    .replaceAll(/&#x([\dA-Fa-f]+);/g, (entity, hex: string) =>
+      fromCodePoint(Number.parseInt(hex, 16), entity),
+    )
+    .replaceAll(/&#(\d+);/g, (entity, decimal: string) =>
+      fromCodePoint(Number.parseInt(decimal, 10), entity),
+    )
     .replaceAll('&quot;', '"')
     .replaceAll('&lt;', '<')
     .replaceAll('&gt;', '>')
@@ -13,7 +28,7 @@ const unescapeAttribute = (value: string) =>
 export const parseXmlAttributes = (raw: string): Record<string, string> => {
   const result: Record<string, string> = {};
   for (const match of raw.matchAll(/([\w:-]+)="([^"]*)"/g)) {
-    result[match[1]] = unescapeAttribute(match[2]);
+    result[match[1]] = unescapeXmlText(match[2]);
   }
   return result;
 };

@@ -92,6 +92,9 @@ export const componentMap = {
   [SettingsTabs.Connector]: dynamic(() => import('../connector'), {
     loading: loading('Settings > Connector'),
   }),
+  [SettingsTabs.Automations]: dynamic(() => import('../automations'), {
+    loading: loading('Settings > Automations'),
+  }),
   [SettingsTabs.Tools]: dynamic(() => import('../tools'), {
     loading: loading('Settings > Tools'),
   }),
