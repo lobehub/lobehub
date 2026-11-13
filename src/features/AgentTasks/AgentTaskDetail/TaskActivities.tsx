@@ -40,6 +40,7 @@ import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selecto
 import { PRIORITY_META } from '../features/TaskPriorityTag';
 import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import { styles } from '../shared/style';
+import ActivityAuthorProfile from './ActivityAuthorProfile';
 import { resolveAssignmentActivityCopy } from './assignmentActivityCopy';
 import CommentCard from './CommentCard';
 import CommentInput from './CommentInput';
@@ -189,7 +190,9 @@ const RowMark = ({
   icon: LucideIcon;
 }) =>
   author?.avatar ? (
-    <Avatar avatar={author.avatar} size={16} />
+    <ActivityAuthorProfile author={author}>
+      <Avatar avatar={author.avatar} size={16} />
+    </ActivityAuthorProfile>
   ) : (
     <Icon color={cssVar.colorTextTertiary} icon={icon} size={14} />
   );
