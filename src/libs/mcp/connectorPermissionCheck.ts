@@ -30,7 +30,7 @@ export async function getConnectorToolPermission(
 ): Promise<ConnectorToolPermission | null> {
   try {
     const connectorModel = new ConnectorModel(db, userId, workspaceId);
-    const [connector] = await connectorModel.resolveByIdentifiers([identifier], agentId);
+    const [connector] = await connectorModel.resolveByIdentifiers([identifier], { agentId });
     if (!connector) return null;
 
     const toolModel = new ConnectorToolModel(db, userId, workspaceId);

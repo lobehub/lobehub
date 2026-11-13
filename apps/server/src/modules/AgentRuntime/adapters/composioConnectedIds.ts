@@ -45,7 +45,7 @@ export async function loadConnectedComposioIds(
     const connectorModel = new ConnectorModel(serverDB, userId, workspaceId);
     // Agent-aware: resolves the agent's own Composio connectors plus the base
     // (workspace/personal) ones, scoped by the model's workspace ownership.
-    const connectors = await connectorModel.resolveAll(agentId);
+    const connectors = await connectorModel.resolveAll({ agentId });
     for (const connector of connectors) {
       if (
         connector.isEnabled &&

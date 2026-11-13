@@ -103,7 +103,7 @@ describe('resolveWidgetEnv', () => {
     );
 
     expect(env).toEqual({ GITHUB_TOKEN: 'agent-tok' });
-    expect(model.resolveByIdentifiers).toHaveBeenCalledWith(['github'], 'agt_1');
+    expect(model.resolveByIdentifiers).toHaveBeenCalledWith(['github'], { agentId: 'agt_1' });
   });
 
   it('never lets a personal credential reach a workspace widget', async () => {
