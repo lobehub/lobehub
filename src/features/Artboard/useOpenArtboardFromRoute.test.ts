@@ -54,14 +54,14 @@ beforeEach(() => {
 });
 
 describe('useOpenArtboardFromRoute', () => {
-  it('opens the board panel only after the artboard tool has registered its portal', async () => {
+  it('opens the board tab only after the artboard tool has loaded', async () => {
     renderHook(() => useOpenArtboardFromRoute(), { wrapper });
 
     expect(openBoardPanel).not.toHaveBeenCalled();
 
     await act(async () => resolveLoad());
 
-    expect(openBoardPanel).toHaveBeenCalledWith('tool_1');
+    expect(openBoardPanel).toHaveBeenCalledWith('art_1');
   });
 
   it.each(['CLI-created board', 'creation message outside the loaded window'])(
@@ -72,7 +72,7 @@ describe('useOpenArtboardFromRoute', () => {
 
       await act(async () => resolveLoad());
 
-      expect(openBoardPanel).toHaveBeenCalledWith(undefined, 'art_1');
+      expect(openBoardPanel).toHaveBeenCalledWith('art_1');
     },
   );
 
@@ -86,7 +86,7 @@ describe('useOpenArtboardFromRoute', () => {
     act(() => useChatStore.setState({ activeTopicId: 't' }));
     rerender();
     await act(async () => resolveLoad());
-    expect(openBoardPanel).toHaveBeenCalledWith(undefined, 'art_1');
+    expect(openBoardPanel).toHaveBeenCalledWith('art_1');
   });
 
   it.each([

@@ -1,6 +1,5 @@
-import type { BuiltinPortalProps } from '@lobechat/types';
-import { Button, Center, Flexbox, Icon, Text } from '@lobehub/ui';
-import { Minimize2Icon, PresentationIcon } from 'lucide-react';
+import { Button, Center, Icon, Text } from '@lobehub/ui';
+import { Minimize2Icon } from 'lucide-react';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,10 +7,6 @@ import BoardView from '../Board';
 import { ArtboardFullscreen } from '../Board/Fullscreen';
 import { artboardActions, useArtboardStore } from '../store';
 import { useArtboardFeature } from '../useArtboardFeature';
-
-interface BoardPortalState {
-  artboardId?: string;
-}
 
 const exitFullscreen = () => artboardActions.setFullscreen(false);
 
@@ -29,30 +24,12 @@ const FullscreenPlaceholder = ({ artboardId }: { artboardId: string }) => {
   );
 };
 
-const BoardPortal = ({ state }: BuiltinPortalProps<unknown, BoardPortalState>) => {
+const BoardPane = ({ artboardId }: { artboardId: string }) => {
   const { enabled } = useArtboardFeature();
-  const artboardId = state?.artboardId;
   const fullscreen = useArtboardStore((s) => s.fullscreen && s.boardId === artboardId);
-  if (!enabled || !artboardId) return null;
+  if (!enabled) return null;
   if (fullscreen) return <FullscreenPlaceholder artboardId={artboardId} />;
-  return (
-    // The tool panel pads its body for reading; the board runs edge to edge.
-    <Flexbox flex={1} height={'100%'} style={{ marginInline: -12, minHeight: 0 }}>
-      <BoardView artboardId={artboardId} />
-    </Flexbox>
-  );
+  return <BoardView artboardId={artboardId} />;
 };
 
-export const BoardPortalTitle = () => {
-  const { t } = useTranslation('project');
-  return (
-    <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
-      <Icon icon={PresentationIcon} size={18} />
-      <Text ellipsis weight={500}>
-        {t('artboard.header.title')}
-      </Text>
-    </Flexbox>
-  );
-};
-
-export default BoardPortal;
+export default BoardPane;

@@ -1,11 +1,9 @@
-import { useChatStore } from '@/store/chat/store';
+import { useGlobalStore } from '@/store/global';
+import { artboardTabKey } from '@/store/global/initialState';
 
 import { isArtboardEnabled } from '../useArtboardFeature';
-import { ARTBOARD_TOOL } from './tool';
 
-export const openBoardPanel = (toolMessageId?: string, artboardId?: string) => {
+export const openBoardPanel = (artboardId: string) => {
   if (!isArtboardEnabled()) return;
-  useChatStore
-    .getState()
-    .openToolUI(toolMessageId ?? '', ARTBOARD_TOOL, artboardId ? { artboardId } : undefined);
+  useGlobalStore.getState().openWorkingSidebar(artboardTabKey(artboardId));
 };

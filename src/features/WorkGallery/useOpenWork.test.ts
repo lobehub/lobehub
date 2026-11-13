@@ -4,10 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useOpenWork } from './useOpenWork';
 
-const { createModal, getVersion, openArtboardFullscreen } = vi.hoisted(() => ({
+const { createModal, getVersion, openArtboard } = vi.hoisted(() => ({
   createModal: vi.fn(),
   getVersion: vi.fn(),
-  openArtboardFullscreen: vi.fn(),
+  openArtboard: vi.fn(),
 }));
 
 vi.mock('@lobehub/ui', () => ({ createModal }));
@@ -15,7 +15,7 @@ vi.mock('@/services/canvas', () => ({ canvasService: { getVersion } }));
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => vi.fn(),
 }));
-vi.mock('@/features/Artboard/Gallery/loader', () => ({ openArtboardFullscreen }));
+vi.mock('@/features/Artboard/openArtboard', () => ({ openArtboard }));
 vi.mock('@/features/Work/descriptors', () => ({
   getWorkTypeDescriptor: () => ({
     getOpenTarget: (item: WorkSummaryItem) =>
@@ -51,12 +51,12 @@ describe('useOpenWork Canvas entry', () => {
 });
 
 describe('useOpenWork Artboard entry', () => {
-  it('opens the board full screen in place', () => {
+  it('hands the board to the artboard opener', () => {
     const { result } = renderHook(() => useOpenWork());
     act(() => {
       result.current({ resourceId: 'art_1', type: 'artboard' } as WorkSummaryItem);
     });
 
-    expect(openArtboardFullscreen).toHaveBeenCalledWith('art_1');
+    expect(openArtboard).toHaveBeenCalledWith('art_1');
   });
 });

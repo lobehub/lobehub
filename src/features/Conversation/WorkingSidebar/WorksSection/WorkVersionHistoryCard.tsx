@@ -5,7 +5,7 @@ import { memo, useState } from 'react';
 
 import TaskPriorityTag from '@/features/AgentTasks/features/TaskPriorityTag';
 import TaskStatusTag from '@/features/AgentTasks/features/TaskStatusTag';
-import { openArtboardFullscreen } from '@/features/Artboard/Gallery/loader';
+import { openArtboard } from '@/features/Artboard/openArtboard';
 import { getWorkTypeDescriptor, isSafeExternalUrl } from '@/features/Work/descriptors';
 import { useResourceDeletedPrompt } from '@/features/Work/useResourceDeletedPrompt';
 import { useChatStore } from '@/store/chat';
@@ -84,7 +84,7 @@ const WorkVersionHistoryCard = memo<{ work: WorkListItem }>(({ work }) => {
     if (!openTarget) return undefined;
     switch (openTarget.kind) {
       case 'artboard': {
-        return () => void openArtboardFullscreen(openTarget.artboardId);
+        return () => void openArtboard(openTarget.artboardId);
       }
       case 'document': {
         return resourceDeleted

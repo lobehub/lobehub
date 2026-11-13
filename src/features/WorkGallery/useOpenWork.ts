@@ -2,7 +2,7 @@ import type { WorkSummaryItem } from '@lobechat/types';
 import { useCallback } from 'react';
 
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
-import { openArtboardFullscreen } from '@/features/Artboard/Gallery/loader';
+import { openArtboard } from '@/features/Artboard/openArtboard';
 import { openCanvasModal } from '@/features/CanvasModal/loader';
 import { openDocumentModal } from '@/features/DocumentModal/loader';
 import { getWorkTypeDescriptor, isSafeExternalUrl } from '@/features/Work/descriptors';
@@ -23,7 +23,7 @@ export const useOpenWork = () => {
 
       switch (openTarget.kind) {
         case 'artboard': {
-          void openArtboardFullscreen(openTarget.artboardId);
+          void openArtboard(openTarget.artboardId);
           return;
         }
         case 'canvas': {

@@ -13,13 +13,14 @@ import { openBoardPanel } from './openBoardPanel';
 
 type BoardCardProps = BuiltinRenderProps<Partial<CreateArtboardParams>, ArtboardToolState>;
 
-const BoardCard = ({ apiName, args, messageId, pluginError, pluginState }: BoardCardProps) => {
+const BoardCard = ({ apiName, args, pluginError, pluginState }: BoardCardProps) => {
   const { t } = useTranslation('project');
   const { enabled } = useArtboardFeature();
-  if (!enabled || pluginError || !pluginState?.artboardId) return null;
+  const artboardId = pluginState?.artboardId;
+  if (!enabled || pluginError || !artboardId) return null;
 
   const updated = apiName === ArtboardApiName.updateArtboard;
-  const open = () => openBoardPanel(messageId);
+  const open = () => openBoardPanel(artboardId);
 
   return (
     <Block

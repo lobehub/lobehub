@@ -1,7 +1,7 @@
 import type { IconProps } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 
-import { CANVAS_TAB_PREFIX } from '@/store/global/initialState';
+import { ARTBOARD_TAB_PREFIX, CANVAS_TAB_PREFIX } from '@/store/global/initialState';
 
 export interface SidebarTabDescriptor {
   icon: IconProps['icon'];
@@ -24,9 +24,13 @@ export const isBrowserTab = (tab: string) =>
 
 export const isCanvasTab = (tab: string) => tab.startsWith(CANVAS_TAB_PREFIX);
 
-// Browser pages and canvases belong to one conversation, so pinning them across
-// every topic of the agent would reopen content that does not exist there.
-export const isDynamicTab = (tab: string) => isBrowserTab(tab) || isCanvasTab(tab);
+export const isArtboardTab = (tab: string) => tab.startsWith(ARTBOARD_TAB_PREFIX);
+
+export const isWorkTab = (tab: string) => isCanvasTab(tab) || isArtboardTab(tab);
+
+// Browser pages, canvases and artboards belong to one conversation, so pinning them
+// across every topic of the agent would reopen content that does not exist there.
+export const isDynamicTab = (tab: string) => isBrowserTab(tab) || isWorkTab(tab);
 
 export const browserSessionIdOfTab = (baseSessionId: string, tab: string) =>
   tab === BROWSER_TAB_KEY
