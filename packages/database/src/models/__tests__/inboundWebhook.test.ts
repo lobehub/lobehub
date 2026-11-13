@@ -414,8 +414,13 @@ describe('InboundWebhookModel delivery recovery', () => {
       lastError: 'http_5xx',
       lastDeliveryAt: null,
     });
+    // A control envelope (gap, terminated) is not an event: it must not move "last event".
     await model.recordDelivery(row.id, false);
-    expect(await model.findById(row.id)).toMatchObject({ status: 'error', lastError: 'http_5xx' });
+    expect(await model.findById(row.id)).toMatchObject({
+      status: 'error',
+      lastError: 'http_5xx',
+      lastDeliveryAt: null,
+    });
     await model.recordDelivery(row.id, true);
     expect(await model.findById(row.id)).toMatchObject({
       status: 'active',

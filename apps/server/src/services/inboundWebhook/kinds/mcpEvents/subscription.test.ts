@@ -19,10 +19,12 @@ const mocks = vi.hoisted(() => ({
   fresh: vi.fn(),
   subscribe: vi.fn(),
   unsubscribe: vi.fn(),
+  updateStatus: vi.fn(),
 }));
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: class {
     findById = mocks.connector;
+    updateStatus = mocks.updateStatus;
   },
 }));
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://lobehub.example.com' } }));
@@ -241,6 +243,8 @@ describe('subscription maintenance', () => {
     await maintainMcpSubscription(ctx);
     expect(stored).toMatchObject({ status: 'error', lastError, maintenanceFailures: 3 });
     expect(stored.nextMaintenanceAt).toEqual(new Date(NOW.getTime() + maintenanceBackoff(3)));
+    if (lastError === 'auth') expect(mocks.updateStatus).toHaveBeenCalledWith('connector', 'error');
+    else expect(mocks.updateStatus).not.toHaveBeenCalled();
   });
 
   it('caps exponential maintenance backoff at six hours', () => {

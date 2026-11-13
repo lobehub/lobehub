@@ -2,6 +2,7 @@ import type { InboundWebhookError, McpEventsWebhookState } from '@lobechat/types
 import { INBOUND_WEBHOOK_ERRORS } from '@lobechat/types';
 
 import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorStatus } from '@/database/schemas';
 import { appEnv } from '@/envs/app';
 import { getMcpEventErrorName } from '@/libs/mcp/events/errors';
 import type { McpSubscribeEventParams, McpSubscribeEventResult } from '@/libs/mcp/events/schema';
@@ -115,9 +116,18 @@ export async function maintainMcpSubscription(ctx: InboundWebhookContext): Promi
       ctx.row.id,
       getMcpEventErrorName(error) ?? 'transport',
     );
+    const authFailure = isMcpAuthError(error);
+    if (authFailure && ctx.row.connectorId) {
+      const connectorModel = new ConnectorModel(
+        ctx.db,
+        ctx.row.userId,
+        ctx.row.workspaceId ?? undefined,
+      );
+      await connectorModel.updateStatus(ctx.row.connectorId, ConnectorStatus.error);
+    }
     const failures = ctx.row.maintenanceFailures + 1;
     await ctx.model.update(ctx.row.id, {
-      lastError: isMcpAuthError(error) ? 'auth' : 'server_unreachable',
+      lastError: authFailure ? 'auth' : 'server_unreachable',
       maintenanceFailures: failures,
       nextMaintenanceAt: new Date(Date.now() + maintenanceBackoff(failures)),
       status: 'error',
