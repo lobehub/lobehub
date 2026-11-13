@@ -16,6 +16,9 @@ type ConnectorPatch = Parameters<ToolStore['updateConnector']>[1];
  * A popup that closes without a result is a success when the callback did
  * connect the row: providers whose COOP policy severs `window.opener` lose the
  * callback's message.
+ *
+ * The callback's sync only adds tools, so an authorized edit lists them again
+ * to drop the ones the edited endpoint no longer has.
  */
 export const saveOAuthConnectorEdit = async (
   id: string,
@@ -30,12 +33,20 @@ export const saveOAuthConnectorEdit = async (
     const authorizationUrl = await get().startConnectorOAuth(id);
     await waitForConnectorOAuth(popup, id, authorizationUrl);
   } catch (error) {
-    if (await isConnectedAfterDismiss(error, id, get)) return;
-    await restoreConnector(previous, get).catch((restoreError) => {
-      console.error('[connector] restore of connector %s failed:', id, restoreError);
-    });
-    throw error;
+    if (!(await isConnectedAfterDismiss(error, id, get))) {
+      await restoreConnector(previous, get).catch((restoreError) => {
+        console.error('[connector] restore of connector %s failed:', id, restoreError);
+      });
+      throw error;
+    }
   }
+
+  // The edit is authorized and stored: a failed re-list only leaves extra tools
+  await get()
+    .syncConnectorTools(id, { pruneMissingAutoTools: true })
+    .catch((syncError) => {
+      console.error('[connector] tool sync of connector %s failed:', id, syncError);
+    });
 };
 
 const isConnectedAfterDismiss = async (error: unknown, id: string, get: () => ToolStore) => {

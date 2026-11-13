@@ -227,7 +227,10 @@ describe('CustomConnectorModal edit save', () => {
         mcpStdioConfig: { args: ['--port', '1'], command: 'uvx', env: { API_KEY: 'new' } },
       }),
     );
-    expect(mocks.state.syncConnectorTools).toHaveBeenCalledWith('c1');
+    // The edited endpoint's list replaces the stored one
+    expect(mocks.state.syncConnectorTools).toHaveBeenCalledWith('c1', {
+      pruneMissingAutoTools: true,
+    });
   });
 
   it('lists the tools of an edited HTTP endpoint again', async () => {
@@ -251,7 +254,10 @@ describe('CustomConnectorModal edit save', () => {
         mcpServerUrl: 'https://new.example.com',
       }),
     );
-    expect(mocks.state.syncConnectorTools).toHaveBeenCalledWith('c1');
+    // The edited endpoint's list replaces the stored one
+    expect(mocks.state.syncConnectorTools).toHaveBeenCalledWith('c1', {
+      pruneMissingAutoTools: true,
+    });
   });
 
   // Stored before its popup opens: the helper undoes it when authorization fails

@@ -30,6 +30,7 @@ const makeStore = (statusAfterPopup: string) => {
     }),
     getConnectorForEdit: vi.fn().mockResolvedValue(previous),
     startConnectorOAuth: vi.fn().mockResolvedValue('https://auth.example.com/authorize'),
+    syncConnectorTools: vi.fn().mockResolvedValue(undefined),
     updateConnector: vi.fn().mockResolvedValue(undefined),
   };
   return { get: () => state as never, state };
@@ -55,6 +56,27 @@ describe('saveOAuthConnectorEdit', () => {
     expect(restoreConnector).not.toHaveBeenCalled();
   });
 
+  // The callback's sync only adds tools: the edited endpoint's list replaces them
+  it('lists the tools again once the edit is authorized, dropping the ones it no longer has', async () => {
+    const { get, state } = makeStore('connected');
+
+    await saveOAuthConnectorEdit('c1', patch, popup, get);
+
+    expect(state.syncConnectorTools).toHaveBeenCalledWith('c1', { pruneMissingAutoTools: true });
+    expect(state.syncConnectorTools.mock.invocationCallOrder[0]).toBeGreaterThan(
+      vi.mocked(waitForConnectorOAuth).mock.invocationCallOrder[0],
+    );
+  });
+
+  it('keeps an authorized edit when listing its tools again fails', async () => {
+    const { get, state } = makeStore('connected');
+    state.syncConnectorTools.mockRejectedValueOnce(new Error('unreachable'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(saveOAuthConnectorEdit('c1', patch, popup, get)).resolves.toBeUndefined();
+    expect(restoreConnector).not.toHaveBeenCalled();
+  });
+
   // The edit already pointed the connector at the new endpoint: its tools must
   // not keep running there unauthorized
   it.each([
@@ -66,6 +88,7 @@ describe('saveOAuthConnectorEdit', () => {
     vi.mocked(waitForConnectorOAuth).mockRejectedValueOnce(error);
 
     await expect(saveOAuthConnectorEdit('c1', patch, popup, get)).rejects.toBe(error);
+    expect(state.syncConnectorTools).not.toHaveBeenCalled();
 
     // Read before the edit is stored
     expect(state.getConnectorForEdit.mock.invocationCallOrder[0]).toBeLessThan(

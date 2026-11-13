@@ -58,7 +58,13 @@ export class CustomPluginActionImpl {
     identifier,
     name,
   }: CustomMcpConnectorParams): Promise<void> => {
-    const { createConnector, deleteConnector, syncConnectorTools, uninstallPlugin } = this.#get();
+    const {
+      createConnector,
+      deleteConnector,
+      refreshPlugins,
+      syncConnectorTools,
+      uninstallPlugin,
+    } = this.#get();
     const isHttp = config.type === 'http';
     // Set whatever the transport: it can be edited to stdio later
     const metadata: Record<string, unknown> = {
@@ -96,13 +102,15 @@ export class CustomPluginActionImpl {
       throw error;
     }
 
-    // The listed rows, which a cache-only list also has
-    const legacyPlugins = pluginSelectors.installedCustomPluginMetaList(this.#get());
-    if (!legacyPlugins.some((plugin) => plugin.identifier === identifier)) return;
     // The install itself succeeded: a plugin row left behind is only logged
-    await uninstallPlugin(identifier).catch((error) => {
+    try {
+      // The protocol-install popup mounts no plugin list: ask the server
+      await refreshPlugins();
+      if (!pluginSelectors.getCustomPluginById(identifier)(this.#get())) return;
+      await uninstallPlugin(identifier);
+    } catch (error) {
       console.error('[customMcp] removing legacy custom plugin %s failed:', identifier, error);
-    });
+    }
   };
 
   /**

@@ -326,8 +326,9 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
           }
         } else {
           await updateConnector(connectorId, patch);
-          // A changed endpoint, command or credential can expose different tools
-          await syncConnectorTools(connectorId);
+          // A changed endpoint, command or credential can expose different tools:
+          // its list replaces the stored one
+          await syncConnectorTools(connectorId, { pruneMissingAutoTools: true });
         }
 
         onEditSuccess?.();

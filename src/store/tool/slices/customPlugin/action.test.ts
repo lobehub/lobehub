@@ -115,16 +115,16 @@ describe('useToolStore:customPlugin', () => {
     });
 
     // The lists would show the plugin in the connector's place, so their
-    // Configure and Delete would act on a row the calls no longer run on
+    // Configure and Delete would act on a row the calls no longer run on. The
+    // protocol-install popup mounts no plugin list, so the store may hold none.
     it('removes a legacy custom plugin of the same identifier once the connector is synced', async () => {
       const { syncConnectorTools } = mockConnectorActions();
       act(() => {
-        useToolStore.setState({
-          installedPlugins: [
-            { identifier: 'my-mcp', manifest: { identifier: 'my-mcp' }, type: 'customPlugin' },
-          ] as never,
-        });
+        useToolStore.setState({ installedPlugins: [] });
       });
+      vi.mocked(pluginService.getInstalledPlugins).mockResolvedValue([
+        { identifier: 'my-mcp', manifest: { identifier: 'my-mcp' }, type: 'customPlugin' },
+      ] as never);
 
       await act(async () => {
         await useToolStore.getState().installCustomMcpConnector({
@@ -137,6 +137,22 @@ describe('useToolStore:customPlugin', () => {
       expect(vi.mocked(pluginService.uninstallPlugin).mock.invocationCallOrder[0]).toBeGreaterThan(
         syncConnectorTools.mock.invocationCallOrder[0],
       );
+    });
+
+    it('keeps a same-identifier plugin the server does not list as a custom plugin', async () => {
+      mockConnectorActions();
+      vi.mocked(pluginService.getInstalledPlugins).mockResolvedValue([
+        { identifier: 'my-mcp', manifest: { identifier: 'my-mcp' }, type: 'plugin' },
+      ] as never);
+
+      await act(async () => {
+        await useToolStore.getState().installCustomMcpConnector({
+          config: { type: 'http', url: 'https://mcp.example.com' },
+          identifier: 'my-mcp',
+        });
+      });
+
+      expect(pluginService.uninstallPlugin).not.toHaveBeenCalled();
     });
 
     it('keeps the legacy custom plugin when the connector sync fails', async () => {
