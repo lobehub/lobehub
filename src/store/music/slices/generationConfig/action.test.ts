@@ -144,6 +144,47 @@ describe('music generationConfig', () => {
     ).toBe(true);
   });
 
+  // The first-run form must not queue a batch the provider runtime would refuse
+  it('canSubmit follows the input rules of the selected model', () => {
+    const state = useMusicStore.getState();
+    const can = (model: string, parameters: Record<string, unknown>, schema = sunoSchema) =>
+      musicGenerationConfigSelectors.canSubmit({
+        ...state,
+        model,
+        parameters: parameters as any,
+        parametersSchema: schema,
+      });
+
+    // Suno: a prompt alone is refused; a style, lyrics or reference audio is needed
+    expect(can('suno-v6', { prompt: 'a happy song' })).toBe(false);
+    expect(can('suno-v6', { prompt: 'a happy song', style: 'pop' })).toBe(true);
+    expect(can('suno-v6', { instrumental: true, lyrics: 'words', prompt: 'p' })).toBe(false);
+    // Custom mode (title or duration) needs lyrics, a style or a negative style
+    expect(can('suno-v6', { prompt: 'p', title: 'Song' })).toBe(false);
+    expect(can('suno-v6', { duration: 120, prompt: 'p' })).toBe(false);
+    expect(can('suno-v6', { duration: 120, prompt: 'p', style: 'pop' })).toBe(true);
+    expect(can('suno-v6', { negativeStyle: 'metal', title: 'Song' })).toBe(true);
+
+    // MiniMax text to song: vocals need lyrics or auto lyrics with a prompt
+    expect(can('music-2.6', { prompt: 'rainy night' })).toBe(false);
+    expect(can('music-2.6', { autoLyrics: true, prompt: 'rainy night' })).toBe(true);
+    expect(can('music-2.6', { lyrics: '[Verse] rain', prompt: '' })).toBe(true);
+    expect(can('music-2.6', { instrumental: true, prompt: '' })).toBe(false);
+    expect(can('music-2.6', { instrumental: true, prompt: 'lo-fi beat' })).toBe(true);
+
+    // MiniMax cover: reference audio and a prompt
+    expect(
+      can('music-cover', { referenceAudioUrl: 'https://a.example/ref.mp3' }, coverSchema),
+    ).toBe(false);
+    expect(
+      can(
+        'music-cover',
+        { prompt: 'jazz cover', referenceAudioUrl: 'https://a.example/ref.mp3' },
+        coverSchema,
+      ),
+    ).toBe(true);
+  });
+
   it('reuses a previous batch config, ignoring params the model does not declare', () => {
     useMusicStore
       .getState()
