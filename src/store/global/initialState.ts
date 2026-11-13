@@ -325,7 +325,7 @@ export interface SystemStatus {
    * an agent only exists in the scope it was picked in, and a single value let
    * the personal inbox reach a workspace home after a switch, where every
    * config save and send against it returned NOT_FOUND until the workspace
-   * agent list loaded (T-14038).
+   * agent list loaded.
    */
   homeSelectedAgentIdByScope?: Record<string, string>;
   homeTaskCount?: number;
