@@ -401,6 +401,19 @@ export class AgentRuntimeCoordinator {
   }
 
   /**
+   * Record that the `execAgent` invocation running step 0 inline is done with
+   * it, so the queued fallback delivery of step 0 is acknowledged unrun.
+   */
+  async markInlineFirstStepSettled(operationId: string): Promise<void> {
+    return this.stateManager.markInlineFirstStepSettled(operationId);
+  }
+
+  /** Whether {@link markInlineFirstStepSettled} ran for this operation. */
+  async isInlineFirstStepSettled(operationId: string): Promise<boolean> {
+    return this.stateManager.isInlineFirstStepSettled(operationId);
+  }
+
+  /**
    * Atomically try to claim a step for execution (distributed lock).
    */
   async tryClaimStep(

@@ -241,6 +241,7 @@ export class AgentStateManager {
   private readonly INTERRUPT_PREFIX = 'agent_runtime_interrupt';
   private readonly QUEUED_MESSAGES_PREFIX = 'agent_runtime_queued_messages';
   private readonly INLINE_RESUME_PREFIX = 'agent_runtime_inline_resume';
+  private readonly INLINE_FIRST_STEP_PREFIX = 'agent_runtime_inline_first_step';
   private readonly DEFAULT_TTL = 2 * 3600; // 2h
 
   constructor() {
@@ -659,6 +660,7 @@ export class AgentStateManager {
       `${this.INTERRUPT_PREFIX}:${operationId}`,
       `${this.QUEUED_MESSAGES_PREFIX}:${operationId}`,
       `${this.INLINE_RESUME_PREFIX}:${operationId}`,
+      `${this.INLINE_FIRST_STEP_PREFIX}:${operationId}`,
     ];
 
     try {
@@ -821,6 +823,33 @@ export class AgentStateManager {
       );
     } catch (error) {
       console.error('Failed to clear inline resume pointer:', error);
+    }
+  }
+
+  /**
+   * Best-effort: without the marker the fallback delivery of step 0 runs as a
+   * redelivery, and the step claim plus the stale-step guards still keep it
+   * from running the step twice.
+   */
+  async markInlineFirstStepSettled(operationId: string): Promise<void> {
+    try {
+      await this.redis.setex(
+        `${this.INLINE_FIRST_STEP_PREFIX}:${operationId}`,
+        this.DEFAULT_TTL,
+        '1',
+      );
+    } catch (error) {
+      console.error('Failed to mark inline first step settled:', error);
+    }
+  }
+
+  /** A read failure answers false: the delivery then runs as a redelivery. */
+  async isInlineFirstStepSettled(operationId: string): Promise<boolean> {
+    try {
+      return (await this.redis.get(`${this.INLINE_FIRST_STEP_PREFIX}:${operationId}`)) === '1';
+    } catch (error) {
+      console.error('Failed to read inline first step marker:', error);
+      return false;
     }
   }
 

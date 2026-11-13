@@ -30,6 +30,7 @@ const initialDoneResult = () => ({
 const mockGetOperationMetadata = vi.fn();
 const mockLoadInlineResume = vi.fn();
 const mockClearInlineResume = vi.fn();
+const mockIsInlineFirstStepSettled = vi.fn();
 const mockExecuteStep = vi.fn();
 const mockScheduleContinuation = vi.fn();
 const mockReleaseOperationLock = vi.fn();
@@ -59,6 +60,7 @@ vi.mock('@/server/modules/AgentRuntime', () => ({
     return {
       clearInlineResume: mockClearInlineResume,
       getOperationMetadata: mockGetOperationMetadata,
+      isInlineFirstStepSettled: mockIsInlineFirstStepSettled,
       loadInlineResume: mockLoadInlineResume,
     };
   }),
@@ -907,5 +909,69 @@ describe('runStep inline step loop', () => {
     expect(res.status).toBe(200);
     expect(mockScheduleContinuation).not.toHaveBeenCalled();
     expect(getCaptures()[0].body).toMatchObject({ inlinedSteps: 1 });
+  });
+});
+
+describe('runStep fallback of an inline step 0 (agent_inline_first_step)', () => {
+  const fallbackBody = {
+    context: { phase: 'user_input' },
+    operationId: 'op-1',
+    payload: { inlineFirstStepFallback: true },
+    stepIndex: 0,
+  };
+
+  beforeEach(() => {
+    mockGetOperationMetadata.mockReset();
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1', workspaceId: 'ws-1' });
+    mockExecuteStep.mockReset();
+    mockIsInlineFirstStepSettled.mockReset();
+    mockLoadInlineResume.mockReset();
+    mockLoadInlineResume.mockResolvedValue(null);
+    mockReleaseOperationLock.mockReset();
+    mockGetServerDB.mockResolvedValue({} as any);
+  });
+
+  it('acknowledges without running anything once the inline run settled step 0', async () => {
+    mockIsInlineFirstStepSettled.mockResolvedValue(true);
+
+    const { ctx, getCaptures } = buildContext({ body: fallbackBody });
+    const res = await runStep(ctx);
+
+    expect(res.status).toBe(200);
+    expect(getCaptures()[0].body).toMatchObject({ inlineFirstStepSettled: true, success: true });
+    expect(mockExecuteStep).not.toHaveBeenCalled();
+    expect(mockLoadInlineResume).not.toHaveBeenCalled();
+  });
+
+  it("runs as step 0's redelivery while the inline run has not settled it", async () => {
+    mockIsInlineFirstStepSettled.mockResolvedValue(false);
+    mockExecuteStep.mockResolvedValueOnce(initialDoneResult());
+
+    const { ctx } = buildContext({ body: fallbackBody });
+    const res = await runStep(ctx);
+
+    expect(res.status).toBe(200);
+    expect(mockExecuteStep).toHaveBeenCalledTimes(1);
+    expect(mockExecuteStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        // Replays a parked approval whose Review the inline run failed to persist.
+        externalRetryCount: 1,
+        firstStepDispatch: 'inline_fallback',
+        operationId: 'op-1',
+        stepIndex: 0,
+      }),
+    );
+  });
+
+  it('leaves an ordinary delivery of step 0 alone', async () => {
+    mockExecuteStep.mockResolvedValueOnce(initialDoneResult());
+
+    const { ctx } = buildContext({ body: { ...fallbackBody, payload: undefined } });
+    await runStep(ctx);
+
+    expect(mockIsInlineFirstStepSettled).not.toHaveBeenCalled();
+    expect(mockExecuteStep).toHaveBeenCalledWith(
+      expect.objectContaining({ externalRetryCount: 0, firstStepDispatch: undefined }),
+    );
   });
 });

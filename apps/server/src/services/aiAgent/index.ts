@@ -39,6 +39,7 @@ import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { TopicRepository } from '@/database/repositories/topic';
+import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { AgentService } from '@/server/services/agent';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
@@ -59,6 +60,7 @@ import { ComposioService } from '@/server/services/composio';
 import { DocumentService } from '@/server/services/document';
 import { MarketService } from '@/server/services/market';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
+import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import {
   type BackgroundSubAgentResult,
@@ -66,6 +68,7 @@ import {
 } from './backgroundSubAgentDelivery';
 import { resolveForegroundInterventionConfig } from './foregroundIntervention';
 import { createGraphAwareAgentFactory } from './helpers/agentFactory';
+import { type InlineFirstStepRun, runInlineFirstStep } from './inlineFirstStep';
 import { InterventionController } from './intervention/InterventionController';
 import type { ApprovalClaimState } from './pipeline/approvalResume';
 import { runDeferredOperationInit } from './pipeline/deferredInit';
@@ -252,11 +255,35 @@ export class AiAgentService {
       resolveSourceAgentSnapshot: (agentId, sourceOperationId) =>
         this.resolveSourceAgentSnapshot(agentId, sourceOperationId),
       retirePendingApprovalOperation: (opId) => this.retirePendingApprovalOperation(opId),
+      scheduleInlineFirstStep: (run) => this.scheduleInlineFirstStep(run),
       topicModel: this.topicModel,
       userId: this.userId,
       withholdGatewayToken: this.withholdGatewayToken,
       workspaceId: this.workspaceId,
     };
+  }
+
+  /**
+   * Hand step 0 to the host to run once the response is sent
+   * (`agent_inline_first_step`). Unscoped: a step's own deferred work must not
+   * join the clock of whatever scope the send ran in.
+   */
+  private scheduleInlineFirstStep(run: InlineFirstStepRun): void {
+    afterUnscoped(() =>
+      runInlineFirstStep(
+        {
+          coordinator: new AgentRuntimeCoordinator(),
+          // Built the way the step worker (`/api/agent/run`) builds it, from the
+          // run's metadata, so the step sees the same service there and here.
+          createService: (metadata) =>
+            new AiAgentService(this.db, metadata.userId, {
+              includeShareVisitor: Boolean(metadata.streamOwnerUserId),
+              workspaceId: metadata.workspaceId,
+            }),
+        },
+        run,
+      ),
+    );
   }
 
   /** Dependency bundle for the topic-start stage in `pipeline/topicStart.ts`. */
