@@ -16,6 +16,7 @@ import {
   readConnectorOAuthCompletion,
   saveConnectorOAuthState,
 } from '@/server/services/connector/stateStore';
+import { sanitizeReturnTo } from '@/server/services/scm/scope';
 
 import { assertConnectorMaintainable } from '../_helpers/connectorManagePolicy';
 import { connectorProcedure, connectorWriteProcedure } from './procedure';
@@ -146,7 +147,8 @@ export const connectorAccountProcedures = {
         connectorId: input.id,
         lobeUserId: ctx.userId,
         linkTarget,
-        returnTo: input.returnTo,
+        // Only an in-app path may ever be followed after the callback.
+        returnTo: sanitizeReturnTo(input.returnTo),
         workspaceId: ctx.workspaceId ?? undefined,
       });
 

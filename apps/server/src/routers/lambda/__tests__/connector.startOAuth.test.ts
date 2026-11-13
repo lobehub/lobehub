@@ -301,6 +301,19 @@ describe('connectorRouter.startOAuth client registration', () => {
     expect(mocks.saveState.mock.calls.at(-1)?.[1].linkTarget).toEqual({ kind: 'new' });
   });
 
+  it('keeps only an in-app return path in the OAuth state', async () => {
+    stubAuthorizationServer({ registration_endpoint: 'https://mcp.example.com/register' });
+    const caller = connectorRouter.createCaller({ serverDB: {}, userId: 'me' } as any);
+
+    await caller.startOAuth({ id: CONNECTOR_ID, returnTo: '/settings/connector' });
+    expect(mocks.saveState.mock.calls.at(-1)?.[1].returnTo).toBe('/settings/connector');
+
+    for (const returnTo of ['https://evil.example/x', '//evil.example/x', '/\\evil.example']) {
+      await caller.startOAuth({ id: CONNECTOR_ID, returnTo });
+      expect(mocks.saveState.mock.calls.at(-1)?.[1].returnTo).toBeUndefined();
+    }
+  });
+
   it('rejects add on a non-custom connector and reauthorization of an unknown account', async () => {
     connectorModelMock.findById.mockResolvedValue({
       id: CONNECTOR_ID,

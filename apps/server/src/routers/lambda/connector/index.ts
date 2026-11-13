@@ -1,3 +1,4 @@
+import { builtinTools } from '@lobechat/builtin-tools';
 import { getComposioAppByIdentifier } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { buildMcpToolMetadata } from '@lobechat/const/mcpApp';
@@ -930,7 +931,6 @@ export const connectorRouter = router({
   syncBuiltinTool: connectorProcedure
     .input(z.object({ identifier: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
-      const { builtinTools } = await import('@lobechat/builtin-tools');
       const tool = builtinTools.find((t) => t.identifier === input.identifier);
 
       if (!tool) {
