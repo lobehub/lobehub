@@ -29,6 +29,7 @@ beforeEach(() => {
   } as any);
   useToolStore.setState({
     composioServers: [],
+    connectors: [],
     installedPlugins: [],
     lobehubSkillServers: [],
     uninstalledBuiltinTools: [],
@@ -66,6 +67,37 @@ describe('createBrowserContextFactProviders', () => {
 
     await expect(providers.listRecentAgents!(12)).resolves.toEqual([{ id: 'agent-new' }]);
     expect(agentService.queryAgents).toHaveBeenCalledTimes(1);
+  });
+
+  // Installs now land only in user_connectors: a connector-only custom MCP
+  // must still reach the builder's inventory, once per identifier.
+  it('lists custom connectors beside legacy custom plugin rows', async () => {
+    useToolStore.setState({
+      connectors: [
+        {
+          identifier: 'repo-mcp',
+          metadata: { description: 'Repo tools' },
+          name: 'Repo',
+          sourceType: 'custom',
+        },
+        { identifier: 'my-mcp', metadata: null, name: '', sourceType: 'custom' },
+        { identifier: 'market-mcp', metadata: null, name: 'Docs', sourceType: 'marketplace' },
+      ],
+      installedPlugins: [
+        {
+          identifier: 'my-mcp',
+          manifest: { meta: { description: 'Stale', title: 'Old title' } },
+          type: 'customPlugin',
+        },
+        { identifier: 'legacy-mcp', manifest: { meta: { title: 'Legacy' } }, type: 'customPlugin' },
+      ],
+    } as any);
+
+    await expect(createBrowserContextFactProviders().listCustomPlugins!()).resolves.toEqual([
+      { description: 'Repo tools', identifier: 'repo-mcp', name: 'Repo', type: 'custom' },
+      { description: undefined, identifier: 'my-mcp', name: 'my-mcp', type: 'custom' },
+      { description: undefined, identifier: 'legacy-mcp', name: 'Legacy', type: 'custom' },
+    ]);
   });
 
   it('treats only active Composio connections and every installed LobeHub skill provider as connected', async () => {
