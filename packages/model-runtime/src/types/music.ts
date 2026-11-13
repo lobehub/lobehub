@@ -91,6 +91,8 @@ export interface MusicPollingRoute {
   channelId?: string;
   /** Position of an id-less channel in its router's option list */
   channelIndex?: number;
+  /** Model the task was submitted with, so model-dependent routers resolve the same router */
+  model?: string;
   routerId?: string;
 }
 

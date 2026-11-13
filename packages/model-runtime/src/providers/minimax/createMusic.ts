@@ -23,6 +23,9 @@ const DEFAULT_OUTPUT_FORMAT = 'url';
 
 const MINIMAX_MUSIC_STATUS_DONE = 2;
 
+/** Cover models re-sing a reference track; the others compose from prompt and lyrics. */
+const MINIMAX_COVER_MODEL_PATTERN = /^music-cover/i;
+
 const HTTP_ERROR_TYPES: Record<number, ILobeAgentRuntimeErrorType> = {
   401: AgentRuntimeErrorType.InvalidProviderAPIKey,
   403: AgentRuntimeErrorType.PermissionDenied,
@@ -114,18 +117,38 @@ export const buildMiniMaxMusicRequest = (
     watermark,
   } = payload.params;
 
-  if (!prompt?.trim() && !lyrics?.trim() && !referenceAudioUrl && !referenceAudioBase64) {
-    throw new MiniMaxMusicError(
-      'MiniMax music generation needs a prompt, lyrics, or reference audio',
-      AgentRuntimeErrorType.InvalidRequestFormat,
-    );
-  }
+  const has = (value?: string) => Boolean(value?.trim());
+  const invalid = (message: string) =>
+    new MiniMaxMusicError(message, AgentRuntimeErrorType.InvalidRequestFormat);
+  const hasReferenceAudio = Boolean(referenceAudioUrl || referenceAudioBase64);
 
   if (referenceAudioUrl && referenceAudioBase64) {
-    throw new MiniMaxMusicError(
-      'Pass either referenceAudioUrl or referenceAudioBase64, not both',
-      AgentRuntimeErrorType.InvalidRequestFormat,
-    );
+    throw invalid('Pass either referenceAudioUrl or referenceAudioBase64, not both');
+  }
+
+  // Validate per mode so a request MiniMax would refuse never reaches the paid endpoint.
+  if (MINIMAX_COVER_MODEL_PATTERN.test(requestModel)) {
+    if (!hasReferenceAudio) throw invalid('MiniMax cover models need reference audio');
+    if (!has(prompt))
+      throw invalid('MiniMax cover models need a prompt describing the target style');
+    if (instrumental || lyricsOptimizer) {
+      throw invalid('MiniMax cover models support neither instrumental nor lyricsOptimizer');
+    }
+  } else {
+    if (hasReferenceAudio) {
+      throw invalid('Reference audio is only supported by MiniMax cover models (music-cover)');
+    }
+    if (instrumental) {
+      if (!has(prompt)) throw invalid('A MiniMax instrumental track needs a prompt');
+    } else if (!has(lyrics)) {
+      if (!lyricsOptimizer) {
+        throw invalid(
+          'MiniMax needs lyrics for a song with vocals; set lyricsOptimizer to write them from the prompt, or instrumental',
+        );
+      }
+      if (!has(prompt))
+        throw invalid('MiniMax lyricsOptimizer needs a prompt to write lyrics from');
+    }
   }
 
   const audioSetting = {

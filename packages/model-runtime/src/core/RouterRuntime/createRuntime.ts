@@ -497,7 +497,8 @@ export const createRouterRuntime = ({
       );
     }
 
-    private async resolveMusicRoute(model?: string, route?: MusicPollingRoute) {
+    private async resolveMusicRoute(requestModel?: string, route?: MusicPollingRoute) {
+      const model = requestModel ?? route?.model;
       const pinned = route?.routerId || route?.channelId || route?.channelIndex !== undefined;
 
       if (route && pinned) {
@@ -566,6 +567,7 @@ export const createRouterRuntime = ({
         route: {
           ...(option.id ? { channelId: option.id } : {}),
           ...(channelIndex !== undefined && channelIndex >= 0 ? { channelIndex } : {}),
+          model: payload.model,
           ...(router.id ? { routerId: router.id } : {}),
         },
       };

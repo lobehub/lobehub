@@ -85,7 +85,7 @@ describe('createRouterRuntime music', () => {
 
     await expect(runtime.createMusic(payload)).resolves.toEqual({
       inferenceId: 'task-1',
-      route: { channelId: 'a', routerId: 'suno-router' },
+      route: { channelId: 'a', model: 'suno-v5', routerId: 'suno-router' },
       status: 'pending',
     });
 
@@ -175,6 +175,56 @@ describe('createRouterRuntime music', () => {
       created?.status === 'pending' ? created.route : undefined,
     );
     expect(pollKeys).toEqual(['channel-b']);
+  });
+
+  it('polls a model-dependent router from the route alone', async () => {
+    const pollKeys: string[] = [];
+
+    class MockMusicRuntime implements LobeRuntimeAI {
+      private apiKey: string;
+      constructor({ apiKey }: { apiKey: string }) {
+        this.apiKey = apiKey;
+      }
+      createMusic = vi.fn(async () => ({ inferenceId: 'task-1', status: 'pending' as const }));
+      handlePollMusicStatus = vi.fn(async () => {
+        pollKeys.push(this.apiKey);
+        return { status: 'pending' as const };
+      });
+    }
+
+    const Runtime = createRouterRuntime({
+      id: 'music-router',
+      // Only emits the music router once it knows the model.
+      routers: (_options: unknown, context?: { model?: string }) =>
+        context?.model === 'suno-v5'
+          ? [
+              {
+                apiType: 'openai',
+                id: 'suno-router',
+                options: [{ apiKey: 'music-key', id: 'm' }],
+                runtime: MockMusicRuntime as any,
+              },
+            ]
+          : [
+              {
+                apiType: 'openai',
+                id: 'chat-router',
+                options: {},
+                runtime: MockMusicRuntime as any,
+              },
+            ],
+    } as any);
+    const runtime = new Runtime();
+
+    const created = await runtime.createMusic(payload);
+    expect(created).toMatchObject({ route: { model: 'suno-v5', routerId: 'suno-router' } });
+
+    await runtime.handlePollMusicStatus(
+      'task-1',
+      undefined,
+      created?.status === 'pending' ? created.route : undefined,
+    );
+    expect(pollKeys).toEqual(['music-key']);
   });
 
   it('reports runtimes without music support', async () => {

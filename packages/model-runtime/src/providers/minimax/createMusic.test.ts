@@ -77,27 +77,42 @@ describe('buildMiniMaxMusicRequest', () => {
     });
   });
 
-  it('maps instrumental, lyrics optimizer and the reference audio URL', () => {
+  it('maps instrumental and lyrics optimizer for composing models', () => {
     expect(
       buildMiniMaxMusicRequest(
         {
-          model: 'music-cover',
+          model: 'music-2.6',
           params: {
             instrumental: true,
             lyricsOptimizer: true,
             outputFormat: 'hex',
-            prompt: 'acoustic cover',
-            referenceAudioUrl: 'https://example.com/ref.mp3',
+            prompt: 'lofi',
           },
+        },
+        'music-2.6',
+      ),
+    ).toEqual({
+      is_instrumental: true,
+      lyrics_optimizer: true,
+      model: 'music-2.6',
+      output_format: 'hex',
+      prompt: 'lofi',
+    });
+  });
+
+  it('maps the reference audio URL for cover models', () => {
+    expect(
+      buildMiniMaxMusicRequest(
+        {
+          model: 'music-cover',
+          params: { prompt: 'acoustic cover', referenceAudioUrl: 'https://example.com/ref.mp3' },
         },
         'music-cover',
       ),
     ).toEqual({
       audio_url: 'https://example.com/ref.mp3',
-      is_instrumental: true,
-      lyrics_optimizer: true,
       model: 'music-cover',
-      output_format: 'hex',
+      output_format: 'url',
       prompt: 'acoustic cover',
     });
   });
@@ -107,7 +122,12 @@ describe('buildMiniMaxMusicRequest', () => {
       buildMiniMaxMusicRequest(
         {
           model: 'music-cover',
-          params: { outputFormat: 'url', referenceAudioBase64: 'AAAA', stream: true },
+          params: {
+            outputFormat: 'url',
+            prompt: 'jazz cover',
+            referenceAudioBase64: 'AAAA',
+            stream: true,
+          },
         },
         'music-cover',
       ),
@@ -115,23 +135,63 @@ describe('buildMiniMaxMusicRequest', () => {
       audio_base64: 'AAAA',
       model: 'music-cover',
       output_format: 'hex',
+      prompt: 'jazz cover',
       stream: true,
     });
   });
 
-  it('rejects an empty request and conflicting reference audio', () => {
-    expect(() => buildMiniMaxMusicRequest({ model: 'music-2.6', params: {} }, 'music-2.6')).toThrow(
-      /prompt, lyrics, or reference audio/,
-    );
-    expect(() =>
-      buildMiniMaxMusicRequest(
-        {
-          model: 'music-cover',
-          params: { referenceAudioBase64: 'AAAA', referenceAudioUrl: 'https://x/a.mp3' },
-        },
-        'music-cover',
-      ),
-    ).toThrow(/either referenceAudioUrl or referenceAudioBase64/);
+  it.each([
+    [
+      'vocals without lyrics',
+      'music-2.6',
+      { prompt: 'pop' },
+      /needs lyrics for a song with vocals/,
+    ],
+    ['an empty request', 'music-2.6', {}, /needs lyrics for a song with vocals/],
+    [
+      'lyricsOptimizer without prompt',
+      'music-2.6',
+      { lyricsOptimizer: true },
+      /needs a prompt to write lyrics/,
+    ],
+    [
+      'instrumental without prompt',
+      'music-2.6',
+      { instrumental: true },
+      /instrumental track needs a prompt/,
+    ],
+    [
+      'reference audio on a composing model',
+      'music-2.6',
+      { lyrics: 'la', referenceAudioUrl: 'https://x/a.mp3' },
+      /only supported by MiniMax cover models/,
+    ],
+    [
+      'a cover without reference audio',
+      'music-cover',
+      { prompt: 'jazz' },
+      /cover models need reference audio/,
+    ],
+    [
+      'a cover without prompt',
+      'music-cover',
+      { referenceAudioUrl: 'https://x/a.mp3' },
+      /cover models need a prompt/,
+    ],
+    [
+      'an instrumental cover',
+      'music-cover',
+      { instrumental: true, prompt: 'jazz', referenceAudioUrl: 'https://x/a.mp3' },
+      /support neither instrumental/,
+    ],
+    [
+      'both reference audio inputs',
+      'music-cover',
+      { prompt: 'jazz', referenceAudioBase64: 'AAAA', referenceAudioUrl: 'https://x/a.mp3' },
+      /either referenceAudioUrl or referenceAudioBase64/,
+    ],
+  ])('rejects %s', (_label, model, params, message) => {
+    expect(() => buildMiniMaxMusicRequest({ model, params } as any, model)).toThrow(message);
   });
 });
 
@@ -183,7 +243,10 @@ describe('createMiniMaxMusic', () => {
     fetchMock.mockResolvedValue(okResponse('49443303'));
 
     const result = await createMiniMaxMusic(
-      { model: 'music-2.6', params: { format: 'wav', outputFormat: 'hex', prompt: 'lofi' } },
+      {
+        model: 'music-2.6',
+        params: { format: 'wav', outputFormat: 'hex', lyrics: 'la la', prompt: 'lofi' },
+      },
       options,
     );
 
@@ -209,7 +272,7 @@ describe('createMiniMaxMusic', () => {
     );
 
     const result = await createMiniMaxMusic(
-      { model: 'music-2.6', params: { prompt: 'lofi', stream: true } },
+      { model: 'music-2.6', params: { lyrics: 'la la', prompt: 'lofi', stream: true } },
       options,
     );
 
@@ -229,7 +292,7 @@ describe('createMiniMaxMusic', () => {
     );
 
     const result = await createMiniMaxMusic(
-      { model: 'music-2.6', params: { prompt: 'lofi', stream: true } },
+      { model: 'music-2.6', params: { lyrics: 'la la', prompt: 'lofi', stream: true } },
       options,
     );
 
@@ -243,7 +306,10 @@ describe('createMiniMaxMusic', () => {
     );
 
     await expect(
-      createMiniMaxMusic({ model: 'music-2.6', params: { prompt: 'lofi', stream: true } }, options),
+      createMiniMaxMusic(
+        { model: 'music-2.6', params: { lyrics: 'la la', prompt: 'lofi', stream: true } },
+        options,
+      ),
     ).rejects.toMatchObject({
       error: { message: 'MiniMax music API error: insufficient balance' },
       errorType: AgentRuntimeErrorType.InsufficientQuota,
@@ -259,7 +325,10 @@ describe('createMiniMaxMusic', () => {
     );
 
     await expect(
-      createMiniMaxMusic({ model: 'music-2.6', params: { prompt: 'lofi', stream: true } }, options),
+      createMiniMaxMusic(
+        { model: 'music-2.6', params: { lyrics: 'la la', prompt: 'lofi', stream: true } },
+        options,
+      ),
     ).rejects.toMatchObject({
       error: { message: 'MiniMax music stream ended before the song finished' },
       errorType: AgentRuntimeErrorType.ProviderNetworkError,
@@ -272,7 +341,10 @@ describe('createMiniMaxMusic', () => {
     );
 
     await expect(
-      createMiniMaxMusic({ model: 'music-2.6', params: { prompt: 'lofi' } }, options),
+      createMiniMaxMusic(
+        { model: 'music-2.6', params: { lyrics: 'la la', prompt: 'lofi' } },
+        options,
+      ),
     ).rejects.toMatchObject({
       error: { message: 'MiniMax music task did not finish (status 1)' },
       errorType: AgentRuntimeErrorType.ProviderBizError,
@@ -284,7 +356,10 @@ describe('createMiniMaxMusic', () => {
     fetchMock.mockResolvedValue(okResponse('not-hex'));
 
     await expect(
-      createMiniMaxMusic({ model: 'music-2.6', params: { prompt: 'lofi' } }, options),
+      createMiniMaxMusic(
+        { model: 'music-2.6', params: { lyrics: 'la la', prompt: 'lofi' } },
+        options,
+      ),
     ).rejects.toMatchObject({ errorType: AgentRuntimeErrorType.UpstreamMalformedResponse });
   });
 
@@ -302,7 +377,10 @@ describe('createMiniMaxMusic', () => {
     );
 
     await expect(
-      createMiniMaxMusic({ model: 'music-2.6', params: { prompt: 'lofi' } }, options),
+      createMiniMaxMusic(
+        { model: 'music-2.6', params: { lyrics: 'la la', prompt: 'lofi' } },
+        options,
+      ),
     ).rejects.toMatchObject({
       error: { base_resp: { status_code: statusCode }, message: 'MiniMax music API error: nope' },
       errorType,
@@ -314,7 +392,10 @@ describe('createMiniMaxMusic', () => {
     fetchMock.mockResolvedValue(new Response('unauthorized', { status: 401 }));
 
     await expect(
-      createMiniMaxMusic({ model: 'music-2.6', params: { prompt: 'lofi' } }, options),
+      createMiniMaxMusic(
+        { model: 'music-2.6', params: { lyrics: 'la la', prompt: 'lofi' } },
+        options,
+      ),
     ).rejects.toMatchObject({
       error: { status: 401 },
       errorType: AgentRuntimeErrorType.InvalidProviderAPIKey,
@@ -323,7 +404,7 @@ describe('createMiniMaxMusic', () => {
 
   it('rejects an invalid request before calling MiniMax', async () => {
     await expect(
-      createMiniMaxMusic({ model: 'music-2.6', params: {} }, options),
+      createMiniMaxMusic({ model: 'music-2.6', params: { prompt: 'pop' } }, options),
     ).rejects.toMatchObject({ errorType: AgentRuntimeErrorType.InvalidRequestFormat });
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -353,7 +434,10 @@ describe('LobeMinimaxAI createMusic routing', () => {
   ])('sends music-* models from baseURL %s to %s', async (baseURL, expectedUrl) => {
     const runtime = new LobeMinimaxAI({ apiKey: 'test-key', baseURL });
 
-    const result = await runtime.createMusic({ model: 'music-2.6', params: { prompt: 'pop' } });
+    const result = await runtime.createMusic({
+      model: 'music-2.6',
+      params: { lyrics: '[Verse]\nla la', prompt: 'pop' },
+    });
 
     expect(result.status).toBe('success');
     expect(fetchMock.mock.calls[0][0]).toBe(expectedUrl);
