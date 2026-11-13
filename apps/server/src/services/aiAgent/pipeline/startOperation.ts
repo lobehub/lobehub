@@ -64,6 +64,8 @@ export interface StartOperationInput {
   initialStepCount?: number;
   /** Relay executor the calling client declared; lands on `state.host.llmExecutor`. */
   llmExecutor?: InternalExecAgentParams['llmExecutor'];
+  /** See InternalExecAgentParams.markTopicRunning. */
+  markTopicRunning?: boolean;
   maxSteps?: number;
   onOperationCreated?: InternalExecAgentParams['onOperationCreated'];
   /**
@@ -154,6 +156,28 @@ export const startOperation = async (
     userInterventionConfig,
     userTimezone,
   } = input;
+  const ownsRootTopic =
+    !appContext?.isolationThread && !appContext?.threadId && !topicStartOwnerOperationId;
+  const markTopicRunning = input.markTopicRunning === true && autoStart && ownsRootTopic;
+  const onOperationCreated = markTopicRunning
+    ? async (createdOperationId: string) => {
+        const updated = await deps.topicModel.updateMetadata(
+          topicId,
+          {
+            runningOperation: {
+              assistantMessageId,
+              heteroType: null,
+              operationId: createdOperationId,
+              scope: appContext?.scope ?? undefined,
+              startedAt: new Date().toISOString(),
+            },
+          },
+          { status: 'running' },
+        );
+        if (!updated.length) throw new Error('Topic no longer available for this operation');
+        await input.onOperationCreated?.(createdOperationId);
+      }
+    : input.onOperationCreated;
   // A builder topic continued from another surface (scope `main`, an approval
   // resume) arrives without the group it edits; the group the topic was opened
   // on stands in, so the run still knows its target.
@@ -318,7 +342,7 @@ export const startOperation = async (
         trigger,
       },
       autoStart,
-      onOperationCreated: input.onOperationCreated,
+      onOperationCreated,
       botContext,
       botPlatformContext,
       deviceAccessPolicy: { canUseDevice, reason: deviceAccessReason },
@@ -385,7 +409,7 @@ export const startOperation = async (
     // `appContext.subAgentProgress`.
     // `orchestrationRole` is public rendering metadata. Only the internally
     // propagated parent operation id proves child ownership of this topic.
-    if (!appContext?.isolationThread && !appContext?.threadId && !topicStartOwnerOperationId) {
+    if (ownsRootTopic && !markTopicRunning) {
       await deps.topicModel.updateMetadata(topicId, {
         runningOperation: {
           assistantMessageId,
@@ -398,6 +422,12 @@ export const startOperation = async (
           threadId: appContext?.threadId ?? undefined,
         },
       });
+    }
+
+    // An explicit auto-start request can still return an unstarted operation
+    // (no queue implementation); it must not leave an unattended topic spinning.
+    if (markTopicRunning && !result.autoStarted) {
+      await deps.topicModel.settleRunningOperation(topicId, operationId, 'active');
     }
 
     // Generate a short-lived JWT for Gateway WebSocket authentication.
@@ -434,6 +464,15 @@ export const startOperation = async (
       userMessageId: userMessageId ?? parentMessageId ?? '',
     };
   } catch (error) {
+    if (markTopicRunning) {
+      // Compare-and-settle preserves a newer run and never drops a marker
+      // separately from its state, including aborts and errors after preparation.
+      try {
+        await deps.topicModel.settleRunningOperation(topicId, operationId, 'active');
+      } catch (cleanupError) {
+        console.error('[startOperation] Failed to settle an opted-in startup', cleanupError);
+      }
+    }
     if (topicStartOwnerOperationId) {
       await deps.topicModel.removeRunningOperationChild(topicId, operationId).catch(() => false);
     }

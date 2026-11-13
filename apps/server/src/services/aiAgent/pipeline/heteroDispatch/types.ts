@@ -45,6 +45,8 @@ export interface HeteroDispatchInput {
   hooks?: AgentHook[];
   isPublicWorkspaceAgent: boolean;
   localDeviceId?: string;
+  /** Server-only topic-status opt-in, propagated by the event waker. */
+  markTopicRunning?: boolean;
   maxSteps?: number;
   memberDeviceOverride?: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'>;
   onOperationCreated?: InternalExecAgentParams['onOperationCreated'];

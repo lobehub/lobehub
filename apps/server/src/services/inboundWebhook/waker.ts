@@ -210,6 +210,7 @@ export async function wakeInboundWebhook(
         agentId: row.agentId,
         appContext: { topicId: row.topicId! },
         autoStart: true,
+        markTopicRunning: true,
         externalOrigin: {
           kind: row.config.eventName,
           label: connector.name,
