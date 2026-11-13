@@ -163,6 +163,11 @@ export default defineConfig({
       '@lobehub/ui > dayjs/plugin/weekday.js',
       '@lobehub/ui > dayjs/plugin/weekOfYear.js',
       '@lobehub/ui > dayjs/plugin/weekYear.js',
+      // Served raw, its bare `mdast-util-to-markdown` import would be rewritten to the single
+      // optimized copy, the 2.1.2 the workspace pins, which lacks the attention API the CJK
+      // serializer needs ("Expected a handler with the attention API" on any emphasis).
+      // Pre-bundled, it resolves its own nested 2.2.
+      '@lobehub/ui > remark-cjk-friendly',
     ],
     exclude: [...sharedOptimizeDeps.exclude, ...lobeUiImportSources, '@lobehub/icons'],
   },
