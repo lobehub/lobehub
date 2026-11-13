@@ -915,9 +915,6 @@ export default {
     'The execution environment is fixed in the Agent Profile and cannot be switched while chatting.',
   'heteroAgent.executionTarget.infoTooltip':
     'Choose where this Agent runs. A device can read and write files or operate a computer; Cloud Sandbox runs in an isolated temporary environment.',
-  'heteroAgent.executionTarget.gateway': 'Gateway',
-  'heteroAgent.executionTarget.gatewayDesc':
-    'Run through the device gateway so other clients can follow progress',
   'heteroAgent.executionTarget.loadFailed': 'Couldn’t load devices.',
   'heteroAgent.executionTarget.loading': 'Loading devices…',
   'heteroAgent.executionTarget.local': 'Local device',
@@ -963,6 +960,7 @@ export default {
     'This topic has been running on {{name}}, where its working directory and agent session are kept. After switching, its next turn starts a fresh session in the new environment. New topics will use this choice too.',
   'heteroAgent.executionTarget.switchTopic.ok': 'Switch',
   'heteroAgent.executionTarget.switchTopic.title': 'Move this topic to another environment?',
+  'heteroAgent.executionTarget.thisDevice': 'This device',
   'heteroAgent.executionTarget.unknownDevice': 'Unknown device',
   'heteroAgent.executionTarget.wake': 'Wake now',
   'heteroAgent.executionTarget.wakeFailed': 'Could not wake this cloud device. Try again.',
