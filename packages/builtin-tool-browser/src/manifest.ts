@@ -4,11 +4,14 @@ import { systemPrompt } from './systemRole';
 import { BrowserApiName, BrowserIdentifier } from './types';
 
 export const BrowserManifest: BuiltinToolManifest = {
+  // Every api is `ordered`: all calls drive one page, so a `navigate` + `readPage`
+  // batch run concurrently can report one page's title and another page's text.
   api: [
     {
       description:
         'Open a URL in the in-app browser sidebar. Opens the panel automatically if it is closed.',
       name: BrowserApiName.navigate,
+      ordered: true,
       parameters: {
         properties: {
           url: {
@@ -24,6 +27,7 @@ export const BrowserManifest: BuiltinToolManifest = {
       description:
         'Capture an accessibility snapshot of the current page: interactive elements (links, buttons, inputs, headings) with stable refs like [ref=e12] for use in click/fill. Always snapshot before acting, and re-snapshot after the page changes.',
       name: BrowserApiName.snapshot,
+      ordered: true,
       parameters: {
         properties: {},
         type: 'object',
@@ -33,6 +37,7 @@ export const BrowserManifest: BuiltinToolManifest = {
       description:
         'Click an element. Prefer a ref from the latest snapshot; viewport x/y coordinates are a fallback for canvas-like surfaces.',
       name: BrowserApiName.click,
+      ordered: true,
       parameters: {
         properties: {
           ref: {
@@ -55,6 +60,7 @@ export const BrowserManifest: BuiltinToolManifest = {
       description:
         'Fill a text input, textarea, or contenteditable identified by a snapshot ref, or choose an option of a native select (combobox) by its value or visible label. Set submit=true to press Enter afterwards.',
       name: BrowserApiName.fill,
+      ordered: true,
       parameters: {
         properties: {
           ref: {
@@ -78,6 +84,7 @@ export const BrowserManifest: BuiltinToolManifest = {
       description:
         'Send a key or key combination to the focused element, e.g. Enter, Tab, ArrowDown, Control+a, Shift+Tab. Use ControlOrMeta for shortcuts that are Cmd on macOS and Ctrl elsewhere (select all, copy, paste, undo).',
       name: BrowserApiName.press,
+      ordered: true,
       parameters: {
         properties: {
           key: {
@@ -93,6 +100,7 @@ export const BrowserManifest: BuiltinToolManifest = {
     {
       description: 'Scroll the page vertically (positive dy scrolls down) or horizontally.',
       name: BrowserApiName.scroll,
+      ordered: true,
       parameters: {
         properties: {
           dx: {
@@ -112,6 +120,7 @@ export const BrowserManifest: BuiltinToolManifest = {
       description:
         'Lay the page out at a fixed viewport size in CSS pixels, e.g. 1440×900 to see the desktop layout or 390×844 for a phone. The size stays for later pages in this conversation. Omit width and height to go back to the default size.',
       name: BrowserApiName.setViewport,
+      ordered: true,
       parameters: {
         properties: {
           height: {
@@ -130,6 +139,7 @@ export const BrowserManifest: BuiltinToolManifest = {
       description:
         'Capture a screenshot of the current page. The image is stored and returned to you as a file reference, and is also shown to the USER in chat. Use snapshot/readPage when you only need the page structure or text.',
       name: BrowserApiName.screenshot,
+      ordered: true,
       parameters: {
         properties: {},
         type: 'object',
@@ -139,6 +149,7 @@ export const BrowserManifest: BuiltinToolManifest = {
       description:
         'Extract the readable text content of the current page (for quoting or summarizing).',
       name: BrowserApiName.readPage,
+      ordered: true,
       parameters: {
         properties: {},
         type: 'object',

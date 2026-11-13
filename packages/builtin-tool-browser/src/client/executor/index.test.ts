@@ -66,6 +66,39 @@ describe('browserExecutor.snapshot', () => {
   });
 });
 
+describe('browserExecutor session key', () => {
+  beforeEach(() => {
+    snapshot.mockReset();
+    snapshot.mockResolvedValue({ snapshot: '', success: true });
+  });
+
+  it('keeps a topic run on the topic page', async () => {
+    const { browserExecutor } = await import('./index');
+
+    await browserExecutor.snapshot({}, ctx);
+
+    expect(snapshot).toHaveBeenCalledWith({ sessionId: 'topic:tpc_1' });
+  });
+
+  it('keeps a thread the user opened on the topic page the panel shows', async () => {
+    const { browserExecutor } = await import('./index');
+
+    await browserExecutor.snapshot({}, { ...ctx, threadId: 'thd_user' });
+
+    expect(snapshot).toHaveBeenCalledWith({ sessionId: 'topic:tpc_1' });
+  });
+
+  it('gives each sub-agent thread its own page', async () => {
+    const { browserExecutor } = await import('./index');
+
+    await browserExecutor.snapshot({}, { ...ctx, isSubAgent: true, threadId: 'thd_a' });
+    await browserExecutor.snapshot({}, { ...ctx, isSubAgent: true, threadId: 'thd_b' });
+
+    expect(snapshot).toHaveBeenNthCalledWith(1, { sessionId: 'topic:tpc_1:thread:thd_a' });
+    expect(snapshot).toHaveBeenNthCalledWith(2, { sessionId: 'topic:tpc_1:thread:thd_b' });
+  });
+});
+
 describe('browserExecutor.setViewport', () => {
   const setViewport = vi.fn();
 
