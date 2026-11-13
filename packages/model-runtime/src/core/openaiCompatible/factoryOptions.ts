@@ -23,6 +23,7 @@ import type {
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import type { AssertContextWithinWindowOptions } from '../../utils/resolveSafeMaxTokens';
 import type { ChatPayloadForTransformStream } from '../streams/protocol';
+import type { ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
 import type { DecideConfig } from './decide';
 
 // OpenAI SDK v6 widened `apiKey` to `string | ApiKeySetter`; lobehub only ever
@@ -92,6 +93,17 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
     excludeUsage?: boolean;
     forceImageBase64?: boolean;
     forceVideoBase64?: boolean;
+    /**
+     * Resolve pricing lookup options (e.g. ttl, thinkingMode) consumed by the
+     * usage cost computation for lookup-priced units. Receives the LobeHub
+     * payload and the transformed provider request (chat-completions params or
+     * Responses params). Mirrors anthropicCompatible's hook of the
+     * same name.
+     */
+    getPricingOptions?: (
+      payload: ChatStreamPayload,
+      requestPayload: unknown,
+    ) => Promise<ComputeChatCostOptions | undefined> | ComputeChatCostOptions | undefined;
     handleError?: (
       error: any,
       options: ConstructorOptions<T>,
