@@ -162,6 +162,13 @@ export const configRouter = router({
 
       let safeValue = input.value;
 
+      // `pinned` is the team pin in a workspace and has its own owner/admin
+      // gated route (`updateAgentPinned`); a config patch must not set it.
+      if (ctx.workspaceId && 'pinned' in safeValue) {
+        const { pinned: _pinned, ...rest } = safeValue as Record<string, unknown>;
+        safeValue = rest;
+      }
+
       // Model / execution-environment / topic-share policies govern every member.
       // Only the creator or workspace primary owner may write them; other
       // collaborators send a fully merged agencyConfig, so strip the protected

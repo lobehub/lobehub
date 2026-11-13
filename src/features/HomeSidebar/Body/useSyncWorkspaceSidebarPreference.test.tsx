@@ -88,4 +88,32 @@ describe('useSyncWorkspaceSidebarPreference', () => {
     expect(workspace?.sidebarItems).toEqual(['projects', 'agents']);
     expect(workspace?.hiddenSidebarSections).toEqual(['recents']);
   });
+
+  it('writes a layout that still names the former Private section back merged', () => {
+    const updateWorkspaceUserPreference = vi.fn().mockResolvedValue(undefined);
+    useUserStore.setState({
+      updateWorkspaceUserPreference,
+      workspaceUserPreference: {
+        sidebar: {
+          hiddenSections: ['recents', 'private'],
+          items: ['recents', 'private', 'agent', '__spacer__', 'image'],
+        },
+      },
+      workspaceUserPreferenceWorkspaceId: 'ws-b',
+    });
+
+    renderHook(() => useSyncWorkspaceSidebarPreference('ws-b'));
+
+    const workspace = useGlobalStore.getState().status.workspace;
+    // Read side: one Agents section, no empty or duplicate one.
+    expect(workspace?.sidebarItems).toEqual(['recents', 'agent', '__spacer__', 'image']);
+    expect(workspace?.hiddenSidebarSections).toEqual(['recents']);
+    // Write side: the normalized layout is persisted once, replacing `private`.
+    expect(updateWorkspaceUserPreference).toHaveBeenCalledWith({
+      sidebar: {
+        hiddenSections: ['recents'],
+        items: ['recents', 'agent', '__spacer__', 'image'],
+      },
+    });
+  });
 });

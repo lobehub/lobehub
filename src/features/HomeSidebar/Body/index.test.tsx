@@ -101,10 +101,6 @@ vi.mock('./Agent', () => ({
   default: ({ itemKey }: { itemKey: string }) => <div data-testid={`sidebar-item-${itemKey}`} />,
 }));
 
-vi.mock('./Private', () => ({
-  default: ({ itemKey }: { itemKey: string }) => <div data-testid={`sidebar-item-${itemKey}`} />,
-}));
-
 vi.mock('./CustomizeSidebarModal', () => ({
   openCustomizeSidebarModal: vi.fn(),
 }));

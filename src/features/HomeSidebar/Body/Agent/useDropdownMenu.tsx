@@ -4,6 +4,7 @@ import { Hash, LucideCheck, SlidersHorizontalIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { openCustomizeSidebarModal } from '@/features/HomeSidebar/Body/CustomizeSidebarModal';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -11,7 +12,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useCreateMenuItems } from '../../hooks';
 
 interface AgentActionsDropdownMenuProps {
-  openConfigGroupModal: () => void;
+  openConfigGroupModal: (scope?: 'private' | 'public') => void;
 }
 
 export const useAgentActionsDropdownMenu = ({
@@ -24,10 +25,26 @@ export const useAgentActionsDropdownMenu = ({
 
   // Create menu items
   const { createSessionGroupMenuItem, configMenuItem } = useCreateMenuItems();
+  // The workspace Agents section also holds the member's private folders
+  // (formerly managed from the separate Private section).
+  const isWorkspace = !!useActiveWorkspaceId();
 
   return useMemo(() => {
     const createSessionGroupItem = createSessionGroupMenuItem();
-    const configItem = configMenuItem(openConfigGroupModal);
+    const configItem = configMenuItem(() => openConfigGroupModal('public'));
+    const privateFolderItems = isWorkspace
+      ? [
+          {
+            ...createSessionGroupMenuItem({ visibility: 'private' }),
+            label: t('navPanel.createPrivateFolder'),
+          },
+          {
+            ...configMenuItem(() => openConfigGroupModal('private')),
+            key: 'configPrivate',
+            label: t('navPanel.managePrivateFolders'),
+          },
+        ]
+      : [];
 
     const pageSizeOptions = [5, 10, 15, 20];
     const pageSizeItems = pageSizeOptions.map((size) => ({
@@ -42,6 +59,7 @@ export const useAgentActionsDropdownMenu = ({
     return [
       createSessionGroupItem,
       configItem,
+      ...privateFolderItems,
       { type: 'divider' as const },
       {
         children: pageSizeItems,
@@ -64,6 +82,7 @@ export const useAgentActionsDropdownMenu = ({
     createSessionGroupMenuItem,
     configMenuItem,
     openConfigGroupModal,
+    isWorkspace,
     t,
   ]);
 };

@@ -1,9 +1,11 @@
+import type { SidebarVisibility } from '@lobechat/types';
 import { type DropdownItem } from '@lobehub/ui';
 import { confirmModal, Icon, toast } from '@lobehub/ui';
 import { LucideCopy, Pen, PictureInPicture2Icon, Pin, PinOff, Trash } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAgentGroupTransferMenuItem } from '@/business/client/hooks/useAgentGroupTransferMenuItem';
 import { useAgentGroupTransferToMemberMenuItem } from '@/business/client/hooks/useAgentGroupTransferToMemberMenuItem';
 import { openEditingPopover } from '@/features/EditingPopover/store';
@@ -13,6 +15,8 @@ import { useResourceManageable } from '@/hooks/useResourceManageable';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
+
+import { useSidebarPinMenuItems } from '../../useSidebarPinMenuItems';
 
 interface UseGroupDropdownMenuParams {
   anchor: HTMLElement | null;
@@ -24,6 +28,7 @@ interface UseGroupDropdownMenuParams {
   pinned: boolean;
   title: string;
   userId?: string | null;
+  visibility?: SidebarVisibility;
 }
 
 export const useGroupDropdownMenu = ({
@@ -36,6 +41,7 @@ export const useGroupDropdownMenu = ({
   pinned,
   title,
   userId,
+  visibility,
 }: UseGroupDropdownMenuParams): (() => DropdownItem[]) => {
   const { t } = useTranslation(['chat', 'common']);
 
@@ -63,18 +69,33 @@ export const useGroupDropdownMenu = ({
     title,
   });
 
+  const activeWorkspaceId = useActiveWorkspaceId();
+  // Workspace: personal pin for every member + owner/admin team pin on public
+  // groups. Personal mode keeps the single column-backed pin.
+  const { menuItems: workspacePinItems } = useSidebarPinMenuItems({
+    id,
+    pinned,
+    type: 'group',
+    visibility,
+  });
+
   return useMemo(
     () => () =>
       [
+        ...(activeWorkspaceId ? workspacePinItems : []),
         ...(canConfigure
           ? [
-              {
-                icon: <Icon icon={pinned ? PinOff : Pin} />,
-                key: 'pin',
-                label: t(pinned ? 'pinOff' : 'pin'),
-                onClick: () => pinAgentGroup(id, !pinned),
-                sfSymbol: pinned ? 'pin.slash' : 'pin',
-              },
+              ...(activeWorkspaceId
+                ? []
+                : [
+                    {
+                      icon: <Icon icon={pinned ? PinOff : Pin} />,
+                      key: 'pin',
+                      label: t(pinned ? 'pinOff' : 'pin'),
+                      onClick: () => pinAgentGroup(id, !pinned),
+                      sfSymbol: pinned ? 'pin.slash' : 'pin',
+                    },
+                  ]),
               {
                 icon: <Icon icon={Pen} />,
                 key: 'rename',
@@ -156,6 +177,8 @@ export const useGroupDropdownMenu = ({
           : []),
       ] as DropdownItem[],
     [
+      activeWorkspaceId,
+      workspacePinItems,
       anchor,
       avatar,
       backgroundColor,

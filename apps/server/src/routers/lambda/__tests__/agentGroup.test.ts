@@ -14,6 +14,7 @@ import { EditLockService } from '@/server/services/editLock';
 import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { canPerformResourceAction } from '@/server/services/resourcePermission';
 import {
+  getWorkspaceScopedPermissionMatches,
   hasWorkspaceScopedPermission,
   isWorkspacePrimaryOwner,
 } from '@/server/services/workspacePermission';
@@ -27,6 +28,7 @@ import { agentGroupRouter } from '../agentGroup';
 vi.mock('@/server/services/resourceEvents', () => ({ publishResourceEvent: vi.fn() }));
 // Both read the DB directly; `mockCtx.serverDB` is a bare object.
 vi.mock('@/server/services/workspacePermission', () => ({
+  getWorkspaceScopedPermissionMatches: vi.fn(),
   hasWorkspaceScopedPermission: vi.fn().mockResolvedValue(true),
   isWorkspacePrimaryOwner: vi.fn().mockResolvedValue(true),
 }));
@@ -897,6 +899,78 @@ describe('agentGroupRouter', () => {
           userId,
         );
       });
+    });
+  });
+
+  describe('team pin', () => {
+    const wsCtx = () => ({ serverDB: {}, userId, workspaceId: 'ws-1' });
+
+    beforeEach(() => {
+      vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue(null);
+      chatGroupModelMock.update.mockResolvedValue({ id: 'group-1' });
+    });
+
+    it('refuses a member pinning a public workspace group', async () => {
+      chatGroupModelMock.findById.mockResolvedValue({ id: 'group-1', visibility: 'public' });
+      vi.mocked(getWorkspaceScopedPermissionMatches).mockResolvedValue({
+        hasAllScope: false,
+        hasOwnerScope: true,
+      });
+
+      await expect(
+        agentGroupRouter.createCaller(wsCtx()).updateGroup({
+          id: 'group-1',
+          value: { pinned: true },
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(chatGroupModelMock.update).not.toHaveBeenCalled();
+    });
+
+    it('lets an owner/admin pin a public workspace group for the team', async () => {
+      chatGroupModelMock.findById.mockResolvedValue({ id: 'group-1', visibility: 'public' });
+      vi.mocked(getWorkspaceScopedPermissionMatches).mockResolvedValue({
+        hasAllScope: true,
+        hasOwnerScope: false,
+      });
+
+      await agentGroupRouter
+        .createCaller(wsCtx())
+        .updateGroup({ id: 'group-1', value: { pinned: true } });
+
+      expect(chatGroupModelMock.update).toHaveBeenCalledWith(
+        'group-1',
+        expect.objectContaining({ pinned: true }),
+      );
+    });
+
+    it('never creates a public workspace group already pinned', async () => {
+      agentGroupRepoMock.createGroupWithSupervisor.mockResolvedValue({
+        group: { id: 'group-1', visibility: 'private' },
+        supervisorAgentId: 'sup-1',
+      });
+
+      const caller = agentGroupRouter.createCaller(wsCtx());
+      await caller.createGroup({ pinned: true, title: 'Team' });
+      await caller.createGroup({ pinned: true, title: 'Mine', visibility: 'private' });
+
+      expect(agentGroupRepoMock.createGroupWithSupervisor.mock.calls[0][0]).toMatchObject({
+        pinned: false,
+      });
+      // A private group's pin is its creator's own and stays.
+      expect(agentGroupRepoMock.createGroupWithSupervisor.mock.calls[1][0]).toMatchObject({
+        pinned: true,
+      });
+    });
+
+    it('keeps a private group pin and other edits free of the team check', async () => {
+      chatGroupModelMock.findById.mockResolvedValue({ id: 'group-1', visibility: 'private' });
+
+      const caller = agentGroupRouter.createCaller(wsCtx());
+      await caller.updateGroup({ id: 'group-1', value: { pinned: true } });
+      await caller.updateGroup({ id: 'group-1', value: { title: 'New' } });
+
+      expect(getWorkspaceScopedPermissionMatches).not.toHaveBeenCalled();
+      expect(chatGroupModelMock.update).toHaveBeenCalledTimes(2);
     });
   });
 

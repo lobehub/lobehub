@@ -282,7 +282,6 @@ describe('systemStatusSelectors', () => {
         'project',
         'dashboard',
         'favorites',
-        'private',
         'agent',
         'recents',
         SIDEBAR_SPACER_ID,
@@ -315,7 +314,10 @@ describe('systemStatusSelectors', () => {
       const s: GlobalState = merge(initialState, {
         status: { sidebarItems: stored },
       });
-      expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual(stored);
+      // The former Private section is merged into Agents.
+      expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual(
+        stored.filter((key) => key !== 'private'),
+      );
     });
 
     it('should re-anchor the spacer when stored above the accordion', () => {
@@ -344,7 +346,6 @@ describe('systemStatusSelectors', () => {
         'dashboard',
         'favorites',
         'recents',
-        'private',
         'agent',
         SIDEBAR_SPACER_ID,
         'image',
@@ -381,7 +382,6 @@ describe('systemStatusSelectors', () => {
         'resource',
         'favorites',
         'recents',
-        'private',
         'agent',
         SIDEBAR_SPACER_ID,
         'image',
@@ -417,7 +417,6 @@ describe('systemStatusSelectors', () => {
         'resource',
         'favorites',
         'recents',
-        'private',
         'agent',
         SIDEBAR_SPACER_ID,
         'image',
@@ -428,7 +427,10 @@ describe('systemStatusSelectors', () => {
       const s: GlobalState = merge(initialState, {
         status: { sidebarItems: stored },
       });
-      expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual(stored);
+      // The former Private section is merged into Agents.
+      expect(systemStatusSelectors.sidebarItems(null)(s)).toEqual(
+        stored.filter((key) => key !== 'private'),
+      );
     });
 
     it('should slot missing top-group defaults before the accordion block', () => {
@@ -460,7 +462,7 @@ describe('systemStatusSelectors', () => {
         status: { sidebarSectionOrder: ['agent', 'recents'] },
       });
       const items = systemStatusSelectors.sidebarItems(null)(s);
-      // accordion slot uses the user's legacy order; `private` (added after
+      // accordion slot uses the user's legacy order; `favorites` (added after
       // the legacy state was saved) is backfilled at the head of the block.
       expect(items).toEqual([
         'tasks',
@@ -469,7 +471,6 @@ describe('systemStatusSelectors', () => {
         'dashboard',
         'resource',
         'favorites',
-        'private',
         'agent',
         'recents',
         SIDEBAR_SPACER_ID,
@@ -484,8 +485,7 @@ describe('systemStatusSelectors', () => {
         status: { sidebarSectionOrder: ['recents', 'agent'] },
       });
       const items = systemStatusSelectors.sidebarItems(null)(s);
-      // `private` (new accordion entry not present in legacy state) is
-      // backfilled at the head of the block; recents/agent keep legacy order.
+      // recents/agent keep their legacy order.
       expect(items).toEqual([
         'tasks',
         'goals',
@@ -493,7 +493,6 @@ describe('systemStatusSelectors', () => {
         'dashboard',
         'resource',
         'favorites',
-        'private',
         'recents',
         'agent',
         SIDEBAR_SPACER_ID,

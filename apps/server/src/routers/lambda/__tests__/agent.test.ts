@@ -91,6 +91,7 @@ vi.mock('@/server/services/agent', () => ({
 }));
 
 vi.mock('@/server/services/workspacePermission', () => ({
+  getWorkspaceScopedPermissionMatches: vi.fn(),
   hasWorkspaceScopedPermission: vi.fn(),
   isWorkspacePrimaryOwner: vi.fn(),
 }));
@@ -189,6 +190,7 @@ describe('agentRouter', () => {
       findBySessionId: vi.fn(),
       getAgentAssignedKnowledge: vi.fn(),
       getAgentVisibility: vi.fn().mockResolvedValue(null),
+      getAgentVisibilityMeta: vi.fn().mockResolvedValue(null),
       publishToWorkspace: vi.fn(),
       resolveIdBySlug: vi.fn().mockResolvedValue(null),
       toggleFile: vi.fn(),

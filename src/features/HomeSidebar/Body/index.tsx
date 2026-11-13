@@ -26,7 +26,6 @@ import { isModifierClick } from '@/utils/navigation';
 import Agent from './Agent';
 import { openCustomizeSidebarModal } from './CustomizeSidebarModal';
 import Favorites from './Favorites';
-import Private from './Private';
 import { useSyncWorkspaceSidebarPreference } from './useSyncWorkspaceSidebarPreference';
 
 export enum GroupKey {
@@ -34,18 +33,12 @@ export enum GroupKey {
   Community = 'community',
   Favorites = 'favorites',
   Pages = 'pages',
-  Private = 'private',
   Project = 'project',
   Recents = 'recents',
   Resource = 'resource',
 }
 
-const ACCORDION_KEYS = new Set<string>([
-  GroupKey.Favorites,
-  GroupKey.Recents,
-  GroupKey.Agent,
-  GroupKey.Private,
-]);
+const ACCORDION_KEYS = new Set<string>([GroupKey.Favorites, GroupKey.Recents, GroupKey.Agent]);
 
 /** Keys rendered in the header — must be excluded from the body to avoid duplicates
  * when migrating users whose persisted sidebarItems still include them. */
@@ -55,7 +48,6 @@ const SECTION_GAP = 8;
 const accordionComponents: Record<string, (key: string) => ReactElement> = {
   [GroupKey.Agent]: (key) => <Agent itemKey={key} key={key} />,
   [GroupKey.Favorites]: (key) => <Favorites itemKey={key} key={key} />,
-  [GroupKey.Private]: (key) => <Private itemKey={key} key={key} />,
   [GroupKey.Recents]: (key) => <Recents itemKey={key} key={key} />,
 };
 
@@ -80,11 +72,8 @@ const Body = memo(() => {
   const tab = useActiveTabKey();
   const navigate = useWorkspaceAwareNavigate();
   const { topNavItems, bottomMenuItems } = useNavLayout();
-  // Personal mode has no notion of "private vs workspace-public" — every row
-  // is implicitly the owner's. Hide the Private section entirely there so the
-  // sidebar doesn't sprout an empty accordion users can't populate.
   const activeWorkspaceId = useActiveWorkspaceId();
-  // The Agent/Private sections subtract the caller's sidebar-hidden items,
+  // The Agents section subtracts the caller's sidebar-hidden items,
   // and the section layout syncs per-member — both live in the workspace
   // user preference, so load it alongside the sidebar.
   const useFetchWorkspaceUserPreference = useUserStore((s) => s.useFetchWorkspaceUserPreference);
@@ -141,13 +130,9 @@ const Body = memo(() => {
   // Items that must always be visible regardless of hiddenSections
   const isVisible = useCallback(
     (k: string) => {
-      // Private accordion is workspace-only. In personal mode every row is
-      // implicitly owner-private, so a dedicated bucket would be a noisy
-      // empty section.
-      if (k === GroupKey.Private && !activeWorkspaceId) return false;
       return k === GroupKey.Agent || k === SIDEBAR_SPACER_ID || !hiddenSections.includes(k);
     },
-    [hiddenSections, activeWorkspaceId],
+    [hiddenSections],
   );
 
   const visibleKeys = useMemo(
