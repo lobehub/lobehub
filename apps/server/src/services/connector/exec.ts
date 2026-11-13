@@ -85,6 +85,18 @@ const reachesServer = async (
   );
 };
 
+/**
+ * A failed call in the shape the chat stores as a tool error. The model reads
+ * `content`; the tool card shows a failure only when `error` is set, so a bare
+ * `success: false` would render as a successful call.
+ */
+const failedToolResult = (message: string, type: string) => ({
+  content: message,
+  error: { message, type },
+  state: { content: [{ text: message, type: 'text' as const }], isError: true },
+  success: false,
+});
+
 export const callConnectorToolById = async (
   params: {
     agentId?: string;
@@ -192,7 +204,7 @@ export const callConnectorToolById = async (
     );
   } catch (error) {
     if (error instanceof ConnectorLinkSelectionError)
-      return { content: error.message, success: false };
+      return failedToolResult(error.message, 'CONNECTOR_ACCOUNT_SELECTION');
     throw error;
   }
   const fresh = resolved.linkId
@@ -209,13 +221,13 @@ export const callConnectorToolById = async (
     });
   } catch (error) {
     if (isMcpAuthorizationError(error))
-      return {
-        success: false,
-        content: buildMcpAuthorizationErrorContent(connector.identifier, {
+      return failedToolResult(
+        buildMcpAuthorizationErrorContent(connector.identifier, {
           isShareVisitor: false,
           linkName: resolved.linkName,
         }),
-      };
+        'AUTHORIZATION_ERROR',
+      );
     throw error;
   }
 };

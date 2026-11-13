@@ -155,13 +155,24 @@ describe('OAuth account routing over real HTTP and database', () => {
         ).toMatchObject({
           success: false,
           content: expect.stringContaining('link_id is required'),
+          // The chat shows a failed tool card only when `error` is set.
+          error: {
+            type: 'CONNECTOR_ACCOUNT_SELECTION',
+            message: expect.stringContaining('link_id is required'),
+          },
+          state: { isError: true },
         });
         expect(
           await callConnectorToolById(
             { identifier: row.identifier, toolName: 'whoami', args: '{"link_id":"invalid"}' },
             ctx,
           ),
-        ).toMatchObject({ success: false, content: expect.stringContaining('no longer exists') });
+        ).toMatchObject({
+          success: false,
+          content: expect.stringContaining('no longer exists'),
+          error: { type: 'CONNECTOR_ACCOUNT_SELECTION' },
+          state: { isError: true },
+        });
         await linkModel.updateCredentials(
           bob.linkId,
           { ...(await linkModel.findById(bob.linkId))!.credentials, expiresAt: 1 },
