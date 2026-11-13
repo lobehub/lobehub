@@ -1,4 +1,4 @@
-import { getComposioAppByIdentifier } from '@lobechat/const';
+import { getComposioAppByIdentifier, hasCallableMcpEndpoint } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { buildMcpToolMetadata } from '@lobechat/const/mcpApp';
 import { upsertPluginMode } from '@lobechat/types';
@@ -1108,6 +1108,15 @@ export const connectorRouter = router({
       // "Configure" button opens CustomConnectorModal in migration mode.
       if (plugin.type === 'customPlugin' && plugin.customParams?.mcp) {
         return { connectorId: null, toolCount: 0 };
+      }
+
+      // A connector installed for this identifier (an endpoint plus the tools
+      // it synced from its own server) supersedes the plugin row, whose
+      // manifest a reinstall leaves as it was. Projecting that manifest would
+      // put the old tools and display fields back over the synced ones.
+      const [installed] = await ctx.connectorModel.queryByIdentifiers([input.identifier]);
+      if (installed && hasCallableMcpEndpoint(installed)) {
+        return { connectorId: installed.id, toolCount: 0 };
       }
 
       // Legacy plugin rows can outlive a provider's removal from the Composio catalog. Do not
