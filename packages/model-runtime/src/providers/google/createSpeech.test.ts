@@ -12,6 +12,7 @@ import {
   createGeminiSpeech,
   extractGeminiSpeechAudio,
   getGeminiSpeechErrorType,
+  isPromptStyledGeminiTTSModel,
 } from './createSpeech';
 import { LobeGoogleAI } from './index';
 import { encodeWav } from './speechAudio';
@@ -98,6 +99,19 @@ describe('buildGeminiSpeechRequest', () => {
         { parts: [{ text: 'Say cheerfully: Hello there' }], role: 'user' },
       ]);
     }
+  });
+
+  it('classifies legacy TTS ids, including gateway-prefixed ones, in linear time', () => {
+    expect(isPromptStyledGeminiTTSModel('gemini-2.5-pro-preview-tts')).toBe(true);
+    expect(isPromptStyledGeminiTTSModel('google/gemini-3.1-flash-tts-preview')).toBe(true);
+    expect(isPromptStyledGeminiTTSModel('gemini-3.8-flash-tts')).toBe(false);
+    expect(isPromptStyledGeminiTTSModel('gemini-2.5-flash')).toBe(false);
+
+    // CodeQL js/polynomial-redos: many repetitions of the prefix must not backtrack.
+    const adversarial = 'gemini-2.5-'.repeat(50_000);
+    const start = performance.now();
+    expect(isPromptStyledGeminiTTSModel(adversarial)).toBe(false);
+    expect(performance.now() - start).toBeLessThan(100);
   });
 
   it('passes the abort signal and per-request headers to the SDK', () => {

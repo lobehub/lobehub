@@ -44,9 +44,14 @@ export const GEMINI_TTS_FORMATS = ['mp3', 'wav', 'pcm'] as const satisfies TTSAu
  * models treat the text strictly as a transcript and take style from `speechMetadata`.
  * @see https://ai.google.dev/gemini-api/docs/speech-generation
  */
-const PROMPT_STYLED_TTS_MODEL = /gemini-(?:2\.5|3\.1)-[\w.-]*tts/i;
+const PROMPT_STYLED_TTS_PREFIXES = ['gemini-2.5-', 'gemini-3.1-'];
 
-export const isPromptStyledGeminiTTSModel = (model: string) => PROMPT_STYLED_TTS_MODEL.test(model);
+/** Plain string checks: a model id comes from the caller, so no backtracking pattern runs on it. */
+export const isPromptStyledGeminiTTSModel = (model: string) => {
+  const id = model.toLowerCase().split('/').pop() ?? '';
+
+  return id.includes('tts') && PROMPT_STYLED_TTS_PREFIXES.some((prefix) => id.startsWith(prefix));
+};
 
 const HTTP_ERROR_TYPES: Record<number, ILobeAgentRuntimeErrorType> = {
   401: AgentRuntimeErrorType.InvalidProviderAPIKey,
