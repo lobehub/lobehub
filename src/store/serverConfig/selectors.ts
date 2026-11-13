@@ -24,6 +24,7 @@ export const serverConfigSelectors = {
   enableMagicLink: (s: ServerConfigStore) => s.serverConfig.enableMagicLink || false,
   /** Runtime flag `mcp_apps`: MCP Apps views in the conversation. */
   enableMcpApps: (s: ServerConfigStore) => s.featureFlags.enableMcpApps === true,
+  enableMcpEvents: (s: ServerConfigStore) => s.featureFlags.enableMcpEvents === true,
   enableAgentKnowledgeSpace: (s: ServerConfigStore) =>
     s.featureFlags.enableAgentKnowledgeSpace === true,
   enableMarketTrustedClient: (s: ServerConfigStore) =>
