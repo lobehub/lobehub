@@ -457,6 +457,7 @@ describe('run outcome of the live stream (#19543 #19613 #19615)', () => {
   describe.each([
     ['done', 'completed', 'Agent finished'],
     ['waiting_for_human', 'waiting_for_human', 'Agent paused: waiting for human approval'],
+    ['waiting_for_async_tool', 'unknown', 'Agent waiting for an async tool'],
     ['error', 'failed', 'Agent failed'],
     ['interrupted', 'interrupted', 'Agent interrupted'],
   ])('agent_runtime_end reason=%s', (reason, kind, label) => {

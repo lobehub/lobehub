@@ -141,6 +141,9 @@ export const describeOutcome = (outcome: AgentRunOutcome): string => {
       return `${pc.yellow('⏸')} Agent paused: waiting for human approval — approve or answer it in LobeHub, the CLI does not wait for it`;
     }
     case 'unknown': {
+      if (outcome.status === 'waiting_for_async_tool') {
+        return `${pc.yellow('⏸')} Agent waiting for an async tool`;
+      }
       return `${pc.yellow('?')} Agent run outcome unknown${outcome.status ? ` (status: ${outcome.status})` : ''}`;
     }
   }
