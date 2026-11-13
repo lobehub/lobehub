@@ -378,6 +378,93 @@ describe('git status replicas', () => {
     ).toEqual({ value: { branch: 'feat/x', detached: false } });
   });
 
+  it('does not restore an older optimistic branch after consecutive checkouts settle', async () => {
+    vi.mocked(gitService.getGitBranch).mockResolvedValue({ branch: 'main' });
+    const { result } = renderHook(() => useFetchGitBranch('device-1', '/repo'), { wrapper });
+    await waitFor(() => expect(result.current.isConfirmed).toBe(true));
+
+    await act(() => result.current.mutate({ branch: 'feat/first' }, { revalidate: false }));
+    const firstRead = deferred<{ branch: string }>();
+    vi.mocked(gitService.getGitBranch).mockReturnValueOnce(firstRead.promise);
+    let firstSettlement!: Promise<unknown>;
+    act(() => {
+      firstSettlement = result.current.mutate();
+    });
+    await waitFor(() => expect(gitService.getGitBranch).toHaveBeenCalledTimes(2));
+
+    // Checkout's busy flag clears before its branch refresh finishes. The next
+    // checkout must replace the previous overlay, not stack on top of it.
+    await act(() => result.current.mutate({ branch: 'main' }, { revalidate: false }));
+    await act(() => result.current.mutate());
+    expect(result.current.data?.branch).toBe('main');
+
+    await act(async () => {
+      firstRead.resolve({ branch: 'feat/first' });
+      await firstSettlement;
+    });
+    expect(result.current.data?.branch).toBe('main');
+  });
+
+  it('releases a branch overlay when its owner unmounts', async () => {
+    vi.mocked(gitService.getGitBranch).mockResolvedValue({ branch: 'main' });
+    const owner = renderHook(() => useFetchGitBranch('device-1', '/repo'), { wrapper });
+    const observer = renderHook(() => useFetchGitBranch('device-1', '/repo'), { wrapper });
+    await waitFor(() => expect(owner.result.current.isConfirmed).toBe(true));
+
+    await act(() => owner.result.current.mutate({ branch: 'feat/old' }, { revalidate: false }));
+    expect(observer.result.current.data?.branch).toBe('feat/old');
+    owner.unmount();
+
+    await act(() => observer.result.current.mutate());
+    expect(observer.result.current.data?.branch).toBe('main');
+  });
+
+  it('keeps an old directory checkout completion from settling the new directory overlay', async () => {
+    vi.mocked(gitService.getGitBranch).mockResolvedValue({ branch: 'main' });
+    const { result, rerender } = renderHook(({ path }) => useFetchGitBranch('device-1', path), {
+      initialProps: { path: '/repo' },
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.isConfirmed).toBe(true));
+    const finishOldCheckout = result.current.mutate;
+    await act(() => result.current.mutate({ branch: 'feat/old' }, { revalidate: false }));
+
+    rerender({ path: '/other-repo' });
+    await waitFor(() => expect(result.current.isConfirmed).toBe(true));
+    await act(() => result.current.mutate({ branch: 'feat/new' }, { revalidate: false }));
+    await act(() => finishOldCheckout());
+    expect(result.current.data?.branch).toBe('feat/new');
+
+    vi.mocked(gitService.getGitBranch).mockResolvedValue({ branch: 'feat/new' });
+    await act(() => result.current.mutate());
+    expect(result.current.data?.branch).toBe('feat/new');
+    expect(useGitStatusStore.getState().gitBranchMap[gitStatusKey(REMOTE)]?.value?.branch).toBe(
+      'main',
+    );
+  });
+
+  it('does not let a callback from an earlier visit settle a new checkout of the same directory', async () => {
+    vi.mocked(gitService.getGitBranch).mockResolvedValue({ branch: 'main' });
+    const { result, rerender } = renderHook(({ path }) => useFetchGitBranch('device-1', path), {
+      initialProps: { path: '/repo' },
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.isConfirmed).toBe(true));
+    const finishEarlierVisit = result.current.mutate;
+    await act(() => result.current.mutate({ branch: 'feat/old' }, { revalidate: false }));
+    rerender({ path: '/other-repo' });
+    await waitFor(() => expect(result.current.isConfirmed).toBe(true));
+    rerender({ path: '/repo' });
+
+    await act(() => result.current.mutate({ branch: 'feat/new' }, { revalidate: false }));
+    await act(() => finishEarlierVisit());
+    expect(result.current.data?.branch).toBe('feat/new');
+
+    vi.mocked(gitService.getGitBranch).mockResolvedValue({ branch: 'feat/new' });
+    await act(() => result.current.mutate());
+    expect(result.current.data?.branch).toBe('feat/new');
+  });
+
   it('revalidates the mounted reads of a directory', async () => {
     vi.mocked(gitService.getGitAheadBehind).mockResolvedValue({ ahead: 0, behind: 0 } as any);
     const { result } = renderHook(() => useFetchGitAheadBehind('device-1', '/repo'), {
