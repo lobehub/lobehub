@@ -151,7 +151,7 @@ const readConnectors = async (
       candidateIds.length > 0
         ? deps.connectorModel.resolveByIdentifiers(
             candidateIds,
-            resolvedAgentId,
+            { agentId: resolvedAgentId },
             connectorGateKeeper,
           )
         : [],
@@ -236,11 +236,11 @@ const readDiscoverableConnectors = async (
       if (grantedUnpinnedIds.length === 0) return none;
       resolved = await deps.connectorModel.resolveByIdentifiers(
         grantedUnpinnedIds,
-        ctx.resolvedAgentId,
+        { agentId: ctx.resolvedAgentId },
         gateKeeper,
       );
     } else {
-      resolved = await deps.connectorModel.resolveAll(ctx.resolvedAgentId, gateKeeper);
+      resolved = await deps.connectorModel.resolveAll({ agentId: ctx.resolvedAgentId }, gateKeeper);
     }
     const connectorsMcp = filterInstalledMarketplaceConnectors(resolved, installedIds).filter(
       (c) => !candidates.has(c.identifier) && (c.mcpServerUrl || c.mcpConnectionType === 'stdio'),

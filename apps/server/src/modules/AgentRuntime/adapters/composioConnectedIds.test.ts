@@ -44,7 +44,7 @@ describe('loadConnectedComposioIds', () => {
     expect(ids.has('gmail')).toBe(true);
     // scoped to the caller's workspace + resolved agent-aware
     expect(ConnectorModel).toHaveBeenCalledWith(expect.anything(), 'user_test', 'ws-1');
-    expect(connectorModelMock.resolveAll).toHaveBeenCalledWith('agent-1');
+    expect(connectorModelMock.resolveAll).toHaveBeenCalledWith({ agentId: 'agent-1' });
   });
 
   it('still counts a base connection projected into the plugin table', async () => {

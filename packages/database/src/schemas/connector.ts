@@ -1,4 +1,9 @@
-import type { CustomPluginParams, ToolManifest } from '@lobechat/types';
+import type {
+  ConnectorOidcConfig,
+  ConnectorVisibility,
+  CustomPluginParams,
+  ToolManifest,
+} from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -21,46 +26,11 @@ import { workspaces } from './workspace';
 // user_connectors — types & consts
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface OIDCConfig {
-  authorizationEndpoint?: string;
-
-  /**
-   * Client identifier.
-   * - pre_registration: filled in by the user
-   * - dcr: written back after dynamic registration succeeds
-   * - client_id_metadata_document: this value IS the metadata URL
-   */
-  clientId?: string;
-
-  /**
-   * Client secret for confidential clients.
-   * - pre_registration: filled in by the user
-   * - dcr: written back after dynamic registration succeeds
-   * Stored in plaintext (non-token credential); access/refresh tokens live
-   * encrypted in `credentials` instead.
-   */
-  clientSecret?: string;
-
-  /** OIDC discovery issuer URL — preferred over manual endpoint overrides */
-  issuer?: string;
-  redirectUri?: string;
-  /** DCR only (RFC 7591) — dynamic client registration endpoint */
-  registrationEndpoint?: string;
-
-  scheme: 'pre_registration' | 'dcr' | 'client_id_metadata_document';
-  scopes?: string[];
-  tokenEndpoint?: string;
-
-  /**
-   * How the client authenticates at the token endpoint. DCR records the method
-   * the server registered; otherwise it is learned from the first successful
-   * exchange. Servers that enforce the registered method reject any other one.
-   */
-  tokenEndpointAuthMethod?: 'client_secret_basic' | 'client_secret_post' | 'none';
-
-  /** Recommended for public clients */
-  usePKCE?: boolean;
-}
+/**
+ * Declared in `@lobechat/types` as `ConnectorOidcConfig`; this alias keeps
+ * existing `@/database/schemas` imports working.
+ */
+export type OIDCConfig = ConnectorOidcConfig;
 
 /**
  * Decrypted shape of the `credentials` column.
@@ -215,7 +185,7 @@ export const userConnectors = pgTable(
     isEnabled: boolean('is_enabled').notNull().default(true),
 
     // ── OIDC/OAuth config (plaintext — non-sensitive) ─────────────────────
-    oidcConfig: jsonb('oidc_config').$type<OIDCConfig>(),
+    oidcConfig: jsonb('oidc_config').$type<ConnectorOidcConfig>(),
 
     // ── Encrypted credentials ─────────────────────────────────────────────
     credentials: text('credentials'),
@@ -223,6 +193,18 @@ export const userConnectors = pgTable(
 
     /** Safe non-sensitive metadata for display and future extensibility */
     metadata: jsonb('metadata').$type<ConnectorMetadata>(),
+
+    /**
+     * Visibility WITHIN a workspace (same contract as devices / agents, filtered
+     * by `buildWorkspaceWhere`):
+     * - 'public'  → shared with the workspace; every member sees it and every
+     *   agent in the workspace may load it.
+     * - 'private' → the creator's own; only `user_id` sees it, and only that
+     *   member's private agents load it.
+     * Defaults to 'public' so rows that predate the column keep their shared
+     * behaviour. Ignored for personal rows (`workspace_id IS NULL`).
+     */
+    visibility: text('visibility').$type<ConnectorVisibility>().default('public').notNull(),
 
     ...timestamps,
   },

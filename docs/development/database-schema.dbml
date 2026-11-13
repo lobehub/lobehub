@@ -1602,6 +1602,7 @@ table user_connectors {
   credentials text
   token_expires_at "timestamp with time zone"
   metadata jsonb
+  visibility text [not null, default: 'public']
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]

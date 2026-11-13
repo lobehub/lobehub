@@ -124,7 +124,9 @@ describe('ComposioService.getComposioManifests', () => {
     });
 
     expect(mocks.connectorQuery).not.toHaveBeenCalled();
-    expect(mocks.connectorQueryByIdentifiers).toHaveBeenCalledWith(['gmail'], 'agent-1');
+    expect(mocks.connectorQueryByIdentifiers).toHaveBeenCalledWith(['gmail'], {
+      agentId: 'agent-1',
+    });
     expect(manifests.map((m) => m.identifier)).toEqual(['gmail']);
   });
 

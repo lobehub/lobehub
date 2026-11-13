@@ -245,7 +245,7 @@ describe('agentBuilderRuntime', () => {
       expect(result.success).toBe(false);
       expect(result.error).toMatchObject({ type: 'PluginNotFound' });
       expect(result.content).toContain('"tg-mcp"');
-      expect(mockResolveConnectors).toHaveBeenCalledWith('agent-1');
+      expect(mockResolveConnectors).toHaveBeenCalledWith({ agentId: 'agent-1' });
       expect(mockUpdateConfig).not.toHaveBeenCalled();
       expect(mockUpdateAgent).not.toHaveBeenCalled();
     });

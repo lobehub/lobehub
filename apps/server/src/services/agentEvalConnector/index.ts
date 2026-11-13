@@ -85,6 +85,7 @@ const storedRecord = (stored: StoredEnvironmentConnection): PublicConnectorRecor
   status: 'connected',
   updatedAt: new Date(0),
   userId: '',
+  visibility: 'public',
 });
 
 const stable = (value: unknown): string => {

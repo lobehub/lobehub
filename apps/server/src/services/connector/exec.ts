@@ -49,7 +49,7 @@ const findConnector = async (
   if (!params.agentId) return ctx.connectorModel.queryByIdentifiers([params.identifier]);
   if (!(await ctx.agentModel.existsById(params.agentId))) return [];
 
-  return ctx.connectorModel.resolveByIdentifiers([params.identifier], params.agentId);
+  return ctx.connectorModel.resolveByIdentifiers([params.identifier], { agentId: params.agentId });
 };
 
 /**

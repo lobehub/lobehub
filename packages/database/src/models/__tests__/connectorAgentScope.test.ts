@@ -117,7 +117,7 @@ describe('ConnectorModel agent-scoped resolution', () => {
       });
 
       const model = new ConnectorModel(serverDB, userId);
-      const resolved = await model.resolveByIdentifiers(['gmail'], agentA);
+      const resolved = await model.resolveByIdentifiers(['gmail'], { agentId: agentA });
 
       expect(resolved).toHaveLength(1);
       expect(resolved[0].id).toBe(agentRow.id);
@@ -128,7 +128,7 @@ describe('ConnectorModel agent-scoped resolution', () => {
       const baseRow = await insertConnector({ identifier: 'gmail', name: 'Personal Gmail' });
 
       const model = new ConnectorModel(serverDB, userId);
-      const resolved = await model.resolveByIdentifiers(['gmail'], agentA);
+      const resolved = await model.resolveByIdentifiers(['gmail'], { agentId: agentA });
 
       expect(resolved).toHaveLength(1);
       expect(resolved[0].id).toBe(baseRow.id);
@@ -142,7 +142,7 @@ describe('ConnectorModel agent-scoped resolution', () => {
       });
 
       const model = new ConnectorModel(serverDB, userId);
-      const resolved = await model.resolveByIdentifiers(['gmail'], agentA);
+      const resolved = await model.resolveByIdentifiers(['gmail'], { agentId: agentA });
 
       expect(resolved.map((r) => r.id)).toEqual([agentRow.id]);
     });
@@ -153,7 +153,7 @@ describe('ConnectorModel agent-scoped resolution', () => {
 
       const model = new ConnectorModel(serverDB, userId);
       // Running as agent A: agent B's row must be invisible → falls back to base.
-      const resolved = await model.resolveByIdentifiers(['gmail'], agentA);
+      const resolved = await model.resolveByIdentifiers(['gmail'], { agentId: agentA });
 
       expect(resolved).toHaveLength(1);
       expect(resolved[0].id).toBe(baseRow.id);
@@ -176,7 +176,7 @@ describe('ConnectorModel agent-scoped resolution', () => {
       await insertConnector({ identifier: 'notion', name: 'Personal Notion' });
 
       const model = new ConnectorModel(serverDB, userId);
-      const resolved = await model.resolveByIdentifiers(['gmail', 'notion'], agentA);
+      const resolved = await model.resolveByIdentifiers(['gmail', 'notion'], { agentId: agentA });
 
       const byId = Object.fromEntries(resolved.map((r) => [r.identifier, r.name]));
       expect(resolved).toHaveLength(2);
@@ -205,7 +205,9 @@ describe('ConnectorModel agent-scoped resolution', () => {
 
       const model = new ConnectorModel(serverDB, userId, workspaceId);
 
-      expect((await model.resolveByIdentifiers(['gmail'], agentA))[0].id).toBe(agentWsRow.id);
+      expect((await model.resolveByIdentifiers(['gmail'], { agentId: agentA }))[0].id).toBe(
+        agentWsRow.id,
+      );
       // no agent binding → workspace base, still not personal
       expect((await model.resolveByIdentifiers(['gmail']))[0].id).toBe(wsRow.id);
     });
@@ -236,7 +238,7 @@ describe('ConnectorModel agent-scoped resolution', () => {
       await insertConnector({ identifier: 'notion', name: 'Personal Notion' });
 
       const model = new ConnectorModel(serverDB, userId);
-      const all = await model.resolveAll(agentA);
+      const all = await model.resolveAll({ agentId: agentA });
 
       const byIdentifier = Object.fromEntries(all.map((r) => [r.identifier, r.name]));
       expect(all).toHaveLength(2);
@@ -348,9 +350,11 @@ describe('ConnectorModel agent-scoped resolution', () => {
       const model = new ConnectorModel(serverDB, userId);
 
       // Agent A (the mounter) resolves it.
-      expect((await model.resolveByIdentifiers(['gmail'], agentA))[0]?.id).toBe(mounted.id);
+      expect((await model.resolveByIdentifiers(['gmail'], { agentId: agentA }))[0]?.id).toBe(
+        mounted.id,
+      );
       // Agent B is locked out — the only row is mounted by A, no free fallback.
-      expect(await model.resolveByIdentifiers(['gmail'], agentB)).toHaveLength(0);
+      expect(await model.resolveByIdentifiers(['gmail'], { agentId: agentB })).toHaveLength(0);
       // Non-agent base resolution also excludes a mounted row.
       expect(await model.resolveByIdentifiers(['gmail'])).toHaveLength(0);
     });
@@ -369,7 +373,7 @@ describe('ConnectorModel agent-scoped resolution', () => {
       });
 
       const model = new ConnectorModel(serverDB, userId);
-      const resolved = await model.resolveByIdentifiers(['gmail', 'notion'], agentA);
+      const resolved = await model.resolveByIdentifiers(['gmail', 'notion'], { agentId: agentA });
       const byIdentifier = Object.fromEntries(resolved.map((r) => [r.identifier, r]));
 
       expect(byIdentifier.gmail.id).toBe(owned.id); // owned > free base

@@ -142,7 +142,9 @@ export const patchConnectorPermissions = async <P extends { identifier: string }
     ];
     const connectorEntries =
       allIdentifiers.length > 0
-        ? await deps.connectorModel.resolveByIdentifiers(allIdentifiers, resolvedAgentId)
+        ? await deps.connectorModel.resolveByIdentifiers(allIdentifiers, {
+            agentId: resolvedAgentId,
+          })
         : [];
 
     if (connectorEntries.length > 0) {

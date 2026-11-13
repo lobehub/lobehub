@@ -1,5 +1,5 @@
 import type { LobeTool } from '@lobechat/types';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import type { InstalledPluginItem, NewInstalledPlugin } from '../schemas';
 import { userInstalledPlugins } from '../schemas';
@@ -67,6 +67,25 @@ export class PluginModel {
       .where(and(eq(userInstalledPlugins.identifier, id), this.visible()));
   };
 
+  /**
+   * Remove the projection rows that mirror one Composio account, leaving the
+   * app's other projection rows. In a workspace every member's projection row
+   * is in scope, and a private connection is one member's: deleting by
+   * identifier ({@link delete}) would also drop a teammate's legacy
+   * connection of the same app.
+   */
+  deleteComposioMirrors = async (identifier: string, connectedAccountId: string) => {
+    return this.db
+      .delete(userInstalledPlugins)
+      .where(
+        and(
+          eq(userInstalledPlugins.identifier, identifier),
+          this.visible(),
+          sql`${userInstalledPlugins.customParams} -> 'composio' ->> 'connectedAccountId' = ${connectedAccountId}`,
+        ),
+      );
+  };
+
   deleteAll = async () => {
     return this.db.delete(userInstalledPlugins).where(this.ownership());
   };
@@ -91,6 +110,32 @@ export class PluginModel {
       ...item,
       runtimeType: item.manifest?.type || 'default',
     }));
+  };
+
+  /**
+   * The Composio projection rows in scope, newest first, with the user who
+   * wrote each. A workspace keeps one projection row per member for the same
+   * app, so a lookup by identifier ({@link findById}) picks an arbitrary one.
+   */
+  queryComposioMirrors = async (identifiers?: string[]) => {
+    if (identifiers?.length === 0) return [];
+
+    return this.db
+      .select({
+        customParams: userInstalledPlugins.customParams,
+        identifier: userInstalledPlugins.identifier,
+        manifest: userInstalledPlugins.manifest,
+        userId: userInstalledPlugins.userId,
+      })
+      .from(userInstalledPlugins)
+      .where(
+        and(
+          this.visible(),
+          sql`COALESCE(jsonb_exists(${userInstalledPlugins.customParams}, 'composio'), false)`,
+          identifiers ? inArray(userInstalledPlugins.identifier, identifiers) : undefined,
+        ),
+      )
+      .orderBy(desc(userInstalledPlugins.createdAt), userInstalledPlugins.userId);
   };
 
   findById = async (id: string) => {

@@ -375,7 +375,9 @@ describe('readConnectorUiResourceById', () => {
       ctx,
     );
 
-    expect(ctx.connectorModel.resolveByIdentifiers).toHaveBeenCalledWith(['my-conn'], 'agt_1');
+    expect(ctx.connectorModel.resolveByIdentifiers).toHaveBeenCalledWith(['my-conn'], {
+      agentId: 'agt_1',
+    });
     expect(ctx.connectorModel.queryByIdentifiers).not.toHaveBeenCalled();
   });
 
@@ -403,7 +405,9 @@ describe('callConnectorToolById agent resolution', () => {
     );
 
     expect(ctx.agentModel.existsById).toHaveBeenCalledWith('agt_1');
-    expect(ctx.connectorModel.resolveByIdentifiers).toHaveBeenCalledWith(['my-conn'], 'agt_1');
+    expect(ctx.connectorModel.resolveByIdentifiers).toHaveBeenCalledWith(['my-conn'], {
+      agentId: 'agt_1',
+    });
     expect(ctx.connectorModel.queryByIdentifiers).not.toHaveBeenCalled();
   });
 });

@@ -230,7 +230,7 @@ export class ComposioService {
     { connectedAccountId: string; connectorId?: string; ownerUserId: string } | undefined
   > {
     if (this.connectorModel) {
-      const [connector] = await this.connectorModel.resolveByIdentifiers([identifier], agentId);
+      const [connector] = await this.connectorModel.resolveByIdentifiers([identifier], { agentId });
       const composio = connector?.metadata?.composio;
       if (composio?.connectedAccountId) {
         return {
@@ -277,8 +277,8 @@ export class ComposioService {
     if (this.connectorModel && this.connectorToolModel) {
       try {
         const connectors = identifiers
-          ? await this.connectorModel.resolveByIdentifiers(identifiers, agentId)
-          : await this.connectorModel.resolveAll(agentId);
+          ? await this.connectorModel.resolveByIdentifiers(identifiers, { agentId })
+          : await this.connectorModel.resolveAll({ agentId });
         const composioConnectors = connectors.filter(
           (c) =>
             VALID_COMPOSIO_IDENTIFIERS.has(c.identifier) &&
