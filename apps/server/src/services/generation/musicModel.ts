@@ -1,3 +1,4 @@
+import { loadModels } from '@lobechat/business-model-bank/model-config';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type { MusicModelParamsSchema, Pricing } from 'model-bank';
 
@@ -49,7 +50,6 @@ export const resolveMusicModelCard = async ({
   userId: string;
   workspaceId?: string;
 }): Promise<MusicModelCard | undefined> => {
-  const { loadModels } = await import('@lobechat/business-model-bank/model-config');
   const builtinModels = (await loadModels()) as BuiltinModelLike[];
   const builtin =
     builtinModels.find((item) => item.id === model && item.providerId === provider) ??

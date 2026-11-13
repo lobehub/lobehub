@@ -5,6 +5,7 @@ import { type MusicGenerationTaskMetadata } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { chargeAfterGenerate } from '@/business/server/music-generation/chargeAfterGenerate';
@@ -168,37 +169,41 @@ export const musicRouter = router({
         }));
         const createdGenerations = await tx.insert(generations).values(newGenerations).returning();
 
-        const tasks = await Promise.all(
-          createdGenerations.map(async (generation: GenerationItem, index: number) => {
-            const metadata: MusicGenerationTaskMetadata = {
-              index,
-              ...(prechargeResult ? { precharge: prechargeResult } : {}),
-              ...(ctx.spendOrigin ? { spendOrigin: ctx.spendOrigin } : {}),
-              webhookToken,
-            };
-            const [asyncTask] = await tx
-              .insert(asyncTasks)
-              .values({
-                metadata,
-                status: AsyncTaskStatus.Pending,
-                type: AsyncTaskType.MusicGeneration,
-                userId,
-                workspaceId: wsId,
-              })
-              .returning();
+        // One transaction runs on one connection, so insert the tasks one after another
+        const tasks: {
+          asyncTaskCreatedAt: Date;
+          asyncTaskId: string;
+          generation: GenerationItem;
+        }[] = [];
+        for (const [index, generation] of createdGenerations.entries()) {
+          const metadata: MusicGenerationTaskMetadata = {
+            index,
+            ...(prechargeResult ? { precharge: prechargeResult } : {}),
+            ...(ctx.spendOrigin ? { spendOrigin: ctx.spendOrigin } : {}),
+            webhookToken,
+          };
+          const [asyncTask] = await tx
+            .insert(asyncTasks)
+            .values({
+              metadata,
+              status: AsyncTaskStatus.Pending,
+              type: AsyncTaskType.MusicGeneration,
+              userId,
+              workspaceId: wsId,
+            })
+            .returning();
 
-            await tx
-              .update(generations)
-              .set({ asyncTaskId: asyncTask.id })
-              .where(and(eq(generations.id, generation.id), eq(generations.userId, userId)));
+          await tx
+            .update(generations)
+            .set({ asyncTaskId: asyncTask.id })
+            .where(and(eq(generations.id, generation.id), eq(generations.userId, userId)));
 
-            return {
-              asyncTaskCreatedAt: asyncTask.createdAt,
-              asyncTaskId: asyncTask.id,
-              generation,
-            };
-          }),
-        );
+          tasks.push({
+            asyncTaskCreatedAt: asyncTask.createdAt,
+            asyncTaskId: asyncTask.id,
+            generation,
+          });
+        }
 
         return { batch, tasks };
       });
@@ -234,13 +239,20 @@ export const musicRouter = router({
       } catch (error) {
         console.error('[music] Failed to start the async music task:', error);
 
-        await Promise.allSettled(
-          tasks.map(({ asyncTaskId }) =>
-            asyncTaskModel.update(asyncTaskId, {
-              error: createMusicTaskError(error, 'submit'),
-              status: AsyncTaskStatus.Error,
-            }),
-          ),
+        // Best effort: one failed status write must not stop the others or the refund below
+        await pMap(
+          tasks,
+          async ({ asyncTaskId }) => {
+            try {
+              await asyncTaskModel.update(asyncTaskId, {
+                error: createMusicTaskError(error, 'submit'),
+                status: AsyncTaskStatus.Error,
+              });
+            } catch (updateError) {
+              console.error('[music] Failed to mark task %s as errored:', asyncTaskId, updateError);
+            }
+          },
+          { concurrency: 5 },
         );
 
         // The async router never ran, so refund the pre-charge here

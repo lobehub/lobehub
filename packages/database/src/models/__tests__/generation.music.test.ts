@@ -2,7 +2,7 @@
 import type { MusicGenerationAsset } from '@lobechat/types';
 import { AsyncTaskStatus, FileSource } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
@@ -14,7 +14,7 @@ import {
   users,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { GenerationModel } from '../generation';
+import type { GenerationModel as GenerationModelType } from '../generation';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -27,7 +27,22 @@ vi.mock('@/server/services/file', () => ({
 }));
 
 const userId = 'music-generation-test-user';
-const generationModel = new GenerationModel(serverDB, userId);
+let generationModel: GenerationModelType;
+
+// The server-db suite runs with `isolate: false`: generation.test.ts mocks `../file`
+// and the file service, and whichever file loads `../generation` first would bind
+// it to its own mocks. Load a fresh copy here (real FileModel, this file's
+// FileService mock) and leave no mocked module behind for the other files.
+beforeAll(async () => {
+  vi.resetModules();
+  const { GenerationModel } = await import('../generation');
+  generationModel = new GenerationModel(serverDB, userId);
+});
+
+afterAll(() => {
+  vi.doUnmock('@/server/services/file');
+  vi.resetModules();
+});
 
 const musicAsset: MusicGenerationAsset = {
   coverUrl: 'generations/music/song_cover.jpg',

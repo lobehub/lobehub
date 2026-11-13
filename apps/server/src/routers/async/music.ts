@@ -18,6 +18,7 @@ import {
   type SpendOrigin,
 } from '@lobechat/types';
 import debug from 'debug';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
@@ -59,6 +60,9 @@ const createMusicInputSchema = z.object({
   webhookToken: z.string(),
   workspaceId: z.string().optional(),
 });
+
+/** Caps concurrent async-task writes per batch so a large batch cannot exhaust the DB pool. */
+const TASK_UPDATE_CONCURRENCY = 5;
 
 class MusicStageError extends Error {
   constructor(
@@ -197,10 +201,11 @@ export const musicRouter = router({
       try {
         ({ resolvedModelId } = await resolveBusinessModelMapping(provider, model));
 
-        await Promise.all(
-          tasks.map(({ asyncTaskId }) =>
+        await pMap(
+          tasks,
+          ({ asyncTaskId }) =>
             asyncTaskModel.update(asyncTaskId, { status: AsyncTaskStatus.Processing }),
-          ),
+          { concurrency: TASK_UPDATE_CONCURRENCY },
         );
 
         const modelRuntime = await initModelRuntimeFromDB(
@@ -236,8 +241,9 @@ export const musicRouter = router({
         let tracks: MusicTrack[];
         if (submitted.status === 'pending') {
           log('Music task %s is pending, polling', submitted.inferenceId);
-          await Promise.all(
-            tasks.map(({ asyncTaskId }, index) => {
+          await pMap(
+            tasks,
+            ({ asyncTaskId }, index) => {
               const metadata: MusicGenerationTaskMetadata = {
                 index,
                 ...(prechargeResult ? { precharge: prechargeResult } : {}),
@@ -249,7 +255,8 @@ export const musicRouter = router({
                 inferenceId: submitted.inferenceId,
                 metadata,
               });
-            }),
+            },
+            { concurrency: TASK_UPDATE_CONCURRENCY },
           );
 
           try {
@@ -265,10 +272,11 @@ export const musicRouter = router({
         } else {
           tracks = submitted.tracks;
           if (submitted.inferenceId)
-            await Promise.all(
-              tasks.map(({ asyncTaskId }) =>
+            await pMap(
+              tasks,
+              ({ asyncTaskId }) =>
                 asyncTaskModel.update(asyncTaskId, { inferenceId: submitted.inferenceId }),
-              ),
+              { concurrency: TASK_UPDATE_CONCURRENCY },
             );
         }
 
@@ -378,15 +386,24 @@ export const musicRouter = router({
         });
         const taskError = createMusicTaskError(original, stage, providerContentPolicyMessage);
 
-        await Promise.allSettled(
-          tasks
-            .filter(({ asyncTaskId }) => !settledTaskIds.has(asyncTaskId))
-            .map(({ asyncTaskId }) =>
-              asyncTaskModel.update(asyncTaskId, {
+        // Best effort: one failed status write must not stop the others or the settlement below
+        await pMap(
+          tasks.filter(({ asyncTaskId }) => !settledTaskIds.has(asyncTaskId)),
+          async ({ asyncTaskId }) => {
+            try {
+              await asyncTaskModel.update(asyncTaskId, {
                 error: taskError,
                 status: AsyncTaskStatus.Error,
-              }),
-            ),
+              });
+            } catch (updateError) {
+              console.error(
+                '[music-async] Failed to mark task %s as errored:',
+                asyncTaskId,
+                updateError,
+              );
+            }
+          },
+          { concurrency: TASK_UPDATE_CONCURRENCY },
         );
         // Charge the songs delivered before the failure; refund when there were none
         await settleCharge(stored);
