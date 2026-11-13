@@ -180,6 +180,7 @@ export async function createAgentRuntime(
   {
     abortSignal,
     agentState,
+    bindAgentDocumentIndex,
     operationId,
     stepIndex,
     tracingContextEngine,
@@ -193,6 +194,7 @@ export async function createAgentRuntime(
      * Works, so loading should cover that window).
      */
     agentState?: any;
+    bindAgentDocumentIndex?: RuntimeExecutorContext['bindAgentDocumentIndex'];
     operationId: string;
     stepIndex: number;
     tracingContextEngine?: (input: unknown, output: unknown, metadata?: unknown) => void;
@@ -270,6 +272,7 @@ export async function createAgentRuntime(
   // Create streaming executor context
   const executorContext: RuntimeExecutorContext = {
     abortSignal,
+    bindAgentDocumentIndex,
     // The factory may be a Graph-aware dispatcher that still returns the
     // default agent for ordinary conversations. Keep the early visible
     // output end behavior tied to the actual agent, not factory presence.
