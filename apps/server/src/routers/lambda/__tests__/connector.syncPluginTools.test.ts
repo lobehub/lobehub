@@ -59,7 +59,8 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
 
     connectorModelMock = {
       create: vi.fn().mockResolvedValue({ id: 'conn-new' }),
-      queryByIdentifiers: vi.fn().mockResolvedValue([]),
+      findManageableByIdentifier: vi.fn().mockResolvedValue(null),
+      isComposioAccountPrivateToTeammate: vi.fn().mockResolvedValue(false),
       update: vi.fn(),
     };
     connectorToolModelMock = { upsertMany: vi.fn() };
@@ -81,6 +82,7 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
       serverDB: {},
       userId: 'user_test',
       workspaceId: workspaceId ?? null,
+      ...(workspaceId && { workspaceRole: 'member' }),
     } as any);
 
   it('returns { connectorId: null } early for customPlugin rows that own an MCP endpoint', async () => {
@@ -186,16 +188,14 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
     // Opening connector details automatically calls syncPluginTools. The old
     // update replaced metadata with display fields only, erasing the account id
     // needed for execution and remote revocation.
-    connectorModelMock.queryByIdentifiers.mockResolvedValueOnce([
-      {
-        id: 'conn-existing',
-        metadata: {
-          composio: activeGmailAuthConfig(),
-          mountedByAgentId: 'agent-1',
-        },
-        userId: 'user_test',
+    connectorModelMock.findManageableByIdentifier.mockResolvedValueOnce({
+      id: 'conn-existing',
+      metadata: {
+        composio: activeGmailAuthConfig(),
+        mountedByAgentId: 'agent-1',
       },
-    ]);
+      userId: 'user_test',
+    });
     pluginModelMock.findById.mockResolvedValueOnce({
       type: 'plugin',
       customParams: {
@@ -212,6 +212,73 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
         description: 'Gmail tools',
         mountedByAgentId: 'agent-1',
       }),
+    });
+  });
+
+  it('refreshes a connector switched to private in place, not through a new shared twin', async () => {
+    // Regression: the lookup saw shared rows only, so refreshing a private
+    // Composio connector created an enabled shared row carrying the same
+    // account from the plugin projection, offering it to every workspace agent.
+    connectorModelMock.findManageableByIdentifier.mockResolvedValueOnce({
+      agentId: null,
+      id: 'conn-private',
+      metadata: { composio: activeGmailAuthConfig() },
+      userId: 'user_test',
+      visibility: 'private',
+    });
+    pluginModelMock.findById.mockResolvedValueOnce({
+      type: 'plugin',
+      customParams: { composio: activeGmailAuthConfig() },
+      manifest: { api: [{ name: 'send' }], meta: { title: 'Gmail' } },
+    });
+
+    const result = await callerFor('ws-1').syncPluginTools({ identifier: 'gmail' });
+
+    expect(connectorModelMock.findManageableByIdentifier).toHaveBeenCalledWith(
+      'gmail',
+      undefined,
+      'ca-gmail',
+    );
+    expect(result).toEqual({ connectorId: 'conn-private', toolCount: 1 });
+    expect(connectorModelMock.create).not.toHaveBeenCalled();
+    expect(connectorModelMock.update).toHaveBeenCalledWith('conn-private', {
+      metadata: expect.objectContaining({ composio: activeGmailAuthConfig() }),
+    });
+  });
+
+  it("never projects a teammate's private Composio account onto a shared row", async () => {
+    // The plugin projection is workspace-wide, so a teammate still reads the
+    // account of a connector its owner made private.
+    connectorModelMock.isComposioAccountPrivateToTeammate.mockResolvedValue(true);
+    pluginModelMock.findById.mockResolvedValue({
+      type: 'plugin',
+      customParams: { composio: activeGmailAuthConfig() },
+      manifest: { api: [{ name: 'send' }], meta: { description: 'Gmail tools', title: 'Gmail' } },
+    });
+
+    // No row of theirs: nothing is created
+    expect(await callerFor('ws-1').syncPluginTools({ identifier: 'gmail' })).toEqual({
+      connectorId: null,
+      toolCount: 0,
+    });
+    expect(connectorModelMock.create).not.toHaveBeenCalled();
+    expect(connectorToolModelMock.upsertMany).not.toHaveBeenCalled();
+
+    // Their own shared row keeps its account; only the display fields refresh
+    connectorModelMock.findManageableByIdentifier.mockResolvedValueOnce({
+      agentId: null,
+      id: 'conn-shared',
+      metadata: { composio: { ...activeGmailAuthConfig(), connectedAccountId: 'ca-shared' } },
+      userId: 'user_test',
+      visibility: 'public',
+    });
+    await callerFor('ws-1').syncPluginTools({ identifier: 'gmail' });
+
+    expect(connectorModelMock.update).toHaveBeenCalledWith('conn-shared', {
+      metadata: {
+        composio: expect.objectContaining({ connectedAccountId: 'ca-shared' }),
+        description: 'Gmail tools',
+      },
     });
   });
 
