@@ -36,7 +36,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { getConnectorConfigureConfig } from '@/features/Connectors/CustomConnectorModal/imperative';
+import { useConnectorConfigure } from '@/features/Connectors/CustomConnectorModal/useConnectorConfigure';
 import { openPluginEditDrawer } from '@/features/PluginDevModal/imperative';
 import { createSkillStoreModal } from '@/features/SkillStore';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -573,6 +573,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
   // MCP connectors the user added: custom ones and marketplace installs
   const customConnectors = useToolStore(connectorSelectors.userMcpConnectors, isEqual);
+  const getConfigure = useConnectorConfigure();
   const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
   const fetchConnectors = useToolStore((s) => s.fetchConnectors);
   useEffect(() => {
@@ -1169,7 +1170,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [userAgentSkills, t, createManagedSkillItem, deleteAgentSkill],
   );
 
-  // Custom connector list items (user-added OAuth MCP servers).
+  // Connector MCP list items (custom ones and marketplace installs).
   // Toggling adds the connector identifier to agents.plugins[] — the same field
   // the runtime resolves connectors from, so they become callable immediately.
   const customConnectorItems = useMemo(
@@ -1189,7 +1190,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
         return createManagedSkillItem({
           badge: <Icon icon={McpIcon} size={12} />,
-          configureConfig: getConnectorConfigureConfig(connector),
+          configureConfig: getConfigure(connector),
           deleteConfig: {
             displayName: title,
             onDelete: async () => {
@@ -1210,7 +1211,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           title,
         });
       }),
-    [customConnectors, t, createManagedSkillItem, deleteConnector, togglePlugin],
+    [customConnectors, t, createManagedSkillItem, deleteConnector, getConfigure, togglePlugin],
   );
 
   // Skills list items (including LobeHub Skill and Composio)
