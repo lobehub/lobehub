@@ -555,6 +555,75 @@ describe('StaleToolResultTrimProcessor', () => {
     });
   });
 
+  // Regression (T-14057): a cold turn trimmed old results and the cache stored
+  // the trimmed bytes; the next warm follow-up failed the break-even for its
+  // new candidates and fell back to the untrimmed history, restoring the full
+  // text and invalidating the cache from the first restored result.
+  describe('sticky trims across turns', () => {
+    const T0 = Date.parse('2026-09-20T08:00:00Z');
+    const MIN = 60_000;
+    const at = (ms: number) => new Date(ms).toISOString();
+    const fillers = (prefix: string) =>
+      Array.from({ length: 3 }, (_, i) => ({
+        content: `${prefix} filler ${i}`,
+        id: `${prefix}-f${i}`,
+        role: 'assistant',
+      }));
+
+    it('keeps an earlier turn’s trims on a warm follow-up that skips new trims', async () => {
+      const messages = [
+        readFileResult('/a.ts', 'x'.repeat(5000), [0, 200]),
+        writeFileResult('/a.ts'),
+        ...fillers('t1'),
+        previousTurnMessage(at(T0)),
+        // Turn 1 starts after a cold gap, so its trim of /a.ts is free.
+        { content: 'turn 1', createdAt: at(T0 + 10 * MIN), id: 'u1', role: 'user' },
+        ...fillers('t1-run'),
+        { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' },
+        readFileResult('/b.ts', 'y'.repeat(5000), [0, 200]),
+        writeFileResult('/b.ts'),
+        ...fillers('t2'),
+        { content: 'turn 1 done', createdAt: at(T0 + 20 * MIN), id: 'done1', role: 'assistant' },
+        // Turn 2 follows within the TTL; trimming /b.ts would not pay for the rewrite.
+        { content: 'turn 2', createdAt: at(T0 + 21 * MIN), id: 'u2', role: 'user' },
+        ...recencyPadding(3),
+      ];
+
+      const result = await createProcessor().process(createContext(messages));
+
+      expect(result.messages[0].content).toContain('superseded by a later write');
+      expect(result.messages.find((m) => m.content === 'y'.repeat(5000))).toBeDefined();
+      expect(result.metadata.staleToolResultTrim).toMatchObject({
+        cacheWarm: true,
+        carriedMessages: 1,
+        skippedReason: 'warm-cache',
+        trimmedMessages: 1,
+      });
+    });
+
+    it('keeps the placeholder an earlier turn chose when a later event matches another rule', async () => {
+      const messages = [
+        readFileResult('/c.ts', 'x'.repeat(5000), [0, 200]),
+        readFileResult('/c.ts', 'x'.repeat(5000), [0, 200]),
+        ...fillers('t1'),
+        previousTurnMessage(at(T0)),
+        { content: 'turn 1', createdAt: at(T0 + 10 * MIN), id: 'u1', role: 'user' },
+        // Turn 1 writes the file: by turn 2 the first read also counts as superseded by a write.
+        writeFileResult('/c.ts'),
+        ...fillers('t2'),
+        { content: 'turn 1 done', createdAt: at(T0 + 20 * MIN), id: 'done1', role: 'assistant' },
+        { content: 'turn 2', createdAt: at(T0 + 30 * MIN), id: 'u2', role: 'user' },
+        ...recencyPadding(3),
+      ];
+
+      const result = await createProcessor().process(createContext(messages));
+
+      expect(result.messages[0].content).toBe(
+        '[readFile result trimmed: /c.ts (lines 0-200) — the same range was read again later. Refer to the newer read, or call readFile again if needed.]',
+      );
+    });
+  });
+
   describe('invalidation index hygiene', () => {
     // Regression (Codex P2): a FAILED write must not supersede a good read.
     it('ignores failed writes when superseding reads', async () => {

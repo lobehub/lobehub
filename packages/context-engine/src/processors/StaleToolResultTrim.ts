@@ -9,6 +9,8 @@ declare module '../types' {
       byRule: Record<string, number>;
       /** Whether the turn boundary fell inside the provider cache TTL. */
       cacheWarm?: boolean;
+      /** Trims an earlier turn accepted, kept so the cached prefix stays byte-stable. */
+      carriedMessages?: number;
       /** Estimated gain used by the warm break-even check (skip path only). */
       gainEstimate?: number;
       /** Measured gap between the previous turn's last activity and the trigger. */
@@ -111,6 +113,44 @@ export interface StaleToolResultTrimConfig {
    * @default 1.5
    */
   warmSafetyMargin?: number;
+}
+
+interface TrimCandidate {
+  content: string;
+  index: number;
+  rule: string;
+}
+
+/** One turn's trim decision, made at its trigger and replayed by every later turn. */
+interface TurnPlan {
+  /** New trims this turn accepted. */
+  accepted: TrimCandidate[];
+  cacheWarm?: boolean;
+  gapMs?: number;
+  /** Set when the warm break-even check rejected this turn's new candidates. */
+  skipped?: NonNullable<PipelineContext['metadata']['staleToolResultTrim']>;
+}
+
+/**
+ * What the turn replay has learned about the closed history so far. Turn
+ * boundaries only move forward, so every field grows incrementally and each
+ * message is indexed once per request however many turns are replayed.
+ */
+interface ReplayIndex {
+  /** Tool chars (images weighted) in messages [0, scanned), for the size gate. */
+  closedToolChars: number;
+  lastWriteIndexByPath: Map<string, number>;
+  /** Current trim candidates in [0, scanned) that no turn has accepted yet. */
+  pending: Map<number, TrimCandidate>;
+  /** `rawCharsPrefix[i]` = untrimmed chars (images weighted) of messages [0, i). */
+  rawCharsPrefix: number[];
+  readWindowsByPath: Map<string, { end: number; index: number; start: number }[]>;
+  /** Messages [0, scanned) are indexed. */
+  scanned: number;
+  /** Chars removed by the trims accepted so far. */
+  trimmedSavedChars: number;
+  /** Untrimmed readFile windows in [0, scanned) per path, re-derived when a later write or covering re-read arrives. */
+  untrimmedReadsByPath: Map<string, { end: number; index: number; start: number }[]>;
 }
 
 const LOCAL_SYSTEM = 'lobe-local-system';
@@ -271,7 +311,9 @@ const toEpochMs = (value: unknown): number | undefined => {
  * warm cache (user followed up within the provider's cache TTL), the trim is
  * a paid rewrite, so it only fires when the savings clear the warm
  * thresholds. Trimming is truly free at cold boundaries — the first turn,
- * or any gap longer than the cache TTL.
+ * or any gap longer than the cache TTL. A trim an earlier turn accepted is
+ * kept by every later turn, warm or cold: the warm gate only decides whether
+ * to add new trims, never whether to undo old ones.
  *
  * Must run AFTER the flatten processors (assistantGroup / compressedGroup
  * hoist nested tool results into top-level `role: 'tool'` rows with
@@ -310,6 +352,139 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
 
     const messages = context.messages;
 
+    // Trims are sticky across turns. The processor is stateless — nothing about
+    // a trim is persisted — so the decision every earlier turn made is replayed
+    // here from its own boundary, oldest first. Once a turn accepted a trim, the
+    // provider cache holds the trimmed bytes, and every later turn must send the
+    // same bytes. Before this replay, a warm follow-up whose break-even check
+    // failed fell back to the untrimmed history: it meant to keep the warm
+    // prefix, but restored the full text of results the previous turn had
+    // trimmed and invalidated the cache from the first of them (T-14057).
+    // A turn's decision only reads messages up to its own trigger, so the
+    // replay reproduces it exactly from the current history.
+    const userIndexes = messages.flatMap((m, i) => (m.role === 'user' ? [i] : []));
+    const turnTriggers = userIndexes.length > 0 ? userIndexes : [-1];
+
+    const rawCharsPrefix = [0];
+    for (const m of messages) {
+      const chars =
+        (typeof m.content === 'string' ? m.content.length : 0) +
+        imageCountOf(m) * this.config.imageCharEquivalent;
+      rawCharsPrefix.push(rawCharsPrefix.at(-1)! + chars);
+    }
+    const replay: ReplayIndex = {
+      closedToolChars: 0,
+      lastWriteIndexByPath: new Map(),
+      rawCharsPrefix,
+      readWindowsByPath: new Map(),
+      scanned: 0,
+      trimmedSavedChars: 0,
+      pending: new Map(),
+      untrimmedReadsByPath: new Map(),
+    };
+
+    const trimmed = new Map<number, TrimCandidate>();
+    let current: TurnPlan | undefined;
+    for (const lastUserIndex of turnTriggers) {
+      current = this.planTurn(messages, lastUserIndex, replay);
+      if (current.accepted.length === 0) continue;
+      for (const candidate of current.accepted) {
+        trimmed.set(candidate.index, candidate);
+        replay.pending.delete(candidate.index);
+        replay.trimmedSavedChars += this.savedCharsOf(messages[candidate.index], candidate);
+      }
+      for (const [path, reads] of replay.untrimmedReadsByPath) {
+        replay.untrimmedReadsByPath.set(
+          path,
+          reads.filter((read) => !trimmed.has(read.index)),
+        );
+      }
+    }
+
+    const carriedMessages = trimmed.size - (current?.accepted.length ?? 0);
+    if (trimmed.size === 0) {
+      if (!current?.skipped) return this.markAsExecuted(context);
+      const skipped = this.cloneContext(context);
+      skipped.metadata.staleToolResultTrim = current.skipped;
+      return this.markAsExecuted(skipped);
+    }
+
+    const clonedContext = this.cloneContext(context);
+    let savedChars = 0;
+    const byRule: Record<string, number> = {};
+
+    clonedContext.messages = clonedContext.messages.map((message, index) => {
+      const candidate = trimmed.get(index);
+      if (!candidate) return message;
+
+      savedChars += this.savedCharsOf(message, candidate);
+      byRule[candidate.rule] = (byRule[candidate.rule] ?? 0) + 1;
+      // A trimmed image read must not keep its attachments: MessageContentProcessor
+      // (later in the pipeline) would still turn pluginState.images into
+      // model-visible image_url parts, billing the stale image while the text
+      // claims the result was trimmed.
+      const pluginState = (message.pluginState as { images?: unknown } | undefined)?.images
+        ? { ...(message.pluginState as Record<string, unknown>), images: undefined }
+        : message.pluginState;
+      return { ...message, content: candidate.content, pluginState };
+    });
+
+    log(
+      'Trimmed %d stale tool result(s) (%d carried from earlier turns), saved %d chars',
+      trimmed.size,
+      carriedMessages,
+      savedChars,
+    );
+
+    clonedContext.metadata.staleToolResultTrim = {
+      ...current?.skipped,
+      byRule,
+      cacheWarm: current?.skipped?.cacheWarm ?? current?.cacheWarm,
+      carriedMessages,
+      gapMs: current?.skipped?.gapMs ?? current?.gapMs,
+      savedChars,
+      trimmedMessages: trimmed.size,
+    };
+    return this.markAsExecuted(clonedContext);
+  }
+
+  private savedCharsOf(message: Message, candidate: TrimCandidate): number {
+    return (
+      (message.content as string).length -
+      candidate.content.length +
+      imageCountOf(message) * this.config.imageCharEquivalent
+    );
+  }
+
+  /** Re-derive whether the closed-history tool row at `index` is a trim candidate now. */
+  private refreshCandidate(messages: Message[], index: number, replay: ReplayIndex): void {
+    replay.pending.delete(index);
+    const message = messages[index];
+    if (typeof message.content !== 'string' || message.content.length === 0) return;
+    // Error results are the most valuable debugging context — never trim.
+    if (message.pluginError) return;
+
+    const replacement = this.trimMessage(
+      message,
+      index,
+      replay.lastWriteIndexByPath,
+      replay.readWindowsByPath,
+    );
+    if (replacement === undefined || replacement.content === message.content) return;
+    // Never admit a replacement that grows the payload — a result barely over
+    // the keep threshold would come back longer once the notice is appended.
+    // Image reads are exempt: the dropped attachment dwarfs any notice.
+    const hasImages =
+      ((message.pluginState as { images?: unknown[] } | undefined)?.images?.length ?? 0) > 0;
+    if (!hasImages && replacement.content.length >= message.content.length) return;
+    replay.pending.set(index, { content: replacement.content, index, rule: replacement.rule });
+  }
+
+  /**
+   * Decide which NEW trims the turn triggered by `messages[lastUserIndex]`
+   * accepts, given the trims earlier turns already applied (tracked in `replay`).
+   */
+  private planTurn(messages: Message[], lastUserIndex: number, replay: ReplayIndex): TurnPlan {
     // Turn boundary: the last user message starts the in-flight turn. Every
     // LLM step of a running operation re-assembles the payload and re-runs
     // this pipeline, so the trim set must be FROZEN for the whole turn —
@@ -333,35 +508,29 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
     //
     // When no user message exists (tests, exotic flows), the recency window
     // alone applies.
-    const lastUserIndex = messages.reduce((acc, m, i) => (m.role === 'user' ? i : acc), -1);
+    const none: TurnPlan = { accepted: [] };
     const boundary =
       lastUserIndex >= 0
         ? Math.max(0, lastUserIndex + 1 - this.config.keepRecentMessages)
         : Math.max(0, messages.length - this.config.keepRecentMessages);
 
-    let closedToolChars = 0;
-    for (let i = 0; i < boundary; i++) {
-      const m = messages[i];
-      if (m.role !== 'tool') continue;
-      if (typeof m.content === 'string') closedToolChars += m.content.length;
-      closedToolChars += imageCountOf(m) * this.config.imageCharEquivalent;
-    }
-    if (closedToolChars < this.config.minTotalToolChars) {
-      return this.markAsExecuted(context);
-    }
-
-    // Pass 1 — index events inside the closed history that invalidate earlier
-    // results:
+    // Pass 1 — extend the index of the closed history up to this boundary.
+    // Boundaries only move forward across turns, so each message is indexed
+    // once per request no matter how many turns are replayed:
+    // - tool chars for the minimum-size gate
     // - writes per file path (any writeFile/editFile result row marks a write)
     // - read windows per path, to find reads fully covered by a later re-read
     // Failed results index nothing: a failed write did not supersede anything,
     // a failed read covers nothing.
-    const lastWriteIndexByPath = new Map<string, number>();
-    const readWindowsByPath = new Map<string, { end: number; index: number; start: number }[]>();
-
-    for (let index = 0; index < boundary; index++) {
+    const firstNew = replay.scanned;
+    // Earlier untrimmed reads whose candidacy the newly indexed events change.
+    const affected = new Set<number>();
+    for (let index = firstNew; index < boundary; index++) {
       const m = messages[index];
       if (m.role !== 'tool') continue;
+      if (typeof m.content === 'string') replay.closedToolChars += m.content.length;
+      replay.closedToolChars += imageCountOf(m) * this.config.imageCharEquivalent;
+
       if (m.pluginError) continue;
       const plugin = getPlugin(m);
       if (plugin?.identifier !== LOCAL_SYSTEM) continue;
@@ -369,47 +538,66 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       const path = pathOf(m, plugin);
       if (!path) continue;
 
+      const earlierReads = replay.untrimmedReadsByPath.get(path) ?? [];
       if (WRITE_APIS.has(plugin.apiName ?? '')) {
-        lastWriteIndexByPath.set(path, index);
+        replay.lastWriteIndexByPath.set(path, index);
+        // A write supersedes every earlier read of the path, even one already
+        // pending as covered by a re-read (the write rule takes precedence).
+        for (const read of earlierReads) {
+          if (replay.pending.get(read.index)?.rule !== 'readSupersededByWrite') {
+            affected.add(read.index);
+          }
+        }
       } else if (READ_APIS.has(plugin.apiName ?? '')) {
         const loc = effectiveReadWindow(m, plugin);
-        const windows = readWindowsByPath.get(path) ?? [];
-        windows.push({ end: loc[1], index, start: loc[0] });
-        readWindowsByPath.set(path, windows);
+        const window = { end: loc[1], index, start: loc[0] };
+        const windows = replay.readWindowsByPath.get(path) ?? [];
+        windows.push(window);
+        replay.readWindowsByPath.set(path, windows);
+        // A re-read only changes the earlier reads it fully covers; one that is
+        // already pending stays superseded either way.
+        for (const read of earlierReads) {
+          if (
+            !replay.pending.has(read.index) &&
+            window.start <= read.start &&
+            window.end >= read.end
+          ) {
+            affected.add(read.index);
+          }
+        }
+        earlierReads.push(window);
+        replay.untrimmedReadsByPath.set(path, earlierReads);
       }
     }
+    replay.scanned = Math.max(replay.scanned, boundary);
 
-    // Pass 2 — collect trim candidates (dry run first; the cache-warmth gate
-    // below needs the total savings before deciding).
-    const candidates: { content: string; index: number; rule: string }[] = [];
-    for (let index = 0; index < boundary; index++) {
-      const message = messages[index];
-      if (message.role !== 'tool') continue;
-      if (typeof message.content !== 'string' || message.content.length === 0) continue;
-      // Error results are the most valuable debugging context — never trim.
-      if (message.pluginError) continue;
-
-      const trimmed = this.trimMessage(message, index, lastWriteIndexByPath, readWindowsByPath);
-      if (trimmed === undefined || trimmed.content === message.content) continue;
-      // Never admit a replacement that grows the payload — a result barely over
-      // the keep threshold would come back longer once the notice is appended.
-      // Image reads are exempt: the dropped attachment dwarfs any notice.
-      const hasImages =
-        ((message.pluginState as { images?: unknown[] } | undefined)?.images?.length ?? 0) > 0;
-      if (!hasImages && trimmed.content.length >= message.content.length) continue;
-      candidates.push({ content: trimmed.content, index, rule: trimmed.rule });
+    // Pass 2 — keep the pending candidate set current (dry run; the
+    // cache-warmth gate below needs the total savings before deciding).
+    // A row's candidacy only changes when it enters the closed history, or —
+    // for a readFile — when a later write or covering re-read of the same path
+    // does, so only those rows are re-derived. Rows an earlier turn trimmed
+    // are gone from the pending set and keep that turn's replacement, so the
+    // placeholder stays byte-identical even when a later event would now pick
+    // a different rule for it.
+    for (const index of affected) {
+      if (index < firstNew) this.refreshCandidate(messages, index, replay);
+    }
+    for (let index = firstNew; index < boundary; index++) {
+      if (messages[index].role === 'tool') this.refreshCandidate(messages, index, replay);
     }
 
-    if (candidates.length === 0) {
-      return this.markAsExecuted(context);
-    }
+    if (replay.closedToolChars < this.config.minTotalToolChars) return none;
+
+    const candidates = [...replay.pending.values()];
+
+    if (candidates.length === 0) return none;
 
     // Cache-warmth gate. Trimming is free only when the prompt cache is cold —
     // i.e. the gap between the previous turn's last activity and this turn's
     // trigger exceeds the provider's cache TTL (Anthropic: 5 min, refreshed
-    // per hit). When the user follows up within the TTL, the untrimmed prefix
-    // would still hit, so the trim must clear a break-even check against the
-    // rewrite it causes:
+    // per hit). When the user follows up within the TTL, the cached prefix
+    // (with earlier turns' trims applied) would still hit, so the new trims
+    // must clear a break-even check against the rewrite they cause:
     //
     //   gain = R_est × S × readPrice   (each remaining step reads S less)
     //   cost = ((P − S) × writePrice − P × readPrice) × margin
@@ -423,11 +611,7 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
     // A trimmed result also loses its images (pass 3), which is most of the saving for an
     // image read.
     const potentialSavedChars = candidates.reduce(
-      (s, c) =>
-        s +
-        (messages[c.index].content as string).length -
-        c.content.length +
-        imageCountOf(messages[c.index]) * this.config.imageCharEquivalent,
+      (s, c) => s + this.savedCharsOf(messages[c.index], c),
       0,
     );
     const triggeredAt = toEpochMs(messages[lastUserIndex]?.createdAt);
@@ -444,14 +628,10 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       // message list: candidates and savings are already frozen there, and
       // counting in-flight output would grow the estimated rewrite cost
       // step by step, flipping a trim that passed the gate back to a skip
-      // mid-operation and restoring the original prefix.
+      // mid-operation and restoring the original prefix. Earlier turns' trims
+      // are priced as applied: that is the prefix the cache holds.
       const payloadEnd = lastUserIndex >= 0 ? lastUserIndex + 1 : messages.length;
-      let totalChars = 0;
-      for (let i = 0; i < payloadEnd; i++) {
-        const m = messages[i];
-        if (typeof m.content === 'string') totalChars += m.content.length;
-        totalChars += imageCountOf(m) * this.config.imageCharEquivalent;
-      }
+      const totalChars = replay.rawCharsPrefix[payloadEnd] - replay.trimmedSavedChars;
       const gainEstimate =
         this.config.warmRemainingStepsEstimate * potentialSavedChars * this.config.cacheReadPrice;
       const rewriteCostEstimate =
@@ -460,67 +640,30 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       const worthwhile = gainEstimate > rewriteCostEstimate * this.config.warmSafetyMargin;
       if (!worthwhile) {
         log(
-          'Skipping trim: cache warm (gap <= %dms), gain %d <= cost %d × %d',
+          'Skipping new trims: cache warm (gap <= %dms), gain %d <= cost %d × %d',
           this.config.cacheTtlMs,
           gainEstimate,
           rewriteCostEstimate,
           this.config.warmSafetyMargin,
         );
-        const skipped = this.cloneContext(context);
-        skipped.metadata.staleToolResultTrim = {
-          byRule: {},
-          cacheWarm,
-          gapMs,
-          gainEstimate,
-          potentialSavedChars,
-          rewriteCostEstimate,
-          savedChars: 0,
-          skippedReason: 'warm-cache',
-          trimmedMessages: 0,
+        return {
+          accepted: [],
+          skipped: {
+            byRule: {},
+            cacheWarm,
+            gapMs,
+            gainEstimate,
+            potentialSavedChars,
+            rewriteCostEstimate,
+            savedChars: 0,
+            skippedReason: 'warm-cache',
+            trimmedMessages: 0,
+          },
         };
-        return this.markAsExecuted(skipped);
       }
     }
 
-    // Pass 3 — apply
-    const clonedContext = this.cloneContext(context);
-    let savedChars = 0;
-    const byRule: Record<string, number> = {};
-    const candidateByIndex = new Map(candidates.map((c) => [c.index, c]));
-
-    clonedContext.messages = clonedContext.messages.map((message, index) => {
-      const candidate = candidateByIndex.get(index);
-      if (!candidate) return message;
-
-      savedChars +=
-        (message.content as string).length -
-        candidate.content.length +
-        imageCountOf(message) * this.config.imageCharEquivalent;
-      byRule[candidate.rule] = (byRule[candidate.rule] ?? 0) + 1;
-      // A trimmed image read must not keep its attachments: MessageContentProcessor
-      // (later in the pipeline) would still turn pluginState.images into
-      // model-visible image_url parts, billing the stale image while the text
-      // claims the result was trimmed.
-      const pluginState = (message.pluginState as { images?: unknown } | undefined)?.images
-        ? { ...(message.pluginState as Record<string, unknown>), images: undefined }
-        : message.pluginState;
-      return { ...message, content: candidate.content, pluginState };
-    });
-
-    const trimmedMessages = candidates.length;
-
-    if (trimmedMessages > 0) {
-      log('Trimmed %d stale tool result(s), saved %d chars', trimmedMessages, savedChars);
-    }
-
-    clonedContext.metadata.staleToolResultTrim = {
-      byRule,
-      cacheWarm,
-      gapMs,
-      savedChars,
-      trimmedMessages,
-    };
-    return this.markAsExecuted(clonedContext);
+    return { accepted: candidates, cacheWarm, gapMs };
   }
 
   /** Returns the replacement, or undefined when the message must stay untouched. */
