@@ -1,0 +1,209 @@
+import {
+  ARTBOARD_BOARD_SIZE,
+  type ArtboardBoardView,
+  type ArtboardEdgeView,
+  type ArtboardGroupView,
+  type ArtboardItem,
+  artboardJourneyOf,
+  type ArtboardPageView,
+  type ArtboardRect,
+  type ArtboardRoundView,
+} from '@lobechat/types';
+
+import { spreadEdges } from './edgeSpread';
+
+export interface Rect {
+  maxX: number;
+  maxY: number;
+  minX: number;
+  minY: number;
+}
+
+export interface EdgePath {
+  d: string;
+  lx: number;
+  ly: number;
+  points: [number, number][];
+  room: number;
+}
+
+export type BoardEdge = ArtboardEdgeView & EdgePath;
+
+export type BoardBlocker =
+  | { groupId: string | null; id: string; kind: 'round'; pageId: string; text: string }
+  | { boardId: string | null; id: string; kind: 'question'; pageId: string | null; text: string };
+
+export interface BoardModel {
+  artboard: ArtboardItem;
+  blockers: BoardBlocker[];
+  boardById: Record<string, ArtboardBoardView>;
+  boards: ArtboardBoardView[];
+  bounds: Rect;
+  edges: BoardEdge[];
+  finalized: boolean;
+  groups: ArtboardGroupView[];
+  imageUrls: Record<string, string>;
+  journeyBoards: ArtboardBoardView[];
+  journeyEdges: ArtboardEdgeView[];
+  journeyEntryId: string | undefined;
+  journeyGroupId: string | undefined;
+  openRounds: ArtboardRoundView[];
+  pageId: string | undefined;
+  pageIdOf: (id: string) => string | undefined;
+  pages: ArtboardPageView[];
+  recommendedIds: Set<string>;
+  roundByGroupId: Record<string, ArtboardRoundView>;
+}
+
+export const computeEdgePath = (from: ArtboardRect, to: ArtboardRect): EdgePath => {
+  const right = to.x >= from.x + from.w;
+  const left = to.x + to.w <= from.x;
+
+  if (right || left) {
+    const x1 = right ? from.x + from.w : from.x;
+    const x2 = right ? to.x : to.x + to.w;
+    const y1 = from.y + from.h / 2;
+    const y2 = to.y + to.h / 2;
+    const mx = (x1 + x2) / 2;
+    return {
+      d: `M${x1} ${y1} H${mx} V${y2} H${x2}`,
+      lx: mx,
+      ly: (y1 + y2) / 2,
+      points: [
+        [x1, y1],
+        [mx, y1],
+        [mx, y2],
+        [x2, y2],
+      ],
+      room: Math.abs(x2 - x1),
+    };
+  }
+
+  const down = to.y >= from.y;
+  const x1 = from.x + from.w / 2;
+  const x2 = to.x + to.w / 2;
+  const y1 = down ? from.y + from.h : from.y;
+  const y2 = down ? to.y : to.y + to.h;
+  const my = (y1 + y2) / 2;
+  return {
+    d: `M${x1} ${y1} V${my} H${x2} V${y2}`,
+    lx: (x1 + x2) / 2,
+    ly: my,
+    points: [
+      [x1, y1],
+      [x1, my],
+      [x2, my],
+      [x2, y2],
+    ],
+    room: Math.min(from.w, to.w),
+  };
+};
+
+export const toBounds = (rect: ArtboardRect): Rect => ({
+  maxX: rect.x + rect.w,
+  maxY: rect.y + rect.h,
+  minX: rect.x,
+  minY: rect.y,
+});
+
+const EMPTY_BOUNDS: Rect = {
+  maxX: ARTBOARD_BOARD_SIZE.width,
+  maxY: ARTBOARD_BOARD_SIZE.height,
+  minX: 0,
+  minY: 0,
+};
+
+const union = (rects: Rect[]): Rect =>
+  rects.length
+    ? {
+        maxX: Math.max(...rects.map((r) => r.maxX)),
+        maxY: Math.max(...rects.map((r) => r.maxY)),
+        minX: Math.min(...rects.map((r) => r.minX)),
+        minY: Math.min(...rects.map((r) => r.minY)),
+      }
+    : EMPTY_BOUNDS;
+
+export const buildBoardModel = (
+  artboard: ArtboardItem,
+  imageUrls: Record<string, string>,
+  requestedPageId?: string | null,
+): BoardModel => {
+  const { content } = artboard;
+  const pageId = (content.pages.find((p) => p.id === requestedPageId) ?? content.pages[0])?.id;
+  const boardById = Object.fromEntries(content.boards.map((b) => [b.id, b]));
+
+  const boards = content.boards.filter((b) => b.pageId === pageId);
+  const groups = content.groups.filter((g) => g.pageId === pageId);
+  const onPage = new Set(boards.map((b) => b.id));
+  const edges = spreadEdges(
+    content.edges.flatMap((edge) =>
+      onPage.has(edge.from) && onPage.has(edge.to)
+        ? [{ ...edge, ...computeEdgePath(boardById[edge.from].rect, boardById[edge.to].rect) }]
+        : [],
+    ),
+    (edge) => !!(edge.label || edge.condition),
+  );
+
+  const journey = artboardJourneyOf(content);
+  const journeyBoards = journey.boards ?? [];
+  const journeyEdges = journey.edges ?? [];
+  const targets = new Set(journeyEdges.map((e) => e.to));
+  const entries = journeyBoards.filter((b) => !targets.has(b.id));
+
+  const roundById = Object.fromEntries(content.rounds.map((r) => [r.id, r]));
+  const roundByGroupId: Record<string, ArtboardRoundView> = {};
+  const groupIdByRound: Record<string, string> = {};
+  for (const b of content.boards) {
+    if (!b.roundId || !b.groupId || !roundById[b.roundId]) continue;
+    roundByGroupId[b.groupId] = roundById[b.roundId];
+    groupIdByRound[b.roundId] = b.groupId;
+  }
+  const openRounds = content.rounds.filter((round) => round.status === 'open');
+  const pageIds = new Map<string, string>(
+    [...content.boards, ...content.groups, ...content.rounds].map((x) => [x.id, x.pageId]),
+  );
+
+  return {
+    artboard,
+    blockers: [
+      ...openRounds.map((round) => ({
+        groupId: groupIdByRound[round.id] ?? null,
+        id: round.id,
+        kind: 'round' as const,
+        pageId: round.pageId,
+        text: round.title,
+      })),
+      ...content.questions.map((question) => ({
+        boardId: question.boardId,
+        id: question.id,
+        kind: 'question' as const,
+        pageId: question.pageId,
+        text: question.content,
+      })),
+    ],
+    boardById,
+    boards,
+    bounds: union([
+      ...groups.map((g) => toBounds(g.rect)),
+      ...boards.filter((b) => !b.groupId).map((b) => toBounds(b.rect)),
+    ]),
+    edges,
+    finalized: artboard.phase === 'finalized',
+    groups,
+    imageUrls,
+    journeyBoards,
+    journeyEdges,
+    journeyEntryId: entries.length === 1 ? entries[0].id : undefined,
+    journeyGroupId: journey.group?.id,
+    openRounds,
+    pageId,
+    pageIdOf: (id) => pageIds.get(id),
+    pages: content.pages,
+    recommendedIds: new Set(
+      content.rounds.flatMap((round) =>
+        round.recommendedBoardId ? [round.recommendedBoardId] : [],
+      ),
+    ),
+    roundByGroupId,
+  };
+};

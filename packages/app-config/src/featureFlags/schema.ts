@@ -90,6 +90,14 @@ export const FeatureFlagsSchema = z.object({
   mcp_apps: FeatureFlagValue.optional(),
 
   /**
+   * Artboard: the agent's lobe-artboard tool in project conversations, the
+   * board card and side panel, and the Artboard Works tab. Off: the tool is
+   * never offered and artboard Works are not requested. Array values are user
+   * ids.
+   */
+  artboard: FeatureFlagValue.optional(),
+
+  /**
    * Rollout gate for moving an agent's documents into its dedicated knowledge
    * base at runtime, and for showing those spaces in the library. Off: no space
    * is created and existing ones stay hidden. Array values are user ids.
@@ -228,6 +236,9 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   // Off until an admin publishes a user allowlist or flips it to true.
   dashboard: false,
 
+  // On in development only; production needs an explicit allowlist.
+  artboard: isDev,
+
   // Off: a personal-trial layout, enabled per user id.
   im_layout: false,
 
@@ -287,6 +298,7 @@ export const mapFeatureFlagsEnvToState = (
       'agent_gateway_mux_mobile',
     ),
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId, 'agent_llm_relay'),
+    enableArtboard: evaluateFeatureFlag(config.artboard, userId, 'artboard'),
     enableDeferredInit: evaluateFeatureFlag(
       config.agent_deferred_init,
       userId,

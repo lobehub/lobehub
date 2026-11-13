@@ -15,6 +15,7 @@ import type { InternalExecAgentParams } from './types';
  */
 export type ComposerRunRequest = Pick<
   InternalExecAgentParams,
+  | 'acceptsArtboardWorks'
   | 'acceptsFileWorks'
   | 'acceptsMemberRuntimeEnd'
   | 'agentId'
@@ -107,6 +108,7 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
   let reopenOutcome: TopicRunReopenOutcome | undefined;
 
   const result = await ctx.aiAgentService.execAgent({
+    acceptsArtboardWorks: input.acceptsArtboardWorks,
     acceptsFileWorks: input.acceptsFileWorks,
     acceptsMemberRuntimeEnd: input.acceptsMemberRuntimeEnd,
     agentId: input.agentId,

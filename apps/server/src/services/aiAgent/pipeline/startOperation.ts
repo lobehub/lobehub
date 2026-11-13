@@ -38,6 +38,7 @@ export type StartOperationInit =
   | { pendingRequest: OperationInitRequest };
 
 export interface StartOperationInput {
+  acceptsArtboardWorks?: boolean;
   /** See {@link InternalExecAgentParams.acceptsFileWorks}. */
   acceptsFileWorks?: boolean;
   /** See {@link InternalExecAgentParams.acceptsMemberRuntimeEnd}. */
@@ -120,6 +121,7 @@ export const startOperation = async (
     userMessageId,
   } = ctx;
   const {
+    acceptsArtboardWorks,
     acceptsFileWorks,
     acceptsMemberRuntimeEnd,
     approvalClaim,
@@ -185,6 +187,11 @@ export const startOperation = async (
         : undefined);
     // Its `file_works` declaration too, or the continuation's terminal push
     // would drop the file Work card the parked client can render.
+    const artboardWorksAccepted =
+      acceptsArtboardWorks ??
+      (approvalSourceOperationId
+        ? await deps.agentRuntimeService.acceptsArtboardWorks(approvalSourceOperationId)
+        : undefined);
     const fileWorksAccepted =
       acceptsFileWorks ??
       (approvalSourceOperationId
@@ -209,6 +216,7 @@ export const startOperation = async (
         : await resolveOperationInitSlots(init);
     const result = await deps.agentRuntimeService.createOperation({
       ...initSlots,
+      acceptsArtboardWorks: artboardWorksAccepted,
       pendingInitRequest,
       acceptsFileWorks: fileWorksAccepted,
       acceptsMemberRuntimeEnd: memberRuntimeEndAccepted,

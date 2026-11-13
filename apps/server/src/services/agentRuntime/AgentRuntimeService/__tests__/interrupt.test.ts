@@ -316,6 +316,35 @@ describe('AgentRuntimeService', () => {
       svc.messageServiceInstance = { queryMessages };
     };
 
+    it.each([
+      [{}, ['document']],
+      [{ acceptsFileWorks: true }, ['document', 'file']],
+      [{ acceptsArtboardWorks: true }, ['document', 'artboard']],
+      [{ acceptsArtboardWorks: true, acceptsFileWorks: true }, ['document', 'file', 'artboard']],
+    ])('gates terminal snapshot Work cards independently for host %j', async (host, types) => {
+      stubMessageService(
+        service,
+        vi.fn(async (params) => [
+          {
+            id: 'assistant-terminal',
+            role: 'assistant',
+            works: [
+              { id: 'doc', type: 'document' },
+              ...(params.includeFileWorks ? [{ id: 'file', type: 'file' }] : []),
+              ...(params.includeArtboardWorks ? [{ id: 'board', type: 'artboard' }] : []),
+            ],
+          },
+        ]),
+      );
+
+      const snapshot = await service.queryUiMessages({
+        host,
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
+      } as any);
+
+      expect(snapshot?.[0].works?.map((work) => work.type)).toEqual(types);
+    });
+
     it('returns messageService.queryMessages result when agentId + topicId are present', async () => {
       const stubMessages = [{ id: 'msg_x', role: 'user' }];
       const queryMessages = vi.fn().mockResolvedValue(stubMessages);

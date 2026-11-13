@@ -17,6 +17,7 @@ import { taskExecutor } from '@lobechat/builtin-tool-task/client/executor';
 import { videoGenerationExecutor } from '@lobechat/builtin-tool-video-generation/executor';
 
 import type { IBuiltinToolExecutor } from '../types';
+import { artboardHookExecutor } from './artboard';
 import {
   ampExecutor,
   claudeCodeExecutor,
@@ -65,6 +66,7 @@ export const builtinToolExecutors = [
   qoderExecutor,
   traeExecutor,
   agentBuilderExecutor,
+  artboardHookExecutor,
   agentDocumentsExecutor,
   agentManagementExecutor,
   attachmentsExecutor,

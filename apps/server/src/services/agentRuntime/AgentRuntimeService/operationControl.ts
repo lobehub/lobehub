@@ -210,6 +210,19 @@ export async function acceptsFileWorks(
   }
 }
 
+export async function acceptsArtboardWorks(
+  deps: OperationControlDeps,
+  operationId: string,
+): Promise<boolean> {
+  try {
+    const state = await deps.coordinator.loadAgentState(operationId);
+    return state?.host?.acceptsArtboardWorks === true;
+  } catch (error) {
+    log('[%s] Failed to read the artboard Works declaration: %O', operationId, error);
+    return false;
+  }
+}
+
 /**
  * Whether the client that started this operation declared it handles
  * `member_runtime_end`. An unknown or expired operation reads as `false`, so

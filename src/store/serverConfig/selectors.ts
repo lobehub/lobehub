@@ -8,6 +8,7 @@ export const serverConfigSelectors = {
   agentIdentityProviders: (s: ServerConfigStore) =>
     s.serverConfig.agentIdentityProviders ?? EMPTY_PROVIDERS,
   disableEmailPassword: (s: ServerConfigStore) => s.serverConfig.disableEmailPassword || false,
+  enableArtboard: (s: ServerConfigStore) => s.featureFlags.enableArtboard === true,
   enableBusinessFeatures: (s: ServerConfigStore) => s.serverConfig.enableBusinessFeatures || false,
   enableEmailVerification: (s: ServerConfigStore) =>
     s.serverConfig.enableEmailVerification || false,

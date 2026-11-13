@@ -80,8 +80,8 @@ import {
   BROWSER_TAB_PREFIX,
   type BrowserTabMetadata,
   isBrowserTab,
-  isCanvasTab,
   isDynamicTab,
+  isWorkTab,
   type SidebarTabDescriptor,
 } from './dynamicTabs';
 import FilesPane from './Files/FilesPane';
@@ -521,7 +521,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const availableTabsSignature = JSON.stringify(tabDescriptors.map((tab) => tab.key));
   const isAvailableTab = useCallback(
     (tab: string) =>
-      availableTabs.has(tab) || (browserAvailable && isBrowserTab(tab)) || isCanvasTab(tab),
+      availableTabs.has(tab) || (browserAvailable && isBrowserTab(tab)) || isWorkTab(tab),
     [availableTabs, browserAvailable],
   );
   const openTabsContextKey = topicId
@@ -833,7 +833,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const reviewTwoPane = activeTab === 'review' && reviewAvailable && showReviewTree;
   const preferredMinWidth = reviewTwoPane
     ? TWO_PANE_MIN_WIDTH
-    : isCanvasTab(activeTab)
+    : isWorkTab(activeTab)
       ? CANVAS_MIN_WIDTH
       : 0;
   const displayWidth = Math.max(storedWidth, preferredMinWidth);

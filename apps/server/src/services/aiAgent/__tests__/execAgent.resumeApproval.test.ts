@@ -18,13 +18,6 @@ const approvedResumeInput = (): NonNullable<
   toolCallId: 'call_xyz',
 });
 
-const stoppedApprovalInput = (): Parameters<AiAgentService['stopPendingApproval']>[0] => ({
-  batchId: 'batch-1',
-  operationId: 'op-parked-1',
-  toolMessageIds: ['tool-msg-1', 'tool-msg-2'],
-  topicId: 'topic-1',
-});
-
 const {
   mockCompleteGroupActionMember,
   mockLoadGroupMemberBridge,
@@ -167,6 +160,7 @@ vi.mock('@/database/models/userMemory/persona', () => ({
 vi.mock('@/server/services/agentRuntime', () => ({
   AgentRuntimeService: vi.fn().mockImplementation(function () {
     return {
+      acceptsArtboardWorks: vi.fn().mockResolvedValue(false),
       acceptsFileWorks: vi.fn().mockResolvedValue(false),
       acceptsMemberRuntimeEnd: vi.fn().mockResolvedValue(false),
       getLlmExecutor: vi.fn().mockResolvedValue(undefined),
@@ -1081,172 +1075,5 @@ describe('AiAgentService.execAgent - resumeApproval', () => {
         expect.objectContaining({ completionReason: 'done', status: 'done' }),
       );
     });
-  });
-});
-
-describe('AiAgentService.stopPendingApproval', () => {
-  let service: AiAgentService;
-
-  const pendingToolMessage = {
-    createdAt: new Date('2026-08-03T00:00:00.000Z'),
-    id: 'tool-msg-1',
-    role: 'tool',
-    topicId: 'topic-1',
-  };
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockFindById.mockImplementation(async (id: string) => ({ ...pendingToolMessage, id }));
-    mockFindMessagePlugin.mockResolvedValue({
-      intervention: {
-        batchId: 'batch-1',
-        operationId: 'op-parked-1',
-        status: 'pending',
-      },
-    });
-    mockListMessagePluginsByTopic.mockResolvedValue(
-      ['tool-msg-1', 'tool-msg-2'].map((id) => ({
-        id,
-        intervention: {
-          batchId: 'batch-1',
-          operationId: 'op-parked-1',
-          status: 'pending',
-        },
-      })),
-    );
-    mockResolveHumanApproval.mockResolvedValue([]);
-    mockUpdateMessagePlugin.mockResolvedValue(undefined);
-    mockUpdateToolMessage.mockResolvedValue(undefined);
-    mockFindOperationById.mockResolvedValue({
-      id: 'op-parked-1',
-      status: 'waiting_for_human',
-      topicId: 'topic-1',
-    });
-    mockRecordCompletion.mockResolvedValue(undefined);
-    mockInterruptOperation.mockResolvedValue(true);
-    mockLoadGroupMemberBridge.mockResolvedValue(undefined);
-    mockCompleteGroupActionMember.mockResolvedValue(true);
-    service = new AiAgentService({} as unknown as LobeChatDatabase, 'user-1');
-  });
-
-  // Codex P1 on #20093: a member stopped on its approval never reached its own
-  // completion, so the supervisor stayed parked on the member barrier forever.
-  it("reports a stopped group member through its bridge so the supervisor isn't stranded", async () => {
-    const bridge = {
-      anchorMessageId: 'msg-speak',
-      expectedMembers: 1,
-      groupToolMessageId: 'msg-speak',
-      mode: 'in_group',
-      onComplete: 'resume',
-      parentOperationId: 'op-supervisor',
-    };
-    mockLoadGroupMemberBridge.mockResolvedValue({ agentId: 'agt-carol', bridge });
-
-    await service.stopPendingApproval(stoppedApprovalInput());
-
-    expect(mockCompleteGroupActionMember).toHaveBeenCalledWith({
-      ...bridge,
-      operationId: 'op-parked-1',
-      reason: 'interrupted',
-    });
-  });
-
-  it('does not touch any bridge when the stopped run is not a group member', async () => {
-    await service.stopPendingApproval(stoppedApprovalInput());
-
-    expect(mockCompleteGroupActionMember).not.toHaveBeenCalled();
-  });
-
-  it('settles every pending row in place and retires the parked operation', async () => {
-    const result = await service.stopPendingApproval(stoppedApprovalInput());
-
-    // In place: the approval pause already wrote these rows. Inserting fresh
-    // aborted rows would duplicate every tool AND leave the originals pending,
-    // which is what keeps the approval cards on screen after a stop.
-    expect(mockResolveHumanApproval).toHaveBeenCalledWith(
-      [
-        {
-          content: 'Tool execution was aborted by user.',
-          id: 'tool-msg-1',
-          intervention: { status: 'aborted' },
-        },
-        {
-          content: 'Tool execution was aborted by user.',
-          id: 'tool-msg-2',
-          intervention: { status: 'aborted' },
-        },
-      ],
-      { publishResult: true },
-    );
-
-    // The exact parked operation and sealed batch identity are validated; a
-    // newer operation in the same topic can never be guessed and interrupted.
-    expect(mockInterruptOperation).toHaveBeenCalledWith('op-parked-1');
-    expect(mockRecordCompletion).toHaveBeenCalledWith(
-      'op-parked-1',
-      expect.objectContaining({ completionReason: 'interrupted', status: 'interrupted' }),
-    );
-    expect(result.settledToolMessageIds).toEqual(['tool-msg-1', 'tool-msg-2']);
-  });
-
-  it('stamps the generic resolution id on every stopped row', async () => {
-    const approvalResolutionRequestId = '018fbd8e-7baf-7c6d-8000-000000000098';
-
-    await service.stopPendingApproval({
-      approvalResolutionRequestId,
-      batchId: 'batch-1',
-      operationId: 'op-parked-1',
-      toolMessageIds: ['tool-msg-1', 'tool-msg-2'],
-      topicId: 'topic-1',
-    });
-
-    expect(mockResolveHumanApproval).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({
-          intervention: { resolutionRequestId: approvalResolutionRequestId, status: 'aborted' },
-        }),
-      ]),
-      { publishResult: true },
-    );
-  });
-
-  it('nothing runs and the model is not continued', async () => {
-    mockListMessagePluginsByTopic.mockResolvedValue([
-      {
-        id: 'tool-msg-1',
-        intervention: {
-          batchId: 'batch-1',
-          operationId: 'op-parked-1',
-          status: 'pending',
-        },
-      },
-    ]);
-    await service.stopPendingApproval({
-      batchId: 'batch-1',
-      operationId: 'op-parked-1',
-      toolMessageIds: ['tool-msg-1'],
-      topicId: 'topic-1',
-    });
-
-    // A stop is not a rejection: a rejection resumes the model so it can
-    // respond, a stop ends the turn outright.
-    expect(mockCreateOperation).not.toHaveBeenCalled();
-  });
-
-  it('rejects a target from another topic before writing anything', async () => {
-    mockFindById.mockImplementation(async (id: string) => ({
-      ...pendingToolMessage,
-      id,
-      topicId: id === 'tool-msg-2' ? 'other-topic' : 'topic-1',
-    }));
-
-    await expect(service.stopPendingApproval(stoppedApprovalInput())).rejects.toThrow(
-      /topicId does not match/,
-    );
-
-    // Validation runs before any write, so a refused stop cannot half-clear the
-    // batch and strand the rest against a run that is already gone.
-    expect(mockResolveHumanApproval).not.toHaveBeenCalled();
-    expect(mockInterruptOperation).not.toHaveBeenCalled();
   });
 });

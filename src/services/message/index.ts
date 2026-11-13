@@ -20,6 +20,7 @@ import { type HeatmapsProps } from '@lobehub/charts';
 import pMap from 'p-map';
 
 import { lambdaClient } from '@/libs/trpc/client';
+import { workTypeOptIn } from '@/services/workTypeOptIn';
 
 import { abortableRequest } from '../utils/abortableRequest';
 import type { MessageListPage, MessageRoundCursor } from './cache';
@@ -186,7 +187,7 @@ export class MessageService {
     // legacy set. See resolveAllowedWorkTypes.
     const data = await lambdaClient.message.getMessages.query({
       ...params,
-      includeFileWorks: true,
+      ...workTypeOptIn(),
     });
 
     return data as unknown as UIChatMessage[];
@@ -266,7 +267,7 @@ export class MessageService {
     const data = await lambdaClient.message.getMessages.query({
       ...params,
       before: { createdAt: new Date(cursor.createdAt), id: cursor.id },
-      includeFileWorks: true,
+      ...workTypeOptIn(),
     });
 
     return { messages: data as unknown as UIChatMessage[] };

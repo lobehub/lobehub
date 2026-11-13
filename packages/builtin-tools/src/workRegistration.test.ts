@@ -634,3 +634,51 @@ describe('dispatchWorkRegistrationIntent · canvas', () => {
     ).resolves.toBeUndefined();
   });
 });
+
+describe('dispatchWorkRegistrationIntent · artboard', () => {
+  it('registers the artboard version with provenance and its project', async () => {
+    const registerArtboard = vi.fn().mockResolvedValue(undefined);
+    await dispatchWorkRegistrationIntent(
+      {
+        action: 'register',
+        artboard: {
+          artboardId: 'art_1',
+          changeType: 'created',
+          description: '3 组 · 10 个画面',
+          projectId: 'prj_1',
+          title: '新用户首次进入项目',
+          toolName: 'createArtboard',
+        },
+        type: 'artboard',
+      },
+      {
+        deleteTaskWork: vi.fn(),
+        handleSkillToolResult: vi.fn(),
+        registerArtboard,
+        registerDocument: vi.fn(),
+        registerTask: vi.fn(),
+      },
+      {
+        agentId: 'agent-1',
+        messageId: 'msg-1',
+        rootOperationId: 'op-root',
+        toolCallId: 'call-1',
+        toolIdentifier: 'lobe-artboard',
+        toolName: 'createArtboard',
+        topicId: 'topic-1',
+      },
+    );
+
+    expect(registerArtboard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        artboardId: 'art_1',
+        changeType: 'created',
+        projectId: 'prj_1',
+        rootOperationId: 'op-root',
+        toolCallId: 'call-1',
+        toolIdentifier: 'lobe-artboard',
+        toolName: 'createArtboard',
+      }),
+    );
+  });
+});

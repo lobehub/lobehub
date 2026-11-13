@@ -394,6 +394,7 @@ export const discoverTools = async (
           attachedFileTypes: await toolReads.attachedFileTypes,
           externalFileTypes: rawExternalFileTypes,
           isBotConversation,
+          isProjectConversation: !!appContext?.projectId,
           isProjectCoordinator: projectScope.isCoordinator,
           loadHistoryMessages,
           modelMediaCapabilities,

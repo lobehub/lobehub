@@ -20,10 +20,16 @@ import { canUseGatewayProtocolV2 } from '@/helpers/gatewayProtocol';
 import { createWorkspaceLambdaClient, lambdaClient } from '@/libs/trpc/client';
 import { buildLlmExecutorDeclaration } from '@/services/llmRelay';
 
+import { workTypeOptIn } from './workTypeOptIn';
+
 export type { ExecAgentResult, ScheduleAgentRunParams, ScheduleAgentRunResult };
 
 /** Gateway stream features every run started from this client handles. */
-const STREAM_FEATURES: AgentStreamClientFeature[] = ['file_works', 'member_runtime_end'];
+const streamFeatures = (): AgentStreamClientFeature[] => [
+  'file_works',
+  'member_runtime_end',
+  ...(workTypeOptIn().includeArtboardWorks ? ['artboard_works' as const] : []),
+];
 
 /** An older server's strict input schema rejected the `streamFeatures` key. */
 const isUnknownStreamFeaturesError = (error: unknown): boolean => {
@@ -355,7 +361,7 @@ class AiAgentService {
         clientProtocol,
         ...(llmExecutor && { llmExecutor }),
         ...params,
-        streamFeatures: STREAM_FEATURES,
+        streamFeatures: streamFeatures(),
       },
       options,
     );
@@ -383,7 +389,7 @@ class AiAgentService {
         clientProtocol,
         ...(llmExecutor && { llmExecutor }),
         ...params.request,
-        streamFeatures: STREAM_FEATURES,
+        streamFeatures: streamFeatures(),
       },
     });
   }
@@ -520,7 +526,7 @@ class AiAgentService {
     let result: Awaited<ReturnType<typeof mutate>>;
     try {
       // This client subscribes to the continuation it starts.
-      result = await mutate({ ...params, streamFeatures: STREAM_FEATURES });
+      result = await mutate({ ...params, streamFeatures: streamFeatures() });
     } catch (error) {
       // A server from before `streamFeatures` validates this input strictly and
       // rejects the unknown key before claiming anything, so resending the same

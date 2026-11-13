@@ -1,3 +1,4 @@
+import { ArtboardIdentifier } from '@lobechat/builtin-tool-artboard';
 import { GoalIdentifier } from '@lobechat/builtin-tool-goal';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -37,5 +38,21 @@ describe('resolveTurnScopedPluginIds goal follow-up', () => {
 
   it('does not add the goal tool to a conversation without goal proposals', async () => {
     expect(await resolve([{ role: 'user' }, { role: 'assistant' }])).toEqual([]);
+  });
+});
+
+describe('resolveTurnScopedPluginIds artboard', () => {
+  const resolveIn = (isProjectConversation: boolean) =>
+    resolveTurnScopedPluginIds({
+      attachedFileTypes: [],
+      isBotConversation: false,
+      isProjectConversation,
+      loadHistoryMessages: async () => [],
+      modelMediaCapabilities: { audio: true, video: true, vision: true },
+    });
+
+  it('offers the artboard tool only in a project conversation', async () => {
+    expect(await resolveIn(true)).toContain(ArtboardIdentifier);
+    expect(await resolveIn(false)).not.toContain(ArtboardIdentifier);
   });
 });

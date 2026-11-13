@@ -96,6 +96,7 @@ export interface ExecRunContext {
  * This extends the public ExecAgentParams with server-side only options
  */
 export interface InternalExecAgentParams extends ExecAgentParams {
+  acceptsArtboardWorks?: boolean;
   /**
    * The calling client renders `file` Works in pushed snapshots, derived from
    * the `streamFeatures` it declared on `aiAgent.execAgent`. See

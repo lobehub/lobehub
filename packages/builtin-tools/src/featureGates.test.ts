@@ -1,3 +1,4 @@
+import { ArtboardIdentifier } from '@lobechat/builtin-tool-artboard';
 import { DashboardIdentifier, LegacyDashboardIdentifier } from '@lobechat/builtin-tool-dashboard';
 import { describe, expect, it } from 'vitest';
 
@@ -12,6 +13,11 @@ describe('feature-gated builtin tools', () => {
     expect(getFeatureDisabledToolIds({ enableDashboard: true })).not.toContain(
       LegacyDashboardIdentifier,
     );
+  });
+
+  it('drops the artboard tool unless the artboard flag is on', () => {
+    expect(getFeatureDisabledToolIds(undefined)).toContain(ArtboardIdentifier);
+    expect(getFeatureDisabledToolIds({ enableArtboard: true })).not.toContain(ArtboardIdentifier);
   });
 
   it('only gates tools that declare a flag', () => {

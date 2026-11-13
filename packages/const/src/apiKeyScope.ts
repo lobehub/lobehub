@@ -222,6 +222,7 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // `auth.getScope` only reports which scope the presented credential runs
   // under, so any key — however narrow — can tell where its calls land
   auth: 'open',
+  artboard: 'blocked',
   artifactShare: rw('chat:read', null),
   // decrypts stored bot/messenger credentials and calls external channel APIs
   botMessage: 'blocked',

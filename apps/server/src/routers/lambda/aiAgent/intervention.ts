@@ -25,7 +25,7 @@ import {
 import { assertCanUseAgentRunConversation, assertCanUseOperationAgent } from './guards';
 import { dispatchClaimedAgentIntervention } from './interventionDispatch';
 import { aiAgentBaseProcedure, aiAgentWriteProcedure } from './procedures';
-import { acceptsFileWorksOf, acceptsMemberRuntimeEndOf } from './utils';
+import { acceptsArtboardWorksOf, acceptsFileWorksOf, acceptsMemberRuntimeEndOf } from './utils';
 
 const log = debug('lobe-server:ai-agent-router');
 
@@ -226,6 +226,7 @@ export const interventionRouter = router({
       }
 
       const dispatch = await dispatchClaimedAgentIntervention(resolution, ctx, {
+        acceptsArtboardWorks: acceptsArtboardWorksOf(input.streamFeatures),
         acceptsFileWorks: acceptsFileWorksOf(input.streamFeatures),
         acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
       });

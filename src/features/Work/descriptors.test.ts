@@ -223,4 +223,19 @@ describe('getWorkTypeDescriptor', () => {
       expect(getWorkTypeDescriptor(linear).getDescription(linear)).toBe('In Progress');
     });
   });
+
+  describe('artboard open target', () => {
+    it('opens the board it records', () => {
+      const item = { resourceId: 'art_1', title: '首次进入', type: 'artboard' } as any;
+      expect(getWorkTypeDescriptor(item).getOpenTarget(item)).toEqual({
+        artboardId: 'art_1',
+        kind: 'artboard',
+      });
+    });
+
+    it('has nothing to open without a board id', () => {
+      const item = { resourceId: null, title: 'x', type: 'artboard' } as any;
+      expect(getWorkTypeDescriptor(item).getOpenTarget(item)).toBeNull();
+    });
+  });
 });
