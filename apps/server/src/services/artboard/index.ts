@@ -346,6 +346,22 @@ export class ArtboardService {
 
   takeUndeliveredComments = (id: string) => this.commentService.takeUndelivered(id);
 
+  async unreadCommentNotices(projectId: string, topicId: string) {
+    const rows = (await this.artboards.listByProject(projectId)).filter(
+      (row) => row.topicId === topicId,
+    );
+    const notices = await pMap(
+      rows,
+      async ({ id, title }) => ({
+        id,
+        threads: await this.commentService.countUndelivered(id),
+        title,
+      }),
+      { concurrency: ARTBOARD_SOURCE_CONCURRENCY },
+    );
+    return notices.filter((notice) => notice.threads > 0);
+  }
+
   addComment = (id: string, input: ArtboardCommentInput) =>
     this.commentService.open(id, input, null);
 

@@ -166,6 +166,21 @@ describe('ArtboardService comment delivery', () => {
   });
 });
 
+describe('ArtboardService.unreadCommentNotices', () => {
+  it('lists the artboards of a conversation that have unread threads', async () => {
+    const { artboard } = await create();
+    expect(await asUser().unreadCommentNotices(projectId, topicId)).toEqual([]);
+
+    await asUser().addComment(artboard.id, { clientId: 'c1', content: '一' });
+    await asUser().addComment(artboard.id, { clientId: 'c2', content: '二' });
+
+    expect(await asUser().unreadCommentNotices(projectId, topicId)).toEqual([
+      { id: artboard.id, threads: 2, title: '画板' },
+    ]);
+    expect(await asUser().unreadCommentNotices(projectId, 'tpc_other')).toEqual([]);
+  });
+});
+
 describe('ArtboardService comment anchors', () => {
   it('flags a board thread as stale once the board moves to another Canvas version', async () => {
     const { artboard, journey } = await create();
