@@ -276,14 +276,22 @@ export const projectFilesRouter = router({
         workspaceId: ctx.workspaceId,
       });
 
-      // Register device-scoped skill roots (~/.agents/skills / ~/.claude/skills)
+      // Register skill roots outside the scanned directory — device-scoped
+      // (~/.agents/skills, …) and project skills found in a parent directory —
       // in an in-memory cache so subsequent getLocalFilePreview calls pass the
       // workspace root guard without polluting the UI's working-directory list.
+      // A parent-level grant is tied to the scanned project, so it holds only
+      // while that project is an approved root.
       if (result?.skills) {
-        const skillRoots = [
-          ...new Set(result.skills.filter((s) => s.scope === 'device').map((s) => s.previewRoot)),
-        ].filter(Boolean);
-        registerDeviceSkillRoots(input.deviceId, skillRoots);
+        registerDeviceSkillRoots(
+          input.deviceId,
+          result.skills.flatMap((s) => {
+            if (s.scope === 'device') return [{ root: s.previewRoot }];
+            if (s.previewRoot !== input.scope)
+              return [{ projectRoot: input.scope, root: s.previewRoot }];
+            return [];
+          }),
+        );
       }
 
       return result ?? null;

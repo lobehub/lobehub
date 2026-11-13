@@ -19,7 +19,7 @@ export interface DeviceUnavailableErrorData {
 }
 
 export type ProjectSkillScope = 'device' | 'project';
-export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
+export type ProjectSkillSource = '.agents/skills' | '.claude/skills' | '.codex/skills';
 
 /**
  * A filesystem skill discovered on the execution device by the client at
@@ -41,8 +41,9 @@ export interface ProjectSkillMeta {
 }
 
 /**
- * A single project-root agent instructions file (`AGENTS.md` / `CLAUDE.md`) read
- * from the device filesystem during workspace init. Unlike skills (metadata
+ * A single agent instructions file (`AGENTS.md` / `CLAUDE.md`) read from the
+ * working directory or one of its parents up to the repository root during
+ * workspace init. Unlike skills (metadata
  * only), the full body is carried so it can be injected into the system role and
  * rendered in web without a second device round-trip. Carried as a list on
  * {@link WorkspaceInitResult} since multiple files can coexist (e.g. both
@@ -51,6 +52,11 @@ export interface ProjectSkillMeta {
 export interface WorkspaceInstructions {
   /** Full file content (capped at read time, e.g. 64KB). */
   content: string;
+  /**
+   * Absolute path of the file. Absent in scans cached before parent
+   * directories were read, which only covered the working directory.
+   */
+  path?: string;
   /** Source file the instructions were read from. */
   source: 'AGENTS.md' | 'CLAUDE.md';
 }

@@ -767,7 +767,7 @@ export interface ResolveSkillResourcePathResult {
 }
 
 export type ProjectSkillScope = 'device' | 'project';
-export type ProjectSkillSource = '.agents/skills' | '.claude/skills';
+export type ProjectSkillSource = '.agents/skills' | '.claude/skills' | '.codex/skills';
 
 export interface ProjectSkillItem {
   description?: string;
