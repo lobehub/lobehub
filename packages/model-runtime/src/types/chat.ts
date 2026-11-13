@@ -96,7 +96,8 @@ export interface ChatStreamPayload {
    * `settings.contextCachingTTL` (`resolveRequestContextCachingTTL`). Set only for providers whose
    * API takes a TTL: today `5m` / `1h` on the first-party Anthropic runtime, where `1h` is the
    * default. `1h` writes cost 2× base input instead of 1.25× for `5m` and keep the prefix warm
-   * across 5–60 minute gaps. Undefined → breakpoints without a `ttl` (the API's 5m default).
+   * across 5–60 minute gaps. The runtime drops it when its base URL is not Anthropic's own API.
+   * Undefined or dropped → breakpoints without a `ttl` (the API's 5m default).
    */
   contextCachingTTL?: ContextCachingTTL;
   /**

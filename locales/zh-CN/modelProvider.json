@@ -219,7 +219,7 @@
   "providerModels.item.modelConfig.contextCachingTTL.effective": "当前生效：{{ttl}}",
   "providerModels.item.modelConfig.contextCachingTTL.effectiveDefault": "当前生效：{{ttl}}（默认）",
   "providerModels.item.modelConfig.contextCachingTTL.extra.automatic": "该服务商自动管理提示缓存，此项不会改变请求，只用于上下文优化判断缓存前缀还能复用多久。",
-  "providerModels.item.modelConfig.contextCachingTTL.extra.requestable": "请求会让服务商按此时长保留提示缓存。1 小时缓存的写入价为输入价的 2 倍（5 分钟为 1.25 倍），对话间隔较长时仍能命中。",
+  "providerModels.item.modelConfig.contextCachingTTL.extra.requestable": "发往服务商官方 API 的请求会让其按此时长保留提示缓存。1 小时缓存的写入价为输入价的 2 倍（5 分钟为 1.25 倍），对话间隔较长时仍能命中。设置了自定义 API 代理地址时，请求不携带此时长。",
   "providerModels.item.modelConfig.contextCachingTTL.options.1h": "1 小时",
   "providerModels.item.modelConfig.contextCachingTTL.options.24h": "24 小时",
   "providerModels.item.modelConfig.contextCachingTTL.options.5m": "5 分钟",
