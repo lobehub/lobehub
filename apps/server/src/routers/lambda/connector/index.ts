@@ -56,21 +56,21 @@ import {
   withTrustedLinkedByUserId,
 } from '@/server/utils/connectorAttribution';
 
-import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
-import { toConnectorEditDetail } from './_helpers/connectorEditDetail';
+import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
+import { toConnectorEditDetail } from '../_helpers/connectorEditDetail';
 import {
   assertConnectorCredentialsManageable,
   assertConnectorMaintainable,
   canManageWorkspaceConnectors,
   getConnectorMemberManage,
   isWorkspaceConnectorAdmin,
-} from './_helpers/connectorManagePolicy';
+} from '../_helpers/connectorManagePolicy';
 import {
   assertPrivateConnectorTarget,
   resolveVisibilityChange,
   resolveWriteVisibility,
-} from './_helpers/connectorVisibility';
-import { upsertConnectorEntry } from './_helpers/upsertConnectorEntry';
+} from '../_helpers/connectorVisibility';
+import { upsertConnectorEntry } from '../_helpers/upsertConnectorEntry';
 
 const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
