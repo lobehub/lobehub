@@ -419,5 +419,21 @@ describe('GatewayActionImpl · local device activation (本机)', () => {
       expect(request).not.toHaveProperty('deviceId');
       expect(request).toHaveProperty('localDeviceId', 'this-desktop');
     });
+
+    // Regression guard: a legacy agent identified only by `model` (no stored
+    // provider yet) must keep this desktop's hints. The `auto` default is
+    // driven by `isHetero`, and a provider-only discriminator would let it
+    // swallow the hints — sending a Claude Code run to the cloud sandbox.
+    it('keeps both desktop hints for a model-only heterogeneous agent', async () => {
+      mockEnv.isDesktop = true;
+      mockGateway.getDeviceInfo.mockResolvedValue({ deviceId: 'device-local-1' });
+      mockAgentStore.state.agentMap['agent-1'] = { model: 'claude-code', userId: 'user-1' };
+
+      await send();
+
+      const request = vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)?.[0];
+      expect(request).toHaveProperty('deviceId', 'device-local-1');
+      expect(request).toHaveProperty('localDeviceId', 'device-local-1');
+    });
   });
 });
