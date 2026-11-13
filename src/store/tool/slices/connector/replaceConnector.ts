@@ -66,10 +66,11 @@ export const restoreConnector = async (snapshot: ConnectorSnapshot, get: () => T
         ? { credentials: null }
         : {}),
     isEnabled: snapshot.isEnabled,
-    mcpConnectionType: (snapshot.mcpConnectionType ??
-      undefined) as ConnectorPatch['mcpConnectionType'],
-    mcpServerUrl: mcpServerUrl ?? undefined,
-    mcpStdioConfig: mcpStdioConfig ?? undefined,
+    // `null` clears what the failed install wrote, so an endpoint-less row
+    // (a legacy plugin's tool projection) is not left on the new endpoint
+    mcpConnectionType: (snapshot.mcpConnectionType ?? null) as ConnectorPatch['mcpConnectionType'],
+    mcpServerUrl: mcpServerUrl ?? null,
+    mcpStdioConfig: mcpStdioConfig ?? null,
     metadata: snapshot.metadata ?? {},
     name: snapshot.name,
     // A row without an OAuth client drops the one the failed attempt stored.

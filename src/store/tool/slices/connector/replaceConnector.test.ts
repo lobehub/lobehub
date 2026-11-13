@@ -152,6 +152,24 @@ describe('restoreConnector', () => {
     });
   });
 
+  it('clears the endpoint a failed install wrote over an endpoint-less legacy projection', async () => {
+    const { get, state } = makeStore([{ id: 'c1', mcpServerUrl: 'https://new.example.com' }]);
+
+    await restoreConnector(
+      snapshot({ mcpConnectionType: null, mcpServerUrl: null, mcpStdioConfig: null }),
+      get,
+    );
+
+    expect(state.updateConnector).toHaveBeenCalledWith(
+      'c1',
+      expect.objectContaining({
+        mcpConnectionType: null,
+        mcpServerUrl: null,
+        mcpStdioConfig: null,
+      }),
+    );
+  });
+
   it('leaves a row that was not connected disconnected', async () => {
     const { get, state } = makeStore([{ id: 'c1', mcpServerUrl: 'https://old.example.com' }]);
 

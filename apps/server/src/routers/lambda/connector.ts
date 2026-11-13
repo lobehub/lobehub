@@ -109,6 +109,18 @@ const connectorCredentialsInputSchema = z.discriminatedUnion('type', [
   z.object({ headers: z.record(z.string(), z.string()), type: z.literal('header') }),
 ]);
 
+const mcpConnectionTypeSchema = z.enum([
+  ConnectorMcpConnectionType.http,
+  ConnectorMcpConnectionType.stdio,
+  ConnectorMcpConnectionType.cloud,
+]);
+const mcpServerUrlSchema = z.string().url();
+const mcpStdioConfigSchema = z.object({
+  args: z.array(z.string()).optional(),
+  command: z.string(),
+  env: z.record(z.string(), z.string()).optional(),
+});
+
 const createConnectorSchema = z.object({
   /**
    * Bind this connector to a specific agent (Agent > Workspace/Personal). When
@@ -120,21 +132,9 @@ const createConnectorSchema = z.object({
   credentials: connectorCredentialsInputSchema.optional(),
   identifier: z.string().min(1).max(255),
   isEnabled: z.boolean().optional().default(true),
-  mcpConnectionType: z
-    .enum([
-      ConnectorMcpConnectionType.http,
-      ConnectorMcpConnectionType.stdio,
-      ConnectorMcpConnectionType.cloud,
-    ])
-    .optional(),
-  mcpServerUrl: z.string().url().optional(),
-  mcpStdioConfig: z
-    .object({
-      args: z.array(z.string()).optional(),
-      command: z.string(),
-      env: z.record(z.string(), z.string()).optional(),
-    })
-    .optional(),
+  mcpConnectionType: mcpConnectionTypeSchema.optional(),
+  mcpServerUrl: mcpServerUrlSchema.optional(),
+  mcpStdioConfig: mcpStdioConfigSchema.optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   name: z.string().min(1).max(255),
   oidcConfig: oidcConfigSchema.optional(),
@@ -705,9 +705,14 @@ export const connectorRouter = router({
           // + uniqueness guards), not the generic update patch.
           .omit({ agentId: true, identifier: true, sourceType: true })
           // Allow `null` here so an edit can clear credentials (switch to no-auth),
-          // or drop an OAuth client (undoing a failed switch to OAuth).
+          // drop an OAuth client (undoing a failed switch to OAuth), or put back
+          // an endpoint-less row (undoing a failed install over a legacy plugin's
+          // tool projection).
           .extend({
             credentials: connectorCredentialsInputSchema.nullish(),
+            mcpConnectionType: mcpConnectionTypeSchema.nullish(),
+            mcpServerUrl: mcpServerUrlSchema.nullish(),
+            mcpStdioConfig: mcpStdioConfigSchema.nullish(),
             oidcConfig: oidcConfigSchema.nullish(),
           }),
       }),

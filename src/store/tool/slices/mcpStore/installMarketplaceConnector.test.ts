@@ -284,7 +284,7 @@ describe('installMarketplaceConnector', () => {
       isEnabled: true,
       mcpConnectionType: 'http',
       mcpServerUrl: 'https://old.example',
-      mcpStdioConfig: undefined,
+      mcpStdioConfig: null,
       metadata: { avatar: 'old', marketplaceInstalled: true },
       name: 'Old MCP',
       oidcConfig: null,
@@ -300,6 +300,40 @@ describe('installMarketplaceConnector', () => {
         },
       ],
     });
+  });
+
+  it('puts a legacy tool projection back off the endpoint a failed reinstall wrote', async () => {
+    state.connectors = [
+      { id: 'connector-1', identifier: 'market-mcp', metadata: {}, sourceType: 'marketplace' },
+    ] as never;
+    vi.mocked(state.getConnectorForEdit).mockResolvedValue({
+      credentials: null,
+      id: 'connector-1',
+      isEnabled: true,
+      mcpConnectionType: null,
+      mcpServerUrl: null,
+      mcpStdioConfig: null,
+      metadata: {},
+      name: 'Legacy MCP',
+      oidcConfig: null,
+      status: 'connected',
+      tools: [{ description: null, inputSchema: null, metadata: null, toolName: 'search' }],
+    } as never);
+    vi.mocked(state.createConnector).mockResolvedValue({ id: 'connector-1', isNew: false });
+    vi.mocked(state.syncConnectorTools).mockRejectedValue(new Error('unreachable'));
+
+    await expect(install({ type: 'http', url: 'https://new.example' })).rejects.toThrow(
+      'unreachable',
+    );
+
+    expect(state.updateConnector).toHaveBeenCalledWith(
+      'connector-1',
+      expect.objectContaining({
+        mcpConnectionType: null,
+        mcpServerUrl: null,
+        mcpStdioConfig: null,
+      }),
+    );
   });
 
   it('rolls back when the install is canceled while the mark is written', async () => {

@@ -436,9 +436,10 @@ export class ConnectorActionImpl {
         | { headers: Record<string, string>; type: 'header' }
         | null;
       isEnabled?: boolean;
-      mcpConnectionType?: 'cloud' | 'http' | 'stdio';
-      mcpServerUrl?: string;
-      mcpStdioConfig?: { args?: string[]; command: string; env?: Record<string, string> };
+      /** `null` clears the field, as on an endpoint-less row being put back. */
+      mcpConnectionType?: 'cloud' | 'http' | 'stdio' | null;
+      mcpServerUrl?: string | null;
+      mcpStdioConfig?: { args?: string[]; command: string; env?: Record<string, string> } | null;
       metadata?: Record<string, unknown>;
       name?: string;
       /** A new client leaves the row disconnected until it is authorized; `null` drops it. */
