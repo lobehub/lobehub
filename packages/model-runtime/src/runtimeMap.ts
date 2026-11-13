@@ -67,6 +67,7 @@ import { LobeSparkAI } from './providers/spark';
 import { LobeStepfunAI } from './providers/stepfun';
 import { LobeStraicoAI } from './providers/straico';
 import { LobeStreamLakeAI } from './providers/streamlake';
+import { LobeSunoAI } from './providers/suno';
 import { LobeSuperGrokAI } from './providers/superGrok';
 import { LobeTaichuAI } from './providers/taichu';
 import { LobeTencentCloudAI } from './providers/tencentcloud';
@@ -156,6 +157,7 @@ export const providerRuntimeMap = {
   siliconcloud: LobeSiliconCloudAI,
   spark: LobeSparkAI,
   stepfun: LobeStepfunAI,
+  suno: LobeSunoAI,
   straico: LobeStraicoAI,
   streamlake: LobeStreamLakeAI,
   supergrok: LobeSuperGrokAI,

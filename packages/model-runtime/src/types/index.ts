@@ -5,6 +5,7 @@ export * from './embeddings';
 export * from './error';
 export * from './image';
 export * from './model';
+export * from './music';
 export * from './pricing';
 export * from './providerDiagnostics';
 export * from './routeAttempt';

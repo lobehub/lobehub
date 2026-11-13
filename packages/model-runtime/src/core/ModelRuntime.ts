@@ -33,6 +33,7 @@ import type {
   CreateImageMethodOptions,
   CreateImagePayload,
 } from '../types/image';
+import type { CreateMusicOptions, CreateMusicPayload, CreateMusicResult } from '../types/music';
 import type {
   CreateVideoMethodOptions,
   CreateVideoPayload,
@@ -558,6 +559,22 @@ export class ModelRuntime {
     if (!this._runtime.createVideo) return;
 
     return createVideoWithCompletionMode(this._runtime, payload, finalOptions);
+  }
+
+  /**
+   * Generate music with the provider runtime. Returns `undefined` when the provider has no
+   * music support. Asynchronous providers return a `pending` result with a task id unless
+   * `options.waitForCompletion` is set; poll it with {@link handlePollMusicStatus}.
+   */
+  async createMusic(
+    payload: CreateMusicPayload,
+    options?: CreateMusicOptions,
+  ): Promise<CreateMusicResult | undefined> {
+    return this._runtime.createMusic?.(payload, options);
+  }
+
+  async handlePollMusicStatus(inferenceId: string, model?: string) {
+    return this._runtime.handlePollMusicStatus?.(inferenceId, model);
   }
 
   async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {

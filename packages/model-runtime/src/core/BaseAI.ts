@@ -10,6 +10,9 @@ import type {
   CreateImageMethodOptions,
   CreateImagePayload,
   CreateImageResponse,
+  CreateMusicOptions,
+  CreateMusicPayload,
+  CreateMusicResult,
   CreateVideoMethodOptions,
   CreateVideoPayload,
   CreateVideoResult,
@@ -25,6 +28,7 @@ import type {
   HandleCreateVideoWebhookPayload,
   HandleCreateVideoWebhookResult,
   ModelRequestOptions,
+  PollMusicStatusResult,
   PollVideoStatusResult,
   PullModelParams,
   TextToSpeechOptions,
@@ -41,6 +45,15 @@ export interface LobeRuntimeAI {
     payload: CreateImagePayload,
     options?: CreateImageMethodOptions,
   ) => Promise<CreateImageResponse>;
+
+  /**
+   * Generate a song. Synchronous providers return `success` with tracks; asynchronous ones
+   * return `pending` with a task id unless `options.waitForCompletion` is set.
+   */
+  createMusic?: (
+    payload: CreateMusicPayload,
+    options?: CreateMusicOptions,
+  ) => Promise<CreateMusicResult>;
 
   createVideo?: (
     payload: CreateVideoPayload,
@@ -68,6 +81,9 @@ export interface LobeRuntimeAI {
   handleCreateVideoWebhook?: (
     payload: HandleCreateVideoWebhookPayload,
   ) => Promise<HandleCreateVideoWebhookResult>;
+
+  /** Query an asynchronous music task once, for `createMusic` results that are `pending`. */
+  handlePollMusicStatus?: (inferenceId: string, model?: string) => Promise<PollMusicStatusResult>;
 
   handlePollVideoStatus?: (
     inferenceId: string,

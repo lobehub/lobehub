@@ -9,6 +9,8 @@ import type {
   ChatStreamPayload,
   CreateImageMethodOptions,
   CreateImagePayload,
+  CreateMusicOptions,
+  CreateMusicPayload,
   CreateVideoMethodOptions,
   CreateVideoPayload,
   DecisionOptions,
@@ -474,6 +476,48 @@ export const createRouterRuntime = ({
           pricingContext: options?.pricingContext,
         },
       );
+    }
+
+    /**
+     * An asynchronous music task only exists on the channel that accepted it, so submit and
+     * poll resolve the same channel and never fall back to another one: a fallback submit
+     * would leave the task id unreachable for polling.
+     */
+    private async resolveMusicRuntime(model?: string): Promise<LobeRuntimeAI> {
+      let router = model ? await resolveMatchedRouter(this.deps, model) : undefined;
+
+      if (!router) {
+        const resolvedRouters = await resolveRouters(this.deps, { model });
+        const { baseURL } = this._options;
+        router =
+          (baseURL
+            ? resolvedRouters.find((item) => item.baseURLPattern?.test(baseURL))
+            : undefined) ?? resolvedRouters.at(-1)!;
+      }
+
+      const option = normalizeRouterOptions(this.deps, router)[0];
+      if (!option) throw new Error('The music generation channel is no longer available');
+
+      const { runtime } = await createRuntimeFromOption(this.deps, router, option);
+      return runtime;
+    }
+
+    async createMusic(payload: CreateMusicPayload, options?: CreateMusicOptions) {
+      const runtime = await this.resolveMusicRuntime(payload.model);
+      if (!runtime.createMusic) {
+        throw new Error('Music generation is not supported by the matched runtime');
+      }
+
+      return runtime.createMusic(payload, options);
+    }
+
+    async handlePollMusicStatus(inferenceId: string, model?: string) {
+      const runtime = await this.resolveMusicRuntime(model);
+      if (!runtime.handlePollMusicStatus) {
+        throw new Error('Music polling is not supported by the matched runtime');
+      }
+
+      return runtime.handlePollMusicStatus(inferenceId, model);
     }
 
     async createVideo(payload: CreateVideoPayload, options?: CreateVideoMethodOptions) {

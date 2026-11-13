@@ -82,6 +82,7 @@ export { LobeQwenAI } from './providers/qwen';
 export { LobeStepfunAI } from './providers/stepfun';
 export { LobeStraicoAI } from './providers/straico';
 export { LobeStreamLakeAI } from './providers/streamlake';
+export { LobeSunoAI } from './providers/suno';
 export { LobeSuperGrokAI } from './providers/superGrok';
 export { LobeTogetherAI } from './providers/togetherai';
 export { LobeTypeSafeAI } from './providers/typesafe';

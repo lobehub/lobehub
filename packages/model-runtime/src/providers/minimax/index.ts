@@ -17,6 +17,7 @@ import { resolveMappedModelId } from '../../utils/modelIdMapping';
 import { resolveSafeMaxTokens } from '../../utils/resolveSafeMaxTokens';
 import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';
 import { createMiniMaxImage } from './createImage';
+import { LobeMinimaxMusicAI } from './createMusic';
 import { LobeMinimaxSpeechAI } from './createSpeech';
 import { createMiniMaxVideo } from './createVideo';
 
@@ -28,6 +29,8 @@ const MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN = /\/v1\/messages\/?$/;
 
 // All MiniMax speech models (`speech-2.8-hd`, `speech-02-turbo`, ...) share the t2a_v2 API.
 const MINIMAX_SPEECH_MODEL_PATTERN = /^speech-/i;
+// MiniMax music models (`music-2.6`, `music-cover`, ...) share the music_generation API.
+const MINIMAX_MUSIC_MODEL_PATTERN = /^music-/i;
 
 const isMiniMaxM3Model = (model: string) => model.toLowerCase() === 'minimax-m3';
 // M3.1 Flash always thinks: it rejects disabled thinking and takes `reasoning_effort` instead.
@@ -462,18 +465,33 @@ const createSpeechRouter = (baseURL?: string | null) => ({
   runtime: LobeMinimaxSpeechAI,
 });
 
+// Music shares the speech host normalization: it is a native `/v1` API with no
+// OpenAI- or Anthropic-compatible counterpart.
+const createMusicRouter = (baseURL?: string | null) => ({
+  apiType: 'openai' as const,
+  id: 'music',
+  options: {
+    baseURL: normalizeMiniMaxSpeechBaseURL(baseURL),
+    remark: 'music',
+  },
+  runtime: LobeMinimaxMusicAI,
+});
+
 export const params: CreateRouterRuntimeOptions = {
   id: ModelProvider.Minimax,
   models: fetchMiniMaxModelsWithOpenAI,
   routers: (options, context) => {
     // Match the upstream id too, so an alias mapped onto `speech-*` still reaches t2a_v2.
-    if (
-      context?.model &&
-      MINIMAX_SPEECH_MODEL_PATTERN.test(
-        resolveMappedModelId(context.model, { modelIdMapping: options.modelIdMapping }),
-      )
-    ) {
+    const upstreamModel = context?.model
+      ? resolveMappedModelId(context.model, { modelIdMapping: options.modelIdMapping })
+      : undefined;
+
+    if (upstreamModel && MINIMAX_SPEECH_MODEL_PATTERN.test(upstreamModel)) {
       return [createSpeechRouter(options.baseURL)];
+    }
+
+    if (upstreamModel && MINIMAX_MUSIC_MODEL_PATTERN.test(upstreamModel)) {
+      return [createMusicRouter(options.baseURL)];
     }
 
     const sdkType = resolveMiniMaxSDKType(options.sdkType);
