@@ -15,6 +15,8 @@ import { AcpRpcResponseError } from '../spawn/acpStdioClient';
 import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
 import { listCopilotAcpModels } from '../spawn/copilotAcpSession';
 import { listDroidAcpModels } from '../spawn/droidAcpSession';
+import { detectDshCommand, DSH_COMMAND, listDshAcpModels } from '../spawn/dshAcpSession';
+import type { ResolvedHeteroCommand } from '../spawn/resolveCliCommand';
 import { resolveHeteroSpawnCommand } from '../spawn/resolveCliCommand';
 import { listTraeAcpModels } from '../spawn/traeAcpSession';
 import { resolveHeteroSpawnCwd } from '../spawn/workingDirectory';
@@ -318,6 +320,31 @@ const getCatalogErrorMessage = (
 };
 
 /**
+ * Resolve the runtime to launch for catalog discovery. DeepSeek Harness is a
+ * protocol runtime with no local-CLI descriptor, so it is not covered by
+ * {@link resolveHeteroSpawnCommand}; its own detector validates the version and
+ * resolves the executable the same way.
+ */
+const resolveCatalogCommand = async (
+  params: ListHeterogeneousAgentModelsParams,
+  env: NodeJS.ProcessEnv | Record<string, string>,
+): Promise<ResolvedHeteroCommand> => {
+  if (params.type !== 'deepseek-harness') {
+    return resolveHeteroSpawnCommand(params.type, params.command);
+  }
+
+  const requested = params.command?.trim();
+  if (requested && requested !== DSH_COMMAND) return { command: requested };
+
+  const detected = await detectDshCommand(DSH_COMMAND, env as NodeJS.ProcessEnv).catch(
+    () => undefined,
+  );
+  return detected?.available && detected.path
+    ? { command: detected.path, pathEnv: detected.resolvedPathEnv }
+    : { command: DSH_COMMAND };
+};
+
+/**
  * Query the model catalog from the same host that will execute the agent.
  *
  * Callers own construction of the full child environment so Desktop can apply
@@ -329,8 +356,8 @@ export const listHeterogeneousAgentModels = async (
   params: ListHeterogeneousAgentModelsParams,
 ): Promise<HeterogeneousAgentModelCatalog> => {
   const updatedAt = Date.now();
-  const resolved = await resolveHeteroSpawnCommand(params.type, params.command);
   const callerEnv = params.env ?? process.env;
+  const resolved = await resolveCatalogCommand(params, callerEnv);
   const mergedPath = [
     ...new Set(
       [callerEnv.PATH, resolved.pathEnv].filter(Boolean).join(path.delimiter).split(path.delimiter),
@@ -358,6 +385,19 @@ export const listHeterogeneousAgentModels = async (
     // Catalog discovery must work even when a saved project path no longer exists.
     // Keep valid project directories so project-specific provider configuration still applies.
     const cwd = resolveHeteroSpawnCwd(params.cwd ?? process.cwd());
+
+    if (params.type === 'deepseek-harness') {
+      const models = await listDshAcpModels({
+        args: params.args,
+        commandPath: resolved.command,
+        cwd: cwd ?? process.cwd(),
+        env: env as NodeJS.ProcessEnv,
+        // Keep the interactive catalog budget instead of the runtime's 60s turn
+        // budget: a cold boot should surface a retryable timeout, not a hang.
+        timeoutMs: MODEL_CATALOG_TIMEOUT_MS,
+      });
+      return { models, status: 'success', updatedAt };
+    }
 
     if (params.type === 'copilot') {
       const models = await listCopilotAcpModels({

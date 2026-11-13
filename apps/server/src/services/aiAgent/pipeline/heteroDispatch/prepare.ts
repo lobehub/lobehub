@@ -4,6 +4,7 @@ import {
   appendAttachedFilesToPrompt,
   collectHeteroAttachedFiles,
   isLocalHeterogeneousType,
+  isLocalRuntimeHeterogeneousType,
   resolveDispatchedClaudeCodeEntrypoint,
 } from '@lobechat/heterogeneous-agents';
 import {
@@ -318,16 +319,20 @@ export const prepareHeteroRun = async (
     runAttachments.imageList && runAttachments.imageList.length > 0
       ? runAttachments.imageList.map((image) => ({ id: image.id, url: image.url }))
       : undefined;
-  const heteroExecArgs = isLocalHeterogeneousType(heteroType)
-    ? buildHeteroExecArgs(
-        heterogeneousProvider?.type === heteroType
-          ? applyTopicModelToHeterogeneousProvider(
-              heterogeneousProvider,
-              pinnedHeterogeneousTopicModel,
-            )
-          : { type: heteroType },
-      )
-    : undefined;
+  // Protocol runtimes (DeepSeek Harness) also launch through `lh hetero exec`
+  // and need the selector flags (e.g. `--model <tuple>`) built for it, even
+  // though they are not local-CLI descriptor agents.
+  const heteroExecArgs =
+    isLocalHeterogeneousType(heteroType) || isLocalRuntimeHeterogeneousType(heteroType)
+      ? buildHeteroExecArgs(
+          heterogeneousProvider?.type === heteroType
+            ? applyTopicModelToHeterogeneousProvider(
+                heterogeneousProvider,
+                pinnedHeterogeneousTopicModel,
+              )
+            : { type: heteroType },
+        )
+      : undefined;
 
   const heteroParams = {
     agentType: heteroType,
