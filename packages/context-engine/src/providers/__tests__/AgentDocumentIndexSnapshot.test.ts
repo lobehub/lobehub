@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { MessagesEngine } from '../../engine/messages/MessagesEngine';
+import { getSlicedMessages } from '../../processors/HistoryTruncate';
 import type { UIChatMessage } from '../../types';
 import type { AgentContextDocument, AgentDocumentIndexSnapshot } from '../AgentDocumentInjector';
 import {
@@ -65,6 +66,7 @@ const runTurn = async (
   docs: AgentContextDocument[],
   messages: UIChatMessage[],
   stored?: AgentDocumentIndexSnapshot,
+  history: { enableHistoryCount?: boolean; historyCount?: number } = {},
 ) => {
   const { snapshot } = resolveAgentDocumentIndex({
     cacheTtlMs: TTL,
@@ -72,11 +74,13 @@ const runTurn = async (
     messages,
     now: new Date(messages.at(-1)!.createdAt as unknown as string),
     stored,
+    visibleMessages: getSlicedMessages(messages, history),
   });
   const result = await new MessagesEngine({
     agentDocumentChanges: agentDocumentChangesByMessage(snapshot),
     agentDocuments: agentDocumentsFromSnapshot(docs, snapshot),
     enableSystemDate: false,
+    ...history,
     messages,
     model: 'claude-sonnet-5-5',
     provider: 'anthropic',
@@ -136,6 +140,19 @@ describe('agent-document index snapshot', () => {
     const second = await runTurn([plan()], turn2, first.snapshot);
 
     expect(second.payload.at(-1)!.content as string).toMatch(/created\s+Launch plan/);
+  });
+
+  // Regression: with history limited, the message carrying the earlier note is
+  // cut before the engine runs, so suppressing an identical note left the model
+  // with neither the snapshot row nor a note for the new document.
+  it('notes the difference again when history truncation drops the earlier note', async () => {
+    const history = { enableHistoryCount: true, historyCount: 1 };
+    const first = await runTurn([], turn1, undefined, history);
+    const second = await runTurn([plan()], turn2, first.snapshot, history);
+    const third = await runTurn([plan()], turn3, second.snapshot, history);
+
+    expect(JSON.stringify(third.payload)).not.toContain('"u2"');
+    expect(third.payload.at(-1)!.content as string).toMatch(/created\s+Launch plan/);
   });
 
   it('refreshes the index and drops the notes once the cache has gone cold', async () => {

@@ -302,6 +302,12 @@ export interface ResolveAgentDocumentIndexInput {
   pinned?: unknown;
   /** The snapshot kept for the conversation between runs. */
   stored?: unknown;
+  /**
+   * The messages the model will actually see, after history truncation. A note
+   * only counts as already shown while its message is among them. Defaults to
+   * `messages`.
+   */
+  visibleMessages?: TurnMessage[];
 }
 
 export interface ResolvedAgentDocumentIndex {
@@ -330,6 +336,7 @@ export function resolveAgentDocumentIndex({
   now,
   pinned,
   stored,
+  visibleMessages = messages,
 }: ResolveAgentDocumentIndexInput): ResolvedAgentDocumentIndex {
   const compressionId = messages.findLast((m) => m.role === 'compressedGroup')?.id;
 
@@ -351,7 +358,7 @@ export function resolveAgentDocumentIndex({
     isSnapshot(stored) &&
     stored.compressionId === compressionId
   ) {
-    const presentMessageIds = new Set(messages.flatMap((m) => (m.id ? [m.id] : [])));
+    const presentMessageIds = new Set(visibleMessages.flatMap((m) => (m.id ? [m.id] : [])));
     const snapshot = noteAgentDocumentChanges(stored, docs, {
       messageId: lastUser.id,
       presentMessageIds,

@@ -5,7 +5,7 @@ import {
   selectExpertise,
 } from '@lobechat/agent-runtime';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
-import { cacheEconomicsForProvider } from '@lobechat/context-engine';
+import { cacheEconomicsForProvider, getSlicedMessages } from '@lobechat/context-engine';
 import { gatherContextFacts } from '@lobechat/mecha';
 import type { ChatStreamPayload } from '@lobechat/model-runtime';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
@@ -152,6 +152,12 @@ export const buildServerCallLlmContext = async ({
       documentIndexTurn: {
         cacheTtlMs: cacheEconomicsForProvider(provider).ttlMs,
         messages: messagesForContext,
+        // The engine drops older messages when history is limited; a change note
+        // on a dropped message no longer reaches the model.
+        visibleMessages: getSlicedMessages(messagesForContext, {
+          enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
+          historyCount,
+        }),
       },
       state,
     }),

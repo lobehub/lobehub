@@ -15,6 +15,8 @@ export interface AgentDocumentIndexTurn {
   cacheTtlMs: number;
   /** The conversation the context engine runs on. */
   messages: ResolveAgentDocumentIndexInput['messages'];
+  /** The messages left after history truncation, when the agent limits history. */
+  visibleMessages?: ResolveAgentDocumentIndexInput['messages'];
 }
 
 interface ResolveInput {
@@ -53,6 +55,7 @@ export const resolveServerAgentDocumentIndex = async ({
     now: new Date(),
     pinned,
     stored,
+    visibleMessages: turn.visibleMessages,
   });
 
   if (resolved.pin) ctx.bindAgentDocumentIndex?.(resolved.snapshot);
