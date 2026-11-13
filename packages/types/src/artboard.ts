@@ -24,6 +24,8 @@ export interface ArtboardRect {
 }
 
 export type ArtboardCommentAnchor =
+  // With a board: fractions (0–1) of the board. With a group only: pixels from the group's
+  // top-left. With neither: page coordinates.
   | { type: 'canvas'; x: number; y: number }
   // offsetX / offsetY are fractions (0–1) of the hit element's width and height.
   | { nodePath: string; offsetX: number; offsetY: number; type: 'node' };
@@ -37,7 +39,9 @@ export interface ArtboardRoundMetadata {
 }
 export interface ArtboardGroupMetadata {}
 export interface ArtboardBoardMetadata {}
-export interface ArtboardCommentMetadata {}
+export interface ArtboardCommentMetadata {
+  sourceVersionId?: string;
+}
 
 export const ARTBOARD_BOARD_SIZE = { height: 400, width: 640 } as const;
 
@@ -167,6 +171,10 @@ export interface ArtboardCommentThreadView extends ArtboardCommentView {
   pageId: string | null;
   replies: ArtboardCommentView[];
   resolvedAt: Date | null;
+  // The board moved to another source version after the comment was made.
+  stale: boolean;
+  // Unresolved, with a user message the agent has not been handed yet.
+  unread: boolean;
 }
 
 const ref = z.string().min(1).optional();

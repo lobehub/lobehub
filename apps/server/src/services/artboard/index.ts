@@ -1,12 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type {
-  ArtboardCommentAnchor,
-  ArtboardCommentThreadView,
-  ArtboardCommentView,
-  ArtboardItem,
-  ArtboardOp,
-} from '@lobechat/types';
+import type { ArtboardItem, ArtboardOp } from '@lobechat/types';
 import { checkFinalizeReadiness } from '@lobechat/types';
 import pMap from 'p-map';
 
@@ -22,12 +16,11 @@ import type { LobeChatDatabase } from '@/database/type';
 import { TaskService } from '@/server/services/task';
 
 import {
-  artboardConflict,
-  ArtboardServiceError,
-  guardArtboard,
-  requireRowId,
-  requireText,
-} from './errors';
+  type ArtboardCommentInput,
+  ArtboardCommentService,
+  type ArtboardQuestionInput,
+} from './comments';
+import { artboardConflict, ArtboardServiceError, guardArtboard, requireRowId } from './errors';
 import { buildJourneyFlow } from './finalize';
 import { applyArtboardOps } from './ops';
 import {
@@ -36,15 +29,9 @@ import {
   createArtboardSourceResolver,
   resolveOpSources,
 } from './sources';
-import {
-  describeArtboard,
-  toArtboardContent,
-  toArtboardItem,
-  toCommentThreadView,
-  toCommentView,
-  withoutDraftPicks,
-} from './view';
+import { describeArtboard, toArtboardContent, toArtboardItem, withoutDraftPicks } from './view';
 
+export type { ArtboardCommentInput, ArtboardQuestionInput } from './comments';
 export type { ArtboardServiceErrorCode } from './errors';
 export { ArtboardServiceError } from './errors';
 export { describeArtboard } from './view';
@@ -91,22 +78,6 @@ export interface ArtboardFinalizeResult {
   artboard: ArtboardItem;
 }
 
-export interface ArtboardCommentInput {
-  anchor?: ArtboardCommentAnchor | null;
-  boardId?: string | null;
-  clientId: string;
-  content: string;
-  groupId?: string | null;
-  pageId?: string | null;
-}
-
-export interface ArtboardQuestionInput {
-  boardId?: string | null;
-  content: string;
-  groupId?: string | null;
-  pageId?: string | null;
-}
-
 export interface ArtboardServiceOptions {
   context?: ArtboardContext;
   sources?: ArtboardSourceResolver;
@@ -119,6 +90,7 @@ export class ArtboardService {
   private artboards: ArtboardModel;
   private structure: ArtboardStructureModel;
   private comments: ArtboardCommentModel;
+  private commentService: ArtboardCommentService;
   private sources: ArtboardSourceResolver;
   private agentId: string | null;
 
@@ -132,6 +104,12 @@ export class ArtboardService {
     this.structure = new ArtboardStructureModel(db, userId, workspaceId);
     this.comments = new ArtboardCommentModel(db, userId, workspaceId);
     this.agentId = options.context?.agentId ?? null;
+    this.commentService = new ArtboardCommentService({
+      agentId: this.agentId,
+      comments: this.comments,
+      requireArtboard: (id) => this.require(id),
+      structure: this.structure,
+    });
     this.sources =
       options.sources ??
       createArtboardSourceResolver(db, { ...options.context, userId, workspaceId });
@@ -356,87 +334,23 @@ export class ArtboardService {
     return { artboard: await this.item(await this.require(id)) };
   }
 
-  async listComments(id: string): Promise<ArtboardCommentThreadView[]> {
-    await this.require(id);
-    return (await this.comments.listThreads(id)).map(toCommentThreadView);
-  }
+  listComments = (id: string) => this.commentService.list(id);
 
-  async takeUndeliveredComments(id: string): Promise<ArtboardCommentThreadView[]> {
-    await this.require(id);
-    const threads = await this.comments.listThreads(id, { unresolvedOnly: true });
-    const pending = threads.flatMap(({ replies, root }) =>
-      [root, ...replies].filter((comment) => !comment.deliveredAt).map((comment) => comment.id),
-    );
-    await this.comments.markDelivered(pending, new Date());
-    return threads.map(toCommentThreadView);
-  }
+  countUndeliveredComments = (id: string) => this.commentService.countUndelivered(id);
 
-  private async anchorPageId(id: string, input: Pick<ArtboardCommentInput, 'boardId' | 'groupId'>) {
-    const structure = await this.structure.getStructure(id);
-    if (!structure) throw notFound(id);
-    const board = structure.boards.find((item) => item.id === input.boardId);
-    const group = structure.groups.find((item) => item.id === input.groupId);
-    return board?.pageId ?? group?.pageId ?? structure.pages[0].id;
-  }
+  takeUndeliveredComments = (id: string) => this.commentService.takeUndelivered(id);
 
-  private async openThread(
-    id: string,
-    input: ArtboardCommentInput,
-    authorAgentId: string | null,
-  ): Promise<ArtboardCommentThreadView> {
-    await this.require(id);
-    requireText(input.content);
-    if (input.boardId) requireRowId(input.boardId, 'board');
-    const pageId = input.pageId ?? (await this.anchorPageId(id, input));
-    const root = await guardArtboard(() =>
-      this.comments.create(id, {
-        anchor: input.anchor ?? null,
-        authorAgentId,
-        boardId: input.boardId ?? null,
-        clientId: input.clientId,
-        content: input.content,
-        groupId: input.groupId ?? null,
-        pageId,
-      }),
-    );
-    return toCommentThreadView({ replies: [], root });
-  }
+  addComment = (id: string, input: ArtboardCommentInput) =>
+    this.commentService.open(id, input, null);
 
-  addComment = (id: string, input: ArtboardCommentInput) => this.openThread(id, input, null);
+  askQuestion = (id: string, input: ArtboardQuestionInput) => this.commentService.ask(id, input);
 
-  askQuestion(id: string, input: ArtboardQuestionInput) {
-    if (!this.agentId)
-      throw new ArtboardServiceError('invalid', 'Only an agent run can open a question thread.');
-    return this.openThread(id, { ...input, clientId: randomUUID() }, this.agentId);
-  }
+  replyComment = (commentId: string, input: { clientId?: string; content: string }) =>
+    this.commentService.reply(commentId, input);
 
-  async replyComment(
-    commentId: string,
-    input: { clientId?: string; content: string },
-  ): Promise<ArtboardCommentView> {
-    requireRowId(commentId, 'comment');
-    requireText(input.content);
-    const reply = await guardArtboard(() =>
-      this.comments.reply(commentId, {
-        authorAgentId: input.clientId ? null : this.agentId,
-        clientId: input.clientId ?? randomUUID(),
-        content: input.content,
-      }),
-    );
-    return toCommentView(reply);
-  }
+  resolveComment = (commentId: string) => this.commentService.settle(commentId, true);
 
-  private async settleComment(commentId: string, resolved: boolean) {
-    requireRowId(commentId, 'comment');
-    const root = await guardArtboard(() =>
-      resolved ? this.comments.resolve(commentId) : this.comments.reopen(commentId),
-    );
-    return toCommentThreadView({ replies: [], root });
-  }
-
-  resolveComment = (commentId: string) => this.settleComment(commentId, true);
-
-  reopenComment = (commentId: string) => this.settleComment(commentId, false);
+  reopenComment = (commentId: string) => this.commentService.settle(commentId, false);
 
   async finalize(id: string, revision: number): Promise<ArtboardFinalizeResult> {
     const row = await this.require(id);

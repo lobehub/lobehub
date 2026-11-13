@@ -39,17 +39,23 @@ export const toCommentView = (row: ArtboardCommentRow): ArtboardCommentView => (
   id: row.id,
 });
 
-export const toCommentThreadView = ({
-  replies,
-  root,
-}: ArtboardCommentThread): ArtboardCommentThreadView => ({
-  ...toCommentView(root),
-  anchor: root.anchor ?? null,
-  boardId: root.boardId,
-  groupId: root.groupId,
-  pageId: root.pageId,
-  replies: replies.map(toCommentView),
-  resolvedAt: root.resolvedAt,
+export const isThreadUnread = ({ replies, root }: ArtboardCommentThread) =>
+  !root.resolvedAt &&
+  [root, ...replies].some((comment) => !comment.authorAgentId && !comment.deliveredAt);
+
+export const toCommentThreadView = (
+  thread: ArtboardCommentThread,
+  stale: boolean,
+): ArtboardCommentThreadView => ({
+  ...toCommentView(thread.root),
+  anchor: thread.root.anchor ?? null,
+  boardId: thread.root.boardId,
+  groupId: thread.root.groupId,
+  pageId: thread.root.pageId,
+  replies: thread.replies.map(toCommentView),
+  resolvedAt: thread.root.resolvedAt,
+  stale,
+  unread: isThreadUnread(thread),
 });
 
 export const toArtboardContent = (

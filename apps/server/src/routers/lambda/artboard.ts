@@ -90,6 +90,12 @@ export const artboardRouter = router({
       ),
     ),
 
+  countUndeliveredComments: artboardProcedure
+    .input(idInput)
+    .query(({ ctx, input }) =>
+      run('countUndeliveredComments', () => ctx.artboardService.countUndeliveredComments(input.id)),
+    ),
+
   create: artboardProcedureWrite
     .input(
       z.object({
