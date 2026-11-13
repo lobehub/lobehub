@@ -8,36 +8,44 @@ import type {
   ChannelSendMessageParams,
   ChannelSentMessage,
 } from '@lobechat/types';
-import { Flexbox, Text, cssVar } from '@lobehub/ui';
-import { memo } from 'react';
+import { Button, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { CircleAlertIcon } from 'lucide-react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChannelApiName } from '../../types';
 
-const ChannelErrorDetail = memo<{ detail?: string; summary: string }>(({ detail, summary }) => (
-  <Flexbox gap={4} paddingBlock={8}>
-    <Text style={{ color: cssVar.colorError }}>{summary}</Text>
-    {detail && (
-      <div
-        style={{
-          overflow: 'auto',
-          maxHeight: 180,
-          paddingBlock: 8,
-          paddingInline: 10,
-          border: `1px solid ${cssVar.colorBorderSecondary}`,
-          borderRadius: 6,
-          backgroundColor: cssVar.colorFillQuaternary,
-          color: cssVar.colorTextSecondary,
-          fontSize: 12,
-          overflowWrap: 'anywhere',
-          whiteSpace: 'pre-wrap',
-        }}
-      >
-        {detail}
-      </div>
-    )}
-  </Flexbox>
-));
+/** One readable line saying what failed and what to do; the raw message stays folded. */
+const ChannelErrorDetail = memo<{ detail?: string; summary: string }>(({ detail, summary }) => {
+  const { t } = useTranslation('plugin');
+  const [expanded, setExpanded] = useState(false);
+
+  // A new failure starts folded again.
+  useEffect(() => setExpanded(false), [detail]);
+
+  return (
+    <Flexbox gap={4} paddingBlock={8} role={'alert'}>
+      <Flexbox horizontal align={'center'} gap={6}>
+        <Icon color={cssVar.colorError} icon={CircleAlertIcon} size={14} />
+        <Text type={'danger'}>{summary}</Text>
+        {detail && (
+          <Button size={'small'} type={'link'} onClick={() => setExpanded((value) => !value)}>
+            {t(
+              expanded
+                ? 'builtins.lobe-channel.errorDetailHide'
+                : 'builtins.lobe-channel.errorDetailShow',
+            )}
+          </Button>
+        )}
+      </Flexbox>
+      {expanded && detail && (
+        <Text fontSize={12} style={{ wordBreak: 'break-word' }} type={'secondary'}>
+          {detail}
+        </Text>
+      )}
+    </Flexbox>
+  );
+});
 ChannelErrorDetail.displayName = 'ChannelErrorDetail';
 
 const ChannelHistoryRender = memo<
