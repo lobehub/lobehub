@@ -564,7 +564,11 @@ const isBannerDismissed =
 const tokenDisplayFormatShort = (s: GlobalState) =>
   s.status.tokenDisplayFormatShort !== undefined ? s.status.tokenDisplayFormatShort : true;
 
-const homeSelectedAgentId = (s: GlobalState) => s.status.homeSelectedAgentId;
+/** The home AgentSelect choice made in `scope` (a cache scope), if any. */
+const homeSelectedAgentId =
+  (scope: string) =>
+  (s: GlobalState): string | undefined =>
+    s.status.homeSelectedAgentIdByScope?.[scope];
 
 export const systemStatusSelectors = {
   agentBuilderPanelWidth,
