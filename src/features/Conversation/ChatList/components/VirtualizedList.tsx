@@ -27,7 +27,7 @@ import {
   useConversationStoreApi,
   virtuaListSelectors,
 } from '../../store';
-import { VLIST_CLASS_NAME } from '../constants';
+import { CONVERSATION_SCROLLER_END_BLEED_VAR, VLIST_CLASS_NAME } from '../constants';
 import {
   CONVERSATION_SPACER_TRANSITION_MS,
   useConversationScroll,
@@ -60,6 +60,7 @@ const CONVERSATION_HEADER_ID = '__conversation_header__';
 // that talk to virtua directly) work in MESSAGE index space; this offset
 // translates at the virtua boundary.
 const LEADING_ROWS = 1;
+const END_BLEED = `var(${CONVERSATION_SCROLLER_END_BLEED_VAR}, 0px)`;
 const USER_SCROLL_INTENT_TTL_MS = 500;
 const SCROLL_KEYS = new Set(['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp', ' ']);
 
@@ -519,7 +520,17 @@ const VirtualizedList = memo<VirtualizedListProps>(
           keepMounted={keepMountedIndicesWithSlots}
           ref={virtuaRef}
           shift={shift}
-          style={{ height: '100%', overflowAnchor: 'none', paddingBottom }}
+          style={{
+            // Extend under a panel floating beside the list so the scrollbar
+            // lands on the host's edge. The matching border-box padding keeps
+            // the rows exactly as wide as before.
+            boxSizing: 'border-box',
+            height: '100%',
+            overflowAnchor: 'none',
+            paddingBottom,
+            paddingInlineEnd: END_BLEED,
+            width: `calc(100% + ${END_BLEED})`,
+          }}
           onScroll={handleScroll}
           onScrollEnd={handleScrollEnd}
         >
