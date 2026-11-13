@@ -194,7 +194,7 @@ describe('callConnectorToolById', () => {
 
     await callConnectorToolById(
       { identifier: 'my-conn', toolName: 'do_thing' },
-      { ...makeCtx([connector], [tool()]), fileService },
+      { ...makeCtx([connector], [tool()]), resolveFileService: () => fileService },
     );
 
     const { processContentBlocks: processor } = vi.mocked(mcpService.callTool).mock.calls[0][0];
@@ -203,17 +203,36 @@ describe('callConnectorToolById', () => {
     expect(processContentBlocks).toHaveBeenCalledWith(blocks, fileService);
   });
 
-  it('formats media blocks as returned when no file service is given', async () => {
+  it('formats media blocks as returned without file storage, or for a view', async () => {
     vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
+    const resolveFileService = vi.fn(() => ({ uploadMedia: vi.fn() }) as any);
 
     await callConnectorToolById(
       { identifier: 'my-conn', toolName: 'do_thing' },
-      makeCtx([connector], [tool()]),
+      { ...makeCtx([connector], [tool()]), resolveFileService: () => undefined },
+    );
+    const server = await getMcpServerFingerprint({ type: 'http', url: connector.mcpServerUrl! });
+    await callConnectorToolById(
+      { fromApp: true, identifier: 'my-conn', server, toolName: 'do_thing' },
+      { ...makeCtx([connector], [tool()]), resolveFileService },
     );
 
-    expect(mcpService.callTool).toHaveBeenCalledWith(
-      expect.objectContaining({ processContentBlocks: undefined }),
-    );
+    expect(mcpService.callTool).toHaveBeenCalledTimes(2);
+    for (const [call] of vi.mocked(mcpService.callTool).mock.calls) {
+      expect(call.processContentBlocks).toBeUndefined();
+    }
+    expect(resolveFileService).not.toHaveBeenCalled();
+  });
+
+  // Built only for an HTTP call: storage that cannot be built must not fail another kind
+  it('never reads file storage for a call that does not reach an HTTP server', async () => {
+    const resolveFileService = vi.fn();
+    const ctx = { ...makeCtx([connector], [tool()]), resolveFileService };
+
+    await expect(
+      callConnectorToolById({ identifier: 'my-conn', toolName: 'missing' }, ctx),
+    ).rejects.toHaveProperty('code', 'BAD_REQUEST');
+    expect(resolveFileService).not.toHaveBeenCalled();
   });
 
   it.each([true, false])('passes the caller mcp_apps flag (%s) through', async (enabled) => {

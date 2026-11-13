@@ -34,12 +34,6 @@ export interface ConnectorExecContext extends ConnectorToolSyncContext {
   /** Visibility-aware: decides whether the caller may act as the given agent. */
   agentModel: Pick<AgentModel, 'existsById'>;
   /**
-   * Stores an HTTP connector tool result's image / audio blocks as the
-   * caller's files, so the text result links to them, as `tools.mcp.callTool`
-   * does. None: the blocks are formatted as returned (base64 data).
-   */
-  fileService?: FileService;
-  /**
    * The caller's legacy plugin rows, which stand in for an unmarked marketplace
    * install made before installs used connectors. None: no such row counts.
    */
@@ -49,6 +43,13 @@ export interface ConnectorExecContext extends ConnectorToolSyncContext {
    * such a call. `undefined` (or no resolver): no Market credential to run as.
    */
   resolveCloudMcpCaller?: () => Promise<CloudMcpCaller | undefined>;
+  /**
+   * The caller's file storage, read only for an HTTP connector call: a result's
+   * image / audio blocks are stored as files the text result links to, as
+   * `tools.mcp.callTool` does. `undefined` (or no resolver): the blocks are
+   * formatted as returned (base64 data).
+   */
+  resolveFileService?: () => FileService | undefined;
   /** `userId` decides the caller's `mcp_apps` flag. */
   userId?: string | null;
 }
@@ -227,7 +228,8 @@ export const callConnectorToolById = async (
   }
 
   const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);
-  const { fileService } = ctx;
+  // A view's call gets its blocks back as they are (`mcpService.callTool`)
+  const fileService = params.fromApp ? undefined : ctx.resolveFileService?.();
 
   return mcpService.callTool({
     argsStr: params.args ?? '{}',

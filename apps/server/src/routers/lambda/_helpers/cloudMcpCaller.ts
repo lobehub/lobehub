@@ -4,8 +4,9 @@ import { UserModel } from '@/database/models/user';
 import { resolveMarketUserContext } from '@/libs/trpc/lambda/middleware';
 import { isTrustedClientEnabled } from '@/libs/trusted-client';
 import { DiscoverService } from '@/server/services/discover';
-import { FileService } from '@/server/services/file';
 import type { CloudMcpCaller } from '@/server/services/mcp/cloudTool';
+
+import { resolveRequestFileService } from './requestFileService';
 
 /**
  * The caller a signed-in request runs a cloud MCP tool as, the way
@@ -34,7 +35,7 @@ export const resolveRequestCloudMcpCaller = async (ctx: {
       accessToken: marketAccessToken,
       userInfo: marketUserInfo,
     }),
-    fileService: new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
+    fileService: resolveRequestFileService(ctx),
     userAccessToken,
   };
 };

@@ -56,7 +56,6 @@ import {
   pruneMissingAutoConnectorTools,
   syncConnectorToolsById,
 } from '@/server/services/connector/sync';
-import { FileService } from '@/server/services/file';
 import {
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,
@@ -76,6 +75,7 @@ import {
   resolveConnectorToolPermission,
   resolveDefaultPermission,
 } from './_helpers/connectorToolPermission';
+import { resolveRequestFileService } from './_helpers/requestFileService';
 import { upsertConnectorEntry } from './_helpers/upsertConnectorEntry';
 
 const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -878,7 +878,7 @@ export const connectorRouter = router({
       try {
         return await callConnectorToolById(input, {
           ...ctx,
-          fileService: new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
+          resolveFileService: () => resolveRequestFileService(ctx),
           resolveCloudMcpCaller: () => resolveRequestCloudMcpCaller(ctx),
         });
       } catch (err: any) {
