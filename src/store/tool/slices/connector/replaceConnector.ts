@@ -4,15 +4,27 @@ import { lambdaClient } from '@/libs/trpc/client';
 
 import type { ToolStore } from '../../store';
 import { connectorSelectors } from './selectors';
+import type { ConnectorWithTools } from './types';
 
 export type ConnectorSnapshot = Awaited<ReturnType<ToolStore['getConnectorForEdit']>>;
 type ConnectorPatch = Parameters<ToolStore['updateConnector']>[1];
 
 /**
+ * Whether an MCP install from `sourceType` may overwrite a stored row of the
+ * same identifier: one from the same source, or the endpoint-less tool
+ * projection a legacy marketplace plugin left (`connector.syncPluginTools`).
+ * Builtin tools and Composio connections are never MCP servers to replace.
+ */
+const isReplaceableBy = (existing: ConnectorWithTools, sourceType: 'custom' | 'marketplace') => {
+  if (existing.metadata?.composio) return false;
+  if (existing.sourceType === sourceType) return true;
+  return existing.sourceType === 'marketplace' && !hasCallableMcpEndpoint(existing);
+};
+
+/**
  * Read the connector an install is about to overwrite: `connector.create`
- * upserts on the identifier, whatever source the stored row came from. A row
- * the user added from another source is refused rather than replaced; an
- * endpoint-less row is only a tool projection and may be taken over.
+ * upserts on the identifier, whatever source the stored row came from, so a
+ * row the install may not replace (see {@link isReplaceableBy}) is refused.
  * Returns the stored row's snapshot for {@link restoreConnector}.
  */
 export const snapshotReplacedConnector = async (
@@ -23,7 +35,7 @@ export const snapshotReplacedConnector = async (
   await get().fetchConnectors();
   const existing = connectorSelectors.connectorByIdentifier(identifier)(get());
   if (!existing) return;
-  if (existing.sourceType !== sourceType && hasCallableMcpEndpoint(existing)) {
+  if (!isReplaceableBy(existing, sourceType)) {
     throw new Error(
       `A connector with the identifier "${identifier}" already exists. Remove it before adding this MCP server.`,
     );
