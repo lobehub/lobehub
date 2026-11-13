@@ -17,6 +17,7 @@ import {
 import {
   buildAnthropicMessages,
   buildAnthropicTools,
+  buildCacheControl,
 } from '../../core/protocols/anthropicMessages/messages';
 import { resolveCacheTTL } from '../../core/protocols/anthropicMessages/resolveCacheTTL';
 import { resolveMaxTokens } from '../../core/protocols/anthropicMessages/resolveMaxTokens';
@@ -282,6 +283,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     options?: ChatMethodOptions,
   ): Promise<Response> => {
     const {
+      contextCachingTTL,
       effort,
       enabledContextCaching = true,
       max_tokens,
@@ -315,7 +317,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     const systemPrompts = !!systemPromptText
       ? ([
           {
-            cache_control: enabledContextCaching ? { type: 'ephemeral' } : undefined,
+            cache_control: enabledContextCaching ? buildCacheControl(contextCachingTTL) : undefined,
             text: systemPromptText,
             type: 'text',
           },
@@ -323,6 +325,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       : undefined;
 
     const postTools = buildAnthropicTools(tools, {
+      cacheTTL: contextCachingTTL,
       enabledContextCaching,
     });
 
@@ -332,6 +335,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     const postMessages = stripUnsupportedClaudeAssistantPrefill(
       this.resolveModelId(model),
       await buildAnthropicMessages(user_messages, {
+        cacheTTL: contextCachingTTL,
         enabledContextCaching,
         imageBudget: BEDROCK_INLINE_IMAGE_BUDGET,
       }),

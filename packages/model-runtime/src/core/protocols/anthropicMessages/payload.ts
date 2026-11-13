@@ -5,7 +5,12 @@ import { rejectsDisabledThinkingAtEffort } from '../../../providers/anthropic/mo
 import type { ChatStreamPayload } from '../../../types';
 import { resolveModelSamplingParameters } from '../../parameterResolver';
 import { type ComputeChatCostOptions } from '../../usageConverters/utils/computeChatCost';
-import { buildAnthropicMessages, buildAnthropicTools, buildSearchTool } from './messages';
+import {
+  buildAnthropicMessages,
+  buildAnthropicTools,
+  buildCacheControl,
+  buildSearchTool,
+} from './messages';
 import { resolveCacheTTL } from './resolveCacheTTL';
 import { resolveMaxTokens } from './resolveMaxTokens';
 import { resolveClaudeThinkingConfig } from './resolveThinkingConfig';
@@ -27,6 +32,7 @@ export const buildDefaultAnthropicPayload = async (
     tools,
     thinking,
     effort,
+    contextCachingTTL,
     enabledContextCaching = true,
     enabledSearch,
   } = payload;
@@ -48,10 +54,12 @@ export const buildDefaultAnthropicPayload = async (
       ? systemMessage.content
       : undefined;
 
+  const cacheTTL = enabledContextCaching ? contextCachingTTL : undefined;
+
   const systemPrompts = systemPromptText
     ? ([
         {
-          cache_control: enabledContextCaching ? { type: 'ephemeral' } : undefined,
+          cache_control: enabledContextCaching ? buildCacheControl(cacheTTL) : undefined,
           text: systemPromptText,
           type: 'text',
         },
@@ -60,10 +68,10 @@ export const buildDefaultAnthropicPayload = async (
 
   const postMessages = stripUnsupportedClaudeAssistantPrefill(
     model,
-    await buildAnthropicMessages(userMessages, { enabledContextCaching }),
+    await buildAnthropicMessages(userMessages, { cacheTTL, enabledContextCaching }),
   );
 
-  let postTools = buildAnthropicTools(tools, { enabledContextCaching }) as
+  let postTools = buildAnthropicTools(tools, { cacheTTL, enabledContextCaching }) as
     AnthropicTools[] | undefined;
 
   if (enabledSearch) {
@@ -138,6 +146,7 @@ export const resolveDefaultAnthropicPricingOptions = (
   const cacheTTL = resolveCacheTTL(requestPayload, {
     messages: anthropicPayload.messages,
     system: anthropicPayload.system,
+    tools: anthropicPayload.tools,
   });
 
   if (!cacheTTL) return undefined;

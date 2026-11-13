@@ -3,7 +3,10 @@ import { type ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 
-import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatible';
+import {
+  buildDefaultAnthropicPayload,
+  resolveDefaultAnthropicPricingOptions,
+} from '../../core/anthropicCompatible';
 import { type LobeRuntimeAI } from '../../core/BaseAI';
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
 import { transformResponseAPIToStream } from '../../core/openaiCompatible';
@@ -271,6 +274,10 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
             payload: {
               model,
               pricing,
+              pricingOptions: resolveDefaultAnthropicPricingOptions(
+                rest as ChatStreamPayload,
+                anthropicPayload,
+              ),
               provider: ModelProvider.GithubCopilot,
             },
           }),
