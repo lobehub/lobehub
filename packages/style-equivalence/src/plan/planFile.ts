@@ -8,14 +8,20 @@ import type {
 } from '../extract';
 import { mergeKinds, valueIdentifiers } from '../extract/identifiers';
 import { type Combo, combosFor, DOMAIN_COMBO_LIMIT } from './combos';
-import { childCovered, elementsOf, parentCovered, replacedDescendants } from './descendants';
+import {
+  childCovered,
+  childrenLearned,
+  elementsOf,
+  parentCovered,
+  replacedDescendants,
+} from './descendants';
 import {
   forwardedDescendants,
   forwardedInside,
   type ForwardPlan,
   partlyForwarded,
 } from './forwarded';
-import { sharedInlineStyles } from './inlineStyle';
+import { INLINE_MASK, sharedInlineStyles, type SharedStyle } from './inlineStyle';
 import type { InnerNode } from './inner';
 import { keptEmotionRules } from './kept';
 import { bindKnobs, parseExpression } from './knobs';
@@ -31,6 +37,7 @@ import {
 import { runtimeStyleProbe, styleDropped } from './probes';
 import { reachableCombos } from './reachable';
 import { realItemsOf, rendersReal, sampleTargets, standInsOf } from './real';
+import { type ShapeBook, shapeOf } from './shapes';
 import { tableDomain } from './tables';
 
 export { isIntrinsicTag } from './placement';
@@ -62,11 +69,14 @@ export interface PlanCase {
   flags: string[];
   forward?: ForwardPlan;
   forwardedParam?: string;
+  inlineMasks?: Partial<Record<Side, Array<{ index: number; style: string }>>>;
   inlineStyles?: Partial<Record<Side, Array<{ binding: number; index: number; without: string }>>>;
   inner?: Record<string, InnerNode[]>;
   key: string;
   knobs?: string[];
   neutralOmitted?: number[];
+  realElements?: Record<Side, string[]>;
+  realLeaf?: true;
   samples?: InnerNode[];
   standIns?: Partial<Record<Side, string[]>>;
   variables: PlanVariable[];
@@ -93,6 +103,7 @@ export interface UnpairedCounterpart {
 export interface PlanConfig {
   layoutComponents: string[];
   realComponents?: Record<string, RealComponent>;
+  shapes?: ShapeBook;
 }
 
 const declarationFree = (element: StyleElement) =>
@@ -194,9 +205,19 @@ export const planFile = (
   }
   for (const [owner, elements] of headOwners)
     if (!baseOwners.has(owner)) unpairedHead.push(...elements);
-  const replaced = replacedDescendants(base, head, pairs, unpairedHead);
+  const { learned, replaced, wrapped } = replacedDescendants(
+    base,
+    head,
+    pairs,
+    unpairedHead,
+    config.shapes,
+  );
   const replacedHead = new Set(replaced.map(([, right]) => right));
-  unpairedHead.splice(0, unpairedHead.length, ...unpairedHead.filter((e) => !replacedHead.has(e)));
+  unpairedHead.splice(
+    0,
+    unpairedHead.length,
+    ...unpairedHead.filter((e) => !replacedHead.has(e) && !wrapped.has(e)),
+  );
   pairs.push(...replaced);
   const forwarded = forwardedDescendants(base, head, pairs, unpairedHead, config.realComponents);
   const forwardOf = new Map(forwarded.map((entry) => [entry.pair[1], entry.forward]));
@@ -212,9 +233,14 @@ export const planFile = (
   );
   pairs.push(...forwarded.map((entry) => entry.pair), ...inside.map((entry) => entry.pair));
   const rendered = new Set(pairs.map(([left]) => left.id));
+  const learnedParents = new Set(
+    replaced.filter(([, right]) => learned.has(right)).map(([left]) => left.parent!),
+  );
   const covered = new Set(
-    [...new Set(replaced.map(([left]) => left.parent!))].filter((id) =>
-      parentCovered(byId.base.get(id)!, base, rendered),
+    [...new Set(replaced.map(([left]) => left.parent!))].filter(
+      (id) =>
+        parentCovered(byId.base.get(id)!, base, rendered, config.shapes) &&
+        (!learnedParents.has(id) || childrenLearned(byId.base.get(id)!, base, config.shapes)),
     ),
   );
   const moved = movedStylesheets(base, head, pairs);
@@ -252,11 +278,14 @@ export const planFile = (
         .filter(({ proof }) => proof.exhaustive)
         .flatMap(({ index }) => [chains.base[index], chains.head[index]]),
     );
-    if (left.tag !== right.tag) flags.add('TAG_CHANGED');
+    if (left.tag !== (right.wraps ? byId.head.get(right.wraps)?.tag : right.tag))
+      flags.add('TAG_CHANGED');
     for (const item of chains.head)
       for (const slot of item.slots)
         for (const key of head.unsupported?.[slot] ?? []) flags.add(`STYLEX_UNSUPPORTED:${key}`);
     const realItems = realItemsOf(chains, config.realComponents);
+    const realElements = learned.has(right) ? { base: [left.id], head: [right.id] } : undefined;
+    if (realElements) [left, right].forEach((item) => realItems.add(item));
     for (const item of [...chains.base, ...chains.head]) {
       const real = realItems.has(item) || resolved.has(item);
       if (!isIntrinsicTag(item.tag) && !layout.has(item.tag) && !real)
@@ -276,6 +305,7 @@ export const planFile = (
       item.flags.forEach((flag) => !cleared(flag) && flags.add(flag));
     }
     if (isReplaced) evidence.push('DESCENDANT_REPLACED');
+    if (realElements) evidence.push('COMPONENT_SHAPE_LEARNED');
     if (forward) evidence.push('FORWARDED_RENDERED');
     if (param) evidence.push('FORWARDED_PROP_ABSENT');
     const partialFlag = partial.get(left.id);
@@ -318,7 +348,21 @@ export const planFile = (
     for (const { index, proof } of [...movedAt, ...keptAt])
       if (proof.nodes.length) inner[index] = [...(inner[index] ?? []), ...proof.nodes];
     const structural = flags.size > 0;
-    const shared = sharedInlineStyles(chains);
+    const shared = sharedInlineStyles(chains, {
+      base: base.moduleNames,
+      head: head.moduleNames,
+    });
+    const inlineMasks: NonNullable<PlanCase['inlineMasks']> = {};
+    for (const [side, list] of Object.entries(shared) as Array<[Side, SharedStyle[]]>)
+      for (const { index, mask } of list)
+        if (mask)
+          (inlineMasks[side === 'base' ? 'head' : 'base'] ??= []).push({ index, style: mask });
+    const toggled = Object.values(shared).some((list) =>
+      list.some((style) => style.mask && !style.certain),
+    );
+    const targetShared = Object.values(shared).some((list) =>
+      list.some((style) => style.index === chains.base.length - 1),
+    );
     const variables = new Map<string, PlanVariable>();
     for (const side of ['base', 'head'] as const)
       for (const [itemIndex, item] of chains[side].entries())
@@ -377,10 +421,16 @@ export const planFile = (
     if (Object.keys(modeling.used).length && modeling.combos.length > DOMAIN_COMBO_LIMIT)
       modeling = model({});
     const { knobs, modeled, pairwise } = modeling;
-    const combos = knobs ? modeling.combos : reachableCombos(modeling.combos, chains);
-    if (combos.length < modeling.combos.length) evidence.push('COMBOS_UNREACHABLE_DROPPED');
+    const reached = knobs ? modeling.combos : reachableCombos(modeling.combos, chains);
+    const combos = toggled
+      ? reached.flatMap((combo) => [
+          { ...combo, [INLINE_MASK]: true },
+          { ...combo, [INLINE_MASK]: false },
+        ])
+      : reached;
+    if (reached.length < modeling.combos.length) evidence.push('COMBOS_UNREACHABLE_DROPPED');
     modeling.added.forEach((flag) => flags.add(flag));
-    if (styleDropped(left, right, probes)) flags.add('RUNTIME_STYLE_DROPPED');
+    if (!targetShared && styleDropped(left, right, probes)) flags.add('RUNTIME_STYLE_DROPPED');
     if (knobs) evidence.push('CONDITION_KNOBS');
     if (Object.keys(modeling.used).length) evidence.push('TABLE_KEYS');
     if (modeled.some((variable) => variable.probe)) evidence.push('RUNTIME_STYLE_PROBED');
@@ -395,6 +445,7 @@ export const planFile = (
       flags: [...flags].sort(),
       ...(forward ? { forward } : {}),
       ...(param ? { forwardedParam: param } : {}),
+      ...(Object.keys(inlineMasks).length ? { inlineMasks } : {}),
       ...(Object.keys(shared).length
         ? {
             inlineStyles: Object.fromEntries(
@@ -410,6 +461,10 @@ export const planFile = (
       key: `${file}|${left.id}`,
       ...(knobs ? { knobs } : {}),
       ...(omitted.length ? { neutralOmitted: omitted } : {}),
+      ...(realElements ? { realElements } : {}),
+      ...(realElements && shapeOf(left, 'base', config.shapes)?.leaf
+        ? { realLeaf: true as const }
+        : {}),
       ...(samples.length ? { samples } : {}),
       ...(Object.keys(standIns).length ? { standIns } : {}),
       variables: modeled,

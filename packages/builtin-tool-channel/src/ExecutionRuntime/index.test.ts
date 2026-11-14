@@ -87,3 +87,63 @@ describe('Channel model-facing history', () => {
     });
   });
 });
+
+describe('Channel messaging', () => {
+  const history = { readMessage: vi.fn(), readMessages: vi.fn() };
+
+  it('returns the directory and the posted message as content and state', async () => {
+    const directory = {
+      channels: [
+        {
+          agents: [{ agentId: 'agent-lobehub', description: null, name: 'LobeHub Agent' }],
+          current: false,
+          id: 'channel-lobehub',
+          kind: 'group' as const,
+          projectId: null,
+          title: 'General',
+        },
+      ],
+      hasMore: false,
+    };
+    const sent = {
+      agents: [{ agentId: 'agent-lobehub', name: 'LobeHub Agent' }],
+      channelId: 'channel-lobehub',
+      channelTitle: 'General',
+      messageId: 'message-sent',
+      url: 'https://example.com/channels/channel-lobehub',
+    };
+    const messaging = {
+      listChannels: vi.fn().mockResolvedValue(directory),
+      sendMessage: vi.fn().mockResolvedValue(sent),
+    };
+    const runtime = new ChannelExecutionRuntime(history, messaging);
+
+    const listed = await runtime.listChannels({ agentId: 'agent-lobehub' });
+    expect(messaging.listChannels).toHaveBeenCalledWith({ agentId: 'agent-lobehub' });
+    expect(listed).toMatchObject({ state: directory, success: true });
+    expect(JSON.parse(listed.content!)).toEqual(directory);
+
+    const params = { agentIds: ['agent-lobehub'], channelId: 'channel-lobehub', content: 'Hi' };
+    const result = await runtime.sendMessage(params);
+    expect(messaging.sendMessage).toHaveBeenCalledWith(params);
+    expect(result).toMatchObject({ state: sent, success: true });
+  });
+
+  it('reports a refused send, and a run without messaging', async () => {
+    const runtime = new ChannelExecutionRuntime(history, {
+      listChannels: vi.fn(),
+      sendMessage: vi.fn().mockRejectedValue(new Error('Not an Agent member of "General"')),
+    });
+    expect(
+      await runtime.sendMessage({ agentIds: ['x'], channelId: 'c', content: 'Hi' }),
+    ).toMatchObject({
+      content: 'Not an Agent member of "General"',
+      error: { type: 'ChannelMessagingError' },
+      success: false,
+    });
+    expect(await new ChannelExecutionRuntime(history).listChannels()).toMatchObject({
+      error: { type: 'ChannelMessagingError' },
+      success: false,
+    });
+  });
+});

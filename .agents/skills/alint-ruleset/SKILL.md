@@ -89,8 +89,9 @@ interpret a skipped suite as a pass.
 - **Runner** — `bun run check --alint` (changed lines by default; explicit paths lint whole
   files), `bun run alint --dirty`, `bun run alint:audit`.
 - **CI & reporting** — `.agents/scripts/check/alint.ts` (the `--alint` selector),
-  `packages/alint/report.ts` (the ALint check run, its annotations, one PR summary comment
-  with marker `<!-- alint-summary -->`, and a usage line), and the `ALint & Test Desktop App`
+  `packages/alint/report.ts` (the ALint check run, its annotations, one PR summary review
+  plus one inline comment per finding, aggregated per file above 5 findings, and a usage
+  line), and the `ALint & Test Desktop App`
   job in `.github/workflows/test.yml`. The check is not required, so a red check informs
   rather than blocks.
 - **Scripts in this skill** — [`scripts/`](scripts/): `collect-rejections.ts`,

@@ -1,0 +1,69 @@
+---
+title: Using Fish Audio API Key in LobeHub
+description: >-
+  Configure a Fish Audio API key in LobeHub and generate expressive speech with Fish Audio S2.1 Pro and Drama 3.
+tags:
+  - Fish Audio
+  - Text to Speech
+  - TTS
+  - API Key
+---
+
+# Using Fish Audio in LobeHub
+
+[Fish Audio](https://fish.audio) provides expressive multilingual text-to-speech models that follow natural-language delivery directions. In LobeHub, Fish Audio is a text-to-speech provider only: it has no chat models.
+
+<Steps>
+  ### Step 1: Obtain your Fish Audio API key
+
+  - Sign up or sign in at [Fish Audio](https://fish.audio).
+  - Open [API Keys](https://fish.audio/app/api-keys) and create a key. API usage is prepaid and billed separately from the Fish Audio app subscription.
+  - Copy the key and store it securely.
+
+  ### Step 2: Configure Fish Audio in LobeHub
+
+  - Open **App Settings → AI Providers** and select **Fish Audio** (type `Fish` in the provider search box to find it).
+  - Paste your key into **API Key**. Changes are saved automatically, and the key is encrypted with AES-GCM before it is stored.
+  - Turn on the switch next to the provider name.
+  - Optional: to send requests through a proxy, enter it in **API Proxy URL**. Leave it empty to use `https://api.fish.audio`.
+
+  ### Step 3: Choose models
+
+  The **Model List** shows the Fish Audio speech models under the **TTS** tab. Fish Audio S2.1 Pro and Drama 3 are enabled by default; S2 Pro and the deprecated S1 can be turned on in the same list.
+
+  Fish Audio has no chat model, so the provider page shows no **Check** button. Verify the key by generating speech as described below.
+
+  <Callout type={'warning'}>
+    Fish Audio bills per million UTF-8 bytes, so one Chinese character costs as much as three English letters. LobeHub records usage in the same UTF-8 bytes, including when Fish Audio models are reached through an OpenAI-compatible gateway such as OpenRouter. Review the [Fish Audio API pricing](https://docs.fish.audio/developer-guide/models-pricing/pricing-and-rate-limits) before generating large amounts of audio.
+  </Callout>
+</Steps>
+
+## Generate speech
+
+Speech synthesis runs through the LobeHub text-to-speech API, which the LobeHub CLI (`lh`) and the OpenAI-compatible `POST /api/v1/audio/speech` endpoint both use:
+
+```bash
+lh generate tts "Hello from LobeHub" -m fishaudio/s2.1-pro -o hello.mp3
+```
+
+- **Voice** — when no voice is given, Fish Audio's own default voice is used. Pass `--voice <reference_id>` to use another voice: the 32-character id in the voice page URL `fish.audio/m/<reference_id>`.
+- **Length** — each request is limited to 4,096 characters, because the audio is returned in a single response. Split longer text into several requests.
+- **Format** — `mp3` (default) or `opus`.
+- **Speed** — `0.5` to `2`.
+- **Instructions** — S2.1 Pro, S2 Pro and Drama 3 take a delivery direction of up to 200 characters, for example `--instructions "whisper, nervous"`. It is placed in front of the text as a `[direction]` and billed with it. S1 does not accept instructions.
+
+<Callout type={'warning'}>
+  LobeHub does not bundle any voices from the Fish Audio community library, which contains many unlicensed character and real-person clones. Only use voices you cloned yourself or are licensed to use.
+</Callout>
+
+## Troubleshooting
+
+**"Fish Audio API Key is incorrect or empty, please check your Fish Audio API Key and try again."** — No key was found, or Fish Audio rejected the key. Enter a valid key in **App Settings → AI Providers → Fish Audio**, or ask the administrator to set `FISHAUDIO_API_KEY` on the server. When Fish Audio rejected the key, its own message follows in parentheses, for example `Fish Audio API error (401): Invalid token`.
+
+**"Fish Audio API error (402)…"** — The account has no API credit for the selected model. Top up the API balance in Fish Audio.
+
+**"Check the voice id…"** — The `reference_id` does not exist or your account may not use it. Pass a voice you own, or omit `--voice`.
+
+**Rate-limit errors** — The account reached its concurrent request limit, which grows with your total API spend. Retry later.
+
+For self-hosted deployments, see `FISHAUDIO_API_KEY` in the [model provider environment variables](/docs/self-hosting/environment-variables/model-provider#fish-audio).

@@ -13,6 +13,10 @@ describe('SpendType', () => {
     expect(renderIconClass('textToSpeech')).toContain('lucide-audio-lines');
   });
 
+  it('renders the music icon for music generation spend', () => {
+    expect(renderIconClass('musicGeneration')).toContain('lucide-music');
+  });
+
   it('keeps the microphone icon for speech recognition spend', () => {
     expect(renderIconClass('speechRecognition')).toContain('lucide-mic');
   });

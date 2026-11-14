@@ -11,6 +11,10 @@ const { getMember, resolveSandboxSessionConfig } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/server/services/sandbox', () => ({
+  getSandboxProviderKind: () => 'market',
+  MarketSandboxProvider: vi.fn(function (this: any) {
+    this.callTool = vi.fn(async () => ({ result: {}, success: true }));
+  }),
   resolveSandboxSessionConfig,
 }));
 
@@ -254,6 +258,78 @@ describe('ServerCredsService.injectCreds', () => {
       topicId: 'topic-1',
       userId: 'user-1',
     });
-    expect(result).toBe(injectResult);
+    expect(result).toEqual({
+      ...injectResult,
+      envVarsByKey: { 'dc-cli-token': ['DC_CLI_TOKEN'] },
+    });
+  });
+
+  it('maps each key to its own variables and merges ~/.creds/env after injecting', async () => {
+    const inject = vi.fn().mockImplementation(async ({ keys }: { keys: string[] }) => {
+      const byKey: Record<string, Record<string, string>> = {
+        'deepseek': { DEEPSEEK_API_KEY: 'sk******ab' },
+        'lobehub-database': {
+          CLOUD_DATABASE_URL: 'po******db',
+          LOBEHUB_DATABASE_URL: 'po******db',
+          MARKET_DATABASE_URL: 'po******db',
+        },
+      };
+      return {
+        credentials: { env: Object.assign({}, ...keys.map((key) => byKey[key])) },
+        notFound: [],
+        success: true,
+      };
+    });
+    const callTool = vi.fn().mockResolvedValue({ result: {}, success: true });
+    const service = new ServerCredsService(buildMarketService(inject), {
+      sandboxProvider: { callTool },
+    });
+
+    const result = await service.injectCreds({
+      keys: ['lobehub-database', 'deepseek'],
+      sandbox: true,
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    expect(result.envVarsByKey).toEqual({
+      'deepseek': ['DEEPSEEK_API_KEY'],
+      'lobehub-database': ['CLOUD_DATABASE_URL', 'LOBEHUB_DATABASE_URL', 'MARKET_DATABASE_URL'],
+    });
+    // Only the first call writes into the sandbox; the per-key lookups don't.
+    expect(inject.mock.calls.map(([req]) => [req.keys, req.sandbox])).toEqual([
+      [['lobehub-database', 'deepseek'], true],
+      [['lobehub-database'], false],
+      [['deepseek'], false],
+    ]);
+    expect(callTool).toHaveBeenCalledTimes(1);
+    expect(callTool).toHaveBeenCalledWith('runCommand', {
+      command: expect.stringContaining('~/.creds/.env.ledger'),
+    });
+    for (const value of ['sk******ab', 'po******db']) {
+      expect(JSON.stringify(callTool.mock.calls)).not.toContain(value);
+    }
+  });
+
+  it('still returns the injection when merging ~/.creds/env fails', async () => {
+    const inject = vi.fn().mockResolvedValue({
+      credentials: { env: { DEEPSEEK_API_KEY: 'sk******ab' } },
+      notFound: [],
+      success: true,
+    });
+    const callTool = vi.fn().mockRejectedValue(new Error('sandbox down'));
+    const service = new ServerCredsService(buildMarketService(inject), {
+      sandboxProvider: { callTool },
+    });
+
+    const result = await service.injectCreds({
+      keys: ['deepseek'],
+      sandbox: true,
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.envVarsByKey).toEqual({ deepseek: ['DEEPSEEK_API_KEY'] });
   });
 });

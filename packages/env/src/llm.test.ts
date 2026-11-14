@@ -18,3 +18,17 @@ describe('TypeSafe deployment credentials', () => {
     expect(getLLMConfig().ENABLED_TYPESAFE).toBe(false);
   });
 });
+
+describe('fal credentials', () => {
+  it('reads FAL_API_KEY', () => {
+    vi.stubEnv('FAL_API_KEY', 'fal-api-key');
+    vi.stubEnv('FAL_KEY', 'fal-sdk-key');
+    expect(getLLMConfig().FAL_API_KEY).toBe('fal-api-key');
+  });
+
+  it('falls back to FAL_KEY, the name fal SDKs use', () => {
+    vi.stubEnv('FAL_API_KEY', '');
+    vi.stubEnv('FAL_KEY', 'fal-sdk-key');
+    expect(getLLMConfig().FAL_API_KEY).toBe('fal-sdk-key');
+  });
+});

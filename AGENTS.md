@@ -120,7 +120,7 @@ When designing or reviewing user-facing flows (empty/loading/error states, confi
 ## UI 设计工作指南（lobe-design）
 
 本项目在做界面相关工作（新增页面、改交互、调视觉、统一设计系统、还原设计稿、上线前审查）时，
-走 **lobe-design** 这条单入口 pipeline。安装：`https://github.com/lobehub/lobe-design-skill`（skill 版本 5.8.0）。
+走 **lobe-design** 这条单入口 pipeline。安装：`https://github.com/lobehub/lobe-design-skill`（skill 版本 6.3.1）。
 
 skill 装在本仓库的 `.agents/skills/lobe-design`，下面所有命令都相对它执行：
 
@@ -137,6 +137,7 @@ export LOBE_DESIGN="./.agents/skills/lobe-design"
 
 - `.agents/ux/product.md`：产品画像：平台、产品类型、用户、核心任务、规则适用性、文案 profile（05-init Round 1）
 - `.agents/ux/components.md`：组件盘点：按平台分类（web：薄包装 / 与 lobe-ui 重复 / 业务组件；mobile：项目原子层 / 薄包装 / 业务组件）（05-init Round 2）
+- `.agents/ux/lobe-design-rules.md`：项目层规则：skill 没收录的编号（`C-` / `D-` / `K-` / `E-`）按 id 查，不要整份读
 - **装完或升级 skill 后**：跑 stage `05-init`（或说「初始化 / 升级后刷新」）完成两轮自迭代 ——Round 1 产品画像 → `.agents/ux/product.md`，Round 2 组件盘点 → `.agents/ux/components.md`。可用 `node "$LOBE_DESIGN/scripts/project-scan.mjs" --check` 检查是否缺失或过期。
 - **日常任何 UI 任务**：先读 `.agents/ux/product.md` 与 `.agents/ux/components.md`，再按 stage 加载 skill 规则。
 - 宏观指令（「整体打磨」「重做这页」）和新页面从 stage `00-brief` 开始：先读 `.agents/ux/product.md`，写出后续 stage 消费的页面简报；纯视觉或文案修正跳过。
@@ -171,7 +172,7 @@ export LOBE_DESIGN="./.agents/skills/lobe-design"
 ### 3. 自迭代：纠正要沉淀下来
 
 - **何时记**：用户纠正了一次输出；80 审查发现同类问题本轮复发；60 或 lint 扫描发现可机械识别的漂移 ≥ 2 处。
-- **在本项目里记**：写进 项目自己的规则文件（建议新建 .agents/ux/lobe-design-rules.md），续编号，删除的编号不复用；新的产品事实写 `product.md`，组件用法写 `components.md`，一次性决定不记。
+- **在本项目里记**：写进 `.agents/ux/lobe-design-rules.md`，续编号，删除的编号不复用；新的产品事实写 `product.md`，组件用法写 `components.md`，一次性决定不记。
   不改 `$LOBE_DESIGN` 下的 skill 文件（重装会覆盖），也不在本项目里 bump skill 版本或写 skill 的 `learnings/LOG.md`。
 - **选层（由强到弱，选当前可行的最强一层）**：`structure > lint > rule > style`
   - 能用「出现了 X」「做了 X 却没有 Y」或数数描述 → **lint**

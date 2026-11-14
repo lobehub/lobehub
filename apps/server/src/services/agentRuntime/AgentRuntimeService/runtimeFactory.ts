@@ -24,6 +24,7 @@ import { hookDispatcher } from '../hooks';
 import { createEvalConnectorHook } from './evalConnectorHook';
 import { createEvalToolGateHook } from './evalToolGateHook';
 import { DurableStatusUnavailableError } from './executionErrors';
+import { withGraphSteerReopen } from './graphSteerReopen';
 import type { AgentRuntimeServiceContext } from './types';
 
 const log = debug('lobe-server:agent-runtime-service');
@@ -179,6 +180,7 @@ export async function createAgentRuntime(
   {
     abortSignal,
     agentState,
+    bindAgentDocumentIndex,
     operationId,
     stepIndex,
     tracingContextEngine,
@@ -192,6 +194,7 @@ export async function createAgentRuntime(
      * Works, so loading should cover that window).
      */
     agentState?: any;
+    bindAgentDocumentIndex?: RuntimeExecutorContext['bindAgentDocumentIndex'];
     operationId: string;
     stepIndex: number;
     tracingContextEngine?: (input: unknown, output: unknown, metadata?: unknown) => void;
@@ -269,6 +272,7 @@ export async function createAgentRuntime(
   // Create streaming executor context
   const executorContext: RuntimeExecutorContext = {
     abortSignal,
+    bindAgentDocumentIndex,
     // The factory may be a Graph-aware dispatcher that still returns the
     // default agent for ordinary conversations. Keep the early visible
     // output end behavior tied to the actual agent, not factory presence.
@@ -285,6 +289,7 @@ export async function createAgentRuntime(
     botContext: principal?.actor?.bot,
     execSubAgent: deps.delegate.execSubAgent,
     execVirtualSubAgent: deps.delegate.execVirtualSubAgent,
+    cancelVirtualSubAgent: deps.delegate.cancelVirtualSubAgent,
     execGroupMember: deps.delegate.execGroupMember,
     onGroupMemberResult: (params) => deps.completeGroupMemberBarrier(params),
     hookDispatcher,
@@ -306,7 +311,7 @@ export async function createAgentRuntime(
 
   // Create Agent Runtime instance
   const runtime = new AgentRuntime(agent as any, {
-    executors: createRuntimeExecutors(executorContext),
+    executors: withGraphSteerReopen(createRuntimeExecutors(executorContext), operationId),
   });
 
   return { agent, runtime };

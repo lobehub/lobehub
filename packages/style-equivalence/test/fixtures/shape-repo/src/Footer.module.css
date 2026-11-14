@@ -1,0 +1,7 @@
+.footer {
+  display: block;
+}
+
+.footer > button {
+  min-height: 44px;
+}

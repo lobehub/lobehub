@@ -6,6 +6,7 @@ export enum AsyncTaskType {
   ImageGeneration = 'image_generation',
   /** One-way Linear issue → task sync run in the background (`linear_issue_sync`). */
   LinearIssueSync = 'linear_issue_sync',
+  MusicGeneration = 'music_generation',
   UserMemoryExtractionHourly = 'user_memory_extraction:hourly',
   UserMemoryExtractionWithChatTopic = 'user_memory_extraction:chat_topic',
   VideoGeneration = 'video_generation',
@@ -226,6 +227,24 @@ export interface VideoGenerationTaskMetadata {
    * the feature had not shipped, so no stored row carries the old key.
    */
   spendOrigin?: SpendOrigin;
+  webhookToken?: string;
+}
+
+/** Metadata stored on each `music_generation` async task of one batch. */
+export interface MusicGenerationTaskMetadata {
+  /** Position of this generation in the batch; the provider's n-th track lands here. */
+  index?: number;
+  precharge?: unknown;
+  /** Channel that accepted an asynchronous task, so polling reaches the same channel. */
+  route?: {
+    channelId?: string;
+    channelIndex?: number;
+    model?: string;
+    routerId?: string;
+  };
+  /** Origin of the submitting request, kept for the completion charge. */
+  spendOrigin?: SpendOrigin;
+  /** One-time token the provider callback URL carries. */
   webhookToken?: string;
 }
 

@@ -26,6 +26,7 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors, homeRecentSelectors } from '@/store/home/selectors';
 import { ALL_RECENTS_LIMIT } from '@/store/home/slices/recent/action';
 import { createConversationRecentQueryKey } from '@/store/home/slices/recent/projection';
+import { useCurrentProjectList, useProjectStore } from '@/store/project';
 
 import AgentConversation from './AgentConversation';
 import ChannelConversation from './ChannelConversation';
@@ -113,11 +114,17 @@ const Body = memo(() => {
   }, [activeRouteId, revalidateRecents]);
   const channelsEnabled = useChannelsEnabled();
   const allChannels = useChannelStore(channelSelectors.list);
+  useProjectStore((s) => s.useFetchProjectList)(channelsEnabled);
+  const projects = useCurrentProjectList();
+  const projectMap = useMemo(
+    () => new Map(projects.map((project) => [project.id, project] as const)),
+    [projects],
+  );
   const { query } = useMessageSearch();
   const [showArchived, setShowArchived] = useState(false);
-  // Group Channels outside any project; a direct Channel opens from its Agent's row. An archived
-  // one leaves the list unless it is open, but search still finds it and the archived group at
-  // the end lists it.
+  // Group Channels, a project's included as that project's group chat; a direct Channel opens
+  // from its Agent's row. An archived one leaves the list unless it is open, but search still
+  // finds it and the archived group at the end lists it.
   const directChannels = useMemo(
     () =>
       new Map(
@@ -130,9 +137,7 @@ const Body = memo(() => {
     [allChannels, channelsEnabled],
   );
   const { archived, channels } = useMemo(() => {
-    const groups = channelsEnabled
-      ? (allChannels ?? []).filter((channel) => !channel.projectId && !channel.agentId)
-      : [];
+    const groups = channelsEnabled ? (allChannels ?? []).filter((channel) => !channel.agentId) : [];
     const isHidden = (channel: (typeof groups)[number]) =>
       channel.status === 'archived' && channel.id !== activeRouteId;
     return {
@@ -177,6 +182,7 @@ const Body = memo(() => {
         },
         query,
         channels,
+        (channel) => (channel.projectId ? projectMap.get(channel.projectId)?.name : undefined),
       ),
     [
       items,
@@ -189,6 +195,7 @@ const Body = memo(() => {
       inboxChannel,
       query,
       channels,
+      projectMap,
     ],
   );
 

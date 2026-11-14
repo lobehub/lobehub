@@ -181,6 +181,8 @@ export const buildConversationEntries = (
   inbox: { activeAt?: Date; channel?: ChannelListItem; title: string } | undefined,
   query = '',
   channels: ChannelListItem[] = [],
+  /** The name of the project a Channel belongs to, which a search also matches. */
+  projectNameOf?: (channel: ChannelListItem) => string | undefined,
 ): ConversationEntry[] => {
   const keyword = query.trim().toLowerCase();
   const matches = (...names: (string | null | undefined)[]) =>
@@ -196,7 +198,7 @@ export const buildConversationEntries = (
   const rest = [
     ...items(recent),
     ...channels
-      .filter((channel) => matches(channel.title))
+      .filter((channel) => matches(channel.title, projectNameOf?.(channel)))
       .map((channel) => ({
         activeAt: channelActivity(channel),
         channel,
@@ -214,6 +216,29 @@ export const buildConversationEntries = (
   }
 
   return [...items(pinned), ...rest];
+};
+
+/**
+ * The Messages tab badge: the sum of what the list rows show. A row that opens a direct Channel
+ * counts that Channel's unread messages instead of its Agent's unread topics, and an archived
+ * group Channel has no row.
+ */
+export const messagesUnreadCount = (
+  items: Pick<SidebarAgentItem, 'id' | 'unreadCount'>[],
+  channels: ChannelListItem[] | undefined,
+): number => {
+  let sum = 0;
+  const directAgentIds = new Set<string>();
+  for (const channel of channels ?? []) {
+    const direct = !!channel.agentId && !channel.projectId;
+    if (direct) directAgentIds.add(channel.agentId!);
+    else if (channel.agentId || channel.status === 'archived') continue;
+    sum += channel.unreadCount ?? 0;
+  }
+  for (const item of items) {
+    if (!directAgentIds.has(item.id)) sum += item.unreadCount ?? 0;
+  }
+  return sum;
 };
 
 /** IM-style timestamp: time today, weekday this week, date otherwise. */

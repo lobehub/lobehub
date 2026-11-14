@@ -17,13 +17,33 @@ const runtime = new SkillsExecutionRuntime({
   builtinSkills: filterBuiltinSkills(builtinSkills),
   service: {
     execScript: async (command, options) => {
-      const cwd = await desktopSkillRuntimeService.resolveExecutionDirectory(
+      const skillDir = await desktopSkillRuntimeService.resolveExecutionDirectory(
         options.activatedSkills,
       );
+      // A Local Sandbox run is fenced to the agent's working directory, never
+      // to the skill directory: that is the device's shared skill cache, and a
+      // writable cache would let a fenced run plant code a later unfenced run
+      // executes. The script still starts in its skill directory (reads are not
+      // fenced). Unfenced runs keep the historical skill-directory-only cwd.
+      if (options.localSandbox && !options.workingDirectory) {
+        return {
+          executionEnv: 'device' as const,
+          exitCode: 1,
+          output: '',
+          stderr:
+            'Local Sandbox requires a working directory. Set one for this agent (or topic) and run the command again.',
+          success: false,
+        };
+      }
       const result = await localFileService.runCommand({
         command,
-        cwd,
+        cwd: options.localSandbox ? (skillDir ?? options.workingDirectory) : skillDir,
         description: options.description,
+        ...(options.localSandbox && {
+          sandbox: true,
+          sandboxNetwork: options.localSandboxNetwork === true,
+          sandboxRoot: options.workingDirectory,
+        }),
         timeout: undefined,
       });
       return {

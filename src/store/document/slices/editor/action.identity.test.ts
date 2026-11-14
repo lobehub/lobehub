@@ -56,7 +56,7 @@ describe('document identity and metadata-only saves', () => {
 
     await useDocumentStore.getState().onEditorInit(editor, 'B');
 
-    expect(spy.setDocument).toHaveBeenCalledWith('json', JSON.stringify(body('B body')), {
+    expect(spy.setDocument).toHaveBeenCalledWith('json', body('B body'), {
       keepId: true,
     });
     expect(useDocumentStore.getState().documents.A.content).toBe('A body');

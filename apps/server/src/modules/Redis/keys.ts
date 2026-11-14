@@ -206,6 +206,12 @@ export const RedisKeys = {
      * Full key: agentSteer:hetero_deliveries:v1:{operationId}
      */
     heteroDeliveries: (operationId: string): string => `hetero_deliveries:v1:${operationId}`,
+    /**
+     * Marks a sub-agent run whose final queue read came back empty: it ends
+     * without reading again, so a steer appended behind it must be taken back.
+     * Full key: agentSteer:sealed_run:v1:{operationId}
+     */
+    sealedRun: (operationId: string): string => `sealed_run:v1:${operationId}`,
   },
   /**
    * Agent identity scope — see {@link RedisKeyNamespace.AGENT_IDENTITY}.
@@ -247,6 +253,12 @@ export const RedisKeys = {
    * Lobechat core scope - for application-level caching
    */
   lobechat: {
+    /**
+     * The agent-document index snapshot one conversation renders from, and its change notes.
+     * Full key: lobechat:agent_document_index:v1:{topicId}:{threadId|main}:{agentId}
+     */
+    agentDocumentIndex: (topicId: string, threadId: string | undefined, agentId: string): string =>
+      `agent_document_index:v1:${topicId}:${threadId ?? 'main'}:${agentId}`,
     /**
      * Digest of the body the last projection of a page's collaboration room wrote.
      * Full key: lobechat:page_projection:v1:{documentId}

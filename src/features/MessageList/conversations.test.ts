@@ -8,6 +8,7 @@ import {
   inboxActivity,
   latestActivity,
   latestTopicOf,
+  messagesUnreadCount,
 } from './conversations';
 
 const agent = (id: string, updatedAt: string, extra: Partial<SidebarAgentItem> = {}) =>
@@ -249,6 +250,55 @@ describe('buildConversationEntries', () => {
     expect(ids(buildConversationEntries(sections, undefined, 'team', channels))).toEqual([
       'chn_team',
     ]);
+  });
+
+  it("finds a project Channel by its project's name", () => {
+    const channels = [
+      { ...channel('chn_general', 'General', '2026-10-03'), projectId: 'pro_1' },
+      channel('chn_team', 'Team', '2026-10-02'),
+    ];
+    const projectNameOf = (c: ChannelListItem) => (c.projectId ? 'Apollo' : undefined);
+
+    expect(
+      ids(buildConversationEntries(sections, undefined, 'apollo', channels, projectNameOf)),
+    ).toEqual(['chn_general']);
+  });
+});
+
+describe('messagesUnreadCount', () => {
+  const channel = (patch: Partial<ChannelListItem>) =>
+    ({
+      agentId: null,
+      projectId: null,
+      status: 'active',
+      unreadCount: 0,
+      ...patch,
+    }) as ChannelListItem;
+
+  it('sums the list rows: topics without a direct Channel, direct, group and project Channels', () => {
+    const items = [
+      agent('agt_topics', '2026-10-01', { unreadCount: 2 }),
+      agent('agt_direct', '2026-10-01', { unreadCount: 5 }),
+    ];
+    const channels = [
+      channel({ agentId: 'agt_direct', id: 'chn_direct', unreadCount: 1 }),
+      channel({ agentId: 'agt_inbox', id: 'chn_inbox', unreadCount: 3 }),
+      channel({ id: 'chn_team', unreadCount: 4 }),
+      channel({ id: 'chn_project', projectId: 'pro_1', unreadCount: 6 }),
+    ];
+
+    // 2 (topics) + 1 (direct, not the agent's 5 topics) + 3 (inbox) + 4 (group) + 6 (project)
+    expect(messagesUnreadCount(items, channels)).toBe(16);
+  });
+
+  it('leaves out archived group Channels, which have no row', () => {
+    const channels = [channel({ id: 'chn_old', status: 'archived', unreadCount: 7 })];
+
+    expect(messagesUnreadCount([], channels)).toBe(0);
+  });
+
+  it('counts only Agent topics while Channels are off', () => {
+    expect(messagesUnreadCount([agent('a', '2026-10-01', { unreadCount: 2 })], undefined)).toBe(2);
   });
 });
 

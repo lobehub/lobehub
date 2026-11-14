@@ -93,6 +93,10 @@ const SkillList = memo<SkillListProps>(
     const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
     const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
     const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+    const marketplaceConnectors = useToolStore(
+      connectorSelectors.marketplaceMcpConnectors,
+      isEqual,
+    );
     const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
     const agentBoundConnectors = useToolStore(connectorSelectors.agentBoundConnectors, isEqual);
@@ -309,6 +313,7 @@ const SkillList = memo<SkillListProps>(
       marketAgentSkills.length > 0 ||
       userAgentSkills.length > 0 ||
       communityMCPs.length > 0 ||
+      marketplaceConnectors.length > 0 ||
       customMCPs.length > 0 ||
       agentBoundConnectors.length > 0;
 
@@ -350,8 +355,8 @@ const SkillList = memo<SkillListProps>(
         />
       ));
 
-    const renderCommunityMCPs = () =>
-      communityMCPs.map((plugin) => (
+    const renderCommunityMCPs = () => [
+      ...communityMCPs.map((plugin) => (
         <McpSkillItem
           author={plugin.author}
           avatar={plugin.avatar}
@@ -363,7 +368,21 @@ const SkillList = memo<SkillListProps>(
           type={plugin.type as LobeToolType}
           onSelect={onSelect ? () => onSelect(plugin.identifier, 'plugin') : undefined}
         />
-      ));
+      )),
+      // Marketplace installs made on the connector path (no legacy plugin row)
+      ...marketplaceConnectors.map((c) => (
+        <McpSkillItem
+          avatar={c.metadata?.avatar as string | undefined}
+          identifier={c.identifier}
+          isSelected={selectedIdentifier === c.identifier}
+          key={c.id}
+          runtimeType="mcp"
+          title={c.name || c.identifier}
+          type={'plugin' as LobeToolType}
+          onSelect={onSelect ? () => onSelect(c.identifier, 'mcp-connector') : undefined}
+        />
+      )),
+    ];
 
     const renderCustomMCPs = () =>
       customMCPs.map((plugin) => (
@@ -447,7 +466,8 @@ const SkillList = memo<SkillListProps>(
     // Skills tab only shows agent-based community skills; Lobehub/Composio OAuth
     // connectors live exclusively in the Connectors view (hasCommunityConnectors).
     const hasCommunitySkills = !isConnectorView && marketAgentSkills.length > 0;
-    const hasCommunityTools = communityMCPs.length > 0 && isConnectorView;
+    const communityToolCount = communityMCPs.length + marketplaceConnectors.length;
+    const hasCommunityTools = communityToolCount > 0 && isConnectorView;
     // In connector view: custom MCPs (old plugins) + custom connectors (new store).
     // In skill view: user agent skills
     const hasCustomConnectors =
@@ -556,7 +576,7 @@ const SkillList = memo<SkillListProps>(
             'communityTools',
             t('skillGroup.communityTools', 'Community Tools'),
             renderCommunityMCPs(),
-            communityMCPs.length,
+            communityToolCount,
           )}
 
         {hasCustomConnectors &&

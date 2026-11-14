@@ -219,8 +219,7 @@ export const UserAgentConnection = memo<UserAgentConnectionProps>(
     const { t } = useTranslation('messenger');
     const { allowed: canEdit } = usePermission('edit_own_content');
     const enableWorkspaceScopes = useServerConfigStore(
-      (s) =>
-        serverConfigSelectors.enableBusinessFeatures(s) && s.featureFlags.enableWorkspace === true,
+      serverConfigSelectors.enableBusinessFeatures,
     );
     const handle = formatUserHandle(link);
     const hasReadableHandle = Boolean(link.platformUsername);

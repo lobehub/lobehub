@@ -18,11 +18,17 @@ export interface StyleBinding {
   spread: boolean;
 }
 
+export interface ComponentImport {
+  imported: string;
+  source: string;
+}
+
 export interface StyleElement {
   aliases?: Record<string, string>;
   attributes?: Record<string, string>;
   bindings: StyleBinding[];
   children?: string[];
+  component?: ComponentImport;
   derived?: Record<string, string>;
   flags: string[];
   foreignSpread?: boolean;
@@ -35,6 +41,7 @@ export interface StyleElement {
   literalProps: Record<string, LiteralValue>;
   owner: string;
   parent?: string;
+  propTexts?: string[];
   real?: boolean;
   runtimeStyle?: string;
   slots: string[];
@@ -44,6 +51,7 @@ export interface StyleElement {
   subtreeTags?: Record<string, number>;
   tag: string;
   variables: VariableUse[];
+  wraps?: string;
 }
 
 export interface StyleRule {
@@ -65,6 +73,7 @@ export interface FileExtraction {
   gaps: string[];
   globalRules?: StyleRule[];
   literalClasses?: string[];
+  moduleNames?: string[];
   outsideReferences: string[];
   plain?: StyleElement[];
   prelude: string;

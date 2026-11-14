@@ -9,6 +9,7 @@ import type {
   GlobalState,
   ModelDetailPanelExpandedKey,
   ProjectListSortBy,
+  ProjectListViewMode,
   ProjectTopicSubGroupMode,
   SystemStatus,
   WorkspaceOverridableField,
@@ -515,6 +516,8 @@ const channelListSort = (s: GlobalState): ChannelListSort =>
   s.status.channelListSort ?? DEFAULT_CHANNEL_LIST_SORT;
 const projectListSortBy = (s: GlobalState): ProjectListSortBy =>
   s.status.projectListSortBy ?? 'manual';
+const projectListViewMode = (s: GlobalState): ProjectListViewMode =>
+  s.status.projectListViewMode ?? 'folder';
 const agentDocumentSort = (s: GlobalState): AgentDocumentSort =>
   s.status.agentDocumentSort ?? DEFAULT_AGENT_DOCUMENT_SORT;
 const agentListViewOptions = (s: GlobalState) => s.status.agentListViewOptions;
@@ -523,6 +526,7 @@ const agentListSidebarSectionCollapsed = (s: GlobalState) =>
   s.status.agentListSidebarSectionCollapsed ?? false;
 const imageTopicViewMode = (s: GlobalState) => s.status.imageTopicViewMode || 'grid';
 const imageTopicPanelWidth = (s: GlobalState) => s.status.imageTopicPanelWidth;
+const musicTopicViewMode = (s: GlobalState) => s.status.musicTopicViewMode || 'list';
 const verifyReportPanelWidth = (s: GlobalState) => s.status.verifyReportPanelWidth || 300;
 const videoPanelWidth = (s: GlobalState) => s.status.videoPanelWidth;
 const videoTopicViewMode = (s: GlobalState) => s.status.videoTopicViewMode || 'grid';
@@ -561,7 +565,11 @@ const isBannerDismissed =
 const tokenDisplayFormatShort = (s: GlobalState) =>
   s.status.tokenDisplayFormatShort !== undefined ? s.status.tokenDisplayFormatShort : true;
 
-const homeSelectedAgentId = (s: GlobalState) => s.status.homeSelectedAgentId;
+/** The home AgentSelect choice made in `scope` (a cache scope), if any. */
+const homeSelectedAgentId =
+  (scope: string) =>
+  (s: GlobalState): string | undefined =>
+    s.status.homeSelectedAgentIdByScope?.[scope];
 
 export const systemStatusSelectors = {
   agentBuilderPanelWidth,
@@ -569,6 +577,7 @@ export const systemStatusSelectors = {
   contactListSortBy,
   channelListSort,
   projectListSortBy,
+  projectListViewMode,
   agentListExpandedGroupKeys,
   agentListSidebarSectionCollapsed,
   agentListViewMode,
@@ -648,6 +657,7 @@ export const systemStatusSelectors = {
   topicOnlyMine,
   topicPageSize,
   videoPanelWidth,
+  musicTopicViewMode,
   videoTopicViewMode,
   videoTopicPanelWidth,
   wideScreen,

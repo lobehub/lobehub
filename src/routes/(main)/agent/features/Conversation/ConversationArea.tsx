@@ -5,6 +5,7 @@ import { memo, Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBusinessConversationAnalytics } from '@/business/client/hooks/useBusinessConversationAnalytics';
+import { RenderProfiler } from '@/components/RenderProfiler';
 import AgentHome from '@/features/AgentHome';
 import { useSlugRouteSendGuard } from '@/features/AgentRoute/useSlugRouteSendGuard';
 import {
@@ -159,33 +160,35 @@ const Conversation = memo(() => {
           {topicPending ? (
             <TopicMigrationPlaceholder agentId={context.agentId} topicId={context.topicId} />
           ) : (
-            <ChatList
-              printable
-              headerSlot={<div aria-hidden className={styles.floatingHeaderSpacer} />}
-              messageDeepLink={messageDeepLink}
-              welcome={<AgentHome />}
-              footerSlot={
-                isSubagentThread ? (
-                  <Flexbox
-                    horizontal
-                    align={'center'}
-                    justify={'center'}
-                    paddingBlock={6}
-                    paddingInline={16}
-                  >
-                    <span
-                      style={{
-                        color: cssVar.colorTextDescription,
-                        fontSize: 12,
-                        textAlign: 'center',
-                      }}
+            <RenderProfiler region={'messages'}>
+              <ChatList
+                printable
+                headerSlot={<div aria-hidden className={styles.floatingHeaderSpacer} />}
+                messageDeepLink={messageDeepLink}
+                welcome={<AgentHome />}
+                footerSlot={
+                  isSubagentThread ? (
+                    <Flexbox
+                      horizontal
+                      align={'center'}
+                      justify={'center'}
+                      paddingBlock={6}
+                      paddingInline={16}
                     >
-                      {t('thread.subagentReadOnlyHint')}
-                    </span>
-                  </Flexbox>
-                ) : undefined
-              }
-            />
+                      <span
+                        style={{
+                          color: cssVar.colorTextDescription,
+                          fontSize: 12,
+                          textAlign: 'center',
+                        }}
+                      >
+                        {t('thread.subagentReadOnlyHint')}
+                      </span>
+                    </Flexbox>
+                  ) : undefined
+                }
+              />
+            </RenderProfiler>
           )}
         </Flexbox>
       </SplitDropZone>

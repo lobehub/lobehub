@@ -81,6 +81,10 @@ overrides:
   drizzle-orm: ^0.45.2
   fast-xml-parser: 5.4.2
   lexical: 0.42.0
+  # 2.2 serializes attention by trial and re-render, which takes minutes on a long
+  # paragraph. The CJK extension is written against the 2.2 attention API and keeps it.
+  mdast-util-to-markdown: 2.1.2
+  'mdast-util-to-markdown-cjk-friendly>mdast-util-to-markdown': ^2.2.0
   # Keep the coupled core/autolink patches applied without a root lockfile.
   micromark: 4.0.3
   micromark-extension-gfm-autolink-literal: 2.1.0

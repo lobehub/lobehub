@@ -557,10 +557,30 @@ export const canvasKeys = {
   storage: def('canvas:storage', () => ['canvas:storage']),
 };
 
-// ---- changelog ----------------------------------------------------------
-export const changelogKeys = {
-  modalIndex: def('changelog:modalIndex', () => ['changelog:modalIndex']),
-  post: def('changelog:post', (id: string, locale: string) => ['changelog:post', id, locale]),
+// ---- agent onboarding ---------------------------------------------------
+export const onboardingKeys = {
+  agentBootstrap: def('onboarding:agentBootstrap', () => ['onboarding:agentBootstrap']),
+  agentHistoryTopics: def('onboarding:agentHistoryTopics', (agentId: string) => [
+    'onboarding:agentHistoryTopics',
+    agentId,
+  ]),
+  analysisStatus: def('onboarding:analysisStatus', () => ['onboarding:analysisStatus']),
+  profile: def('onboarding:profile', () => ['onboarding:profile']),
+  suggestedTasks: def('onboarding:suggestedTasks', () => ['onboarding:suggestedTasks']),
+  understandingSession: def('onboarding:understandingSession', (topicId: string) => [
+    'onboarding:understandingSession',
+    topicId,
+  ]),
+  understandingStart: def('onboarding:understandingStart', (topicId: string) => [
+    'onboarding:understandingStart',
+    topicId,
+  ]),
+  understandingTopic: def('onboarding:understandingTopic', () => ['onboarding:understandingTopic']),
+};
+
+// ---- agent home / profile (kept off the `agent:` idb tier) -----
+export const agentHomeKeys = {
+  topics: def('agentHome:topics', (agentId: string) => ['agentHome:topics', agentId]),
 };
 
 // ---- bot wake records (one bot's judged messages; never persisted) ----
@@ -661,9 +681,9 @@ export const taskLabelKeys = {
 
 export const swrKeys = {
   agent: agentConfigKeys,
+  agentHome: agentHomeKeys,
   auth: authKeys,
   canvas: canvasKeys,
-  changelog: changelogKeys,
   cron: cronKeys,
   device: deviceKeys,
   electron: electronKeys,
@@ -678,6 +698,7 @@ export const swrKeys = {
   messenger: messengerKeys,
   scm: scmKeys,
   ollama: ollamaKeys,
+  onboarding: onboardingKeys,
   openInApp: openInAppKeys,
   ragEval: ragEvalKeys,
   recommendations: recommendationsKeys,

@@ -8,7 +8,7 @@ import { sandboxStorageService } from '@/services/sandboxStorage';
 const USAGE_KEY = 'sandbox-drive-usage';
 
 /**
- * A refresh of a drive too large to measure in one go (LOBE-15436): the
+ * A refresh of a drive too large to measure in one go: the
  * execution plane walks it over several calls and, until the walk ends, says
  * how much it has counted so far beside the last finished figure.
  */

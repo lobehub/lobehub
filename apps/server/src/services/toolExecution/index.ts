@@ -1,17 +1,11 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { DEFAULT_TOOL_RESULT_MAX_LENGTH, truncateToolResult } from '@lobechat/prompts/toolResult';
 import { type ChatToolPayload } from '@lobechat/types';
-import { safeParseJSON } from '@lobechat/utils';
 import { isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
 import debug from 'debug';
 
 import { ConnectorToolPermission } from '@/database/schemas';
-import {
-  type CloudMCPParams,
-  type HttpMCPClientParams,
-  type StdioMCPParams,
-  type ToolCallContent,
-} from '@/libs/mcp';
+import { type CloudMCPParams, type HttpMCPClientParams, type StdioMCPParams } from '@/libs/mcp';
 import {
   buildBlockedToolResponse,
   getConnectorToolPermission,
@@ -20,11 +14,10 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 import { resolveDeviceClientKind } from '@/server/services/deviceGateway/deviceChannels';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
-import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
-import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
+import { callCloudMcpTool, runtimeCloudMcpCaller } from '../mcp/cloudTool';
 import { type BuiltinToolsExecutor } from './builtin';
 import { classifyToolError, getToolAccessDeniedError } from './errorClassification';
 import { buildMcpAuthorizationErrorContent, isMcpAuthorizationError } from './mcpAuthError';
@@ -579,35 +572,14 @@ export class ToolExecutionService {
     log('Executing Cloud MCP tool: %s:%s via cloud gateway', identifier, apiName);
 
     try {
-      // Create DiscoverService with user context
-      const discoverService = new DiscoverService({
-        userInfo: context.userId ? { userId: context.userId } : undefined,
-      });
-
-      // Parse arguments
-      const apiParams = safeParseJSON(args) || {};
-
-      // Call cloud MCP endpoint via Market API
-      // Returns CloudGatewayResponse: { content: ToolCallContent[], isError?: boolean }
-      const cloudResult = await discoverService.callCloudMcpEndpoint({
-        apiParams,
-        identifier,
-        toolName: apiName,
-      });
-
-      const cloudResultContent = (cloudResult?.content ?? []) as ToolCallContent[];
-
-      // Convert content blocks to string (same as market router does)
-      const content = contentBlocksToString(cloudResultContent);
-      const state = { ...cloudResult, content: cloudResultContent };
+      const { content, state, success } = await callCloudMcpTool(
+        { args, identifier, toolName: apiName },
+        runtimeCloudMcpCaller(context.userId),
+      );
 
       log('Cloud MCP tool execution successful for: %s:%s', identifier, apiName);
 
-      return {
-        content,
-        state,
-        success: !cloudResult?.isError,
-      };
+      return { content, state, success };
     } catch (error) {
       log('Cloud MCP tool execution failed for %s:%s: %O', identifier, apiName, error);
       return {

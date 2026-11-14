@@ -3,7 +3,11 @@ import { buildMcpToolMetadata, getMcpToolVisibility } from '@lobechat/const/mcpA
 import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorToolModel } from '@/database/models/connectorTool';
 import type { ConnectorCredentials } from '@/database/schemas';
-import { ConnectorMcpConnectionType, ConnectorStatus } from '@/database/schemas';
+import {
+  ConnectorMcpConnectionType,
+  ConnectorStatus,
+  ConnectorToolPermission,
+} from '@/database/schemas';
 import type { AuthConfig } from '@/libs/mcp';
 import { inferCrudType } from '@/libs/mcp/utils';
 import { mcpService } from '@/server/services/mcp';
@@ -90,6 +94,29 @@ export const buildHttpAuthFromCredentials = (
   }
 };
 
+export interface ConnectorToolSyncOptions {
+  /**
+   * Drop the `auto` tools the server no longer lists, so they stop being
+   * advertised: eval contracts, and an MCP install or reinstall, whose tool
+   * list replaces the stored one as a plugin install replaced its manifest.
+   * Approval and disabled rows stay as permission tombstones, so neither a later
+   * listing nor the rollback of a failed reinstall can bring them back as `auto`.
+   */
+  pruneMissingAutoTools?: boolean;
+}
+
+/** After a sync: delete the connector's `auto` tools that `listedToolNames` no longer has. */
+export const pruneMissingAutoConnectorTools = async (
+  connectorToolModel: Pick<ConnectorToolModel, 'deleteToolsNotIn' | 'queryByConnector'>,
+  connectorId: string,
+  listedToolNames: string[],
+): Promise<void> => {
+  const tombstones = (await connectorToolModel.queryByConnector(connectorId))
+    .filter((tool) => tool.permission !== ConnectorToolPermission.auto)
+    .map((tool) => tool.toolName);
+  await connectorToolModel.deleteToolsNotIn(connectorId, [...listedToolNames, ...tombstones]);
+};
+
 /**
  * Connect to a connector's MCP server, fetch its tool list, and sync it into
  * `user_connector_tools`. Refreshes the OAuth token first when needed, and
@@ -102,7 +129,7 @@ export const syncConnectorToolsById = async (
   connectorId: string,
   /** `userId` decides the `mcp_apps` flag: with it on, view-only tools are listed too. */
   ctx: ConnectorToolSyncContext & { userId?: string | null },
-  options: { pruneMissingAutoTools?: boolean } = {},
+  options: ConnectorToolSyncOptions = {},
 ): Promise<{ toolCount: number }> => {
   let connector = await ctx.connectorModel.findById(connectorId);
   if (!connector) throw new Error('Connector not found');
@@ -140,15 +167,11 @@ export const syncConnectorToolsById = async (
 
   await ctx.connectorToolModel.upsertMany(connectorId, syncInputs);
   if (options.pruneMissingAutoTools) {
-    // Eval contracts exclude vanished auto tools. Retain denied/approval rows as
-    // permission tombstones so a later upstream listing cannot auto-approve them.
-    const restricted = (await ctx.connectorToolModel.queryByConnector(connectorId))
-      .filter((tool) => tool.permission !== 'auto')
-      .map((tool) => tool.toolName);
-    await ctx.connectorToolModel.deleteToolsNotIn(connectorId, [
-      ...syncInputs.map((tool) => tool.toolName),
-      ...restricted,
-    ]);
+    await pruneMissingAutoConnectorTools(
+      ctx.connectorToolModel,
+      connectorId,
+      syncInputs.map((tool) => tool.toolName),
+    );
   }
   await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.connected);
 

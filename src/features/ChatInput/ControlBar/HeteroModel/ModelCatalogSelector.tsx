@@ -42,6 +42,7 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useMenuContentLifecycle } from '../useMenuContentLifecycle';
+import { getModelLabel, getModelOptionDescription } from './labels';
 import { useModelCatalogView } from './useModelCatalogView';
 import { useTargetModelCatalog } from './useTargetModelCatalog';
 
@@ -170,6 +171,14 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
       search,
     });
 
+    // The persisted id can be an opaque tuple (DeepSeek Harness). Show the
+    // catalog label when it is loaded, otherwise derive a readable name.
+    const triggerModelLabel =
+      currentModel === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
+        ? t('heteroAgent.modelSelector.default')
+        : (data?.models.find((item) => item.id === currentModel)?.label ??
+          getModelLabel(currentModel, t('heteroAgent.modelSelector.default')));
+
     const handleOpenChangeComplete = useCallback(
       (nextOpen: boolean) => {
         completeOpenChange(nextOpen);
@@ -183,17 +192,10 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
         {...stylex.props(styles.trigger, disabled && styles.triggerDisabled)}
         aria-label={t('heteroAgent.cliModel.ariaLabel', {
           name: agentName,
-          model:
-            currentModel === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
-              ? t('heteroAgent.modelSelector.default')
-              : currentModel,
+          model: triggerModelLabel,
         })}
       >
-        <span {...stylex.props(styles.triggerLabel)}>
-          {currentModel === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
-            ? t('heteroAgent.modelSelector.default')
-            : currentModel}
-        </span>
+        <span {...stylex.props(styles.triggerLabel)}>{triggerModelLabel}</span>
         <Icon icon={ChevronDownIcon} size={12} />
       </div>
     );
@@ -299,7 +301,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
                         <DropdownMenuItemDesc
                           className={isStale ? stylex.props(styles.stale).className : undefined}
                         >
-                          {item.id}
+                          {getModelOptionDescription(item.id)}
                           {isStale ? ` · ${t('heteroAgent.cliModel.stale')}` : ''}
                         </DropdownMenuItemDesc>
                       </DropdownMenuItemLabelGroup>

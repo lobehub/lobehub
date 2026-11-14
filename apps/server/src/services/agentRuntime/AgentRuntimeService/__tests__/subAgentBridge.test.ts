@@ -675,6 +675,9 @@ describe('AgentRuntimeService', () => {
         (service as any).messageModel.findById = vi
           .fn()
           .mockResolvedValue({ id: 'tool-msg-1', topicId: 'topic-1' });
+        (service as any).messageModel.releaseCancelSuppressedDelivery = vi
+          .fn()
+          .mockResolvedValue([]);
         deliver = vi.fn().mockResolvedValue(undefined);
         (service as any).delegate.deliverBackgroundSubAgentResults = deliver;
       });
@@ -703,6 +706,35 @@ describe('AgentRuntimeService', () => {
         });
         expect(resumeSpy).not.toHaveBeenCalled();
         expect(deliver).toHaveBeenCalledWith({ topicId: 'topic-1' });
+      });
+
+      it('hands back a racing cancel claim when the run still finished with an answer', async () => {
+        const release = vi.fn().mockResolvedValue(['tool-msg-1']);
+        (service as any).messageModel.releaseCancelSuppressedDelivery = release;
+
+        await service.completeSubAgentBridge({ ...bridgeParams, finalState: childState as any });
+
+        expect(release).toHaveBeenCalledWith(['tool-msg-1']);
+        // Released after the answer is stored and before it is delivered.
+        expect(release.mock.invocationCallOrder[0]).toBeGreaterThan(
+          updateToolMessage.mock.invocationCallOrder[0],
+        );
+        expect(release.mock.invocationCallOrder[0]).toBeLessThan(
+          deliver.mock.invocationCallOrder[0],
+        );
+      });
+
+      it('keeps a cancel claim when the run was stopped', async () => {
+        const release = vi.fn().mockResolvedValue([]);
+        (service as any).messageModel.releaseCancelSuppressedDelivery = release;
+
+        await service.completeSubAgentBridge({
+          ...bridgeParams,
+          finalState: childState as any,
+          reason: 'interrupted',
+        });
+
+        expect(release).not.toHaveBeenCalled();
       });
 
       it('stores a failure as an error result', async () => {

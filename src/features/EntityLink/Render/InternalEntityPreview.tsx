@@ -1,6 +1,5 @@
 'use client';
 
-import type { VerifyCodingScope } from '@lobechat/types';
 import {
   ActionIcon,
   Avatar,
@@ -26,16 +25,12 @@ import { useTranslation } from 'react-i18next';
 
 import { ArticleSkeleton } from '@/components/Skeleton';
 import { goalStatusKey } from '@/features/AgentGoals/goalPresentation';
-import { useClientDataSWR } from '@/libs/swr';
-import { agentService } from '@/services/agent';
-import { documentService } from '@/services/document';
-import { goalService } from '@/services/goal';
-import { taskService } from '@/services/task';
-import { verifyService } from '@/services/verify';
+import type { EntityPreview } from '@/store/entityPreview';
 import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import type { InternalLinkReference } from '../internalLink';
 import { useAcceptanceBrowserUrl } from './useAcceptanceBrowserUrl';
+import { useEntityPreview } from './useEntityPreview';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   content: css`
@@ -78,15 +73,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-interface PreviewData {
-  avatar?: string | null;
-  backgroundColor?: string | null;
-  description?: string | null;
-  meta?: string | null;
-  secondaryMeta?: string | null;
-  title?: string | null;
-}
-
 const getVerifyStatusLabel = (status: string | null | undefined, t: TFunction<'chat'>) => {
   switch (status) {
     case 'delivered': {
@@ -123,116 +109,63 @@ const getVerifyStatusLabel = (status: string | null | undefined, t: TFunction<'c
 };
 
 /**
- * One cache entry per entity, shared between the hover preview and the eager
- * title resolution on the link itself — whichever fires first warms the other.
+ * The card's status lines. They come from statuses and counts that move on
+ * while the entity runs, so a preview restored from an earlier session only
+ * shows them once the server has confirmed it; the branch / commit / tested-at
+ * line of a verify run is fixed and paints at once.
  */
-export const internalEntityPreviewKey = (reference: InternalLinkReference) => [
-  'internal-entity-preview',
-  reference.type,
-  reference.pathname,
-];
-
-export const getPreviewData = async (
-  reference: InternalLinkReference,
+export const formatPreviewMeta = (
+  preview: EntityPreview | undefined,
+  isConfirmed: boolean,
   t: TFunction<'chat'>,
-): Promise<PreviewData | null> => {
-  switch (reference.type) {
-    case 'acceptance': {
-      const bundle = await verifyService.getAcceptanceBundle(reference.acceptanceId);
-      if (!bundle) return null;
+): { meta?: string | null; secondaryMeta?: string | null } => {
+  if (!preview) return {};
 
-      const passed = bundle.checks.filter((check) => check.state === 'passed').length;
-      const exceptions = bundle.checks.filter(
-        (check) => check.state === 'failed' || check.state === 'uncertain',
-      ).length;
+  const { acceptance, goal, verify } = preview;
+  const verifyScope = verify
+    ? [
+        verify.branch,
+        verify.commit,
+        verify.testedAt ? new Date(verify.testedAt).toLocaleString() : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : null;
 
-      return {
-        description: bundle.acceptance.requirement || bundle.latestReport?.summary,
-        meta: t('internalLink.preview.acceptanceCounts', {
-          exceptions,
-          passed,
-          total: bundle.checks.length,
-        }),
-        secondaryMeta: t('internalLink.preview.acceptanceRounds', {
-          count: bundle.rounds.length,
-        }),
-        title: bundle.subject.title || bundle.subject.id,
-      };
-    }
-    case 'agent': {
-      return agentService.getAgentConfigById(reference.agentId);
-    }
-    case 'document': {
-      const document = await documentService.getDocumentById(reference.documentId);
-      return document
-        ? {
-            description: document.content,
-            title: document.title || document.filename,
-          }
-        : null;
-    }
-    case 'goal': {
-      const { decisions, goal, nodes } = await goalService.getGraph(reference.goalId);
-      const tasks = nodes.filter((node) => node.kind === 'task');
-      const done = tasks.filter((node) =>
-        ['rejected', 'resolved', 'retired'].includes(node.status),
-      ).length;
-      const pending = decisions.filter((decision) => decision.status === 'pending').length;
+  if (!isConfirmed) return { secondaryMeta: verifyScope };
 
-      return {
-        description: goal.requirement,
-        meta: [
-          pending > 0 ? t('goalList.needsYou', { count: pending }) : t(goalStatusKey(goal.status)),
-          t('goalList.taskProgress', { done, total: tasks.length }),
-        ].join(' · '),
-        title: goal.title,
-      };
-    }
-    case 'task': {
-      const result = await taskService.getDetail(reference.taskId);
-      const task = result.data;
-      return task
-        ? {
-            description: task.description || task.instruction,
-            title: task.name || task.identifier,
-          }
-        : null;
-    }
-    case 'verify': {
-      const bundle = await verifyService.getReportBundle(reference.runId);
-      if (!bundle) return null;
+  if (acceptance)
+    return {
+      meta: t('internalLink.preview.acceptanceCounts', {
+        exceptions: acceptance.exceptions,
+        passed: acceptance.passed,
+        total: acceptance.total,
+      }),
+      secondaryMeta: t('internalLink.preview.acceptanceRounds', { count: acceptance.rounds }),
+    };
 
-      const { report, run } = bundle;
-      const status = report?.verdict ?? run.status;
-      const counts = report
-        ? t('internalLink.preview.verifyCounts', {
-            failed: report.failedChecks ?? 0,
-            passed: report.passedChecks ?? 0,
-            uncertain: report.uncertainChecks ?? 0,
-          })
-        : null;
-      // Branch/commit chips only exist on a coding scope (a run with no
-      // scenario predates the column and is coding); testedAt is shared.
-      const codingScope =
-        (run.scenario ?? 'coding') === 'coding' ? (run.context as VerifyCodingScope | null) : null;
-      const testedAt = (run.context as { testedAt?: string } | null)?.testedAt;
-      const scope = [
-        codingScope?.branch,
-        codingScope?.commit?.slice(0, 10),
-        testedAt ? new Date(testedAt).toLocaleString() : null,
-      ].filter(Boolean);
+  if (goal)
+    return {
+      meta: [
+        goal.pendingDecisions > 0
+          ? t('goalList.needsYou', { count: goal.pendingDecisions })
+          : t(goalStatusKey(goal.status)),
+        t('goalList.taskProgress', { done: goal.done, total: goal.total }),
+      ].join(' · '),
+    };
 
-      return {
-        description: report?.summary,
-        meta: [getVerifyStatusLabel(status, t), counts].filter(Boolean).join(' · '),
-        secondaryMeta: scope.join(' · '),
-        title: run.title,
-      };
-    }
-    case 'route': {
-      return null;
-    }
-  }
+  if (verify)
+    return {
+      meta: [
+        getVerifyStatusLabel(verify.status, t),
+        verify.counts ? t('internalLink.preview.verifyCounts', verify.counts) : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      secondaryMeta: verifyScope,
+    };
+
+  return {};
 };
 
 interface InternalEntityPreviewProps extends PropsWithChildren {
@@ -248,11 +181,18 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
     // A click on the link opens the acceptance in the side panel; this is the
     // explicit way out to a full browser page.
     const browserUrl = useAcceptanceBrowserUrl(reference);
-    const { data, isLoading } = useClientDataSWR(
-      open ? internalEntityPreviewKey(reference) : null,
-      () => getPreviewData(reference, t),
-      { revalidateOnFocus: false },
-    );
+    const {
+      error,
+      isConfirmed,
+      isHydrated,
+      isValidating,
+      preview: data,
+      title,
+    } = useEntityPreview(reference, open);
+    // Skeleton only while nothing at all is known; a remembered preview paints
+    // at once and the network confirms it behind it.
+    const isLoading = !data && !error && (!isHydrated || isValidating);
+    const { meta, secondaryMeta } = formatPreviewMeta(data, isConfirmed, t);
 
     const icon =
       reference.type === 'acceptance'
@@ -289,7 +229,7 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
           )}
           <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
             <span className={styles.type}>{typeLabel}</span>
-            <span className={styles.title}>{data?.title || fallbackTitle}</span>
+            <span className={styles.title}>{title || fallbackTitle}</span>
           </Flexbox>
           {browserUrl && (
             <ActionIcon
@@ -305,14 +245,14 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
             {data.description}
           </Text>
         )}
-        {data?.meta && (
+        {meta && (
           <Text fontSize={12} type={'secondary'}>
-            {data.meta}
+            {meta}
           </Text>
         )}
-        {data?.secondaryMeta && (
+        {secondaryMeta && (
           <Text fontSize={12} type={'secondary'}>
-            {data.secondaryMeta}
+            {secondaryMeta}
           </Text>
         )}
       </Flexbox>
@@ -320,7 +260,7 @@ export const InternalEntityPreview = memo<InternalEntityPreviewProps>(
 
     return (
       <Popover
-        // Disabling the SWR key clears data before the exit animation finishes.
+        // Keep the closing card as it was through the exit animation.
         content={<Freeze frozen={!open}>{content}</Freeze>}
         mouseEnterDelay={0.35}
         open={open}

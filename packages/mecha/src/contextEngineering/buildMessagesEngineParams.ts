@@ -75,6 +75,7 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
     stepContext: run.stepContext,
 
     // --- agent definition ---
+    agentDocumentChanges: agent.documentChanges,
     agentDocuments: agent.documents,
     agentIdentity: agent.identity,
     enableHistoryCount: agent.enableHistoryCount,
