@@ -50,6 +50,7 @@ import {
   applyWatchKeywordInstructions,
   burstMatchesWatchKeyword,
   dispatchTextCommand,
+  isEmptyInboundMessage,
   mergeSkippedMessages,
   summarizeMessageAttachments,
 } from './utils';
@@ -467,6 +468,22 @@ export function registerHandlers(
     // a "newcomer" — otherwise count would be 0 at that moment and the
     // single-user-relaxation logic wouldn't kick in.
     await trackThreadParticipants(thread, [...(context?.skipped ?? []), message]);
+    // Blank events (recalls, unsupported types, whitespace) carry nothing for the agent. Drop them
+    // before the access gates, commands and wake judgement, all of which can reply or call a model.
+    // No wake decision record either: `record()` would run the shadow policies, the classifier
+    // included, on the blank text.
+    const burst = mergeSkippedMessages(message, context);
+    if (isEmptyInboundMessage(burst)) {
+      log(
+        'onNewMention: skip empty message (no text, attachments or quote), agent=%s, platform=%s, thread=%s, msgId=%s, merged=%d',
+        agentId,
+        platform,
+        thread.id,
+        message.id,
+        (context?.skipped?.length ?? 0) + 1,
+      );
+      return;
+    }
 
     // Side-effect-free `bypassGate` commands (`/whoami`) answer before the
     // gate so a not-yet-configured operator can discover their own ID.
@@ -599,6 +616,22 @@ export function registerHandlers(
     ]);
     remember('onSubscribedMessage', [...(context?.skipped ?? []), message], thread);
     if (message.author.isBot === true) return;
+    // Blank events (recalls, unsupported types, whitespace) carry nothing for the agent. Drop them
+    // before the access gates, commands and wake judgement, all of which can reply or call a model.
+    // No wake decision record either: `record()` would run the shadow policies, the classifier
+    // included, on the blank text.
+    const burst = mergeSkippedMessages(message, context);
+    if (isEmptyInboundMessage(burst)) {
+      log(
+        'onSubscribedMessage: skip empty message (no text, attachments or quote), agent=%s, platform=%s, thread=%s, msgId=%s, merged=%d',
+        agentId,
+        platform,
+        thread.id,
+        message.id,
+        (context?.skipped?.length ?? 0) + 1,
+      );
+      return;
+    }
     const replyLocale = detectReplyLocale(message);
 
     // Group / channel / thread policy: only respond when the bot is @-mentioned.

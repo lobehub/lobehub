@@ -375,7 +375,9 @@ export async function executeWithHooksLocalMode(
                   );
                   // The stand-down marker is for the runtime, not the channel.
                   const replyText = extractStandDown(lastAssistantContent).content;
-                  const hasText = !!replyText;
+                  // Trim like BotCallbackService: a whitespace-only reply would
+                  // otherwise go out as an empty message.
+                  const hasText = !!replyText?.trim();
                   const hasAttachments = !!lastChunkAttachments?.length;
 
                   if (hasText || hasAttachments) {
