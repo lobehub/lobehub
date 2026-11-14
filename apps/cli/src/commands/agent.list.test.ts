@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as WorkspaceModule from '../api/workspace';
+import { log } from '../utils/logger';
 import { registerAgentCommand } from './agent';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
@@ -58,5 +59,41 @@ describe('agent list --tag', () => {
     for (const [input] of mockTrpcClient.agent.queryAgents.query.mock.calls) {
       expect(input).not.toHaveProperty('tag');
     }
+  });
+
+  it('prints only rows carrying the tag', async () => {
+    mockTrpcClient.agent.queryAgents.query.mockResolvedValue([
+      { id: 'pet', tags: ['lobe-pet'], title: 'Pet' },
+      { id: 'crm', tags: [], title: 'CRM' },
+    ]);
+
+    await run('--tag', 'lobe-pet', '--json');
+
+    const out = JSON.parse(consoleSpy.mock.calls[0][0]);
+    expect(out.map((a: { id: string }) => a.id)).toEqual(['pet']);
+  });
+
+  it('prints nothing and warns when an older server ignored the tag', async () => {
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
+    mockTrpcClient.agent.queryAgents.query.mockResolvedValue([
+      { id: 'crm', title: 'CRM' },
+      { id: 'coder', title: 'Coder' },
+    ]);
+
+    await run('--tag', 'lobe-pet', '--json');
+
+    expect(JSON.parse(consoleSpy.mock.calls[0][0])).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('does not filter agents by tag'));
+    warn.mockRestore();
+  });
+
+  it('leaves the list untouched without --tag', async () => {
+    mockTrpcClient.agent.queryAgents.query.mockResolvedValue([{ id: 'crm', title: 'CRM' }]);
+
+    await run('--json');
+
+    expect(JSON.parse(consoleSpy.mock.calls[0][0]).map((a: { id: string }) => a.id)).toEqual([
+      'crm',
+    ]);
   });
 });

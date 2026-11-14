@@ -92,7 +92,18 @@ export function registerAgentCommand(program: Command) {
       if (options.limit) input.limit = Number.parseInt(options.limit, 10);
 
       const result = await client.agent.queryAgents.query(input);
-      const items = Array.isArray(result) ? result : ((result as any).items ?? []);
+      const listed: any[] = Array.isArray(result) ? result : ((result as any).items ?? []);
+      // An older server drops the unknown `tag` input and returns an unfiltered
+      // page whose rows carry no `tags`: keep only rows that really carry the
+      // tag, so unrelated agents are never printed as a filtered result.
+      const tag = input.tag;
+      const items =
+        tag === undefined
+          ? listed
+          : listed.filter((a) => Array.isArray(a?.tags) && a.tags.includes(tag));
+      if (tag !== undefined && listed.length > 0 && !listed.some((a) => Array.isArray(a?.tags))) {
+        log.warn('This server does not filter agents by tag; upgrade it to use --tag.');
+      }
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
