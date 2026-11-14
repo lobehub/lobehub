@@ -70,7 +70,7 @@ Onlyboxes 可以部署在同机或其他内网机器；不以本机是否存在�
 
 ## Fork 的 Actions
 
-上游专用 Branch Synchronization、Deploy Workbench、Release Desktop Canary、Release ModelBank 默认在 Fork 中跳过。
+上游专用 Branch Synchronization、Deploy Workbench、Release Desktop Canary、Release ModelBank 和 Preview CLI 默认在 Fork 中跳过。
 只有官方仓库，或显式设置仓库变量 `ENABLE_UPSTREAM_PUBLISH_WORKFLOWS=true` 的仓库，才执行这些任务。
 启用前需配置各自 GitHub App、Cloudflare/S3、桌面 OTA 和 npm 发布凭据。
 代码测试及本 Fork 的镜像发布不受此开关影响。
