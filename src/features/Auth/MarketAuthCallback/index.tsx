@@ -1,18 +1,42 @@
 'use client';
 
-import { Button, FluentEmoji, Result, Text } from '@lobehub/ui';
+import { Avatar, Button, Flexbox, FluentEmoji, Result, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
+import { CircleCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { persistMarketAuthResult } from '@/layout/AuthProvider/MarketAuth/handoff';
+import {
+  type MarketAuthAccount,
+  persistMarketAuthResult,
+  resolveMarketAuthAccountPayload,
+} from '@/layout/AuthProvider/MarketAuth/handoff';
 
 type CallbackStatus = 'loading' | 'success' | 'error';
+
+const styles = stylex.create({
+  account: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    minWidth: 260,
+    paddingBlock: 12,
+    paddingInline: 16,
+    backgroundColor: cssVar.colorFillQuaternary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  successIcon: {
+    color: cssVar.colorSuccess,
+  },
+});
 
 const MarketAuthCallbackPage = () => {
   const { t } = useTranslation('marketAuth');
   const [status, setStatus] = useState<CallbackStatus>('loading');
   const [message, setMessage] = useState('');
-  const [countdown, setCountdown] = useState(3);
+  const [authState, setAuthState] = useState<string>();
+  const [account, setAccount] = useState<MarketAuthAccount>();
 
   useEffect(() => {
     console.info('[MarketAuthCallback] Processing authorization callback');
@@ -51,7 +75,8 @@ const MarketAuthCallbackPage = () => {
     if (code && state) {
       console.info('[MarketAuthCallback] Authorization successful, code received');
       setStatus('success');
-      setMessage(t('callback.messages.successWithRedirect'));
+      setAuthState(state);
+      setMessage(t('callback.messages.successDescription'));
 
       persistMarketAuthResult({
         code,
@@ -71,47 +96,53 @@ const MarketAuthCallbackPage = () => {
         );
       }
 
-      // Start countdown and close window after 3 seconds
-      let timeLeft = 3;
-      setCountdown(timeLeft);
+      return;
+    }
 
-      const countdownTimer = setInterval(() => {
-        timeLeft -= 1;
-        setCountdown(timeLeft);
+    console.error('[MarketAuthCallback] Missing code or state parameter');
+    setStatus('error');
+    setMessage(t('callback.messages.missingParams'));
 
-        if (timeLeft <= 0) {
-          clearInterval(countdownTimer);
-          window.close();
-        }
-      }, 1000);
-    } else {
-      console.error('[MarketAuthCallback] Missing code or state parameter');
-      setStatus('error');
-      setMessage(t('callback.messages.missingParams'));
+    persistMarketAuthResult({
+      error: 'Missing authorization parameters',
+      state: state || undefined,
+      type: 'MARKET_AUTH_ERROR',
+    });
 
-      persistMarketAuthResult({
-        error: 'Missing authorization parameters',
-        state: state || undefined,
-        type: 'MARKET_AUTH_ERROR',
-      });
-
-      if (window.opener) {
-        window.opener.postMessage(
-          {
-            error: 'Missing authorization parameters',
-            state,
-            type: 'MARKET_AUTH_ERROR',
-          },
-          window.location.origin,
-        );
-      }
+    if (window.opener) {
+      window.opener.postMessage(
+        {
+          error: 'Missing authorization parameters',
+          state,
+          type: 'MARKET_AUTH_ERROR',
+        },
+        window.location.origin,
+      );
     }
   }, [t]);
+
+  // The opener exchanges the code and knows who just authorized, so it posts the
+  // account back here — the callback URL itself only carries code + state.
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+
+      const payload = resolveMarketAuthAccountPayload(event.data);
+      if (!payload) return;
+      if (payload.state && authState && payload.state !== authState) return;
+
+      setAccount(payload.account);
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    return () => window.removeEventListener('message', handleMessage);
+  }, [authState]);
 
   const getStatusIcon = () => {
     switch (status) {
       case 'success': {
-        return <FluentEmoji emoji={'✅'} size={96} type={'anim'} />;
+        return <CircleCheck size={56} strokeWidth={1.5} {...stylex.props(styles.successIcon)} />;
       }
       case 'error': {
         return <FluentEmoji emoji={'🥵'} size={96} type={'anim'} />;
@@ -154,21 +185,38 @@ const MarketAuthCallbackPage = () => {
     if (status === 'loading') {
       return t('callback.messages.processing');
     }
-    if (status === 'success') {
-      return t('callback.messages.successWithCountdown', { countdown, message });
-    }
+
     return message;
   };
 
   const getExtra = () => {
-    if (status === 'error') {
-      return (
-        <Button block size={'large'} style={{ minWidth: 240 }} onClick={() => window.close()}>
+    if (status === 'loading') return undefined;
+
+    return (
+      <Flexbox align={'center'} gap={16}>
+        {status === 'success' && account && (
+          <div {...stylex.props(styles.account)}>
+            <Avatar
+              avatar={account.avatarUrl}
+              fallbackVariant={'text'}
+              size={40}
+              title={account.displayName}
+            />
+            <Flexbox gap={2}>
+              <Text weight={500}>{account.displayName}</Text>
+              <Text fontSize={12} type={'secondary'}>
+                {account.userName
+                  ? `@${account.userName} · ${t('callback.messages.connectedAccount')}`
+                  : t('callback.messages.connectedAccount')}
+              </Text>
+            </Flexbox>
+          </div>
+        )}
+        <Button size={'large'} type={'primary'} onClick={() => window.close()}>
           {t('callback.buttons.close')}
         </Button>
-      );
-    }
-    return undefined;
+      </Flexbox>
+    );
   };
 
   return (
