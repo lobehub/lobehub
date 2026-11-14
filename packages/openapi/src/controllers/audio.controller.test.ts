@@ -200,6 +200,21 @@ describe('AudioController.handleSpeech', () => {
     });
   });
 
+  it.each([
+    { model: 's2.1-pro', provider: 'fishaudio', voice: '0123456789abcdef0123456789abcdef' },
+    { model: 'seed-tts-2.0', provider: 'doubaospeech', voice: 'zh_male_m191_uranus_bigtts' },
+  ])('passes a $provider request through with its voice, model and format', async (request) => {
+    const res = await speech({ ...request, input: 'Hello', response_format: 'mp3', speed: 1.2 });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-LobeHub-Provider')).toBe(request.provider);
+    expect(synthesizeMock).toHaveBeenCalledWith({
+      ...request,
+      input: 'Hello',
+      params: { format: 'mp3', speed: 1.2 },
+    });
+  });
+
   it('surfaces upstream failures as 502 with a readable message', async () => {
     synthesizeMock.mockRejectedValue(
       new TTSProviderError('voice id not exist', 'ProviderBizError'),

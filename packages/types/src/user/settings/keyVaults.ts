@@ -35,6 +35,20 @@ export interface CloudflareKeyVault {
   baseURLOrAccountID?: string;
 }
 
+/**
+ * Doubao Speech (Volcengine speech synthesis): an API key from the new speech console, or
+ * the legacy console's App ID + Access Token.
+ */
+export interface DoubaoSpeechKeyVault {
+  /** Legacy console Access Token, sent as `X-Api-Access-Key` with `appId`. */
+  accessToken?: string;
+  /** New-console API key, sent as `X-Api-Key`. */
+  apiKey?: string;
+  /** Legacy console App ID, sent as `X-Api-App-Id` with `accessToken`. */
+  appId?: string;
+  baseURL?: string;
+}
+
 export interface ComfyUIKeyVault {
   apiKey?: string;
   authType?: 'none' | 'basic' | 'bearer' | 'custom';

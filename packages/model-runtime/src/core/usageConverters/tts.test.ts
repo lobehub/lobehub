@@ -1,12 +1,16 @@
 import type { Pricing } from 'model-bank';
+import fishaudioModels from 'model-bank/fishaudio';
 import openaiModels from 'model-bank/openai';
 import { describe, expect, it } from 'vitest';
 
+import { FISH_AUDIO_MODELS } from '../../providers/fishaudio/createSpeech';
 import {
   convertOpenAISpeechTokenUsage,
   convertTextToSpeechUsage,
+  countFishAudioBilledBytes,
   countMiniMaxSpeechCharacters,
   countTextToSpeechCharacters,
+  isFishAudioSpeechModel,
   isMiniMaxSpeechModel,
   isTokenBilledTextToSpeech,
 } from './tts';
@@ -105,5 +109,34 @@ describe('isMiniMaxSpeechModel', () => {
     expect(isMiniMaxSpeechModel('tts-1')).toBe(false);
     expect(isMiniMaxSpeechModel('openai/gpt-4o-mini-tts')).toBe(false);
     expect(isMiniMaxSpeechModel(undefined)).toBe(false);
+  });
+});
+
+describe('countFishAudioBilledBytes', () => {
+  it('counts UTF-8 bytes: a Chinese character is 3, an emoji 4', () => {
+    expect(countFishAudioBilledBytes('hello')).toBe(5);
+    expect(countFishAudioBilledBytes('你好，世界')).toBe(15);
+    expect(countFishAudioBilledBytes('hi 👋')).toBe(7);
+  });
+});
+
+describe('isFishAudioSpeechModel', () => {
+  it('matches every Fish Audio card and runtime model, by catalog and gateway id', () => {
+    const ids = [...fishaudioModels.map((model: { id: string }) => model.id), ...FISH_AUDIO_MODELS];
+
+    expect(ids.length).toBeGreaterThan(0);
+    for (const id of ids) {
+      expect(isFishAudioSpeechModel(id)).toBe(true);
+      expect(isFishAudioSpeechModel(`fish-audio/${id}`)).toBe(true);
+    }
+  });
+
+  it('rejects other models and look-alike ids', () => {
+    expect(isFishAudioSpeechModel('tts-1')).toBe(false);
+    expect(isFishAudioSpeechModel('speech-2.8-hd')).toBe(false);
+    expect(isFishAudioSpeechModel('s2')).toBe(false);
+    expect(isFishAudioSpeechModel('s1-mini')).toBe(false);
+    expect(isFishAudioSpeechModel('other/s1')).toBe(false);
+    expect(isFishAudioSpeechModel(undefined)).toBe(false);
   });
 });
