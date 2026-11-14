@@ -894,7 +894,7 @@ export default {
     'Turn it on in Settings → Labs, or switch this agent to Subscription authentication.',
   'heteroAgent.apiMode.labDisabled.title': 'Provider binding is a Labs experiment',
   'heteroAgent.apiMode.localOnly.desc':
-    'Switch the execution environment to Local device, or use Subscription authentication.',
+    'Switch the execution environment to This computer, or use Subscription authentication.',
   'heteroAgent.apiMode.localOnly.title': 'API mode requires Desktop local execution',
   'heteroAgent.apiMode.modelUnavailable':
     'The model "{{providerId}}/{{model}}" is disabled or no longer available.',
@@ -909,6 +909,7 @@ export default {
   'heteroAgent.executionTarget.sandboxUnsupported':
     '{{name}} currently runs only on a local or connected device',
   'heteroAgent.executionTarget.auto': 'Auto',
+  'heteroAgent.executionTarget.builtinGroup': 'Built-in',
   'heteroAgent.executionTarget.autoDesc':
     'Use an online device automatically, picking one when several are available',
   'heteroAgent.executionTarget.fixedTip':
@@ -917,8 +918,8 @@ export default {
     'Choose where this Agent runs. A device can read and write files or operate a computer; Cloud Sandbox runs in an isolated temporary environment.',
   'heteroAgent.executionTarget.loadFailed': 'Couldn’t load devices.',
   'heteroAgent.executionTarget.loading': 'Loading devices…',
-  'heteroAgent.executionTarget.local': 'Local device',
-  'heteroAgent.executionTarget.localDesc': 'Run as a local process on this desktop app',
+  'heteroAgent.executionTarget.local': 'This computer',
+  'heteroAgent.executionTarget.localDesc': 'Runs right here, with access to your files and tools',
   'heteroAgent.executionTarget.localSandbox': 'Local sandbox',
   'heteroAgent.executionTarget.localSandboxDesc':
     'Run on this computer, with commands limited to the working directory and no network',
@@ -930,7 +931,7 @@ export default {
   'heteroAgent.executionTarget.localSandboxUnavailable': 'Not available on this device: {{reason}}',
   'heteroAgent.executionTarget.manage': 'Manage',
   'heteroAgent.executionTarget.noDevices':
-    'No remote devices yet. Run `lh connect` on another machine to add one.',
+    'No other devices yet. Run `lh connect` on another computer to add one.',
   'heteroAgent.executionTarget.noWorkspaceDevices':
     'No workspace devices yet. Run `{{cmd}}` on a machine to enroll it for every member.',
   'heteroAgent.executionTarget.none': 'No device',
@@ -947,6 +948,7 @@ export default {
   'heteroAgent.executionTarget.reconnect': 'Reconnect',
   'heteroAgent.executionTarget.reconnectFailed':
     'Could not reconnect this device. Make sure the desktop app is running, then try again.',
+  'heteroAgent.executionTarget.otherDevicesGroup': 'Other devices',
   'heteroAgent.executionTarget.personalGroup': 'Private Devices',
   'heteroAgent.executionTarget.sandbox': 'Cloud Sandbox',
   'heteroAgent.executionTarget.sandboxDesc': 'Runs in the cloud, no machine needed',
@@ -960,7 +962,6 @@ export default {
     'This topic has been running on {{name}}, where its working directory and agent session are kept. After switching, its next turn starts a fresh session in the new environment. New topics will use this choice too.',
   'heteroAgent.executionTarget.switchTopic.ok': 'Switch',
   'heteroAgent.executionTarget.switchTopic.title': 'Move this topic to another environment?',
-  'heteroAgent.executionTarget.thisDevice': 'This device',
   'heteroAgent.executionTarget.unknownDevice': 'Unknown device',
   'heteroAgent.executionTarget.wake': 'Wake now',
   'heteroAgent.executionTarget.wakeFailed': 'Could not wake this cloud device. Try again.',
