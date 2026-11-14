@@ -1,7 +1,7 @@
 import { ModelProvider } from 'model-bank';
 
-import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatible';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 import type { ChatCompletionErrorPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { processMultiProviderModelList } from '../../utils/modelParse';

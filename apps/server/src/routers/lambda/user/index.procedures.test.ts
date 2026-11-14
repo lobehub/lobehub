@@ -25,6 +25,7 @@ function expected(): Array<
   [name: string, type: 'mutation' | 'query' | 'subscription', middlewares: number]
 > {
   return [
+    ['addIslandDismissals', 'mutation', 11],
     ['confirmOnboardingUnderstanding', 'mutation', 14],
     ['createOnboardingTasks', 'mutation', 13],
     ['finishOnboarding', 'mutation', 11],

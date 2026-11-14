@@ -173,7 +173,7 @@ const ShareLayout = ({
 
   return (
     <Flexbox horizontal height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
-      <div {...sx(styles.lane, undefined, laneStyle)}>
+      <div {...sx(styles.lane, laneStyle)}>
         <header {...stylex.props(styles.header)}>
           <div {...stylex.props(styles.lead)}>
             <ShareLogoLink>

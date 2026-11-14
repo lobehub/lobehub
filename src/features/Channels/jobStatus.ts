@@ -16,13 +16,21 @@ export const memberJobStatus = (job: ChannelReplyJob) => {
   return status === 'status.running' ? ('status.working' as const) : status;
 };
 
+/**
+ * A follow-up deferred behind the message's primary responder. It starts only once that reply
+ * settles and may well stay silent, so until then it is not a reply in progress.
+ */
+export const isAwaitingPrimary = (job: ChannelReplyJob) =>
+  job.status === 'queued' && job.blockedCode === 'awaiting_primary';
+
 /** Colour family of a status: working blue, attention amber, error red, settled grey. */
 export type ChannelStatusTone = 'attention' | 'done' | 'error' | 'quiet' | 'working';
 
 export const channelJobTone = (job: ChannelReplyJob): ChannelStatusTone => {
   if (job.status === 'failed') return 'error';
   if (job.publicationRevoked) return job.writerHeld ? 'attention' : 'quiet';
-  if (job.status === 'queued') return job.blockedCode ? 'attention' : 'working';
+  if (job.status === 'queued')
+    return isAwaitingPrimary(job) ? 'quiet' : job.blockedCode ? 'attention' : 'working';
   if (job.status === 'running') return 'working';
   if (job.status === 'completed') return 'done';
   return 'quiet';
@@ -34,7 +42,11 @@ export const isChannelJobActive = (job: ChannelReplyJob) =>
 
 /** Work the conversation is still waiting on: shown above the composer, not on messages. */
 export const replyActivityJobs = <T extends ChannelReplyJob>(jobs: T[]) =>
-  jobs.filter((job) => isChannelJobActive(job) || (job.publicationRevoked && job.writerHeld));
+  jobs.filter(
+    (job) =>
+      (isChannelJobActive(job) && !isAwaitingPrimary(job)) ||
+      (job.publicationRevoked && job.writerHeld),
+  );
 
 /**
  * Each member's newest job when it failed. A later reply, stop or retry by the same member
@@ -69,15 +81,10 @@ export const conversationReplies = (detail: ChannelDetail, threadId: string | nu
   };
 };
 
-/**
- * What a direct conversation's header says about its one Agent: "typing" while it works, or the
- * reply it is `waiting` on when blocked or stopping. Null when nothing is pending.
- */
-export const directReplyStatus = (detail: ChannelDetail) => {
-  const { jobs, receiving } = conversationReplies(detail, null);
-  const job = jobs[0] && memberCurrentJob(jobs, jobs[0].memberId);
-  if (!job) return receiving ? { jobs } : null;
-  return channelJobTone(job) === 'working' ? { jobs } : { jobs, waiting: job };
+/** Whether the conversation has a reply or routing in progress to show above the composer. */
+export const hasReplyActivity = (detail: ChannelDetail, threadId: string | null) => {
+  const { jobs, receiving } = conversationReplies(detail, threadId);
+  return jobs.length > 0 || receiving;
 };
 
 /**

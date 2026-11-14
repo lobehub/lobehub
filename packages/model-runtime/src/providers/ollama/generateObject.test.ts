@@ -2,7 +2,7 @@
 import { Ollama } from 'ollama/browser';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { StructuredOutputError } from '../../core/openaiCompatibleFactory/structuredOutput';
+import { StructuredOutputError } from '../../core/openaiCompatible/structuredOutput';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { LobeOllamaAI } from './index';
 

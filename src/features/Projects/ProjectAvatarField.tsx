@@ -52,7 +52,9 @@ interface ProjectAvatarFieldProps {
   /** The rest of the row; an image dropped on it lands here as well. */
   children: ReactNode;
   disabled?: boolean;
-  /** Seeds the generated avatar shown until the user picks one. */
+  /** The project's reserved id: seeds the generated avatar shown until one is picked. */
+  id: string;
+  /** Labels the avatar. */
   name: string;
   onChange: (avatar?: string) => void;
   /** An upload is in flight; the avatar it brings arrives through `onChange` later. */
@@ -64,7 +66,7 @@ interface ProjectAvatarFieldProps {
  * image, or drop an image anywhere on the row.
  */
 const ProjectAvatarField = memo<ProjectAvatarFieldProps>(
-  ({ avatar, children, disabled, name, onChange, onUploadingChange }) => {
+  ({ avatar, children, disabled, id, name, onChange, onUploadingChange }) => {
     const { t } = useTranslation('project');
     const { upload, uploading } = useProjectAvatarUpload({ onChange, onUploadingChange });
 
@@ -92,9 +94,11 @@ const ProjectAvatarField = memo<ProjectAvatarFieldProps>(
                 role={'button'}
               >
                 {/* Until one is picked, the project's own generated avatar: the one
-                    it keeps after creation, seeded by the name as it is typed. */}
+                    it keeps after creation, seeded by its reserved id so typing the
+                    name does not reshuffle it. */}
                 <ProjectAvatar
                   avatar={value}
+                  id={id}
                   name={name.trim() || t('create.title')}
                   size={TILE_SIZE}
                 />

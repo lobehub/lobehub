@@ -15,6 +15,7 @@
     "./project-file-index": "./src/projectFileIndex.ts",
     "./rpc-clients": "./src/rpcClients.ts",
     "./skill-directory": "./src/skillDirectory.ts",
+    "./terminal": "./src/terminal.ts",
     "./workspace": "./src/workspace.ts"
   },
   "main": "./src/index.ts",

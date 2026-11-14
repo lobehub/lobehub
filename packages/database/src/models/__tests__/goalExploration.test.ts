@@ -74,15 +74,17 @@ async function seedExperiment(goalId: string, title = 'Three arms') {
     title: `${title} run 1`,
   });
   const task = await new TaskModel(db, userId).create({ instruction: 'baseline evidence' });
-  const work = await new WorkModel(db, userId).registerTask({
-    changeType: 'created',
-    taskId: task.id,
-    toolIdentifier: 'test',
-    toolName: 'createTask',
-  });
+  const work = await new WorkModel(db, userId).registerTask(createdTaskWorkInput(task));
   await graphModel.attachWorkVersion(goalId, run!.id, work!.currentVersionId!, 'produced');
   return { experimentId: experiment!.id, versionId: work!.currentVersionId! };
 }
+
+const createdTaskWorkInput = (task: { id: string }): Parameters<WorkModel['registerTask']>[0] => ({
+  changeType: 'created',
+  taskId: task.id,
+  toolIdentifier: 'test',
+  toolName: 'createTask',
+});
 
 describe('GoalExplorationModel', () => {
   it('reruns a corrected protocol inside the same experiment without spending a slot', async () => {
@@ -116,12 +118,7 @@ describe('GoalExplorationModel', () => {
     const { experimentId } = await seedExperiment(goalId);
     const first = await model.apply(goalId, (await claim(goalId))!.token, revise(experimentId));
     const task = await new TaskModel(db, userId).create({ instruction: 'rerun evidence' });
-    const work = await new WorkModel(db, userId).registerTask({
-      changeType: 'created',
-      taskId: task.id,
-      toolIdentifier: 'test',
-      toolName: 'createTask',
-    });
+    const work = await new WorkModel(db, userId).registerTask(createdTaskWorkInput(task));
     await graphModel.attachWorkVersion(goalId, first.nodeId!, work!.currentVersionId!, 'produced');
     await graphModel.updateNodeStatus(goalId, first.nodeId!, 'resolved');
     const second = await model.apply(
@@ -203,12 +200,7 @@ describe('GoalExplorationModel', () => {
       status: 'resolved',
     });
     const task = await new TaskModel(db, userId).create({ instruction: 'baseline evidence' });
-    const work = await new WorkModel(db, userId).registerTask({
-      changeType: 'created',
-      taskId: task.id,
-      toolIdentifier: 'test',
-      toolName: 'createTask',
-    });
+    const work = await new WorkModel(db, userId).registerTask(createdTaskWorkInput(task));
     await graphModel.attachWorkVersion(goalId, parent.id, work!.currentVersionId!, 'produced');
     const lease = await claim(goalId);
     const result = await model.apply(goalId, lease!.token, expand(parent.id));

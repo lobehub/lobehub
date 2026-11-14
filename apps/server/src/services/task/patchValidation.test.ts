@@ -4,7 +4,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveTaskPatchInvariants } from './patchValidation';
 
-const { assertAgentUsableByMock } = vi.hoisted(() => ({ assertAgentUsableByMock: vi.fn() }));
+const { assertAgentUsableByMock, findProjectMock } = vi.hoisted(() => ({
+  assertAgentUsableByMock: vi.fn(),
+  findProjectMock: vi.fn(),
+}));
+
+vi.mock('@/database/models/project', () => ({
+  ProjectModel: class {
+    findById = findProjectMock;
+  },
+}));
 
 vi.mock('@/database/utils/agent-access', () => ({
   assertAgentUsableBy: assertAgentUsableByMock,
@@ -33,6 +42,8 @@ const buildContext = (rows: Record<string, Record<string, unknown>> = {}) => {
   const taskModel = {
     findAllDescendants: vi.fn().mockResolvedValue([]),
     findById: vi.fn(async (id: string) => storedTask(id, rows[id])),
+    hasDependencyOutsideProject: vi.fn().mockResolvedValue(false),
+    hasSubtaskOutsideProject: vi.fn().mockResolvedValue(false),
     resolve: vi.fn(async (id: string) => storedTask(id, rows[id])),
   };
   const taskService = {
@@ -228,5 +239,120 @@ describe('resolveTaskPatchInvariants normalization', () => {
     const result = await resolveTaskPatchInvariants(context, { data: both, id: 'task-1' });
 
     expect(result.data.editorData).toEqual({ root: {} });
+  });
+});
+
+describe('resolveTaskPatchInvariants project', () => {
+  beforeEach(() => {
+    assertAgentUsableByMock.mockReset();
+    findProjectMock.mockReset();
+    findProjectMock.mockImplementation(async (id: string) =>
+      id.startsWith('project-') ? { id } : null,
+    );
+  });
+
+  it('accepts moving a task to a project the caller can read', async () => {
+    const { context } = buildContext();
+    const { data } = await resolveTaskPatchInvariants(context, {
+      data: { projectId: 'project-2' },
+      id: 'task-1',
+    });
+    expect(data.projectId).toBe('project-2');
+  });
+
+  it.each(['missing', ''])('refuses the unknown project id %j as not found', async (projectId) => {
+    const { context } = buildContext();
+    await expect(
+      resolveTaskPatchInvariants(context, { data: { projectId }, id: 'task-1' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND', message: 'Project not found' });
+  });
+
+  it('clears the project without looking one up', async () => {
+    const { context } = buildContext();
+    const { data } = await resolveTaskPatchInvariants(context, {
+      data: { projectId: null },
+      id: 'task-1',
+    });
+    expect(data.projectId).toBeNull();
+    expect(findProjectMock).not.toHaveBeenCalled();
+  });
+
+  it('leaves the project out of the patch when it is not sent', async () => {
+    const { context, taskModel } = buildContext();
+    const { data } = await resolveTaskPatchInvariants(context, {
+      data: { name: 'renamed' },
+      id: 'task-1',
+    });
+    expect(data).not.toHaveProperty('projectId');
+    expect(findProjectMock).not.toHaveBeenCalled();
+    expect(taskModel.hasSubtaskOutsideProject).not.toHaveBeenCalled();
+  });
+
+  it('does not re-check links when the project stays the same', async () => {
+    const { context, taskModel } = buildContext({ 'task-1': { parentTaskId: 'parent-1' } });
+    await resolveTaskPatchInvariants(context, { data: { projectId: 'project-1' }, id: 'task-1' });
+    expect(taskModel.hasSubtaskOutsideProject).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['moved', 'project-2'],
+    ['cleared', null],
+  ])('refuses a subtask %s away from its parent', async (_label, projectId) => {
+    const { context } = buildContext({ 'task-1': { parentTaskId: 'parent-1' } });
+    await expect(
+      resolveTaskPatchInvariants(context, { data: { projectId }, id: 'task-1' }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Subtask must belong to the same project as its parent',
+    });
+  });
+
+  it('accepts a move that detaches the subtask in the same patch', async () => {
+    const { context } = buildContext({ 'task-1': { parentTaskId: 'parent-1' } });
+    const { data } = await resolveTaskPatchInvariants(context, {
+      data: { projectId: 'project-2' },
+      id: 'task-1',
+      parentTaskId: null,
+    });
+    expect(data).toMatchObject({ parentTaskId: null, projectId: 'project-2' });
+  });
+
+  it('judges a new parent against the project the same patch moves to', async () => {
+    const { context } = buildContext({ 'parent-1': { projectId: 'project-2' } });
+    const { data } = await resolveTaskPatchInvariants(context, {
+      data: { projectId: 'project-2' },
+      id: 'task-1',
+      parentTaskId: 'parent-1',
+    });
+    expect(data).toMatchObject({ parentTaskId: 'parent-1', projectId: 'project-2' });
+
+    await expect(
+      resolveTaskPatchInvariants(context, {
+        data: { projectId: 'project-3' },
+        id: 'task-1',
+        parentTaskId: 'parent-1',
+      }),
+    ).rejects.toMatchObject({ message: 'Parent task must belong to the same project' });
+  });
+
+  it('refuses moving a task whose subtasks would stay behind', async () => {
+    const { context, taskModel } = buildContext();
+    taskModel.hasSubtaskOutsideProject.mockResolvedValue(true);
+    await expect(
+      resolveTaskPatchInvariants(context, { data: { projectId: 'project-2' }, id: 'task-1' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('subtasks') });
+    expect(taskModel.hasSubtaskOutsideProject).toHaveBeenCalledWith('task-1', 'project-2');
+  });
+
+  it('refuses a move that strands a dependency', async () => {
+    const { context, taskModel } = buildContext();
+    taskModel.hasDependencyOutsideProject.mockResolvedValue(true);
+    await expect(
+      resolveTaskPatchInvariants(context, { data: { projectId: 'project-2' }, id: 'task-1' }),
+    ).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+      message: expect.stringContaining('dependencies cannot cross project boundaries'),
+    });
+    expect(taskModel.hasDependencyOutsideProject).toHaveBeenCalledWith('task-1', 'project-2');
   });
 });

@@ -397,8 +397,8 @@ export interface LobeRuntimeAI {
 ```
 
 **Adapter Architecture**: Through two factory functions —
-`openaiCompatibleFactory` and
-`anthropicCompatibleFactory` — most providers can be
+`createOpenAICompatibleRuntime` and
+`createAnthropicCompatibleRuntime` — most providers can be
 integrated with minimal configuration. Currently supports
 over 40 model providers (OpenAI, Anthropic, Google,
 Azure, Bedrock, Ollama, etc.), with implementations

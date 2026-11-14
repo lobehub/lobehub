@@ -33,6 +33,19 @@ lh gen json "Extract the person" --schema ./person.json --schema-name person --s
 - It is a single request: \`--stream\`, \`--temperature\` and \`--max-tokens\` are not accepted options
 - Use \`lh gen text\` when you want prose
 
+## Text-to-Speech
+
+\`lh gen tts\` synthesizes with the provider's saved API key. A bare model id picks the provider of its built-in card.
+
+\`\`\`bash
+lh gen tts "Hello" -m gemini-3.8-flash-tts --voice Kore -o hello.mp3
+lh gen tts "你好" -m minimax/speech-2.8-hd -o hello-zh.mp3
+\`\`\`
+
+- Without \`--voice\`, the server uses the Default Voice saved for the model in Settings → AI Providers, then the model's default voice
+- Gemini TTS (Google provider): 30 prebuilt voices such as \`Kore\`, \`Puck\`, \`Zephyr\`; control pace and tone with \`--instructions\` (no \`--speed\`); output is MP3
+- The server rejects params the model does not support, e.g. \`--speed\` on Gemini models
+
 ## Tips
 
 - Image/video generation is async; use \`status\` or \`download\` to get results

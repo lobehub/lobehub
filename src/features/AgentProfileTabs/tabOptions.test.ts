@@ -10,11 +10,17 @@ import {
 
 const labels = {
   'channel': 'tab.integration',
+  'engine': 'tab.engine',
+  'environment': 'tab.environment',
+  'instruction': 'tab.instruction',
+  'knowledge': 'tab.knowledge',
   'mail': 'tab.mail',
   'profile': 'tab.profile',
   'self-evolving': 'title',
   'share': 'share',
+  'skills': 'tab.skills',
   'statistics': 'usageStats.title',
+  'tools': 'tab.tools',
 };
 
 describe('buildAgentProfileTabPath', () => {
@@ -61,10 +67,16 @@ describe('buildAgentProfileTabOptions', () => {
       mailSupported: false,
       selfLearningSupported: false,
       shareSupported: true,
+      heterogeneous: false,
     });
 
     expect(options.map((option) => option.value)).toEqual([
       'profile',
+      'instruction',
+      'knowledge',
+      'engine',
+      'tools',
+      'skills',
       'channel',
       'statistics',
       'share',
@@ -79,9 +91,19 @@ describe('buildAgentProfileTabOptions', () => {
       mailSupported: false,
       selfLearningSupported: false,
       shareSupported: false,
+      heterogeneous: false,
     });
 
-    expect(options.map((option) => option.value)).toEqual(['profile', 'channel', 'statistics']);
+    expect(options.map((option) => option.value)).toEqual([
+      'profile',
+      'instruction',
+      'knowledge',
+      'engine',
+      'tools',
+      'skills',
+      'channel',
+      'statistics',
+    ]);
   });
 
   it('drops the config tabs for a member without edit access', () => {
@@ -92,6 +114,7 @@ describe('buildAgentProfileTabOptions', () => {
       mailSupported: false,
       selfLearningSupported: false,
       shareSupported: true,
+      heterogeneous: false,
     });
 
     expect(options.map((option) => option.value)).toEqual(['statistics']);
@@ -105,6 +128,7 @@ describe('buildAgentProfileTabOptions', () => {
       mailSupported: false,
       selfLearningSupported: false,
       shareSupported: false,
+      heterogeneous: false,
     });
 
     expect(options.map((option) => option.value)).toEqual(['channel', 'statistics']);
@@ -118,6 +142,7 @@ describe('buildAgentProfileTabOptions', () => {
       mailSupported: false,
       selfLearningSupported: false,
       shareSupported: false,
+      heterogeneous: false,
     });
 
     expect(options.map((option) => option.value)).toEqual(['statistics', 'share']);
@@ -131,10 +156,16 @@ describe('buildAgentProfileTabOptions', () => {
       mailSupported: true,
       selfLearningSupported: false,
       shareSupported: false,
+      heterogeneous: false,
     });
 
     expect(options.map((option) => option.value)).toEqual([
       'profile',
+      'instruction',
+      'knowledge',
+      'engine',
+      'tools',
+      'skills',
       'mail',
       'channel',
       'statistics',
@@ -149,6 +180,7 @@ describe('buildAgentProfileTabOptions', () => {
       mailSupported: false,
       selfLearningSupported: true,
       shareSupported: false,
+      heterogeneous: false,
     });
 
     expect(options.map((option) => option.value)).toEqual(['self-evolving', 'statistics']);
@@ -162,6 +194,7 @@ describe('buildAgentProfileTabOptions', () => {
       mailSupported: false,
       selfLearningSupported: false,
       shareSupported: false,
+      heterogeneous: false,
     });
 
     expect(options.map((option) => option.value)).toEqual(['self-evolving', 'statistics']);
@@ -175,9 +208,65 @@ describe('buildAgentProfileTabOptions', () => {
       mailSupported: true,
       selfLearningSupported: false,
       shareSupported: false,
+      heterogeneous: false,
     });
 
     expect(options.map((option) => option.value)).toEqual(['statistics']);
+  });
+});
+
+describe('instruction, knowledge, engine, environment, tools and skills tabs', () => {
+  const base = {
+    active: 'profile' as const,
+    canConfigure: true,
+    labels,
+    mailSupported: false,
+    selfLearningSupported: false,
+    shareSupported: false,
+  };
+
+  it('leaves instruction, knowledge, tools and skills out, and adds environment, for agents that bring their own', () => {
+    const options = buildAgentProfileTabOptions({ ...base, heterogeneous: true });
+
+    expect(options.map((option) => option.value)).toEqual([
+      'profile',
+      'engine',
+      'environment',
+      'channel',
+      'statistics',
+    ]);
+  });
+
+  it('keeps tools when it owns the current page even if the agent has none', () => {
+    const options = buildAgentProfileTabOptions({
+      ...base,
+      active: 'tools',
+      heterogeneous: true,
+    });
+
+    expect(options.map((option) => option.value)).toContain('tools');
+  });
+
+  it('drops the configuration pages for a member without edit access', () => {
+    const options = buildAgentProfileTabOptions({
+      ...base,
+      active: 'statistics',
+      canConfigure: false,
+      heterogeneous: false,
+    });
+
+    expect(options.map((option) => option.value)).toEqual(['statistics']);
+  });
+
+  it.each([
+    ['/agent/agt_1/engine', 'engine'],
+    ['/agent/agt_1/environment', 'environment'],
+    ['/acme/agent/agt_1/tools', 'tools'],
+    ['/agent/agt_1/instruction', 'instruction'],
+    ['/agent/agt_1/skills', 'skills'],
+    ['/agent/agt_1/knowledge', 'knowledge'],
+  ])('maps %s to its tab', (pathname, tab) => {
+    expect(getAgentProfileTab(pathname)).toBe(tab);
   });
 });
 
@@ -187,13 +276,30 @@ describe('groupAgentProfileTabOptions', () => {
     value,
   });
 
-  it('keeps the profile on top and puts mail and IM bots under identity', () => {
+  it('keeps who-it-is on top, then the setup pages, then mail and IM bots under identity', () => {
     const groups = groupAgentProfileTabOptions(
-      (['profile', 'mail', 'channel', 'self-evolving', 'statistics', 'share'] as const).map(option),
+      (
+        [
+          'profile',
+          'instruction',
+          'knowledge',
+          'engine',
+          'environment',
+          'tools',
+          'skills',
+          'mail',
+          'channel',
+          'self-evolving',
+          'statistics',
+          'share',
+        ] as const
+      ).map(option),
     );
 
     expect(groups.map((group) => [group.key, group.options.map((item) => item.value)])).toEqual([
       ['profile', ['profile']],
+      ['shape', ['instruction', 'knowledge']],
+      ['setup', ['engine', 'environment', 'tools', 'skills']],
       ['identity', ['mail', 'channel']],
       ['general', ['self-evolving', 'statistics', 'share']],
     ]);

@@ -658,4 +658,67 @@ describe('AgentEvalRunModel', () => {
       expect(count).toBe(0);
     });
   });
+
+  describe('startedAt guards', () => {
+    const startedAt = new Date('2026-10-01T00:00:00.000Z');
+
+    it('applies update only to the run whose start timestamp still matches', async () => {
+      const run = await runModel.create({ datasetId, startedAt, status: 'running' });
+
+      expect(await runModel.update(run.id, { name: 'Guarded' }, { startedAt })).toMatchObject({
+        name: 'Guarded',
+      });
+      // A caller that read an older start timestamp must not overwrite the new attempt.
+      expect(
+        await runModel.update(run.id, { name: 'Stale' }, { startedAt: new Date(0) }),
+      ).toBeUndefined();
+      expect((await runModel.findById(run.id))?.name).toBe('Guarded');
+    });
+
+    it('treats a null start timestamp as its own attempt', async () => {
+      const run = await runModel.create({ datasetId, status: 'running' });
+
+      expect(
+        await runModel.update(run.id, { name: 'Unstarted' }, { startedAt: null }),
+      ).toMatchObject({ name: 'Unstarted' });
+      expect(await runModel.update(run.id, { name: 'Wrong' }, { startedAt })).toBeUndefined();
+    });
+
+    it('writes progress only for the matching attempt of a live run', async () => {
+      const run = await runModel.create({ datasetId, startedAt, status: 'running' });
+
+      expect(
+        await runModel.updateProgress(run.id, { passedCases: 3 }, { startedAt }),
+      ).toMatchObject({ metrics: expect.objectContaining({ passedCases: 3 }) });
+      expect(
+        await runModel.updateProgress(run.id, { passedCases: 9 }, { startedAt: null }),
+      ).toBeUndefined();
+
+      const unstarted = await runModel.create({ datasetId, status: 'running' });
+      expect(
+        await runModel.updateProgress(unstarted.id, { passedCases: 1 }, { startedAt: null }),
+      ).toMatchObject({ metrics: expect.objectContaining({ passedCases: 1 }) });
+    });
+
+    it('finalizes only the matching attempt', async () => {
+      const run = await runModel.create({ datasetId, startedAt, status: 'running' });
+
+      expect(
+        await runModel.finalize(
+          run.id,
+          { metrics: { passedCases: 1 }, status: 'completed' },
+          { startedAt: startedAt.toISOString() },
+        ),
+      ).toMatchObject({ status: 'completed' });
+      expect(
+        await runModel.finalize(run.id, { status: 'failed' }, { startedAt: new Date(0) }),
+      ).toBeUndefined();
+      expect((await runModel.findById(run.id))?.status).toBe('completed');
+
+      const unstarted = await runModel.create({ datasetId, status: 'running' });
+      expect(
+        await runModel.finalize(unstarted.id, { status: 'completed' }, { startedAt: null }),
+      ).toMatchObject({ status: 'completed' });
+    });
+  });
 });

@@ -12,6 +12,11 @@ export const RESOURCE_HOME_PATH = '/resource';
 export const DRIVE_PATH = '/resource/drive';
 /** The cloud sandbox's drives (public / personal) and their usage. */
 export const SANDBOX_STORAGE_PATH = '/resource/sandbox-storage';
+/**
+ * The sandbox storage page opened on its space analysis and cleanup, for a
+ * drive over its quota: where every refusal of a write points.
+ */
+export const SANDBOX_STORAGE_CLEANUP_PATH = `${SANDBOX_STORAGE_PATH}?view=cleanup`;
 export const LIBRARY_INDEX_PATH = '/resource/library';
 export const WORKS_PATH = '/resource/works';
 

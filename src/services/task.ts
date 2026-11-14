@@ -61,7 +61,7 @@ class TaskService {
     completedWithin?: TaskCompletedWindow;
     excludeStatuses?: TaskStatus[];
     filter?: TaskListFilter;
-    groupBy?: 'assignee' | 'label' | 'member' | 'priority';
+    groupBy?: 'assignee' | 'label' | 'member' | 'priority' | 'project';
     groups?: Array<{
       key: string;
       limit?: number;
@@ -183,6 +183,8 @@ class TaskService {
       name?: string;
       parentTaskId?: string | null;
       priority?: number;
+      // null takes the task out of its project
+      projectId?: string | null;
       // schedulePattern: cron expression for scheduled automation (e.g. '0 9 * * *')
       schedulePattern?: string | null;
       // scheduleTimezone: IANA timezone for the cron expression (e.g. 'Asia/Shanghai')

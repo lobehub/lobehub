@@ -112,6 +112,18 @@ describe('ThreadModel coverage', () => {
       expect(await threadModel.settleRun('thread-settle-cancelled', 'op-1', value)).toBe(false);
       expect((await findThread('thread-settle-cancelled'))?.status).toBe(ThreadStatus.Cancel);
     });
+
+    it('refuses to settle when the caller carries no claim timestamp', async () => {
+      await insertThread('thread-settle-unstamped', ThreadStatus.Processing, 'op-1');
+
+      const unsettled = {
+        metadata: { completedAt: '2026-10-01T00:01:00.000Z', operationId: 'op-1' },
+        status: ThreadStatus.Completed,
+      } as unknown as typeof value;
+
+      expect(await threadModel.settleRun('thread-settle-unstamped', 'op-1', unsettled)).toBe(false);
+      expect((await findThread('thread-settle-unstamped'))?.status).toBe(ThreadStatus.Processing);
+    });
   });
 
   describe('claimForRun', () => {

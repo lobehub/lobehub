@@ -7,13 +7,12 @@ import AsyncError from '@/components/AsyncError';
 import Loading from '@/components/Loading/CircleLoading';
 import {
   unreadableVersions,
+  usePlanSkill,
   useSkillVersion,
 } from '@/features/AgentGoals/ProcessControl/BatchPlan/skillVersions';
 import { getLanguage } from '@/features/AgentSkillDetail/ContentViewer';
 import FileTree from '@/features/FileTree';
 import { skillFileTree } from '@/features/SkillViewer/skillFileTree';
-import { useClientDataSWR } from '@/libs/swr';
-import { userSkillService } from '@/services/userSkill';
 import { parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 
 const SKILL_INDEX = 'SKILL.md';
@@ -59,9 +58,7 @@ interface SkillDirectoryProps {
 const SkillDirectory = memo<SkillDirectoryProps>(
   ({ fallbackContent, filesOpen, revision, skillId }) => {
     const [selectedFile, setSelectedFile] = useState(SKILL_INDEX);
-    const { data: skill, isLoading } = useClientDataSWR(['goal-gate-plan-skill', skillId], () =>
-      userSkillService.get(skillId),
-    );
+    const { data: skill, isLoading } = usePlanSkill(skillId);
     const {
       data: shipped,
       error,

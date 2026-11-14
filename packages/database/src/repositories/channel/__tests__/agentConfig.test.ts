@@ -40,6 +40,27 @@ describe('Channel Agent configuration', () => {
     expect(claim.job.executionConfig?.runtime).toBe(model);
   });
 
+  it.each(['kimi-code', 'deepseek-harness'])(
+    'runs the local %s runtime on the member device',
+    async (type) => {
+      const team = await fixture.createTeamChannel();
+      const member = await fixture.addAgent(team.channel.id, 'Local Agent', deviceConfig());
+      await db
+        .update(agents)
+        .set({ agencyConfig: { heterogeneousProvider: { type } } as never })
+        .where(eq(agents.id, member.agentId!));
+      const message = await team.asMember.send(team.channel.id, {
+        content: 'Request',
+        mentions: [member.id],
+        requestKey: 'request',
+        routing: 'fallback',
+      });
+      const [job] = await jobsOf(db, message.id);
+      const claim = (await execution.claim(team.channel.id, job.id, lease))!;
+      expect(claim.job.executionConfig?.runtime).toBe(type);
+    },
+  );
+
   it.each([false, true])('uses the Agent default layers (workspace=%s)', async (workspace) => {
     await db.insert(userSettings).values({
       id: fixture.ownerId,

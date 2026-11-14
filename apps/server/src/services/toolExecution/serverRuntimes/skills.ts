@@ -108,6 +108,13 @@ interface UserSettingsWithMarketToken {
 interface SkillDeviceExecution {
   deviceId: string;
   executionTimeoutMs?: number;
+  /**
+   * The run's resolved Local Sandbox decision (`context.localSandbox`), the
+   * same value the local-system device-proxy applies to `runCommand`.
+   */
+  localSandbox?: boolean;
+  /** `context.localSandboxNetwork`; only meaningful with {@link localSandbox}. */
+  localSandboxNetwork?: boolean;
   operationId?: string;
   /**
    * Filesystem skills already living on the device (project/device SKILL.md).
@@ -593,6 +600,14 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       }
 
       const cwd = runDir ?? device.workingDirectory;
+      // A fenced run writes only to the agent's working directory: `runDir` is
+      // the device's shared skill cache, which must stay out of the fence so a
+      // fenced run cannot plant code a later unfenced run executes.
+      if (device.localSandbox && !device.workingDirectory) {
+        return fail(
+          'Local Sandbox requires a working directory. Set one for this agent (or topic) and run the command again.',
+        );
+      }
       // Content scope, NOT the gateway-addressing scope resolved above: a
       // workspace agent routed to the caller's own machine is still editing
       // workspace content.
@@ -620,6 +635,17 @@ class SkillServerRuntimeService implements SkillRuntimeService {
             // device credentials' personal scope, and tell it which run it acts for.
             ...(deviceLhEnv && { env: deviceLhEnv }),
             ...(device.executionTimeoutMs && { timeout: device.executionTimeoutMs }),
+            // The fence is the run owner's decision, applied exactly as the
+            // local-system device-proxy does for `runCommand`; neither it nor
+            // its root comes from the model. A client predating `sandboxRoot`
+            // still fences, just to `cwd`.
+            ...(device.localSandbox !== undefined && {
+              sandbox: device.localSandbox,
+              ...(device.localSandbox && {
+                sandboxNetwork: device.localSandboxNetwork === true,
+                sandboxRoot: device.workingDirectory,
+              }),
+            }),
           }),
           identifier: LocalSystemIdentifier,
         },
@@ -973,6 +999,8 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       ? {
           deviceId: context.activeDeviceId,
           executionTimeoutMs: context.executionTimeoutMs,
+          localSandbox: context.localSandbox,
+          localSandboxNetwork: context.localSandboxNetwork,
           operationId: context.operationId,
           projectSkills: context.projectSkills,
           // Same lazy workspace-principal recovery as the local-system runtime,

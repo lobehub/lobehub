@@ -8,6 +8,8 @@ import { type HomeInboxState } from './slices/inbox/initialState';
 import { initialHomeInboxState } from './slices/inbox/initialState';
 import { type LabelState } from './slices/label/initialState';
 import { initialLabelState } from './slices/label/initialState';
+import { type HomeNotificationState } from './slices/notification/initialState';
+import { initialHomeNotificationState } from './slices/notification/initialState';
 import { type RecentState } from './slices/recent/initialState';
 import { initialRecentState } from './slices/recent/initialState';
 import { type SidebarUIState } from './slices/sidebarUI/initialState';
@@ -20,6 +22,7 @@ export interface HomeStoreState
     RecentState,
     HomeInboxState,
     HomeInputState,
+    HomeNotificationState,
     LabelState,
     SidebarUIState {}
 
@@ -29,6 +32,7 @@ export const initialState: HomeStoreState = {
   ...initialRecentState,
   ...initialHomeInboxState,
   ...initialHomeInputState,
+  ...initialHomeNotificationState,
   ...initialLabelState,
   ...initialSidebarUIState,
 };

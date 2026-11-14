@@ -1,11 +1,27 @@
-import { describe, expect, it } from 'vitest';
+import type * as BusinessConst from '@lobechat/business-const';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DEFAULT_FEATURE_FLAGS,
   evaluateFeatureFlag,
   FeatureFlagsSchema,
+  type IFeatureFlags,
   mapFeatureFlagsEnvToState,
 } from './schema';
+
+const businessConst = vi.hoisted(() => ({ enabled: false }));
+
+vi.mock('@lobechat/business-const', async (importOriginal) => ({
+  ...(await importOriginal<typeof BusinessConst>()),
+  // A getter so per-test mutation is observed by the already-imported schema module.
+  get ENABLE_BUSINESS_FEATURES() {
+    return businessConst.enabled;
+  },
+}));
+
+afterEach(() => {
+  businessConst.enabled = false;
+});
 
 describe('FeatureFlagsSchema', () => {
   /**
@@ -17,6 +33,24 @@ describe('FeatureFlagsSchema', () => {
 
     expect(result.success).toBe(true);
     expect(result.data).toEqual({ dashboard: true });
+  });
+
+  /**
+   * The Cloud snapshot still carries the retired `workspace` / `voice_dictation` /
+   * `storage_overage` / `agent_gateway_mux_mobile` keys until they are deleted after deploy;
+   * parsing it must keep every other flag instead of dropping the whole snapshot.
+   */
+  it('parses a snapshot that still holds the retired rollout flags', () => {
+    const result = FeatureFlagsSchema.safeParse({
+      agent_gateway_mux_mobile: true,
+      dashboard: ['user-1'],
+      storage_overage: true,
+      voice_dictation: true,
+      workspace: ['rollout:100', 'user-1'],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual({ dashboard: ['user-1'] });
   });
 
   it('should validate correct feature flags with boolean values', () => {
@@ -192,27 +226,11 @@ describe('evaluateFeatureFlag', () => {
 });
 
 describe('mapFeatureFlagsEnvToState', () => {
-  it('should enable auth captcha by default', () => {
+  it('should map the default feature flags', () => {
     const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
 
     expect(mappedState.enableAuthCaptcha).toBe(true);
-  });
-
-  it('should enable storage overage by default', () => {
-    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
-
-    expect(mappedState.enableStorageOverage).toBe(true);
-  });
-
-  it('should keep realtime voice dictation disabled by default', () => {
-    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
-
-    expect(mappedState.enableVoiceDictation).toBe(false);
-  });
-
-  it('should keep onboarding v2 off by default outside development', () => {
-    const mappedState = mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS);
-
+    expect(mappedState).not.toHaveProperty('enableStorageOverage');
     expect(mappedState.enableOnboardingV2).toBe(false);
   });
 
@@ -226,14 +244,37 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableOnboardingV2).toBe(false);
   });
 
-  it('should map the workspace allowlist flag by user ID', () => {
-    const config = {
-      workspace: ['user-123'],
-    };
+  /**
+   * Released LobeHub Mobile clients still read these from `serverFeatureFlags`; they must keep
+   * getting what Cloud served while the flags were rolled out (`true`), and self-hosted
+   * deployments what they got by default (`false`), whatever the retired Redis keys say.
+   */
+  it('emits the deprecated mobile compatibility fields from the business-feature gate', () => {
+    // The retired keys are no longer part of IFeatureFlags; feed them like a stale snapshot would.
+    const retiredOff = {
+      agent_gateway_mux_mobile: false,
+      voice_dictation: false,
+      workspace: false,
+    } as IFeatureFlags;
+    const retiredOn = {
+      agent_gateway_mux_mobile: true,
+      voice_dictation: true,
+      workspace: true,
+    } as IFeatureFlags;
 
-    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableWorkspace).toBe(true);
-    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableWorkspace).toBe(false);
-    expect(mapFeatureFlagsEnvToState(config).enableWorkspace).toBe(false);
+    businessConst.enabled = true;
+    expect(mapFeatureFlagsEnvToState(retiredOff, 'user-1')).toMatchObject({
+      enableGatewayMuxMobile: true,
+      enableVoiceDictation: true,
+      enableWorkspace: true,
+    });
+
+    businessConst.enabled = false;
+    expect(mapFeatureFlagsEnvToState(retiredOn, 'user-1')).toMatchObject({
+      enableGatewayMuxMobile: false,
+      enableVoiceDictation: false,
+      enableWorkspace: false,
+    });
   });
 
   it('should map DevDock access only for allowlisted user IDs', () => {
@@ -257,19 +298,6 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableAgentShare).toBe(false);
   });
 
-  it('should keep the new subscription tiers off by default and enable them for listed users', () => {
-    expect(DEFAULT_FEATURE_FLAGS.new_tier_plans).toBe(false);
-    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableNewTierPlans).toBe(
-      false,
-    );
-
-    const config = { new_tier_plans: ['tester-123'] };
-
-    expect(mapFeatureFlagsEnvToState(config, 'tester-123').enableNewTierPlans).toBe(true);
-    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableNewTierPlans).toBe(false);
-    expect(mapFeatureFlagsEnvToState(config).enableNewTierPlans).toBe(false);
-  });
-
   it('should keep mobile new-tier sales off by default and enable them for listed users', () => {
     expect(DEFAULT_FEATURE_FLAGS.mobile_new_tier_sales).toBe(false);
     expect(
@@ -283,11 +311,9 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mapFeatureFlagsEnvToState(config).enableMobileNewTierSales).toBe(false);
   });
 
-  it('should not let the web new-tier flag open mobile new-tier sales', () => {
-    const state = mapFeatureFlagsEnvToState({ new_tier_plans: true }, 'user-1');
-
-    expect(state.enableNewTierPlans).toBe(true);
-    expect(state.enableMobileNewTierSales).toBeUndefined();
+  it('should always report the new tiers as on for released clients that still read the flag', () => {
+    expect(mapFeatureFlagsEnvToState({}, 'user-1').enableNewTierPlans).toBe(true);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS).enableNewTierPlans).toBe(true);
   });
 
   it('should keep the mobile sandbox grant off by default and out of the client state', () => {
@@ -310,21 +336,6 @@ describe('mapFeatureFlagsEnvToState', () => {
 
     expect(mapFeatureFlagsEnvToState(config, 'user-123').enableTopicPreview).toBe(true);
     expect(mapFeatureFlagsEnvToState(config, 'user-456').enableTopicPreview).toBe(false);
-  });
-
-  it('should gate the mobile gateway mux behind its own flag', () => {
-    expect(DEFAULT_FEATURE_FLAGS.agent_gateway_mux_mobile).toBe(false);
-    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableGatewayMuxMobile).toBe(
-      false,
-    );
-
-    const everyone = mapFeatureFlagsEnvToState({ agent_gateway_mux_mobile: true }, 'user-1');
-    expect(everyone.enableGatewayMuxMobile).toBe(true);
-
-    const config = { agent_gateway_mux_mobile: ['user-123'] };
-    expect(mapFeatureFlagsEnvToState(config, 'user-123').enableGatewayMuxMobile).toBe(true);
-    expect(mapFeatureFlagsEnvToState(config, 'user-456').enableGatewayMuxMobile).toBe(false);
-    expect(mapFeatureFlagsEnvToState(config).enableGatewayMuxMobile).toBe(false);
   });
 
   it('should keep dashboards off by default and enable them per user or globally', () => {
@@ -428,11 +439,9 @@ describe('mapFeatureFlagsEnvToState', () => {
       auth_captcha: true,
       market: true,
       speech_to_text: true,
-      voice_dictation: true,
       changelog: false,
       api_key_manage: false,
       cloud_promotion: true,
-      storage_overage: false,
       commercial_hide_github: false,
       commercial_hide_docs: true,
     };
@@ -453,10 +462,8 @@ describe('mapFeatureFlagsEnvToState', () => {
       enableRAGEval: true,
       enableAgentOnboarding: true,
       enableAuthCaptcha: true,
-      enableStorageOverage: false,
       showMarket: true,
       enableSTT: true,
-      enableVoiceDictation: true,
       showCloudPromotion: true,
       hideGitHub: false,
       hideDocs: true,
@@ -469,7 +476,6 @@ describe('mapFeatureFlagsEnvToState', () => {
       edit_agent: ['user-123', 'user-456'],
       agent_onboarding: ['user-123'],
       auth_captcha: ['user-123'],
-      storage_overage: ['user-123'],
       create_session: ['user-789'],
       dalle: true,
       knowledge_base: ['user-123'],
@@ -480,7 +486,6 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mappedState.isAgentEditable).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableAgentOnboarding).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableAuthCaptcha).toBe(true); // user-123 is in allowlist
-    expect(mappedState.enableStorageOverage).toBe(true); // user-123 is in allowlist
     expect(mappedState.enableKnowledgeBase).toBe(true); // user-123 is in allowlist
   });
 
@@ -537,5 +542,31 @@ describe('mapFeatureFlagsEnvToState', () => {
 
     expect(mappedState.enableChannels).toBe(true);
     expect(mappedState.enableDashboard).toBe(false);
+  });
+
+  describe('agent_runtime_strip_operation_toolset', () => {
+    it('is off by default', () => {
+      expect(DEFAULT_FEATURE_FLAGS.agent_runtime_strip_operation_toolset).toBe(false);
+      expect(
+        mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableStripOperationToolset,
+      ).toBe(false);
+    });
+
+    it('maps true to enabled for every user', () => {
+      const config = { agent_runtime_strip_operation_toolset: true };
+
+      expect(mapFeatureFlagsEnvToState(config, 'user-1').enableStripOperationToolset).toBe(true);
+      expect(mapFeatureFlagsEnvToState(config).enableStripOperationToolset).toBe(true);
+    });
+
+    it('maps a user allowlist to the listed users only', () => {
+      const config = FeatureFlagsSchema.parse({
+        agent_runtime_strip_operation_toolset: ['user-1'],
+      });
+
+      expect(mapFeatureFlagsEnvToState(config, 'user-1').enableStripOperationToolset).toBe(true);
+      expect(mapFeatureFlagsEnvToState(config, 'user-2').enableStripOperationToolset).toBe(false);
+      expect(mapFeatureFlagsEnvToState(config).enableStripOperationToolset).toBe(false);
+    });
   });
 });

@@ -180,6 +180,10 @@ export const UserLabSchema = z.object({
    */
   enableArtifactDeployment: z.boolean().optional(),
   /**
+   * edit workspace pages together in a live collaboration room
+   */
+  enablePageCollab: z.boolean().optional(),
+  /**
    * run Claude Code hetero sessions through the Claude Agent SDK instead of CLI spawn
    */
   enableClaudeCodeSdk: z.boolean().optional(),
@@ -316,6 +320,15 @@ export interface UserPreference {
    * opt-out.
    */
   integration?: UserIntegrationPreference;
+  /**
+   * Keys of the goal asks this user dismissed from the approval island, shared
+   * by every client of the account. Written only through
+   * `UserModel.addIslandDismissals`; deliberately absent from
+   * {@link UserPreferenceSchema}, because `updatePreference` sends the whole
+   * object and replaces arrays, so a stale client would overwrite keys
+   * another client added.
+   */
+  islandDismissals?: string[];
   lab?: UserLab;
   /**
    * Last active workspace id. Used on cloud to land the user back in the

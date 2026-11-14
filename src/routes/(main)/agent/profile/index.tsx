@@ -1,14 +1,14 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { type FC } from 'react';
-import { memo, Suspense } from 'react';
+import { type FC, lazy, memo, Suspense } from 'react';
 import { useParams } from 'react-router';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { delayed } from '@/components/Skeleton/Delayed';
 import ProfileSkeleton from '@/components/Skeleton/Profile';
 import AgentBuilder from '@/features/AgentBuilder';
+import ItemDetailDock from '@/features/ProfileEditor/ItemDetailPanel';
 import ResourceConfigAccessGate from '@/features/ResourcePermission/ResourceConfigAccessGate';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { usePermission } from '@/hooks/usePermission';
@@ -18,7 +18,6 @@ import { StyleSheet } from '@/utils/styles';
 
 import EditLockDriver from './features/EditLockDriver';
 import Header from './features/Header';
-import ProfileEditor from './features/ProfileEditor';
 import ProfileHydration from './features/ProfileHydration';
 import ProfileProvider from './features/ProfileProvider';
 import { selectors as profileSelectors, useProfileStore } from './features/store';
@@ -43,7 +42,31 @@ const styles = StyleSheet.create({
   },
 });
 
-const ProfileArea = memo(() => {
+// One editor per route: the shell stays small and each page loads only its own editor.
+const EngineEditor = lazy(() => import('./features/EngineEditor'));
+const EnvironmentEditor = lazy(() => import('./features/EnvironmentEditor'));
+const InstructionEditor = lazy(() => import('./features/InstructionEditor'));
+const KnowledgeEditor = lazy(() => import('./features/KnowledgeEditor'));
+const ProfileEditor = lazy(() => import('./features/ProfileEditor'));
+const SkillsEditor = lazy(() => import('./features/SkillsEditor'));
+const ToolsEditor = lazy(() => import('./features/ToolsEditor'));
+
+/** Which page of the profile group the shell renders. They share one editing session. */
+export type AgentProfileViewKey =
+  'engine' | 'environment' | 'instruction' | 'knowledge' | 'profile' | 'skills' | 'tools';
+
+const VIEWS: Record<AgentProfileViewKey, FC> = {
+  engine: EngineEditor,
+  environment: EnvironmentEditor,
+  instruction: InstructionEditor,
+  knowledge: KnowledgeEditor,
+  profile: ProfileEditor,
+  skills: SkillsEditor,
+  tools: ToolsEditor,
+};
+
+const ProfileArea = memo<{ view: AgentProfileViewKey }>(({ view }) => {
+  const View = VIEWS[view];
   const editor = useProfileStore((s) => s.editor);
   const isAgentConfigLoading = useAgentStore(agentSelectors.isAgentConfigLoading);
   // `isAgentConfigLoading` is data-presence ("no config in the map yet"), so a
@@ -73,7 +96,7 @@ const ProfileArea = memo(() => {
           loading={<ProfileSkeleton />}
           onRetry={() => retryAgentConfigFetch()}
         >
-          <Header />
+          <Header active={view} />
           <Flexbox
             horizontal
             height={'100%'}
@@ -82,7 +105,9 @@ const ProfileArea = memo(() => {
             onClick={handleContentClick}
           >
             <WideScreenContainer>
-              <ProfileEditor />
+              <Suspense fallback={<ProfileSkeleton />}>
+                <View />
+              </Suspense>
             </WideScreenContainer>
           </Flexbox>
         </AsyncBoundary>
@@ -107,7 +132,12 @@ const AgentBuilderSlot = memo(() => {
   return <AgentBuilder />;
 });
 
-const AgentProfile: FC = () => {
+/**
+ * Profile, Instruction, Knowledge, Engine, Environment, Tools and Skills are separate routes but one editing session: the same
+ * lock, hydration, store and Agent Builder serve all three, so a prompt edited on
+ * Context is the prompt the Builder sees from Profile.
+ */
+export const AgentProfileView = ({ view }: { view: AgentProfileViewKey }) => {
   const { aid } = useParams<{ aid: string }>();
 
   return (
@@ -120,7 +150,8 @@ const AgentProfile: FC = () => {
       >
         <ProfileProvider>
           <Flexbox horizontal height={'100%'} width={'100%'}>
-            <ProfileArea />
+            <ProfileArea view={view} />
+            <ItemDetailDock />
             <AgentBuilderSlot />
           </Flexbox>
         </ProfileProvider>
@@ -128,5 +159,7 @@ const AgentProfile: FC = () => {
     </Suspense>
   );
 };
+
+const AgentProfile: FC = () => <AgentProfileView view="profile" />;
 
 export default AgentProfile;

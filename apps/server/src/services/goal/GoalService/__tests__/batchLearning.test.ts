@@ -95,8 +95,9 @@ describe('GoalService', () => {
 
     // The plan lives as a skill in the user's library: v1 at decomposition,
     // v2 when the break revised it — each version kept whole.
+    // Named after the goal ("Migrate stores"), not the batch id.
     const planSkill = next.planSkill!;
-    expect(planSkill.name).toMatch(/^goal-plan-/);
+    expect(planSkill.name).toBe('migrate-stores-plan');
     const skills = new UserSkillService(serverDB, userId);
     const skill = await skills.getSkill(planSkill.id);
     expect(skill?.versions.map((version) => version.version)).toEqual([1, 2]);

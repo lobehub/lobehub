@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, userConnectors, users } from '../../schemas';
+import { agentEvalDatasets, agents, userConnectors, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ConnectorModel } from '../connector';
 
@@ -21,6 +21,7 @@ const composio = {
 };
 
 const cleanup = async () => {
+  await serverDB.delete(agentEvalDatasets).where(eq(agentEvalDatasets.userId, userId));
   // agents and user_connectors cascade from the owning user.
   await serverDB.delete(users).where(eq(users.id, userId));
 };
@@ -136,6 +137,119 @@ describe('ConnectorModel coverage edges', () => {
         isEnabled: true,
         status: 'connected',
       });
+    });
+  });
+
+  describe('evaluation connections', () => {
+    const createDataset = async () => {
+      const [dataset] = await serverDB
+        .insert(agentEvalDatasets)
+        .values({ identifier: 'conncov-dataset', name: 'Eval Dataset', userId })
+        .returning();
+      return dataset.id;
+    };
+
+    it('requires a dataset id when building an evaluation model', () => {
+      expect(() => ConnectorModel.forEvaluation(serverDB, userId, '')).toThrow(
+        'A Dataset is required for evaluation connections',
+      );
+    });
+
+    it('rejects the import marker on an ordinary connector create', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+
+      await expect(
+        model.create({ ...base, metadata: { agentEval: { datasetId: 'x' } } } as any),
+      ).rejects.toThrow('Use the Dataset connection API for evaluation connections');
+    });
+
+    it('rejects a dataset outside the caller scope', async () => {
+      const model = ConnectorModel.forEvaluation(serverDB, userId, missingId);
+
+      await expect(model.create({ ...base } as any)).rejects.toThrow('Dataset not found');
+    });
+
+    it('stamps the imported marker with the owning dataset', async () => {
+      const datasetId = await createDataset();
+      const model = ConnectorModel.forEvaluation(serverDB, userId, datasetId);
+
+      const row = await model.create({ ...base, identifier: 'eval-mock' } as any);
+
+      expect(row.metadata).toEqual({ agentEval: { datasetId } });
+    });
+
+    it('requires secure storage for mock credentials', async () => {
+      const datasetId = await createDataset();
+      const model = ConnectorModel.forEvaluation(serverDB, userId, datasetId);
+
+      await expect(
+        model.create({
+          ...base,
+          credentials: JSON.stringify({ token: 't', type: 'bearer' }),
+        } as any),
+      ).rejects.toThrow('Secure connection storage is unavailable');
+    });
+
+    it('refuses to attach a mock connection to a normal agent', async () => {
+      const datasetId = await createDataset();
+      const gateKeeper = {
+        decrypt: vi.fn(),
+        encrypt: vi.fn(async (plaintext: string) => `enc:${plaintext}`),
+      };
+      const model = ConnectorModel.forEvaluation(
+        serverDB,
+        userId,
+        datasetId,
+        undefined,
+        gateKeeper,
+      );
+
+      await expect(model.create({ ...base, agentId } as any)).rejects.toThrow(
+        'Evaluation connections cannot be assigned to a normal Agent',
+      );
+    });
+
+    it('reports a mock credential encryption failure as a stable error', async () => {
+      const datasetId = await createDataset();
+      const gateKeeper = {
+        decrypt: vi.fn(),
+        encrypt: vi.fn(async () => {
+          throw new Error('vault down');
+        }),
+      };
+      const model = ConnectorModel.forEvaluation(
+        serverDB,
+        userId,
+        datasetId,
+        undefined,
+        gateKeeper,
+      );
+      const row = await model.create({ ...base, identifier: 'eval-mock-update' } as any);
+
+      await expect(
+        model.update(row.id, {
+          credentials: JSON.stringify({ token: 't', type: 'bearer' }),
+        } as any),
+      ).rejects.toThrow('Could not securely store the mock connection');
+    });
+
+    it('rethrows a raw encryption failure for an ordinary connector', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const row = await model.create({ ...base, identifier: 'plain-encrypt' } as any);
+      const gateKeeper = {
+        decrypt: vi.fn(),
+        encrypt: vi.fn(async () => {
+          throw new Error('vault down');
+        }),
+      };
+
+      await expect(
+        model.update(
+          row.id,
+          { credentials: JSON.stringify({ token: 't', type: 'bearer' }) } as any,
+          gateKeeper,
+        ),
+      ).rejects.toThrow('vault down');
     });
   });
 });

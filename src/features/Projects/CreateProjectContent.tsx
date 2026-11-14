@@ -19,6 +19,7 @@ import {
   isProjectIdentifierValid,
   isProjectSlugValid,
   type MainAgentMode,
+  reserveProjectIds,
 } from './createProjectForm';
 import CreateProjectMoreFields from './CreateProjectMoreFields';
 import MainAgentSection from './MainAgentSection';
@@ -75,6 +76,8 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
     slugConflict: false,
     slugEdited: false,
   });
+  // Taken once per open modal: both generated avatars are seeded by these ids.
+  const [reservedIds] = useState(reserveProjectIds);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const mainAgentId = form.mainAgentId ?? inboxAgentId;
   const createInput = getCreateProjectInput(form);
@@ -117,6 +120,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
       const project = await createProject(
         buildCreateProjectRequest(createInput, {
           avatar: form.avatar,
+          ids: reservedIds,
           mainAgentId,
           mainAgentMode: form.mainAgentMode,
         }),
@@ -169,6 +173,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
           <ProjectAvatarField
             avatar={form.avatar}
             disabled={form.loading}
+            id={reservedIds.projectId}
             name={form.name}
             onChange={(avatar) => updateForm({ avatar })}
             onUploadingChange={(avatarUploading) => updateForm({ avatarUploading })}
@@ -185,6 +190,7 @@ const CreateProjectContent = memo<CreateProjectOptions>(({ onCreated }) => {
         </Flexbox>
         <MainAgentSection
           agentId={mainAgentId}
+          dedicatedAgentId={reservedIds.agentId}
           disabled={form.loading}
           mode={form.mainAgentMode}
           projectAvatar={form.avatar}

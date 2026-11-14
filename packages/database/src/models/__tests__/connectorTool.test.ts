@@ -510,4 +510,12 @@ describe('ConnectorToolModel', () => {
       expect(await otherModel.findById(stored.id)).toBeUndefined();
     });
   });
+
+  describe('forEvaluation', () => {
+    it('requires a dataset id', () => {
+      expect(() => ConnectorToolModel.forEvaluation(serverDB, userId, '')).toThrow(
+        'A Dataset is required for evaluation tools',
+      );
+    });
+  });
 });

@@ -52,13 +52,13 @@ export const agentProviderAccounts = pgTable(
     // Visibility WITHIN a workspace (same contract as devices / agents):
     //   - 'public'  → every member sees the subscription (without its identity
     //     fields) and agents can draw on it: a team account on a shared machine.
-    //   - 'private' → only members holding a login for it
-    //     (`agent_provider_account_logins`) see and use it.
+    //   - 'private' → only its creator sees and uses it. Logins do not grant
+    //     access: the server cannot verify a reported login, so sharing is the
+    //     creator's call (publish).
     //   Ignored for personal rows (`workspace_id IS NULL`).
-    // The default stays 'public' (today's behaviour) until ingestion dedupes by
-    // identity regardless of visibility and reads go through logins; flipping
-    // it earlier would make a second member's login of a private account
-    // collide with the workspace identity unique index.
+    // Ingestion creates workspace rows as 'private' (`upsertByIdentity`, which
+    // dedupes by identity across visibility); the column default only covers
+    // rows added by hand and the ones that pre-date that change.
     visibility: text('visibility', { enum: ['private', 'public'] })
       .default('public')
       .notNull(),
@@ -181,9 +181,9 @@ export type AgentAccountBindingItem = typeof agentAccountBindings.$inferSelect;
  * every login points at the same account row. Written by the desktop sampler
  * whenever it reports a reading from a device it can resolve.
  *
- * Logins decide where an account can run (a login only exists on its machine)
- * and, for a `private` account, who may see and use it: the members whose
- * devices hold a login.
+ * Logins decide where an account can run (a login only exists on its machine).
+ * They do not decide who may see a `private` account — a login is reported by
+ * the device and cannot be verified, so only the account's creator sees it.
  */
 export const agentProviderAccountLogins = pgTable(
   'agent_provider_account_logins',

@@ -58,18 +58,13 @@ afterEach(() => {
 });
 
 describe('settings useCategory', () => {
-  const groupKeys = (key: SettingsGroupKey, enableBusinessFeatures = false) => {
-    const { result } = renderHook(() => useCategory(), {
-      wrapper: createWrapper(true, enableBusinessFeatures),
-    });
-
-    return result.current.find((group) => group.key === key)?.items.map((item) => item.key);
-  };
-
-  it('orders groups with Plans & Billing right after Account', () => {
+  it('orders business groups with account, connection and resource contents', () => {
     const { result } = renderHook(() => useCategory(), {
       wrapper: createWrapper(true, true),
     });
+
+    const groupKeys = (key: SettingsGroupKey) =>
+      result.current.find((group) => group.key === key)?.items.map((item) => item.key);
 
     expect(result.current.map((group) => group.key)).toEqual([
       SettingsGroupKey.Account,
@@ -79,35 +74,37 @@ describe('settings useCategory', () => {
       SettingsGroupKey.Resource,
       SettingsGroupKey.System,
     ]);
-  });
 
-  it('keeps preferences, notifications and stats in the Account group', () => {
-    expect(groupKeys(SettingsGroupKey.Account, true)).toEqual([
+    expect(groupKeys(SettingsGroupKey.Account)).toEqual([
       SettingsTabs.Profile,
       SettingsTabs.Appearance,
       SettingsTabs.Hotkey,
       SettingsTabs.Notification,
       SettingsTabs.Stats,
     ]);
-  });
 
-  it('puts every outside service in the Connection group', () => {
-    expect(groupKeys(SettingsGroupKey.Connection, true)).toEqual([
+    expect(groupKeys(SettingsGroupKey.Connection)).toEqual([
       SettingsTabs.Messenger,
       SettingsTabs.Integrations,
       SettingsTabs.Connector,
       SettingsTabs.Creds,
     ]);
+
+    // The sandbox drives moved to Docs → Sandbox Storage; settings keep only the
+    // environment definitions.
+    const keys = groupKeys(SettingsGroupKey.Resource);
+    expect(keys).toContain(SettingsTabs.Environments);
+    expect(keys).not.toContain('drive');
   });
 
   // Messenger bots are LobeHub-operated and only configurable from the cloud
   // admin, so the tab is a dead end on self-hosted deployments.
-  it('hides Messenger without business features', () => {
-    expect(getItemKeys()).not.toContain(SettingsTabs.Messenger);
-  });
+  it('keeps Provider and hides Messenger and OAuth Apps by default', () => {
+    const keys = getItemKeys();
 
-  it('keeps Provider visible when provider settings are enabled', () => {
-    expect(getItemKeys()).toContain(SettingsTabs.Provider);
+    expect(keys).not.toContain(SettingsTabs.Messenger);
+    expect(keys).toContain(SettingsTabs.Provider);
+    expect(keys).not.toContain(SettingsTabs.OAuthApps);
   });
 
   it('hides Provider when provider settings are disabled', () => {
@@ -118,18 +115,6 @@ describe('settings useCategory', () => {
     const keys = result.current.flatMap((group) => group.items.map((item) => item.key));
 
     expect(keys).not.toContain(SettingsTabs.Provider);
-  });
-
-  it('hides OAuth Apps by default', () => {
-    expect(getItemKeys()).not.toContain(SettingsTabs.OAuthApps);
-  });
-
-  // The sandbox drives moved to Docs → Sandbox Storage; settings keep only the
-  // environment definitions.
-  it('keeps Environments in settings without a sandbox storage tab', () => {
-    const keys = groupKeys(SettingsGroupKey.Resource, true);
-    expect(keys).toContain(SettingsTabs.Environments);
-    expect(keys).not.toContain('drive');
   });
 
   it('lists API Key once when both of its flags are on', () => {

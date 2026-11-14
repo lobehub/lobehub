@@ -4,17 +4,14 @@ import { Alert, Block, Button, Flexbox, Icon, Input, Select, Text, toast } from 
 import { SendIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
-import { messengerKeys } from '@/libs/swr/keys';
-import { messengerService } from '@/services/messenger';
+import { messengerActions, messengerSelectors, useMessengerStore } from '@/store/messenger';
 
 import type { MessengerPlatform } from '../constants';
 import { getMessengerErrorMessage, getMessengerQueuedToast } from '../i18n';
 import { MessengerPushWindowState } from './MessengerPushWindowState';
 import { styles } from './shared';
 
-const PUSH_WINDOW_REFRESH_INTERVAL = 5000;
 const PUSH_WINDOW_DEFAULT_MAX_SENDS = 10;
 
 export interface MessengerPushTarget {
@@ -53,16 +50,9 @@ export const MessengerPushSection = memo<MessengerPushSectionProps>(
       }
     }, [targets, tenantId]);
 
-    const windowSWR = useSWR(
-      messengerKeys.pushWindow(platform, tenantId),
-      () => messengerService.getMessengerPushWindow(platform, tenantId),
-      {
-        refreshInterval: platform === 'wechat' ? PUSH_WINDOW_REFRESH_INTERVAL : 0,
-        refreshWhenHidden: false,
-        refreshWhenOffline: false,
-      },
-    );
-    const status = windowSWR.data;
+    const windowSync = messengerActions.useFetchPushWindow({ platform, tenantId });
+    // Live status, never restored from disk: undefined until the server answers.
+    const status = useMessengerStore(messengerSelectors.pushWindow({ platform, tenantId }));
 
     const canPush = status?.deliverability === 'always' ? status.linked : !!status?.windowOpen;
 
@@ -72,7 +62,7 @@ export const MessengerPushSection = memo<MessengerPushSectionProps>(
 
       setSending(true);
       try {
-        const result = await messengerService.sendMessengerPush({
+        const result = await messengerActions.sendPush({
           content: text,
           platform,
           tenantId,
@@ -103,7 +93,6 @@ export const MessengerPushSection = memo<MessengerPushSectionProps>(
             toast.warning(t('messenger.push.unavailableToast'));
           }
         }
-        await windowSWR.mutate();
       } catch (error) {
         toast.error(getMessengerErrorMessage(error, t, 'messenger.push.unavailableToast'));
       } finally {
@@ -137,10 +126,12 @@ export const MessengerPushSection = memo<MessengerPushSectionProps>(
                   {t('messenger.push.title')}
                 </Text>
                 <MessengerPushWindowState
-                  error={windowSWR.error}
+                  error={windowSync.error}
                   name={name}
                   status={status}
-                  onRetry={() => windowSWR.mutate()}
+                  onRetry={() => {
+                    void windowSync.revalidate();
+                  }}
                 />
               </Flexbox>
             </Flexbox>

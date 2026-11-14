@@ -1,7 +1,8 @@
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { environments, users } from '../../schemas';
+import { environments, users, workspaces } from '../../schemas';
 import { EnvironmentModel, normalizeProjectRepository } from '../environment';
 
 const db = await getTestDB();
@@ -86,6 +87,33 @@ describe('EnvironmentModel', () => {
         repositoryUrl: 'https://github.com/lobehub/lobehub',
       });
       expect(theirs.id).not.toBe(created.id);
+    });
+
+    // A workspace-public agent applies published environments only, so asking
+    // for one must not hand back the caller's private environment for the repo.
+    it('reuses or makes a published environment when one is asked for', async () => {
+      const workspaceId = 'environment-workspace';
+      await db.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Env Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+      const scoped = new EnvironmentModel(db, userId, workspaceId);
+      const repo = { name: 'lobehub/lobehub', repositoryUrl: 'https://github.com/lobehub/lobehub' };
+
+      const privateEnv = await scoped.ensureForRepository(repo);
+      const published = await scoped.ensureForRepository({ ...repo, visibility: 'public' });
+
+      expect(privateEnv.visibility).toBe('private');
+      expect(published.id).not.toBe(privateEnv.id);
+      expect(published.visibility).toBe('public');
+      expect((await scoped.ensureForRepository({ ...repo, visibility: 'public' })).id).toBe(
+        published.id,
+      );
+
+      await db.delete(environments);
+      await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
     });
 
     it('suffixes the name when another environment already holds it', async () => {

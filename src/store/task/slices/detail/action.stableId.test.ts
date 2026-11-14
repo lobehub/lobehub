@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope, createReplicaState } from '@/libs/replica';
 import { broadcastCacheScope, resetCacheScopeBroadcast } from '@/libs/replica/cacheScopeEvents';
-import { useClientDataSWR } from '@/libs/swr';
+import { mutate, useClientDataSWR } from '@/libs/swr';
 import { taskService } from '@/services/task';
 
 import { useTaskStore } from '../../store';
@@ -27,6 +27,9 @@ const detail = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
+  // `restoreAllMocks` below also drops the factory's resolved value, and the
+  // replica driver chains `.catch` on what `mutate` returns.
+  vi.mocked(mutate).mockResolvedValue(undefined);
   resetCacheScopeBroadcast();
   useTaskStore.setState({
     activeTaskId: undefined,

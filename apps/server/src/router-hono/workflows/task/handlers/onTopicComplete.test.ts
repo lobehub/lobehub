@@ -63,6 +63,7 @@ describe('onTopicComplete webhook', () => {
 
     await onTopicComplete(context);
 
+    expect(claim).not.toHaveBeenCalled();
     expect(isRunAlreadySettled).toHaveBeenCalledWith(expect.anything(), 'user-1', 'ws-1', {
       operationId: 'op-1',
       reason: 'error',
@@ -141,15 +142,6 @@ describe('onTopicComplete webhook', () => {
 
       await onTopicComplete(context);
 
-      expect(lifecycleOnTopicComplete).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not claim failed runs, which the settled check already fences', async () => {
-      const { context } = makeContext(failedRunPayload);
-
-      await onTopicComplete(context);
-
-      expect(claim).not.toHaveBeenCalled();
       expect(lifecycleOnTopicComplete).toHaveBeenCalledTimes(1);
     });
   });

@@ -6,11 +6,12 @@
  *   bun run widget:tick --dry-run       # only report how many are due
  *   SERVER_URL=http://localhost:3011 bun run widget:tick
  *
- * When QSTASH_CURRENT_SIGNING_KEY is set the route verifies signatures, so the
- * request is signed with that key the way QStash would; otherwise it is sent
- * unsigned, which the route accepts.
+ * With QStash configured, sign with its current key. Otherwise use the existing
+ * vault secret for same-origin callbacks; unsigned requests are development-only.
  */
 import { createHash, createHmac, randomUUID } from 'node:crypto';
+
+import { signInternalCallback } from '../../src/libs/qstash/internalSignature';
 
 const serverUrl = (
   process.env.SERVER_URL ||
@@ -46,9 +47,10 @@ const response = await fetch(url, {
   body,
   headers: {
     'content-type': 'application/json',
-    ...(signingKey && { 'Upstash-Signature': sign(signingKey) }),
+    ...(signingKey ? { 'Upstash-Signature': sign(signingKey) } : signInternalCallback(url, body)),
   },
   method: 'POST',
+  redirect: 'error',
 });
 
 console.log(`POST ${url} → ${response.status}${signingKey ? ' (signed)' : ''}`);

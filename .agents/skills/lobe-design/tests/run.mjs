@@ -2,7 +2,7 @@
 // Runs every deterministic check of the skill. Usage (from skills/lobe-design/): node tests/run.mjs
 // Sections: structure · routing · lint regressions · detail regressions · learnings gate · CLI contract.
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, rmdirSync, symlinkSync, writeFileSync, unlinkSync} from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync, unlinkSync} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -251,7 +251,7 @@ console.log('== bootstrap');
     t('bootstrap fs: --check 已接入 → 0', run('bootstrap.mjs', ['--check', '--root', tmp]).status === 0);
     const fresh = mkdtempSync(join(tmpdir(), 'lobe-fresh-'));
     t('bootstrap fs: --check 未接入 → 1', run('bootstrap.mjs', ['--check', '--root', fresh]).status === 1);
-    rmdirSync(fresh, { recursive: true });
+    rmSync(fresh, { recursive: true, force: true });
     // 版本落后时 --check 必须失败（否则升级不会被发现）
     writeFileSync(guide, readFileSync(guide, 'utf8').replace(/skill (版本|version) [\d.]+/, 'skill $1 1.0.0'));
     t('bootstrap fs: --check 版本落后 → 1', run('bootstrap.mjs', ['--check', '--root', tmp]).status === 1);
@@ -261,7 +261,7 @@ console.log('== bootstrap');
     run('bootstrap.mjs', ['--root', tmp2]);
     t('bootstrap fs: 无 AGENTS.md 时写入 CLAUDE.md', readFileSync(join(tmp2, 'CLAUDE.md'), 'utf8').includes('lobe-design:begin'));
     t('bootstrap fs: 不新建 AGENTS.md', !existsSync(join(tmp2, 'AGENTS.md')));
-    rmdirSync(tmp2, { recursive: true });
+    rmSync(tmp2, { recursive: true, force: true });
     // 宿主项目布局：.agents/skills/lobe-design + .agents/ux
     const tmp3 = mkdtempSync(join(tmpdir(), 'lobe-host-'));
     mkdirSync(join(tmp3, '.agents/skills/lobe-design'), { recursive: true });
@@ -279,7 +279,7 @@ console.log('== bootstrap');
     t('bootstrap fs: 宿主项目重复运行 unchanged', JSON.parse(r3.stdout).action === 'unchanged' && readFileSync(join(tmp3, 'AGENTS.md'), 'utf8') === host1);
     rmSync(tmp3, { recursive: true, force: true });
   } finally {
-    rmdirSync(tmp, { recursive: true });
+    rmSync(tmp, { recursive: true, force: true });
   }
 }
 
@@ -366,6 +366,8 @@ console.log('== platform (mobile / RN)');
   t('platform: parsePlatform 中文 / 英文 / 表格', parsePlatform('平台：mobile（主），web') === 'mobile' && parsePlatform('platform: web') === 'web' && parsePlatform('| 平台 | mobile |') === 'mobile');
   const off = parseApplicability('| C-01..C-03 | 不适用 | RN |\n| P-01 | 强调 |\nlint-off: LOBE-RAW-COLOR, D-11\n');
   t('platform: 适用性表展开区间 + lint-off', ['C-01', 'C-02', 'C-03', 'LOBE-RAW-COLOR', 'D-11'].every((x) => off.has(x)) && !off.has('P-01'), [...off].join(','));
+  const bizOff = parseApplicability('| 系统 | 用户、设置 | P-02 / P-05 | 邀请或停用账号 |\n| 不适用 | 营销页 | P-09 |\n| D-10 | 关闭 | 迁移中 |\n');
+  t('platform: 业务描述里的「停用」不关规则，整格标记才算', !bizOff.has('P-02') && !bizOff.has('P-05') && bizOff.has('P-09') && bizOff.has('D-10'), [...bizOff].join(','));
   const tmp = mkdtempSync(join(tmpdir(), 'ld-rn-'));
   try {
     cpSync(rn, tmp, { recursive: true });

@@ -1,4 +1,4 @@
-import type { WorkspaceUserPreference } from '@lobechat/types';
+import type { WorkspaceMemberConfig, WorkspaceUserPreference } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -69,6 +69,8 @@ export const workspaceMembers = pgTable(
     // duties in each workspace. Lengths are enforced by the API, not the column.
     title: text('title'),
     responsibilities: text('responsibilities'),
+    /** Per-member display settings; see {@link WorkspaceMemberConfig}. */
+    config: jsonb('config').$type<WorkspaceMemberConfig>().notNull().default({}),
     joinedAt: timestamptz('joined_at').notNull().defaultNow(),
     updatedAt: updatedAt(),
     deletedAt: timestamptz('deleted_at'),

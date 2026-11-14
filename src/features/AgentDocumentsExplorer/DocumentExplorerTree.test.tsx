@@ -230,6 +230,27 @@ const createDocument = (overrides: Partial<AgentDocumentItem>): AgentDocumentIte
     ...overrides,
   }) as AgentDocumentItem;
 
+const skillBundleInput = (): Parameters<typeof createDocument>[0] => ({
+  category: AGENT_DOCUMENT_SKILL_CATEGORY,
+  documentId: 'skill-bundle-doc',
+  fileType: 'skills/bundle',
+  filename: 'youtube-comment-retrieval-workflow',
+  id: 'skill-bundle-row',
+  isFolder: true,
+  isSkillBundle: true,
+  templateId: 'agent-skill',
+  title: 'YouTube Comment Retrieval Workflow',
+});
+
+const notesFolderInput = (): Parameters<typeof createDocument>[0] => ({
+  documentId: 'folder-doc',
+  fileType: CUSTOM_FOLDER_FILE_TYPE,
+  filename: 'Notes',
+  id: 'folder-row',
+  isFolder: true,
+  title: 'Notes',
+});
+
 describe('DocumentExplorerTree', () => {
   beforeEach(() => {
     messageError.mockReset();
@@ -326,16 +347,7 @@ describe('DocumentExplorerTree', () => {
   });
 
   it('offers upload on a folder context menu', () => {
-    const data = [
-      createDocument({
-        documentId: 'folder-doc',
-        fileType: CUSTOM_FOLDER_FILE_TYPE,
-        filename: 'Notes',
-        id: 'folder-row',
-        isFolder: true,
-        title: 'Notes',
-      }),
-    ];
+    const data = [createDocument(notesFolderInput())];
 
     render(<DocumentExplorerTree agentId="agent-1" data={data} mutate={vi.fn()} />, {
       wrapper: MemoryRouter,
@@ -346,17 +358,7 @@ describe('DocumentExplorerTree', () => {
 
   it('renders managed skill bundle as a folder with SKILL.md underneath', () => {
     const data = [
-      createDocument({
-        category: AGENT_DOCUMENT_SKILL_CATEGORY,
-        documentId: 'skill-bundle-doc',
-        fileType: 'skills/bundle',
-        filename: 'youtube-comment-retrieval-workflow',
-        id: 'skill-bundle-row',
-        isFolder: true,
-        isSkillBundle: true,
-        templateId: 'agent-skill',
-        title: 'YouTube Comment Retrieval Workflow',
-      }),
+      createDocument(skillBundleInput()),
       createDocument({
         category: AGENT_DOCUMENT_SKILL_CATEGORY,
         documentId: 'skill-index-doc',
@@ -368,14 +370,7 @@ describe('DocumentExplorerTree', () => {
         templateId: 'agent-skill',
         title: 'Generated workflow title',
       }),
-      createDocument({
-        documentId: 'folder-doc',
-        fileType: CUSTOM_FOLDER_FILE_TYPE,
-        filename: 'Notes',
-        id: 'folder-row',
-        isFolder: true,
-        title: 'Notes',
-      }),
+      createDocument(notesFolderInput()),
     ];
 
     render(<DocumentExplorerTree agentId="agent-1" data={data} mutate={vi.fn()} />, {
@@ -396,17 +391,7 @@ describe('DocumentExplorerTree', () => {
 
   it('opens SKILL.md in the document page but does not open the empty skill bundle', () => {
     const data = [
-      createDocument({
-        category: AGENT_DOCUMENT_SKILL_CATEGORY,
-        documentId: 'skill-bundle-doc',
-        fileType: 'skills/bundle',
-        filename: 'youtube-comment-retrieval-workflow',
-        id: 'skill-bundle-row',
-        isFolder: true,
-        isSkillBundle: true,
-        templateId: 'agent-skill',
-        title: 'YouTube Comment Retrieval Workflow',
-      }),
+      createDocument(skillBundleInput()),
       createDocument({
         category: AGENT_DOCUMENT_SKILL_CATEGORY,
         documentId: 'skill-index-doc',
@@ -493,14 +478,7 @@ describe('DocumentExplorerTree', () => {
 
   it('does not default-expand document folders', () => {
     const data = [
-      createDocument({
-        documentId: 'folder-doc',
-        fileType: CUSTOM_FOLDER_FILE_TYPE,
-        filename: 'Notes',
-        id: 'folder-row',
-        isFolder: true,
-        title: 'Notes',
-      }),
+      createDocument(notesFolderInput()),
       createDocument({
         documentId: 'nested-folder-doc',
         fileType: CUSTOM_FOLDER_FILE_TYPE,
@@ -521,19 +499,7 @@ describe('DocumentExplorerTree', () => {
 
   it('shows delete recovery action for a managed skill bundle without SKILL.md', async () => {
     const mutate = vi.fn().mockResolvedValue(undefined);
-    const data = [
-      createDocument({
-        category: AGENT_DOCUMENT_SKILL_CATEGORY,
-        documentId: 'skill-bundle-doc',
-        fileType: 'skills/bundle',
-        filename: 'youtube-comment-retrieval-workflow',
-        id: 'skill-bundle-row',
-        isFolder: true,
-        isSkillBundle: true,
-        templateId: 'agent-skill',
-        title: 'YouTube Comment Retrieval Workflow',
-      }),
-    ];
+    const data = [createDocument(skillBundleInput())];
 
     render(<DocumentExplorerTree agentId="agent-1" data={data} mutate={mutate} />, {
       wrapper: MemoryRouter,

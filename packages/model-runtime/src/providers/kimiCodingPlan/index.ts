@@ -5,7 +5,7 @@ import {
   buildDefaultAnthropicPayload,
   createAnthropicCompatibleParams,
   createAnthropicCompatibleRuntime,
-} from '../../core/anthropicCompatibleFactory';
+} from '../../core/anthropicCompatible';
 import type { ChatStreamPayload } from '../../types';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 import { sanitizeAnthropicThinkingParts } from '../../utils/sanitizeAnthropicThinkingParts';

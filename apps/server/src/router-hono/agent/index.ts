@@ -7,7 +7,12 @@ import { botCallback } from './handlers/botCallback';
 import { botReplay } from './handlers/botReplay';
 import { botWakeFlush } from './handlers/botWakeFlush';
 import { channelAdvance, channelCallback } from './handlers/channel';
-import { documentAccess, documentProjection } from './handlers/documentCollab';
+import {
+  documentAccess,
+  documentProjection,
+  documentRoomStatus,
+  documentSeed,
+} from './handlers/documentCollab';
 import { execAgent } from './handlers/execAgent';
 import { finalizeAbandoned } from './handlers/finalizeAbandoned';
 import { gatewayCallback } from './handlers/gatewayCallback';
@@ -64,6 +69,8 @@ app.get('/llm-relay/:callId/payload', llmRelayPayload);
 app.post('/llm-relay/:callId/chunks', llmRelayChunks);
 app.get('/document-access', serviceTokenAuth(), documentAccess);
 app.post('/document-projection', serviceTokenAuth(), documentProjection);
+app.post('/document-seed', serviceTokenAuth(), documentSeed);
+app.get('/document-room-status', serviceTokenAuth(), documentRoomStatus);
 
 // POST /api/agent/finalize-abandoned — watchdog reverse-trigger finalize
 app.post('/finalize-abandoned', serviceTokenAuth(), finalizeAbandoned);

@@ -4,13 +4,28 @@ import type { HeterogeneousProviderConfig } from './agencyConfig';
 import { buildHeteroSpawnArgs } from './agencyConfig';
 import {
   applyHeteroSelection,
+  buildHeteroExecArgs,
   getHeteroSelectorCapability,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   isCodexServerDefaultCustomModel,
   isHeteroSelectorAvailable,
+  parseModelTuple,
 } from './heteroSelectorCapabilities';
 
 describe('selector availability', () => {
+  it('offers an ACP model selector for DeepSeek Harness and preserves tuple selections', () => {
+    const value = '["gateway","deepseek-v4-pro"]';
+    const capability = getHeteroSelectorCapability('deepseek-harness');
+
+    expect(isHeteroSelectorAvailable('deepseek-harness')).toBe(true);
+    expect(capability?.model?.source).toBe('catalog');
+    expect(capability?.model?.encodings).toEqual([]);
+    expect(capability?.model?.resolve({ model: value })).toBe(value);
+    expect(applyHeteroSelection({ type: 'deepseek-harness' }, { model: value })).toMatchObject({
+      model: value,
+    });
+  });
+
   it('derives the selectable provider set from any registered dimension', () => {
     expect(isHeteroSelectorAvailable('amp')).toBe(true);
     expect(isHeteroSelectorAvailable('claude-code')).toBe(true);
@@ -289,5 +304,41 @@ describe('applyHeteroSelection', () => {
     const patched = { ...stale, ...applyHeteroSelection(stale, { model: 'opus' }) };
 
     expect(buildHeteroSpawnArgs(patched)).toEqual(['--model', 'opus']);
+  });
+});
+
+describe('DeepSeek Harness exec args', () => {
+  it('forwards the persisted tuple to lh hetero exec without native spawn args', () => {
+    const provider: HeterogeneousProviderConfig = {
+      args: ['--config', '/tmp/dsh.yml'],
+      model: '["deepseek-account","deepseek-flash"]',
+      type: 'deepseek-harness',
+    };
+
+    // The runtime selects the model through ACP, so the desktop spawn keeps the
+    // user's own args and passes the tuple as `initialModel` instead.
+    expect(buildHeteroSpawnArgs(provider)).toEqual(['--config', '/tmp/dsh.yml']);
+    expect(buildHeteroExecArgs(provider)).toEqual([
+      '--agent-arg=--config',
+      '--agent-arg=/tmp/dsh.yml',
+      '--model',
+      '["deepseek-account","deepseek-flash"]',
+    ]);
+  });
+});
+
+describe('parseModelTuple', () => {
+  it('decodes the provider and model halves', () => {
+    expect(parseModelTuple('["deepseek-account","deepseek-v4-pro"]')).toEqual({
+      modelId: 'deepseek-v4-pro',
+      providerId: 'deepseek-account',
+    });
+  });
+
+  it('returns undefined for opaque and malformed values', () => {
+    expect(parseModelTuple('deepseek-v4-pro')).toBeUndefined();
+    expect(parseModelTuple('["deepseek-account"]')).toBeUndefined();
+    expect(parseModelTuple('["deepseek-account",42]')).toBeUndefined();
+    expect(parseModelTuple('[not json')).toBeUndefined();
   });
 });

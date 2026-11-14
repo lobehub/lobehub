@@ -34,6 +34,8 @@
   "features.messageTextSelectionActions.title": "消息文本选择操作",
   "features.oauthApps.desc": "在个人和工作区设置中显示 OAuth 应用管理入口。此功能默认隐藏。",
   "features.oauthApps.title": "OAuth 应用",
+  "features.pageCollab.desc": "在工作区页面中与成员实时共同编辑，并看到谁正在同一页面。关闭时页面照常保存，成员的修改在刷新后可见。",
+  "features.pageCollab.title": "页面实时协作",
   "features.projects.desc": "将长期目标组织到独立工作空间中，并集中管理相关智能体、资料库与任务。",
   "features.projects.title": "项目工作空间",
   "features.selfLearning.desc": "让 Agent 在后台从对话中学习，并在每晚复盘。在「记忆 → 自进化」中查看结果。",

@@ -45,7 +45,7 @@ export class ProjectWorkingDirectoryModel {
     return { userId: this.userId, workspaceId: this.workspaceId };
   }
 
-  private async project(id: string, write = false) {
+  private async project(id: string) {
     const [row] = await this.db
       .select()
       .from(projects)
@@ -54,8 +54,6 @@ export class ProjectWorkingDirectoryModel {
           eq(projects.id, id),
           buildWorkspaceWhere(this.scope(), projects),
           isNull(projects.deletedAt),
-          /* v8 ignore next -- unreachable: `project()` is private and its only caller (`list`) never passes `write` */
-          write ? eq(projects.userId, this.userId) : undefined,
         ),
       );
     if (!row) throw new Error('Project not found or access denied');

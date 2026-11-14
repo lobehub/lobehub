@@ -287,7 +287,7 @@ const TabItem = memo<TabItemProps>(
             size={16}
           />
         ) : meta.avatarSeed ? (
-          <ProjectAvatar avatar={meta.avatar} name={meta.avatarSeed} size={16} />
+          <ProjectAvatar avatar={meta.avatar} id={meta.avatarSeed} name={meta.title} size={16} />
         ) : meta.avatarKind === 'workspace' ? (
           <WorkspaceAvatar avatar={meta.avatar} name={meta.title} size={16} />
         ) : meta.avatar ? (

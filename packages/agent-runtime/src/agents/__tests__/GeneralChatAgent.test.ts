@@ -965,8 +965,7 @@ describe('GeneralChatAgent', () => {
     it('rejects parallel-batch calls that arrived with empty arguments instead of executing them', async () => {
       const agent = new GeneralChatAgent(createAgentOptions(mockModelRuntimeConfig));
 
-      // The serialization-loss shape from T-673: fully-formed parallel calls
-      // whose per-call arguments were lost upstream, reaching the agent as ''.
+      // T-673 loss shape: fully-formed parallel calls whose arguments arrived as ''.
       const lostArgsCalls: ChatToolPayload[] = [
         {
           apiName: 'search',
@@ -997,6 +996,7 @@ describe('GeneralChatAgent', () => {
         {
           payload: {
             blockedContent: expect.stringContaining('arguments of this call arrived empty'),
+            blockedContentByCallId: expect.any(Object),
             blockedReason: 'tool_arguments_empty',
             parentMessageId: 'msg-1',
             toolsCalling: lostArgsCalls,
@@ -1030,8 +1030,7 @@ describe('GeneralChatAgent', () => {
           parentMessageId: 'msg-1',
           toolsCalling: [lostArgsCall, healthyCall],
         }),
-        // Manifests without humanIntervention config → no intervention, so the
-        // healthy call goes straight to the executor.
+        // No humanIntervention config → the healthy call goes straight to the executor.
         createMockState({
           toolManifestMap: {
             'lobe-web-browsing': { identifier: 'lobe-web-browsing' },
@@ -1044,6 +1043,7 @@ describe('GeneralChatAgent', () => {
         {
           payload: {
             blockedContent: expect.stringContaining('Call the tool again one call at a time'),
+            blockedContentByCallId: expect.any(Object),
             blockedReason: 'tool_arguments_empty',
             parentMessageId: 'msg-1',
             toolsCalling: [lostArgsCall],

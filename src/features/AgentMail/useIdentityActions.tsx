@@ -13,6 +13,8 @@ export interface UseAccountActionsParams {
   agentId: string;
   /** Revalidate the addresses after opening or releasing one. */
   onChanged: () => Promise<unknown> | void;
+  /** Show a refused opening beside the form that asked, instead of in a toast. */
+  onProvisionFailed?: (message: string) => void;
 }
 
 /**
@@ -23,7 +25,11 @@ export interface UseAccountActionsParams {
  * never a generic failure, because "that prefix is taken" and "this deployment
  * has no mailbox service" are different things for the user to act on.
  */
-export const useAccountActions = ({ agentId, onChanged }: UseAccountActionsParams) => {
+export const useAccountActions = ({
+  agentId,
+  onChanged,
+  onProvisionFailed,
+}: UseAccountActionsParams) => {
   const { t } = useTranslation('setting');
 
   const provision = useCallback(
@@ -43,15 +49,15 @@ export const useAccountActions = ({ agentId, onChanged }: UseAccountActionsParam
         return account;
       } catch (error) {
         console.error('[AgentIdentity] provision failed', error);
-        toast.error(
-          t('identity.provision.failed', {
-            reason: error instanceof Error ? error.message : String(error),
-          }),
-        );
+        const message = t('identity.provision.failed', {
+          reason: error instanceof Error ? error.message : String(error),
+        });
+        if (onProvisionFailed) onProvisionFailed(message);
+        else toast.error(message);
         return undefined;
       }
     },
-    [agentId, onChanged, t],
+    [agentId, onChanged, onProvisionFailed, t],
   );
 
   const release = useCallback(

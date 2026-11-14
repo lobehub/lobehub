@@ -80,6 +80,7 @@ vi.mock('@/server/services/queue', () => ({
   },
 }));
 
+// Isolate mail wake/digest behavior; callbackAuth.test.ts covers real signature validation.
 const qstash = vi.hoisted(() => ({ valid: true }));
 vi.mock('@/libs/qstash', () => ({ verifyQStashSignature: async () => qstash.valid }));
 

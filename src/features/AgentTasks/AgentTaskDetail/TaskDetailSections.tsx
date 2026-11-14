@@ -25,7 +25,7 @@ import TaskSubtasks from './TaskSubtasks';
 const TaskDetailSections = memo(() => {
   return (
     <div className={styles.root}>
-      <div className={styles.header}>
+      <div className={styles.grid}>
         <Flexbox className={styles.main} gap={12}>
           <TaskGoalBar />
           <TaskParentBar />
@@ -40,14 +40,14 @@ const TaskDetailSections = memo(() => {
         <div className={styles.side}>
           <TaskProperties />
         </div>
+        <Flexbox className={styles.body} gap={24}>
+          <TaskInstruction />
+          <TaskAcceptance />
+          <TaskSubtasks />
+          <TaskArtifacts />
+          <TaskActivities />
+        </Flexbox>
       </div>
-      <Flexbox gap={24} style={{ paddingBottom: 120 }}>
-        <TaskInstruction />
-        <TaskAcceptance />
-        <TaskSubtasks />
-        <TaskArtifacts />
-        <TaskActivities />
-      </Flexbox>
     </div>
   );
 });

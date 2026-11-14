@@ -111,6 +111,18 @@ describe('archived issues', () => {
   });
 });
 
+describe('issue labels', () => {
+  it('reads each label with its color and group, which a sync needs to create it', async () => {
+    fetchMock.mockImplementation(async () => reply(emptyIssues));
+
+    await listLinearIssues('token', { stateTypes: ['completed'], teamId: 'team-pkg' });
+
+    expect(requestBody(fetchMock.mock.calls[0]).query).toContain(
+      'nodes { name color parent { name color } }',
+    );
+  });
+});
+
 describe('getLinearProjectTeamIds', () => {
   it('reads every page of the teams a project belongs to', async () => {
     fetchMock

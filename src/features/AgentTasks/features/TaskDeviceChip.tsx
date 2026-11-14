@@ -16,6 +16,8 @@ import { deviceLabel, getTaskDeviceLockReason, useTaskRunTarget } from './useTas
 interface TaskDeviceChipProps {
   /** The assignee whose execution environment is inherited when nothing is pinned. */
   agentId: string;
+  /** The caller is the task's creator (or is creating it); see `devicePoolForTask`. */
+  canPinPrivateDevices: boolean;
   /**
    * Row class for the trigger. Omitted → the composer's compact chip; the task
    * detail's header row passes its own chip-sized class instead.
@@ -62,6 +64,7 @@ interface TaskDeviceChipProps {
 const TaskDeviceChip = memo<TaskDeviceChipProps>(
   ({
     agentId,
+    canPinPrivateDevices,
     className,
     disabled,
     followDirectory,
@@ -84,7 +87,7 @@ const TaskDeviceChip = memo<TaskDeviceChipProps>(
       isPending,
       pinnedDeviceId,
       retryDevices,
-    } = useTaskRunTarget(agentId, value);
+    } = useTaskRunTarget(agentId, value, { canPinPrivateDevices });
 
     // An author-fixed target still leaves the directory choosable, so the switch
     // only locks when neither axis is. A task already off the agent keeps the

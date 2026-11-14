@@ -58,6 +58,21 @@ export const setPendingSandboxSelection = (agentId: string, selection?: SandboxS
 };
 
 /**
+ * Selections the composer filled in itself rather than the person choosing
+ * them: the plan's default placement. Kept by identity, so a pick — always a
+ * new object — is never mistaken for one. The server needs the difference: a
+ * project conversation started on the default is given the project's
+ * repository checkout instead, while one the person placed keeps their choice.
+ */
+const seeded = new WeakSet<SandboxSelection>();
+
+/** Fill an agent's empty slot with the default placement, marked as not chosen by anyone. */
+export const seedPendingSandboxSelection = (agentId: string, selection: SandboxSelection): void => {
+  seeded.add(selection);
+  setPendingSandboxSelection(agentId, selection);
+};
+
+/**
  * The place an agent's next conversation starts when nobody picks one, and
  * the plan turns out to include a drive. Registered by the composer as soon as
  * it knows the agent runs in the sandbox — before the entitlement has loaded —
@@ -69,6 +84,7 @@ const defaults = new Map<string, SandboxSelection>();
 
 /** Register an agent's default placement; `undefined` clears it. */
 export const setSandboxDefaultSelection = (agentId: string, selection?: SandboxSelection): void => {
+  if (selection) seeded.add(selection);
   if (selection) defaults.set(agentId, selection);
   else defaults.delete(agentId);
 };
@@ -130,7 +146,13 @@ export const consumePendingSandboxSelection = (agentId: string): SandboxSelectio
   return selection;
 };
 
-/** The topic metadata a pending selection becomes when the topic is created with it. */
+/**
+ * The topic metadata a pending selection becomes when the topic is created with
+ * it. An empty selection is the temporary sandbox picked on purpose, and says so:
+ * otherwise it would arrive as nothing picked, and a project conversation would
+ * be given the project's checkout instead. A default nobody picked says that
+ * too, so the project's checkout can take its place.
+ */
 export const toSandboxTopicMetadata = (
   selection: SandboxSelection | undefined,
 ): ChatTopicMetadata | undefined =>
@@ -139,4 +161,8 @@ export const toSandboxTopicMetadata = (
     sandboxEnvironmentId: selection.environmentId,
     sandboxInstanceId: selection.instanceId,
     sandboxWorkingDirectory: selection.workingDirectory,
+    ...(seeded.has(selection) && { sandboxSeeded: true }),
+    ...(!selection.environmentId &&
+      !selection.instanceId &&
+      selection.workingDirectory === undefined && { sandboxTemporary: true }),
   };

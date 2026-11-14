@@ -8,7 +8,7 @@ import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 
-import { taskDetailLayoutStyles as layout } from './taskDetailLayoutStyles';
+import { TASK_DETAIL_PAGE_WIDTH, taskDetailLayoutStyles as layout } from './taskDetailLayoutStyles';
 
 const styles = createStaticStyles(({ css }) => ({
   acceptance: css`
@@ -23,7 +23,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   control: css`
     height: 32px;
-    padding-inline: 10px;
+    padding-inline: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
@@ -33,7 +33,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const TaskDetailBodySkeleton = () => (
   <Flexbox aria-busy className={layout.root} flex={1}>
-    <div className={layout.header}>
+    <div className={layout.grid}>
       <Flexbox className={layout.main} gap={12}>
         <Flexbox style={{ paddingBottom: 5, paddingTop: 5 }}>
           <SkeletonBar height={24} width={'min(520px, 56%)'} />
@@ -69,34 +69,33 @@ const TaskDetailBodySkeleton = () => (
           ))}
         </div>
       </div>
-    </div>
-
-    <Flexbox gap={24} style={{ paddingBottom: 120 }}>
-      <Flexbox gap={12}>
-        <SkeletonBar height={14} width={'94%'} />
-        <SkeletonBar height={14} width={'88%'} />
-        <SkeletonBar height={14} width={'72%'} />
-      </Flexbox>
-
-      <Flexbox gap={12}>
-        <Flexbox horizontal align={'center'} gap={8}>
-          <SkeletonBar height={16} radius={'50%'} width={16} />
-          <SkeletonBar height={18} width={112} />
+      <Flexbox className={layout.body} gap={24}>
+        <Flexbox gap={12}>
+          <SkeletonBar height={14} width={'94%'} />
+          <SkeletonBar height={14} width={'88%'} />
+          <SkeletonBar height={14} width={'72%'} />
         </Flexbox>
-        <Flexbox className={styles.acceptance}>
-          {Array.from({ length: 3 }).map((_, index) => (
-            <Flexbox key={index}>
-              {index > 0 && <div className={styles.divider} />}
-              <Flexbox horizontal align={'center'} gap={10} padding={'12px'}>
-                <SkeletonBar height={16} radius={'50%'} width={16} />
-                <SkeletonBar height={12} width={24} />
-                <SkeletonBar height={14} width={`${58 + index * 9}%`} />
+
+        <Flexbox gap={12}>
+          <Flexbox horizontal align={'center'} gap={8}>
+            <SkeletonBar height={16} radius={'50%'} width={16} />
+            <SkeletonBar height={18} width={112} />
+          </Flexbox>
+          <Flexbox className={styles.acceptance}>
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Flexbox key={index}>
+                {index > 0 && <div className={styles.divider} />}
+                <Flexbox horizontal align={'center'} gap={10} padding={'12px'}>
+                  <SkeletonBar height={16} radius={'50%'} width={16} />
+                  <SkeletonBar height={12} width={24} />
+                  <SkeletonBar height={14} width={`${58 + index * 9}%`} />
+                </Flexbox>
               </Flexbox>
-            </Flexbox>
-          ))}
+            ))}
+          </Flexbox>
         </Flexbox>
       </Flexbox>
-    </Flexbox>
+    </div>
   </Flexbox>
 );
 
@@ -107,7 +106,7 @@ const TaskDetailSkeleton = memo<RouteSkeletonProps>(({ chrome = 'page' }) =>
     <Flexbox flex={1} height={'100%'}>
       <NavHeader />
       <Flexbox flex={1} style={{ minHeight: 0, overflowY: 'auto' }}>
-        <WideScreenContainer>
+        <WideScreenContainer minWidth={TASK_DETAIL_PAGE_WIDTH}>
           <TaskDetailBodySkeleton />
         </WideScreenContainer>
       </Flexbox>

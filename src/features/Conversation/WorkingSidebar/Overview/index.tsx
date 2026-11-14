@@ -69,6 +69,7 @@ import OverviewHeader from './OverviewHeader';
 import { ChevronRight, OverviewRow, PickerGlyph, rowStyles } from './OverviewRow';
 import PortSwitcher from './PortSwitcher';
 import { sectionStyles } from './sectionStyles';
+import { TerminalRow } from './TerminalRow';
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
@@ -553,6 +554,7 @@ const Overview = memo<OverviewProps>(
               onClick={() => onOpenTab('documents')}
             />
           )}
+          <TerminalRow />
         </Flexbox>
       </Flexbox>
     );

@@ -76,8 +76,8 @@ const MasonryView = memo(function MasonryView({
 
   // Sort data using current sort settings
   const data = useMemo(
-    () => sortFileList(rawData, sorter, sortType) || [],
-    [rawData, sorter, sortType],
+    () => sortFileList(rawData, sorter, sortType, { groupFolders: Boolean(libraryId) }) || [],
+    [libraryId, rawData, sorter, sortType],
   );
 
   const dataLength = data.length;

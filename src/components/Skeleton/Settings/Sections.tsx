@@ -368,7 +368,7 @@ const InsetTiles = ({
   tiles: number;
 }) => (
   <div
-    {...sx([styles.grid], undefined, {
+    {...sx(styles.grid, {
       gap: 8,
       gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
     })}
@@ -489,7 +489,7 @@ const Detail = ({
     </Flexbox>
     <div {...stylex.props(styles.divider)} />
     <div
-      {...sx([styles.grid], undefined, {
+      {...sx(styles.grid, {
         columnGap: 24,
         gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
       })}
@@ -531,9 +531,7 @@ const Quota = ({ blocks }: { blocks: QuotaBlockShape[] }) => (
     {blocks.map(({ caption, cellHeight, labels }, index) => (
       <div key={index} {...stylex.props(styles.quotaBlock)}>
         <QuotaCaption caption={caption} />
-        <div
-          {...sx([styles.grid], undefined, { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' })}
-        >
+        <div {...sx(styles.grid, { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' })}>
           {[0, 1].map((cell) => (
             <Flexbox gap={10} height={cellHeight} justify={'center'} key={cell} paddingInline={16}>
               <QuotaCellLabel index={cell} label={labels?.[cell]} />

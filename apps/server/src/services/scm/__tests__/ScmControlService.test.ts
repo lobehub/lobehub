@@ -117,6 +117,29 @@ const createTopic = async () => {
   return topic;
 };
 
+const privatePullRequestWork = (userId: string): typeof works.$inferInsert => ({
+  resourceId: 'arvinxx/sandbox#5',
+  resourceType: 'github_pull_request',
+  status: 'open',
+  toolIdentifier: 'lobe-local-system',
+  toolName: 'runCommand',
+  type: 'external',
+  userId,
+  visibility: 'private',
+});
+
+const userInstallationInput = (
+  userId: string,
+): Parameters<typeof ScmInstallationModel.bind>[1] => ({
+  accountExternalId: '1',
+  accountLogin: 'arvinxx',
+  accountType: 'user',
+  installationId: '90001',
+  provider: 'github',
+  repositorySelection: 'all',
+  userId,
+});
+
 describe('ScmControlService — merge', () => {
   it('accepts the linked acceptance, stamps the round, and flips the Work', async () => {
     const [acceptance] = await serverDB
@@ -127,19 +150,7 @@ describe('ScmControlService — merge', () => {
       .insert(verifyRuns)
       .values({ acceptanceId: acceptance.id, roundIndex: 1, userId })
       .returning();
-    const [work] = await serverDB
-      .insert(works)
-      .values({
-        resourceId: 'arvinxx/sandbox#5',
-        resourceType: 'github_pull_request',
-        status: 'open',
-        toolIdentifier: 'lobe-local-system',
-        toolName: 'runCommand',
-        type: 'external',
-        userId,
-        visibility: 'private',
-      })
-      .returning();
+    const [work] = await serverDB.insert(works).values(privatePullRequestWork(userId)).returning();
     const row = await ScmChangeRequestModel.upsert(serverDB, {
       ...baseRow,
       links: { acceptanceId: acceptance.id, workId: work.id },
@@ -209,15 +220,7 @@ describe('ScmControlService — merge', () => {
 describe('ScmControlService — wake', () => {
   it('wakes the agent of the linked conversation with the failing check and its log', async () => {
     const topic = await createTopic();
-    const installation = await ScmInstallationModel.bind(serverDB, {
-      accountExternalId: '1',
-      accountLogin: 'arvinxx',
-      accountType: 'user',
-      installationId: '90001',
-      provider: 'github',
-      repositorySelection: 'all',
-      userId,
-    });
+    const installation = await ScmInstallationModel.bind(serverDB, userInstallationInput(userId));
     const row = await ScmChangeRequestModel.upsert(serverDB, {
       ...baseRow,
       headRef: 'feat/x',
@@ -377,15 +380,7 @@ describe('ScmControlService — wake', () => {
 
   it('wakes the agent for a trusted review bot even though GitHub reports it as none', async () => {
     const topic = await createTopic();
-    const installation = await ScmInstallationModel.bind(serverDB, {
-      accountExternalId: '1',
-      accountLogin: 'arvinxx',
-      accountType: 'user',
-      installationId: '90001',
-      provider: 'github',
-      repositorySelection: 'all',
-      userId,
-    });
+    const installation = await ScmInstallationModel.bind(serverDB, userInstallationInput(userId));
     const row = await ScmChangeRequestModel.upsert(serverDB, {
       ...baseRow,
       links: { installationId: installation.id, topicId: topic.id },
@@ -617,19 +612,7 @@ describe('ScmControlService — wake', () => {
   });
 
   it('flips the Work to merged even when accepting on merge is off', async () => {
-    const [work] = await serverDB
-      .insert(works)
-      .values({
-        resourceId: 'arvinxx/sandbox#5',
-        resourceType: 'github_pull_request',
-        status: 'open',
-        toolIdentifier: 'lobe-local-system',
-        toolName: 'runCommand',
-        type: 'external',
-        userId,
-        visibility: 'private',
-      })
-      .returning();
+    const [work] = await serverDB.insert(works).values(privatePullRequestWork(userId)).returning();
     const row = await ScmChangeRequestModel.upsert(serverDB, {
       ...baseRow,
       links: { workId: work.id },
@@ -683,19 +666,7 @@ describe('ScmControlService — wake', () => {
 
     // The merge itself is still mirrored: the gate covers what we do on the
     // author's behalf, not the record of what GitHub reported.
-    const [work] = await serverDB
-      .insert(works)
-      .values({
-        resourceId: 'arvinxx/sandbox#5',
-        resourceType: 'github_pull_request',
-        status: 'open',
-        toolIdentifier: 'lobe-local-system',
-        toolName: 'runCommand',
-        type: 'external',
-        userId,
-        visibility: 'private',
-      })
-      .returning();
+    const [work] = await serverDB.insert(works).values(privatePullRequestWork(userId)).returning();
     expect(
       await control().handle({
         event: changeRequestEvent('merged'),
@@ -768,15 +739,7 @@ describe('ScmControlService — wake', () => {
 describe('ScmControlService — the tracking comment in GitHub', () => {
   const bindAndOpen = async (extra: Record<string, unknown>) => {
     const topic = await createTopic();
-    const installation = await ScmInstallationModel.bind(serverDB, {
-      accountExternalId: '1',
-      accountLogin: 'arvinxx',
-      accountType: 'user',
-      installationId: '90001',
-      provider: 'github',
-      repositorySelection: 'all',
-      userId,
-    });
+    const installation = await ScmInstallationModel.bind(serverDB, userInstallationInput(userId));
     const [acceptance] = await serverDB
       .insert(acceptances)
       .values({ status: 'delivered', subjectId: 's', subjectType: 'standalone', userId })

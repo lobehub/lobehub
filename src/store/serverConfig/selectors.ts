@@ -28,11 +28,9 @@ export const serverConfigSelectors = {
     s.featureFlags.enableAgentKnowledgeSpace === true,
   enableMarketTrustedClient: (s: ServerConfigStore) =>
     s.serverConfig.enableMarketTrustedClient || false,
-  enablePageCollab: (s: ServerConfigStore) => s.serverConfig.enablePageCollab || false,
+  enableWorkspacePageCollab: (s: ServerConfigStore) =>
+    s.serverConfig.enableWorkspacePageCollab || false,
   enableUploadFileToServer: (s: ServerConfigStore) => s.serverConfig.enableUploadFileToServer,
-  /** Workspaces are available to this user (business deployment + per-user `workspace` flag). */
-  enableWorkspace: (s: ServerConfigStore) =>
-    (s.serverConfig.enableBusinessFeatures || false) && s.featureFlags.enableWorkspace === true,
   enableMultimodalUnderstanding: (s: ServerConfigStore) =>
     s.serverConfig.enableMultimodalUnderstanding || false,
   enabledTelemetryChat: (s: ServerConfigStore) => s.serverConfig.telemetry.langfuse || false,

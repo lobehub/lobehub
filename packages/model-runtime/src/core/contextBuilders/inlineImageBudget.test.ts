@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { imageUrlToBase64 } from '../../utils/imageToBase64';
-import { buildAnthropicMessages } from './anthropic';
+import { buildAnthropicMessages } from '../protocols/anthropicMessages/messages';
 import {
   clearInlineImageCache,
   type ImageSlot,

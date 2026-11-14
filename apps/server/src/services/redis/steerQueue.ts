@@ -554,6 +554,42 @@ export const steerQueue = {
     return { operationIds: [...operationIds], total: items.length + drained };
   },
 
+  /**
+   * Marks `operationId` as past its last queue read. A run seals itself before
+   * that read and unseals when the read took an entry in; a writer checks
+   * {@link steerQueue.isSealed} after its append, so an entry appended after
+   * the read is always taken back by its writer.
+   *
+   * @throws when Redis is unavailable
+   */
+  async seal(operationId: string): Promise<void> {
+    const redis = await getClient();
+    if (!redis) throw new Error('Redis is unavailable to seal a run');
+
+    await redis.set(RedisKeys.agentSteer.sealedRun(operationId), '1', {
+      px: QUEUE_TTL_SECONDS * 1000,
+    });
+  },
+
+  /** Undoes {@link steerQueue.seal}: the run reads its queue again. */
+  async unseal(operationId: string): Promise<void> {
+    const redis = await getClient();
+    if (!redis) throw new Error('Redis is unavailable to unseal a run');
+
+    await redis.del(RedisKeys.agentSteer.sealedRun(operationId));
+  },
+
+  /**
+   * Whether `operationId` is past its last queue read (see
+   * {@link steerQueue.seal}); `undefined` without Redis.
+   */
+  async isSealed(operationId: string): Promise<boolean | undefined> {
+    const redis = await getClient();
+    if (!redis) return;
+
+    return (await redis.get(RedisKeys.agentSteer.sealedRun(operationId))) !== null;
+  },
+
   /** Number of entries `operationId` would take; `0` without Redis. */
   async length(scope: SteerQueueScope, operationId: string): Promise<number> {
     const redis = await getClient();

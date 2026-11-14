@@ -1,4 +1,5 @@
 import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -122,11 +123,17 @@ export const projectActiveConversationCoordinate = (
   }
 
   if (!coordinate.routeAgentId) {
-    if (useAgentStore.getState().activeAgentId !== undefined) {
+    // Home works against the inbox agent; every other route-less page has none.
+    const routeLessAgentId = coordinate.isHome
+      ? builtinAgentSelectors.inboxAgentId(useAgentStore.getState())
+      : undefined;
+    if (useAgentStore.getState().activeAgentId !== routeLessAgentId) {
       useAgentStore.setState(
-        { activeAgentId: undefined },
+        { activeAgentId: routeLessAgentId },
         false,
-        'ActiveConversationBridge/leaveAgent',
+        coordinate.isHome
+          ? 'ActiveConversationBridge/syncHomeAgent'
+          : 'ActiveConversationBridge/leaveAgent',
       );
     }
     if (

@@ -16,11 +16,15 @@ const service = vi.hoisted(() => ({
 vi.mock('@/services/agentAccount', () => ({ agentAccountService: service }));
 
 const surface = vi.hoisted(() => ({ mobile: false }));
+const server = vi.hoisted(() => ({ loaded: true, providers: ['agent-mail'] }));
 vi.mock('@/utils/mobileSurface', () => ({ isMobileSurface: () => surface.mobile }));
 
 vi.mock('@/store/serverConfig', () => ({
   useServerConfigStore: (selector: (state: unknown) => unknown) =>
-    selector({ serverConfig: { agentIdentityProviders: ['agent-mail'] } }),
+    selector({
+      serverConfig: { agentIdentityProviders: server.providers },
+      serverConfigLoaded: server.loaded,
+    }),
 }));
 vi.mock('@/features/NavHeader', () => ({ default: () => null }));
 vi.mock('@/features/AgentBreadcrumb', () => ({ default: () => null }));
@@ -86,12 +90,16 @@ const row = (id: string, subject: string) => ({
   subject,
 });
 
-const page = (path = '/agent/agt_1/mail') =>
+const page = (path = '/agent/agt_1/mail', disabled = false) =>
   render(
     <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
-          <Route element={<AgentMail agentId={'agt_1'} />} path={'/agent/:aid/mail/:messageId?'} />
+          <Route
+            element={<AgentMail agentId={'agt_1'} disabled={disabled} />}
+            path={'/agent/:aid/mail/:messageId?'}
+          />
+          <Route element={<div>profile page</div>} path={'/agent/:aid/profile'} />
         </Routes>
       </MemoryRouter>
     </SWRConfig>,
@@ -100,6 +108,8 @@ const page = (path = '/agent/agt_1/mail') =>
 beforeEach(() => {
   vi.clearAllMocks();
   surface.mobile = false;
+  server.providers = ['agent-mail'];
+  server.loaded = true;
   service.list.mockResolvedValue([account('acc_a', 'a@lobe.id'), account('acc_b', 'b@lobe.id')]);
   service.listInbox.mockImplementation(async ({ accountId }: { accountId?: string }) =>
     accountId === 'acc_b' ? [row('msg_b', 'For B')] : [row('msg_a', 'For A')],
@@ -212,7 +222,8 @@ describe('AgentMail', () => {
 
     expect(service.revoke).toHaveBeenCalledWith('acc_a');
     expect(await screen.findByText('preview of For B')).toBeInTheDocument();
-    expect(screen.queryByText('Full body of msg_a')).not.toBeInTheDocument();
+    // Switching the list and leaving the message are separate updates; wait for both.
+    await waitFor(() => expect(screen.queryByText('Full body of msg_a')).not.toBeInTheDocument());
   });
 
   it('adds another mailbox through a dialog', async () => {
@@ -228,8 +239,138 @@ describe('AgentMail', () => {
     service.listInbox.mockResolvedValue([]);
     page();
 
-    expect(await screen.findByText('identity.provision')).toBeInTheDocument();
+    expect(await screen.findByText('identity.empty.open')).toBeInTheDocument();
     expect(screen.queryByText('menu:identity.release')).not.toBeInTheDocument();
+    expect(await screen.findByText('identity.empty.title')).toBeInTheDocument();
+    expect(screen.getByText('@lobe.id')).toBeInTheDocument();
+    expect(screen.queryByText('identity.inbox.title')).not.toBeInTheDocument();
+    expect(screen.queryByText('identity.inbox.detail.placeholder')).not.toBeInTheDocument();
+  });
+
+  it('keeps the action unavailable until a prefix is typed', async () => {
+    service.list.mockResolvedValue([]);
+    service.listInbox.mockResolvedValue([]);
+    page();
+
+    await screen.findByText('identity.empty.title');
+    const action = screen.getByRole('button', { name: 'identity.empty.open' });
+    expect(action).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText('identity.prefix.required'), {
+      target: { value: '   ' },
+    });
+    expect(action).toBeDisabled();
+    expect(service.provision).not.toHaveBeenCalled();
+  });
+
+  it('shows a refused opening inside the form and clears it on the next edit', async () => {
+    service.list.mockResolvedValue([]);
+    service.listInbox.mockResolvedValue([]);
+    service.provision.mockRejectedValue(new Error('prefix is taken'));
+    page();
+
+    const input = await screen.findByLabelText('identity.prefix.required');
+    fireEvent.change(input, { target: { value: 'taken' } });
+    fireEvent.click(screen.getByRole('button', { name: 'identity.empty.open' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('identity.provision.failed');
+    expect(input).toHaveValue('taken');
+
+    fireEvent.change(input, { target: { value: 'other' } });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('leaves the page when the deployment cannot open a mailbox and the agent has none', async () => {
+    server.providers = [];
+    service.list.mockResolvedValue([]);
+    service.listInbox.mockResolvedValue([]);
+    page();
+
+    expect(await screen.findByText('profile page')).toBeInTheDocument();
+  });
+
+  it('keeps mail from a released address readable instead of the full-page offer', async () => {
+    service.list.mockResolvedValue([]);
+    page('/agent/agt_1/mail/msg_a');
+
+    expect(await screen.findByText('For A')).toBeInTheDocument();
+    expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
+    expect(screen.queryByText('identity.empty.title')).not.toBeInTheDocument();
+    expect(screen.getByText('identity.empty.open')).toBeInTheDocument();
+  });
+
+  it('does not leave the page while retained mail exists and no provider is configured', async () => {
+    server.providers = [];
+    service.list.mockResolvedValue([]);
+    page();
+
+    expect(await screen.findByText('For A')).toBeInTheDocument();
+    expect(screen.queryByText('profile page')).not.toBeInTheDocument();
+  });
+
+  it('does not leave the page while the server config is still loading', async () => {
+    server.loaded = false;
+    server.providers = [];
+    service.list.mockResolvedValue([]);
+    service.listInbox.mockResolvedValue([]);
+    page();
+
+    await waitFor(() => expect(service.list).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText('profile page')).not.toBeInTheDocument();
+  });
+
+  it('keeps an existing mailbox readable after the provider is removed', async () => {
+    server.providers = [];
+    page();
+
+    expect(await screen.findByText('a@lobe.id')).toBeInTheDocument();
+    expect(screen.queryByText('profile page')).not.toBeInTheDocument();
+  });
+
+  it('shows the address on one row without labelling a working mailbox', async () => {
+    page();
+
+    expect(await screen.findByText('a@lobe.id')).toBeInTheDocument();
+    expect(screen.queryByText('identity.status.active')).not.toBeInTheDocument();
+  });
+
+  it('opens the first mailbox and moves on to it', async () => {
+    service.list.mockResolvedValueOnce([]);
+    // No mail before the first address; the new address then has its own.
+    service.listInbox.mockImplementation(async ({ accountId }: { accountId?: string }) =>
+      accountId ? [row('msg_a', 'For A')] : [],
+    );
+    service.provision.mockResolvedValue(account('acc_a', 'a@lobe.id'));
+    page();
+
+    fireEvent.change(await screen.findByLabelText('identity.prefix.required'), {
+      target: { value: 'growth' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'identity.empty.open' }));
+
+    expect(await screen.findByText('For A')).toBeInTheDocument();
+    expect(service.provision).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'agt_1', prefix: 'growth', provider: 'agent-mail' }),
+    );
+    expect(screen.queryByText('identity.empty.title')).not.toBeInTheDocument();
+  });
+
+  it('states the absence to a read-only viewer without offering to open one', async () => {
+    service.list.mockResolvedValue([]);
+    service.listInbox.mockResolvedValue([]);
+    page('/agent/agt_1/mail', true);
+
+    expect(await screen.findByText('identity.empty.readOnly')).toBeInTheDocument();
+    expect(screen.queryByText('identity.empty.open')).not.toBeInTheDocument();
+  });
+
+  it('does not mistake a failed read for an agent with no mailbox', async () => {
+    service.list.mockRejectedValue(new Error('network down'));
+    page();
+
+    expect(await screen.findByText('identity.loadFailed')).toBeInTheDocument();
+    expect(screen.queryByText('identity.empty.title')).not.toBeInTheDocument();
   });
 
   it('keeps the mailbox on screen when a later refresh fails', async () => {

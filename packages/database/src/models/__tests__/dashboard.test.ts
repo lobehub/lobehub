@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { and, eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import {
@@ -142,6 +142,26 @@ describe('DashboardModel', () => {
       await expect(model.create({ projectId, title: 'x' })).rejects.toMatchObject({
         code: 'SCOPE_MISMATCH',
       });
+    });
+
+    it('refuses to place a widget whose workspace differs from the board', async () => {
+      const model = new DashboardModel(serverDB, userId, workspaceId);
+      const dashboard = await model.create({ title: 'Board' });
+      const foreign = await new WidgetModel(serverDB, userId, otherWorkspaceId).create({
+        title: 'Foreign widget',
+      });
+      // Simulate a widget read scope that drifts from the board's: the
+      // tenant check must still refuse the cross-workspace placement.
+      vi.spyOn(model as any, 'readableWidget').mockReturnValue(undefined);
+
+      await expect(model.addItem(dashboard.id, foreign.id)).rejects.toMatchObject({
+        code: 'SCOPE_MISMATCH',
+      });
+      const items = await serverDB
+        .select()
+        .from(dashboardItems)
+        .where(eq(dashboardItems.dashboardId, dashboard.id));
+      expect(items).toEqual([]);
     });
 
     it('rejects another user’s personal project and unknown ids as not found', async () => {

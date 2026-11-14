@@ -20,7 +20,7 @@ export interface GenerationTopicStoreSlice {
 
 export interface GenerationTopicContextValue {
   /** i18n namespace */
-  namespace: 'image' | 'video';
+  namespace: 'image' | 'music' | 'video';
   useStore: UseBoundStore<StoreApi<GenerationTopicStoreSlice>>;
 }
 

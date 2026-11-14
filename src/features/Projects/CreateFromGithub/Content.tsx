@@ -25,6 +25,7 @@ import {
   getProjectFieldSuggestions,
   isProjectIdentifierValid,
   type MainAgentMode,
+  reserveProjectIds,
 } from '../createProjectForm';
 import MainAgentSection from '../MainAgentSection';
 import { useDefaultMainAgent } from '../useDefaultMainAgent';
@@ -65,6 +66,9 @@ const CreateFromGithubContent = () => {
     nameEdited: false,
     url: '',
   });
+
+  // Taken once per open dialog: the dedicated agent's previewed character is seeded by it.
+  const [reservedIds] = useState(reserveProjectIds);
 
   const repository = parseGithubRepository(form.url);
   const urlInvalid = Boolean(form.url.trim()) && !repository;
@@ -109,6 +113,7 @@ const CreateFromGithubContent = () => {
     try {
       const project = await createProject({
         ...buildCreateProjectRequest(createInput, {
+          ids: reservedIds,
           mainAgentId,
           mainAgentMode: form.mainAgentMode,
         }),
@@ -222,6 +227,7 @@ const CreateFromGithubContent = () => {
         {repository && (
           <MainAgentSection
             agentId={mainAgentId}
+            dedicatedAgentId={reservedIds.agentId}
             disabled={form.loading}
             mode={form.mainAgentMode}
             projectName={form.name}

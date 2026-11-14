@@ -6,6 +6,25 @@ import type { OperationMetadata } from '@/store/chat/slices/operation/types';
 import type { ChatStore } from '@/store/chat/store';
 
 /**
+ * When a seeded row was created: the server's time when it ships one, never
+ * before its parent. The list sorts by `createdAt`, so a client clock behind
+ * the server's would otherwise file the reply above the message it answers.
+ */
+const seedCreatedAt = (
+  get: () => ChatStore,
+  serverTime: number | undefined,
+  parentId: string | null | undefined,
+): number => {
+  const time = serverTime ?? Date.now();
+  const parentCreatedAt = parentId
+    ? dbMessageSelectors.getDbMessageById(parentId)(get())?.createdAt
+    : undefined;
+  const parentTime = parentCreatedAt === undefined ? NaN : new Date(parentCreatedAt).getTime();
+
+  return Number.isFinite(parentTime) && time <= parentTime ? parentTime + 1 : time;
+};
+
+/**
  * Insert the rows a seeded `stream_start` names into the local store, so the
  * step renders without a DB read. Newer servers ship the assistant seed; the
  * caller falls back to a refetch when there is none.
@@ -38,6 +57,7 @@ export const insertStreamStartSeeds = (
   ) {
     get().internal_dispatchMessage(
       {
+        createdAt: seedCreatedAt(get, parent.createdAt, parent.parentId),
         id: parent.id,
         type: 'createMessage',
         value: {
@@ -54,6 +74,7 @@ export const insertStreamStartSeeds = (
 
   get().internal_dispatchMessage(
     {
+      createdAt: seedCreatedAt(get, seed.createdAt, seed.parentId),
       id: seed.id,
       type: 'createMessage',
       value: {

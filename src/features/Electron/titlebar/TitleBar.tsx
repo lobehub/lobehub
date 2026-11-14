@@ -6,6 +6,7 @@ import { useDeferredMount } from '@/hooks/useDeferredMount';
 import { electronStylish } from '@/styles/electron';
 import { getPlatform } from '@/utils/platform';
 
+import AutoEnrollWorkspaceDevice from '../connection/AutoEnrollWorkspaceDevice';
 import Connection from '../connection/Connection';
 import DeviceGateway from '../connection/DeviceGateway';
 import { useWatchThemeUpdate } from '../system/useWatchThemeUpdate';
@@ -40,6 +41,7 @@ const TitleBar = memo(() => {
         <Flexbox horizontal className={electronStylish.nodrag} gap={8}>
           <UpdateNotification />
           <DeviceGateway />
+          <AutoEnrollWorkspaceDevice />
           <Connection />
         </Flexbox>
         {showCustomWinControl && (

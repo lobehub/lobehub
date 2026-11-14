@@ -28,7 +28,7 @@ export const TaskAcceptanceHeader = memo<TaskAcceptanceHeaderProps>(
         gap={8}
         paddingBlock={4}
         paddingInline={8}
-        style={{ cursor: 'pointer', width: 'fit-content' }}
+        style={{ cursor: 'pointer', marginInlineStart: -8, width: 'fit-content' }}
         variant={'borderless'}
         onClick={onToggle}
       >

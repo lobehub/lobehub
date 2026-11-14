@@ -1,4 +1,4 @@
-import { TASK_LABEL_NAME_MAX_LENGTH } from '@lobechat/types';
+import { TASK_LABEL_COLOR_PATTERN, TASK_LABEL_NAME_MAX_LENGTH } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -16,9 +16,7 @@ import { resolveTaskOrThrow } from '@/server/services/task/utils';
  * every member who sees the shared label fetch an attacker resource).
  * Constrain it to a hex literal wherever it can be written.
  */
-const hexColor = z
-  .string()
-  .regex(/^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i, 'INVALID_LABEL_COLOR');
+const hexColor = z.string().regex(TASK_LABEL_COLOR_PATTERN, 'INVALID_LABEL_COLOR');
 
 const labelName = z.string().trim().min(1).max(TASK_LABEL_NAME_MAX_LENGTH);
 const labelIds = z.array(z.string().min(1).max(64)).max(50);

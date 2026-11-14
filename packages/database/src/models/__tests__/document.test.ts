@@ -43,12 +43,7 @@ afterEach(async () => {
 
 // Helper to create a minimal valid document
 const createTestDocument = async (model: DocumentModel, fModel: FileModel, content: string) => {
-  const { id: fileId } = await fModel.create({
-    fileType: 'text/plain',
-    name: 'test.txt',
-    size: 100,
-    url: 'https://example.com/test.txt',
-  });
+  const { id: fileId } = await fModel.create(plainTextFileInput());
 
   // Fetch the file to get complete data
   const file = await fModel.findById(fileId);
@@ -66,6 +61,13 @@ const createTestDocument = async (model: DocumentModel, fModel: FileModel, conte
 
   return { documentId: id, file };
 };
+
+const plainTextFileInput = (): Parameters<FileModel['create']>[0] => ({
+  fileType: 'text/plain',
+  name: 'test.txt',
+  size: 100,
+  url: 'https://example.com/test.txt',
+});
 
 describe('DocumentModel', () => {
   describe('findOrCreateFolder', () => {
@@ -115,12 +117,7 @@ describe('DocumentModel', () => {
 
   describe('create', () => {
     it('should create a new document', async () => {
-      const { id: fileId } = await fileModel.create({
-        fileType: 'text/plain',
-        name: 'test.txt',
-        size: 100,
-        url: 'https://example.com/test.txt',
-      });
+      const { id: fileId } = await fileModel.create(plainTextFileInput());
 
       const file = await fileModel.findById(fileId);
       if (!file) throw new Error('File not found');
@@ -802,12 +799,7 @@ describe('DocumentModel', () => {
     });
 
     it('should return the first document when multiple documents exist for same file', async () => {
-      const { id: fileId } = await fileModel.create({
-        fileType: 'text/plain',
-        name: 'test.txt',
-        size: 100,
-        url: 'https://example.com/test.txt',
-      });
+      const { id: fileId } = await fileModel.create(plainTextFileInput());
 
       const file = await fileModel.findById(fileId);
       if (!file) throw new Error('File not found after creation');
@@ -841,12 +833,7 @@ describe('DocumentModel', () => {
     });
 
     it('should return the oldest document when rows are inserted out of order', async () => {
-      const { id: fileId } = await fileModel.create({
-        fileType: 'text/plain',
-        name: 'test.txt',
-        size: 100,
-        url: 'https://example.com/test.txt',
-      });
+      const { id: fileId } = await fileModel.create(plainTextFileInput());
 
       const file = await fileModel.findById(fileId);
       if (!file) throw new Error('File not found after creation');
@@ -881,12 +868,7 @@ describe('DocumentModel', () => {
     });
 
     it('should break created-at ties on id so the lookup stays stable', async () => {
-      const { id: fileId } = await fileModel.create({
-        fileType: 'text/plain',
-        name: 'test.txt',
-        size: 100,
-        url: 'https://example.com/test.txt',
-      });
+      const { id: fileId } = await fileModel.create(plainTextFileInput());
 
       const file = await fileModel.findById(fileId);
       if (!file) throw new Error('File not found after creation');

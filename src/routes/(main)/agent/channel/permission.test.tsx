@@ -274,6 +274,28 @@ const LocationProbe = () => <output data-testid="location">{useLocation().search
 // A saved bot folds its credentials away; open them the way a person would.
 const openCredentials = () => fireEvent.click(screen.getByText('channel.credentials'));
 
+const paidWechatNoticeDefinition = (): SerializedPlatformDefinition => ({
+  ...platformDef,
+  access: {
+    allowed: false,
+    requiredPlan: 'paid',
+    rolloutMode: 'notice',
+  },
+  id: 'wechat',
+  name: 'WeChat',
+});
+
+const paidWechatEnforcedDefinition = (): SerializedPlatformDefinition => ({
+  ...platformDef,
+  access: {
+    allowed: false,
+    requiredPlan: 'paid',
+    rolloutMode: 'enforce',
+  },
+  id: 'wechat',
+  name: 'WeChat',
+});
+
 describe('Agent channel permission gates', () => {
   beforeEach(() => {
     mocks.activeWorkspaceId = null;
@@ -436,16 +458,7 @@ describe('Agent channel permission gates', () => {
       <Header
         agentId="agent-id"
         currentConfig={currentConfig}
-        platformDef={{
-          ...platformDef,
-          access: {
-            allowed: false,
-            requiredPlan: 'paid',
-            rolloutMode: 'enforce',
-          },
-          id: 'wechat',
-          name: 'WeChat',
-        }}
+        platformDef={paidWechatEnforcedDefinition()}
       />,
     );
 
@@ -458,16 +471,7 @@ describe('Agent channel permission gates', () => {
       <Header
         agentId="agent-id"
         currentConfig={{ ...currentConfig, enabled: false }}
-        platformDef={{
-          ...platformDef,
-          access: {
-            allowed: false,
-            requiredPlan: 'paid',
-            rolloutMode: 'enforce',
-          },
-          id: 'wechat',
-          name: 'WeChat',
-        }}
+        platformDef={paidWechatEnforcedDefinition()}
       />,
     );
 
@@ -475,22 +479,9 @@ describe('Agent channel permission gates', () => {
   });
 
   it('renders the paid-feature alert with the platform name and top spacing', () => {
-    render(
-      <PlatformDetail
-        agentId="agent-id"
-        platformDef={{
-          ...platformDef,
-          access: {
-            allowed: false,
-            requiredPlan: 'paid',
-            rolloutMode: 'notice',
-          },
-          id: 'wechat',
-          name: 'WeChat',
-        }}
-      />,
-      { wrapper: MemoryRouter },
-    );
+    render(<PlatformDetail agentId="agent-id" platformDef={paidWechatNoticeDefinition()} />, {
+      wrapper: MemoryRouter,
+    });
 
     const alert = screen.getByTestId('channel-paid-alert');
     expect(alert).toHaveTextContent('channel.paidFeature.notice.title:WeChat');
@@ -499,22 +490,9 @@ describe('Agent channel permission gates', () => {
   });
 
   it('renders personal upgrade guidance and navigates to personal plans', async () => {
-    render(
-      <PlatformDetail
-        agentId="agent-id"
-        platformDef={{
-          ...platformDef,
-          access: {
-            allowed: false,
-            requiredPlan: 'paid',
-            rolloutMode: 'notice',
-          },
-          id: 'wechat',
-          name: 'WeChat',
-        }}
-      />,
-      { wrapper: MemoryRouter },
-    );
+    render(<PlatformDetail agentId="agent-id" platformDef={paidWechatNoticeDefinition()} />, {
+      wrapper: MemoryRouter,
+    });
 
     const title = screen.getByTestId('channel-paid-alert-title');
     const description = screen.getByTestId('channel-paid-alert-description');
@@ -529,22 +507,9 @@ describe('Agent channel permission gates', () => {
   it('renders workspace upgrade guidance and navigates to workspace plans', async () => {
     mocks.activeWorkspaceId = 'workspace-1';
 
-    render(
-      <PlatformDetail
-        agentId="agent-id"
-        platformDef={{
-          ...platformDef,
-          access: {
-            allowed: false,
-            requiredPlan: 'paid',
-            rolloutMode: 'notice',
-          },
-          id: 'wechat',
-          name: 'WeChat',
-        }}
-      />,
-      { wrapper: MemoryRouter },
-    );
+    render(<PlatformDetail agentId="agent-id" platformDef={paidWechatNoticeDefinition()} />, {
+      wrapper: MemoryRouter,
+    });
 
     const title = screen.getByTestId('channel-paid-alert-title');
     const description = screen.getByTestId('channel-paid-alert-description');

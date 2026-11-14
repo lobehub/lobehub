@@ -107,6 +107,19 @@ describe('GatewayHttpClient clientKinds', () => {
       expect(resolveClientKinds).not.toHaveBeenCalled();
     });
 
+    it('sends clientKinds given for an RPC instead of resolving them from the method', async () => {
+      const { kindsClient, resolveClientKinds } = withResolver();
+      mockFetch({ json: vi.fn().mockResolvedValue({ success: true }), ok: true });
+
+      await kindsClient.invokeRpc(
+        { clientKinds: ['cli'], deviceId: 'device-1', userId: 'user-1' },
+        { method: 'readTerminal' },
+      );
+
+      expect(bodyOf()).toMatchObject({ clientKinds: ['cli'] });
+      expect(resolveClientKinds).not.toHaveBeenCalled();
+    });
+
     it('omits clientKinds when any client can serve the request', async () => {
       const { kindsClient } = withResolver();
       mockFetch({ json: vi.fn().mockResolvedValue({ success: true }), ok: true });

@@ -71,7 +71,7 @@ export const resolveBlockedTools =
 
     for (const toolPayload of payload.toolsCalling) {
       const result: ToolRunResult = {
-        content: blockedContent,
+        content: payload.blockedContentByCallId?.[toolPayload.id] ?? blockedContent,
         error: blockedReason,
         executionTime: 0,
         state: {

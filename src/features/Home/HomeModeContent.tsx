@@ -23,14 +23,14 @@ import { splitBriefs } from '@/features/HomeInbox/splitBriefs';
 import { useHomeInboxTopics } from '@/features/HomeInbox/useHomeInboxTopics';
 import Recommendations from '@/features/Recommendations';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useClientDataSWR } from '@/libs/swr';
-import { recentKeys } from '@/libs/swr/keys';
-import { useCacheScope } from '@/libs/swr/useCacheScope';
-import { recentService } from '@/services/recent';
 import { useBriefStore } from '@/store/brief';
 import { briefListSelectors } from '@/store/brief/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { useHomeStore } from '@/store/home';
+import { HOME_TOPIC_RECENTS_PARAMS } from '@/store/home/slices/recent/action';
+import { createRecentQueryKey } from '@/store/home/slices/recent/initialState';
+import { homeRecentSelectors } from '@/store/home/slices/recent/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
@@ -45,7 +45,7 @@ import RunningGlyph from './components/RunningGlyph';
 import Time from './components/Time';
 import { isHomeWidgetHidden } from './CustomizeModal/config';
 import EmptySuggestions from './EmptySuggestions';
-import { resolveHomeChatContentState } from './homeChatContentState';
+import { isRecentsSnapshotSettled, resolveHomeChatContentState } from './homeChatContentState';
 import type { HomeMode } from './types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -133,7 +133,13 @@ export const RECENT_TASK_STATUSES: TaskStatus[] = TASK_STATUSES.filter(
   (status) => status !== 'completed',
 );
 
-export const HOME_TOPIC_RECENT_LIMIT = 15;
+export { HOME_TOPIC_RECENT_LIMIT } from '@/store/home/slices/recent/action';
+
+const HOME_TOPIC_RECENTS_KEY = createRecentQueryKey(HOME_TOPIC_RECENTS_PARAMS.limit, {
+  types: HOME_TOPIC_RECENTS_PARAMS.types,
+  view: HOME_TOPIC_RECENTS_PARAMS.view,
+});
+const EMPTY_RECENTS: RecentItem[] = [];
 
 const FLEX_MIN_WIDTH_0 = { minWidth: 0 };
 
@@ -468,17 +474,14 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   const recentsHidden = hiddenWidgets.includes('recents');
   const tasksHidden = hiddenWidgets.includes('tasks');
   const scheduledTasksHidden = isHomeWidgetHidden('scheduledTasks', hiddenWidgets);
-  const cacheScope = useCacheScope();
-
-  // Workspace topics are shared, so "mine" must be narrowed server-side —
-  // client-filtering the top N of a team-wide feed could starve out the
-  // viewer's own topics entirely.
-  const recentsSWR = useClientDataSWR(
-    isLogin && !recentsHidden
-      ? recentKeys.topicList(HOME_TOPIC_RECENT_LIMIT, cacheScope, 'mine')
-      : null,
-    () => recentService.getAll(HOME_TOPIC_RECENT_LIMIT, ['topic'], true, true, false),
-    { revalidateOnFocus: false },
+  // The `recentList` replica paints the last rows on a cold start and
+  // revalidates in the background. Workspace topics are shared, so "mine" is
+  // narrowed server-side (see `HOME_TOPIC_RECENTS_PARAMS`).
+  const useFetchHomeTopicRecents = useHomeStore((s) => s.useFetchHomeTopicRecents);
+  const recentsSync = useFetchHomeTopicRecents(!!isLogin && !recentsHidden);
+  const storedTopicRecents = useHomeStore(homeRecentSelectors.query(HOME_TOPIC_RECENTS_KEY));
+  const topicRecentsConfirmed = useHomeStore(
+    homeRecentSelectors.isQueryConfirmed(HOME_TOPIC_RECENTS_KEY),
   );
 
   const inboxTopics = useHomeInboxTopics(isLogin);
@@ -495,7 +498,8 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
   const briefs = useBriefStore(briefListSelectors.briefs);
   const briefsInit = useBriefStore(briefListSelectors.isBriefsInit);
   const needsYouCount = useMemo(() => splitBriefs(briefs).needsYou.length, [briefs]);
-  const topicRecents = recentsSWR.data ?? [];
+  const topicRecents = storedTopicRecents ?? EMPTY_RECENTS;
+  const recentsInit = isRecentsSnapshotSettled(storedTopicRecents, topicRecentsConfirmed);
 
   if (mode === 'chat') {
     // With the recents section switched off nothing is fetched, so it reports as
@@ -503,10 +507,10 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     // activity alone decides what this column is.
     const state = resolveHomeChatContentState({
       authLoaded: !!authLoaded,
-      hasError: !recentsHidden && !!recentsSWR.error,
+      hasError: !recentsHidden && !!recentsSync.error,
       isLogin: !!isLogin,
       recentsCount: topicRecents.length,
-      recentsInit: recentsHidden || recentsSWR.data !== undefined,
+      recentsInit: recentsHidden || recentsInit,
       activityCount: mineRunningCount + mineUnreadCount + needsYouCount,
       activityError: Boolean(inboxTopics.error || briefsSWR.error),
       activityResolved:
@@ -548,7 +552,11 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
             title={t('dashboard.chat.recents')}
           >
             {state === 'error' ? (
-              <AsyncError error={recentsSWR.error} variant={'inline'} onRetry={recentsSWR.mutate} />
+              <AsyncError
+                error={recentsSync.error}
+                variant={'inline'}
+                onRetry={() => void recentsSync.revalidate()}
+              />
             ) : state === 'loading' ? (
               <LoadingRows withTime />
             ) : (

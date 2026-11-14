@@ -237,6 +237,54 @@ describe('Channel history context', () => {
   );
 });
 
+describe('goal management capability', () => {
+  it.each([
+    // The user typed this turn, so "run a goal" works without the `/goal` prefix.
+    ['a chat turn the user sent', { trigger: 'chat' }, true],
+    ['a run the user scheduled', { trigger: 'scheduled', userMessageId: undefined }, true],
+    // A server-started `chat` delivery (background results) writes no user row.
+    ['a chat delivery with no user turn', { trigger: 'chat', userMessageId: undefined }, false],
+    // Goal planning and supervision turns carry no trigger: no goal spawns goals.
+    ['a goal planning turn', { trigger: undefined }, false],
+    ['a bot message', { trigger: 'bot' }, false],
+    ['an inbox wakeup', { trigger: 'inbox' }, false],
+  ])('for %s: %s', async (_, overrides, granted) => {
+    const { deps } = createDeps();
+    await dispatchHeteroAgent(
+      deps,
+      createCtx(
+        {
+          boundDeviceId: 'dev-1',
+          executionTarget: 'device',
+          heterogeneousProvider: { type: 'claude-code' },
+        },
+        { prompt: 'run a goal to polish the mailbox', ...overrides },
+      ),
+      createInput('claude-code'),
+    );
+    const signed = mocks.signHeteroOperationJWT.mock.calls[0][0];
+    expect(signed.capabilities.includes('goal:manage')).toBe(granted);
+  });
+
+  it('keeps it out of a Task run the user did not type', async () => {
+    const { deps } = createDeps();
+    await dispatchHeteroAgent(
+      deps,
+      createCtx(
+        {
+          boundDeviceId: 'dev-1',
+          executionTarget: 'device',
+          heterogeneousProvider: { type: 'claude-code' },
+        },
+        { prompt: 'Implement this step of the goal', trigger: 'chat' },
+      ),
+      createInput('claude-code', { operationTaskId: 'task_1' }),
+    );
+    const signed = mocks.signHeteroOperationJWT.mock.calls[0][0];
+    expect(signed.capabilities).not.toContain('goal:manage');
+  });
+});
+
 describe('dispatchHeteroAgent — preparation failures', () => {
   it('fails before dispatch when the operation JWT cannot be signed', async () => {
     mocks.signHeteroOperationJWT.mockRejectedValueOnce(new Error('no key'));

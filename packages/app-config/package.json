@@ -10,6 +10,7 @@
     "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
+    "@lobechat/business-const": "workspace:*",
     "@lobechat/database": "workspace:*",
     "@lobechat/types": "workspace:*",
     "@lobechat/utils": "workspace:*",

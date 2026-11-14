@@ -2,6 +2,7 @@ import type { ChildProcess } from 'node:child_process';
 
 import { resolveClaudeAccountSpawnEnv } from '@lobechat/device-control/claude-code-account-routing';
 import type { AgentRunRequestMessage } from '@lobechat/device-gateway-client';
+import { buildClaudeCodeEntrypointEnv } from '@lobechat/heterogeneous-agents/protocol';
 
 import type HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 
@@ -84,7 +85,12 @@ export const executeGatewayAgentRun = async (
     // the process has actually spawned (or emitted an early error) before
     // acknowledging the server request.
     return await heterogeneousAgentCtr.spawnLhHeteroExec({
-      accountEnv: account.env,
+      accountEnv: {
+        ...account.env,
+        ...(request.agentType === 'claude-code'
+          ? buildClaudeCodeEntrypointEnv(request.claudeCodeEntrypoint)
+          : {}),
+      },
       agentId: request.agentId,
       agentType: request.agentType,
       assistantMessageId: request.assistantMessageId,

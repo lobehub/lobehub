@@ -772,10 +772,10 @@ describe('hetero exec command', () => {
         command: 'devin',
         extraArgs: ['--agent-type', 'coding', '--model', 'claude-sonnet-4-6-thinking'],
         initialModel: 'claude-sonnet-4-6-thinking',
-        permissionMode: 'bypass',
         prompt: 'do thing',
       }),
     );
+    expect(mockSpawnAgent.mock.calls[0]?.[0]).not.toHaveProperty('permissionMode');
   });
 
   it('runs TRAE Enterprise with ACP model selection and only native provider arguments', async () => {
@@ -1167,9 +1167,9 @@ describe('hetero exec command', () => {
       expect.objectContaining({
         agentType: 'devin',
         askUserBridge: expect.objectContaining({ pending: expect.any(Function) }),
-        permissionMode: 'bypass',
       }),
     );
+    expect(mockSpawnAgent.mock.calls[0]?.[0]).not.toHaveProperty('permissionMode');
   });
 
   it('runs OpenCode with model, resume, and native args while ignoring effort and speed', async () => {

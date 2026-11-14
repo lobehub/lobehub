@@ -189,4 +189,29 @@ describe('server-derived Lobe Bench dataset freezing', () => {
     expect(await datasets.update(system.id, { name: 'Changed' })).toBeUndefined();
     expect((await datasets.findById(system.id))?.metadata).toEqual({ kind: 'lobe-bench' });
   });
+
+  it('compares a cleared metadata object against the stored one before refusing', async () => {
+    const dataset = await datasets.create({
+      benchmarkId: lobeBenchId,
+      identifier: 'clear-metadata',
+      name: 'Clear metadata',
+    });
+
+    await expect(
+      datasets.update(dataset.id, { metadata: null } as unknown as Record<string, unknown>),
+    ).rejects.toBeInstanceOf(AgentEvalDatasetWriteError);
+  });
+
+  it('accepts a cleared metadata patch when the stored metadata is already empty', async () => {
+    const [legacy] = await db
+      .insert(agentEvalDatasets)
+      .values({ benchmarkId: lobeBenchId, identifier: 'no-metadata', name: 'No metadata', userId })
+      .returning();
+
+    const updated = await datasets.update(legacy.id, {
+      metadata: null,
+    } as unknown as Record<string, unknown>);
+
+    expect(updated?.metadata).toMatchObject({ custom: true, kind: 'lobe-bench' });
+  });
 });

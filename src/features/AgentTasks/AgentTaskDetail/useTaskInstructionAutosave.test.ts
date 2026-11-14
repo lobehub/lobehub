@@ -99,4 +99,41 @@ describe('useTaskInstructionAutosave', () => {
     expect(editor.getDocument).not.toHaveBeenCalled();
     expect(updateTask).not.toHaveBeenCalled();
   });
+
+  it('saves a pasted token verbatim instead of letting the markdown export escape it', async () => {
+    // The editor's default markdown export runs a remark round-trip that escapes an
+    // underscore next to `-` or `.` (abc-_def -> abc-\\_def), so a pasted JWT reaches
+    // the executor mangled. Autosave must read the writer's output verbatim; this mock
+    // mirrors that escaping, so dropping `format: false` fails here.
+    const token = 'eyJhbGciOiJFZERTQSJ9.abc-_def.ghi_jkl';
+    const escapingEditor = {
+      getDocument: vi.fn((type: string, options?: { format?: boolean }) =>
+        type === 'json'
+          ? { root: { children: [{ text: token }] } }
+          : options?.format === false
+            ? token
+            : 'eyJhbGciOiJFZERTQSJ9.abc-\\_def.ghi_jkl',
+      ),
+    } as unknown as IEditor;
+
+    const { result } = renderHook(() =>
+      useTaskInstructionAutosave({
+        contentRevision: 0,
+        editable: true,
+        editor: escapingEditor,
+        onEdit,
+        taskId: 'T-1',
+        updateTask,
+      }),
+    );
+
+    act(() => result.current());
+    await act(async () => vi.advanceTimersByTimeAsync(300));
+
+    expect(updateTask).toHaveBeenCalledWith(
+      'T-1',
+      { editorData: { root: { children: [{ text: token }] } }, instruction: token },
+      { source: 'editor' },
+    );
+  });
 });

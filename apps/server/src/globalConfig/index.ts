@@ -19,7 +19,10 @@ import { parseSSOProviders } from '@/libs/better-auth/utils/server';
 import { OIDC_ISSUER_PATH } from '@/libs/oidc-provider/routes';
 import { parseSystemAgent } from '@/server/globalConfig/parseSystemAgent';
 import { isLlmRelayDeploymentReady } from '@/server/modules/AgentRuntime/llmRelay/deployment';
-import { isPageCollabEnabled } from '@/server/services/pageCollab/config';
+import {
+  isLegacyPageCollabEnabled,
+  isWorkspacePageCollabEnabled,
+} from '@/server/services/pageCollab/config';
 import { getSandboxDeployment } from '@/server/services/sandbox/deployment';
 import { type GlobalServerConfig } from '@/types/serverConfig';
 import { cleanObject } from '@/utils/object';
@@ -184,8 +187,9 @@ export const getServerGlobalConfig = async () => {
     enableMarketTrustedClient: !!(
       appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID
     ),
-    enablePageCollab: enableGatewayMode && isPageCollabEnabled(),
+    enablePageCollab: enableGatewayMode && isLegacyPageCollabEnabled(),
     enableUploadFileToServer: !!fileEnv.S3_SECRET_ACCESS_KEY,
+    enableWorkspacePageCollab: enableGatewayMode && isWorkspacePageCollabEnabled(),
     enableMultimodalUnderstanding: !!(
       toolsEnv.MULTIMODAL_UNDERSTANDING_PROVIDER && toolsEnv.MULTIMODAL_UNDERSTANDING_MODEL
     ),

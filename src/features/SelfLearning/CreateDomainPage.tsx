@@ -38,6 +38,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import type { ExpertiseDomainDraft } from '@/services/expertise';
 import { expertiseService } from '@/services/expertise';
 import { useAgentStore } from '@/store/agent';
+import { expertiseActions } from '@/store/expertise';
 import { shinyTextStyles } from '@/styles';
 
 import { type AdjustmentTarget, mergeAdjustedBlock } from './createDomainAdjustment';
@@ -295,6 +296,8 @@ const CreateDomainPage = memo(() => {
         title: draft.title.trim(),
       });
       if (storageKey) localStorage.removeItem(storageKey);
+      // The portrait the page opens on may be a local copy from before this direction existed.
+      void expertiseActions.refreshOverview(agentId);
       navigate(urlJoin('/agent', agentId, 'self-evolving', id));
     } catch {
       toast.error(t('create.failed'));

@@ -20,6 +20,7 @@ describe('aiAgentRouter procedures', () => {
 
 function expected(): Array<[name: string, type: 'mutation' | 'query']> {
   return [
+    ['beginLocalHeteroRunFee', 'mutation'],
     ['beginServerDefaultHeterogeneousOperation', 'mutation'],
     ['cancelServerDefaultHeterogeneousOperation', 'mutation'],
     ['createClientGroupAgentTaskThread', 'mutation'],
@@ -29,6 +30,7 @@ function expected(): Array<[name: string, type: 'mutation' | 'query']> {
     ['execAgents', 'mutation'],
     ['execGroupAgent', 'mutation'],
     ['execSubAgentTask', 'mutation'],
+    ['finishLocalHeteroRunFee', 'mutation'],
     ['finishServerDefaultHeterogeneousOperation', 'mutation'],
     ['getAgentInterventionReview', 'mutation'],
     ['getAgentInterventionReviewBySource', 'mutation'],

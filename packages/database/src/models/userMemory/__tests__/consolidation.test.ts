@@ -222,6 +222,132 @@ describe('UserMemoryConsolidationModel', () => {
     expect(await model.listPendingLegacyContexts()).toHaveLength(1);
   });
 
+  it('reactivates a closed dossier when fresh evidence extends it', async () => {
+    const daysAgo = (days: number) =>
+      new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+    const old = await createLegacy('billing migration', daysAgo(400));
+    const first = await model.applyContextPlan('run_closed', {
+      dossiers: [{ memberIds: [old.context.id], now: 'v1', title: 'Billing' }],
+      nextSteps: [],
+      now: 'v1',
+      openQuestions: [],
+      title: 'Billing',
+    });
+    const [closed] = await serverDB
+      .select()
+      .from(userMemoriesDossiers)
+      .where(eq(userMemoriesDossiers.id, first.dossierIds[0]));
+    expect(closed.status).toBe('closed');
+
+    const fresh = await createLegacy('billing migration resumed', daysAgo(1));
+    await model.applyContextPlan('run_resumed', {
+      dossiers: [
+        {
+          existingDossierId: first.dossierIds[0],
+          memberIds: [fresh.context.id],
+          now: 'v2',
+          title: 'Billing',
+        },
+      ],
+      existingContextId: first.contextId,
+      nextSteps: [],
+      now: 'v2',
+      openQuestions: [],
+      title: 'Billing',
+    });
+    const [resumed] = await serverDB
+      .select()
+      .from(userMemoriesDossiers)
+      .where(eq(userMemoriesDossiers.id, first.dossierIds[0]));
+    expect(resumed.status).toBe('active');
+
+    await model.revertRun('run_resumed');
+    const [restored] = await serverDB
+      .select()
+      .from(userMemoriesDossiers)
+      .where(eq(userMemoriesDossiers.id, first.dossierIds[0]));
+    expect(restored.status).toBe('closed');
+  });
+
+  it('files older evidence without rewriting the current state', async () => {
+    const fresh = await createLegacy('pricing launched', '2026-09-01');
+    const first = await model.applyContextPlan('run_fresh', {
+      dossiers: [{ memberIds: [fresh.context.id], now: 'launched', title: 'Pricing' }],
+      nextSteps: ['watch churn'],
+      now: 'launched',
+      openQuestions: [],
+      title: 'Pricing',
+    });
+
+    const old = await createLegacy('pricing draft', '2026-04-01');
+    const second = await model.applyContextPlan('run_old', {
+      dossiers: [
+        {
+          existingDossierId: first.dossierIds[0],
+          memberIds: [old.context.id],
+          now: 'drafting',
+          title: 'Pricing',
+        },
+      ],
+      existingContextId: first.contextId,
+      nextSteps: ['write the draft'],
+      now: 'drafting',
+      openQuestions: [],
+      title: 'Pricing',
+    });
+    expect(second.activities).toBe(1);
+
+    const [ctx] = await serverDB
+      .select()
+      .from(userMemoriesContexts)
+      .where(eq(userMemoriesContexts.id, first.contextId!));
+    expect(ctx.now).toBe('launched');
+    expect(ctx.description).toBe('launched');
+    expect(ctx.nextSteps).toEqual(['watch churn']);
+    expect(ctx.lastEvidenceAt?.toISOString().slice(0, 10)).toBe('2026-09-01');
+    const [ctxParent] = await serverDB
+      .select()
+      .from(userMemories)
+      .where(eq(userMemories.id, ctx.userMemoryId!));
+    expect(ctxParent.summary).toBe('launched');
+
+    const [dossier] = await serverDB
+      .select()
+      .from(userMemoriesDossiers)
+      .where(eq(userMemoriesDossiers.id, first.dossierIds[0]));
+    expect(dossier.now).toBe('launched');
+    expect(dossier.summary).toBe('launched');
+    expect(dossier.activityCount).toBe(2);
+
+    // Evidence newer than the stored state still rewrites it.
+    const newer = await createLegacy('pricing v2', '2026-10-01');
+    await model.applyContextPlan('run_newer', {
+      dossiers: [
+        {
+          existingDossierId: first.dossierIds[0],
+          memberIds: [newer.context.id],
+          now: 'v2 live',
+          title: 'Pricing',
+        },
+      ],
+      existingContextId: first.contextId,
+      nextSteps: [],
+      now: 'v2 live',
+      openQuestions: [],
+      title: 'Pricing',
+    });
+    const [updated] = await serverDB
+      .select()
+      .from(userMemoriesContexts)
+      .where(eq(userMemoriesContexts.id, first.contextId!));
+    expect(updated.now).toBe('v2 live');
+    const [updatedDossier] = await serverDB
+      .select()
+      .from(userMemoriesDossiers)
+      .where(eq(userMemoriesDossiers.id, first.dossierIds[0]));
+    expect(updatedDossier.now).toBe('v2 live');
+  });
+
   it('reverts a run that updated the same context and dossier in several chunks', async () => {
     const a = await createLegacy('scheduler backend', '2026-05-01');
     const first = await model.applyContextPlan('run_5', createInitialContextPlan(a.context.id));

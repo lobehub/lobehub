@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { getTestDB } from '../../core/getTestDB';
 import {
   documents,
+  files,
   SKILL_BUNDLE_FILE_TYPE,
   SKILL_SCRIPT_FILE_TYPE,
   SKILL_VERSION_FILE_TYPE,
@@ -209,6 +210,56 @@ describe('UserSkillModel coverage', () => {
       ).toBe(2);
       expect(await model.findById(bundle.id)).toMatchObject({ version: 2 });
       expect((await model.listVersions(bundle.id)).map((v) => v.version)).toEqual([2]);
+    });
+
+    it('names the published package after an unnamed bundle', async () => {
+      const bundle = await insertRow({
+        fileType: SKILL_BUNDLE_FILE_TYPE,
+        filename: null,
+        metadata: { userSkill: { version: 1 } },
+      });
+
+      expect(
+        await model.revise(bundle.id, {
+          archive: archiveFor('unnamed'),
+          baseVersion: 1,
+          content: 'v2 body',
+        }),
+      ).toBe(2);
+
+      const [published] = await serverDB.select().from(files).where(eq(files.parentId, bundle.id));
+      expect(published.name).toBe('@2.zip');
+    });
+
+    it('reads an archive published before file hashes were stored', async () => {
+      const bundle = await insertRow({ fileType: SKILL_BUNDLE_FILE_TYPE, filename: 'hashless' });
+      await model.revise(bundle.id, {
+        archive: archiveFor('hashless-v2'),
+        baseVersion: 1,
+        content: 'v2 body',
+      });
+      // Older rows predate the hash column being filled in by the publisher.
+      await serverDB.update(files).set({ fileHash: null }).where(eq(files.parentId, bundle.id));
+
+      const skill = await model.findById(bundle.id);
+
+      expect(skill?.archive).toMatchObject({ fileHash: '' });
+    });
+
+    it('tolerates an archive row that lost its metadata', async () => {
+      const scoped = new UserSkillModel(serverDB, userId);
+      const createdAt = new Date('2026-10-01T00:00:00.000Z');
+      // `archiveRows` only selects rows whose metadata carries `skillVersion`, so a
+      // metadata-less row is a defensive case the query cannot surface on its own.
+      (scoped as any).archiveRows = async () => [
+        { createdAt, fileHash: 'h', id: 'archive-1', metadata: null, size: 1, url: 'skills/a.zip' },
+      ];
+
+      const [version] = await scoped.listVersions('skill-1');
+
+      expect(version).toMatchObject({ archive: { fileHash: 'h', fileId: 'archive-1' } });
+      expect(version.note).toBeUndefined();
+      expect(Number.isNaN(version.version)).toBe(true);
     });
   });
 

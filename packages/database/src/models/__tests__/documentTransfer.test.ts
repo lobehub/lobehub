@@ -7,6 +7,7 @@ import {
   DOCUMENT_FOLDER_TYPE,
   documentCommentMentions,
   documentComments,
+  documentHistories,
   documentLikes,
   documents,
   files,
@@ -15,6 +16,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { DOCUMENT_TRANSFER_FOREIGN_ROWS, DocumentModel } from '../document';
+import { DocumentHistoryModel } from '../documentHistory';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -322,6 +324,55 @@ describe('DocumentModel.transferTo', () => {
         .from(documentCommentMentions)
         .where(eq(documentCommentMentions.commentId, comment!.id)),
     ).toHaveLength(0);
+  });
+  it('brings the version history along into the target workspace', async () => {
+    const personal = new DocumentModel(serverDB, userId);
+    const folder = await createFolder(personal, 'Versioned Folder', 'versioned-folder');
+    const page = await createPage(personal, 'Versioned', 'versioned-page', folder.id);
+    const personalHistory = new DocumentHistoryModel(serverDB, userId);
+    await personalHistory.create({
+      documentId: page.id,
+      editorData: { root: { children: [], type: 'root' } },
+      saveSource: 'manual',
+      savedAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+
+    await personal.transferTo(folder.id, wsId1, userId);
+
+    const inWorkspace = await new DocumentHistoryModel(serverDB, userId, wsId1).listByDocumentId(
+      page.id,
+    );
+    expect(inWorkspace.map(({ saveSource }) => saveSource)).toEqual(['manual']);
+    expect(await personalHistory.listByDocumentId(page.id)).toHaveLength(0);
+  });
+
+  it("brings a workspace page's versions to its new owner on a personal transfer", async () => {
+    const ws = new DocumentModel(serverDB, userId, wsId1);
+    const page = await createPage(ws, 'Shared versions', 'shared-versions');
+    await serverDB.insert(documentHistories).values([
+      {
+        documentId: page.id,
+        editorData: { root: { children: [], type: 'root' } },
+        saveSource: 'autosave',
+        savedAt: new Date('2026-01-01T00:00:00.000Z'),
+        userId,
+        workspaceId: wsId1,
+      },
+      {
+        documentId: page.id,
+        editorData: { root: { children: [], type: 'root' } },
+        saveSource: 'autosave',
+        savedAt: new Date('2026-01-02T00:00:00.000Z'),
+        userId: otherUserId,
+        workspaceId: wsId1,
+      },
+    ]);
+
+    await ws.transferTo(page.id, null, userId);
+
+    expect(await new DocumentHistoryModel(serverDB, userId).listByDocumentId(page.id)).toHaveLength(
+      2,
+    );
   });
 });
 

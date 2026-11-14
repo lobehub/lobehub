@@ -12,7 +12,7 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
 export const useVerifyReportUrl = () => {
   const appOrigin = useAcceptanceOrigin();
   const runId = useChatStore(chatPortalSelectors.verifyReportRunId);
-  // Same SWR key as the portal's title and body, so this shares their request.
+  // Same replica entry as the portal's title and body, so this shares their request.
   const { data } = useVerifyReportBundle(runId ?? null);
   const roundPath = buildAcceptanceRoundPath(data?.run);
   // Copied and opened outside the app, so it stays on the public route: the

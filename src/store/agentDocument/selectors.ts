@@ -31,7 +31,16 @@ const getReaderDocument =
   (s: AgentDocumentState): AgentDocumentReaderDetail | undefined =>
     params ? s.agentDocumentReaderMap[agentDocumentReaderKey(params)] : undefined;
 
+/** The document's chat topic id, or `undefined` before its first paint. */
+const getDocumentChatTopicId =
+  (params?: AgentDocumentReaderParams | null) =>
+  (s: AgentDocumentState): string | undefined =>
+    params?.agentId && params.documentId
+      ? s.agentDocumentChatTopicMap[agentDocumentReaderKey(params)]?.topicId
+      : undefined;
+
 export const agentDocumentSelectors = {
+  getDocumentChatTopicId,
   getDocumentList,
   getReaderDocument,
   isDocumentListConfirmed,

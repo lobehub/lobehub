@@ -284,7 +284,6 @@ export class AgentRuntime {
         currentState = result.newState;
         latestState = currentState;
 
-
         // A call_llm consumes any resume-seeded assistant placeholder exactly
         // once — it has now either reused that message id or created its own —
         // so clear the seed before the next step. Otherwise a later assistant
@@ -755,7 +754,10 @@ export class AgentRuntime {
 
       for (const toolCalling of payload.toolsCalling) {
         const result = {
-          content: payload.blockedContent ?? 'Blocked by security/privacy.',
+          content:
+            payload.blockedContentByCallId?.[toolCalling.id] ??
+            payload.blockedContent ??
+            'Blocked by security/privacy.',
           ...(payload.blockedReason && { error: payload.blockedReason }),
           success: false,
         };

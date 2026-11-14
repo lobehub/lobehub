@@ -1,8 +1,39 @@
-import type { CreatableAcceptanceSubjectType } from '@lobechat/types';
+import type {
+  AcceptanceCommentList,
+  CreatableAcceptanceSubjectType,
+  UserSkillVersionDetail,
+} from '@lobechat/types';
 
-import type { VerifyCheckResultItem } from '@/database/schemas/verify';
-import { AppIndexedDBStorage, defineReplica } from '@/libs/replica';
-import type { AcceptanceBundle, AcceptanceBySubject, VerifyStateResponse } from '@/services/verify';
+import type {
+  VerifyCheckResultItem,
+  VerifyCriterionItem,
+  VerifyRubricItem,
+} from '@/database/schemas/verify';
+import {
+  AppIndexedDBStorage,
+  arrayEntity,
+  definePagedReplica,
+  defineReplica,
+  type ReplicaEntityAdapter,
+  type ReplicaPagedData,
+} from '@/libs/replica';
+import type { UserSkillDetail } from '@/services/userSkill';
+import type {
+  AcceptanceBundle,
+  AcceptanceBySubject,
+  AcceptanceListFilter,
+  AcceptanceListItem,
+  AcceptanceListQuery,
+  GoalCriterionWithInstruction,
+  VerifyReportBundle,
+  verifyService,
+  VerifyStateResponse,
+} from '@/services/verify';
+
+/** Model / token / latency the verifier's LLM call recorded. */
+export type VerifierTracing = NonNullable<
+  Awaited<ReturnType<typeof verifyService.getVerifierTracing>>
+>;
 
 /**
  * The Acceptance aggregate of one acceptance id (`acceptanceBundleMap[id]`):
@@ -136,4 +167,231 @@ export const verifyRunResource = defineReplica<string, VerifyRunSnapshot>({
     namespace: `replica:${VERIFY_RUN_NAME}:v${VERIFY_RUN_VERSION}`,
   }),
   version: VERIFY_RUN_VERSION,
+});
+
+/** The list narrowing a list entry was read under (everything but search and paging). */
+export interface AcceptanceListParams extends AcceptanceListQuery {
+  /** Widen the recency window (server-capped) — the merge picker asks for more. */
+  limit?: number;
+  /** A search term; search entries stay in memory only. */
+  q?: string;
+}
+
+/** `null` (no project) and `undefined` (any project) are different reads. */
+const acceptanceProjectKey = (projectId: string | null | undefined) =>
+  projectId === null ? '~none' : (projectId ?? '');
+
+/**
+ * Entry key of one acceptance list read (`acceptanceListMap[key]`): every
+ * dimension the server filters on. The scope (user + workspace) partitions the
+ * replica itself, so a key never carries the workspace.
+ */
+export const acceptanceListKey = ({
+  filter,
+  limit,
+  projectId,
+  q,
+  scope,
+  source,
+}: AcceptanceListParams = {}): string =>
+  [
+    filter ?? '',
+    acceptanceProjectKey(projectId),
+    scope ?? '',
+    source ?? '',
+    limit === undefined ? '' : String(limit),
+    q ? `q:${q}` : '',
+  ].join('|');
+
+/** Search results answer one typed query; they are never repainted after a reload. */
+const isSearchListKey = (key: string) => key.includes('|q:');
+
+/** Acceptance list rows are addressed by the acceptance id. */
+export const acceptanceListEntity: ReplicaEntityAdapter<AcceptanceListItem[], AcceptanceListItem> =
+  arrayEntity<AcceptanceListItem>((item) => item.id);
+
+/**
+ * The caller's recent acceptances under one narrowing (`acceptanceListMap`):
+ * the workspace shell's onboarding probe, the merge target picker and the list
+ * panel's search. A reload paints the last browse from IndexedDB, then
+ * revalidates; search entries are memory-only.
+ */
+export const acceptanceListResource = defineReplica<AcceptanceListParams, AcceptanceListItem[]>({
+  key: acceptanceListKey,
+  name: 'acceptanceList',
+  persist: { maxEntries: 20 },
+  persistKey: (key) => !isSearchListKey(key),
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** One view of the list panel's scroll feed: the status split and the narrowing. */
+export type AcceptancePageParams = Omit<AcceptanceListQuery, 'filter'> & {
+  filter: AcceptanceListFilter;
+};
+
+export type AcceptancePageData = ReplicaPagedData<AcceptanceListItem, string>;
+
+/** Entry key of one scroll feed (`acceptancePageMap[key]`). */
+export const acceptancePageKey = ({ filter, projectId, scope, source }: AcceptancePageParams) =>
+  [filter, acceptanceProjectKey(projectId), scope ?? '', source ?? ''].join('|');
+
+/**
+ * The list panel's keyset feed, newest first (`acceptancePageMap`). Only the
+ * head page survives a reload, so the first frame shows what the first network
+ * page would, never a stale tail.
+ */
+export const acceptancePageResource = definePagedReplica<
+  AcceptancePageParams,
+  AcceptanceListItem,
+  string,
+  AcceptancePageData
+>({
+  key: acceptancePageKey,
+  name: 'acceptancePage',
+  paging: {
+    direction: 'forward',
+    getId: (item) => item.id,
+    mode: 'cursor',
+    persist: { pages: 1 },
+  },
+  persist: { maxEntries: 20 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/**
+ * The discussion of one acceptance (`acceptanceCommentMap[acceptanceId]`):
+ * comments, approvals, reactions and the caller's comment permissions. LRU-capped
+ * because every opened acceptance would otherwise keep its thread.
+ */
+export const acceptanceCommentResource = defineReplica<string, AcceptanceCommentList>({
+  key: (acceptanceId) => acceptanceId,
+  name: 'acceptanceComment',
+  persist: { maxEntries: 30 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/**
+ * A replica value for a read the server may answer with "not found".
+ *
+ * Wrapped on purpose: a replica value can never be `null` (the engine reads it
+ * as "keep the current value"), but a page must tell "the server has no such
+ * record" (`value: null`, settles on its not-found state) apart from "nothing
+ * read yet" (no entry). The `null` answer is never persisted (see
+ * {@link toPersistedLookup}): it is a page state, and a reload must ask again.
+ */
+export interface VerifyLookup<T> {
+  value: T | null;
+}
+
+export const toPersistedLookup = <T>(entry: VerifyLookup<T>): VerifyLookup<T> | null =>
+  entry.value === null ? null : entry;
+
+const TERMINAL_REPORT_STATUSES = new Set(['delivered', 'errored', 'failed', 'passed']);
+
+/**
+ * Persist finished reports only. A run that is still planned / verifying /
+ * repairing is a live status, so a reload must not paint it from an old
+ * snapshot; it maps to `null` and the engine drops any earlier row.
+ */
+export const toPersistedReportBundle = (
+  entry: VerifyLookup<VerifyReportBundle>,
+): VerifyLookup<VerifyReportBundle> | null =>
+  entry.value?.run.status && TERMINAL_REPORT_STATUSES.has(entry.value.run.status) ? entry : null;
+
+/**
+ * The standalone verify report of one run (`verifyReportBundleMap[verifyRunId]`):
+ * the report page and the verify report portal (title, menu, link). Carries
+ * evidence, so the persisted set is LRU-capped.
+ */
+export const verifyReportBundleResource = defineReplica<string, VerifyLookup<VerifyReportBundle>>({
+  key: (verifyRunId) => verifyRunId,
+  name: 'verifyReportBundle',
+  persist: { maxEntries: 30 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** Model / token / latency of one LLM verifier judgment, keyed by tracing id. */
+export const verifierTracingResource = defineReplica<string, VerifyLookup<VerifierTracing>>({
+  key: (tracingId) => tracingId,
+  name: 'verifierTracing',
+  persist: { maxEntries: 100 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** The rubric list is not paged: every template sits in this single entry. */
+export const VERIFY_RUBRIC_LIST_KEY = 'all';
+
+/** The workspace's reusable rubric templates (`verifyRubricListMap.all`). */
+export const verifyRubricListResource = defineReplica<Record<string, never>, VerifyRubricItem[]>({
+  key: () => VERIFY_RUBRIC_LIST_KEY,
+  name: 'verifyRubricList',
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** The criteria one rubric groups, in rubric order, keyed by rubric id. */
+export const verifyRubricCriteriaResource = defineReplica<string, VerifyCriterionItem[]>({
+  key: (rubricId) => rubricId,
+  name: 'verifyRubricCriteria',
+  persist: { maxEntries: 50 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** One entry key per criteria set: the request depends on the ids alone. */
+export const goalCriteriaKey = (criteriaIds: string[]) => criteriaIds.join(',');
+
+/**
+ * The persisted criteria a Goal is accepted against, with their judge
+ * instructions, keyed by the ordered id list (`goalCriteriaMap`). Shared by the
+ * Goal's acceptance-standard section and its result / sign-off pages.
+ */
+export const goalCriteriaResource = defineReplica<string[], GoalCriterionWithInstruction[]>({
+  key: goalCriteriaKey,
+  name: 'verifyGoalCriteria',
+  persist: { maxEntries: 50 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/**
+ * A plan skill from the user's library with every version it kept, keyed by
+ * skill id (`planSkillMap`): the gate's skill directory and the batch plan's
+ * version list. Ships the skill's files, so the persisted set is capped.
+ */
+export const planSkillResource = defineReplica<string, VerifyLookup<UserSkillDetail>>({
+  key: (skillId) => skillId,
+  name: 'planSkill',
+  persist: { maxEntries: 20 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** One shipped version of a skill. */
+export interface SkillVersionParams {
+  skillId: string;
+  version: number;
+}
+
+export const skillVersionKey = ({ skillId, version }: SkillVersionParams) =>
+  `${skillId}@${version}`;
+
+/**
+ * One version of a skill as it shipped (`skillVersionMap['<id>@<version>']`).
+ * A version never changes once written, so the persisted copy is exact.
+ */
+export const skillVersionResource = defineReplica<
+  SkillVersionParams,
+  VerifyLookup<UserSkillVersionDetail>
+>({
+  key: skillVersionKey,
+  name: 'skillVersion',
+  persist: { maxEntries: 50 },
+  storage: 'indexedDB',
+  version: 1,
 });

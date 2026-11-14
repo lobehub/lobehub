@@ -3,8 +3,8 @@ import type { ChatModelCard } from '@lobechat/types';
 import { loadModels, MODEL_REASONING_EXTEND_PARAMS, ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 
-import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatible';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 
 type ModelSettings = NonNullable<ChatModelCard['settings']>;
