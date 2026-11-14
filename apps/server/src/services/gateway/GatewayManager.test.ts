@@ -47,6 +47,21 @@ const createMockBot = (): PlatformClient => ({
   stop: vi.fn().mockResolvedValue(undefined),
 });
 
+// Helper: a bot whose start() stays pending until the platform handshake
+// completes (QQ resolves only on READY), released by hand via `ready()`.
+const createHandshakeBot = (startError?: Error) => {
+  let ready!: () => void;
+  const handshake = new Promise<void>((resolve, reject) => {
+    ready = () => (startError ? reject(startError) : resolve());
+  });
+  const bot = createMockBot();
+  bot.start = vi.fn(() => handshake);
+  return { bot, ready };
+};
+
+/** Let pending DB lookups and feature checks settle. */
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 // Helper: create a fake definition that returns the given bot
 const createFakeDefinition = (
   id: string,
@@ -72,7 +87,11 @@ describe('GatewayManager', () => {
     mockDb = {};
     mockGateKeeper = {};
 
-    vi.mocked(getServerDB).mockResolvedValue(mockDb as any);
+    // mockReset: a queued `mockRejectedValueOnce` a test never consumed must
+    // not leak into the next one (clearAllMocks keeps queued once-values).
+    vi.mocked(getServerDB)
+      .mockReset()
+      .mockResolvedValue(mockDb as any);
     vi.mocked(KeyVaultsGateKeeper.initWithEnvKey).mockResolvedValue(mockGateKeeper as any);
     mockFindEnabledByPlatform.mockResolvedValue([]);
     mockFindEnabledByPlatformAndAppId.mockResolvedValue(null);
@@ -135,6 +154,32 @@ describe('GatewayManager', () => {
       // Should not throw
       await expect(manager.start()).resolves.toBeUndefined();
       expect(manager.isRunning).toBe(true);
+    });
+
+    it('should share one in-flight start when called again before the first finishes', async () => {
+      const { bot, ready } = createHandshakeBot();
+      const factory = vi.fn().mockReturnValue(bot);
+      mockFindEnabledByPlatform.mockResolvedValue([
+        { applicationId: 'app-1', credentials: {}, userId: 'user-1' },
+      ]);
+      const manager = new GatewayManager({ definitions: [createFakeDefinition('qq', factory)] });
+
+      const first = manager.start();
+      const second = manager.start();
+      await flush();
+
+      // The handshake is still pending: one sync, one connection, same promise.
+      expect(second).toBe(first);
+      expect(mockFindEnabledByPlatform).toHaveBeenCalledTimes(1);
+      expect(factory).toHaveBeenCalledTimes(1);
+      expect(manager.isRunning).toBe(false);
+
+      ready();
+      await Promise.all([first, second]);
+
+      expect(manager.isRunning).toBe(true);
+      expect(bot.start).toHaveBeenCalledTimes(1);
+      expect(factory).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -268,6 +313,123 @@ describe('GatewayManager', () => {
       await manager.startClient('slack', 'app-123');
       expect(mockBot1.stop).toHaveBeenCalled();
       expect(mockBot2.start).toHaveBeenCalled();
+    });
+
+    it('should register the bot before its start resolves so stopClient can reach it', async () => {
+      const { bot, ready } = createHandshakeBot();
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue({
+        applicationId: 'app-1',
+        credentials: {},
+      });
+      const manager = new GatewayManager({
+        definitions: [createFakeDefinition('qq', () => bot)],
+      });
+
+      const starting = manager.startClient('qq', 'app-1');
+      await flush();
+      expect(bot.start).toHaveBeenCalledTimes(1);
+
+      // Disconnect lands mid-handshake: the bot is already tracked, so it stops.
+      await manager.stopClient('qq', 'app-1');
+      expect(bot.stop).toHaveBeenCalledTimes(1);
+
+      ready();
+      await starting;
+
+      // The late READY does not leave an untracked connection behind.
+      expect(bot.stop).toHaveBeenCalledTimes(2);
+      await manager.stopClient('qq', 'app-1');
+      expect(bot.stop).toHaveBeenCalledTimes(2);
+    });
+
+    it('should roll back the registration when start fails', async () => {
+      const failing = createHandshakeBot(new Error('create session error'));
+      const retry = createMockBot();
+      const factory = vi.fn().mockReturnValueOnce(failing.bot).mockReturnValueOnce(retry);
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue({
+        applicationId: 'app-1',
+        credentials: {},
+      });
+      mockFindEnabledByPlatform.mockResolvedValue([{ applicationId: 'app-1', credentials: {} }]);
+      const manager = new GatewayManager({ definitions: [createFakeDefinition('qq', factory)] });
+
+      const starting = manager.startClient('qq', 'app-1');
+      await flush();
+      failing.ready();
+      await expect(starting).rejects.toThrow('create session error');
+
+      // The failed bot no longer holds the slot, so the next sync starts it.
+      await manager.start();
+      expect(factory).toHaveBeenCalledTimes(2);
+      expect(retry.start).toHaveBeenCalledTimes(1);
+    });
+
+    it('should keep one open connection when two startClient calls for the same bot overlap', async () => {
+      const first = createHandshakeBot();
+      const second = createHandshakeBot();
+      const factory = vi.fn().mockReturnValueOnce(first.bot).mockReturnValueOnce(second.bot);
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue({
+        applicationId: 'app-1',
+        credentials: {},
+      });
+      const manager = new GatewayManager({ definitions: [createFakeDefinition('qq', factory)] });
+
+      const a = manager.startClient('qq', 'app-1');
+      const b = manager.startClient('qq', 'app-1');
+      await flush();
+
+      // The later call took the slot and retired the earlier bot before its
+      // own handshake could overlap it.
+      expect(first.bot.stop).toHaveBeenCalled();
+      expect(second.bot.stop).not.toHaveBeenCalled();
+
+      first.ready();
+      second.ready();
+      await Promise.all([a, b]);
+
+      expect(second.bot.stop).not.toHaveBeenCalled();
+      await manager.stopClient('qq', 'app-1');
+      expect(second.bot.stop).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not start a replacement that was disconnected while the replaced bot was stopping', async () => {
+      const first = createHandshakeBot();
+      let finishFirstStop!: () => void;
+      // Only the replacement's stop of the first bot is slow; later stops resolve.
+      first.bot.stop = vi
+        .fn()
+        .mockImplementationOnce(
+          () =>
+            new Promise<void>((resolve) => {
+              finishFirstStop = resolve;
+            }),
+        )
+        .mockResolvedValue(undefined);
+      const second = createHandshakeBot();
+      const factory = vi.fn().mockReturnValueOnce(first.bot).mockReturnValueOnce(second.bot);
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue({
+        applicationId: 'app-1',
+        credentials: {},
+      });
+      const manager = new GatewayManager({ definitions: [createFakeDefinition('qq', factory)] });
+
+      const a = manager.startClient('qq', 'app-1');
+      const b = manager.startClient('qq', 'app-1');
+      await flush();
+      // The second call holds the slot and is waiting for the first bot to stop.
+      expect(first.bot.stop).toHaveBeenCalledTimes(1);
+
+      // The user disconnects during that wait.
+      await manager.stopClient('qq', 'app-1');
+      expect(second.bot.stop).toHaveBeenCalledTimes(1);
+
+      finishFirstStop();
+      first.ready();
+      second.ready();
+      await Promise.all([a, b]);
+
+      // The disconnected replacement never opens a connection.
+      expect(second.bot.start).not.toHaveBeenCalled();
     });
   });
 

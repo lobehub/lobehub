@@ -192,8 +192,13 @@ export async function gatewayCron(c: Context): Promise<Response> {
   // plus a configured owning host. Re-checking MESSAGE_GATEWAY_URL here would
   // narrow that to the default host and drop a node-only deployment into the
   // legacy path, where its connections are never reconciled.
+  //
+  // Outside Vercel the process is long-lived and GatewayManager already holds
+  // the persistent connections (instrumentation / the launcher start it). The
+  // cron-window listeners below would open a second connection next to the
+  // manager's for the same bot, so converge on the manager there instead.
   const service = new GatewayService();
-  if (service.useMessageGateway) {
+  if (service.useMessageGateway || !process.env.VERCEL_ENV) {
     await service.ensureRunning();
     return c.json({ ensureRunning: true });
   }

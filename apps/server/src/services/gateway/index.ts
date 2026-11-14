@@ -50,9 +50,20 @@ export class GatewayService {
       return;
     }
 
+    const manager = createGatewayManager({ definitions: platformRegistry.listPlatforms() });
+
+    // Boot calls this from both instrumentation `register()` and the
+    // launcher's POST /gateway/start, and a user connect can join them. A
+    // start already in flight is returned as-is rather than syncing again
+    // (which would open a second connection per bot); the caller that began
+    // it runs the gateway cleanup below.
+    if (manager.isStarting) {
+      log('GatewayManager start already in progress, joining it');
+      return manager.start();
+    }
+
     // Start local connections first, then clean up gateway —
     // brief overlap is better than a gap where messages are lost.
-    const manager = createGatewayManager({ definitions: platformRegistry.listPlatforms() });
     await manager.start();
     log('GatewayManager started');
 

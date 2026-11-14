@@ -28,6 +28,11 @@ export interface GatewayManagerConfig {
 export class GatewayManager {
   private clients = new Map<string, PlatformClient>();
   private running = false;
+  /**
+   * The start in progress, shared by every concurrent `start()` caller so the
+   * DB sync — and the connection it opens per bot — runs once.
+   */
+  private startPromise: Promise<void> | null = null;
   private config: GatewayManagerConfig;
 
   private definitionByPlatform: Map<string, PlatformDefinition>;
@@ -41,18 +46,40 @@ export class GatewayManager {
     return this.running;
   }
 
+  get isStarting(): boolean {
+    return this.startPromise !== null;
+  }
+
   // ------------------------------------------------------------------
   // Lifecycle (call once)
   // ------------------------------------------------------------------
 
-  async start(): Promise<void> {
+  /**
+   * Concurrent calls share one in-flight start. Boot reaches this from both
+   * instrumentation `register()` and the launcher's `POST /gateway/start`, and
+   * a user connect can join them; each running its own sync would open a
+   * second connection per bot (QQ rejects it: 4903 create session error).
+   */
+  start(): Promise<void> {
     if (this.running) {
       log('GatewayManager already running, skipping');
-      return;
+      return Promise.resolve();
+    }
+
+    if (this.startPromise) {
+      log('GatewayManager start already in progress, joining it');
+      return this.startPromise;
     }
 
     log('Starting GatewayManager');
 
+    this.startPromise = this.runStart().finally(() => {
+      this.startPromise = null;
+    });
+    return this.startPromise;
+  }
+
+  private async runStart(): Promise<void> {
     await this.sync().catch((err) => {
       console.error('[GatewayManager] Initial sync failed:', err);
     });
@@ -68,9 +95,8 @@ export class GatewayManager {
 
     for (const [key, client] of this.clients) {
       log('Stopping client %s', key);
-      await client.stop();
+      await this.retireClient(key, client);
     }
-    this.clients.clear();
 
     this.running = false;
     log('GatewayManager stopped');
@@ -87,8 +113,7 @@ export class GatewayManager {
     const existing = this.clients.get(key);
     if (existing) {
       log('Stopping existing client %s before restart', key);
-      await existing.stop();
-      this.clients.delete(key);
+      await this.retireClient(key, existing);
     }
 
     // Load from DB (system-wide single row — platform + applicationId is globally
@@ -126,8 +151,7 @@ export class GatewayManager {
       return;
     }
 
-    await client.start();
-    this.clients.set(key, client);
+    await this.startRegisteredClient(key, client);
     log('Started client %s', key);
   }
 
@@ -136,9 +160,62 @@ export class GatewayManager {
     const client = this.clients.get(key);
     if (!client) return;
 
-    await client.stop();
-    this.clients.delete(key);
+    await this.retireClient(key, client);
     log('Stopped client %s', key);
+  }
+
+  /**
+   * Register `client` before awaiting its start, so anything that checks the
+   * map meanwhile sees this bot as taken instead of opening a second
+   * connection. QQ's start() only resolves after the gateway handshake
+   * (token → bot info → gateway URL → WebSocket → Identify → READY), which
+   * otherwise leaves a window of several seconds.
+   */
+  private async startRegisteredClient(key: string, client: PlatformClient): Promise<void> {
+    // A concurrent startClient for the same bot can register its client while
+    // this call was still loading the provider. Take the slot and retire that
+    // one first, so only one connection survives.
+    const concurrent = this.clients.get(key);
+    this.clients.set(key, client);
+    if (concurrent && concurrent !== client) {
+      log('Replacing client %s registered while this one was loading', key);
+      await concurrent.stop().catch((err) => {
+        log('Failed to stop replaced client %s: %O', key, err);
+      });
+
+      // stopClient / stop retired this client during that wait — opening it
+      // now would reconnect a bot the user just disconnected.
+      if (this.clients.get(key) !== client) {
+        log('Client %s was retired before it started, skipping start', key);
+        return;
+      }
+    }
+
+    try {
+      await client.start();
+    } catch (error) {
+      if (this.clients.get(key) === client) this.clients.delete(key);
+      throw error;
+    }
+
+    // stopClient, stop or a newer startClient retired this client while it
+    // was still connecting. Tear down what start() opened so it does not
+    // linger as a connection nothing tracks.
+    if (this.clients.get(key) !== client) {
+      log('Client %s was retired while starting, stopping it', key);
+      await client.stop().catch((err) => {
+        log('Failed to stop retired client %s: %O', key, err);
+      });
+    }
+  }
+
+  /**
+   * Stop a client and drop its slot — unless a newer client took the slot
+   * while this one was stopping.
+   */
+  private async retireClient(key: string, client: PlatformClient): Promise<void> {
+    await client.stop();
+    if (this.clients.get(key) === client) this.clients.delete(key);
   }
 
   // ------------------------------------------------------------------
@@ -184,10 +261,7 @@ export class GatewayManager {
         }))
       ) {
         const existing = this.clients.get(key);
-        if (existing) {
-          await existing.stop();
-          this.clients.delete(key);
-        }
+        if (existing) await this.retireClient(key, existing);
         // Keep the cached runtime snapshot in sync with the stop — otherwise
         // the channel UI keeps reporting a connected bot that was just
         // paid-gated. Mirrors the external-gateway and cron sync paths.
@@ -217,8 +291,7 @@ export class GatewayManager {
           continue;
         }
 
-        await client.start();
-        this.clients.set(key, client);
+        await this.startRegisteredClient(key, client);
         log('Sync: started client %s', key);
       } catch (err) {
         log('Sync: failed to start client %s: %O', key, err);
@@ -231,8 +304,7 @@ export class GatewayManager {
       if (activeKeys.has(key)) continue;
 
       log('Sync: client %s removed from DB, stopping', key);
-      await client.stop();
-      this.clients.delete(key);
+      await this.retireClient(key, client);
     }
   }
 
