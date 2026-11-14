@@ -1,0 +1,48 @@
+---
+title: Using Wally in LobeHub
+description: >-
+  Learn how to get a Wally API key, configure the Wally provider in LobeHub,
+  and chat with open-weight models through its OpenAI-compatible API.
+tags:
+  - LobeHub
+  - Wally
+  - RunAnywhere
+  - API Key
+  - Web UI
+---
+
+# Using Wally in LobeHub
+
+[Wally](https://www.runwally.com) by RunAnywhere serves open-weight models such as DeepSeek, GLM, Kimi and MiniMax through an OpenAI-compatible API at `https://inference.runanywhere.ai/v1`.
+
+This guide walks you through using Wally in LobeHub.
+
+<Steps>
+  ### Step 1: Get a Wally API key
+
+  - Sign in to the [RunAnywhere console](https://console.runanywhere.ai)
+  - Create an API key and copy it
+
+  <Callout type={'warning'}>
+    Store your API key securely and do not share it.
+  </Callout>
+
+  ### Step 2: Configure Wally in LobeHub
+
+  - Open **Settings → AI Providers** in LobeHub
+  - Select **Wally** in the provider list
+  - Paste your API key and turn on the provider
+  - Optionally click **Fetch models** to load the current model list from Wally
+
+  ### Step 3: Choose a model
+
+  - Pick a Wally model in your assistant's model picker, for example `deepseek-v4.1-flash` or `glm-5.3-flash`, and start chatting
+
+  <Callout type={'info'}>
+    Models that accept images are marked with the vision ability. The current catalog, with context windows and prices, is at [runwally.com/pricing](https://www.runwally.com/pricing).
+  </Callout>
+</Steps>
+
+Usage is billed per token by Wally. See the [Wally pricing page](https://www.runwally.com/pricing) for current rates and the [API documentation](https://docs.runanywhere.ai/wally-cloud/api) for details.
+
+For self-hosted deployments, set `WALLY_API_KEY` to enable Wally on the server. See the [model provider environment variables](/docs/self-hosting/environment-variables/model-provider#wally).

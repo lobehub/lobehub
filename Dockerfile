@@ -341,6 +341,8 @@ ENV \
     V0_API_KEY="" V0_MODEL_LIST="" \
     # vLLM
     VLLM_API_KEY="" VLLM_MODEL_LIST="" VLLM_PROXY_URL="" \
+    # Wally
+    WALLY_API_KEY="" WALLY_MODEL_LIST="" WALLY_PROXY_URL="" \
     # Wenxin
     WENXIN_API_KEY="" WENXIN_MODEL_LIST="" \
     # xAI

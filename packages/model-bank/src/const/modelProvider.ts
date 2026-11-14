@@ -81,6 +81,7 @@ export enum ModelProvider {
   VLLM = 'vllm',
   Volcengine = 'volcengine',
   VolcengineCodingPlan = 'volcenginecodingplan',
+  Wally = 'wally',
   Wenxin = 'wenxin',
   XAI = 'xai',
   XiaomiMiMo = 'xiaomimimo',

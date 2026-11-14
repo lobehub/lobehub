@@ -945,4 +945,27 @@ Connect to your own Unsloth Studio instance. See [Using Unsloth in LobeHub](/doc
 - Default: Unset; the browser sends the requests.
 - Example: `http://magpie.example.com:3425/v1`
 
+## Wally
+
+### `WALLY_API_KEY`
+
+- Type: Required
+- Description: The API key you created in the [RunAnywhere console](https://console.runanywhere.ai) for Wally.
+- Default: -
+- Example: `your-wally-api-key`
+
+### `WALLY_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the Wally API base URL.
+- Default: `https://inference.runanywhere.ai/v1`
+- Example: `https://inference.runanywhere.ai/v1`
+
+### `WALLY_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the Wally model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
+- Default: `-`
+- Example: `-all,+deepseek-v4.1-flash,+glm-5.3-flash`
+
 [model-list]: /docs/self-hosting/advanced/model-list

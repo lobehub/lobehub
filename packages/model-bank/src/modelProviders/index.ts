@@ -83,6 +83,7 @@ import VertexAIProvider from './vertexai';
 import VLLMProvider from './vllm';
 import VolcengineProvider from './volcengine';
 import VolcengineCodingPlanProvider from './volcengineCodingPlan';
+import WallyProvider from './wally';
 import WenxinProvider from './wenxin';
 import XAIProvider from './xai';
 import XiaomiMiMoProvider from './xiaomimimo';
@@ -229,6 +230,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   CometAPIProvider,
   VercelAIGatewayProvider,
   CerebrasProvider,
+  WallyProvider,
   ZenMuxProvider,
   OpenCodeZenProvider,
   OpenCodeCodingPlanProvider,
@@ -388,6 +390,7 @@ export { default as VertexAIProviderCard } from './vertexai';
 export { default as VLLMProviderCard } from './vllm';
 export { default as VolcengineProviderCard } from './volcengine';
 export { default as VolcengineCodingPlanProviderCard } from './volcengineCodingPlan';
+export { default as WallyProviderCard } from './wally';
 export { default as WenxinProviderCard } from './wenxin';
 export { default as XAIProviderCard } from './xai';
 export { default as XiaomiMiMoProviderCard } from './xiaomimimo';
