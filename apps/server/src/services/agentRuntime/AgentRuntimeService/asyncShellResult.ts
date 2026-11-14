@@ -1,3 +1,4 @@
+import type { ToolRunResult } from '@lobechat/agent-runtime';
 import type { LobeChatDatabase } from '@lobechat/database';
 import debug from 'debug';
 
@@ -14,7 +15,24 @@ export interface DeferredShellResult {
   toolCallId: string;
 }
 
+/**
+ * The `afterToolCall` gate a deferred completion goes through. Typed by shape
+ * rather than by the runtime's own signature so this module keeps depending on
+ * nothing but the models it writes.
+ */
+export type DeferredShellResultControl = (input: {
+  operationId?: string;
+  preserveUsage?: boolean;
+  result: ToolRunResult;
+  toolMessageId: string;
+}) => Promise<{ blocked: boolean; cancelled: boolean; result: ToolRunResult }>;
+
 export interface AsyncShellResultDeps {
+  /**
+   * A late device result never travels back through `ServerToolTransport`, so
+   * this path has to run the same controls before the answer reaches history.
+   */
+  controlCompletedToolResult: DeferredShellResultControl;
   messageModel: Pick<MessageModel, 'findMessagePlugin' | 'updateToolMessage'>;
   /**
    * Override for {@link PLACEHOLDER_WAIT}, used by tests to keep the wait
@@ -150,21 +168,44 @@ export async function completeDeferredShell(
   const content = timedOut
     ? timeoutContent(pluginState.asyncShell.commandId, pluginState.asyncShell.timeoutMs)
     : synthesizeContent(result);
-  const backfill = await deps.messageModel.updateToolMessage(plugin.id, {
+
+  const completed: ToolRunResult = {
     content,
-    pluginError:
+    error:
       result.error ??
       (timedOut
         ? { message: 'Command did not finish within its wait window.', type: 'timeout' }
-        : null),
-    pluginState: {
+        : undefined),
+    executionTime: result.executionTimeMs,
+    state: {
       ...pluginState,
       error: result.error,
       exitCode,
       finishedAt: new Date().toISOString(),
       status: failed ? 'error' : 'completed',
     },
+    success: !failed,
+  };
+
+  // Run the configured `afterToolCall` policy before the answer is persisted.
+  // This completion bypasses `ServerToolTransport`, so nothing has evaluated a
+  // result policy on it yet: without this the raw device output would land in
+  // history and be handed to the model even when that policy denies or replaces
+  // it. `subAgentBridge` runs the same gate for its deferred results.
+  const controlled = await deps.controlCompletedToolResult({
+    operationId,
+    preserveUsage: true,
+    result: completed,
+    // The policy inspects the parked call's arguments, not this completion.
+    toolMessageId: plugin.id,
+  });
+
+  const backfill = await deps.messageModel.updateToolMessage(plugin.id, {
+    content: controlled.result.content,
+    pluginError: controlled.result.error ?? null,
+    pluginState: controlled.result.state,
     onlyIfEmpty: true,
+    ...(controlled.blocked && { replacePluginState: true }),
   });
 
   if (!backfill.success) {
@@ -177,11 +218,12 @@ export async function completeDeferredShell(
   }
 
   log(
-    'shell completed: op=%s tool=%s message=%s exit=%s',
+    'shell completed: op=%s tool=%s message=%s exit=%s blocked=%s',
     operationId,
     result.toolCallId,
     plugin.id,
     String(exitCode),
+    String(controlled.blocked),
   );
 
   const resumed = await deps.tryResumeParentFromAsyncTool(
