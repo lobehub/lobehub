@@ -4,6 +4,8 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { restoreConnector } from '@/store/tool/slices/connector/replaceConnector';
+
 import CustomConnectorModal from './index';
 import { saveOAuthConnectorEdit } from './oauthEdit';
 
@@ -51,6 +53,9 @@ vi.mock('@/features/PluginDevModal', () => ({
   },
 }));
 
+vi.mock('@/store/tool/slices/connector/replaceConnector', () => ({
+  restoreConnector: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('@/utils/connectorOAuth', () => ({ waitForConnectorOAuth: vi.fn() }));
 vi.mock('./oauthEdit', () => ({ saveOAuthConnectorEdit: vi.fn() }));
 
@@ -258,6 +263,29 @@ describe('CustomConnectorModal edit save', () => {
     expect(mocks.state.syncConnectorTools).toHaveBeenCalledWith('c1', {
       pruneMissingAutoTools: true,
     });
+  });
+
+  // Its old tools would otherwise stay callable against the endpoint the edit stored
+  it('puts the connector back when the edited stdio command lists no tools', async () => {
+    const failure = new Error('spawn not-a-command ENOENT');
+    mocks.state.syncConnectorTools.mockRejectedValueOnce(failure);
+    render(<CustomConnectorModal open connectorId="c1" onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('seed').textContent).not.toBe('null'));
+
+    await expect(
+      mocks.onSave!({
+        customParams: { mcp: { command: 'not-a-command', type: 'stdio' } },
+        identifier: 'my-mcp',
+      }),
+    ).rejects.toBe(failure);
+
+    expect(mocks.state.updateConnector).toHaveBeenCalled();
+    expect(restoreConnector).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mcpStdioConfig: { args: ['-y'], command: 'npx', env: { API_KEY: 'old' } },
+      }),
+      expect.any(Function),
+    );
   });
 
   // Stored before its popup opens: the helper undoes it when authorization fails

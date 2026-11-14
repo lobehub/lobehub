@@ -9,6 +9,7 @@ import { connectorSelectors } from '@/store/tool/slices/connector';
 import { waitForConnectorOAuth } from '@/utils/connectorOAuth';
 import { executeOAuthCreate } from '@/utils/connectorOAuthCreate';
 
+import { saveConnectorEdit } from './connectorEdit';
 import { executeLegacyMigrationSave } from './legacyPluginMigration';
 import { saveOAuthConnectorEdit } from './oauthEdit';
 
@@ -69,7 +70,6 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
   ({ open, onClose, connectorId, legacyPlugin, onEditSuccess }) => {
     const createConnector = useToolStore((s) => s.createConnector);
     const deleteConnector = useToolStore((s) => s.deleteConnector);
-    const updateConnector = useToolStore((s) => s.updateConnector);
     const getConnectorForEdit = useToolStore((s) => s.getConnectorForEdit);
     const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
     const syncConnectorTools = useToolStore((s) => s.syncConnectorTools);
@@ -325,10 +325,8 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
             await fetchConnectors();
           }
         } else {
-          await updateConnector(connectorId, patch);
-          // A changed endpoint, command or credential can expose different tools:
-          // its list replaces the stored one
-          await syncConnectorTools(connectorId, { pruneMissingAutoTools: true });
+          // Re-lists the tools; an unreadable list undoes the edit
+          await saveConnectorEdit(connectorId, patch, useToolStore.getState);
         }
 
         onEditSuccess?.();
