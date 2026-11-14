@@ -15,6 +15,16 @@ export interface HeteroFinalizeParams {
   agentId?: string | null;
   completionReason: 'done' | 'error' | 'interrupted';
   error?: { message: string; type: string };
+  /**
+   * Rewrites the reported run cost before it reaches the snapshot and the
+   * returned totals, so both book the same value (heteroFinish uses it to
+   * de-cumulate legacy Claude Code session cost).
+   */
+  resolveCost?: (reported: {
+    totalCost: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+  }) => { reportedSessionTotal?: number; total: number };
   topicId?: string | null;
   userId?: string | null;
 }
@@ -30,6 +40,8 @@ export interface HeteroTraceTotals {
   /** Heterogeneous provider the run executed on (e.g. `claude-code`). Mirrors the
    * provider `recordStart` already seeds, returned so the backfill stays consistent. */
   provider: string | null;
+  /** The client's raw cost when `resolveCost` found it to be a session total. */
+  reportedSessionTotal?: number;
   stepCount: number;
   toolCalls: number;
   totalCost: number;
@@ -187,7 +199,14 @@ export class HeteroTraceRecorder {
         session?.totalInputTokens ?? steps.reduce((sum, s) => sum + (s.inputTokens || 0), 0);
       const totalOutputTokens =
         session?.totalOutputTokens ?? steps.reduce((sum, s) => sum + (s.outputTokens || 0), 0);
-      const totalCost = session?.totalCost ?? steps.reduce((sum, s) => sum + (s.totalCost || 0), 0);
+      const reportedCost =
+        session?.totalCost ?? steps.reduce((sum, s) => sum + (s.totalCost || 0), 0);
+      const resolvedCost = params.resolveCost?.({
+        totalCost: reportedCost,
+        totalInputTokens,
+        totalOutputTokens,
+      }) ?? { total: reportedCost };
+      const totalCost = resolvedCost.total;
       const totalCredits =
         session?.totalCredits ?? steps.reduce((sum, s) => sum + (s.credits || 0), 0);
 
@@ -225,6 +244,9 @@ export class HeteroTraceRecorder {
         llmCalls: steps.filter(isModelTurn).length,
         model: partial.model ?? null,
         provider: partial.provider ?? null,
+        ...(resolvedCost.reportedSessionTotal === undefined
+          ? {}
+          : { reportedSessionTotal: resolvedCost.reportedSessionTotal }),
         stepCount: steps.length,
         toolCalls: steps.filter((s) => s.stepType === 'call_tool').length,
         totalCost,
