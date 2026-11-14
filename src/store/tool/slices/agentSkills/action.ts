@@ -1,4 +1,7 @@
 import type {
+  BatchImportInput,
+  BatchImportPreview,
+  BatchImportResult,
   CreateSkillInput,
   ImportGitHubInput,
   ImportUrlInput,
@@ -163,6 +166,20 @@ export class AgentSkillsActionImpl {
     const result = await agentSkillService.importFromZip(params);
     await this.#refreshList();
     return result;
+  };
+
+  importAgentSkillsFromZipBatch = async (
+    params: BatchImportInput,
+  ): Promise<BatchImportResult | undefined> => {
+    const result = await agentSkillService.importFromZipBatch(params);
+    await this.#refreshList();
+    return result;
+  };
+
+  previewAgentSkillBatchImport = async (
+    params: ImportZipInput,
+  ): Promise<BatchImportPreview | undefined> => {
+    return agentSkillService.previewBatchImport(params);
   };
 
   /**

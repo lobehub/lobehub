@@ -99,6 +99,115 @@ export interface ParsedZipSkill {
   zipHash?: string;
 }
 
+/** One skill parsed out of an archive that holds several skill folders. */
+export interface ParsedBatchSkill extends ParsedZipSkill {
+  /**
+   * Directory that holds the SKILL.md inside the archive, without a trailing
+   * slash. `''` is the archive root.
+   */
+  path: string;
+  /** Every batch skill is repacked on its own so its hash names only its files. */
+  skillZipBuffer: Buffer;
+  zipHash: string;
+}
+
+/** A skill folder in a batch archive that could not be parsed. */
+export interface ParsedBatchSkillFailure {
+  message: string;
+  path: string;
+}
+
+export interface ParsedSkillBatch {
+  failures: ParsedBatchSkillFailure[];
+  skills: ParsedBatchSkill[];
+}
+
+/**
+ * A single batch import accepts at most this many skill folders. Keep the
+ * server-side parser and the upload copy in sync through this constant.
+ */
+export const MAX_BATCH_IMPORT_SKILLS = 50;
+
+/** The existing skill a candidate collides with by name. */
+export interface BatchImportConflict {
+  id: string;
+  identifier: string;
+  name: string;
+  source: SkillSource;
+  updatedAt: Date;
+}
+
+/** One skill folder found in a batch archive, shown before anything is written. */
+export interface BatchImportCandidate {
+  /** The installed skill with the same name, when one exists. */
+  conflict?: BatchImportConflict;
+  description?: string;
+  /**
+   * Path of an earlier skill folder in the same archive that resolves to the
+   * same name. Importing both with `overwrite` replaces the earlier one; with
+   * the default `skip` the later one is skipped.
+   */
+  duplicateOf?: string;
+  /** Set when the folder has a SKILL.md that could not be parsed. */
+  error?: string;
+  name: string;
+  /** Directory inside the archive; `''` for the root. */
+  path: string;
+  resourceCount: number;
+}
+
+export interface BatchImportPreview {
+  candidates: BatchImportCandidate[];
+  /** Number of candidates that collide with an installed skill by name. */
+  conflictCount: number;
+  /** Number of candidates whose SKILL.md could not be parsed. */
+  invalidCount: number;
+}
+
+export type BatchImportConflictStrategy = 'overwrite' | 'skip';
+
+export interface BatchImportChoice {
+  /**
+   * What to do when an installed skill already uses this name. Ignored when
+   * the candidate is new.
+   */
+  onConflict: BatchImportConflictStrategy;
+  /** Candidate path from {@link BatchImportPreview}. */
+  path: string;
+}
+
+export interface BatchImportInput {
+  /**
+   * Skills to import. A candidate missing from this list is skipped, so the
+   * caller can send only the rows the user selected.
+   */
+  skills: BatchImportChoice[];
+  zipFileId: string;
+}
+
+export type BatchImportItemStatus = SkillImportStatus | 'failed' | 'skipped';
+
+export interface BatchImportItemResult {
+  error?: string;
+  name: string;
+  path: string;
+  skillId?: string;
+  status: BatchImportItemStatus;
+}
+
+export interface BatchImportSummary {
+  created: number;
+  failed: number;
+  skipped: number;
+  unchanged: number;
+  updated: number;
+}
+
+export interface BatchImportResult {
+  results: BatchImportItemResult[];
+  summary: BatchImportSummary;
+}
+
 // ===== Resource Types =====
 
 export interface SkillResourceMeta {

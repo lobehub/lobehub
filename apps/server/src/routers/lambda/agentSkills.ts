@@ -1,5 +1,5 @@
 import type { SkillManifest } from '@lobechat/types';
-import { skillManifestSchema } from '@lobechat/types';
+import { MAX_BATCH_IMPORT_SKILLS, skillManifestSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -34,6 +34,11 @@ const skillImportErrorToTRPCCode = (
 
     case 'FORBIDDEN': {
       return 'FORBIDDEN';
+    }
+
+    case 'INVALID_PACKAGE':
+    case 'INVALID_URL': {
+      return 'BAD_REQUEST';
     }
 
     case 'NOT_FOUND':
@@ -130,6 +135,18 @@ const updateSkillSchema = z.object({
   id: z.string(),
   // All metadata should be passed through manifest
   manifest: skillManifestSchema.partial().optional(),
+});
+
+const importZipBatchSchema = z.object({
+  skills: z
+    .array(
+      z.object({
+        onConflict: z.enum(['overwrite', 'skip']),
+        path: z.string().max(1024),
+      }),
+    )
+    .max(MAX_BATCH_IMPORT_SKILLS),
+  zipFileId: z.string(),
 });
 
 // ===== Router =====
@@ -233,6 +250,16 @@ export const agentSkillsRouter = router({
       }
     }),
 
+  importFromZipBatch: skillWriteProcedure
+    .input(importZipBatchSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await ctx.skillImporter.importFromZipBatch(input);
+      } catch (error) {
+        handleSkillImportError(error);
+      }
+    }),
+
   importFromMarket: skillWriteProcedure
     .input(z.object({ identifier: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -278,6 +305,16 @@ export const agentSkillsRouter = router({
       }
 
       return ctx.skillResourceService.listResources(skill.resources, input.includeContent);
+    }),
+
+  previewBatchImport: skillProcedure
+    .input(z.object({ zipFileId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      try {
+        return await ctx.skillImporter.previewBatchImport(input);
+      } catch (error) {
+        handleSkillImportError(error);
+      }
     }),
 
   readResource: skillResourceProcedure

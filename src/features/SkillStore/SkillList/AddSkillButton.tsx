@@ -1,12 +1,13 @@
 import { Button, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
-import { ChevronDown, FileArchive, Grid2x2Plus, Link, PenLine } from 'lucide-react';
+import { ChevronDown, FileArchive, Grid2x2Plus, Layers, Link, PenLine } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CustomConnectorModal } from '@/features/Connectors';
 import { usePermission } from '@/hooks/usePermission';
 
+import { openBatchImportModal } from './BatchImportModal';
 import { openImportFromGithubModal } from './ImportFromGithubModal';
 import { openImportFromUrlModal } from './ImportFromUrlModal';
 import { openUploadSkillModal } from './UploadSkillModal';
@@ -67,6 +68,16 @@ const AddSkillButton = () => {
             onClick: () => {
               if (!canCreate) return;
               openUploadSkillModal();
+            },
+          },
+          {
+            disabled: !canCreate,
+            icon: <Icon icon={Layers} />,
+            key: 'batchImport',
+            label: <MenuLabel desc={t('tab.batchImport.desc')} title={t('tab.batchImport')} />,
+            onClick: () => {
+              if (!canCreate) return;
+              openBatchImportModal();
             },
           },
           { type: 'divider' as const },
