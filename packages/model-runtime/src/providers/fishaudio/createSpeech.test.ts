@@ -175,6 +175,32 @@ describe('createFishAudioSpeech', () => {
     expect(getModelPricing).toHaveBeenCalledWith('fish-pro', 'fishaudio', undefined);
   });
 
+  it("validates a mapped alias against the resolved model's card", async () => {
+    await expect(
+      createFishAudioSpeech(
+        { input: 'Hi', model: 'fish-pro', params: { speed: 100 }, voice: VOICE },
+        { ...options, modelIdMapping: { 'fish-pro': 's2.1-pro' } },
+      ),
+    ).rejects.toMatchObject({
+      error: { message: expect.stringContaining('params.speed') },
+      errorType: AgentRuntimeErrorType.ProviderBizError,
+    });
+    // S1 takes no instructions; s2.1-pro-free follows the S2.1 Pro schema.
+    await expect(
+      createFishAudioSpeech(
+        { input: 'Hi', model: 'fish-s1', params: { instructions: 'calm' }, voice: VOICE },
+        { ...options, modelIdMapping: { 'fish-s1': 's1' } },
+      ),
+    ).rejects.toMatchObject({ errorType: AgentRuntimeErrorType.ProviderBizError });
+    await expect(
+      createFishAudioSpeech(
+        { input: 'Hi', model: 'free', params: { speed: 3 }, voice: VOICE },
+        { ...options, modelIdMapping: { free: 's2.1-pro-free' } },
+      ),
+    ).rejects.toMatchObject({ error: { message: expect.stringContaining('params.speed') } });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   describe('rejects before calling Fish Audio', () => {
     it.each([
       ['an unknown model, which Fish would silently serve as S2.1 Pro', { model: 's3-ultra' }],

@@ -5,7 +5,9 @@ import {
   DEFAULT_TTS_AUDIO_FORMAT,
   DOUBAO_SPEECH_DEFAULT_VOICE_ID,
   DOUBAO_SPEECH_VOICE_IDS,
+  validateTTSParams,
 } from 'model-bank';
+import doubaoSpeechModels from 'model-bank/doubaospeech';
 
 import {
   convertTextToSpeechUsage,
@@ -392,6 +394,19 @@ export async function createDoubaoSpeech(
     if (!DOUBAO_SPEECH_RESOURCES.has(requestModel)) {
       throw new DoubaoSpeechError(
         `Unknown Doubao Speech model "${requestModel}"; expected one of ${[...DOUBAO_SPEECH_RESOURCES].join(', ')}`,
+        AgentRuntimeErrorType.ProviderBizError,
+      );
+    }
+
+    // A mapped alias matches no card in the TTS service, so validate against the resolved
+    // model's card before anything reaches Doubao.
+    const card = doubaoSpeechModels.find((model) => model.id === requestModel);
+    const issues = card?.parameters
+      ? validateTTSParams(card.parameters, resolveTextToSpeechParams(payload))
+      : [];
+    if (issues.length > 0) {
+      throw new DoubaoSpeechError(
+        `Doubao Speech ${requestModel}: ${issues.map(({ key, reason }) => `params.${key} ${reason}`).join('; ')}`,
         AgentRuntimeErrorType.ProviderBizError,
       );
     }

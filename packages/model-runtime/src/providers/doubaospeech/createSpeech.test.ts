@@ -210,6 +210,19 @@ describe('createDoubaoSpeech', () => {
     expect(getModelPricing).toHaveBeenCalledWith('doubao-tts', 'doubaospeech', undefined);
   });
 
+  it("validates a mapped alias against the resolved model's card", async () => {
+    await expect(
+      createDoubaoSpeech(
+        { input: 'Hi', model: 'doubao-tts', params: { speed: 100 }, voice: VOICE },
+        { ...options, modelIdMapping: { 'doubao-tts': 'seed-tts-2.0' } },
+      ),
+    ).rejects.toMatchObject({
+      error: { message: expect.stringContaining('params.speed') },
+      errorType: AgentRuntimeErrorType.ProviderBizError,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   describe('rejects before calling Doubao Speech', () => {
     it('without credentials', async () => {
       await expect(

@@ -7,7 +7,9 @@ import {
   FISH_AUDIO_MAX_INPUT_CHARACTERS,
   FISH_AUDIO_MAX_INSTRUCTIONS_LENGTH,
   FISH_AUDIO_SAMPLE_RATES,
+  validateTTSParams,
 } from 'model-bank';
+import fishAudioModels from 'model-bank/fishaudio';
 
 import {
   convertTextToSpeechUsage,
@@ -146,6 +148,21 @@ export const buildFishAudioSpeechRequest = (
   }
 
   const params = resolveTextToSpeechParams(payload);
+
+  // The TTS service validates against the card of the id it was given; a mapped alias
+  // (`fish-pro` -> `s2.1-pro`) matches none, so check the resolved model's card here.
+  // `s2.1-pro-free` has no card of its own and takes the S2.1 Pro schema.
+  const card =
+    fishAudioModels.find((model) => model.id === requestModel) ??
+    fishAudioModels.find((model) => model.id === requestModel.replace(/-free$/, ''));
+  const issues = card?.parameters ? validateTTSParams(card.parameters, params) : [];
+  if (issues.length > 0) {
+    throw new FishAudioSpeechError(
+      `Fish Audio ${requestModel}: ${issues.map(({ key, reason }) => `params.${key} ${reason}`).join('; ')}`,
+      AgentRuntimeErrorType.ProviderBizError,
+    );
+  }
+
   const format = params.format ?? DEFAULT_TTS_AUDIO_FORMAT;
   if (!FISH_AUDIO_FORMATS.has(format)) {
     throw new FishAudioSpeechError(
