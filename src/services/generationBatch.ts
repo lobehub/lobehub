@@ -12,7 +12,7 @@ class GenerationBatchService {
    */
   async getGenerationBatches(
     topicId: string,
-    type?: 'image' | 'video',
+    type?: 'image' | 'music' | 'video',
   ): Promise<GenerationBatchWithAsyncTaskId[]> {
     return lambdaClient.generationBatch.getGenerationBatches.query({ topicId, type });
   }

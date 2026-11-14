@@ -12,9 +12,10 @@ const Fal: ModelProviderCard = {
   modelsUrl: 'https://fal.ai/models',
   name: 'Fal',
   settings: {
+    // fal serves no chat models, so the checker verifies the key against fal's platform API
+    checkMode: 'credentials',
     disableBrowserRequest: true,
     showAddNewModel: false,
-    showChecker: false,
     showModelFetcher: true,
   },
   url: 'https://fal.ai',

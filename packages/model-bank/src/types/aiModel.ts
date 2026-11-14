@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import {
   type ModelParamsSchema,
+  type MusicModelParamsSchema,
   type TTSModelParamsSchema,
   type TTSVoice,
   type VideoModelParamsSchema,
@@ -176,13 +177,17 @@ export type PricingUnitName =
 
   // Video-based pricing units
   | 'videoInput'
-  | 'videoGeneration';
+  | 'videoGeneration'
+
+  // Music-based pricing units
+  | 'musicGeneration'; // for text-to-music models
 
 export type PricingUnitType =
   | 'millionTokens' // per 1M tokens
   | 'millionCharacters' // per 1M characters
   | 'image' // per image
   | 'video' // per video
+  | 'song' // per generated song (music models)
   | 'megapixel' // per megapixel
   | 'second'; // per second
 
@@ -690,6 +695,21 @@ export interface AIVideoModelCard extends AIBaseModelCard {
   type: 'video';
 }
 
+export interface AIText2MusicModelCard extends AIBaseModelCard {
+  /**
+   * How many songs one request returns.
+   * Generation pre-creates this many result rows.
+   * @default 1
+   */
+  outputsPerRequest?: number;
+  /**
+   * Standard music parameters the model accepts and their allowed values.
+   */
+  parameters?: MusicModelParamsSchema;
+  pricing?: Pricing;
+  type: 'text2music';
+}
+
 export interface AITTSModelCard extends AIBaseModelCard {
   /**
    * Standard TTS parameters the model accepts and their allowed values.
@@ -754,8 +774,10 @@ export interface AiFullModelCard extends AIBaseModelCard {
   displayName?: string;
   id: string;
   maxDimension?: number;
-  /** Image generation params, or standard TTS params for `tts` models. */
-  parameters?: ModelParamsSchema | TTSModelParamsSchema;
+  /** Songs returned per request, for `text2music` models. */
+  outputsPerRequest?: number;
+  /** Image generation params, standard TTS params for `tts`, or music params for `text2music`. */
+  parameters?: ModelParamsSchema | TTSModelParamsSchema | MusicModelParamsSchema;
   pricing?: Pricing;
   settings?: AiModelSettings;
   type: AiModelType;

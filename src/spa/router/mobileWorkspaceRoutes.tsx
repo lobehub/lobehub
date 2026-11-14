@@ -1,6 +1,6 @@
 'use client';
 
-import { FilePenIcon, Image, Video } from 'lucide-react';
+import { FilePenIcon, Image, Music, Video } from 'lucide-react';
 import { lazy } from 'react';
 import type { RouteObject } from 'react-router';
 
@@ -191,36 +191,53 @@ const pageRoute: RouteObject = {
   path: 'page',
 };
 
-const generationRoute = (kind: 'image' | 'video'): RouteObject => ({
+type GenerationKind = 'image' | 'music' | 'video';
+
+const GENERATION_PAGES: Record<
+  GenerationKind,
+  Pick<RouteObject, 'element'> & {
+    layout: RouteObject['element'];
+    meta: Parameters<typeof routeMeta>[0];
+  }
+> = {
+  image: {
+    element: dynamicElement(() => import('@/routes/(main)/(create)/image'), 'Mobile > Image'),
+    layout: dynamicLayout(
+      () => import('@/routes/(main)/(create)/image/_layout'),
+      'Mobile > Image > Layout',
+    ),
+    meta: { icon: Image, titleKey: 'navigation.image' },
+  },
+  music: {
+    element: dynamicElement(() => import('@/routes/(main)/(create)/music'), 'Mobile > Music'),
+    layout: dynamicLayout(
+      () => import('@/routes/(main)/(create)/music/_layout'),
+      'Mobile > Music > Layout',
+    ),
+    meta: { icon: Music, titleKey: 'navigation.music' },
+  },
+  video: {
+    element: dynamicElement(() => import('@/routes/(main)/(create)/video'), 'Mobile > Video'),
+    layout: dynamicLayout(
+      () => import('@/routes/(main)/(create)/video/_layout'),
+      'Mobile > Video > Layout',
+    ),
+    meta: { icon: Video, titleKey: 'navigation.video' },
+  },
+};
+
+const generationRoute = (kind: GenerationKind): RouteObject => ({
   children: [
     {
       children: [
         {
-          element:
-            kind === 'image'
-              ? dynamicElement(() => import('@/routes/(main)/(create)/image'), 'Mobile > Image')
-              : dynamicElement(() => import('@/routes/(main)/(create)/video'), 'Mobile > Video'),
-          handle: {
-            meta: routeMeta(
-              kind === 'image'
-                ? { icon: Image, titleKey: 'navigation.image' }
-                : { icon: Video, titleKey: 'navigation.video' },
-            ),
-          },
+          element: GENERATION_PAGES[kind].element,
+          handle: { meta: routeMeta(GENERATION_PAGES[kind].meta) },
           index: true,
         },
       ],
       // Topic URL sync plus the topic sidebar (opened as a drawer on mobile).
-      element:
-        kind === 'image'
-          ? dynamicLayout(
-              () => import('@/routes/(main)/(create)/image/_layout'),
-              'Mobile > Image > Layout',
-            )
-          : dynamicLayout(
-              () => import('@/routes/(main)/(create)/video/_layout'),
-              'Mobile > Video > Layout',
-            ),
+      element: GENERATION_PAGES[kind].layout,
     },
   ],
   element: pageLayout(`Mobile > ${kind} > Page Layout`),
@@ -267,6 +284,7 @@ export const mobileWorkspaceRoutes: RouteObject[] = [
   pageRoute,
   generationRoute('image'),
   generationRoute('video'),
+  generationRoute('music'),
   dashboardRoute,
 ];
 

@@ -13,7 +13,9 @@ type PricingLabelKey =
   | 'providerModels.item.pricing.inputCharts'
   | 'providerModels.item.pricing.inputMinutes'
   | 'providerModels.item.pricing.inputTokens'
-  | 'providerModels.item.pricing.outputTokens';
+  | 'providerModels.item.pricing.outputTokens'
+  | 'providerModels.item.pricing.second'
+  | 'providerModels.item.pricing.song';
 
 type Translate = (key: PricingLabelKey, options: { amount: string }) => string;
 
@@ -94,6 +96,21 @@ export const formatModelPricingLabels = (
       labels = [
         typeof inputRate === 'number' &&
           t('providerModels.item.pricing.inputMinutes', { amount: format(inputRate) }),
+      ];
+      break;
+    }
+    case 'text2music': {
+      const songRate = findUnit(pricing, 'musicGeneration');
+      // Billed per song, or per second of generated audio (MiniMax Music 3, ACE-Step on fal)
+      labels = [
+        songRate?.strategy === 'fixed' &&
+          (songRate.unit === 'song' || songRate.unit === 'second') &&
+          t(
+            songRate.unit === 'song'
+              ? 'providerModels.item.pricing.song'
+              : 'providerModels.item.pricing.second',
+            { amount: format(songRate.rate) },
+          ),
       ];
       break;
     }

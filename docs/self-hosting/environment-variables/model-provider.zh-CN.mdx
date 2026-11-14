@@ -760,7 +760,7 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 ### `FAL_API_KEY`
 
 - 类型：必选
-- 描述：这是你在 FAL 服务中申请的 API 密钥
+- 描述：这是你在 FAL 服务中申请的 API 密钥（在 [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys) 创建）。未设置 `FAL_API_KEY` 时，LobeHub 会读取 fal 官方 SDK 使用的 `FAL_KEY`。该密钥用于 fal 的图片、视频与音乐生成。音乐生成（MiniMax Music 与 ACE-Step 1.5）只走 fal：MiniMax 官方音乐接口已对新用户停售。详见 [音乐生成](/zh/docs/usage/getting-started/music)。
 - 默认值：-
 - 示例：`fal-xxxxxx...xxxxxx`
 

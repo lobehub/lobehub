@@ -164,6 +164,131 @@ describe('aiProviderRouter', () => {
       });
       expect(initModelRuntimeFromDB).not.toHaveBeenCalled();
     });
+
+    describe('credentials check mode', () => {
+      it('verifies a credentials-mode provider without a check model or chat', async () => {
+        const mockChat = vi.fn();
+        const mockCheckCredentials = vi.fn().mockResolvedValue({ balance: 100.5 });
+        vi.mocked(AiInfraRepos).prototype.getAiProviderDetail = vi.fn().mockResolvedValue({
+          ...mockProviderDetail,
+          id: 'fal',
+          settings: { checkMode: 'credentials' },
+          source: 'builtin',
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+          chat: mockChat,
+          checkCredentials: mockCheckCredentials,
+        } as any);
+
+        const caller = aiProviderRouter.createCaller(createMockContext());
+        const result = await caller.checkProviderConnectivity({ id: 'fal' });
+
+        expect(result).toEqual({ balance: 100.5, ok: true });
+        expect(mockCheckCredentials).toHaveBeenCalledTimes(1);
+        expect(mockChat).not.toHaveBeenCalled();
+      });
+
+      it('reports a rejected key with its error type and gateway message', async () => {
+        vi.mocked(AiInfraRepos).prototype.getAiProviderDetail = vi.fn().mockResolvedValue({
+          ...mockProviderDetail,
+          id: 'fal',
+          settings: { checkMode: 'credentials' },
+          source: 'builtin',
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+          checkCredentials: vi.fn().mockRejectedValue({
+            error: { code: 401, message: 'Unauthorized', provider: 'fal' },
+            errorType: 'InvalidProviderAPIKey',
+          }),
+        } as any);
+
+        const caller = aiProviderRouter.createCaller(createMockContext());
+        const result = await caller.checkProviderConnectivity({ id: 'fal' });
+
+        expect(result).toEqual({
+          error: 'InvalidProviderAPIKey: Unauthorized',
+          errorType: 'InvalidProviderAPIKey',
+          ok: false,
+        });
+      });
+
+      it('reports a missing key raised while building the runtime', async () => {
+        vi.mocked(AiInfraRepos).prototype.getAiProviderDetail = vi.fn().mockResolvedValue({
+          ...mockProviderDetail,
+          id: 'fal',
+          settings: { checkMode: 'credentials' },
+          source: 'builtin',
+        });
+        vi.mocked(initModelRuntimeFromDB).mockRejectedValue({
+          errorType: 'InvalidProviderAPIKey',
+        });
+
+        const caller = aiProviderRouter.createCaller(createMockContext());
+        const result = await caller.checkProviderConnectivity({ id: 'fal' });
+
+        expect(result).toEqual({
+          error: 'InvalidProviderAPIKey',
+          errorType: 'InvalidProviderAPIKey',
+          ok: false,
+        });
+      });
+
+      it('honours checkMode stored on a provider detail', async () => {
+        const mockCheckCredentials = vi.fn().mockResolvedValue({});
+        vi.mocked(AiInfraRepos).prototype.getAiProviderDetail = vi
+          .fn()
+          .mockResolvedValue({ ...mockProviderDetail, settings: { checkMode: 'credentials' } });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+          checkCredentials: mockCheckCredentials,
+        } as any);
+
+        const caller = aiProviderRouter.createCaller(createMockContext());
+        const result = await caller.checkProviderConnectivity({ id: mockProviderId });
+
+        expect(result).toEqual({ ok: true });
+      });
+
+      it('fails clearly when the runtime has no credential check', async () => {
+        vi.mocked(AiInfraRepos).prototype.getAiProviderDetail = vi.fn().mockResolvedValue({
+          ...mockProviderDetail,
+          id: 'fal',
+          settings: { checkMode: 'credentials' },
+          source: 'builtin',
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+          checkCredentials: vi.fn().mockResolvedValue(undefined),
+        } as any);
+
+        const caller = aiProviderRouter.createCaller(createMockContext());
+        const result = await caller.checkProviderConnectivity({ id: 'fal' });
+
+        expect(result).toEqual({
+          error: 'This provider does not support a credential check.',
+          ok: false,
+        });
+      });
+
+      it('still chats when a model is passed explicitly', async () => {
+        const mockChat = vi.fn().mockResolvedValue(new Response('{}'));
+        const mockCheckCredentials = vi.fn();
+        vi.mocked(AiInfraRepos).prototype.getAiProviderDetail = vi.fn().mockResolvedValue({
+          ...mockProviderDetail,
+          id: 'fal',
+          settings: { checkMode: 'credentials' },
+          source: 'builtin',
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+          chat: mockChat,
+          checkCredentials: mockCheckCredentials,
+        } as any);
+
+        const caller = aiProviderRouter.createCaller(createMockContext());
+        const result = await caller.checkProviderConnectivity({ id: 'fal', model: 'x' });
+
+        expect(result).toEqual({ model: 'x', ok: true });
+        expect(mockCheckCredentials).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('createAiProvider', () => {

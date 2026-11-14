@@ -463,7 +463,8 @@ export const getLLMConfig = () => {
       INFINIAI_API_KEY: process.env.INFINIAI_API_KEY,
 
       ENABLED_FAL: process.env.ENABLED_FAL !== '0',
-      FAL_API_KEY: process.env.FAL_API_KEY,
+      // `FAL_KEY` is the name fal's own SDKs and docs use
+      FAL_API_KEY: process.env.FAL_API_KEY || process.env.FAL_KEY,
 
       ENABLED_BFL: !!process.env.BFL_API_KEY,
       BFL_API_KEY: process.env.BFL_API_KEY,
