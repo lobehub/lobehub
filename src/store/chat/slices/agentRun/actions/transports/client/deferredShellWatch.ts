@@ -126,8 +126,16 @@ export const watchDeferredShell = async (params: {
 
     onComplete({
       content: output?.content ?? null,
+      // The executor normalizes an IPC rejection into a plain failed result
+      // (`{ content, error, success: false }`) with no shell state at all.
+      // Deriving the outcome from `state.success` alone would report that as a
+      // completed command and drop the failure the server needs to record.
+      error:
+        output?.success === false
+          ? (output.error as DeferredShellResult['error'] | undefined)
+          : undefined,
       state: output?.state,
-      success: state.success !== false,
+      success: output?.success !== false && state.success !== false,
     });
     return;
   }

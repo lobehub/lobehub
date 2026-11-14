@@ -16,15 +16,23 @@ const buildDeps = (plugin: unknown = POLL_PLUGIN, backfillSuccess = true) => {
     success: backfillSuccess,
   }));
   const tryResumeParentFromAsyncTool = vi.fn(async () => true);
+  // Passthrough by default: no `afterToolCall` policy configured.
+  const controlCompletedToolResult = vi.fn(async (input: any) => ({
+    blocked: false,
+    cancelled: false,
+    result: input.result,
+  }));
 
   return {
     deps: {
+      controlCompletedToolResult,
       messageModel: { findMessagePlugin: vi.fn(), updateToolMessage } as any,
       serverDB: {
         query: { messagePlugins: { findFirst: vi.fn(async () => plugin) } },
       } as any,
       tryResumeParentFromAsyncTool,
     },
+    controlCompletedToolResult,
     tryResumeParentFromAsyncTool,
     updateToolMessage,
   };
@@ -61,6 +69,42 @@ describe('completeDeferredShell', () => {
       expect.objectContaining({
         knownFulfilledMessageId: 'msg_placeholder',
         scheduleVerifyOnHold: true,
+      }),
+    );
+  });
+
+  it('runs the result policy before the answer reaches history', async () => {
+    const { deps, controlCompletedToolResult, updateToolMessage } = buildDeps();
+    // A configured `afterToolCall` policy denies the command's output. This
+    // completion never travelled through `ServerToolTransport`, so the gate has
+    // to run here as well — otherwise the raw device text is what history and
+    // the model get.
+    controlCompletedToolResult.mockResolvedValueOnce({
+      blocked: true,
+      cancelled: false,
+      result: {
+        content: 'Denied by policy.',
+        error: 'hook_denied',
+        state: { phase: 'afterToolCall', type: 'blocked' },
+        success: false,
+      },
+    } as any);
+
+    await completeDeferredShell(deps, {
+      operationId: 'op_1',
+      result: { content: 'secret', state: { exitCode: 0 }, success: true, toolCallId: 'call_1' },
+    });
+
+    expect(controlCompletedToolResult).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: 'op_1', toolMessageId: 'msg_placeholder' }),
+    );
+    expect(updateToolMessage).toHaveBeenCalledWith(
+      'msg_placeholder',
+      expect.objectContaining({
+        content: 'Denied by policy.',
+        pluginError: 'hook_denied',
+        // A withheld result replaces the whole state, including the shell ids.
+        replacePluginState: true,
       }),
     );
   });

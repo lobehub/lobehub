@@ -421,6 +421,10 @@ export class AiAgentService {
   ): Promise<CompleteDeferredShellOutcome> {
     return completeDeferredShell(
       {
+        // The parked step never returned through `ServerToolTransport`, so this
+        // is the only place an `afterToolCall` policy can see its answer.
+        controlCompletedToolResult: (input) =>
+          this.agentRuntimeService.controlCompletedToolResult(input),
         messageModel: this.messageModel,
         serverDB: this.db,
         tryResumeParentFromAsyncTool: (resumeParams, options) =>
