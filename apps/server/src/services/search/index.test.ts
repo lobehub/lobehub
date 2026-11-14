@@ -42,9 +42,9 @@ vi.mock('./impls');
 vi.mock('@/envs/tools', () => ({
   toolsEnv: {
     CRAWL_CONCURRENCY: undefined,
-    CRAWLER_IMPLS: '',
+    CRAWLER_IMPLS: [] as string[],
     CRAWLER_RETRY: undefined,
-    SEARCH_PROVIDERS: '',
+    SEARCH_PROVIDERS: [] as string[],
   },
 }));
 
@@ -72,24 +72,42 @@ describe('SearchService', () => {
     });
 
     it('should create instances for all providers from SEARCH_PROVIDERS', () => {
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'tavily,brave';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = ['tavily', 'brave'];
       searchService = new SearchService();
       expect(createSearchServiceImpl).toHaveBeenCalledWith(SearchImplType.Tavily);
       expect(createSearchServiceImpl).toHaveBeenCalledWith(SearchImplType.Brave);
     });
+  });
 
-    it('should handle full-width comma in SEARCH_PROVIDERS', () => {
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'tavily，brave';
-      searchService = new SearchService();
+  describe('unknown SEARCH_PROVIDERS', () => {
+    it('should drop unknown providers instead of falling back to Search1API', () => {
+      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(function () {});
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = ['serxng-typo', 'tavily'];
+      vi.mocked(createSearchServiceImpl).mockClear();
+
+      new SearchService();
+      new SearchService();
+
+      expect(createSearchServiceImpl).toHaveBeenCalledTimes(2);
       expect(createSearchServiceImpl).toHaveBeenCalledWith(SearchImplType.Tavily);
-      expect(createSearchServiceImpl).toHaveBeenCalledWith(SearchImplType.Brave);
+      expect(createSearchServiceImpl).not.toHaveBeenCalledWith('serxng-typo');
+      // Warned once per id, not once per request
+      expect(consoleWarn).toHaveBeenCalledTimes(1);
+      expect(consoleWarn.mock.calls[0][0]).toContain('"serxng-typo"');
+      consoleWarn.mockRestore();
     });
 
-    it('should trim whitespace in SEARCH_PROVIDERS', () => {
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = '  tavily  ,  brave  ';
-      searchService = new SearchService();
-      expect(createSearchServiceImpl).toHaveBeenCalledWith(SearchImplType.Tavily);
-      expect(createSearchServiceImpl).toHaveBeenCalledWith(SearchImplType.Brave);
+    it('should use the default provider when every configured id is unknown', () => {
+      const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(function () {});
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = ['unknown-only'];
+      vi.mocked(createSearchServiceImpl).mockClear();
+
+      new SearchService();
+
+      expect(createSearchServiceImpl).toHaveBeenCalledTimes(1);
+      expect(createSearchServiceImpl).toHaveBeenCalledWith();
+      expect(SearchService.getAvailableChannels().searchProviders).toEqual([{ id: 'searxng' }]);
+      consoleWarn.mockRestore();
     });
   });
 
@@ -131,11 +149,14 @@ describe('SearchService', () => {
 
     it('should return errorDetail without logging sensitive provider details', async () => {
       const errorMessage = '401 Bearer sk-sensitive-token - upstream response body';
-      class TestSearchImpl {
-        query = vi.fn().mockRejectedValue(new Error(errorMessage));
+      // Production builds minify class names, so the log must carry the provider id
+      class x {
+        query = vi
+          .fn()
+          .mockRejectedValue(Object.assign(new Error(errorMessage), { code: 'UNAUTHORIZED' }));
       }
-      const testSearchImpl = new TestSearchImpl();
-      vi.mocked(createSearchServiceImpl).mockReturnValue(testSearchImpl as any);
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = ['searxng'];
+      vi.mocked(createSearchServiceImpl).mockReturnValue(new x() as any);
       searchService = new SearchService();
       const consoleError = vi.spyOn(console, 'error').mockImplementation(function () {});
 
@@ -149,7 +170,8 @@ describe('SearchService', () => {
         results: [],
       });
       expect(consoleError).toHaveBeenCalledWith('[SearchService] query failed', {
-        provider: 'TestSearchImpl',
+        code: 'UNAUTHORIZED',
+        provider: 'searxng',
       });
 
       const loggedContent = JSON.stringify(consoleError.mock.calls);
@@ -267,7 +289,7 @@ describe('SearchService', () => {
     it('should not retry the same unrestricted query', async () => {
       const emptyResponse = emptySearchResponse();
 
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = '';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = [];
       searchService = new SearchService();
       mockSearchImpl.query.mockResolvedValue(emptyResponse);
 
@@ -347,7 +369,7 @@ describe('SearchService', () => {
         .mockReturnValueOnce(mockImpl1 as any)
         .mockReturnValueOnce(mockImpl2 as any);
 
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = ['searxng', 'exa'];
       searchService = new SearchService();
 
       const result = await searchService.webSearch({ query: 'test' });
@@ -369,7 +391,7 @@ describe('SearchService', () => {
         .mockReturnValueOnce(mockImpl2 as any)
         .mockReturnValueOnce(mockImpl3 as any);
 
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa,brave';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = ['searxng', 'exa', 'brave'];
       searchService = new SearchService();
 
       const result = await searchService.webSearch({ query: 'test' });
@@ -388,7 +410,7 @@ describe('SearchService', () => {
         .mockReturnValueOnce(mockImpl1 as any)
         .mockReturnValueOnce(mockImpl2 as any);
 
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = ['searxng', 'exa'];
       searchService = new SearchService();
 
       const result = await searchService.webSearch({ query: 'test' });
@@ -406,7 +428,7 @@ describe('SearchService', () => {
         .mockReturnValueOnce(mockImpl1 as any)
         .mockReturnValueOnce(mockImpl2 as any);
 
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = ['searxng', 'exa'];
       searchService = new SearchService();
 
       const result = await searchService.webSearch(engineSearchInput());
@@ -425,7 +447,7 @@ describe('SearchService', () => {
         .mockReturnValueOnce(mockImpl1 as any)
         .mockReturnValueOnce(mockImpl2 as any);
 
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = ['searxng', 'exa'];
       searchService = new SearchService();
 
       const result = await searchService.webSearch(engineSearchInput());
@@ -443,7 +465,7 @@ describe('SearchService', () => {
         .mockReturnValueOnce(mockImpl1 as any)
         .mockReturnValueOnce(mockImpl2 as any);
 
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = ['searxng', 'exa'];
       searchService = new SearchService();
 
       const result = await searchService.webSearch({ query: 'test' });
@@ -466,7 +488,7 @@ describe('SearchService', () => {
         .mockReturnValueOnce(mockImpl1 as any)
         .mockReturnValueOnce(mockImpl2 as any);
 
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = ['searxng', 'exa'];
       searchService = new SearchService();
 
       const result = await searchService.webSearch(engineSearchInput());
@@ -508,7 +530,7 @@ describe('SearchService', () => {
     });
 
     it('should use crawler implementations from env', async () => {
-      vi.mocked(toolsEnv).CRAWLER_IMPLS = 'jina,reader';
+      vi.mocked(toolsEnv).CRAWLER_IMPLS = ['jina', 'reader'];
 
       const mockSuccessResult = crawlResult('jina', 'ok');
       const mockCrawler = {
@@ -743,7 +765,7 @@ describe('SearchService', () => {
 
   describe('user channel preferences - search providers', () => {
     it('should reorder providers by user preference intersected with env', () => {
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa,brave';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = ['searxng', 'exa', 'brave'];
       // Drop the construction the shared beforeEach already recorded.
       vi.mocked(createSearchServiceImpl).mockClear();
 
@@ -756,7 +778,7 @@ describe('SearchService', () => {
     });
 
     it('should ignore user providers not enabled in env', () => {
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = ['searxng', 'exa'];
       vi.mocked(createSearchServiceImpl).mockClear();
 
       searchService = new SearchService({
@@ -768,7 +790,7 @@ describe('SearchService', () => {
     });
 
     it('should fall back to env order when user preference filters to empty', () => {
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = ['searxng', 'exa'];
       vi.mocked(createSearchServiceImpl).mockClear();
 
       searchService = new SearchService({ userChannels: { searchProviders: ['tavily', 'brave'] } });
@@ -778,7 +800,7 @@ describe('SearchService', () => {
     });
 
     it('should intersect against the runtime default when SEARCH_PROVIDERS is empty', () => {
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = '';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = [];
       vi.mocked(createSearchServiceImpl).mockClear();
 
       // 'exa' is not a default provider, so it is dropped; only SearXNG remains,
@@ -790,7 +812,7 @@ describe('SearchService', () => {
     });
 
     it('should behave identically to no-config when userChannels is omitted', () => {
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = ['searxng', 'exa'];
       vi.mocked(createSearchServiceImpl).mockClear();
 
       searchService = new SearchService();
@@ -812,7 +834,7 @@ describe('SearchService', () => {
     };
 
     it('should intersect user crawler impls with env in user order', async () => {
-      vi.mocked(toolsEnv).CRAWLER_IMPLS = 'jina,naive,firecrawl';
+      vi.mocked(toolsEnv).CRAWLER_IMPLS = ['jina', 'naive', 'firecrawl'];
       mockCrawler();
 
       searchService = new SearchService({
@@ -827,7 +849,7 @@ describe('SearchService', () => {
     });
 
     it('should intersect against Crawler defaults when env is not configured', async () => {
-      vi.mocked(toolsEnv).CRAWLER_IMPLS = '';
+      vi.mocked(toolsEnv).CRAWLER_IMPLS = [];
       mockCrawler();
 
       searchService = new SearchService({
@@ -843,7 +865,7 @@ describe('SearchService', () => {
     });
 
     it('should fall back to env impls when user preference filters to empty', async () => {
-      vi.mocked(toolsEnv).CRAWLER_IMPLS = 'jina,naive';
+      vi.mocked(toolsEnv).CRAWLER_IMPLS = ['jina', 'naive'];
       mockCrawler();
 
       searchService = new SearchService({ userChannels: { crawlerImpls: ['firecrawl'] } });
@@ -856,7 +878,7 @@ describe('SearchService', () => {
     });
 
     it('should forward the raw env list unchanged when userChannels is omitted', async () => {
-      vi.mocked(toolsEnv).CRAWLER_IMPLS = '';
+      vi.mocked(toolsEnv).CRAWLER_IMPLS = [];
       mockCrawler();
 
       searchService = new SearchService();
@@ -869,8 +891,8 @@ describe('SearchService', () => {
 
   describe('getAvailableChannels', () => {
     it('should return enabled channels in env default order', () => {
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng,exa,brave';
-      vi.mocked(toolsEnv).CRAWLER_IMPLS = 'jina,naive';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = ['searxng', 'exa', 'brave'];
+      vi.mocked(toolsEnv).CRAWLER_IMPLS = ['jina', 'naive'];
 
       expect(SearchService.getAvailableChannels()).toEqual({
         crawlerImpls: [{ id: 'jina' }, { id: 'naive' }],
@@ -879,8 +901,8 @@ describe('SearchService', () => {
     });
 
     it('should fall back to Crawler default impls when CRAWLER_IMPLS is empty', () => {
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = 'searxng';
-      vi.mocked(toolsEnv).CRAWLER_IMPLS = '';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = ['searxng'];
+      vi.mocked(toolsEnv).CRAWLER_IMPLS = [];
 
       expect(SearchService.getAvailableChannels()).toEqual({
         crawlerImpls: [
@@ -894,8 +916,8 @@ describe('SearchService', () => {
     });
 
     it('should fall back to the runtime default provider when SEARCH_PROVIDERS is empty', () => {
-      vi.mocked(toolsEnv).SEARCH_PROVIDERS = '';
-      vi.mocked(toolsEnv).CRAWLER_IMPLS = 'jina';
+      vi.mocked(toolsEnv).SEARCH_PROVIDERS = [];
+      vi.mocked(toolsEnv).CRAWLER_IMPLS = ['jina'];
 
       // Matches the runtime default (single SearXNG provider) so the settings
       // page never reports "no channels available" while search still works.
