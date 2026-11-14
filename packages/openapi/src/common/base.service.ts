@@ -32,6 +32,12 @@ const isNilOrEmptyObject = (value: unknown): boolean => {
  * Provides unified service layer base functionality, consistent with the project's existing service layer pattern
  */
 export abstract class BaseService implements IBaseService {
+  /**
+   * Stable service name used as the log prefix.
+   * Do not derive it from `this.constructor.name`: production server bundles
+   * mangle class names, which turns the prefix into a meaningless identifier.
+   */
+  protected abstract readonly serviceName: string;
   protected userId: string;
   protected workspaceId?: string;
   public db: LobeChatDatabase;
@@ -162,7 +168,7 @@ export abstract class BaseService implements IBaseService {
    * @param data Additional data
    */
   protected log(level: 'info' | 'warn' | 'error' | 'debug', message: string, data?: any): void {
-    const logMessage = `[${this.constructor.name}] ${message}`;
+    const logMessage = `[${this.serviceName}] ${message}`;
 
     switch (level) {
       case 'info': {

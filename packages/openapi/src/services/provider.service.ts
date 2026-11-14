@@ -25,6 +25,8 @@ import type {
  * Provider service implementation class, responsible for handling AI Provider business logic
  */
 export class ProviderService extends BaseService {
+  protected readonly serviceName = 'ProviderService';
+
   private gateKeeperPromise: Promise<KeyVaultsGateKeeper> | null = null;
 
   constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {

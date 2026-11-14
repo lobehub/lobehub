@@ -38,6 +38,8 @@ export interface MessageCountResult {
  * Provides various message count statistics functions
  */
 export class MessageService extends BaseService {
+  protected readonly serviceName = 'MessageService';
+
   private coreFileService: CoreFileService;
 
   constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
