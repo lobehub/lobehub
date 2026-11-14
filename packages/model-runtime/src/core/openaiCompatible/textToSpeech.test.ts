@@ -285,6 +285,22 @@ describe('createOpenAICompatibleSpeech', () => {
     ).rejects.toMatchObject({ error: { message: expect.stringContaining('params.sampleRate') } });
     expect(create).not.toHaveBeenCalled();
 
+    // s2.1-pro-free follows the S2.1 Pro schema, and a refused sample rate is a clean error.
+    for (const params of [{ speed: 3 }, { sampleRate: 44_100 }]) {
+      await expect(
+        createOpenAICompatibleSpeech(
+          client,
+          { input: 'Hi', model: 'fish-audio/s2.1-pro-free', params, voice: 'default' },
+          undefined,
+          { ...context, provider: 'openrouter', requestModel: 'fish-audio/s2.1-pro-free' },
+        ),
+      ).rejects.toMatchObject({
+        error: { message: expect.stringContaining('Fish Audio s2.1-pro-free: params.') },
+        errorType: 'ProviderBizError',
+      });
+    }
+    expect(create).not.toHaveBeenCalled();
+
     // The directed S2 family accepts instructions through the gateway.
     create.mockResolvedValue(audioResponse([0]));
     await createOpenAICompatibleSpeech(

@@ -298,7 +298,12 @@ export async function createFishAudioSpeech(
     }
 
     const { body, format, text } = buildFishAudioSpeechRequest(payload, requestModel);
-    const pricing = await getModelPricing(payload.model, provider, options.pricingContext);
+    // Alias-specific pricing wins; an unpriced alias falls back to the model actually called.
+    const pricing =
+      (await getModelPricing(payload.model, provider, options.pricingContext)) ??
+      (requestModel !== payload.model
+        ? await getModelPricing(requestModel, provider, options.pricingContext)
+        : undefined);
 
     log(
       'tts request: model=%s reference_id=%s format=%s',

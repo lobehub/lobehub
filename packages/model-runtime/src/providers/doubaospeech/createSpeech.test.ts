@@ -230,6 +230,20 @@ describe('createDoubaoSpeech', () => {
     expect(getModelPricing).toHaveBeenCalledWith('doubao-tts', 'doubaospeech', undefined);
   });
 
+  it('prices an unpriced alias by the model it maps to', async () => {
+    vi.mocked(getModelPricing).mockImplementation(async (model) =>
+      model === 'seed-tts-2.0' ? seed20Pricing : undefined,
+    );
+
+    const result = await createDoubaoSpeech(
+      { input: 'Hi', model: 'doubao-tts', voice: VOICE },
+      { ...options, modelIdMapping: { 'doubao-tts': 'seed-tts-2.0' } },
+    );
+
+    expect(getModelPricing).toHaveBeenCalledWith('seed-tts-2.0', 'doubaospeech', undefined);
+    expect(result.usage?.cost).toBeGreaterThan(0);
+  });
+
   it("validates a mapped alias against the resolved model's card", async () => {
     await expect(
       createDoubaoSpeech(

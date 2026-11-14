@@ -152,8 +152,11 @@ export const createOpenAICompatibleSpeech = async (
     // The TTS service validates params against the static card, which a gateway or mapped
     // id never matches; check them against the Fish catalog card of the model actually
     // called, so e.g. S1 refuses `instructions` it would otherwise speak aloud.
-    const card = fishCatalogModel
-      ? fishAudioModels.find((item) => item.id === toFishAudioCatalogModel(fishCatalogModel))
+    // `s2.1-pro-free` has no card of its own and follows the S2.1 Pro schema.
+    const catalogId = fishCatalogModel ? toFishAudioCatalogModel(fishCatalogModel) : undefined;
+    const card = catalogId
+      ? (fishAudioModels.find((item) => item.id === catalogId) ??
+        fishAudioModels.find((item) => item.id === catalogId.replace(/-free$/, '')))
       : undefined;
     const issues: TTSParamsIssue[] = card?.parameters
       ? validateTTSParams(card.parameters, params)
@@ -168,7 +171,7 @@ export const createOpenAICompatibleSpeech = async (
     if (issues.length > 0) {
       throw AgentRuntimeError.chat({
         error: {
-          message: `Fish Audio ${card!.id}: ${issues.map(({ key, reason }) => `params.${key} ${reason}`).join('; ')}`,
+          message: `Fish Audio ${catalogId ?? payload.model}: ${issues.map(({ key, reason }) => `params.${key} ${reason}`).join('; ')}`,
         },
         errorType: AgentRuntimeErrorType.ProviderBizError,
         provider: context.provider,

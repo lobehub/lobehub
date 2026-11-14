@@ -436,7 +436,12 @@ export async function createDoubaoSpeech(
     const { body, format } = buildDoubaoSpeechRequest(payload, await hashUid(options.user));
     const speaker = (body.req_params as { speaker: string }).speaker;
     const resource = resolveDoubaoSpeechResource(requestModel, speaker);
-    const pricing = await getModelPricing(payload.model, provider, options.pricingContext);
+    // Alias-specific pricing wins; an unpriced alias falls back to the model actually called.
+    const pricing =
+      (await getModelPricing(payload.model, provider, options.pricingContext)) ??
+      (requestModel !== payload.model
+        ? await getModelPricing(requestModel, provider, options.pricingContext)
+        : undefined);
 
     log('tts request: resource=%s speaker=%s format=%s', resource, speaker, format);
 

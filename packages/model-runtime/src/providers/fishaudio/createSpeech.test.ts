@@ -175,6 +175,21 @@ describe('createFishAudioSpeech', () => {
     expect(getModelPricing).toHaveBeenCalledWith('fish-pro', 'fishaudio', undefined);
   });
 
+  it('prices an unpriced alias by the model it maps to', async () => {
+    vi.mocked(getModelPricing).mockImplementation(async (model) =>
+      model === 's2.1-pro' ? s21Pricing : undefined,
+    );
+
+    const result = await createFishAudioSpeech(
+      { input: 'Hi', model: 'fish-pro', voice: VOICE },
+      { ...options, modelIdMapping: { 'fish-pro': 's2.1-pro' } },
+    );
+
+    expect(getModelPricing).toHaveBeenCalledWith('fish-pro', 'fishaudio', undefined);
+    expect(getModelPricing).toHaveBeenCalledWith('s2.1-pro', 'fishaudio', undefined);
+    expect(result.usage?.cost).toBeGreaterThan(0);
+  });
+
   it("validates a mapped alias against the resolved model's card", async () => {
     await expect(
       createFishAudioSpeech(
