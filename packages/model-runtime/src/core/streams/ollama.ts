@@ -8,10 +8,17 @@ import {
   createSSEEncoder,
 } from './events';
 import type { StreamContext, StreamProtocolChunk } from './protocol';
-import { generateToolCallId } from './protocol';
+import { generateToolCallId, getLeadingContent } from './protocol';
 
-const transformOllamaStream = (chunk: ChatResponse, stack: StreamContext): StreamProtocolChunk => {
+const transformOllamaStream = (
+  chunk: ChatResponse,
+  stack: StreamContext,
+): StreamProtocolChunk | StreamProtocolChunk[] => {
   if (chunk.message.thinking) {
+    // Native thinking is authoritative: it closes any open fallback block, and
+    // a later literal <think> in the answer is text.
+    stack.thinkingInContent = false;
+
     return { data: chunk.message.thinking, id: stack.id, type: 'reasoning' };
   }
 
@@ -36,19 +43,37 @@ const transformOllamaStream = (chunk: ChatResponse, stack: StreamContext): Strea
     return { data: 'finished', id: stack.id, type: 'stop' };
   }
 
-  // Check for <think> or </think> tags and update thinkingInContent state
-  if (chunk.message.content.includes('<think>')) {
-    stack.thinkingInContent = true;
-  } else if (chunk.message.content.includes('</think>')) {
-    stack.thinkingInContent = false;
+  const content = chunk.message.content;
+
+  // A <think> tag is structural only when it leads the answer. Models can quote
+  // the same tag mid-answer (prompt-engineering examples, code samples);
+  // flipping the state there would move the rest of the reply into reasoning or
+  // strip the literal text.
+  if (stack.thinkingInContent === undefined) {
+    const leading = getLeadingContent(content);
+    if (leading) stack.thinkingInContent = leading.startsWith('<think>');
   }
 
-  // Remove <think> and </think> tags, and determine return type based on current thinking mode
-  return {
-    data: chunk.message.content.replaceAll(/<\/?think>/g, ''),
-    id: stack.id,
-    type: stack?.thinkingInContent ? 'reasoning' : 'text',
-  };
+  if (stack.thinkingInContent) {
+    if (content.includes('</think>')) {
+      const [before, ...rest] = content.split('</think>');
+      const after = rest.join('</think>');
+      stack.thinkingInContent = false;
+
+      const results: StreamProtocolChunk[] = [];
+      const reasoning = before.replaceAll('<think>', '');
+      if (reasoning) results.push({ data: reasoning, id: stack.id, type: 'reasoning' });
+      if (after) results.push({ data: after, id: stack.id, type: 'text' });
+
+      return results.length > 0 ? results : { data: '', id: stack.id, type: 'text' };
+    }
+
+    // Remove think tags only inside the fallback thinking block; in text mode
+    // they are literal answer content.
+    return { data: content.replaceAll(/<\/?think>/g, ''), id: stack.id, type: 'reasoning' };
+  }
+
+  return { data: content, id: stack.id, type: 'text' };
 };
 
 export const OllamaStream = (

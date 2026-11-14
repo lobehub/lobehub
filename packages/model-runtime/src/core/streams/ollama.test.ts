@@ -65,6 +65,168 @@ describe('OllamaStream', () => {
         );
       });
 
+      it('keeps a literal <think> mid-answer as text', async () => {
+        vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+        const messages = ['Let me explain ', '<think>literal</think>', ' now.'];
+        const mockOllamaStream = new ReadableStream<ChatResponse>({
+          start(controller) {
+            messages.forEach((content) => {
+              controller.enqueue({ message: { content }, done: false } as ChatResponse);
+            });
+            controller.enqueue({ message: { content: '' }, done: true } as ChatResponse);
+            controller.close();
+          },
+        });
+
+        const protocolStream = OllamaStream(mockOllamaStream);
+
+        const decoder = new TextDecoder();
+        const chunks: string[] = [];
+
+        for await (const chunk of protocolStream) {
+          chunks.push(decoder.decode(chunk, { stream: true }));
+        }
+
+        expect(chunks).toEqual([
+          'id: chat_1\n',
+          'event: text\n',
+          `data: "Let me explain "\n\n`,
+          'id: chat_1\n',
+          'event: text\n',
+          `data: "<think>literal</think>"\n\n`,
+          'id: chat_1\n',
+          'event: text\n',
+          `data: " now."\n\n`,
+          'id: chat_1\n',
+          'event: stop\n',
+          `data: "finished"\n\n`,
+        ]);
+      });
+
+      it('keeps a literal </think> as text when no thinking block is open', async () => {
+        vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+        const messages = ['The closing tag ', '</think>', ' is literal'];
+        const mockOllamaStream = new ReadableStream<ChatResponse>({
+          start(controller) {
+            messages.forEach((content) => {
+              controller.enqueue({ message: { content }, done: false } as ChatResponse);
+            });
+            controller.enqueue({ message: { content: '' }, done: true } as ChatResponse);
+            controller.close();
+          },
+        });
+
+        const protocolStream = OllamaStream(mockOllamaStream);
+
+        const decoder = new TextDecoder();
+        const chunks: string[] = [];
+
+        for await (const chunk of protocolStream) {
+          chunks.push(decoder.decode(chunk, { stream: true }));
+        }
+
+        expect(chunks).toEqual([
+          'id: chat_1\n',
+          'event: text\n',
+          `data: "The closing tag "\n\n`,
+          'id: chat_1\n',
+          'event: text\n',
+          `data: "</think>"\n\n`,
+          'id: chat_1\n',
+          'event: text\n',
+          `data: " is literal"\n\n`,
+          'id: chat_1\n',
+          'event: stop\n',
+          `data: "finished"\n\n`,
+        ]);
+      });
+
+      it('lets native thinking close an already open fallback block', async () => {
+        vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+        const mockOllamaStream = new ReadableStream<ChatResponse>({
+          start(controller) {
+            controller.enqueue({
+              message: { content: '<think>' },
+              done: false,
+            } as ChatResponse);
+            controller.enqueue({
+              message: { thinking: 'native thinking' },
+              done: false,
+            } as ChatResponse);
+            controller.enqueue({ message: { content: 'Hello' }, done: false } as ChatResponse);
+            controller.enqueue({ message: { content: '' }, done: true } as ChatResponse);
+            controller.close();
+          },
+        });
+
+        const protocolStream = OllamaStream(mockOllamaStream);
+
+        const decoder = new TextDecoder();
+        const chunks: string[] = [];
+
+        for await (const chunk of protocolStream) {
+          chunks.push(decoder.decode(chunk, { stream: true }));
+        }
+
+        expect(chunks).toEqual([
+          'id: chat_1\n',
+          'event: reasoning\n',
+          `data: ""\n\n`,
+          'id: chat_1\n',
+          'event: reasoning\n',
+          `data: "native thinking"\n\n`,
+          'id: chat_1\n',
+          'event: text\n',
+          `data: "Hello"\n\n`,
+          'id: chat_1\n',
+          'event: stop\n',
+          `data: "finished"\n\n`,
+        ]);
+      });
+
+      it('does not enter thinking mode after native thinking content', async () => {
+        vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+        const mockOllamaStream = new ReadableStream<ChatResponse>({
+          start(controller) {
+            controller.enqueue({
+              message: { thinking: 'native thinking' },
+              done: false,
+            } as ChatResponse);
+            controller.enqueue({
+              message: { content: '<think>literal</think>' },
+              done: false,
+            } as ChatResponse);
+            controller.enqueue({ message: { content: '' }, done: true } as ChatResponse);
+            controller.close();
+          },
+        });
+
+        const protocolStream = OllamaStream(mockOllamaStream);
+
+        const decoder = new TextDecoder();
+        const chunks: string[] = [];
+
+        for await (const chunk of protocolStream) {
+          chunks.push(decoder.decode(chunk, { stream: true }));
+        }
+
+        expect(chunks).toEqual([
+          'id: chat_1\n',
+          'event: reasoning\n',
+          `data: "native thinking"\n\n`,
+          'id: chat_1\n',
+          'event: text\n',
+          `data: "<think>literal</think>"\n\n`,
+          'id: chat_1\n',
+          'event: stop\n',
+          `data: "finished"\n\n`,
+        ]);
+      });
+
       it('thinking field', async () => {
         vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
 

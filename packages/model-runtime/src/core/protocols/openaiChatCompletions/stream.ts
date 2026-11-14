@@ -25,6 +25,7 @@ import {
   createTokenSpeedCalculator,
   FIRST_CHUNK_ERROR_KEY,
   generateToolCallId,
+  getLeadingContent,
 } from '../../streams/protocol';
 import { recordProviderReportedCost } from '../../streams/providerReportedCost';
 import { convertOpenAIUsage } from '../../usageConverters';
@@ -542,6 +543,14 @@ const transformOpenAIStream = (
       const carriedReasoning: StreamProtocolChunk[] = [];
 
       if (typeof reasoning_content === 'string') {
+        // Native reasoning is authoritative: it closes any open fallback block,
+        // and a later literal <think> in the answer is text. Empty strings are
+        // placeholders some providers send before any content and must not
+        // latch that mode.
+        if (reasoning_content !== '') {
+          streamContext.thinkingInContent = false;
+        }
+
         const reasoningChunk: StreamProtocolChunk = {
           data: reasoning_content,
           id: chunk.id,
@@ -570,8 +579,17 @@ const transformOpenAIStream = (
           return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
         }
 
+        // A <think> tag is structural only when it leads the answer. Models can
+        // quote the same tag mid-answer (prompt-engineering examples, code
+        // samples); flipping the state there would move the rest of the reply
+        // into reasoning or strip the literal text.
+        if (streamContext.thinkingInContent === undefined) {
+          const leading = getLeadingContent(content);
+          if (leading) streamContext.thinkingInContent = leading.startsWith('<think>');
+        }
+
         // Handle special case with </think> tag: need to split content
-        if (content.includes('</think>')) {
+        if (streamContext.thinkingInContent && content.includes('</think>')) {
           const parts = content.split('</think>');
           const beforeThink = parts[0].replaceAll('<think>', ''); // Remove possible <think> tag
           const afterThink = parts.slice(1).join('</think>'); // Handle case with multiple </think> tags
@@ -604,13 +622,11 @@ const transformOpenAIStream = (
           );
         }
 
-        // Remove <think> tag (no need to split, as content after <think> tag is all reasoning)
-        const thinkingContent = content.replaceAll(/<\/?think>/g, '');
-
-        // Check if there's a <think> tag, update thinkingInContent state
-        if (content.includes('<think>')) {
-          streamContext.thinkingInContent = true;
-        }
+        // Remove think tags only while in the fallback thinking block; in text
+        // mode they are literal answer content.
+        const thinkingContent = streamContext.thinkingInContent
+          ? content.replaceAll(/<\/?think>/g, '')
+          : content;
 
         // Check if there's citation content, update returnedCitation state
         if (!streamContext?.returnedCitation) {
