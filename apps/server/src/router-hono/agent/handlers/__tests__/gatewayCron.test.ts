@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { gatewayCron } from '../gatewayCron';
 
@@ -25,6 +25,10 @@ describe('gatewayCron', () => {
     delete process.env.MESSAGE_GATEWAY_SERVICE_TOKEN;
   });
 
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   const runCron = () => gatewayCron({ json: (body: unknown) => body } as never);
 
   it('reconciles through the gateway even with no MESSAGE_GATEWAY_URL', async () => {
@@ -38,15 +42,28 @@ describe('gatewayCron', () => {
     expect(mockService.ensureRunning).toHaveBeenCalledTimes(1);
   });
 
-  it('does not reconcile through the gateway when no host is enabled', async () => {
+  it('does not reconcile through the gateway on Vercel when no host is enabled', async () => {
+    vi.stubEnv('VERCEL_ENV', 'production');
     mockService.useMessageGateway = false;
     process.env.MESSAGE_GATEWAY_URL = 'https://message-gateway.test.com';
     process.env.MESSAGE_GATEWAY_SERVICE_TOKEN = 'token';
 
-    // Falls through to the legacy in-process path, whose dependencies are not
+    // Falls through to the legacy cron-window path, whose dependencies are not
     // stubbed here — reaching it at all is the assertion.
     await runCron().catch(() => undefined);
 
     expect(mockService.ensureRunning).not.toHaveBeenCalled();
+  });
+
+  it('hands persistent bots to the GatewayManager outside Vercel', async () => {
+    // A long-lived process already holds each bot's connection in the
+    // GatewayManager; the cron-window listeners would open a second one for
+    // the same (platform, applicationId). The legacy path's dependencies are
+    // not stubbed, so resolving with this body proves it was never entered.
+    vi.stubEnv('VERCEL_ENV', '');
+    mockService.useMessageGateway = false;
+
+    await expect(runCron()).resolves.toEqual({ ensureRunning: true });
+    expect(mockService.ensureRunning).toHaveBeenCalledTimes(1);
   });
 });
