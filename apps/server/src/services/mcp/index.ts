@@ -102,19 +102,6 @@ const isMcpToolFailure = (error: unknown): error is ProtocolError | SdkError =>
   (SdkError.isInstance(error) &&
     (error.code === SdkErrorCode.RequestTimeout || error.code === SdkErrorCode.ConnectionClosed));
 
-interface McpClientRequestOptions {
-  /** Open a session that announces MCP Apps (the user's `mcp_apps` flag). */
-  mcpApps?: boolean;
-  /**
-   * Send the HTTP transport's requests through `ssrfSafeFetch`, which refuses
-   * private, loopback, link-local and metadata addresses (unless the
-   * deployment allows them: `SSRF_ALLOW_PRIVATE_IP_ADDRESS`,
-   * `SSRF_ALLOW_IP_ADDRESS_LIST`). For an endpoint the user did not enter,
-   * such as a marketplace listing an agent installs on its own.
-   */
-  ssrfSafe?: boolean;
-}
-
 const ssrfSafeMcpFetch = (url: string | URL, init?: RequestInit) =>
   ssrfSafeFetch(url.toString(), init);
 
@@ -175,7 +162,7 @@ export class MCPService {
     params: MCPClientParams,
     operationName: string,
     operation: (client: MCPClient) => Promise<T>,
-    { mcpApps = false, ssrfSafe }: McpClientRequestOptions = {},
+    { mcpApps = false }: { mcpApps?: boolean } = {},
   ): Promise<T> {
     const connection = this.getConnectionLogMetadata(params);
 
@@ -191,7 +178,7 @@ export class MCPService {
           // failure (bad URL/token, stdio spawn error) is NOT a stale-session
           // error, so it must bail immediately instead of retrying — otherwise
           // we'd repeat auth attempts / respawn stdio commands needlessly.
-          const client = await this.getClient(params, skipCache, { mcpApps, ssrfSafe });
+          const client = await this.getClient(params, skipCache, { mcpApps });
           return await operation(client);
         } catch (error) {
           // Only retry for NoValidSessionId errors
@@ -239,11 +226,10 @@ export class MCPService {
   async listRawTools(
     params: MCPClientParams,
     /**
-     * `mcpApps`: list on a session that announces MCP Apps (the user's
-     * `mcp_apps` flag): a server may list the tools only its views call just
-     * to such a client. `ssrfSafe`: see {@link McpClientRequestOptions}.
+     * List on a session that announces MCP Apps (the user's `mcp_apps` flag):
+     * a server may list the tools only its views call just to such a client.
      */
-    options: McpClientRequestOptions = {},
+    { mcpApps = false }: { mcpApps?: boolean } = {},
   ): Promise<McpTool[]> {
     return this.withSessionRetry(
       params,
@@ -253,7 +239,7 @@ export class MCPService {
         log(`Tools listed successfully, result count: %d`, result.length);
         return result;
       },
-      options,
+      { mcpApps },
     );
   }
 
@@ -441,7 +427,7 @@ export class MCPService {
   private async getClient(
     params: MCPClientParams,
     skipCache = false,
-    { mcpApps = false, ssrfSafe = false }: McpClientRequestOptions = {},
+    { mcpApps = false }: { mcpApps?: boolean } = {},
   ): Promise<MCPClient> {
     // Every server caller (including connector sync and agent tool execution)
     // must enforce the same Desktop-only stdio boundary, even for cached clients.
@@ -454,9 +440,9 @@ export class MCPService {
     }
 
     // A session announces its capabilities once, at initialize, so sessions
-    // with and without MCP Apps are cached apart.
-    // A guarded session never reuses, nor lends, an unguarded one's transport.
-    const key = `${this.serializeParams(params)}${mcpApps ? '#mcp-apps' : ''}${ssrfSafe ? '#ssrf-safe' : ''}`;
+    // with and without MCP Apps are cached apart. A guarded (`ssrfSafe`) and an
+    // unguarded session differ in their params, so they are apart too.
+    const key = `${this.serializeParams(params)}${mcpApps ? '#mcp-apps' : ''}`;
 
     if (!skipCache && this.clients.has(key)) {
       return this.clients.get(key)!;
@@ -466,7 +452,7 @@ export class MCPService {
     log(`No cached client found, Initializing new client.`);
     try {
       const client = new MCPClient(params, {
-        fetch: ssrfSafe ? ssrfSafeMcpFetch : undefined,
+        fetch: params.type === 'http' && params.ssrfSafe ? ssrfSafeMcpFetch : undefined,
         mcpApps,
       });
       await client.initialize({

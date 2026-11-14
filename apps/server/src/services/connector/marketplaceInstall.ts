@@ -2,6 +2,7 @@ import {
   hasCallableMcpEndpoint,
   isMarketplaceInstallCompleted,
   MARKETPLACE_INSTALL_COMPLETED_KEY,
+  SSRF_SAFE_TRANSPORT_KEY,
 } from '@lobechat/const';
 import debug from 'debug';
 
@@ -259,7 +260,14 @@ export const installMarketplaceMcpConnector = async (
     version: manifest.version,
   };
   if (deployment.headers) metadata.customHeaders = deployment.headers;
-  if (deployment.type === 'cloud') metadata.cloudEndPoint = deployment.cloudEndPoint;
+  if (deployment.type === 'cloud') {
+    metadata.cloudEndPoint = deployment.cloudEndPoint;
+  } else {
+    // The endpoint is the listing's, not one the user entered: an agent's
+    // install must not make the server reach a private or metadata address, at
+    // the tool sync below nor on any later call (the listing's DNS may change).
+    metadata[SSRF_SAFE_TRANSPORT_KEY] = true;
+  }
 
   const claim = await connectorModel.createUnlessIdentifierHeld(
     {
@@ -293,12 +301,11 @@ export const installMarketplaceMcpConnector = async (
           { connectorModel, connectorToolModel },
           REPLACE_TOOLS,
         )
-      : // The endpoint is the listing's, not one the user entered: an agent's
-        // install must not make the server reach a private or metadata address.
+      : // Over the SSRF-safe transport, as the row's mark asks
         await syncConnectorToolsById(
           created.id,
           { connectorModel, connectorToolModel, userId },
-          { ...REPLACE_TOOLS, ssrfSafe: true },
+          REPLACE_TOOLS,
         );
 
     if (toolCount === 0) {

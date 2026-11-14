@@ -64,15 +64,16 @@ export const connectorAgentScopeRouter = router({
       await assertConnectorCredentialsManageable(ctx, connector);
       if (!connector.agentId) return { id: input.connectorId }; // already base — no-op
 
-      const existingBase = await ctx.connectorModel.findScopedByIdentifier(connector.identifier);
-      if (existingBase) {
+      const moved = await ctx.connectorModel.moveToBaseUnlessIdentifierHeld(
+        input.connectorId,
+        connector.identifier,
+      );
+      if ('holder' in moved) {
         throw new TRPCError({
           code: 'CONFLICT',
           message: `A personal "${connector.identifier}" connector already exists; delete the agent connector instead`,
         });
       }
-
-      await ctx.connectorModel.update(input.connectorId, { agentId: null });
       return { id: input.connectorId };
     }),
 

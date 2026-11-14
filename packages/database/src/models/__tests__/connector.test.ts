@@ -434,6 +434,56 @@ describe('ConnectorModel', () => {
     });
   });
 
+  describe('moveToBaseUnlessIdentifierHeld', () => {
+    const agentInput = {
+      agentId: 'move-agent',
+      identifier: 'fetch-mcp',
+      name: 'Fetch',
+      sourceType: 'marketplace',
+      status: 'connected',
+    } as const;
+    const baseRows = async () =>
+      (await serverDB.select().from(userConnectors)).filter((row) => row.agentId === null);
+
+    beforeEach(async () => {
+      await serverDB.insert(agents).values({ id: 'move-agent', userId });
+    });
+
+    it('moves an agent connector into the base scope when no base row holds the identifier', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const agentRow = await model.create(agentInput);
+
+      expect(await model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp')).toEqual({
+        moved: true,
+      });
+      expect(await baseRows()).toEqual([expect.objectContaining({ id: agentRow.id })]);
+    });
+
+    it('returns the holding base row and leaves the agent connector bound', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const holder = await model.create({ ...agentInput, agentId: null });
+      const agentRow = await model.create(agentInput);
+
+      expect(await model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp')).toEqual({
+        holder: expect.objectContaining({ id: holder.id }),
+      });
+      expect(await model.findById(agentRow.id)).toMatchObject({ agentId: 'move-agent' });
+    });
+
+    it('never leaves two base rows when a create of the identifier runs at the same time', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const agentRow = await model.create(agentInput);
+      const { agentId: _agentId, ...baseInput } = agentInput;
+
+      await Promise.all([
+        model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp'),
+        model.createUnlessIdentifierHeld(baseInput),
+      ]);
+
+      expect(await baseRows()).toHaveLength(1);
+    });
+  });
+
   describe('query', () => {
     it('returns only the current user / workspace connectors with decrypted credentials', async () => {
       const model = new ConnectorModel(serverDB, userId, undefined, gateKeeper);

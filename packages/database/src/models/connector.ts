@@ -313,10 +313,11 @@ export class ConnectorModel {
   /**
    * Create a base connector (`agent_id IS NULL`) unless a row in this scope
    * already holds its identifier. The lookup and the insert are one step,
-   * serialized on a transaction-scoped advisory lock keyed by the scope and
-   * identifier: the identifier indexes are not unique, so two concurrent
-   * callers would otherwise both find it free and both insert. `canReplace`
-   * may let the holding row go: it is deleted, with its tools, in that step.
+   * serialized on the identifier lock every base-row writer takes
+   * ({@link lockBaseIdentifier}): the identifier indexes are not unique, so two
+   * concurrent callers would otherwise both find it free and both insert.
+   * `canReplace` may let the holding row go: it is deleted, with its tools, in
+   * that step.
    */
   createUnlessIdentifierHeld = async (
     params: Omit<CreateConnectorParams, 'agentId'>,
@@ -326,26 +327,11 @@ export class ConnectorModel {
     } = {},
   ): Promise<{ created: UserConnectorItem } | { holder: UserConnectorItem }> => {
     const { canReplace, gateKeeper = this.gateKeeper } = options;
-    const scopeKey = this.workspaceId ? `workspace:${this.workspaceId}` : `user:${this.userId}`;
 
     return this.db.transaction(async (tx) => {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${`user_connectors:${scopeKey}:${params.identifier}`}))`,
-      );
+      await this.lockBaseIdentifier(tx, params.identifier);
 
-      const [holder] = await tx
-        .select()
-        .from(userConnectors)
-        .where(
-          and(
-            this.ownership(),
-            eq(userConnectors.identifier, params.identifier),
-            isNull(userConnectors.agentId),
-          ),
-        )
-        .orderBy(asc(userConnectors.createdAt))
-        .limit(1);
-
+      const holder = await this.findBaseHolder(tx, params.identifier);
       if (holder) {
         if (!canReplace?.(holder)) return { holder };
         await tx
@@ -357,6 +343,66 @@ export class ConnectorModel {
         created: await this.insertInTransaction(tx, { ...params, agentId: null }, gateKeeper),
       };
     });
+  };
+
+  /**
+   * Move an agent's connector into the base scope (`agent_id = NULL`) unless a
+   * base row in this scope already holds its identifier: the lookup and the
+   * move are one step, under the lock {@link createUnlessIdentifierHeld} takes.
+   */
+  moveToBaseUnlessIdentifierHeld = async (
+    id: string,
+    identifier: string,
+  ): Promise<{ holder: UserConnectorItem } | { moved: true }> =>
+    this.db.transaction(async (tx) => {
+      await this.lockBaseIdentifier(tx, identifier);
+
+      const holder = await this.findBaseHolder(tx, identifier);
+      if (holder) return { holder };
+
+      await tx
+        .update(userConnectors)
+        .set({ agentId: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(userConnectors.id, id),
+            eq(userConnectors.identifier, identifier),
+            this.ownership(),
+          ),
+        );
+      return { moved: true as const };
+    });
+
+  /**
+   * Hold this scope's base-row lock on `identifier` until `tx` ends. A writer
+   * that adds a base row (a create, a move out of an agent) takes it before
+   * looking for a holder, so no two of them both find the identifier free.
+   */
+  private lockBaseIdentifier = async (tx: Transaction, identifier: string) => {
+    const scopeKey = this.workspaceId ? `workspace:${this.workspaceId}` : `user:${this.userId}`;
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtext(${`user_connectors:${scopeKey}:${identifier}`}))`,
+    );
+  };
+
+  /** The oldest base row of this scope holding `identifier`. */
+  private findBaseHolder = async (
+    tx: Transaction,
+    identifier: string,
+  ): Promise<UserConnectorItem | undefined> => {
+    const [holder] = await tx
+      .select()
+      .from(userConnectors)
+      .where(
+        and(
+          this.ownership(),
+          eq(userConnectors.identifier, identifier),
+          isNull(userConnectors.agentId),
+        ),
+      )
+      .orderBy(asc(userConnectors.createdAt))
+      .limit(1);
+    return holder;
   };
 
   private insertInTransaction = async (

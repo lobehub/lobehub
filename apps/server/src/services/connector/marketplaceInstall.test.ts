@@ -3,6 +3,7 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ConnectorModel } from '@/database/models/connector';
 import {
   userConnectors,
   userConnectorTools,
@@ -11,6 +12,7 @@ import {
   workspaceMembers,
   workspaces,
 } from '@/database/schemas';
+import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { mcpService } from '@/server/services/mcp';
 
 import {
@@ -19,6 +21,7 @@ import {
   MARKETPLACE_INSTALL_LEASE_MS,
   pickMarketplaceDeployment,
 } from './marketplaceInstall';
+import { buildConnectorMcpParams } from './sync';
 
 vi.mock('@/server/services/mcp', () => ({ mcpService: { listRawTools: vi.fn() } }));
 vi.mock('@/server/services/mcp/featureGate', () => ({
@@ -195,10 +198,12 @@ describe('installMarketplaceMcpConnector', () => {
       expect.objectContaining({
         headers: { 'X-Client': 'lobehub' },
         name: 'remote-mcp',
+        // The listing's endpoint is reached over the SSRF-safe transport
+        ssrfSafe: true,
         type: 'http',
         url: 'https://mcp.example.com/mcp',
       }),
-      { mcpApps: false, ssrfSafe: true },
+      { mcpApps: false },
     );
     const [connector] = await connectorRows();
     expect(connector).toMatchObject({
@@ -210,8 +215,25 @@ describe('installMarketplaceMcpConnector', () => {
     expect(connector.metadata).toMatchObject({
       customHeaders: { 'X-Client': 'lobehub' },
       marketplaceInstalled: true,
+      ssrfSafeTransport: true,
     });
     expect(await pluginRows()).toEqual([]);
+  });
+
+  it('keeps every later call to an HTTP install on the SSRF-safe transport', async () => {
+    vi.mocked(mcpService.listRawTools).mockResolvedValue([{ name: 'search' }] as never);
+    await installMarketplaceMcpConnector(scope, 'remote-mcp', httpManifest);
+
+    const [row] = await connectorRows();
+    const connector = (await new ConnectorModel(db, userId).findById(row.id))!;
+    const tools = await db.select().from(userConnectorTools);
+
+    // A conversation's tool calls (`toolExecution` runs the manifest's params),
+    // and the `connector.callTool` / view / re-sync paths (`buildConnectorMcpParams`)
+    expect(buildConnectorManifests([connector], tools)).toEqual([
+      expect.objectContaining({ mcpParams: expect.objectContaining({ ssrfSafe: true }) }),
+    ]);
+    expect(buildConnectorMcpParams(connector)).toMatchObject({ ssrfSafe: true, type: 'http' });
   });
 
   it('removes the connector it created when the server cannot be reached', async () => {

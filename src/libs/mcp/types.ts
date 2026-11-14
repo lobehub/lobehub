@@ -151,6 +151,15 @@ export interface HttpMCPClientParams {
   connectVia?: 'device';
   headers?: Record<string, string>;
   name: string;
+  /**
+   * Send every request through `ssrfSafeFetch`, which refuses private,
+   * loopback, link-local and metadata addresses (unless the deployment allows
+   * them: `SSRF_ALLOW_PRIVATE_IP_ADDRESS`, `SSRF_ALLOW_IP_ADDRESS_LIST`). Set
+   * for a connector whose endpoint nobody vouched for (`SSRF_SAFE_TRANSPORT_KEY`).
+   * Part of the params, so a guarded session is never cached with, or lent to,
+   * an unguarded one.
+   */
+  ssrfSafe?: boolean;
   type: 'http';
   url: string;
 }

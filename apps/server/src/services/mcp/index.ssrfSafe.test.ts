@@ -62,8 +62,14 @@ afterEach(() => {
 });
 
 const params = () => ({ name: 'loopback-mcp', type: 'http' as const, url: server.url });
+const guarded = () => ({ ...params(), ssrfSafe: true });
+const echo = (clientParams: ReturnType<typeof params>) => ({
+  argsStr: JSON.stringify({ text: 'hi' }),
+  clientParams,
+  toolName: 'echo',
+});
 
-describe('MCPService.listRawTools over the SSRF-safe transport', () => {
+describe('MCPService over the SSRF-safe transport (`ssrfSafe` params)', () => {
   it('lists the tools of a loopback server without the guard', async () => {
     const tools = await new MCPService().listRawTools(params());
 
@@ -73,15 +79,13 @@ describe('MCPService.listRawTools over the SSRF-safe transport', () => {
   it('refuses to reach a loopback server with the guard', async () => {
     delete process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS;
 
-    await expect(new MCPService().listRawTools(params(), { ssrfSafe: true })).rejects.toThrow(
-      /SSRF blocked/,
-    );
+    await expect(new MCPService().listRawTools(guarded())).rejects.toThrow(/SSRF blocked/);
   });
 
   it('reaches it through the guarded transport where the deployment allows private addresses', async () => {
     process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS = '1';
 
-    const tools = await new MCPService().listRawTools(params(), { ssrfSafe: true });
+    const tools = await new MCPService().listRawTools(guarded());
 
     expect(tools.map((tool) => tool.name)).toEqual(['echo']);
   });
@@ -91,8 +95,14 @@ describe('MCPService.listRawTools over the SSRF-safe transport', () => {
     await service.listRawTools(params());
     delete process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS;
 
-    await expect(service.listRawTools(params(), { ssrfSafe: true })).rejects.toThrow(
-      /SSRF blocked/,
-    );
+    await expect(service.listRawTools(guarded())).rejects.toThrow(/SSRF blocked/);
+  });
+
+  it('guards tool calls too, not only the listing', async () => {
+    const service = new MCPService();
+    expect(await service.callTool(echo(params()))).toMatchObject({ content: 'hi', success: true });
+    delete process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS;
+
+    await expect(service.callTool(echo(guarded()))).rejects.toThrow(/SSRF blocked/);
   });
 });
