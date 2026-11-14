@@ -1,6 +1,6 @@
 import { DEFAULT_SECURITY_BLACKLIST, InterventionChecker } from '@lobechat/agent-runtime';
 import { isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
-import { mayRequireMandatoryApproval } from '@lobechat/const/plugin';
+import { isMarketplaceInstallRunnable, mayRequireMandatoryApproval } from '@lobechat/const/plugin';
 import { connectorToolIntervention } from '@lobechat/mecha';
 import type {
   HumanInterventionConfig,
@@ -95,8 +95,14 @@ const findToolIntervention = (
   const s = getToolStoreState();
   const confirmed = revalidated && s.isConnectorListConfirmed(agentId);
 
-  const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
-  // Same routing as `mcpService.invokeMcpToolCall`
+  const resolved = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
+  const plugin =
+    pluginSelectors.getInstalledPluginById(identifier)(s) ||
+    pluginSelectors.getCustomPluginById(identifier)(s);
+  // Same routing as `mcpService.invokeMcpToolCall`: an unfinished marketplace
+  // install is not run, so the plugin row it falls back to decides
+  const connector =
+    resolved && isMarketplaceInstallRunnable(resolved, !!plugin) ? resolved : undefined;
   if (
     connector?.isEnabled &&
     (!!connector.mcpServerUrl || connector.mcpConnectionType === 'stdio')
@@ -115,9 +121,6 @@ const findToolIntervention = (
     return { intervention: connectorToolIntervention(tool) };
   }
 
-  const plugin =
-    pluginSelectors.getInstalledPluginById(identifier)(s) ||
-    pluginSelectors.getCustomPluginById(identifier)(s);
   // An agent's own connector the client hasn't loaded: its permission is
   // unknown here, so treat it as needing approval.
   if (!plugin) return agentId ? { intervention: 'required' } : null;
@@ -140,7 +143,7 @@ const findToolIntervention = (
   // (patchManifestWithPermissions). Until the server confirms the lists they
   // may be stale or missing, so ask.
   if (!confirmed) return { intervention: 'required' };
-  const permission = connector?.tools.find((t) => t.toolName === toolName)?.permission;
+  const permission = resolved?.tools.find((t) => t.toolName === toolName)?.permission;
   if (permission === 'disabled') return null;
   // Never looser than the tool's own `always` (`patchManifestWithPermissions`)
   if (permission === 'needs_approval')
