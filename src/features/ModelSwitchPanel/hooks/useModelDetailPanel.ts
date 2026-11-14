@@ -166,6 +166,7 @@ const UNIT_LABEL_MAP: Record<string, string> = {
   millionCharacters: '/M chars',
   millionTokens: '/M tokens',
   second: '/s',
+  song: '/song',
 };
 
 const formatUnitRate = (unit: PricingUnit, currency?: ModelPriceCurrency): FormattedUnitPrice => {

@@ -153,6 +153,8 @@ describe('musicRouter.createMusic', () => {
       },
       expect.objectContaining({
         callbackUrl: 'https://app.example.com/api/webhooks/music/acme?token=token-1',
+        // The LobeHub router records the request source on the route attempt
+        metadata: { trigger: 'music' },
       }),
     );
     expect(runtime.handlePollMusicStatus).not.toHaveBeenCalled();
