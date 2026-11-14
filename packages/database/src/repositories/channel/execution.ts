@@ -100,6 +100,12 @@ const REVOKED_LEASE_PREFIX = 'revoked:';
 export const RECENT_CONTEXT_LIMIT = 5;
 
 /**
+ * The member's own latest replies a fresh topic starts with, so a conversation that rotated (or
+ * went idle) still knows what the member said last. Deterministic: no summary is generated.
+ */
+export const CARRY_OVER_REPLIES = 3;
+
+/**
  * Channel writes made by the system rather than by a person: the dispatcher, native
  * completion callbacks, device receipts and reconcile. Mutations lock the channel row
  * within a transaction, except lease-only heartbeats. Callers must authenticate the source
@@ -316,9 +322,11 @@ export class ChannelExecutionRepository {
   /**
    * Public messages before the request that this run's topic has not seen, oldest first and
    * at most {@link RECENT_CONTEXT_LIMIT}: everything after the last request the topic accepted,
-   * except the reply it published. A new topic has seen nothing, so it gets the latest
-   * messages. Anything older stays behind the history tools; `omitted` counts the unseen
-   * messages left out, so the prompt can say there is more to read.
+   * except the messages the topic wrote itself (its published reply and the acknowledgement it
+   * opened with). A new topic has seen nothing, so it gets the latest messages, plus the
+   * member's own last {@link CARRY_OVER_REPLIES} replies in the branch.
+   * Anything older stays behind the history tools; `omitted` counts the unseen messages left
+   * out, so the prompt can say there is more to read.
    */
   recentContext = async (
     channelId: string,
@@ -370,9 +378,21 @@ export class ChannelExecutionRepository {
       beforeSequence: job.manifest.cutoffSequence,
       limit: RECENT_CONTEXT_LIMIT + ownIds.length,
     });
-    const messages = recent
+    const latest = recent
       .filter(({ id, sequence }) => sequence > seenThrough && !ownIds.includes(id))
       .slice(-RECENT_CONTEXT_LIMIT);
+    // A fresh topic has none of the member's own earlier work: hand it its last replies here.
+    const own = seen
+      ? []
+      : await readManifestMessages(this.db, channelId, job.manifest, {
+          agentId: job.manifest.self.agentId,
+          beforeSequence: job.manifest.cutoffSequence,
+          limit: CARRY_OVER_REPLIES,
+        });
+    const messages = [
+      ...own.filter(({ id }) => !latest.some((message) => message.id === id)),
+      ...latest,
+    ].sort((a, b) => a.sequence - b.sequence);
     const unseen = await countManifestMessages(this.db, channelId, job.manifest, {
       afterSequence: seenThrough,
       beforeSequence: job.manifest.cutoffSequence,

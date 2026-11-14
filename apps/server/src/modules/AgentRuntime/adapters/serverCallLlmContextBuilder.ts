@@ -193,6 +193,8 @@ export const buildServerCallLlmContext = async ({
     enableExpertise: selectEnableExpertise(state),
     enableHistoryCount: agentConfig.chatConfig?.enableHistoryCount ?? undefined,
     enableStaleToolResultTrim: agentConfig.chatConfig?.enableStaleToolResultTrim ?? undefined,
+    // Only a Channel run's history is made of Channel prompts worth compacting.
+    compactChannelTurns: state.origin?.trigger === 'channel',
     evalContext: state.world?.eval,
     expertise: selectExpertise(state),
     forceFinish: state.forceFinish,

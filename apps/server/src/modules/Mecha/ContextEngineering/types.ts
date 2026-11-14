@@ -148,6 +148,8 @@ export interface ServerMessagesEngineParams {
    * model context. Undefined / true → trimming enabled (default).
    */
   enableStaleToolResultTrim?: boolean;
+  /** The run answers a Channel request; see `MessagesEngineParams.compactChannelTurns`. */
+  compactChannelTurns?: boolean;
 
   /** Force finish flag: when true, injects summary prompt for max-steps completion */
   forceFinish?: boolean;

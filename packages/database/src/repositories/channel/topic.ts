@@ -1,14 +1,34 @@
 import type { ChannelExecutionConfig } from '@lobechat/types';
-import { and, desc, eq, isNotNull, isNull, ne } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
 import type { ChannelItem, ChannelJobItem, ChannelMemberItem } from '../../schemas';
-import { agentOperations, channelJobs, topics } from '../../schemas';
+import { agentOperations, channelJobs, messages, topics } from '../../schemas';
 import type { Transaction } from '../../type';
 import { CHANNEL_TOPIC_TRIGGER } from '../../utils/topicVisibility';
 
 // Matches Bot AgentBridgeService: check on the next request, never expire guild Threads.
 const TOPIC_STALE_THRESHOLD = 4 * 60 * 60 * 1000;
+
+/**
+ * Stored text past which a topic is not continued. Channel history is public and re-readable
+ * through the history tools, so a fresh topic loses nothing it cannot read again; rotating here
+ * keeps runs off the native context compression, which starts at half the model window (64k
+ * tokens for an unknown 128k model). 200k characters is roughly 50k tokens.
+ *
+ * Measured as the summed length of the topic's message content: tool results and replies are
+ * where a long Channel conversation grows, and it is one indexed aggregate per claim.
+ */
+export const CHANNEL_TOPIC_MAX_CHARS = 200_000;
+
+const topicChars = async (tx: Transaction, topicId: string) => {
+  const [row] = await tx
+    .select({ chars: sql<number>`coalesce(sum(length(${messages.content})), 0)::int` })
+    .from(messages)
+    .where(eq(messages.topicId, topicId));
+
+  return row?.chars ?? 0;
+};
 
 /**
  * Resolve continuation from the source-side job history, without Channel fields on topics.
@@ -63,7 +83,9 @@ export const resolveTopic = async (
     topic.userId === userId &&
     topic.workspaceId === channel.workspaceId &&
     !topic.isDeleted &&
-    (job.threadId || Date.now() - topic.updatedAt.getTime() <= TOPIC_STALE_THRESHOLD)
+    (job.threadId || Date.now() - topic.updatedAt.getTime() <= TOPIC_STALE_THRESHOLD) &&
+    // Threads never go idle, so size is what bounds them.
+    (await topicChars(tx, topic.id)) <= CHANNEL_TOPIC_MAX_CHARS
   ) {
     // A Channel that belongs to a project runs inside it, so the topic it works in
     // must say which project it belongs to: that binding is what the run resolves

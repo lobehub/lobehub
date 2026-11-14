@@ -8,6 +8,7 @@ import {
   AgentCouncilFlattenProcessor,
   AgentSenderMessageProcessor,
   cacheEconomicsForProvider,
+  ChannelTurnCompactProcessor,
   CompressedGroupRoleTransformProcessor,
   DisabledToolCallFilter,
   GroupMessageFlattenProcessor,
@@ -173,6 +174,7 @@ export class MessagesEngine {
       enableAgentMode,
       enableHistoryCount,
       enableStaleToolResultTrim,
+      compactChannelTurns,
       historyCount,
       forceFinish,
       historySummary,
@@ -595,6 +597,9 @@ export class MessagesEngine {
       // payload exactly once. MUST run AFTER the flatten steps (grouped /
       // compressed tool rows are only hoisted back to `role: 'tool'` with
       // plugin/pluginState there) and BEFORE ToolCallProcessor.
+      // Earlier Channel turns keep only their request: the public context, quote and wake hint
+      // injected into each were for that turn, and the history tools re-read them.
+      new ChannelTurnCompactProcessor({ enabled: compactChannelTurns === true }),
       new ActivationResultTrimProcessor({
         injectedManifests: injectedToolManifests,
         injectedSkills: injectedActivatedSkills,

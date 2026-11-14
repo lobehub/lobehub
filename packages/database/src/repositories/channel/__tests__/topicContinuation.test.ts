@@ -3,8 +3,9 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, channelMembers, channelThreads, topics } from '../../../schemas';
+import { agents, channelMembers, channelThreads, messages, topics } from '../../../schemas';
 import { ChannelExecutionRepository } from '..';
+import { CHANNEL_TOPIC_MAX_CHARS } from '../topic';
 import { createChannelFixture, jobsOf, lease } from './testUtils';
 
 const db = await getTestDB();
@@ -206,6 +207,37 @@ describe('Channel topic continuation', () => {
     expect(await recent(second.job.id)).toEqual(['Two o’clock?']);
     expect((await execution.recentContext(state.channel.id, second.job.id)).omitted).toBe(0);
   });
+
+  it.each([false, true])(
+    'starts over once the conversation outgrows its size limit, carrying its last reply (Thread=%s)',
+    async (thread) => {
+      const state = await setup(thread);
+      const first = (await state.claim((await state.send()).id))!;
+      await state.finish(first.job.id);
+      const grow = (chars: number) =>
+        db.insert(messages).values({
+          content: 'x'.repeat(chars),
+          role: 'tool',
+          topicId: first.topic.id,
+          userId: first.topic.userId!,
+        });
+
+      // At the limit the conversation carries on.
+      await grow(CHANNEL_TOPIC_MAX_CHARS - 'Request 1'.length - 200);
+      const second = (await state.claim((await state.send()).id))!;
+      expect(second.topic.id).toBe(first.topic.id);
+      await state.finish(second.job.id);
+
+      await grow(1000);
+      const third = (await state.claim((await state.send()).id))!;
+      expect(third.topic.id).not.toBe(first.topic.id);
+      // The fresh topic still knows what the member said last here.
+      const { messages: context } = await execution.recentContext(state.channel.id, third.job.id);
+      expect(context.map((m) => m.content)).toEqual(
+        expect.arrayContaining(['Answer 1', 'Answer 2']),
+      );
+    },
+  );
 
   it('blocks a deleted Agent reference while retaining the public request', async () => {
     const state = await setup();
