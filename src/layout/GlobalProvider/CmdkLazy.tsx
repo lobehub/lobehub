@@ -1,38 +1,25 @@
 'use client';
 
-import { Component, lazy, type PropsWithChildren, Suspense } from 'react';
+import { type ComponentType, lazy, Suspense } from 'react';
+
+type CommandMenuModule = { default: ComponentType };
 
 // Lazy load the CommandMenu component with React lazy
 // This splits the CommandMenu code into a separate chunk that only loads when needed
-const CmdkComponent = lazy(() => import('@/features/CommandMenu'));
+// The chunk carries the Shiki/oniguruma WASM payload. On browsers that reject
+// synchronous WebAssembly compilation above 4KB on the main thread, the chunk
+// rejects during module evaluation. Contain that rejection: global search is
+// optional, so a failed chunk resolves to a component that renders nothing
+// instead of taking down the app shell.
+export const loadCommandMenu = (): Promise<CommandMenuModule> =>
+  import('@/features/CommandMenu').catch(() => ({ default: () => null }));
 
-/**
- * The CommandMenu chunk carries the Shiki/oniguruma syntax-highlighting WASM
- * payload. On browsers that reject synchronous WebAssembly compilation above
- * 4KB on the main thread that chunk throws while it initializes, and a lazy
- * component's init error is fatal to the whole tree unless a boundary sits
- * between it and the app shell. Global search is a convenience, not a
- * prerequisite, so contain the failure: the menu silently disappears and the
- * rest of the page keeps working.
- */
-class CmdkErrorBoundary extends Component<PropsWithChildren, { failed: boolean }> {
-  state = { failed: false };
-
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-
-  render() {
-    return this.state.failed ? null : this.props.children;
-  }
-}
+const CmdkComponent = lazy(loadCommandMenu);
 
 const CmdkLazy = () => (
-  <CmdkErrorBoundary>
-    <Suspense fallback={null}>
-      <CmdkComponent />
-    </Suspense>
-  </CmdkErrorBoundary>
+  <Suspense fallback={null}>
+    <CmdkComponent />
+  </Suspense>
 );
 
 export default CmdkLazy;
