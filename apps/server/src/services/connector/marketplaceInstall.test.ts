@@ -321,17 +321,31 @@ describe('installMarketplaceMcpConnector', () => {
       ).toEqual(['fetch', 'purge']);
     });
 
-    it('leaves an interrupted install a pre-connector plugin row makes callable', async () => {
+    it('leaves a connected pre-connector install its bare plugin row makes callable', async () => {
+      const seeded = await seedUnfinished({ status: 'connected', updatedAt: staleAt() });
+      await db
+        .insert(userInstalledPlugins)
+        .values({ identifier: 'fetch-mcp', type: 'plugin', userId });
+
+      expect(await installMarketplaceMcpConnector(scope, 'fetch-mcp', cloudManifest)).toEqual({
+        status: 'exists',
+      });
+      expect(await connectorRows()).toEqual([seeded]);
+    });
+
+    it('takes over an interrupted install a bare plugin row cannot make callable', async () => {
+      // A manifest-less plugin row only lets runs call a connected row
       const seeded = await seedUnfinished({ updatedAt: staleAt() });
       await db
         .insert(userInstalledPlugins)
         .values({ identifier: 'fetch-mcp', type: 'plugin', userId });
 
       expect(await installMarketplaceMcpConnector(scope, 'fetch-mcp', cloudManifest)).toEqual({
-        blocker: 'conflict',
-        status: 'blocked',
+        status: 'installed',
       });
-      expect(await connectorRows()).toEqual([seeded]);
+      const [connector] = await connectorRows();
+      expect(connector.id).not.toBe(seeded.id);
+      expect(connector.metadata).toMatchObject({ marketplaceInstalled: true });
     });
   });
 

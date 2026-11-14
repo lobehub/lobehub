@@ -146,14 +146,15 @@ type HolderVerdict =
 
 /**
  * What an install does about the base row already holding its identifier:
- * - `exists`: a finished marketplace install, left as it is;
+ * - `exists`: a finished marketplace install, left as it is. That includes a
+ *   connected pre-connector install, which its plugin row (with or without a
+ *   manifest) lets runs call, as `isMarketplaceInstallRunnable` does;
  * - `in-progress`: an unfinished marketplace install inside the lease, which
  *   its install (this server's, or the web's) may still finish;
  * - `replace`: the caller's own unfinished marketplace install past the lease,
  *   which no run can call: a retry takes it over;
  * - `conflict`: anything else (a custom or builtin connector, a row without an
- *   endpoint, another member's row, a pre-connector install its plugin row
- *   makes callable).
+ *   endpoint, another member's row).
  */
 const judgeHolder = (
   holder: {
@@ -161,6 +162,7 @@ const judgeHolder = (
     mcpServerUrl?: string | null;
     metadata?: unknown;
     sourceType?: string | null;
+    status?: string | null;
     updatedAt: Date;
     userId: string;
   },
@@ -169,7 +171,7 @@ const judgeHolder = (
   if (holder.sourceType !== ConnectorSourceType.marketplace || !hasCallableMcpEndpoint(holder))
     return 'conflict';
   if (isMarketplaceInstallCompleted(holder.metadata)) return 'exists';
-  if (hasPluginRow) return 'conflict';
+  if (hasPluginRow && holder.status === ConnectorStatus.connected) return 'exists';
   if (Date.now() - holder.updatedAt.getTime() < MARKETPLACE_INSTALL_LEASE_MS) return 'in-progress';
   return holder.userId === userId ? 'replace' : 'conflict';
 };
