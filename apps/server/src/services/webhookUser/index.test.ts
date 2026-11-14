@@ -21,6 +21,26 @@ describe('WebhookUserService', () => {
     id: 'user-123',
   };
 
+  const emptyNextAuthChain = () => ({
+    from: vi.fn().mockReturnThis(),
+    innerJoin: vi.fn().mockReturnThis(),
+    select: vi.fn().mockReturnThis(),
+    then: vi.fn().mockImplementation(function (cb) {
+      return cb([]);
+    }),
+    where: vi.fn().mockReturnThis(),
+  });
+
+  const existingUserNextAuthChain = () => ({
+    from: vi.fn().mockReturnThis(),
+    innerJoin: vi.fn().mockReturnThis(),
+    select: vi.fn().mockReturnThis(),
+    then: vi.fn().mockImplementation(function (cb) {
+      return cb([{ users: mockUser }]);
+    }),
+    where: vi.fn().mockReturnThis(),
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -87,15 +107,7 @@ describe('WebhookUserService', () => {
       mockDb.query.account.findFirst.mockResolvedValue(null);
 
       // Setup chain mock for NextAuth query
-      const chainMock = {
-        from: vi.fn().mockReturnThis(),
-        innerJoin: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        then: vi.fn().mockImplementation(function (cb) {
-          return cb([{ users: mockUser }]);
-        }),
-        where: vi.fn().mockReturnThis(),
-      };
+      const chainMock = existingUserNextAuthChain();
       mockDb.select.mockReturnValue(chainMock);
 
       const updateData = { email: 'updated@example.com' };
@@ -121,15 +133,7 @@ describe('WebhookUserService', () => {
       mockDb.query.account.findFirst.mockResolvedValue(null);
 
       // NextAuth account also not found
-      const chainMock = {
-        from: vi.fn().mockReturnThis(),
-        innerJoin: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        then: vi.fn().mockImplementation(function (cb) {
-          return cb([]);
-        }),
-        where: vi.fn().mockReturnThis(),
-      };
+      const chainMock = emptyNextAuthChain();
       mockDb.select.mockReturnValue(chainMock);
 
       const result = await service.safeUpdateUser(
@@ -186,15 +190,7 @@ describe('WebhookUserService', () => {
       mockDb.query.account.findFirst.mockResolvedValue(null);
 
       // NextAuth account found
-      const chainMock = {
-        from: vi.fn().mockReturnThis(),
-        innerJoin: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        then: vi.fn().mockImplementation(function (cb) {
-          return cb([{ users: mockUser }]);
-        }),
-        where: vi.fn().mockReturnThis(),
-      };
+      const chainMock = existingUserNextAuthChain();
       mockDb.select.mockReturnValue(chainMock);
 
       const result = await service.safeSignOutUser({
@@ -213,15 +209,7 @@ describe('WebhookUserService', () => {
       mockDb.query.account.findFirst.mockResolvedValue(null);
 
       // NextAuth account also not found
-      const chainMock = {
-        from: vi.fn().mockReturnThis(),
-        innerJoin: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        then: vi.fn().mockImplementation(function (cb) {
-          return cb([]);
-        }),
-        where: vi.fn().mockReturnThis(),
-      };
+      const chainMock = emptyNextAuthChain();
       mockDb.select.mockReturnValue(chainMock);
 
       const result = await service.safeSignOutUser({
@@ -287,15 +275,7 @@ describe('WebhookUserService', () => {
       mockDb.query.account.findFirst.mockResolvedValue(null);
 
       // NextAuth account also not found
-      const chainMock = {
-        from: vi.fn().mockReturnThis(),
-        innerJoin: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        then: vi.fn().mockImplementation(function (cb) {
-          return cb([]);
-        }),
-        where: vi.fn().mockReturnThis(),
-      };
+      const chainMock = emptyNextAuthChain();
       mockDb.select.mockReturnValue(chainMock);
 
       await service.safeUpdateUser({ providerId: 'unknown', accountId: 'unknown' }, {});

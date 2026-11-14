@@ -2,6 +2,8 @@ import type { AssistantSliceState } from './slices/assistant/initialState';
 import { initialAssistantSliceState } from './slices/assistant/initialState';
 import type { GroupAgentSliceState } from './slices/groupAgent/initialState';
 import { initialGroupAgentSliceState } from './slices/groupAgent/initialState';
+import type { MarketSliceState } from './slices/market/initialState';
+import { initialMarketSliceState } from './slices/market/initialState';
 import type { MCPSliceState } from './slices/mcp/initialState';
 import { initialMCPSliceState } from './slices/mcp/initialState';
 import type { ModelSliceState } from './slices/model/initialState';
@@ -23,6 +25,7 @@ import { initialUserSliceState } from './slices/user/initialState';
  */
 export type DiscoverStoreState = AssistantSliceState &
   GroupAgentSliceState &
+  MarketSliceState &
   MCPSliceState &
   ModelSliceState &
   PluginSliceState &
@@ -34,6 +37,7 @@ export type DiscoverStoreState = AssistantSliceState &
 export const initialState: DiscoverStoreState = {
   ...initialAssistantSliceState,
   ...initialGroupAgentSliceState,
+  ...initialMarketSliceState,
   ...initialMCPSliceState,
   ...initialModelSliceState,
   ...initialPluginSliceState,

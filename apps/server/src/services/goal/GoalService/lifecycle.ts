@@ -69,7 +69,11 @@ export const deleteGoal = async (ctx: GoalServiceContext, goalId: string) => {
     });
     graph = await ctx.graphModel.getGraph(goalId);
     if (graph) {
-      if (managed) await new GoalManagerService(ctx.db, ctx.userId, ctx.workspaceId).stop(graph);
+      // Deleting is the person's own word too; see `GoalManagerService.stop`.
+      if (managed)
+        await new GoalManagerService(ctx.db, ctx.userId, ctx.workspaceId).stop(graph, {
+          ownerConfirmsExit: true,
+        });
       if (supervised)
         await new GoalSupervisorService(ctx.db, ctx.userId, ctx.workspaceId).stop(graph);
     }
@@ -361,8 +365,14 @@ export const close = async (
         'Could not stop the work still running for this goal, so it was not closed. Try again once the run is reachable.',
     });
   try {
+    // Ending the goal is the person's own word that its stranded planning turn
+    // is over; see `GoalManagerService.stop`. The turn stays settled even if the
+    // Task pass below refuses the close: the person asked to end the goal, so a
+    // later resume plans afresh instead of pausing on that turn again.
     if (graph.goal.config?.manager)
-      await new GoalManagerService(ctx.db, ctx.userId, ctx.workspaceId).stop(graph);
+      await new GoalManagerService(ctx.db, ctx.userId, ctx.workspaceId).stop(graph, {
+        ownerConfirmsExit: true,
+      });
     if (graph.goal.config?.supervision?.enabled || graph.goal.config?.supervisorState)
       await new GoalSupervisorService(ctx.db, ctx.userId, ctx.workspaceId).stop(graph);
   } catch (error) {

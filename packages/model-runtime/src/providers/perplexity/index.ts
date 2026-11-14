@@ -1,7 +1,7 @@
 import { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 import { resolveParameters } from '../../core/parameterResolver';
 import type { ChatStreamPayload } from '../../types';
 

@@ -139,7 +139,7 @@ describe('getSchemaFields', () => {
       label: 'settings',
       properties: [
         field('charLimit'),
-        { ...field('botWakeDisabled'), featureFlag: 'enableBotWake' },
+        { ...field('gatedSetting'), featureFlag: 'enableExampleRollout' },
       ],
       type: 'object',
     },
@@ -147,13 +147,12 @@ describe('getSchemaFields', () => {
 
   it('hides a field behind a rollout flag until the flag is on', () => {
     expect(getSchemaFields(schema, 'settings').map((f) => f.key)).toEqual(['charLimit']);
-    expect(getSchemaFields(schema, 'settings', { enableBotWake: false }).map((f) => f.key)).toEqual(
-      ['charLimit'],
-    );
-    expect(getSchemaFields(schema, 'settings', { enableBotWake: true }).map((f) => f.key)).toEqual([
-      'charLimit',
-      'botWakeDisabled',
-    ]);
+    expect(
+      getSchemaFields(schema, 'settings', { enableExampleRollout: false }).map((f) => f.key),
+    ).toEqual(['charLimit']);
+    expect(
+      getSchemaFields(schema, 'settings', { enableExampleRollout: true }).map((f) => f.key),
+    ).toEqual(['charLimit', 'gatedSetting']);
   });
 });
 

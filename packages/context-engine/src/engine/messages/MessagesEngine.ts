@@ -36,6 +36,7 @@ import {
   AgentAccountContextInjector,
   AgentBuilderContextInjector,
   AgentDocumentBeforeSystemInjector,
+  AgentDocumentChangesInjector,
   AgentDocumentContextInjector,
   AgentDocumentMessageInjector,
   AgentDocumentSystemAppendInjector,
@@ -199,6 +200,7 @@ export class MessagesEngine {
       additionalContexts,
       agentGroup,
       agentDocuments,
+      agentDocumentChanges,
       planTodo,
       userMemory,
       initialContext,
@@ -455,6 +457,14 @@ export class MessagesEngine {
 
       // Agent documents → after-first-user, context-end
       new AgentDocumentMessageInjector(agentDocConfig),
+      // Agent-document change notes → the user message each belongs to (the
+      // index renders a snapshot; these say what changed since). Not gated on
+      // `hasAgentDocuments`: a snapshot taken before the first document has no
+      // rows, and the notes are then the only place new documents appear.
+      new AgentDocumentChangesInjector({
+        changes: agentDocumentChanges,
+        enabled: isAgentMode && !!agentDocumentChanges,
+      }),
       // Active topic document → last user message, for continuing document work outside page scope
       new ActiveTopicDocumentContextInjector({
         activeTopicDocument: initialContext?.activeTopicDocument,

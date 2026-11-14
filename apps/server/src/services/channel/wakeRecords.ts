@@ -24,6 +24,7 @@ export const CHANNEL_WAKE_FOLLOWUP_REASONS = [
   'followup-window',
   'in-duty',
   'named-in-text',
+  'routing-deferred',
   'routing-uncertain',
 ] as const;
 
@@ -86,6 +87,9 @@ export const recordChannelWakeDecisions = async (
     const chosen = applied.status === 'assigned' && applied.recipients.includes(memberId);
     const answer = trace.answers?.[memberId];
     const finalReason = finalReasonFor(decision, applied.status, chosen, memberId, judgement);
+    // A woken member either led the message or followed the primary responder's reply.
+    const deferredBehind =
+      decision.status === 'assigned' ? decision.wakes?.[memberId]?.afterMemberId : undefined;
     const verdicts: SignalDecisionVerdict[] = [
       ...(judgement?.verdicts ?? []),
       ...(answer?.type === 'boolean'
@@ -114,6 +118,10 @@ export const recordChannelWakeDecisions = async (
               lastReplyAt: candidate.lastReplyAt ?? null,
               quiet: judgement?.quiet ?? false,
               silentWakes: candidate.silentWakes,
+              ...(chosen && {
+                responder: deferredBehind ? 'deferred' : 'primary',
+                ...(deferredBehind && { primaryMemberId: deferredBehind }),
+              }),
             },
           },
           outcome: chosen ? 'wake' : 'skip',

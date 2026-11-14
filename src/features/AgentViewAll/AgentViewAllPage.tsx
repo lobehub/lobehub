@@ -1,6 +1,6 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
+import { DEFAULT_USER_AVATAR_URL } from '@lobechat/const';
 import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import {
   Avatar,
@@ -366,7 +366,7 @@ const AgentViewAllPage = memo(() => {
       const groups = [...buckets.entries()].map(([userId, groupItems]) => ({
         // Same fallback as the row avatars — a member without a profile
         // avatar still gets the default one instead of a bare name.
-        avatar: (userId && authorByUserId.get(userId)?.avatar) || DEFAULT_AVATAR,
+        avatar: (userId && authorByUserId.get(userId)?.avatar) || DEFAULT_USER_AVATAR_URL,
         color: undefined as string | null | undefined,
         items: groupItems,
         key: `author:${userId || 'unknown'}`,

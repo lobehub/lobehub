@@ -27,6 +27,7 @@ import {
   DOCUMENT_FOLDER_TYPE,
   documentCommentMentions,
   documentComments,
+  documentHistories,
   documentLikes,
   documents,
   files,
@@ -808,6 +809,18 @@ export class DocumentModel {
         .set({ ...ownershipUpdate, ...visibilityUpdate })
         .where(inArray(files.parentId, ids));
 
+      // History reads filter on the denormalized scope. A workspace target
+      // filters on `workspace_id` alone, so authors keep their attribution; a
+      // personal target reads `user_id = owner`, so the new owner takes every version.
+      await (trx as LobeChatDatabase)
+        .update(documentHistories)
+        .set(
+          targetWorkspaceId
+            ? { workspaceId: targetWorkspaceId }
+            : { userId: targetUserId, workspaceId: null },
+        )
+        .where(inArray(documentHistories.documentId, ids));
+
       return { documentIds: ids };
     });
   };
@@ -842,9 +855,10 @@ export class DocumentModel {
         const currentId = queue.shift()!;
         if (seen.has(currentId)) continue;
         seen.add(currentId);
-        const original = byId.get(currentId);
-        /* v8 ignore next -- unreachable: the queue only holds documentId (the subtree root collectSubtree fetched by that id) and ids pushed from subtree rows, so byId always has it */
-        if (!original) continue;
+        // Invariant: the queue only holds documentId (the subtree root
+        // collectSubtree fetched by that id) and ids pushed from subtree rows,
+        // all of which are byId keys.
+        const original = byId.get(currentId)!;
 
         const newParentId =
           currentId === documentId ? null : (idMap.get(original.parentId!) ?? null);

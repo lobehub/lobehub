@@ -1,4 +1,5 @@
-import { createStaticStyles, Flexbox, ScrollShadow } from '@lobehub/ui';
+import { Flexbox, ScrollShadow } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
 import { useChatInputUploadKey } from '@/features/ChatInput/hooks/useChatInputUpload';
@@ -9,12 +10,7 @@ import ContextItem from './ContextItem';
 import ElementItem from './ElementItem';
 import SelectionItem from './SelectionItem';
 
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    overflow-x: scroll;
-    width: 100%;
-  `,
-}));
+const styles = stylex.create({ container: { overflowX: 'scroll', width: '100%' } });
 
 const ContextList = memo(() => {
   const contextSelectionKey = useChatInputStore((s) => s.contextSelectionKey);
@@ -42,7 +38,7 @@ const ContextList = memo(() => {
     <ScrollShadow
       hideScrollBar
       horizontal
-      className={styles.container}
+      className={stylex.props(styles.container).className}
       orientation={'horizontal'}
       size={8}
     >

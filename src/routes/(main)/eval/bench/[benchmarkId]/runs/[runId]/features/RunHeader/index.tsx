@@ -30,6 +30,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AgentAvatar from '@/components/AgentAvatar';
+import { benchmarkDatasetPath, runBackPath } from '@/features/LobeBench/experimentNavigation';
+import { useIsLobeBenchBenchmark } from '@/features/LobeBench/useIsLobeBenchBenchmark';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
@@ -200,6 +202,9 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
   const canStart = run.status === 'idle' || run.status === 'failed' || run.status === 'aborted';
   const [starting, setStarting] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+  const lobeBench = useIsLobeBenchBenchmark(benchmarkId);
+  const backPath = runBackPath({ benchmarkId, experimentId: run.experimentId, lobeBench });
+  const backToExperiment = lobeBench && backPath.includes('/experiments/');
 
   const snapshot = run.config?.agentSnapshot;
   const agentTitle = run.targetAgent?.title || t('run.detail.agent.unnamed');
@@ -224,7 +229,7 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
       okText: t('run.actions.delete'),
       onOk: async () => {
         await deleteRun(run.id);
-        navigate(`/eval/bench/${benchmarkId}`);
+        navigate(backPath);
       },
       title: t('run.actions.delete'),
     });
@@ -274,9 +279,11 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
   return (
     <Flexbox gap={16}>
       {/* Back link */}
-      <WorkspaceLink className={styles.backLink} to={`/eval/bench/${benchmarkId}`}>
+      <WorkspaceLink className={styles.backLink} to={backPath}>
         <ArrowLeft size={16} />
-        {t('run.detail.backToBenchmark')}
+        {backToExperiment
+          ? t('lobeBench.attempt.backToExperiment')
+          : t('run.detail.backToBenchmark')}
       </WorkspaceLink>
 
       {/* Header band — results-led: run name + status prominent, meta as a quiet stat row */}
@@ -300,7 +307,7 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
                 <WorkspaceLink
                   className={styles.datasetLink}
                   target="_blank"
-                  to={`/eval/bench/${benchmarkId}/datasets/${run.dataset.id}`}
+                  to={benchmarkDatasetPath(run.dataset.id, lobeBench)}
                 >
                   <span className={styles.metaItem}>{run.dataset.name}</span>
                 </WorkspaceLink>

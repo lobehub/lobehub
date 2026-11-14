@@ -146,7 +146,9 @@ describe('executeDeviceRpc', () => {
     };
 
     expect(result.skills.map((s) => s.name)).toEqual(['spa-routes']);
-    expect(result.instructions).toEqual([{ content: '# Agents', source: 'AGENTS.md' }]);
+    expect(result.instructions).toEqual([
+      { content: '# Agents', path: path.join(root, 'AGENTS.md'), source: 'AGENTS.md' },
+    ]);
     expect(deps.approveProjectRoot).toHaveBeenCalledWith(root);
   });
 

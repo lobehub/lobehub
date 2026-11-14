@@ -5,7 +5,7 @@ import { type BriefItem } from '@/store/brief/types';
 
 import { initialBriefListState } from './initialState';
 import { BRIEF_LIST_KEY } from './projection';
-import { briefListSelectors } from './selectors';
+import { briefListSelectors, briefNewsSelectors } from './selectors';
 
 const createState = (overrides: Partial<BriefStore> = {}) =>
   ({
@@ -54,5 +54,31 @@ describe('briefListSelectors', () => {
     it('should report loaded once the feed has a value, even an empty one', () => {
       expect(briefListSelectors.isBriefsInit(createState({ briefListMap: feed([]) }))).toBe(true);
     });
+  });
+});
+
+describe('briefNewsSelectors.paintableNewsDay', () => {
+  const DAY = '2026-07-31';
+  const newsState = (news: BriefItem[], source?: 'server' | 'storage') =>
+    createState({
+      briefNewsMap: { [DAY]: { day: DAY, hasEarlier: false, news } },
+      briefNewsReplica: {
+        entries: source ? { [DAY]: { pending: [], source, updatedAt: 1 } } : {},
+      },
+    });
+
+  it('is undefined before the day is hydrated or fetched', () => {
+    expect(briefNewsSelectors.paintableNewsDay(DAY)(createState())).toBeUndefined();
+  });
+
+  it('paints restored rows before the server answers', () => {
+    const state = newsState([{ id: 'b1' }] as unknown as BriefItem[], 'storage');
+    expect(briefNewsSelectors.paintableNewsDay(DAY)(state)?.news).toHaveLength(1);
+  });
+
+  // A stale empty snapshot must not claim "nothing happened today".
+  it('keeps a restored empty day loading until the server confirms it', () => {
+    expect(briefNewsSelectors.paintableNewsDay(DAY)(newsState([], 'storage'))).toBeUndefined();
+    expect(briefNewsSelectors.paintableNewsDay(DAY)(newsState([], 'server'))?.news).toEqual([]);
   });
 });

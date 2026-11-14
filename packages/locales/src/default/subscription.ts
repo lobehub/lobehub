@@ -82,11 +82,8 @@ export default {
   'compare.title': 'Plan comparison',
   'creditsChip.available': 'available',
   'creditsChip.balance': 'Balance {{amount}}',
-  'creditsChip.percent': '{{percent}}%',
-  'creditsChip.title': 'Usage left',
-  'creditsChip.tooltip': 'Usage left in the current billing cycle',
+  'creditsChip.viewDetails': 'View details',
   'creditsChip.viewUsage': 'View usage',
-  'creditsChip.balanceNote.free': 'Free usage has run out. Requests now use your balance.',
   'creditsChip.balanceNote.limit': 'Monthly limit reached. Requests now use your balance.',
   'creditsChip.balanceNote.subscription':
     'Subscription usage has run out. Requests now use your balance.',
@@ -113,6 +110,12 @@ export default {
     'Spend your {{credits}} balance once plan limits run out. No extra cost.',
   'limitation.insufficientBudget.rescue.overflow.cta': 'Use balance and continue',
   'limitation.insufficientBudget.rescue.overflow.title': 'Use your balance',
+  'limitation.insufficientBudget.rescue.limit.benefit':
+    '{{spent}} of {{limit}} used this month. Raise the limit to keep going on your balance.',
+  'limitation.insufficientBudget.rescue.limit.benefitPlain':
+    'Raise the limit to keep going on your balance.',
+  'limitation.insufficientBudget.rescue.limit.cta': 'Adjust limit',
+  'limitation.insufficientBudget.rescue.limit.title': 'Raise your monthly balance limit',
   'limitation.insufficientBudget.rescue.topup.benefitOverflow':
     "Top-up balance is used after your plan limits run out. We'll turn that on for you.",
   'limitation.insufficientBudget.rescue.upgrade.benefitMultiple':
@@ -368,7 +371,6 @@ export default {
   'credits.topUp.unitPrice': 'Unit price',
   'credits.topUp.unitPriceFormat': '${{price}} / $1',
   'credits.topUp.unitPriceSuffix': '/ $1',
-  'credits.topUp.bestValue.cta': 'View {{plan}} annual',
   'credits.topUp.bestValue.savings': 'Save ${{savings}} on this purchase',
   'credits.topUp.subscribeNudge.cta': 'View plans',
   'credits.topUp.subscribeNudge.desc':
@@ -743,6 +745,9 @@ export default {
   'plansModal.persistentSandbox.desc':
     'Files your agent writes in the cloud sandbox are discarded when the session ends. Upgrade to keep a persistent working directory that survives sessions and is shared across your topics.',
   'plansModal.persistentSandbox.title': 'Keep your sandbox files',
+  'plansModal.preciseSchedule.desc':
+    'Run scheduled tasks at any exact minute, not only on the hour or half hour. Upgrade to a paid plan to pick your own time.',
+  'plansModal.preciseSchedule.title': 'Schedule tasks at an exact time',
   'plansModal.artifactDeploymentLimit.desc':
     'Your Artifact hosting capacity has been reached. Upgrade to increase active deployments and per-site size limits.',
   'plansModal.artifactDeploymentLimit.title': 'Increase Artifact hosting capacity',
@@ -772,17 +777,9 @@ export default {
   'qa.list.embeddings.a':
     'Vector storage is not equal to the original size of your uploaded or imported dataset, but is calculated based on the vectorization of pure text content in your files. For example, a 1-page PDF file (1000-1500 characters) may only take up about 1 vector storage entry when extracted and vectorized into pure text. You can view your usage under "{{usage}}".',
   'qa.list.embeddings.q': 'How is vector storage calculated?',
-  'qa.list.free.a':
-    '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, we provide all registered users with {{credit}} of free usage per month, ready to use without complex configuration. If you need more usage, you can subscribe to {{starter}}, {{premium}} or {{ultimate}}.',
-  'qa.list.free.newA':
-    '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, every registered user gets {{credit}} of free usage per month, ready to use without complex configuration. For more usage, subscribe to {{plus}}, {{pro}} or {{max}}.',
-  'qa.list.free.limit.a':
-    '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, every registered user gets a free monthly usage limit, ready to use without complex configuration. If you need more usage, you can subscribe to {{starter}}, {{premium}} or {{ultimate}}.',
   'qa.list.free.limit.newA':
     '{{name}} has always adhered to open source principles. For professional developers, you can use all open source capabilities through self-deployment of the community version. In {{cloud}}, every registered user gets a free monthly usage limit, ready to use without complex configuration. For more usage, subscribe to {{plus}}, {{pro}} or {{max}}.',
   'qa.list.free.q': 'Can {{name}} be used for free?',
-  'qa.list.limit.a':
-    '{{cloud}} subscription plans are divided into {{starter}}, {{premium}} and {{ultimate}}, each providing a different usage allowance. If your current plan\'s usage is insufficient, we recommend upgrading. You can also top up your balance on the <fundsLink>"{{funds}}"</fundsLink> page for pay-as-you-go usage. Alternatively, you can set up a custom model API key to use API credits purchased from other sources.',
   'qa.list.limit.newA.balance':
     'Keep going with your balance: top up on the <fundsLink>{{funds}}</fundsLink> page, then turn on "{{overflow}}".',
   'qa.list.limit.newA.customApi': 'Add your own model API key and pay the model provider directly.',
@@ -947,7 +944,6 @@ export default {
   'usage.credit.addon.used': 'Top-up balance',
   'usage.credit.desc': 'Usage for AI chat, image generation, speech synthesis',
   'usage.credit.free.expired': 'Expired on {{date}}',
-  'usage.credit.free.used': 'Free usage',
   'usage.credit.referral.used': 'Referral rewards',
   'usage.credit.subscription.used': 'Subscription usage',
   'usage.credit.title': 'Usage',
@@ -972,25 +968,28 @@ export default {
   'usage.storage.sandboxStorage.used': 'Sandbox storage',
   'usage.window.rule.planUltraWeek': 'Ultra model weekly limit',
   'usage.storage.sandboxStorage.pool': 'Sandbox drives (workspace pool)',
-  'usage.remainingValue': 'Remaining: {{value}}',
-  'creditsChip.rolling.title': 'Usage left',
-  'creditsChip.rolling.tooltip': 'Plan usage left before the next limit',
   'usage.window.credits': 'Balance',
-  'usage.window.left': '{{percent}}% left',
   'usage.window.notStarted': 'Starts with your next request',
   'usage.window.overflow.desc': 'When a limit runs out, keep going on your balance.',
   'usage.window.overflow.limit': '{{spent}} / {{limit}} this month',
   'usage.window.overflow.off': 'Off: requests pause when a limit runs out',
   'usage.window.overflow.updateFailed': 'Update failed. Try again.',
   'usage.window.overflow.title': 'Use balance after limits',
+  'usage.window.overflow.belowSpend':
+    'Not above the {{spent}} used this month, so your balance stops covering requests.',
+  'usage.window.overflow.monthlyLimit': 'Monthly limit',
+  'usage.window.overflow.monthlyLimitDesc':
+    'The most your balance pays each month once plan limits run out. Leave empty for no limit.',
+  'usage.window.overflow.monthlyLimitTitle': 'Monthly balance limit',
+  'usage.window.overflow.noLimit': 'No limit',
+  'usage.window.overflow.save': 'Save',
+  'usage.window.overflow.spent': '{{spent}} used this month',
   'usage.window.resetsIn': 'Resets in {{duration}}',
   'usage.window.rule.plan5h': '5-hour limit',
   'usage.window.rule.plan7d': 'Weekly limit',
   'usage.window.rule.planMonth': 'Monthly limit',
   'creditUsageReminder.exhausted': "This billing cycle's subscription usage has run out",
-  'creditUsageReminder.left': "Only {{percent}} of this billing cycle's subscription usage is left",
   'creditUsageReminder.window.exhausted': '{{rule}} reached',
-  'creditUsageReminder.window.left': '{{rule}}: only {{percent}} left',
   'modelPricing.descUsd':
     '{{name}} bills AI model usage by tokens. The table below shows the price in USD per 1M tokens.',
   'creditsChip.rolling.topup': 'Top up',
@@ -998,8 +997,6 @@ export default {
   'tab.balance': 'Balance',
   'credits.topUp.titleUsd': 'Top up balance',
   'credits.topUp.customHintUsd': 'Any amount from ${{min}}',
-  'credits.topUp.bestValue.titleUsd':
-    'Top up from ${{price}} per $1 of balance with {{plan}} yearly',
   'credits.topUp.success.balance': '+{{amount}} balance',
   'credits.autoTopUp.descUsd': 'Make sure your balance never runs out',
   'credits.packages.titleUsd': 'My top-ups',
@@ -1013,11 +1010,15 @@ export default {
     '{{hobby}} does not include subscription usage; configure your own model API or top up your balance',
   'balance.subscriptionQuota': 'Subscription usage',
   'balance.subscriptionQuotaDesc': 'Subscription usage is spent first, then your balance',
-  'compare.hobbyQuotaTooltip': 'No monthly usage included; configure your own model API',
   'compare.monthlyQuota': 'Monthly usage',
   'plans.quota.freeLimit': 'Monthly limit, resets every month',
-  'plans.quota.freeTip': '{{amount}} free usage each month',
   'plans.quota.none': 'No built-in usage',
   'plans.quota.title': 'Usage',
-  'plans.quota.tooltip': 'Amount available for model usage each month',
+  'creditUsageReminder.used': "{{percent}} of this billing cycle's subscription usage is used",
+  'creditUsageReminder.window.used': '{{rule}}: {{percent}} used',
+  'creditsChip.rolling.usageTitle': 'Plan usage',
+  'creditsChip.rolling.usageTooltip': 'Plan usage toward the nearest limit',
+  'creditsChip.usageTitle': 'Usage',
+  'creditsChip.usageTooltip': 'Usage in the current billing cycle',
+  'usage.window.used': '{{percent}}% used',
 };

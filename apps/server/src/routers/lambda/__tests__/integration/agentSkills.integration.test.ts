@@ -114,6 +114,13 @@ const mockFetch = vi.fn(function () {
 });
 vi.stubGlobal('fetch', mockFetch);
 
+const researchSkillInput = (agentId: string) => ({
+  agentId,
+  content: '# Research Helper\n\nUse this skill for research.',
+  skillName: 'research-helper',
+  targetNamespace: 'agent' as const,
+});
+
 describe('Skill Router Integration Tests', () => {
   let serverDB: LobeChatDatabase;
   let agentDocumentModel: AgentDocumentModel;
@@ -504,12 +511,7 @@ describe('Skill Router Integration Tests', () => {
       const caller = agentDocumentRouter.createCaller(createTestContext(userId));
       const agentId = await createTestAgent(serverDB, userId);
 
-      const result = await caller.createSkillByPath({
-        agentId,
-        content: '# Research Helper\n\nUse this skill for research.',
-        skillName: 'research-helper',
-        targetNamespace: 'agent',
-      });
+      const result = await caller.createSkillByPath(researchSkillInput(agentId));
 
       if (!result) {
         throw new Error('Expected createSkill to return a skill file node');
@@ -562,12 +564,7 @@ describe('Skill Router Integration Tests', () => {
       const caller = agentDocumentRouter.createCaller(createTestContext(userId));
       const agentId = await createTestAgent(serverDB, userId);
 
-      await caller.createSkillByPath({
-        agentId,
-        content: '# Research Helper\n\nUse this skill for research.',
-        skillName: 'research-helper',
-        targetNamespace: 'agent',
-      });
+      await caller.createSkillByPath(researchSkillInput(agentId));
 
       await expect(
         caller.createSkillByPath({
@@ -623,12 +620,7 @@ describe('Skill Router Integration Tests', () => {
       const documentCaller = agentDocumentRouter.createCaller(createTestContext(userId));
       const agentId = await createTestAgent(serverDB, userId);
 
-      await skillCaller.createSkillByPath({
-        agentId,
-        content: '# Research Helper\n\nUse this skill for research.',
-        skillName: 'research-helper',
-        targetNamespace: 'agent',
-      });
+      await skillCaller.createSkillByPath(researchSkillInput(agentId));
 
       const id = await getManagedSkillBindingId({
         agentId,
@@ -649,12 +641,7 @@ describe('Skill Router Integration Tests', () => {
       const documentCaller = agentDocumentRouter.createCaller(createTestContext(userId));
       const agentId = await createTestAgent(serverDB, userId);
 
-      await skillCaller.createSkillByPath({
-        agentId,
-        content: '# Research Helper\n\nUse this skill for research.',
-        skillName: 'research-helper',
-        targetNamespace: 'agent',
-      });
+      await skillCaller.createSkillByPath(researchSkillInput(agentId));
 
       const id = await getManagedSkillBindingId({
         agentId,

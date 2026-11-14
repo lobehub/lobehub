@@ -1,5 +1,5 @@
 import { cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
-import { CalendarClock, HeartPulse, TagIcon, UserRound } from 'lucide-react';
+import { CalendarClock, FolderXIcon, HeartPulse, TagIcon, UserRound } from 'lucide-react';
 import { memo } from 'react';
 
 import TaskLabelDot from '@/features/TaskLabels/TaskLabelDot';
@@ -11,6 +11,7 @@ import PriorityLowIcon from '../features/icons/PriorityLowIcon';
 import PriorityMediumIcon from '../features/icons/PriorityMediumIcon';
 import PriorityNoneIcon from '../features/icons/PriorityNoneIcon';
 import PriorityUrgentIcon from '../features/icons/PriorityUrgentIcon';
+import TaskProjectChip from '../features/TaskProjectChip';
 import TaskStatusIcon from '../features/TaskStatusIcon';
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 import { useUserDisplayMeta } from '../shared/useUserDisplayMeta';
@@ -51,6 +52,12 @@ const TaskGroupPrefix = ({ group }: { group: TaskGroupMeta }) => {
     return <Icon icon={UserRound} size={14} />;
   }
 
+  // A named project's header is its badge alone — see `TaskGroupLabel`.
+  if (group.groupBy === 'project') {
+    if (group.projectId) return null;
+    return <Icon color={cssVar.colorTextDescription} icon={FolderXIcon} size={14} />;
+  }
+
   if (group.groupBy === 'priority') {
     const priority = group.priority ?? 0;
     const PriorityIcon =
@@ -87,15 +94,19 @@ interface TaskGroupLabelProps {
 const TaskGroupLabel = memo<TaskGroupLabelProps>(({ group }) => (
   <Flexbox horizontal align={'center'} flex={'none'} gap={6} style={{ overflow: 'hidden' }}>
     <TaskGroupPrefix group={group} />
-    <Text ellipsis weight={500}>
-      {group.groupBy === 'assignee' && group.assigneeId ? (
-        <AssigneeLabel agentId={group.assigneeId} />
-      ) : group.groupBy === 'member' && group.assigneeUserId ? (
-        <AssigneeUserLabel userId={group.assigneeUserId} />
-      ) : (
-        group.label
-      )}
-    </Text>
+    {group.groupBy === 'project' && group.projectId ? (
+      <TaskProjectChip projectId={group.projectId} />
+    ) : (
+      <Text ellipsis weight={500}>
+        {group.groupBy === 'assignee' && group.assigneeId ? (
+          <AssigneeLabel agentId={group.assigneeId} />
+        ) : group.groupBy === 'member' && group.assigneeUserId ? (
+          <AssigneeUserLabel userId={group.assigneeUserId} />
+        ) : (
+          group.label
+        )}
+      </Text>
+    )}
   </Flexbox>
 ));
 

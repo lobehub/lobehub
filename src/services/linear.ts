@@ -39,6 +39,7 @@ class LinearService {
     issueIds: string[];
     projectId: string;
     syncComments?: boolean;
+    syncLabels?: boolean;
   }) => lambdaClient.linear.startImport.mutate(params);
 
   cancelSync = async (projectId: string, jobId: string) =>
@@ -62,7 +63,7 @@ class LinearService {
   /** Starts a background run of a saved rule; returns the job id. */
   startRuleSync = async (
     ruleId: string,
-    options: { includeArchived?: boolean; syncComments?: boolean } = {},
+    options: { includeArchived?: boolean; syncComments?: boolean; syncLabels?: boolean } = {},
   ) => lambdaClient.linear.startRuleSync.mutate({ ruleId, ...options });
 }
 

@@ -359,8 +359,6 @@
   "channel.qq.webhookMigrationTitle": "建議遷移至 WebSocket 模式",
   "channel.quickSetup.connect.desc": "儲存您在上方填寫的內容並使機器人上線。其他設定可以稍後更改。",
   "channel.quickSetup.connect.title": "儲存並連接",
-  "channel.quickSetup.discord.bot.desc": "在機器人頁面，重置令牌並複製它，然後開啟訊息內容意圖。",
-  "channel.quickSetup.discord.bot.title": "獲取機器人令牌並允許訊息內容",
   "channel.quickSetup.discord.create.desc": "在開發者入口網站中，點擊「新建應用程式」並命名。",
   "channel.quickSetup.discord.create.title": "創建應用程式",
   "channel.quickSetup.discord.credentials.desc": "兩者都在「一般資訊」中。",

@@ -28,6 +28,7 @@ export const defaultProxySettings: NetworkProxySettings = {
 export const STORE_DEFAULTS: ElectronMainStore = {
   appTrayVisible: true,
   dataSyncConfig: { storageMode: 'cloud' },
+  debugLoggingEnabled: false,
   encryptedTokens: {},
   gatewayDeviceId: '',
   gatewayEnabled: true,
@@ -41,6 +42,7 @@ export const STORE_DEFAULTS: ElectronMainStore = {
   localFileWorkspaceRoots: [],
   networkProxy: defaultProxySettings,
   pendingRestoreRoute: '',
+  remoteDebuggingEnabled: false,
   shortcuts: DEFAULT_ELECTRON_DESKTOP_SHORTCUTS,
   storagePath: appStorageDir,
   themeMode: 'system',

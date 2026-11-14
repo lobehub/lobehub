@@ -75,4 +75,23 @@ describe('ContactListBody', () => {
     );
     expect(screen.queryByText('Turns ideas into product specs')).not.toBeInTheDocument();
   });
+
+  it('opens the contact card instead of the profile editor', () => {
+    agentList.init = true;
+    agentList.items = [
+      { id: 'agt_1', title: 'Product Helper' },
+      { id: 'grp_1', title: 'Launch Crew', type: 'group' },
+    ];
+
+    render(createElement(ContactListBody));
+
+    expect(screen.getByRole('link', { name: 'Product Helper' })).toHaveAttribute(
+      'href',
+      '/agents/agt_1',
+    );
+    expect(screen.getByRole('link', { name: 'Launch Crew' })).toHaveAttribute(
+      'href',
+      '/agents/grp_1',
+    );
+  });
 });

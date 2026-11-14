@@ -16,6 +16,16 @@ export interface ElectronMainStore {
   };
   dataSyncConfig: DataSyncConfig;
   /**
+   * Settings → About → Debug logs: packaged builds also write `debug` records to
+   * `<userData>/logs/*.jsonl`. Dev builds always do.
+   */
+  debugLoggingEnabled: boolean;
+  /**
+   * Epoch milliseconds at which `debugLoggingEnabled` turns itself off. Absent means it
+   * stays on until the user turns it off (`modules/debugLogging`).
+   */
+  debugLoggingExpiresAt?: number;
+  /**
    * Explicit completion state for the multi-step desktop onboarding flow.
    * Undefined preserves the legacy behavior for users who completed onboarding
    * before this marker existed.
@@ -83,6 +93,12 @@ export interface ElectronMainStore {
   localFileWorkspaceRoots: string[];
   networkProxy: NetworkProxySettings;
   pendingRestoreRoute: string;
+  /**
+   * Settings → About → Remote Debugging: open the Chromium DevTools protocol port on every
+   * launch, even in packaged builds, so agents can evaluate code, read store
+   * snapshots and take screenshots. Off by default; a change applies on restart.
+   */
+  remoteDebuggingEnabled: boolean;
   shortcuts: Record<string, string>;
   storagePath: string;
   themeMode: 'dark' | 'light' | 'system';

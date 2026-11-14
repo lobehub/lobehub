@@ -47,6 +47,7 @@ import { useTaskStore } from '@/store/task';
 import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
+import { electronStylish } from '@/styles/electron';
 import { isForbiddenError } from '@/utils/forbiddenError';
 
 import AssigneeAvatar from '../../features/AssigneeAvatar';
@@ -330,6 +331,7 @@ const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false })
     <Flexbox
       horizontal
       align={'center'}
+      className={electronStylish.nodrag}
       flex={1}
       gap={8}
       style={{ maxWidth: '100%', minWidth: 0, overflow: 'hidden' }}
@@ -371,7 +373,7 @@ const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false })
   );
 
   const actions = !topicId ? null : (
-    <Flexbox horizontal align={'center'} gap={4}>
+    <Flexbox horizontal align={'center'} className={electronStylish.nodrag} gap={4}>
       <ActionIcon
         icon={expanded ? Minimize2 : Maximize2}
         size={SHARE_ICON_SIZE}

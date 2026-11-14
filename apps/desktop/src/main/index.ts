@@ -2,6 +2,7 @@ import './pre-app-init';
 
 import { App } from './core/App';
 import { installProcessErrorHandlers } from './process-error-handlers';
+import { installStructuredLogging } from './utils/structuredLog';
 
 const mainBootstrapKey = '__LOBEHUB_DESKTOP_MAIN_BOOTSTRAPPED__' as const;
 const mainProcessGlobal = globalThis as typeof globalThis & {
@@ -15,6 +16,10 @@ const mainProcessGlobal = globalThis as typeof globalThis & {
 // are assigned to neutral chunks in the Vite config.
 if (!mainProcessGlobal[mainBootstrapKey]) {
   mainProcessGlobal[mainBootstrapKey] = true;
+
+  // First, so the error handlers and every window's console land in
+  // `<userData>/logs/*.jsonl`; lines logged while modules imported are buffered.
+  installStructuredLogging();
 
   // Guard the main process against transient network blips (Wi-Fi/VPN switch,
   // system sleep) emitted by Electron's net stack as uncaught exceptions.

@@ -539,6 +539,23 @@ export function sharedRendererPlugins(options: SharedRendererOptions) {
   ];
 }
 
+/**
+ * `LOBE_REACT_PROFILING=1` builds the renderer against React's profiling build,
+ * so `<Profiler>` callbacks fire in a production bundle. Render-budget E2E runs
+ * read the counts through `window.__LOBE_RENDER_PROFILE__`.
+ */
+export const isReactProfilingBuild = () => process.env.LOBE_REACT_PROFILING === '1';
+
+/**
+ * Only `react-dom/client` is swapped: `react-dom/profiling` re-exports the client
+ * API and still imports `react-dom` for the shared internals, so `createPortal`
+ * and `flushSync` callers keep using the same renderer instance.
+ */
+export const sharedRendererAlias = () =>
+  isReactProfilingBuild()
+    ? [{ find: /^react-dom\/client$/, replacement: 'react-dom/profiling' }]
+    : [];
+
 export function sharedRendererDefine(options: { isElectron: boolean; isMobile: boolean }) {
   const nextPublicDefine = Object.fromEntries(
     Object.entries(process.env)
@@ -551,6 +568,7 @@ export function sharedRendererDefine(options: { isElectron: boolean; isMobile: b
     '__DEV__': process.env.NODE_ENV !== 'production' ? 'true' : 'false',
     '__ELECTRON__': JSON.stringify(options.isElectron),
     '__MOBILE__': JSON.stringify(options.isMobile),
+    '__REACT_PROFILING__': JSON.stringify(isReactProfilingBuild()),
     '__REACT_SCAN__': process.env.REACT_SCAN === 'true' ? 'true' : 'false',
     '__TEST__': 'false',
     ...nextPublicDefine,

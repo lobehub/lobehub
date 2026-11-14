@@ -340,6 +340,8 @@ export default {
     'For Gemini 3.1 Pro Preview models; controls thinking depth with low/medium/high levels.',
   'providerModels.item.modelConfig.extendParams.options.thinkingLevel4.hint':
     'For Gemini 3.1 Flash Image models; toggle thinking on/off.',
+  'providerModels.item.modelConfig.extendParams.options.thinkingLevel5.hint':
+    'For Gemini 4 Hydrogen models; controls thinking depth with low/medium/high/xhigh levels.',
   'providerModels.item.modelConfig.extendParams.options.urlContext.hint':
     'For Gemini series; supports providing URL context.',
   'providerModels.item.modelConfig.extendParams.placeholder':
@@ -373,6 +375,11 @@ export default {
     'Set the maximum number of tokens supported by the model',
   'providerModels.item.modelConfig.tokens.title': 'Maximum Context Window',
   'providerModels.item.modelConfig.tokens.unlimited': 'Unlimited',
+  'providerModels.item.modelConfig.ttsVoice.extra':
+    'Used when a speech request does not name a voice. Leave empty to use the model default.',
+  'providerModels.item.modelConfig.ttsVoice.placeholder': 'Model default ({{voice}})',
+  'providerModels.item.modelConfig.ttsVoice.placeholderCustom': 'Enter a voice ID',
+  'providerModels.item.modelConfig.ttsVoice.title': 'Default Voice',
   'providerModels.item.modelConfig.type.extra':
     'Different model types have distinct use cases and capabilities',
   'providerModels.item.modelConfig.type.options.asr': 'Speech-to-Text',

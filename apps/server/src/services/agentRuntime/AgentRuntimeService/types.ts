@@ -1,6 +1,8 @@
 import type { Agent, AgentState, GeneralAgentConfig } from '@lobechat/agent-runtime';
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import {
+  type CancelVirtualSubAgentParams,
+  type CancelVirtualSubAgentResult,
   type ExecSubAgentParams,
   type ExecSubAgentResult,
   type ExecVirtualSubAgentParams,
@@ -127,6 +129,14 @@ export interface InterventionLifecycleCheckpoint {
  * top-level option. One named home for the whole upward-call surface.
  */
 export interface AgentRuntimeDelegate {
+  /**
+   * Stop a running `lobe-agent.callSubAgent` child on behalf of the agent that
+   * dispatched it (`lobe-agent.cancelSubAgent`). The thread and its history are
+   * kept, so the same sub-agent can be continued afterwards.
+   */
+  cancelVirtualSubAgent?: (
+    params: CancelVirtualSubAgentParams,
+  ) => Promise<CancelVirtualSubAgentResult>;
   /**
    * Hand the topic's finished background sub-agent results to their parent
    * agent as a new turn, unless a run of that topic is still going (its own

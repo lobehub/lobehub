@@ -18,7 +18,7 @@ import Recommendations, { useRecommendationsVisible } from '@/features/Recommend
 // acceptance workspace into its chunk for one hook.
 import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useBriefStore } from '@/store/brief';
-import { briefListSelectors } from '@/store/brief/selectors';
+import { briefListSelectors, briefNewsSelectors } from '@/store/brief/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useGoalStore } from '@/store/goal';
@@ -162,16 +162,27 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // of serving yesterday under a "Daily brief" label until remount.
   const newsDay = dayjs().subtract(newsDayOffset, 'day').format('YYYY-MM-DD');
   const useFetchNewsByDay = useBriefStore((s) => s.useFetchNewsByDay);
-  const newsSWR = useFetchNewsByDay(isLogin === true && showRailSections, cacheScope, newsDay);
-  const dayNews = newsSWR.data?.news;
-  const hasEarlierNews = newsSWR.data?.hasEarlier ?? false;
-  // `keepPreviousData` shows the previous day's payload while a page flip is in
-  // flight, so everything the user SEES (title, empty copy, arrow gating) must
-  // derive from the payload's own day — not from `newsDayOffset`, which has
-  // already moved on. Otherwise a slow flip renders "Yesterday's brief" over
-  // today's items. Clicks navigate relative to the shown day for the same
-  // reason: WYSIWYG paging self-heals any offset/data divergence.
-  const shownNewsOffset = newsSWR.data ? resolveShownNewsOffset(newsSWR.data.day) : 0;
+  const newsSync = useFetchNewsByDay(isLogin === true && showRailSections, newsDay);
+  // While a page flip is in flight the previous day stays on screen. Only the
+  // day *key* is remembered here — the row itself is read from the replica,
+  // which clears on a scope switch, so another identity's digest never shows.
+  // A restored empty day is not the server's answer (it may just be stale), so
+  // it is not paintable — no "nothing today" copy — until confirmed.
+  const requestedNews = useBriefStore(briefNewsSelectors.paintableNewsDay(newsDay));
+  const [settledNewsDay, setSettledNewsDay] = useState(newsDay);
+  if (requestedNews && settledNewsDay !== newsDay) setSettledNewsDay(newsDay);
+  const newsData = useBriefStore(
+    briefNewsSelectors.paintableNewsDay(requestedNews ? newsDay : settledNewsDay),
+  );
+  const dayNews = newsData?.news;
+  const hasEarlierNews = newsData?.hasEarlier ?? false;
+  // The previous day's payload shows while a page flip is in flight, so
+  // everything the user SEES (title, empty copy, arrow gating) must derive
+  // from the payload's own day — not from `newsDayOffset`, which has already
+  // moved on. Otherwise a slow flip renders "Yesterday's brief" over today's
+  // items. Clicks navigate relative to the shown day for the same reason:
+  // WYSIWYG paging self-heals any offset/data divergence.
+  const shownNewsOffset = newsData ? resolveShownNewsOffset(newsData.day) : 0;
 
   // Goals are the one home feed that is not about today: they run for days, so
   // the dashboard is where you check on them. Behind the same lab toggle as the
@@ -386,15 +397,15 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   // A first-load failure of the day feed must not make the whole section
   // vanish — an absent "Daily brief" is indistinguishable from having no
   // briefs, so surface the error with a retry like the topic feed does.
-  if (showRailSections && newsSWR.error && !dayNews)
+  if (showRailSections && newsSync.error && !dayNews)
     sections.push({
       key: 'news-error',
       label: t('inbox.news.title'),
       node: (
         <AsyncError
-          error={newsSWR.error}
+          error={newsSync.error}
           variant={'inline'}
-          onRetry={() => void newsSWR.mutate()}
+          onRetry={() => void newsSync.revalidate()}
         />
       ),
     });
@@ -409,7 +420,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const showNewsSection =
     showRailSections && !!dayNews && (news.length > 0 || shownNewsOffset > 0 || hasEarlierNews);
   if (showNewsSection) {
-    const newsDate = dayjs(newsSWR.data!.day);
+    const newsDate = dayjs(newsData!.day);
     const newsLabel =
       shownNewsOffset === 0
         ? t('inbox.news.title')
@@ -426,9 +437,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
     sections.push({
       action: (
         <Flexbox horizontal align={'center'} gap={4}>
-          {unresolvedNews.length > 0 && (
-            <MarkAllReadButton news={unresolvedNews} onResolved={() => void newsSWR.mutate()} />
-          )}
+          {unresolvedNews.length > 0 && <MarkAllReadButton news={unresolvedNews} />}
           <ActionIcon
             disabled={!hasEarlierNews}
             icon={ChevronLeftIcon}
@@ -493,7 +502,7 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
       // back when the cards land.
       const railFeedsSettled =
         (!showGoals || goals !== undefined || Boolean(goalsSWR.error)) &&
-        (!showRailSections || Boolean(newsSWR.data) || Boolean(newsSWR.error));
+        (!showRailSections || Boolean(dayNews) || Boolean(newsSync.error));
 
       if (!railFeedsSettled)
         return (

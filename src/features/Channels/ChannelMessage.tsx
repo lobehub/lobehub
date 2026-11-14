@@ -24,6 +24,7 @@ import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import CollapsibleContent from '@/components/CollapsibleContent';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { ChatItem } from '@/features/Conversation/ChatItem';
@@ -36,12 +37,14 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { authorAvatar, isCurrentUserAuthor, memberName } from './memberName';
 import { CHANNEL_MENTION_TAG, remarkChannelMentions } from './mentionMarkdown';
 import { MessageAttachments } from './MessageAttachments';
-import { channelTimeFormatters } from './messagePresentation';
+import { channelMessageTime, channelTimeFormatters } from './messagePresentation';
 import { MessageFailureMark, MessageRoutingStatus } from './MessageReceipts';
 import { showsReplyQuote } from './replyQuote';
 import type { ReplyTopic } from './ReplyTopicPanel';
+import { ReplyWorks } from './ReplyWorks';
 import { styles } from './styles';
 import type { ChannelThreadDraft } from './threadDraft';
+import { ThreadPreviewCard } from './ThreadPreviewCard';
 import type { ChannelReplyTarget } from './useReplyTarget';
 
 const MentionChip = ({ children }: { children?: ReactNode }) => (
@@ -112,13 +115,16 @@ export const ChannelMessage = ({
     !isRoot &&
     message.routingStatus !== 'unassigned' &&
     !detail.jobs.some((job) => job.messageId === message.id && job.status === 'failed');
+  // A continuation sits under its header, so its hover stamp only needs the clock.
   const timestamp = (
     <time
       dateTime={date.toISOString()}
       title={timeFormats.full.format(date)}
       {...stylex.props(styles.messageTime)}
     >
-      {timeFormats.time.format(date)}
+      {compact
+        ? timeFormats.time.format(date)
+        : channelMessageTime(date, { locale: i18n.language, yesterday: t('date.yesterday') })}
     </time>
   );
   const isOwnMessage = useUserStore((s) =>
@@ -156,6 +162,7 @@ export const ChannelMessage = ({
                 agentId: agentAuthorId,
                 avatar: message.author.avatar,
                 name: message.author.name || t('unnamedAgent'),
+                title: message.sourceTopicTitle,
                 topicId: sourceTopicId,
               }),
           },
@@ -207,6 +214,7 @@ export const ChannelMessage = ({
     >
       {compact && <span {...stylex.props(styles.continuationTime)}>{timestamp}</span>}
       <ChatItem
+        quietHeader
         showAvatar
         showTitle
         agentId={message.author.type === 'agent' ? message.author.id : undefined}
@@ -217,18 +225,6 @@ export const ChannelMessage = ({
         placement="left"
         showHeader={!compact}
         style={{ paddingInlineStart: 48 }}
-        actionAddon={
-          thread ? (
-            <Button
-              icon={GitBranch}
-              size="small"
-              type="text"
-              onClick={() => onOpenThread?.(thread.id)}
-            >
-              {t('openThread')}
-            </Button>
-          ) : undefined
-        }
         avatar={{
           avatar: authorAvatar(message.author),
           title: message.author.name || t('deletedMember'),
@@ -251,7 +247,15 @@ export const ChannelMessage = ({
                   title: message.author.name,
                 }}
               >
-                <span style={{ cursor: 'pointer', display: 'inline-flex' }}>{avatar}</span>
+                <span style={{ cursor: 'pointer', display: 'inline-flex' }}>
+                  <AgentAvatar
+                    agentId={agentAuthorId}
+                    avatar={message.author.avatar}
+                    name={message.author.name}
+                    shape={'circle'}
+                    size={36}
+                  />
+                </span>
               </AgentProfilePopup>
             ) : (
               avatar
@@ -260,6 +264,27 @@ export const ChannelMessage = ({
         )}
         message={
           <Flexbox gap={8}>
+            {message.via && (
+              // Sent as this person's request, but written by an Agent in another Channel; a
+              // receipt brings that Channel's answer back, under the Agent that gave it.
+              <Flexbox horizontal align={'center'} gap={6}>
+                <AgentAvatar
+                  agentId={message.via.agentId}
+                  avatar={message.via.avatar ?? undefined}
+                  name={message.via.name}
+                  shape={'circle'}
+                  size={16}
+                />
+                <Text fontSize={12} type="secondary">
+                  {message.receipt
+                    ? t('message.relayReplyFrom', {
+                        channel: message.receipt.channelTitle,
+                        name: message.via.name,
+                      })
+                    : t('message.relayedBy', { name: message.via.name })}
+                </Text>
+              </Flexbox>
+            )}
             {!isRoot &&
               showsReplyQuote(message) &&
               (message.replyTo ? (
@@ -300,6 +325,14 @@ export const ChannelMessage = ({
               ) : (
                 <MessageText content={message.content} names={mentionNames} />
               ))}
+            {!!message.works?.length && <ReplyWorks works={message.works} />}
+            {thread && (
+              <ThreadPreviewCard
+                root={message}
+                thread={thread}
+                onOpen={() => onOpenThread?.(thread.id)}
+              />
+            )}
           </Flexbox>
         }
         titleAddon={

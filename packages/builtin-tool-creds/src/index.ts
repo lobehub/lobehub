@@ -13,6 +13,12 @@ export {
   resolveAvailableComposioServices,
   type UserCredsContext,
 } from './helpers';
+export {
+  buildInjectCredsResult,
+  type InjectCredsResultInput,
+  type InjectCredsResultSummary,
+  resolveEnvVarsByKey,
+} from './injectResult';
 export { CredsIdentifier, CredsManifest } from './manifest';
 export { systemPrompt } from './systemRole';
 export {

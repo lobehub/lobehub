@@ -201,6 +201,9 @@ export class WorkModel {
     rootOperationIds?: string[] | null;
   }) => queries.listByRootOperations(this.ctx, params);
 
+  /** See {@link queries.listSummariesByIds}. */
+  listSummariesByIds = (workIds: string[]) => queries.listSummariesByIds(this.ctx, workIds);
+
   listSummariesByRootOperations = (params: {
     includeFileWorks?: boolean;
     limit?: number;

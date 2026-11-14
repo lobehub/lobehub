@@ -9,6 +9,8 @@ import { matchesLoadRules } from '../../policies/agentDocumentLoadPolicy';
 export type { AgentDocumentLoadRule, AgentDocumentLoadRules };
 export type { AgentDocumentPolicyLoad };
 
+export * from './indexSnapshot';
+
 export const AGENT_DOCUMENT_INJECTION_POSITIONS = [
   'after-first-user',
   'before-first-user',

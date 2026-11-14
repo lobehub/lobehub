@@ -91,7 +91,7 @@ describe('application generation chains', () => {
       recentMessages: ['alice: deploy failed again'],
     });
 
-    expect(BOT_REPLY_OPENER_PROMPT_VERSION).toBe('v2');
+    expect(BOT_REPLY_OPENER_PROMPT_VERSION).toBe('v3');
     expect(BOT_REPLY_OPENER_JSON_SCHEMA.name).toBe('bot_reply_opener');
     expect(BOT_REPLY_OPENER_JSON_SCHEMA.schema.required).toEqual([
       'acknowledge',
@@ -119,6 +119,22 @@ describe('application generation chains', () => {
     // A threadless platform's group chat is neither a thread nor a DM.
     expect(messages[1].content).not.toContain('direct message');
     expect(messages[1].content).not.toContain('may move the conversation');
+  });
+
+  it('tells a Channel opener that its acknowledgement announces the thread opening under it', () => {
+    const channel = chainBotReplyOpener({
+      ackPlacement: 'before-thread',
+      canOpenThread: true,
+      message: '帮我排查昨天部署失败的原因',
+    });
+    expect(channel.messages[1].content).toContain('the thread you choose opens under it');
+    expect(channel.messages[1].content).toContain('you are moving this into a thread');
+    expect(channel.messages[1].content).toContain('let me look into this');
+
+    // An IM bot posts its acknowledgement inside the thread it opened: no announcement.
+    const bot = chainBotReplyOpener({ canOpenThread: true, message: '帮我排查昨天部署失败的原因' });
+    expect(bot.messages[1].content).not.toContain('moving this into a thread');
+    expect(bot.messages[0].content).toBe(channel.messages[0].content);
   });
 
   it('keeps the bot-wake classifier messages, schema, and version together', () => {

@@ -88,10 +88,41 @@ describe('generate tts', () => {
       input: 'hello',
       model: 'tts-1',
       params: undefined,
-      provider: 'openai',
+      provider: undefined,
       speed: undefined,
       voice: undefined,
     });
+  });
+
+  it('lets the server pick the provider of a bare Gemini TTS model id', async () => {
+    await run(
+      '你好，Gemini',
+      '-m',
+      'gemini-3.8-flash-tts',
+      '--voice',
+      'Kore',
+      '--instructions',
+      'Say cheerfully',
+      '-o',
+      output,
+    );
+
+    expect(synthesize).toHaveBeenCalledWith({
+      input: '你好，Gemini',
+      model: 'gemini-3.8-flash-tts',
+      params: { instructions: 'Say cheerfully' },
+      provider: undefined,
+      speed: undefined,
+      voice: 'Kore',
+    });
+  });
+
+  it('sends an explicit provider for a Gemini TTS model', async () => {
+    await run('hello', '-p', 'google', '-m', 'gemini-2.5-flash-preview-tts', '-o', output);
+
+    expect(synthesize).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gemini-2.5-flash-preview-tts', provider: 'google' }),
+    );
   });
 
   it('names the default output file after the returned format', async () => {

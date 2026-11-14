@@ -18,6 +18,9 @@ import type { Transaction } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
 import { ChannelError } from './error';
 
+/** Why a deferred `followup` has not started; see {@link deliver} and `claimJob`. */
+export const AWAITING_PRIMARY_REASON = 'Waiting for the first responder to finish';
+
 /** The Thread a message belongs to, or null for the main channel. */
 export const findThread = async (
   tx: Transaction,
@@ -118,6 +121,8 @@ export const pairedAgent = async (
  * in a new directory. Returns the ids of the Agents that received a job.
  *
  * `wakes` records why each member was woken; a member without one owes an answer (`mention`).
+ * A wake deferred behind the message's primary responder (`afterMemberId`) is queued as
+ * `awaiting_primary` from the start, so it never reads as a reply in progress before it can run.
  */
 export const deliver = async (
   tx: Transaction,
@@ -139,6 +144,8 @@ export const deliver = async (
         requesterMemberId,
         threadId: message.threadId,
         wake: wakes?.[agent.id] ?? null,
+        blockedCode: wakes?.[agent.id]?.afterMemberId ? ('awaiting_primary' as const) : null,
+        blockedReason: wakes?.[agent.id]?.afterMemberId ? AWAITING_PRIMARY_REASON : null,
       })),
     )
     .onConflictDoNothing();

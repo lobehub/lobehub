@@ -2164,6 +2164,7 @@ table documents {
   editor_data jsonb
   slug varchar(255)
   workspace_id text
+  created_by_agent_id text
   visibility text [not null, default: 'public']
   deleted_at "timestamp with time zone"
   is_deleted boolean
@@ -5686,6 +5687,7 @@ table workspace_members {
   role text [not null, default: 'member']
   title text
   responsibilities text
+  config jsonb [not null, default: `{}`]
   joined_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
   deleted_at "timestamp with time zone"

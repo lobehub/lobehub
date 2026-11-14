@@ -94,15 +94,6 @@ describe('pageAgentRuntime initPage with collaboration', () => {
     expect(room.pushes[0]).toMatchObject({ bootstrap: true });
     expect(room.pushes[1]).toMatchObject({ actor: 'agent:u1' });
 
-    const projected = await projectPageState(Y.encodeStateAsUpdate(room.doc));
-    expect(projected.markdown).toContain('new body');
-    expect(projected.markdown).not.toContain('para one');
-    expect(projected.title).toBe('Fresh');
-  });
-
-  it('persists the edit right away as one AI version of the agent run', async () => {
-    await createRuntime().initPage({ markdown: '# Fresh\n\nnew body' }, ctx);
-
     expect(store.updates).toHaveLength(1);
     expect(store.updates[0].params).toMatchObject({
       history: { agentId: 'agt_1', editorIds: ['u1'], operationId: 'op_root' },
@@ -110,6 +101,11 @@ describe('pageAgentRuntime initPage with collaboration', () => {
       saveSource: 'llm_call',
     });
     expect(store.updates[0].params.content).toContain('new body');
+
+    const projected = await projectPageState(Y.encodeStateAsUpdate(room.doc));
+    expect(projected.markdown).toContain('new body');
+    expect(projected.markdown).not.toContain('para one');
+    expect(projected.title).toBe('Fresh');
   });
 
   it('writes a personal page on its stored row without opening a room', async () => {

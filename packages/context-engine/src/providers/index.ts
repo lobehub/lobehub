@@ -8,6 +8,7 @@ export { AgentBuilderContextInjector } from './AgentBuilderContextInjector';
 export {
   AGENT_DOCUMENT_INJECTION_POSITIONS,
   AgentDocumentBeforeSystemInjector,
+  AgentDocumentChangesInjector,
   AgentDocumentContextInjector,
   AgentDocumentMessageInjector,
   AgentDocumentSystemAppendInjector,
@@ -78,7 +79,10 @@ export type {
 export type {
   AgentContextDocument,
   AgentDocumentBeforeSystemInjectorConfig,
+  AgentDocumentChange,
+  AgentDocumentChangesByMessage,
   AgentDocumentContextInjectorConfig,
+  AgentDocumentIndexSnapshot,
   AgentDocumentInjectionPosition,
   AgentDocumentLoadRule,
   AgentDocumentLoadRules,

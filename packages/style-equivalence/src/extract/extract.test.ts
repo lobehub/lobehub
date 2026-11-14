@@ -49,6 +49,12 @@ describe('extractFile', () => {
   it('finds the same element and condition variable on both sides of a cx → stylex.props migration', () => {
     const before = extractFile(base, 'a.tsx', options);
     const after = extractFile(head, 'a.tsx', options);
+    expect(before.prelude).toContain(
+      "import { createStaticStyles, cx, Flexbox } from '@lobehub/ui';",
+    );
+    expect(before.prelude).toContain('const styles = createStaticStyles(');
+    expect(before.prelude).not.toContain('useStore');
+    expect(before.prelude).not.toContain('indicator');
     expect(before.styleSymbols).toEqual(['styles']);
     expect(after.styleSymbols).toEqual(['styles']);
     for (const result of [before, after]) {
@@ -96,14 +102,6 @@ export const Item = () => {
     expect(elements[0].bindings).toEqual([
       { expr: 'stylex.props(styles.a)', prop: '...', spread: true },
     ]);
-  });
-
-  it('keeps only the style declaration closure in the prelude', () => {
-    const { prelude } = extractFile(base, 'a.tsx', options);
-    expect(prelude).toContain("import { createStaticStyles, cx, Flexbox } from '@lobehub/ui';");
-    expect(prelude).toContain('const styles = createStaticStyles(');
-    expect(prelude).not.toContain('useStore');
-    expect(prelude).not.toContain('indicator');
   });
 
   it('imports the stylex namespace when the styles come from another module', () => {

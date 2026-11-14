@@ -26,6 +26,73 @@ export interface SandboxStorageFileEntry {
   size?: number;
 }
 
+/**
+ * What a drive's space goes to, in the categories the storage analysis sorts
+ * it into. `dependencies` and `cache` (caches and build output) can be
+ * regenerated; the rest cannot, and `environments` is the runtime's own
+ * snapshot store, deleted through the environment, never as files.
+ */
+export const SANDBOX_STORAGE_CATEGORIES = [
+  'dependencies',
+  'cache',
+  'archives',
+  'media',
+  'git',
+  'environments',
+  'other',
+] as const;
+
+export type SandboxStorageCategory = (typeof SANDBOX_STORAGE_CATEGORIES)[number];
+
+export interface SandboxStorageAnalysisItem {
+  bytes: number;
+  category: SandboxStorageCategory;
+  /** `environments` only: the stored environment (instance id) this is. */
+  environment?: string;
+  isDirectory: boolean;
+  /** Relative to the drive's root. */
+  path: string;
+  /** Deletable without asking: a dependency directory, a cache or build output. */
+  regenerable: boolean;
+}
+
+export interface SandboxStorageAnalysisResult {
+  categories: { bytes: number; category: SandboxStorageCategory; items: number }[];
+  items: SandboxStorageAnalysisItem[];
+  largestDirectories: { bytes: number; path: string }[];
+  largestFiles: { bytes: number; category: SandboxStorageCategory; path: string }[];
+  /** A delete since the scan could not be subtracted exactly; scan again for exact figures. */
+  stale?: boolean;
+  totalBytes: number;
+}
+
+export interface SandboxStorageAnalysis {
+  finishedAt?: string;
+  /** Snapshot so far while scanning; the final figures once `done`. */
+  result?: SandboxStorageAnalysisResult;
+  scannedBytes: number;
+  startedAt?: string;
+  /** `scanning`: this call advanced the scan; `running`: another call is advancing it. */
+  status: 'done' | 'running' | 'scanning';
+}
+
+export interface SandboxStorageDeleteResult {
+  deleted: string[];
+  /** Everything requested is gone or failed; otherwise call again with `pending`. */
+  done: boolean;
+  /** Paths the volume refused to remove (permissions, busy); the rest of the batch still ran. */
+  failed?: { message: string; path: string }[];
+  freedBytes: number;
+  missing: string[];
+  pending: string[];
+}
+
+export interface SandboxStorageExportResult {
+  contentType: string;
+  kind: 'directory' | 'file';
+  size: number;
+}
+
 export interface SandboxStorageFileList {
   entries: SandboxStorageFileEntry[];
   path: string;
@@ -233,6 +300,32 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
 
   return {
     /**
+     * Copy one file as it is, or one folder as a zip, to a presigned upload
+     * URL — read off the volume by the storage service itself, without a
+     * sandbox session. A refusal carries an `EXPORT_*` code; a deployment
+     * that cannot export answers 501 `EXPORT_UNAVAILABLE`, and one that
+     * predates the route answers 404 with no code.
+     */
+    exportFile: async (
+      params: {
+        fileOnly?: boolean;
+        hidden?: string[];
+        maxBytes?: number;
+        maxFiles?: number;
+        path: string;
+        uploadHeaders?: Record<string, string>;
+        uploadUrl: string;
+      },
+      options: { signal?: AbortSignal } = {},
+    ): Promise<SandboxStorageExportResult> =>
+      request(`${CURRENT_STORAGE}/export`, {
+        body: JSON.stringify(params),
+        signal: options.signal,
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
+
+    /**
      * Create a directory, parents included. Idempotent — an existing directory
      * is a success, so a picker can offer "new folder" without first proving
      * the name is free.
@@ -272,6 +365,41 @@ export const createSandboxStorageClient = ({ baseURL, headers }: SandboxStorageC
         method: 'DELETE',
       });
     },
+
+    /**
+     * One step of the drive's space analysis: what takes the space, by
+     * category, with the largest files and folders. A large drive takes
+     * several steps — call again while `status` is not `done`. A finished
+     * analysis is reused for a while unless `restart`. Not quota gated, and
+     * no sandbox session: it is how an over-quota drive is emptied.
+     */
+    analyzeStorage: async (
+      params: RequestContext & { restart?: boolean; top?: number } = {},
+    ): Promise<SandboxStorageAnalysis> =>
+      request(`${CURRENT_STORAGE}/analysis`, {
+        body: JSON.stringify({ restart: params.restart, top: params.top, topicId: params.topicId }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
+
+    /**
+     * Delete several files or folders at once, for good. Not quota gated.
+     * With `regenerableOnly` the storage service refuses the whole call
+     * (`storage_paths_not_regenerable`) unless every path is a dependency
+     * directory, a cache or build output, or inside one.
+     */
+    deletePaths: async (
+      params: RequestContext & { paths: string[]; regenerableOnly?: boolean },
+    ): Promise<SandboxStorageDeleteResult> =>
+      request(`${CURRENT_STORAGE}/files/delete`, {
+        body: JSON.stringify({
+          paths: params.paths,
+          regenerableOnly: params.regenerableOnly,
+          topicId: params.topicId,
+        }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      }),
 
     deleteFile: async (
       params: RequestContext & { path: string; recursive?: boolean },

@@ -501,6 +501,10 @@ export const gatherContextFacts = async (
         docsAgentId ? providers.listAgentDocuments?.(docsAgentId) : undefined,
       ),
     () =>
+      attempt('agentDocumentChanges', () =>
+        docsAgentId ? providers.listAgentDocumentChanges?.(docsAgentId) : undefined,
+      ),
+    () =>
       attempt('agentAccountContext', async () => {
         const context = await providers.listAgentAccountContext?.(request.agentId);
         // Whether this step can actually read or answer mail is decided by the
@@ -542,6 +546,7 @@ export const gatherContextFacts = async (
 
   const [
     agentDocuments,
+    agentDocumentChanges,
     agentAccountContext,
     agentBuilderContext,
     agentManagementContext,
@@ -560,6 +565,7 @@ export const gatherContextFacts = async (
   ] = await tupleSettled(tasks);
 
   return {
+    agentDocumentChanges,
     agentDocuments: agentDocuments?.length ? agentDocuments : undefined,
     step: {
       agentAccountContext,

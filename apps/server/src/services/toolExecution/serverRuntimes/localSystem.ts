@@ -136,7 +136,17 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         // it: `lh goal plan` and the other run-attributed commands need it. The
         // model's own `env` wins: it may be deliberately overriding the scope.
         if (api.name === LocalSystemApiName.runCommand && typeof finalArgs?.command === 'string') {
-          finalArgs = { ...finalArgs, topicId: context.topicId, agentId: context.agentId };
+          // `sandboxRoot` moves the fence; like `sandbox` below it is host-owned
+          // (only the skills runtime sets it), so a model-supplied one is dropped.
+          const { sandboxRoot: _offContractSandboxRoot, ...commandArgs } = finalArgs as Record<
+            string,
+            unknown
+          >;
+          finalArgs = {
+            ...(commandArgs as typeof finalArgs),
+            topicId: context.topicId,
+            agentId: context.agentId,
+          };
           const lhEnv = buildDeviceLhEnv({
             operationId: context.operationId,
             workspaceId: await getContentWorkspaceId(),
