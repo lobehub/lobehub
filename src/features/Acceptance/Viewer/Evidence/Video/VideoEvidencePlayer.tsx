@@ -7,6 +7,8 @@ import type {
   VerifyEvidenceChapter,
 } from '@lobechat/types';
 import {
+  // oxlint-disable-next-line stylex-migration/no-emotion-styles -- needs lobe-ui slot: Video.Controls frame number
+  createStaticStyles,
   cx,
   Flexbox,
   useVideo,
@@ -15,11 +17,15 @@ import {
   Video,
   type VideoPlayer,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import type { CSSProperties, ReactNode, RefObject } from 'react';
 import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import FloatingCommentAction, { FLOATING_ACTION_HOST } from '../FloatingCommentAction';
+import { sx } from '@/styles/sx';
+
+import { floatingActionHostMarker, videoPlayerMarker } from '../../markers.stylex';
+import FloatingCommentAction from '../FloatingCommentAction';
 import { noteKeyOf, toClaimMarkers, toNoteMarkers, toSections } from './chapters';
 import { readStoredRate, storeRate } from './playbackRate';
 import { styles } from './styles';
@@ -30,6 +36,57 @@ import { frameOf } from './videoTime';
 
 const MAX_HEIGHT = 360;
 const MIN_PLAYER_WIDTH = 480;
+
+const fallback = createStaticStyles(({ css }) => ({
+  compactControls: css`
+    @media (width <= 767px) {
+      .lobe-video__frame-number {
+        display: none;
+      }
+    }
+  `,
+}));
+
+const playerStyles = stylex.create({
+  root: {
+    display: { 'default': null, ':fullscreen': 'flex' },
+    flexDirection: { 'default': null, ':fullscreen': 'column' },
+    borderRadius: { 'default': null, ':fullscreen': 0 },
+  },
+  controls: {
+    flex: { default: null, [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 'none' },
+  },
+  stage: {
+    containerType: {
+      default: null,
+      [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 'size',
+    },
+    flex: { default: null, [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: '1' },
+    alignItems: {
+      default: null,
+      [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 'center',
+    },
+    minWidth: { default: null, [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 0 },
+    minHeight: { default: null, [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 0 },
+  },
+  frame: {
+    flex: { default: null, [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 'none' },
+    width: {
+      default: null,
+      [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]:
+        'min(100cqw, calc(100cqh * var(--acceptance-video-aspect)))',
+    },
+    maxWidth: {
+      default: 'var(--acceptance-video-frame-width)',
+      [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]: 'none',
+    },
+    height: {
+      default: null,
+      [stylex.when.ancestor(':fullscreen', videoPlayerMarker)]:
+        'min(100cqh, calc(100cqw / var(--acceptance-video-aspect)))',
+    },
+  },
+});
 
 export interface VideoEvidencePlayerHandle {
   focus: (time: AcceptanceCommentTime, options?: { reveal?: boolean }) => void;
@@ -80,12 +137,12 @@ const CommentSurface = ({
   const gesture = useVideoRegionGesture(player, onRegion);
   if (!ready) return null;
   return (
-    <div className={cx(styles.overlay, styles.drawable)} onPointerDown={gesture.onPointerDown}>
+    <div {...stylex.props(styles.overlay, styles.drawable)} onPointerDown={gesture.onPointerDown}>
       <FrameRegions active={active} regions={regions} />
       {gesture.draft ? (
         <DraftRegion rect={gesture.draft} />
       ) : (
-        <div className={styles.hint}>
+        <div {...stylex.props(styles.hint)}>
           {t(
             paused
               ? 'acceptance.comments.video.hintPaused'
@@ -177,24 +234,26 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
         {/* The host takes the player's width, so the comment action floats right
             beside a narrow recording instead of at the far edge of the column. */}
         <div
-          {...{ [FLOATING_ACTION_HOST]: '' }}
           data-acceptance-video-host
-          style={{
+          {...sx([floatingActionHostMarker], undefined, {
             maxWidth: frameMaxHeight
               ? `max(${MIN_PLAYER_WIDTH}px, calc(${frameMaxHeight} * ${aspect}))`
               : `min(100%, ${Math.max(MIN_PLAYER_WIDTH, frameWidth)}px)`,
             position: 'relative',
             width: '100%',
-          }}
+          })}
         >
           <Video.Root
-            className={cx(styles.player, styles.compactControls)}
             defaultPlaybackRate={defaultRate}
             markers={markers}
             maxHeight={frameMaxHeight ? undefined : MAX_HEIGHT}
             player={player}
             sections={sections}
             src={src}
+            className={cx(
+              stylex.props(playerStyles.root, videoPlayerMarker).className,
+              fallback.compactControls,
+            )}
             style={
               {
                 '--acceptance-video-aspect': aspect,
@@ -211,8 +270,8 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
               if (key !== undefined) onMarkClick?.(key);
             }}
           >
-            <div data-acceptance-video-stage className={styles.stage}>
-              <Video.Frame className={styles.frame}>
+            <div data-acceptance-video-stage {...stylex.props(styles.stage, playerStyles.stage)}>
+              <Video.Frame className={stylex.props(playerStyles.frame).className}>
                 {onRegion ? (
                   <CommentSurface
                     active={activeMark}
@@ -228,7 +287,7 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
                 <Video.LoadError />
               </Video.Frame>
             </div>
-            <Video.Controls frameStep />
+            <Video.Controls frameStep className={stylex.props(playerStyles.controls).className} />
           </Video.Root>
           {onComment && (
             <FloatingCommentAction

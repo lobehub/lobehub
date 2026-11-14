@@ -1,4 +1,5 @@
 import type { AcceptanceCommentItem } from '@lobechat/types';
+import * as stylex from '@stylexjs/stylex';
 import { useTranslation } from 'react-i18next';
 
 import { AttachmentThumbs } from '../Evidence/attachments';
@@ -11,12 +12,12 @@ const CommentContent = ({ comment }: { comment: AcceptanceCommentItem }) => {
   return (
     <>
       {comment.deletedAt ? (
-        <span className={styles.deleted}>{t('acceptance.comments.deleted')}</span>
+        <span {...stylex.props(styles.deleted)}>{t('acceptance.comments.deleted')}</span>
       ) : (
         comment.content
       )}
       {comment.attachments.length > 0 && (
-        <div className={styles.attachments}>
+        <div {...stylex.props(styles.attachments)}>
           <AttachmentThumbs attachments={comment.attachments} size={'comment'} />
         </div>
       )}

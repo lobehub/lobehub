@@ -2,6 +2,8 @@ import type { FixtureProfile } from './fixtureRegistry';
 
 export const migrationFixtures = [
   ['AskUserQuestionView', 'packages/shared-tool-ui/src/AskUserQuestion/AskUserQuestionView.tsx'],
+  ['AttachmentThumbs', 'src/features/Acceptance/Viewer/Evidence/attachments.tsx'],
+  ['VideoEvidencePlayer', 'src/features/Acceptance/Viewer/Evidence/Video/VideoEvidencePlayer.tsx'],
   ['SidebarGroupItem', 'src/features/HomeSidebar/Body/Agent/Modals/ConfigGroupModal/GroupItem.tsx'],
   ['ToolbarActionButton', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
   ['PreviewToolbar', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
@@ -50,6 +52,24 @@ export const migrationProfiles: Record<string, FixtureProfile> = {
       './useVoiceMessageCapability',
       './useVoiceMessageRecorder',
     ].map((source) => ({ importer: voiceMessageImporter, source, replacement: voiceMessageData })),
+  },
+  AttachmentThumbs: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next'],
+    exportName: 'AttachmentThumbs',
+    variants: [{ id: 'chip' }, { id: 'comment' }, { id: 'dark-comment', appearance: 'dark' }],
+    boundaries: [
+      {
+        importer: 'src/features/Acceptance/Viewer/Evidence/attachments.tsx',
+        source: '@/store/file',
+        replacement: 'fixtures/FixtureBusinessData.ts',
+      },
+    ],
+  },
+  VideoEvidencePlayer: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next'],
+    exportName: 'VideoEvidencePlayer',
+    settleFrames: 2,
+    variants: [{ id: 'player' }, { id: 'frame-height' }, { id: 'dark-player', appearance: 'dark' }],
   },
   SidebarGroupItem: {
     dependencies: ['lucide-react', 'i18next', 'react-i18next'],

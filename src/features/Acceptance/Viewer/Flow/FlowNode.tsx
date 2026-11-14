@@ -1,6 +1,8 @@
 'use client';
 
-import { createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Handle, Position } from '@xyflow/react';
 import {
   CheckCircle2,
@@ -41,88 +43,75 @@ export const flowStateColor = (state?: string) =>
         ? cssVar.colorWarning
         : cssVar.colorTextTertiary;
 
-const styles = createStaticStyles(({ css }) => ({
-  card: css`
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-
-    width: 260px;
-    height: 100%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-
-    transition:
-      border-color 0.15s,
-      box-shadow 0.15s;
-
-    &:hover {
-      border-color: ${cssVar.colorPrimaryBorder};
-    }
-  `,
-  selected: css`
-    border-color: ${cssVar.colorPrimaryBorder};
-    box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBg};
-  `,
-  head: css`
-    padding-block: 12px;
-    padding-inline: 12px;
-  `,
-  glyph: css`
-    display: flex;
-    flex: none;
-    align-items: center;
-    justify-content: center;
-
-    width: 36px;
-    height: 36px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  title: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 1.4;
-  `,
-  subtitle: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
-    font-size: 11px;
-    line-height: 16px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  footer: css`
-    margin-block-start: auto;
-    padding-block: 7px;
-    padding-inline: 12px;
-    border-block-start: 1px dashed ${cssVar.colorBorderSecondary};
-
-    font-size: 11px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  handle: css`
-    width: 1px;
-    min-width: 0;
-    height: 1px;
-    min-height: 0;
-    border: none;
-
-    opacity: 0;
-  `,
-}));
+const styles = stylex.create({
+  card: {
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    width: '260px',
+    height: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorPrimaryBorder },
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+    transition: 'border-color 0.15s,\n      box-shadow 0.15s',
+  },
+  selected: {
+    borderColor: cssVar.colorPrimaryBorder,
+    boxShadow: `0 0 0 2px ${cssVar.colorPrimaryBg}`,
+  },
+  head: { paddingBlock: '12px', paddingInline: '12px' },
+  glyph: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '36px',
+    height: '36px',
+    borderRadius: cssVar.borderRadius,
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  title: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+    fontSize: '13px',
+    fontWeight: 500,
+    lineHeight: 1.4,
+  },
+  subtitle: {
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: '2',
+    fontSize: '11px',
+    lineHeight: '16px',
+    color: cssVar.colorTextTertiary,
+  },
+  footer: {
+    marginBlockStart: 'auto',
+    paddingBlock: '7px',
+    paddingInline: '12px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'dashed',
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    fontSize: '11px',
+    color: cssVar.colorTextTertiary,
+  },
+  handle: {
+    width: '1px',
+    minWidth: '0',
+    height: '1px',
+    minHeight: '0',
+    borderStyle: 'none',
+    opacity: 0,
+  },
+});
 
 /** Same status/head/summary hierarchy as Goal's exploration cards. */
 export function FlowNode({ data }: { data: FlowNodeData }) {
@@ -141,12 +130,17 @@ export function FlowNode({ data }: { data: FlowNodeData }) {
               : CircleDashed;
   return (
     <>
-      <Handle className={styles.handle} id="in" position={Position.Left} type="target" />
-      <div className={cx(styles.card, data.selected && styles.selected)}>
-        <Flexbox horizontal className={styles.head} gap={10}>
+      <Handle
+        className={stylex.props(styles.handle).className}
+        id="in"
+        position={Position.Left}
+        type="target"
+      />
+      <div {...stylex.props(styles.card, data.selected && styles.selected)}>
+        <Flexbox horizontal className={stylex.props(styles.head).className} gap={10}>
           <div
             aria-label={t(`flow.state.${data.state ?? 'pending'}`)}
-            className={styles.glyph}
+            className={stylex.props(styles.glyph).className}
             role="img"
             style={{
               background: flowStateBackground(data.state),
@@ -156,11 +150,16 @@ export function FlowNode({ data }: { data: FlowNodeData }) {
             <Icon icon={statusIcon} size={24} />
           </div>
           <Flexbox gap={3} style={{ minWidth: 0 }}>
-            <span className={styles.title}>{data.title}</span>
-            <span className={styles.subtitle}>{data.expected}</span>
+            <span {...stylex.props(styles.title)}>{data.title}</span>
+            <span {...stylex.props(styles.subtitle)}>{data.expected}</span>
           </Flexbox>
         </Flexbox>
-        <Flexbox horizontal align="center" className={styles.footer} gap={12}>
+        <Flexbox
+          horizontal
+          align="center"
+          className={stylex.props(styles.footer).className}
+          gap={12}
+        >
           <Flexbox horizontal align="center" gap={4}>
             <Icon icon={Repeat2} size={12} />
             {data.attempts}
@@ -171,16 +170,21 @@ export function FlowNode({ data }: { data: FlowNodeData }) {
           </Flexbox>
         </Flexbox>
       </div>
-      <Handle className={styles.handle} id="out" position={Position.Right} type="source" />
       <Handle
-        className={styles.handle}
+        className={stylex.props(styles.handle).className}
+        id="out"
+        position={Position.Right}
+        type="source"
+      />
+      <Handle
+        className={stylex.props(styles.handle).className}
         id="return-in"
         position={Position.Bottom}
         style={{ left: '35%' }}
         type="target"
       />
       <Handle
-        className={styles.handle}
+        className={stylex.props(styles.handle).className}
         id="return-out"
         position={Position.Bottom}
         style={{ left: '65%' }}

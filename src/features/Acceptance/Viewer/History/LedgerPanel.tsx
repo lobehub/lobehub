@@ -1,6 +1,8 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import {
   CheckCircle2,
@@ -19,6 +21,8 @@ import { useTranslation } from 'react-i18next';
 import { useIsHydrated } from '@/hooks/useIsHydrated';
 import type { AcceptanceBundle } from '@/services/verify';
 
+import { roundCardMarker } from '../markers.stylex';
+
 export type AcceptanceRound = AcceptanceBundle['rounds'][number];
 
 /** Per-round acceptance tally (how many of the round's own checks the user signed off). */
@@ -27,51 +31,46 @@ export interface RoundReview {
   total: number;
 }
 
-const styles = createStaticStyles(({ css }) => ({
-  countBadge: css`
-    padding-block: 1px;
-    padding-inline: 7px;
-    border-radius: 99px;
-
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextSecondary};
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  round: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    transition:
-      box-shadow 0.2s ease,
-      border-color 0.2s ease;
-  `,
-  roundActive: css`
-    border-color: ${cssVar.colorPrimary};
-    box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBg};
-  `,
-  /* The whole card is the report affordance — no inner button. */
-  roundClickable: css`
-    cursor: pointer;
-
-    .acceptance-round-open-hint {
-      opacity: 0;
-      transition: opacity 0.2s ease;
-    }
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-      background: ${cssVar.colorFillQuaternary};
-
-      .acceptance-round-open-hint {
-        opacity: 1;
-      }
-    }
-  `,
-}));
+const styles = stylex.create({
+  countBadge: {
+    paddingBlock: '1px',
+    paddingInline: '7px',
+    borderRadius: '99px',
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextSecondary,
+    backgroundColor: cssVar.colorFillTertiary,
+  },
+  round: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
+  },
+  roundActive: {
+    borderColor: cssVar.colorPrimary,
+    boxShadow: `0 0 0 2px ${cssVar.colorPrimaryBg}`,
+  },
+  // The whole card is the report affordance — no inner button.
+  roundClickable: {
+    cursor: 'pointer',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+  },
+  // An active card that is also clickable: hover still wins over the active
+  // border, as `.roundClickable:hover` outranked `.roundActive` before.
+  roundActiveClickable: {
+    borderColor: { 'default': cssVar.colorPrimary, ':hover': cssVar.colorBorder },
+    boxShadow: `0 0 0 2px ${cssVar.colorPrimaryBg}`,
+  },
+  openHint: {
+    opacity: { default: 0, [stylex.when.ancestor(':hover', roundCardMarker)]: 1 },
+    transition: 'opacity 0.2s ease',
+  },
+});
 
 /** Only the still-running states keep a machine indicator; a settled round is
     reframed as an ACCEPTANCE state (已验收 / 待验收), not a verification verdict. */
@@ -120,7 +119,7 @@ const LedgerPanel = memo<LedgerPanelProps>(
           <Text strong style={{ fontSize: 13 }}>
             {t('acceptance.ledger.title')}
           </Text>
-          <span className={styles.countBadge}>{rounds.length}</span>
+          <span {...stylex.props(styles.countBadge)}>{rounds.length}</span>
           <Flexbox flex={1} />
           {!hideCollapse && (
             <ActionIcon
@@ -189,10 +188,12 @@ const LedgerPanel = memo<LedgerPanelProps>(
               gap={6}
               key={round.run.id}
               role={openable ? 'button' : undefined}
-              className={cx(
+              {...stylex.props(
                 styles.round,
                 openable && styles.roundClickable,
-                highlight === round.run.roundIndex && styles.roundActive,
+                openable && roundCardMarker,
+                highlight === round.run.roundIndex &&
+                  (openable ? styles.roundActiveClickable : styles.roundActive),
               )}
               onClick={openable ? () => onOpenReport(round) : undefined}
             >
@@ -220,10 +221,10 @@ const LedgerPanel = memo<LedgerPanelProps>(
                 </Text>
                 {openable && (
                   <Icon
-                    className={'acceptance-round-open-hint'}
                     color={cssVar.colorTextTertiary}
                     icon={ChevronRight}
                     size={14}
+                    {...stylex.props(styles.openHint)}
                   />
                 )}
               </Flexbox>

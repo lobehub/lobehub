@@ -1,6 +1,8 @@
 'use client';
 
-import { Avatar, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Avatar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDown, ChevronUp, CircleAlert, Loader2, MessagesSquare } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,49 +19,47 @@ import {
   rejectFeedbackPreviewState,
 } from './rejectFeedback';
 
-const styles = createStaticStyles(({ css }) => ({
-  avatarStack: css`
-    flex: none;
-
-    > * + * {
-      margin-inline-start: -6px;
-      box-shadow: 0 0 0 2px ${cssVar.colorBgElevated};
-    }
-  `,
-  box: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  body: css`
-    padding-block: 0 10px;
-    padding-inline: 12px;
-  `,
-  list: css`
-    overflow-y: auto;
-    max-height: 240px;
-  `,
-  row: css`
-    padding-block: 10px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-  summary: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-  `,
-  toggle: css`
-    cursor: pointer;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  avatarStack: {
+    flex: 'none',
+  },
+  // Every avatar after the first tucks under its neighbour (the old `> * + *`).
+  avatarOverlap: {
+    marginInlineStart: '-6px',
+    boxShadow: `0 0 0 2px ${cssVar.colorBgElevated}`,
+  },
+  box: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+  },
+  body: {
+    paddingBlockStart: 0,
+    paddingBlockEnd: '10px',
+    paddingInline: '12px',
+  },
+  list: {
+    overflowY: 'auto',
+    maxHeight: '240px',
+  },
+  row: {
+    paddingBlock: '10px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: { 'default': 'solid', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+  },
+  summary: {
+    paddingBlock: '10px',
+    paddingInline: '12px',
+  },
+  toggle: {
+    cursor: 'pointer',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillTertiary },
+  },
+});
 
 const useAuthorLabel = () => {
   const { t } = useTranslation('verify');
@@ -69,14 +69,25 @@ const useAuthorLabel = () => {
       : author.name || t('acceptance.reject.teammate');
 };
 
-const AuthorAvatar = memo<{ author: RejectFeedbackItem['author']; label: string }>(
-  ({ author, label }) =>
-    author.kind === 'unknown' ? (
-      <Avatar avatar={<Icon icon={MessagesSquare} size={12} />} size={20} />
-    ) : (
-      // First character only — a two-character CJK name wraps in a small circle.
-      <Avatar avatar={author.avatar || label.slice(0, 1)} size={20} />
-    ),
+const AuthorAvatar = memo<{
+  author: RejectFeedbackItem['author'];
+  label: string;
+  overlap?: boolean;
+}>(({ author, label, overlap }) =>
+  author.kind === 'unknown' ? (
+    <Avatar
+      avatar={<Icon icon={MessagesSquare} size={12} />}
+      size={20}
+      {...stylex.props(overlap && styles.avatarOverlap)}
+    />
+  ) : (
+    // First character only — a two-character CJK name wraps in a small circle.
+    <Avatar
+      avatar={author.avatar || label.slice(0, 1)}
+      size={20}
+      {...stylex.props(overlap && styles.avatarOverlap)}
+    />
+  ),
 );
 
 AuthorAvatar.displayName = 'AcceptanceRejectAuthorAvatar';
@@ -92,7 +103,7 @@ const FeedbackRow = memo<{ item: RejectFeedbackItem }>(({ item }) => {
   ].filter(Boolean);
 
   return (
-    <Flexbox horizontal className={styles.row} gap={8}>
+    <Flexbox horizontal gap={8} {...stylex.props(styles.row)}>
       <AuthorAvatar author={item.author} label={authorLabel} />
       <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
         <Flexbox horizontal align={'baseline'} gap={6} style={{ minWidth: 0 }}>
@@ -120,7 +131,7 @@ FeedbackRow.displayName = 'AcceptanceRejectFeedbackRow';
 
 const Notice = memo<{ icon: typeof MessagesSquare; spin?: boolean; text: string }>(
   ({ icon, spin, text }) => (
-    <Flexbox horizontal align={'center'} className={cx(styles.box, styles.summary)} gap={8}>
+    <Flexbox horizontal align={'center'} gap={8} {...stylex.props(styles.box, styles.summary)}>
       <Icon color={cssVar.colorTextTertiary} icon={icon} size={16} spin={spin} />
       <Text fontSize={13} type={'secondary'}>
         {text}
@@ -189,15 +200,15 @@ const RejectFeedbackPreview = memo<{ acceptanceId: string }>(({ acceptanceId }) 
   const toggle = () => setOpen((value) => !value);
 
   return (
-    <Flexbox className={styles.box}>
+    <Flexbox {...stylex.props(styles.box)}>
       <Flexbox
         horizontal
         align={'center'}
         aria-expanded={open}
-        className={cx(styles.summary, styles.toggle)}
         gap={8}
         role={'button'}
         tabIndex={0}
+        {...stylex.props(styles.summary, styles.toggle)}
         onClick={toggle}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === ' ') {
@@ -210,19 +221,19 @@ const RejectFeedbackPreview = memo<{ acceptanceId: string }>(({ acceptanceId }) 
         <Text strong fontSize={13} style={{ flex: 1, minWidth: 0 }}>
           {[t('acceptance.reject.included', { count: feedback.length }), ...breakdown].join(' · ')}
         </Text>
-        <Flexbox horizontal className={styles.avatarStack}>
-          {faces.map(([label, author]) => (
-            <AuthorAvatar author={author} key={label} label={label} />
+        <Flexbox horizontal {...stylex.props(styles.avatarStack)}>
+          {faces.map(([label, author], index) => (
+            <AuthorAvatar author={author} key={label} label={label} overlap={index > 0} />
           ))}
         </Flexbox>
         <Icon icon={open ? ChevronUp : ChevronDown} size={14} />
       </Flexbox>
       {open && (
-        <Flexbox className={styles.body} gap={4}>
+        <Flexbox gap={4} {...stylex.props(styles.body)}>
           <Text fontSize={12} type={'secondary'}>
             {t('acceptance.reject.includedHint')}
           </Text>
-          <Flexbox className={styles.list}>
+          <Flexbox {...stylex.props(styles.list)}>
             {feedback.map((item) => (
               <FeedbackRow item={item} key={item.key} />
             ))}

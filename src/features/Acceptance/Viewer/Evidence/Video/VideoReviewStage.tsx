@@ -2,16 +2,9 @@
 
 import { isFullFrameRect } from '@lobechat/const/verify';
 import type { AcceptanceReviewAnnotation, VerifyEvidenceChapter } from '@lobechat/types';
-import {
-  createStaticStyles,
-  cssVar,
-  cx,
-  useVideo,
-  useVideoPlayer,
-  useVideoState,
-  Video,
-  type VideoPlayer,
-} from '@lobehub/ui';
+import { useVideo, useVideoPlayer, useVideoState, Video, type VideoPlayer } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react';
 import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -29,17 +22,15 @@ type Rect = AcceptanceReviewAnnotation['rect'];
 
 const RATES = [0.5, 1, 1.5, 2];
 
-const local = createStaticStyles(({ css }) => ({
-  /** The frame shrinks to the room left by the timeline and the tools. */
-  fit: css`
-    display: flex;
-    flex: 1;
-    align-items: center;
-    justify-content: center;
-
-    min-height: 0;
-  `,
-}));
+const local = stylex.create({
+  fit: {
+    display: 'flex',
+    flex: '1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '0',
+  },
+});
 
 export interface VideoReviewStageHandle {
   /** Pause on a note's frame (and select its span) — the notes panel's "go there". */
@@ -123,7 +114,7 @@ const Hint = ({ drafting, flash }: { drafting: boolean; flash: string | null }) 
       : paused
         ? t('acceptance.video.hintPaused', { frame })
         : t('acceptance.video.hintPlaying'));
-  return hint ? <div className={styles.hint}>{hint}</div> : null;
+  return hint ? <div {...stylex.props(styles.hint)}>{hint}</div> : null;
 };
 
 /**
@@ -310,7 +301,7 @@ export const VideoReviewStage = memo<VideoReviewStageProps>(
       const disputed = notes.some((note) => disputesClaim(note.disputes, claim));
       return (
         <button
-          className={styles.dispute}
+          {...stylex.props(styles.dispute)}
           disabled={disputed}
           type={'button'}
           onClick={() => {
@@ -360,7 +351,7 @@ export const VideoReviewStage = memo<VideoReviewStageProps>(
           if (fresh && fresh !== src) setSrc(fresh);
         }}
       >
-        <div className={local.fit}>
+        <div {...stylex.props(local.fit)}>
           <Video.Frame
             style={{
               borderRadius: cssVar.borderRadiusLG,
@@ -370,7 +361,7 @@ export const VideoReviewStage = memo<VideoReviewStageProps>(
             }}
           >
             {ready && (
-              <div className={cx(styles.overlay, styles.drawable)} onPointerDown={onStageDown}>
+              <div {...stylex.props(styles.overlay, styles.drawable)} onPointerDown={onStageDown}>
                 <FrameRegions regions={regions} />
                 {draft && <DraftRegion rect={draft} />}
                 <Hint drafting={Boolean(draft)} flash={flash} />

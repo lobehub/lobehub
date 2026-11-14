@@ -2,6 +2,7 @@
 
 import type { AcceptanceGroupFeedback } from '@lobechat/types';
 import { ActionIcon, Button, cssVar, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import {
   BadgeCheck,
   ChevronRight,
@@ -14,7 +15,10 @@ import {
 import { Fragment, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { sx } from '@/styles/sx';
+
 import { hasVisualEvidence } from '../Evidence/evidence';
+import { groupHeaderMarker } from '../markers.stylex';
 import { openGroupFeedbackModal } from '../Review/modals';
 import { AcceptanceCheckRow } from './CheckRow';
 import type { CheckFilter } from './checkState';
@@ -118,11 +122,11 @@ const CheckList = memo<CheckListProps>(
     if (visibleRows.length === 0) {
       const allAccepted = filter === 'pending' && isGroupFullyAccepted(checks);
       return (
-        <Flexbox align={'center'} className={styles.emptyCard} gap={12} justify={'center'}>
+        <Flexbox align={'center'} gap={12} justify={'center'} {...stylex.props(styles.emptyCard)}>
           {allAccepted ? (
             <>
               <Icon
-                className={styles.celebrateIcon}
+                {...stylex.props(styles.celebrateIcon)}
                 color={cssVar.colorSuccess}
                 icon={PartyPopper}
                 size={40}
@@ -152,7 +156,7 @@ const CheckList = memo<CheckListProps>(
 
     if (!shouldGroupChecks(checks.length)) {
       return (
-        <Flexbox className={styles.groupCard}>
+        <Flexbox {...stylex.props(styles.groupCard)}>
           {visibleRows.map((check) => (
             <AcceptanceCheckRow
               canReview={canReview}
@@ -173,7 +177,7 @@ const CheckList = memo<CheckListProps>(
     }
 
     return (
-      <Flexbox className={styles.groupCard}>
+      <Flexbox {...stylex.props(styles.groupCard)}>
         {groups.map(({ checks: groupChecks_, key, label, rows }, groupIndex) => {
           const passed = groupChecks_.filter((check) => check.state === 'passed').length;
           const collapsed = collapsedGroups.has(key);
@@ -208,12 +212,11 @@ const CheckList = memo<CheckListProps>(
               <Flexbox
                 horizontal
                 align={'center'}
-                className={styles.groupHeader}
                 gap={8}
-                style={{
+                {...sx([styles.groupHeader, groupHeaderMarker], undefined, {
                   borderBlockStart:
                     groupIndex > 0 ? `1px solid ${cssVar.colorBorderSecondary}` : 'none',
-                }}
+                })}
                 onClick={() => onToggleGroup(key)}
               >
                 <Text strong style={{ fontSize: 13 }}>
@@ -260,13 +263,16 @@ const CheckList = memo<CheckListProps>(
                   reviewableChecks.length > 0 &&
                   (unaccepted.length > 0 ? (
                     <Button
-                      className={'acceptance-group-actions'}
                       disabled={reviewPending && acceptingGroup !== key}
                       icon={<Icon icon={BadgeCheck} />}
                       loading={acceptingGroup === key}
                       size={'small'}
                       // The spinner must stay visible after the pointer leaves.
-                      style={acceptingGroup === key ? { opacity: 1 } : undefined}
+                      {...sx(
+                        [styles.groupActions],
+                        undefined,
+                        acceptingGroup === key ? { opacity: 1 } : undefined,
+                      )}
                       type={'text'}
                       onClick={async (event) => {
                         event.stopPropagation();
@@ -300,7 +306,7 @@ const CheckList = memo<CheckListProps>(
                     belong to no single check yet must reach the next round.
                     Lives with the other group-level controls by the chevron. */}
                 {canReview && (
-                  <span className={'acceptance-group-actions'}>
+                  <span {...stylex.props(styles.groupActions)}>
                     <ActionIcon
                       icon={MessageSquareText}
                       size={'small'}

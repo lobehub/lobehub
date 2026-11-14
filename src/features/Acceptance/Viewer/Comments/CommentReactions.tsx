@@ -3,128 +3,100 @@
 import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
 import type { AcceptanceCommentReaction } from '@lobechat/types';
-import {
-  createStaticStyles,
-  cssVar,
-  cx,
-  Flexbox,
-  Icon,
-  Popover,
-  toast,
-  Tooltip,
-  useTheme,
-} from '@lobehub/ui';
+import { Flexbox, Icon, Popover, toast, Tooltip, useTheme } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { PlusIcon, SmilePlus } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
+import { sx } from '@/styles/sx';
 
 /** The ten GitHub offers, in GitHub's order — the shortcut covers nearly every click. */
 const QUICK_REACTIONS = ['👍', '👎', '😄', '🎉', '😕', '❤️', '🚀', '👀', '🙏', '🔥'];
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = stylex.create({
   /** The reaction row closes the comment, so it hugs the body's bottom edge. */
-  bar: css`
-    padding-block-start: 10px;
-  `,
-  chip: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 5px;
-    align-items: center;
-
-    height: 24px;
-    padding-block: 0;
-    padding-inline: 8px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 999px;
-
-    font-size: 13px;
-    line-height: 1;
-
-    background: ${cssVar.colorFillQuaternary};
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-  `,
+  bar: {
+    paddingBlockStart: '10px',
+  },
+  chip: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '5px',
+    alignItems: 'center',
+    height: '24px',
+    paddingBlock: 0,
+    paddingInline: '8px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: '999px',
+    fontSize: '13px',
+    lineHeight: 1,
+    backgroundColor: cssVar.colorFillQuaternary,
+  },
   /** Yours reads as pressed: same shape, the accent border and count. */
-  chipMine: css`
-    border-color: ${cssVar.colorInfoBorder};
-    color: ${cssVar.colorInfoText};
-    background: color-mix(in srgb, ${cssVar.colorInfo} 10%, transparent);
-  `,
-  count: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  emojiButton: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 30px;
-    height: 30px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 17px;
-
-    &:hover {
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
-  moreButton: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 30px;
-    height: 30px;
-    border-radius: ${cssVar.borderRadius};
-
-    color: ${cssVar.colorTextTertiary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillSecondary};
-    }
-  `,
+  chipMine: {
+    // Hover keeps the neutral border, as it did when `.chip:hover` outranked this rule.
+    borderColor: { 'default': cssVar.colorInfoBorder, ':hover': cssVar.colorBorder },
+    color: cssVar.colorInfoText,
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorInfo} 10%, transparent)`,
+  },
+  count: {
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+  emojiButton: {
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '30px',
+    height: '30px',
+    borderRadius: cssVar.borderRadius,
+    fontSize: '17px',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+  },
+  moreButton: {
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '30px',
+    height: '30px',
+    borderRadius: cssVar.borderRadius,
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillSecondary },
+  },
   /**
    * The add button stands on its own rather than waiting for a hover: reacting
    * is the cheapest way to answer a delivery, and an affordance you have to
    * find by sweeping the mouse is one most readers never find at all. Quiet by
    * default, it darkens under the cursor.
    */
-  trigger: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 999px;
-
-    color: ${cssVar.colorTextTertiary};
-
-    transition: color ${cssVar.motionDurationFast};
-
-    &:hover,
-    &[data-open] {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-}));
+  trigger: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '24px',
+    height: '24px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '999px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    transition: `color ${cssVar.motionDurationFast}`,
+  },
+  triggerOpen: {
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillQuaternary,
+  },
+});
 
 interface CommentReactionsProps {
   /** Absent for a reader who may not write — the chips stay, the button goes. */
@@ -174,11 +146,11 @@ const CommentReactions = memo<CommentReactionsProps>(({ onReact, reactions }) =>
   ) : (
     <Flexbox horizontal gap={2} style={{ padding: 4 }} wrap={'wrap'}>
       {QUICK_REACTIONS.map((emoji) => (
-        <div className={styles.emojiButton} key={emoji} onClick={() => pick(emoji)}>
+        <div key={emoji} {...stylex.props(styles.emojiButton)} onClick={() => pick(emoji)}>
           {emoji}
         </div>
       ))}
-      <div className={styles.moreButton} onClick={() => setFull(true)}>
+      <div {...stylex.props(styles.moreButton)} onClick={() => setFull(true)}>
         <Icon icon={PlusIcon} size={15} />
       </div>
     </Flexbox>
@@ -188,7 +160,7 @@ const CommentReactions = memo<CommentReactionsProps>(({ onReact, reactions }) =>
   // row, so it stays where the reader last clicked it instead of sliding right
   // by one chip every time somebody reacts.
   return (
-    <Flexbox horizontal align={'center'} className={styles.bar} gap={6} wrap={'wrap'}>
+    <Flexbox horizontal align={'center'} gap={6} wrap={'wrap'} {...stylex.props(styles.bar)}>
       {onReact && (
         <Popover
           content={picker}
@@ -203,7 +175,7 @@ const CommentReactions = memo<CommentReactionsProps>(({ onReact, reactions }) =>
         >
           <span
             data-comment-reaction-add
-            className={styles.trigger}
+            {...stylex.props(styles.trigger, open && styles.triggerOpen)}
             title={t('acceptance.comments.addReaction')}
             {...(open ? { 'data-open': '' } : {})}
           >
@@ -217,12 +189,15 @@ const CommentReactions = memo<CommentReactionsProps>(({ onReact, reactions }) =>
           title={reaction.authorNames.length > 0 ? reaction.authorNames.join('、') : reaction.emoji}
         >
           <span
-            className={cx(styles.chip, reaction.mine && styles.chipMine)}
-            style={onReact ? undefined : { cursor: 'default' }}
+            {...sx(
+              [styles.chip, reaction.mine && styles.chipMine],
+              undefined,
+              onReact ? undefined : { cursor: 'default' },
+            )}
             onClick={onReact ? () => void fire(reaction.emoji, !reaction.mine) : undefined}
           >
             <span>{reaction.emoji}</span>
-            <span className={styles.count}>{reaction.count}</span>
+            <span {...stylex.props(styles.count)}>{reaction.count}</span>
           </span>
         </Tooltip>
       ))}
