@@ -73,14 +73,21 @@ export class McpAppActionImpl {
     const view = state.views[id];
     if (!enabled() || !view || view.placed) return;
     const mode = declared === 'fullscreen' && state.panels[view.scope] ? 'fullscreen' : 'inline';
+    const live = this.consumeLive(id);
     useMcpAppStore.setState(
-      { views: { ...state.views, [id]: { ...view, mode, placed: true } } },
+      (s) => ({ views: { ...s.views, [id]: { ...view, live, mode, placed: true } } }),
       false,
       'mcpApp/place',
     );
-    if (this.consumeLive(id) && mode === 'fullscreen')
+    if (live && mode === 'fullscreen')
       useGlobalStore.getState().openWorkingSidebar(mcpAppTabKey(id));
   };
+  /**
+   * Whether `request` is still the call a tab shows: an older instance of the
+   * tab (closed and reopened since) must not act on the current one.
+   */
+  isCurrentEntry = (id: string, request: number | undefined) =>
+    request !== undefined && useMcpAppStore.getState().entries[id]?.request === request;
   /** Show a view that lives in the side panel; its location doesn't change. */
   reveal = (id: string) => {
     const state = useMcpAppStore.getState();
@@ -115,6 +122,9 @@ export class McpAppActionImpl {
       false,
       'mcpApp/settle',
     );
+    // A live call the app moves to the side panel opens there, as placing it would have
+    if (move && resolved === 'fullscreen' && view.live)
+      useGlobalStore.getState().openWorkingSidebar(mcpAppTabKey(id));
   };
   markLive = (id: string) => {
     if (enabled() && !useMcpAppStore.getState().liveCalls[id])

@@ -91,6 +91,37 @@ describe('MCP App placement', () => {
     expect(modeOf('call')).toBe('fullscreen');
   });
 
+  it('opens the side panel when the app moves a live call there on initialization', () => {
+    mcpAppActions.registerPanel('topic-a');
+    mcpAppActions.registerView('live', view);
+    mcpAppActions.registerView('history', view);
+    mcpAppActions.markLive('live');
+    // Nothing declared fullscreen: both start in their message
+    mcpAppActions.place('live', 'inline');
+    mcpAppActions.place('history', 'inline');
+
+    // Each app supports fullscreen only
+    mcpAppActions.settle('live', ['fullscreen'], 'fullscreen');
+    mcpAppActions.settle('history', ['fullscreen'], 'fullscreen');
+
+    expect(modeOf('live')).toBe('fullscreen');
+    expect(modeOf('history')).toBe('fullscreen');
+    expect(gate.open).toHaveBeenCalledTimes(1);
+    expect(gate.open).toHaveBeenCalledWith('mcp-app:live');
+  });
+
+  it('tells an entrypoint tab its current open from one before a close and reopen', () => {
+    const first = mcpAppActions.startEntry('entry');
+    expect(mcpAppActions.isCurrentEntry('entry', first)).toBe(true);
+
+    mcpAppActions.forgetEntries(['entry']);
+    const reopened = mcpAppActions.startEntry('entry');
+
+    expect(mcpAppActions.isCurrentEntry('entry', first)).toBe(false);
+    expect(mcpAppActions.isCurrentEntry('entry', reopened)).toBe(true);
+    expect(mcpAppActions.isCurrentEntry('entry', undefined)).toBe(false);
+  });
+
   it("moves between hosts only on the app's request, within its modes and topic", () => {
     mcpAppActions.registerView('call', view);
     mcpAppActions.place('call', 'inline');

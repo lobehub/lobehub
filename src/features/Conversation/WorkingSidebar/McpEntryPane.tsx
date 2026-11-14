@@ -90,7 +90,11 @@ export const McpEntryPane = ({
           if (!modes.includes('fullscreen')) setUnsupported(true);
         },
         onMode: () => 'fullscreen',
-        onTeardown: () => onClose(tab),
+        // Only this open's app closes the tab: an older one that finishes
+        // saving after the tab was closed and reopened must not close the new one
+        onTeardown: () => {
+          if (mcpAppActions.isCurrentEntry(id, state?.request)) onClose(tab);
+        },
         onUpdateModelContext: (params) => mcpAppContext.update(id, params),
         onDispose: () => mcpAppContext.clear(id),
       }}

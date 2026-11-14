@@ -12,6 +12,8 @@ export interface McpAppViewState {
   dismissed?: boolean;
   icon?: string;
   identifier: string;
+  /** It came from a call completed in the live conversation, which opens its side panel. */
+  live?: boolean;
   messageId?: string;
   mode: 'inline' | 'fullscreen';
   /** Its location was decided from what the tool and resource declare. */
