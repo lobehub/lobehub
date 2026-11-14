@@ -252,13 +252,14 @@ export const callConnectorToolById = async (
   }
 
   const report = await resolveReporter(connector, ctx);
-  if (!report) return runConnectorTool(connector, params, ctx);
+  const run = { ...params, mcpApps };
+  if (!report) return runConnectorTool(connector, run, ctx);
 
   const startTime = Date.now();
   let failure: Error | undefined;
   let result: unknown;
   try {
-    result = await runConnectorTool(connector, params, ctx);
+    result = await runConnectorTool(connector, run, ctx);
     return result;
   } catch (error) {
     failure = error instanceof Error ? error : new Error(String(error));
@@ -302,7 +303,14 @@ const installedVersion = (metadata: unknown): string | undefined => {
 
 const runConnectorTool = async (
   connector: DecryptedConnector,
-  params: { args?: string; fromApp?: boolean; fromEntrypoint?: boolean; toolName: string },
+  params: {
+    args?: string;
+    fromApp?: boolean;
+    fromEntrypoint?: boolean;
+    /** The caller's `mcp_apps` flag, as the call's checks read it. */
+    mcpApps: boolean;
+    toolName: string;
+  },
   ctx: ConnectorExecContext,
 ): Promise<unknown> => {
   // A market-hosted stdio server: no session to open, the market's cloud
@@ -330,7 +338,7 @@ const runConnectorTool = async (
     clientParams: buildConnectorMcpParams(fresh),
     fromApp: params.fromApp,
     fromEntrypoint: params.fromEntrypoint,
-    mcpApps: await isMcpAppsEnabled(ctx.userId),
+    mcpApps: params.mcpApps,
     processContentBlocks: fileService
       ? (blocks) => processContentBlocks(blocks, fileService)
       : undefined,

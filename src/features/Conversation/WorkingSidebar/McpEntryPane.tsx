@@ -2,9 +2,9 @@ import { Button, Flexbox, Text } from '@lobehub/ui';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { parseMcpEntryTab } from '@/features/MCPApp/entrypoints';
+import { mcpEntryInstanceId, parseMcpEntryTab } from '@/features/MCPApp/entrypoints';
 import McpAppView from '@/features/MCPApp/McpAppView';
-import { useFetchMcpAppEntrypoint } from '@/features/MCPApp/useFetchMcpAppEntrypoint';
+import { openMcpAppEntrypoint } from '@/features/MCPApp/openEntrypoint';
 import { useMcpAppIdentity } from '@/features/MCPApp/useMcpAppIdentity';
 import { getMcpAppFromState, unwrapMcpToolState } from '@/libs/mcp/mcpApp';
 import { mcpAppActions } from '@/store/mcpApp/action';
@@ -30,30 +30,33 @@ export const McpEntryPane = ({
   const identifier = entry?.identifier;
   const toolName = entry?.toolName;
   const [title] = useMcpAppIdentity(identifier ?? '', agentId);
-  const id = `${scope}:${tab}`;
+  const id = mcpEntryInstanceId(scope, tab);
   useEffect(() => {
     if (identifier) mcpAppActions.registerView(id, { identifier, scope, title });
   }, [id, identifier, scope, title]);
-  const {
-    data: result,
-    error,
-    mutate: reopen,
-  } = useFetchMcpAppEntrypoint({ agentId, id, identifier, toolName });
+  // Opened by the user (the open menu, or the buttons below), never by mounting
+  const state = useMcpAppStore(mcpAppSelectors.entry(id));
+  const open = () => {
+    setUnsupported(false);
+    if (identifier && toolName) void openMcpAppEntrypoint({ agentId, id, identifier, toolName });
+  };
   // Context the view reported belongs to this instance only
   useEffect(() => () => mcpAppContext.clear(id), [id]);
+  const result = state?.result;
   const app = getMcpAppFromState(result?.state);
-  if (error || unsupported || !entry)
+  if (state?.status === 'error' || unsupported || !entry)
     return (
       <Flexbox gap={8} padding={16}>
         <Text>{t('mcpApp.entrypoint.error')}</Text>
-        <Button
-          onClick={() => {
-            setUnsupported(false);
-            void reopen();
-          }}
-        >
-          {t('mcpApp.entrypoint.retry')}
-        </Button>
+        <Button onClick={open}>{t('mcpApp.entrypoint.retry')}</Button>
+      </Flexbox>
+    );
+  // A tab restored with the conversation: its app opens when the user asks
+  if (!state)
+    return (
+      <Flexbox align={'flex-start'} gap={8} padding={16}>
+        <Text type={'secondary'}>{title}</Text>
+        <Button onClick={open}>{t('mcpApp.entrypoint.open')}</Button>
       </Flexbox>
     );
   if (!app || !result)

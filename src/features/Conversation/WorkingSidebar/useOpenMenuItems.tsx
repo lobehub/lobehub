@@ -3,8 +3,10 @@ import { CheckIcon, PanelsTopLeftIcon, SquareTerminalIcon } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { mcpEntryTabKey } from '@/features/MCPApp/entrypoints';
+import { mcpEntryInstanceId, mcpEntryTabKey } from '@/features/MCPApp/entrypoints';
+import { openMcpAppEntrypoint } from '@/features/MCPApp/openEntrypoint';
 import { useMcpAppEntrypoints } from '@/features/MCPApp/useMcpAppEntrypoints';
+import { mcpAppSelectors, useMcpAppStore } from '@/store/mcpApp/store';
 
 import { BROWSER_TAB_KEY, type SidebarTabDescriptor } from './dynamicTabs';
 
@@ -17,6 +19,8 @@ interface OpenMenuOptions {
   openedTabs: string[];
   openTab: (key: string) => void;
   requestTabFocus: (key: string) => void;
+  /** The conversation an app opened from the menu belongs to. */
+  scope?: string;
   terminalAvailable: boolean;
   toggleTerminalPanel: (open: boolean) => void;
 }
@@ -29,6 +33,7 @@ export const useOpenMenuItems = ({
   openTab,
   openedTabs,
   requestTabFocus,
+  scope,
   terminalAvailable,
   toggleTerminalPanel,
 }: OpenMenuOptions) => {
@@ -119,6 +124,18 @@ export const useOpenMenuItems = ({
                   <Icon icon={PanelsTopLeftIcon} size={14} />
                 ),
                 onClick: () => {
+                  if (scope) {
+                    const id = mcpEntryInstanceId(scope, key);
+                    const running = mcpAppSelectors.entry(id)(useMcpAppStore.getState());
+                    // An app already open in its tab is shown, not opened again
+                    if (!openedTabs.includes(key) || !running || running.status === 'error')
+                      void openMcpAppEntrypoint({
+                        agentId,
+                        id,
+                        identifier: entry.identifier,
+                        toolName: entry.toolName,
+                      });
+                  }
                   openTab(key);
                   requestTabFocus(key);
                 },
@@ -132,6 +149,7 @@ export const useOpenMenuItems = ({
         index < items.length - 1 ? [item, { type: 'divider' as const }] : [item],
       );
   }, [
+    agentId,
     entries,
     mcpAppsAvailable,
     availableTabs,
@@ -140,6 +158,7 @@ export const useOpenMenuItems = ({
     openTab,
     openedTabs,
     requestTabFocus,
+    scope,
     t,
     terminalAvailable,
     toggleTerminalPanel,

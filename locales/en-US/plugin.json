@@ -902,6 +902,7 @@
   "mcpApp.context.remove": "Remove app context",
   "mcpApp.entrypoint.error": "The app could not be opened. Try again.",
   "mcpApp.entrypoint.loading": "Opening app…",
+  "mcpApp.entrypoint.open": "Open app",
   "mcpApp.entrypoint.retry": "Retry",
   "mcpApp.entrypoints": "Apps",
   "mcpApp.message.confirm.cancel": "Cancel",

@@ -7,6 +7,7 @@ export default {
   'mcpApp.entrypoints': 'Apps',
   'mcpApp.entrypoint.error': 'The app could not be opened. Try again.',
   'mcpApp.entrypoint.retry': 'Retry',
+  'mcpApp.entrypoint.open': 'Open app',
   'mcpApp.entrypoint.loading': 'Opening app…',
   'builtins.lobe-channel.title': 'Channel',
   'builtins.lobe-channel.apiName.readMessages': 'Read Channel history',

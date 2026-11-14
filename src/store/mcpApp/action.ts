@@ -4,6 +4,7 @@ import { getServerConfigStoreState, serverConfigSelectors } from '@/store/server
 import {
   initialState,
   type McpAppConversationHost,
+  type McpAppEntryState,
   type McpAppViewState,
   useMcpAppStore,
 } from './store';
@@ -162,6 +163,42 @@ export class McpAppActionImpl {
     );
     if (mode === 'fullscreen') useGlobalStore.getState().openWorkingSidebar(mcpAppTabKey(id));
     return mode;
+  };
+  /** An entrypoint tab starts its `{}` tool call; returns the call's number, 0 when off. */
+  startEntry = (id: string) => {
+    if (!enabled()) return 0;
+    const request = (useMcpAppStore.getState().entries[id]?.request ?? 0) + 1;
+    useMcpAppStore.setState(
+      (s) => ({ entries: { ...s.entries, [id]: { request, status: 'opening' } } }),
+      false,
+      'mcpApp/startEntry',
+    );
+    return request;
+  };
+  /** The call answered; only the latest one started for the tab counts. */
+  settleEntry = (id: string, request: number, result?: McpAppEntryState['result']) => {
+    if (useMcpAppStore.getState().entries[id]?.request !== request) return;
+    useMcpAppStore.setState(
+      (s) => ({
+        entries: {
+          ...s.entries,
+          [id]: { request, result, status: result ? 'ready' : 'error' },
+        },
+      }),
+      false,
+      'mcpApp/settleEntry',
+    );
+  };
+  /** The tab closed: opening it again calls the tool afresh. */
+  forgetEntries = (ids: string[]) => {
+    const gone = new Set(ids);
+    const { entries } = useMcpAppStore.getState();
+    if (!Object.keys(entries).some((id) => gone.has(id))) return;
+    useMcpAppStore.setState(
+      { entries: Object.fromEntries(Object.entries(entries).filter(([id]) => !gone.has(id))) },
+      false,
+      'mcpApp/forgetEntries',
+    );
   };
   /** The app asked to go away: it leaves both locations and its unsent context is dropped. */
   dismiss = (id: string) => {

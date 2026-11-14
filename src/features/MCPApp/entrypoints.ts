@@ -8,6 +8,8 @@ export interface AppEntrypoint extends McpAppThreadEntry {
 }
 export const mcpEntryTabKey = (identifier: string, toolName: string) =>
   `mcp-entry:${encodeURIComponent(identifier)}:${encodeURIComponent(toolName)}`;
+/** One entrypoint tab's app instance: per conversation (`scope`) and tab. */
+export const mcpEntryInstanceId = (scope: string, tab: string) => `${scope}:${tab}`;
 export const parseMcpEntryTab = (tab: string) => {
   if (!tab.startsWith('mcp-entry:')) return;
   const parts = tab.slice(10).split(':');

@@ -870,6 +870,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     openTab,
     openedTabs,
     requestTabFocus,
+    scope: composerTarget.writable ? composerTarget.contextKey : undefined,
     terminalAvailable,
     toggleTerminalPanel,
   });

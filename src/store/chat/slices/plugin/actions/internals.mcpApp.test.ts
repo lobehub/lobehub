@@ -17,6 +17,9 @@ vi.mock('@/store/tool/selectors', () => ({
   composioStoreSelectors: { composioAsLobeTools: () => [] },
   lobehubSkillStoreSelectors: { lobehubSkillAsLobeTools: () => [] },
   pluginSelectors: { confirmedInstalledPlugins: () => [] },
+  // The client's own connector list doesn't hold this run's connector: only
+  // the operation snapshot does
+  toolSelectors: { executableConnectorManifests: () => [] },
 }));
 
 const identifier = 'MCPAppsAcceptanceFixture';

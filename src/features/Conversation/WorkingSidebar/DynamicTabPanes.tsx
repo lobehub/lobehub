@@ -3,7 +3,9 @@ import * as stylex from '@stylexjs/stylex';
 import { Globe2Icon, PanelsTopLeftIcon } from 'lucide-react';
 import { Activity, lazy, memo, useEffect } from 'react';
 
+import { mcpEntryInstanceId } from '@/features/MCPApp/entrypoints';
 import { canvasIdOfTab } from '@/store/global/initialState';
+import { mcpAppActions } from '@/store/mcpApp/action';
 import { useMcpAppStore } from '@/store/mcpApp/store';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
@@ -114,6 +116,18 @@ const DynamicTabPanes = memo<DynamicTabPanesProps>(
           onCloseTab(tab);
       }
     }, [views, openedTabs, onCloseTab, enabled]);
+    // An entrypoint tab that closed drops its app: opening it again calls the tool afresh
+    const scope = composerTarget.writable ? composerTarget.contextKey : undefined;
+    useEffect(() => {
+      if (!scope) return;
+      const prefix = mcpEntryInstanceId(scope, 'mcp-entry:');
+      const open = new Set(openedTabs.map((tab) => mcpEntryInstanceId(scope, tab)));
+      mcpAppActions.forgetEntries(
+        Object.keys(useMcpAppStore.getState().entries).filter(
+          (id) => id.startsWith(prefix) && !open.has(id),
+        ),
+      );
+    }, [openedTabs, scope]);
     return (
       <>
         {enabled &&

@@ -3,6 +3,8 @@ import type { SendMessageParams } from '@lobechat/types';
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
 
+import type { MCPToolCallResult } from '@/libs/mcp';
+
 import { createDevtools } from '../middleware/createDevtools';
 
 export interface McpAppViewState {
@@ -19,6 +21,13 @@ export interface McpAppViewState {
   settled?: boolean;
   title: string;
 }
+/** A thread entrypoint tab's `{}` tool call: one per tab instance (topic and entrypoint). */
+export interface McpAppEntryState {
+  /** Bumped per call, so an older call's answer never replaces a newer one. */
+  request: number;
+  result?: MCPToolCallResult;
+  status: 'error' | 'opening' | 'ready';
+}
 export interface McpAppConversationHost {
   agentId?: string;
   sendMessage: (params: SendMessageParams) => Promise<void>;
@@ -29,6 +38,7 @@ export interface McpAppState {
     { content: string; identifier: string; scope: string; sent?: string; title: string }
   >;
   discoveryAttempts: Record<string, number>;
+  entries: Record<string, McpAppEntryState>;
   hosts: Record<string, McpAppConversationHost>;
   liveCalls: Record<string, boolean>;
   panels: Record<string, boolean>;
@@ -37,6 +47,7 @@ export interface McpAppState {
 export const initialState: McpAppState = {
   discoveryAttempts: {},
   contexts: {},
+  entries: {},
   hosts: {},
   liveCalls: {},
   panels: {},
@@ -47,6 +58,7 @@ export const useMcpAppStore = createWithEqualityFn<McpAppState>()(
   shallow,
 );
 export const mcpAppSelectors = {
+  entry: (id: string) => (s: McpAppState) => s.entries[id],
   host: (scope: string) => (s: McpAppState) => s.hosts[scope],
   panelAvailable: (scope: string) => (s: McpAppState) => !!s.panels[scope],
   view: (id: string) => (s: McpAppState) => s.views[id],

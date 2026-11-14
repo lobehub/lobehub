@@ -24,8 +24,8 @@ import { type ReadResourceResult } from '@modelcontextprotocol/client';
 import { omit } from 'es-toolkit/compat';
 
 import { type MCPToolCallResult } from '@/libs/mcp';
-import { renderMcpArgs, renderMcpUrlTemplate } from '@/libs/mcp/urlTemplate';
 import { localConnectorHttpParams } from '@/libs/mcp/localConnector';
+import { renderMcpArgs, renderMcpUrlTemplate } from '@/libs/mcp/urlTemplate';
 import { getMCPConnectionErrorType } from '@/libs/mcp/utils';
 import { toolsClient } from '@/libs/trpc/client';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
@@ -675,7 +675,7 @@ class MCPService {
     // Same resolution as `invokeMcpToolCall`: the view comes from the connector
     // the tool ran on. The agent's lists are loaded by now, so an identifier
     // with no connector here has none on the server either.
-    if (connectorServes) {
+    if (connector) {
       if (onThisDevice) {
         if (!isDesktop || !isMcpAppsOn()) return;
         const { lambdaClient } = await import('@/libs/trpc/client');
