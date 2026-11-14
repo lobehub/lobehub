@@ -141,7 +141,7 @@ export const queryAgencyRoutingByIds = async (
 
 /**
  * Build the where condition shared by queryAgents / countAgents: the current
- * user's agents, with optional keyword filter.
+ * user's agents, with optional keyword and tag filters.
  *
  * Virtual rows are infrastructure (group-built members, supervisors) and stay
  * excluded. That includes the inbox (Lobe AI): it is the product-owned
@@ -160,6 +160,7 @@ export const buildQueryAgentsWhere = (
   ctx: AgentModelContext,
   keyword?: string,
   includeInbox = false,
+  tag?: string,
 ) => {
   // Include agents where virtual is false OR null (legacy data without virtual
   // field), plus the inbox when the caller opts into it.
@@ -168,6 +169,9 @@ export const buildQueryAgentsWhere = (
     includeInbox
       ? or(eq(agents.virtual, false), isNull(agents.virtual), eq(agents.slug, INBOX_SESSION_ID))
       : or(eq(agents.virtual, false), isNull(agents.virtual)),
+    // A client that marks the agents it creates with a tag
+    // lists only those: filtered here so `limit` is spent on matching rows.
+    tag === undefined ? undefined : sql`${agents.tags} @> ${JSON.stringify([tag])}::jsonb`,
   );
 
   // `name` is the user-facing display name (see `agents.name`); resolving the
@@ -200,7 +204,7 @@ export const buildQueryAgentsWhere = (
 /**
  * Query the user's agents with an optional keyword filter.
  * Returns minimal agent info (id, title, name, description, avatar,
- * backgroundColor), plus `userId`/`visibility` so callers can gate per-agent
+ * backgroundColor, tags), plus `userId`/`visibility` so callers can gate per-agent
  * actions (e.g. transfer is creator/primary-owner only), a compact
  * `heteroType` derived from `agencyConfig` so callers can tell which results
  * are heterogeneous (external CLI/device) agents, and `isInbox` so callers can
@@ -208,7 +212,7 @@ export const buildQueryAgentsWhere = (
  * slug the row shape no longer carries.
  * Excludes virtual agents (supervisors, group-built members) and, unless the
  * caller opts in with `includeInbox: true`, the product-owned inbox (Lobe AI).
- * See `buildQueryAgentsWhere`.
+ * `tag` keeps only agents whose `tags` contain it. See `buildQueryAgentsWhere`.
  */
 export const queryAgents = async (
   ctx: AgentModelContext,
@@ -217,10 +221,11 @@ export const queryAgents = async (
     keyword?: string;
     limit?: number;
     offset?: number;
+    tag?: string;
   },
 ) => {
-  const { includeInbox = false, keyword, limit = 9999, offset = 0 } = params ?? {};
-  const searchCondition = buildQueryAgentsWhere(ctx, keyword, includeInbox);
+  const { includeInbox = false, keyword, limit = 9999, offset = 0, tag } = params ?? {};
+  const searchCondition = buildQueryAgentsWhere(ctx, keyword, includeInbox, tag);
 
   const rows = await ctx.db
     .select({
@@ -231,6 +236,7 @@ export const queryAgents = async (
       id: agents.id,
       name: agents.name,
       slug: agents.slug,
+      tags: agents.tags,
       title: agents.title,
       userId: agents.userId,
       visibility: agents.visibility,
@@ -271,6 +277,7 @@ export const countAgents = async (
     keyword?: string;
     range?: [string, string];
     startDate?: string;
+    tag?: string;
   },
 ): Promise<number> => {
   const result = await ctx.db
@@ -278,7 +285,7 @@ export const countAgents = async (
     .from(agents)
     .where(
       genWhere([
-        buildQueryAgentsWhere(ctx, params?.keyword, params?.includeInbox ?? false),
+        buildQueryAgentsWhere(ctx, params?.keyword, params?.includeInbox ?? false, params?.tag),
         params?.range
           ? genRangeWhere(params.range, agents.createdAt, (date) => date.toDate())
           : undefined,

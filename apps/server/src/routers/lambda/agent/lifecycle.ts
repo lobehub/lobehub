@@ -44,6 +44,7 @@ export const lifecycleRouter = router({
           keyword: z.string().optional(),
           range: z.tuple([z.string(), z.string()]).optional(),
           startDate: z.string().optional(),
+          tag: z.string().optional(),
         })
         .optional(),
     )
@@ -184,7 +185,8 @@ export const lifecycleRouter = router({
   /**
    * Query the user's agents with optional keyword filter — other virtual rows
    * excluded, and the inbox (Lobe AI) included and flagged with `isInbox` only
-   * when the caller passes `includeInbox: true`.
+   * when the caller passes `includeInbox: true`; `tag` keeps only agents
+   * carrying that tag.
    * Returns agents with minimal info (id, name, title, description, avatar,
    * backgroundColor).
    * Used by AddGroupMemberModal and group-management tool to search/select agents.
@@ -197,6 +199,7 @@ export const lifecycleRouter = router({
           keyword: z.string().optional(),
           limit: z.number().max(100).optional(),
           offset: z.number().optional(),
+          tag: z.string().optional(),
         })
         .optional(),
     )
