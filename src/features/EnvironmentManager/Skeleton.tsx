@@ -35,6 +35,19 @@ export const EnvironmentListSkeleton = () => (
 );
 
 /**
+ * The detail panel's definition while only the stored row is known: the row
+ * keeps no configuration, so its sections wait for the server's answer.
+ */
+export const EnvironmentDefinitionSkeleton = () => (
+  <Flexbox aria-busy data-testid={'environment-definition-skeleton'} gap={12} paddingBlock={8}>
+    <SkeletonBar height={16} width={'40%'} />
+    <SkeletonBar height={32} width={'100%'} />
+    <SkeletonBar height={16} width={'30%'} />
+    <SkeletonBar height={32} width={'100%'} />
+  </Flexbox>
+);
+
+/**
  * `EnvironmentManager` before its chunk loads: the heading row (pool tabs, or
  * the section name, then refresh + create) above the list frame. `leading`
  * replaces the section name, e.g. with a tab-strip placeholder.

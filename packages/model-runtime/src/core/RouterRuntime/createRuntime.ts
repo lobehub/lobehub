@@ -9,6 +9,9 @@ import type {
   ChatStreamPayload,
   CreateImageMethodOptions,
   CreateImagePayload,
+  CreateMusicOptions,
+  CreateMusicPayload,
+  CreateMusicResult,
   CreateVideoMethodOptions,
   CreateVideoPayload,
   DecisionOptions,
@@ -19,6 +22,8 @@ import type {
   GenerateObjectOptions,
   GenerateObjectPayload,
   HandleCreateVideoWebhookPayload,
+  MusicPollingRoute,
+  PollMusicStatusOptions,
   TextToSpeechOptions,
   TextToSpeechPayload,
   VideoPollingRoute,
@@ -474,6 +479,148 @@ export const createRouterRuntime = ({
           pricingContext: options?.pricingContext,
         },
       );
+    }
+
+    /**
+     * An asynchronous music task only exists on the channel that accepted it. Submit never
+     * falls back to another channel, and a pending result carries the channel as `route` so
+     * polling reaches the same router and credential even if routing changes in between.
+     */
+    /** Router for a model without channel sorting: model match, then base URL, then last. */
+    private async resolveDefaultMusicRouter(model?: string): Promise<RouterInstance> {
+      if (model) return resolveMatchedRouter(this.deps, model);
+
+      const resolvedRouters = await resolveRouters(this.deps);
+      const { baseURL } = this._options;
+      return (
+        (baseURL
+          ? resolvedRouters.find((item) => item.baseURLPattern?.test(baseURL))
+          : undefined) ?? resolvedRouters.at(-1)!
+      );
+    }
+
+    private async resolveMusicRoute(requestModel?: string, route?: MusicPollingRoute) {
+      const model = requestModel ?? route?.model;
+      const pinned = route?.routerId || route?.channelId || route?.channelIndex !== undefined;
+
+      if (route && pinned) {
+        let router: RouterInstance | undefined;
+        if (route.routerId) {
+          const resolvedRouters = await resolveRouters(this.deps, { model });
+          router = resolvedRouters.find((item) => item.id === route.routerId);
+        } else if (route.channelId) {
+          const resolvedRouters = await resolveRouters(this.deps, { model });
+          router = resolvedRouters.find((item) =>
+            normalizeRouterOptions(this.deps, item).some((option) => option.id === route.channelId),
+          );
+        } else {
+          router = await this.resolveDefaultMusicRouter(model);
+        }
+        if (!router) throw new Error('The music generation route is no longer available');
+
+        const options = normalizeRouterOptions(this.deps, router);
+        const option = route.channelId
+          ? options.find((item) => item.id === route.channelId)
+          : options[route.channelIndex ?? 0];
+        if (!option) throw new Error('The music generation channel is no longer available');
+
+        return { option, router };
+      }
+
+      // Honor channel sorting (affinity, demoted channels) and take its first choice; music
+      // never falls back after submission.
+      if (model) {
+        const { matchedRouter, routerOptions } = await selectRouteOptions(this.deps, model, {
+          method: 'createMusic',
+        });
+        const option = routerOptions[0];
+        if (!option) throw new Error('The music generation channel is no longer available');
+
+        return { option, router: matchedRouter };
+      }
+
+      const router = await this.resolveDefaultMusicRouter();
+      const option = normalizeRouterOptions(this.deps, router)[0];
+      if (!option) throw new Error('The music generation channel is no longer available');
+
+      return { option, router };
+    }
+
+    async createMusic(payload: CreateMusicPayload, options?: CreateMusicOptions) {
+      // One attempt on the first sorted channel, through the normal route lifecycle so attempt
+      // reporting and `onRouteSuccess` affinity still apply; music never falls back.
+      const routeContext = { metadata: options?.metadata, method: 'createMusic' as const };
+      const { matchedRouter: router, routerOptions } = await selectRouteOptions(
+        this.deps,
+        payload.model,
+        routeContext,
+      );
+      const option = routerOptions[0];
+      if (!option) throw new Error('The music generation channel is no longer available');
+
+      const run = createRouteRun({
+        deps: this.deps,
+        matchedRouter: router,
+        model: payload.model,
+        providerId: id,
+        routeContext,
+        routerOptions,
+        signal: options?.signal,
+      });
+      const prepared = await run.prepareAttempt(0);
+      const musicRuntime: LobeRuntimeAI = prepared.runtime;
+      if (!musicRuntime.createMusic) {
+        throw new Error('Music generation is not supported by the matched runtime');
+      }
+
+      let result: CreateMusicResult;
+      try {
+        result = await musicRuntime.createMusic(payload, options);
+      } catch (error) {
+        run.reportFailure(prepared, error);
+        throw error;
+      }
+
+      await run.notifyRouteSuccess(prepared);
+      run.reportAttempt(prepared.attempt, {
+        durationMs: Date.now() - prepared.attempt.startedAt,
+        success: true,
+      });
+
+      if (result.status !== 'pending') return result;
+
+      // A channel without an id is identified by its position in the unsorted option list.
+      const channelIndex = option.id
+        ? undefined
+        : normalizeRouterOptions(this.deps, router).findIndex(
+            (item) => item === option || JSON.stringify(item) === JSON.stringify(option),
+          );
+
+      return {
+        ...result,
+        route: {
+          ...(option.id ? { channelId: option.id } : {}),
+          ...(channelIndex !== undefined && channelIndex >= 0 ? { channelIndex } : {}),
+          model: payload.model,
+          ...(router.id ? { routerId: router.id } : {}),
+        },
+      };
+    }
+
+    async handlePollMusicStatus(
+      inferenceId: string,
+      model?: string,
+      route?: MusicPollingRoute,
+      options?: PollMusicStatusOptions,
+    ) {
+      const { option, router } = await this.resolveMusicRoute(model, route);
+      const { runtime } = await createRuntimeFromOption(this.deps, router, option);
+      const musicRuntime: LobeRuntimeAI = runtime;
+      if (!musicRuntime.handlePollMusicStatus) {
+        throw new Error('Music polling is not supported by the matched runtime');
+      }
+
+      return musicRuntime.handlePollMusicStatus(inferenceId, model, undefined, options);
     }
 
     async createVideo(payload: CreateVideoPayload, options?: CreateVideoMethodOptions) {

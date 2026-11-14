@@ -68,20 +68,28 @@ export function registerTtsCommand(parent: Command) {
     .command('tts <text>')
     .description('Convert text to speech')
     .option('-o, --output <file>', 'Output audio file path (default: output.<format>)')
-    .option('--voice <voice>', "Voice id (default: the model's default voice)")
+    .option(
+      '--voice <voice>',
+      "Voice id (default: the voice saved for the model in provider settings, else the model's default)",
+    )
     .option('--speed <n>', 'Speed multiplier')
     .option('--pitch <n>', 'Pitch adjustment')
     .option('--volume <n>', 'Volume adjustment')
     .option('--emotion <emotion>', 'Emotion, e.g. happy, sad')
-    .option('--format <format>', 'Audio format: mp3, opus, aac')
+    .option('--format <format>', 'Audio format: mp3, opus, aac (as the model supports)')
     .option('--sample-rate <hz>', 'Output sample rate in Hz')
     .option('--instructions <text>', 'Style instructions, for models that accept them')
     .option('--params <json>', 'Extra standard TTS params as a JSON object')
     .option('-m, --model <model>', 'Model ID (provider/model format)', 'tts-1')
-    .option('-p, --provider <provider>', 'Provider name (derived from model if omitted)')
+    .option(
+      '-p, --provider <provider>',
+      "Provider name (default: the model prefix, else the built-in model's provider)",
+    )
     .action(async (text: string, options: TtsCommandOptions) => {
       const parts = options.model.split('/');
-      const provider = options.provider || (parts.length > 1 ? parts[0] : 'openai');
+      // Without a provider the server picks the one of the model's built-in card
+      // (`gemini-3.8-flash-tts` → google), then OpenAI.
+      const provider = options.provider || (parts.length > 1 ? parts[0] : undefined);
       const model = parts.length > 1 ? parts.slice(1).join('/') : options.model;
 
       let params: Record<string, unknown>;

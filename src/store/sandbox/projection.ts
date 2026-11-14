@@ -1,6 +1,6 @@
-import type { EnvironmentKind } from '@lobechat/types';
+import type { EnvironmentKind, EnvironmentVisibility } from '@lobechat/types';
 
-import { defineReplica } from '@/libs/replica';
+import { arrayEntity, defineReplica, type ReplicaEntityAdapter } from '@/libs/replica';
 import type { environmentService } from '@/services/environment';
 import type { sandboxStorageService } from '@/services/sandboxStorage';
 
@@ -14,18 +14,20 @@ type RawEntitlement = Awaited<ReturnType<typeof sandboxStorageService.getEntitle
 type RawInstanceDetail = Awaited<ReturnType<typeof sandboxStorageService.getInstance>>;
 
 /**
- * The cloud-sandbox reads the composer's instance chip, its picker and the
- * working panel's Files tab paint from. Replicas, so a reload paints the last
- * confirmed answer on the first frames and the network only confirms it.
+ * The cloud-sandbox reads the composer's instance chip, its picker, the
+ * environments page and the working panel's Files tab paint from. Replicas, so
+ * a reload paints the last confirmed answer on the first frames and the network
+ * only confirms it.
  *
- * Every value is a slim projection: an environment's configuration carries
- * `env` and source URLs (a URL can carry a token), and an instance row carries
- * build logs, so neither reaches storage — only the fields these surfaces read.
+ * Every persisted value is a slim projection: an environment's configuration
+ * carries `env` and source URLs (a URL can carry a token), and an instance row
+ * carries build logs, so neither reaches storage — only the fields these
+ * surfaces read.
  * Rows are partitioned by the cache scope (user + workspace), which is also the
  * dimension the server answers the entitlement and both lists from.
  */
 
-/** The single entry of the scope-wide reads (entitlement and both lists). */
+/** The single entry of the scope-wide reads (entitlement and the instance list). */
 export const SANDBOX_SCOPE_ENTRY = 'current';
 export type SandboxScopeEntry = typeof SANDBOX_SCOPE_ENTRY;
 
@@ -44,27 +46,86 @@ export const toSandboxEntitlement = (raw: RawEntitlement): SandboxEntitlement =>
   quotaBytes: raw.quotaBytes ?? null,
 });
 
-/** What the composer's picker reads of an environment, and nothing more. */
-export interface SandboxPickerEnvironment {
+/**
+ * Which pool of environments a list answers: `all` on the personal page and in
+ * the composer's picker, `public` / `private` on the workspace page's two tabs.
+ * The server answers each pool with its own query, so each is its own entry.
+ */
+export type SandboxEnvironmentPool = EnvironmentVisibility | 'all';
+
+export const toEnvironmentPool = (visibility?: EnvironmentVisibility): SandboxEnvironmentPool =>
+  visibility ?? 'all';
+
+/** A GitHub checkout URL as `owner/name`, or nothing for any other URL. */
+const GITHUB_REPOSITORY = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/;
+
+const githubRepository = (configuration: RawEnvironment['configuration']): string | undefined => {
+  const sources = (configuration as { sources?: { kind?: string; url?: string }[] } | null)
+    ?.sources;
+  const url = sources?.find((source) => source.kind === 'git')?.url;
+
+  return url ? GITHUB_REPOSITORY.exec(url)?.[1] : undefined;
+};
+
+/**
+ * One environment as the environments page and the composer's picker read it.
+ *
+ * `configuration` lives in memory only: it carries `env` (credentials) and
+ * source URLs (a URL can carry a token), so it never reaches storage. A row
+ * restored from storage has none; `repository` is the one fact of it a row
+ * shows, kept only when it is a plain GitHub `owner/name`.
+ */
+export interface SandboxEnvironment {
+  /** Absent on a row restored from storage, until the server answers again. */
+  configuration?: RawEnvironment['configuration'];
+  createdAt: string;
+  creator: {
+    avatar: string | null;
+    fullName: string | null;
+    id: string | null;
+    username: string | null;
+  } | null;
+  description: string | null;
   id: string;
-  /** Derived from the configuration at the boundary; the configuration is not kept. */
+  /** Every environment is a code environment now; kept for the picker's shape. */
   kind: EnvironmentKind;
   name: string;
+  repository?: string;
   userId: string;
   visibility: RawEnvironment['visibility'];
   workspaceId: string | null;
 }
 
-export const toPickerEnvironment = (environment: RawEnvironment): SandboxPickerEnvironment => ({
+export const toSandboxEnvironment = (environment: RawEnvironment): SandboxEnvironment => ({
+  configuration: environment.configuration,
+  createdAt: new Date(environment.createdAt).toISOString(),
+  creator: environment.creator
+    ? {
+        avatar: environment.creator.avatar ?? null,
+        fullName: environment.creator.fullName ?? null,
+        id: environment.creator.id,
+        username: environment.creator.username ?? null,
+      }
+    : null,
+  description: environment.description ?? null,
   id: environment.id,
-  // Every environment is a code environment now; the field stays so the
-  // picker's shape does not change under the persisted replica rows.
   kind: 'code',
   name: environment.name,
+  repository: githubRepository(environment.configuration),
   userId: environment.userId,
   visibility: environment.visibility,
   workspaceId: environment.workspaceId ?? null,
 });
+
+/** What reaches storage of a list: every row without its configuration. */
+export const toPersistedEnvironments = (environments: SandboxEnvironment[]): SandboxEnvironment[] =>
+  environments.map(({ configuration: _configuration, ...row }) => row);
+
+/** What the composer's picker reads of an environment, and nothing more. */
+export type SandboxPickerEnvironment = Pick<
+  SandboxEnvironment,
+  'id' | 'kind' | 'name' | 'userId' | 'visibility' | 'workspaceId'
+>;
 
 /** A listed copy, as the picker renders it. */
 export interface SandboxPickerInstance {
@@ -144,12 +205,23 @@ export const sandboxEntitlementResource = defineReplica<SandboxScopeEntry, Sandb
   version: 1,
 });
 
+/** Environment rows are addressed by the environment id, in every pool. */
+export const sandboxEnvironmentEntity: ReplicaEntityAdapter<
+  SandboxEnvironment[],
+  SandboxEnvironment
+> = arrayEntity<SandboxEnvironment>((environment) => environment.id);
+
+/**
+ * Every pool's environments. The environments page and the composer's picker
+ * read the same `all` entry, so the personal page and the picker share one
+ * request and one stored row.
+ */
 export const sandboxEnvironmentsResource = defineReplica<
-  SandboxScopeEntry,
-  SandboxPickerEnvironment[]
+  SandboxEnvironmentPool,
+  SandboxEnvironment[]
 >({
-  key: (entry) => entry,
-  name: 'sandboxPickerEnvironments',
+  key: (pool) => pool,
+  name: 'sandboxEnvironments',
   storage: 'indexedDB',
   version: 1,
 });

@@ -27,12 +27,14 @@ import {
   setTaskFilterContent,
   setTaskFilterDateWindow,
   showsTaskFilterValuesInline,
+  taskFilterBarConditions,
   taskFilterSetOperatorKey,
   type TaskFilterValue,
   toggleTaskFilterOperator,
   toggleTaskFilterValue,
 } from './taskFilterState';
 import type { TaskFilterFieldDef, TaskFilterSetFieldDef } from './useTaskFilterFields';
+import { TASK_FILTER_CONTENT_COMMIT_DELAY_MS } from './useTaskListFind';
 
 const styles = stylex.create({
   bar: {
@@ -58,6 +60,8 @@ const styles = stylex.create({
   contentInput: {
     backgroundColor: 'transparent',
     borderStyle: 'none',
+    // The chip's own frame replaces the global ring; keyboard focus still shows inside it.
+    boxShadow: { 'default': 'none', ':focus-visible': `inset 0 0 0 1px ${cssVar.colorPrimary}` },
     color: cssVar.colorText,
     fontSize: 12,
     outline: 'none',
@@ -86,12 +90,11 @@ const styles = stylex.create({
   },
 });
 
-/** Content typed into the chip is committed after this pause, like a search box. */
-const CONTENT_COMMIT_DELAY_MS = 400;
-
 interface TaskFilterBarProps {
   fields: TaskFilterFieldDef[];
   filter?: TaskListFilter;
+  /** The header's find box shows the `content` condition, so the bar leaves it out. */
+  hideContent?: boolean;
   setFilter: (updater: (prev: TaskListFilter | undefined) => TaskListFilter | undefined) => void;
 }
 
@@ -138,7 +141,7 @@ const ContentInput = memo<{ onCommit: (value: string) => void; value: string }>(
     useEffect(() => setDraft(value), [value]);
     useEffect(() => {
       if (draft.trim() === value) return;
-      const timer = setTimeout(() => onCommit(draft), CONTENT_COMMIT_DELAY_MS);
+      const timer = setTimeout(() => onCommit(draft), TASK_FILTER_CONTENT_COMMIT_DELAY_MS);
       return () => clearTimeout(timer);
     }, [draft, onCommit, value]);
 
@@ -163,155 +166,162 @@ ContentInput.displayName = 'TaskFilterContentInput';
  * `[field] [operator] [values] [×]`. The operator flips on click, the values
  * reopen the value menu, × drops the condition; "Clear" drops them all.
  */
-const TaskFilterBar = memo<TaskFilterBarProps>(({ fields, filter, setFilter }) => {
-  const { t } = useTranslation('chat');
+const TaskFilterBar = memo<TaskFilterBarProps>(
+  ({ fields, filter: activeFilter, hideContent = false, setFilter }) => {
+    const { t } = useTranslation('chat');
 
-  if (!filter) return null;
+    // Nothing left to show as a chip: a lone "Clear" would only repeat the find box.
+    const filter = taskFilterBarConditions(activeFilter, hideContent);
+    if (!filter) return null;
 
-  const removeButton = (field: Parameters<typeof removeTaskFilterField>[1]) => (
-    <Segment
-      title={t('taskList.filter.remove')}
-      onClick={() => setFilter((prev) => removeTaskFilterField(prev, field))}
-    >
-      <Icon icon={XIcon} size={12} />
-    </Segment>
-  );
-
-  const renderSetChip = (field: TaskFilterSetFieldDef) => {
-    const set = filter[field.key] as TaskListFilterSet<TaskFilterValue> | undefined;
-    if (!set) return null;
-    const selected = set.values.map(
-      (value) =>
-        field.options.find((option) => option.value === value) ?? {
-          // A value whose option is gone (a deleted agent, a member who left)
-          // still renders, so it can be seen and removed.
-          icon: undefined,
-          label: t('taskList.filter.unknownValue'),
-          value,
-        },
-    );
-    const summary = showsTaskFilterValuesInline(selected.length)
-      ? selected.map((option) => option.label).join(', ')
-      : t('taskList.filter.valueCount', { count: selected.length });
-    const valueItems: DropdownItem[] = field.options.map((option) => ({
-      checked: isTaskFilterValueSelected(filter, field.key, option.value),
-      closeOnClick: false,
-      icon: option.icon,
-      key: `${field.key}:${option.value}`,
-      label: option.label,
-      onCheckedChange: () =>
-        setFilter((prev) => toggleTaskFilterValue(prev, field.key, option.value)),
-      type: 'checkbox' as const,
-    }));
-
-    return (
-      <span
-        {...stylex.props(styles.chip)}
-        data-testid={`task-filter-chip-${field.key}`}
-        key={field.key}
+    const removeButton = (field: Parameters<typeof removeTaskFilterField>[1]) => (
+      <Segment
+        title={t('taskList.filter.remove')}
+        onClick={() => setFilter((prev) => removeTaskFilterField(prev, field))}
       >
-        <Segment>
-          <Icon color={cssVarJs.colorTextSecondary} icon={field.icon} size={14} />
-          {field.label}
-        </Segment>
-        <Segment
-          secondary
-          onClick={() => setFilter((prev) => toggleTaskFilterOperator(prev, field.key))}
-        >
-          {t(taskFilterSetOperatorKey(set.operator, set.values.length))}
-        </Segment>
-        <DropdownMenu items={valueItems}>
-          <span
-            {...stylex.props(styles.segment, styles.segmentButton)}
-            role={'button'}
-            tabIndex={0}
-          >
-            {showsTaskFilterValuesInline(selected.length) &&
-              selected.map((option) => (
-                <span key={String(option.value)} style={{ display: 'inline-flex' }}>
-                  {option.icon}
-                </span>
-              ))}
-            {summary}
-          </span>
-        </DropdownMenu>
-        {removeButton(field.key)}
-      </span>
+        <Icon icon={XIcon} size={12} />
+      </Segment>
     );
-  };
 
-  const renderDateChip = (field: {
-    icon: TaskFilterFieldDef['icon'];
-    key: TaskListFilterDateField;
-    label: string;
-  }) => {
-    const date = filter[field.key];
-    if (!date) return null;
-    const windowItems: DropdownItem[] = TASK_LIST_FILTER_DATE_WINDOWS.map((window) => ({
-      checked: date.window === window,
-      key: `${field.key}:${window}`,
-      label: t(`taskList.filter.window.${window}`),
-      onCheckedChange: () => setFilter((prev) => setTaskFilterDateWindow(prev, field.key, window)),
-      type: 'checkbox' as const,
-    }));
+    const renderSetChip = (field: TaskFilterSetFieldDef) => {
+      const set = filter[field.key] as TaskListFilterSet<TaskFilterValue> | undefined;
+      if (!set) return null;
+      const selected = set.values.map(
+        (value) =>
+          field.options.find((option) => option.value === value) ?? {
+            // A value whose option is gone (a deleted agent, a member who left)
+            // still renders, so it can be seen and removed.
+            icon: undefined,
+            label: t('taskList.filter.unknownValue'),
+            value,
+          },
+      );
+      const summary = showsTaskFilterValuesInline(selected.length)
+        ? selected.map((option) => option.label).join(', ')
+        : t('taskList.filter.valueCount', { count: selected.length });
+      const valueItems: DropdownItem[] = field.options.map((option) => ({
+        checked: isTaskFilterValueSelected(filter, field.key, option.value),
+        closeOnClick: false,
+        icon: option.icon,
+        key: `${field.key}:${option.value}`,
+        label: option.label,
+        onCheckedChange: () =>
+          setFilter((prev) => toggleTaskFilterValue(prev, field.key, option.value)),
+        type: 'checkbox' as const,
+      }));
 
-    return (
-      <span
-        {...stylex.props(styles.chip)}
-        data-testid={`task-filter-chip-${field.key}`}
-        key={field.key}
-      >
-        <Segment>
-          <Icon color={cssVarJs.colorTextSecondary} icon={field.icon} size={14} />
-          {field.label}
-        </Segment>
-        <Segment
-          secondary
-          onClick={() => setFilter((prev) => toggleTaskFilterOperator(prev, field.key))}
+      return (
+        <span
+          {...stylex.props(styles.chip)}
+          data-testid={`task-filter-chip-${field.key}`}
+          key={field.key}
         >
-          {t(
-            date.operator === 'before'
-              ? 'taskList.filter.operator.before'
-              : 'taskList.filter.operator.within',
-          )}
-        </Segment>
-        <DropdownMenu items={windowItems}>
-          <span
-            {...stylex.props(styles.segment, styles.segmentButton)}
-            role={'button'}
-            tabIndex={0}
-          >
-            {t(`taskList.filter.window.${date.window}`)}
-          </span>
-        </DropdownMenu>
-        {removeButton(field.key)}
-      </span>
-    );
-  };
-
-  return (
-    <Flexbox horizontal align={'center'} {...stylex.props(styles.bar)} gap={6}>
-      {fields.map((field) => (field.kind === 'set' ? renderSetChip(field) : renderDateChip(field)))}
-      {filter.content && (
-        <span {...stylex.props(styles.chip)} data-testid={'task-filter-chip-content'}>
           <Segment>
-            <Icon color={cssVarJs.colorTextSecondary} icon={TextSearchIcon} size={14} />
-            {t('taskList.filter.field.content')}
+            <Icon color={cssVarJs.colorTextSecondary} icon={field.icon} size={14} />
+            {field.label}
           </Segment>
-          <Segment secondary>{t('taskList.filter.operator.contains')}</Segment>
-          <ContentInput
-            value={filter.content}
-            onCommit={(value) => setFilter((prev) => setTaskFilterContent(prev, value))}
-          />
-          {removeButton('content')}
+          <Segment
+            secondary
+            onClick={() => setFilter((prev) => toggleTaskFilterOperator(prev, field.key))}
+          >
+            {t(taskFilterSetOperatorKey(set.operator, set.values.length))}
+          </Segment>
+          <DropdownMenu items={valueItems}>
+            <span
+              {...stylex.props(styles.segment, styles.segmentButton)}
+              role={'button'}
+              tabIndex={0}
+            >
+              {showsTaskFilterValuesInline(selected.length) &&
+                selected.map((option) => (
+                  <span key={String(option.value)} style={{ display: 'inline-flex' }}>
+                    {option.icon}
+                  </span>
+                ))}
+              {summary}
+            </span>
+          </DropdownMenu>
+          {removeButton(field.key)}
         </span>
-      )}
-      <Button size={'small'} type={'text'} onClick={() => setFilter(() => undefined)}>
-        {t('taskList.filter.clear')}
-      </Button>
-    </Flexbox>
-  );
-});
+      );
+    };
+
+    const renderDateChip = (field: {
+      icon: TaskFilterFieldDef['icon'];
+      key: TaskListFilterDateField;
+      label: string;
+    }) => {
+      const date = filter[field.key];
+      if (!date) return null;
+      const windowItems: DropdownItem[] = TASK_LIST_FILTER_DATE_WINDOWS.map((window) => ({
+        checked: date.window === window,
+        key: `${field.key}:${window}`,
+        label: t(`taskList.filter.window.${window}`),
+        onCheckedChange: () =>
+          setFilter((prev) => setTaskFilterDateWindow(prev, field.key, window)),
+        type: 'checkbox' as const,
+      }));
+
+      return (
+        <span
+          {...stylex.props(styles.chip)}
+          data-testid={`task-filter-chip-${field.key}`}
+          key={field.key}
+        >
+          <Segment>
+            <Icon color={cssVarJs.colorTextSecondary} icon={field.icon} size={14} />
+            {field.label}
+          </Segment>
+          <Segment
+            secondary
+            onClick={() => setFilter((prev) => toggleTaskFilterOperator(prev, field.key))}
+          >
+            {t(
+              date.operator === 'before'
+                ? 'taskList.filter.operator.before'
+                : 'taskList.filter.operator.within',
+            )}
+          </Segment>
+          <DropdownMenu items={windowItems}>
+            <span
+              {...stylex.props(styles.segment, styles.segmentButton)}
+              role={'button'}
+              tabIndex={0}
+            >
+              {t(`taskList.filter.window.${date.window}`)}
+            </span>
+          </DropdownMenu>
+          {removeButton(field.key)}
+        </span>
+      );
+    };
+
+    return (
+      <Flexbox horizontal align={'center'} {...stylex.props(styles.bar)} gap={6}>
+        {fields.map((field) =>
+          field.kind === 'set' ? renderSetChip(field) : renderDateChip(field),
+        )}
+        {filter.content && (
+          <span {...stylex.props(styles.chip)} data-testid={'task-filter-chip-content'}>
+            <Segment>
+              <Icon color={cssVarJs.colorTextSecondary} icon={TextSearchIcon} size={14} />
+              {t('taskList.filter.field.content')}
+            </Segment>
+            <Segment secondary>{t('taskList.filter.operator.contains')}</Segment>
+            <ContentInput
+              value={filter.content}
+              onCommit={(value) => setFilter((prev) => setTaskFilterContent(prev, value))}
+            />
+            {removeButton('content')}
+          </span>
+        )}
+        <Button size={'small'} type={'text'} onClick={() => setFilter(() => undefined)}>
+          {t('taskList.filter.clear')}
+        </Button>
+      </Flexbox>
+    );
+  },
+);
 
 TaskFilterBar.displayName = 'TaskFilterBar';
 

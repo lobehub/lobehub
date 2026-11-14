@@ -28,6 +28,7 @@ export const FLAG_LABELS: Record<string, string> = {
   CONTAINER_UNMODELED: '容器查询未建模',
   CROSS_COMPONENT: '跨组件选择器',
   DIFFERENCE_NOT_REPRODUCED: '差异没有复现',
+  INLINE_STYLE_MASKED: '两侧同一个 style 盖住了类样式',
   INLINE_STYLE_SPREAD_ORDER: 'style 与展开属性顺序变了',
   INNER_TARGET: '命中组件内部',
   MEDIA_UNMODELED: '媒体条件未建模',
@@ -103,6 +104,8 @@ export const FLAG_EXPLANATIONS: Record<string, string> = {
     '别的组件的选择器会命中这个元素（比如 .muted .control-label），合成环境里没有那个外层组件，这条规则的效果没有被比较。',
   DIFFERENCE_NOT_REPRODUCED:
     '一些条件下出现过差异，单独重跑这些用例时没有复现。可能是渲染时序造成的抖动，也可能只在整页组合下出现，需要人工确认。',
+  INLINE_STYLE_MASKED:
+    '两侧给这个元素传了同一个 style={…}，它盖住了类样式里的同名属性。有这个值时两侧一样；只有这个值在运行时为空值（属性没传、函数返回 undefined、?? / && 短路）时，露出来的类样式不一样。确认一下它不会是空值。',
   INLINE_STYLE_SPREAD_ORDER:
     '两侧传的 style={…} 写法一样，但它和 {...props} 这类展开属性的先后顺序两侧不同，或者只有一侧有展开属性。展开对象里如果带 style，两侧谁覆盖谁就不同；工具不知道展开对象里有什么。',
   INNER_TARGET:

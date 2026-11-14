@@ -7,9 +7,13 @@ import type {
   ASRResponse,
   ChatMethodOptions,
   ChatStreamPayload,
+  CheckCredentialsResult,
   CreateImageMethodOptions,
   CreateImagePayload,
   CreateImageResponse,
+  CreateMusicOptions,
+  CreateMusicPayload,
+  CreateMusicResult,
   CreateVideoMethodOptions,
   CreateVideoPayload,
   CreateVideoResult,
@@ -25,6 +29,9 @@ import type {
   HandleCreateVideoWebhookPayload,
   HandleCreateVideoWebhookResult,
   ModelRequestOptions,
+  MusicPollingRoute,
+  PollMusicStatusOptions,
+  PollMusicStatusResult,
   PollVideoStatusResult,
   PullModelParams,
   TextToSpeechOptions,
@@ -37,10 +44,27 @@ import type {
 export interface LobeRuntimeAI {
   baseURL?: string;
   chat?: (payload: ChatStreamPayload, options?: ChatMethodOptions) => Promise<Response>;
+
+  /**
+   * Verify the configured key without generating anything (e.g. a balance endpoint).
+   * Used by the provider settings checker for providers that serve no chat model
+   * (`settings.checkMode: 'credentials'`). Throws an `AgentRuntimeError` on a rejected key.
+   */
+  checkCredentials?: () => Promise<CheckCredentialsResult>;
+
   createImage?: (
     payload: CreateImagePayload,
     options?: CreateImageMethodOptions,
   ) => Promise<CreateImageResponse>;
+
+  /**
+   * Generate a song. Synchronous providers return `success` with tracks; asynchronous ones
+   * return `pending` with a task id unless `options.waitForCompletion` is set.
+   */
+  createMusic?: (
+    payload: CreateMusicPayload,
+    options?: CreateMusicOptions,
+  ) => Promise<CreateMusicResult>;
 
   createVideo?: (
     payload: CreateVideoPayload,
@@ -68,6 +92,14 @@ export interface LobeRuntimeAI {
   handleCreateVideoWebhook?: (
     payload: HandleCreateVideoWebhookPayload,
   ) => Promise<HandleCreateVideoWebhookResult>;
+
+  /** Query an asynchronous music task once, for `createMusic` results that are `pending`. */
+  handlePollMusicStatus?: (
+    inferenceId: string,
+    model?: string,
+    route?: MusicPollingRoute,
+    options?: PollMusicStatusOptions,
+  ) => Promise<PollMusicStatusResult>;
 
   handlePollVideoStatus?: (
     inferenceId: string,

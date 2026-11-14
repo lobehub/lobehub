@@ -1,5 +1,6 @@
 import ts from 'typescript';
 
+import { CSS_TAG_SOURCES, cssConstantFactory, cssTemplatesOf } from './cssConstants';
 import { valueIdentifiers } from './identifiers';
 import { type ImportedClass, importedClassOf } from './importedClasses';
 import type { StyleAdapter, StylesheetBinding } from './types';
@@ -7,9 +8,11 @@ import type { StyleAdapter, StylesheetBinding } from './types';
 const STYLESHEET = /\.css$/;
 
 export interface TopLevel {
+  cssConstants: Set<string>;
   importedClasses: Map<string, ImportedClass>;
   importOf: Map<string, ts.ImportDeclaration>;
   keptStatements: Set<ts.Statement>;
+  moduleNames: () => string[];
   prelude: () => string;
   require: (name: string) => boolean;
   sideEffectCss: string[];
@@ -54,8 +57,24 @@ export const collectTopLevel = (
   const declarations = new Map<string, ts.Statement>();
   const styleSymbols = new Set<string>();
   const styleFactories = new Map<string, ts.CallExpression>();
+  const cssConstants = new Set<string>();
   const importedClasses = new Map<string, ImportedClass>();
   const sideEffectCss: string[] = [];
+  const isCssTag = (name: string) => {
+    const statement = importOf.get(name);
+    const named = statement?.importClause?.namedBindings;
+    return (
+      !!statement &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      CSS_TAG_SOURCES.has(statement.moduleSpecifier.text) &&
+      !!named &&
+      ts.isNamedImports(named) &&
+      named.elements.some(
+        (element) =>
+          element.name.text === name && (element.propertyName ?? element.name).text === 'css',
+      )
+    );
+  };
   const stylesheets: TopLevel['stylesheets'] = [];
 
   for (const statement of ast.statements) {
@@ -116,6 +135,14 @@ export const collectTopLevel = (
         ) {
           styleSymbols.add(declaration.name.text);
           styleFactories.set(declaration.name.text, initializer);
+          continue;
+        }
+        const templates = initializer && cssTemplatesOf(initializer, isCssTag);
+        const factory = templates && cssConstantFactory(ast, declaration.name.text, templates);
+        if (factory) {
+          styleSymbols.add(declaration.name.text);
+          styleFactories.set(declaration.name.text, factory);
+          cssConstants.add(declaration.name.text);
         }
       }
     if (ts.isFunctionDeclaration(statement) && statement.name)
@@ -168,10 +195,14 @@ export const collectTopLevel = (
     return lines.join('\n');
   };
 
+  const moduleNames = () => [...new Set([...importOf.keys(), ...declarations.keys()])].sort();
+
   return {
+    cssConstants,
     importedClasses,
     importOf,
     keptStatements,
+    moduleNames,
     prelude,
     require,
     sideEffectCss,

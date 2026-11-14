@@ -3270,6 +3270,7 @@
   "workspace.billingPage.usage.categories.chat": "聊天",
   "workspace.billingPage.usage.categories.embedding": "嵌入",
   "workspace.billingPage.usage.categories.imageGeneration": "图像生成",
+  "workspace.billingPage.usage.categories.musicGeneration": "音乐生成",
   "workspace.billingPage.usage.categories.tts": "文本转语音",
   "workspace.billingPage.usage.categories.videoGeneration": "视频生成",
   "workspace.billingPage.usage.empty": "还没有费用记录。成员开始使用模型后，费用会显示在这里。",

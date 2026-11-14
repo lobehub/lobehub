@@ -60,4 +60,31 @@ describe('pickModelConfigFormValues', () => {
 
     expect(UpdateAiModelSchema.safeParse(payload).success).toBe(true);
   });
+
+  it('submits the TTS default voice and drops an empty one', () => {
+    const ttsValues = {
+      ...formValues,
+      settings: { ttsVoice: 'Kore' },
+      type: 'tts',
+    };
+
+    const payload = pickModelConfigFormValues(ttsValues);
+    expect(payload.settings?.ttsVoice).toBe('Kore');
+    expect(UpdateAiModelSchema.safeParse(payload).success).toBe(true);
+
+    expect(
+      pickModelConfigFormValues({ ...ttsValues, settings: { ttsVoice: '  ' } }).settings?.ttsVoice,
+    ).toBeUndefined();
+    expect(
+      pickModelConfigFormValues({ ...ttsValues, settings: { ttsVoice: ' my voice ' } }).settings
+        ?.ttsVoice,
+    ).toBe('my voice');
+  });
+
+  it('drops the TTS default voice once the model is no longer a TTS model', () => {
+    expect(
+      pickModelConfigFormValues({ ...formValues, settings: { ttsVoice: 'Kore' }, type: 'chat' })
+        .settings?.ttsVoice,
+    ).toBeUndefined();
+  });
 });

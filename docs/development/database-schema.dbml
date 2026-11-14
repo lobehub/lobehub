@@ -16,6 +16,7 @@ table acceptance_comments {
   attachments jsonb
   source jsonb
   metadata jsonb
+  review_mark_id uuid
   client_id text [not null]
   resolved_at "timestamp with time zone"
   resolved_by_user_id text
@@ -31,6 +32,7 @@ table acceptance_comments {
     author_user_id [name: 'acceptance_comments_author_user_id_idx']
     author_agent_id [name: 'acceptance_comments_author_agent_id_idx']
     workspace_id [name: 'acceptance_comments_workspace_id_idx']
+    review_mark_id [name: 'acceptance_comments_review_mark_id_idx']
   }
 }
 
@@ -78,6 +80,58 @@ table acceptance_flows {
 
   indexes {
     acceptance_id [name: 'acceptance_flows_acceptance_idx']
+  }
+}
+
+table acceptance_review_marks {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  review_id uuid [not null]
+  seq integer [not null]
+  kind text [not null]
+  url text [not null]
+  route_key text [not null]
+  page_meta jsonb
+  rect_document jsonb [not null]
+  rect_viewport jsonb [not null]
+  scroll jsonb [not null]
+  viewport jsonb [not null]
+  regions jsonb
+  region_refs jsonb
+  targets jsonb
+  sketch jsonb
+  context jsonb
+  screenshot_file_id text
+  content text [not null]
+  client_id text [not null]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (review_id, client_id) [name: 'acceptance_review_marks_review_id_client_id_unique', unique]
+    (review_id, seq) [name: 'acceptance_review_marks_review_id_seq_unique', unique]
+    (route_key, review_id) [name: 'acceptance_review_marks_route_key_review_id_idx']
+  }
+}
+
+table acceptance_reviews {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  site_id text [not null]
+  user_id text
+  workspace_id text
+  project_id text
+  status text [not null, default: 'draft']
+  task_id text
+  last_mark_seq integer [not null, default: 0]
+  submitted_at "timestamp with time zone"
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (site_id, created_at) [name: 'acceptance_reviews_site_id_created_at_idx']
+    task_id [name: 'acceptance_reviews_task_id_idx']
+    user_id [name: 'acceptance_reviews_user_id_idx']
+    workspace_id [name: 'acceptance_reviews_workspace_id_idx']
+    (site_id, user_id) [name: 'acceptance_reviews_one_draft_per_user_unique', unique]
   }
 }
 

@@ -34,6 +34,13 @@ import type {
   CreateImagePayload,
 } from '../types/image';
 import type {
+  CreateMusicOptions,
+  CreateMusicPayload,
+  CreateMusicResult,
+  MusicPollingRoute,
+  PollMusicStatusOptions,
+} from '../types/music';
+import type {
   CreateVideoMethodOptions,
   CreateVideoPayload,
   CreateVideoResponse,
@@ -560,12 +567,41 @@ export class ModelRuntime {
     return createVideoWithCompletionMode(this._runtime, payload, finalOptions);
   }
 
+  /**
+   * Generate music with the provider runtime. Returns `undefined` when the provider has no
+   * music support. Asynchronous providers return a `pending` result with a task id unless
+   * `options.waitForCompletion` is set; poll it with {@link handlePollMusicStatus}.
+   */
+  async createMusic(
+    payload: CreateMusicPayload,
+    options?: CreateMusicOptions,
+  ): Promise<CreateMusicResult | undefined> {
+    return this._runtime.createMusic?.(payload, options);
+  }
+
+  async handlePollMusicStatus(
+    inferenceId: string,
+    model?: string,
+    route?: MusicPollingRoute,
+    options?: PollMusicStatusOptions,
+  ) {
+    return this._runtime.handlePollMusicStatus?.(inferenceId, model, route, options);
+  }
+
   async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {
     return this._runtime.handleCreateVideoWebhook?.(payload);
   }
 
   async handlePollVideoStatus(inferenceId: string, model?: string, route?: VideoPollingRoute) {
     return this._runtime.handlePollVideoStatus?.(inferenceId, model, route);
+  }
+
+  /**
+   * Verify the provider key without a chat model. `undefined` when the runtime has no
+   * credential check, so callers can fall back to a chat check.
+   */
+  async checkCredentials() {
+    return this._runtime.checkCredentials?.();
   }
 
   async models() {

@@ -1,7 +1,8 @@
-export { sandboxActions } from './action';
+export { type CreatedEnvironment, sandboxActions } from './action';
 export { type SandboxState } from './initialState';
 export {
   type SandboxEntitlement,
+  type SandboxEnvironment,
   type SandboxPickerEnvironment,
   type SandboxPickerInstance,
   type SandboxPickerInstanceList,

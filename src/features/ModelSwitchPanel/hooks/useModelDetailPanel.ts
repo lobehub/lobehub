@@ -117,6 +117,7 @@ const UNIT_GROUP_MAP: Record<PricingUnitName, PricingGroup> = {
   imageInput: 'image',
   imageInput_cacheRead: 'image',
   imageOutput: 'image',
+  musicGeneration: 'audio',
   textInput: 'text',
   textInput_cacheRead: 'text',
   textInput_cacheWrite: 'text',
@@ -153,6 +154,7 @@ const UNIT_SORT_ORDER: Record<PricingUnitName, number> = {
   audioInput: 0,
   audioOutput: 1,
   audioInput_cacheRead: 2,
+  musicGeneration: 3,
   videoInput: 0,
   videoGeneration: 1,
 };
@@ -164,6 +166,7 @@ const UNIT_LABEL_MAP: Record<string, string> = {
   millionCharacters: '/M chars',
   millionTokens: '/M tokens',
   second: '/s',
+  song: '/song',
 };
 
 const formatUnitRate = (unit: PricingUnit, currency?: ModelPriceCurrency): FormattedUnitPrice => {

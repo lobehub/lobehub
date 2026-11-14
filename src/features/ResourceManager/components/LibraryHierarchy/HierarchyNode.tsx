@@ -32,6 +32,7 @@ import { useFileItemDropdown } from '../Explorer/ItemDropdown/useFileItemDropdow
 import FolderAddButton from './FolderAddButton';
 import HierarchyNodeMenuButton from './HierarchyNodeMenuButton';
 import HierarchyNodeToggle from './HierarchyNodeToggle';
+import { isRowOwnClick, resolveFolderRowClick } from './rowClick';
 import { isHierarchyNodeActive, resolveDeletedFolderRedirect } from './selection';
 import { styles } from './styles';
 
@@ -305,6 +306,12 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     if (item.isFolder) {
       const isActive = isHierarchyNodeActive(item, selectedKey);
 
+      const handleRowClick = (e: React.MouseEvent<HTMLDivElement>) => {
+        const action = resolveFolderRowClick(e, { flat, isActive });
+        if (action === 'toggle') onToggle(item.id);
+        else if (action === 'navigate') handleFolderClick(item.id);
+      };
+
       return (
         <Flexbox gap={2}>
           <Block
@@ -330,7 +337,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
             style={{
               paddingInlineStart: level * 12 + 4,
             }}
-            onClick={() => handleFolderClick(item.id)}
+            onClick={handleRowClick}
             onDragEnd={handleDragEnd}
             onDragLeave={flat ? undefined : handleDragLeave}
             onDragOver={flat ? undefined : handleDragOver}
@@ -403,6 +410,10 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     // Render as file. A document that holds other documents gets the folder's
     // caret; the row itself still opens the document.
     const isActive = isHierarchyNodeActive(item, selectedKey);
+    const handleFileRowClick = (e: React.MouseEvent<HTMLDivElement>) => {
+      if (isRowOwnClick(e)) handleItemClick();
+    };
+
     return (
       <Flexbox gap={2}>
         <Block
@@ -428,7 +439,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
           style={{
             paddingInlineStart: level * 12 + 4,
           }}
-          onClick={handleItemClick}
+          onClick={handleFileRowClick}
           onDragEnd={handleDragEnd}
           onDragLeave={flat ? undefined : handleDragLeave}
           onDragOver={flat ? undefined : handleDragOver}
