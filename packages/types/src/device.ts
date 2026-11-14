@@ -42,9 +42,9 @@ export interface ProjectSkillMeta {
 
 /**
  * A single agent instructions file (`AGENTS.md` / `CLAUDE.md`) read from the
- * working directory or one of its parents up to the repository root during
- * workspace init. Unlike skills (metadata
- * only), the full body is carried so it can be injected into the system role and
+ * execution-device home or the working directory and its parents up to the
+ * repository root during workspace init. Unlike skills (metadata only), the
+ * full body is carried so it can be injected into the system role and
  * rendered in web without a second device round-trip. Carried as a list on
  * {@link WorkspaceInitResult} since multiple files can coexist (e.g. both
  * `AGENTS.md` and `CLAUDE.md`, or future nested files).
@@ -57,6 +57,8 @@ export interface WorkspaceInstructions {
    * directories were read, which only covered the working directory.
    */
   path?: string;
+  /** Instruction scope. Absent in older scans; defaults to project. */
+  scope?: 'device' | 'project';
   /** Source file the instructions were read from. */
   source: 'AGENTS.md' | 'CLAUDE.md';
 }
@@ -75,8 +77,8 @@ export interface WorkspaceInstructions {
  */
 export interface WorkspaceInitResult {
   /**
-   * Project-root agent instructions files (`AGENTS.md` / `CLAUDE.md`). Empty
-   * when none are present.
+   * Device instructions followed by project instructions (`AGENTS.md` /
+   * `CLAUDE.md`). Empty when none are present.
    */
   instructions: WorkspaceInstructions[];
   /** Filesystem skills discovered on the execution device (metadata only). */
@@ -196,7 +198,7 @@ export { deriveWorktreePath, type DeriveWorktreePathOptions } from './worktreePa
 
 export interface WorkingDirEntry extends WorkingDirConfig {
   /**
-   * Cached "workspace init" scan of this directory (AGENTS.md + project skills).
+   * Cached "workspace init" scan (device/project instructions and skills).
    * Populated server-side at run start via `deviceGateway.initWorkspace` and
    * reused within the TTL gated by `workspaceScannedAt`. Also read directly by
    * the web UI to render the project's skills / instructions.

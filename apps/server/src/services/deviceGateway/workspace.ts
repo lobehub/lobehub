@@ -14,9 +14,9 @@ import type { DeviceClientGetter } from './types';
 const log = debug('lobe-server:device-gateway');
 
 /**
- * Scan a bound project directory on the device in a single round-trip:
- * project skills (`.agents/skills` + `.claude/skills`) plus the root
- * `AGENTS.md` / `CLAUDE.md`. Routed through the generic device RPC relay
+ * Scan a bound working directory on the device in a single round-trip:
+ * project and device skills plus their `AGENTS.md` / `CLAUDE.md` instructions.
+ * Routed through the generic device RPC relay
  * (`invokeRpc`) — a server-internal channel the agent never sees, distinct
  * from the LLM-facing tool-call path.
  *
