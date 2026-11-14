@@ -28,6 +28,7 @@ import GiteeAIProvider from './giteeai';
 import GithubProvider from './github';
 import GithubCopilotProvider from './githubCopilot';
 import GLMCodingPlanProvider from './glmCodingPlan';
+import GMICloudProvider from './gmicloud';
 import GoogleProvider from './google';
 import GroqProvider from './groq';
 import HigressProvider from './higress';
@@ -226,6 +227,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   QiniuProvider,
   ReplicateProvider,
   NebiusProvider,
+  GMICloudProvider,
   CometAPIProvider,
   VercelAIGatewayProvider,
   CerebrasProvider,
@@ -334,6 +336,7 @@ export { default as GiteeAIProviderCard } from './giteeai';
 export { default as GithubProviderCard } from './github';
 export { default as GithubCopilotProviderCard } from './githubCopilot';
 export { default as GLMCodingPlanProviderCard } from './glmCodingPlan';
+export { default as GMICloudProviderCard } from './gmicloud';
 export { default as GoogleProviderCard } from './google';
 export { default as GroqProviderCard } from './groq';
 export { default as HigressProviderCard } from './higress';

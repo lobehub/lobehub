@@ -1,0 +1,44 @@
+---
+title: Using the GMI Cloud API Key in LobeHub
+description: >-
+  Learn how to configure and use GMI Cloud models in LobeHub, obtain your API
+  key, and start chatting.
+tags:
+  - LobeHub
+  - GMI Cloud
+  - API Key
+  - Web UI
+---
+
+# Using GMI Cloud in LobeHub
+
+[GMI Cloud](https://www.gmicloud.ai) is a GPU cloud that runs a serverless, OpenAI-compatible inference API for open models such as DeepSeek, Qwen, GLM, Kimi and MiniMax.
+
+This guide will walk you through how to use GMI Cloud in LobeHub:
+
+To configure this provider in LobeHub, open **App Settings → AI Providers**, select the provider, and turn on its switch.
+
+<Steps>
+  ### Step 1: Obtain a GMI Cloud API Key
+
+  - Sign up and log in to the [GMI Cloud console](https://console.gmicloud.ai)
+  - Open the API Keys page and create a new key
+  - Copy the generated API key and store it securely
+
+  <Callout type={'warning'}>
+    Make sure to save your API key securely. It will only be shown once. If you lose it, you’ll need to generate a new one.
+  </Callout>
+
+  ### Step 2: Configure GMI Cloud in LobeHub
+
+  - Go to the `App Settings` section in LobeHub
+  - In the provider list, select `GMI Cloud`
+  - Enable GMI Cloud and paste in your API key
+  - Click `Fetch models` to load the full GMI Cloud catalog, then choose a model for your assistant
+
+  <Callout type={'warning'}>
+    Please note that you may incur charges from the API provider. Refer to GMI Cloud’s [pricing](https://www.gmicloud.ai/pricing) for more details.
+  </Callout>
+</Steps>
+
+You're now ready to start chatting with models powered by GMI Cloud in LobeHub.
