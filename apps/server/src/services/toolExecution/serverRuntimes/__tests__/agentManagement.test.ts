@@ -631,6 +631,10 @@ describe('agentManagementRuntime', () => {
       mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: ['plugin-a'] });
       mockFindById.mockResolvedValue(undefined);
       mockGetMcpManifest.mockResolvedValue(manifest);
+      // The connector the install wrote, as the agent's runs resolve it
+      mockResolveConnectors.mockResolvedValue([
+        { identifier: 'plugin-b', isEnabled: true, status: 'connected' },
+      ]);
 
       const runtime = createWorkspaceRuntime();
       const result = await runtime.installPlugin({

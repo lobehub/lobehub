@@ -134,6 +134,12 @@ export interface ConnectorToolSyncOptions {
    * listing nor the rollback of a failed reinstall can bring them back as `auto`.
    */
   pruneMissingAutoTools?: boolean;
+  /**
+   * Reach the server through the SSRF-safe transport (`mcpService.listRawTools`):
+   * for an endpoint the user did not enter, as when an agent installs a
+   * marketplace MCP on its own.
+   */
+  ssrfSafe?: boolean;
 }
 
 /** After a sync: delete the connector's `auto` tools that `listedToolNames` no longer has. */
@@ -297,6 +303,7 @@ export const syncConnectorToolsById = async (
       (await listOnDevice(connector, mcpParams, ctx, mcpApps)) ??
       (await mcpService.listRawTools(mcpParams, {
         mcpApps,
+        ssrfSafe: options.ssrfSafe,
       }));
   } catch (err) {
     if (link) await getConnectorLinkModel(ctx).updateStatus(connectorId, link.id, 'error');

@@ -515,6 +515,10 @@ describe('agentBuilderRuntime', () => {
       const manifest = { deploymentOptions: [], identifier: 'ads-mcp', tools: [{ name: 'list' }] };
       mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
       mockGetMcpManifest.mockResolvedValue(manifest);
+      // The connector the install wrote, as the agent's runs resolve it
+      mockResolveConnectors.mockResolvedValue([
+        { identifier: 'ads-mcp', isEnabled: true, status: 'connected' },
+      ]);
 
       const result = await createRuntime().installPlugin(
         { identifier: 'ads-mcp', source: 'market' },
@@ -533,6 +537,26 @@ describe('agentBuilderRuntime', () => {
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
         plugins: [{ identifier: 'ads-mcp', mode: 'pinned' }],
       });
+    });
+
+    it("refuses an install the agent's own disconnected connector would shadow", async () => {
+      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
+      mockGetMcpManifest.mockResolvedValue({ identifier: 'ads-mcp' });
+      // The agent owns a row of the identifier, which its runs pick over the base install
+      mockResolveConnectors.mockResolvedValue([
+        { agentId: 'agent-1', identifier: 'ads-mcp', isEnabled: true, status: 'disconnected' },
+      ]);
+
+      const result = await createRuntime().installPlugin(
+        { identifier: 'ads-mcp', source: 'market' },
+        { editingAgentId: 'agent-1', toolManifestMap: {} },
+      );
+
+      expect(mockInstallMarketplaceConnector).toHaveBeenCalled();
+      expect(mockResolveConnectors).toHaveBeenCalledWith('agent-1');
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('not connected');
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
     });
 
     it('installs into the run workspace', async () => {

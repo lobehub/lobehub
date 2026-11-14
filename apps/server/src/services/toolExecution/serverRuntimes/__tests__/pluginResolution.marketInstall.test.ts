@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
-import { userConnectors, userInstalledPlugins, users } from '@/database/schemas';
+import { agents, userConnectors, userInstalledPlugins, users } from '@/database/schemas';
 import { discoverTools } from '@/server/services/aiAgent/pipeline/toolDiscovery';
 import {
   installMarketplaceMcpConnector,
@@ -160,6 +160,25 @@ describe('resolveOrInstallMarketPlugin — server-side marketplace install', () 
     expect(resolution).toEqual({ source: 'connector', status: 'loadable' });
     expect(await db.select().from(userConnectors)).toEqual(before);
     expect(await db.select().from(userInstalledPlugins)).toEqual([]);
+  });
+
+  it("reports the agent's own disconnected connector, which its runs pick over the install", async () => {
+    await db.insert(agents).values({ id: AGENT_ID, userId });
+    await db.insert(userConnectors).values({
+      agentId: AGENT_ID,
+      identifier: IDENTIFIER,
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://mcp.example.com/mcp',
+      name: 'Agent copy',
+      sourceType: 'custom',
+      status: 'disconnected',
+      userId,
+    });
+
+    const { installedNow, resolution } = await installFromServer();
+
+    expect(installedNow).toBe(true);
+    expect(resolution).toEqual({ status: 'not-connected' });
   });
 
   it('reports the install as installed in the next marketplace search', async () => {

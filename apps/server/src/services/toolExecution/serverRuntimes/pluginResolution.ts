@@ -228,7 +228,10 @@ export const resolveOrInstallMarketPlugin = async (
   const outcome = await deps.installMarketplaceConnector(identifier, manifest as MarketMcpManifest);
   switch (outcome.status) {
     case 'installed': {
-      return { installedNow: true, resolution: { source: 'connector', status: 'loadable' } };
+      // The install is the base connector, while the agent's own row of the
+      // identifier, if it has one, comes first in its runs: resolve as they will.
+      const { resolution } = await resolveExisting();
+      return { installedNow: true, resolution };
     }
     case 'exists': {
       // Enabled and connected, or not: the connector answers like any other

@@ -293,10 +293,12 @@ export const installMarketplaceMcpConnector = async (
           { connectorModel, connectorToolModel },
           REPLACE_TOOLS,
         )
-      : await syncConnectorToolsById(
+      : // The endpoint is the listing's, not one the user entered: an agent's
+        // install must not make the server reach a private or metadata address.
+        await syncConnectorToolsById(
           created.id,
           { connectorModel, connectorToolModel, userId },
-          REPLACE_TOOLS,
+          { ...REPLACE_TOOLS, ssrfSafe: true },
         );
 
     if (toolCount === 0) {
