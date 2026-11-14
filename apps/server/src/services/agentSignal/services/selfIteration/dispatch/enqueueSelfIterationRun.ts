@@ -3,6 +3,7 @@ import { type AgentSignalOperationMarker, RequestTrigger, ThreadType } from '@lo
 
 import { ThreadModel } from '@/database/models/thread';
 import type { LobeChatDatabase } from '@/database/type';
+import { resolveAgentSignalModelConfig } from '@/server/services/agentSignal/modelConfig';
 
 /** The builtin self-iteration agent slugs an execAgent run can dispatch to. */
 export type SelfIterationSlug =
@@ -86,6 +87,9 @@ export const enqueueSelfIterationRun = async (
   // helper is reachable from the light agentSignal path, so a static import would
   // couple that whole subsystem into every importer.
   const { AiAgentService } = await import('@/server/services/aiAgent');
+  // The builtin agent's persisted model is the deployment's mini default, which may name a
+  // provider this user never enabled; run on the user's own self-iteration model instead.
+  const { model, provider } = await resolveAgentSignalModelConfig(input.db, input.userId);
   const result = await new AiAgentService(input.db, input.userId, {
     workspaceId: input.workspaceId,
   }).execAgent({
@@ -104,7 +108,9 @@ export const enqueueSelfIterationRun = async (
     },
     autoStart: true,
     ...(input.maxSteps ? { maxSteps: input.maxSteps } : {}),
+    model,
     prompt: input.prompt,
+    provider,
     slug: input.slug,
     trigger: RequestTrigger.AgentSignal,
     userInterventionConfig: { approvalMode: 'headless' },
