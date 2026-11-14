@@ -483,8 +483,6 @@
   "plans.compare.agentRunFee": "Kosten per Agent-taak",
   "plans.compare.artifactSiteSize": "Maximale grootte per site",
   "plans.compare.artifactSites": "Actieve Artifact-sites",
-  "plans.compare.baseline": "Limieten worden vergeleken als veelvouden van {{plan}}.",
-  "plans.compare.baselineUltra": "Limieten worden vergeleken als veelvouden van {{plan}}, en Ultra-modellen als veelvouden van {{ultraPlan}}.",
   "plans.compare.concurrentAgentRuns": "Gelijktijdige Agent-taken",
   "plans.compare.documentCharacters": "Tekens per document",
   "plans.compare.earlyAccess": "Vroege toegang tot nieuwe functies",

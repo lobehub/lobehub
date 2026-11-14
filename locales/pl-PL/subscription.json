@@ -483,8 +483,6 @@
   "plans.compare.agentRunFee": "Opłata za zadanie Agenta",
   "plans.compare.artifactSiteSize": "Maks. rozmiar na stronę",
   "plans.compare.artifactSites": "Aktywne witryny Artefaktów",
-  "plans.compare.baseline": "Limity są porównywane jako wielokrotność planu {{plan}}.",
-  "plans.compare.baselineUltra": "Limity są porównywane jako wielokrotność planu {{plan}}, a modele Ultra jako wielokrotność planu {{ultraPlan}}.",
   "plans.compare.concurrentAgentRuns": "Równoległe zadania Agenta",
   "plans.compare.documentCharacters": "Znaki na dokument",
   "plans.compare.earlyAccess": "Wczesny dostęp do nowych funkcji",
