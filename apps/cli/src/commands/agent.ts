@@ -51,6 +51,13 @@ type AgentVisibility = (typeof AGENT_VISIBILITIES)[number];
 const readAgencyConfig = (agencyConfigFile: string): Promise<Record<string, unknown>> =>
   readJsonObjectFile(agencyConfigFile, 'agencyConfig');
 
+interface AgentListOptions {
+  json?: string | boolean;
+  keyword?: string;
+  limit?: string;
+  tag?: string;
+}
+
 export function registerAgentCommand(program: Command) {
   const agent = program.command('agent').description('Manage agents');
   registerAgentSpaceFsCommand(agent);
@@ -64,8 +71,9 @@ export function registerAgentCommand(program: Command) {
     .description('List agents')
     .option('-L, --limit <n>', 'Maximum number of items', '30')
     .option('-k, --keyword <keyword>', 'Filter by keyword')
+    .option('--tag <tag>', 'Only agents carrying this tag')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
-    .action(async (options: { json?: string | boolean; keyword?: string; limit?: string }) => {
+    .action(async (options: AgentListOptions) => {
       const client = await getTrpcClient();
 
       // The inbox (Lobe AI) is a real assistant the user can open, and this is
@@ -77,8 +85,10 @@ export function registerAgentCommand(program: Command) {
         keyword?: string;
         limit?: number;
         offset?: number;
+        tag?: string;
       } = { includeInbox: true };
       if (options.keyword) input.keyword = options.keyword;
+      if (options.tag?.trim()) input.tag = options.tag.trim();
       if (options.limit) input.limit = Number.parseInt(options.limit, 10);
 
       const result = await client.agent.queryAgents.query(input);
