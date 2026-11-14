@@ -52,7 +52,7 @@ import DeviceOptionRow from './DeviceOptionRow';
 import { getDevicePoolStatus } from './devicePoolStatus';
 import OptionRow from './OptionRow';
 import { reconnectDevice } from './reconnectDevice';
-import { splitThisComputerDevices } from './thisComputerDevices';
+import { isThisComputerDevice, splitThisComputerDevices } from './thisComputerDevices';
 import { useSandboxNetworkToggle } from './useSandboxNetworkToggle';
 import { useTopicAwareTargetSelect } from './useTopicAwareTargetSelect';
 
@@ -523,7 +523,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     !isWorkspaceAgent &&
     (isPoolEmpty || (poolStatus === 'devices' && otherDevices.length === 0));
   const isThisComputerBound =
-    isDesktop && !!boundDeviceId && localMachineDeviceIds.includes(boundDeviceId);
+    isDesktop && !!boundDevice && isThisComputerDevice(boundDevice, localMachineDeviceIds);
 
   // Compute chip
   let chipIcon: ReactNode = <ExecutionTargetIcon target={'sandbox'} />;

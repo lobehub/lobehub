@@ -36,6 +36,18 @@ describe('splitThisComputerDevices', () => {
     expect(ids(result.thisComputerDevices)).toEqual(['mine-personal']);
   });
 
+  // Regression: a public workspace row this machine enrolled is a team device.
+  // It was dropped from both groups, so its publisher could not pick it.
+  it('keeps a public workspace row of this machine among the other devices', () => {
+    const shared = { ...device('mine-workspace'), scope: 'workspace', visibility: 'public' };
+    const result = splitThisComputerDevices([shared as DeviceListItem, ...rows.slice(1)], {
+      localMachineIds: ['mine-personal', 'mine-workspace'],
+    });
+
+    expect(ids(result.otherDevices)).toEqual(['mine-workspace', 'zeabur', 'hetzner']);
+    expect(result.thisComputerDevices).toEqual([]);
+  });
+
   it('treats every row as another device off desktop', () => {
     const result = splitThisComputerDevices(rows, { localMachineIds: [] });
 
