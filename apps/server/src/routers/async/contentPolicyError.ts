@@ -14,7 +14,9 @@ export const getContentPolicyErrorMessage = (error: any) => {
     errorCode === 'moderation_blocked' ||
     errorMessage.includes('content policy') ||
     errorMessage.includes('safety system') ||
-    errorMessage.includes('sensitive information')
+    errorMessage.includes('sensitive information') ||
+    // Google image generation: "Request rejected in accordance with our terms of use and policies."
+    errorMessage.includes('in accordance with our terms of use and policies')
   ) {
     return CONTENT_POLICY_ERROR_MESSAGE;
   }

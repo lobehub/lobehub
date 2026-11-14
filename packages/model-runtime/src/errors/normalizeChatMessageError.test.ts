@@ -20,6 +20,25 @@ describe('normalizeChatMessageError', () => {
     expect(normalizeChatMessageError(result)).toEqual(result);
   });
 
+  it('classifies the Google terms-of-use rejection as content moderation', () => {
+    // Shape logged by StreamingLLMExecutor for a Gemini 403 policy rejection.
+    const result = normalizeChatMessageError({
+      _responseBody: { traceId: '91f7705fe9f5bdc1d3f2095795b4415f' },
+      error: {
+        code: 403,
+        message: 'Request rejected in accordance with our terms of use and policies.',
+        status: 'PERMISSION_DENIED',
+      },
+      errorType: 'ProviderBizError',
+      provider: 'lobehub',
+    });
+    expect(result).toMatchObject({
+      attribution: 'user',
+      numericId: 5001,
+      type: 'ContentModeration',
+    });
+  });
+
   it('preserves a non-enumerable Error message with a known errorType', () => {
     const error = Object.assign(new Error('provider credentials rejected'), {
       errorType: 'InvalidProviderAPIKey',
