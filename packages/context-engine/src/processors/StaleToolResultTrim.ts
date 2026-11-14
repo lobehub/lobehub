@@ -147,8 +147,8 @@ interface ReplayIndex {
   readWindowsByPath: Map<string, { end: number; index: number; start: number }[]>;
   /** Messages [0, scanned) are indexed. */
   scanned: number;
-  /** Chars removed by the trims accepted so far. */
-  trimmedSavedChars: number;
+  /** Chars removed by each trim accepted so far, keyed by message index. */
+  trimmedSavedByIndex: Map<number, number>;
   /** Untrimmed readFile windows in [0, scanned) per path, re-derived when a later write or covering re-read arrives. */
   untrimmedReadsByPath: Map<string, { end: number; index: number; start: number }[]>;
 }
@@ -157,6 +157,27 @@ const LOCAL_SYSTEM = 'lobe-local-system';
 
 const imageCountOf = (message: Message) =>
   (message.pluginState as { images?: unknown[] } | undefined)?.images?.length ?? 0;
+
+const charsOf = (value: unknown): number =>
+  typeof value === 'string' ? value.length : value == null ? 0 : JSON.stringify(value).length;
+
+/**
+ * Model-visible chars of a message for cache pricing: its content (text or
+ * parts) plus the arguments of the tool calls it issued, which reach the
+ * provider as `tool_calls[].function.arguments`. A large `writeFile` call is
+ * mostly arguments, and leaving them out underprices the rewrite behind it.
+ */
+const payloadCharsOf = (message: Message): number => {
+  let chars = charsOf(message.content);
+  for (const tool of (message.tools as { arguments?: unknown }[] | undefined) ?? []) {
+    chars += charsOf(tool?.arguments);
+  }
+  for (const call of (message.tool_calls as { function?: { arguments?: unknown } }[] | undefined) ??
+    []) {
+    chars += charsOf(call?.function?.arguments);
+  }
+  return chars;
+};
 const BROWSER = 'lobe-browser';
 const WEB_BROWSING = 'lobe-web-browsing';
 const MESSAGE = 'lobe-message';
@@ -359,18 +380,26 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
     // same bytes. Before this replay, a warm follow-up whose break-even check
     // failed fell back to the untrimmed history: it meant to keep the warm
     // prefix, but restored the full text of results the previous turn had
-    // trimmed and invalidated the cache from the first of them (T-14057).
-    // A turn's decision only reads messages up to its own trigger, so the
-    // replay reproduces it exactly from the current history.
-    const userIndexes = messages.flatMap((m, i) => (m.role === 'user' ? [i] : []));
+    // trimmed and invalidated the cache from the first of them.
+    // A turn's decision only reads persisted history up to its own trigger, so
+    // the replay reproduces it exactly from the current history.
+    //
+    // Virtual tail user messages (`meta.virtualLastUser`, e.g. TodoInjector) are
+    // re-created at the end of the payload on every step and never persist, so
+    // they are not turn triggers: counting one would move the boundary on every
+    // step of a running operation.
+    const userIndexes = messages.flatMap((m, i) =>
+      m.role === 'user' && m.meta?.virtualLastUser !== true ? [i] : [],
+    );
     const turnTriggers = userIndexes.length > 0 ? userIndexes : [-1];
 
     const rawCharsPrefix = [0];
     for (const m of messages) {
-      const chars =
-        (typeof m.content === 'string' ? m.content.length : 0) +
-        imageCountOf(m) * this.config.imageCharEquivalent;
-      rawCharsPrefix.push(rawCharsPrefix.at(-1)! + chars);
+      rawCharsPrefix.push(
+        rawCharsPrefix.at(-1)! +
+          payloadCharsOf(m) +
+          imageCountOf(m) * this.config.imageCharEquivalent,
+      );
     }
     const replay: ReplayIndex = {
       closedToolChars: 0,
@@ -378,7 +407,7 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       rawCharsPrefix,
       readWindowsByPath: new Map(),
       scanned: 0,
-      trimmedSavedChars: 0,
+      trimmedSavedByIndex: new Map(),
       pending: new Map(),
       untrimmedReadsByPath: new Map(),
     };
@@ -391,7 +420,10 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
       for (const candidate of current.accepted) {
         trimmed.set(candidate.index, candidate);
         replay.pending.delete(candidate.index);
-        replay.trimmedSavedChars += this.savedCharsOf(messages[candidate.index], candidate);
+        replay.trimmedSavedByIndex.set(
+          candidate.index,
+          this.savedCharsOf(messages[candidate.index], candidate),
+        );
       }
       for (const [path, reads] of replay.untrimmedReadsByPath) {
         replay.untrimmedReadsByPath.set(
@@ -600,7 +632,12 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
     // must clear a break-even check against the rewrite they cause:
     //
     //   gain = R_est × S × readPrice   (each remaining step reads S less)
-    //   cost = ((P − S) × writePrice − P × readPrice) × margin
+    //   cost = ((Q − S) × writePrice − Q × readPrice) × margin
+    //
+    // Q is the span the trims rewrite: from the first new candidate up to the
+    // trigger, with earlier turns' trims applied (that is what the cache
+    // holds). The prefix before it stays cached, and the trigger and everything
+    // after it are written in either case.
     //
     // Thanks to determinism the rewrite is paid at most once per trim-set
     // change, not per follow-up — but a warm quick-question turn (1-5 steps)
@@ -623,15 +660,25 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
     const cacheWarm = gapMs !== undefined && gapMs <= this.config.cacheTtlMs;
 
     if (cacheWarm) {
-      // The cost side of the break-even must be priced from the payload frozen
-      // at the turn boundary (closed history + the trigger), not the live
-      // message list: candidates and savings are already frozen there, and
-      // counting in-flight output would grow the estimated rewrite cost
-      // step by step, flipping a trim that passed the gate back to a skip
-      // mid-operation and restoring the original prefix. Earlier turns' trims
-      // are priced as applied: that is the prefix the cache holds.
-      const payloadEnd = lastUserIndex >= 0 ? lastUserIndex + 1 : messages.length;
-      const totalChars = replay.rawCharsPrefix[payloadEnd] - replay.trimmedSavedChars;
+      // Q only covers persisted history strictly between the first candidate
+      // and the trigger, so later turns replaying this decision price exactly
+      // the same bytes. Send-time context never lands there: injectors write
+      // into the head (system prompt, document index), the trigger itself
+      // (e.g. an active-document snapshot appended to the last user message),
+      // or after it. Pricing the whole payload let a large one-turn injection
+      // skip a trim that the next turn's replay, no longer seeing it, accepted —
+      // trimming bytes the cache still held in full. The span is also frozen at
+      // the turn boundary, so in-flight output cannot flip the decision
+      // mid-operation.
+      const firstCandidate = Math.min(...candidates.map((c) => c.index));
+      let trimmedInSpan = 0;
+      for (const [index, saved] of replay.trimmedSavedByIndex) {
+        if (index >= firstCandidate && index < lastUserIndex) trimmedInSpan += saved;
+      }
+      const totalChars =
+        replay.rawCharsPrefix[lastUserIndex] -
+        replay.rawCharsPrefix[firstCandidate] -
+        trimmedInSpan;
       const gainEstimate =
         this.config.warmRemainingStepsEstimate * potentialSavedChars * this.config.cacheReadPrice;
       const rewriteCostEstimate =
