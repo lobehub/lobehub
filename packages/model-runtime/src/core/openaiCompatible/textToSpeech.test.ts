@@ -223,6 +223,23 @@ describe('createOpenAICompatibleSpeech', () => {
     expect(result.usage).toEqual({ cost: 0.00003, inputCharacters: 2 });
   });
 
+  it('prices an alias mapped to a Fish route by the mapped model card', async () => {
+    create.mockResolvedValue(audioResponse([0]));
+    vi.mocked(getModelPricing).mockImplementation(async (model, provider) =>
+      model === 'drama-3' && provider === 'fishaudio' ? characterPricing : undefined,
+    );
+
+    const result = await createOpenAICompatibleSpeech(
+      client,
+      { input: 'hi', model: 'custom-fish', voice: 'default' },
+      undefined,
+      { ...context, provider: 'my-gateway', requestModel: 'fish-audio/drama-3' },
+    );
+
+    expect(getModelPricing).toHaveBeenCalledWith('drama-3', 'fishaudio', undefined);
+    expect(result.usage).toEqual({ cost: 0.00003, inputCharacters: 2 });
+  });
+
   it('refuses a gateway Fish Audio input over the per-request cap before the request', async () => {
     await expect(
       createOpenAICompatibleSpeech(

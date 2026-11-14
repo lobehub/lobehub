@@ -24,6 +24,7 @@ import {
   countFishAudioBilledBytes,
   countMiniMaxSpeechCharacters,
   countTextToSpeechCharacters,
+  isFishAudioSpeechModel,
   isFishAudioSpeechRoute,
   isMiniMaxSpeechModel,
   isTokenBilledTextToSpeech,
@@ -113,13 +114,17 @@ export const createOpenAICompatibleSpeech = async (
   const params = resolveTextToSpeechParams(payload);
   const format = params.format ?? DEFAULT_TTS_AUDIO_FORMAT;
   const fishAudio = isFishAudioSpeechRoute(context.provider, payload.model, context.requestModel);
-  // A gateway id (`fish-audio/s2.1-pro` on OpenRouter) has no card of its own: price it by
-  // the Fish Audio catalog card when the provider has none.
+  // A gateway id (`fish-audio/s2.1-pro` on OpenRouter) or an alias mapped to one has no
+  // card of its own: price it by the Fish Audio catalog card of the model actually called,
+  // preferring the mapped upstream id over the logical alias.
+  const fishCatalogModel = fishAudio
+    ? [context.requestModel, payload.model].find((model) => isFishAudioSpeechModel(model))
+    : undefined;
   const pricing =
     (await getModelPricing(payload.model, context.provider, options?.pricingContext)) ??
-    (fishAudio
+    (fishCatalogModel
       ? await getModelPricing(
-          toFishAudioCatalogModel(payload.model),
+          toFishAudioCatalogModel(fishCatalogModel),
           'fishaudio',
           options?.pricingContext,
         )
