@@ -72,23 +72,25 @@ describe('DevDock store', () => {
     expect(useDevDockStore.getState().pinOverrides).toEqual({ reload: false });
   });
 
-  it('opens the Local Database panel without persisting it as the active panel', () => {
+  it('never writes the open panel to storage', () => {
     useDevDockStore.getState().togglePanel('local-database');
+    useDevDockStore.getState().togglePanel('feature-flags');
 
-    expect(useDevDockStore.getState().activePanelId).toBe('local-database');
-    expect(readPersisted().activePanelId).toBeNull();
+    expect(readPersisted()).not.toHaveProperty('activePanelId');
   });
 
-  it('drops a persisted Local Database panel on boot', async () => {
+  it('restores persisted state but boots with no panel open', async () => {
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ activePanelId: 'local-database', panelHeight: 500 }),
+      JSON.stringify({ activePanelId: 'local-database', expanded: false, panelHeight: 500 }),
     );
 
     vi.resetModules();
+    // Boot-time state only exists at module init, so the store has to be re-imported.
     const { useDevDockStore: bootedStore } = await import('./store');
 
     expect(bootedStore.getState().activePanelId).toBeNull();
+    expect(bootedStore.getState().expanded).toBe(false);
     expect(bootedStore.getState().panelHeight).toBe(500);
   });
 });

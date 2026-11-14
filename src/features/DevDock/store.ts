@@ -4,22 +4,6 @@ const STORAGE_KEY = 'LOBE_DEV_DOCK_UI';
 
 export const MIN_PANEL_HEIGHT = 180;
 
-/**
- * Panels that must never be restored on boot.
- *
- * The Local Database panel reads every entry of the local database when it mounts.
- * When that read hangs the restored panel freezes the app before the user can close
- * it, and a force quit only brings it back. The panel stays openable — it just never
- * becomes the panel the next launch restores.
- */
-const UNRESTORABLE_PANEL_IDS = new Set(['local-database']);
-
-export const toPersistedActivePanelId = (id: string | null | undefined): string | null => {
-  if (!id) return null;
-
-  return UNRESTORABLE_PANEL_IDS.has(id) ? null : id;
-};
-
 interface DevDockUIState {
   activePanelId: string | null;
   expanded: boolean;
@@ -49,12 +33,24 @@ const readPersisted = (): DevDockUIState => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_UI;
-    const persisted = { ...DEFAULT_UI, ...(JSON.parse(raw) as Partial<DevDockUIState>) };
 
-    return { ...persisted, activePanelId: toPersistedActivePanelId(persisted.activePanelId) };
+    // The open panel is never restored: a panel that hangs while mounting (Local Database
+    // reads every entry of the local database) would come back before the user can close it.
+    return {
+      ...DEFAULT_UI,
+      ...(JSON.parse(raw) as Partial<DevDockUIState>),
+      activePanelId: null,
+    };
   } catch {
     return DEFAULT_UI;
   }
+};
+
+const persist = (state: DevDockUIState) => {
+  if (typeof localStorage === 'undefined') return;
+
+  const { activePanelId: _activePanelId, ...rest } = state;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
 };
 
 export interface DevDockStore extends DevDockUIState {
@@ -71,30 +67,7 @@ export interface DevDockStore extends DevDockUIState {
 export const useDevDockStore = create<DevDockStore>((set, get) => {
   const update = (patch: Partial<DevDockUIState>) => {
     set(patch);
-    if (typeof localStorage === 'undefined') return;
-    const {
-      activePanelId,
-      expanded,
-      maximized,
-      mesurer,
-      panelHeight,
-      pinOverrides,
-      reactScan,
-      scrollDebug,
-    } = get();
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        activePanelId: toPersistedActivePanelId(activePanelId),
-        expanded,
-        maximized,
-        mesurer,
-        panelHeight,
-        pinOverrides,
-        reactScan,
-        scrollDebug,
-      }),
-    );
+    persist(get());
   };
 
   return {
