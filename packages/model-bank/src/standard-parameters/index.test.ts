@@ -152,6 +152,20 @@ describe('meta-schema', () => {
       });
     });
 
+    it('should keep thinkingLevel in the extracted defaults', () => {
+      const schema: ModelParamsSchema = {
+        prompt: { default: '' },
+        thinkingLevel: { default: 'minimal', enum: ['minimal', 'high'] },
+      };
+
+      const result = extractDefaultValues(schema);
+
+      expect(result).toEqual({
+        prompt: '',
+        thinkingLevel: 'minimal',
+      });
+    });
+
     it('should preserve all parameter types correctly', () => {
       const schema: ModelParamsSchema = {
         prompt: { default: 'test' },
