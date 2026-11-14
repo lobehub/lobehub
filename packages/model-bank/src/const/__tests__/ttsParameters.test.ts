@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import elevenlabsModels from '../../aiModels/elevenlabs';
+import googleModels from '../../aiModels/google';
 import minimaxModels from '../../aiModels/minimax';
 import { openaiTTSModels } from '../../aiModels/openai/nonChat';
 import {
@@ -211,5 +212,84 @@ describe('ElevenLabs TTS model cards', () => {
     // Other legacy Default voice ids (Sarah, George, Rachel) must not be offered.
     for (const legacyId of ['EXAVITQu4vr4xnSDxMaL', 'JBFqnCBsd6RMkjVDRZzb', '21m00Tcm4TlvDq8ikWAM'])
       expect(ids).not.toContain(legacyId);
+  });
+});
+
+describe('Google Gemini TTS model cards', () => {
+  const googleTTSModels = googleModels.filter(
+    (card): card is AITTSModelCard => card.type === 'tts',
+  );
+
+  it('lists the Gemini 3.8 TTS models, and 2.5 preview TTS as legacy', () => {
+    expect(googleTTSModels.map((card) => [card.id, !!card.enabled, !!card.legacy])).toEqual([
+      ['gemini-3.8-flash-tts', true, false],
+      ['gemini-3.8-flash-lite-tts', true, false],
+      ['gemini-2.5-flash-preview-tts', false, true],
+      ['gemini-2.5-pro-preview-tts', false, true],
+    ]);
+  });
+
+  it.each(googleTTSModels.map((card) => [card.id, card]))(
+    '%s offers the 30 prebuilt voices with Kore as the default',
+    (_id, card) => {
+      expect(() => validateTTSModelParamsSchema(card.parameters)).not.toThrow();
+      for (const voice of card.voices!) expect(() => TTSVoiceSchema.parse(voice)).not.toThrow();
+
+      const voiceIds = card.voices!.map((voice) => voice.id);
+      expect(voiceIds).toHaveLength(30);
+      expect(new Set(voiceIds).size).toBe(30);
+      expect(voiceIds).toEqual(
+        expect.arrayContaining(['Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Sulafat']),
+      );
+      expect(card.parameters!.voice!.default).toBe('Kore');
+      expect(voiceIds).toContain(card.parameters!.voice!.default);
+    },
+  );
+
+  it('declares only the params the runtime honors: format and style instructions', () => {
+    for (const card of googleTTSModels) {
+      expect(Object.keys(card.parameters!).sort()).toEqual(['format', 'instructions', 'voice']);
+      expect(card.parameters!.format).toEqual({ default: 'mp3', enum: ['mp3', 'wav', 'pcm'] });
+      expect(extractTTSDefaultValues(card.parameters!)).toEqual({
+        format: 'mp3',
+        instructions: '',
+      });
+      // Gemini has no numeric speed: a legacy speed must be reported, not silently dropped.
+      expect(validateTTSParams(card.parameters!, { speed: 1.5 })).toEqual([
+        { key: 'speed', reason: 'not supported by this model' },
+      ]);
+      expect(validateTTSParams(card.parameters!, { format: 'opus' })).toHaveLength(1);
+      expect(
+        validateTTSParams(card.parameters!, { format: 'mp3', instructions: 'speak slowly' }),
+      ).toEqual([]);
+    }
+  });
+
+  it('bills text input and audio output per million tokens', () => {
+    const units = Object.fromEntries(
+      googleTTSModels.map((card) => [
+        card.id,
+        card.pricing!.units.map((unit) => [unit.name, unit.unit, (unit as any).rate]),
+      ]),
+    );
+
+    expect(units).toEqual({
+      'gemini-3.8-flash-lite-tts': [
+        ['textInput', 'millionTokens', 0.5],
+        ['audioOutput', 'millionTokens', 6],
+      ],
+      'gemini-3.8-flash-tts': [
+        ['textInput', 'millionTokens', 0.5],
+        ['audioOutput', 'millionTokens', 9],
+      ],
+      'gemini-2.5-flash-preview-tts': [
+        ['textInput', 'millionTokens', 0.5],
+        ['audioOutput', 'millionTokens', 10],
+      ],
+      'gemini-2.5-pro-preview-tts': [
+        ['textInput', 'millionTokens', 1],
+        ['audioOutput', 'millionTokens', 20],
+      ],
+    });
   });
 });

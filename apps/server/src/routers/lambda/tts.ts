@@ -11,6 +11,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import {
   INLINE_TTS_AUDIO_FORMATS,
+  resolveTTSModelRef,
   TTSProviderError,
   TTSRequestError,
   TTSService,
@@ -37,7 +38,8 @@ const synthesizeInput = z.object({
   model: z.string().min(1),
   /** Standard TTS params, checked against the model card when it declares them. */
   params: ttsParamsInput.optional(),
-  provider: z.string().min(1).default('openai'),
+  /** Defaults to the provider of the model's built-in card, then OpenAI. */
+  provider: z.string().min(1).optional(),
   /** @deprecated Use `params.speed`. */
   speed: z.number().min(0.25).max(4).optional(),
   /** Defaults to the model card's default voice. */
@@ -62,7 +64,10 @@ export const ttsRouter = router({
       const service = new TTSService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
 
       try {
-        const result = await service.synthesize(input);
+        // Without a provider, `lobehub/speech-2.8-hd` splits into provider and model, and a
+        // bare id takes the provider of its built-in card (`gemini-3.8-flash-tts` → google).
+        const ref = resolveTTSModelRef(input.model, input.provider);
+        const result = await service.synthesize({ ...input, ...ref });
 
         return {
           audioBase64: Buffer.from(result.audio).toString('base64'),

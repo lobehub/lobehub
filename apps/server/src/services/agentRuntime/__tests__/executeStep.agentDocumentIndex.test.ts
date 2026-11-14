@@ -65,11 +65,11 @@ beforeEach(() => {
   stubRunningDurableOperation();
 });
 
-// The agent-document index rows a step froze must reach the state the
+// The agent-document index snapshot a step pinned must reach the state the
 // step saves, or the next step renders the edited document live and rewrites
 // the prompt-cache prefix behind the index.
-describe('AgentRuntimeService.executeStep - agent-document index facts', () => {
-  it('writes the facts the step bound into binding.agentDocumentIndex', async () => {
+describe('AgentRuntimeService.executeStep - agent-document index snapshot', () => {
+  it('writes the snapshot the step bound into binding.agentDocumentIndex', async () => {
     const service = new AgentRuntimeService({} as any, 'user-1', { queueService: null });
     const coordinator = (service as any).coordinator;
     const completionLifecycle = (service as any).completionLifecycle;
@@ -91,14 +91,16 @@ describe('AgentRuntimeService.executeStep - agent-document index facts', () => {
       savedState = stepResult.newState;
     });
 
-    const facts = {
-      'agent-doc-1': { contentCharCount: 9400, updatedAt: '2026-05-01T00:00:00.000Z' },
+    const snapshot = {
+      notes: [],
+      rows: [{ contentCharCount: 9400, filename: 'report.md', id: 'agent-doc-1' }],
+      takenAt: '2026-05-01T00:00:00.000Z',
     };
     vi.spyOn(service as any, 'createAgentRuntime').mockImplementation(
       async ({ bindAgentDocumentIndex }: any) => ({
         runtime: {
           step: vi.fn().mockImplementation(async () => {
-            bindAgentDocumentIndex(facts);
+            bindAgentDocumentIndex(snapshot);
             return { events: [], newState: { ...state, status: 'done', stepCount: 1 } };
           }),
         },
@@ -115,7 +117,7 @@ describe('AgentRuntimeService.executeStep - agent-document index facts', () => {
     });
 
     expect(savedState.binding).toEqual({
-      agentDocumentIndex: facts,
+      agentDocumentIndex: snapshot,
       device: { id: 'device-1' },
     });
   });
