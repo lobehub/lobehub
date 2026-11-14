@@ -184,7 +184,7 @@ export const IterationTimeline = memo<{
             <Flexbox horizontal gap={12} key={entry.key}>
               <Flexbox align={'center'} style={{ flex: 'none', width: 9 }}>
                 <span
-                  {...sx([styles.stepDot], undefined, {
+                  {...sx(styles.stepDot, {
                     borderColor:
                       entry.review.action === 'accept'
                         ? cssVar.colorSuccess
@@ -213,7 +213,7 @@ export const IterationTimeline = memo<{
           <Flexbox horizontal gap={12} key={entry.key}>
             <Flexbox align={'center'} style={{ flex: 'none', width: 9 }}>
               <span
-                {...sx([styles.stepDot], undefined, {
+                {...sx(styles.stepDot, {
                   background: isCurrent ? stateColor : cssVar.colorBgContainer,
                   borderColor: isCurrent ? stateColor : cssVar.colorTextQuaternary,
                 })}
@@ -277,7 +277,7 @@ export const IterationTimeline = memo<{
                     ) : item.content ? (
                       <div
                         key={item.id}
-                        {...sx([evidenceStyles.evidenceText], undefined, {
+                        {...sx(evidenceStyles.evidenceText, {
                           maxHeight: 120,
                           maxWidth: 420,
                         })}

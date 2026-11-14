@@ -32,7 +32,7 @@ export const ReadComment = ({
 
   return (
     <Flexbox
-      {...sx([styles.box], undefined, {
+      {...sx(styles.box, {
         marginInlineStart: threaded && comment.parentCommentId ? 24 : 0,
       })}
     >

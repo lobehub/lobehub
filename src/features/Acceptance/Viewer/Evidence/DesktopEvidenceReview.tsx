@@ -153,15 +153,13 @@ export const DesktopEvidenceReview = memo<DesktopEvidenceReviewProps>(({ model }
                       current: index + 1,
                       total: evidence.length,
                     })}
-                    {...sx(
-                      [styles.thumb, item.id === activeEvidence.id && styles.thumbActive],
-                      undefined,
-                      { flexShrink: 0 },
-                    )}
+                    {...sx(styles.thumb, item.id === activeEvidence.id && styles.thumbActive, {
+                      flexShrink: 0,
+                    })}
                     onClick={() => model.selectEvidence(index)}
                   >
                     {item.type === 'video' ? (
-                      <span {...sx([styles.videoThumb], undefined, { height: '100%' })}>
+                      <span {...sx(styles.videoThumb, { height: '100%' })}>
                         <Icon icon={Film} size={18} />
                       </span>
                     ) : (
@@ -171,7 +169,7 @@ export const DesktopEvidenceReview = memo<DesktopEvidenceReviewProps>(({ model }
                 ))}
               </Flexbox>
             )}
-            <div {...sx([styles.stageRow], undefined, { position: 'relative' })}>
+            <div {...sx(styles.stageRow, { position: 'relative' })}>
               {isVideo ? (
                 <VideoReviewStage
                   chapters={activeEvidence.chapters ?? []}

@@ -36,14 +36,13 @@ const Regions = ({ active, regions }: { active?: string; regions: FrameRegion[] 
       <div
         key={region.key}
         {...sx(
-          [region.label === undefined && region.color === undefined ? styles.region : styles.mark],
-          undefined,
+          region.label === undefined && region.color === undefined ? styles.region : styles.mark,
           { ...percent(region.rect), borderColor: region.color },
         )}
       >
         {region.label !== undefined ? (
           <span
-            {...sx([styles.markBadge, region.key === active && styles.markBadgeActive], undefined, {
+            {...sx(styles.markBadge, region.key === active && styles.markBadgeActive, {
               background: region.color,
             })}
           >
@@ -61,5 +60,5 @@ export const FrameRegions = ({ active, regions }: { active?: string; regions: Fr
   regions.length > 0 ? <Regions active={active} regions={regions} /> : null;
 
 export const DraftRegion = ({ rect }: { rect: Rect }) => (
-  <div {...sx([styles.draft], undefined, percent(rect))} />
+  <div {...sx(styles.draft, percent(rect))} />
 );

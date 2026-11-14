@@ -134,7 +134,7 @@ export function FlowCanvas({
       <Flexbox
         ref={ref}
         {...sx(
-          [styles.canvas],
+          styles.canvas,
           fallback.canvas,
           fullscreen ? { flex: 1, height: '100%', minHeight: 0 } : undefined,
         )}

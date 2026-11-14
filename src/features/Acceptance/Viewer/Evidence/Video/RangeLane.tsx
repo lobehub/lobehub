@@ -63,7 +63,7 @@ export const RangeLane = ({ notes, onRange, onSeek, range }: RangeLaneProps) => 
         .map((note) => (
           <div
             key={`span-${note.key}`}
-            {...sx([styles.noteSpan], undefined, {
+            {...sx(styles.noteSpan, {
               left: pct(note.start),
               top: 4,
               width: pct(note.end! - note.start),
@@ -72,7 +72,7 @@ export const RangeLane = ({ notes, onRange, onSeek, range }: RangeLaneProps) => 
         ))}
       {range && (
         <div
-          {...sx([styles.rangeBand], undefined, {
+          {...sx(styles.rangeBand, {
             left: pct(range.start),
             width: pct(range.end - range.start),
           })}

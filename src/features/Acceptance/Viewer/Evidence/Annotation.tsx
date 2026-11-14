@@ -154,18 +154,18 @@ export const AnnotatedImage = memo<AnnotatedImageProps>(
     return (
       <Flexbox gap={6} style={{ maxWidth: '100%', width: 'fit-content' }}>
         <div {...stylex.props(styles.frame)}>
-          <img alt={''} src={src} onLoad={onLoad} {...sx([styles.image], undefined, imageStyle)} />
+          <img alt={''} src={src} onLoad={onLoad} {...sx(styles.image, imageStyle)} />
           {annotations.map((annotation, index) => (
             <div
               key={index}
-              {...sx([styles.rect], undefined, {
+              {...sx(styles.rect, {
                 ...rectStyle(annotation.rect),
                 borderColor: annotation.color ?? cssVar.colorError,
               })}
             >
               {numbered && (
                 <span
-                  {...sx([styles.badge], undefined, {
+                  {...sx(styles.badge, {
                     background: annotation.color ?? cssVar.colorError,
                   })}
                 >
@@ -232,18 +232,14 @@ export const AnnotationCanvas = memo<AnnotationCanvasProps>(
     return (
       <div
         {...handlers}
-        {...sx(
-          [styles.frame, styles.canvas],
-          undefined,
+        {...sx(styles.frame, styles.canvas, {
           // With an explicit zoomed width the frame must OUTGROW its host —
           // capping at 100% would clip the image instead of letting the host
           // viewport scroll/pan over it.
-          {
-            maxWidth: imageWidth ? 'none' : undefined,
-            touchAction: drawing ? 'none' : 'pan-x pan-y',
-            cursor: drawing ? 'crosshair' : 'auto',
-          },
-        )}
+          maxWidth: imageWidth ? 'none' : undefined,
+          touchAction: drawing ? 'none' : 'pan-x pan-y',
+          cursor: drawing ? 'crosshair' : 'auto',
+        })}
       >
         <img
           alt={''}
@@ -252,16 +248,12 @@ export const AnnotationCanvas = memo<AnnotationCanvasProps>(
           src={src}
           // Zoomed width comes from the host (viewport × zoom); the frame
           // shrink-wraps the image, so overlays track exactly.
-          {...sx(
-            [styles.image],
-            undefined,
-            imageWidth ? { maxWidth: 'none', width: imageWidth } : undefined,
-          )}
+          {...sx(styles.image, imageWidth ? { maxWidth: 'none', width: imageWidth } : undefined)}
         />
         {annotations.map((annotation, index) => (
           <div
             key={index}
-            {...sx([styles.rect, styles.editableRect], undefined, {
+            {...sx(styles.rect, styles.editableRect, {
               ...rectStyle(annotation.rect),
               pointerEvents: drawing ? 'auto' : 'none',
             })}
@@ -285,7 +277,7 @@ export const AnnotationCanvas = memo<AnnotationCanvasProps>(
             />
           </div>
         ))}
-        {draft && <div {...sx([styles.rect], undefined, rectStyle(draft))} />}
+        {draft && <div {...sx(styles.rect, rectStyle(draft))} />}
       </div>
     );
   },

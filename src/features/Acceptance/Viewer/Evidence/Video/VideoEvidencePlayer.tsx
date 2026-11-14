@@ -235,7 +235,7 @@ export const VideoEvidencePlayer = memo<VideoEvidencePlayerProps>(
             beside a narrow recording instead of at the far edge of the column. */}
         <div
           data-acceptance-video-host
-          {...sx([floatingActionHostMarker], undefined, {
+          {...sx(floatingActionHostMarker, {
             maxWidth: frameMaxHeight
               ? `max(${MIN_PLAYER_WIDTH}px, calc(${frameMaxHeight} * ${aspect}))`
               : `min(100%, ${Math.max(MIN_PLAYER_WIDTH, frameWidth)}px)`,

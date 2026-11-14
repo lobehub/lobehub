@@ -375,13 +375,13 @@ export const AcceptanceCheckRow = memo<{
             <Flexbox
               horizontal
               align={'center'}
-              {...sx([styles.rowTitle], undefined, { minWidth: 0 })}
+              {...sx(styles.rowTitle, { minWidth: 0 })}
               flex={1}
               gap={8}
               wrap={open ? 'wrap' : 'nowrap'}
             >
               <Text
-                {...sx([open || !desktop ? null : styles.titleEllipsis], undefined, {
+                {...sx(open || !desktop ? null : styles.titleEllipsis, {
                   fontSize: desktop ? 13 : 14,
                   minWidth: 0,
                 })}
@@ -409,11 +409,9 @@ export const AcceptanceCheckRow = memo<{
                   // A running accept/ignore spinner stays visible after the pointer leaves.
                   data-busy={accepting || ignoring ? '' : undefined}
                   gap={2}
-                  {...sx(
-                    [styles.rowActions, !(accepting || ignoring) && styles.rowActionsIdle],
-                    undefined,
-                    { flex: 'none' },
-                  )}
+                  {...sx(styles.rowActions, !(accepting || ignoring) && styles.rowActionsIdle, {
+                    flex: 'none',
+                  })}
                 >
                   <ActionIcon
                     disabled={reviewPending && !accepting}

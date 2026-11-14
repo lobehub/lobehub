@@ -98,10 +98,7 @@ export const AcceptanceOverview = ({
   return (
     <>
       <Flexbox {...stylex.props(styles.headerBand)}>
-        <Flexbox
-          gap={12}
-          {...sx([styles.column], undefined, { maxWidth: acceptanceReadingColumnMaxWidth })}
-        >
+        <Flexbox gap={12} {...sx(styles.column, { maxWidth: acceptanceReadingColumnMaxWidth })}>
           {/* Sharing sits beside the identity, as on the workbench page. The
               control gates itself on the server's review capability, so a
               reader without it sees nothing here. The inline padding clears the
@@ -152,7 +149,7 @@ export const AcceptanceOverview = ({
       <Flexbox
         gap={16}
         paddingBlock={20}
-        {...sx([styles.column], undefined, {
+        {...sx(styles.column, {
           maxWidth: tab === 'flow' ? 1500 : getAcceptanceBodyMaxWidth(tab),
         })}
       >

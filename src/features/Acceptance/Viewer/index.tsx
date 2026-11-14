@@ -71,7 +71,7 @@ const AcceptancePage = ({
               flex={1}
               style={{ minHeight: 0, minWidth: 0, position: 'relative' }}
             >
-              <Flexbox flex={1} {...sx([styles.contentFrame], undefined, { minWidth: 0 })}>
+              <Flexbox flex={1} {...sx(styles.contentFrame, { minWidth: 0 })}>
                 <Flexbox
                   flex={focused ? 1 : undefined}
                   gap={16}

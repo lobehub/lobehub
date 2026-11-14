@@ -68,7 +68,7 @@ const comparisonContent = (item: AcceptanceEvidence, action?: ReactNode, video?:
   );
   if (!action) return image;
   return (
-    <div {...sx([floatingActionHostMarker], undefined, { position: 'relative' })}>
+    <div {...sx(floatingActionHostMarker, { position: 'relative' })}>
       {image}
       {action}
     </div>
@@ -203,7 +203,7 @@ export const EvidenceList = memo<{
           return (
             <div
               key={item.id}
-              {...sx([action && floatingActionHostMarker], undefined, {
+              {...sx(action && floatingActionHostMarker, {
                 position: 'relative',
                 width: '100%',
               })}
@@ -288,7 +288,7 @@ export const EvidenceList = memo<{
             <Flexbox
               gap={4}
               key={item.id}
-              {...sx([action && floatingActionHostMarker], undefined, {
+              {...sx(action && floatingActionHostMarker, {
                 maxWidth: '100%',
                 position: 'relative',
                 width: 'fit-content',
@@ -309,8 +309,7 @@ export const EvidenceList = memo<{
               ) : (
                 <Flexbox
                   {...sx(
-                    [styles.evidenceImage],
-                    undefined,
+                    styles.evidenceImage,
                     item.fileWidth && item.fileHeight
                       ? { aspectRatio: imageRatio(item), maxWidth: '100%', width: item.fileWidth }
                       : undefined,

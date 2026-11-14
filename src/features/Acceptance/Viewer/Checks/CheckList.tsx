@@ -213,7 +213,7 @@ const CheckList = memo<CheckListProps>(
                 horizontal
                 align={'center'}
                 gap={8}
-                {...sx([styles.groupHeader, groupHeaderMarker], undefined, {
+                {...sx(styles.groupHeader, groupHeaderMarker, {
                   borderBlockStart:
                     groupIndex > 0 ? `1px solid ${cssVar.colorBorderSecondary}` : 'none',
                 })}
@@ -269,8 +269,7 @@ const CheckList = memo<CheckListProps>(
                       size={'small'}
                       // The spinner must stay visible after the pointer leaves.
                       {...sx(
-                        [styles.groupActions],
-                        undefined,
+                        styles.groupActions,
                         acceptingGroup === key ? { opacity: 1 } : undefined,
                       )}
                       type={'text'}

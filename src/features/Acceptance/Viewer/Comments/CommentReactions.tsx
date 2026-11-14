@@ -190,8 +190,8 @@ const CommentReactions = memo<CommentReactionsProps>(({ onReact, reactions }) =>
         >
           <span
             {...sx(
-              [styles.chip, reaction.mine && styles.chipMine],
-              undefined,
+              styles.chip,
+              reaction.mine && styles.chipMine,
               onReact ? undefined : { cursor: 'default' },
             )}
             onClick={onReact ? () => void fire(reaction.emoji, !reaction.mine) : undefined}

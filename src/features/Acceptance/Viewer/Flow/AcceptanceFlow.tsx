@@ -204,7 +204,7 @@ export function AcceptanceFlow() {
         gap={8}
         justify="space-between"
         wrap="wrap"
-        {...sx([styles.toolbar], undefined, { maxWidth: contentMeasure })}
+        {...sx(styles.toolbar, { maxWidth: contentMeasure })}
       >
         <Flexbox horizontal align="center" gap={4}>
           <Button size="small" type="text" onClick={() => setFocus(undefined)}>
@@ -256,7 +256,7 @@ export function AcceptanceFlow() {
       </Flexbox>
       <Flexbox horizontal flex={fullscreen ? 1 : undefined} {...stylex.props(styles.workspace)}>
         {showOutline ? (
-          <Flexbox flex={1} {...sx([styles.outline], undefined, { maxWidth: contentMeasure })}>
+          <Flexbox flex={1} {...sx(styles.outline, { maxWidth: contentMeasure })}>
             <FlowOutline edges={graphEdges} nodes={graph.nodes} onSelect={setSelected} />
           </Flexbox>
         ) : (

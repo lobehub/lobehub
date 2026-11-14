@@ -319,7 +319,7 @@ const DecisionBar = memo<DecisionBarProps>(
     }, [reviewComplete]);
 
     return (
-      <div {...sx([styles.bar], undefined, { maxWidth: barMaxWidth })}>
+      <div {...sx(styles.bar, { maxWidth: barMaxWidth })}>
         <Flexbox horizontal align={'center'} gap={8} {...stylex.props(styles.summary)}>
           {state === 'live' && repairing ? (
             <RepairingMark />
@@ -338,14 +338,14 @@ const DecisionBar = memo<DecisionBarProps>(
               color={cssVar.colorSuccess}
               icon={BadgeCheck}
               size={22}
-              {...sx([justCompleted && styles.completePop], undefined, { flex: 'none' })}
+              {...sx(justCompleted && styles.completePop, { flex: 'none' })}
             />
           ) : settledNeedsFix ? (
             <Icon
               color={cssVar.colorWarning}
               icon={CircleAlert}
               size={22}
-              {...sx([justCompleted && styles.completePop], undefined, { flex: 'none' })}
+              {...sx(justCompleted && styles.completePop, { flex: 'none' })}
             />
           ) : (
             <ProgressRing done={decidedCount} total={totalCount} />
