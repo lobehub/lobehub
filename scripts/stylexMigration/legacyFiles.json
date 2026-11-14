@@ -173,7 +173,6 @@
   "src/features/AgentGoals/ProcessControl/Graph/ExperimentGroup.tsx",
   "src/features/AgentGoals/ProcessControl/Graph/GraphLegend.tsx",
   "src/features/AgentGoals/ProcessControl/Graph/GraphNode.tsx",
-  "src/features/AgentGoals/ProcessControl/Graph/index.tsx",
   "src/features/AgentGoals/ProcessControl/ResultAnchorRail.tsx",
   "src/features/AgentGoals/ProcessControl/ResultDeliverables.tsx",
   "src/features/AgentGoals/ProcessControl/ResultTrail.tsx",

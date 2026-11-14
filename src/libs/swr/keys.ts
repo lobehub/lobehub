@@ -588,6 +588,7 @@ export const shareKeys = {
     'share:pageDocument',
     documentId,
   ]),
+  goal: def('share:goal', (shareId: string) => ['share:goal', shareId]),
   topic: def('share:topic', (id: string) => ['share:topic', id]),
   /** The visitor's own topics under an agent share (server-scoped by senderId). */
   visitorTopics: def('share:visitorTopics', (shareId: string) => ['share:visitorTopics', shareId]),

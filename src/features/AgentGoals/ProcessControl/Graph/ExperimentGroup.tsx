@@ -9,7 +9,7 @@ import type { GraphNodeData } from './GraphNode';
 
 export interface ExperimentGroupData extends GraphNodeData {
   onEnter: () => void;
-  onInspect: () => void;
+  onInspect?: () => void;
   onToggle: () => void;
 }
 
@@ -81,16 +81,18 @@ const ExperimentGroup = ({ data }: NodeProps) => {
           </span>
         </Button>
         <Flexbox horizontal gap={4} style={{ flexShrink: 0 }}>
-          <Button
-            className={'nodrag'}
-            size={'small'}
-            onClick={(event) => {
-              event.stopPropagation();
-              onInspect();
-            }}
-          >
-            {t('goalExperiment.inspect')}
-          </Button>
+          {onInspect && (
+            <Button
+              className={'nodrag'}
+              size={'small'}
+              onClick={(event) => {
+                event.stopPropagation();
+                onInspect();
+              }}
+            >
+              {t('goalExperiment.inspect')}
+            </Button>
+          )}
           <Button
             aria-label={t('goalExperiment.drillNamed', { title: view.node.title })}
             className={'nodrag'}

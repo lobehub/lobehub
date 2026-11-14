@@ -1,10 +1,11 @@
-import { createStaticStyles, cssVar, Flexbox, Markdown, Skeleton, Tag, Text } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Markdown, Skeleton, Text } from '@lobehub/ui';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import Graph from '@/features/AgentGoals/ProcessControl/Graph';
 import { chapterMap } from '@/features/AgentGoals/ProcessControl/Graph/chapterMap';
+import DetourCallout from '@/features/AgentGoals/Report/DetourCallout';
 import { useEntityMarkdown } from '@/features/EntityLink';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -18,16 +19,6 @@ import { useReportChapter, useReportGraph } from './useReportGraph';
  */
 
 const styles = createStaticStyles(({ css }) => ({
-  /**
-   * Review: an outline is enough — no tinted fill, so the detour reads as a
-   * callout beside the map rather than a filled warning block.
-   */
-  detour: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border: 1px dashed ${cssVar.colorWarningBorder};
-    border-radius: ${cssVar.borderRadius};
-  `,
   scroll: css`
     overflow-y: auto;
     flex: 1;
@@ -113,18 +104,7 @@ export const ChapterBody = memo(() => {
     <Frame>
       <Flexbox gap={8}>
         {chapter.chapter.detours.map((detour, index) => (
-          <Flexbox className={styles.detour} gap={4} key={index}>
-            <Flexbox horizontal align={'center'} gap={8}>
-              <Tag color={'warning'} size={'small'}>
-                {t(`goalProcess.result.story.detourKind.${detour.kind}`)}
-              </Tag>
-              <Text weight={600}>{detour.title}</Text>
-            </Flexbox>
-            <Text fontSize={13}>{detour.reason}</Text>
-            <Text fontSize={13} type={'secondary'}>
-              {`${t('goalProcess.result.story.lesson')}：${detour.lesson}`}
-            </Text>
-          </Flexbox>
+          <DetourCallout key={index} {...detour} />
         ))}
       </Flexbox>
       <Text fontSize={12} type={'secondary'}>

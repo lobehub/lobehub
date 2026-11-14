@@ -7,5 +7,6 @@ export default [
   route('share/page/:id', 'routes/sharePage.tsx'),
   route('share/artifact/:id', 'routes/shareArtifact.tsx'),
   route('share/file/:id', 'routes/shareFile.tsx'),
+  route('share/goal/:id', 'routes/shareGoal.tsx'),
   route('*', 'routes/catchall.tsx'),
 ] satisfies RouteConfig;

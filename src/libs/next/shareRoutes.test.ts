@@ -10,6 +10,9 @@ describe('isShareSpaRoute', () => {
     '/share/t/abc?hl=zh-CN',
     '/share/artifact/42',
     '/share/artifact/42/',
+    '/share/goal/gsh_1',
+    '/share/goal/gsh_1/',
+    '/share/goal/gsh_1?hl=zh-CN',
   ])('matches %s', (pathname) => {
     expect(isShareSpaRoute(pathname)).toBe(true);
   });
@@ -19,6 +22,10 @@ describe('isShareSpaRoute', () => {
     '/share/',
     '/share/t',
     '/share/artifact',
+    '/share/goal',
+    '/share/goal/',
+    '/share/g/gsh_1',
+    '/share/goal/gsh_1/extra',
     '/share/t/abc/extra',
     '/shared/t/abc',
     '/chat',
