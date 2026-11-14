@@ -9,7 +9,7 @@ import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
-import type { ConnectorMetadata, UserConnectorItem } from '@/database/schemas';
+import type { ConnectorMetadata } from '@/database/schemas';
 import {
   ConnectorMcpConnectionType,
   ConnectorSourceType,
@@ -156,10 +156,14 @@ type HolderVerdict =
  *   makes callable).
  */
 const judgeHolder = (
-  holder: Pick<
-    UserConnectorItem,
-    'mcpConnectionType' | 'mcpServerUrl' | 'metadata' | 'sourceType' | 'updatedAt' | 'userId'
-  >,
+  holder: {
+    mcpConnectionType?: string | null;
+    mcpServerUrl?: string | null;
+    metadata?: unknown;
+    sourceType?: string | null;
+    updatedAt: Date;
+    userId: string;
+  },
   { hasPluginRow, userId }: { hasPluginRow: boolean; userId: string },
 ): HolderVerdict => {
   if (holder.sourceType !== ConnectorSourceType.marketplace || !hasCallableMcpEndpoint(holder))
