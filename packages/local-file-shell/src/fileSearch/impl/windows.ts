@@ -20,6 +20,16 @@ type WindowsFallbackTool = 'fast-glob' | 'fd' | 'powershell';
 type FastGlobStatsEntry = { path: string; stats: Stats };
 
 /**
+ * Quote a value for embedding in a PowerShell single-quoted literal.
+ *
+ * The impl builds one `-Command` string, so `searchDir` and `keywords` are parsed as
+ * PowerShell source, not passed as argv. A `'` in either one closes the literal early
+ * and the leftover text is parsed as code — a directory like `C:\Users\o'brien`
+ * fails with "The string is missing the terminator".
+ */
+const toPowerShellLiteral = (value: string): string => value.replaceAll("'", "''");
+
+/**
  * Windows file search implementation
  * Uses fd > PowerShell > fast-glob fallback strategy
  */
@@ -160,8 +170,18 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
     try {
       const filter = options.keywords ? `*${options.keywords}*` : '*';
 
+      // `-LiteralPath` (not `-Path`): `-Path` resolves the value as a wildcard expression,
+      // so a directory named `[v2] builds` matches nothing and the search silently answers
+      // "0 files". Both interpolated values are quoted as PowerShell literals because a
+      // `'` in either one would end the string early and turn the rest into source.
+      // The encoding line is what makes non-ASCII paths usable at all: Windows PowerShell
+      // writes stdout in the system ANSI code page (CP936 on a zh-CN box), and the pipe is
+      // decoded as UTF-8, so `季度报告.txt` arrives as `���ȱ���.txt`. `stat()` then throws
+      // on every path and `processFilePaths` swallows it, which is how a directory full of
+      // Chinese-named files answered "no files".
       const psCommand = `
-        Get-ChildItem -Path '${searchDir}' -Filter '${filter}' -Recurse -File -Depth 10 -ErrorAction SilentlyContinue |
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8;
+        Get-ChildItem -LiteralPath '${toPowerShellLiteral(searchDir)}' -Filter '${toPowerShellLiteral(filter)}' -Recurse -File -Depth 10 -ErrorAction SilentlyContinue |
         Where-Object {
           $_.FullName -notlike '*\\node_modules\\*' -and
           $_.FullName -notlike '*\\.git\\*' -and
