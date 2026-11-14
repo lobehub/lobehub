@@ -82,11 +82,17 @@ export const sendMessage = (
     // not here after the full streaming lifecycle — otherwise the isolated
     // UI would not see the AI response while it is still streaming.
     const appContext = mcpAppContext.take(messageMapKey(targetContext));
+    // The app context is spent only on a message the conversation accepts
+    let accepted = false;
     const result = await chatStore
       .sendMessage({
         ...sendParams,
         ...(appContext.selections.length > 0 && {
           contextSelections: [...(sendParams.contextSelections ?? []), ...appContext.selections],
+          onMessageAccepted: () => {
+            accepted = true;
+            sendParams.onMessageAccepted?.();
+          },
           onPreflightFailure: () => {
             appContext.restore();
             sendParams.onPreflightFailure?.();
@@ -101,6 +107,8 @@ export const sendMessage = (
         appContext.restore();
         throw error;
       });
+    // A command that stores no message (`/compact`) leaves it for the next one
+    if (appContext.selections.length > 0 && !accepted) appContext.restore();
 
     // ===== Hook: onAfterMessageCreate =====
     // Called after messages are created but before AI response is complete

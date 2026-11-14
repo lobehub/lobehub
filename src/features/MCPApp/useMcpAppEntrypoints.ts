@@ -17,8 +17,9 @@ export const useMcpAppEntrypoints = (agentId?: string) => {
   const agentPlugins = useAgentStore((s) =>
     enabled && agentId ? agentSelectors.getAgentConfigById(agentId)(s)?.plugins : undefined,
   );
-  const [plugins, connectors, agentConnectors] = useToolStore((s) => [
+  const [plugins, pluginsConfirmed, connectors, agentConnectors] = useToolStore((s) => [
     s.installedPlugins,
+    pluginSelectors.isInstalledPluginsServerConfirmed(s),
     s.connectors,
     s.agentConnectors,
   ]);
@@ -49,7 +50,9 @@ export const useMcpAppEntrypoints = (agentId?: string) => {
           state.syncConnectorTools(connector.id),
         );
     }
-    for (const plugin of plugins) {
+    // A plugin painted from the local cache lacks its URL or command: its one
+    // discovery attempt waits for the server's records
+    for (const plugin of pluginsConfirmed ? plugins : []) {
       const config = plugin.customParams?.mcp;
       if (!config || plugin.manifest?.mcpAppEntrypoints !== undefined) continue;
       refreshMcpAppDiscovery(`plugin:${plugin.identifier}`, async () => {
@@ -64,7 +67,7 @@ export const useMcpAppEntrypoints = (agentId?: string) => {
         await state.refreshPlugins();
       });
     }
-  }, [enabled, plugins, connectors, agentConnectors, agentId]);
+  }, [enabled, plugins, pluginsConfirmed, connectors, agentConnectors, agentId]);
   return selectMcpAppEntrypoints(getToolStoreState(), enabled, agentId).filter(
     (entry) => !getDisabledPluginIds(agentPlugins).includes(entry.identifier),
   );

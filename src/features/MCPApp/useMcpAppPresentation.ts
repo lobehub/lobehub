@@ -51,8 +51,9 @@ export const useMcpAppPresentation = ({
         scope,
         title: title || identifier,
         icon,
+        ...(location === 'fullscreen' && { inPanel: true }),
       });
-  }, [enabled, toolCallId, identifier, messageId, scope, title, icon]);
+  }, [enabled, toolCallId, identifier, messageId, scope, title, icon, location]);
 
   // Where the view lives follows what the tool and its resource declare,
   // decided before any frame mounts. Either host decides: a side panel tab

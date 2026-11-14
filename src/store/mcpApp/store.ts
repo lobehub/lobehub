@@ -12,6 +12,11 @@ export interface McpAppViewState {
   dismissed?: boolean;
   icon?: string;
   identifier: string;
+  /**
+   * A side panel tab shows it: a tab open (or restored with the conversation)
+   * keeps the view in the panel whatever its metadata first declared.
+   */
+  inPanel?: boolean;
   /** It came from a call completed in the live conversation, which opens its side panel. */
   live?: boolean;
   messageId?: string;

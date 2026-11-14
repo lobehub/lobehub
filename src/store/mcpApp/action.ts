@@ -63,7 +63,8 @@ export class McpAppActionImpl {
   };
   /**
    * Decide where a view lives from what its tool and resource declare
-   * (`declared`), once. The side panel needs one in the view's conversation;
+   * (`declared`), once. A view a side panel tab already shows stays there: the
+   * tab is restored with the conversation, its location state is not. The side panel needs one in the view's conversation;
    * without it the view stays in its message. Only a call that completed in
    * this live conversation opens the panel by itself: a view loaded from
    * history waits there for the user to look.
@@ -72,7 +73,8 @@ export class McpAppActionImpl {
     const state = useMcpAppStore.getState();
     const view = state.views[id];
     if (!enabled() || !view || view.placed) return;
-    const mode = declared === 'fullscreen' && state.panels[view.scope] ? 'fullscreen' : 'inline';
+    const wanted = declared === 'fullscreen' || view.inPanel ? 'fullscreen' : 'inline';
+    const mode = wanted === 'fullscreen' && state.panels[view.scope] ? 'fullscreen' : 'inline';
     const live = this.consumeLive(id);
     useMcpAppStore.setState(
       (s) => ({ views: { ...s.views, [id]: { ...view, live, mode, placed: true } } }),

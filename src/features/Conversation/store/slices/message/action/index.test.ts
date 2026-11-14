@@ -329,6 +329,7 @@ describe('MCP App context dispatch', () => {
     await store.getState().sendMessage({ message: 'hello' });
     expect(sendMessage.mock.calls[0][0]).not.toHaveProperty('contextSelections');
     expect(sendMessage.mock.calls[0][0]).not.toHaveProperty('onPreflightFailure');
+    expect(sendMessage.mock.calls[0][0]).not.toHaveProperty('onMessageAccepted');
   });
   it('attaches the snapshot and restores it on a failed send', async () => {
     const selection = {
@@ -345,5 +346,41 @@ describe('MCP App context dispatch', () => {
     await expect(store.getState().sendMessage({ message: 'hello' })).rejects.toThrow('offline');
     expect(sendMessage.mock.calls[0][0].contextSelections).toEqual([selection]);
     expect(restore).toHaveBeenCalledOnce();
+  });
+  it('keeps the snapshot for the next message when a command stores none', async () => {
+    const selection = {
+      id: 'view',
+      source: 'mcpApp' as const,
+      identifier: 'notes',
+      content: 'ctx',
+    };
+    const restore = vi.fn();
+    const store = createTestStore();
+    // `/compact` compresses history and returns without accepting a message
+    const sendMessage = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(useChatStore, 'getState').mockReturnValue({ sendMessage } as any);
+    vi.spyOn(mcpAppContext, 'take').mockReturnValue({ selections: [selection], restore });
+    await store.getState().sendMessage({ message: '/compact' });
+    expect(restore).toHaveBeenCalledOnce();
+  });
+  it('spends the snapshot on an accepted message', async () => {
+    const selection = {
+      id: 'view',
+      source: 'mcpApp' as const,
+      identifier: 'notes',
+      content: 'ctx',
+    };
+    const restore = vi.fn();
+    const onMessageAccepted = vi.fn();
+    const store = createTestStore();
+    const sendMessage = vi.fn(async (params: { onMessageAccepted?: () => void }) => {
+      params.onMessageAccepted?.();
+      return undefined;
+    });
+    vi.spyOn(useChatStore, 'getState').mockReturnValue({ sendMessage } as any);
+    vi.spyOn(mcpAppContext, 'take').mockReturnValue({ selections: [selection], restore });
+    await store.getState().sendMessage({ message: 'hello', onMessageAccepted });
+    expect(restore).not.toHaveBeenCalled();
+    expect(onMessageAccepted).toHaveBeenCalledOnce();
   });
 });

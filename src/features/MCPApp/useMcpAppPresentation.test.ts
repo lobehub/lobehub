@@ -109,6 +109,18 @@ describe('MCP App placement from declarations', () => {
     expect(result.current.mode).toBe('inline');
   });
 
+  it('keeps a restored side panel tab in the panel whatever the tool first declared', () => {
+    mcpAppActions.registerPanel('topic');
+    // The app moved itself to the panel before the reload; its message is rendered too
+    const inline = renderHook(() => useMcpAppPresentation({ ...options, preferred: 'inline' }));
+    renderHook(() =>
+      useMcpAppPresentation({ ...options, location: 'fullscreen', preferred: 'inline' }),
+    );
+    decide();
+    expect(inline.result.current.mode).toBe('fullscreen');
+    expect(control.open).not.toHaveBeenCalled();
+  });
+
   it('lets the side panel host decide when its tab is restored without the message', () => {
     mcpAppActions.registerPanel('topic');
     const { result } = renderHook(() =>

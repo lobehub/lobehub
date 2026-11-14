@@ -6,6 +6,7 @@ import { initialState, useMcpAppStore } from '@/store/mcpApp/store';
 import { useMcpAppEntrypoints } from './useMcpAppEntrypoints';
 
 const mocks = vi.hoisted(() => ({
+  confirmed: true,
   enabled: false,
   state: {
     installedPlugins: [] as any[],
@@ -32,7 +33,7 @@ vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: { getAgentConfigById: () => () => ({ plugins: [] }) },
 }));
 vi.mock('@/store/tool/selectors', () => ({
-  pluginSelectors: { isInstalledPluginsServerConfirmed: () => true },
+  pluginSelectors: { isInstalledPluginsServerConfirmed: () => mocks.confirmed },
 }));
 vi.mock('@/services/mcp', () => ({
   mcpService: { getPluginMcpManifest: mocks.discover },
@@ -41,6 +42,7 @@ vi.mock('@/services/plugin', () => ({ pluginService: { updatePluginManifest: moc
 beforeEach(() => {
   useMcpAppStore.setState(initialState);
   vi.clearAllMocks();
+  mocks.confirmed = true;
   mocks.enabled = false;
   mocks.state.installedPlugins = [];
   mocks.state.connectors = [];
@@ -85,5 +87,33 @@ describe('gated entrypoint discovery refresh', () => {
     unmount();
     renderHook(() => useMcpAppEntrypoints());
     expect(mocks.discover).toHaveBeenCalledOnce();
+  });
+  it("waits for the server's plugin records before spending a plugin's discovery", async () => {
+    mocks.enabled = true;
+    mocks.confirmed = false;
+    // Painted from the local cache: the projection keeps the type, not the URL
+    mocks.state.installedPlugins = [
+      { customParams: { mcp: { type: 'http' } }, identifier: 'notes', manifest: { api: [] } },
+    ];
+    const { rerender } = renderHook(() => useMcpAppEntrypoints());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mocks.discover).not.toHaveBeenCalled();
+
+    mocks.confirmed = true;
+    mocks.state.installedPlugins = [
+      {
+        customParams: { mcp: { type: 'http', url: 'https://example.com/mcp' } },
+        identifier: 'notes',
+        manifest: { api: [] },
+      },
+    ];
+    rerender();
+
+    await waitFor(() => expect(mocks.discover).toHaveBeenCalledOnce());
+    expect(mocks.discover).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customParams: { mcp: { type: 'http', url: 'https://example.com/mcp' } },
+      }),
+    );
   });
 });
