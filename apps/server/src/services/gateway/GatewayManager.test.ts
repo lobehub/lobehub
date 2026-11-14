@@ -391,6 +391,46 @@ describe('GatewayManager', () => {
       await manager.stopClient('qq', 'app-1');
       expect(second.bot.stop).toHaveBeenCalledTimes(1);
     });
+
+    it('should not start a replacement that was disconnected while the replaced bot was stopping', async () => {
+      const first = createHandshakeBot();
+      let finishFirstStop!: () => void;
+      // Only the replacement's stop of the first bot is slow; later stops resolve.
+      first.bot.stop = vi
+        .fn()
+        .mockImplementationOnce(
+          () =>
+            new Promise<void>((resolve) => {
+              finishFirstStop = resolve;
+            }),
+        )
+        .mockResolvedValue(undefined);
+      const second = createHandshakeBot();
+      const factory = vi.fn().mockReturnValueOnce(first.bot).mockReturnValueOnce(second.bot);
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue({
+        applicationId: 'app-1',
+        credentials: {},
+      });
+      const manager = new GatewayManager({ definitions: [createFakeDefinition('qq', factory)] });
+
+      const a = manager.startClient('qq', 'app-1');
+      const b = manager.startClient('qq', 'app-1');
+      await flush();
+      // The second call holds the slot and is waiting for the first bot to stop.
+      expect(first.bot.stop).toHaveBeenCalledTimes(1);
+
+      // The user disconnects during that wait.
+      await manager.stopClient('qq', 'app-1');
+      expect(second.bot.stop).toHaveBeenCalledTimes(1);
+
+      finishFirstStop();
+      first.ready();
+      second.ready();
+      await Promise.all([a, b]);
+
+      // The disconnected replacement never opens a connection.
+      expect(second.bot.start).not.toHaveBeenCalled();
+    });
   });
 
   describe('stopClient', () => {
