@@ -187,44 +187,6 @@ table agents {
   }
 }
 
-table agents_files {
-  file_id text [not null]
-  agent_id text [not null]
-  enabled boolean [default: true]
-  user_id text [not null]
-  workspace_id text
-  accessed_at "timestamp with time zone" [not null, default: `now()`]
-  created_at "timestamp with time zone" [not null, default: `now()`]
-  updated_at "timestamp with time zone" [not null, default: `now()`]
-
-  indexes {
-    (file_id, agent_id, user_id) [pk]
-    agent_id [name: 'agents_files_agent_id_idx']
-    file_id [name: 'agents_files_file_id_idx']
-    user_id [name: 'agents_files_user_id_idx']
-    workspace_id [name: 'agents_files_workspace_id_idx']
-  }
-}
-
-table agents_knowledge_bases {
-  agent_id text [not null]
-  knowledge_base_id text [not null]
-  user_id text [not null]
-  workspace_id text
-  enabled boolean [default: true]
-  accessed_at "timestamp with time zone" [not null, default: `now()`]
-  created_at "timestamp with time zone" [not null, default: `now()`]
-  updated_at "timestamp with time zone" [not null, default: `now()`]
-
-  indexes {
-    (agent_id, knowledge_base_id) [pk]
-    agent_id [name: 'agents_knowledge_bases_agent_id_idx']
-    knowledge_base_id [name: 'agents_knowledge_bases_knowledge_base_id_idx']
-    user_id [name: 'agents_knowledge_bases_user_id_idx']
-    workspace_id [name: 'agents_knowledge_bases_workspace_id_idx']
-  }
-}
-
 table agent_accounts {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   agent_id text [not null]
@@ -768,6 +730,44 @@ table agent_interventions {
     
     
     
+  }
+}
+
+table agents_files {
+  file_id text [not null]
+  agent_id text [not null]
+  enabled boolean [default: true]
+  user_id text [not null]
+  workspace_id text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (file_id, agent_id, user_id) [pk]
+    agent_id [name: 'agents_files_agent_id_idx']
+    file_id [name: 'agents_files_file_id_idx']
+    user_id [name: 'agents_files_user_id_idx']
+    workspace_id [name: 'agents_files_workspace_id_idx']
+  }
+}
+
+table agents_knowledge_bases {
+  agent_id text [not null]
+  knowledge_base_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  enabled boolean [default: true]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (agent_id, knowledge_base_id) [pk]
+    agent_id [name: 'agents_knowledge_bases_agent_id_idx']
+    knowledge_base_id [name: 'agents_knowledge_bases_knowledge_base_id_idx']
+    user_id [name: 'agents_knowledge_bases_user_id_idx']
+    workspace_id [name: 'agents_knowledge_bases_workspace_id_idx']
   }
 }
 
@@ -2234,6 +2234,7 @@ table documents {
     file_id [name: 'documents_file_id_idx']
     parent_id [name: 'documents_parent_id_idx']
     knowledge_base_id [name: 'documents_knowledge_base_id_idx']
+    created_by_agent_id [name: 'documents_created_by_agent_id_idx']
     (client_id, user_id) [name: 'documents_client_id_user_id_unique', unique]
     (slug, user_id) [name: 'documents_slug_user_id_unique', unique]
     workspace_id [name: 'documents_workspace_id_idx']
