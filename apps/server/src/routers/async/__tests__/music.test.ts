@@ -236,7 +236,7 @@ describe('musicRouter.createMusic', () => {
     );
   });
 
-  it('stores the songs of one batch concurrently, so storage needs one download of time', async () => {
+  it('stores two songs of one batch at the same time', async () => {
     runtime.createMusic.mockResolvedValue({
       status: 'success',
       tracks: [
@@ -262,6 +262,29 @@ describe('musicRouter.createMusic', () => {
 
     await expect(promise).resolves.toEqual({ stored: 2, success: true });
     expect(generationServiceMock.ensureTopicCover).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a stored song successful when its first success status write fails', async () => {
+    runtime.createMusic.mockResolvedValue({
+      status: 'success',
+      tracks: [
+        { audioUrl: 'https://cdn.example.com/a.mp3', id: 'clip-a' },
+        { audioUrl: 'https://cdn.example.com/b.mp3', id: 'clip-b' },
+      ],
+    });
+    let failedOnce = false;
+    asyncTaskModelMock.update.mockImplementation(async (id: string, value: any) => {
+      if (id === 'task-1' && value.status === AsyncTaskStatus.Success && !failedOnce) {
+        failedOnce = true;
+        throw new Error('connection reset');
+      }
+    });
+
+    const result = await musicRouter.createCaller(ctx).createMusic(createInput());
+
+    expect(result).toEqual({ stored: 2, success: true });
+    expect(taskUpdates('task-1').map((value) => value.status)).not.toContain(AsyncTaskStatus.Error);
+    expect(taskUpdates('task-1').at(-1)).toMatchObject({ status: AsyncTaskStatus.Success });
   });
 
   it('fails every task and refunds when the provider reports the task failed', async () => {

@@ -97,6 +97,25 @@ export const validateMusicParams = (
 };
 
 /**
+ * Drop the params the model card does not declare. Validation lets an undeclared param through
+ * while it is unset (`false`, `null`, `''`), so this keeps such values out of the stored config
+ * and the provider request. Without a declared schema (a custom model) every param is kept.
+ */
+export const pickDeclaredMusicParams = (
+  params: MusicParamsInput,
+  schema?: MusicModelParamsSchema,
+): MusicParamsInput => {
+  if (!schema) return params;
+
+  const result: Record<string, unknown> = { prompt: params.prompt };
+  for (const [key, value] of Object.entries(params)) {
+    if (key !== 'prompt' && key in schema) result[key] = value;
+  }
+
+  return result as MusicParamsInput;
+};
+
+/**
  * Map the standard params to the runtime's provider-neutral params.
  */
 export const toRuntimeMusicParams = (params: MusicParamsInput): MusicGenerationParams => {

@@ -29,6 +29,7 @@ import { FileService } from '@/server/services/file';
 import { resolveMusicModelCard } from '@/server/services/generation/musicModel';
 import {
   musicParamsInputSchema,
+  pickDeclaredMusicParams,
   validateMusicParams,
 } from '@/server/services/generation/musicParams';
 import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
@@ -71,7 +72,7 @@ export const musicRouter = router({
     .mutation(async ({ input, ctx }) => {
       const { userId, serverDB, asyncTaskModel, fileService, generationTopicModel } = ctx;
       const wsId = ctx.workspaceId ?? undefined;
-      const { generationTopicId, model, params, provider } = input;
+      const { generationTopicId, model, provider } = input;
 
       const { resolvedModelId } = await resolveBusinessModelMapping(provider, model);
 
@@ -91,7 +92,7 @@ export const musicRouter = router({
         });
       }
 
-      const paramErrors = validateMusicParams(params, card.parameters);
+      const paramErrors = validateMusicParams(input.params, card.parameters);
       if (paramErrors.length > 0) {
         throw new TRPCError({
           cause: { errors: paramErrors },
@@ -99,6 +100,7 @@ export const musicRouter = router({
           message: `Invalid music params: ${paramErrors.join('; ')}`,
         });
       }
+      const params = pickDeclaredMusicParams(input.params, card.parameters);
 
       const generationTopic = await generationTopicModel.findById(generationTopicId);
       if (!generationTopic) {

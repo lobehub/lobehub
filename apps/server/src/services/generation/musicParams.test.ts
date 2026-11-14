@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { musicParamsInputSchema, toRuntimeMusicParams, validateMusicParams } from './musicParams';
+import {
+  musicParamsInputSchema,
+  pickDeclaredMusicParams,
+  toRuntimeMusicParams,
+  validateMusicParams,
+} from './musicParams';
 
 const parse = (value: unknown) => musicParamsInputSchema.parse(value);
 
@@ -67,5 +72,25 @@ describe('toRuntimeMusicParams', () => {
       prompt: 'rainy night',
       title: 'Rain',
     });
+  });
+});
+
+describe('pickDeclaredMusicParams', () => {
+  it('drops unset flags the model does not declare, so they never reach the provider', () => {
+    const params = parse({ autoLyrics: false, instrumental: false, lyrics: 'la', prompt: 'p' });
+    const schema = { lyrics: { default: null }, prompt: { default: '' } } as any;
+
+    expect(validateMusicParams(params, schema)).toEqual([]);
+    expect(pickDeclaredMusicParams(params, schema)).toEqual({ lyrics: 'la', prompt: 'p' });
+    expect(toRuntimeMusicParams(pickDeclaredMusicParams(params, schema))).toEqual({
+      lyrics: 'la',
+      prompt: 'p',
+    });
+  });
+
+  it('keeps every param for a custom model without a schema', () => {
+    const params = parse({ instrumental: false, prompt: 'p' });
+
+    expect(pickDeclaredMusicParams(params)).toEqual(params);
   });
 });

@@ -73,6 +73,9 @@ class MusicStageError extends Error {
   }
 }
 
+/** How many songs of one batch are downloaded and stored at the same time */
+const MUSIC_STORE_CONCURRENCY = 2;
+
 const wait = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
     if (signal.aborted) return reject(new DOMException('Aborted', 'AbortError'));
@@ -292,8 +295,9 @@ export const musicRouter = router({
 
         const coverKeys: (string | undefined)[] = [];
 
-        // Store the songs concurrently, so a batch finishing near the task deadline needs the
-        // time of one download rather than one per song.
+        // Store songs two at a time: a batch finishing near the task deadline waits for fewer
+        // sequential downloads, while each song is buffered in memory (up to 100 MB) only two
+        // at a time.
         await pMap(
           tasks,
           async ({ asyncTaskId, generationId }, index) => {
@@ -344,11 +348,6 @@ export const musicRouter = router({
               coverKeys[index] = processResult.coverKey;
               stored += 1;
               settledTaskIds.add(asyncTaskId);
-
-              await asyncTaskModel.update(asyncTaskId, {
-                duration,
-                status: AsyncTaskStatus.Success,
-              });
             } catch (error) {
               console.error(
                 '[music-async] Failed to store track %d of %s:',
@@ -361,9 +360,28 @@ export const musicRouter = router({
                 error: createMusicTaskError(error, 'process'),
                 status: AsyncTaskStatus.Error,
               });
+              return;
+            }
+
+            // The song is stored: a failed status write must not turn it into an error card,
+            // so retry it once instead of falling into the storage failure path above.
+            const success = { duration, status: AsyncTaskStatus.Success };
+            try {
+              await asyncTaskModel.update(asyncTaskId, success);
+            } catch (error) {
+              console.error('[music-async] Retrying the success status of %s:', asyncTaskId, error);
+              try {
+                await asyncTaskModel.update(asyncTaskId, success);
+              } catch (retryError) {
+                console.error(
+                  '[music-async] Failed to mark stored song %s as succeeded:',
+                  asyncTaskId,
+                  retryError,
+                );
+              }
             }
           },
-          { concurrency: Math.max(tasks.length, 1) },
+          { concurrency: MUSIC_STORE_CONCURRENCY },
         );
 
         // The first stored song's cover, as in batch order
