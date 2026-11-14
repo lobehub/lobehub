@@ -64,7 +64,7 @@ class DeploymentTests(unittest.TestCase):
                 managed = json.loads(text.replace('$$', '$'))
                 for service, values in managed['services'].items():
                     effective['services'].setdefault(service, {}).update(values)
-            stdout = json.dumps(effective)
+            stdout = json.dumps(effective).replace('$', '$$')
         elif 'pull' in args:
             status = self.pull_status
         elif 'up' in args:
@@ -256,7 +256,7 @@ def compose_check():
         override = case.directory / 'docker-compose.override.yml'
         config = json.loads(subprocess.check_output([
             'docker', 'compose', '--project-directory', str(case.directory),
-            '-f', str(case.compose), '-f', str(override), 'config', '--format', 'json'], text=True))
+            '-f', str(case.compose), '-f', str(override), 'config', '--format', 'json'], text=True).replace('$$', '$'))
         service = config['services']['lobe']
         assert service['image'] == MODULE.DEFAULT_IMAGE + ':main'
         assert service['environment']['APP_URL'] == 'http://10.10.10.118:3210'
@@ -268,7 +268,7 @@ def compose_check():
             stream.write(MODULE.MARKER + '\n' + json.dumps(managed).replace('$', '$$'))
         config = json.loads(subprocess.check_output([
             'docker', 'compose', '--project-directory', str(case.directory),
-            '-f', str(case.compose), '-f', str(override), 'config', '--format', 'json'], text=True))
+            '-f', str(case.compose), '-f', str(override), 'config', '--format', 'json'], text=True).replace('$$', '$'))
         assert config['services']['lobe']['environment']['ONLYBOXES_JIT_SIGNING_KEY'] == 'secret$with$dollars'
     finally:
         case.tearDown()

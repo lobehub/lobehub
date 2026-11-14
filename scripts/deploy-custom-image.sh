@@ -217,7 +217,9 @@ class Manager:
         return command
 
     def config(self, override=None):
-        return json.loads(run(self.command(override) + ['config', '--format', 'json'], capture=True).stdout)
+        # Compose re-escapes literal dollars when serializing config for reuse.
+        output = run(self.command(override) + ['config', '--format', 'json'], capture=True).stdout
+        return json.loads(output.replace('$$', '$'))
 
     @contextlib.contextmanager
     def staged(self, managed):
