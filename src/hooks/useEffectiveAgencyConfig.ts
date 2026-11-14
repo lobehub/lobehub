@@ -128,8 +128,9 @@ export const useEffectiveAgencyConfig = (
     !(
       usesWorkspaceMemberSelection && sharedAgencyConfig?.executionTargetSelectionPolicy === 'fixed'
     );
-  const activeTopicId = useChatStore((s) => s.activeTopicId);
-  const bindingTopicId = topicId === undefined ? activeTopicId : topicId;
+  // Select inside the store callback so an explicit `topicId` (including
+  // `null`) does not subscribe the caller to every active-topic switch.
+  const bindingTopicId = useChatStore((s) => (topicId === undefined ? s.activeTopicId : topicId));
   const topicDeviceId = useChatStore((s) =>
     getTopicBoundDeviceId(
       bindingTopicId ? topicSelectors.getTopicById(bindingTopicId)(s) : undefined,

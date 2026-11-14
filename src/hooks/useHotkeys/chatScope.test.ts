@@ -8,9 +8,15 @@ import type { HotkeyId } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useFindInTopicHotkey, useToggleTerminalPanelHotkey } from './chatScope';
+import {
+  useAddUserMessageHotkey,
+  useFindInTopicHotkey,
+  useToggleTerminalPanelHotkey,
+} from './chatScope';
 
 const mocks = vi.hoisted(() => ({
+  disableScope: vi.fn(),
+  enableScope: vi.fn(),
   hotkeyCallback: undefined as (() => void) | undefined,
   openWorkingSidebar: vi.fn(),
   toggleTerminalPanel: vi.fn(),
@@ -33,6 +39,10 @@ vi.mock('@/store/global', () => ({
       openWorkingSidebar: mocks.openWorkingSidebar,
       toggleTerminalPanel: mocks.toggleTerminalPanel,
     }),
+}));
+
+vi.mock('react-hotkeys-hook', () => ({
+  useHotkeysContext: () => ({ disableScope: mocks.disableScope, enableScope: mocks.enableScope }),
 }));
 
 vi.mock('./useHotkeyById', () => ({
@@ -119,5 +129,27 @@ describe('useFindInTopicHotkey', () => {
       keys: 'mod+f',
       scopes: [HotkeyScopeEnum.Chat],
     });
+  });
+});
+
+describe('useAddUserMessageHotkey', () => {
+  beforeEach(() => {
+    mocks.disableScope.mockReset();
+    mocks.enableScope.mockReset();
+  });
+
+  it('enables its scope for as long as it is mounted, without re-toggling on re-render', () => {
+    const { rerender, unmount } = renderHook(({ send }) => useAddUserMessageHotkey(send), {
+      initialProps: { send: vi.fn() },
+    });
+    rerender({ send: vi.fn() });
+
+    expect(mocks.enableScope).toHaveBeenCalledTimes(1);
+    expect(mocks.enableScope).toHaveBeenCalledWith(HotkeyEnum.AddUserMessage);
+    expect(mocks.disableScope).not.toHaveBeenCalled();
+
+    unmount();
+
+    expect(mocks.disableScope).toHaveBeenCalledWith(HotkeyEnum.AddUserMessage);
   });
 });

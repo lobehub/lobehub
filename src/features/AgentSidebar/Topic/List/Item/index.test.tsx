@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,6 +14,7 @@ const scopedTopicMock = vi.hoisted(() => ({
 }));
 const useTopicNavigationMock = vi.hoisted(() => vi.fn());
 const prefetchMessagesMock = vi.hoisted(() => vi.fn());
+const useTopicItemDropdownMenuMock = vi.hoisted(() => vi.fn(() => ({ dropdownMenu: () => [] })));
 const activeTopicIdMock = vi.hoisted(() => ({ value: undefined as string | undefined }));
 const agentRuntimeRunningMock = vi.hoisted(() => ({ value: false }));
 const runningStartTimeMock = vi.hoisted(() => ({ value: undefined as number | undefined }));
@@ -67,6 +68,7 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
     extra,
     href,
     icon,
+    onPointerEnter,
     slots,
     title,
   }: {
@@ -76,10 +78,16 @@ vi.mock('@/features/NavPanel/components/NavItem', () => ({
     extra?: ReactNode;
     href?: string;
     icon?: ReactNode;
+    onPointerEnter?: () => void;
     slots?: { iconBelow?: ReactNode; titlePrefix?: ReactNode };
     title?: ReactNode;
   }) => (
-    <div data-active={String(active)} data-href={href} data-testid="nav-item">
+    <div
+      data-active={String(active)}
+      data-href={href}
+      data-testid="nav-item"
+      onPointerEnter={onPointerEnter}
+    >
       <div data-testid="nav-item-leading">
         {icon}
         {slots?.iconBelow}
@@ -197,7 +205,7 @@ vi.mock('./Actions', () => ({
   ),
 }));
 vi.mock('./useDropdownMenu', () => ({
-  useTopicItemDropdownMenu: () => ({ dropdownMenu: [] }),
+  useTopicItemDropdownMenu: useTopicItemDropdownMenuMock,
 }));
 // The row only decides *whether* to mount the thread list; the list itself has
 // its own tests (`ThreadList/*.test.ts`), so stub it to a marker here.
@@ -323,6 +331,20 @@ describe('TopicItem active state', () => {
     render(<TopicItem id="tpc_test" title="Topic" />);
 
     expect(screen.getByTestId('nav-item')).toHaveAttribute('data-active', 'false');
+  });
+
+  it('mounts the right-click menu only once the row is reached', () => {
+    useTopicItemDropdownMenuMock.mockClear();
+    render(<TopicItem id="tpc_test" title="Topic" />);
+
+    // A mounted menu hook re-renders on every navigation, so idle rows must not mount one.
+    expect(useTopicItemDropdownMenuMock).not.toHaveBeenCalled();
+
+    fireEvent.pointerEnter(screen.getByTestId('nav-item'));
+
+    expect(useTopicItemDropdownMenuMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'tpc_test', title: 'Topic' }),
+    );
   });
 
   it('prefixes the cmd-click href with the active workspace slug', () => {

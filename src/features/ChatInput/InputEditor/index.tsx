@@ -17,7 +17,6 @@ import * as stylex from '@stylexjs/stylex';
 import Fuse from 'fuse.js';
 import { KEY_ESCAPE_COMMAND } from 'lexical';
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
-import { useHotkeysContext } from 'react-hotkeys-hook';
 import { useTranslation } from 'react-i18next';
 
 import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
@@ -134,7 +133,6 @@ const InputEditor = memo<{
   const { canUseResource } = useChatInputResourceAccess();
   const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.AddUserMessage));
   const userId = useUserStore(userProfileSelectors.userId);
-  const { enableScope, disableScope } = useHotkeysContext();
   const agentId = useAgentId();
   const inputHistoryScope = useMemo(() => ({ agentId, userId }), [agentId, userId]);
 
@@ -643,7 +641,6 @@ const InputEditor = memo<{
         onCompositionEnd={({ event }) => compositionProps.onCompositionEnd(event)}
         onInit={handleEditorInit}
         onBlur={() => {
-          disableScope(HotkeyEnum.AddUserMessage);
           saveDraftDebounced.flush();
         }}
         onChange={() => {
@@ -673,9 +670,6 @@ const InputEditor = memo<{
               selectionText: selectionText || undefined,
             });
           }
-        }}
-        onFocus={() => {
-          enableScope(HotkeyEnum.AddUserMessage);
         }}
         onKeyDown={({ event }) => {
           if (inputHistory.handleKeyDown(event)) return true;
