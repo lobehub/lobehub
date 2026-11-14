@@ -311,7 +311,6 @@
   "credits.topUp.yearlyNudge.cta": "View yearly plans",
   "credits.topUp.yearlyNudge.title": "Yearly subscribers top up for less, as low as ${{price}} per $1 of balance",
   "creditsChip.autoTopUp.enable": "Turn on auto top-up",
-  "creditsChip.autoTopUp.topUpOnce": "Top up once",
   "creditsChip.available": "available",
   "creditsChip.balance": "Balance {{amount}}",
   "creditsChip.balanceNote.limit": "Monthly limit reached. Requests now use your balance.",

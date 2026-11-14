@@ -1060,7 +1060,6 @@ export default {
     'Add a card to refill the balance automatically, so requests keep going after your limits run out',
   'credits.autoTopUp.summaryOff': '{{summary}}, so requests keep going after your limits run out',
   'creditsChip.autoTopUp.enable': 'Turn on auto top-up',
-  'creditsChip.autoTopUp.topUpOnce': 'Top up once',
   'limitation.insufficientBudget.rescue.autoTopUp.cta': 'Turn on auto top-up & continue',
   'limitation.insufficientBudget.rescue.autoTopUp.ctaNoCard': 'Add card & turn on auto top-up',
   'limitation.insufficientBudget.rescue.autoTopUp.success.desc':

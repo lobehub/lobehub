@@ -311,7 +311,6 @@
   "credits.topUp.yearlyNudge.cta": "查看年费套餐",
   "credits.topUp.yearlyNudge.title": "年费用户充值享折扣，每 $1 余额低至 ${{price}}",
   "creditsChip.autoTopUp.enable": "开启自动充值",
-  "creditsChip.autoTopUp.topUpOnce": "单次充值",
   "creditsChip.available": "可用",
   "creditsChip.balance": "余额 {{amount}}",
   "creditsChip.balanceNote.limit": "每月限额已用完，请求将使用余额。",
