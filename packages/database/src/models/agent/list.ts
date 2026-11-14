@@ -171,7 +171,7 @@ export const buildQueryAgentsWhere = (
       : or(eq(agents.virtual, false), isNull(agents.virtual)),
     // A client that marks the agents it creates with a tag
     // lists only those: filtered here so `limit` is spent on matching rows.
-    tag ? sql`${agents.tags} @> ${JSON.stringify([tag])}::jsonb` : undefined,
+    tag === undefined ? undefined : sql`${agents.tags} @> ${JSON.stringify([tag])}::jsonb`,
   );
 
   // `name` is the user-facing display name (see `agents.name`); resolving the

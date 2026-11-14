@@ -64,6 +64,17 @@ describe('AgentModel queryAgents / countAgents — tag filter', () => {
     expect(result.map((a) => a.id)).toEqual(['pet-old']);
   });
 
+  it('filters on an empty tag instead of treating it as no filter', async () => {
+    await serverDB.insert(agents).values([
+      { id: 'empty-tag', tags: [''], userId: owner },
+      { id: 'plain', tags: ['a'], userId: owner },
+    ]);
+    const model = new AgentModel(serverDB, owner);
+
+    expect((await model.queryAgents({ tag: '' })).map((a) => a.id)).toEqual(['empty-tag']);
+    await expect(model.countAgents({ tag: '' })).resolves.toBe(1);
+  });
+
   it('lists a member only the tagged agents the workspace already shows them', async () => {
     await serverDB.insert(agents).values([
       { id: 'ws-pet-public', tags: ['lobe-pet'], userId: owner, visibility: 'public', workspaceId },

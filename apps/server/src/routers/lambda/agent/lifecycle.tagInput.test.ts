@@ -6,7 +6,7 @@ import { agentRouter } from '.';
 /**
  * `createAgent` stores tag strings exactly as given (`CreateAgentSchema`: no
  * length cap, no trimming), so the list/count filters must look up that exact
- * value: a stricter or normalizing read side would leave agents that
+ * value, the empty string included: a stricter or normalizing read side would leave agents that
  * `lh agent list --tag` can never return.
  */
 describe('queryAgents / countAgents tag input', () => {
@@ -23,7 +23,7 @@ describe('queryAgents / countAgents tag input', () => {
     expect(parse(name, { tag: ' ' })).toMatchObject({ tag: ' ' });
   });
 
-  it.each(['queryAgents', 'countAgents'])('%s rejects an empty tag', (name) => {
-    expect(() => parse(name, { tag: '' })).toThrow();
+  it.each(['queryAgents', 'countAgents'])('%s keeps an empty tag (a stored value too)', (name) => {
+    expect(parse(name, { tag: '' })).toMatchObject({ tag: '' });
   });
 });
