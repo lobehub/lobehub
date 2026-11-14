@@ -182,6 +182,11 @@ export function registerAgentCommand(program: Command) {
     .option('-p, --provider <provider>', 'Provider ID')
     .option('-s, --system-role <role>', 'System role prompt')
     .option('--group <groupId>', 'Group ID')
+    .option(
+      '--tag <tag>',
+      'Tag the agent (repeatable), e.g. so an app can find the agents it created',
+      (tag: string, tags: string[] = []) => [...tags, tag],
+    )
     .addOption(
       new Option(
         '--visibility <visibility>',
@@ -197,6 +202,7 @@ export function registerAgentCommand(program: Command) {
         model?: string;
         provider?: string;
         systemRole?: string;
+        tag?: string[];
         title?: string;
         visibility?: AgentVisibility;
       }) => {
@@ -209,6 +215,8 @@ export function registerAgentCommand(program: Command) {
         if (options.model) config.model = options.model;
         if (options.provider) config.provider = options.provider;
         if (options.systemRole) config.systemRole = options.systemRole;
+        const tags = [...new Set((options.tag ?? []).map((t) => t.trim()).filter(Boolean))];
+        if (tags.length > 0) config.tags = tags;
 
         const input: Record<string, any> = { config };
         if (options.group) input.groupId = options.group;
