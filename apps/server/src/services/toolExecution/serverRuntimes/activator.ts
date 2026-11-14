@@ -7,7 +7,7 @@ import {
 } from '@lobechat/builtin-tool-activator/executionRuntime';
 import { SkillsExecutionRuntime } from '@lobechat/builtin-tool-skills/executionRuntime';
 import { resolveShareAllowedSkillIds } from '@lobechat/const';
-import { describeLockedDevicePicker, getDisabledPluginIds } from '@lobechat/types';
+import { describeWithheldDevicePicker, getDisabledPluginIds } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentSkillModel } from '@/database/models/agentSkill';
@@ -150,11 +150,14 @@ export const activatorRuntime: ServerRuntimeRegistration = {
             }
           }
         : undefined,
-      // A device-locked run walls the picker off, so activating it can only fail;
-      // say why, so the model sends the user to the device selector instead.
+      // A device-locked run, or a run with no device at all, walls the picker
+      // off, so activating it can only fail; say why, so the model sends the
+      // user to the device selector instead of retrying a "Not found".
       explainNotFound: (identifier) =>
         identifier === REMOTE_DEVICE_TOOL_IDENTIFIER && context.executionPlan
-          ? describeLockedDevicePicker(context.executionPlan)
+          ? describeWithheldDevicePicker(context.executionPlan, {
+              canUseDevice: context.canUseDevice,
+            })
           : undefined,
       getActivatedToolIds: () => [...activatedIds],
       getToolManifests: async (identifiers: string[]): Promise<ToolManifestInfo[]> => {
