@@ -3,6 +3,11 @@ import { getConnectorCatalog } from '@lobechat/const';
 
 import type { ConnectorModel } from '@/database/models/connector';
 import type { PluginModel } from '@/database/models/plugin';
+import type {
+  MarketMcpManifest,
+  MarketplaceInstallBlocker,
+  MarketplaceInstallOutcome,
+} from '@/server/services/connector/marketplaceInstall';
 
 import type { ToolExecutionResult } from '../types';
 
@@ -17,6 +22,8 @@ import type { ToolExecutionResult } from '../types';
  * - `no-tools`: installed, but the manifest has no API list, so the tool pool
  *   drops it on every run (e.g. a custom MCP behind OAuth that was never
  *   connected).
+ * - `needs-user-install`: a marketplace MCP the server cannot install by
+ *   itself (`blocker` says why), so the user installs it from the marketplace.
  * - `unknown`: nothing by that id; `suggestions` holds near matches such as
  *   `tg-mcp` for `tg_mcp`.
  */
@@ -24,6 +31,7 @@ export type PluginResolution =
   | { source: 'builtin' | 'connector' | 'installed'; status: 'loadable' }
   | { status: 'no-tools' }
   | { status: 'not-connected' }
+  | { blocker: MarketplaceInstallBlocker; status: 'needs-user-install' }
   | { status: 'unknown'; suggestions: string[] };
 
 export interface PluginResolverDeps {
@@ -79,6 +87,56 @@ export const resolvePluginIdentifier = async (
   return { status: 'unknown', suggestions };
 };
 
+const NEEDS_USER_INSTALL: Record<
+  MarketplaceInstallBlocker,
+  { content: (identifier: string) => string; message: string; type: string }
+> = {
+  'config': {
+    content: (id) =>
+      `Marketplace MCP "${id}" needs settings only the user can provide (such as an API key), so it cannot be installed from here. Ask the user to install it from the marketplace and fill in its settings, then enable it. Nothing was changed.`,
+    message: 'Plugin needs configuration',
+    type: 'PluginNeedsConfig',
+  },
+  'conflict': {
+    content: (id) =>
+      `A connector with the identifier "${id}" already exists and is not a finished install of this marketplace MCP. Ask the user to remove it (or finish its install) in Settings → Connectors first. Nothing was changed.`,
+    message: 'Connector identifier already in use',
+    type: 'PluginIdentifierConflict',
+  },
+  'forbidden': {
+    content: (id) =>
+      `Only workspace owners and admins can add connectors in this workspace, so "${id}" was not installed. Ask a workspace admin to install it. Nothing was changed.`,
+    message: 'Not allowed to add workspace connectors',
+    type: 'PluginInstallForbidden',
+  },
+  'local-only': {
+    content: (id) =>
+      `Marketplace MCP "${id}" has no remote endpoint: it runs as a local (stdio) process, which only the LobeHub desktop app can start. Ask the user to install it from the marketplace in the desktop app. Nothing was changed.`,
+    message: 'Plugin runs only as a local process',
+    type: 'PluginNeedsDesktop',
+  },
+  'no-tools': {
+    content: (id) =>
+      `Marketplace MCP "${id}" lists no tools, so installing it would not make any tool available. Nothing was changed.`,
+    message: 'Plugin has no loadable tools',
+    type: 'PluginHasNoTools',
+  },
+  'oauth': {
+    content: (id) =>
+      `Marketplace MCP "${id}" signs in with OAuth, which the user has to authorize in their browser. Ask the user to install it from the marketplace and complete the sign-in, then enable it. Nothing was changed.`,
+    message: 'Plugin needs OAuth authorization',
+    type: 'PluginNeedsAuthorization',
+  },
+};
+
+const needsUserInstallResult = (
+  identifier: string,
+  { blocker }: { blocker: MarketplaceInstallBlocker },
+): ToolExecutionResult => {
+  const { content, message, type } = NEEDS_USER_INSTALL[blocker];
+  return { content: content(identifier), error: { message, type }, success: false };
+};
+
 /** The failure returned instead of pinning an id that would load no tools. */
 export const unresolvablePluginResult = (
   identifier: string,
@@ -91,6 +149,9 @@ export const unresolvablePluginResult = (
       success: false,
     };
   }
+
+  if (resolution.status === 'needs-user-install')
+    return needsUserInstallResult(identifier, resolution);
 
   if (resolution.status === 'not-connected') {
     return {
@@ -114,31 +175,36 @@ export const unresolvablePluginResult = (
 
 export interface MarketPluginDeps extends PluginResolverDeps {
   discoverService: { getMcpManifest: (params: { identifier: string }) => Promise<unknown> };
-  pluginModel: PluginResolverDeps['pluginModel'] & Pick<PluginModel, 'create' | 'update'>;
+  /** Stores a marketplace MCP as a connector (`installMarketplaceMcpConnector`). */
+  installMarketplaceConnector: (
+    identifier: string,
+    manifest: MarketMcpManifest,
+  ) => Promise<MarketplaceInstallOutcome>;
 }
 
 /**
  * Resolve a plugin id for `installPlugin`. A `market` install is satisfied by
- * the marketplace plugin itself: an installed row with APIs, or a manifest
- * fetched now — a same-named builtin, catalog id or connector does not count
- * as that install. Only when the marketplace has nothing does it fall back to
- * the source-agnostic resolution. A row is written only when the fetched
- * manifest lists its APIs, and a custom plugin's own manifest is never
- * overwritten.
+ * the marketplace MCP itself: a legacy installed plugin row with APIs, a
+ * finished marketplace connector install, or one made now — a same-named
+ * builtin or catalog id does not count as that install. Only when the
+ * marketplace has nothing does it fall back to the source-agnostic resolution.
  *
- * `installedNow` is true when this call created or filled the row: such a tool
- * was not in the current run's tool pool, so it loads from the next run.
+ * An install made now lands in `user_connectors`, as the web install does; no
+ * `user_installed_plugins` row is written, while rows written before stay
+ * readable. `installedNow` is true when this call installed it: such a tool was
+ * not in the current run's tool pool, so it loads from the next run.
  */
 export const resolveOrInstallMarketPlugin = async (
   identifier: string,
   deps: MarketPluginDeps,
   options: { agentId?: string; source?: string } = {},
 ): Promise<{ installedNow: boolean; resolution: PluginResolution }> => {
-  if (options.source !== 'market')
-    return {
-      installedNow: false,
-      resolution: await resolvePluginIdentifier(identifier, deps, options),
-    };
+  const resolveExisting = async () => ({
+    installedNow: false,
+    resolution: await resolvePluginIdentifier(identifier, deps, options),
+  });
+
+  if (options.source !== 'market') return resolveExisting();
 
   const existing = await deps.pluginModel.findById(identifier);
   if (existing && hasLoadableApis(existing.manifest))
@@ -151,18 +217,24 @@ export const resolveOrInstallMarketPlugin = async (
   } catch {
     // Not a marketplace plugin (or the market is unreachable).
   }
+  if (!manifest || typeof manifest !== 'object') return resolveExisting();
 
-  if (hasLoadableApis(manifest)) {
-    if (existing) await deps.pluginModel.update(identifier, { manifest: manifest as any });
-    else await deps.pluginModel.create({ identifier, manifest: manifest as any, type: 'plugin' });
-
-    return { installedNow: true, resolution: { source: 'installed', status: 'loadable' } };
+  const outcome = await deps.installMarketplaceConnector(identifier, manifest as MarketMcpManifest);
+  switch (outcome.status) {
+    case 'installed': {
+      return { installedNow: true, resolution: { source: 'connector', status: 'loadable' } };
+    }
+    case 'exists': {
+      // Enabled and connected, or not: the connector answers like any other
+      return resolveExisting();
+    }
+    case 'blocked': {
+      return {
+        installedNow: false,
+        resolution: { blocker: outcome.blocker, status: 'needs-user-install' },
+      };
+    }
   }
-
-  return {
-    installedNow: false,
-    resolution: await resolvePluginIdentifier(identifier, deps, options),
-  };
 };
 
 export const NEXT_RUN_NOTE =

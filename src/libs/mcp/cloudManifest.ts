@@ -1,7 +1,7 @@
 import type { ToolManifest } from '@lobechat/types';
 import debug from 'debug';
 
-const log = debug('lobe-mcp:store:cloudManifest');
+const log = debug('lobe-mcp:cloudManifest');
 
 /**
  * Build manifest for cloud MCP connection from market data

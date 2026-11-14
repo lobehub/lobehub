@@ -18,6 +18,10 @@ import { ConnectorModel } from '@/database/models/connector';
 import { PluginModel } from '@/database/models/plugin';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { AgentService } from '@/server/services/agent';
+import {
+  installMarketplaceMcpConnector,
+  type MarketMcpManifest,
+} from '@/server/services/connector/marketplaceInstall';
 import { DiscoverService } from '@/server/services/discover';
 import { filterHiddenProviderModels } from '@/utils/aiProvider';
 
@@ -74,6 +78,9 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
     const discoverService = new DiscoverService({
       userInfo: { userId, workspaceId: context.workspaceId },
     });
+    const installScope = { serverDB: context.serverDB, userId, workspaceId: context.workspaceId };
+    const installMarketplaceConnector = (identifier: string, manifest: MarketMcpManifest) =>
+      installMarketplaceMcpConnector(installScope, identifier, manifest);
 
     return {
       getAvailableModels: async (
@@ -340,7 +347,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
 
           const { installedNow, resolution } = await resolveOrInstallMarketPlugin(
             identifier,
-            { connectorModel, discoverService, pluginModel },
+            { connectorModel, discoverService, installMarketplaceConnector, pluginModel },
             { agentId, source: 'market' },
           );
           if (resolution.status !== 'loadable')

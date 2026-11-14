@@ -1,3 +1,4 @@
+import { withMandatoryApprovalMark } from '@lobechat/const';
 import {
   buildMcpToolMetadata,
   getMcpAppEntrypoints,
@@ -22,6 +23,7 @@ import {
 } from '@/database/schemas';
 import type { AuthConfig, McpTool } from '@/libs/mcp';
 import { inferCrudType } from '@/libs/mcp/utils';
+import { resolveConnectorToolPermission } from '@/server/routers/lambda/_helpers/connectorToolPermission';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
 import { listMcpToolsOnDevice } from '@/server/services/mcp/deviceTunnel';
@@ -144,6 +146,63 @@ export const pruneMissingAutoConnectorTools = async (
     .filter((tool) => tool.permission !== ConnectorToolPermission.auto)
     .map((tool) => tool.toolName);
   await connectorToolModel.deleteToolsNotIn(connectorId, [...listedToolNames, ...tombstones]);
+};
+
+/** A tool the caller already listed (a desktop listing, a cloud server's market manifest). */
+export interface ConnectorListedTool {
+  description?: string;
+  /**
+   * A manifest tool's `humanIntervention` (cloud marketplace installs):
+   * `required` / `always`, or rules or a dynamic config that can ask for
+   * either, make a newly synced tool need approval. One that can ask for
+   * `always` keeps it on every sync, since no approval mode waives it.
+   */
+  humanIntervention?: unknown;
+  inputSchema?: Record<string, unknown>;
+  toolName: string;
+  /** The MCP tool's `_meta.ui.visibility`, when it declares one. */
+  visibility?: string[];
+}
+
+/**
+ * Store a tool list the caller already holds, without reaching the server,
+ * and mark the connector `connected`. A tool synced before keeps the
+ * permission it has.
+ */
+export const syncConnectorToolsFromList = async (
+  connectorId: string,
+  tools: ConnectorListedTool[],
+  ctx: {
+    connectorModel: Pick<ConnectorModel, 'updateStatus'>;
+    connectorToolModel: Pick<
+      ConnectorToolModel,
+      'deleteToolsNotIn' | 'queryByConnector' | 'upsertMany'
+    >;
+  },
+  options: ConnectorToolSyncOptions = {},
+): Promise<{ toolCount: number }> => {
+  const syncInputs = tools.map((t) => ({
+    crudType: inferCrudType(t.toolName),
+    // Applies to new tools only: a synced tool keeps the permission it has
+    defaultPermission: resolveConnectorToolPermission(t.humanIntervention),
+    description: t.description,
+    inputSchema: t.inputSchema,
+    // Refreshed on every sync, unlike the permission: an `always` the
+    // manifest asks for stays mandatory whatever the permission is
+    metadata: withMandatoryApprovalMark(buildMcpToolMetadata(t.visibility), t.humanIntervention),
+    toolName: t.toolName,
+  }));
+
+  await ctx.connectorToolModel.upsertMany(connectorId, syncInputs);
+  if (options.pruneMissingAutoTools) {
+    await pruneMissingAutoConnectorTools(
+      ctx.connectorToolModel,
+      connectorId,
+      syncInputs.map((tool) => tool.toolName),
+    );
+  }
+  await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.connected);
+  return { toolCount: syncInputs.length };
 };
 
 /**
