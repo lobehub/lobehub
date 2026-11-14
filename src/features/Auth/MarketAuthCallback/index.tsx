@@ -193,7 +193,7 @@ const MarketAuthCallbackPage = () => {
     if (status === 'loading') return undefined;
 
     return (
-      <Flexbox align={'center'} gap={16} vertical>
+      <Flexbox align={'center'} gap={16}>
         {status === 'success' && account && (
           <div {...stylex.props(styles.account)}>
             <Avatar
@@ -202,7 +202,7 @@ const MarketAuthCallbackPage = () => {
               size={40}
               title={account.displayName}
             />
-            <Flexbox gap={2} vertical>
+            <Flexbox gap={2}>
               <Text weight={500}>{account.displayName}</Text>
               <Text fontSize={12} type={'secondary'}>
                 {account.userName
