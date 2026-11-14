@@ -7,8 +7,7 @@ import { RequestTrigger } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { cacheScope, replicaKeys } from '@/libs/replica';
-import { CACHE_TIERS } from '@/libs/swr/localStorageProvider';
+import { cacheScope } from '@/libs/replica';
 import { aiChatService } from '@/services/aiChat';
 
 import { builderSuggestionResource } from './projection';
@@ -84,23 +83,8 @@ describe('useBuilderSuggestions', () => {
     vi.restoreAllMocks();
   });
 
-  // The SWR tier persists every key whose serialized form contains a
-  // CACHE_TIERS pattern; the replica must stay the only persisted copy.
-  it('keeps the replica sync key out of the SWR persistence tiers', () => {
-    const serialized = JSON.stringify(
-      replicaKeys.sync(
-        builderSuggestionResource.name,
-        builderSuggestionResource.version,
-        scope,
-        'key',
-        baseParams,
-      ),
-    );
-
+  it('persists the suggestions under the replica namespace', () => {
     expect(builderSuggestionResource.namespace).toBe('replica:agentBuilderSuggestions:v1');
-    expect(
-      [...CACHE_TIERS.idb, ...CACHE_TIERS.local].filter((p) => serialized.includes(p)),
-    ).toEqual([]);
   });
 
   it('tags suggestion requests with the builder suggestion trigger', async () => {

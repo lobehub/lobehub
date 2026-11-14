@@ -2,10 +2,10 @@
  * @vitest-environment happy-dom
  */
 import { render, screen, waitFor } from '@testing-library/react';
-import { type ReactNode, useEffect } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { setPostRenderReady } from '@/spa/atoms/app';
+import { getAppPainted, setAppPainted, setPostRenderReady } from '@/spa/atoms/app';
 import { setDevDockUnlocked } from '@/utils/devDockUnlock';
 
 import type SPAGlobalProviderComponent from './index';
@@ -13,14 +13,11 @@ import { type DevDockLayout as DevDockLayoutComponent } from './index';
 
 let SPAGlobalProvider: typeof SPAGlobalProviderComponent;
 let DevDockLayout: typeof DevDockLayoutComponent;
-const { cacheGateReleased, canAccessDevDock, devDockRenderError, initializeBuiltin } = vi.hoisted(
-  () => ({
-    cacheGateReleased: { current: true },
-    canAccessDevDock: vi.fn(() => false),
-    devDockRenderError: { current: null as Error | null },
-    initializeBuiltin: vi.fn(() => null),
-  }),
-);
+const { canAccessDevDock, devDockRenderError, initializeBuiltin } = vi.hoisted(() => ({
+  canAccessDevDock: vi.fn(() => false),
+  devDockRenderError: { current: null as Error | null },
+  initializeBuiltin: vi.fn(() => null),
+}));
 
 vi.mock('@lobehub/ui', async (importOriginal) => {
   const React = await import('react');
@@ -91,15 +88,6 @@ vi.mock('@/layout/GlobalProvider/AppTheme', async () => {
   return {
     default: ({ children }: { children?: ReactNode }) =>
       React.createElement(React.Fragment, null, children),
-  };
-});
-
-vi.mock('@/layout/GlobalProvider/CacheHydrationGate', async () => {
-  const React = await import('react');
-
-  return {
-    default: ({ children }: { children?: ReactNode }) =>
-      cacheGateReleased.current ? React.createElement(React.Fragment, null, children) : null,
   };
 });
 
@@ -175,7 +163,7 @@ describe('SPAGlobalProvider', () => {
 
   beforeEach(() => {
     initializeBuiltin.mockClear();
-    cacheGateReleased.current = true;
+    setAppPainted(false);
     canAccessDevDock.mockReturnValue(false);
     devDockRenderError.current = null;
     setDevDockUnlocked(false);
@@ -183,23 +171,35 @@ describe('SPAGlobalProvider', () => {
     setPostRenderReady(false);
   });
 
-  it('defers builtin subscriptions until persistent cache hydration has completed', () => {
-    cacheGateReleased.current = false;
-    const { unmount } = render(
-      <SPAGlobalProvider>
-        <div />
-      </SPAGlobalProvider>,
-    );
-    expect(initializeBuiltin).not.toHaveBeenCalled();
-    unmount();
-
-    cacheGateReleased.current = true;
+  it('renders the app and signals first paint on the first commit, with no cache hydration wait', () => {
     render(
       <SPAGlobalProvider>
-        <div />
+        <div data-testid="spa-route-content" />
       </SPAGlobalProvider>,
     );
+
+    expect(screen.getByTestId('spa-route-content')).toBeInTheDocument();
     expect(initializeBuiltin).toHaveBeenCalled();
+    expect(getAppPainted()).toBe(true);
+  });
+
+  it('reports the first paint only after the route content has committed', () => {
+    let paintedWhenContentCommitted: boolean | undefined;
+    const RouteContent = () => {
+      useLayoutEffect(() => {
+        paintedWhenContentCommitted = getAppPainted();
+      }, []);
+      return null;
+    };
+
+    render(
+      <SPAGlobalProvider>
+        <RouteContent />
+      </SPAGlobalProvider>,
+    );
+
+    expect(paintedWhenContentCommitted).toBe(false);
+    expect(getAppPainted()).toBe(true);
   });
 
   afterEach(() => {

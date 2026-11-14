@@ -14,7 +14,6 @@ import { SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope } from '@/libs/replica';
-import { CACHE_TIERS } from '@/libs/swr/localStorageProvider';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { gitService } from '@/services/git';
 
@@ -391,13 +390,5 @@ describe('git status replicas', () => {
     );
 
     await waitFor(() => expect(result.current.data).toMatchObject({ ahead: 3 }));
-  });
-
-  // The persistence moved to replicas: the SWR cache tiers must not also keep it.
-  it('is not persisted by the SWR cache layer', () => {
-    const patterns = [...CACHE_TIERS.idb, ...CACHE_TIERS.local];
-    for (const name of ['gitBranch', 'gitAheadBehind', 'gitWorkingTreeStatus', 'gitWorktrees']) {
-      expect(patterns.some((pattern) => pattern.includes(name))).toBe(false);
-    }
   });
 });

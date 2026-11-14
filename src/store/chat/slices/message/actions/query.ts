@@ -84,9 +84,9 @@ export class MessageQueryActionImpl {
    * (every one when `predicate` is omitted). Nothing is refetched: the
    * conversation is gone.
    *
-   * Installs upgraded from before the replica still hold `message:list` rows
-   * in the SWR IndexedDB tier, which never expires them; those are purged too
-   * until the SWR persistence layer is removed.
+   * In-memory SWR `message:list` entries are dropped too. Rows the removed SWR
+   * persistence layer left behind are deleted once at boot
+   * (`purgeLegacySWRCache`).
    */
   evictConversationMessages = async (
     predicate?: (context: ConversationContext) => boolean,

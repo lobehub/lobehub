@@ -8,14 +8,12 @@ import { randomUUID } from 'node:crypto';
 
 import type { RecentItem } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { replicaKeys } from 'local-replica';
 import type { PropsWithChildren } from 'react';
 import { createElement, useEffect } from 'react';
-import { SWRConfig, unstable_serialize, useSWRConfig } from 'swr';
+import { SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope } from '@/libs/replica';
-import { CACHE_TIERS } from '@/libs/swr/localStorageProvider';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { fileService } from '@/services/file';
 import { recentService } from '@/services/recent';
@@ -268,25 +266,6 @@ describe('Home topic and tray recents on the recentList replica', () => {
     expect(new Set([SIDEBAR, DRAWER, HOME_TOPICS, TRAY]).size).toBe(4);
     // Sidebar entries keep their original key, so persisted rows still hydrate.
     expect(SIDEBAR).toBe('limit:11');
-  });
-
-  it('keeps the new sync keys out of the legacy SWR persistence tiers', () => {
-    for (const params of [HOME_TOPIC_RECENTS_PARAMS, TRAY_RECENTS_PARAMS]) {
-      const serialized = unstable_serialize(
-        replicaKeys.sync(
-          recentListResource.name,
-          recentListResource.version,
-          scope,
-          recentListResource.key(params),
-          params,
-        ),
-      );
-      expect(
-        [...CACHE_TIERS.idb, ...CACHE_TIERS.local].filter((pattern) =>
-          serialized.includes(pattern),
-        ),
-      ).toEqual([]);
-    }
   });
 
   it('asks the server for the same rows as before', async () => {

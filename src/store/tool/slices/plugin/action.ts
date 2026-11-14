@@ -98,10 +98,6 @@ export class PluginActionImpl {
       throw new Error('The installed plugins have not been loaded from the server');
   };
 
-  checkPluginsIsInstalled = async (_plugins: string[]): Promise<void> => {
-    // Old plugin system has been deprecated, skip auto-installation
-  };
-
   /**
    * Fetch the installed plugins and confirm the replica with them. The painted
    * list stays on screen while the network answers.
@@ -240,10 +236,6 @@ export class PluginActionImpl {
         mcpService.readMcpAppResource(identifier, resourceUri, { agentId, onThisDevice, server }),
       { revalidateOnFocus: false, revalidateOnReconnect: false },
     );
-
-  useCheckPluginsIsInstalled = (enable: boolean, plugins: string[]): SWRResponse => {
-    return useClientDataSWR(enable ? plugins : null, this.#get().checkPluginsIsInstalled);
-  };
 
   validatePluginSettings = async (identifier: string): Promise<ValidationResult | undefined> => {
     // Validate the full record: the display projection has no settings, so it

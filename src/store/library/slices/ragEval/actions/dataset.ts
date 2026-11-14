@@ -1,11 +1,6 @@
-import {
-  type CreateNewEvalDatasets,
-  type EvalDatasetRecord,
-  type RAGEvalDataSetItem,
-} from '@lobechat/types';
-import { type SWRResponse } from 'swr';
+import { type CreateNewEvalDatasets } from '@lobechat/types';
 
-import { mutate, useClientDataSWR } from '@/libs/swr';
+import { mutate } from '@/libs/swr';
 import { ragEvalKeys } from '@/libs/swr/keys';
 import { ragEvalService } from '@/services/ragEval';
 import { type KnowledgeBaseStore } from '@/store/library/store';
@@ -20,11 +15,10 @@ export const createRagEvalDatasetSlice = (
 
 export class RAGEvalDatasetActionImpl {
   readonly #get: () => KnowledgeBaseStore;
-  readonly #set: Setter;
 
-  constructor(set: Setter, get: () => KnowledgeBaseStore, _api?: unknown) {
+  constructor(_set: Setter, get: () => KnowledgeBaseStore, _api?: unknown) {
+    void _set;
     void _api;
-    this.#set = set;
     this.#get = get;
   }
 
@@ -40,27 +34,6 @@ export class RAGEvalDatasetActionImpl {
   removeDataset = async (id: string): Promise<void> => {
     await ragEvalService.removeDataset(id);
     await this.#get().refreshDatasetList();
-  };
-
-  useFetchDatasetRecords = (datasetId: string | null): SWRResponse<EvalDatasetRecord[]> => {
-    return useClientDataSWR<EvalDatasetRecord[]>(
-      !!datasetId ? ragEvalKeys.datasetRecords(datasetId) : null,
-      () => ragEvalService.getDatasetRecords(datasetId!),
-    );
-  };
-
-  useFetchDatasets = (knowledgeBaseId: string): SWRResponse<RAGEvalDataSetItem[]> => {
-    return useClientDataSWR<RAGEvalDataSetItem[]>(
-      ragEvalKeys.datasetList(knowledgeBaseId),
-      () => ragEvalService.getDatasets(knowledgeBaseId),
-      {
-        fallbackData: [],
-        onSuccess: () => {
-          if (!this.#get().initDatasetList)
-            this.#set({ initDatasetList: true }, false, 'useFetchDatasets/init');
-        },
-      },
-    );
   };
 }
 

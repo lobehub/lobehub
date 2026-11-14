@@ -17,7 +17,7 @@ describe('useLocalDatabaseInspector', () => {
     vi.clearAllMocks();
     mocks.listCollections.mockResolvedValue([
       { entryCount: 2, name: 'query-projections' },
-      { entryCount: 1, name: 'swr-cache' },
+      { entryCount: 1, name: 'app-settings' },
     ]);
     mocks.entriesByPrefix.mockImplementation(async (collection: string) =>
       collection === 'query-projections'
@@ -43,13 +43,13 @@ describe('useLocalDatabaseInspector', () => {
     const { result } = renderHook(() => useLocalDatabaseInspector());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    await act(() => result.current.selectCollection('swr-cache'));
-    expect(result.current.selectedCollection).toBe('swr-cache');
+    await act(() => result.current.selectCollection('app-settings'));
+    expect(result.current.selectedCollection).toBe('app-settings');
     expect(result.current.entries).toEqual([{ key: 'message:list', value: { data: [] } }]);
 
     mocks.listCollections.mockResolvedValue([
       { entryCount: 2, name: 'query-projections' },
-      { entryCount: 2, name: 'swr-cache' },
+      { entryCount: 2, name: 'app-settings' },
     ]);
     mocks.entriesByPrefix.mockResolvedValueOnce([
       { key: 'message:list', value: { data: [] } },
@@ -58,7 +58,7 @@ describe('useLocalDatabaseInspector', () => {
 
     await act(() => result.current.refresh());
 
-    expect(result.current.selectedCollection).toBe('swr-cache');
+    expect(result.current.selectedCollection).toBe('app-settings');
     expect(result.current.entries).toHaveLength(2);
     expect(result.current.collections[1].entryCount).toBe(2);
   });
