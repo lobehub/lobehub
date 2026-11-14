@@ -1,6 +1,7 @@
 import type {
   AgentBuilderContext,
   AgentContextDocument,
+  AgentDocumentChangesByMessage,
   AgentGroupConfig,
   AgentManagementContext,
   BotPlatformContext,
@@ -44,6 +45,8 @@ export type ContextVariables = Record<string, string | (() => string)>;
 export interface ContextAgentSnapshot {
   /** The run answers a Channel request; see `MessagesEngineParams.compactChannelTurns`. */
   compactChannelTurns?: boolean;
+  /** Change notes for the documents index, keyed by the user message each belongs to. */
+  documentChanges?: AgentDocumentChangesByMessage;
   /** Agent documents the agent may consult. */
   documents?: AgentContextDocument[];
   enableHistoryCount?: boolean;

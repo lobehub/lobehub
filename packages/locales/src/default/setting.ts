@@ -1446,19 +1446,30 @@ export default {
   'settingAgent.tag.title': 'Tag',
   'settingAgent.title': 'Agent info',
   'settingAbout.debugLogs.desc':
-    'Also record detailed debug logs. Turn on while reproducing an issue, then turn off: debug logs use more disk space and may include file paths and URLs.',
+    'Record more detailed logs while you reproduce a problem. Debug logs use more disk space and may include file paths and web addresses.',
   'settingAbout.debugLogs.devDesc': 'Development builds always record debug logs.',
-  'settingAbout.debugLogs.directory': 'Log Files',
-  'settingAbout.debugLogs.openDirectory': 'Open Folder',
-  'settingAbout.debugLogs.openDirectoryDesc': 'Attach these files when you report an issue.',
+  'settingAbout.debugLogs.openDirectory': 'Open Log Folder',
   'settingAbout.debugLogs.title': 'Debug Logs',
-  'settingAbout.diagnostics.title': 'Diagnostics',
+  'settingAbout.debugLogs.option.24h': 'On for 24 hours',
+  'settingAbout.debugLogs.option.always': 'Always on',
+  'settingAbout.debugLogs.option.off': 'Off',
+  'settingAbout.debugLogs.status.always':
+    'On until you turn it off. Debug logs use more disk space.',
+  'settingAbout.debugLogs.status.hours_one': 'On. Turns off automatically in {{count}} hour.',
+  'settingAbout.debugLogs.status.hours_other': 'On. Turns off automatically in {{count}} hours.',
+  'settingAbout.debugLogs.status.soon': 'On. Turns off automatically within the hour.',
+  'settingAbout.debugLogs.updateFailed': "Couldn't change debug logs. Try again.",
+  'settingAbout.diagnostics.bundle.desc':
+    'Packs the last 24 hours of logs with the app version and system details into one file. Attach it when you report a problem.',
+  'settingAbout.diagnostics.bundle.title': 'Diagnostics Package',
+  'settingAbout.remoteDebugging.activeDesc':
+    'On: programs on this computer can control LobeHub through port {{port}}. Turn it off when you finish debugging.',
   'settingAbout.remoteDebugging.confirm.content':
     'After you restart LobeHub, programs on this computer can connect to port {{port}}, control LobeHub windows, and read your signed-in session and data. The port opens on every launch until you turn this off. Turn it on only while debugging.',
   'settingAbout.remoteDebugging.confirm.ok': 'Allow',
   'settingAbout.remoteDebugging.confirm.title': 'Allow remote debugging?',
   'settingAbout.remoteDebugging.desc':
-    'Let developer tools on this computer connect to LobeHub on port {{port}} and read app state.',
+    'For developers troubleshooting LobeHub. When on, other programs on this computer can control LobeHub and read your signed-in session and data. Keep it off for everyday use.',
   'settingAbout.remoteDebugging.launchOptionDesc':
     'Remote debugging was turned on by a launch option for this session.',
   'settingAbout.remoteDebugging.restartToApply': 'Restart LobeHub to apply this change.',

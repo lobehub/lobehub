@@ -2,7 +2,12 @@ import { type AgentState, selectToolSourceMap } from '@lobechat/agent-runtime';
 import { formatWebOnboardingStateMessage } from '@lobechat/builtin-tool-web-onboarding/utils';
 import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
 import { AGENT_PLAN_FILE_TYPE } from '@lobechat/const';
-import { freezeAgentDocumentIndexFacts } from '@lobechat/context-engine/agent-document';
+import {
+  type AgentContextDocument,
+  agentDocumentChangesByMessage,
+  type AgentDocumentIndexSnapshot,
+  agentDocumentsFromSnapshot,
+} from '@lobechat/context-engine/agent-document';
 import type { ContextFactProviders, ContextFactRequest } from '@lobechat/mecha';
 import {
   agentShareDocumentAccessScope,
@@ -36,8 +41,16 @@ import { OnboardingService } from '@/server/services/onboarding';
 import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
 import { toAgentContextDocuments } from '@/utils/agentDocumentContextMapping';
 
+import { type AgentDocumentIndexTurn, resolveServerAgentDocumentIndex } from './agentDocumentIndex';
+
 export interface ServerContextFactSource {
   ctx: RuntimeExecutorContext;
+  /**
+   * The step's conversation and provider cache TTL. With it the documents
+   * index renders from a snapshot kept across warm turns; without it, from
+   * the live documents.
+   */
+  documentIndexTurn?: AgentDocumentIndexTurn;
   state: AgentState;
 }
 
@@ -66,6 +79,7 @@ const getAppUrl = (): string | undefined => {
  */
 export const createServerContextFactProviders = ({
   ctx,
+  documentIndexTurn,
   state,
 }: ServerContextFactSource): ContextFactProviders => {
   const { serverDB, userId } = ctx;
@@ -79,6 +93,46 @@ export const createServerContextFactProviders = ({
         visitorUserId: ctx.agentShareVisitor.visitorUserId,
       })
     : ordinaryDocumentAccessScope;
+
+  // `listAgentDocuments` and `listAgentDocumentChanges` must render from the
+  // same snapshot, and resolving one may write it, so resolve once per agent.
+  const agentDocumentIndexes = new Map<
+    string,
+    Promise<{ docs: AgentContextDocument[]; snapshot?: AgentDocumentIndexSnapshot }>
+  >();
+  const loadAgentDocumentIndex = (agentId: string) => {
+    let pending = agentDocumentIndexes.get(agentId);
+    if (!pending) {
+      pending = (async () => {
+        const docs = toAgentContextDocuments(
+          await new AgentDocumentsService(
+            db,
+            userId,
+            workspaceId,
+            undefined,
+            documentAccessScope,
+          ).getAgentContextDocuments(agentId),
+        );
+        if (!documentIndexTurn) return { docs };
+        try {
+          const snapshot = await resolveServerAgentDocumentIndex({
+            agentId,
+            ctx,
+            docs,
+            state,
+            turn: documentIndexTurn,
+          });
+          return { docs, snapshot };
+        } catch (error) {
+          // A snapshot only saves cache; never lose the documents over it.
+          log('Agent-document index snapshot failed, rendering live documents: %O', error);
+          return { docs };
+        }
+      })();
+      agentDocumentIndexes.set(agentId, pending);
+    }
+    return pending;
+  };
 
   return {
     findAgentDocument: async (agentId, documentId) => {
@@ -242,22 +296,17 @@ export const createServerContextFactProviders = ({
       };
     },
 
+    listAgentDocumentChanges: async (agentId) => {
+      const index = await loadAgentDocumentIndex(agentId);
+      return index.snapshot && agentDocumentChangesByMessage(index.snapshot);
+    },
+
     listAgentDocuments: async (agentId) => {
-      const docs = await new AgentDocumentsService(
-        db,
-        userId,
-        workspaceId,
-        undefined,
-        documentAccessScope,
-      ).getAgentContextDocuments(agentId);
-      // Render index rows from what this run first saw, so editing a document
-      // mid-run does not rewrite the prompt prefix behind the index.
-      const { documents, facts } = freezeAgentDocumentIndexFacts(
-        toAgentContextDocuments(docs),
-        state.binding?.agentDocumentIndex,
-      );
-      if (facts) ctx.bindAgentDocumentIndex?.(facts);
-      return documents;
+      const { docs, snapshot } = await loadAgentDocumentIndex(agentId);
+      // The index renders the snapshot, so documents created, edited or
+      // deleted since do not rewrite the prompt prefix behind it; the change
+      // notes (`listAgentDocumentChanges`) tell the model about them.
+      return snapshot ? agentDocumentsFromSnapshot(docs, snapshot) : docs;
     },
 
     // Connected = ACTIVE Composio connections across BOTH the legacy plugin

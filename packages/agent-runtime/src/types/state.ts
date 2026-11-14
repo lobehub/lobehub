@@ -1,7 +1,7 @@
 import type {
   ActivatedStepSkill,
   ActivatedStepTool,
-  AgentDocumentIndexFacts,
+  AgentDocumentIndexSnapshot,
   AgentGroupConfig,
   BotPlatformContext,
   DiscordContext,
@@ -351,12 +351,12 @@ export interface AgentWorldSnapshot {
  */
 export interface AgentRunBinding {
   /**
-   * SIZE / UPDATED of each progressive agent-document index row, as this run
-   * first saw it. Steps render the index from here so a document the run edits
-   * does not rewrite the prompt prefix behind the index (see
-   * `freezeAgentDocumentIndexFacts`). Grows when a new document shows up.
+   * The agent-document index snapshot (rows + change notes) this run renders
+   * from, pinned on its first step so later steps send the same index and
+   * notes (see `resolveAgentDocumentIndex`). Replaced only when the history is
+   * compressed mid-run.
    */
-  agentDocumentIndex?: AgentDocumentIndexFacts;
+  agentDocumentIndex?: AgentDocumentIndexSnapshot;
   /**
    * Device routed for this run. `id` stays absent until a device is bound;
    * `systemInfo` may already carry a working directory for runs whose cwd was

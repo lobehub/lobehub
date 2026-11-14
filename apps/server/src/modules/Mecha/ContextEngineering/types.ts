@@ -2,6 +2,7 @@
 import type {
   AgentBuilderContext,
   AgentContextDocument,
+  AgentDocumentChangesByMessage,
   AgentGroupConfig,
   AgentManagementContext,
   BotPlatformContext,
@@ -94,6 +95,8 @@ export interface ServerMessagesEngineParams {
   attachmentPreviewFileIds?: string[];
   /** Agent documents to inject into context based on load rules and positions */
   agentDocuments?: AgentContextDocument[];
+  /** Agent-document change notes keyed by the user message each belongs to */
+  agentDocumentChanges?: AgentDocumentChangesByMessage;
   /** Immutable expertise captured when the operation started. */
   expertise?: ExpertiseContextSnapshot;
   /** Whether to inject the operation expertise snapshot. */

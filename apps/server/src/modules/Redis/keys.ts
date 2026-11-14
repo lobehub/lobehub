@@ -254,6 +254,12 @@ export const RedisKeys = {
    */
   lobechat: {
     /**
+     * The agent-document index snapshot one conversation renders from, and its change notes.
+     * Full key: lobechat:agent_document_index:v1:{topicId}:{threadId|main}:{agentId}
+     */
+    agentDocumentIndex: (topicId: string, threadId: string | undefined, agentId: string): string =>
+      `agent_document_index:v1:${topicId}:${threadId ?? 'main'}:${agentId}`,
+    /**
      * Digest of the body the last projection of a page's collaboration room wrote.
      * Full key: lobechat:page_projection:v1:{documentId}
      */
