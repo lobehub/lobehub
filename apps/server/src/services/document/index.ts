@@ -16,14 +16,18 @@ import {
   ordinaryFileAccessScope,
   stripAgentShareDocumentProvenance,
 } from '@lobechat/types';
+import { isChunkingUnsupported } from '@lobechat/utils/isChunkingUnsupported';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
+import pMap from 'p-map';
 
+import { MAX_FILE_PARSE_SIZE } from '@/const/file';
 import { DocumentModel, type DocumentQuerySortBy } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
+import { lockFileForWrite } from '@/database/utils/fileWriteLock';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { normalizeEditorDataDiffNodes } from '@/libs/editor/normalizeDiffNodes';
@@ -52,6 +56,8 @@ import type {
 import { assertDocumentWriteWithinLimit } from './writeLimit';
 
 const log = debug('lobe-chat:service:document');
+
+const ENSURE_FILES_PARSED_CONCURRENCY = 3;
 
 /**
  * Upper bound, in characters, of parsed file text stored in `documents.content`.
@@ -1008,6 +1014,35 @@ export class DocumentService {
    * transaction scoped, so a nested call would hold it until the outer
    * transaction commits instead of releasing it after the insert.
    */
+  /**
+   * Store the full text of files filed into a knowledge base, so they are full-text searchable
+   * without chunks or an embedding model. Best-effort: a file that cannot be parsed stays out of
+   * search but must not fail the caller, which has already filed it.
+   */
+  async ensureFilesParsed(ids: string[]): Promise<void> {
+    const fileIds = ids.filter((id) => !id.startsWith('docs_'));
+    if (fileIds.length === 0) return;
+
+    const parsableFiles = (await this.fileModel.findByIds(fileIds)).filter(
+      (file) =>
+        !isChunkingUnsupported(file.fileType) &&
+        file.size <= MAX_FILE_PARSE_SIZE &&
+        !file.url.startsWith('internal://'),
+    );
+
+    await pMap(
+      parsableFiles,
+      async (file) => {
+        try {
+          await this.parseFile(file.id);
+        } catch (error) {
+          console.warn(`[ensureFilesParsed] failed to parse file ${file.id}:`, error);
+        }
+      },
+      { concurrency: ENSURE_FILES_PARSED_CONCURRENCY },
+    );
+  }
+
   async parseFile(
     fileId: string,
     accessScope: FileAccessScope = ordinaryFileAccessScope,
@@ -1050,11 +1085,12 @@ export class DocumentService {
         // itself stays outside the transaction: it downloads and reads the whole
         // file, and holding a connection that long would turn every large upload
         // into pool pressure.
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${`parseFile:${fileId}`})::bigint)`,
-        );
-
         const transactionDb = tx as unknown as LobeChatDatabase;
+
+        // Same per-file lock `FileVisibilityRepository.setVisibility` and
+        // `updateFile` take, so the parse cannot interleave with either.
+        await lockFileForWrite(transactionDb, fileId);
+
         const transactionDocumentModel = new DocumentModel(
           transactionDb,
           this.userId,
@@ -1067,6 +1103,19 @@ export class DocumentService {
         // second document for the same file.
         const raced = await transactionDocumentModel.findByFileId(fileId, accessScope);
         if (raced) return raced;
+
+        // `file` was read before the download, so a publish into the workspace
+        // can have committed while the file was being parsed. Re-read the row
+        // under the lock: publishing takes the same per-file lock
+        // (`FileVisibilityRepository.setVisibility`), so the value seen here is
+        // the one that will still hold when this row is inserted. Without it the
+        // parsed text is written as private while the file itself is public, and
+        // the text stays unsearchable until the file is published again.
+        const currentFile = await new FileModel(
+          transactionDb,
+          this.userId,
+          this.workspaceId,
+        ).findById(fileId, { accessScope });
 
         return transactionDocumentModel.create({
           content: fileDocument.content,
@@ -1081,6 +1130,9 @@ export class DocumentService {
           title,
           totalCharCount: fileDocument.totalCharCount,
           totalLineCount: fileDocument.totalLineCount,
+          // The re-read wins; the download-time value is only a fallback for the
+          // case where the row stopped being visible to this scope mid-parse.
+          visibility: currentFile?.visibility ?? file.visibility,
         });
       });
 

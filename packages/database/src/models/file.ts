@@ -859,6 +859,10 @@ export class FileModel {
    * operation to the creator's own row and make it idempotent against rows
    * already at the target visibility.
    *
+   * Single-aggregate on purpose: this only touches `files`. The parsed
+   * `documents` rows that mirror the file are a second aggregate, so the
+   * transaction that keeps both in step lives in `FileVisibilityRepository`.
+   *
    * Unpublishing is safe by design — after the flip, `buildWorkspaceWhere` and
    * any downstream file-access checks hide the file from other members on the
    * next read; blobs already fetched by clients stay cached until they expire.
@@ -876,7 +880,8 @@ export class FileModel {
           eq(files.userId, this.userId),
           eq(files.visibility, fromVisibility),
         ),
-      );
+      )
+      .returning({ id: files.id });
   };
 
   findByNames = async (fileNames: string[]) =>

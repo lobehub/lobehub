@@ -39,7 +39,7 @@ const movedFileInput = () => ({
 const buildMockFileAccessUrl = ({ id }: { id: string }) => `https://lobehub.com/f/${id}`;
 
 const routerMocks = vi.hoisted(() => {
-  const transactionClient = {};
+  const transactionClient = { execute: vi.fn().mockResolvedValue(undefined) };
 
   return {
     businessFileUploadCheck: vi.fn(),

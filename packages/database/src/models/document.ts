@@ -463,6 +463,33 @@ export class DocumentModel {
   };
 
   /**
+   * Mirror a file's `visibility` onto the document rows parsed from it
+   * (`documents.file_id = fileId`). Single-aggregate on purpose: the caller
+   * that also flips the `files` row owns the transaction
+   * (`FileVisibilityRepository.setVisibility`).
+   */
+  setVisibilityByFileId = async (
+    fileId: string,
+    visibility: 'private' | 'public',
+  ): Promise<number> => {
+    const updated = await this.db
+      .update(documents)
+      .set({ visibility })
+      .where(
+        and(
+          eq(documents.fileId, fileId),
+          eq(documents.sourceType, 'file'),
+          this.workspaceId
+            ? eq(documents.workspaceId, this.workspaceId)
+            : eq(documents.userId, this.userId),
+        ),
+      )
+      .returning({ id: documents.id });
+
+    return updated.length;
+  };
+
+  /**
    * Mirror a file's placement / name onto the document row(s) backed by it
    * (`documents.file_id = fileId`). The knowledge-base tree is rendered from
    * `documents.parent_id`, so moving only the `files` row leaves the item under
