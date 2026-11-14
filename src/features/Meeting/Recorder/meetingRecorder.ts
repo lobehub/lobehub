@@ -148,7 +148,12 @@ export const meetingRecorder = new MeetingRecorderController({
   uploadRecording,
 });
 
-export const listMicrophones = () =>
+/**
+ * Enumerate the microphones attached to this machine. Local-only: it reads
+ * `navigator.mediaDevices` and never calls the server, so there is nothing to
+ * cache or dedupe — the list has to be re-read whenever the recorder opens.
+ */
+export const enumerateLocalMicrophones = () =>
   meetingRecorder.refreshDevices(() =>
     typeof navigator !== 'undefined' && navigator.mediaDevices?.enumerateDevices
       ? navigator.mediaDevices.enumerateDevices()
@@ -165,7 +170,7 @@ export const watchMicrophonePermission = () => {
     if (!status) return;
     meetingActions.setPermission(status.state);
     // Labels and the full device list only appear once access is granted.
-    if (status.state === 'granted') void listMicrophones();
+    if (status.state === 'granted') void enumerateLocalMicrophones();
   };
 
   navigator.permissions

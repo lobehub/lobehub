@@ -21,7 +21,11 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { meetingActions, type RecorderPhase, useMeetingStore } from '@/store/meeting';
 
 import { meetingDetailPath } from '../../paths';
-import { listMicrophones, meetingRecorder, watchMicrophonePermission } from '../meetingRecorder';
+import {
+  enumerateLocalMicrophones,
+  meetingRecorder,
+  watchMicrophonePermission,
+} from '../meetingRecorder';
 import type { Point } from './dragPosition';
 import LiveTranscript from './LiveTranscript';
 import MicrophoneSelect from './MicrophoneSelect';
@@ -263,7 +267,10 @@ const MeetingRecorderOverlay = () => {
 
   useEffect(() => {
     if (!open) return;
-    void listMicrophones();
+    // Local device enumeration (`navigator.mediaDevices`), not a server read:
+    // there is no cache to share, and the list has to be re-read on each open
+    // because devices are plugged in and out while the panel is closed.
+    void enumerateLocalMicrophones();
     return watchMicrophonePermission();
   }, [open]);
 
