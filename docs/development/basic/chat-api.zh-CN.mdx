@@ -361,8 +361,8 @@ export interface LobeRuntimeAI {
 }
 ```
 
-**适配器架构**：通过 `openaiCompatibleFactory` 和
-`anthropicCompatibleFactory` 两种工厂函数，
+**适配器架构**：通过 `createOpenAICompatibleRuntime` 和
+`createAnthropicCompatibleRuntime` 两种工厂函数，
 大多数提供商只需少量配置即可接入。
 目前支持超过 40 个模型提供商
 （OpenAI、Anthropic、Google、Azure、Bedrock、Ollama 等），

@@ -2,6 +2,7 @@ import { createReplicaState, type ReplicaState } from '@/libs/replica';
 import {
   type FavoriteAgentItem,
   type FavoritePluginItem,
+  type FavoriteStatus,
   type FollowCounts,
   type FollowStatus,
   type FollowUserItem,
@@ -23,6 +24,10 @@ export interface SocialSliceState {
   favoritePluginsMap: Record<string, PaginatedResponse<FavoritePluginItem>>;
   /** Replica bookkeeping of `favoritePluginsMap`. */
   favoritePluginsReplica: ReplicaState<PaginatedResponse<FavoritePluginItem>>;
+  /** The viewer's favorite status per target (`favoriteStatusKey`). */
+  favoriteStatusMap: Record<string, FavoriteStatus>;
+  /** Replica bookkeeping of `favoriteStatusMap`. */
+  favoriteStatusReplica: ReplicaState<FavoriteStatus>;
   /** Target user's follower / following counts (`socialUserKey`). */
   followCountsMap: Record<string, FollowCounts>;
   /** Replica bookkeeping of `followCountsMap`. */
@@ -45,6 +50,8 @@ export const initialSocialSliceState: SocialSliceState = {
   favoriteAgentsMap: {},
   favoriteAgentsReplica: createReplicaState(),
   favoritePluginsMap: {},
+  favoriteStatusMap: {},
+  favoriteStatusReplica: createReplicaState(),
   favoritePluginsReplica: createReplicaState(),
   followCountsMap: {},
   followCountsReplica: createReplicaState(),

@@ -1,7 +1,5 @@
 export default {
   'directories.currentFolder': 'Current folder',
-  'settings.reuseEnvironmentDescription':
-    'Already created an environment? Select it to link its repository configuration to this project, then add a working directory for this project.',
   'settings.startDirectoryConversation': 'New topic here',
   'settings.editDirectory': 'Edit folder',
   'settings.editDirectoryBusy':
@@ -18,7 +16,6 @@ export default {
   'settings.removeDirectoryFailed':
     'Could not remove the folder. If a topic is running here, wait for it to finish and try again.',
   'settings.configureDirectory': 'Add a working directory',
-  'settings.reuseEnvironment': 'Add an existing environment to this project',
   'settings.addDirectoryFailed': 'Could not add working directory',
   'settings.identifier': 'Project identifier',
   'settings.identifierDescription':
@@ -263,6 +260,15 @@ export default {
   'goals.status.running': 'Pursuing',
   'goals.status.scheduled': 'Scheduled',
   'goals.title': 'Goals',
+  'list.folder.coordinatedBy': 'Coordinated by {{name}}',
+  'list.folder.intro': 'About',
+  'list.folder.noTasks': 'No tasks',
+  'list.folder.noTasksHint':
+    'No tasks yet. Create the first one in this project and it shows up here.',
+  'list.folder.overviewError': "Couldn't load the tasks shown on the cards.",
+  'list.folder.recentTask': 'Latest task',
+  'list.folder.running': 'In progress',
+  'list.folder.taskProgress': '{{done}}/{{total}} tasks',
   'list.emptyDescription': 'Create your first project to organize goals, tasks, and resources.',
   'list.deleteAction': 'Delete project',
   'list.deleteError': 'Could not delete the project.',
@@ -272,6 +278,9 @@ export default {
   'list.searchPlaceholder': 'Search projects',
   'list.title': 'Projects',
   'list.viewAll': 'View all projects',
+  'list.view.folder': 'Folders',
+  'list.view.list': 'List',
+  'list.view.title': 'View',
   'overview.noDescription': 'A dedicated workspace for this long-running goal.',
   'overview.activeTasks': 'In progress',
   'overview.agentSelect': 'Choose an agent',
@@ -302,8 +311,37 @@ export default {
   'rename.nameLabel': 'Project name',
   'rename.success': 'Project renamed',
   'rename.title': 'Rename project',
+  'environment.add.action': 'Add',
+  'environment.add.existing': 'Add an existing one',
+  'environment.add.failed': "Couldn't add the environment to this project",
+  'environment.add.github': 'New from GitHub',
+  'environment.add.noExisting': 'All of your environments are already in this project.',
+  'environment.add.noPublished':
+    'No published environments to add. A shared project only uses published environments.',
+  'environment.add.title': 'Add environment',
+  'environment.privateInShared': 'Private',
+  'environment.privateInSharedTooltip':
+    "This project is shared, so its conversations only use published environments. This private environment won't be checked out.",
+  'overview.context.location.devices': 'Devices',
+  'overview.context.location.directories': 'Project folders',
+  'overview.context.location.directoryUnavailable':
+    "Couldn't reach this folder. Check that the device is online and the folder still exists.",
+  'overview.context.location.noDirectories': 'No project folders on this device yet.',
+  'overview.context.location.noDirectoryTooltip':
+    "This device has no project folder yet, so the conversation starts in the device's default directory.",
+  'overview.context.location.environments': 'Code environments',
+  'overview.context.location.noEnvironments': 'No code environments yet.',
+  'overview.context.location.title': 'Work location',
   'overview.openTasks': 'Open task workspace',
   'overview.composerPlaceholder': 'Tell the project what to move forward next…',
+  'overview.context.repository.publishHint':
+    'This agent is shared with the workspace and only uses published environments, so the repository is added as one that workspace members can see.',
+  'overview.context.target.device': 'A connected device',
+  'overview.context.target.noneTooltip':
+    'This agent has nowhere to run yet. Switch to the cloud sandbox so it can work on the code.',
+  'overview.context.target.sandboxTooltip':
+    'Runs in the cloud sandbox, so none of your devices need to be online.',
+  'overview.context.target.switchFailed': "Couldn't change where this agent runs",
   'overview.sendHint': '⌘ ↵ to send',
   'overview.startConversation': 'Start moving',
   'overview.tasksEmpty': 'No tasks belong to this project yet.',

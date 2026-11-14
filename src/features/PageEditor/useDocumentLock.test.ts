@@ -5,6 +5,8 @@ import { useDocumentStore } from '@/store/document';
 
 import { useDocumentLock } from './useDocumentLock';
 
+const editLockCalls = vi.hoisted(() => ({ value: [] as any[] }));
+
 const mockPageState: {
   current: Record<string, unknown>;
 } = { current: {} };
@@ -26,14 +28,17 @@ vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
 }));
 
 vi.mock('@/features/EditLock', () => ({
-  useEditLock: () => ({
-    expiresAt: null,
-    health: 'healthy',
-    holderId: null,
-    lockedByOther: false,
-    ownerId: undefined,
-    pending: false,
-  }),
+  useEditLock: (options: any) => {
+    editLockCalls.value.push(options);
+    return {
+      expiresAt: null,
+      health: 'healthy',
+      holderId: null,
+      lockedByOther: false,
+      ownerId: undefined,
+      pending: false,
+    };
+  },
 }));
 
 vi.mock('@/libs/swr', () => ({
@@ -124,5 +129,41 @@ describe('useDocumentLock — lockOwnerId publication into the document store', 
 
     unmount();
     expect(useDocumentStore.getState().documents['doc-1'].lockOwnerId).toBeUndefined();
+  });
+});
+
+describe('useDocumentLock — inside a collaboration room', () => {
+  beforeEach(() => {
+    editLockCalls.value = [];
+    mockPageState.current = {
+      collab: { access: 'edit', pending: 0, status: 'synced' },
+      documentId: 'doc-1',
+      isWorkspacePage: true,
+      lockExpiresAt: null,
+      lockOwnerId: undefined,
+      setLockHealth: vi.fn(),
+      setLockOwnerId: vi.fn(),
+      setLockPending: vi.fn(),
+      setLockState: vi.fn(),
+    };
+  });
+
+  it('takes the lock as the room once this member edits, so editors outside the room are locked out', () => {
+    mockPageState.current.collab = { access: 'edit', edited: true, pending: 0, status: 'synced' };
+
+    renderHook(() => useDocumentLock());
+
+    const options = editLockCalls.value.at(-1);
+    expect(options.enabled).toBe(true);
+    expect(options.isDirty).toBe(true);
+    expect(options.ownerId).toMatch(/^room:doc-1:/);
+  });
+
+  it('only watches the lock while this member has not edited', () => {
+    renderHook(() => useDocumentLock());
+
+    const options = editLockCalls.value.at(-1);
+    expect(options.enabled).toBe(true);
+    expect(options.isDirty).toBe(false);
   });
 });

@@ -2,7 +2,7 @@
 import type { ILobeAgentRuntimeErrorType } from '@lobechat/types';
 import { describe } from 'vitest';
 
-import { createOpenAICompatibleRuntime } from './core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from './core/openaiCompatible';
 import { testProvider } from './providerTestUtils';
 
 // Provider plumbing compares error codes as strings; this suite intentionally

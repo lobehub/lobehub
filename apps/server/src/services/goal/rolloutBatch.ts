@@ -265,6 +265,8 @@ export interface MaterializeRolloutBatchInput {
   planSkillOwner?: {
     db: LobeChatDatabase;
     goalTitle: string;
+    /** The planner's short slug for the plan; derived from the goal title when absent. */
+    skillName?: string;
     userId: string;
     workspaceId?: string;
   };
@@ -347,6 +349,7 @@ export const materializeRolloutBatch = async ({
           files: recipeFiles,
           goalId,
           goalTitle: planSkillOwner.goalTitle,
+          name: planSkillOwner.skillName,
           plan: outline,
         }),
       );

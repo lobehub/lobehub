@@ -117,6 +117,16 @@ async function setupTrajectoryChain(opts?: {
   return { benchmark, dataset, run, testCase };
 }
 
+const basicTrajectoryInput = (
+  run: Pick<typeof agentEvalRuns.$inferSelect, 'datasetId' | 'id'>,
+  testCase: { id: string },
+): Parameters<AgentEvalRunService['executeTrajectory']>[0] => ({
+  run: { datasetId: run.datasetId, targetAgentId: null },
+  runId: run.id,
+  testCase: { content: { input: 'test' }, sortOrder: 1 },
+  testCaseId: testCase.id,
+});
+
 describe('AgentEvalRunService', () => {
   describe('createRun restored history', () => {
     it('should link a child to a parent in a later message batch', async () => {
@@ -351,12 +361,7 @@ describe('AgentEvalRunService', () => {
       mockExecAgent.mockResolvedValue({});
 
       const service = new AgentEvalRunService(serverDB, userId);
-      await service.executeTrajectory({
-        run: { datasetId: run.datasetId, targetAgentId: null },
-        runId: run.id,
-        testCase: { content: { input: 'test' }, sortOrder: 1 },
-        testCaseId: testCase.id,
-      });
+      await service.executeTrajectory(basicTrajectoryInput(run, testCase));
 
       const callArgs = mockExecAgent.mock.calls[0][0];
       expect(callArgs).not.toHaveProperty('evalContext');
@@ -368,12 +373,7 @@ describe('AgentEvalRunService', () => {
       mockExecAgent.mockResolvedValue({}); // no operationId
 
       const service = new AgentEvalRunService(serverDB, userId);
-      const result = await service.executeTrajectory({
-        run: { datasetId: run.datasetId, targetAgentId: null },
-        runId: run.id,
-        testCase: { content: { input: 'test' }, sortOrder: 1 },
-        testCaseId: testCase.id,
-      });
+      const result = await service.executeTrajectory(basicTrajectoryInput(run, testCase));
 
       expect(result).toHaveProperty('topicId');
       expect(result).not.toHaveProperty('error');
@@ -390,12 +390,7 @@ describe('AgentEvalRunService', () => {
       mockExecAgent.mockRejectedValue(new Error('Connection refused'));
 
       const service = new AgentEvalRunService(serverDB, userId);
-      const result = await service.executeTrajectory({
-        run: { datasetId: run.datasetId, targetAgentId: null },
-        runId: run.id,
-        testCase: { content: { input: 'test' }, sortOrder: 1 },
-        testCaseId: testCase.id,
-      });
+      const result = await service.executeTrajectory(basicTrajectoryInput(run, testCase));
 
       // Should return error and topicId
       expect(result).toHaveProperty('error', 'Connection refused');
@@ -420,12 +415,7 @@ describe('AgentEvalRunService', () => {
       mockExecAgent.mockRejectedValue('some string error');
 
       const service = new AgentEvalRunService(serverDB, userId);
-      const result = await service.executeTrajectory({
-        run: { datasetId: run.datasetId, targetAgentId: null },
-        runId: run.id,
-        testCase: { content: { input: 'test' }, sortOrder: 1 },
-        testCaseId: testCase.id,
-      });
+      const result = await service.executeTrajectory(basicTrajectoryInput(run, testCase));
 
       expect(result).toHaveProperty('error', 'Agent execution failed to start');
     });

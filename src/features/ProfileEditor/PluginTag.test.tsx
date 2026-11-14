@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -67,7 +67,7 @@ vi.mock('@/components/Plugins/PluginAvatar', () => ({ default: () => null }));
 
 // Run selectors against controlled state (the mocked selectors ignore state).
 vi.mock('@/store/tool', () => ({
-  useToolStore: (sel: (s: unknown) => unknown) => sel({}),
+  useToolStore: (sel: (s: unknown) => unknown) => sel({ builtinTools: [] }),
 }));
 vi.mock('@/store/tool/slices/connector/selectors', () => ({
   connectorSelectors: {
@@ -135,5 +135,90 @@ describe('PluginTag author attribution', () => {
     render(<PluginTag showAuthor agentId="agt-1" pluginId="gmail" />);
 
     expect(screen.queryByTestId('author-avatar')).toBeNull();
+  });
+});
+
+describe('PluginTag row variant', () => {
+  beforeEach(() => {
+    mocks.agentConnectors = [];
+    mocks.connectorList = [];
+  });
+
+  it('names the kind of tool and shows whose credentials it runs under', () => {
+    mocks.agentConnectors = [
+      { authorizedByAvatar: null, authorizedByName: '张三', identifier: 'gmail' },
+    ];
+    render(<PluginTag showAuthor agentId="agt-1" pluginId="gmail" variant="row" />);
+
+    expect(screen.getByText('settingAgent.tools.type.custom-connector')).toBeTruthy();
+    expect(screen.getByTestId('author-avatar')).toHaveTextContent('张三');
+  });
+
+  it('names the kind as a skill when the row sits in the skills list', () => {
+    mocks.agentConnectors = [
+      { authorizedByAvatar: null, authorizedByName: '张三', identifier: 'gmail' },
+    ];
+    render(<PluginTag isSkill pluginId="gmail" variant="row" />);
+
+    expect(screen.getByText('settingAgent.tools.type.skill')).toBeTruthy();
+    expect(screen.queryByText('settingAgent.tools.type.custom-connector')).toBeNull();
+  });
+
+  it('shows how many tools an item brings, and opens its details on click', () => {
+    mocks.agentConnectors = [
+      {
+        authorizedByAvatar: null,
+        authorizedByName: null,
+        identifier: 'gmail',
+        name: 'Gmail',
+        tools: [
+          { description: 'Send a mail', displayName: null, toolName: 'send' },
+          { description: null, displayName: 'Read', toolName: 'read' },
+        ],
+      },
+    ];
+    const onOpen = vi.fn();
+    render(<PluginTag agentId="agt-1" pluginId="gmail" variant="row" onOpen={onOpen} />);
+
+    expect(screen.getByText('settingAgent.tools.toolCount')).toBeTruthy();
+    fireEvent.click(screen.getByText('Gmail'));
+    expect(onOpen).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identifier: 'gmail',
+        tools: [
+          { description: 'Send a mail', name: 'send' },
+          { description: null, name: 'Read' },
+        ],
+      }),
+    );
+  });
+
+  it('switches an item on and off without opening its details', () => {
+    const onToggle = vi.fn();
+    const onOpen = vi.fn();
+    render(
+      <PluginTag enabled pluginId="gmail" variant="row" onOpen={onOpen} onToggle={onToggle} />,
+    );
+
+    fireEvent.click(screen.getByRole('switch'));
+    expect(onToggle).toHaveBeenCalledWith(false);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('labels a row with the given source instead of the stored kind', () => {
+    render(<PluginTag isSkill pluginId="gmail" tagLabel="Community" variant="row" />);
+
+    expect(screen.getByText('Community')).toBeTruthy();
+  });
+
+  it('offers removal only when the row is removable and editable', () => {
+    const { rerender } = render(<PluginTag pluginId="gmail" variant="row" />);
+    expect(screen.queryByLabelText('settingAgent.tools.remove')).toBeTruthy();
+
+    rerender(<PluginTag disabled pluginId="gmail" variant="row" />);
+    expect(screen.queryByLabelText('settingAgent.tools.remove')).toBeNull();
+
+    rerender(<PluginTag pluginId="gmail" removable={false} variant="row" />);
+    expect(screen.queryByLabelText('settingAgent.tools.remove')).toBeNull();
   });
 });

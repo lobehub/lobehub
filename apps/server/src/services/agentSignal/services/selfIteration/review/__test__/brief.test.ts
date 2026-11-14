@@ -27,6 +27,47 @@ const getSelfReviewProposal = (
   brief: ReturnType<ReturnType<typeof createBriefSelfReviewService>['projectNightlyReviewBrief']>,
 ) => getNightlySelfReview(brief)?.selfReviewProposal;
 
+const existingReviewBrief = (
+  existingProposal: NonNullable<ReturnType<typeof getSelfReviewProposal>>,
+) => ({
+  agentId: 'agent-1',
+  id: 'brief-old',
+  metadata: {
+    agentSignal: {
+      nightlySelfReview: {
+        selfReviewProposal: existingProposal,
+      },
+    },
+  },
+  trigger: 'agent-signal:nightly-review',
+});
+
+const refineManagedSkillAction = (): NonNullable<
+  Parameters<
+    ReturnType<typeof createBriefSelfReviewService>['projectNightlyReviewBrief']
+  >[0]['plan']
+>['actions'][number] => ({
+  actionType: 'refine_skill',
+  applyMode: ApplyMode.ProposalOnly,
+  baseSnapshot: completeRefineSkillBaseSnapshot('adoc-1'),
+  confidence: 0.91,
+  dedupeKey: 'skill:adoc-1',
+  evidenceRefs: [{ id: 'adoc-1', type: 'agent_document' }],
+  idempotencyKey: 'source:refine_skill:skill:adoc-1',
+  operation: {
+    domain: 'skill',
+    input: {
+      patch: 'Use the existing skill index.',
+      skillDocumentId: 'adoc-1',
+      userId: 'user-1',
+    },
+    operation: 'refine',
+  },
+  rationale: 'Refine the managed skill instead of creating duplicate skill drafts.',
+  risk: Risk.Medium,
+  target: { skillDocumentId: 'adoc-1' },
+});
+
 describe('briefSelfReviewService', () => {
   /**
    * @example
@@ -226,29 +267,7 @@ describe('briefSelfReviewService', () => {
       agentId: 'agent-1',
       localDate: '2026-05-09',
       plan: {
-        actions: [
-          {
-            actionType: 'refine_skill',
-            applyMode: ApplyMode.ProposalOnly,
-            baseSnapshot: completeRefineSkillBaseSnapshot('adoc-1'),
-            confidence: 0.91,
-            dedupeKey: 'skill:adoc-1',
-            evidenceRefs: [{ id: 'adoc-1', type: 'agent_document' }],
-            idempotencyKey: 'source:refine_skill:skill:adoc-1',
-            operation: {
-              domain: 'skill',
-              input: {
-                patch: 'Use the existing skill index.',
-                skillDocumentId: 'adoc-1',
-                userId: 'user-1',
-              },
-              operation: 'refine',
-            },
-            rationale: 'Refine the managed skill instead of creating duplicate skill drafts.',
-            risk: Risk.Medium,
-            target: { skillDocumentId: 'adoc-1' },
-          },
-        ],
+        actions: [refineManagedSkillAction()],
         plannerVersion: 'test-planner',
         reviewScope: Scope.Nightly,
         summary: 'Review found a skill refinement proposal.',
@@ -316,27 +335,7 @@ describe('briefSelfReviewService', () => {
             rationale: 'No self-iteration change is needed.',
             risk: Risk.Low,
           },
-          {
-            actionType: 'refine_skill',
-            applyMode: ApplyMode.ProposalOnly,
-            baseSnapshot: completeRefineSkillBaseSnapshot('adoc-1'),
-            confidence: 0.91,
-            dedupeKey: 'skill:adoc-1',
-            evidenceRefs: [{ id: 'adoc-1', type: 'agent_document' }],
-            idempotencyKey: 'source:refine_skill:skill:adoc-1',
-            operation: {
-              domain: 'skill',
-              input: {
-                patch: 'Use the existing skill index.',
-                skillDocumentId: 'adoc-1',
-                userId: 'user-1',
-              },
-              operation: 'refine',
-            },
-            rationale: 'Refine the managed skill instead of creating duplicate skill drafts.',
-            risk: Risk.Medium,
-            target: { skillDocumentId: 'adoc-1' },
-          },
+          refineManagedSkillAction(),
         ],
         plannerVersion: 'test-planner',
         reviewScope: Scope.Nightly,
@@ -785,18 +784,9 @@ describe('briefSelfReviewService', () => {
       expiresAt: '2026-05-12T00:00:00.000Z',
       updatedAt: '2026-05-09T00:00:00.000Z',
     };
-    const existingBrief = {
-      agentId: 'agent-1',
-      id: 'brief-old',
-      metadata: {
-        agentSignal: {
-          nightlySelfReview: {
-            selfReviewProposal: existingProposal,
-          },
-        },
-      },
-      trigger: 'agent-signal:nightly-review',
-    } as Awaited<ReturnType<BriefModel['create']>>;
+    const existingBrief = existingReviewBrief(existingProposal) as Awaited<
+      ReturnType<BriefModel['create']>
+    >;
     const updatedBrief = {
       ...existingBrief,
       metadata: {
@@ -906,18 +896,9 @@ describe('briefSelfReviewService', () => {
         },
       ],
     };
-    const existingBrief = {
-      agentId: 'agent-1',
-      id: 'brief-old',
-      metadata: {
-        agentSignal: {
-          nightlySelfReview: {
-            selfReviewProposal: existingProposal,
-          },
-        },
-      },
-      trigger: 'agent-signal:nightly-review',
-    } as Awaited<ReturnType<BriefModel['create']>>;
+    const existingBrief = existingReviewBrief(existingProposal) as Awaited<
+      ReturnType<BriefModel['create']>
+    >;
     const createdBrief = { id: 'brief-new' } as Awaited<ReturnType<BriefModel['create']>>;
     const create = vi.spyOn(BriefModel.prototype, 'create').mockResolvedValue(createdBrief);
     vi.spyOn(BriefModel.prototype, 'listUnresolvedByAgentAndTrigger').mockResolvedValue([
@@ -1005,18 +986,9 @@ describe('briefSelfReviewService', () => {
       expiresAt: '2026-05-12T00:00:00.000Z',
       updatedAt: '2026-05-09T00:00:00.000Z',
     };
-    const existingBrief = {
-      agentId: 'agent-1',
-      id: 'brief-old',
-      metadata: {
-        agentSignal: {
-          nightlySelfReview: {
-            selfReviewProposal: existingProposal,
-          },
-        },
-      },
-      trigger: 'agent-signal:nightly-review',
-    } as Awaited<ReturnType<BriefModel['create']>>;
+    const existingBrief = existingReviewBrief(existingProposal) as Awaited<
+      ReturnType<BriefModel['create']>
+    >;
     const createdBrief = { id: 'brief-new' } as Awaited<ReturnType<BriefModel['create']>>;
     const create = vi.spyOn(BriefModel.prototype, 'create').mockResolvedValue(createdBrief);
     vi.spyOn(BriefModel.prototype, 'listUnresolvedByAgentAndTrigger').mockResolvedValue([

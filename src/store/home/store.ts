@@ -23,6 +23,8 @@ import { type HomeInboxAction } from './slices/inbox/action';
 import { createHomeInboxSlice } from './slices/inbox/action';
 import { type LabelAction } from './slices/label/action';
 import { createLabelSlice } from './slices/label/action';
+import { type HomeNotificationAction } from './slices/notification/action';
+import { createHomeNotificationSlice } from './slices/notification/action';
 import { type RecentAction } from './slices/recent/action';
 import { createRecentSlice } from './slices/recent/action';
 import { type SidebarUIAction } from './slices/sidebarUI/action';
@@ -38,6 +40,7 @@ export interface HomeStore
     RecentAction,
     HomeInboxAction,
     HomeInputAction,
+    HomeNotificationAction,
     LabelAction,
     SidebarUIAction,
     ResetableStore,
@@ -49,6 +52,7 @@ type HomeStoreAction = AgentListAction &
   RecentAction &
   HomeInboxAction &
   HomeInputAction &
+  HomeNotificationAction &
   LabelAction &
   SidebarUIAction &
   ResetableStore;
@@ -68,6 +72,7 @@ const createStore: StateCreator<HomeStore, [['zustand/devtools', never]]> = (
     createRecentSlice(...parameters),
     createHomeInboxSlice(...parameters),
     createHomeInputSlice(...parameters),
+    createHomeNotificationSlice(...parameters),
     createLabelSlice(...parameters),
     createSidebarUISlice(...parameters),
     new HomeStoreResetAction(...parameters),

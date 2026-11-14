@@ -60,6 +60,8 @@ describe('the main agent a project creates', () => {
     expect(agent).toEqual(
       expect.objectContaining({ avatar: '🚀', title: 'Apollo Project Agent', virtual: false }),
     );
+    // A project runs in the cloud sandbox unless someone picks a device.
+    expect(agent.agencyConfig).toEqual({ executionTarget: 'sandbox' });
     expect(await labelsOf(agent.id)).toEqual([
       expect.objectContaining({ name: PROJECT_AGENT_LABEL, workspaceId: null }),
     ]);
@@ -67,6 +69,34 @@ describe('the main agent a project creates', () => {
     expect(await new AgentLabelModel(serverDB, userId).query()).toEqual([
       expect.objectContaining({ name: PROJECT_AGENT_LABEL, usageCount: 1 }),
     ]);
+  });
+
+  it('takes the ids the create form reserved, so its generated avatars match the preview', async () => {
+    const project = await createProject(repo, {
+      dedicatedAgentId: 'agt_reservedAgnt',
+      id: 'prj_reservedProj',
+      name: 'Reserved',
+    });
+
+    expect(project.id).toBe('prj_reservedProj');
+    expect(project.coordinatorAgentId).toBe('agt_reservedAgnt');
+    // The reserved agent id is not a column of the project.
+    expect(project).not.toHaveProperty('dedicatedAgentId');
+  });
+
+  it('ignores a reserved agent id when the project reuses an existing agent', async () => {
+    const existing = await new AgentModel(serverDB, userId).create({ title: 'Existing' });
+
+    const project = await createProject(repo, {
+      coordinatorAgentId: existing.id,
+      dedicatedAgentId: 'agt_unusedAgent',
+      name: 'Reuse',
+    });
+
+    expect(project.coordinatorAgentId).toBe(existing.id);
+    expect(await serverDB.select().from(agents).where(eq(agents.id, 'agt_unusedAgent'))).toEqual(
+      [],
+    );
   });
 
   it('shares one Project label across the projects of a scope', async () => {

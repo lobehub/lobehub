@@ -19,7 +19,7 @@ export const API_KEY_FULL_ACCESS_SCOPE = '*';
 
 /**
  * The selectable scope catalog. `model:invoke` is its own tier because it is
- * the one that burns money (chat/completions, image, video, asr).
+ * the one that burns money (chat/completions, image, video, music, asr).
  *
  * Deliberately absent (a restricted key can never obtain them):
  * - `api_key:*` — keys must not mint keys (self-provisioning)
@@ -263,6 +263,9 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   generationBatch: { any: 'model:invoke' },
   generationTopic: { any: 'model:invoke' },
   goal: rw('agent:read', 'agent:write'),
+  // a share link publishes the goal's wrap-up to anyone holding it; restricted
+  // API keys must not flip it (full-access keys still can)
+  goalShare: 'blocked',
   group: rw('agent:read', 'agent:write'),
   healthcheck: 'open',
   home: rw('chat:read', 'chat:write'),
@@ -287,6 +290,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // numeric telemetry attached to a goal / agent / task / project — same
   // domain as the subjects that own it
   metric: rw('agent:read', 'agent:write'),
+  // submits paid music generation tasks
+  music: { any: 'model:invoke' },
   notebook: rw('knowledge:read', 'knowledge:write'),
   notification: rw('user:read', 'user:write'),
   oauthApp: 'blocked',
@@ -387,6 +392,9 @@ export const TRPC_PROCEDURE_EXTRA_SCOPES: Record<string, ApiKeyScope[]> = {
   'aiAgent.execAgents': AGENT_RUN_SCOPES,
   'aiAgent.execGroupAgent': AGENT_RUN_SCOPES,
   'aiAgent.execSubAgentTask': AGENT_RUN_SCOPES,
+  // a desktop-local external agent run holds and settles a real run fee
+  'aiAgent.beginLocalHeteroRunFee': AGENT_RUN_SCOPES,
+  'aiAgent.finishLocalHeteroRunFee': AGENT_RUN_SCOPES,
   'aiAgent.scheduleAgentRun': AGENT_RUN_SCOPES,
   'aiAgent.startExecution': AGENT_RUN_SCOPES,
   // a queued follow-up is a deferred composer send: the run that drains it

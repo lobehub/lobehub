@@ -1,10 +1,9 @@
-import { ActionIcon, Block, Button, cssVar, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
-import { GithubIcon } from '@lobehub/ui/icons';
-import { ChevronDownIcon, FolderIcon, PencilIcon, PlusIcon } from 'lucide-react';
-import { useState } from 'react';
+import { ActionIcon, Block, Button, cssVar, Flexbox, Tag, Text, Tooltip } from '@lobehub/ui';
+import { FolderIcon, PencilIcon, PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import RepositoryAvatar from '@/components/RepositoryAvatar';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import {
   useProjectDirectories,
@@ -12,38 +11,26 @@ import {
   useProjectEnvironments,
 } from '@/store/projectWorkingDirectory';
 
+import { openAddEnvironmentModal } from '../AddEnvironmentModal';
 import { openEnvironmentModal } from './EnvironmentModal';
 
-export function ProjectWorkingDirectories({ projectId }: { projectId: string }) {
+interface ProjectWorkingDirectoriesProps {
+  projectId: string;
+  /**
+   * A workspace-public project: its conversations run a public agent, which
+   * applies published environments only.
+   */
+  shared?: boolean;
+}
+
+export function ProjectWorkingDirectories({ projectId, shared }: ProjectWorkingDirectoriesProps) {
   const { t } = useTranslation('project');
   const navigate = useWorkspaceAwareNavigate();
   const linkedRequest = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
-  const availableRequest = useProjectDirectoryStore((s) => s.useFetchEnvironments)();
   const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
   const linked = useProjectEnvironments(projectId);
-  const available = useProjectEnvironments();
   const directories = useProjectDirectories(projectId);
-  const attach = useProjectDirectoryStore((s) => s.attachEnvironment);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<unknown>();
-  const [failedEnvironmentId, setFailedEnvironmentId] = useState<string>();
-  const link = async (id: string) => {
-    setFailedEnvironmentId(id);
-    setPending(true);
-    setError(undefined);
-    try {
-      await attach(projectId, id);
-      setFailedEnvironmentId(undefined);
-    } catch (error) {
-      console.error('Failed to associate environment', error);
-      setError(error);
-    } finally {
-      setPending(false);
-    }
-  };
-  const unlinked = available.filter((env) => !linked.some((item) => item.id === env.id));
-  const requestError =
-    error || linkedRequest.error || availableRequest.error || directoriesRequest.error;
+  const requestError = linkedRequest.error || directoriesRequest.error;
   return (
     <Flexbox gap={20}>
       <Flexbox gap={12}>
@@ -51,49 +38,20 @@ export function ProjectWorkingDirectories({ projectId }: { projectId: string }) 
           <Text fontSize={16} weight={600}>
             {t('settings.environments')}
           </Text>
-          <Flexbox horizontal gap={8}>
-            {!!unlinked.length && (
-              <DropdownMenu
-                items={unlinked.map((env) => ({
-                  key: env.id,
-                  label: env.name,
-                  onClick: () => void link(env.id),
-                }))}
-              >
-                <Button disabled={pending} icon={ChevronDownIcon}>
-                  {t('settings.reuseEnvironment')}
-                </Button>
-              </DropdownMenu>
-            )}
-            <Button
-              disabled={pending}
-              icon={PlusIcon}
-              type="primary"
-              onClick={() => openEnvironmentModal({ onSaved: (env) => link(env.id) })}
-            >
-              {t('directories.newEnvironment')}
-            </Button>
-          </Flexbox>
+          <Button
+            icon={PlusIcon}
+            type="primary"
+            onClick={() => openAddEnvironmentModal({ projectId, publish: shared })}
+          >
+            {t('environment.add.title')}
+          </Button>
         </Flexbox>
         <Text type="secondary">{t('settings.environmentDescription')}</Text>
-        {!!unlinked.length && (
-          <Text fontSize={13} type="secondary">
-            {t('settings.reuseEnvironmentDescription')}
-          </Text>
-        )}
       </Flexbox>
       {requestError ? (
         <AsyncError
           error={requestError}
-          onRetry={() =>
-            failedEnvironmentId
-              ? link(failedEnvironmentId)
-              : Promise.all([
-                  linkedRequest.revalidate(),
-                  availableRequest.revalidate(),
-                  directoriesRequest.revalidate(),
-                ])
-          }
+          onRetry={() => Promise.all([linkedRequest.revalidate(), directoriesRequest.revalidate()])}
         />
       ) : !linkedRequest.hasData || !directoriesRequest.hasData ? (
         <Text>{t('loading', { ns: 'common' })}</Text>
@@ -104,6 +62,8 @@ export function ProjectWorkingDirectories({ projectId }: { projectId: string }) 
           {linked.map((env, index) => {
             const source = env.configuration.sources?.find((source) => source.kind === 'git');
             const count = directories.filter((d) => d.environmentId === env.id).length;
+            // The project's conversations never check a private one out.
+            const unusable = shared && env.visibility !== 'public';
             return (
               <Flexbox
                 horizontal
@@ -116,10 +76,34 @@ export function ProjectWorkingDirectories({ projectId }: { projectId: string }) 
                   index ? { borderTop: `1px solid ${cssVar.colorBorderSecondary}` } : undefined
                 }
               >
-                <Flexbox flex={1} gap={6} style={{ minWidth: 0 }}>
-                  <Text weight={500}>{env.name}</Text>
-                  <Flexbox horizontal align="center" gap={6}>
-                    <Icon icon={source ? GithubIcon : FolderIcon} size={14} />
+                <Flexbox horizontal align="center" flex={1} gap={12} style={{ minWidth: 0 }}>
+                  {source ? (
+                    <RepositoryAvatar size={36} url={source.url} />
+                  ) : (
+                    <Block
+                      align="center"
+                      height={36}
+                      justify="center"
+                      style={{ borderRadius: '50%', flex: 'none' }}
+                      variant="filled"
+                      width={36}
+                    >
+                      <FolderIcon size={16} />
+                    </Block>
+                  )}
+                  <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
+                    <Flexbox horizontal align="center" gap={8}>
+                      <Text ellipsis weight={500}>
+                        {env.name}
+                      </Text>
+                      {unusable && (
+                        <Tooltip title={t('environment.privateInSharedTooltip')}>
+                          <Tag color="warning" size="small">
+                            {t('environment.privateInShared')}
+                          </Tag>
+                        </Tooltip>
+                      )}
+                    </Flexbox>
                     {source ? (
                       <a
                         href={source.url}

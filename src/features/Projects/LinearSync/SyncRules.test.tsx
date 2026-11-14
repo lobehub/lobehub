@@ -74,6 +74,7 @@ describe('SyncRules', () => {
       expect(linearServiceMocks.startRuleSync).toHaveBeenCalledWith('rule-1', {
         includeArchived: false,
         syncComments: true,
+        syncLabels: true,
       }),
     );
   });

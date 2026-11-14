@@ -2,7 +2,7 @@ import type { InvokeModelWithResponseStreamResponse } from '@aws-sdk/client-bedr
 
 import type { ChatStreamCallbacks } from '../../../types';
 import { nanoid } from '../../../utils/uuid';
-import { transformAnthropicStream } from '../anthropic';
+import { transformAnthropicStream } from '../../protocols/anthropicMessages/stream';
 import {
   createEventCallbacksTransformer,
   createModelEventTransformer,

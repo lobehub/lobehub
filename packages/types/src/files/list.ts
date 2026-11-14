@@ -67,6 +67,8 @@ export interface FileListItem {
   visibility?: 'private' | 'public' | null;
 }
 
+export type ResourceSorter = 'custom' | 'name' | 'createdAt' | 'size';
+
 export enum SortType {
   Asc = 'asc',
   Desc = 'desc',
@@ -102,7 +104,7 @@ export const QueryFileListSchema = z.object({
   q: z.string().nullish(),
   showFilesInKnowledgeBase: z.boolean().default(false),
   sortType: z.enum(['desc', 'asc']).optional(),
-  sorter: z.enum(['createdAt', 'size']).optional(),
+  sorter: z.enum(['custom', 'name', 'createdAt', 'size', 'updatedAt']).optional(),
   /**
    * Origin narrowing driven by the explorer's source filter. Absent / `all`
    * keeps the historical pool (everything except hidden sources).

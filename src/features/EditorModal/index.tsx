@@ -31,7 +31,7 @@ const EditorModalFooter = memo<EditorModalFooterProps>((props) => {
 
     setConfirmLoading(true);
     try {
-      const finalValue = (editor.getDocument('markdown') as unknown as string) || '';
+      const finalValue = (editor.getDocument('markdown', { format: false }) as unknown as string) || '';
       const editorData = editor.getDocument('json');
       await onConfirm?.(finalValue, editorData);
       close();

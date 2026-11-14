@@ -1,10 +1,14 @@
 import {
+  hasSameScheduleMinute,
+  isPreciseSchedulePattern,
   isValidTimezone,
   validateCronPattern,
   validateScheduleUpdate,
 } from '@lobechat/utils/cronEval';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
+
+import { checkPreciseScheduleAccess } from '@/business/server/task/preciseSchedule';
 
 /**
  * Write-time schedule validation, shared by every boundary that can create or
@@ -53,5 +57,24 @@ export function assertResultingScheduleValid(
   );
   if (result && !result.valid) {
     throw new TRPCError({ code: 'BAD_REQUEST', message: `Invalid schedule: ${result.error}` });
+  }
+}
+
+/**
+ * Enforce a deployment's plan rule for custom exact times at every write
+ * boundary. Only picking a new exact minute is checked: a schedule that already
+ * has one keeps running and stays editable after a downgrade.
+ */
+export async function assertPreciseScheduleAllowed(
+  actor: { userId: string; workspaceId?: string | null },
+  storedPattern: string | null | undefined,
+  nextPattern: string | null | undefined,
+) {
+  if (!nextPattern || !isPreciseSchedulePattern(nextPattern)) return;
+  if (storedPattern && hasSameScheduleMinute(storedPattern, nextPattern)) return;
+
+  const access = await checkPreciseScheduleAccess(actor);
+  if (!access.allowed) {
+    throw new TRPCError({ code: 'PRECONDITION_FAILED', message: access.message });
   }
 }

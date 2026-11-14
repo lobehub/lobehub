@@ -27,6 +27,7 @@ type LabFeatureI18nKey =
   | 'imessage'
   | 'messageTextSelectionActions'
   | 'oauthApps'
+  | 'pageCollab'
   | 'projects'
   | 'selfLearning'
   | 'topicBugReport';
@@ -134,6 +135,14 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     i18nKey: 'artifactDeployment',
     searchKeywords: ['artifact', 'deploy', 'publish'],
     stage: 'beta',
+  },
+  {
+    businessOnly: true,
+    flag: 'enablePageCollab',
+    i18nKey: 'pageCollab',
+    searchKeywords: ['collaboration', 'co-editing', 'realtime', 'live editing', 'page'],
+    stage: 'alpha',
+    workspaceOnly: true,
   },
   {
     desktopOnly: true,

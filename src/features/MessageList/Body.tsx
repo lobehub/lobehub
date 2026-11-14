@@ -6,7 +6,7 @@ import { Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
 import { Archive } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
@@ -26,6 +26,7 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors, homeRecentSelectors } from '@/store/home/selectors';
 import { ALL_RECENTS_LIMIT } from '@/store/home/slices/recent/action';
 import { createConversationRecentQueryKey } from '@/store/home/slices/recent/projection';
+import { useCurrentProjectList, useProjectStore } from '@/store/project';
 
 import AgentConversation from './AgentConversation';
 import ChannelConversation from './ChannelConversation';
@@ -96,18 +97,34 @@ const Body = memo(() => {
   const { t } = useTranslation(['common', 'channel']);
   const { error: agentsError, mutate: retryAgents } = useFetchAgentList();
   const isInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
-  useHomeStore((s) => s.useFetchConversationRecents)(ALL_RECENTS_LIMIT);
+  const { error: recentsError, revalidate: revalidateRecents } = useHomeStore(
+    (s) => s.useFetchConversationRecents,
+  )(ALL_RECENTS_LIMIT);
 
   const items = useHomeStore(homeAgentListSelectors.allAgents, isEqual);
   const recents = useHomeStore(homeRecentSelectors.conversationRecents(RECENTS_QUERY_KEY));
   const activeRouteId = useActiveRouteId();
+  // The open conversation keeps its row, so a first topic started there only needs to reach the
+  // recents by the time the person moves on: refresh them whenever the routed conversation changes.
+  const lastRouteIdRef = useRef(activeRouteId);
+  useEffect(() => {
+    if (lastRouteIdRef.current === activeRouteId) return;
+    lastRouteIdRef.current = activeRouteId;
+    void revalidateRecents();
+  }, [activeRouteId, revalidateRecents]);
   const channelsEnabled = useChannelsEnabled();
   const allChannels = useChannelStore(channelSelectors.list);
+  useProjectStore((s) => s.useFetchProjectList)(channelsEnabled);
+  const projects = useCurrentProjectList();
+  const projectMap = useMemo(
+    () => new Map(projects.map((project) => [project.id, project] as const)),
+    [projects],
+  );
   const { query } = useMessageSearch();
   const [showArchived, setShowArchived] = useState(false);
-  // Group Channels outside any project; a direct Channel opens from its Agent's row. An archived
-  // one leaves the list unless it is open, but search still finds it and the archived group at
-  // the end lists it.
+  // Group Channels, a project's included as that project's group chat; a direct Channel opens
+  // from its Agent's row. An archived one leaves the list unless it is open, but search still
+  // finds it and the archived group at the end lists it.
   const directChannels = useMemo(
     () =>
       new Map(
@@ -120,9 +137,7 @@ const Body = memo(() => {
     [allChannels, channelsEnabled],
   );
   const { archived, channels } = useMemo(() => {
-    const groups = channelsEnabled
-      ? (allChannels ?? []).filter((channel) => !channel.projectId && !channel.agentId)
-      : [];
+    const groups = channelsEnabled ? (allChannels ?? []).filter((channel) => !channel.agentId) : [];
     const isHidden = (channel: (typeof groups)[number]) =>
       channel.status === 'archived' && channel.id !== activeRouteId;
     return {
@@ -156,7 +171,10 @@ const Body = memo(() => {
   const entries = useMemo(
     () =>
       buildConversationEntries(
-        buildConversationSections(items, recents, directChannels),
+        buildConversationSections(items, recents, directChannels, {
+          activeId: activeRouteId,
+          includeIdle: !!query.trim(),
+        }),
         {
           activeAt: inboxActivity(inboxUpdatedAt, inboxTopic, inboxChannel),
           channel: inboxChannel,
@@ -164,17 +182,20 @@ const Body = memo(() => {
         },
         query,
         channels,
+        (channel) => (channel.projectId ? projectMap.get(channel.projectId)?.name : undefined),
       ),
     [
       items,
       recents,
       directChannels,
+      activeRouteId,
       inboxUpdatedAt,
       inboxTitle,
       inboxTopic,
       inboxChannel,
       query,
       channels,
+      projectMap,
     ],
   );
 
@@ -190,6 +211,7 @@ const Body = memo(() => {
         activeRouteId={activeRouteId}
         channel={entry.channel}
         key={'inbox'}
+        topic={inboxTopic}
       />
     ) : entry.type === 'channel' ? (
       <ChannelConversation
@@ -202,9 +224,9 @@ const Body = memo(() => {
       <ConversationItem activeRouteId={activeRouteId} conversation={entry} key={entry.item.id} />
     );
 
-  // Only the agent rows wait on the agent list: Lobe AI and Channels load on
-  // their own, so a slow or failed agent-list request must not hide them.
-  const agentsLoading = !isInit && items.length === 0;
+  // Only the agent rows wait on the agent list and recents (which decide what has a conversation):
+  // Lobe AI and Channels load on their own, so a slow or failed request must not hide them.
+  const agentsLoading = (!isInit && items.length === 0) || recents === undefined;
 
   return (
     <Flexbox gap={1} paddingBlock={'0 12px'} paddingInline={6}>
@@ -217,6 +239,12 @@ const Body = memo(() => {
       {agentsLoading ? (
         agentsError ? (
           <AsyncError error={agentsError} variant="inline" onRetry={() => void retryAgents()} />
+        ) : recents === undefined && recentsError ? (
+          <AsyncError
+            error={recentsError}
+            variant="inline"
+            onRetry={() => void revalidateRecents()}
+          />
         ) : (
           <SkeletonList paddingBlock={8} />
         )

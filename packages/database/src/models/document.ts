@@ -27,6 +27,7 @@ import {
   DOCUMENT_FOLDER_TYPE,
   documentCommentMentions,
   documentComments,
+  documentHistories,
   documentLikes,
   documents,
   files,
@@ -807,6 +808,18 @@ export class DocumentModel {
         .update(files)
         .set({ ...ownershipUpdate, ...visibilityUpdate })
         .where(inArray(files.parentId, ids));
+
+      // History reads filter on the denormalized scope. A workspace target
+      // filters on `workspace_id` alone, so authors keep their attribution; a
+      // personal target reads `user_id = owner`, so the new owner takes every version.
+      await (trx as LobeChatDatabase)
+        .update(documentHistories)
+        .set(
+          targetWorkspaceId
+            ? { workspaceId: targetWorkspaceId }
+            : { userId: targetUserId, workspaceId: null },
+        )
+        .where(inArray(documentHistories.documentId, ids));
 
       return { documentIds: ids };
     });

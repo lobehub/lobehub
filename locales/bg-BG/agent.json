@@ -359,8 +359,6 @@
   "channel.qq.webhookMigrationTitle": "Обмислете миграция към режим WebSocket",
   "channel.quickSetup.connect.desc": "Запазва попълненото по-горе и активира бота. Всичко останало може да бъде променено по-късно.",
   "channel.quickSetup.connect.title": "Запази и свържи",
-  "channel.quickSetup.discord.bot.desc": "На страницата на бота, нулирайте токена и го копирайте, след това включете Message Content Intent.",
-  "channel.quickSetup.discord.bot.title": "Вземете токена на бота и разрешете съдържание на съобщения",
   "channel.quickSetup.discord.create.desc": "В Developer Portal, кликнете върху New Application и го именувайте.",
   "channel.quickSetup.discord.create.title": "Създайте приложение",
   "channel.quickSetup.discord.credentials.desc": "И двете са в General Information.",

@@ -20,6 +20,7 @@ const enabledAsrModelList = (s: AIProviderStoreState) => s.enabledAsrModelList |
 
 const enabledImageModelList = (s: AIProviderStoreState) => s.enabledImageModelList || [];
 
+const enabledMusicModelList = (s: AIProviderStoreState) => s.enabledMusicModelList || [];
 const enabledVideoModelList = (s: AIProviderStoreState) => s.enabledVideoModelList || [];
 
 const hiddenBuiltinModels = (s: AIProviderStoreState) => s.hiddenBuiltinModels;
@@ -119,6 +120,7 @@ export const aiProviderSelectors = {
   enabledAsrModelList,
   enabledEmbeddingModelList,
   enabledImageModelList,
+  enabledMusicModelList,
   enabledVideoModelList,
   hiddenBuiltinModels,
   isActiveProviderApiKeyNotEmpty,

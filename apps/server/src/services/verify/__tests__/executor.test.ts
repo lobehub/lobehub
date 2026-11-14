@@ -2,6 +2,8 @@
 import { terminalRecord } from '@lobechat/utils/verify/terminalEvidence.fixture';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AiGenerationService } from '@/server/services/aiGeneration';
+
 import { VerifyExecutorService } from '../executor';
 
 const mocks = vi.hoisted(() => ({
@@ -472,6 +474,44 @@ describe('VerifyExecutorService', () => {
       'b',
       expect.objectContaining({ status: 'passed' }),
     );
+  });
+
+  /**
+   * Regression: judge calls in a workspace billed the caller's personal budget because the
+   * model call was built without the workspace id.
+   */
+  it('bills batch and single-item judging to the workspace it runs in', async () => {
+    mocks.runEnsureForOperation.mockResolvedValue({
+      id: 'run-1',
+      plan: [
+        { id: 'a', index: 0, required: true, title: 'A', verifierType: 'llm' },
+        { id: 'b', index: 1, required: true, title: 'B', verifierType: 'llm' },
+      ],
+      planConfirmedAt: new Date(),
+    });
+    mocks.resultListByRun.mockReset().mockResolvedValue([]);
+    mocks.aiGenerateObject
+      .mockResolvedValueOnce({
+        verdicts: [
+          { checkItemId: 'a', confidence: 1, evidence: 'ok', reasoning: 'ok', verdict: 'passed' },
+        ],
+      })
+      .mockResolvedValueOnce({ confidence: 1, evidence: 'ok', reasoning: 'ok', verdict: 'passed' });
+    const db = {} as never;
+
+    await new VerifyExecutorService(db, 'user-1', 'ws-1').execute({
+      deliverable: 'done',
+      goal: 'ship',
+      modelConfig: { model: 'model', provider: 'provider' },
+      operationId: 'op-1',
+    });
+
+    expect(mocks.aiGenerateObject).toHaveBeenCalledTimes(2);
+    expect(AiGenerationService).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(AiGenerationService).mock.calls).toEqual([
+      [db, 'user-1', 'ws-1'],
+      [db, 'user-1', 'ws-1'],
+    ]);
   });
 
   it('loads screenshot content into a vision-model message', async () => {

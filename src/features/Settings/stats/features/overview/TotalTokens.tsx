@@ -6,9 +6,7 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import Statistic from '@/components/Statistic';
 import StatisticCard from '@/components/StatisticCard';
 import TitleWithPercentage from '@/components/StatisticCard/TitleWithPercentage';
-import { useClientDataSWR } from '@/libs/swr';
-import { statsKeys } from '@/libs/swr/keys';
-import { messageService } from '@/services/message';
+import { statsActions, statsSelectors, useStatsStore } from '@/store/stats';
 import { formatShortenNumber } from '@/utils/format';
 import { lastMonth } from '@/utils/time';
 
@@ -16,18 +14,17 @@ import { HeatmapType } from '../../types';
 import TotalCard from './ShareButton/TotalCard';
 
 /**
- * Cumulative token count. Derived from the daily token-heatmap series (same SWR
- * key as the heatmap, so the request is deduped) rather than a separate query:
+ * Cumulative token count. Derived from the daily token-heatmap series (same replica
+ * entry as the heatmap, so the request is deduped) rather than a separate query:
  * `count` sums the whole window and `prevCount` sums up to the end of last month
  * so the card shows the same month-over-month delta as its siblings.
  */
 const TotalTokens = memo<{ inShare?: boolean }>(({ inShare }) => {
   const { t } = useTranslation('auth');
 
-  const { data, isLoading, error, mutate } = useClientDataSWR(
-    statsKeys.heatmaps(HeatmapType.Tokens),
-    () => messageService.getTokenHeatmaps(),
-  );
+  const { error, revalidate } = statsActions.useFetchHeatmap(HeatmapType.Tokens);
+  // A restored empty series is not a confident zero until the server confirms it.
+  const data = useStatsStore(statsSelectors.settledHeatmap(HeatmapType.Tokens));
 
   const { count, prevCount } = useMemo(() => {
     if (!data?.length) return { count: 0, prevCount: 0 };
@@ -53,9 +50,9 @@ const TotalTokens = memo<{ inShare?: boolean }>(({ inShare }) => {
   // Metric variant: a failed fetch must never fall through to a confident `$0`
   // — show a failed marker + Retry where the number would sit (ux Read §1.1).
   return (
-    <AsyncBoundary data={data} error={error} errorVariant={'metric'} onRetry={() => mutate()}>
+    <AsyncBoundary data={data} error={error} errorVariant={'metric'} onRetry={() => revalidate()}>
       <StatisticCard
-        loading={isLoading || !data}
+        loading={!data}
         statistic={{
           description: (
             <Statistic title={t('date.prevMonth')} value={formatShortenNumber(prevCount) || '--'} />

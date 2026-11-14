@@ -124,6 +124,7 @@ const declareBatch = async (
     planSkillOwner: {
       db,
       goalTitle: goal.title,
+      skillName: plan.rollout.skillName,
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     },

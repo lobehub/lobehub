@@ -18,6 +18,7 @@ import AssigneeMemberSelector from './AssigneeMemberSelector';
 import AssigneeUserAvatar from './AssigneeUserAvatar';
 import { formatTaskItemDate } from './formatTaskItemDate';
 import TaskPriorityTag from './TaskPriorityTag';
+import TaskProjectChip from './TaskProjectChip';
 import TaskStatusTag from './TaskStatusTag';
 import TaskSubtaskProgressTag from './TaskSubtaskProgressTag';
 import TaskTriggerTag from './TaskTriggerTag';
@@ -29,6 +30,8 @@ export type TaskItemRouteScope = 'agent' | 'global';
 interface TaskItemProps {
   /** Extra class on the row's surface, e.g. to hand its hover fill to a wrapper. */
   className?: string;
+  /** The surface already belongs to one project, so its rows do not repeat it. */
+  hideProject?: boolean;
   routeScope?: TaskItemRouteScope;
   task: TaskListItem;
   variant?: 'compact' | 'default';
@@ -50,7 +53,7 @@ const toTaskStatus = (status: string): TaskStatus =>
   TASK_STATUS_SET.has(status as TaskStatus) ? (status as TaskStatus) : 'backlog';
 
 const AgentTaskItem = memo<TaskItemProps>((props) => {
-  const { className, task, routeScope = 'agent', variant = 'default' } = props;
+  const { className, hideProject, task, routeScope = 'agent', variant = 'default' } = props;
   const { t, i18n } = useTranslation('common');
   const { t: tChat } = useTranslation('chat');
   const fetchTaskDetail = useTaskStore((s) => s.fetchTaskDetail);
@@ -192,6 +195,8 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
     </Flexbox>
   );
 
+  const projectNode = hideProject ? null : <TaskProjectChip projectId={task.projectId} />;
+
   const scheduleNode = task.automationMode ? (
     <TaskTriggerTag
       automationMode={task.automationMode}
@@ -249,6 +254,7 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
           <Flexbox horizontal align={'center'} gap={8} style={FLEX_MIN_WIDTH_0}>
             <TaskPriorityTag priority={task.priority} taskIdentifier={task.id} />
             <TaskLabelChips labels={task.labels} max={2} />
+            {projectNode}
             {scheduleNode}
             {timeNode}
           </Flexbox>
@@ -270,6 +276,7 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
         <Flexbox horizontal align={'center'} gap={4} justify={'space-between'}>
           {titleRow}
           <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+            {projectNode}
             {scheduleNode}
             {assigneeNode}
             {timeNode}

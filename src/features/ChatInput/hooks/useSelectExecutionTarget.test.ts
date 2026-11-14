@@ -31,6 +31,8 @@ const testState = vi.hoisted(() => ({
   },
   getDeviceInfo: vi.fn(),
   isDesktop: false,
+  devices: [] as { deviceId: string; visibility?: 'private' | 'public' }[],
+  localMachineDeviceIds: [] as string[],
   user: {
     updateWorkspaceUserPreference: vi.fn(),
     workspaceUserPreference: {} as {
@@ -62,6 +64,18 @@ vi.mock('@/services/electron/gatewayConnection', () => ({
   },
 }));
 
+vi.mock('@/store/device', () => ({
+  deviceSelectors: {
+    getDeviceById: (deviceId?: string) => () =>
+      testState.devices.find((device) => device.deviceId === deviceId),
+  },
+  getDeviceStoreState: () => ({}),
+}));
+
+vi.mock('@/hooks/useLocalMachineDeviceIds', () => ({
+  useLocalMachineDeviceIds: () => testState.localMachineDeviceIds,
+}));
+
 vi.mock('@/features/ResourcePermission/useAgentManagementAccess', () => ({
   useAgentManagementAccess: () => testState.access,
 }));
@@ -88,6 +102,7 @@ vi.mock('@/store/user', () => ({
 
 describe('useSelectExecutionTarget', () => {
   beforeEach(() => {
+    vi.mocked(toast.error).mockClear();
     testState.access.canManageAgent = true;
     testState.access.isAccessLoading = false;
     testState.agent.agencyConfig = undefined;
@@ -97,6 +112,8 @@ describe('useSelectExecutionTarget', () => {
     testState.electron.gatewayDeviceInfo = undefined;
     testState.getDeviceInfo = vi.fn();
     testState.isDesktop = false;
+    testState.devices = [];
+    testState.localMachineDeviceIds = [];
     testState.user.workspaceUserPreference = {};
     testState.user.updateWorkspaceUserPreference = vi.fn();
   });
@@ -453,6 +470,48 @@ describe('useSelectExecutionTarget', () => {
         },
       });
       expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
+    });
+
+    // This machine's own workspace row is usually private: on the shared row
+    // it would point every other member at a device they cannot see.
+    it("routes a manager's pick of this machine's workspace row into the per-user override", async () => {
+      testState.access.canManageAgent = true;
+      testState.agent.agentMap = {
+        'agent-id': { visibility: 'public', workspaceId: 'ws-1' },
+      };
+      testState.isDesktop = true;
+      testState.localMachineDeviceIds = ['this-machine', 'this-machine-ws'];
+      testState.devices = [{ deviceId: 'this-machine-ws', visibility: 'private' }];
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('device', 'this-machine-ws', { silent: true });
+
+      expect(testState.user.updateWorkspaceUserPreference).toHaveBeenCalledWith({
+        agentDeviceOverrides: {
+          'agent-id': { boundDeviceId: 'this-machine-ws', executionTarget: 'device' },
+        },
+      });
+      expect(testState.agent.updateAgentConfigById).not.toHaveBeenCalled();
+    });
+
+    it("keeps a manager's pick of this machine's public workspace row a shared binding", async () => {
+      testState.access.canManageAgent = true;
+      testState.agent.agentMap = {
+        'agent-id': { visibility: 'public', workspaceId: 'ws-1' },
+      };
+      testState.isDesktop = true;
+      testState.localMachineDeviceIds = ['this-machine', 'this-machine-ws'];
+      testState.devices = [{ deviceId: 'this-machine-ws', visibility: 'public' }];
+      const { result } = renderHook(() => useSelectExecutionTarget('agent-id'));
+
+      await result.current('device', 'this-machine-ws');
+
+      expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+        'agent-id',
+        { agencyConfig: { boundDeviceId: 'this-machine-ws', executionTarget: 'device' } },
+        { rethrow: true },
+      );
+      expect(testState.user.updateWorkspaceUserPreference).not.toHaveBeenCalled();
     });
 
     it("routes a private Workspace agent owner's 'local' pick into the per-user override", async () => {

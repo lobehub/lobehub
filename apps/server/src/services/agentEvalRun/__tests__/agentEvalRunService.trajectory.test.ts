@@ -17,6 +17,13 @@ vi.mock('@/server/services/agentRuntime/AgentRuntimeService', () => ({
 
 beforeEach(cleanupDB);
 
+const contains42CaseInput = (): Parameters<typeof setupEvalChain>[0] => ({
+  assistantOutput: '42',
+  datasetEvalMode: 'contains',
+  expected: '42',
+  totalCases: 1,
+});
+
 describe('AgentEvalRunService', () => {
   describe('recordTrajectoryCompletion', () => {
     it('should write telemetry and update real-time metrics', async () => {
@@ -90,12 +97,7 @@ describe('AgentEvalRunService', () => {
     });
 
     it('should persist toolCalls and llmCalls in evalResult', async () => {
-      const { run, testCase } = await setupEvalChain({
-        assistantOutput: '42',
-        datasetEvalMode: 'contains',
-        expected: '42',
-        totalCases: 1,
-      });
+      const { run, testCase } = await setupEvalChain(contains42CaseInput());
 
       const service = new AgentEvalRunService(serverDB, userId);
       await service.recordTrajectoryCompletion({
@@ -191,12 +193,7 @@ describe('AgentEvalRunService', () => {
     });
 
     it('should short-circuit on error status and skip evaluation', async () => {
-      const { run, testCase } = await setupEvalChain({
-        assistantOutput: '42',
-        datasetEvalMode: 'contains',
-        expected: '42',
-        totalCases: 1,
-      });
+      const { run, testCase } = await setupEvalChain(contains42CaseInput());
 
       const service = new AgentEvalRunService(serverDB, userId);
       await service.recordTrajectoryCompletion({
@@ -431,12 +428,7 @@ describe('AgentEvalRunService', () => {
 
   describe('recordTrajectoryCompletion - re-entry guard', () => {
     it('should skip telemetry and evaluation when topic is already in timeout state', async () => {
-      const { run, testCase } = await setupEvalChain({
-        assistantOutput: '42',
-        datasetEvalMode: 'contains',
-        expected: '42',
-        totalCases: 1,
-      });
+      const { run, testCase } = await setupEvalChain(contains42CaseInput());
 
       // Manually mark the topic as timeout (simulating what checkAndHandleRunTimeout does)
       const runTopicModel = new AgentEvalRunTopicModel(serverDB, userId);
@@ -508,12 +500,7 @@ describe('AgentEvalRunService', () => {
     });
 
     it('should skip telemetry when topic is already in passed state', async () => {
-      const { run, testCase } = await setupEvalChain({
-        assistantOutput: '42',
-        datasetEvalMode: 'contains',
-        expected: '42',
-        totalCases: 1,
-      });
+      const { run, testCase } = await setupEvalChain(contains42CaseInput());
 
       // Complete normally first
       const service = new AgentEvalRunService(serverDB, userId);

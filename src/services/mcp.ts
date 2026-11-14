@@ -15,8 +15,10 @@ import { toRecord } from '@lobechat/utils/object';
 import { type PluginManifest } from '@lobehub/market-sdk';
 import { type CallReportRequest } from '@lobehub/market-types';
 import { type ReadResourceResult } from '@modelcontextprotocol/client';
+import { omit } from 'es-toolkit/compat';
 
 import { type MCPToolCallResult } from '@/libs/mcp';
+import { renderMcpArgs, renderMcpUrlTemplate } from '@/libs/mcp/urlTemplate';
 import { getMCPConnectionErrorType } from '@/libs/mcp/utils';
 import { toolsClient } from '@/libs/trpc/client';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
@@ -142,13 +144,22 @@ const buildPluginMcpParams = (
   } as any;
 
   if (connection?.type === 'http') {
-    const headers = { ...connection.headers, ...pluginSettings };
+    // Settings the URL asks for (`{{KEY}}`) go into the URL, matching the install
+    // that produced `manifest.mcpParams`; the rest are headers
+    const rendered = renderMcpUrlTemplate(connection.url ?? '', pluginSettings);
+    if (connection.url) params.url = rendered.url;
+    const headers = {
+      ...connection.headers,
+      ...(pluginSettings && omit(pluginSettings, rendered.usedKeys)),
+    };
     // Left out when empty, as the runtime's manifest params leave it: MCP
     // sessions are cached by these params, so `{}` would open a second one
     if (Object.keys(headers).length > 0) params.headers = headers;
   }
 
   if (connection?.type === 'stdio') {
+    // Match the install that produced `manifest.mcpParams`: args get the settings they ask for
+    if (connection.args) params.args = renderMcpArgs(connection.args, pluginSettings);
     params.env = {
       ...connection?.env,
       ...pluginSettings,

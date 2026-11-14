@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   driveFolderExists: vi.fn(),
+  ensureDriveFolder: vi.fn(),
   findEnvironmentById: vi.fn(),
   EnvironmentInstanceModel: vi.fn(),
   listStorageDirectories: vi.fn(),
@@ -46,6 +47,7 @@ vi.mock('@/database/models/environmentInstance', () => ({
 
 vi.mock('../driveFolder', () => ({
   driveFolderExists: mocks.driveFolderExists,
+  ensureDriveFolder: mocks.ensureDriveFolder,
 }));
 
 const { resolveSandboxSessionConfig } = await import('../session');
@@ -93,6 +95,8 @@ describe('resolveSandboxSessionConfig', () => {
     });
     mocks.driveFolderExists.mockReset();
     mocks.driveFolderExists.mockResolvedValue(true);
+    mocks.ensureDriveFolder.mockReset();
+    mocks.ensureDriveFolder.mockResolvedValue(true);
     mocks.listStorageDirectories.mockReset();
     mocks.listStorageDirectories.mockResolvedValue([]);
     resolveSandboxStorageClaim.mockResolvedValue(CLAIM);
@@ -402,6 +406,44 @@ describe('resolveSandboxSessionConfig', () => {
       await expect(resolve({ workspaceId: 'ws-1' })).resolves.toEqual({
         claim: CLAIM,
         drive: 'public',
+        fallback: 'directoryMissing',
+        mode: 'ephemeral',
+      });
+      expect(mocks.ensureDriveFolder).not.toHaveBeenCalled();
+    });
+
+    // A repository's checkout is filled by its environment, so bringing the
+    // folder back is a fresh clone — which is how a project conversation's
+    // checkout is made on its first run.
+    it("creates a repository checkout's folder the drive does not have yet", async () => {
+      findById.mockResolvedValue({
+        metadata: {
+          sandboxEnvironmentId: 'env-1',
+          sandboxWorkingDirectory: 'projects/atlas/repo',
+        },
+      });
+      mocks.driveFolderExists.mockResolvedValue(false);
+
+      await expect(resolve()).resolves.toMatchObject({
+        cwd: 'projects/atlas/repo',
+        mode: 'drive',
+      });
+      expect(mocks.ensureDriveFolder).toHaveBeenCalledWith(
+        expect.objectContaining({ claim: CLAIM, path: 'projects/atlas/repo', topicId: 'topic-1' }),
+      );
+    });
+
+    it('falls back when a checkout folder cannot be created', async () => {
+      findById.mockResolvedValue({
+        metadata: {
+          sandboxEnvironmentId: 'env-1',
+          sandboxWorkingDirectory: 'projects/atlas/repo',
+        },
+      });
+      mocks.driveFolderExists.mockResolvedValue(false);
+      mocks.ensureDriveFolder.mockResolvedValue(false);
+
+      await expect(resolve()).resolves.toMatchObject({
         fallback: 'directoryMissing',
         mode: 'ephemeral',
       });

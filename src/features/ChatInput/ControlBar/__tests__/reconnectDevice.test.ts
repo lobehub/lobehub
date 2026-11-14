@@ -1,7 +1,11 @@
 import { MANAGED_CLOUD_DEVICE_IDENTITY_SOURCE } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
-import { MANAGED_DEVICE_WAKE_POLL, reconnectDevice } from '../reconnectDevice';
+import {
+  MANAGED_DEVICE_WAKE_POLL,
+  reconnectDevice,
+  wakeManagedDeviceAndWait,
+} from '../reconnectDevice';
 
 const managed = {
   deviceId: 'managed-a',
@@ -113,5 +117,22 @@ describe('reconnectDevice', () => {
     const d = deps(Number.POSITIVE_INFINITY);
 
     await expect(reconnectDevice(desktop, { isCurrentMachine: false }, d)).resolves.toBe('failed');
+  });
+});
+
+describe('wakeManagedDeviceAndWait', () => {
+  it('stops polling once the surface that asked is gone', async () => {
+    const d = deps(Number.POSITIVE_INFINITY);
+    let polls = 0;
+    const shouldStop = () => polls >= 2;
+    const refreshDevices = d.refreshDevices as unknown as ReturnType<typeof vi.fn>;
+    refreshDevices.mockImplementation(async () => {
+      polls += 1;
+      return [];
+    });
+
+    await expect(wakeManagedDeviceAndWait(managed, { ...d, shouldStop })).resolves.toBe('starting');
+    expect(d.wakeManagedDevice).toHaveBeenCalledTimes(1);
+    expect(refreshDevices).toHaveBeenCalledTimes(2);
   });
 });

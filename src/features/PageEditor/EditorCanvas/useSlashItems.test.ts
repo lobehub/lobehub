@@ -8,6 +8,8 @@ import {
 import { renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { requestListNumberMenu } from '@/features/EditorCanvas';
+
 import { useSlashItems } from './useSlashItems';
 
 vi.mock('@lobehub/editor', () => ({
@@ -26,7 +28,10 @@ vi.mock('@lobehub/editor', () => ({
   INSERT_VIDEO_COMMAND: 'INSERT_VIDEO_COMMAND',
 }));
 
-vi.mock('@/features/EditorCanvas', () => ({ openFileSelector: vi.fn() }));
+vi.mock('@/features/EditorCanvas', () => ({
+  openFileSelector: vi.fn(),
+  requestListNumberMenu: vi.fn(),
+}));
 
 type SlashItem = Extract<NonNullable<SlashOptions['items']>[number], { key: string }>;
 
@@ -47,6 +52,17 @@ describe('useSlashItems', () => {
     item!.onSelect!(editor as any, {} as any);
 
     expect(editor.dispatchCommand).toHaveBeenCalledWith(command, undefined);
+  });
+
+  it('opens the list number menu from the slash menu, for use without a pointer', () => {
+    const { result } = renderHook(() => useSlashItems());
+    const item = findItem(result.current, 'num');
+    const editor = { dispatchCommand: vi.fn(), focus: vi.fn() };
+
+    expect(item).toBeDefined();
+    item!.onSelect!(editor as any, {} as any);
+
+    expect(requestListNumberMenu).toHaveBeenCalledWith(editor);
   });
 
   it('inserts an empty video block from the slash menu', () => {

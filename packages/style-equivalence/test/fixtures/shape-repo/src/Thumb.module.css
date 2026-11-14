@@ -1,0 +1,8 @@
+.thumb {
+  width: 56px;
+}
+
+.thumb img {
+  width: 100%;
+  object-fit: cover;
+}

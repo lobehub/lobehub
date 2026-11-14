@@ -1,4 +1,5 @@
 import { CloudSandboxApiName } from '../../types';
+import DeleteFiles from './DeleteFiles';
 import EditLocalFile from './EditLocalFile';
 import ExecuteCode from './ExecuteCode';
 import MoveLocalFiles from './MoveLocalFiles';
@@ -12,6 +13,7 @@ import WriteFile from './WriteFile';
  * messages with apiName like 'editLocalFile' still resolve after the rename.
  */
 export const CloudSandboxInterventions = {
+  [CloudSandboxApiName.deleteFiles]: DeleteFiles,
   [CloudSandboxApiName.editFile]: EditLocalFile,
   [CloudSandboxApiName.executeCode]: ExecuteCode,
   [CloudSandboxApiName.moveFiles]: MoveLocalFiles,

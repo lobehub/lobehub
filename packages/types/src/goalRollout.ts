@@ -1,5 +1,6 @@
 import type { GoalNodeStatus } from './goal';
 import type { GoalRolloutRetro, GoalRolloutVerifier } from './goalRetro';
+import type { WorkSummaryItem } from './work';
 
 /**
  * Batch rollout trigger. `off`/absent keeps the ordinary decomposition: a goal
@@ -201,7 +202,19 @@ export interface GoalReleaseGateUnit {
   /** The unit's own acceptance, when it was verified. */
   acceptance?: { checks?: { failed: number; passed: number; total: number }; id: string };
   /** Deliverables it produced: pull requests, reports, documents. */
-  artifacts: { documentId?: string; title: string; type: string; url?: string }[];
+  artifacts: {
+    documentId?: string;
+    /** Short reference, e.g. a pull request's `#123`. */
+    identifier?: string;
+    /** e.g. `github_pull_request`; with `status`, what the review shows its state by. */
+    resourceType?: string;
+    /** The resource's state when the gate opened, e.g. `open` / `merged`. */
+    status?: string;
+    title: string;
+    type: string;
+    url?: string;
+    workId?: string;
+  }[];
   /** The unit's own brief: what it was asked to do. */
   brief?: string;
   nodeId: string;
@@ -211,6 +224,11 @@ export interface GoalReleaseGateUnit {
   taskId?: string;
   title: string;
   tokens: number;
+  /**
+   * The same outputs as the conversation's Work cards show them, frozen when
+   * the gate opened. Absent from dossiers frozen by an older server.
+   */
+  works?: WorkSummaryItem[];
 }
 
 /**

@@ -100,6 +100,14 @@ const FOLDER_ROW_ID = '23d908ac-0a43-440d-a67f-1f57b8427c53';
 const DOC_ROW_ID = 'ae743612-eef4-4c46-879f-9db9c346e760';
 const SKILL_ROW_ID = '8716f7a5-1234-4d35-80fd-5d4354f1a439';
 
+const oldAgentDocument = () => ({
+  agentId: 'agent-1',
+  content: 'old',
+  documentId: 'documents-1',
+  id: 'agent-doc-1',
+  title: 'Doc',
+});
+
 describe('AgentDocumentsService', () => {
   const db = {} as LobeChatDatabase;
   const userId = 'user-1';
@@ -1372,13 +1380,7 @@ lossless tool result
 
   describe('replaceDocumentContentById', () => {
     it('rejects LiteXML content instead of saving an empty document', async () => {
-      mockModel.findById.mockResolvedValueOnce({
-        agentId: 'agent-1',
-        content: 'old',
-        documentId: 'documents-1',
-        id: 'agent-doc-1',
-        title: 'Doc',
-      });
+      mockModel.findById.mockResolvedValueOnce(oldAgentDocument());
 
       const service = new AgentDocumentsService(db, userId);
 
@@ -1394,21 +1396,13 @@ lossless tool result
     });
 
     it('should save history before editing document content', async () => {
-      mockModel.findById
-        .mockResolvedValueOnce({
-          agentId: 'agent-1',
-          content: 'old',
-          documentId: 'documents-1',
-          id: 'agent-doc-1',
-          title: 'Doc',
-        })
-        .mockResolvedValueOnce({
-          agentId: 'agent-1',
-          content: 'new',
-          documentId: 'documents-1',
-          id: 'agent-doc-1',
-          title: 'Doc',
-        });
+      mockModel.findById.mockResolvedValueOnce(oldAgentDocument()).mockResolvedValueOnce({
+        agentId: 'agent-1',
+        content: 'new',
+        documentId: 'documents-1',
+        id: 'agent-doc-1',
+        title: 'Doc',
+      });
 
       const service = new AgentDocumentsService(db, userId);
       const result = await service.replaceDocumentContentById('agent-doc-1', 'new', 'agent-1');
@@ -1487,21 +1481,13 @@ lossless tool result
     });
 
     it('strips a leading H1 that differs from the document title', async () => {
-      mockModel.findById
-        .mockResolvedValueOnce({
-          agentId: 'agent-1',
-          content: 'old',
-          documentId: 'documents-1',
-          id: 'agent-doc-1',
-          title: 'Doc',
-        })
-        .mockResolvedValueOnce({
-          agentId: 'agent-1',
-          content: 'body',
-          documentId: 'documents-1',
-          id: 'agent-doc-1',
-          title: 'Doc',
-        });
+      mockModel.findById.mockResolvedValueOnce(oldAgentDocument()).mockResolvedValueOnce({
+        agentId: 'agent-1',
+        content: 'body',
+        documentId: 'documents-1',
+        id: 'agent-doc-1',
+        title: 'Doc',
+      });
 
       const service = new AgentDocumentsService(db, userId);
       await service.replaceDocumentContentById('agent-doc-1', '# 一、总体结论\n\nbody', 'agent-1');
@@ -1513,21 +1499,13 @@ lossless tool result
     });
 
     it('keeps H1 headings that appear after other body content', async () => {
-      mockModel.findById
-        .mockResolvedValueOnce({
-          agentId: 'agent-1',
-          content: 'old',
-          documentId: 'documents-1',
-          id: 'agent-doc-1',
-          title: 'Doc',
-        })
-        .mockResolvedValueOnce({
-          agentId: 'agent-1',
-          content: 'intro\n\n# Echoes the title\n\n## Keep me\n\nbody',
-          documentId: 'documents-1',
-          id: 'agent-doc-1',
-          title: 'Doc',
-        });
+      mockModel.findById.mockResolvedValueOnce(oldAgentDocument()).mockResolvedValueOnce({
+        agentId: 'agent-1',
+        content: 'intro\n\n# Echoes the title\n\n## Keep me\n\nbody',
+        documentId: 'documents-1',
+        id: 'agent-doc-1',
+        title: 'Doc',
+      });
 
       const service = new AgentDocumentsService(db, userId);
       await service.replaceDocumentContentById(

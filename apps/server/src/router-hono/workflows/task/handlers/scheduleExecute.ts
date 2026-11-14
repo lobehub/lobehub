@@ -6,6 +6,8 @@ import { runScheduleTick } from '@/server/services/taskRunner/scheduleTick';
 const log = debug('lobe-server:workflows:task:schedule-execute');
 
 export interface ScheduleExecutePayload {
+  /** Present on a delayed delivery: the occurrence (ISO) it was reserved for. */
+  occurrence?: string;
   taskId: string;
   userId: string;
 }
@@ -18,13 +20,13 @@ export interface ScheduleExecutePayload {
 export async function scheduleExecute(c: Context) {
   try {
     const body = (await c.req.json()) as ScheduleExecutePayload;
-    const { taskId, userId } = body;
+    const { occurrence, taskId, userId } = body;
     if (!taskId || !userId) {
       return c.json({ error: 'Missing required fields: taskId, userId' }, 400);
     }
 
     log('Received: taskId=%s userId=%s', taskId, userId);
-    const outcome = await runScheduleTick(taskId, userId);
+    const outcome = await runScheduleTick(taskId, userId, { occurrence });
     return c.json({ success: true, ...outcome });
   } catch (error) {
     console.error('[task/schedule-execute] Error:', error);

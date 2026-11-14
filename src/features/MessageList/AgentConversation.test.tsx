@@ -49,7 +49,8 @@ vi.mock('@/features/HomeSidebar/Body/Agent/ModalProvider', () => ({
   useAgentModal: () => ({ openCreateGroupModal: () => {} }),
 }));
 vi.mock('@/hooks/usePrefetchAgent', () => ({ usePrefetchAgent: () => () => {} }));
-vi.mock('@/store/chat', () => ({ useChatStore: () => false }));
+const chat = vi.hoisted(() => ({ running: false }));
+vi.mock('@/store/chat', () => ({ useChatStore: () => chat.running }));
 vi.mock('@/store/chat/selectors', () => ({
   operationSelectors: { isAgentVisiblyRunning: () => () => false },
 }));
@@ -57,10 +58,10 @@ vi.mock('./useAgentConversationLink', () => ({
   useAgentConversationLink: (_: string, url: string) => ({ url }),
 }));
 vi.mock('./ConversationRow', () => ({
-  default: ({ avatar, contextMenuItems, running, title }: any) =>
+  default: ({ avatar, contextMenuItems, title, typing }: any) =>
     createElement(
       'div',
-      { 'data-running': String(!!running), 'data-testid': 'row' },
+      { 'data-testid': 'row', 'data-typing': String(!!typing) },
       title,
       avatar as never,
       createElement(
@@ -84,6 +85,8 @@ describe('AgentConversation avatar', () => {
     render(createElement(AgentConversation, { active: false, conversation: conversation() }));
 
     expect(screen.getByTestId('agent-avatar')).toHaveTextContent('agt_cook:generated');
+    expect(screen.getByTestId('menu')).toHaveTextContent('delete');
+    expect(screen.getByTestId('menu')).not.toHaveTextContent('channel-');
   });
 
   it('keeps an agent’s own image or emoji', () => {
@@ -114,13 +117,6 @@ describe('AgentConversation avatar', () => {
 
     expect(screen.getByTestId('menu')).toHaveTextContent('channel-unarchive');
   });
-
-  it('keeps the Agent menu alone when the row opens no Channel', () => {
-    render(createElement(AgentConversation, { active: false, conversation: conversation() }));
-
-    expect(screen.getByTestId('menu')).toHaveTextContent('delete');
-    expect(screen.getByTestId('menu')).not.toHaveTextContent('channel-');
-  });
 });
 
 describe('AgentConversation reply activity', () => {
@@ -147,7 +143,7 @@ describe('AgentConversation reply activity', () => {
 
   // The header said "typing" while the row and its avatar stayed idle: the row only read chat
   // operations, and a direct Channel replies through Channel jobs.
-  it('animates the avatar while the direct Channel replies, keeping the row preview', () => {
+  it('animates the avatar and says typing while the direct Channel replies', () => {
     showReply({ status: 'running' });
     render(
       createElement(AgentConversation, { active: true, conversation: conversation(undefined, {}) }),
@@ -155,7 +151,7 @@ describe('AgentConversation reply activity', () => {
 
     expect(screen.getByTestId('agent-avatar')).toHaveAttribute('data-state', 'working');
     expect(screen.getByTestId('agent-avatar')).toHaveAttribute('data-animated', 'true');
-    expect(screen.getByTestId('row')).toHaveAttribute('data-running', 'false');
+    expect(screen.getByTestId('row')).toHaveAttribute('data-typing', 'true');
   });
 
   it('shows a blocked reply as waiting', () => {
@@ -165,7 +161,7 @@ describe('AgentConversation reply activity', () => {
     );
 
     expect(screen.getByTestId('agent-avatar')).toHaveAttribute('data-state', 'waiting');
-    expect(screen.getByTestId('row')).toHaveAttribute('data-running', 'false');
+    expect(screen.getByTestId('row')).toHaveAttribute('data-typing', 'false');
   });
 
   it('stays idle once the reply settles', () => {
@@ -176,6 +172,7 @@ describe('AgentConversation reply activity', () => {
 
     expect(screen.getByTestId('agent-avatar')).not.toHaveAttribute('data-state');
     expect(screen.getByTestId('agent-avatar')).toHaveAttribute('data-animated', 'false');
+    expect(screen.getByTestId('row')).toHaveAttribute('data-typing', 'false');
   });
 
   // A row whose conversation is not open used to stay idle; it now reads the list's jobs.
@@ -201,6 +198,19 @@ describe('AgentConversation reply activity', () => {
     );
 
     expect(screen.getByTestId('agent-avatar')).toHaveAttribute('data-state', 'working');
-    expect(screen.getByTestId('row')).toHaveAttribute('data-running', 'false');
+    expect(screen.getByTestId('row')).toHaveAttribute('data-typing', 'true');
+  });
+
+  // The row said typing while the Channel was idle: the Agent was running in its other topics.
+  it('only animates the avatar while the Agent runs elsewhere', () => {
+    showReply({ status: 'completed' });
+    chat.running = true;
+    render(
+      createElement(AgentConversation, { active: true, conversation: conversation(undefined, {}) }),
+    );
+    chat.running = false;
+
+    expect(screen.getByTestId('agent-avatar')).toHaveAttribute('data-state', 'working');
+    expect(screen.getByTestId('row')).toHaveAttribute('data-typing', 'false');
   });
 });

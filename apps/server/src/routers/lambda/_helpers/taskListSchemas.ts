@@ -92,7 +92,7 @@ export const groupListSchema = z
     completedWithin: z.enum(TASK_COMPLETED_WINDOWS).optional(),
     excludeStatuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
     filter: taskListFilterSchema.optional(),
-    groupBy: z.enum(['agent', 'assignee', 'label', 'member', 'priority']).optional(),
+    groupBy: z.enum(['agent', 'assignee', 'label', 'member', 'priority', 'project']).optional(),
     groups: z
       .array(
         z.object({

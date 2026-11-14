@@ -17,27 +17,28 @@ beforeEach(async () => {
   stateDirectory = await mkdtemp(path.join(tmpdir(), 'search-reindex-test-'));
   captureFingerprint = 'capture-v1';
   revision = 10;
-  repository = new FtsSearchReindexFileRepository({
-    readCaptureFingerprint: vi.fn(async () => captureFingerprint),
-    readHighWaterRevision: vi.fn(async () => revision),
-    reserveRevisionWithWriteFence: vi.fn(async () => ++revision),
-    stateDirectory,
-  });
+  repository = new FtsSearchReindexFileRepository(checkpointRepositoryOptions());
 });
 
 afterEach(async () => {
   await rm(stateDirectory, { force: true, recursive: true });
 });
 
+const checkpointRepositoryOptions = (): ConstructorParameters<
+  typeof FtsSearchReindexFileRepository
+>[0] => ({
+  readCaptureFingerprint: vi.fn(async () => captureFingerprint),
+  readHighWaterRevision: vi.fn(async () => revision),
+  reserveRevisionWithWriteFence: vi.fn(async () => ++revision),
+  stateDirectory,
+});
+
 describe('FtsSearchReindexFileRepository', () => {
   it('creates one local v2 checkpoint and resumes it after constructing a new repository', async () => {
     const first = await repository.createOrResume('test-search', 1);
-    const resumed = await new FtsSearchReindexFileRepository({
-      readCaptureFingerprint: vi.fn(async () => captureFingerprint),
-      readHighWaterRevision: vi.fn(async () => revision),
-      reserveRevisionWithWriteFence: vi.fn(async () => ++revision),
-      stateDirectory,
-    }).createOrResume('test-search', 1);
+    const resumed = await new FtsSearchReindexFileRepository(
+      checkpointRepositoryOptions(),
+    ).createOrResume('test-search', 1);
 
     expect(first.run.baseRevision).toBe(11);
     expect(first.progress).toHaveLength(14);
@@ -80,12 +81,7 @@ describe('FtsSearchReindexFileRepository', () => {
     await repository.completeEntity(state.run.id, 'agents');
     captureFingerprint = 'capture-v2';
 
-    const restarted = new FtsSearchReindexFileRepository({
-      readCaptureFingerprint: vi.fn(async () => captureFingerprint),
-      readHighWaterRevision: vi.fn(async () => revision),
-      reserveRevisionWithWriteFence: vi.fn(async () => ++revision),
-      stateDirectory,
-    });
+    const restarted = new FtsSearchReindexFileRepository(checkpointRepositoryOptions());
 
     await expect(restarted.createOrResume('changed-capture-search', 1)).rejects.toThrow(
       'capture definition fingerprint changed',
@@ -113,12 +109,7 @@ describe('FtsSearchReindexFileRepository', () => {
     const state = await repository.createOrResume('healthy-search', 1);
     await writeFile(path.join(stateDirectory, 'reindex-unrelated-deadbeef-v1.json'), '{');
 
-    const restarted = new FtsSearchReindexFileRepository({
-      readCaptureFingerprint: vi.fn(async () => captureFingerprint),
-      readHighWaterRevision: vi.fn(async () => revision),
-      reserveRevisionWithWriteFence: vi.fn(async () => ++revision),
-      stateDirectory,
-    });
+    const restarted = new FtsSearchReindexFileRepository(checkpointRepositoryOptions());
     await expect(restarted.getTargetRun('healthy-search', 1)).resolves.toMatchObject({
       run: { id: state.run.id },
     });
@@ -328,12 +319,7 @@ describe('FtsSearchReindexFileRepository', () => {
     expect(second.run.id).toBe(secondRunId);
     await expect(repository.listRuns('rebuild-search')).resolves.toHaveLength(2);
 
-    const restarted = new FtsSearchReindexFileRepository({
-      readCaptureFingerprint: vi.fn(async () => captureFingerprint),
-      readHighWaterRevision: vi.fn(async () => revision),
-      reserveRevisionWithWriteFence: vi.fn(async () => ++revision),
-      stateDirectory,
-    });
+    const restarted = new FtsSearchReindexFileRepository(checkpointRepositoryOptions());
     await expect(restarted.getRun(secondRunId)).resolves.toMatchObject({
       progress: [
         expect.objectContaining({ physicalIndex: `rebuild-search-messages-v1-r${secondRunId}` }),

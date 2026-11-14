@@ -1,5 +1,10 @@
 import type { HealthUsage } from './DeviceHealth/buildHealthTimeline';
-import { type UsageLevel, usageLevel } from './DeviceHealth/format';
+import {
+  LOAD_THRESHOLDS,
+  peakUsageLevel,
+  type UsageLevel,
+  usageLevel,
+} from './DeviceHealth/format';
 
 /** Segments of the level meter, bottom to top; each stands for 20%. */
 export const LOAD_HINT_SEGMENTS = 5;
@@ -18,7 +23,7 @@ export interface LoadHint {
 /**
  * One meter for the whole machine: a run stalls on whichever of CPU, memory
  * or load is exhausted, so the meter shows the busiest of them, with the same
- * yellow / red thresholds as the device page. Load averages are absent on
+ * yellow / red thresholds as the device page (load has its own, higher ones). Load averages are absent on
  * Windows and are then simply not considered. Load above 100% of the cores
  * fills the meter; any non-zero reading lights the bottom segment, so a
  * running machine never reads as empty.
@@ -42,5 +47,9 @@ export const loadHint = (usage: HealthUsage | null): LoadHint | null => {
       ? 0
       : Math.min(LOAD_HINT_SEGMENTS, Math.max(1, Math.ceil((peak / 100) * LOAD_HINT_SEGMENTS)));
 
-  return { level: usageLevel(peak) ?? 'normal', lit, readings };
+  const level = peakUsageLevel(
+    ...readings.map((r) => usageLevel(r.value, r.metric === 'load' ? LOAD_THRESHOLDS : undefined)),
+  );
+
+  return { level: level ?? 'normal', lit, readings };
 };

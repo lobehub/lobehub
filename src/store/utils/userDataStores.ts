@@ -9,18 +9,23 @@ import { useChatStore } from '@/store/chat';
 import { resetGatewayMuxRegistry } from '@/store/chat/slices/agentRun/actions/transports/gateway/muxRegistry';
 import { useDiscoverStore } from '@/store/discover';
 import { useDocumentStore } from '@/store/document';
+import { documentCommentActions } from '@/store/documentComment';
 import { useEvalStore } from '@/store/eval';
+import { expertiseActions } from '@/store/expertise';
 import { useFileStore } from '@/store/file';
 import { useHomeStore } from '@/store/home';
 import { useImageStore } from '@/store/image';
+import { integrationActions } from '@/store/integration';
 import { useKnowledgeBaseStore } from '@/store/library';
 import { useMentionStore } from '@/store/mention';
+import { messengerActions } from '@/store/messenger';
 import { useNotebookStore } from '@/store/notebook';
 import { pageActions } from '@/store/page';
 import { projectFileActions } from '@/store/projectFile';
 import { resourcePermissionActions } from '@/store/resourcePermission';
 import { sandboxActions } from '@/store/sandbox';
 import { useSessionStore } from '@/store/session';
+import { statsActions } from '@/store/stats';
 import { useTaskStore } from '@/store/task';
 import { useToolStore } from '@/store/tool';
 import { useUserStore } from '@/store/user';
@@ -58,10 +63,15 @@ const resetableStores: ResetableStoreApi[] = [
 const resetableActions: ResetableStore[] = [
   channelActions,
   agentDocumentActions,
+  expertiseActions,
+  integrationActions,
+  messengerActions,
+  documentCommentActions,
   pageActions,
   projectFileActions,
   resourcePermissionActions,
   sandboxActions,
+  statsActions,
   workActions,
 ];
 

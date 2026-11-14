@@ -44,7 +44,8 @@ const LabsForm = memo(() => {
   const labChecked = useUserStore((s) =>
     LAB_FEATURES.map(({ flag }) => labPreferSelectors[flag](s)),
   );
-  const enableWorkspace = useServerConfigStore(serverConfigSelectors.enableWorkspace);
+  // Workspaces exist wherever business features are enabled.
+  const enableWorkspace = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const form = useForm();
 
   // Cross-surface experiments. Platform-specific ones (Electron main-process

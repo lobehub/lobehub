@@ -1,6 +1,7 @@
 import * as stylex from '@stylexjs/stylex';
 import { Trans, useTranslation } from 'react-i18next';
 
+import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -34,11 +35,33 @@ export function JoinEventLine({ event: { inviter, members } }: { event: ChannelJ
               {names.map((part) => {
                 if (part.type === 'literal') return part.value;
                 const member = members[memberIndex++];
-                return (
-                  <span key={member.id} {...stylex.props(styles.eventMember)}>
+                const content = (
+                  <span
+                    key={member.id}
+                    {...stylex.props(
+                      styles.eventMember,
+                      !!member.agentId && styles.eventMemberAgent,
+                    )}
+                  >
                     <MemberAvatar member={member} size={18} />
                     <span {...stylex.props(styles.eventMemberName)}>{part.value}</span>
                   </span>
+                );
+                if (!member.agentId) return content;
+                return (
+                  // Same profile card an Agent shows on hover on its messages.
+                  <AgentProfilePopup
+                    agentId={member.agentId}
+                    key={member.id}
+                    trigger={'hover'}
+                    agent={{
+                      avatar: member.avatar,
+                      description: member.description,
+                      title: part.value,
+                    }}
+                  >
+                    {content}
+                  </AgentProfilePopup>
                 );
               })}
             </span>

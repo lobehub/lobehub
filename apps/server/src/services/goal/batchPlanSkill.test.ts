@@ -3,9 +3,36 @@ import { describe, expect, it } from 'vitest';
 import { learnedRulesClause, planSkillName, planUnitBrief } from './batchPlanSkill';
 
 describe('planSkillName', () => {
-  it('turns a node id into a short, valid skill name', () => {
-    expect(planSkillName('13b47c2a-5b56-4e8d-b53a-41e2b418d58a')).toBe('goal-plan-13b47c2a');
-    expect(planSkillName('gnd_AbC123xyz')).toBe('goal-plan-gndabc12');
+  const batchNodeId = '2e351018-5b56-4e8d-b53a-41e2b418d58a';
+
+  it("uses the planner's name, slugged into a valid skill name", () => {
+    expect(planSkillName({ batchNodeId, name: 'Migrate store reads to Replica' })).toBe(
+      'migrate-store-reads-to-replica',
+    );
+  });
+
+  /**
+   * Regression: the plan skill was named after the batch id
+   * (`goal-plan-2e351018`), which says nothing in the library or in a unit's
+   * brief about what the plan does.
+   */
+  it('falls back to the words of the goal title rather than the batch id', () => {
+    expect(
+      planSkillName({ batchNodeId, goalTitle: '客户端读取全量迁移到 replica（STAMP v2）' }),
+    ).toBe('replica-stamp-v2-plan');
+  });
+
+  it('cuts a long name at a word', () => {
+    const name = planSkillName({ batchNodeId, name: 'word '.repeat(20) });
+    expect(name.length).toBeLessThanOrEqual(48);
+    expect(name).toMatch(/^word(-word)*$/);
+  });
+
+  it('keeps the batch id only when nothing reads as words', () => {
+    expect(planSkillName({ batchNodeId, goalTitle: '首页迁移', name: 'v2' })).toBe(
+      'goal-plan-2e351018',
+    );
+    expect(planSkillName({ batchNodeId: 'gnd_AbC123xyz' })).toBe('goal-plan-gndabc12');
   });
 });
 

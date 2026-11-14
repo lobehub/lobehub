@@ -8,7 +8,7 @@ import type { MouseEvent } from 'react';
 import { memo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import { ChatInputAction } from '../ActionBar/components/ChatInputAction';
 import { useChatInputStore, useStoreApi } from '../store';
@@ -81,7 +81,8 @@ const styles = stylex.create({
 
 const Dictation = memo(() => {
   const { t } = useTranslation('chat');
-  const enabled = useServerConfigStore((s) => s.featureFlags.enableVoiceDictation === true);
+  // The realtime ASR session endpoint only exists on business deployments.
+  const enabled = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const storeApi = useStoreApi();
   const [activeAudioInputMode, editor, mobile, generating, setActiveAudioInputMode] =
     useChatInputStore((s) => [

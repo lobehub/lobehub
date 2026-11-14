@@ -27,6 +27,8 @@ import DeviceLoadMeter, { useDeviceLoad } from '@/features/DeviceManager/DeviceL
 import {
   devicePoolForAgent,
   ExecutionTargetIcon,
+  findOwnWorkspaceDevice,
+  getMachineDefaultTarget,
   groupExecutionTargetDevices,
 } from '@/features/ExecutionTargetPicker';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -37,6 +39,7 @@ import {
 } from '@/helpers/executionTarget';
 import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
+import { useLocalMachineDeviceIds } from '@/hooks/useLocalMachineDeviceIds';
 import { deviceService } from '@/services/device';
 import { localFileService } from '@/services/electron/localFileService';
 import { useAgentStore } from '@/store/agent';
@@ -245,6 +248,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
+  // Both ids this machine holds — personal, and its row in the active
+  // workspace — so the workspace row reads as this machine too.
+  const localMachineDeviceIds = useLocalMachineDeviceIds();
   const [reconnectingDeviceId, setReconnectingDeviceId] = useState<string>();
 
   const handleReconnectDevice = useCallback(
@@ -257,7 +263,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         // device list instead of making the user close and reopen the picker.
         const outcome = await reconnectDevice(
           device,
-          { isCurrentMachine: isDesktop && device.deviceId === currentDeviceId },
+          { isCurrentMachine: isDesktop && localMachineDeviceIds.includes(device.deviceId) },
           {
             connectGateway: () => useElectronStore.getState().connectGateway(),
             openDeepLink: (url) => {
@@ -282,13 +288,21 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         setReconnectingDeviceId(undefined);
       }
     },
-    [currentDeviceId, refreshDevices, t],
+    [localMachineDeviceIds, refreshDevices, t],
   );
 
   // A member's explicit target override may resolve `local`; without one the
   // raw shared fallback stays workspace-scoped so a legacy `local` value keeps
   // routing to its bound workspace device rather than this member's desktop.
   const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
+  // This machine's own row in a workspace agent's pool. Once it exists, "run on
+  // this machine" goes through the gateway on that row — which Tasks and other
+  // surfaces can resolve — rather than the in-app `local` path. Only when the
+  // agent routes through the gateway at all.
+  const ownWorkspaceDevice =
+    isDesktop && isWorkspaceAgent && isDeviceListConfirmed && deviceRoutingAvailable
+      ? findOwnWorkspaceDevice(devices, localMachineDeviceIds)
+      : undefined;
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,
@@ -382,8 +396,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     selectExecutionTarget,
   });
 
-  // Auto-default to THIS desktop's local execution on first open, for both
-  // personal and workspace agents (workspace behaviour used to be a hostname
+  // Auto-default to THIS desktop's local execution on first open when the
+  // unset target does not resolve to `auto` (hetero agents, or gateway mode
+  // off), for both personal and workspace agents (workspace behaviour used to be a hostname
   // lookup against the workspace device pool — see — but with
   // per-user overrides that lookup is unnecessary: `useSelectExecutionTarget`
   // resolves `'local'` to this desktop's personal gateway `deviceId` and, for
@@ -399,19 +414,44 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     if (!isDesktop) return;
     if (!canShowExecutionTargetSelector) return;
     if (isWorkspacePreferenceLoading) return;
-    if (agencyConfig?.executionTarget !== undefined) return;
-    if (agencyConfig?.boundDeviceId !== undefined) return;
+    // the unset target already defaults to `auto` wherever the gateway routes,
+    // and canary's `getMachineDefaultTarget` below owns the stored-target
+    // decisions — this only keeps the auto default from being overwritten.
+    if (executionTarget === 'auto') return;
     if (!currentDeviceId) return;
+    // Whether this machine has a workspace row is only known once the server
+    // confirms the list; deciding earlier would write `local` and then move it.
+    // A failed list falls back to `local` rather than leaving no default.
+    if (isWorkspaceAgent && !isDeviceListConfirmed && !deviceListError) return;
+    // A workspace agent whose pool holds this machine runs on that row through
+    // the gateway. A plain `local` pick (not the sandboxed one, which only the
+    // in-app path can fence) moves over to it too.
+    const defaultTarget = getMachineDefaultTarget({
+      executionTarget: agencyConfig?.executionTarget,
+      boundDeviceId: agencyConfig?.boundDeviceId,
+      // Without an override of the member's own, a stored `local` is the
+      // agent's legacy shared value, not their pick: leave it alone.
+      isOwnPick: !workspaceScoped,
+      localSandboxEnabled,
+      ownWorkspaceDeviceId: ownWorkspaceDevice?.deviceId,
+    });
+    if (!defaultTarget) return;
     // `silent`: this is a mount-time default, so a rejected write must not
     // surface a save-failure toast on an agent the user only opened.
-    void selectExecutionTarget('local', undefined, { silent: true });
+    void selectExecutionTarget(defaultTarget.target, defaultTarget.deviceId, { silent: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     agencyConfig?.executionTarget,
     agencyConfig?.boundDeviceId,
     currentDeviceId,
+    executionTarget,
     canShowExecutionTargetSelector,
+    deviceListError,
+    isDeviceListConfirmed,
     isWorkspacePreferenceLoading,
+    workspaceScoped,
+    localSandboxEnabled,
+    ownWorkspaceDevice?.deviceId,
   ]);
 
   const boundDevice =
@@ -529,17 +569,17 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   };
 
   const renderDeviceRow = (d: NonNullable<typeof devices>[number]) => {
-    const isCurrentMachine = d.deviceId === currentDeviceId;
+    const isCurrentMachine = localMachineDeviceIds.includes(d.deviceId);
     return (
       <DeviceOptionRow
         active={isActive('device', d.deviceId)}
         device={d}
-        isCurrentMachine={isCurrentMachine}
         key={d.deviceId}
         reconnecting={reconnectingDeviceId === d.deviceId}
         tags={tagsFor(
           isActive('device', d.deviceId),
-          isCurrentMachine ? [t('heteroAgent.executionTarget.gateway')] : [],
+          // Users pick a machine, not a transport: tag this one as "This device".
+          isCurrentMachine ? [t('heteroAgent.executionTarget.thisDevice')] : [],
         )}
         onReconnect={() => void handleReconnectDevice(d)}
         onSelect={() => void handleSelect('device', d.deviceId)}
@@ -607,7 +647,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           `local` pick lands in `users.preference.agentDeviceOverrides` — my
           per-user override — so it never binds the workspace-shared
           `agencyConfig` or coerces any other member's dispatch. */}
-      {isDesktop ? (
+      {/* Hidden once this machine has its own workspace row (listed below,
+          tagged as this machine), unless it is still the active pick. */}
+      {isDesktop && (!ownWorkspaceDevice || isActive('local')) ? (
         <OptionRow
           active={isActive('local')}
           desc={t('heteroAgent.executionTarget.localDesc')}

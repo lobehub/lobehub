@@ -1,4 +1,3 @@
-export { PENDING_TRANSFERS_SWR_KEY } from './keys';
 export { isTransferManifestActionable } from './manifestState';
 export {
   default as TransferManifestList,

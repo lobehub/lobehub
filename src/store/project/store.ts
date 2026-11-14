@@ -28,9 +28,12 @@ import {
   projectDetailResource,
   type ProjectListItem,
   projectListResource,
+  type ProjectOverview,
+  type ProjectOverviewMap,
+  projectOverviewResource,
 } from './projection';
 
-export type { ProjectDetail, ProjectListItem } from './projection';
+export type { ProjectDetail, ProjectListItem, ProjectOverview } from './projection';
 
 export interface ProjectStoreState {
   /** Project pages by route param (id or slug). */
@@ -41,6 +44,10 @@ export interface ProjectStoreState {
   projectListMap: Record<string, ProjectListItem[]>;
   /** Replica bookkeeping for `projectListMap`. */
   projectListReplica: ReplicaState<ProjectListItem[]>;
+  /** `projectOverviewMap.all`: folder-card content of every project, by project id. */
+  projectOverviewMap: Record<string, ProjectOverviewMap>;
+  /** Replica bookkeeping for `projectOverviewMap`. */
+  projectOverviewReplica: ReplicaState<ProjectOverviewMap>;
 }
 
 interface ProjectStore extends ProjectStoreState {
@@ -50,6 +57,10 @@ interface ProjectStore extends ProjectStoreState {
   createProject: (input: {
     avatar?: string;
     coordinatorAgentId?: string;
+    /** Reserved id of the dedicated main agent; see `reserveProjectIds`. */
+    dedicatedAgentId?: string;
+    /** Reserved project id; see `reserveProjectIds`. */
+    id?: string;
     identifier?: string;
     name: string;
     /** GitHub repository to attach as the project's environment, in the same write. */
@@ -86,6 +97,8 @@ interface ProjectStore extends ProjectStoreState {
   useFetchProjectDetail: (idOrSlug?: string) => ReplicaSyncResult;
   /** Fetch orchestration only; read the rows with `useCurrentProjectList`. */
   useFetchProjectList: (enabled?: boolean) => ReplicaSyncResult;
+  /** Fetch orchestration only; read a card's content with `useProjectOverview`. */
+  useFetchProjectOverviews: (enabled?: boolean) => ReplicaSyncResult;
 }
 
 export const initialProjectState: ProjectStoreState = {
@@ -93,6 +106,8 @@ export const initialProjectState: ProjectStoreState = {
   projectDetailReplica: createReplicaState(),
   projectListMap: {},
   projectListReplica: createReplicaState(),
+  projectOverviewMap: {},
+  projectOverviewReplica: createReplicaState(),
 };
 
 const LIST_PARAMS = {} as Record<string, never>;
@@ -141,6 +156,16 @@ export const useProjectStore = createWithEqualityFn<ProjectStore>()(
       set,
       stateKey: 'projectDetailReplica',
       view: recordLens<ProjectStore, ProjectDetail>('projectDetailMap'),
+    });
+    const overviews = createReplicaSlice(projectOverviewResource, {
+      actionPrefix: 'project/overview',
+      fetcher: () => projectService.listOverviews(),
+      get,
+      merge: (response) =>
+        Object.fromEntries(response.data.map((overview) => [overview.projectId, overview])),
+      set,
+      stateKey: 'projectOverviewReplica',
+      view: recordLens<ProjectStore, ProjectOverviewMap>('projectOverviewMap'),
     });
     // The same project lives in the list and in every loaded project page.
     const projectEntity = linkReplicaEntity<ProjectListItem>([list, detail]);
@@ -328,6 +353,7 @@ export const useProjectStore = createWithEqualityFn<ProjectStore>()(
       },
       useFetchProjectDetail: (idOrSlug) => detail.useSync(idOrSlug || null),
       useFetchProjectList: (enabled = true) => list.useSync(LIST_PARAMS, { enabled }),
+      useFetchProjectOverviews: (enabled = true) => overviews.useSync(LIST_PARAMS, { enabled }),
     };
   }),
   shallow,
@@ -346,6 +372,20 @@ export const useCurrentProjectList = () =>
  */
 export const useLoadedProjectList = () =>
   useProjectStore((state): ProjectListItem[] | undefined => state.projectListMap[PROJECT_LIST_KEY]);
+
+/** A project's folder-card content; `undefined` until loaded or when it has none. */
+export const useProjectOverview = (projectId: string): ProjectOverview | undefined =>
+  useProjectStore((state) => state.projectOverviewMap[PROJECT_LIST_KEY]?.[projectId]);
+
+/** Whether the overview batch has arrived, so a card without a row really has no content. */
+export const useProjectOverviewsLoaded = () =>
+  useProjectStore((state) => state.projectOverviewMap[PROJECT_LIST_KEY] !== undefined);
+
+/** One row of the cached project list; `undefined` when it is not (yet) in the list. */
+export const projectListItemSelector =
+  (id: string | null | undefined) =>
+  (state: ProjectStoreState): ProjectListItem | undefined =>
+    id ? state.projectListMap[PROJECT_LIST_KEY]?.find((project) => project.id === id) : undefined;
 
 export const useCurrentProjectDetail = (idOrSlug?: string) =>
   useProjectStore((state) => (idOrSlug ? state.projectDetailMap[idOrSlug] : undefined));

@@ -20,6 +20,11 @@ export interface ProjectContextTask extends TaskSummary {
 
 export interface ProjectContextPromptInput {
   /**
+   * Whether the run can message Agents in other Channels (`lobe-channel`, only injected into
+   * Channel runs and not discoverable elsewhere), so the rules may point hand-offs there.
+   */
+  channelMessaging?: boolean;
+  /**
    * Whether the coordinator gets the delegation rules. They name LobeHub task
    * tools, so a runtime without them (a CLI agent) leaves them out.
    */
@@ -55,6 +60,9 @@ const COORDINATOR_RULES = [
   '</coordination_rules>',
 ];
 
+const CHANNEL_MESSAGING_RULE =
+  '- To pass a message or question to another Agent and let it decide what to do, message it in a Channel it belongs to (`listChannels`, then `sendMessage`) instead of creating a task for it.';
+
 /**
  * Live context for a run inside a project: who works here, what knowledge is
  * linked, and what is still open. Rebuilt every turn so renames and membership
@@ -63,6 +71,7 @@ const COORDINATOR_RULES = [
  */
 export const buildProjectContextPrompt = (input: ProjectContextPromptInput): string => {
   const {
+    channelMessaging = false,
     coordinationRules = true,
     currentAgentId,
     knowledgeBases,
@@ -122,7 +131,12 @@ export const buildProjectContextPrompt = (input: ProjectContextPromptInput): str
   }
   lines.push('</open_tasks>');
 
-  if (isCoordinator && coordinationRules) lines.push(...COORDINATOR_RULES);
+  if (isCoordinator && coordinationRules)
+    lines.push(
+      ...COORDINATOR_RULES.slice(0, -1),
+      ...(channelMessaging ? [CHANNEL_MESSAGING_RULE] : []),
+      COORDINATOR_RULES.at(-1)!,
+    );
 
   return lines.join('\n');
 };

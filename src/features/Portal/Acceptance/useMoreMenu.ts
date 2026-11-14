@@ -6,8 +6,6 @@ import { useAcceptanceBundle } from '@/features/Acceptance/hooks';
 import { openAcceptanceDeleteConfirm } from '@/features/Acceptance/Workspace/AcceptanceDeleteConfirm';
 import { type PortalMoreMenuConfig } from '@/features/Portal/components/PortalMoreMenu/types';
 import { usePermission } from '@/hooks/usePermission';
-import { mutate as globalMutate } from '@/libs/swr';
-import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 import { useVerifyStore } from '@/store/verify';
@@ -32,7 +30,7 @@ export const useAcceptanceMoreMenu = (): PortalMoreMenuConfig | undefined => {
   const refreshAll = () =>
     Promise.all([
       useVerifyStore.getState().refreshAcceptanceBundle(acceptanceId),
-      globalMutate(isAcceptanceListKey),
+      useVerifyStore.getState().refreshAcceptanceLists(),
     ]);
 
   return {
@@ -46,7 +44,8 @@ export const useAcceptanceMoreMenu = (): PortalMoreMenuConfig | undefined => {
               await verifyService.deleteAcceptance(acceptanceId, purge);
               // Close the panel first: the bundle it shows no longer exists.
               clearPortalStack();
-              await globalMutate(isAcceptanceListKey);
+              useVerifyStore.getState().removeAcceptancesFromLists([acceptanceId]);
+              await useVerifyStore.getState().refreshAcceptanceLists();
               toast.success(t('acceptance.workspace.deleteSuccess'));
             },
             title,

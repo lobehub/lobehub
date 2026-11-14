@@ -6,11 +6,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { finishOperation } from '../executeStep/completion';
 import { prepareStepInput } from '../executeStep/prepare';
-import { readQueuedMessagesFlag } from '../operationControl';
+import { injectQueuedFollowUp, readQueuedMessagesFlag } from '../operationControl';
 
-const { steerQueueLength } = vi.hoisted(() => ({ steerQueueLength: vi.fn() }));
+const { steerQueueLength, steerQueueSeal, steerQueueUnseal } = vi.hoisted(() => ({
+  steerQueueLength: vi.fn(),
+  steerQueueSeal: vi.fn(),
+  steerQueueUnseal: vi.fn(),
+}));
 vi.mock('@/server/services/redis', () => ({
-  redisService: { steerQueue: { length: steerQueueLength } },
+  redisService: {
+    steerQueue: { length: steerQueueLength, seal: steerQueueSeal, unseal: steerQueueUnseal },
+  },
 }));
 
 const stateOf = (overrides: Partial<AgentState> = {}) =>
@@ -25,6 +31,8 @@ describe('server-side steer queue in the step loop', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     steerQueueLength.mockResolvedValue(0);
+    steerQueueSeal.mockResolvedValue(undefined);
+    steerQueueUnseal.mockResolvedValue(undefined);
   });
 
   describe('readQueuedMessagesFlag', () => {
@@ -76,6 +84,105 @@ describe('server-side steer queue in the step loop', () => {
       await expect(readQueuedMessagesFlag(depsWithFlag(false), 'op-1', 1, stateOf())).resolves.toBe(
         false,
       );
+    });
+  });
+
+  describe('injectQueuedFollowUp — a running sub-agent’s steer queue', () => {
+    const createDeps = (injected?: { messageId: string }) =>
+      ({
+        delegate: { injectQueuedFollowUp: vi.fn().mockResolvedValue(injected) },
+        userId: 'user-1',
+      }) as any;
+    const child = stateOf({
+      origin: {
+        agentId: 'agt-1',
+        lineage: { isSubAgent: true, parentOperationId: 'op-parent' },
+        threadId: 'thd-sub',
+        topicId: 'tpc-1',
+      },
+      status: 'running',
+    });
+
+    it('takes the parent’s queued instruction from the sub-agent’s thread queue', async () => {
+      steerQueueLength.mockResolvedValue(1);
+      const deps = createDeps({ messageId: 'msg-steer' });
+
+      await expect(injectQueuedFollowUp(deps, 'op-child', 2, child)).resolves.toEqual({
+        messageId: 'msg-steer',
+      });
+      const scope = { threadId: 'thd-sub', topicId: 'tpc-1', userId: 'user-1' };
+      expect(steerQueueLength).toHaveBeenCalledWith(scope, 'op-child');
+      expect(deps.delegate.injectQueuedFollowUp).toHaveBeenCalledWith({
+        operationId: 'op-child',
+        scope,
+        state: child,
+      });
+    });
+
+    it('skips the join when nothing waits for the sub-agent', async () => {
+      const deps = createDeps({ messageId: 'msg-steer' });
+
+      await expect(injectQueuedFollowUp(deps, 'op-child', 2, child)).resolves.toBeUndefined();
+      expect(deps.delegate.injectQueuedFollowUp).not.toHaveBeenCalled();
+    });
+
+    it('seals the sub-agent before its last read, so a later steer is taken back', async () => {
+      const deps = createDeps({ messageId: 'msg-steer' });
+
+      await expect(
+        injectQueuedFollowUp(deps, 'op-child', 2, child, { lastRead: true }),
+      ).resolves.toBeUndefined();
+      expect(steerQueueSeal).toHaveBeenCalledWith('op-child');
+      expect(steerQueueSeal.mock.invocationCallOrder[0]).toBeLessThan(
+        steerQueueLength.mock.invocationCallOrder[0],
+      );
+      expect(steerQueueUnseal).not.toHaveBeenCalled();
+    });
+
+    it('unseals when the last read took a steer in, since the sub-agent answers again', async () => {
+      steerQueueLength.mockResolvedValue(1);
+      const deps = createDeps({ messageId: 'msg-steer' });
+
+      await expect(
+        injectQueuedFollowUp(deps, 'op-child', 2, child, { lastRead: true }),
+      ).resolves.toEqual({ messageId: 'msg-steer' });
+      expect(steerQueueUnseal).toHaveBeenCalledWith('op-child');
+    });
+
+    it('keeps the joined steer when unsealing fails', async () => {
+      steerQueueLength.mockResolvedValue(1);
+      steerQueueUnseal.mockRejectedValue(new Error('redis down'));
+      const deps = createDeps({ messageId: 'msg-steer' });
+
+      await expect(
+        injectQueuedFollowUp(deps, 'op-child', 2, child, { lastRead: true }),
+      ).resolves.toEqual({ messageId: 'msg-steer' });
+    });
+
+    it('retries a seal that Redis rejects before reading', async () => {
+      steerQueueSeal.mockRejectedValueOnce(new Error('timeout')).mockResolvedValueOnce(undefined);
+
+      await injectQueuedFollowUp(createDeps(), 'op-child', 2, child, { lastRead: true });
+
+      expect(steerQueueSeal).toHaveBeenCalledTimes(2);
+      expect(steerQueueSeal.mock.invocationCallOrder[1]).toBeLessThan(
+        steerQueueLength.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('does not seal on a read the run makes before another LLM call', async () => {
+      await injectQueuedFollowUp(createDeps(), 'op-child', 2, child);
+
+      expect(steerQueueSeal).not.toHaveBeenCalled();
+    });
+
+    it('has no queue for a child run outside a thread', async () => {
+      steerQueueLength.mockResolvedValue(1);
+      const deps = createDeps({ messageId: 'msg-steer' });
+      const noThread = stateOf({ origin: { lineage: { isSubAgent: true }, topicId: 'tpc-1' } });
+
+      await expect(injectQueuedFollowUp(deps, 'op-child', 2, noThread)).resolves.toBeUndefined();
+      expect(steerQueueLength).not.toHaveBeenCalled();
     });
   });
 
@@ -189,7 +296,9 @@ describe('server-side steer queue in the step loop', () => {
 
         const { currentContext, currentState } = await prepare(deps, phase);
 
-        expect(deps.injectQueuedFollowUp).toHaveBeenCalledWith('op-1', 2, expect.anything());
+        expect(deps.injectQueuedFollowUp).toHaveBeenCalledWith('op-1', 2, expect.anything(), {
+          lastRead: false,
+        });
         expect(currentContext).toMatchObject({
           payload: { parentMessageId: 'msg-steer' },
           phase: 'user_input',
@@ -214,6 +323,143 @@ describe('server-side steer queue in the step loop', () => {
       await prepare(deps, 'user_input');
 
       expect(deps.injectQueuedFollowUp).not.toHaveBeenCalled();
+    });
+
+    describe('a running sub-agent steered by its parent', () => {
+      const subAgentOrigin = {
+        agentId: 'agt-1',
+        lineage: { isSubAgent: true, parentOperationId: 'op-parent' },
+        threadId: 'thd-sub',
+        topicId: 'tpc-1',
+      };
+      const prepareChild = (deps: any, phase: string, payload: Record<string, unknown>) =>
+        prepareStepInput(deps, {
+          agentState: stateOf({
+            messages: toolMessages,
+            origin: subAgentOrigin,
+            status: 'running',
+          } as any),
+          params: {
+            context: { payload: { parentMessageId: 'msg-tool', ...payload }, phase },
+            operationId: 'op-child',
+            stepIndex: 4,
+          } as any,
+          stepEntryMessages: undefined as any,
+        });
+
+      it('injects the steer instruction into the sub-agent context on its next step', async () => {
+        const deps = createDeps({ messageId: 'msg-steer' });
+
+        const { currentContext, currentState } = await prepareChild(deps, 'tool_result', {});
+
+        expect(deps.injectQueuedFollowUp).toHaveBeenCalledWith('op-child', 4, expect.anything(), {
+          lastRead: false,
+        });
+        // The next LLM call runs on the steer message, read back from the thread.
+        expect(currentContext).toMatchObject({
+          payload: { parentMessageId: 'msg-steer' },
+          phase: 'user_input',
+        });
+        expect(currentState.messages).toEqual(refreshed);
+      });
+
+      const prepareGraphChild = (
+        deps: any,
+        currentNode: string,
+        terminalNode?: string,
+        phase: 'node_in' | 'node_out' = 'node_in',
+      ) =>
+        prepareStepInput(deps, {
+          agentState: stateOf({
+            messages: toolMessages,
+            metadata: {
+              __graphRuntimeState: {
+                graphContext: { edgeTraversalCounts: {}, store: {} },
+                graphState: { active: true, attempts: 1, currentNode, phase },
+                instructionCount: 2,
+                terminalNode,
+              },
+            },
+            origin: subAgentOrigin,
+            status: 'running',
+          } as any),
+          params: {
+            context: {
+              payload: { hasToolsCalling: false, result: { content: 'node', tool_calls: [] } },
+              phase: 'llm_result',
+            },
+            operationId: 'op-child',
+            stepIndex: 4,
+          } as any,
+          stepEntryMessages: undefined as any,
+        });
+
+      it.each([
+        ['an intermediate node', 'draft', 'review'],
+        ['a state without its terminal node', 'review', undefined],
+      ])('takes the steer at a graph’s result at %s without sealing', async (_case, node, end) => {
+        const deps = createDeps({ messageId: 'msg-steer' });
+
+        const { currentContext } = await prepareGraphChild(deps, node, end);
+
+        // Read before the graph moves on, so later nodes work with the
+        // correction; not the run's last read, so the queue stays open.
+        expect(deps.injectQueuedFollowUp).toHaveBeenCalledWith('op-child', 4, expect.anything(), {
+          lastRead: false,
+        });
+        expect(currentContext).toMatchObject({
+          payload: { parentMessageId: 'msg-steer' },
+          phase: 'user_input',
+        });
+      });
+
+      it.each([
+        ['an intermediate node', 'draft'],
+        ['the terminal node', 'review'],
+      ])('leaves a graph’s output extraction at %s alone', async (_case, node) => {
+        const deps = createDeps({ messageId: 'msg-steer' });
+
+        const { currentContext } = await prepareGraphChild(deps, node, 'review', 'node_out');
+
+        // The graph takes the extraction reply only as an llm_result; the
+        // node's own answer before it was the read.
+        expect(deps.injectQueuedFollowUp).not.toHaveBeenCalled();
+        expect(currentContext).toMatchObject({ phase: 'llm_result' });
+      });
+
+      it('makes its last read at the graph’s terminal node', async () => {
+        const deps = createDeps(undefined);
+
+        await prepareGraphChild(deps, 'review', 'review');
+
+        expect(deps.injectQueuedFollowUp).toHaveBeenCalledWith('op-child', 4, expect.anything(), {
+          lastRead: true,
+        });
+      });
+
+      it('takes the steer at its final answer instead of finishing without it', async () => {
+        const deps = createDeps({ messageId: 'msg-steer' });
+
+        const { currentContext } = await prepareChild(deps, 'llm_result', {
+          hasToolsCalling: false,
+          result: { content: 'done', tool_calls: [] },
+        });
+
+        // Its last read before it ends: sealed, so a steer that misses it is taken back.
+        expect(deps.injectQueuedFollowUp).toHaveBeenCalledWith('op-child', 4, expect.anything(), {
+          lastRead: true,
+        });
+        expect(currentContext).toMatchObject({ phase: 'user_input' });
+      });
+
+      it('runs the tools the model asked for before taking the steer', async () => {
+        const deps = createDeps({ messageId: 'msg-steer' });
+
+        await prepareChild(deps, 'llm_result', { hasToolsCalling: true, toolsCalling: [{}] });
+        await prepareChild(deps, 'llm_result', { result: { tool_calls: [{ id: 'call-2' }] } });
+
+        expect(deps.injectQueuedFollowUp).not.toHaveBeenCalled();
+      });
     });
 
     it('lets the agent park for a tool still waiting for approval first', async () => {

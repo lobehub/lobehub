@@ -4,12 +4,14 @@ import type {
   ChannelHistoryMessageDetail,
   ChannelHistoryPage,
   ChannelInputManifest,
+  ChannelMessageVia,
   ChannelReadMessageParams,
   ChannelReadMessagesParams,
 } from '@lobechat/types';
+import { channelMessageVia } from '@lobechat/types';
 import { and, eq, isNull } from 'drizzle-orm';
 
-import { agentOperations, channelJobs, workspaceMembers } from '../../schemas';
+import { agentOperations, channelJobs, channelMessages, workspaceMembers } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { normalizeWorkspaceId } from '../../utils/workspace';
 import { activeMembers, findThread } from './delivery';
@@ -120,6 +122,32 @@ export class ChannelHistoryRepository {
       return fn(tx, channel.id, job.manifest);
     });
   }
+
+  /**
+   * The live run's Channel and request, under the same checks as a history read: what a run may
+   * act from (e.g. relay a request into another Channel). `requestVia` is set when the request
+   * it answers was itself relayed by an Agent.
+   */
+  currentRun = async (
+    operationId: string,
+  ): Promise<{
+    channelId: string;
+    manifest: ChannelInputManifest;
+    requestVia?: ChannelMessageVia;
+  }> =>
+    this.read(operationId, async (tx, channelId, manifest) => {
+      const [request] = await tx
+        .select({ metadata: channelMessages.metadata })
+        .from(channelMessages)
+        .where(
+          and(
+            eq(channelMessages.channelId, channelId),
+            eq(channelMessages.id, manifest.requestMessageId),
+          ),
+        )
+        .limit(1);
+      return { channelId, manifest, requestVia: channelMessageVia(request?.metadata) };
+    });
 
   readMessages = async (
     operationId: string,

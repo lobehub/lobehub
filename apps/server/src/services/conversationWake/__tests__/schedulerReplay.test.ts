@@ -35,23 +35,8 @@ describe('wake scheduler replay', () => {
         effects: step.effects,
         state: step.state,
       });
-      state = next.state;
-    });
-  });
-
-  it('survives a JSON round trip between every step, as it does through Redis', () => {
-    let runCounter = 0;
-    let state: SchedulerState | undefined;
-
-    for (const step of replay.steps as RecordedStep[]) {
-      const next = transitionScheduler(
-        state,
-        step.event,
-        replay.options as SchedulerOptions,
-        () => `run-${++runCounter}`,
-      );
       state = structuredClone(next.state);
-    }
+    });
 
     expect(state).toEqual((replay.steps.at(-1) as RecordedStep).state);
   });

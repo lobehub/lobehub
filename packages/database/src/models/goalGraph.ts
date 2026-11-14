@@ -305,6 +305,7 @@ export class GoalGraphModel {
         // metadata rather than the `url` column.
         metadata: workVersions.metadata,
         resourceId: works.resourceId,
+        resourceType: works.resourceType,
         status: workVersions.status,
         title: workVersions.title,
         type: works.type,
@@ -326,6 +327,7 @@ export class GoalGraphModel {
       display.set(row.versionId, {
         identifier: row.identifier,
         resourceId: row.resourceId,
+        resourceType: row.resourceType,
         status: row.status,
         title: row.title,
         type: row.type,

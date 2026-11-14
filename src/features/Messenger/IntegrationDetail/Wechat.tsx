@@ -20,6 +20,7 @@ import AsyncError from '@/components/AsyncError';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { messengerService } from '@/services/messenger';
+import { messengerActions } from '@/store/messenger';
 
 import { getMessengerErrorMessage } from '../i18n';
 import { MessengerPushSection } from './MessengerPush';
@@ -254,8 +255,6 @@ const WechatDetail = memo<WechatDetailProps>(({ access, name, onBack }) => {
   const [rescanning, setRescanning] = useState(false);
   const data = useMessengerData('wechat');
   const { handleSetActive, handleUnlink } = useLinkActions({
-    installationsMutate: data.installationsMutate,
-    linksMutate: data.linksMutate,
     name,
     platform: 'wechat',
   });
@@ -273,7 +272,7 @@ const WechatDetail = memo<WechatDetailProps>(({ access, name, onBack }) => {
   const sessionExpired = installation?.runtime?.errorCode === 'session_expired';
 
   const handleConfirmed = async () => {
-    await Promise.all([data.linksMutate(), data.installationsMutate()]);
+    await messengerActions.refreshAfterConnect();
     setRescanning(false);
     toast.success(t('messenger.wechat.connected'));
   };

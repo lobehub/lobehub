@@ -23,6 +23,7 @@ import {
   ImageIcon,
   ListIcon,
   ListOrderedIcon,
+  ListRestartIcon,
   ListTodoIcon,
   MessageSquareWarningIcon,
   MinusIcon,
@@ -35,7 +36,7 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { openFileSelector } from '@/features/EditorCanvas';
+import { openFileSelector, requestListNumberMenu } from '@/features/EditorCanvas';
 
 export const useSlashItems = (): SlashOptions['items'] => {
   const { t } = useTranslation('editor');
@@ -91,6 +92,15 @@ export const useSlashItems = (): SlashOptions['items'] => {
         label: t('typobar.numberList'),
         onSelect: (editor) => {
           editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined);
+        },
+      },
+      {
+        // The keyboard's way to the menu the pointer opens on a list number.
+        icon: ListRestartIcon,
+        key: 'num',
+        label: t('list.number.set'),
+        onSelect: (editor) => {
+          requestListNumberMenu(editor);
         },
       },
       {

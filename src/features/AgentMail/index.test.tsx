@@ -241,13 +241,6 @@ describe('AgentMail', () => {
 
     expect(await screen.findByText('identity.empty.open')).toBeInTheDocument();
     expect(screen.queryByText('menu:identity.release')).not.toBeInTheDocument();
-  });
-
-  it('gives the whole page to the offer instead of an empty inbox and reader', async () => {
-    service.list.mockResolvedValue([]);
-    service.listInbox.mockResolvedValue([]);
-    page();
-
     expect(await screen.findByText('identity.empty.title')).toBeInTheDocument();
     expect(screen.getByText('@lobe.id')).toBeInTheDocument();
     expect(screen.queryByText('identity.inbox.title')).not.toBeInTheDocument();

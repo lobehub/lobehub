@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatPercent, peakUsageLevel, usageLevel } from './format';
+import { formatPercent, LOAD_THRESHOLDS, peakUsageLevel, usageLevel } from './format';
 
 describe('device health formatters', () => {
   // The chart calls its formatter for every slot, including slots with no
@@ -24,9 +24,16 @@ describe('usage levels', () => {
     expect(usageLevel(null)).toBeUndefined();
   });
 
-  it('rates a block by its busiest metric', () => {
-    expect(peakUsageLevel(40, 55, 96)).toBe('critical');
-    expect(peakUsageLevel(null, 82, undefined)).toBe('high');
-    expect(peakUsageLevel(null, undefined)).toBeUndefined();
+  it('rates load per core: yellow above the core count, red only at twice it', () => {
+    expect(usageLevel(99.9, LOAD_THRESHOLDS)).toBe('normal');
+    expect(usageLevel(129, LOAD_THRESHOLDS)).toBe('high');
+    expect(usageLevel(199.9, LOAD_THRESHOLDS)).toBe('high');
+    expect(usageLevel(200, LOAD_THRESHOLDS)).toBe('critical');
+  });
+
+  it('rates a block by its hottest level', () => {
+    expect(peakUsageLevel('normal', 'normal', 'critical')).toBe('critical');
+    expect(peakUsageLevel(undefined, 'high', 'normal')).toBe('high');
+    expect(peakUsageLevel(undefined, undefined)).toBeUndefined();
   });
 });

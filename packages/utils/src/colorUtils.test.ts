@@ -62,8 +62,9 @@ describe('colorUtils', () => {
       // Using hex with alpha
       const result = convertAlphaToSolid('#ff000080', '#ffffff');
 
-      // #ff000080 is red with 50% opacity (80 in hex = 128/255 ≈ 0.5)
-      expect(result).toBe('#ff8080');
+      // 80 in hex is an alpha of exactly 128/255 (≈ 0.502), which chroma-js
+      // reads unrounded since 3.3.0: 255 * (1 - 128/255) = 127 → 7f
+      expect(result).toBe('#ff7f7f');
     });
 
     it('should handle named colors', () => {
@@ -180,9 +181,10 @@ describe('colorUtils', () => {
     });
 
     it('should produce same result regardless of input color format', () => {
+      // The same alpha in every format: hex `80` is exactly 128/255.
       const result1 = convertAlphaToSolid('#ff000080', '#ffffff');
-      const result2 = convertAlphaToSolid('rgba(255, 0, 0, 0.5)', 'white');
-      const result3 = convertAlphaToSolid('rgba(255, 0, 0, 0.5)', '#fff');
+      const result2 = convertAlphaToSolid(`rgba(255, 0, 0, ${128 / 255})`, 'white');
+      const result3 = convertAlphaToSolid(`rgba(255, 0, 0, ${128 / 255})`, '#fff');
 
       expect(result1).toBe(result2);
       expect(result2).toBe(result3);

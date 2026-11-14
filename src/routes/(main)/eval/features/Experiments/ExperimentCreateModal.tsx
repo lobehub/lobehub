@@ -37,7 +37,7 @@ const ExperimentModalContent = memo<ExperimentModalContentProps>(
     const createExperiment = useEvalStore((s) => s.createExperiment);
     const updateExperiment = useEvalStore((s) => s.updateExperiment);
     const useFetchBenchmarks = useEvalStore((s) => s.useFetchBenchmarks);
-    const benchmarkList = useEvalStore(benchmarkSelectors.benchmarkList);
+    const benchmarkList = useEvalStore(benchmarkSelectors.agentBenchmarkList);
 
     useFetchBenchmarks();
 

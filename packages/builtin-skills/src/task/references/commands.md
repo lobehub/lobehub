@@ -3,7 +3,7 @@
 ## Core Commands
 
 - `lh task list [--status <status>] [--root] [--parent <id>] [--agent <id>] [--label <name>] [--unlabeled] [-L <limit>] [--tree]` - List tasks
-  - `--status`: pending, running, paused, completed, failed, canceled
+  - `--status`: backlog, running, scheduled, paused, completed, failed, canceled
   - `--root`: Only root tasks (no parent)
   - `--label`: Tasks carrying any of these labels (repeatable / comma-separated; a label group name matches any label in it)
   - `--tree`: Display as tree structure
@@ -18,7 +18,7 @@
 
 ## Lifecycle Commands
 
-- `lh task start <id> [--no-run] [-p <prompt>] [-f] [-v]` - Start task (pending → running)
+- `lh task start <id> [--no-run] [-p <prompt>] [-f] [-v]` - Start task (backlog → running)
   - `--no-run`: Only update status, skip agent execution
   - `-f, --follow`: Follow agent output in real-time
   - `-v, --verbose`: Show detailed tool call info
