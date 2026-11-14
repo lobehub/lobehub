@@ -99,6 +99,9 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
   // menu has observed that device return the same external account identity.
   // This avoids painting another machine's pinned/first account on a device
   // switch while still preserving last-known-good data after later failures.
+  // The snapshot stored for this source (agent + device + env) carries the
+  // identity that same device reported earlier, so it seeds the trust after a
+  // reload: a device that does not answer then still shows its account.
   const trustedDeviceAccounts = useSingleton(() => new Map<string, string>());
 
   /**
@@ -139,7 +142,16 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
         ? deviceAccount?.accountId
         : undefined;
       const pinnedId = devicePickId ?? bindings.find((b) => b.role === 'pinned')?.accountId;
-      const trustedExternalAccountId = deviceId ? trustedDeviceAccounts.get(deviceId) : undefined;
+      const storedSnapshot =
+        deviceId && !trustedDeviceAccounts.has(deviceId)
+          ? ((await quotaStore.readStoredQuotaPanel(sourceKey)) as
+              ClaudeCodeQuotaSnapshot | undefined)
+          : undefined;
+      const trustedExternalAccountId = deviceId
+        ? (trustedDeviceAccounts.get(deviceId) ??
+          storedSnapshot?.identity?.externalAccountId ??
+          undefined)
+        : undefined;
       let account = deviceId
         ? claude.find((a) => a.externalAccountId === trustedExternalAccountId)
         : (claude.find((a) => a.id === pinnedId) ?? claude[0]);
@@ -149,6 +161,7 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
       // awaiting the live fetch so the panel never blocks on it.
       let live: ClaudeCodeQuotaSnapshot | null = null;
       let liveFailed = false;
+      let deviceUnreachable = false;
       if (
         force ||
         options?.revalidate ||
@@ -176,6 +189,10 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
                 liveFailed = true;
                 return null;
               });
+        // The device RPC answers `null` when the device is offline, timed out
+        // or predates the quota RPC: a sample that never happened, not a
+        // statement about the login.
+        deviceUnreachable = !!deviceId && sampleEnv !== null && live === null && !liveFailed;
 
         const externalAccountId = live?.identity?.externalAccountId;
         if (live?.status === 'ok' && externalAccountId && live.readings?.length) {
@@ -224,16 +241,23 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
       // attribute the sample to, so the live snapshot stands on its own.
       const merged = account ? buildClaudePanelSnapshot(account, readings, live) : null;
       if (merged && hasRenderableWindow(merged)) {
-        return live?.status === 'unavailable' && live.reason
-          ? { ...merged, refreshUnavailableReason: live.reason }
-          : merged;
+        const refreshUnavailableReason = deviceUnreachable
+          ? 'device-unreachable'
+          : live?.status === 'unavailable'
+            ? live.reason
+            : undefined;
+        return refreshUnavailableReason ? { ...merged, refreshUnavailableReason } : merged;
       }
+      // Nothing to show for a device that did not answer: flagged as a failed
+      // sample, so the panel keeps the last snapshot it stored for this device.
+      if (deviceUnreachable)
+        return { ...unavailableSnapshot('device-unreachable'), sampleFailed: true };
       // A failed live fetch with nothing to show still reads as "unavailable",
       // but flagged, so the panel keeps the last snapshot it already shows.
       if (!live && liveFailed) return { ...unavailableSnapshot(), sampleFailed: true };
       return live ?? merged ?? unavailableSnapshot();
     },
-    [agentId, deviceId, env, trustedDeviceAccounts],
+    [agentId, deviceId, env, sourceKey, trustedDeviceAccounts],
   );
 
   const getWindows = useCallback(
@@ -277,6 +301,9 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
         }
         case 'credentials-not-found': {
           return t('heteroAgent.claudeQuota.unavailableNotFound');
+        }
+        case 'device-unreachable': {
+          return t('heteroAgent.claudeQuota.unavailableDeviceUnreachable');
         }
         case 'external-auth': {
           return t('heteroAgent.claudeQuota.unavailableExternalAuth');

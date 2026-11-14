@@ -724,6 +724,8 @@ export default {
   'heteroAgent.claudeQuota.scopedWeekly': 'Weekly ({{model}})',
   'heteroAgent.claudeQuota.title': 'Claude Code quota',
   'heteroAgent.claudeQuota.tooltip': 'View Claude Code quota',
+  'heteroAgent.claudeQuota.unavailableDeviceUnreachable':
+    "The execution device didn't respond, so quota can't be refreshed. Check that the device is online and up to date, then refresh.",
   'heteroAgent.claudeQuota.unavailableExpired':
     'Claude Code login has expired. Start a Claude Code conversation or run claude in a terminal, then refresh.',
   'heteroAgent.claudeQuota.unavailableExternalAuth':

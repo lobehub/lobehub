@@ -67,7 +67,12 @@ export type CodexRateLimitResetOutcome =
  * (region / missing proxy) before checking the login.
  */
 export type ClaudeCodeQuotaUnavailableReason =
-  'credentials-expired' | 'credentials-not-found' | 'external-auth' | 'request-blocked';
+  | 'credentials-expired'
+  | 'credentials-not-found'
+  /** Set by the caller, not the sampler: the execution device never answered the quota RPC. */
+  | 'device-unreachable'
+  | 'external-auth'
+  | 'request-blocked';
 
 export interface ClaudeCodeScopedWeekly {
   /** Display name of the model the window is scoped to, e.g. "Fable". */

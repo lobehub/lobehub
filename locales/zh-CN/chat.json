@@ -1453,6 +1453,7 @@
   "heteroAgent.claudeQuota.scopedWeekly": "每周（{{model}}）",
   "heteroAgent.claudeQuota.title": "Claude Code 额度",
   "heteroAgent.claudeQuota.tooltip": "查看 Claude Code 额度",
+  "heteroAgent.claudeQuota.unavailableDeviceUnreachable": "执行设备没有响应，暂时无法刷新额度。请确认该设备在线且已更新到最新版本后再刷新。",
   "heteroAgent.claudeQuota.unavailableExpired": "Claude Code 登录已过期，发起一次 Claude Code 对话或在终端运行 claude 后再刷新。",
   "heteroAgent.claudeQuota.unavailableExternalAuth": "当前 Agent 使用 API Key / 自定义接入点运行，订阅额度不适用。",
   "heteroAgent.claudeQuota.unavailableNotFound": "未找到 Claude Code 登录凭证，请先在终端运行 claude 完成登录。",

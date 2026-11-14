@@ -249,6 +249,26 @@ export class ActionImpl {
     this.#panel.useSync(hashQuotaSourceKey(sourceKey));
 
   /**
+   * The last snapshot a panel of `sourceKey` showed: the replica's copy, else
+   * the stored row. A sampler that starts on mount can run before the replica
+   * hydrated, and must still see what this source showed before the reload.
+   */
+  readStoredQuotaPanel = async (sourceKey: string): Promise<QuotaPanelSnapshot | undefined> => {
+    const key = hashQuotaSourceKey(sourceKey);
+    const hydrated = this.#get().quotaPanelMap[key];
+    if (hydrated) return hydrated;
+
+    const scope = quotaPanelResource.scope;
+    if (!scope.canPersist()) return undefined;
+    try {
+      const row = await quotaPanelResource.storage?.get({ queryKey: key, scope: scope.get() });
+      return row?.data;
+    } catch {
+      return undefined;
+    }
+  };
+
+  /**
    * The data context a panel sample is captured under: the identity (user +
    * workspace) plus the reset generation, since a desktop `refreshUserData` /
    * `disconnectRemoteServer` can change the context without changing the scope.
