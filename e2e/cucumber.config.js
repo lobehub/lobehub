@@ -20,7 +20,7 @@ export default {
   parallel: canRunInParallel && !perfRun ? Math.max(1, requestedParallel) : 1,
   paths: ['src/features/**/*.feature'],
   publishQuiet: true,
-  require: ['src/steps/**/!(*.test).ts', 'src/support/**/*.ts'],
+  require: ['src/steps/**/!(*.test).ts', 'src/support/**/!(*.test).ts'],
   requireModule: ['tsx/cjs'],
   retry: 0,
   tags: perfRun ? '@perf and not @skip' : 'not @skip and not @perf',

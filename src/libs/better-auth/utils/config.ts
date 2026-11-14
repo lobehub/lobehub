@@ -1,3 +1,5 @@
+import { type BetterAuthOptions } from 'better-auth/minimal';
+
 import assetLinks from '@/../public/.well-known/assetlinks.json';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
@@ -113,7 +115,7 @@ export const getTrustedOrigins = (enabledSSOProviders: string[]) => {
  * Build Better Auth secondaryStorage backed by Redis.
  * Uses the shared Redis manager to avoid duplicate connections and prefixes keys to prevent clashes.
  */
-export const createSecondaryStorage = () => {
+export const createSecondaryStorage = (): BetterAuthOptions['secondaryStorage'] => {
   const redisConfig = getRedisConfig();
   if (!isRedisEnabled(redisConfig)) return undefined;
 
@@ -138,6 +140,29 @@ export const createSecondaryStorage = () => {
     get: async (key: string) => {
       const redisClient = await getRedisClient();
       return (await redisClient.get(buildKey(key))) ?? null;
+    },
+    getAndDelete: async (key: string) => {
+      const redisClient = await getRedisClient();
+      // One Lua operation also supports Redis versions without GETDEL.
+      return redisClient.eval<string | null>(
+        `local value = redis.call('GET', KEYS[1])
+         if value then redis.call('DEL', KEYS[1]) end
+         return value`,
+        1,
+        buildKey(key),
+      );
+    },
+    increment: async (key: string, ttl: number) => {
+      const redisClient = await getRedisClient();
+      // Never extend a live counter's window, including when requests arrive concurrently.
+      return redisClient.eval<number>(
+        `local value = redis.call('INCR', KEYS[1])
+         if value == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+         return value`,
+        1,
+        buildKey(key),
+        ttl,
+      );
     },
     set: async (key: string, value: string, ttl?: number) => {
       const redisClient = await getRedisClient();
