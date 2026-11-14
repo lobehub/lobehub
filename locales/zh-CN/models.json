@@ -703,6 +703,8 @@
   "gpt-image-1.description": "ChatGPT 原生多模态图像生成模型。",
   "gpt-image-2.5-flare.description": "OpenAI 最快的模型，适用于高质量的日常图像生成和编辑，质量最高为 max，输出最高可达 4K。",
   "gpt-image-2.5-sunburst.description": "OpenAI 功能最强大的图像生成和编辑模型，专为最看重编辑精度的工作流而打造，质量最高为 max，输出最高可达 4K。",
+  "gpt-image-2.6-flare.description": "GPT Image 2.6 Flare 可根据文本和图像输入生成并编辑图像，适合快速、交互式的视觉工作流。",
+  "gpt-image-2.6-sunburst.description": "GPT Image 2.6 Sunburst 可根据文本和图像输入生成并编辑图像，适合细节丰富的构图和精准的视觉编辑。",
   "gpt-image-2.description": "OpenAI 的下一代多模态图像模型，具备原生推理能力，支持最高 4K 分辨率、近乎完美的文字渲染及高保真多语言能力。",
   "gpt-oss-120b.description": "OpenAI GPT-OSS 120B是一款顶级开源语言模型，拥有1200亿参数，提供强大的推理和编码能力。",
   "gpt-oss-20b.description": "需申请访问。GPT-OSS-20B 是 OpenAI 开源的中型语言模型，具备高效的文本生成能力。",
