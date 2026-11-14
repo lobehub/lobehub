@@ -28,6 +28,7 @@ interface ChainContext {
   forward?: { application?: string; element: ForwardElement };
   inner?: Record<string, InnerNode[]>;
   layout: Set<string>;
+  masks?: Array<{ index: number; style: string }>;
   omitted?: number[];
   probed: Set<string>;
   real?: Record<string, RealComponent>;
@@ -77,6 +78,8 @@ const renderChain = (chain: StyleElement[], context: ChainContext, depth = 0): s
   }
   if (element.runtimeStyle && probed.has(element.runtimeStyle))
     attributes.push(`style={${element.runtimeStyle}}`);
+  const mask = context.masks?.find((item) => item.index === depth);
+  if (mask) attributes.push(`style={(${mask.style})}`);
   const component = real ? context.real?.[element.tag] : undefined;
   if (component?.sample) attributes.push(component.sample(sampleContent(context.samples)));
   const open = `<${tag} ${attributes.join(' ')}`;
@@ -298,6 +301,7 @@ export const generateModule = (
       },
       inner: entry.inner,
       layout,
+      masks: entry.inlineMasks?.[side],
       omitted: entry.neutralOmitted,
       probed,
       real: config.realComponents,

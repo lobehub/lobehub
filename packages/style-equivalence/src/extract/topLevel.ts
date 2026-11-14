@@ -12,6 +12,7 @@ export interface TopLevel {
   importedClasses: Map<string, ImportedClass>;
   importOf: Map<string, ts.ImportDeclaration>;
   keptStatements: Set<ts.Statement>;
+  moduleNames: () => string[];
   prelude: () => string;
   require: (name: string) => boolean;
   sideEffectCss: string[];
@@ -194,11 +195,14 @@ export const collectTopLevel = (
     return lines.join('\n');
   };
 
+  const moduleNames = () => [...new Set([...importOf.keys(), ...declarations.keys()])].sort();
+
   return {
     cssConstants,
     importedClasses,
     importOf,
     keptStatements,
+    moduleNames,
     prelude,
     require,
     sideEffectCss,

@@ -65,6 +65,7 @@ export interface FileExtraction {
   gaps: string[];
   globalRules?: StyleRule[];
   literalClasses?: string[];
+  moduleNames?: string[];
   outsideReferences: string[];
   plain?: StyleElement[];
   prelude: string;

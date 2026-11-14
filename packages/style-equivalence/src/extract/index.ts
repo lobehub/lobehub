@@ -521,6 +521,7 @@ export const extractFile = (
     ...(globalRules.length ? { globalRules } : {}),
     ...(literalClasses.size ? { literalClasses: [...literalClasses].sort() } : {}),
     ...(Object.keys(unsupported).length ? { unsupported } : {}),
+    moduleNames: top.moduleNames(),
     outsideReferences,
     ...(plain.length ? { plain } : {}),
     prelude: top.prelude(),

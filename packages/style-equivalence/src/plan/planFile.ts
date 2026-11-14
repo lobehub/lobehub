@@ -15,7 +15,7 @@ import {
   type ForwardPlan,
   partlyForwarded,
 } from './forwarded';
-import { sharedInlineStyles } from './inlineStyle';
+import { INLINE_MASK, sharedInlineStyles, type SharedStyle } from './inlineStyle';
 import type { InnerNode } from './inner';
 import { keptEmotionRules } from './kept';
 import { bindKnobs, parseExpression } from './knobs';
@@ -62,6 +62,7 @@ export interface PlanCase {
   flags: string[];
   forward?: ForwardPlan;
   forwardedParam?: string;
+  inlineMasks?: Partial<Record<Side, Array<{ index: number; style: string }>>>;
   inlineStyles?: Partial<Record<Side, Array<{ binding: number; index: number; without: string }>>>;
   inner?: Record<string, InnerNode[]>;
   key: string;
@@ -318,7 +319,21 @@ export const planFile = (
     for (const { index, proof } of [...movedAt, ...keptAt])
       if (proof.nodes.length) inner[index] = [...(inner[index] ?? []), ...proof.nodes];
     const structural = flags.size > 0;
-    const shared = sharedInlineStyles(chains);
+    const shared = sharedInlineStyles(chains, {
+      base: base.moduleNames,
+      head: head.moduleNames,
+    });
+    const inlineMasks: NonNullable<PlanCase['inlineMasks']> = {};
+    for (const [side, list] of Object.entries(shared) as Array<[Side, SharedStyle[]]>)
+      for (const { index, mask } of list)
+        if (mask)
+          (inlineMasks[side === 'base' ? 'head' : 'base'] ??= []).push({ index, style: mask });
+    const toggled = Object.values(shared).some((list) =>
+      list.some((style) => style.mask && !style.certain),
+    );
+    const targetShared = Object.values(shared).some((list) =>
+      list.some((style) => style.index === chains.base.length - 1),
+    );
     const variables = new Map<string, PlanVariable>();
     for (const side of ['base', 'head'] as const)
       for (const [itemIndex, item] of chains[side].entries())
@@ -377,10 +392,16 @@ export const planFile = (
     if (Object.keys(modeling.used).length && modeling.combos.length > DOMAIN_COMBO_LIMIT)
       modeling = model({});
     const { knobs, modeled, pairwise } = modeling;
-    const combos = knobs ? modeling.combos : reachableCombos(modeling.combos, chains);
-    if (combos.length < modeling.combos.length) evidence.push('COMBOS_UNREACHABLE_DROPPED');
+    const reached = knobs ? modeling.combos : reachableCombos(modeling.combos, chains);
+    const combos = toggled
+      ? reached.flatMap((combo) => [
+          { ...combo, [INLINE_MASK]: true },
+          { ...combo, [INLINE_MASK]: false },
+        ])
+      : reached;
+    if (reached.length < modeling.combos.length) evidence.push('COMBOS_UNREACHABLE_DROPPED');
     modeling.added.forEach((flag) => flags.add(flag));
-    if (styleDropped(left, right, probes)) flags.add('RUNTIME_STYLE_DROPPED');
+    if (!targetShared && styleDropped(left, right, probes)) flags.add('RUNTIME_STYLE_DROPPED');
     if (knobs) evidence.push('CONDITION_KNOBS');
     if (Object.keys(modeling.used).length) evidence.push('TABLE_KEYS');
     if (modeled.some((variable) => variable.probe)) evidence.push('RUNTIME_STYLE_PROBED');
@@ -395,6 +416,7 @@ export const planFile = (
       flags: [...flags].sort(),
       ...(forward ? { forward } : {}),
       ...(param ? { forwardedParam: param } : {}),
+      ...(Object.keys(inlineMasks).length ? { inlineMasks } : {}),
       ...(Object.keys(shared).length
         ? {
             inlineStyles: Object.fromEntries(
