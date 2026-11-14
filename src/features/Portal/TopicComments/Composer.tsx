@@ -1,4 +1,4 @@
-import { ChatInput, ChatInputActionBar, SendButton } from '@lobehub/editor/react';
+import { ChatInput, SendButton } from '@lobehub/editor/react';
 import { Flexbox, toast } from '@lobehub/ui';
 import { memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +18,8 @@ import TopicCommentEditor, { type TopicCommentEditorRef } from './TopicCommentEd
 import { useComposerSubmit } from './useComposerSubmit';
 
 interface ComposerProps {
+  /** Focus the input on mount: the user opened this view to write. */
+  autoFocus?: boolean;
   messageId?: string;
   onCreated?: () => void;
   parentCommentId?: string;
@@ -26,7 +28,7 @@ interface ComposerProps {
 }
 
 const Composer = memo<ComposerProps>(
-  ({ messageId, onCreated, parentCommentId, rootReplyCount, topicId }) => {
+  ({ autoFocus, messageId, onCreated, parentCommentId, rootReplyCount, topicId }) => {
     const { t } = useTranslation('chat');
 
     const workspaceId = useActiveWorkspaceId();
@@ -67,44 +69,46 @@ const Composer = memo<ComposerProps>(
 
     if (!workspaceId || !canUseResource) return null;
 
+    const busy = creating || submitting;
+    const placeholder = parentCommentId
+      ? t('topicComment.replyPlaceholder')
+      : messageId
+        ? t('topicComment.messagePlaceholder')
+        : t('topicComment.placeholder');
+
     return (
       <Flexbox className={styles.composer}>
-        <ChatInput
-          resize={false}
-          styles={{ body: { padding: 8 } }}
-          footer={
-            <ChatInputActionBar
-              justify={'flex-end'}
-              right={
-                <SendButton
-                  disabled={creating || submitting || !content.trim()}
-                  loading={creating || submitting}
-                  shape={'round'}
-                  title={t('input.send')}
-                  type={'text'}
-                  onClick={submit}
-                />
-              }
-            />
-          }
-        >
-          <TopicCommentEditor
-            disabled={creating || submitting}
-            initialContent={content}
-            initialEditorData={draft?.editorData}
-            ref={editorRef}
-            placeholder={
-              parentCommentId
-                ? t('topicComment.replyPlaceholder')
-                : messageId
-                  ? t('topicComment.messagePlaceholder')
-                  : t('topicComment.placeholder')
-            }
-            onPressEnter={onPressEnter}
-            onChange={({ content: nextContent, editorData }) =>
-              setDraftContent(key, nextContent, editorData)
-            }
-          />
+        <ChatInput minHeight={0} resize={false} styles={{ body: { padding: 0 } }}>
+          <div className={styles.composerRow}>
+            <div className={styles.composerEditor}>
+              <TopicCommentEditor
+                compact
+                autoFocus={autoFocus}
+                disabled={busy}
+                initialContent={content}
+                initialEditorData={draft?.editorData}
+                placeholder={placeholder}
+                ref={editorRef}
+                onPressEnter={onPressEnter}
+                onChange={({ content: nextContent, editorData }) =>
+                  setDraftContent(key, nextContent, editorData)
+                }
+              />
+            </div>
+            {/* Enter sends; like the Channel composer, Send appears once there is something to send. */}
+            {(busy || Boolean(content.trim())) && (
+              <SendButton
+                aria-label={t('input.send')}
+                disabled={busy}
+                loading={busy}
+                shape={'round'}
+                size={28}
+                title={t('input.send')}
+                type={'primary'}
+                onClick={submit}
+              />
+            )}
+          </div>
         </ChatInput>
       </Flexbox>
     );

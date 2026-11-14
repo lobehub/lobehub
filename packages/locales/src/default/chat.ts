@@ -3526,7 +3526,6 @@ export default {
   'topicComment.notFound': 'This comment no longer exists',
   'topicComment.openMessageComments': 'Open {{count}} message comments',
   'topicComment.placeholder': 'Add a comment…',
-  'topicComment.repliesTitle': 'Replies',
   'topicComment.replies_one': '{{count}} reply',
   'topicComment.replies_other': '{{count}} replies',
   'topicComment.reply': 'Reply',

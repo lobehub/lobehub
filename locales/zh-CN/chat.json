@@ -3081,7 +3081,6 @@
   "topicComment.removed": "此评论已被 Workspace Owner 移除。",
   "topicComment.removedOwn": "你的评论已被 Workspace Owner 移除。",
   "topicComment.removedOwnerView": "此评论已被 Workspace Owner 移除。恢复期内，只有 Workspace Owner 可以查看原内容。",
-  "topicComment.repliesTitle": "回复",
   "topicComment.replies_one": "{{count}} 条回复",
   "topicComment.replies_other": "{{count}} 条回复",
   "topicComment.reply": "回复",
