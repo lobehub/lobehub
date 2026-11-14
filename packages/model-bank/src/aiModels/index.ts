@@ -28,6 +28,7 @@ import { default as giteeai } from './giteeai';
 import { default as github } from './github';
 import { default as githubcopilot } from './githubCopilot';
 import { default as glmcodingplan } from './glmCodingPlan';
+import { default as gmicloud } from './gmicloud';
 import { default as google } from './google';
 import { default as groq } from './groq';
 import { default as higress } from './higress';
@@ -144,6 +145,7 @@ const staticModelMap: ModelsMap = {
   githubcopilot,
   google,
   glmcodingplan,
+  gmicloud,
   groq,
   higress,
   huggingface,
@@ -264,6 +266,7 @@ export { default as giteeai } from './giteeai';
 export { default as github } from './github';
 export { default as githubcopilot } from './githubCopilot';
 export { default as glmcodingplan } from './glmCodingPlan';
+export { default as gmicloud } from './gmicloud';
 export { default as google } from './google';
 export { default as groq } from './groq';
 export { default as higress } from './higress';

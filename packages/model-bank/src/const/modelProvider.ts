@@ -26,6 +26,7 @@ export enum ModelProvider {
   Github = 'github',
   GithubCopilot = 'githubcopilot',
   GLMCodingPlan = 'glmcodingplan',
+  GMICloud = 'gmicloud',
   Google = 'google',
   Groq = 'groq',
   Higress = 'higress',

@@ -120,6 +120,9 @@ export const getLLMConfig = () => {
       ENABLED_NEBIUS: z.boolean(),
       NEBIUS_API_KEY: z.string().optional(),
 
+      ENABLED_GMICLOUD: z.boolean(),
+      GMICLOUD_API_KEY: z.string().optional(),
+
       ENABLED_NOVITA: z.boolean(),
       NOVITA_API_KEY: z.string().optional(),
 
@@ -504,6 +507,9 @@ export const getLLMConfig = () => {
 
       ENABLED_NEBIUS: !!process.env.NEBIUS_API_KEY,
       NEBIUS_API_KEY: process.env.NEBIUS_API_KEY,
+
+      ENABLED_GMICLOUD: !!process.env.GMICLOUD_API_KEY,
+      GMICLOUD_API_KEY: process.env.GMICLOUD_API_KEY,
 
       ENABLED_CEREBRAS: !!process.env.CEREBRAS_API_KEY,
       CEREBRAS_API_KEY: process.env.CEREBRAS_API_KEY,
