@@ -1,5 +1,9 @@
 import type { LobeAgentChatConfig } from '@lobechat/types';
-import type { AiModelReasoningConfig, ExtendParamsType } from 'model-bank/aiModel';
+import type {
+  AiModelReasoningConfig,
+  ContextCachingTTL,
+  ExtendParamsType,
+} from 'model-bank/aiModel';
 import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank/aiModel';
 
 import { isAdaptiveThinkingDefaultOnModel } from '../providers/anthropic/modelId';
@@ -61,6 +65,12 @@ export const resolveEffectiveReasoningChatConfig = (
  * Extended parameters for model runtime
  */
 export interface ModelExtendParams {
+  /**
+   * Prompt-cache TTL the request writes, from the model's `settings.contextCachingTTL`
+   * (`resolveRequestContextCachingTTL`). Only set where the API takes a TTL: today `5m` / `1h`
+   * on the first-party Anthropic runtime.
+   */
+  contextCachingTTL?: ContextCachingTTL;
   deepseekV4ReasoningEffort?: string;
   effort?: string;
   enabledContextCaching?: boolean;

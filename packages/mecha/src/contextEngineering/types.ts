@@ -4,6 +4,7 @@ import type {
   AgentGroupConfig,
   AgentManagementContext,
   BotPlatformContext,
+  CacheTTL,
   DiscordContext,
   DocumentReferenceItem,
   EvalContext,
@@ -61,6 +62,12 @@ export interface ContextAgentSnapshot {
  */
 export interface ContextModelSnapshot {
   capabilities?: ModelCapabilityChecker;
+  /**
+   * The model's prompt-cache lifetime (`ResolvedModelParams.contextCachingTTL`), resolved with
+   * the TTL the payload writes so the two agree. Sets the stale-tool-result trim's warmth
+   * window; undefined → the provider's default window.
+   */
+  contextCachingTTL?: CacheTTL;
   displayName?: string;
   knowledgeCutoff?: string;
   model: string;

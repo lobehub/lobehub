@@ -4,6 +4,7 @@ import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { isDesktop } from '@lobechat/const';
 import type {
   AgentGroupConfig,
+  CacheTTL,
   LobeToolManifest,
   MemoryContext,
   OperationSkillSet,
@@ -68,6 +69,11 @@ interface ContextEngineeringContext {
    */
   attachmentPreviewFileIds?: string[];
   /**
+   * The model's prompt-cache lifetime (`ResolvedModelParams.contextCachingTTL`). Sets the
+   * stale-tool-result trim's warmth window; undefined → the provider's default window.
+   */
+  contextCachingTTL?: CacheTTL;
+  /**
    * Identifiers the agent has explicitly disabled (`agents.plugins` tri-state).
    * Excluded from the client skill candidate pool entirely — not just left
    * out of `plugins` (pinned) — so a disabled skill is neither listed in
@@ -122,6 +128,7 @@ interface ContextEngineeringContext {
 export const contextEngineering = async ({
   additionalContexts,
   attachmentPreviewFileIds,
+  contextCachingTTL,
   messages = [],
   manifests,
   tools,
@@ -341,6 +348,7 @@ export const contextEngineering = async ({
     },
     model: {
       capabilities: { isCanUseAudio, isCanUseFC, isCanUseVideo, isCanUseVision },
+      contextCachingTTL,
       displayName: getRuntimeModelDisplayName(model, provider),
       knowledgeCutoff: getRuntimeModelKnowledgeCutoff(model, provider),
       model,

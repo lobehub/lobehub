@@ -239,6 +239,9 @@ class ChatService {
       groupId,
       additionalContexts,
       attachmentPreviewFileIds,
+      // The model's cache lifetime, resolved with the TTL the payload below writes, so the
+      // trim prices warmth against the cache actually kept.
+      contextCachingTTL: modelParams.contextCachingTTL,
       // History messages + the current turn; unset means no truncation.
       historyCount: modelParams.historyCount,
       // Page editor context from agent runtime
@@ -266,6 +269,9 @@ class ChatService {
         ...modelParams.resolvedExtendParams,
         // Always present on the browser payload, even when unset.
         enabledSearch: modelParams.resolvedExtendParams?.enabledSearch,
+        // Only the resolved TTL may reach the payload: context engineering above priced the
+        // stale-tool-result trim with it, so a caller-supplied value must not override it.
+        contextCachingTTL: modelParams.resolvedExtendParams?.contextCachingTTL,
         messages: modelMessages,
         stream: modelParams.stream,
         tools,

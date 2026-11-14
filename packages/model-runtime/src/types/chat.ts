@@ -4,6 +4,7 @@ import type {
   ModelTokensUsage,
   ModelUsage,
 } from '@lobechat/types';
+import type { ContextCachingTTL } from 'model-bank/aiModel';
 import type OpenAI from 'openai';
 
 import type { ComputeChatCostOptions } from '../core/usageConverters/utils/computeChatCost';
@@ -90,6 +91,15 @@ export interface OpenAIChatMessage {
  */
 export interface ChatStreamPayload {
   apiMode?: 'chatCompletion' | 'responses';
+  /**
+   * Prompt-cache lifetime the request writes, resolved from the model's
+   * `settings.contextCachingTTL` (`resolveRequestContextCachingTTL`). Set only for providers whose
+   * API takes a TTL: today `5m` / `1h` on the first-party Anthropic runtime, where `1h` is the
+   * default. `1h` writes cost 2× base input instead of 1.25× for `5m` and keep the prefix warm
+   * across 5–60 minute gaps. The runtime drops it when its base URL is not Anthropic's own API.
+   * Undefined or dropped → breakpoints without a `ttl` (the API's 5m default).
+   */
+  contextCachingTTL?: ContextCachingTTL;
   /**
    * @title Provider deployment name
    */

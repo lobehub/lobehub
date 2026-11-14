@@ -41,7 +41,7 @@ export type {
 } from './tokenAccounting/attachmentBudget';
 export { planAttachmentPreviews } from './tokenAccounting/attachmentBudget';
 // Processors
-export type { PlaceholderValue, PlaceholderValueMap } from './processors';
+export type { CacheTTL, PlaceholderValue, PlaceholderValueMap } from './processors';
 export {
   buildPlaceholderGenerators,
   formatPlaceholderValues,

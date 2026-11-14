@@ -5,6 +5,7 @@ import type {
   AgentGroupConfig,
   AgentManagementContext,
   BotPlatformContext,
+  CacheTTL,
   DiscordContext,
   DocumentReferenceItem,
   EvalContext,
@@ -168,6 +169,11 @@ export interface ServerMessagesEngineParams {
 
   /** Model ID */
   model: string;
+  /**
+   * The model's prompt-cache lifetime (`ResolvedModelParams.contextCachingTTL`). Sets the
+   * stale-tool-result trim's warmth window; undefined → the provider's default window.
+   */
+  contextCachingTTL?: CacheTTL;
   /** Human-friendly model name, e.g. `Fable 5`. Omit when unknown. */
   modelDisplayName?: string;
   /** Model knowledge cutoff date, e.g. `2024-06`. Omit when unknown. */

@@ -5,6 +5,10 @@ import {
 } from '@lobechat/model-runtime/providers/deepseek/modelId';
 import { isKimiAlwaysPreserveThinkingModel } from '@lobechat/model-runtime/providers/moonshot/modelId';
 import {
+  resolveContextCachingTTL,
+  resolveRequestContextCachingTTL,
+} from '@lobechat/model-runtime/utils/contextCachingTTL';
+import {
   applyModelExtendParams,
   resolveEffectiveReasoningChatConfig,
 } from '@lobechat/model-runtime/utils/modelExtendParams';
@@ -314,9 +318,24 @@ export const resolveModelParams = async (
   const { searchDecision } = request;
   const enabledSearch =
     searchDecision?.enabledSearch && searchDecision.useModelSearch ? true : undefined;
+  // The model's prompt-cache lifetime, set in the provider's model config: the user's pick,
+  // else the provider card's, else the provider default (Anthropic 1h, DeepSeek 72h). Hosts
+  // hand it to the context engine, which tells warm prefixes from cold ones with it, and the
+  // payload carries it where the API takes a TTL (Anthropic), so the two can never disagree.
+  const contextCachingTTL = resolveContextCachingTTL({
+    chatConfig: effectiveChatConfig,
+    modelExtendParams,
+    provider,
+    ttl: userModelRow?.contextCachingTTL ?? modelCard?.contextCachingTTL,
+  });
+  const requestContextCachingTTL = resolveRequestContextCachingTTL(provider, contextCachingTTL);
   const resolvedExtendParams =
-    resolvedModelExtendParams || enabledSearch
-      ? { ...resolvedModelExtendParams, ...(enabledSearch && { enabledSearch }) }
+    resolvedModelExtendParams || enabledSearch || requestContextCachingTTL
+      ? {
+          ...resolvedModelExtendParams,
+          ...(enabledSearch && { enabledSearch }),
+          ...(requestContextCachingTTL && { contextCachingTTL: requestContextCachingTTL }),
+        }
       : undefined;
 
   const cards = providers.listModelCards();
@@ -357,6 +376,7 @@ export const resolveModelParams = async (
       isCanUseVideo: (m, p) => findMediaCapabilities(m, p)?.video ?? false,
       isCanUseVision: (m, p) => findMediaCapabilities(m, p)?.vision ?? false,
     },
+    contextCachingTTL,
     enableAgentMode: chatConfig?.enableAgentMode ?? undefined,
     historyCount: resolveHistoryCount(chatConfig?.historyCount),
     modelDisplayName,

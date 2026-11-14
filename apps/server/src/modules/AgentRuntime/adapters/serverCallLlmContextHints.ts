@@ -30,6 +30,7 @@ interface ResolveServerCallLlmContextHintsInput {
 export interface ServerCallLlmContextHints extends Pick<
   ResolvedModelParams,
   | 'capabilities'
+  | 'contextCachingTTL'
   | 'enableAgentMode'
   | 'historyCount'
   | 'modelDisplayName'
@@ -74,6 +75,7 @@ export const resolveModelExtendParamsForUser = async ({
             if (!row) return null;
             return {
               abilities: row.abilities,
+              contextCachingTTL: row.settings?.contextCachingTTL ?? undefined,
               // Carried so the frozen facts merge the user's deployment alias
               // over the bundled card; without it the transport injects the
               // catalog default instead of the user's endpoint.
@@ -144,6 +146,7 @@ export const resolveServerCallLlmContextHints = async ({
   const messages = llmPayload.messages as UIChatMessage[];
   return {
     capabilities: resolved.capabilities,
+    contextCachingTTL: resolved.contextCachingTTL,
     enableAgentMode: resolved.enableAgentMode,
     historyCount: resolved.historyCount,
     messagesForContext: resolved.shouldReplayAssistantReasoning

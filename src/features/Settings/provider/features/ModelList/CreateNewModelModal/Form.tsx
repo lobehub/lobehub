@@ -5,8 +5,11 @@ import { memo, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import MaxTokenSlider from '@/components/MaxTokenSlider';
+import { useAiInfraStore } from '@/store/aiInfra';
 import { type ChatModelCard } from '@/types/llm';
 
+import ContextCachingTTLSelect from './ContextCachingTTLSelect';
+import { getContextCachingTTLState } from './contextCachingTTLState';
 import ExtendParamsSelect from './ExtendParamsSelect';
 import { CUSTOM_MODEL_TYPES, hasDuplicateModelId } from './utils';
 
@@ -28,8 +31,12 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
     initialValues,
     disabled,
     existingModelIds = [],
+    type,
   }) => {
     const { t } = useTranslation('modelProvider');
+    const provider = useAiInfraStore((s) => s.activeAiProvider);
+    // Prompt caching only applies to chat models; a new model has no type yet.
+    const showContextCachingTTL = !!provider && (!type || type === 'chat');
 
     const formInstance = useForm<FormValues>({ initialValues });
 
@@ -104,6 +111,19 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
           >
             <MaxTokenSlider />
           </Form.Field>
+          {showContextCachingTTL && (
+            <Form.Field
+              label={t('providerModels.item.modelConfig.contextCachingTTL.title')}
+              name={'settings.contextCachingTTL'}
+              extra={t(
+                getContextCachingTTLState(provider).requestable
+                  ? 'providerModels.item.modelConfig.contextCachingTTL.extra.requestable'
+                  : 'providerModels.item.modelConfig.contextCachingTTL.extra.automatic',
+              )}
+            >
+              <ContextCachingTTLSelect disabled={disabled} provider={provider} />
+            </Form.Field>
+          )}
           <Form.Field
             extra={t('providerModels.item.modelConfig.extendParams.extra')}
             label={t('providerModels.item.modelConfig.extendParams.title')}

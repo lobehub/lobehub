@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PipelineContext } from '../../types';
-import { cacheEconomicsForProvider, StaleToolResultTrimProcessor } from '../StaleToolResultTrim';
+import {
+  cacheEconomicsForProvider,
+  cacheTTLToMs,
+  StaleToolResultTrimProcessor,
+} from '../StaleToolResultTrim';
 
 const previousTurnMessage = (createdAt: string) => ({
   content: 'previous turn done',
@@ -656,7 +660,7 @@ describe('StaleToolResultTrimProcessor', () => {
 
     it('prices the warmth check with the active provider policy', async () => {
       // 10-minute gap: cold under Anthropic's 5-min TTL, still warm under
-      // DeepSeek's hour-long disk cache.
+      // DeepSeek's multi-day disk cache.
       const T0 = Date.parse('2026-09-20T08:00:00Z');
       const messages = [
         { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' },
@@ -688,6 +692,104 @@ describe('StaleToolResultTrimProcessor', () => {
         cacheWarm: true,
         skippedReason: 'warm-cache',
       });
+    });
+  });
+  describe('long-lived provider caches', () => {
+    const T0 = Date.parse('2026-09-20T08:00:00Z');
+    const HOUR = 3_600_000;
+    const turnAfter = (gapMs: number) => [
+      { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' },
+      readFileResult('/a.ts', 'x'.repeat(5000), [0, 200]),
+      writeFileResult('/a.ts'),
+      { content: 'filler', id: 'f1', role: 'assistant' },
+      { content: 'filler', id: 'f2', role: 'assistant' },
+      { content: 'filler', id: 'f3', role: 'assistant' },
+      previousTurnMessage(new Date(T0).toISOString()),
+      {
+        content: 'next task',
+        createdAt: new Date(T0 + gapMs).toISOString(),
+        id: 'trigger',
+        role: 'user',
+      },
+      ...recencyPadding(3),
+    ];
+    const run = (economics: ReturnType<typeof cacheEconomicsForProvider>, gapMs: number) =>
+      new StaleToolResultTrimProcessor({
+        economics,
+        keepRecentMessages: 3,
+        minTotalToolChars: 0,
+      }).process(createContext(turnAfter(gapMs)));
+
+    it('keeps a DeepSeek prefix intact across a multi-hour gap (warm, not trimmed)', async () => {
+      // Regression: the old 1h TTL read a 24h-old prefix as cold and rewrote it,
+      // although DeepSeek keeps unused caches for hours to days.
+      const result = await run(cacheEconomicsForProvider('deepseek'), 24 * HOUR);
+
+      expect(result.metadata.staleToolResultTrim).toMatchObject({
+        cacheWarm: true,
+        skippedReason: 'warm-cache',
+        trimmedMessages: 0,
+      });
+      expect(result.messages[1].content).toBe('x'.repeat(5000));
+    });
+
+    it('trims a DeepSeek prefix once the gap exceeds the 72h upper bound', async () => {
+      const result = await run(cacheEconomicsForProvider('deepseek'), 73 * HOUR);
+
+      expect(result.metadata.staleToolResultTrim).toMatchObject({
+        cacheWarm: false,
+        trimmedMessages: 1,
+      });
+    });
+
+    it("uses Anthropic's 1h window only when the model's TTL is 1h", async () => {
+      const gap = 30 * 60_000;
+
+      const fiveMinute = await run(cacheEconomicsForProvider('anthropic'), gap);
+      expect(fiveMinute.metadata.staleToolResultTrim).toMatchObject({
+        cacheWarm: false,
+        trimmedMessages: 1,
+      });
+
+      const oneHour = await run(cacheEconomicsForProvider('anthropic', { cacheTTL: '1h' }), gap);
+      expect(oneHour.metadata.staleToolResultTrim).toMatchObject({
+        cacheWarm: true,
+        skippedReason: 'warm-cache',
+      });
+    });
+
+    it("sets the window from the model's cache TTL for any provider", () => {
+      // 5m on Anthropic is its default: unchanged economics.
+      expect(cacheEconomicsForProvider('anthropic', { cacheTTL: '5m' })).toEqual(
+        cacheEconomicsForProvider('anthropic'),
+      );
+      // A DeepSeek model the user set to 24h keeps DeepSeek's prices with a 24h window.
+      expect(cacheEconomicsForProvider('deepseek', { cacheTTL: '24h' })).toEqual({
+        ...cacheEconomicsForProvider('deepseek'),
+        ttlMs: 24 * HOUR,
+      });
+      expect(cacheEconomicsForProvider('openai', { cacheTTL: '24h' })).toEqual({
+        ...cacheEconomicsForProvider('openai'),
+        ttlMs: 24 * HOUR,
+      });
+      // Only Anthropic bills the 1h tier at 2× writes; elsewhere 1h only moves the window.
+      expect(cacheEconomicsForProvider('anthropic', { cacheTTL: '1h' }).writePrice).toBe(2);
+      expect(cacheEconomicsForProvider('bedrock', { cacheTTL: '1h' })).toEqual({
+        ...cacheEconomicsForProvider('bedrock'),
+        ttlMs: HOUR,
+      });
+    });
+
+    it('keeps the provider window when no TTL is given or it does not parse', () => {
+      expect(cacheEconomicsForProvider('deepseek').ttlMs).toBe(72 * HOUR);
+      expect(cacheTTLToMs('72h')).toBe(72 * HOUR);
+      expect(cacheTTLToMs('5m')).toBe(300_000);
+      expect(cacheTTLToMs(undefined)).toBeUndefined();
+      expect(cacheTTLToMs('0m')).toBeUndefined();
+      expect(cacheTTLToMs('1d')).toBeUndefined();
+      expect(
+        cacheEconomicsForProvider('deepseek', { cacheTTL: 'soon' as unknown as '1h' }).ttlMs,
+      ).toBe(72 * HOUR);
     });
   });
 });

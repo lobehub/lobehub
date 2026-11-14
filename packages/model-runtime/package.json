@@ -2,6 +2,8 @@
   "name": "@lobechat/model-runtime",
   "version": "1.0.0",
   "private": true,
+  "homepage": "https://github.com/lobehub/lobehub/tree/canary/packages/model-runtime",
+  "license": "MIT",
   "exports": {
     ".": "./src/index.ts",
     "./errors": "./src/errors/index.ts",
@@ -16,6 +18,7 @@
     "./resolveVideoSinglePrice": "./src/core/usageConverters/utils/resolveVideoSinglePrice.ts",
     "./types/error": "./src/types/error.ts",
     "./utils/anthropicToolSchema": "./src/utils/anthropicToolSchema.ts",
+    "./utils/contextCachingTTL": "./src/utils/contextCachingTTL.ts",
     "./utils/createError": "./src/utils/createError.ts",
     "./utils/modelExtendParams": "./src/utils/modelExtendParams.ts",
     "./utils/uriParser": "./src/utils/uriParser.ts",
@@ -59,7 +62,5 @@
   },
   "peerDependencies": {
     "zod": "^4.4.3"
-  },
-  "license": "MIT",
-  "homepage": "https://github.com/lobehub/lobehub/tree/canary/packages/model-runtime"
+  }
 }

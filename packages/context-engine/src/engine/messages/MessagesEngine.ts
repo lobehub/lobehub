@@ -172,6 +172,7 @@ export class MessagesEngine {
       enableAgentMode,
       enableHistoryCount,
       enableStaleToolResultTrim,
+      contextCachingTTL,
       historyCount,
       forceFinish,
       historySummary,
@@ -593,12 +594,15 @@ export class MessagesEngine {
       // results (file reads later overwritten, stale browser snapshots, old
       // command output) with short placeholders. Rules are monotone so the
       // trimmed prefix stays byte-stable across requests and the prompt-cache
-      // prefix survives; savings land at the operation boundary where the
-      // cache is cold anyway. Same pipeline position constraints as
-      // ActivationResultTrimProcessor above. Cache economics (TTL, read/write
-      // prices) follow the active provider.
+      // prefix survives. Savings land at operation boundaries whose gap exceeds
+      // the provider's cache TTL; a boundary inside it (always for DeepSeek's
+      // multi-day disk cache, within the hour for Anthropic's 1h TTL) only
+      // trims when the warm break-even check pays for the rewrite. Same
+      // pipeline position constraints as ActivationResultTrimProcessor above.
+      // Cache economics (TTL, read/write prices) follow the active provider and
+      // the requested cache TTL.
       new StaleToolResultTrimProcessor({
-        economics: cacheEconomicsForProvider(provider),
+        economics: cacheEconomicsForProvider(provider, { cacheTTL: contextCachingTTL }),
         enabled: enableStaleToolResultTrim !== false,
       }),
       // Placeholder variables processing — MUST run AFTER all flatten / role

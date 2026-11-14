@@ -246,6 +246,19 @@ export default {
   'providerModels.item.modelConfig.azureDeployName.placeholder':
     'Please enter the model deployment name in Azure',
   'providerModels.item.modelConfig.azureDeployName.title': 'Model Deployment Name',
+  'providerModels.item.modelConfig.contextCachingTTL.effective': 'In effect: {{ttl}}',
+  'providerModels.item.modelConfig.contextCachingTTL.effectiveDefault':
+    'In effect: {{ttl}} (default)',
+  'providerModels.item.modelConfig.contextCachingTTL.extra.automatic':
+    'This provider manages its prompt cache automatically, so requests stay the same. The duration only tells context optimization how long a cached prefix can still be reused.',
+  'providerModels.item.modelConfig.contextCachingTTL.extra.requestable':
+    'Requests to the official provider API ask it to keep the prompt cache this long. A 1-hour cache costs 2× input to write (5 minutes: 1.25×), but still hits after longer pauses between turns. With a custom API proxy URL, requests leave the duration out.',
+  'providerModels.item.modelConfig.contextCachingTTL.options.1h': '1 hour',
+  'providerModels.item.modelConfig.contextCachingTTL.options.24h': '24 hours',
+  'providerModels.item.modelConfig.contextCachingTTL.options.5m': '5 minutes',
+  'providerModels.item.modelConfig.contextCachingTTL.options.72h': '72 hours',
+  'providerModels.item.modelConfig.contextCachingTTL.placeholder': 'Default ({{ttl}})',
+  'providerModels.item.modelConfig.contextCachingTTL.title': 'Cache Duration',
   'providerModels.item.modelConfig.deployName.extra':
     'This field will be used as the model ID when sending requests',
   'providerModels.item.modelConfig.deployName.placeholder':
