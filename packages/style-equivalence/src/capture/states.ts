@@ -39,6 +39,10 @@ export const applyState = async (page: Page, state: CaptureState) => {
   if (state === 'default') return;
   const { pseudos, selector } = forcing(state);
   const cdp = await page.context().newCDPSession(page);
+  // Forcing runs one call per node; a frozen timeline keeps animations the states start from
+  // finishing at staggered times before capture.
+  await cdp.send('Animation.enable');
+  await cdp.send('Animation.setPlaybackRate', { playbackRate: 0 });
   await cdp.send('DOM.enable');
   await cdp.send('CSS.enable');
   const { root } = await cdp.send('DOM.getDocument', { depth: -1 });

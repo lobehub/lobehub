@@ -1,0 +1,8 @@
+.actions {
+  display: flex;
+}
+
+.actions > button {
+  flex: 1;
+  min-height: 44px;
+}
