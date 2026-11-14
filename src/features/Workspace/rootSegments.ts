@@ -24,6 +24,7 @@ export const WORKSPACE_MIRRORED_ROOT_SEGMENTS: ReadonlySet<string> = new Set([
   'goals',
   'group',
   'image',
+  'meeting',
   'memory',
   'music',
   'page',
