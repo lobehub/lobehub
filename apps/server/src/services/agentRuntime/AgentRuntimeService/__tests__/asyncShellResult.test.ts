@@ -101,6 +101,46 @@ describe('completeDeferredShell', () => {
     expect(payload.pluginState).toMatchObject({ status: 'error' });
   });
 
+  it('keeps looking for a placeholder the park has not written yet', async () => {
+    const { deps, tryResumeParentFromAsyncTool, updateToolMessage } = buildDeps();
+    // A command that ends immediately can report before `parkAsyncShell` has
+    // inserted the row: miss once, then find it.
+    (deps.serverDB as any).query.messagePlugins.findFirst = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(POLL_PLUGIN);
+
+    const outcome = await completeDeferredShell(
+      { ...deps, placeholderWait: { attempts: 3, intervalMs: 0 } },
+      {
+        operationId: 'op_1',
+        result: { content: 'fast', success: true, toolCallId: 'call_1' },
+      },
+    );
+
+    expect(outcome).toEqual({ handled: true, resumed: true });
+    expect(updateToolMessage).toHaveBeenCalled();
+    expect(tryResumeParentFromAsyncTool).toHaveBeenCalled();
+  });
+
+  it('reports a missing placeholder instead of swallowing the completion', async () => {
+    const { deps, updateToolMessage } = buildDeps();
+    (deps.serverDB as any).query.messagePlugins.findFirst = vi.fn(async () => null);
+
+    const outcome = await completeDeferredShell(
+      { ...deps, placeholderWait: { attempts: 0, intervalMs: 0 } },
+      {
+        operationId: 'op_1',
+        result: { content: 'fast', success: true, toolCallId: 'call_1' },
+      },
+    );
+
+    // Distinct from `not_deferred_shell`: the caller has to keep this result,
+    // because the device will not send it again.
+    expect(outcome).toEqual({ handled: false, reason: 'placeholder_missing' });
+    expect(updateToolMessage).not.toHaveBeenCalled();
+  });
+
   it('ignores a result for a tool that was never parked', async () => {
     const { deps, updateToolMessage } = buildDeps({
       id: 'msg_other',

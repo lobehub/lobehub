@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import { z } from 'zod';
 
 import { getServerDB } from '@/database/core/db-adaptor';
+import { isAsyncShellEnabled } from '@/server/modules/AgentRuntime/asyncShellPark';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { AiAgentService } from '@/server/services/aiAgent';
 
@@ -152,9 +153,21 @@ async function handleDeferredResult(
       String(outcome.handled),
     );
 
-    // `handled: false` means this was not a parked shell at all. A 200 still
-    // acknowledges it: the device will not resend, and the synchronous queue
-    // never had a waiter for a tool that was never dispatched there.
+    if (!outcome.handled && outcome.reason === 'placeholder_missing' && isAsyncShellEnabled()) {
+      // The park writes the placeholder right after the running receipt returns
+      // through `dispatchClientTool`, so a command that ends immediately can
+      // report before the row exists. The device sends this result exactly once:
+      // acknowledging it would discard the only copy of the answer and leave the
+      // run parked on a command that already finished. Reject instead, so the
+      // gateway's outbound retry redelivers once the row is there — a duplicate
+      // is harmless, the backfill is `onlyIfEmpty` and the resume is CAS-guarded.
+      log('Deferred result op=%s tool=%s has no placeholder yet', operationId, toolCallId);
+      return c.json({ error: 'Deferred shell placeholder is not ready', retryable: true }, 503);
+    }
+
+    // Otherwise `handled: false` means this was not a parked shell at all. A 200
+    // still acknowledges it: the device will not resend, and the synchronous
+    // queue never had a waiter for a tool that was never dispatched there.
     return c.json(outcome);
   } catch (error) {
     console.error('[agent/tool-result] deferred delivery failed:', error);

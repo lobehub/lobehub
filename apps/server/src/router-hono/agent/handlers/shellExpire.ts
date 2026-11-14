@@ -12,6 +12,15 @@ const log = debug('lobe-server:agent:shell-expire');
 
 interface ShellExpireBody {
   operationId?: string;
+  /**
+   * QStash nests the scheduled fields under `payload` (see
+   * `QStashQueueServiceImpl.scheduleMessage`); the local queue spreads them at
+   * the top level instead. Declared so both shapes can be read.
+   */
+  payload?: {
+    toolCallId?: string;
+    toolMessageId?: string;
+  };
   toolCallId?: string;
   toolMessageId?: string;
 }
@@ -34,7 +43,11 @@ export async function shellExpire(c: Context): Promise<Response> {
     return c.json({ error: 'Invalid JSON body' }, 400);
   }
 
-  const { operationId, toolCallId } = body;
+  // QStash keeps `operationId` at the top level and carries the tool ids inside
+  // `body.payload`. Reading the top level alone made every queued delivery fail
+  // the guard below with 400, so a wait that should have been closed by its
+  // deadline stayed parked until the gateway's own watchdog killed it.
+  const { operationId, toolCallId } = { ...body, ...body.payload };
   if (!operationId || !toolCallId) {
     return c.json({ error: 'operationId and toolCallId are required' }, 400);
   }

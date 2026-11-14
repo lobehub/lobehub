@@ -16,6 +16,11 @@ export interface DeferredShellResult {
 
 export interface AsyncShellResultDeps {
   messageModel: Pick<MessageModel, 'findMessagePlugin' | 'updateToolMessage'>;
+  /**
+   * Override for {@link PLACEHOLDER_WAIT}, used by tests to keep the wait
+   * instant. Production callers leave it out.
+   */
+  placeholderWait?: { attempts: number; intervalMs: number };
   serverDB: LobeChatDatabase;
   /** Barrier + single-fire CAS + re-dispatch of the parked step. */
   tryResumeParentFromAsyncTool: (
@@ -47,7 +52,14 @@ export interface CompleteDeferredShellParams {
 }
 
 export type CompleteDeferredShellOutcome =
-  { handled: false; reason: 'not_deferred_shell' } | { handled: true; resumed: boolean };
+  | { handled: false; reason: 'not_deferred_shell' }
+  /**
+   * The completion itself is fine, but its placeholder never showed up. Only
+   * reachable when a device reports a command it already saw start, so the
+   * caller must keep the result instead of acknowledging it away.
+   */
+  | { handled: false; reason: 'placeholder_missing' }
+  | { handled: true; resumed: boolean };
 
 /**
  * The command outlived its deadline. Say what is actually true: the run was
@@ -76,6 +88,32 @@ const synthesizeContent = (result: DeferredShellResult): string => {
 };
 
 /**
+ * How long a completion keeps looking for its placeholder before it is taken to
+ * belong to something else.
+ *
+ * The device starts `watchDeferredShell` as soon as it has sent the running
+ * receipt, while the server writes the placeholder only after that receipt has
+ * come back through `dispatchClientTool`. A command that ends quickly can
+ * therefore report completion before the row exists — and that report is the
+ * only copy of its answer. Poll briefly for it rather than declaring the result
+ * foreign on the first miss.
+ */
+const PLACEHOLDER_WAIT = { attempts: 6, intervalMs: 250 };
+
+const findPlaceholder = async (deps: AsyncShellResultDeps, toolCallId: string) => {
+  const { attempts, intervalMs } = deps.placeholderWait ?? PLACEHOLDER_WAIT;
+
+  for (let attempt = 0; ; attempt++) {
+    const plugin = await deps.serverDB.query.messagePlugins.findFirst({
+      where: (mp, { eq: eqOp }) => eqOp(mp.toolCallId, toolCallId),
+    });
+    if (plugin || attempt >= attempts) return plugin;
+
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+};
+
+/**
  * Finish a shell command that outlived its tool call.
  *
  * The device reports the command's completion long after the dispatching step
@@ -86,17 +124,17 @@ const synthesizeContent = (result: DeferredShellResult): string => {
  * reused here rather than re-implemented.
  *
  * Returns `handled: false` for a result that is not ours (a normal synchronous
- * tool result racing the queue path), so the caller falls through to the
- * existing delivery.
+ * tool result racing the queue path, `not_deferred_shell`) or for one whose
+ * placeholder has not been written yet (`placeholder_missing`). The two are not
+ * interchangeable: the first can be dropped, the second is the only copy of the
+ * command's answer and the caller has to keep it.
  */
 export async function completeDeferredShell(
   deps: AsyncShellResultDeps,
   { operationId, reason = 'device_result', result }: CompleteDeferredShellParams,
 ): Promise<CompleteDeferredShellOutcome> {
-  const plugin = await deps.serverDB.query.messagePlugins.findFirst({
-    where: (mp, { eq: eqOp }) => eqOp(mp.toolCallId, result.toolCallId),
-  });
-  if (!plugin) return { handled: false, reason: 'not_deferred_shell' };
+  const plugin = await findPlaceholder(deps, result.toolCallId);
+  if (!plugin) return { handled: false, reason: 'placeholder_missing' };
 
   const pluginState = plugin.state as AsyncShellPluginState | null;
   if (!pluginState?.asyncShell) return { handled: false, reason: 'not_deferred_shell' };

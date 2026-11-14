@@ -3,10 +3,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { toolResult } from '../toolResult';
 
-const mockCompleteDeferredShell = vi.fn(async () => ({ handled: true, resumed: true }));
+const { mockAsyncShellEnabled } = vi.hoisted(() => ({ mockAsyncShellEnabled: { value: true } }));
+
+const mockCompleteDeferredShell = vi.fn(async () => ({ handled: true, resumed: true } as any));
 const mockResolveOwner = vi.fn(async () => ({ userId: 'user_1' }));
 const mockPipeline = vi.fn();
 const mockRedis = { pipeline: mockPipeline } as any;
+
+vi.mock('@/server/modules/AgentRuntime/asyncShellPark', () => ({
+  isAsyncShellEnabled: () => mockAsyncShellEnabled.value,
+}));
 
 vi.mock('@/server/modules/AgentRuntime/redis', () => ({
   getAgentRuntimeRedisClient: () => mockRedis,
@@ -45,6 +51,7 @@ const deferredBody = {
 describe('toolResult handler — deferred delivery', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAsyncShellEnabled.value = true;
   });
 
   it('routes a deferred result to the park completion, never to Redis', async () => {
@@ -71,6 +78,37 @@ describe('toolResult handler — deferred delivery', () => {
 
     expect(res.status).toBe(400);
     expect(mockCompleteDeferredShell).not.toHaveBeenCalled();
+  });
+
+  it('rejects so the gateway redelivers a completion that beat its placeholder', async () => {
+    // The device sends a deferred result exactly once: a 200 here would discard
+    // the only copy of a command that already finished.
+    mockCompleteDeferredShell.mockResolvedValueOnce({
+      handled: false,
+      reason: 'placeholder_missing',
+    });
+
+    const res = await toolResult(buildContext(deferredBody));
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toEqual({
+      error: 'Deferred shell placeholder is not ready',
+      retryable: true,
+    });
+  });
+
+  it('still acknowledges a foreign result when the async shell feature is off', async () => {
+    // No park means no placeholder will ever appear; retrying every background
+    // shell forever would be worse than the old acknowledgement.
+    mockAsyncShellEnabled.value = false;
+    mockCompleteDeferredShell.mockResolvedValueOnce({
+      handled: false,
+      reason: 'placeholder_missing',
+    });
+
+    const res = await toolResult(buildContext(deferredBody));
+
+    expect(res.status).toBe(200);
   });
 
   it('returns 500 so the gateway can redeliver when completion throws', async () => {
