@@ -4,20 +4,26 @@ import { describe, expect, it } from 'vitest';
 import { agentRouter } from '.';
 
 /**
- * `createAgent` stores any tag string (`CreateAgentSchema`), so the list/count
- * filters must accept every tag it can store: a stricter read-side limit would
- * leave an agent that `lh agent list --tag` can never return.
+ * `createAgent` stores tag strings exactly as given (`CreateAgentSchema`: no
+ * length cap, no trimming), so the list/count filters must look up that exact
+ * value: a stricter or normalizing read side would leave agents that
+ * `lh agent list --tag` can never return.
  */
 describe('queryAgents / countAgents tag input', () => {
   const procedures = (agentRouter as any)._def.procedures as Record<string, any>;
   const parse = (name: string, input: unknown) => procedures[name]._def.inputs[0].parse(input);
-  const longTag = `team-${'x'.repeat(120)}`;
 
-  it.each(['queryAgents', 'countAgents'])('%s accepts a long tag and trims it', (name) => {
-    expect(parse(name, { tag: `  ${longTag}  ` })).toMatchObject({ tag: longTag });
+  it.each(['queryAgents', 'countAgents'])('%s accepts a long tag', (name) => {
+    const longTag = `team-${'x'.repeat(120)}`;
+    expect(parse(name, { tag: longTag })).toMatchObject({ tag: longTag });
   });
 
-  it.each(['queryAgents', 'countAgents'])('%s rejects a blank tag', (name) => {
-    expect(() => parse(name, { tag: '   ' })).toThrow();
+  it.each(['queryAgents', 'countAgents'])('%s keeps the tag exactly as stored', (name) => {
+    expect(parse(name, { tag: ' tenant-A ' })).toMatchObject({ tag: ' tenant-A ' });
+    expect(parse(name, { tag: ' ' })).toMatchObject({ tag: ' ' });
+  });
+
+  it.each(['queryAgents', 'countAgents'])('%s rejects an empty tag', (name) => {
+    expect(() => parse(name, { tag: '' })).toThrow();
   });
 });

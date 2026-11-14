@@ -44,7 +44,7 @@ export const lifecycleRouter = router({
           keyword: z.string().optional(),
           range: z.tuple([z.string(), z.string()]).optional(),
           startDate: z.string().optional(),
-          tag: z.string().trim().min(1).optional(),
+          tag: z.string().min(1).optional(),
         })
         .optional(),
     )
@@ -199,7 +199,7 @@ export const lifecycleRouter = router({
           keyword: z.string().optional(),
           limit: z.number().max(100).optional(),
           offset: z.number().optional(),
-          tag: z.string().trim().min(1).optional(),
+          tag: z.string().min(1).optional(),
         })
         .optional(),
     )
