@@ -5,7 +5,9 @@ import {
   DEFAULT_TTS_AUDIO_FORMAT,
   FISH_AUDIO_DEFAULT_VOICE_ID,
   FISH_AUDIO_MAX_INPUT_CHARACTERS,
+  validateTTSParams,
 } from 'model-bank';
+import fishAudioModels from 'model-bank/fishaudio';
 import type OpenAI from 'openai';
 import type { SpeechCreateParams } from 'openai/resources/audio/speech';
 
@@ -140,6 +142,23 @@ export const createOpenAICompatibleSpeech = async (
       throw AgentRuntimeError.chat({
         error: {
           message: `Fish Audio speech input is ${inputCharacters} characters; the limit is ${FISH_AUDIO_MAX_INPUT_CHARACTERS} per request. Split the text into shorter requests.`,
+        },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        provider: context.provider,
+      });
+    }
+
+    // The TTS service validates params against the static card, which a gateway or mapped
+    // id never matches; check them against the Fish catalog card of the model actually
+    // called, so e.g. S1 refuses `instructions` it would otherwise speak aloud.
+    const card = fishCatalogModel
+      ? fishAudioModels.find((item) => item.id === toFishAudioCatalogModel(fishCatalogModel))
+      : undefined;
+    const issues = card?.parameters ? validateTTSParams(card.parameters, params) : [];
+    if (issues.length > 0) {
+      throw AgentRuntimeError.chat({
+        error: {
+          message: `Fish Audio ${card!.id}: ${issues.map(({ key, reason }) => `params.${key} ${reason}`).join('; ')}`,
         },
         errorType: AgentRuntimeErrorType.ProviderBizError,
         provider: context.provider,

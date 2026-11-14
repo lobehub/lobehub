@@ -240,6 +240,51 @@ describe('createOpenAICompatibleSpeech', () => {
     expect(result.usage).toEqual({ cost: 0.00003, inputCharacters: 2 });
   });
 
+  it('validates gateway Fish params against the Fish catalog card before the request', async () => {
+    await expect(
+      createOpenAICompatibleSpeech(
+        client,
+        {
+          input: 'Hi',
+          model: 'fish-audio/s1',
+          params: { instructions: 'whisper' },
+          voice: 'default',
+        },
+        undefined,
+        { ...context, provider: 'openrouter', requestModel: 'fish-audio/s1' },
+      ),
+    ).rejects.toMatchObject({
+      error: { message: expect.stringContaining('params.instructions') },
+      errorType: 'ProviderBizError',
+      provider: 'openrouter',
+    });
+
+    await expect(
+      createOpenAICompatibleSpeech(
+        client,
+        { input: 'Hi', model: 'custom-fish', params: { speed: 3 }, voice: 'default' },
+        undefined,
+        { ...context, provider: 'my-gateway', requestModel: 'fish-audio/s2.1-pro' },
+      ),
+    ).rejects.toMatchObject({ error: { message: expect.stringContaining('params.speed') } });
+    expect(create).not.toHaveBeenCalled();
+
+    // The directed S2 family accepts instructions through the gateway.
+    create.mockResolvedValue(audioResponse([0]));
+    await createOpenAICompatibleSpeech(
+      client,
+      {
+        input: 'Hi',
+        model: 'fish-audio/s2.1-pro',
+        params: { instructions: 'calm' },
+        voice: 'default',
+      },
+      undefined,
+      { ...context, provider: 'openrouter', requestModel: 'fish-audio/s2.1-pro' },
+    );
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses a gateway Fish Audio input over the per-request cap before the request', async () => {
     await expect(
       createOpenAICompatibleSpeech(
