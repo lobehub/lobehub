@@ -30,8 +30,8 @@ export interface WorkspaceAgentSections {
   /** The member's own pinned rows, in their pin order. */
   myPinned: SidebarAgentItem[];
   /**
-   * Rows outside the member's private folders that they created, used
-   * recently or added explicitly — public and private together, newest first.
+   * Rows outside the member's private folders that are their own or that they
+   * added explicitly — public and private together, newest first.
    */
   rest: SidebarAgentItem[];
   /** Rows pinned for everyone by an owner/admin. */
@@ -43,25 +43,22 @@ const updatedAtMs = (item: SidebarAgentItem) => new Date(item.updatedAt).getTime
 /**
  * Whether a row outside the pinned sections belongs in the member's sidebar.
  *
- * Shared workspace rows are a catalogue, not the member's own list, so by
- * default a row is listed only when it is private (only its creator sees it),
- * the member created it, or the member used it within the server's recent
- * window (`lastUsedAt`). An explicit choice from the row menu or the Agents
- * page (`sidebarAgentVisibilityOverrides`) always wins. The legacy hidden-id
- * list is applied separately by the caller.
+ * Shared workspace rows are a catalogue, not the member's own list. By default
+ * a row is listed only when it is the member's own — private (only its creator
+ * sees it) or created by them — until they hide it. A teammate's shared row is
+ * listed only when the member adds it explicitly. An explicit choice from the
+ * row menu or the Agents page (`sidebarAgentVisibilityOverrides`) always wins;
+ * the release seeded such choices once for the shared rows each member was
+ * using. The legacy hidden-id list is applied separately by the caller.
  */
 export const isListedInWorkspaceSidebar = (
-  item: Pick<SidebarAgentItem, 'id' | 'lastUsedAt' | 'userId' | 'visibility'>,
+  item: Pick<SidebarAgentItem, 'id' | 'userId' | 'visibility'>,
   { currentUserId, visibilityOverrides }: WorkspaceSidebarMembership,
 ): boolean => {
   const override = visibilityOverrides[item.id];
   if (override !== undefined) return override;
 
-  return (
-    item.visibility === 'private' ||
-    (!!currentUserId && item.userId === currentUserId) ||
-    !!item.lastUsedAt
-  );
+  return item.visibility === 'private' || (!!currentUserId && item.userId === currentUserId);
 };
 
 /**

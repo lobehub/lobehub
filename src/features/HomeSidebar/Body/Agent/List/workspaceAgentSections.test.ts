@@ -27,7 +27,6 @@ const item = (
   }) as SidebarAgentItem;
 
 const mine = { userId: ME };
-const used = { lastUsedAt: new Date('2026-01-10') };
 
 const folder = (id: string, visibility: 'private' | 'public', items: SidebarAgentItem[]) =>
   ({ id, items, name: id, sort: 0, visibility }) as SidebarGroup;
@@ -49,29 +48,27 @@ const base = {
 describe('isListedInWorkspaceSidebar', () => {
   const membership = { currentUserId: ME, visibilityOverrides: {} };
 
-  it('lists private rows, rows the member created and rows used recently', () => {
+  it('lists the member’s own rows: private ones and ones they created', () => {
     expect(isListedInWorkspaceSidebar(item('p', 'private', '2026-01-01'), membership)).toBe(true);
     expect(isListedInWorkspaceSidebar(item('c', 'public', '2026-01-01', mine), membership)).toBe(
       true,
     );
-    expect(isListedInWorkspaceSidebar(item('u', 'public', '2026-01-01', used), membership)).toBe(
-      true,
-    );
   });
 
-  it('leaves a teammate’s shared row the member never used on the Agents page', () => {
+  it('leaves a teammate’s shared row on the Agents page until the member adds it', () => {
     expect(isListedInWorkspaceSidebar(item('t', 'public', '2026-01-01'), membership)).toBe(false);
   });
 
   it('lets an explicit choice win over the default', () => {
-    const overrides = { added: true, removed: false };
+    const overrides = { added: true, hiddenOwn: false };
     const withOverrides = { currentUserId: ME, visibilityOverrides: overrides };
 
     expect(isListedInWorkspaceSidebar(item('added', 'public', '2026-01-01'), withOverrides)).toBe(
       true,
     );
+    // A member can hide even a row they created.
     expect(
-      isListedInWorkspaceSidebar(item('removed', 'public', '2026-01-01', used), withOverrides),
+      isListedInWorkspaceSidebar(item('hiddenOwn', 'public', '2026-01-01', mine), withOverrides),
     ).toBe(false);
   });
 });
@@ -114,20 +111,21 @@ describe('resolveWorkspaceAgentSections', () => {
     expect(ids(sections.myPinned)).toEqual(['old-private-pin']);
   });
 
-  it('moves public folders off the sidebar but keeps the rows the member uses', () => {
+  it('moves public folders off the sidebar but keeps the member’s own and added rows', () => {
     const sections = resolveWorkspaceAgentSections({
       ...base,
       groups: [
         folder('catalogue', 'public', [
           item('teammates', 'public', '2026-01-01'),
           item('i-created', 'public', '2026-01-02', mine),
-          item('i-used', 'public', '2026-01-03', used),
+          item('i-added', 'public', '2026-01-03'),
         ]),
       ],
+      visibilityOverrides: { 'i-added': true },
     });
 
     expect(sections.folders).toEqual([]);
-    expect(ids(sections.rest)).toEqual(['i-used', 'i-created']);
+    expect(ids(sections.rest)).toEqual(['i-added', 'i-created']);
   });
 
   it('lists every row once: a personal pin leaves its folder and the rest', () => {

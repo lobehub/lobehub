@@ -82,12 +82,6 @@ export interface SidebarAgentItem {
    * agents). Used by the agents list to render label tags and group by label.
    */
   labels?: SidebarAgentLabel[];
-  /**
-   * When the current member last had a topic under this agent / chat group in
-   * the active workspace. Workspace sidebars list a shared row by default only
-   * when the member created it or used it recently. Absent in personal mode.
-   */
-  lastUsedAt?: Date | null;
   /** Model shown on mobile list rows. */
   model?: string | null;
   /**
