@@ -455,6 +455,7 @@ export const execAgentTurn = async (
         resume,
         runFromHistory,
         selectedSkillIds,
+        selectedToolIds,
         shareGate,
         steer,
         throwIfExecutionAborted,

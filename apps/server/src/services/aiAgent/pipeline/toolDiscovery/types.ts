@@ -54,6 +54,8 @@ export interface ToolDiscoveryInput {
   disableSelfFeedbackIntentTool?: boolean;
   disableTools?: boolean;
   discordContext?: any;
+  /** A prompted turn that is not persisted. It does not inherit earlier mentions. */
+  ephemeralUserMessage?: string;
   evalConnectorSnapshots?: EvalConnectorSnapshots;
   exclusivePluginIds?: string[];
   /**

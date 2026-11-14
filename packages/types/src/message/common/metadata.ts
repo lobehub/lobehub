@@ -482,6 +482,10 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   reactions: z.array(EmojiReactionSchema).optional(),
   scope: z.string().optional(),
   selectedSkillIds: z.array(z.string()).optional(),
+  // @-mentioned tools for this user turn. The server runtime reads them back
+  // when the same turn resumes; the next user turn does not inherit them.
+  // Listed so zod does not strip the field from message writes.
+  selectedToolIds: z.array(z.string()).optional(),
   // External-signal lineage for Monitor-style callback turns ().
   signal: MessageSignalSchema.optional(),
   steer: z.boolean().optional(),
@@ -766,6 +770,11 @@ export interface MessageMetadata {
    * on this and every later turn of the topic by the server runtime.
    */
   selectedSkillIds?: string[];
+  /**
+   * Tools the user @-mentioned on this user turn. Enabled for this turn,
+   * including a resume of it. The next user turn does not inherit them.
+   */
+  selectedToolIds?: string[];
   /**
    * External-signal lineage for messages produced as reactive replies
    * to an out-of-band trigger (Monitor stdout push, webhook callback,

@@ -67,8 +67,15 @@ const connectorTools = [
   },
 ];
 
+interface HistoryMessage {
+  metadata?: Record<string, unknown> | null;
+  role: string;
+}
+
 interface RunOptions {
   agentId?: string;
+  /** Topic history. A resume (no `userMessageMetadata`) reads mentions from here. */
+  history?: HistoryMessage[];
   installed?: boolean;
   /** The agent's own `plugins` config — i.e. what the user pinned. */
   plugins?: string[];
@@ -76,6 +83,8 @@ interface RunOptions {
   selectedToolIds?: string[];
   shareGate?: unknown;
   sourceType?: 'custom' | 'marketplace';
+  /** Metadata of the user row this call created. Omit on a resume. */
+  userMessageMetadata?: Record<string, unknown>;
 }
 
 const connectorModel = {
@@ -127,13 +136,14 @@ const run = (options: RunOptions = {}) => {
         userPreference: vi.fn().mockResolvedValue(undefined),
       },
       shareGate: options.shareGate,
+      userMessageMetadata: options.userMessageMetadata,
     } as never,
     {
       disabledPluginIds: [],
       globalMemoryEnabled: false,
       hasMentionedAgents: false,
       isFixedDeviceTarget: false,
-      loadHistoryMessages: vi.fn().mockResolvedValue([]),
+      loadHistoryMessages: vi.fn().mockResolvedValue(options.history ?? []),
       selectedToolIds: options.selectedToolIds,
       throwIfExecutionAborted: vi.fn(),
     } as never,
@@ -254,6 +264,67 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
         name.startsWith(`${YINGMI}____BatchGetFundNavHistory`),
       ),
     ).toBe(true);
+  });
+
+  it('keeps the @-mentioned connector enabled when the same turn resumes', async () => {
+    // Approval / askUserQuestion starts a new operation without repeating
+    // selectedToolIds. The mention lives on the user row already in history.
+    const result = await run({
+      history: [{ metadata: { selectedToolIds: [YINGMI] }, role: 'user' }, { role: 'assistant' }],
+    });
+
+    expect(result.toolsResult.enabledToolIds).toContain(YINGMI);
+    expect(
+      offeredToolNames(result).some((name) =>
+        name.startsWith(`${YINGMI}____BatchGetFundNavHistory`),
+      ),
+    ).toBe(true);
+  });
+
+  it('does not carry the mention into the next user turn', async () => {
+    const freshTurn = await run({
+      history: [{ metadata: { selectedToolIds: [YINGMI] }, role: 'user' }],
+      userMessageMetadata: { trigger: 'chat' },
+    });
+    const resumedNextTurn = await run({
+      history: [
+        { metadata: { selectedToolIds: [YINGMI] }, role: 'user' },
+        { role: 'assistant' },
+        { metadata: {}, role: 'user' },
+      ],
+    });
+
+    expect(freshTurn.toolsResult.enabledToolIds).not.toContain(YINGMI);
+    expect(resumedNextTurn.toolsResult.enabledToolIds).not.toContain(YINGMI);
+  });
+
+  it.each([
+    { botSender: { id: 'bot-user', platform: 'slack' } },
+    { externalOrigin: { source: 'webhook' } },
+  ])('does not restore a mention from a non-user source: %j', async (metadata) => {
+    const result = await run({
+      history: [
+        { metadata: { selectedToolIds: [YINGMI] }, role: 'user' },
+        { metadata: { ...metadata, selectedToolIds: [YINGMI] }, role: 'user' },
+      ],
+    });
+
+    expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
+  });
+
+  it('still share-gates a mention restored for the same turn', async () => {
+    const result = await run({
+      history: [{ metadata: { selectedToolIds: [YINGMI] }, role: 'user' }],
+      shareGate: {
+        agentId: 'agent-1',
+        shareConfig: { toolGrants: [{ identifier: 'lobe-calculator' }] },
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      },
+    });
+
+    expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
+    expect(result.toolManifestMap[YINGMI]).toBeUndefined();
   });
 
   it('schedules the stale-tool refresh for an unpinned connector too', async () => {

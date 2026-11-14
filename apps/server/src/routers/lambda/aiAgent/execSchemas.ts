@@ -276,8 +276,10 @@ export const ExecAgentFieldsSchema = z.object({
    * Tool identifiers the user @-mentioned in this message. Enabled for this
    * run in addition to the agent's pinned plugins, so a mentioned tool that
    * isn't pinned to the agent (e.g. a custom MCP connector picked from the @
-   * list) is callable. Scoped to the caller's own installed tools/connectors
-   * by the user-scoped lookups downstream, so it can't enable others' tools.
+   * list) is callable. Persisted on the user message as
+   * `metadata.selectedToolIds` and restored when this same turn resumes.
+   * Scoped to the caller's own installed tools/connectors by the user-scoped
+   * lookups downstream, so it can't enable others' tools.
    */
   selectedToolIds: z.array(z.string()).optional(),
   /**

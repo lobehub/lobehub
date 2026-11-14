@@ -50,6 +50,7 @@ import {
   getShareGrantedExtensionIds,
 } from '../../shareGate';
 import type { ExecRunContext } from '../../types';
+import { resolveTurnSelectedToolIds } from '../currentTurnSelectedTools';
 import {
   buildOwnershipNote,
   patchConnectorPermissions,
@@ -107,6 +108,7 @@ export const discoverTools = async (
     disableTools,
     disabledPluginIds: requestedDisabledPluginIds,
     discordContext,
+    ephemeralUserMessage,
     evalConnectorSnapshots,
     exclusivePluginIds,
     externalFileTypes: rawExternalFileTypes,
@@ -172,10 +174,18 @@ export const discoverTools = async (
   let composioManifests: LobeToolManifest[] = [];
   let connectorManifests: ReturnType<typeof buildConnectorManifests> = [];
 
-  // `selectedToolIds` are the user's @-mention picks for this turn; merged in
-  // (deduped) alongside the agent's pinned plugins and any internal
-  // `additionalPluginIds` so a mentioned-but-not-pinned tool (e.g. a custom MCP
-  // connector) is both queried for manifests and enabled by the tools engine.
+  // `selectedToolIds` are the user's @-mention picks for this turn. A resume
+  // does not repeat them, so the current turn's persisted picks are read back
+  // here and merged in (deduped) alongside the agent's pinned plugins and any
+  // internal `additionalPluginIds`. A mentioned-but-not-pinned tool (e.g. a
+  // custom MCP connector) is then both queried for manifests and enabled by
+  // the tools engine. The next user turn does not inherit them.
+  const turnSelectedToolIds = await resolveTurnSelectedToolIds({
+    ephemeralTurn: !!ephemeralUserMessage,
+    loadHistoryMessages,
+    selectedToolIds,
+    userMessageMetadata: ctx.userMessageMetadata,
+  });
   const isGoalTurn = isGoalPrompt(prompt);
   let agentPlugins: string[] = exclusivePluginIds
     ? [...new Set(exclusivePluginIds)]
@@ -193,7 +203,7 @@ export const discoverTools = async (
                   : id,
             ),
             ...(additionalPluginIds || []),
-            ...(selectedToolIds || []),
+            ...turnSelectedToolIds,
             ...(hasMentionedAgents ? ['lobe-agent-management'] : []),
             ...(shareGate ? getShareGrantActivatedPluginIds(shareGate) : []),
           ]),

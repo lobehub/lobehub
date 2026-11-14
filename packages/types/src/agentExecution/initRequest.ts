@@ -119,7 +119,10 @@ export interface AgentRunInitRequest {
   runAttachments: AgentRunAttachments;
   /** Skill identifiers the composer or CLI selected for this message. */
   selectedSkillIds?: string[];
-  /** Tool identifiers the user @-mentioned in this message. */
+  /**
+   * Tool identifiers the user @-mentioned in this message. A resume that omits
+   * them is filled from the current turn's user message.
+   */
   selectedToolIds?: string[];
   /** The Task this run executes, when it runs inside the Task system. */
   taskId?: string;

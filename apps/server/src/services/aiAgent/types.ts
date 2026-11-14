@@ -317,8 +317,10 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * Tool identifiers the user @-mentioned in this message. Merged into the
    * agent's plugin set for this run (alongside `additionalPluginIds`) so a
    * mentioned tool that isn't pinned to the agent — e.g. a custom MCP connector
-   * picked from the @ list — is enabled and callable. User-scoped lookups
-   * downstream (connectors, installed plugins) keep it to the caller's own tools.
+   * picked from the @ list — is enabled and callable. Persisted on the user
+   * message as `metadata.selectedToolIds` and read back when this same turn
+   * resumes. User-scoped lookups downstream (connectors, installed plugins)
+   * keep it to the caller's own tools.
    */
   selectedToolIds?: string[];
   /**

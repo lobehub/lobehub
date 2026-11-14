@@ -39,6 +39,7 @@ import type {
   ResolvedWorkspaceInit,
 } from '../types';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from '../workspaceInitCache';
+import { idsForExplicitActivationRecheck } from './currentTurnSelectedTools';
 import { buildOperationSkillSet, collectSelectedSkillIds } from './operationSkillSet';
 import { buildRunProjectContextPrompt } from './projectContext';
 import type { ToolDiscoveryResult } from './toolDiscovery';
@@ -615,18 +616,25 @@ export const prepareOperation = async (
   const allMessages =
     runFromHistory && !ephemeralUserMessage ? historyMessages : [...historyMessages, userMessage];
 
-  // Re-check historical activations against this run's tool-mode and model
-  // gates. manifestMap is intentionally broader for discovery and must not
-  // by itself authorize a tool in chat/custom mode or without function calls.
+  // Re-check historical activations, and this turn's @-mentions, against this
+  // run's tool-mode and model gates. manifestMap is intentionally broader for
+  // discovery and must not by itself authorize a tool in chat/custom mode or
+  // without function calls. Mentions are limited to ids discovery already
+  // accepted, so an exclusive toolset or the share allowlist is not widened.
   const historicalActivatedToolIds = extractActivatedToolIdsFromMessages(allMessages) ?? [];
+  const toolIdsToRecheck = idsForExplicitActivationRecheck(
+    allMessages,
+    historicalActivatedToolIds,
+    agentPlugins,
+  );
   const activatableToolIds =
-    toolsEngine && historicalActivatedToolIds.length > 0
+    toolsEngine && toolIdsToRecheck.length > 0
       ? toolsEngine.generateToolsDetailed({
           context: { isExplicitActivation: true },
           model,
           provider,
           skipDefaultTools: true,
-          toolIds: historicalActivatedToolIds,
+          toolIds: toolIdsToRecheck,
         }).enabledToolIds
       : [];
 
