@@ -283,6 +283,8 @@
   "acceptance.gate.titleWave": "是否继续放出第 {{wave}} 批？",
   "acceptance.gate.unitAcceptance": "验收 {{passed}}/{{total}}",
   "acceptance.gate.unitAcceptanceOpen": "打开验收",
+  "acceptance.gate.unitArtifacts": "产出",
+  "acceptance.gate.unitArtifactsEmpty": "这一项没有登记产出。",
   "acceptance.gate.unitBrief": "这一项要做什么",
   "acceptance.gate.unitCount": "{{count}} 项",
   "acceptance.gate.unitMeta": "{{runs}} 轮 · {{tokens}} token",

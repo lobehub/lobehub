@@ -88,6 +88,7 @@ async function readRouterSources() {
       'memoryRoutes.tsx',
       'onboardingRoute.tsx',
       'collaborationRoutes.tsx',
+      'evalRoutes.tsx',
     ].map((filename) => readFile(path.join(process.cwd(), 'src/spa/router', filename), 'utf8')),
   );
 }
@@ -236,11 +237,31 @@ describe('desktop router shared definition', () => {
         '/project/project-1/channels/chn_1',
       );
       expect(channelMatches?.at(-1)?.params.channelId).toBe('chn_1');
+      // A thread page stays inside its Channel's route, so the Channel page keeps rendering it.
+      const threadMatches = matchRoutes(
+        createMainAreaRoutes(factory),
+        '/project/project-1/channels/chn_1/threads/cht_1',
+      );
+      expect(threadMatches?.at(-2)?.route.path).toBe('channels/:channelId');
+      expect(threadMatches?.at(-1)?.params).toMatchObject({
+        channelId: 'chn_1',
+        threadId: 'cht_1',
+      });
       // The project root is its home page (composer + overview), not a redirect.
       expect(
         (projectIndexRoute?.element as ReactElement<{ to?: string }> | undefined)?.props.to,
       ).toBeUndefined();
       expect(projectIndexRoute?.handle?.meta?.titleKey).toBe('project:sections.home');
+    },
+  );
+
+  it.each(mainAreaVariants)(
+    '%s opens a Channel thread as a page under its Channel',
+    (_, factory) => {
+      const matches = matchRoutes(createMainAreaRoutes(factory), '/channels/chn_1/threads/cht_1');
+
+      expect(matches?.at(-2)?.route.path).toBe(':channelId');
+      expect(matches?.at(-1)?.params).toMatchObject({ channelId: 'chn_1', threadId: 'cht_1' });
     },
   );
 

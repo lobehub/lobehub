@@ -19,11 +19,15 @@ import { claimJob } from './claim';
 import { appendMessage } from './delivery';
 import { ChannelError } from './error';
 import { countManifestMessages, readManifestMessages } from './manifest';
+import type { ChannelOpeningDecision } from './opening';
+import { applyOpening, findOpeningCandidate, findOpeningReply } from './opening';
 import type { ChannelRoutingDecision } from './routing';
 import { resolveRouting } from './routing';
 import type { ChannelStopScope } from './stop';
 import { stopScope } from './stop';
 import { audit, withChannelLock } from './transaction';
+import type { ChannelWorktreeCandidate } from './worktree';
+import { assignWorktree, findWorktreeCandidate, markWorktreeUnavailable } from './worktree';
 import { advanceOperation, isolateWriter, isOpenJob, operationStatus } from './writer';
 
 /**
@@ -230,6 +234,24 @@ export class ChannelExecutionRepository {
   ): Promise<ChannelClaim | null> =>
     withChannelLock(this.db, channelId, (tx, channel) => claimJob(tx, channel, jobId, options));
 
+  /** A job waiting only on its directory whose branch could move into its own worktree. */
+  worktreeCandidate = async (channelId: string, jobId: string) =>
+    withChannelLock(this.db, channelId, (tx) => findWorktreeCandidate(tx, channelId, jobId));
+
+  /** Records the worktree the device created for the candidate's branch. */
+  assignWorktree = async (channelId: string, candidate: ChannelWorktreeCandidate, path: string) =>
+    withChannelLock(this.db, channelId, (tx) => assignWorktree(tx, channelId, candidate, path));
+
+  /** The device could not create the worktree; leave the directory alone for a while. */
+  worktreeUnavailable = async (
+    channelId: string,
+    candidate: ChannelWorktreeCandidate,
+    reason: string,
+  ) =>
+    withChannelLock(this.db, channelId, (tx) =>
+      markWorktreeUnavailable(tx, channelId, candidate, reason),
+    );
+
   /**
    * The triggering request and its explicit quote; see `recentContext` for the rest. Reads
    * without the channel lock, since nothing at or before the cutoff changes after the claim.
@@ -256,6 +278,39 @@ export class ChannelExecutionRepository {
       messageId: replyToId,
     });
     return [...quoted, ...request];
+  };
+
+  /**
+   * The reply a deferred follow-up waited for: the primary responder's answer to the same
+   * request, published after the request cutoff. Read by id within the job's branch only; the
+   * cutoff still bounds the history tools. Null for every other job.
+   */
+  primaryReply = async (
+    channelId: string,
+    jobId: string,
+  ): Promise<ChannelContextMessage | null> => {
+    const [job] = await this.db
+      .select({ manifest: channelJobs.manifest })
+      .from(channelJobs)
+      .where(
+        and(
+          eq(channelJobs.channelId, channelId),
+          eq(channelJobs.id, jobId),
+          isNotNull(channelJobs.manifest),
+        ),
+      );
+    if (!job?.manifest) throw new ChannelError('NOT_FOUND', 'Claimed job not found');
+    const messageId = job.manifest.primaryReplyMessageId;
+    if (!messageId) return null;
+
+    const [reply] = await readManifestMessages(
+      this.db,
+      channelId,
+      // Sequences are int4; the reply is past the request cutoff, so lift it for this one id.
+      { ...job.manifest, cutoffSequence: 2_147_483_647 },
+      { messageId },
+    );
+    return reply ?? null;
   };
 
   /**
@@ -286,6 +341,7 @@ export class ChannelExecutionRepository {
     const [seen] = job.topicId
       ? await this.db
           .select({
+            id: channelJobs.id,
             manifest: channelJobs.manifest,
             publishedMessageId: channelJobs.publishedMessageId,
           })
@@ -306,22 +362,40 @@ export class ChannelExecutionRepository {
           .limit(1)
       : [];
     const seenThrough = seen?.manifest?.cutoffSequence ?? 0;
-    // One extra row absorbs the topic's own published reply.
+    // The topic wrote its reply, and the acknowledgement it opened with, itself.
+    const opening = seen ? await findOpeningReply(this.db, channelId, seen.id) : undefined;
+    const ownIds = [seen?.publishedMessageId, opening?.id].filter((id): id is string => !!id);
+    // Extra rows absorb the topic's own messages.
     const recent = await readManifestMessages(this.db, channelId, job.manifest, {
       beforeSequence: job.manifest.cutoffSequence,
-      limit: RECENT_CONTEXT_LIMIT + 1,
+      limit: RECENT_CONTEXT_LIMIT + ownIds.length,
     });
     const messages = recent
-      .filter(({ id, sequence }) => sequence > seenThrough && id !== seen?.publishedMessageId)
+      .filter(({ id, sequence }) => sequence > seenThrough && !ownIds.includes(id))
       .slice(-RECENT_CONTEXT_LIMIT);
     const unseen = await countManifestMessages(this.db, channelId, job.manifest, {
       afterSequence: seenThrough,
       beforeSequence: job.manifest.cutoffSequence,
-      excludeId: seen?.publishedMessageId,
+      excludeIds: ownIds,
     });
 
     return { messages, omitted: Math.max(0, unseen - messages.length) };
   };
+
+  /**
+   * What a queued job's opener decides from; undefined once it opened or when it never does.
+   * See {@link findOpeningCandidate}.
+   */
+  openingCandidate = (channelId: string, jobId: string) =>
+    findOpeningCandidate(this.db, channelId, jobId);
+
+  /** Opens a queued job's reply once. See {@link applyOpening}. */
+  open = (channelId: string, jobId: string, decision: ChannelOpeningDecision) =>
+    applyOpening(this.db, channelId, jobId, decision);
+
+  /** The acknowledgement the job posted before its run, if any. */
+  openingReply = async (channelId: string, jobId: string) =>
+    (await findOpeningReply(this.db, channelId, jobId))?.content;
 
   /** The runtime took the input; only now may the job publish. */
   accepted = async (channelId: string, jobId: string) =>

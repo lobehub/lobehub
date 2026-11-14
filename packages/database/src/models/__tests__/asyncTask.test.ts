@@ -36,6 +36,27 @@ afterEach(async () => {
   await serverDB.delete(users).where(eq(users.id, userId));
 });
 
+const cancelledChatTopicMetadata = (): UserMemoryExtractionMetadata => ({
+  control: {
+    cancelRequestedAt: new Date().toISOString(),
+  },
+  progress: {
+    completedTopics: 0,
+    totalTopics: 1,
+  },
+  source: 'chat_topic',
+});
+
+const initialHourlyMetadata = (): HourlyUserMemoryExtractionMetadata => ({
+  progress: {
+    processedUsers: 0,
+    scheduledBatches: 0,
+    scheduledChildRuns: 0,
+  },
+  source: 'hourly_chat_topic',
+  startedAt: '2026-07-06T00:00:00.000Z',
+});
+
 describe('AsyncTaskModel', () => {
   describe('create', () => {
     it('should create a new async task', async () => {
@@ -375,16 +396,7 @@ describe('AsyncTaskModel', () => {
       const [task] = await serverDB
         .insert(asyncTasks)
         .values({
-          metadata: {
-            control: {
-              cancelRequestedAt: new Date().toISOString(),
-            },
-            progress: {
-              completedTopics: 0,
-              totalTopics: 1,
-            },
-            source: 'chat_topic',
-          },
+          metadata: cancelledChatTopicMetadata(),
           status: AsyncTaskStatus.Processing,
           type: AsyncTaskType.UserMemoryExtractionWithChatTopic,
           userId,
@@ -400,16 +412,7 @@ describe('AsyncTaskModel', () => {
       const [task] = await serverDB
         .insert(asyncTasks)
         .values({
-          metadata: {
-            control: {
-              cancelRequestedAt: new Date().toISOString(),
-            },
-            progress: {
-              completedTopics: 0,
-              totalTopics: 1,
-            },
-            source: 'chat_topic',
-          },
+          metadata: cancelledChatTopicMetadata(),
           status: AsyncTaskStatus.Processing,
           type: AsyncTaskType.Chunking,
           userId,
@@ -428,16 +431,7 @@ describe('AsyncTaskModel', () => {
       const [task] = await serverDB
         .insert(asyncTasks)
         .values({
-          metadata: {
-            control: {
-              cancelRequestedAt: new Date().toISOString(),
-            },
-            progress: {
-              completedTopics: 0,
-              totalTopics: 1,
-            },
-            source: 'chat_topic',
-          },
+          metadata: cancelledChatTopicMetadata(),
           status: AsyncTaskStatus.Processing,
           type: AsyncTaskType.UserMemoryExtractionWithChatTopic,
           userId: otherUserId,
@@ -461,15 +455,7 @@ describe('AsyncTaskModel', () => {
       const task = await serverDB
         .insert(asyncTasks)
         .values({
-          metadata: {
-            progress: {
-              processedUsers: 0,
-              scheduledBatches: 0,
-              scheduledChildRuns: 0,
-            },
-            source: 'hourly_chat_topic',
-            startedAt: '2026-07-06T00:00:00.000Z',
-          },
+          metadata: initialHourlyMetadata(),
           status: AsyncTaskStatus.Processing,
           type: AsyncTaskType.UserMemoryExtractionHourly,
           userId,
@@ -561,15 +547,7 @@ describe('AsyncTaskModel', () => {
       const task = await serverDB
         .insert(asyncTasks)
         .values({
-          metadata: {
-            progress: {
-              processedUsers: 0,
-              scheduledBatches: 0,
-              scheduledChildRuns: 0,
-            },
-            source: 'hourly_chat_topic',
-            startedAt: '2026-07-06T00:00:00.000Z',
-          },
+          metadata: initialHourlyMetadata(),
           status: AsyncTaskStatus.Pending,
           type: AsyncTaskType.UserMemoryExtractionHourly,
           userId,
@@ -592,15 +570,7 @@ describe('AsyncTaskModel', () => {
       const task = await serverDB
         .insert(asyncTasks)
         .values({
-          metadata: {
-            progress: {
-              processedUsers: 0,
-              scheduledBatches: 0,
-              scheduledChildRuns: 0,
-            },
-            source: 'hourly_chat_topic',
-            startedAt: '2026-07-06T00:00:00.000Z',
-          },
+          metadata: initialHourlyMetadata(),
           status: AsyncTaskStatus.Pending,
           type: AsyncTaskType.UserMemoryExtractionHourly,
           userId,

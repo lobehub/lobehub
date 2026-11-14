@@ -702,7 +702,7 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 ### `FAL_API_KEY`
 
 - Type: Required
-- Description: This is the API key you applied for in the FAL service.
+- Description: This is the API key you applied for in the FAL service (create one at [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys)). If `FAL_API_KEY` is not set, LobeHub reads `FAL_KEY`, the name fal's own SDKs use. The key powers fal image, video and music generation. Music (MiniMax Music and ACE-Step 1.5) is only available through fal: MiniMax has stopped selling its official music API to new accounts. See [Music Generation](/docs/usage/getting-started/music).
 - Default: -
 - Example: `fal-xxxxxx...xxxxxx`
 
@@ -714,6 +714,33 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 - Example: `-all,+fal-ai/flux/schnell,+fal-ai/flux-pro/kontext=FLUX.1 Kontext [pro]`
 
 The above example disables all models first, then enables `fal-ai/flux/schnell` and `fal-ai/flux-pro/kontext` (displayed as `FLUX.1 Kontext [pro]`).
+
+## ElevenLabs
+
+Text-to-speech only. See [Using ElevenLabs in LobeHub](/docs/usage/providers/elevenlabs) for setup instructions.
+
+### `ELEVENLABS_API_KEY`
+
+- Type: Optional for the deployment; required when providing a shared server key. Users can instead enter their own key in ElevenLabs provider settings, which takes precedence.
+- Description: A key created on the [ElevenLabs API Keys](https://elevenlabs.io/app/settings/api-keys) page. Setting a non-empty key automatically enables ElevenLabs in the server configuration. `ENABLED_ELEVENLABS` is derived from this key, not a separate environment switch. Without a key from either source, speech requests to ElevenLabs fail with an `InvalidProviderAPIKey` error.
+- Default: Unset; no shared server key.
+- Example: `sk_xxxxxx...xxxxxx`
+
+### `ELEVENLABS_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the ElevenLabs API base URL, for example a data-residency endpoint. Only used together with the server key. A trailing `/v1` is accepted.
+- Default: `https://api.elevenlabs.io`
+- Example: `https://api.eu.residency.elevenlabs.io`
+
+### `ELEVENLABS_MODEL_LIST`
+
+- Type: Optional
+- Description: Customizes the ElevenLabs model list using the shared [model-list syntax][model-list]: `+` adds a model, `-` hides a model, and `model_id=display_name` renames a model. Separate entries with commas.
+- Default: Unset; uses the built-in model list.
+- Example: `-all,+eleven_v4,+eleven_flash_v2_5`
+
+The example hides all default models and enables only `eleven_v4` and `eleven_flash_v2_5`.
 
 ## ComfyUI
 

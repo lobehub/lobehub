@@ -147,6 +147,24 @@ describe('TaskRestService patch runs the shared invariants', () => {
     updateTaskMock.mockResolvedValue({ id: 'task-1' });
   });
 
+  it.each(['proj_1', null])(
+    'hands projectId %j to the invariants and the write',
+    async (projectId) => {
+      resolveTaskPatchInvariantsMock.mockImplementation(async (_, { data }) => ({
+        data,
+        resolved: { createdByUserId: CALLER, id: 'task-1' },
+      }));
+
+      await service().updateTask('T-1', { projectId });
+
+      expect(resolveTaskPatchInvariantsMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ data: { projectId }, id: 'T-1' }),
+      );
+      expect(updateTaskMock).toHaveBeenCalledWith('task-1', { projectId }, expect.anything());
+    },
+  );
+
   it('preserves unchanged legacy checkpoint selections after a selected task is deleted', async () => {
     const tasks = { beforeIds: ['T-2'], afterIds: ['T-2'] };
     resolveTaskPatchInvariantsMock.mockImplementation(async (_, { data }) => ({

@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { AnthropicStream } from './anthropic';
+import { AnthropicStream } from '../protocols/anthropicMessages/stream';
+import { OpenAIStream } from '../protocols/openaiChatCompletions/stream';
+import { OpenAIResponsesStream } from '../protocols/openaiResponses/stream';
 import { AWSBedrockClaudeStream } from './bedrock/claude';
-import { OpenAIStream } from './openai/openai';
-import { OpenAIResponsesStream } from './openai/responsesStream';
 import { readProviderReportedCost } from './providerReportedCost';
 
 const createStream = (chunks: unknown[]) =>

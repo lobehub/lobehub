@@ -53,6 +53,8 @@ export enum RequestTrigger {
   MeetingMinutes = 'meeting_minutes',
   Memory = 'memory',
   MultimodalAnalysis = 'multimodal_analysis',
+  /** Text-to-music generation from a music generation topic. */
+  Music = 'music',
   Notify = 'notify',
   Onboarding = 'onboarding',
   Openapi = 'openapi',

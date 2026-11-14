@@ -1,5 +1,5 @@
 import type { HeterogeneousAgentMode, HeterogeneousReasoningEffort } from '@lobechat/types';
-import { HETEROGENEOUS_AGENT_DEFAULT_SELECTION } from '@lobechat/types';
+import { HETEROGENEOUS_AGENT_DEFAULT_SELECTION, parseModelTuple } from '@lobechat/types';
 
 import { MODEL_LABELS } from './modelOptions';
 
@@ -41,11 +41,24 @@ export const getEffortLabelKeys = (
 
 export const getModeLabelKey = (mode: HeterogeneousAgentMode) => MODE_LABEL_KEYS[mode];
 
+/**
+ * Menu description for a catalog option. Synthetic ids (deepseek-harness's
+ * `[provider, model]` tuples) read better as `provider/model`; plain ids stay
+ * untouched so other catalog providers keep their current copy.
+ */
+export const getModelOptionDescription = (model: string): string => {
+  const tuple = parseModelTuple(model);
+  return tuple ? `${tuple.providerId}/${tuple.modelId}` : model;
+};
+
 export const getModelLabel = (model: string, defaultLabel: string) => {
   if (model === HETEROGENEOUS_AGENT_DEFAULT_SELECTION) return defaultLabel;
 
   const aliasLabel = MODEL_LABELS[model];
   if (aliasLabel) return aliasLabel;
+
+  const tuple = parseModelTuple(model);
+  if (tuple) return tuple.modelId;
 
   const match = /^claude-(opus|sonnet|haiku)-(\d+)-(\d+)/.exec(model);
   if (!match) return model;

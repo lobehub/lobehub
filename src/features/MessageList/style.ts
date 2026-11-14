@@ -9,6 +9,22 @@ export const styles = stylex.create({
     display: 'inline-flex',
     flex: 'none',
   },
+  /** Marks a project avatar as one of that project's Channels. */
+  channelMark: {
+    position: 'absolute',
+    insetBlockEnd: '-3px',
+    insetInlineEnd: '-3px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '14px',
+    height: '14px',
+    borderWidth: '1.5px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBgContainer,
+    borderRadius: '4px',
+    backgroundColor: cssVar.colorBgElevated,
+  },
   empty: {
     paddingBlock: '8px',
     paddingInline: '10px',
@@ -58,8 +74,11 @@ export const styles = stylex.create({
   rowTextSingleLine: {
     minHeight: 0,
   },
-  running: {
-    color: cssVar.colorSuccess,
+  tag: {
+    marginInlineStart: '6px',
+    fontSize: '11px',
+    fontWeight: 400,
+    color: cssVar.colorTextQuaternary,
   },
   time: {
     flex: 'none',
@@ -76,6 +95,12 @@ export const styles = stylex.create({
     fontSize: '13px',
     fontWeight: 500,
     lineHeight: '18px',
+  },
+  /** Same quiet colour as the preview it replaces, so a reply in progress does not shout. */
+  typing: {
+    display: 'flex',
+    gap: '6px',
+    alignItems: 'center',
   },
   unread: {
     pointerEvents: 'none',

@@ -13,6 +13,11 @@ describe('flag labels', () => {
     expect(flagExplanation('RUNTIME_STYLE_DROPPED')).toContain('style=');
   });
 
+  it('names a masked inline style whose value may be empty', () => {
+    expect(flagLabel('INLINE_STYLE_MASKED')).toBe('两侧同一个 style 盖住了类样式');
+    expect(flagExplanation('INLINE_STYLE_MASKED')).toContain('空值');
+  });
+
   it('names the components a partly forwarded descendant rule still reaches', () => {
     const flag = 'INNER_TARGET_PARTLY_FORWARDED:h1|AcceptanceGoal,AcceptanceIdentity';
     expect(flagLabel(flag)).toBe('只证明了传进组件的那个 h1');

@@ -223,6 +223,8 @@ describe('AgentEvalRunTopicModel', () => {
       expect((results[0].topic as any).title).toBe('Topic 1');
       expect(results[0].testCase).toBeDefined();
       expect((results[0].testCase as any).id).toBe(testCaseId1);
+      expect(results[0].topicId).toBe(topicId1);
+      expect(results[1].topicId).toBe(topicId2);
     });
 
     it('should return status field after update', async () => {
@@ -233,15 +235,6 @@ describe('AgentEvalRunTopicModel', () => {
 
       expect(results[0].status).toBe('passed');
       expect(results[1].status).toBe('error');
-    });
-
-    it('should order by createdAt ascending', async () => {
-      const results = await runTopicModel.findByRunId(runId);
-
-      expect(results.length).toBe(2);
-      // First created should be first
-      expect(results[0].topicId).toBe(topicId1);
-      expect(results[1].topicId).toBe(topicId2);
     });
 
     it('should return empty array when no topics exist', async () => {
@@ -528,6 +521,62 @@ describe('AgentEvalRunTopicModel', () => {
       expect(result.evalResult).toMatchObject({
         error: 'Execution error: insufficient_user_quota',
       });
+    });
+
+    it('guards the write by the execution that owns the row', async () => {
+      await serverDB
+        .update(agentEvalRunTopics)
+        .set({ evalResult: { executionId: 'exec-1' } })
+        .where(eq(agentEvalRunTopics.topicId, topicId1));
+
+      expect(
+        await runTopicModel.updateByRunAndTopic(
+          runId,
+          topicId1,
+          { score: 0.5 },
+          { executionId: 'exec-2' },
+        ),
+      ).toBeUndefined();
+      expect(
+        await runTopicModel.updateByRunAndTopic(
+          runId,
+          topicId1,
+          { score: 0.5 },
+          { executionId: 'exec-1' },
+        ),
+      ).toMatchObject({ score: 0.5 });
+    });
+
+    it('treats an explicit undefined execution id as "no execution yet"', async () => {
+      expect(
+        await runTopicModel.updateByRunAndTopic(
+          runId,
+          topicId1,
+          { score: 0.1 },
+          { executionId: undefined },
+        ),
+      ).toMatchObject({ score: 0.1 });
+    });
+
+    it('requires the expected status when a status guard is supplied', async () => {
+      await runTopicModel.updateByRunAndTopic(runId, topicId1, { status: 'running' });
+
+      expect(
+        await runTopicModel.updateByRunAndTopic(
+          runId,
+          topicId1,
+          { score: 0.2 },
+          { status: 'passed' },
+        ),
+      ).toBeUndefined();
+      expect(
+        await runTopicModel.updateByRunAndTopic(
+          runId,
+          topicId1,
+          { score: 0.2 },
+          { status: 'running' },
+        ),
+      ).toMatchObject({ score: 0.2 });
     });
   });
 

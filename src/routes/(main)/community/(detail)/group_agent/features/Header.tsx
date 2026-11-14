@@ -19,13 +19,13 @@ import { BookmarkCheckIcon, BookmarkIcon, DotIcon, GitBranchIcon, UsersIcon } fr
 import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
 import PublishedTime from '@/components/PublishedTime';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
-import { favoriteKeys } from '@/libs/swr/keys';
 import { socialService } from '@/services/social';
+import { useDiscoverStore } from '@/store/discover';
+import { socialSelectors } from '@/store/discover/selectors';
 
 import { resolveCommunityProfileLink } from '../../utils/profileLink';
 import { useDetailContext } from './DetailProvider';
@@ -62,13 +62,10 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     socialService.setAccessToken(session.accessToken);
   }
 
-  // TODO: Use 'group_agent' type when social service supports it
-  // Fetch favorite status
-  const { data: favoriteStatus, mutate: mutateFavorite } = useSWR(
-    identifier && isAuthenticated ? favoriteKeys.status('agent', identifier) : null,
-    () => socialService.checkFavoriteStatus('agent-group', identifier!),
-    { revalidateOnFocus: false },
-  );
+  const useFavoriteStatus = useDiscoverStore((s) => s.useFavoriteStatus);
+  const { queryKey: favoriteKey } = useFavoriteStatus('agent-group', identifier, isAuthenticated);
+  const favoriteStatus = useDiscoverStore(socialSelectors.favoriteStatus(favoriteKey));
+  const setFavorite = useDiscoverStore((s) => s.setFavorite);
 
   const isFavorited = favoriteStatus?.isFavorited ?? false;
 
@@ -82,14 +79,8 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
 
     setFavoriteLoading(true);
     try {
-      if (isFavorited) {
-        await socialService.removeFavorite('agent-group', identifier);
-        toast.success(t('assistant.unfavoriteSuccess'));
-      } else {
-        await socialService.addFavorite('agent-group', identifier);
-        toast.success(t('assistant.favoriteSuccess'));
-      }
-      await mutateFavorite();
+      await setFavorite('agent-group', identifier, !isFavorited);
+      toast.success(t(isFavorited ? 'assistant.unfavoriteSuccess' : 'assistant.favoriteSuccess'));
     } catch {
       toast.error(t('assistant.favoriteFailed'));
     } finally {

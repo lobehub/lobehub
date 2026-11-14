@@ -2,6 +2,7 @@ import { type LobeToolManifest } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type AgentShareVisitorContext,
+  type CancelVirtualSubAgentResult,
   type ChatToolPayload,
   type ChatTopicBotContext,
   type ClientSecretPayload,
@@ -61,6 +62,12 @@ export interface ServerSubAgentRunResult {
    * instead of parking the parent — otherwise the parent hangs forever.
    */
   started: boolean;
+  /**
+   * `subAgentId` named a sub-agent that is still running: no child was forked,
+   * the instruction was queued for that run's next step instead. The caller
+   * returns a receipt rather than parking on a result.
+   */
+  steered?: boolean;
   /** The spawned child operation id. */
   subOperationId?: string;
   /** The isolation thread holding the sub-agent's full message trace. */
@@ -85,6 +92,11 @@ export interface ServerSubAgentRunResult {
  * the completion bridge, which backfills the placeholder and resumes the parent.
  */
 export interface ServerSubAgentRunner {
+  /**
+   * Stop a running `callSubAgent` sub-agent this run's agent dispatched in the
+   * same topic (`cancelSubAgent`). Absent when the runtime cannot cancel.
+   */
+  cancel?: (params: { subAgentId: string }) => Promise<CancelVirtualSubAgentResult>;
   run: (params: ServerSubAgentRunParams) => Promise<ServerSubAgentRunResult>;
 }
 

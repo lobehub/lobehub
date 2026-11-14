@@ -41,6 +41,7 @@ export default {
   'table.columns.trigger.enums.meeting_minutes': 'Meeting minutes',
   'table.columns.trigger.enums.memory': 'Memory extraction',
   'table.columns.trigger.enums.multimodal_analysis': 'Multimodal analysis',
+  'table.columns.trigger.enums.music': 'Music generation',
   'table.columns.trigger.enums.notify': 'Notification',
   'table.columns.trigger.enums.onboarding': 'Onboarding',
   'table.columns.trigger.enums.openapi': 'OpenAPI',

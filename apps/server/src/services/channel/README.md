@@ -57,11 +57,36 @@ groups merge field by field), parsed by the shared bot-wake schema.
   choose it, but not wake it on a hunch.
 
 One member woken by its own rules gets the message. Several are arbitrated by the decision model:
-any that is not a confident no is kept, woken for its own reason. When no member's rules claim the
-message, the decision model chooses among the eligible members, as below. A member woken by its
-own rules, or one the model was unsure about, is a `followup` wake (`channel_jobs.wake`): its
-prompt ends with a `channel_wake` block, and it may answer `NO_REPLY`, which settles the job as
-`silent` instead of failing it. A member the model chose owes an answer.
+any that is not a confident no is kept, woken for its own reason, and the most likely one leads
+(see [One primary responder](#one-primary-responder)). When no member's rules claim the message,
+the decision model chooses among the eligible members, as below. A member woken by its own rules,
+or one the model was unsure about, is a `followup` wake (`channel_jobs.wake`): its prompt ends with
+a `channel_wake` block, and it may answer `NO_REPLY`, which settles the job as `silent` instead of
+failing it. The member the model chose to lead owes an answer.
+
+### One primary responder
+
+An unaddressed message has exactly one primary responder; every other member woken for it is a
+`followup` deferred behind it (`channel_jobs.wake.afterMemberId`):
+
+- Decision model: the most likely member at or above 0.7 leads and owes an answer. Other members
+  at or above 0.7 follow as `routing-deferred`, uncertain ones as `routing-uncertain`.
+- Members' own rules: several members named in the text are led by the one named first; claims the
+  model arbitrated are led by the most likely. Without a usable model answer (disabled, failed),
+  the member the person was just talking to (`followup-window`) leads, then one whose duties
+  cover it, then candidate order. A primary woken by its own rules keeps its own `followup` wake.
+- Explicit @mentions are unchanged: every mentioned Agent owes an answer and runs in parallel.
+  So are the paired Agent of a one-person group and the all-candidate fallback.
+
+A deferred job is queued as `awaiting_primary` and the claim keeps it there until the primary's
+job settles (completed, silent, failed or cancelled), or the primary is stuck on a device or a
+person (`device_*`, `unavailable`, `workspace_changed`), in which case it runs without waiting.
+It then runs normally: its prompt carries the primary's published reply as a `channel_reply`
+block after the request (`manifest.primaryReplyMessageId`; the history cutoff stays at the
+request) and a `channel_wake` hint to stay silent if that reply already covers the request, or
+add only what is distinct. Clients do not count an `awaiting_primary` job as a reply in progress.
+`routing_decided` details record `primaryMemberId` and `deferredMemberIds`; each woken member's
+decision row records `responder: primary | deferred`.
 
 Owner presence and stand-down have no Channel equivalent and never fire. The classifier and duty
 judge run as the sender, with the deployment's bot-wake model, under a shared hourly budget per
@@ -88,8 +113,9 @@ answer (`channel:routing`). `channel.listWakeDecisions` pages them in the bots' 
 
 A single `ModelRuntime.decide()` call asks a boolean question per eligible member. Probabilities
 at least 0.7 select a member; probabilities at most 0.3 exclude them. A member between 0.3 and 0.7
-(exclusive) is woken as a `followup` that may stay silent, unless it is quiet; the others are
-unaffected. All confident negatives still produce `skipped`.
+(exclusive) that is not quiet follows a selected primary as a deferred `followup`. When nobody
+reaches 0.7, only the most likely such member is woken, as a `followup` that may stay silent.
+All confident negatives still produce `skipped`.
 A missing/refused answer, invalid probability or provider failure leaves the message unassigned,
 even when another answer is uncertain. These thresholds are policy defaults, not a claim of
 measured accuracy; calibrate them with actual Channel conversations.
@@ -167,11 +193,48 @@ would mean threading a Channel flag through the server context snapshot, `@lobec
 messages engine for no change in what the model sees. External runtimes keep getting it in
 their system context from `heteroDispatch/prepare.ts`.
 
+### Messaging Agents in other Channels
+
+A Native run can also reach Agents outside its Channel, so "tell / ask that Agent" is a message
+the Agent decides on, not a task created for it. `lobe-channel.listChannels` lists the requester's
+active Channels (archived and trashed ones are left out) with their active Agent members.
+`lobe-channel.sendMessage` posts into one of them through `ChannelService.send`, @mentioning the
+chosen Agents (`ChannelMessagingService`).
+
+- **Who sends it.** The run's requester is the sender and execution identity, as if they had
+  posted it, so the target Channel's membership, routing and Agent permissions apply unchanged.
+  A Channel message has exactly one sender and an Agent-authored row is always a `reply` that
+  routes nowhere, so the relaying Agent is recorded in `metadata.via` instead. The timeline shows
+  "Relayed by", and the woken run sees a `via` attribute on its `channel_request`.
+- **What it may do.** Every call first passes the same live-run check as a history read
+  (`ChannelHistoryRepository.currentRun`). The target must be one of the requester's Channels and
+  each `agentId` an active member there; at most five Agents, never the sender itself or the
+  Channel it is answering in (its final answer is posted there).
+- **One hop.** A run answering a relayed request cannot relay again, so two Agents cannot keep
+  waking each other on the requester's behalf.
+- **Retries.** The request key is `agent-relay:<operationId>:<toolCallId>`, so a retried call
+  returns the message already posted.
+- **Where the answer goes.** The addressed Agent answers in its own Channel, and the tool returns
+  a link to it for the relaying run's final answer. When that reply is published,
+  `deliverRelayReceipt` (called from `ChannelCoordinator.complete`) posts it back into the Channel
+  and branch the relay came from (`metadata.via.origin`), as the same requester, @mentioning the
+  relaying Agent. That receipt carries `metadata.receipt` (the answering Channel and reply) and the
+  answering Agent in `via`. The timeline shows "<Agent> replied in #<Channel>", and the woken run
+  sees `via` and `reply_from` on its `channel_request`. Because the receipt has `via`, the run it
+  wakes cannot relay again: one hop each way. The receipt is best-effort: a relaying Agent,
+  Channel or branch that is gone, or a requester who left, gets none. It is keyed by the reply id,
+  so a repeated completion posts it once.
+- **External runtimes.** `lh channel list` and `lh channel send` call the same service through
+  `channel.listChannels` / `channel.sendMessage`, authorised by the run's operation token with
+  the `channel:message` capability that every Channel dispatch is minted alongside
+  `channel:read`. The CLI's `--request-key` (random by default) is the retry key.
+
 ### Why history reads stay on `lobe-channel`
 
 `lobe-message.readMessages` reads a bot platform by model-supplied `platform` / `channelId`
-arguments, authorised by the bot's platform credentials. `lobe-channel` takes no ids from the
-model: every read is scoped and re-authorised by the run's frozen manifest (branch, cutoff,
-membership, live operation). Folding Channel into `lobe-message` would either weaken that to
+arguments, authorised by the bot's platform credentials. `lobe-channel` history reads take no ids
+from the model: every read is scoped and re-authorised by the run's frozen manifest (branch,
+cutoff, membership, live operation). `sendMessage` does take a Channel id, but only one the
+requester is a member of, posted as the requester. Folding Channel into `lobe-message` would either weaken that to
 model-chosen ids or add a second authorisation mode to a tool built around the first, so the two
 stay separate and share only the model-facing projection.

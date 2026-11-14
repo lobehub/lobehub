@@ -16,6 +16,8 @@ class ProjectWorkingDirectoryService {
     lambdaClient.projectWorkingDirectory.saveEnvironment.mutate(input);
   attachEnvironment = (projectId: string, environmentId: string) =>
     lambdaClient.projectWorkingDirectory.attachEnvironment.mutate({ projectId, environmentId });
+  attachRepository = (input: Parameters<Client['attachRepository']['mutate']>[0]) =>
+    lambdaClient.projectWorkingDirectory.attachRepository.mutate(input);
   bind = (input: BindProjectDirectoryInput) =>
     lambdaClient.projectWorkingDirectory.bind.mutate(input);
   list = (projectId?: string) => lambdaClient.projectWorkingDirectory.list.query({ projectId });
@@ -31,6 +33,10 @@ class ProjectWorkingDirectoryService {
   };
   moveTopic = (input: Parameters<Client['moveTopic']['mutate']>[0]) =>
     lambdaClient.projectWorkingDirectory.moveTopic.mutate(input);
+  relocate = (input: Parameters<Client['relocate']['mutate']>[0]) =>
+    lambdaClient.projectWorkingDirectory.relocate.mutate(input);
+  remove = (input: Parameters<Client['remove']['mutate']>[0]) =>
+    lambdaClient.projectWorkingDirectory.remove.mutate(input);
   resolve = (id: string) => lambdaClient.projectWorkingDirectory.resolve.query({ id });
   startTopic = (input: Parameters<Client['startTopic']['mutate']>[0]) =>
     lambdaClient.projectWorkingDirectory.startTopic.mutate(input);

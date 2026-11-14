@@ -8,6 +8,7 @@ import {
   indexLiteXMLDocument,
   normalizeLiteXMLFragment,
   planLiteXMLEditSteps,
+  RichListDocumentPlugin,
 } from '@lobechat/editor-runtime';
 import type { HeadlessEditorOptions, HeadlessLiteXMLOperation } from '@lobehub/editor/headless';
 import { createHeadlessEditor, DEFAULT_HEADLESS_EDITOR_PLUGINS } from '@lobehub/editor/headless';
@@ -113,9 +114,18 @@ const DOCUMENT_HEADLESS_PLUGINS = DEFAULT_HEADLESS_EDITOR_PLUGINS.map(
       : plugin,
 );
 
+// Pages hold what PageEditor's own plugins put in them. A headless editor that
+// lacks one of those exports Markdown that disagrees with the page, and drops
+// the plugin's node state when it seeds a collaboration room.
+const PAGE_DOCUMENT_PLUGINS = [RichListDocumentPlugin as unknown as HeadlessEditorPlugin];
+
 export const createDocumentHeadlessEditor = (
   options?: Pick<HeadlessEditorOptions, 'additionalPlugins'>,
-) => createHeadlessEditor({ ...options, plugins: DOCUMENT_HEADLESS_PLUGINS });
+) =>
+  createHeadlessEditor({
+    additionalPlugins: [...PAGE_DOCUMENT_PLUGINS, ...(options?.additionalPlugins ?? [])],
+    plugins: DOCUMENT_HEADLESS_PLUGINS,
+  });
 
 let headlessEditorTail: Promise<void> = Promise.resolve();
 const insideHeadlessEditorLock = new AsyncLocalStorage<true>();

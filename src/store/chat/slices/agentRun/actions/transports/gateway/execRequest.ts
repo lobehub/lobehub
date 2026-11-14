@@ -1,3 +1,4 @@
+import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type {
   ChatTopic,
@@ -66,6 +67,16 @@ export const resolveDesktopDeviceHints = async (
   if (chatConfigByIdSelectors.isChatModeById(agentId)(agentState)) return {};
 
   const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
+  // Legacy agents may be identified only by `model: '<cli-type>'` (no stored
+  // provider yet) and the server still routes those to the external-CLI path. A
+  // provider-only discriminator would let the `auto` default below swallow this
+  // desktop's device hints, sending the run to the cloud sandbox instead.
+  const isModelOnlyHetero = isHeterogeneousAgentModelId(
+    agentByIdSelectors.getAgentModelById(agentId)(agentState),
+  );
+  const isHetero =
+    isModelOnlyHetero ||
+    !!agentByIdSelectors.getAgencyConfigById(agentId)(agentState)?.heterogeneousProvider;
   const userState = useUserStore.getState();
   const currentUserId = userProfileSelectors.userId(userState);
   // Author-or-admin, mirroring the picker (`useAgentManagementAccess`) and the
@@ -111,11 +122,14 @@ export const resolveDesktopDeviceHints = async (
     },
     getTopicBoundDeviceId(topic, agentId),
     getElectronStoreState().gatewayDeviceInfo?.deviceId,
+    { isHetero },
   );
   const isPlatformTask = isRemoteHeterogeneousType(agencyConfig?.heterogeneousProvider?.type ?? '');
   const executionTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: true,
-    isHetero: !!agencyConfig?.heterogeneousProvider,
+    // this request goes through the device-gateway
+    deviceRoutingAvailable: true,
+    isHetero,
     workspaceScoped,
   });
   // Platform hints are capability claims, not routing overrides. Always send

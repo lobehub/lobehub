@@ -1,4 +1,4 @@
-<!-- lobe-design-init: version=5.8.0 fingerprint=29ef977ba7e7 -->
+<!-- lobe-design-init: version=6.3.1 fingerprint=29ef977ba7e7 -->
 
 # 组件盘点（lobe-design・Round 2）
 
@@ -101,7 +101,7 @@ mobile 与 web 是同一套 DOM 组件；分类同 web（薄包装 / 重复 / �
 | `StatisticCard`、`Statistic`                           | 用量卡片、行内「数值 + 标签」                    | `Statistic` 是行内小字，卡片指标用 `StatisticCard` |
 | `LiteTable`                                            | 窄屏会切换为列表的轻量表格                       | 需要在 mobile 可读的表格用它                       |
 | `PublishedTime`                                        | 发布 / 更新时间                                  | 列表和详情里的发布时间用它                         |
-| `LobeIcons`、`LibIcon`、`SkillAvatar`、`KnowledgeIcon` | 模型厂商、库、技能、知识库图标                   | 厂商徽标走 `@lobehub/icons`（E-03）                |
+| `LobeIcons`、`LibIcon`、`SkillAvatar`、`KnowledgeIcon` | 模型厂商、库、技能、知识库图标                   | 厂商徽标走 `@lobehub/icons`（E-04）                |
 | `Branding`、`BrandWatermark`、`Loading`                | 品牌标识、水印、启动加载                         | 品牌元素只用这些，不直接放 logo 图片               |
 | `features/ShareModal`、`SharePopover`                  | 分享 Agent / 话题 / 页面                         | 分享入口统一                                       |
 | `features/Electron`、`Desktop*Bridge`                  | 仅 desktop 的窗口与系统集成                      | 只在 desktop 渲染；web 与 mobile 不得依赖          |

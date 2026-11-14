@@ -12,6 +12,7 @@ import { memoryExtractionBenchmarkLocomo } from './handlers/memoryExtractionBenc
 import { memoryUserMemoryChatTopicCancel } from './handlers/memoryUserMemoryChatTopicCancel';
 import { memoryUserMemoryConsolidation } from './handlers/memoryUserMemoryConsolidation';
 import { memoryUserMemoryPersonaUpdateWriting } from './handlers/memoryUserMemoryPersonaUpdateWriting';
+import { musicWebhook } from './handlers/music';
 import { videoWebhook } from './handlers/video';
 import { memoryWebhookAuth } from './middlewares/memoryWebhookAuth';
 
@@ -42,6 +43,9 @@ app.post(
 
 // Async video generation callback; the token is verified per asyncTask.
 app.post('/video/:provider', videoWebhook);
+
+// Music gateway callback; acknowledged only, completion is polled by the async music router.
+app.post('/music/:provider', musicWebhook);
 
 // GitHub App: signed event ingress plus the install / setup redirects GitHub
 // sends the user through. The GET routes share the prefix because the App's

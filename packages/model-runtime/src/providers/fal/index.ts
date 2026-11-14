@@ -6,8 +6,17 @@ import type { RuntimeImageGenParamsValue } from 'model-bank';
 import type { ClientOptions } from 'openai';
 
 import type { LobeRuntimeAI } from '../../core/BaseAI';
+import type { CheckCredentialsResult } from '../../types/credentials';
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type {
+  CreateMusicOptions,
+  CreateMusicPayload,
+  CreateMusicResult,
+  MusicPollingRoute,
+  PollMusicStatusOptions,
+  PollMusicStatusResult,
+} from '../../types/music';
 import type {
   CreateVideoPayload,
   CreateVideoResult,
@@ -18,6 +27,7 @@ import { AgentRuntimeError } from '../../utils/createError';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { resolveMappedModelId } from '../../utils/modelIdMapping';
 import { getFalInputSchema, listFalGenerationModels } from './catalog';
+import { FalMusicClient } from './createMusic';
 import { createFalVideo, getFalTaskRoutedVideoEndpoints, pollFalVideoStatus } from './createVideo';
 import {
   isFalResolutionTierEndpoint,
@@ -126,6 +136,7 @@ export class LobeFalAI implements LobeRuntimeAI {
    */
   private readonly client: FalClient;
   private readonly apiKey: string;
+  private readonly music: FalMusicClient;
 
   // OpenAI SDK v6 widened `apiKey` to `string | ApiKeySetter`; lobehub only uses the string form.
   constructor({
@@ -140,6 +151,7 @@ export class LobeFalAI implements LobeRuntimeAI {
     this.apiKey = apiKey;
     this.client = createFalClient({ credentials: apiKey });
     this.modelIdMappingOptions = { modelIdMapping };
+    this.music = new FalMusicClient(apiKey, (endpoint) => getFalInputSchema(apiKey, endpoint));
     log('FalAI initialized with apiKey: %s', apiKey ? '*****' : 'Not set');
   }
 
@@ -163,6 +175,35 @@ export class LobeFalAI implements LobeRuntimeAI {
 
   async handlePollVideoStatus(inferenceId: string): Promise<PollVideoStatusResult> {
     return pollFalVideoStatus(this.client, inferenceId);
+  }
+
+  /**
+   * Submit a song to fal's queue. Returns a pending task to poll with `handlePollMusicStatus`,
+   * or the finished tracks when `options.waitForCompletion` is set.
+   */
+  async createMusic(
+    payload: CreateMusicPayload,
+    options?: CreateMusicOptions,
+  ): Promise<CreateMusicResult> {
+    const requestModel = resolveFalEndpointId(
+      resolveMappedModelId(payload.model, this.modelIdMappingOptions),
+    );
+
+    return this.music.create(requestModel, payload.params, options);
+  }
+
+  async handlePollMusicStatus(
+    inferenceId: string,
+    _model?: string,
+    _route?: MusicPollingRoute,
+    options?: PollMusicStatusOptions,
+  ): Promise<PollMusicStatusResult> {
+    return this.music.poll(inferenceId, options?.signal);
+  }
+
+  /** Verify the key without a chat model: fal serves only generation endpoints */
+  async checkCredentials(): Promise<CheckCredentialsResult> {
+    return this.music.checkCredentials();
   }
 
   async createImage(payload: CreateImagePayload): Promise<CreateImageResponse> {

@@ -65,6 +65,19 @@ export const resolveTopic = async (
     !topic.isDeleted &&
     (job.threadId || Date.now() - topic.updatedAt.getTime() <= TOPIC_STALE_THRESHOLD)
   ) {
+    // A Channel that belongs to a project runs inside it, so the topic it works in
+    // must say which project it belongs to: that binding is what the run resolves
+    // its project context from (project prompt, coordinator scope, task ownership).
+    // Topics created before the Channel was bound carry none — adopt the Channel's
+    // project once. A topic already bound elsewhere is never re-homed by a run.
+    if (!topic.projectId && channel.projectId) {
+      const [adopted] = await tx
+        .update(topics)
+        .set({ projectId: channel.projectId })
+        .where(eq(topics.id, topic.id))
+        .returning();
+      return adopted ?? topic;
+    }
     return topic;
   }
 
@@ -73,6 +86,9 @@ export const resolveTopic = async (
     .values({
       agentId: member.agentId,
       mode: 'default',
+      // The Channel's project, read from the Channel itself (never inferred from the
+      // Agent), so a conversation started by a project Channel is born in the project.
+      projectId: channel.projectId ?? undefined,
       trigger: CHANNEL_TOPIC_TRIGGER,
       userId,
       workspaceId: channel.workspaceId,

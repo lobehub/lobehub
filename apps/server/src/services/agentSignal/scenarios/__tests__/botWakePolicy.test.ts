@@ -47,25 +47,18 @@ describe('bot-wake policy middleware', () => {
   it.each([
     { expected: 'deny', policies: [denyAll], snapshot: {} },
     { expected: 'abstain', policies: [], snapshot: {} },
-    { expected: 'allow', policies: [denyAll], snapshot: { explicitMention: true } },
+    {
+      decision: { fastPath: true, records: [] },
+      expected: 'allow',
+      policies: [denyAll],
+      snapshot: { explicitMention: true },
+    },
     { expected: 'allow', policies: [denyAll], snapshot: { replyToBot: true } },
-  ])('reports $expected for $snapshot', async ({ expected, policies, snapshot }) => {
+  ])('reports $expected for $snapshot', async ({ decision = {}, expected, policies, snapshot }) => {
     const { onDecision, result } = await run(policies, snapshot);
 
-    expect(result.status).toBe('completed');
-    expect(onDecision).toHaveBeenCalledTimes(1);
-    expect(onDecision.mock.calls[0][0].verdict).toBe(expected);
-  });
-
-  it('flags the explicit path as fast', async () => {
-    const { onDecision } = await run([denyAll], { explicitMention: true });
-
-    expect(onDecision.mock.calls[0][0]).toMatchObject({ fastPath: true, records: [] });
-  });
-
-  it('adds no actions or signals: the evaluation is observational', async () => {
-    const { result } = await run([denyAll], {});
-
     expect(result).toMatchObject({ status: 'completed', trace: { actions: [], signals: [] } });
+    expect(onDecision).toHaveBeenCalledTimes(1);
+    expect(onDecision.mock.calls[0][0]).toMatchObject({ verdict: expected, ...decision });
   });
 });

@@ -124,6 +124,8 @@ export default {
   'linear.sync.job.skipReason.commentsFailed':
     'Task synced, but its comments could not be; the next sync retries them',
   'linear.sync.job.skipReason.failed': 'Could not be written; the next sync retries it',
+  'linear.sync.job.skipReason.labelsFailed':
+    'Task synced, but its labels could not be; the next sync retries them',
   'linear.sync.job.skipReason.live':
     'Archived in Linear, but the task has a live schedule or an open goal; a later sync archives it',
   'linear.sync.job.skipReason.missing': 'No longer in Linear, or not visible to this connection',
@@ -165,6 +167,11 @@ export default {
     "Copy each issue's Linear comments into the task's activity, keeping the author and time",
   'linear.sync.options.syncCommentsRuleDesc':
     'Tasks already synced also get the comments they are missing',
+  'linear.sync.options.syncLabels': 'Sync labels',
+  'linear.sync.options.syncLabelsDesc':
+    "Add each issue's Linear labels to the task, creating any that don't exist yet",
+  'linear.sync.options.syncLabelsRuleDesc':
+    'Synced tasks this rule still matches also pick up label changes made in Linear',
   'linear.sync.options.syncTitle': 'Sync options',
   'linear.sync.project.connect': 'Connect Linear',
   'linear.sync.project.description':
@@ -177,6 +184,7 @@ export default {
   'linear.sync.result.archived': '{{count}} archived',
   'linear.sync.result.closed': '{{count}} closed',
   'linear.sync.result.commentsImported': '{{count}} comments added',
+  'linear.sync.result.labelsSynced': 'Labels updated on {{count}} tasks',
   'linear.sync.result.created': '{{count}} created',
   'linear.sync.result.keptLocalEdits': '{{count}} kept local edits',
   'linear.sync.result.skipped': '{{count}} skipped',

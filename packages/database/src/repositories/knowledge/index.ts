@@ -36,11 +36,19 @@ import { alias, type AnyPgColumn, unionAll } from 'drizzle-orm/pg-core';
 
 import { DocumentModel } from '../../models/document';
 import { FileModel } from '../../models/file';
-import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles, users } from '../../schemas';
+import {
+  DOCUMENT_FOLDER_TYPE,
+  documents,
+  files,
+  knowledgeBaseFiles,
+  knowledgeBases,
+  users,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { buildDocumentCategoryFilter, buildFileCategoryFilter } from '../../utils/fileTypeCategory';
 import { notAgentShareFile, ownChatAttachment } from '../../utils/fileVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
+import { naturalNameKey } from './naturalSort';
 
 /**
  * Both UNION arms reach the same two tables, and the file arm joins `documents`
@@ -93,6 +101,9 @@ const fileArmColumns = {
   embeddingTaskId: f.embeddingTaskId,
   fileId: sql<string | null>`${f.id}`.as('file_id'),
   fileType: f.fileType,
+  folderRank: sql<number>`CASE WHEN ${f.fileType} = 'custom/folder' THEN 0 ELSE 1 END`.as(
+    'folder_rank',
+  ),
   // A file that backs a derived page is addressed by the page id.
   id: sql<string>`COALESCE(${d.id}, ${f.id})`.as('id'),
   knowledgeBaseIds: sql<
@@ -102,8 +113,14 @@ const fileArmColumns = {
   ),
   metadata: sql<Record<string, any> | null>`COALESCE(${d.metadata}, ${f.metadata})`.as('metadata'),
   name: f.name,
+  naturalNameKey: naturalNameKey(f.name),
   size: f.size,
   slug: d.slug,
+  sortOrder: sql<
+    number | null
+  >`CASE WHEN jsonb_typeof(COALESCE(${d.metadata}, ${f.metadata}) -> 'sortOrder') = 'number' THEN (COALESCE(${d.metadata}, ${f.metadata}) ->> 'sortOrder')::double precision ELSE NULL END`.as(
+    'sort_order',
+  ),
   sourceType: sql<'file' | 'document'>`'file'`.as('source_type'),
   updatedAt: f.updatedAt,
   uploaderAvatar: sql<string | null>`${users.avatar}`.as('uploader_avatar'),
@@ -138,6 +155,9 @@ const documentArmColumns = {
   embeddingTaskId: sql<string | null>`NULL::uuid`.as('embedding_task_id'),
   fileId: d.fileId,
   fileType: d.fileType,
+  folderRank: sql<number>`CASE WHEN ${d.fileType} = 'custom/folder' THEN 0 ELSE 1 END`.as(
+    'folder_rank',
+  ),
   id: d.id,
   knowledgeBaseIds: sql<
     string[]
@@ -146,8 +166,14 @@ const documentArmColumns = {
   ),
   metadata: d.metadata,
   name: sql<string>`COALESCE(${d.title}, ${d.filename}, 'Untitled')`.as('name'),
+  naturalNameKey: naturalNameKey(sql`COALESCE(${d.title}, ${d.filename}, 'Untitled')`),
   size: sql<number>`${d.totalCharCount}`.as('size'),
   slug: d.slug,
+  sortOrder: sql<
+    number | null
+  >`CASE WHEN jsonb_typeof(${d.metadata} -> 'sortOrder') = 'number' THEN (${d.metadata} ->> 'sortOrder')::double precision ELSE NULL END`.as(
+    'sort_order',
+  ),
   sourceType: sql<'file' | 'document'>`'document'`.as('source_type'),
   updatedAt: d.updatedAt,
   uploaderAvatar: sql<string | null>`${users.avatar}`.as('uploader_avatar'),
@@ -183,13 +209,16 @@ interface KnowledgeRow {
   embeddingTaskId: string | null;
   fileId: string | null;
   fileType: string;
+  folderRank: number;
   hasChildren: boolean;
   id: string;
   knowledgeBaseIds: string[] | null;
   metadata: Record<string, any> | null;
   name: string;
+  naturalNameKey: string;
   size: number;
   slug: string | null;
+  sortOrder: number | null;
   sourceType: 'file' | 'document';
   updatedAt: Date;
   uploaderAvatar: string | null;
@@ -208,6 +237,16 @@ const SORTABLE_COLUMNS: Record<string, string> = {
   size: 'size',
   updatedAt: 'updated_at',
 };
+
+export interface ReorderKnowledgeItemsParams {
+  dragIds: string[];
+  knowledgeBaseId: string;
+  parentId: string | null;
+  position: 'before' | 'after';
+  sorter?: string;
+  sortType?: string;
+  targetId: string;
+}
 
 export interface KnowledgeItem {
   chunkTaskId?: string | null;
@@ -607,8 +646,11 @@ export class KnowledgeRepo {
       Boolean(knowledgeBaseId),
     );
 
-    const rows = await unionAll(fileArm, documentArm)
-      .orderBy(this.orderBy(sortType, sorter))
+    // COLLATE is an ORDER BY expression, so sort outside the UNION.
+    const rows = await this.db
+      .select()
+      .from(unionAll(fileArm, documentArm).as('resources'))
+      .orderBy(...this.resourceOrderBy(sortType, sorter, Boolean(knowledgeBaseId)))
       .limit(limit)
       .offset(offset);
 
@@ -863,13 +905,162 @@ export class KnowledgeRepo {
     return filter === 'none' ? sql`false` : filter;
   };
 
+  /** Persist a sibling order without turning a move into a content edit. */
+  reorderItems = async (params: ReorderKnowledgeItemsParams): Promise<{ success: boolean }> => {
+    const { knowledgeBaseId } = params;
+    return this.db.transaction(async (trx) => {
+      const scope = { userId: this.userId, workspaceId: this.workspaceId };
+      const [kb] = await trx
+        .select({ id: knowledgeBases.id })
+        .from(knowledgeBases)
+        .where(
+          and(eq(knowledgeBases.id, knowledgeBaseId), buildWorkspaceWhere(scope, knowledgeBases)),
+        )
+        .limit(1);
+      if (!kb) return { success: false };
+
+      const links = await trx
+        .select({ fileId: knowledgeBaseFiles.fileId })
+        .from(knowledgeBaseFiles)
+        .where(
+          and(
+            eq(knowledgeBaseFiles.knowledgeBaseId, kb.id),
+            buildWorkspaceWhere(scope, knowledgeBaseFiles),
+          ),
+        );
+      const linkedFileIds = links.map((link) => link.fileId);
+      const documentMembership = linkedFileIds.length
+        ? or(
+            eq(documents.knowledgeBaseId, knowledgeBaseId),
+            inArray(documents.fileId, linkedFileIds),
+          )
+        : eq(documents.knowledgeBaseId, knowledgeBaseId);
+
+      const siblings = await new KnowledgeRepo(
+        trx as unknown as LobeChatDatabase,
+        this.userId,
+        this.workspaceId,
+      ).query({
+        includeContent: false,
+        knowledgeBaseId: kb.id,
+        limit: 1_000_000,
+        parentId: params.parentId,
+        sorter: params.sorter ?? 'custom',
+        sortType: params.sortType ?? SortType.Asc,
+      });
+      // File-backed pages can be addressed by either their page or file ID.
+      const byId = new Map<string, KnowledgeItem>();
+      for (const sibling of siblings) {
+        byId.set(sibling.id, sibling);
+        if (sibling.fileId) byId.set(sibling.fileId, sibling);
+      }
+      const target = byId.get(params.targetId);
+      if (!target) return { success: true };
+      const dragged = [...new Set(params.dragIds.map((id) => byId.get(id)))].filter(
+        (item): item is KnowledgeItem => !!item && item.id !== target.id,
+      );
+      const isFolder = (item: KnowledgeItem) => item.fileType === CUSTOM_FOLDER_FILE_TYPE;
+      let moving = dragged.filter((item) => isFolder(item) === isFolder(target));
+      let boundary = false;
+      if (!moving.length) {
+        const folders = siblings.filter(isFolder);
+        const firstFile = siblings.find((item) => !isFolder(item));
+        boundary =
+          (isFolder(target) && params.position === 'after' && folders.at(-1)?.id === target.id) ||
+          (!isFolder(target) && params.position === 'before' && firstFile?.id === target.id);
+        if (!boundary) return { success: true };
+        moving = dragged.filter((item) => isFolder(item) !== isFolder(target));
+      }
+      if (!moving.length) return { success: true };
+      const movingIds = new Set(moving.map((item) => item.id));
+      const folderGroup = siblings.filter((item) => isFolder(item) && !movingIds.has(item.id));
+      const fileGroup = siblings.filter((item) => !isFolder(item) && !movingIds.has(item.id));
+      const group = isFolder(moving[0]) ? folderGroup : fileGroup;
+      const index = boundary
+        ? isFolder(moving[0])
+          ? group.length
+          : 0
+        : group.findIndex((item) => item.id === target.id) + (params.position === 'after' ? 1 : 0);
+      group.splice(index, 0, ...moving);
+      const documentOrders = [];
+      const fileOrders = [];
+      const linkedFiles = new Set(linkedFileIds);
+      for (const [index, item] of [...folderGroup, ...fileGroup].entries()) {
+        const sortOrder = (index + 1) * 1000;
+        if (item.documentId)
+          documentOrders.push(sql`(${item.documentId}::text, ${sortOrder}::int)`);
+        if (item.fileId && linkedFiles.has(item.fileId)) {
+          fileOrders.push(sql`(${item.fileId}::text, ${sortOrder}::int)`);
+        }
+      }
+      // One statement per table, preserving both unrelated metadata and content timestamps.
+      if (documentOrders.length) {
+        await trx
+          .update(documents)
+          .set({
+            metadata: sql`jsonb_set(COALESCE(${documents.metadata}, '{}'::jsonb), '{sortOrder}', to_jsonb(v.sort_order), true)`,
+            updatedAt: documents.updatedAt,
+          })
+          .from(sql`(VALUES ${sql.join(documentOrders, sql`, `)}) AS v(id, sort_order)`)
+          .where(
+            and(
+              eq(documents.id, sql`v.id`),
+              documentMembership,
+              buildWorkspaceWhere(scope, documents),
+            ),
+          );
+      }
+      if (fileOrders.length) {
+        await trx
+          .update(files)
+          .set({
+            metadata: sql`jsonb_set(COALESCE(${files.metadata}, '{}'::jsonb), '{sortOrder}', to_jsonb(v.sort_order), true)`,
+            updatedAt: files.updatedAt,
+          })
+          .from(sql`(VALUES ${sql.join(fileOrders, sql`, `)}) AS v(id, sort_order)`)
+          .where(and(eq(files.id, sql`v.id`), buildWorkspaceWhere(scope, files)));
+      }
+      return { success: true };
+    });
+  };
+
+  private resourceOrderBy = (
+    sortType?: string,
+    sorter?: string,
+    inKnowledgeBase = false,
+  ): SQL[] => {
+    const direction =
+      (sortType?.toLowerCase() ?? (sorter === 'custom' ? SortType.Asc : SortType.Desc)) ===
+      SortType.Asc
+        ? asc
+        : desc;
+    const foldersFirst = asc(sql.raw('folder_rank'));
+    const stableId = asc(sql.raw('id COLLATE "C"'));
+    if (sorter === 'custom') {
+      return [
+        foldersFirst,
+        sortType?.toLowerCase() === SortType.Desc
+          ? sql`sort_order DESC NULLS LAST`
+          : sql`sort_order ASC NULLS LAST`,
+        direction(sql.raw('natural_name_key')),
+        stableId,
+      ];
+    }
+    if (sorter === 'name') {
+      return [foldersFirst, direction(sql.raw('natural_name_key')), stableId];
+    }
+    const order = this.orderBy(sortType, sorter);
+    return inKnowledgeBase
+      ? [foldersFirst, order, direction(sql.raw('natural_name_key')), stableId]
+      : [order, direction(sql.raw('natural_name_key')), stableId];
+  };
+
   /**
    * Both halves of the sort have to be supplied to take effect — a `sorter`
    * without a `sortType` falls back to newest-first, as it always has.
    *
-   * `sql.raw` is required rather than a column reference: after a set operation
-   * `ORDER BY` may only name an output column, and `"f"."name"` is not one. The
-   * value is looked up in `SORTABLE_COLUMNS`, never taken from the caller.
+   * Use the query output names rather than source-table column references.
+   * The value is looked up in `SORTABLE_COLUMNS`, never taken from the caller.
    */
   private orderBy = (sortType?: string, sorter?: string): SQL => {
     if (!sorter || !sortType || !(sorter in SORTABLE_COLUMNS)) return desc(sql.raw('created_at'));

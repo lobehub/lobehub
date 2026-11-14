@@ -1,13 +1,25 @@
 export default {
-  'builtins.lobe-channel.title': 'Channel history',
+  'builtins.lobe-channel.title': 'Channel',
   'builtins.lobe-channel.apiName.readMessages': 'Read Channel history',
   'builtins.lobe-channel.messageCount': 'Messages: {{count}}',
-  'builtins.lobe-channel.readError': 'Could not read this conversation',
+  'builtins.lobe-channel.readError': "Couldn't read this conversation. Try again in a moment.",
   'builtins.lobe-channel.chunk': 'Characters {{start}}–{{end}} of {{total}}',
   'builtins.lobe-channel.excerpt': 'Message excerpt',
   'builtins.lobe-channel.moreHistory': 'Earlier messages are available',
   'builtins.lobe-channel.empty': 'No messages are visible in this conversation.',
   'builtins.lobe-channel.apiName.readMessage': 'Read Channel message',
+  'builtins.lobe-channel.errorDetailHide': 'Hide details',
+  'builtins.lobe-channel.errorDetailShow': 'Show details',
+  'builtins.lobe-channel.apiName.listChannels': 'List Channels',
+  'builtins.lobe-channel.apiName.sendMessage': 'Message an Agent',
+  'builtins.lobe-channel.channelCount': 'Channels: {{count}}',
+  'builtins.lobe-channel.listError': "Couldn't list your Channels. Try again in a moment.",
+  'builtins.lobe-channel.noAgents': 'No Agents',
+  'builtins.lobe-channel.noChannels': 'No Channels found.',
+  'builtins.lobe-channel.openChannel': 'Open Channel',
+  'builtins.lobe-channel.sendError':
+    "The message wasn't sent. Check the Channel and its Agents, then try again.",
+  'builtins.lobe-channel.sentTo': 'Sent to {{agents}} in #{{channel}}',
 
   'builtins.lobe-attachments.apiName.readAttachment': 'Read attachment',
   'builtins.lobe-attachments.title': 'Attachments',
@@ -99,6 +111,7 @@ export default {
   'builtins.lobe-agent.apiName.analyzeMedia.result':
     'Analyze media: <question>{{question}}</question>',
   'builtins.lobe-agent.apiName.callSubAgent': 'Call sub-agent',
+  'builtins.lobe-agent.apiName.cancelSubAgent': 'Cancel sub-agent',
   'builtins.lobe-agent.subAgent.backgroundHint':
     'The result will be sent to this conversation when it finishes.',
   'builtins.lobe-agent.subAgent.backgroundRunning': 'Running in background',
@@ -270,6 +283,8 @@ export default {
   'builtins.github.render.updatedAt': 'Updated {{time}}',
   'builtins.linear.render.empty': 'No {{collection}} found',
   'builtins.linear.render.updatedAt': 'Updated {{time}}',
+  'builtins.lobe-cloud-sandbox.apiName.analyzeStorage': 'Analyze drive space',
+  'builtins.lobe-cloud-sandbox.apiName.deleteFiles': 'Delete files',
   'builtins.lobe-cloud-sandbox.apiName.editFile': 'Edit file',
   'builtins.lobe-cloud-sandbox.apiName.executeCode': 'Execute code',
   'builtins.lobe-cloud-sandbox.apiName.exportFile': 'Export file',
@@ -292,6 +307,10 @@ export default {
   'builtins.lobe-cloud-sandbox.apiName.renameLocalFile': 'Rename',
   'builtins.lobe-cloud-sandbox.apiName.searchLocalFiles': 'Search files',
   'builtins.lobe-cloud-sandbox.apiName.writeLocalFile': 'Write file',
+  'builtins.lobe-cloud-sandbox.deleteFiles.irreversible':
+    'Deleted files can’t be recovered. The drive has no trash.',
+  'builtins.lobe-cloud-sandbox.deleteFiles.title':
+    'Permanently delete {{count}} items from the drive:',
   'builtins.lobe-cloud-sandbox.inspector.noResults': 'No results',
   'builtins.lobe-cloud-sandbox.title': 'Cloud Sandbox',
   'builtins.lobe-group-agent-builder.apiName.batchCreateAgents': 'Batch create agents',

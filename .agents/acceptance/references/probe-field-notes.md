@@ -256,7 +256,7 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
   );
   r.status; // 401 → re-seed; 200 → the session is live
   ```
-  Recover with `agent-browser close --all` + `setup-auth.sh web-seed`, then re-open the route.
+  Recover with `agent-browser --session <name> close` + `setup-auth.sh web-seed`, then re-open the route.
   After re-seeding, the same bundle returned `isOwner: true` with the owner-only link rendered —
   the code was correct all along.
 - **Why it matters**: an auth-scoped assertion (owner-only / permission-gated UI) fails
@@ -844,7 +844,7 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
   next on 33803, vite on 32459) — never hardcode 3010; re-run
   `scripts/test-env.sh` after the server is up, it reads the ports-file. And
   the `os error 35` agent-browser daemon wedge (D8) recovers with
-  `agent-browser close --all` + re-running `setup-auth.sh web-seed`.
+  `agent-browser --session <name> close` + re-running `setup-auth.sh web-seed`.
 
 ### E30. ✅ "Failed to fetch dynamically imported module" points at the WRONG file — the failure is downstream
 

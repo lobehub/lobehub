@@ -5,6 +5,7 @@ import { fileRouter } from './file';
 import { imageRouter } from './image';
 import { linearRouter } from './linear';
 import { meetingRouter } from './meeting';
+import { musicRouter } from './music';
 import { ragEvalRouter } from './ragEval';
 import { videoRouter } from './video';
 
@@ -15,6 +16,7 @@ export const asyncRouter = router({
   image: imageRouter,
   linear: linearRouter,
   meeting: meetingRouter,
+  music: musicRouter,
   ragEval: ragEvalRouter,
   video: videoRouter,
 });

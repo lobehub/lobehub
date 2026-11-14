@@ -176,10 +176,12 @@ export const styles = createStaticStyles(({ css }) => ({
     padding-block: 12px;
     padding-inline: 16px;
 
-    /* At rest the row is all title. A pending accept/ignore keeps its spinner
-       on screen after the pointer leaves (data-busy). Touch screens have no
-       hover, so their meta stays put. */
-    &:not(:hover, :focus-within) {
+    /* At rest a collapsed row is all title. A pending accept/ignore keeps its
+       spinner on screen after the pointer leaves (data-busy). Touch screens
+       have no hover, so their meta stays put. An OPEN row keeps its controls:
+       its title wraps, so revealing them on hover reflowed the title, grew the
+       header and bounced the evidence below on every pointer pass. */
+    &:not([data-expanded], :hover, :focus-within) {
       .acceptance-row-actions:not([data-busy]) {
         display: none;
       }

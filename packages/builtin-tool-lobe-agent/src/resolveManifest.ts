@@ -5,6 +5,15 @@ import { systemPromptWithoutSubAgent } from './systemRole';
 import { LobeAgentApiName } from './types';
 
 /**
+ * Sub-agent dispatch and control: hidden together, never one without the other.
+ * The share-visitor gate strips the same set.
+ */
+export const LOBE_AGENT_SUB_AGENT_APIS: ReadonlySet<string> = new Set<string>([
+  LobeAgentApiName.callSubAgent,
+  LobeAgentApiName.cancelSubAgent,
+]);
+
+/**
  * Context-aware manifest for the lobe-agent tool.
  *
  * `lobe-agent` bundles plan / todo / media-analysis APIs together with the
@@ -18,7 +27,7 @@ import { LobeAgentApiName } from './types';
  *
  * In both cases plan / todo / media-analysis APIs stay available, so this returns a
  * trimmed manifest (not `null`). It rewrites BOTH halves of the manifest in step:
- * the `api` list drops `callSubAgent`, and `systemRole` switches to the variant
+ * the `api` list drops `callSubAgent` (and `cancelSubAgent`), and `systemRole` switches to the variant
  * without the sub-agent section — otherwise the prompt would keep instructing the
  * model to dispatch a tool that is no longer in its tool list.
  */
@@ -30,7 +39,7 @@ export const resolveLobeAgentManifest: BuiltinManifestResolver = (context) => {
 
   return {
     ...LobeAgentManifest,
-    api: LobeAgentManifest.api.filter((api) => api.name !== LobeAgentApiName.callSubAgent),
+    api: LobeAgentManifest.api.filter((api) => !LOBE_AGENT_SUB_AGENT_APIS.has(api.name)),
     systemRole: systemPromptWithoutSubAgent,
   };
 };

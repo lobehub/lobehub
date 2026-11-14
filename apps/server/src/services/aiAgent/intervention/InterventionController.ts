@@ -22,6 +22,7 @@ import type { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { STOPPED_TOOL_CONTENT } from '../helpers/agentFactory';
+import { releaseHeteroSteers } from '../steerQueue/hetero';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -263,6 +264,19 @@ export class InterventionController {
           'active',
         );
       }
+      // For the same reason, nothing else returns the follow-ups this run had
+      // typed into its session but the agent never picked up. Left alone, they
+      // stay "being delivered" until their lease lapses: a "Send now" of one
+      // is refused as already sent, and every new message queues behind it
+      // with no run left to take it. The process has exited, and the device
+      // confirms an exit only after draining its terminal callback, so none of
+      // them can still be picked up; put them back in the queue now.
+      await releaseHeteroSteers(resolvedOperationId).catch((error) => {
+        console.error('[InterventionController] releaseHeteroSteers failed', {
+          error,
+          operationId: resolvedOperationId,
+        });
+      });
     }
 
     if (!interrupted && deviceCancellationConfirmed !== true) {

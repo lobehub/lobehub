@@ -12,6 +12,7 @@ import type { AgentInboundWakeInput, AgentInboundWaker } from './inbound';
 import {
   createOwnerChannelReportHook,
   INBOX_RUN_INTERVENTION,
+  INBOX_RUN_PLUGIN_IDS,
   OWNER_CHANNEL_INSTRUCTION,
 } from './ownerChannel';
 import { buildInboxTopicTitle, fenceUntrustedInbox, toUntrustedInboxEntry } from './untrusted';
@@ -63,6 +64,7 @@ export const createAgentInboundWaker = (db: LobeChatDatabase): AgentInboundWaker
       service.execAgent({
         agentId: account.agentId,
         appContext: { scope: 'agent', topicId },
+        exclusivePluginIds: INBOX_RUN_PLUGIN_IDS,
         hooks: [createOwnerChannelReportHook(db, account.id)],
         prompt: buildInboundPrompt(account, message),
         title: buildInboxTopicTitle([message]),

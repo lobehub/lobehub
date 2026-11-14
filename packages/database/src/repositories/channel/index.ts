@@ -1,9 +1,11 @@
 import type {
+  ChannelAvatarMember,
   ChannelMemberConfig,
   ChannelMemberRole,
   ChannelReplyJob,
   ChannelVisibility,
 } from '@lobechat/types';
+import { agentDisplayName } from '@lobechat/types';
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import { TrashModel } from '../../models/trash';
@@ -26,6 +28,7 @@ import {
   requireAgentMember,
   requireChannelAgent,
 } from './agent';
+import { channelAvatarMembers } from './avatars';
 import { findThread } from './delivery';
 import { ChannelError } from './error';
 import { addChannelUser, channelUserCandidates, newChannelUserCandidates } from './people';
@@ -51,11 +54,13 @@ export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';
 export { ChannelHistoryRepository } from './history';
+export type { ChannelOpeningCandidate, ChannelOpeningDecision } from './opening';
 export type { ChannelAgentPostInput } from './post';
 export type { AppliedChannelRouting, ChannelRoutingDecision } from './routing';
 export type { ChannelSendInput } from './send';
 export type { ChannelStopScope } from './stop';
 export type { ChannelAccess, ChannelWriteOptions } from './types';
+export type { ChannelWorktreeCandidate } from './worktree';
 
 /** Recycle-bin row title: the start of the thread's root message. */
 const CHANNEL_THREAD_TITLE_LENGTH = 120;
@@ -419,6 +424,8 @@ export class ChannelRepository {
       ChannelItem & {
         canDelete: boolean;
         lastMessage: { content: string; createdAt: Date } | null;
+        memberAvatars: ChannelAvatarMember[];
+        mentionCount: number;
         replyJobs: ChannelReplyJob[];
         unreadCount: number;
       }
@@ -428,6 +435,7 @@ export class ChannelRepository {
       .select({
         channel: channels,
         lastReadSequence: channelMembers.lastReadSequence,
+        memberId: channelMembers.id,
         role: channelMembers.role,
       })
       .from(channels)
@@ -499,13 +507,118 @@ export class ChannelRepository {
       replyJobsOf.set(channelId, jobs);
     }
 
+    // Unread messages that @mention the caller, counted from the same read position as
+    // `unreadCount`; only channels with unread messages are scanned.
+    const unreadMemberIds = rows
+      .filter(({ channel, lastReadSequence }) => channel.sequence > (lastReadSequence ?? 0))
+      .map(({ memberId }) => memberId);
+    const mentioned = unreadMemberIds.length
+      ? await this.db
+          .select({
+            channelId: channelMessages.channelId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(channelMessages)
+          .innerJoin(channelMembers, eq(channelMembers.channelId, channelMessages.channelId))
+          .where(
+            and(
+              inArray(channelMembers.id, unreadMemberIds),
+              sql`${channelMessages.sequence} > coalesce(${channelMembers.lastReadSequence}, 0)`,
+              sql`${channelMessages.mentions} @> jsonb_build_array(${channelMembers.id}::text)`,
+            ),
+          )
+          .groupBy(channelMessages.channelId)
+      : [];
+    const mentionCountOf = new Map(mentioned.map(({ channelId, count }) => [channelId, count]));
+
+    // A group Channel's list avatar pictures its first members; a direct one shows its Agent.
+    const avatarsOf = await channelAvatarMembers(
+      this.db,
+      rows.filter(({ channel }) => !channel.agentId).map(({ channel }) => channel.id),
+      this.userId,
+    );
+
     return rows.map(({ channel, lastReadSequence, role }) => ({
       ...channel,
       canDelete: hasRole(role, 'admin'),
       lastMessage: lastMessageOf.get(channel.id) ?? null,
+      memberAvatars: avatarsOf.get(channel.id) ?? [],
+      mentionCount: mentionCountOf.get(channel.id) ?? 0,
       replyJobs: replyJobsOf.get(channel.id) ?? [],
       unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
     }));
+  };
+
+  /**
+   * The caller's active Channels with their active Agent members, newest first: where the caller
+   * can address another Agent. Archived and trashed Channels are left out, since nothing posted
+   * there is answered.
+   */
+  directory = async (): Promise<
+    Array<{
+      agents: Array<{
+        agentId: string;
+        description: string | null;
+        memberId: string;
+        name: string;
+      }>;
+      channel: ChannelItem;
+    }>
+  > => {
+    const rows = await this.db
+      .select({ channel: channels })
+      .from(channels)
+      .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
+      .where(
+        and(this.membershipWhere(), notTrashed(channels.isDeleted), eq(channels.status, 'active')),
+      )
+      .orderBy(desc(channels.createdAt));
+    if (!rows.length) return [];
+
+    const members = await this.db
+      .select({
+        agentId: channelMembers.agentId,
+        agentName: agents.name,
+        agentTitle: agents.title,
+        channelId: channelMembers.channelId,
+        description: sql<
+          string | null
+        >`coalesce(nullif(${channelMembers.description}, ''), ${agents.description})`,
+        label: channelMembers.name,
+        memberId: channelMembers.id,
+      })
+      .from(channelMembers)
+      .innerJoin(agents, eq(agents.id, channelMembers.agentId))
+      .where(
+        and(
+          inArray(
+            channelMembers.channelId,
+            rows.map(({ channel }) => channel.id),
+          ),
+          eq(channelMembers.actorType, 'agent'),
+          eq(channelMembers.status, 'active'),
+        ),
+      )
+      .orderBy(channelMembers.createdAt);
+
+    const agentsOf = new Map<
+      string,
+      Array<{ agentId: string; description: string | null; memberId: string; name: string }>
+    >();
+    for (const member of members) {
+      const list = agentsOf.get(member.channelId) ?? [];
+      list.push({
+        agentId: member.agentId!,
+        description: member.description,
+        memberId: member.memberId,
+        // The member label is how the Channel names it, and what `@Name` in a message matches.
+        name:
+          member.label ||
+          agentDisplayName({ name: member.agentName, title: member.agentTitle }, 'Agent'),
+      });
+      agentsOf.set(member.channelId, list);
+    }
+    return rows.map(({ channel }) => ({ agents: agentsOf.get(channel.id) ?? [], channel }));
   };
 
   /** Read access. Returns undefined when the channel is missing or the caller is no member. */

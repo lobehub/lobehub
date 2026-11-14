@@ -4,6 +4,7 @@ import { displayPlanTier } from '@lobechat/heterogeneous-agents/quota';
 import { ClaudeCode, Codex, Kimi } from '@lobehub/icons';
 import {
   ActionIcon,
+  confirmModal,
   DropdownMenu,
   Flexbox,
   Icon,
@@ -16,7 +17,15 @@ import {
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
-import { CheckIcon, MoreHorizontalIcon, PanelRightOpenIcon, PencilIcon, XIcon } from 'lucide-react';
+import {
+  CheckIcon,
+  EyeOffIcon,
+  GlobeIcon,
+  MoreHorizontalIcon,
+  PanelRightOpenIcon,
+  PencilIcon,
+  XIcon,
+} from 'lucide-react';
 import { type CSSProperties, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,6 +33,8 @@ import { formatPercent, usageLevel } from '@/features/DeviceManager/DeviceHealth
 import { usageTextColor } from '@/features/DeviceManager/DeviceHealth/shared';
 import { UsageBar } from '@/features/DeviceManager/DeviceHealth/UsageMeter';
 import { type QuotaAccount, useAgentQuotaStore } from '@/store/agentQuota';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import {
   type AccountStatus,
@@ -89,6 +100,10 @@ const PROVIDER_META: Record<
   'codex': { icon: (size) => <Codex.Avatar size={size} />, name: 'Codex' },
   'kimi-code': { icon: (size) => <Kimi.Avatar size={size} />, name: 'Kimi Code' },
 };
+
+/** The provider's avatar, as the list row draws it. */
+export const providerAvatar = (provider: SubscriptionProvider, size: number) =>
+  PROVIDER_META[provider].icon(size);
 
 export const PROVIDER_NAME = Object.fromEntries(
   Object.entries(PROVIDER_META).map(([key, meta]) => [key, meta.name]),
@@ -176,9 +191,18 @@ interface AccountRowProps {
 const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
   const { t } = useTranslation('setting');
   const { t: tCommon } = useTranslation('common');
-  const [useFetchQuotaReadings, renameQuotaAccount, setQuotaAccountEnabled] = useAgentQuotaStore(
-    (s) => [s.useFetchQuotaReadings, s.renameQuotaAccount, s.setQuotaAccountEnabled],
-  );
+  const [
+    useFetchQuotaReadings,
+    renameQuotaAccount,
+    setQuotaAccountEnabled,
+    setQuotaAccountVisibility,
+  ] = useAgentQuotaStore((s) => [
+    s.useFetchQuotaReadings,
+    s.renameQuotaAccount,
+    s.setQuotaAccountEnabled,
+    s.setQuotaAccountVisibility,
+  ]);
+  const currentUserId = useUserStore(userProfileSelectors.userId);
   useFetchQuotaReadings(account.id);
   const readings = useAgentQuotaStore((s) => s.quotaReadingsMap[account.id]);
   const [busy, setBusy] = useState(false);
@@ -189,8 +213,14 @@ const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
   const meta = PROVIDER_META[account.provider];
   const name = accountDisplayName(account);
   const plan = displayPlanTier(account);
+  // Only workspace accounts carry a visibility; personal ones have no team to hide from.
+  const isPrivate = !!account.workspaceId && account.visibility === 'private';
   // With a label set, the email moves to the subtitle so the account stays identifiable.
-  const subtitle = [meta.name, account.label ? account.email : undefined]
+  const subtitle = [
+    meta.name,
+    account.label ? account.email : undefined,
+    isPrivate ? t('subscriptionAccounts.visibility.private') : undefined,
+  ]
     .filter(Boolean)
     .join(' · ');
 
@@ -215,6 +245,38 @@ const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
     if (await run(() => renameQuotaAccount(account.id, draft.trim() || undefined)))
       setEditing(false);
   };
+
+  // Only the member who added the account decides who else sees it: another
+  // login holder hiding it would take it from the team, publishing it would
+  // expose someone else's subscription. The server enforces the same rule.
+  const canChangeVisibility = !!account.workspaceId && account.userId === currentUserId;
+  const confirmVisibility = (visibility: 'private' | 'public') =>
+    confirmModal({
+      content: t(`subscriptionAccounts.visibility.${visibility}Confirm.desc`),
+      okButtonProps: visibility === 'private' ? { danger: true } : undefined,
+      okText: t(`subscriptionAccounts.visibility.${visibility}Action`),
+      onOk: async () => {
+        await run(() => setQuotaAccountVisibility(account.id, visibility));
+      },
+      title: t(`subscriptionAccounts.visibility.${visibility}Confirm.title`),
+    });
+  const visibilityItems = canChangeVisibility
+    ? [
+        isPrivate
+          ? {
+              icon: <Icon icon={GlobeIcon} />,
+              key: 'publish',
+              label: t('subscriptionAccounts.visibility.publicAction'),
+              onClick: () => confirmVisibility('public'),
+            }
+          : {
+              icon: <Icon icon={EyeOffIcon} />,
+              key: 'makePrivate',
+              label: t('subscriptionAccounts.visibility.privateAction'),
+              onClick: () => confirmVisibility('private'),
+            },
+      ]
+    : [];
 
   const statusText = (() => {
     switch (view.status) {
@@ -378,6 +440,7 @@ const AccountRow = ({ account, active, onOpen }: AccountRowProps) => {
               label: t('subscriptionAccounts.actions.rename'),
               onClick: startEdit,
             },
+            ...visibilityItems,
           ]}
         >
           <ActionIcon icon={MoreHorizontalIcon} size={'small'} title={tCommon('more')} />

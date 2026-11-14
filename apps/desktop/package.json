@@ -32,6 +32,7 @@
     "lint:style": "stylelint \"{src,tests}/**/*.{css,less}\" --fix --allow-empty-input",
     "lint:ts": "eslint \"{src,tests}/**/*.{js,jsx,ts,tsx}\" --fix",
     "log:auth": "node scripts/analyzeAuthLog.mjs",
+    "logs": "node scripts/desktopLogs.mts",
     "package:linux": "npm run build:main && electron-builder --linux --config electron-builder.mjs  --publish never",
     "package:local": "npm run build:main && electron-builder --dir --config electron-builder.mjs  --c.mac.notarize=false -c.mac.identity=null --c.asar=false",
     "package:local:reuse": "electron-builder --dir --config electron-builder.mjs  --c.mac.notarize=false -c.mac.identity=null --c.asar=false",

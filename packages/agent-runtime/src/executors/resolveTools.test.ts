@@ -166,6 +166,28 @@ describe('resolveTools executors', () => {
     );
   });
 
+  it('writes the per-call blocked content when one is given for the call id', async () => {
+    const instruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> = {
+      payload: {
+        blockedContent: 'generic rejection',
+        blockedContentByCallId: { 'tool-call-1': 'rejection naming tool-call-1' },
+        blockedReason: 'tool_arguments_empty',
+        parentMessageId: 'assistant-msg-1',
+        toolsCalling: [createToolCall()],
+      },
+      type: 'resolve_blocked_tools',
+    };
+
+    const result = await resolveBlockedTools(host)(instruction, createState());
+
+    expect(host.transports.messages.createToolMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'rejection naming tool-call-1' }),
+    );
+    expect(result.newState.messages).toContainEqual(
+      expect.objectContaining({ content: 'rejection naming tool-call-1', role: 'tool' }),
+    );
+  });
+
   // Without this write the rejection is lost: state messages are rebuilt from
   // the DB every step, and conversation-flow only collects a tool row whose
   // parent assistant lists the matching call.

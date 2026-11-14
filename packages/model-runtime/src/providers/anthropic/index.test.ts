@@ -2,8 +2,8 @@
 import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFactory';
-import * as anthropicHelpers from '../../core/contextBuilders/anthropic';
+import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatible';
+import * as anthropicHelpers from '../../core/protocols/anthropicMessages/messages';
 import type { ChatCompletionTool, ChatStreamPayload } from '../../types/chat';
 import * as debugStreamModule from '../../utils/debugStream';
 import { LobeAnthropicAI } from './index';
@@ -554,7 +554,7 @@ describe('LobeAnthropicAI', () => {
         vi.spyOn(customInstance['client'].messages, 'create').mockRejectedValue(apiError);
 
         // Act & Assert
-        // anthropicCompatibleFactory normalizes the `/v1` suffix away (see #14960),
+        // anthropicCompatible normalizes the `/v1` suffix away (see #14960),
         // then desensitizeUrl reconstructs via the WHATWG URL parser which always
         // emits a trailing `/` in the pathname.
         await expect(

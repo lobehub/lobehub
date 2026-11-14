@@ -5,7 +5,7 @@ import { SANDBOX_DRIVE_ROOT } from '@lobechat/builtin-tool-cloud-sandbox';
 import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { FolderIcon, FolderOpenIcon, HomeIcon } from 'lucide-react';
+import { FolderIcon, FolderOpenIcon, HomeIcon, ServerIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -14,15 +14,9 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { sandboxStorageService } from '@/services/sandboxStorage';
 
 import OptionRow from './OptionRow';
+import SubmenuHeader from './SubmenuHeader';
 
 const styles = stylex.create({
-  header: {
-    paddingBlock: '4px',
-    paddingInline: '8px',
-    fontSize: '12px',
-    fontWeight: 500,
-    color: cssVar.colorTextSecondary,
-  },
   hint: {
     paddingInline: '8px',
     fontSize: '12px',
@@ -42,6 +36,8 @@ export interface SandboxDriveFolderPick {
 interface SandboxDriveMenuProps {
   /** Opens the full directory browser, for folders this short list does not reach. */
   onBrowse: () => void;
+  /** Leaves the menu for Sandbox Storage, where the drives are browsed and managed. */
+  onOpenStorage: () => void;
   onPick: (pick: SandboxDriveFolderPick) => void;
   /** The label of a pick the list cannot show: a nested folder, or another drive. */
   selectedLabel?: string;
@@ -55,7 +51,7 @@ interface SandboxDriveMenuProps {
  * fetched once the row is opened.
  */
 const SandboxDriveMenu = memo<SandboxDriveMenuProps>(
-  ({ onBrowse, onPick, selectedLabel, selectedPath }) => {
+  ({ onBrowse, onOpenStorage, onPick, selectedLabel, selectedPath }) => {
     const { t } = useTranslation(['chat', 'device']);
     const workspaceId = useActiveWorkspaceId();
     // The public drive's root is not a place to work, so a workspace starts on
@@ -76,7 +72,14 @@ const SandboxDriveMenu = memo<SandboxDriveMenuProps>(
 
     return (
       <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
-        <div {...stylex.props(styles.header)}>{t('sandboxDrive.title')}</div>
+        <SubmenuHeader
+          title={t('sandboxDrive.title')}
+          action={{
+            icon: ServerIcon,
+            label: t('sandboxDrive.openStorage'),
+            onClick: onOpenStorage,
+          }}
+        />
 
         <div {...stylex.props(styles.list)}>
           {selectedLabel && !listed && (
