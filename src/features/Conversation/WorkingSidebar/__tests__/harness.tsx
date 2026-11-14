@@ -354,6 +354,19 @@ vi.mock('@/helpers/executionTarget', () => ({
   },
 }));
 vi.mock('@/helpers/gatewayMode', () => ({ useIsGatewayModeEnabled: () => false }));
+// Every suite renders the sidebar with MCP Apps off: the flag lives in the
+// server-config store, which needs its provider, and app discovery is covered
+// on its own (it would pull the whole tool store into the sidebar's import)
+vi.mock('@/store/serverConfig', () => ({
+  getServerConfigStoreState: () => undefined,
+  serverConfigSelectors: { enableMcpApps: () => false },
+  useServerConfigStore: () => false,
+}));
+vi.mock('@/features/MCPApp/useMcpAppEntrypoints', () => ({ useMcpAppEntrypoints: () => [] }));
+vi.mock('../McpEntryTabLabel', () => ({
+  McpEntryTabIcon: () => null,
+  McpEntryTabLabel: () => null,
+}));
 vi.mock('@/const/version', () => ({
   get isDesktop() {
     return platform.isDesktop;
