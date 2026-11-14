@@ -759,6 +759,105 @@ describe('AnthropicStream', () => {
     ]);
   });
 
+  describe('server tools', () => {
+    // `server_tool_use` (Anthropic's native web search) shared the `tool_use` branch, so a search
+    // Anthropic runs itself reached the app as a `web_search` tool call and was rejected (#22615).
+    const start = (index: number, content_block: object) => ({
+      content_block,
+      index,
+      type: 'content_block_start',
+    });
+    const delta = (index: number, delta: object) => ({ delta, index, type: 'content_block_delta' });
+    const input = (index: number, partial_json: string) =>
+      delta(index, { partial_json, type: 'input_json_delta' });
+    const search = (index: number) => [
+      start(index, { id: 'srvtoolu_01', input: {}, name: 'web_search', type: 'server_tool_use' }),
+      input(index, '{"query": "lobehub"}'),
+    ];
+    const tool = (index: number, name: string, ...parts: string[]) => [
+      start(index, { id: `toolu_${index}`, input: {}, name, type: 'tool_use' }),
+      ...parts.map((part) => input(index, part)),
+    ];
+
+    const run = async (blocks: object[]) => {
+      const onToolsCalling = vi.fn();
+      const usage = { input_tokens: 1, output_tokens: 1 };
+      const stream = AnthropicStream(
+        createReadableStream([
+          createMessageStart('msg', 'claude', usage),
+          ...blocks,
+          { type: 'message_stop' },
+        ]),
+        { callbacks: { onToolsCalling } },
+      );
+      let text = '';
+      // @ts-ignore
+      for await (const chunk of stream) text += new TextDecoder().decode(chunk);
+
+      const events = text
+        .split('\n\n')
+        .filter(Boolean)
+        .map((sse) => {
+          const [, event, data] = sse.split('\n');
+          return { data: JSON.parse(data.slice(6)), event: event.slice(7) };
+        });
+      const calls = events.filter((e) => e.event === 'tool_calls').flatMap((e) => e.data);
+      const args: Record<number, string> = {};
+      for (const call of calls)
+        args[call.index] = (args[call.index] ?? '') + call.function.arguments;
+
+      return {
+        args,
+        events,
+        names: calls.map((call) => call.function.name).filter(Boolean),
+        onToolsCalling,
+      };
+    };
+
+    it('does not report a native web search as a tool call', async () => {
+      const { args, events, onToolsCalling } = await run([
+        ...search(0),
+        start(1, { content: [], tool_use_id: 'srvtoolu_01', type: 'web_search_tool_result' }),
+        start(2, { text: '', type: 'text' }),
+        delta(2, { text: 'Found it.', type: 'text_delta' }),
+        delta(2, {
+          citation: { title: 'LobeHub', url: 'https://lobehub.com' },
+          type: 'citations_delta',
+        }),
+      ]);
+
+      expect(args).toEqual({});
+      expect(onToolsCalling).not.toHaveBeenCalled();
+      expect(events).toContainEqual({ data: 'Found it.', event: 'text' });
+      expect(events).toContainEqual({
+        data: { citations: [{ title: 'LobeHub', url: 'https://lobehub.com' }] },
+        event: 'grounding',
+      });
+    });
+
+    it('numbers app tool calls around web searches densely, each with its own arguments', async () => {
+      const { args, names } = await run([
+        ...search(0),
+        ...tool(1, 'weather____current', '{"city": ', '"Paris"}'),
+        ...search(2),
+        ...tool(3, 'weather____forecast', '{"days": 3}'),
+      ]);
+
+      expect(names).toEqual(['weather____current', 'weather____forecast']);
+      expect(args).toEqual({ 0: '{"city": "Paris"}', 1: '{"days": 3}' });
+    });
+
+    it('keeps an app tool call intact when a relay reuses its block index for web searches', async () => {
+      const { args, names } = await run([
+        ...search(0),
+        ...tool(0, 'weather____current', '{"city": "Oslo"}'),
+        ...search(0),
+      ]);
+
+      expect(names).toEqual(['weather____current']);
+      expect(args).toEqual({ 0: '{"city": "Oslo"}' });
+    });
+  });
   it('should handle un-normal block type', async () => {
     const streams = [
       createMessageStart('msg_01MNsLe7n1uVLtu6W8rCFujD', 'claude-3-7-sonnet-20250219', {
