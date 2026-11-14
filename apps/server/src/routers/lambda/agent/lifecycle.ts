@@ -15,6 +15,7 @@ import { TrashService } from '@/server/services/trash';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from '../_helpers/assertWorkspaceRowManageable';
+import { assertCanWriteTeamPin } from '../_helpers/sidebarPin';
 import { agentProcedure } from './procedures';
 
 export const lifecycleRouter = router({
@@ -289,6 +290,14 @@ export const lifecycleRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // A public workspace row's pin is the team pin every member sees, so it
+      // is owner/admin-only. A private row is visible to its creator alone, so
+      // its pin stays personal and any role that can update it may write it.
+      if (ctx.workspaceId) {
+        const meta = await ctx.agentModel.getAgentVisibilityMeta(input.id);
+        if (!meta) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+        if (meta.visibility !== 'private') await assertCanWriteTeamPin(ctx);
+      }
       return ctx.agentModel.update(input.id, { pinned: input.pinned });
     }),
 });

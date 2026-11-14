@@ -210,15 +210,26 @@ export const getTopicShareSubject = async (
 export const getAgentVisibilityMeta = async (
   ctx: AgentModelContext,
   id: string,
-): Promise<{ slug: string | null; userId: string; visibility: 'private' | 'public' } | null> => {
+): Promise<{
+  pinned: boolean;
+  slug: string | null;
+  userId: string;
+  visibility: 'private' | 'public';
+} | null> => {
   const rows = await ctx.db
-    .select({ slug: agents.slug, userId: agents.userId, visibility: agents.visibility })
+    .select({
+      pinned: agents.pinned,
+      slug: agents.slug,
+      userId: agents.userId,
+      visibility: agents.visibility,
+    })
     .from(agents)
     .where(and(eq(agents.id, id), ctx.ownership()))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
   return {
+    pinned: !!row.pinned,
     slug: row.slug,
     userId: row.userId,
     visibility: row.visibility,

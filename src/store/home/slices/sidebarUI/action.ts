@@ -9,10 +9,22 @@ import { getAgentStoreState } from '@/store/agent';
 import { evictMessageCache } from '@/store/chat/utils/evictMessageCache';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
+import { getUserStoreState } from '@/store/user';
 import { type SessionGroupItemBase } from '@/types/session';
 import { setNamespace } from '@/utils/storeDebug';
 
 const n = setNamespace('sidebarUI');
+
+/** Upper bound for one member's personal pin list (mirrors the server cap). */
+export const MAX_SIDEBAR_PINNED_ITEMS = 200;
+
+export interface PersonalPinTarget {
+  id: string;
+  /** Current value of the row's own `pinned` column. */
+  pinned?: boolean | null;
+  type: 'agent' | 'group';
+  visibility?: 'private' | 'public' | null;
+}
 
 type Setter = StoreSetter<HomeStore>;
 export const createSidebarUISlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>
@@ -70,10 +82,11 @@ export class SidebarUIActionImpl {
     return result.groupId;
   };
 
-  // Pinning is part of the SHARED sidebar arrangement in workspace mode — it
-  // writes the same `agents.pinned` / `chat_groups.pinned` columns as personal
-  // mode, so every member sees the same pinned section. A member who doesn't
-  // want an item in their own sidebar hides it instead (personal layer).
+  // Writes the `agents.pinned` / `chat_groups.pinned` column. In personal
+  // mode that is the user's own pin. In a workspace it is the TEAM pin on a
+  // public row (owner/admin only, enforced server-side) and the creator's own
+  // pin on a private row (only they can see it). Members pin public rows for
+  // themselves through `pinItemForMe` instead.
   pinAgent = async (agentId: string, pinned: boolean): Promise<void> => {
     await agentService.updateAgentPinned(agentId, pinned);
     await this.#get().refreshAgentList();
@@ -82,6 +95,34 @@ export class SidebarUIActionImpl {
   pinAgentGroup = async (groupId: string, pinned: boolean): Promise<void> => {
     await chatGroupService.updateGroup(groupId, { pinned });
     await this.#get().refreshAgentList();
+  };
+
+  /**
+   * Pin / unpin an Agent or chat group for the current member only, in the
+   * merged workspace Agents section. The member's pin order lives in their
+   * `sidebarPinnedItemIds` preference (newest first); the shared column on a
+   * public row is the team pin and is left alone. A private row additionally
+   * keeps its own column in sync — only its creator can see it, earlier
+   * clients read it as the pin, and a rollback keeps showing it. Unpinning
+   * clears both places.
+   */
+  pinItemForMe = async (item: PersonalPinTarget, pinned: boolean): Promise<void> => {
+    const userStore = getUserStoreState();
+    const current = userStore.workspaceUserPreference.sidebarPinnedItemIds ?? [];
+    const isPrivate = item.visibility === 'private';
+    const writeColumn = (value: boolean) =>
+      item.type === 'group' ? this.pinAgentGroup(item.id, value) : this.pinAgent(item.id, value);
+
+    const nextIds = pinned
+      ? [item.id, ...current.filter((id) => id !== item.id)].slice(0, MAX_SIDEBAR_PINNED_ITEMS)
+      : current.filter((id) => id !== item.id);
+    const listChanged =
+      nextIds.length !== current.length || nextIds.some((id, i) => id !== current[i]);
+
+    if (listChanged) {
+      await userStore.updateWorkspaceUserPreference({ sidebarPinnedItemIds: nextIds });
+    }
+    if (isPrivate && !!item.pinned !== pinned) await writeColumn(pinned);
   };
 
   removeAgent = async (agentId: string): Promise<void> => {

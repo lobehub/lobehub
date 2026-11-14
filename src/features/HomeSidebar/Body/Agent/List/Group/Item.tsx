@@ -16,11 +16,13 @@ import * as stylex from '@stylexjs/stylex';
 import { HashIcon } from 'lucide-react';
 import React, { memo, useCallback, useMemo, useState } from 'react';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useHomeStore } from '@/store/home';
 
 import { useCreateMenuItems } from '../../../../hooks';
 import { useAgentModal } from '../../ModalProvider';
 import SessionList from '../List';
+import PrivateLockIcon from '../PrivateLockIcon';
 import Actions from './Actions';
 import { useGroupDropdownMenu } from './useDropdownMenu';
 
@@ -29,6 +31,8 @@ const styles = stylex.create({ item: { paddingInlineStart: '14px' } });
 const GroupItem = memo<SidebarGroup>(({ items, id, name, visibility }) => {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const isUpdating = useHomeStore((s) => s.groupUpdatingId === id);
+  // Public and private folders share one Agents section in a workspace.
+  const isPrivateFolder = !!useActiveWorkspaceId() && visibility === 'private';
 
   // Modal management
   const { openConfigGroupModal } = useAgentModal();
@@ -66,6 +70,7 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name, visibility }) => {
                 {groupIcon}
                 <Text ellipsis fontSize={12} style={{ flex: 1 }} type={'secondary'} weight={500}>
                   {name}
+                  {isPrivateFolder && <PrivateLockIcon />}
                 </Text>
               </Flexbox>
             </AccordionTrigger>

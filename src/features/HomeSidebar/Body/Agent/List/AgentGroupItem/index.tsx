@@ -12,7 +12,9 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 
+import { useSidebarPinState } from '../../useSidebarPinState';
 import Actions from '../Item/Actions';
+import PrivateLockIcon from '../PrivateLockIcon';
 import { useGroupDropdownMenu } from './useDropdownMenu';
 
 interface GroupItemProps {
@@ -23,9 +25,11 @@ interface GroupItemProps {
 }
 
 const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) => {
-  const { id, avatar, backgroundColor, description, title, pinned, userId } = item;
+  const { id, avatar, backgroundColor, description, title, pinned, userId, visibility } = item;
   const { t } = useTranslation('chat');
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const { isMyPinned, isPrivate, isTeamPinned } = useSidebarPinState({ id, pinned, visibility });
+  const showPinIcon = isTeamPinned || isMyPinned;
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
 
@@ -43,6 +47,7 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
       <Tag size={'small'} style={{ flexShrink: 0 }}>
         {t('group.title')}
       </Tag>
+      {isPrivate && <PrivateLockIcon />}
     </Flexbox>
   );
 
@@ -73,10 +78,10 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
   // Memoize pin icon
   const pinIcon = useMemo(
     () =>
-      pinned ? (
+      showPinIcon ? (
         <ActionIcon icon={PinIcon} size={12} style={{ opacity: 0.5, pointerEvents: 'none' }} />
       ) : undefined,
-    [pinned],
+    [showPinIcon],
   );
 
   // Memoize avatar icon (show loader when updating)
@@ -113,6 +118,7 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
     pinned: pinned ?? false,
     title: displayTitle,
     userId,
+    visibility,
   });
 
   return (

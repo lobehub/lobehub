@@ -4,36 +4,25 @@ import { buildRevealSidebarSectionPatch } from './useRevealSidebarSection';
 
 describe('buildRevealSidebarSectionPatch ', () => {
   it('expands a collapsed section', () => {
-    // Stale persisted keys from before the Private section shipped.
-    expect(buildRevealSidebarSectionPatch('private', ['recents', 'agent'], [])).toEqual({
-      sidebarExpandedKeys: ['recents', 'agent', 'private'],
+    expect(buildRevealSidebarSectionPatch('agent', ['recents'], [])).toEqual({
+      sidebarExpandedKeys: ['recents', 'agent'],
     });
   });
 
   it('un-hides a hidden section', () => {
-    expect(
-      buildRevealSidebarSectionPatch('private', ['recents', 'agent', 'private'], ['private']),
-    ).toEqual({
+    expect(buildRevealSidebarSectionPatch('agent', ['recents', 'agent'], ['agent'])).toEqual({
       hiddenSidebarSections: [],
     });
   });
 
   it('expands and un-hides in one patch', () => {
-    expect(buildRevealSidebarSectionPatch('private', ['agent'], ['recents', 'private'])).toEqual({
+    expect(buildRevealSidebarSectionPatch('agent', ['favorites'], ['recents', 'agent'])).toEqual({
       hiddenSidebarSections: ['recents'],
-      sidebarExpandedKeys: ['agent', 'private'],
+      sidebarExpandedKeys: ['favorites', 'agent'],
     });
   });
 
   it('returns null when the section is already visible', () => {
-    expect(
-      buildRevealSidebarSectionPatch('private', ['recents', 'agent', 'private'], ['recents']),
-    ).toBeNull();
-  });
-
-  it('handles the workspace (agent) section for the publish direction', () => {
-    expect(buildRevealSidebarSectionPatch('agent', ['recents', 'private'], [])).toEqual({
-      sidebarExpandedKeys: ['recents', 'private', 'agent'],
-    });
+    expect(buildRevealSidebarSectionPatch('agent', ['recents', 'agent'], ['recents'])).toBeNull();
   });
 });

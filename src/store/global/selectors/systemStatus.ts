@@ -207,24 +207,26 @@ const hiddenSidebarSections =
       const overlay = s.status.workspace?.hiddenSidebarSections;
       // Once the user touches sidebar visibility in this workspace the overlay
       // owns the list — including an explicit empty array meaning "show all".
-      if (overlay !== undefined) return overlay;
+      if (overlay !== undefined) return normalizeLegacyHiddenSections(overlay);
       // Untouched workspace: inherit any personal-mode hides and layer the
       // workspace defaults on top so `recents` starts collapsed.
       const personal = s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS;
-      const merged = [...personal];
+      const merged = [...normalizeLegacyHiddenSections(personal)];
       for (const k of WORKSPACE_DEFAULT_HIDDEN_SECTIONS) {
         if (!merged.includes(k)) merged.push(k);
       }
       return merged;
     }
-    return s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS;
+    return normalizeLegacyHiddenSections(s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS);
   };
 
 const sidebarExpandedKeys =
   (workspaceId: string | null) =>
   (s: GlobalState): string[] =>
-    readOverridableField(s.status, 'sidebarExpandedKeys', workspaceId) ??
-    DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS;
+    normalizeLegacyExpandedKeys(
+      readOverridableField(s.status, 'sidebarExpandedKeys', workspaceId) ??
+        DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
+    );
 
 /** Sentinel id representing the flex spacer slot. Its position in `sidebarItems`
  * determines where the sidebar pushes items to the bottom. */
@@ -238,7 +240,6 @@ export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   'resource',
   'favorites',
   'recents',
-  'private',
   'agent',
   SIDEBAR_SPACER_ID,
   'image',
@@ -246,10 +247,54 @@ export const DEFAULT_SIDEBAR_ITEMS: string[] = [
   'memory',
 ];
 
-/** Items that must stay contiguous in the sidebar list (accordion block).
- * `private` sits above `agent` so workspace users see their personal items
- * first, with the workspace-shared agents right below. */
-export const SIDEBAR_ACCORDION_KEYS = new Set(['favorites', 'recents', 'private', 'agent']);
+/** Items that must stay contiguous in the sidebar list (accordion block). */
+export const SIDEBAR_ACCORDION_KEYS = new Set(['favorites', 'recents', 'agent']);
+
+/**
+ * Section key of the former workspace "Private" accordion. It was merged into
+ * the single "Agents" (`agent`) section; saved layouts may still carry it.
+ */
+export const LEGACY_PRIVATE_SECTION_KEY = 'private';
+const AGENT_SECTION_KEY = 'agent';
+
+/**
+ * Map a saved section order onto the merged Agents section: `private` is
+ * dropped, and when the order has no `agent` yet, `agent` takes the slot
+ * `private` held. Returns the input reference when nothing changes.
+ */
+export const normalizeLegacyAgentItems = (items: string[]): string[] => {
+  const privateIndex = items.indexOf(LEGACY_PRIVATE_SECTION_KEY);
+  if (privateIndex === -1) return items;
+
+  if (items.includes(AGENT_SECTION_KEY)) {
+    return items.filter((key) => key !== LEGACY_PRIVATE_SECTION_KEY);
+  }
+  const next = [...items];
+  next[privateIndex] = AGENT_SECTION_KEY;
+  return next.filter((key) => key !== LEGACY_PRIVATE_SECTION_KEY);
+};
+
+/**
+ * Hidden sections: `private` no longer exists and the Agents section is always
+ * shown, so the key is simply dropped.
+ */
+export const normalizeLegacyHiddenSections = (hidden: string[]): string[] =>
+  hidden.includes(LEGACY_PRIVATE_SECTION_KEY)
+    ? hidden.filter((key) => key !== LEGACY_PRIVATE_SECTION_KEY)
+    : hidden;
+
+/**
+ * Expanded sections: the merged Agents section stays expanded when either of
+ * the two former sections was.
+ */
+export const normalizeLegacyExpandedKeys = (keys: string[]): string[] => {
+  if (!keys.includes(LEGACY_PRIVATE_SECTION_KEY)) return keys;
+
+  const withoutPrivate = keys.filter((key) => key !== LEGACY_PRIVATE_SECTION_KEY);
+  return withoutPrivate.includes(AGENT_SECTION_KEY)
+    ? withoutPrivate
+    : [...withoutPrivate, AGENT_SECTION_KEY];
+};
 
 const DEFAULT_BOTTOM_KEYS = new Set(
   DEFAULT_SIDEBAR_ITEMS.slice(DEFAULT_SIDEBAR_ITEMS.indexOf(SIDEBAR_SPACER_ID) + 1),
@@ -425,12 +470,13 @@ const sidebarItems =
   (workspaceId: string | null) =>
   (s: GlobalState): string[] => {
     const items = readOverridableField(s.status, 'sidebarItems', workspaceId);
-    if (items && items.length > 0) return withAllKnownKeys(items);
+    if (items && items.length > 0) return withAllKnownKeys(normalizeLegacyAgentItems(items));
 
     // Migrate from the legacy `sidebarSectionOrder` (canary) which only stored the
     // accordion order (e.g. ['agent', 'recents']). Apply that order to the accordion
     // slot inside the default list so users keep their custom accordion arrangement.
-    const legacy = s.status.sidebarSectionOrder;
+    const legacy =
+      s.status.sidebarSectionOrder && normalizeLegacyAgentItems(s.status.sidebarSectionOrder);
     if (legacy && legacy.length > 0) {
       const legacyAcc = legacy.filter((k) => SIDEBAR_ACCORDION_KEYS.has(k));
       if (legacyAcc.length > 0) {

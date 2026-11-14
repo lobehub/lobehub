@@ -3,6 +3,10 @@ import isEqual from 'fast-deep-equal';
 import { useEffect } from 'react';
 
 import { useGlobalStore } from '@/store/global';
+import {
+  normalizeLegacyAgentItems,
+  normalizeLegacyHiddenSections,
+} from '@/store/global/selectors/systemStatus';
 import { useUserStore } from '@/store/user';
 import { workspaceUserSettingsSelectors } from '@/store/user/selectors';
 
@@ -31,13 +35,32 @@ export const useSyncWorkspaceSidebarPreference = (workspaceId: string | null) =>
     // before that, `serverSidebar` may be the previous workspace's value (or
     // an unfetched placeholder) and must not be pulled or cleared from.
     if (!workspaceId || loadedWorkspaceId !== workspaceId) return;
+    // Saved layouts may still name the former "Private" section, merged into
+    // "Agents" since. Normalize on the way in so the sidebar renders one
+    // Agents section, and write the merged layout back once so the stored
+    // preference stops carrying the legacy key. (The push effect below only
+    // reacts to later overlay edits, so it would not persist this on its own.)
+    const items = serverSidebar?.items ? normalizeLegacyAgentItems(serverSidebar.items) : undefined;
+    const hiddenSections = serverSidebar?.hiddenSections
+      ? normalizeLegacyHiddenSections(serverSidebar.hiddenSections)
+      : undefined;
+
     // Replace wholesale: a field the server preference does not carry must be
     // DELETED from the shared overlay bucket (not left behind by a deep
     // merge), or the previous workspace's layout leaks into this one.
     useGlobalStore.getState().setWorkspaceSidebarOverlay({
-      hiddenSidebarSections: serverSidebar?.hiddenSections,
-      sidebarItems: serverSidebar?.items,
+      hiddenSidebarSections: hiddenSections,
+      sidebarItems: items,
     });
+
+    if (items !== serverSidebar?.items || hiddenSections !== serverSidebar?.hiddenSections) {
+      void useUserStore.getState().updateWorkspaceUserPreference({
+        sidebar: {
+          ...(hiddenSections ? { hiddenSections } : {}),
+          ...(items ? { items } : {}),
+        },
+      });
+    }
   }, [workspaceId, serverSidebar, loadedWorkspaceId]);
 
   // Push: persist local overlay edits (and seed the server from a
