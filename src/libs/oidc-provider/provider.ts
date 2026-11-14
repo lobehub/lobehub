@@ -15,6 +15,7 @@ import { findSiteForOrigin } from '@/server/services/projectReview/sites';
 import {
   accessTokenTTL,
   defaultResourceFor,
+  expiresWithSession,
   extensionCorsDecision,
   extensionGrantScopes,
   extensionResourceServer,
@@ -317,6 +318,8 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
         return interactionUrl;
       },
     },
+
+    expiresWithSession: async (_ctx, source) => expiresWithSession(source),
 
     issueRefreshToken: async (_ctx, client, source) => issuesRefreshToken(client, source.scopes),
 

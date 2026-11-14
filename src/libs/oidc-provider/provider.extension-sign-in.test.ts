@@ -35,7 +35,7 @@ vi.mock('@/database/models/user', () => ({
 }));
 
 vi.mock('@/libs/oidc-provider/adapter', () => {
-  const store = new Map<string, any>();
+  const store = ((globalThis as any).oidcTestStore = new Map<string, any>());
   const key = (model: string, id: string) => `${model}:${id}`;
 
   class MemoryAdapter {
@@ -77,6 +77,13 @@ let provider: Awaited<ReturnType<typeof createOIDCProvider>>;
 let server: Server;
 let origin: string;
 
+const stored = (model: string) =>
+  [...((globalThis as any).oidcTestStore as Map<string, unknown>).keys()].filter((key) =>
+    key.startsWith(`${model}:`),
+  );
+
+let loginAs = USER_ID;
+
 const browser = () => {
   const jar = new Map<string, string>();
   const visit = async (path: string) => {
@@ -93,7 +100,7 @@ const browser = () => {
     const next = location ? new URL(location, origin) : undefined;
     return { next, status: response.status };
   };
-  return { visit };
+  return { jar, visit };
 };
 
 const authorize = (extra: Record<string, string> = {}) => {
@@ -145,11 +152,34 @@ beforeAll(async () => {
   provider = await createOIDCProvider({} as any);
   const handle = provider.callback();
   server = createServer(async (req, res) => {
-    if (!req.url?.startsWith(SIGN_IN_PATH)) return handle(req, res);
-    const location = await provider.interactionResult(req, res, {
-      login: { accountId: USER_ID, remember: true },
-    });
-    res.writeHead(303, { location }).end();
+    const login = req.url?.startsWith(SIGN_IN_PATH) || req.url?.startsWith('/test/login/');
+    if (login) {
+      const location = await provider.interactionResult(req, res, {
+        login: { accountId: loginAs, remember: true },
+      });
+      return void res.writeHead(303, { location }).end();
+    }
+    if (req.url?.startsWith('/test/consent/')) {
+      const details = await provider.interactionDetails(req, res);
+      const grant =
+        (details.grantId && (await provider.Grant.find(details.grantId))) ||
+        new provider.Grant({
+          accountId: details.session!.accountId,
+          clientId: details.params.client_id as string,
+        });
+      grant.addOIDCScope(((details.prompt.details.missingOIDCScope as string[]) ?? []).join(' '));
+      const resources = (details.prompt.details.missingResourceScopes ?? {}) as Record<
+        string,
+        string[]
+      >;
+      for (const [indicator, scopes] of Object.entries(resources))
+        grant.addResourceScope(indicator, scopes.join(' '));
+      const location = await provider.interactionResult(req, res, {
+        consent: { grantId: await grant.save() },
+      });
+      return void res.writeHead(303, { location }).end();
+    }
+    return handle(req, res);
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -205,6 +235,85 @@ describe('acceptance extension sign-in', () => {
     expect(consent.next?.pathname.startsWith('/oauth/consent/')).toBe(true);
   });
 
+  it('keeps the reviewer signed in after the browser session that started it is gone', async () => {
+    const { jar, visit } = browser();
+    const { path, verifier } = authorize();
+    const done = await visit((await visit((await visit(path)).next!.pathname)).next!.pathname);
+    const tokens = await exchange(done.next!.searchParams.get('code')!, verifier);
+
+    const sessionId = jar.get('_session')!.split('.')[0]!;
+    await (await provider.Session.find(sessionId))!.destroy();
+
+    const refreshed = await fetch(`${origin}/oidc/token`, {
+      body: new URLSearchParams({
+        client_id: ACCEPTANCE_EXTENSION_CLIENT_ID,
+        grant_type: 'refresh_token',
+        refresh_token: tokens.body.refresh_token!,
+      }),
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      method: 'POST',
+    });
+    expect(refreshed.status).toBe(200);
+  });
+
+  it('asks the web session who is signing in every time, and reuses the grant it made', async () => {
+    const { visit } = browser();
+    const first = authorize();
+    await visit((await visit((await visit(first.path)).next!.pathname)).next!.pathname);
+    const grants = stored('Grant').length;
+
+    const again = await visit(authorize().path);
+    expect(again.next?.pathname.startsWith(SIGN_IN_PATH)).toBe(true);
+    const done = await visit((await visit(again.next!.pathname)).next!.pathname);
+
+    expect(done.next?.origin + done.next!.pathname).toBe(REDIRECT_URI);
+    expect(stored('Grant')).toHaveLength(grants);
+  });
+
+  it('never carries a provider session over to another account', async () => {
+    const { visit } = browser();
+    await visit((await visit((await visit(authorize().path)).next!.pathname)).next!.pathname);
+
+    loginAs = 'user_other';
+    try {
+      const again = await visit(authorize().path);
+      const resumed = await visit((await visit(again.next!.pathname)).next!.pathname);
+
+      expect(resumed.next?.searchParams.get('code')).toBeFalsy();
+    } finally {
+      loginAs = USER_ID;
+    }
+  });
+
+  it('lets an extension build that asks for consent finish there with a refresh token', async () => {
+    const { visit } = browser();
+    const { path, verifier } = authorize({ prompt: 'consent' });
+    const consent = await visit((await visit((await visit(path)).next!.pathname)).next!.pathname);
+    const uid = consent.next!.pathname.split('/').pop()!;
+    const done = await visit((await visit(`/test/consent/${uid}`)).next!.pathname);
+
+    const tokens = await exchange(done.next!.searchParams.get('code')!, verifier);
+    expect(tokens.body.refresh_token).toEqual(expect.any(String));
+  });
+
+  it('still asks another client for consent after sign-in', async () => {
+    const { visit } = browser();
+    const verifier = randomBytes(32).toString('base64url');
+    const query = new URLSearchParams({
+      client_id: 'lobehub-desktop',
+      code_challenge: createHash('sha256').update(verifier).digest('base64url'),
+      code_challenge_method: 'S256',
+      redirect_uri: 'http://localhost:3210/oidc/callback/desktop',
+      response_type: 'code',
+      scope: 'openid profile',
+    });
+    const login = await visit(`/oidc/auth?${query}`);
+    const uid = login.next!.pathname.split('/').pop()!;
+    const consent = await visit((await visit(`/test/login/${uid}`)).next!.pathname);
+
+    expect(consent.next?.pathname.startsWith('/oauth/consent/')).toBe(true);
+  });
+
   it('keeps every other client on the consent page for sign-in', async () => {
     const { visit } = browser();
     const verifier = randomBytes(32).toString('base64url');
@@ -212,7 +321,7 @@ describe('acceptance extension sign-in', () => {
       client_id: 'lobehub-desktop',
       code_challenge: createHash('sha256').update(verifier).digest('base64url'),
       code_challenge_method: 'S256',
-      redirect_uri: 'http://localhost:3010/oidc/callback/desktop',
+      redirect_uri: 'http://localhost:3210/oidc/callback/desktop',
       response_type: 'code',
       scope: 'openid profile',
     });
