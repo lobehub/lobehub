@@ -1,5 +1,11 @@
 import type { QQAdapter } from '@lobechat/chat-adapter-qq';
-import { createQQAdapter, QQApiClient } from '@lobechat/chat-adapter-qq';
+import {
+  createQQAdapter,
+  isQQActiveRateLimited,
+  isQQDuplicateReply,
+  isQQPassiveExpired,
+  QQApiClient,
+} from '@lobechat/chat-adapter-qq';
 import type { Chat as ChatBot, Message } from 'chat';
 import debug from 'debug';
 
@@ -9,6 +15,7 @@ import {
   getRuntimeStatusErrorMessage,
   updateBotRuntimeStatus,
 } from '@/server/services/gateway/runtimeStatus';
+import { redisService } from '@/server/services/redis';
 
 import { stripMarkdown } from '../stripMarkdown';
 import {
@@ -22,6 +29,12 @@ import {
   type ValidationResult,
 } from '../types';
 import { formatUsageStats } from '../utils';
+import {
+  deferQQReply,
+  reserveQQReply,
+  sendQQMessageActive,
+  sendQQMessageInSlot,
+} from './passiveReply';
 import { sendQQAttachments } from './sendAttachments';
 
 const log = debug('bot-platform:qq:bot');
@@ -42,32 +55,40 @@ function extractThreadType(platformThreadId: string): string {
   return platformThreadId.split(':')[1] || 'group';
 }
 
+/**
+ * Text send, cheapest transport first: a passive reply inside the inbound message's window, then
+ * an active message (QQ accepts those, rate limited per bot and per group), and only when both are
+ * unavailable park the text for the next inbound message.
+ */
 async function sendQQMessage(
   api: QQApiClient,
+  applicationId: string,
+  platformThreadId: string,
   threadType: string,
   targetId: string,
   content: string,
 ): Promise<void> {
-  switch (threadType) {
-    case 'group': {
-      await api.sendGroupMessage(targetId, content);
+  const slot = await reserveQQReply(applicationId, platformThreadId, threadType);
+
+  if (slot) {
+    try {
+      await sendQQMessageInSlot(api, threadType, targetId, content, slot);
       return;
+    } catch (error) {
+      if (isQQDuplicateReply(error)) return;
+      if (!isQQPassiveExpired(error)) throw error;
+
+      log('passive window refused a reply in %s, retrying as active', platformThreadId);
     }
-    case 'guild': {
-      await api.sendGuildMessage(targetId, content);
-      return;
-    }
-    case 'c2c': {
-      await api.sendC2CMessage(targetId, content);
-      return;
-    }
-    case 'dms': {
-      await api.sendDmsMessage(targetId, content);
-      return;
-    }
-    default: {
-      await api.sendGroupMessage(targetId, content);
-    }
+  }
+
+  try {
+    await sendQQMessageActive(api, threadType, targetId, content);
+  } catch (error) {
+    if (!isQQActiveRateLimited(error)) throw error;
+
+    log('active-message quota exhausted in %s, deferring', platformThreadId);
+    await deferQQReply(applicationId, platformThreadId, content);
   }
 }
 
@@ -258,12 +279,14 @@ class QQGatewayClient implements PlatformClient {
       qq: createQQAdapter({
         appId: this.config.applicationId,
         clientSecret: this.config.credentials.appSecret,
+        passiveStore: redisService.qqPassive,
       }),
     };
   }
 
   getMessenger(platformThreadId: string): PlatformMessenger {
     const api = new QQApiClient(this.config.applicationId, this.config.credentials.appSecret);
+    const applicationId = this.config.applicationId;
     const targetId = extractChatId(platformThreadId);
     const threadType = extractThreadType(platformThreadId);
     return {
@@ -274,11 +297,18 @@ class QQGatewayClient implements PlatformClient {
           await sendQQAttachments(api, threadType, targetId, attachments, text);
           return;
         }
-        await sendQQMessage(api, threadType, targetId, text);
+        await sendQQMessage(api, applicationId, platformThreadId, threadType, targetId, text);
       },
       editMessage: (_messageId, content) =>
         // QQ does not support editing — send a new message as fallback
-        sendQQMessage(api, threadType, targetId, messengerContentText(content)),
+        sendQQMessage(
+          api,
+          applicationId,
+          platformThreadId,
+          threadType,
+          targetId,
+          messengerContentText(content),
+        ),
       // QQ Bot API doesn't support reactions or typing
       removeReaction: () => Promise.resolve(),
     };
@@ -366,12 +396,14 @@ class QQWebhookClient implements PlatformClient {
       qq: createQQAdapter({
         appId: this.config.applicationId,
         clientSecret: this.config.credentials.appSecret,
+        passiveStore: redisService.qqPassive,
       }),
     };
   }
 
   getMessenger(platformThreadId: string): PlatformMessenger {
     const api = new QQApiClient(this.config.applicationId, this.config.credentials.appSecret);
+    const applicationId = this.config.applicationId;
     const targetId = extractChatId(platformThreadId);
     const threadType = extractThreadType(platformThreadId);
     return {
@@ -382,10 +414,17 @@ class QQWebhookClient implements PlatformClient {
           await sendQQAttachments(api, threadType, targetId, attachments, text);
           return;
         }
-        await sendQQMessage(api, threadType, targetId, text);
+        await sendQQMessage(api, applicationId, platformThreadId, threadType, targetId, text);
       },
       editMessage: (_messageId, content) =>
-        sendQQMessage(api, threadType, targetId, messengerContentText(content)),
+        sendQQMessage(
+          api,
+          applicationId,
+          platformThreadId,
+          threadType,
+          targetId,
+          messengerContentText(content),
+        ),
       removeReaction: () => Promise.resolve(),
     };
   }
