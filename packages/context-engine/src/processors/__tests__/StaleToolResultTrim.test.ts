@@ -409,9 +409,12 @@ describe('StaleToolResultTrimProcessor', () => {
     // the recency tail (keepRecentMessages=3 in createProcessor), so the stale
     // read is a trim candidate; the last two entries fix the turn-boundary
     // timestamps the warmth gate reads.
-    const turnMessages = (staleChars: number, gapMs: number) => [
+    const turnMessages = (staleChars: number, gapMs: number, liveChars = 0) => [
       readFileResult('/a.ts', 'x'.repeat(staleChars), [0, 200]),
       writeFileResult('/a.ts'),
+      ...(liveChars > 0
+        ? [{ content: 'z'.repeat(liveChars), id: 'big-live-doc', role: 'assistant' }]
+        : []),
       { content: 'filler 1', id: 'f1', role: 'assistant' },
       { content: 'filler 2', id: 'f2', role: 'assistant' },
       { content: 'filler 3', id: 'f3', role: 'assistant' },
@@ -439,16 +442,13 @@ describe('StaleToolResultTrimProcessor', () => {
     });
 
     it('skips the trim on a warm follow-up when savings are small relative to the payload', async () => {
-      // Large live payload (untrimmed) + small stale read: the rewrite of ~500k
-      // chars at write price dwarfs 20 estimated steps of 5k-char savings.
+      // Large live payload after the stale read + small saving: rewriting the
+      // ~500k chars behind it at write price dwarfs 20 steps of 5k-char savings.
       const result = await createProcessor().process(
-        createContext([
-          { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' },
-          ...turnMessages(5000, 1 * MIN),
-        ]),
+        createContext(turnMessages(5000, 1 * MIN, 500_000)),
       );
 
-      expect(result.messages[1].content).toBe('x'.repeat(5000));
+      expect(result.messages[0].content).toBe('x'.repeat(5000));
       expect(result.metadata.staleToolResultTrim).toMatchObject({
         cacheWarm: true,
         gapMs: 60_000,
@@ -476,9 +476,9 @@ describe('StaleToolResultTrimProcessor', () => {
     // disable the warmth gate (always "cold").
     it('reads numeric epoch-ms timestamps for the warmth check', async () => {
       const messages = [
-        { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' },
         readFileResult('/a.ts', 'x'.repeat(5000), [0, 200]),
         writeFileResult('/a.ts'),
+        { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' },
         { content: 'filler', id: 'f1', role: 'assistant' },
         { content: 'filler', id: 'f2', role: 'assistant' },
         { content: 'filler', id: 'f3', role: 'assistant' },
@@ -552,6 +552,169 @@ describe('StaleToolResultTrimProcessor', () => {
 
       expect(result.messages[0].content).toBe('x'.repeat(3000));
       expect(result.metadata.staleToolResultTrim?.trimmedMessages ?? 0).toBe(0);
+    });
+  });
+
+  // Regression: a cold turn trimmed old results and the cache stored
+  // the trimmed bytes; the next warm follow-up failed the break-even for its
+  // new candidates and fell back to the untrimmed history, restoring the full
+  // text and invalidating the cache from the first restored result.
+  describe('sticky trims across turns', () => {
+    const T0 = Date.parse('2026-09-20T08:00:00Z');
+    const MIN = 60_000;
+    const at = (ms: number) => new Date(ms).toISOString();
+    const fillers = (prefix: string) =>
+      Array.from({ length: 3 }, (_, i) => ({
+        content: `${prefix} filler ${i}`,
+        id: `${prefix}-f${i}`,
+        role: 'assistant',
+      }));
+
+    it('keeps an earlier turn’s trims on a warm follow-up that skips new trims', async () => {
+      const messages = [
+        readFileResult('/a.ts', 'x'.repeat(5000), [0, 200]),
+        writeFileResult('/a.ts'),
+        ...fillers('t1'),
+        previousTurnMessage(at(T0)),
+        // Turn 1 starts after a cold gap, so its trim of /a.ts is free.
+        { content: 'turn 1', createdAt: at(T0 + 10 * MIN), id: 'u1', role: 'user' },
+        ...fillers('t1-run'),
+        readFileResult('/b.ts', 'y'.repeat(5000), [0, 200]),
+        writeFileResult('/b.ts'),
+        { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' },
+        ...fillers('t2'),
+        { content: 'turn 1 done', createdAt: at(T0 + 20 * MIN), id: 'done1', role: 'assistant' },
+        // Turn 2 follows within the TTL; trimming /b.ts would not pay for the rewrite.
+        { content: 'turn 2', createdAt: at(T0 + 21 * MIN), id: 'u2', role: 'user' },
+        ...recencyPadding(3),
+      ];
+
+      const result = await createProcessor().process(createContext(messages));
+
+      expect(result.messages[0].content).toContain('superseded by a later write');
+      expect(result.messages.find((m) => m.content === 'y'.repeat(5000))).toBeDefined();
+      expect(result.metadata.staleToolResultTrim).toMatchObject({
+        cacheWarm: true,
+        carriedMessages: 1,
+        skippedReason: 'warm-cache',
+        trimmedMessages: 1,
+      });
+    });
+
+    it('keeps the placeholder an earlier turn chose when a later event matches another rule', async () => {
+      const messages = [
+        readFileResult('/c.ts', 'x'.repeat(5000), [0, 200]),
+        readFileResult('/c.ts', 'x'.repeat(5000), [0, 200]),
+        ...fillers('t1'),
+        previousTurnMessage(at(T0)),
+        { content: 'turn 1', createdAt: at(T0 + 10 * MIN), id: 'u1', role: 'user' },
+        // Turn 1 writes the file: by turn 2 the first read also counts as superseded by a write.
+        writeFileResult('/c.ts'),
+        ...fillers('t2'),
+        { content: 'turn 1 done', createdAt: at(T0 + 20 * MIN), id: 'done1', role: 'assistant' },
+        { content: 'turn 2', createdAt: at(T0 + 30 * MIN), id: 'u2', role: 'user' },
+        ...recencyPadding(3),
+      ];
+
+      const result = await createProcessor().process(createContext(messages));
+
+      expect(result.messages[0].content).toBe(
+        '[readFile result trimmed: /c.ts (lines 0-200) — the same range was read again later. Refer to the newer read, or call readFile again if needed.]',
+      );
+    });
+
+    // Regression: the warm gate priced the whole payload, including context
+    // injected into the trigger only for that request (an active-document
+    // snapshot). The next turn's replay no longer saw the injection, so it
+    // reached a different verdict than the turn itself had.
+    it('reaches the same warm-gate verdict when the turn is replayed without its send-time injection', async () => {
+      const history = [
+        readFileResult('/a.ts', 'x'.repeat(5000), [0, 200]),
+        writeFileResult('/a.ts'),
+        ...fillers('t1'),
+        previousTurnMessage(at(T0)),
+      ];
+      const turn1 = (content: string) => ({
+        content,
+        createdAt: at(T0 + MIN),
+        id: 'u1',
+        role: 'user',
+      });
+
+      const sentInTurn1 = await createProcessor().process(
+        createContext([
+          ...history,
+          turn1(`turn 1\n\n<active_topic_document>${'d'.repeat(500_000)}</active_topic_document>`),
+          ...recencyPadding(3),
+        ]),
+      );
+      const replayedInTurn2 = await createProcessor().process(
+        createContext([
+          ...history,
+          turn1('turn 1'),
+          ...fillers('t1-run'),
+          { content: 'turn 1 done', createdAt: at(T0 + 2 * MIN), id: 'done1', role: 'assistant' },
+          { content: 'turn 2', createdAt: at(T0 + 3 * MIN), id: 'u2', role: 'user' },
+          ...recencyPadding(3),
+        ]),
+      );
+
+      expect(sentInTurn1.messages[0].content).toContain('superseded by a later write');
+      expect(replayedInTurn2.messages[0].content).toBe(sentInTurn1.messages[0].content);
+    });
+
+    // Regression: the rewrite was priced on string content only, so a large
+    // tool-call argument behind the candidate (a 500k-char writeFile) did not
+    // count, and the gate accepted a rewrite that could never pay back.
+    it('prices tool-call arguments behind the candidate in the warm gate', async () => {
+      const messages = [
+        readFileResult('/a.ts', 'x'.repeat(5000), [0, 200]),
+        {
+          content: '',
+          id: 'big-write-call',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'writeFile',
+              arguments: JSON.stringify({ content: 'w'.repeat(500_000), path: '/a.ts' }),
+              id: 'call-w',
+              identifier: 'lobe-local-system',
+            },
+          ],
+        },
+        writeFileResult('/a.ts'),
+        ...fillers('t1'),
+        previousTurnMessage(at(T0)),
+        { content: 'turn 1', createdAt: at(T0 + MIN), id: 'u1', role: 'user' },
+        ...recencyPadding(3),
+      ];
+
+      const result = await createProcessor().process(createContext(messages));
+
+      expect(result.messages[0].content).toBe('x'.repeat(5000));
+      expect(result.metadata.staleToolResultTrim?.skippedReason).toBe('warm-cache');
+    });
+
+    // Regression: a virtual tail user message (TodoInjector and friends) is
+    // re-created at the end of every step; treating it as the turn trigger
+    // moved the boundary mid-operation and trimmed the in-flight turn.
+    it('ignores virtual tail user messages when locating the turn boundary', async () => {
+      const messages = [
+        { content: 'turn 1', id: 'u1', role: 'user' },
+        readFileResult('/a.ts', 'x'.repeat(5000), [0, 200]),
+        writeFileResult('/a.ts'),
+        ...fillers('t1-run'),
+        {
+          content: '<todos>…</todos>',
+          id: 'virtual-last-user-TodoInjector',
+          meta: { injectType: 'TodoInjector', virtualLastUser: true },
+          role: 'user',
+        },
+      ];
+
+      const result = await createProcessor().process(createContext(messages));
+
+      expect(result.messages[1].content).toBe('x'.repeat(5000));
     });
   });
 
@@ -659,9 +822,9 @@ describe('StaleToolResultTrimProcessor', () => {
       // DeepSeek's hour-long disk cache.
       const T0 = Date.parse('2026-09-20T08:00:00Z');
       const messages = [
-        { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' },
         readFileResult('/a.ts', 'x'.repeat(5000), [0, 200]),
         writeFileResult('/a.ts'),
+        { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' },
         { content: 'filler', id: 'f1', role: 'assistant' },
         { content: 'filler', id: 'f2', role: 'assistant' },
         { content: 'filler', id: 'f3', role: 'assistant' },
