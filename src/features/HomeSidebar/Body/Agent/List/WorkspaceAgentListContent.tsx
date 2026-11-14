@@ -1,7 +1,6 @@
 'use client';
 
 import { Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp, MoreHorizontal, PinIcon, UsersIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useMemo, useState } from 'react';
@@ -15,7 +14,6 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
-import { workspaceUserSettingsSelectors } from '@/store/user/selectors';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import CreateAgentButton from '../CreateAgentButton';
@@ -23,8 +21,7 @@ import { resolveAgentListContentState } from './agentListContentState';
 import Group from './Group';
 import InboxItem from './InboxItem';
 import SessionList from './List';
-import { useKeepSidebarGroupsListed, useKeepSidebarListed } from './useAgentList';
-import { resolveWorkspaceAgentSections } from './workspaceAgentSections';
+import { useWorkspaceAgentSections } from './useWorkspaceAgentSections';
 
 /** Team pins beyond this many fold behind a "show more" row. */
 export const TEAM_PINNED_VISIBLE_LIMIT = 5;
@@ -76,56 +73,19 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
     isLogin: !!isLogin,
   });
 
-  const pinned = useHomeStore(homeAgentListSelectors.pinnedAgents, isEqual);
-  const privatePinned = useHomeStore(homeAgentListSelectors.privatePinnedAgents, isEqual);
-  const groups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
-  const privateGroups = useHomeStore(homeAgentListSelectors.privateAgentGroups, isEqual);
-  const ungrouped = useHomeStore(homeAgentListSelectors.ungroupedAgents, isEqual);
-  const privateUngrouped = useHomeStore(homeAgentListSelectors.privateUngroupedAgents, isEqual);
-  const myPinnedIds = useUserStore(workspaceUserSettingsSelectors.sidebarPinnedItemIds, isEqual);
   const agentPageSize = useGlobalStore(systemStatusSelectors.agentPageSize);
-
-  const keep = useKeepSidebarListed();
-  const keepGroups = useKeepSidebarGroupsListed();
   const navigate = useWorkspaceAwareNavigate();
   const [teamExpanded, setTeamExpanded] = useState(false);
 
-  const sections = useMemo(() => {
-    const resolved = resolveWorkspaceAgentSections({
-      groups,
-      myPinnedIds,
-      pinned,
-      privateGroups,
-      privatePinned,
-      privateUngrouped,
-      ungrouped,
-    });
-    // The team section is fixed: a member's own "remove from sidebar" does
-    // not apply to it. Every other section honors the member's hides.
-    const rest = keep(resolved.rest);
-
-    return {
-      folders: keepGroups(resolved.folders).map((group) => ({
-        ...group,
-        items: keep(group.items),
-      })),
-      hasMore: rest.length > agentPageSize,
-      myPinned: keep(resolved.myPinned),
-      rest: rest.slice(0, agentPageSize),
-      teamPinned: resolved.teamPinned,
-    };
-  }, [
-    agentPageSize,
-    groups,
-    keep,
-    keepGroups,
-    myPinnedIds,
-    pinned,
-    privateGroups,
-    privatePinned,
-    privateUngrouped,
-    ungrouped,
-  ]);
+  const resolved = useWorkspaceAgentSections();
+  const sections = useMemo(
+    () => ({
+      ...resolved,
+      hasMore: resolved.rest.length > agentPageSize,
+      rest: resolved.rest.slice(0, agentPageSize),
+    }),
+    [agentPageSize, resolved],
+  );
 
   if (contentState !== 'ready')
     return (
@@ -135,7 +95,8 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
       </>
     );
 
-  const { folders, hasMore, myPinned, rest, teamPinned } = sections;
+  const { folders, hasMore, myPinned, myPinnedFolders, rest, teamPinned, teamPinnedFolders } =
+    sections;
   const teamOverflow = teamPinned.length > TEAM_PINNED_VISIBLE_LIMIT;
   const visibleTeamPinned =
     teamOverflow && !teamExpanded ? teamPinned.slice(0, TEAM_PINNED_VISIBLE_LIMIT) : teamPinned;
@@ -143,7 +104,7 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
   return (
     <>
       {!hideInbox && <InboxItem style={{ minHeight: 36 }} />}
-      {teamPinned.length > 0 && (
+      {teamPinned.length + teamPinnedFolders.length > 0 && (
         <Flexbox data-testid={'sidebar-team-pinned'} gap={1}>
           <SubHeader
             icon={UsersIcon}
@@ -165,9 +126,10 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
               onClick={() => setTeamExpanded((expanded) => !expanded)}
             />
           )}
+          {teamPinnedFolders.length > 0 && <Group dataSource={teamPinnedFolders} />}
         </Flexbox>
       )}
-      {myPinned.length > 0 && (
+      {myPinned.length + myPinnedFolders.length > 0 && (
         <Flexbox data-testid={'sidebar-my-pinned'} gap={1}>
           <SubHeader
             icon={PinIcon}
@@ -175,6 +137,7 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
             title={t('navPanel.myPinned')}
           />
           <SessionList dataSource={myPinned} />
+          {myPinnedFolders.length > 0 && <Group dataSource={myPinnedFolders} />}
         </Flexbox>
       )}
       {folders.length > 0 && <Group dataSource={folders} />}
@@ -183,17 +146,16 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
           <SessionList dataSource={rest} />
         </Flexbox>
       )}
-      {hasMore ? (
-        <NavItem
-          icon={MoreHorizontal}
-          title={t('input.more', { ns: 'chat' })}
-          onClick={() => navigate('/agents')}
-        />
-      ) : (
-        // New agents from the sidebar start private, the safe default; the
-        // "+" menu also offers a workspace agent.
-        <CreateAgentButton visibility={'private'} />
-      )}
+      {/* Shared folders and teammates' agents live on the Agents page, so
+          the way there is always offered, not only when the list overflows. */}
+      <NavItem
+        icon={MoreHorizontal}
+        title={hasMore ? t('input.more', { ns: 'chat' }) : t('navPanel.browseAllAgents')}
+        onClick={() => navigate('/agents')}
+      />
+      {/* New agents from the sidebar start private, the safe default; the
+          "+" menu also offers a workspace agent. */}
+      <CreateAgentButton visibility={'private'} />
     </>
   );
 });

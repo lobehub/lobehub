@@ -1,7 +1,7 @@
 'use client';
 
 import { DEFAULT_USER_AVATAR_URL } from '@lobechat/const';
-import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
+import { agentDisplayName, type SidebarAgentItem, type SidebarGroup } from '@lobechat/types';
 import {
   Avatar,
   Button,
@@ -22,7 +22,7 @@ import {
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import { ChevronDownIcon, ChevronRightIcon, PlusIcon } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
@@ -33,6 +33,7 @@ import {
   AgentViewAllSidebarSectionSkeleton,
 } from '@/components/Skeleton/AgentViewAll';
 import { useKeepSidebarGroupsListed } from '@/features/HomeSidebar/Body/Agent/List/useAgentList';
+import { useWorkspaceSidebarItemIds } from '@/features/HomeSidebar/Body/Agent/List/useWorkspaceAgentSections';
 import { AgentModalProvider } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 import { useSidebarItemVisibility } from '@/features/HomeSidebar/Body/Agent/useSidebarItemVisibility';
 import { useCreateMenuItems } from '@/features/HomeSidebar/hooks';
@@ -51,6 +52,8 @@ import { useUserStore } from '@/store/user';
 import AgentCard, { AgentCardGrid } from './AgentCard';
 import AgentRow, { type AgentRowAuthor } from './AgentRow';
 import { flattenAgentBuckets } from './flattenBuckets';
+import FolderPinActions from './FolderPinActions';
+import { groupItemsByFolder } from './groupByFolder';
 import ListConfig from './ListConfig';
 import { type AgentListViewOptions, normalizeAgentListViewOptions } from './listViewOptions';
 import SidebarAgentsSection from './SidebarAgentsSection';
@@ -65,6 +68,8 @@ interface GroupHeaderProps {
   color?: string | null;
   count: number;
   /** Position in the group list — drives the alternating bar tint. */
+  /** Trailing controls, e.g. a folder's pin state and pin menu. */
+  extra?: ReactNode;
   index: number;
   label: string;
   onToggle: () => void;
@@ -102,7 +107,7 @@ const groupHeaderStyles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const GroupHeader = memo<GroupHeaderProps>(
-  ({ avatar, collapsed, color, count, index, label, onToggle }) => (
+  ({ avatar, collapsed, color, count, extra, index, label, onToggle }) => (
     <Flexbox
       horizontal
       align={'center'}
@@ -137,6 +142,7 @@ const GroupHeader = memo<GroupHeaderProps>(
       <Text fontSize={12} type={'secondary'}>
         {count}
       </Text>
+      {extra}
     </Flexbox>
   ),
 );
@@ -156,6 +162,10 @@ const SegmentLabel = memo<{ count: number; label: string }>(({ count, label }) =
 
 SegmentLabel.displayName = 'AgentViewAllSegmentLabel';
 
+/** A folder section's header carries its pin state and pin menu. */
+const folderExtra = (group: { folder?: SidebarGroup }) =>
+  group.folder ? <FolderPinActions folder={group.folder} /> : undefined;
+
 const AgentViewAllPage = memo(() => {
   const { t } = useTranslation('common');
   const activeWorkspaceId = useActiveWorkspaceId();
@@ -172,6 +182,8 @@ const AgentViewAllPage = memo(() => {
     [setSearchParams],
   );
   const [keyword, setKeyword] = useState('');
+  // While searching, sections open and empty folders drop out so matches show.
+  const searching = keyword.trim().length > 0;
 
   // Card vs list rendering — persisted in systemStatus so the page reopens
   // in the last chosen mode (same mechanism as imageTopicViewMode & friends).
@@ -186,15 +198,25 @@ const AgentViewAllPage = memo(() => {
   // view mode so the page keeps its display config (same as taskListViewOptions).
   const rawViewOptions = useGlobalStore(systemStatusSelectors.agentListViewOptions);
   const viewOptions = useMemo(
-    () => normalizeAgentListViewOptions(rawViewOptions),
-    [rawViewOptions],
+    () => normalizeAgentListViewOptions(rawViewOptions, activeWorkspaceId ? 'folder' : 'none'),
+    [activeWorkspaceId, rawViewOptions],
   );
   const setViewOptions = useCallback(
     (updater: (prev: AgentListViewOptions) => AgentListViewOptions) => {
       const next = normalizeAgentListViewOptions(updater(viewOptions));
-      updateSystemStatus({ agentListViewOptions: next }, 'updateAgentListViewOptions');
+      // The setting is shared by workspace and personal mode, so keep the
+      // grouping unset until the member actually picks one; otherwise the
+      // workspace's folder default would leak into personal mode.
+      const keepDefaultGroupBy =
+        rawViewOptions?.groupBy === undefined && next.groupBy === viewOptions.groupBy;
+      updateSystemStatus(
+        {
+          agentListViewOptions: keepDefaultGroupBy ? { ...next, groupBy: undefined } : next,
+        },
+        'updateAgentListViewOptions',
+      );
     },
-    [updateSystemStatus, viewOptions],
+    [rawViewOptions?.groupBy, updateSystemStatus, viewOptions],
   );
 
   // The sidebar usually owns these fetches, but this page must survive a
@@ -217,6 +239,15 @@ const AgentViewAllPage = memo(() => {
 
   const { isSidebarItemVisible, setSidebarItemVisible } = useSidebarItemVisibility();
   const keepGroups = useKeepSidebarGroupsListed();
+  // In a workspace the sidebar lists only what the member pinned, created,
+  // used recently or added; ask the sidebar's own layout instead of the
+  // plain hide list.
+  const workspaceSidebarIds = useWorkspaceSidebarItemIds();
+  const isListed = useCallback(
+    (item: SidebarAgentItem) =>
+      workspaceSidebarIds ? workspaceSidebarIds.listed.has(item.id) : isSidebarItemVisible(item),
+    [isSidebarItemVisible, workspaceSidebarIds],
+  );
 
   const workspaceItems = useMemo(
     () => flattenAgentBuckets(pinnedAgents, agentGroups, ungroupedAgents),
@@ -238,29 +269,34 @@ const AgentViewAllPage = memo(() => {
     // flattened lists: hiding a Category removes its whole section from the
     // sidebar, so its agents are not "in sidebar" either. The page's own list
     // deliberately keeps showing them — hiding is a sidebar-only preference.
-    const inSidebar = [
-      ...flattenAgentBuckets(pinnedAgents, keepGroups(agentGroups), ungroupedAgents),
-      ...flattenAgentBuckets(
-        privatePinnedAgents,
-        keepGroups(privateAgentGroups),
-        privateUngroupedAgents,
-      ),
-    ];
+    const inSidebar = workspaceSidebarIds
+      ? [...workspaceItems, ...privateItems]
+      : [
+          ...flattenAgentBuckets(pinnedAgents, keepGroups(agentGroups), ungroupedAgents),
+          ...flattenAgentBuckets(
+            privatePinnedAgents,
+            keepGroups(privateAgentGroups),
+            privateUngroupedAgents,
+          ),
+        ];
     const seen = new Set<string>();
     return inSidebar.filter((item) => {
-      if (seen.has(item.id) || !isSidebarItemVisible(item)) return false;
+      if (seen.has(item.id) || !isListed(item)) return false;
       seen.add(item.id);
       return true;
     });
   }, [
     agentGroups,
-    isSidebarItemVisible,
+    isListed,
     keepGroups,
     pinnedAgents,
     privateAgentGroups,
+    privateItems,
     privatePinnedAgents,
     privateUngroupedAgents,
     ungroupedAgents,
+    workspaceItems,
+    workspaceSidebarIds,
   ]);
 
   // Author info (column, grouping, sorting) only means something on the
@@ -293,9 +329,9 @@ const AgentViewAllPage = memo(() => {
   // searching narrows the list below, it doesn't shrink the buckets.
   const bucketCounts = useMemo(() => {
     const count = (list: SidebarAgentItem[]) =>
-      showSidebarHidden ? list.length : list.filter(isSidebarItemVisible).length;
+      showSidebarHidden ? list.length : list.filter(isListed).length;
     return { private: count(privateItems), workspace: count(workspaceItems) };
-  }, [workspaceItems, privateItems, showSidebarHidden, isSidebarItemVisible]);
+  }, [workspaceItems, privateItems, showSidebarHidden, isListed]);
 
   // Label grouping works on every tab (labels exist in personal mode too);
   // author grouping only makes sense where the author column shows.
@@ -324,7 +360,7 @@ const AgentViewAllPage = memo(() => {
       : items;
 
     if (!showSidebarHidden) {
-      matched = matched.filter(isSidebarItemVisible);
+      matched = matched.filter(isListed);
     }
 
     const authorName = (item: SidebarAgentItem) =>
@@ -339,15 +375,7 @@ const AgentViewAllPage = memo(() => {
       if (orderBy === 'author') return direction * authorName(a).localeCompare(authorName(b));
       return direction * (dayjs(a.updatedAt).valueOf() - dayjs(b.updatedAt).valueOf());
     });
-  }, [
-    items,
-    keyword,
-    orderBy,
-    orderDirection,
-    showSidebarHidden,
-    isSidebarItemVisible,
-    authorByUserId,
-  ]);
+  }, [items, keyword, orderBy, orderDirection, showSidebarHidden, isListed, authorByUserId]);
 
   // Author sections (workspace tab only — every private item is the viewer's
   // own, so author buckets would be a single redundant group): items are
@@ -368,12 +396,33 @@ const AgentViewAllPage = memo(() => {
         // avatar still gets the default one instead of a bare name.
         avatar: (userId && authorByUserId.get(userId)?.avatar) || DEFAULT_USER_AVATAR_URL,
         color: undefined as string | null | undefined,
+        folder: undefined as SidebarGroup | undefined,
         items: groupItems,
         key: `author:${userId || 'unknown'}`,
         label:
           (userId && authorByUserId.get(userId)?.name) || t('agentViewAll.groupBy.unknownAuthor'),
       }));
       return groups.sort((a, b) => a.label.localeCompare(b.label));
+    }
+
+    if (groupBy === 'folder') {
+      const folders = segment === 'private' ? privateAgentGroups : agentGroups;
+      const sections = groupItemsByFolder(
+        filteredItems,
+        activeWorkspaceId ? folders : [...agentGroups, ...privateAgentGroups],
+        t('agentViewAll.groupBy.noFolder'),
+      ).filter((section) => !searching || section.items.length > 0);
+      // Without any folder the grouping would be a single bucket: stay flat.
+      if (sections.every((section) => !section.folder)) return null;
+
+      return sections.map((section) => ({
+        avatar: null as string | null,
+        color: undefined as string | null | undefined,
+        folder: section.folder,
+        items: section.items,
+        key: section.key,
+        label: section.label,
+      }));
     }
 
     if (groupBy === 'label') {
@@ -400,6 +449,7 @@ const AgentViewAllPage = memo(() => {
         .map(([labelId, bucket]) => ({
           avatar: null as string | null,
           color: bucket.color,
+          folder: undefined as SidebarGroup | undefined,
           items: bucket.items,
           key: `label:${labelId}`,
           label: bucket.label,
@@ -409,6 +459,7 @@ const AgentViewAllPage = memo(() => {
         groups.push({
           avatar: null,
           color: undefined,
+          folder: undefined,
           items: unlabeled,
           key: 'label:none',
           label: t('agentViewAll.groupBy.noLabel'),
@@ -417,7 +468,17 @@ const AgentViewAllPage = memo(() => {
     }
 
     return null;
-  }, [activeWorkspaceId, groupBy, segment, filteredItems, authorByUserId, t]);
+  }, [
+    activeWorkspaceId,
+    agentGroups,
+    groupBy,
+    privateAgentGroups,
+    searching,
+    segment,
+    filteredItems,
+    authorByUserId,
+    t,
+  ]);
 
   // Group collapse state — groups default to COLLAPSED (mirrors Linear), so
   // the EXPANDED keys are what persists (systemStatus): a reload keeps opened
@@ -440,7 +501,7 @@ const AgentViewAllPage = memo(() => {
   const handleToggleSidebar = useCallback(
     async (item: SidebarAgentItem) => {
       try {
-        await setSidebarItemVisible(item.id, !isSidebarItemVisible(item));
+        await setSidebarItemVisible(item.id, !isListed(item));
       } catch (error) {
         // Personal mode writes the preference optimistically and never rolls
         // back, workspace mode rolls back silently — either way the row's
@@ -449,7 +510,7 @@ const AgentViewAllPage = memo(() => {
         toast.error(t('operationFailed'));
       }
     },
-    [isSidebarItemVisible, setSidebarItemVisible, t],
+    [isListed, setSidebarItemVisible, t],
   );
   // The `im_layout` rail has no agent sidebar, so its "in sidebar" curation
   // (the section and every per-item toggle) does not apply there.
@@ -462,11 +523,11 @@ const AgentViewAllPage = memo(() => {
         item={item}
         key={item.id}
         owner={showAuthor && item.userId ? authorByUserId.get(item.userId) : undefined}
-        sidebarHidden={!isSidebarItemVisible(item)}
-        onToggleSidebar={toggleSidebar}
+        sidebarHidden={!isListed(item)}
+        onToggleSidebar={workspaceSidebarIds?.fixed.has(item.id) ? undefined : toggleSidebar}
       />
     ),
-    [showAuthor, authorByUserId, toggleSidebar, isSidebarItemVisible],
+    [showAuthor, authorByUserId, toggleSidebar, isListed, workspaceSidebarIds],
   );
 
   const renderRow = useCallback(
@@ -476,11 +537,11 @@ const AgentViewAllPage = memo(() => {
         item={item}
         key={item.id}
         showAuthor={showAuthor}
-        sidebarHidden={!isSidebarItemVisible(item)}
-        onToggleSidebar={toggleSidebar}
+        sidebarHidden={!isListed(item)}
+        onToggleSidebar={workspaceSidebarIds?.fixed.has(item.id) ? undefined : toggleSidebar}
       />
     ),
-    [showAuthor, authorByUserId, toggleSidebar, isSidebarItemVisible],
+    [showAuthor, authorByUserId, toggleSidebar, isListed, workspaceSidebarIds],
   );
 
   const { allowed: canCreate, reason: createBlockedReason } = usePermission('create_content');
@@ -547,7 +608,11 @@ const AgentViewAllPage = memo(() => {
       >
         {!imLayout && !isInit && !keyword.trim() && <AgentViewAllSidebarSectionSkeleton />}
         {!imLayout && isInit && !keyword.trim() && sidebarItems.length > 0 && (
-          <SidebarAgentsSection items={sidebarItems} onToggleSidebar={handleToggleSidebar} />
+          <SidebarAgentsSection
+            fixedIds={workspaceSidebarIds?.fixed}
+            items={sidebarItems}
+            onToggleSidebar={handleToggleSidebar}
+          />
         )}
         <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
           {/* The workspace/private split only exists inside a workspace;
@@ -625,7 +690,7 @@ const AgentViewAllPage = memo(() => {
           groupedItems ? (
             <Flexbox gap={8}>
               {groupedItems.map((group, index) => {
-                const collapsed = !expandedGroupSet.has(group.key);
+                const collapsed = !searching && !expandedGroupSet.has(group.key);
                 return (
                   <Flexbox gap={12} key={group.key}>
                     <GroupHeader
@@ -633,6 +698,7 @@ const AgentViewAllPage = memo(() => {
                       collapsed={collapsed}
                       color={group.color}
                       count={group.items.length}
+                      extra={folderExtra(group)}
                       index={index}
                       label={group.label}
                       onToggle={() => toggleGroupCollapsed(group.key)}
@@ -651,7 +717,7 @@ const AgentViewAllPage = memo(() => {
           <Flexbox gap={groupedItems ? 8 : 2}>
             {groupedItems
               ? groupedItems.map((group, index) => {
-                  const collapsed = !expandedGroupSet.has(group.key);
+                  const collapsed = !searching && !expandedGroupSet.has(group.key);
                   return (
                     <Flexbox gap={2} key={group.key}>
                       <GroupHeader
@@ -659,6 +725,7 @@ const AgentViewAllPage = memo(() => {
                         collapsed={collapsed}
                         color={group.color}
                         count={group.items.length}
+                        extra={folderExtra(group)}
                         index={index}
                         label={group.label}
                         onToggle={() => toggleGroupCollapsed(group.key)}

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
+import { sessionService } from '@/services/session';
 import { useHomeStore } from '@/store/home';
 import { useUserStore } from '@/store/user';
 
@@ -17,6 +18,7 @@ beforeEach(() => {
   updatePreference.mockReset().mockResolvedValue(undefined);
   vi.spyOn(agentService, 'updateAgentPinned').mockResolvedValue(undefined as any);
   vi.spyOn(chatGroupService, 'updateGroup').mockResolvedValue(undefined as any);
+  vi.spyOn(sessionService, 'updateSessionGroupTeamPinned').mockResolvedValue(undefined as any);
   vi.spyOn(useHomeStore.getState(), 'refreshAgentList').mockResolvedValue(undefined);
   useUserStore.setState({
     updateWorkspaceUserPreference: updatePreference,
@@ -70,5 +72,26 @@ describe('pinItemForMe', () => {
 
     expect(chatGroupService.updateGroup).toHaveBeenCalledWith('grp', { pinned: true });
     expect(agentService.updateAgentPinned).not.toHaveBeenCalled();
+  });
+
+  it('pins a public folder in the member preference only', async () => {
+    await pinForMe({ id: 'sg-evals', type: 'folder', visibility: 'public' }, true);
+
+    expect(updatePreference).toHaveBeenCalledWith({
+      sidebarPinnedItemIds: ['sg-evals', 'older'],
+    });
+    // A personal folder pin never writes any shared column.
+    expect(sessionService.updateSessionGroupTeamPinned).not.toHaveBeenCalled();
+    expect(agentService.updateAgentPinned).not.toHaveBeenCalled();
+    expect(chatGroupService.updateGroup).not.toHaveBeenCalled();
+  });
+});
+
+describe('pinFolderForTeam', () => {
+  it('writes the folder team pin and refreshes the list', async () => {
+    await act(() => useHomeStore.getState().pinFolderForTeam('sg-evals', true));
+
+    expect(sessionService.updateSessionGroupTeamPinned).toHaveBeenCalledWith('sg-evals', true);
+    expect(useHomeStore.getState().refreshAgentList).toHaveBeenCalled();
   });
 });

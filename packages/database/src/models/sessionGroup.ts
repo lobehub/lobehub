@@ -85,6 +85,26 @@ export class SessionGroupModel {
   };
 
   /**
+   * Set or clear the team pin of a PUBLIC workspace folder. The caller must
+   * already hold the owner/admin grant (checked by the router); this method
+   * only refuses rows it can't apply to — personal mode and private folders
+   * have no team pin. Returns whether a folder was updated.
+   */
+  updateTeamPinned = async (id: string, pinned: boolean): Promise<boolean> => {
+    if (!this.workspaceId) return false;
+
+    const rows = await this.db
+      .update(sessionGroups)
+      .set({ pinned, updatedAt: new Date() })
+      .where(
+        and(eq(sessionGroups.id, id), this.ownership(), eq(sessionGroups.visibility, 'public')),
+      )
+      .returning({ id: sessionGroups.id });
+
+    return rows.length > 0;
+  };
+
+  /**
    * Publish a private session group (folder) into the workspace. One-way:
    * mirrors the rule applied to agents and chat groups — a shared folder
    * can't be re-privatized because other members may already be relying on

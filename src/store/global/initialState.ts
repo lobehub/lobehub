@@ -228,7 +228,8 @@ export interface SystemStatus {
    * Display options of the agent view-all page (grouping / ordering / hidden-agent visibility)
    */
   agentListViewOptions?: {
-    groupBy: 'author' | 'label' | 'none';
+    /** Unset until the member picks one; the page then defaults per mode. */
+    groupBy?: 'author' | 'folder' | 'label' | 'none';
     orderBy: 'author' | 'title' | 'updatedAt';
     orderDirection: 'asc' | 'desc';
     showSidebarHidden: boolean;
@@ -651,7 +652,6 @@ export const INITIAL_STATUS = {
   agentListSidebarSectionCollapsed: false,
   agentListViewMode: 'card' as const,
   agentListViewOptions: {
-    groupBy: 'none' as const,
     orderBy: 'updatedAt' as const,
     orderDirection: 'desc' as const,
     showSidebarHidden: true,

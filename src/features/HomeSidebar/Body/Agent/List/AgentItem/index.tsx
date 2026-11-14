@@ -135,12 +135,19 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
   const showPinIcon = isTeamPinned || isMyPinned;
 
   // Memoize pin icon
+  // The lock sits with the pin in the fixed trailing slot rather than after
+  // the title, where a long name or role tag would truncate it out of view.
   const pinIcon = useMemo(
     () =>
-      showPinIcon ? (
-        <ActionIcon icon={PinIcon} size={12} style={{ opacity: 0.5, pointerEvents: 'none' }} />
+      showPinIcon || isPrivate ? (
+        <>
+          {isPrivate && <PrivateLockIcon />}
+          {showPinIcon && (
+            <ActionIcon icon={PinIcon} size={12} style={{ opacity: 0.5, pointerEvents: 'none' }} />
+          )}
+        </>
       ) : undefined,
-    [showPinIcon],
+    [isPrivate, showPinIcon],
   );
 
   // Memoize avatar icon (show loader when updating, running spinner or unread badge at bottom-right)
@@ -214,13 +221,10 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
         key={id}
         style={style}
         title={
-          roleTag || isPrivate ? (
+          roleTag ? (
             <>
               {displayTitle}
-              {roleTag && (
-                <span style={{ fontSize: 12, marginInlineStart: 6, opacity: 0.6 }}>{roleTag}</span>
-              )}
-              {isPrivate && <PrivateLockIcon />}
+              <span style={{ fontSize: 12, marginInlineStart: 6, opacity: 0.6 }}>{roleTag}</span>
             </>
           ) : (
             displayTitle

@@ -60,6 +60,7 @@ const ListConfig = memo<ListConfigProps>(
         ...(showAuthor
           ? [{ label: t('agentViewAll.groupBy.author'), value: 'author' as const }]
           : []),
+        { label: t('agentViewAll.groupBy.folder'), value: 'folder' as const },
         { label: t('agentViewAll.groupBy.label'), value: 'label' },
       ],
       [showAuthor, t],

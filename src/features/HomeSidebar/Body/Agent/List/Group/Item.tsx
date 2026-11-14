@@ -21,6 +21,7 @@ import { useHomeStore } from '@/store/home';
 
 import { useCreateMenuItems } from '../../../../hooks';
 import { useAgentModal } from '../../ModalProvider';
+import { useFolderPinMenuItems } from '../../useFolderPinMenuItems';
 import SessionList from '../List';
 import PrivateLockIcon from '../PrivateLockIcon';
 import Actions from './Actions';
@@ -28,7 +29,7 @@ import { useGroupDropdownMenu } from './useDropdownMenu';
 
 const styles = stylex.create({ item: { paddingInlineStart: '14px' } });
 
-const GroupItem = memo<SidebarGroup>(({ items, id, name, visibility }) => {
+const GroupItem = memo<SidebarGroup>(({ items, id, name, pinned, visibility }) => {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const isUpdating = useHomeStore((s) => s.groupUpdatingId === id);
   // Public and private folders share one Agents section in a workspace.
@@ -44,12 +45,16 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name, visibility }) => {
     openConfigGroupModal(visibility);
   }, [openConfigGroupModal, visibility]);
 
+  const { isPublicWorkspaceFolder, menuItems } = useFolderPinMenuItems({ id, pinned, visibility });
+  const pinMenuItems = isPublicWorkspaceFolder ? menuItems : undefined;
+
   const dropdownMenu = useGroupDropdownMenu({
     anchor,
     id,
     isCustomGroup: true,
     name,
     openConfigGroupModal: handleOpenConfigGroupModal,
+    pinMenuItems,
     visibility,
   });
 
@@ -68,10 +73,11 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name, visibility }) => {
             <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
               <Flexbox horizontal align="center" gap={6} style={{ overflow: 'hidden' }}>
                 {groupIcon}
-                <Text ellipsis fontSize={12} style={{ flex: 1 }} type={'secondary'} weight={500}>
+                <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
                   {name}
-                  {isPrivateFolder && <PrivateLockIcon />}
                 </Text>
+                {/* Outside the ellipsis so a long name can't push it out of view. */}
+                {isPrivateFolder && <PrivateLockIcon />}
               </Flexbox>
             </AccordionTrigger>
             <div

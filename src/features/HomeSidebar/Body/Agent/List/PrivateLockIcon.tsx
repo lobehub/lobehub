@@ -24,7 +24,6 @@ const PrivateLockIcon = memo(() => {
           color: cssVar.colorTextTertiary,
           display: 'inline-flex',
           flex: 'none',
-          marginInlineStart: 4,
           verticalAlign: 'middle',
         }}
       >

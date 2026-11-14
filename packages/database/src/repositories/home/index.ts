@@ -37,6 +37,13 @@ const HOME_UNREAD_EXCLUDE_TRIGGERS = [
   'document',
 ];
 
+/**
+ * How far back a member's own topics count as "recently used" for the
+ * workspace sidebar. Shared rows the member neither created nor used within
+ * this window stay on the Agents page instead of the sidebar.
+ */
+export const SIDEBAR_RECENT_USE_DAYS = 30;
+
 // Re-export types for backward compatibility
 export type {
   SidebarAgentItem,
@@ -166,6 +173,9 @@ export class HomeRepository {
     // names and colors, so returning it anyway would just be a second way in.
     const agentLabelsMap = includeLabels ? await this.getAgentLabelsMap() : new Map();
 
+    // 2.4 The caller's own recent use, workspace only (see SIDEBAR_RECENT_USE_DAYS).
+    const { agentLastUsed, groupLastUsed } = await this.getRecentUse();
+
     // 3. Query sessionGroups (user-defined folders). Folders are the shared
     // skeleton of a workspace sidebar: every member sees the same public
     // folders, in the same shared order. Private folders stay scoped to their
@@ -178,6 +188,7 @@ export class HomeRepository {
           .select({
             id: sessionGroups.id,
             name: sessionGroups.name,
+            pinned: sessionGroups.pinned,
             sort: sessionGroups.sort,
             userId: sessionGroups.userId,
             visibility: sessionGroups.visibility,
@@ -202,7 +213,53 @@ export class HomeRepository {
       agentUnread,
       groupUnread,
       agentLabelsMap,
+      { agentLastUsed, groupLastUsed },
     );
+  }
+
+  /**
+   * When the caller last had a topic under each agent / chat group, limited to
+   * the last {@link SIDEBAR_RECENT_USE_DAYS} days. Workspace only: personal
+   * sidebars list every row the user owns, so they never need it.
+   */
+  private async getRecentUse(): Promise<{
+    agentLastUsed: Map<string, Date>;
+    groupLastUsed: Map<string, Date>;
+  }> {
+    const agentLastUsed = new Map<string, Date>();
+    const groupLastUsed = new Map<string, Date>();
+    if (!this.workspaceId) return { agentLastUsed, groupLastUsed };
+
+    const since = new Date(Date.now() - SIDEBAR_RECENT_USE_DAYS * 24 * 60 * 60 * 1000);
+    const base = and(
+      buildWorkspaceWhere(this.scope, topics),
+      // Visitor topics of a shared agent keep the creator's userId; they are
+      // not the creator's own use.
+      notShareVisitorTopic(),
+      eq(topics.userId, this.userId),
+      sql`${topics.updatedAt} >= ${since}`,
+      // Scheduled, eval and task topics are not the member opening the agent.
+      or(isNull(topics.trigger), not(inArray(topics.trigger, HOME_UNREAD_EXCLUDE_TRIGGERS))),
+    );
+    const lastUsed = sql<Date>`max(${topics.updatedAt})`;
+
+    const [byAgent, byGroup] = await Promise.all([
+      this.db
+        .select({ id: topics.agentId, value: lastUsed })
+        .from(topics)
+        .where(and(base, sql`${topics.agentId} is not null`))
+        .groupBy(topics.agentId),
+      this.db
+        .select({ id: topics.groupId, value: lastUsed })
+        .from(topics)
+        .where(and(base, sql`${topics.groupId} is not null`))
+        .groupBy(topics.groupId),
+    ]);
+
+    for (const row of byAgent) if (row.id) agentLastUsed.set(row.id, new Date(row.value));
+    for (const row of byGroup) if (row.id) groupLastUsed.set(row.id, new Date(row.value));
+
+    return { agentLastUsed, groupLastUsed };
   }
 
   /**
@@ -328,6 +385,7 @@ export class HomeRepository {
     groupItems: Array<{
       id: string;
       name: string;
+      pinned?: boolean | null;
       sort: number | null;
       userId: string;
       visibility: 'private' | 'public';
@@ -336,6 +394,10 @@ export class HomeRepository {
     agentUnread: Map<string, number> = new Map(),
     groupUnread: Map<string, number> = new Map(),
     agentLabelsMap: Map<string, SidebarAgentLabel[]> = new Map(),
+    recentUse: { agentLastUsed: Map<string, Date>; groupLastUsed: Map<string, Date> } = {
+      agentLastUsed: new Map(),
+      groupLastUsed: new Map(),
+    },
   ): SidebarAgentListResponse {
     // Sidebar organization (folder membership + pin) is SHARED in workspace
     // mode: it reads the same `sessionGroupId` / `pinned` columns as personal
@@ -366,6 +428,7 @@ export class HomeRepository {
           id: a.id,
           isPrivate: visibility === 'private',
           labels: agentLabelsMap.get(a.id),
+          lastUsedAt: recentUse.agentLastUsed.get(a.id),
           name: a.name,
           model: a.model,
           pinned: a.pinned ?? false,
@@ -390,6 +453,7 @@ export class HomeRepository {
           groupId: g.groupId,
           id: g.id,
           isPrivate: visibility === 'private',
+          lastUsedAt: recentUse.groupLastUsed.get(g.id),
           pinned: g.pinned ?? false,
           title: g.title,
           type: 'group' as const,
@@ -465,6 +529,8 @@ export class HomeRepository {
         id: g.id,
         items: itemsMap.get(g.id) || [],
         name: g.name,
+        // Only a public workspace folder can carry a team pin.
+        ...(this.workspaceId && visibility === 'public' ? { pinned: !!g.pinned } : {}),
         sort: g.sort,
         visibility,
       });

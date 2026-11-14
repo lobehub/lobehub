@@ -1,6 +1,8 @@
 export default {
   'about': 'About',
   'advanceSettings': 'Advanced Settings',
+  'agentViewAll.groupBy.folder': 'Category',
+  'agentViewAll.groupBy.noFolder': 'No category',
   'alert.cloud.action': 'Try now',
   'alert.cloud.desc':
     'All registered users get ${{credit}} of free usage per month—no setup needed. Includes global cloud sync and advanced web search.',
@@ -56,6 +58,7 @@ export default {
     'Current topic is not saved, please save it first to use subtopic feature',
   'forkRequiresSavedTopic': 'Current topic is not saved. Save it first to fork a new topic',
   'forkTopic': 'Continue in new topic',
+  'navPanel.browseAllAgents': 'All agents',
   'supportAgent.troubleshoot.question': 'This message failed. Please help me troubleshoot it.',
   'viewExecutionDetails': 'View execution details',
   'cancel': 'Cancel',

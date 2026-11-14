@@ -47,7 +47,6 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
       <Tag size={'small'} style={{ flexShrink: 0 }}>
         {t('group.title')}
       </Tag>
-      {isPrivate && <PrivateLockIcon />}
     </Flexbox>
   );
 
@@ -75,13 +74,19 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className, onNavigate }) 
     [id, openAgentInNewWindow],
   );
 
-  // Memoize pin icon
+  // The lock sits with the pin in the fixed trailing slot so a long title
+  // can't truncate it out of view.
   const pinIcon = useMemo(
     () =>
-      showPinIcon ? (
-        <ActionIcon icon={PinIcon} size={12} style={{ opacity: 0.5, pointerEvents: 'none' }} />
+      showPinIcon || isPrivate ? (
+        <>
+          {isPrivate && <PrivateLockIcon />}
+          {showPinIcon && (
+            <ActionIcon icon={PinIcon} size={12} style={{ opacity: 0.5, pointerEvents: 'none' }} />
+          )}
+        </>
       ) : undefined,
-    [showPinIcon],
+    [isPrivate, showPinIcon],
   );
 
   // Memoize avatar icon (show loader when updating)
