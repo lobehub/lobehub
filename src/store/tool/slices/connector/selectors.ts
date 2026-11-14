@@ -91,7 +91,9 @@ const userMcpConnectors = (s: ToolStoreState): ConnectorWithTools[] => [
 ];
 
 /** Remote marketplace OAuth MCPs also execute with server-held credentials. */
-const executableMcpConnectors = (s: ToolStore): ConnectorWithTools[] => {
+const executableMcpConnectors = (
+  s: Pick<ToolStoreState, 'connectors' | 'installedPlugins'>,
+): ConnectorWithTools[] => {
   // A late OAuth callback may connect after the user canceled installation.
   // Marketplace tools enter the runtime only once the install has finished and
   // the row is connected, the rule every call path applies.
