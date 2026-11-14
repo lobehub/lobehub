@@ -8,6 +8,7 @@ import {
   setTaskFilterContent,
   setTaskFilterDateWindow,
   showsTaskFilterValuesInline,
+  taskFilterBarConditions,
   taskFilterSetOperatorKey,
   taskListFilterScopeKey,
   toggleTaskFilterOperator,
@@ -144,5 +145,22 @@ describe('set chip display', () => {
   it('lists up to two values inline and collapses more into a count', () => {
     expect(showsTaskFilterValuesInline(2)).toBe(true);
     expect(showsTaskFilterValuesInline(3)).toBe(false);
+  });
+});
+
+describe('taskFilterBarConditions', () => {
+  const status = { operator: 'is' as const, values: ['running'] };
+
+  it('keeps every condition when the header has no find box', () => {
+    expect(taskFilterBarConditions({ content: 'deploy' }, false)).toEqual({ content: 'deploy' });
+  });
+
+  it('leaves the content condition to the find box', () => {
+    expect(taskFilterBarConditions({ content: 'deploy', status }, true)).toEqual({ status });
+  });
+
+  it('has nothing to render when the find box holds the only condition', () => {
+    expect(taskFilterBarConditions({ content: 'deploy' }, true)).toBeUndefined();
+    expect(taskFilterBarConditions(undefined, true)).toBeUndefined();
   });
 });
