@@ -396,6 +396,11 @@ const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false })
   return (
     <FloatingPanel
       actions={<Freeze frozen={!open}>{actions}</Freeze>}
+      // Desktop: the panel can reach into the window titlebar's drag band, and Electron
+      // resolves drag regions by rect, ignoring what is painted on top. Opt the panel's own
+      // surface out so its header buttons and top-edge resize handles take the click. Not
+      // `wrapper`: that layer is `position: fixed; inset: 0` and would disable the whole band.
+      classNames={{ panel: electronStylish.nodrag, resizeHandle: electronStylish.nodrag }}
       getContainer={false}
       height={expanded ? EXPANDED_PANEL_HEIGHT : DEFAULT_PANEL_HEIGHT}
       mask={false}
