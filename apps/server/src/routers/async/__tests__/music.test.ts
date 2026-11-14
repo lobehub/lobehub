@@ -184,7 +184,10 @@ describe('musicRouter.createMusic', () => {
       'generations/music/song1_cover.jpg',
     );
     expect(chargeAfterGenerate).toHaveBeenCalledWith(
-      expect.objectContaining({ computePriceParams: { songs: 1 }, model: 'song-model-lite' }),
+      expect.objectContaining({
+        computePriceParams: { duration: 121, songs: 1 },
+        model: 'song-model-lite',
+      }),
     );
   });
 
@@ -232,7 +235,7 @@ describe('musicRouter.createMusic', () => {
     for (const id of ['task-1', 'task-2'])
       expect(taskUpdates(id).at(-1)).toMatchObject({ status: AsyncTaskStatus.Success });
     expect(chargeAfterGenerate).toHaveBeenCalledWith(
-      expect.objectContaining({ computePriceParams: { songs: 2 } }),
+      expect.objectContaining({ computePriceParams: { duration: 243, songs: 2 } }),
     );
   });
 
@@ -362,8 +365,28 @@ describe('musicRouter.createMusic', () => {
       status: AsyncTaskStatus.Error,
     });
     expect(chargeAfterGenerate).toHaveBeenCalledWith(
-      expect.objectContaining({ computePriceParams: { songs: 1 } }),
+      expect.objectContaining({ computePriceParams: { duration: 121, songs: 1 } }),
     );
+  });
+
+  it('retries the error of a song without a track when its first error write fails', async () => {
+    runtime.createMusic.mockResolvedValue({
+      status: 'success',
+      tracks: [{ audioUrl: 'https://cdn.example.com/only.mp3' }],
+    });
+    let failedOnce = false;
+    asyncTaskModelMock.update.mockImplementation(async (id: string, value: any) => {
+      if (id === 'task-2' && value.status === AsyncTaskStatus.Error && !failedOnce) {
+        failedOnce = true;
+        throw new Error('connection reset');
+      }
+    });
+
+    await musicRouter.createCaller(ctx).createMusic(createInput());
+
+    // The batch failure path writes the error again instead of leaving the task processing
+    const errors = taskUpdates('task-2').filter((value) => value.status === AsyncTaskStatus.Error);
+    expect(errors).toHaveLength(2);
   });
 
   it('fails a song whose download fails without failing the others', async () => {
@@ -397,7 +420,7 @@ describe('musicRouter.createMusic', () => {
     for (const id of ['task-1', 'task-2'])
       expect(taskUpdates(id).at(-1)).toMatchObject({ status: AsyncTaskStatus.Success });
     expect(chargeAfterGenerate).toHaveBeenCalledWith(
-      expect.objectContaining({ computePriceParams: { songs: 2 } }),
+      expect.objectContaining({ computePriceParams: { duration: 243, songs: 2 } }),
     );
   });
 
@@ -422,7 +445,7 @@ describe('musicRouter.createMusic', () => {
     expect(taskUpdates('task-2').at(-1)).toMatchObject({ status: AsyncTaskStatus.Error });
     expect(chargeAfterGenerate).toHaveBeenCalledTimes(1);
     expect(chargeAfterGenerate).toHaveBeenCalledWith(
-      expect.objectContaining({ computePriceParams: { songs: 1 } }),
+      expect.objectContaining({ computePriceParams: { duration: 121, songs: 1 } }),
     );
   });
 

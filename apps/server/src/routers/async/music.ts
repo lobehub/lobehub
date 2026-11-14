@@ -166,11 +166,18 @@ export const musicRouter = router({
       // Replaced by the mapped id once resolved; billing falls back to the requested id
       let resolvedModelId = model;
 
+      /** Seconds of audio stored, for models priced per `second` */
+      let storedSeconds = 0;
+
       const settleCharge = async (songs: number, latency?: number) => {
         if (!ENABLE_BUSINESS_FEATURES || !prechargeResult) return;
+        const computePriceParams = {
+          songs,
+          ...(storedSeconds > 0 ? { duration: storedSeconds } : {}),
+        };
         try {
           await chargeAfterGenerate({
-            ...(songs > 0 ? { computePriceParams: { songs }, latency } : { isError: true }),
+            ...(songs > 0 ? { computePriceParams, latency } : { isError: true }),
             metadata: {
               ...spendOrigin,
               asyncTaskId: tasks[0].asyncTaskId,
@@ -305,7 +312,6 @@ export const musicRouter = router({
             const duration = Date.now() - asyncTaskCreatedAt.getTime();
 
             if (!track) {
-              settledTaskIds.add(asyncTaskId);
               await asyncTaskModel.update(asyncTaskId, {
                 error: createMusicTaskError(
                   new Error(`The provider returned ${tracks.length} of ${tasks.length} songs`),
@@ -313,6 +319,8 @@ export const musicRouter = router({
                 ),
                 status: AsyncTaskStatus.Error,
               });
+              // Only once the error is written; otherwise the batch failure path retries it
+              settledTaskIds.add(asyncTaskId);
               return;
             }
 
@@ -347,6 +355,7 @@ export const musicRouter = router({
 
               coverKeys[index] = processResult.coverKey;
               stored += 1;
+              storedSeconds += processResult.duration ?? 0;
               settledTaskIds.add(asyncTaskId);
             } catch (error) {
               console.error(
@@ -355,11 +364,11 @@ export const musicRouter = router({
                 generationBatchId,
                 error,
               );
-              settledTaskIds.add(asyncTaskId);
               await asyncTaskModel.update(asyncTaskId, {
                 error: createMusicTaskError(error, 'process'),
                 status: AsyncTaskStatus.Error,
               });
+              settledTaskIds.add(asyncTaskId);
               return;
             }
 
