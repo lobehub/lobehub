@@ -1,0 +1,33 @@
+name: Deployment script checks
+
+on:
+  push:
+    branches: [main, canary]
+    paths:
+      - 'scripts/deploy-custom-image*'
+      - 'docker-compose/deploy/**'
+      - '.github/workflows/test-deploy-script.yml'
+  pull_request:
+    paths:
+      - 'scripts/deploy-custom-image*'
+      - 'docker-compose/deploy/**'
+      - '.github/workflows/test-deploy-script.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Check shell syntax and deployment scenarios
+        run: |
+          bash -n scripts/deploy-custom-image.sh
+          python3 scripts/deploy-custom-image.test.py
+      - name: Validate real Compose configuration with generated secrets
+        run: python3 scripts/deploy-custom-image.test.py --compose-check
