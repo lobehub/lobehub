@@ -7,6 +7,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import { ChevronRight, CornerDownRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import UserAvatar from '@/features/User/UserAvatar';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -31,14 +32,15 @@ const styles = stylex.create({
     marginInline: 0,
     paddingBlock: 6,
     paddingInline: 10,
-    // A quiet fill instead of a bordered box: the card follows the message, it is not a new one.
+    // No box at rest: the card follows the message, it is not a new one. The fill only answers
+    // the pointer, to show the row opens the thread.
     borderWidth: 0,
     borderStyle: 'none',
     borderRadius: cssVar.borderRadius,
     font: 'inherit',
     textAlign: 'start',
     backgroundColor: {
-      'default': cssVar.colorFillQuaternary,
+      'default': 'transparent',
       ':hover': cssVar.colorFillTertiary,
     },
     cursor: 'pointer',
@@ -140,6 +142,16 @@ export const ThreadPreviewCard = ({
         <span {...stylex.props(styles.row, styles.replyRow)}>
           {isOwnReply ? (
             <UserAvatar shape="circle" size={16} />
+          ) : lastReply.author.type === 'agent' ? (
+            // The timeline's Agent avatar: without an image of its own it draws the character
+            // generated from the Agent id, so the card shows the face the thread shows.
+            <AgentAvatar
+              agentId={lastReply.author.id}
+              avatar={lastReply.author.avatar}
+              name={lastReply.author.name}
+              shape="circle"
+              size={16}
+            />
           ) : (
             <Avatar
               avatar={authorAvatar(lastReply.author)}
