@@ -12,8 +12,10 @@ export {
   countMiniMaxSpeechCharacters,
   countTextToSpeechCharacters,
   isFishAudioSpeechModel,
+  isFishAudioSpeechRoute,
   isMiniMaxSpeechModel,
   isTokenBilledTextToSpeech,
+  toFishAudioCatalogModel,
 } from './tts';
 export {
   computeChatCost,

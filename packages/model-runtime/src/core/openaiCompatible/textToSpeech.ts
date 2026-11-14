@@ -24,9 +24,10 @@ import {
   countFishAudioBilledBytes,
   countMiniMaxSpeechCharacters,
   countTextToSpeechCharacters,
-  isFishAudioSpeechModel,
+  isFishAudioSpeechRoute,
   isMiniMaxSpeechModel,
   isTokenBilledTextToSpeech,
+  toFishAudioCatalogModel,
 } from '../usageConverters/tts';
 
 export interface CreateOpenAICompatibleSpeechContext {
@@ -111,10 +112,19 @@ export const createOpenAICompatibleSpeech = async (
   const log = debug(`${context.logPrefix}:textToSpeech`);
   const params = resolveTextToSpeechParams(payload);
   const format = params.format ?? DEFAULT_TTS_AUDIO_FORMAT;
-  const pricing = await getModelPricing(payload.model, context.provider, options?.pricingContext);
+  const fishAudio = isFishAudioSpeechRoute(context.provider, payload.model, context.requestModel);
+  // A gateway id (`fish-audio/s2.1-pro` on OpenRouter) has no card of its own: price it by
+  // the Fish Audio catalog card when the provider has none.
+  const pricing =
+    (await getModelPricing(payload.model, context.provider, options?.pricingContext)) ??
+    (fishAudio
+      ? await getModelPricing(
+          toFishAudioCatalogModel(payload.model),
+          'fishaudio',
+          options?.pricingContext,
+        )
+      : undefined);
   const streamUsage = isTokenBilledTextToSpeech(pricing);
-  const fishAudio =
-    isFishAudioSpeechModel(payload.model) || isFishAudioSpeechModel(context.requestModel);
 
   // Fish Audio returns the whole audio inline; a longer input would be billed and then
   // exceed the serverless response limit. Gateway ids (`fish-audio/s2.1-pro`) match no

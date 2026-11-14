@@ -51,6 +51,27 @@ const FISH_AUDIO_SPEECH_MODEL_PATTERN =
 export const isFishAudioSpeechModel = (model?: string) =>
   !!model && FISH_AUDIO_SPEECH_MODEL_PATTERN.test(model);
 
+const FISH_AUDIO_GATEWAY_PREFIX = /^fish-audio\//i;
+
+/**
+ * Whether a request on a generic (OpenAI-compatible) runtime goes to Fish Audio. Only a
+ * gateway id (`fish-audio/s1`) proves it: a bare id such as `s1` may be any custom
+ * provider's own model, so it counts only on the Fish Audio provider itself.
+ */
+export const isFishAudioSpeechRoute = (
+  provider: string | undefined,
+  ...models: (string | undefined)[]
+) =>
+  models.some(
+    (model) =>
+      isFishAudioSpeechModel(model) &&
+      (FISH_AUDIO_GATEWAY_PREFIX.test(model!) || provider === 'fishaudio'),
+  );
+
+/** The Fish Audio catalog id of a model id, without the gateway prefix. */
+export const toFishAudioCatalogModel = (model: string) =>
+  model.replace(FISH_AUDIO_GATEWAY_PREFIX, '');
+
 /**
  * Whether the model is billed per token (e.g. `gpt-4o-mini-tts`) rather than per input
  * character (e.g. `tts-1`). Token-billed models need provider-reported token usage.
