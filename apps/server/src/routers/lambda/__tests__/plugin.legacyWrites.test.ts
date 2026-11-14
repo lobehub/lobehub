@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PluginModel } from '@/database/models/plugin';
 
+import { toClientVersionLabel } from '../_helpers/legacyPluginWriteMetrics';
 import { pluginRouter } from '../plugin';
 
 const counter = vi.hoisted(() => ({ add: vi.fn() }));
@@ -73,7 +74,7 @@ describe('pluginRouter legacy create routes', () => {
     });
     expect(counter.add).toHaveBeenCalledWith(1, {
       client_type: 'desktop',
-      client_version: '2.1.4',
+      client_version: toClientVersionLabel('2.1.4'),
       plugin_type: 'plugin',
       procedure: 'createOrInstallPlugin',
     });
@@ -111,7 +112,7 @@ describe('pluginRouter legacy create routes', () => {
     });
     expect(counter.add).toHaveBeenCalledWith(1, {
       client_type: 'desktop',
-      client_version: '2.1.4',
+      client_version: toClientVersionLabel('2.1.4'),
       plugin_type: 'customPlugin',
       procedure: 'createPlugin',
     });
