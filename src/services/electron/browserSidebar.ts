@@ -1,4 +1,7 @@
 import type {
+  BrowserLoginDataImportParams,
+  BrowserLoginDataPreviewResult,
+  BrowserLoginDataSourceParams,
   BrowserSidebarCaptureResult,
   BrowserSidebarImportResult,
   BrowserSidebarNavigateParams,
@@ -39,8 +42,16 @@ class ElectronBrowserSidebarService {
     return this.ipc.browserSidebar.goForward(params);
   }
 
-  importChromeLoginData(): Promise<BrowserSidebarImportResult> {
-    return this.ipc.browserSidebar.importChromeLoginData();
+  importBrowserLoginData(
+    params: BrowserLoginDataImportParams,
+  ): Promise<BrowserSidebarImportResult> {
+    return this.ipc.browserSidebar.importBrowserLoginData(params);
+  }
+
+  previewBrowserLoginData(
+    params: BrowserLoginDataSourceParams,
+  ): Promise<BrowserLoginDataPreviewResult> {
+    return this.ipc.browserSidebar.previewBrowserLoginData(params);
   }
 
   async navigate(params: BrowserSidebarNavigateParams): Promise<BrowserSidebarResult> {
