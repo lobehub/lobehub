@@ -545,9 +545,8 @@ export default {
   'plans.compare.agentRunFee': 'Fee per agent task',
   'plans.compare.artifactSiteSize': 'Max size per site',
   'plans.compare.artifactSites': 'Active Artifact sites',
-  'plans.compare.baseline': 'Limits are compared as multiples of {{plan}}.',
-  'plans.compare.baselineUltra':
-    'Limits are compared as multiples of {{plan}}, and Ultra models as multiples of {{ultraPlan}}.',
+  'plans.compare.baselineNote':
+    'Each limit is shown as a multiple of the plan marked Standard in its row.',
   'plans.compare.concurrentAgentRuns': 'Concurrent agent tasks',
   'plans.compare.documentCharacters': 'Characters per document',
   'plans.compare.earlyAccess': 'Early access to new features',

@@ -483,8 +483,6 @@
   "plans.compare.agentRunFee": "Phí mỗi tác vụ Agent",
   "plans.compare.artifactSiteSize": "Kích thước tối đa mỗi site",
   "plans.compare.artifactSites": "Site Artifact đang hoạt động",
-  "plans.compare.baseline": "Các giới hạn được so sánh theo bội số của {{plan}}.",
-  "plans.compare.baselineUltra": "Các giới hạn được so sánh theo bội số của {{plan}}, và mô hình Ultra theo bội số của {{ultraPlan}}.",
   "plans.compare.concurrentAgentRuns": "Tác vụ Agent đồng thời",
   "plans.compare.documentCharacters": "Ký tự mỗi tài liệu",
   "plans.compare.earlyAccess": "Truy cập sớm các tính năng mới",

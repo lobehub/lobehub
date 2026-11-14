@@ -483,8 +483,6 @@
   "plans.compare.agentRunFee": "هزینه هر وظیفه عامل",
   "plans.compare.artifactSiteSize": "حداکثر اندازه هر سایت",
   "plans.compare.artifactSites": "سایت‌های فعال Artifact",
-  "plans.compare.baseline": "محدودیت‌ها به‌صورت مضربی از {{plan}} مقایسه می‌شوند.",
-  "plans.compare.baselineUltra": "محدودیت‌ها به‌صورت مضربی از {{plan}} و مدل‌های اولترا به‌صورت مضربی از {{ultraPlan}} مقایسه می‌شوند.",
   "plans.compare.concurrentAgentRuns": "وظایف همزمان عامل",
   "plans.compare.documentCharacters": "کاراکتر در هر سند",
   "plans.compare.earlyAccess": "دسترسی زودهنگام به قابلیت‌های جدید",
