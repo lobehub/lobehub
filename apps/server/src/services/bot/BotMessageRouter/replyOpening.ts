@@ -66,6 +66,8 @@ export interface OpeningThread {
 }
 
 export interface OpeningMessage {
+  /** Attachments as the chat SDK normalized them, when the platform provides them. */
+  attachments?: unknown[];
   id?: string;
   raw?: unknown;
   text?: string;
@@ -140,6 +142,34 @@ const verdictOf = (
 });
 
 /**
+ * Whether the addressed message carried files or images. Their content never reaches the opener,
+ * so the only thing worth telling it is that the subject may live outside the text: an image-only
+ * "look at this" otherwise gets acknowledged and named after whatever was discussed before it.
+ */
+const ATTACHMENT_KEYS = [
+  'attachments',
+  'audio',
+  'document',
+  'file',
+  'image',
+  'photo',
+  'video',
+  'voice',
+];
+
+export const hasAttachmentContent = (message: OpeningMessage): boolean => {
+  if (message.attachments?.length) return true;
+  const payload = message.raw;
+  if (!payload || typeof payload !== 'object') return false;
+
+  return ATTACHMENT_KEYS.some((key) => {
+    const value = (payload as Record<string, unknown>)[key];
+
+    return Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null;
+  });
+};
+
+/**
  * Builds how a bot opens its reply to a message addressed to it.
  *
  * - When the owner leaves the placement to the bot (and its wake switch is on), the bot decides with a
@@ -209,6 +239,7 @@ export const createReplyOpening = (deps: ReplyOpeningDeps): ReplyOpeningService 
           botNames: conversation?.botNames,
           canOpenThread,
           message: input.message.text ?? '',
+          hasAttachments: hasAttachmentContent(input.message),
           recentMessages: conversation?.recent.map((line) =>
             describeLine(line, deps.applicationId, conversation.ownerId),
           ),

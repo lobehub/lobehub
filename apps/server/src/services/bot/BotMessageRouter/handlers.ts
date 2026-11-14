@@ -429,6 +429,7 @@ export function registerHandlers(
       conversation: () => wakeRecorder.conversation(observation),
       legacyOpensThread,
       message: {
+        attachments: (message as { attachments?: unknown[] }).attachments,
         id: message.id,
         raw: rawMessage,
         text: client.sanitizeUserInput?.(message.text ?? '', message) ?? message.text,

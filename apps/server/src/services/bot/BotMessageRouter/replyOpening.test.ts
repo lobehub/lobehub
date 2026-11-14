@@ -49,6 +49,24 @@ describe('createReplyOpening', () => {
       wakeKind: 'mention',
     });
 
+  it('tells the opener when the subject may live in an attachment it cannot see', async () => {
+    opener.mockResolvedValue({ placement: 'channel' });
+
+    await create().open({
+      message: { attachments: [{ name: 'image.png' }], id: 'msg-2', text: '解读下这个' },
+      thread: makeThread(),
+      wakeKind: 'mention',
+    });
+    await create().open({
+      message: { id: 'msg-3', raw: { attachments: [{ id: '1' }] }, text: '看这个' },
+      thread: makeThread(),
+      wakeKind: 'mention',
+    });
+
+    expect(opener.mock.calls[0][0]).toMatchObject({ hasAttachments: true, message: '解读下这个' });
+    expect(opener.mock.calls[1][0]).toMatchObject({ hasAttachments: true, message: '看这个' });
+  });
+
   it('falls back to the previous behaviour when the model does not answer in time', async () => {
     opener.mockImplementation(() => new Promise(() => {}));
     const thread = makeThread();
