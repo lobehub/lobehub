@@ -77,5 +77,15 @@ describe('formatModelPricingLabels', () => {
 
       expect(labels).toEqual(['song:0.03']);
     });
+
+    it('shows the per-second price of music models billed by length', () => {
+      const labels = formatModelPricingLabels(
+        'text2music',
+        { units: [{ name: 'musicGeneration', rate: 0.002, strategy: 'fixed', unit: 'second' }] },
+        t,
+      );
+
+      expect(labels).toEqual(['second:0.002']);
+    });
   });
 });

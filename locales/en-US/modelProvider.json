@@ -309,6 +309,7 @@
   "providerModels.item.pricing.inputMinutes": "${{amount}}/Minutes",
   "providerModels.item.pricing.inputTokens": "Input ${{amount}}/M",
   "providerModels.item.pricing.outputTokens": "Output ${{amount}}/M",
+  "providerModels.item.pricing.second": "${{amount}}/Second",
   "providerModels.item.pricing.song": "${{amount}}/Song",
   "providerModels.item.releasedAt": "Released at {{releasedAt}}",
   "providerModels.list.addNew": "Add Model",

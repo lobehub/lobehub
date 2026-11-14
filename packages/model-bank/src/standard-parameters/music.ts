@@ -28,6 +28,8 @@ const stringParam = z.object({
   maxLength: z.number().optional(),
   /** Minimum length in characters */
   minLength: z.number().optional(),
+  /** Whether the model cannot run without it */
+  required: z.boolean().optional(),
   type: z.literal('string').optional(),
 });
 
@@ -36,6 +38,8 @@ const nullableStringParam = z.object({
   description: z.string().optional(),
   maxLength: z.number().optional(),
   minLength: z.number().optional(),
+  /** Whether the model cannot run without it */
+  required: z.boolean().optional(),
   type: z.tuple([z.literal('string'), z.literal('null')]).optional(),
 });
 

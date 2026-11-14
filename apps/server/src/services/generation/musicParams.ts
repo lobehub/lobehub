@@ -83,6 +83,12 @@ export const validateMusicParams = (
       errors.push(`"duration" must be at most ${max} seconds`);
   }
 
+  if (schema.prompt?.required && !hasText(params.prompt))
+    errors.push('The model requires "prompt"');
+  // An instrumental track sends no lyrics, so required lyrics only apply to a vocal one
+  if (schema.lyrics?.required && !params.instrumental && !hasText(params.lyrics))
+    errors.push('The model requires "lyrics"');
+
   if (schema.referenceAudioUrl?.required && !hasText(params.referenceAudioUrl))
     errors.push('The model requires "referenceAudioUrl"');
 

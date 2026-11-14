@@ -23,9 +23,11 @@ const canSubmit = (s: MusicGenerationConfigState) => {
 
   if (!model) return false;
   if (schema.referenceAudioUrl?.required && !hasText(params.referenceAudioUrl)) return false;
+  if (schema.prompt?.required && !hasText(params.prompt)) return false;
 
   // Lyrics are not sent for an instrumental track, so they cannot count as input
   const hasLyrics = !params.instrumental && hasText(params.lyrics);
+  if (schema.lyrics?.required && !params.instrumental && !hasLyrics) return false;
 
   return (
     hasText(params.prompt) ||

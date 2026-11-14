@@ -111,6 +111,24 @@ describe('music generationConfig', () => {
     expect(musicGenerationConfigSelectors.isSupportedParam('referenceAudioUrl')(next)).toBe(true);
   });
 
+  it('canSubmit waits for a required prompt and for required lyrics of a vocal track', () => {
+    const base = {
+      ...useMusicStore.getState(),
+      parametersSchema: {
+        instrumental: { default: false },
+        lyrics: { default: null, required: true },
+        prompt: { default: '', required: true },
+      },
+    };
+    const canSubmit = (parameters: Record<string, unknown>) =>
+      musicGenerationConfigSelectors.canSubmit({ ...base, parameters } as typeof base);
+
+    expect(canSubmit({ lyrics: 'la la', prompt: '' })).toBe(false);
+    expect(canSubmit({ prompt: 'pop' })).toBe(false);
+    expect(canSubmit({ lyrics: 'la la', prompt: 'pop' })).toBe(true);
+    expect(canSubmit({ instrumental: true, prompt: 'pop' })).toBe(true);
+  });
+
   it('canSubmit accepts lyrics or style without a prompt but requires declared reference audio', () => {
     const base = { ...useMusicStore.getState(), parametersSchema: songSchema };
 

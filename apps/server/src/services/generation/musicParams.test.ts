@@ -41,6 +41,22 @@ describe('validateMusicParams', () => {
     ]);
   });
 
+  it('requires a declared required prompt, and required lyrics unless the track is instrumental', () => {
+    const schema = {
+      instrumental: { default: false },
+      lyrics: { default: null, required: true },
+      prompt: { default: '', required: true },
+    };
+
+    expect(validateMusicParams(parse({ lyrics: 'la la', prompt: '' }), schema)).toEqual([
+      'The model requires "prompt"',
+    ]);
+    expect(validateMusicParams(parse({ prompt: 'pop' }), schema)).toEqual([
+      'The model requires "lyrics"',
+    ]);
+    expect(validateMusicParams(parse({ instrumental: true, prompt: 'pop' }), schema)).toEqual([]);
+  });
+
   it('rejects a non-URL reference audio and unknown keys at the schema', () => {
     expect(() => parse({ prompt: 'p', referenceAudioUrl: 'not a url' })).toThrow();
     expect(() => parse({ prompt: 'p', tags: 'pop' })).toThrow(/Unrecognized key/);
