@@ -301,7 +301,7 @@ export const CloudSandboxManifest: BuiltinToolManifest = {
         properties: {
           path: {
             description:
-              'The path of the file in the sandbox to export (e.g., "./output/result.csv")',
+              'The path of the file to export. A relative path (e.g., "./output/result.csv") is resolved against the sandbox working directory, the directory runCommand starts in; an absolute path (e.g., "/workspace/output/result.csv") is used as-is. If the file is reported as not found, run `realpath <file>` with runCommand in the same sandbox and pass the absolute path it prints.',
             type: 'string',
           },
         },
