@@ -817,7 +817,8 @@ export default {
     'Use your iMessage handle as seen in BlueBubbles, usually an email address or E.164 phone number.',
   'channel.userIdHint.line':
     'Open the LINE Developers Console → your channel → Basic settings tab, and copy "Your user ID" (starts with U, 33 chars).',
-  'channel.userIdHint.qq': 'Your QQ number, shown on your QQ profile page.',
+  'channel.userIdHint.qq':
+    'Your QQ openid, not your QQ number. It differs per bot, and you can find this ID in your LobeHub conversation history.',
   'channel.userIdHint.slack': 'Open your Slack profile → ⋮ More → Copy member ID (starts with U).',
   'channel.userIdHint.telegram':
     'Send any message to @userinfobot on Telegram — it replies with your numeric User ID.',
