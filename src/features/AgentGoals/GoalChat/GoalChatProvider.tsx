@@ -60,13 +60,21 @@ export const GoalChatProvider = memo<GoalChatProviderProps>(
       setInitialized(true);
     }, [agentId, initialTopicId, setActiveAgentId]);
 
+    // A pinned panel reads its own record, not the store's active topic: other
+    // hosts on the page write that too. On the agent-less `/goal/:goalId` route
+    // the task manager panel stays mounted while folded, and its agent loading
+    // late switches the store to a blank topic, which left this panel on
+    // "Waiting for the first run" over a record that has turns.
+    const boundTopicId = pinned ? initialTopicId : undefined;
+    const topicId = boundTopicId ?? activeTopicId;
+
     const context = useMemo<ConversationContext>(
       () => ({
         agentId,
-        topicId: activeTopicId,
+        topicId,
         viewedGoal: { goalId },
       }),
-      [activeTopicId, agentId, goalId],
+      [agentId, goalId, topicId],
     );
 
     const operationState = useOperationState(context);
@@ -77,13 +85,14 @@ export const GoalChatProvider = memo<GoalChatProviderProps>(
     // starts a second run that discards the live one (and kills its CLI).
     // Only once the store points at this panel's conversation: until the
     // switch above lands, `activeTopicId` is whatever was open before, and its
-    // run would be followed under this panel's agent.
-    const followedTopicId =
-      initialized &&
-      activeChatAgentId === agentId &&
-      (!initialTopicId || activeTopicId === initialTopicId)
-        ? activeTopicId
-        : undefined;
+    // run would be followed under this panel's agent. A pinned panel already
+    // knows its topic.
+    const followedTopicId = !initialized
+      ? undefined
+      : (boundTopicId ??
+        (activeChatAgentId === agentId && (!initialTopicId || activeTopicId === initialTopicId)
+          ? activeTopicId
+          : undefined));
     const runningOperation = useChatStore((s) =>
       followedTopicId
         ? topicSelectors.getTopicById(followedTopicId)(s)?.metadata?.runningOperation
