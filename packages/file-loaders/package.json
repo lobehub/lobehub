@@ -19,6 +19,10 @@
   },
   "author": "LobeHub <i@lobehub.com>",
   "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
   "main": "./src/index.ts",
   "scripts": {
     "test": "vitest",
