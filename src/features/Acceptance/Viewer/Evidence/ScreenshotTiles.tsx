@@ -7,6 +7,7 @@ import { Check, MessageSquare, X } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { comparisonMedia } from '../../Report/EvidenceComparisonCard';
 import { useOptionalAcceptanceScope } from '../AcceptanceScope';
 import { commentAnchorId } from '../Comments/anchor';
 import { floatingActionHostMarker } from '../markers.stylex';
@@ -356,6 +357,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
         >
           <Image
             alt={alt}
+            {...(flat ? comparisonMedia.image : undefined)}
             loading={'lazy'}
             src={src}
             style={flat ? { borderRadius: 0 } : undefined}
@@ -391,6 +393,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
               >
                 <Image
                   alt={alt}
+                  {...(flat ? comparisonMedia.image : undefined)}
                   height={'100%'}
                   loading={'lazy'}
                   maxHeight={'none'}
@@ -441,6 +444,7 @@ export const ScreenshotTiles = memo<ScreenshotTilesProps>(
       >
         <Image
           alt={alt}
+          {...(flat ? comparisonMedia.image : undefined)}
           loading={'lazy'}
           maxHeight={'none'}
           maxWidth={'none'}

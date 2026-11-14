@@ -5,6 +5,8 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import type {
   AgentRunInitRequest,
   AgentSenderMetadata,
+  CancelVirtualSubAgentParams,
+  CancelVirtualSubAgentResult,
   ExecAgentResult,
   ExecGroupAgentParams,
   ExecGroupAgentResult,
@@ -75,6 +77,7 @@ import {
 } from './pipeline/groupMemberApproval';
 import { resolveNewThread } from './pipeline/newThread';
 import { createGroupAgentTopic, type PrecreatedTopicDeps } from './pipeline/precreatedTopic';
+import { releaseUnstartedRunFee, type RunFeeClaim } from './pipeline/runFee';
 import { releaseUnstartedRunSlot, type RunSlotClaim } from './pipeline/runSlot';
 import { scheduleAgentRun } from './pipeline/scheduleAgentRun';
 import { runWithTopicStart, type TopicStartDeps } from './pipeline/topicStart';
@@ -84,10 +87,16 @@ import { resolveAgentSenderFromOperation } from './sourceAttribution';
 import { startQueuedFollowUp } from './steerQueue';
 import { injectQueuedFollowUp } from './steerQueue/inject';
 import { findOwnLiveRuns } from './steerQueue/liveRuns';
+import { queueSubAgentSteer } from './steerQueue/subAgent';
 import type { SubAgentLlmRelayRequest } from './subAgentLlmRelay';
 import { closeSubAgentLlmRelay, openSubAgentLlmRelay } from './subAgentLlmRelay';
 import type { SubAgentRunDeps } from './subAgentRuns';
-import { execAgentMember, execAgentThreadRun, execIsolatedAgentMember } from './subAgentRuns';
+import {
+  cancelSubAgentThreadRun,
+  execAgentMember,
+  execAgentThreadRun,
+  execIsolatedAgentMember,
+} from './subAgentRuns';
 import type { InternalExecAgentParams } from './types';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -178,6 +187,7 @@ export class AiAgentService {
       //
       // Arrow fields are auto-bound, so no `.bind(this)`.
       delegate: {
+        cancelVirtualSubAgent: this.cancelVirtualSubAgent,
         deliverBackgroundSubAgentResults: this.deliverBackgroundSubAgentResults,
         execSubAgent: this.execSubAgent,
         execVirtualSubAgent: this.execVirtualSubAgent,
@@ -218,6 +228,8 @@ export class AiAgentService {
       agentRuntimeService: this.agentRuntimeService,
       execAgent: (p) => this.execAgent(p),
       messageModel: this.messageModel,
+      queueSubAgentSteer: (p) =>
+        queueSubAgentSteer({ db: this.db, userId: this.userId, workspaceId: this.workspaceId }, p),
       threadModel: this.threadModel,
       userId: this.userId,
     };
@@ -529,11 +541,13 @@ export class AiAgentService {
     };
 
     const runSlot: RunSlotClaim = {};
+    const runFee: RunFeeClaim = {};
 
     try {
-      return await execAgentTurn(this.execAgentTurnDeps, params, approvalClaim, runSlot);
+      return await execAgentTurn(this.execAgentTurnDeps, params, approvalClaim, runSlot, runFee);
     } finally {
       await releaseUnstartedRunSlot(runSlot, this.userId);
+      await releaseUnstartedRunFee(runFee, this.userId);
       if (
         !approvalClaim.continuationPrepared &&
         !approvalClaim.continuationStarted &&
@@ -798,6 +812,24 @@ export class AiAgentService {
       provider: params.provider,
       resumeParentOnComplete: true,
     });
+
+  /**
+   * Stop a running `lobe-agent.callSubAgent` child for the agent that
+   * dispatched it — see `cancelSubAgentThreadRun`. Runtime delegate entry.
+   */
+  cancelVirtualSubAgent = (
+    params: CancelVirtualSubAgentParams,
+  ): Promise<CancelVirtualSubAgentResult> =>
+    cancelSubAgentThreadRun(
+      {
+        agentOperationModel: this.agentOperationModel,
+        interruptTask: (p) => this.interruptTask(p),
+        isOperationInterrupted: (operationId) => this.isOperationInterrupted(operationId),
+        messageModel: this.messageModel,
+        threadModel: this.threadModel,
+      },
+      params,
+    );
 
   /**
    * Hand a topic's finished background sub-agent results to their parent agent

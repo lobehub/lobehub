@@ -96,6 +96,27 @@ describe('TopicAnalysisModel', () => {
     expect(row?.lastMessageUpdatedAt?.toISOString()).toBe('2026-10-30T10:00:00.000Z');
   });
 
+  it('stores nulls when the optional classification fields are omitted', async () => {
+    await personalModel.save({
+      ...snapshot,
+      result: {
+        category: 'coding',
+        model: 'model-a',
+        provider: 'provider-a',
+        taxonomyVersion: 'v1',
+      },
+      topicId,
+    });
+
+    expect(await personalModel.findByTopic(topicId, 'v1')).toMatchObject({
+      intent: null,
+      labels: null,
+      metadata: null,
+      outcome: null,
+      secondaryCategory: null,
+    });
+  });
+
   it('replaces the analysis for the same taxonomy version instead of duplicating it', async () => {
     await addNewerMessage();
     await personalModel.save({ ...snapshot, result: result(), topicId });
@@ -253,6 +274,10 @@ describe('TopicAnalysisModel', () => {
         totalTokens: null,
         userMessages: 0,
       });
+    });
+
+    it('returns undefined when the topic no longer exists', async () => {
+      expect(await personalModel.snapshotTopicUsage('tpc_missing')).toBeUndefined();
     });
 
     it('stores the snapshot with the analysis', async () => {

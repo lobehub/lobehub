@@ -11,9 +11,8 @@ import { useSearchParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useSingleton } from '@/hooks/useSingleton';
-import { mutate as globalMutate } from '@/libs/swr';
-import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
+import { useVerifyStore } from '@/store/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { hasVisualEvidence } from '../Evidence/evidence';
@@ -49,12 +48,15 @@ const styles = stylex.create({
 interface AcceptanceCheckInventoryProps {
   children?: ReactNode;
   onOpenTrace?: (verifierOperationId: string) => void | Promise<void>;
+  /** Rides right after the title — a host's word on where the delivery stands. */
+  titleExtra?: ReactNode;
   toolbar?: ReactNode;
 }
 
 const AcceptanceCheckInventory = ({
   children,
   onOpenTrace,
+  titleExtra,
   toolbar,
 }: AcceptanceCheckInventoryProps) => {
   const { t } = useTranslation('verify');
@@ -175,7 +177,7 @@ const AcceptanceCheckInventory = ({
     try {
       await action();
       await mutate();
-      void globalMutate(isAcceptanceListKey);
+      void useVerifyStore.getState().refreshAcceptanceLists();
       return true;
     } catch (cause) {
       console.error('[acceptance:review]', cause);
@@ -229,6 +231,7 @@ const AcceptanceCheckInventory = ({
           <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap' }}>
             {t('acceptance.checks.title')}
           </Text>
+          {titleExtra}
           <Flexbox flex={1} />
           {toolbar}
         </Flexbox>

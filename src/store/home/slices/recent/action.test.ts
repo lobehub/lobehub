@@ -8,17 +8,21 @@ import { randomUUID } from 'node:crypto';
 
 import type { RecentItem } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import { replicaKeys } from 'local-replica';
 import type { PropsWithChildren } from 'react';
 import { createElement, useEffect } from 'react';
-import { SWRConfig, useSWRConfig } from 'swr';
+import { SWRConfig, unstable_serialize, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope } from '@/libs/replica';
+import { CACHE_TIERS } from '@/libs/swr/localStorageProvider';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { fileService } from '@/services/file';
 import { recentService } from '@/services/recent';
 import { taskService } from '@/services/task';
+import { topicService } from '@/services/topic';
 import { useHomeStore } from '@/store/home';
+import { HOME_TOPIC_RECENTS_PARAMS, TRAY_RECENTS_PARAMS } from '@/store/home/slices/recent/action';
 import {
   createConversationRecentQueryKey,
   createRecentQueryKey,
@@ -237,6 +241,226 @@ describe('recents replica', () => {
 
     secondRequest.resolve(taskUpdateResult);
     await secondRename;
+  });
+});
+
+const HOME_TOPICS = createRecentQueryKey(HOME_TOPIC_RECENTS_PARAMS.limit, {
+  types: HOME_TOPIC_RECENTS_PARAMS.types,
+  view: HOME_TOPIC_RECENTS_PARAMS.view,
+});
+const TRAY = createRecentQueryKey(TRAY_RECENTS_PARAMS.limit, {
+  types: TRAY_RECENTS_PARAMS.types,
+  view: TRAY_RECENTS_PARAMS.view,
+});
+const rowsOf = (queryKey: string) => homeRecentSelectors.query(queryKey)(useHomeStore.getState());
+const seed = (
+  params: typeof HOME_TOPIC_RECENTS_PARAMS | typeof TRAY_RECENTS_PARAMS,
+  rows: RecentItem[],
+  at = scope,
+) =>
+  recentListResource.storage!.set(
+    { queryKey: recentListResource.storageKey(params), scope: at },
+    { data: rows, updatedAt: 1 },
+  );
+
+describe('Home topic and tray recents on the recentList replica', () => {
+  it('keeps each query in its own entry, apart from the sidebar', () => {
+    expect(new Set([SIDEBAR, DRAWER, HOME_TOPICS, TRAY]).size).toBe(4);
+    // Sidebar entries keep their original key, so persisted rows still hydrate.
+    expect(SIDEBAR).toBe('limit:11');
+  });
+
+  it('keeps the new sync keys out of the legacy SWR persistence tiers', () => {
+    for (const params of [HOME_TOPIC_RECENTS_PARAMS, TRAY_RECENTS_PARAMS]) {
+      const serialized = unstable_serialize(
+        replicaKeys.sync(
+          recentListResource.name,
+          recentListResource.version,
+          scope,
+          recentListResource.key(params),
+          params,
+        ),
+      );
+      expect(
+        [...CACHE_TIERS.idb, ...CACHE_TIERS.local].filter((pattern) =>
+          serialized.includes(pattern),
+        ),
+      ).toEqual([]);
+    }
+  });
+
+  it('asks the server for the same rows as before', async () => {
+    const getAll = vi.spyOn(recentService, 'getAll').mockResolvedValue([]);
+
+    renderHook(
+      () => {
+        useHomeStore((s) => s.useFetchHomeTopicRecents)(true);
+        useHomeStore((s) => s.useFetchTrayRecents)(true);
+      },
+      { wrapper },
+    );
+
+    await waitFor(() => expect(getAll).toHaveBeenCalledTimes(2));
+    // Home: own topics with previews; tray: own recents of every type.
+    expect(getAll).toHaveBeenCalledWith(15, ['topic'], true, true, false);
+    expect(getAll).toHaveBeenCalledWith(10, undefined, false, true, false);
+  });
+
+  it('paints persisted Home topics and tray rows before the network, then replaces them', async () => {
+    await seed(HOME_TOPIC_RECENTS_PARAMS, [item('t1', 'Cached topic', 'topic')]);
+    await seed(TRAY_RECENTS_PARAMS, [item('d1', 'Cached doc', 'document')]);
+    const response = deferred<RecentItem[]>();
+    vi.spyOn(recentService, 'getAll').mockReturnValue(response.promise);
+
+    renderHook(
+      () => {
+        useHomeStore((s) => s.useFetchHomeTopicRecents)(true);
+        useHomeStore((s) => s.useFetchTrayRecents)(true);
+      },
+      { wrapper },
+    );
+
+    await waitFor(() => {
+      expect(rowsOf(HOME_TOPICS)?.[0].title).toBe('Cached topic');
+      expect(rowsOf(TRAY)?.[0].title).toBe('Cached doc');
+    });
+    expect(homeRecentSelectors.isQueryConfirmed(HOME_TOPICS)(useHomeStore.getState())).toBe(false);
+
+    await act(async () => response.resolve([item('t2', 'Fresh', 'topic')]));
+
+    await waitFor(() => {
+      expect(rowsOf(HOME_TOPICS)?.map((row) => row.title)).toEqual(['Fresh']);
+      expect(rowsOf(TRAY)?.map((row) => row.title)).toEqual(['Fresh']);
+    });
+    expect(homeRecentSelectors.isQueryConfirmed(HOME_TOPICS)(useHomeStore.getState())).toBe(true);
+  });
+
+  it('treats a hydrated empty snapshot as unconfirmed until the server answers', async () => {
+    await seed(HOME_TOPIC_RECENTS_PARAMS, []);
+    const response = deferred<RecentItem[]>();
+    vi.spyOn(recentService, 'getAll').mockReturnValue(response.promise);
+
+    const { result } = renderHook(() => useHomeStore((s) => s.useFetchHomeTopicRecents)(true), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isHydrated).toBe(true));
+    expect(rowsOf(HOME_TOPICS)).toEqual([]);
+    expect(homeRecentSelectors.isQueryConfirmed(HOME_TOPICS)(useHomeStore.getState())).toBe(false);
+
+    await act(async () => response.resolve([]));
+    await waitFor(() =>
+      expect(homeRecentSelectors.isQueryConfirmed(HOME_TOPICS)(useHomeStore.getState())).toBe(true),
+    );
+  });
+
+  it("never paints another identity's rows", async () => {
+    await seed(HOME_TOPIC_RECENTS_PARAMS, [item('t1', 'Theirs', 'topic')], `${scope}-other`);
+    vi.spyOn(recentService, 'getAll').mockImplementation(() => new Promise(() => {}));
+
+    const { result } = renderHook(() => useHomeStore((s) => s.useFetchHomeTopicRecents)(true), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isHydrated).toBe(true));
+    expect(rowsOf(HOME_TOPICS)).toBeUndefined();
+  });
+
+  it('keeps the last rows when a background refresh fails', async () => {
+    const getAll = vi
+      .spyOn(recentService, 'getAll')
+      .mockResolvedValueOnce([item('t1', 'Kept', 'topic')]);
+    const { result } = renderHook(() => useHomeStore((s) => s.useFetchTrayRecents)(true), {
+      wrapper,
+    });
+    await waitFor(() => expect(rowsOf(TRAY)?.[0].title).toBe('Kept'));
+
+    getAll.mockRejectedValueOnce(new Error('offline'));
+    await act(async () => {
+      await result.current.revalidate().catch(() => undefined);
+    });
+
+    expect(rowsOf(TRAY)?.map((row) => row.title)).toEqual(['Kept']);
+  });
+
+  it('sends one request when several surfaces mount the same query', async () => {
+    const getAll = vi.spyOn(recentService, 'getAll').mockResolvedValue([]);
+
+    const { rerender } = renderHook(
+      ({ late }: { late: boolean }) => {
+        useHomeStore((s) => s.useFetchTrayRecents)(true);
+        useHomeStore((s) => s.useFetchTrayRecents)(true);
+        // A surface that mounts after the first answer (e.g. the titlebar remounting).
+        useHomeStore((s) => s.useFetchTrayRecents)(late);
+      },
+      { initialProps: { late: false }, wrapper },
+    );
+    await waitFor(() => expect(rowsOf(TRAY)).toEqual([]));
+    rerender({ late: true });
+    await act(async () => {});
+
+    expect(getAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes the tray on demand even inside the dedupe window', async () => {
+    const getAll = vi.spyOn(recentService, 'getAll').mockResolvedValue([]);
+    const { result } = renderHook(() => useHomeStore((s) => s.useFetchTrayRecents)(true), {
+      wrapper,
+    });
+    await waitFor(() => expect(getAll).toHaveBeenCalledTimes(1));
+
+    getAll.mockResolvedValueOnce([item('t1', 'Now running', 'topic')]);
+    await act(() => result.current.revalidate());
+
+    expect(getAll).toHaveBeenCalledTimes(2);
+    expect(rowsOf(TRAY)?.[0].title).toBe('Now running');
+  });
+
+  it('carries a rename into the Home topics and the tray, and persists it', async () => {
+    vi.spyOn(recentService, 'getAll').mockResolvedValue([item('t1', 'Old', 'topic')]);
+    vi.spyOn(topicService, 'updateTopic').mockResolvedValue(undefined as never);
+    renderHook(
+      () => {
+        useHomeStore((s) => s.useFetchHomeTopicRecents)(true);
+        useHomeStore((s) => s.useFetchTrayRecents)(true);
+      },
+      { wrapper },
+    );
+    await waitFor(() => expect(rowsOf(TRAY)).toHaveLength(1));
+    await waitFor(() => expect(rowsOf(HOME_TOPICS)).toHaveLength(1));
+
+    await act(() =>
+      useHomeStore.getState().renameRecent({ id: 't1', title: 'New', type: 'topic' }),
+    );
+
+    expect(rowsOf(HOME_TOPICS)?.[0].title).toBe('New');
+    expect(rowsOf(TRAY)?.[0].title).toBe('New');
+    await waitFor(async () =>
+      expect(
+        (
+          await recentListResource.storage!.get({
+            queryKey: recentListResource.storageKey(TRAY_RECENTS_PARAMS),
+            scope,
+          })
+        )?.data[0].title,
+      ).toBe('New'),
+    );
+  });
+
+  it('refetches the Home topics and the tray with the other recents', async () => {
+    const getAll = vi.spyOn(recentService, 'getAll').mockResolvedValue([]);
+    renderHook(
+      () => {
+        useHomeStore((s) => s.useFetchHomeTopicRecents)(true);
+        useHomeStore((s) => s.useFetchTrayRecents)(true);
+      },
+      { wrapper },
+    );
+    await waitFor(() => expect(getAll).toHaveBeenCalledTimes(2));
+
+    await act(() => useHomeStore.getState().refreshRecents());
+
+    expect(getAll).toHaveBeenCalledTimes(4);
   });
 });
 

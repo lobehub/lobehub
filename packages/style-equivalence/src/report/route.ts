@@ -5,7 +5,7 @@ export type Route =
   | { kind: 'file'; file: string }
   | { anchor?: string; kind: 'method' }
   | { kind: 'overview' }
-  | { kind: 'signoff' };
+  | { key?: string; kind: 'review' };
 
 export const parseRoute = (hash: string): Route => {
   const [path, anchor] = hash.replace(/^#/, '').split('#');
@@ -14,13 +14,15 @@ export const parseRoute = (hash: string): Route => {
   if (kind === 'file' && value) return { file: value, kind: 'file' };
   if (kind === 'case' && value) return { key: value, kind: 'case' };
   if (kind === 'method') return anchor ? { anchor, kind: 'method' } : { kind: 'method' };
-  if (kind === 'signoff') return { kind: 'signoff' };
+  if (kind === 'review' && value) return { key: value, kind: 'review' };
+  if (kind === 'review' || kind === 'signoff') return { kind: 'review' };
   return { kind: 'overview' };
 };
 
 export const hrefOf = (route: Route) => {
   if (route.kind === 'file') return `#/file/${encodeURIComponent(route.file)}`;
   if (route.kind === 'case') return `#/case/${encodeURIComponent(route.key)}`;
+  if (route.kind === 'review' && route.key) return `#/review/${encodeURIComponent(route.key)}`;
   if (route.kind === 'overview') return '#/';
   if (route.kind === 'method' && route.anchor) return `#/method#${route.anchor}`;
   return `#/${route.kind}`;

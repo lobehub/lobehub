@@ -129,4 +129,98 @@ describe('getWorkTypeDescriptor', () => {
       });
     });
   });
+
+  describe('external GitHub state and branch', () => {
+    const githubItem = (overrides: Record<string, unknown> = {}) =>
+      ({
+        description: null,
+        id: 'work-gh-1',
+        identifier: 'lobehub/lobehub#1',
+        resourceId: 'lobehub/lobehub#1',
+        resourceType: 'github_pull_request',
+        status: 'open',
+        title: 'A PR',
+        type: 'external',
+        ...overrides,
+      }) as any;
+
+    it('draws each PR state with its own stable glyph and keeps the brand icon otherwise', () => {
+      const iconOf = (overrides: Record<string, unknown>) => {
+        const item = githubItem(overrides);
+        return getWorkTypeDescriptor(item).getIcon(item);
+      };
+
+      const states = ['open', 'draft', 'merged', 'closed'].map((status) => iconOf({ status }));
+      expect(new Set(states).size).toBe(4);
+      // Stable identity: the card must not remount its icon on every render.
+      expect(iconOf({ status: 'open' })).toBe(states[0]);
+      // GraphQL-style uppercase states resolve the same way.
+      expect(iconOf({ status: 'MERGED' })).toBe(states[2]);
+
+      const brand = iconOf({ status: null });
+      expect(states).not.toContain(brand);
+      expect(iconOf({ status: 'constructor' })).toBe(brand);
+      expect(iconOf({ resourceType: 'github_issue', status: 'open' })).not.toBe(brand);
+    });
+
+    it('labels the drawn state for the icon tooltip, and nothing when the icon is the brand', () => {
+      const labelOf = (overrides: Record<string, unknown>) => {
+        const item = githubItem(overrides);
+        return getWorkTypeDescriptor(item).getStateLabelKey?.(item);
+      };
+
+      expect(labelOf({ status: 'draft' })).toBe('metaCard.pr.draft');
+      expect(labelOf({ status: 'merged' })).toBe('metaCard.pr.merged');
+      expect(labelOf({ resourceType: 'github_issue', status: 'closed' })).toBe(
+        'metaCard.pr.closed',
+      );
+      expect(labelOf({ status: null })).toBeNull();
+    });
+
+    it('marks every GitHub identifier with the GitHub logo, and no other provider', () => {
+      const markOf = (overrides: Record<string, unknown>) => {
+        const item = githubItem(overrides);
+        return getWorkTypeDescriptor(item).getIdentifierIcon?.(item);
+      };
+
+      const prMark = markOf({ status: 'open' });
+      expect(prMark).toBeTruthy();
+      // Same mark whether the main icon is a state glyph or already the brand logo.
+      expect(markOf({ status: null })).toBe(prMark);
+      expect(markOf({ resourceType: 'github_issue', status: 'closed' })).toBe(prMark);
+      expect(markOf({ resourceType: 'linear_issue', status: 'In Progress' })).toBeNull();
+    });
+
+    it('reads the head/base branch from the summary metadata only for pull requests', () => {
+      const withBranch = githubItem({
+        event: { metadata: { baseBranch: 'canary', headBranch: 'feat/x' } },
+      });
+      const descriptor = getWorkTypeDescriptor(withBranch);
+
+      expect(descriptor.getBranch?.(withBranch)).toEqual({ base: 'canary', head: 'feat/x' });
+      expect(descriptor.getBranch?.(githubItem())).toBeNull();
+      expect(
+        descriptor.getBranch?.(
+          githubItem({
+            event: { metadata: { headBranch: 'feat/x' } },
+            resourceType: 'github_issue',
+          }),
+        ),
+      ).toBeNull();
+    });
+
+    it('drops the status fallback from the GitHub description but keeps it for Linear', () => {
+      const github = githubItem();
+      expect(getWorkTypeDescriptor(github).getDescription(github)).toBeNull();
+
+      const linear = {
+        description: null,
+        id: 'work-linear-1',
+        resourceType: 'linear_issue',
+        status: 'In Progress',
+        type: 'external',
+      } as any;
+      expect(getWorkTypeDescriptor(linear).getDescription(linear)).toBe('In Progress');
+    });
+  });
 });

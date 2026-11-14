@@ -115,6 +115,14 @@ const insertAssistant = async (
   });
 };
 
+const writingFailure = () => ({
+  code: 'UNDERSTANDING_WRITING_FAILED',
+  message: 'understanding writing failed',
+  operation: 'writing',
+  provider: 'understanding',
+  retryable: true,
+});
+
 describe('OnboardingUnderstandingRepository', () => {
   let repository: OnboardingUnderstandingRepository;
 
@@ -200,13 +208,7 @@ describe('OnboardingUnderstandingRepository', () => {
     await completeProvider('github', 3);
 
     const failed = await repository.failWriting({
-      error: {
-        code: 'UNDERSTANDING_WRITING_FAILED',
-        message: 'understanding writing failed',
-        operation: 'writing',
-        provider: 'understanding',
-        retryable: true,
-      },
+      error: writingFailure(),
       feedbackRevision: 0,
       generationRevision: 0,
       sessionId,
@@ -448,13 +450,7 @@ describe('OnboardingUnderstandingRepository', () => {
       published: true,
     });
     const completedWriting = await repository.failWriting({
-      error: {
-        code: 'UNDERSTANDING_WRITING_FAILED',
-        message: 'understanding writing failed',
-        operation: 'writing',
-        provider: 'understanding',
-        retryable: true,
-      },
+      error: writingFailure(),
       feedbackRevision: 0,
       generationRevision: 1,
       sessionId,
@@ -574,13 +570,7 @@ describe('OnboardingUnderstandingRepository', () => {
       topicId,
     });
     const afterStaleFailure = await repository.failWriting({
-      error: {
-        code: 'UNDERSTANDING_WRITING_FAILED',
-        message: 'understanding writing failed',
-        operation: 'writing',
-        provider: 'understanding',
-        retryable: true,
-      },
+      error: writingFailure(),
       feedbackRevision: 0,
       generationRevision: 0,
       sessionId,
@@ -750,13 +740,7 @@ describe('OnboardingUnderstandingRepository', () => {
         }),
       () =>
         repository.failWriting({
-          error: {
-            code: 'UNDERSTANDING_WRITING_FAILED',
-            message: 'understanding writing failed',
-            operation: 'writing',
-            provider: 'understanding',
-            retryable: true,
-          },
+          error: writingFailure(),
           feedbackRevision: 0,
           generationRevision: 1,
           sessionId: 'inaccessible-session',

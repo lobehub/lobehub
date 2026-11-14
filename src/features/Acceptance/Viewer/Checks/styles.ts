@@ -108,7 +108,8 @@ export const styles = stylex.create({
   rowActionsIdle: {
     display: {
       default: null,
-      [stylex.when.ancestor(':not(:hover, :focus-within)', rowHeaderMarker)]: 'none',
+      [stylex.when.ancestor(':not([data-expanded], :hover, :focus-within)', rowHeaderMarker)]:
+        'none',
     },
   },
   rowChevron: {
@@ -127,7 +128,8 @@ export const styles = stylex.create({
       [compact]: { 'default': null, ':empty': 'none' },
       [hoverable]: {
         default: null,
-        [stylex.when.ancestor(':not(:hover, :focus-within)', rowHeaderMarker)]: 'none',
+        [stylex.when.ancestor(':not([data-expanded], :hover, :focus-within)', rowHeaderMarker)]:
+          'none',
       },
     },
   },

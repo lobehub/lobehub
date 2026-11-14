@@ -1,11 +1,10 @@
 'use client';
 
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Avatar from '@/components/Avatar';
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentDropdownMenu } from '@/features/HomeSidebar/Body/Agent/List/AgentItem/useDropdownMenu';
 import { usePreservedAgentUrl } from '@/features/HomeSidebar/Body/Agent/List/usePreservedAgentUrl';
 import { useAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
@@ -16,6 +15,8 @@ import { operationSelectors } from '@/store/chat/selectors';
 import ConversationRow from './ConversationRow';
 import { type Conversation } from './conversations';
 import { AVATAR_SIZE } from './style';
+import { useAgentConversationLink } from './useAgentConversationLink';
+import { useDirectChannelRow } from './useDirectChannelRow';
 
 interface AgentConversationProps {
   active: boolean;
@@ -28,8 +29,14 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
   const { t } = useTranslation('chat');
   const { openCreateGroupModal } = useAgentModal();
   const prefetchAgent = usePrefetchAgent();
-  const running = useChatStore(operationSelectors.isAgentVisiblyRunning(id));
-  const url = usePreservedAgentUrl(id);
+  const chatRunning = useChatStore(operationSelectors.isAgentVisiblyRunning(id));
+  const agentUrl = usePreservedAgentUrl(id);
+  const { onClick, url } = useAgentConversationLink(id, agentUrl);
+  const { channelActions, replyState } = useDirectChannelRow(conversation.channel, active);
+  const avatarState = replyState ?? (chatRunning ? 'working' : undefined);
+  // Only the direct Channel's own reply says typing: a run in one of the Agent's other topics
+  // only animates the avatar. A blocked reply keeps the preview; its avatar shows it waiting.
+  const typing = !!replyState && replyState !== 'waiting';
   const title = agentDisplayName(item, t('untitledAgent'));
   const avatarSrc = typeof avatar === 'string' ? avatar : undefined;
 
@@ -54,27 +61,41 @@ const AgentConversation = memo<AgentConversationProps>(({ active, conversation }
     visibility,
   });
 
+  const menuItems = useMemo(
+    () => () => {
+      const agentItems = contextMenuItems();
+      const items = channelActions();
+      if (items.length === 0) return agentItems;
+      return [...agentItems, { type: 'divider' as const }, ...items];
+    },
+    [channelActions, contextMenuItems],
+  );
+
   return (
     <ConversationRow
+      closeOnReselect
       active={active}
       activeAt={activeAt}
-      contextMenuItems={contextMenuItems}
-      pinned={!!pinned}
+      contextMenuItems={menuItems}
       preview={preview}
-      running={running}
       title={title}
-      unread={item.unreadCount}
+      typing={typing}
+      unread={conversation.unread ?? item.unreadCount}
       url={url}
       avatar={
-        <Avatar
-          emojiScaleWithBackground
-          avatar={avatarSrc || DEFAULT_AVATAR}
+        // Same avatar the agent has everywhere else, including its direct Channel: its own
+        // image or emoji, else the character generated from its id.
+        <AgentAvatar
+          agentId={id}
+          animated={!!avatarState}
+          avatar={avatarSrc}
           background={backgroundColor || undefined}
           name={title}
-          shape={'square'}
           size={AVATAR_SIZE}
+          state={avatarState}
         />
       }
+      onClick={onClick}
       onMouseEnter={() => prefetchAgent(id)}
     />
   );

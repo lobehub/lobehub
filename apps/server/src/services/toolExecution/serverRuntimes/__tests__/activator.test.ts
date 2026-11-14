@@ -46,6 +46,13 @@ vi.mock('@/server/services/agentSignal/store/adapters/redis/policyStateStore', (
   redisPolicyStateStore: {},
 }));
 
+const userSkillRow = () => ({
+  content: '# User skill',
+  id: 'user-skill-id',
+  identifier: 'user-skill-identifier',
+  name: 'user-skill',
+});
+
 describe('activatorRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -64,14 +71,7 @@ describe('activatorRuntime', () => {
         plugins: [{ identifier: 'user-skill-identifier', mode: 'disabled' }],
       });
       mocks.findByName.mockImplementation(async (name: string) =>
-        name === 'user-skill'
-          ? {
-              content: '# User skill',
-              id: 'user-skill-id',
-              identifier: 'user-skill-identifier',
-              name: 'user-skill',
-            }
-          : undefined,
+        name === 'user-skill' ? userSkillRow() : undefined,
       );
 
       const { activatorRuntime } = await import('../activator');
@@ -90,14 +90,7 @@ describe('activatorRuntime', () => {
     it('still activates the skill when it is not disabled', async () => {
       mocks.getAgentConfigById.mockResolvedValue({ plugins: [] });
       mocks.findByName.mockImplementation(async (name: string) =>
-        name === 'user-skill'
-          ? {
-              content: '# User skill',
-              id: 'user-skill-id',
-              identifier: 'user-skill-identifier',
-              name: 'user-skill',
-            }
-          : undefined,
+        name === 'user-skill' ? userSkillRow() : undefined,
       );
 
       const { activatorRuntime } = await import('../activator');
@@ -174,13 +167,15 @@ describe('activatorRuntime', () => {
       type: 'builtin',
     } as never;
 
+    const webBrowsingContext = () => ({
+      serverDB: {} as never,
+      toolManifestMap: { 'lobe-web-browsing': webBrowsingManifest },
+      userId: 'user-1',
+    });
+
     it('activates a tool requested by its wire name (identifier____apiName)', async () => {
       const { activatorRuntime } = await import('../activator');
-      const runtime = await activatorRuntime.factory({
-        serverDB: {} as never,
-        toolManifestMap: { 'lobe-web-browsing': webBrowsingManifest },
-        userId: 'user-1',
-      });
+      const runtime = await activatorRuntime.factory(webBrowsingContext());
 
       const result = await runtime.activateTools({
         identifiers: ['lobe-web-browsing____search'],
@@ -192,11 +187,7 @@ describe('activatorRuntime', () => {
 
     it('activates a tool requested by a wire name with an MD5-compressed api segment', async () => {
       const { activatorRuntime } = await import('../activator');
-      const runtime = await activatorRuntime.factory({
-        serverDB: {} as never,
-        toolManifestMap: { 'lobe-web-browsing': webBrowsingManifest },
-        userId: 'user-1',
-      });
+      const runtime = await activatorRuntime.factory(webBrowsingContext());
 
       const result = await runtime.activateTools({
         identifiers: ['lobe-web-browsing____MD5HASH_abc123def456'],
@@ -215,11 +206,7 @@ describe('activatorRuntime', () => {
       const wireHash = (segment: string) =>
         `MD5HASH_${Md5.hashStr(segment).toString().slice(0, 12)}`;
       const { activatorRuntime } = await import('../activator');
-      const runtime = await activatorRuntime.factory({
-        serverDB: {} as never,
-        toolManifestMap: { 'lobe-web-browsing': webBrowsingManifest },
-        userId: 'user-1',
-      });
+      const runtime = await activatorRuntime.factory(webBrowsingContext());
 
       const result = await runtime.activateTools({
         identifiers: [`${wireHash('lobe-web-browsing')}____${wireHash('search')}`],
@@ -231,12 +218,7 @@ describe('activatorRuntime', () => {
   });
 
   describe('Agent Share visitor runs', () => {
-    const userSkill = {
-      content: '# User skill',
-      id: 'user-skill-id',
-      identifier: 'user-skill-identifier',
-      name: 'user-skill',
-    };
+    const userSkill = userSkillRow();
 
     const createVisitorRuntime = async (
       agentShareVisitor: { skillGrants?: string[]; toolGrants?: { identifier: string }[] },

@@ -59,7 +59,7 @@ app.post(
         description: 'Synthesized audio',
       },
       400: openAIError('Invalid request, unsupported format or invalid params'),
-      402: openAIError('Insufficient credits'),
+      402: openAIError('Insufficient balance'),
       429: openAIError('Upstream provider rate limit'),
       502: openAIError('Upstream provider error'),
     },

@@ -180,6 +180,8 @@ export interface ToolStateChunkData {
  */
 export interface StreamStartAssistantMessage {
   agentId?: string | null;
+  /** Server creation time (epoch ms). Absent from older servers. */
+  createdAt?: number;
   groupId?: string | null;
   id: string;
   model?: string | null;
@@ -198,6 +200,8 @@ export interface StreamStartAssistantMessage {
  */
 export interface StreamStartParentMessage {
   content: string;
+  /** Server creation time (epoch ms). Absent from older servers. */
+  createdAt?: number;
   id: string;
   metadata?: Record<string, unknown> | null;
   parentId?: string | null;
@@ -278,7 +282,7 @@ export type AgentInterventionInteractionKind = 'permission' | 'plan' | 'question
 
 /** Producer that owns the blocked interaction. */
 export type AgentInterventionProvider =
-  'claude-code' | 'cursor' | 'devin' | 'droid' | 'opencode' | 'qoder';
+  'claude-code' | 'codex' | 'copilot' | 'cursor' | 'devin' | 'droid' | 'opencode' | 'qoder';
 
 /** Whitelisted option surface that may be persisted for cold-start review. */
 export interface AgentInterventionRenderOption {

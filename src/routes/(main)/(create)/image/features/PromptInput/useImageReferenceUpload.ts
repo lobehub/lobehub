@@ -31,6 +31,10 @@ export const useImageReferenceUpload = () => {
 
   const isSupportImageUrl = useImageStore(isSupportedParamSelector('imageUrl'));
   const isSupportImageUrls = useImageStore(isSupportedParamSelector('imageUrls'));
+  // GIF output and reference images exclude each other; block new references while GIF is
+  // selected, but keep removal available.
+  const isAnimatedOutput = useImageStore(imageGenerationConfigSelectors.isAnimatedOutput);
+  const canAddReference = canCreate && !isAnimatedOutput;
 
   const {
     value: imageUrl,
@@ -96,7 +100,7 @@ export const useImageReferenceUpload = () => {
   const { canDropImage, handleUploadFiles, imagePreviewUrls, maxCount, maxFileSize } =
     useReferenceImageUpload({
       addUploadingPreviews: addUploadingImagePreviews,
-      canCreate,
+      canCreate: canAddReference,
       maxFileSize: imageUrlsMaxFileSize ?? imageUrlMaxFileSize,
       onFirstDimensions: autoSetDimensions,
       onLimitExceeded,
@@ -107,7 +111,7 @@ export const useImageReferenceUpload = () => {
 
   const handleAddImage = useCallback(
     (data: UploadData) => {
-      if (!canCreate) return;
+      if (!canAddReference) return;
 
       const { url, dimensions } = extractUrlAndDimensions(data);
       if (!url) return;
@@ -133,7 +137,7 @@ export const useImageReferenceUpload = () => {
       setImageUrls,
       autoSetDimensions,
       extractUrlAndDimensions,
-      canCreate,
+      canAddReference,
     ],
   );
 

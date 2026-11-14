@@ -13,6 +13,10 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { fetchGitHubInstallation } from '@/server/services/scm/github/app';
 import { SCM_MAX_WAKES } from '@/server/services/scm/limits';
 import { consumeScmInstallClaim } from '@/server/services/scm/oauth/stateStore';
+import {
+  listScopeGitHubRepositories,
+  ScmRepositoriesUnavailableError,
+} from '@/server/services/scm/repositories';
 import { canWriteScmScope } from '@/server/services/scm/scope';
 
 /** Path the "Connect GitHub" button navigates to; the server route owns the redirect. */
@@ -141,6 +145,24 @@ export const scmRouter = router({
   listInstallations: scmProcedure.query(async ({ ctx }) =>
     ScmInstallationModel.listByScope(ctx.serverDB, ctx.scope),
   ),
+
+  /**
+   * Repositories the scope's live GitHub installations can read, most recently
+   * pushed first — the list "new project from GitHub" picks from. Read through
+   * the installations rather than the user's own token, so it shows exactly
+   * what an environment built from the pick can clone. One installation
+   * failing (rate limit, revoked on GitHub before the webhook lands) leaves the
+   * others listed; only when every one fails is that an error.
+   */
+  listRepositories: scmProcedure.query(async ({ ctx }) => {
+    try {
+      return await listScopeGitHubRepositories(ctx.serverDB, ctx.scope);
+    } catch (error) {
+      if (!(error instanceof ScmRepositoriesUnavailableError)) throw error;
+
+      throw new TRPCError({ cause: error.cause, code: 'BAD_GATEWAY', message: error.message });
+    }
+  }),
 });
 
 export type ScmRouter = typeof scmRouter;

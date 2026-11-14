@@ -48,9 +48,9 @@ const persistLocaleCookie = (
 };
 
 export function defineConfig() {
-  // `/oauth/connector` is a backend route handler (custom connector OAuth callback);
-  // the rest of `/oauth/*` (e.g. /oauth/callback/success) are SPA pages, so scope
-  // the passthrough to the connector subtree only.
+  // `/oauth/connector` holds backend route handlers (custom connector OAuth callback
+  // and client metadata document); the rest of `/oauth/*` (e.g. /oauth/callback/success)
+  // are SPA pages, so scope the passthrough to the connector subtree only.
   const backendApiEndpoints = ['/api', '/trpc', '/webapi', '/oidc', '/oauth/connector'];
 
   const defaultMiddleware = (request: NextRequest) => {
@@ -238,9 +238,15 @@ export function defineConfig() {
     // Custom connector OAuth callback — hit via a cross-site redirect from the
     // provider, carries its own code+state, so it must not be session-gated.
     '/oauth/connector/callback',
+    // Client ID Metadata Document — fetched by the provider's authorization server.
+    '/oauth/connector/client-metadata.json',
     '/oidc/handoff',
     '/oidc/device/auth',
     '/oidc/token',
+    // RFC 7009 / RFC 7662: native clients revoke (sign out) and introspect with
+    // their client_id and token; a session gate sent them to the sign-in page.
+    '/oidc/token/revocation',
+    '/oidc/token/introspection',
     // OIDC protocol endpoints a client reads before (or without) any browser
     // session: discovery and JWKS are public by spec, and userinfo authenticates
     // with the bearer access token the provider itself checks. Session-gating them

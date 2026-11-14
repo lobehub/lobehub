@@ -16,11 +16,9 @@ import { ArrowLeftIcon, CheckCircle2Icon, Trash2Icon, UserIcon } from 'lucide-re
 import type { ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
 import { usePermission } from '@/hooks/usePermission';
-import { messengerKeys } from '@/libs/swr/keys';
-import { messengerService } from '@/services/messenger';
+import { messengerActions, messengerSelectors, useMessengerStore } from '@/store/messenger';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -221,8 +219,7 @@ export const UserAgentConnection = memo<UserAgentConnectionProps>(
     const { t } = useTranslation('messenger');
     const { allowed: canEdit } = usePermission('edit_own_content');
     const enableWorkspaceScopes = useServerConfigStore(
-      (s) =>
-        serverConfigSelectors.enableBusinessFeatures(s) && s.featureFlags.enableWorkspace === true,
+      serverConfigSelectors.enableBusinessFeatures,
     );
     const handle = formatUserHandle(link);
     const hasReadableHandle = Boolean(link.platformUsername);
@@ -239,12 +236,20 @@ export const UserAgentConnection = memo<UserAgentConnectionProps>(
     // filters the agent list below. The active scope is persisted server-side
     // only when an agent is chosen (it derives the workspace from the agent).
     // `PERSONAL_SCOPE` is the sentinel for personal (null).
-    const scopesSWR = useSWR(enableWorkspaceScopes ? messengerKeys.bindingScopes() : null, () =>
-      messengerService.listBindingScopes(),
-    );
-    const [scope, setScope] = useState<string>(
-      enableWorkspaceScopes ? (link.workspaceId ?? PERSONAL_SCOPE) : PERSONAL_SCOPE,
-    );
+    messengerActions.useFetchBindingScopes(enableWorkspaceScopes);
+    const bindingScopes = useMessengerStore(messengerSelectors.bindingScopes);
+    const linkScope = enableWorkspaceScopes ? (link.workspaceId ?? PERSONAL_SCOPE) : PERSONAL_SCOPE;
+    const [scope, setScope] = useState<string>(linkScope);
+    // A link painted from the local copy may name an older binding scope. When
+    // the server's link moves to another scope, the picker follows it, so the
+    // agent below is read (and defaulted) in the scope the link is bound to.
+    const [syncedLinkScope, setSyncedLinkScope] = useState(linkScope);
+    if (syncedLinkScope !== linkScope) {
+      setSyncedLinkScope(linkScope);
+      setScope(linkScope);
+    }
+    // Defaulting to the inbox writes the binding: never from a restored link.
+    const isLinksConfirmed = useMessengerStore(messengerSelectors.isLinksConfirmed);
     const userAvatar = useUserStore(userProfileSelectors.userAvatar);
     const userDisplayName = useUserStore(userProfileSelectors.displayUserName);
     const userFullName = useUserStore(userProfileSelectors.fullName);
@@ -261,9 +266,9 @@ export const UserAgentConnection = memo<UserAgentConnectionProps>(
         personalAvatar: userAvatar,
         personalLabel,
         personalTagLabel: t('messenger.scopePersonalTag', { defaultValue: 'personal' }),
-        workspaces: scopesSWR.data,
+        workspaces: enableWorkspaceScopes ? bindingScopes : undefined,
       });
-    }, [scopesSWR.data, t, userAvatar, userDisplayName, userFullName]);
+    }, [bindingScopes, enableWorkspaceScopes, t, userAvatar, userDisplayName, userFullName]);
 
     const scopeWorkspaceId = scope === PERSONAL_SCOPE ? null : scope;
     const linkIsActiveScope = scopeWorkspaceId === (link.workspaceId ?? null);
@@ -274,7 +279,7 @@ export const UserAgentConnection = memo<UserAgentConnectionProps>(
     }, [enableWorkspaceScopes, scope]);
 
     // Optimistic selection for the currently-selected scope. Persisting the
-    // active agent does a server round-trip plus a `linksMutate()` refetch, so
+    // active agent waits for the server to adopt the pick into the link, so
     // without this the dropdown only reflects the new pick once both finish.
     // `pending` mirrors the user's choice immediately and is cleared once the
     // link data catches up. Scoped by workspace so it only applies while the
@@ -343,7 +348,7 @@ export const UserAgentConnection = memo<UserAgentConnectionProps>(
             <AgentSelect
               // Default to the scope's inbox agent whenever the selected scope has
               // no active Agent. This also repairs historical agent-less links.
-              defaultToInbox={canEdit && !pendingForScope && !activeAgentId}
+              defaultToInbox={canEdit && isLinksConfirmed && !pendingForScope && !activeAgentId}
               disabled={!canEdit}
               placeholder={t('messenger.activeAgentPlaceholder')}
               value={activeAgentId ?? undefined}
@@ -367,48 +372,42 @@ export const UserAgentConnection = memo<UserAgentConnectionProps>(
 UserAgentConnection.displayName = 'MessengerUserAgentConnection';
 
 export const useMessengerData = (platform: MessengerPlatform) => {
-  const linksSWR = useSWR(messengerKeys.listMyLinks(), () => messengerService.listMyLinks());
-  const installationsSWR = useSWR(messengerKeys.listMyInstallations(), () =>
-    messengerService.listMyInstallations(),
-  );
-
-  const links = (linksSWR.data ?? []).filter((l) => l.platform === platform);
-  const installations = (installationsSWR.data ?? []).filter((i) => i.platform === platform);
+  // A reload paints the last local copy of both lists, then revalidates.
+  const linksSync = messengerActions.useFetchLinks();
+  const installationsSync = messengerActions.useFetchInstallations();
+  const links = useMessengerStore(messengerSelectors.linksByPlatform(platform)) ?? EMPTY;
+  const installations =
+    useMessengerStore(messengerSelectors.installationsByPlatform(platform)) ?? EMPTY;
+  const isSettled = useMessengerStore(messengerSelectors.isPlatformDataSettled(platform));
   const tenantNameByTenantId = new Map(installations.map((i) => [i.tenantId, i.tenantName]));
-  const isInitialLoading = linksSWR.data === undefined || installationsSWR.data === undefined;
-  // A failed links / installations fetch leaves `data === undefined`, which the
-  // callers otherwise read as a permanent skeleton — surface the error so the
-  // detail renders a failure + Retry instead (ux Read §1.1).
-  const error = linksSWR.error ?? installationsSWR.error;
+  // A failed links / installations fetch with nothing to paint would otherwise
+  // read as a permanent skeleton — surface the error so the detail renders a
+  // failure + Retry instead (ux Read §1.1). A retry in flight is loading again.
+  const error =
+    linksSync.isValidating || installationsSync.isValidating
+      ? undefined
+      : (linksSync.error ?? installationsSync.error);
 
   return {
     error,
     installations,
-    installationsMutate: installationsSWR.mutate,
-    isInitialLoading,
+    isInitialLoading: !isSettled,
     links,
-    linksMutate: linksSWR.mutate,
     mutate: () => {
-      void linksSWR.mutate();
-      void installationsSWR.mutate();
+      void messengerActions.refreshConnections();
     },
     tenantNameByTenantId,
   };
 };
 
+const EMPTY: never[] = [];
+
 interface UseLinkActionsArgs {
-  installationsMutate: () => Promise<unknown>;
-  linksMutate: () => Promise<unknown>;
   name: string;
   platform: MessengerPlatform;
 }
 
-export const useLinkActions = ({
-  installationsMutate,
-  linksMutate,
-  name,
-  platform,
-}: UseLinkActionsArgs) => {
+export const useLinkActions = ({ name, platform }: UseLinkActionsArgs) => {
   const { t } = useTranslation('messenger');
 
   const { allowed: canEdit } = usePermission('edit_own_content');
@@ -419,12 +418,11 @@ export const useLinkActions = ({
     if (!canEdit) return false;
 
     try {
-      await messengerService.setActiveAgent({
+      await messengerActions.setActiveAgent({
         agentId,
         platform,
         tenantId: tenantId || undefined,
       });
-      await linksMutate();
       toast.success(t('messenger.setActiveSuccess'));
       return true;
     } catch (error) {
@@ -448,8 +446,7 @@ export const useLinkActions = ({
       okButtonProps: { danger: true },
       onOk: async () => {
         try {
-          await messengerService.unlink({ platform, tenantId: tenantId || undefined });
-          await Promise.all([linksMutate(), installationsMutate()]);
+          await messengerActions.unlink({ platform, tenantId: tenantId || undefined });
           toast.success(t('messenger.unlinkSuccess'));
         } catch (error) {
           toast.error(getMessengerErrorMessage(error, t, 'messenger.unlinkFailed'));
@@ -473,11 +470,6 @@ export interface DisconnectInstallationCopy {
   title: string;
 }
 
-interface UseDisconnectInstallationArgs {
-  installationsMutate: () => Promise<unknown>;
-  linksMutate: () => Promise<unknown>;
-}
-
 /**
  * Disconnect-installation handler shared by Slack and Discord. The copy
  * diverges sharply between platforms — for Slack the operation freezes the
@@ -486,10 +478,7 @@ interface UseDisconnectInstallationArgs {
  * it. The platform passes already-localized strings + the `failedKey` so the
  * shared hook avoids embedding any platform-specific copy.
  */
-export const useDisconnectInstallation = ({
-  installationsMutate,
-  linksMutate,
-}: UseDisconnectInstallationArgs) => {
+export const useDisconnectInstallation = () => {
   const { t } = useTranslation('messenger');
 
   const { allowed: canEdit } = usePermission('edit_own_content');
@@ -502,9 +491,7 @@ export const useDisconnectInstallation = ({
       okButtonProps: { danger: true },
       onOk: async () => {
         try {
-          await messengerService.uninstallInstallation({ installationId: id });
-          await installationsMutate();
-          await linksMutate();
+          await messengerActions.uninstallInstallation(id);
           toast.success(copy.success);
         } catch (error) {
           toast.error(getMessengerErrorMessage(error, t, copy.failedKey));

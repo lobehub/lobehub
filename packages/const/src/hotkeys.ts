@@ -1,5 +1,7 @@
 import type { HotkeyGroupId, HotkeyId, HotkeyRegistration, HotkeyScopeId } from '@lobechat/types';
 
+import { isDesktop } from './version';
+
 const combineKeys = (keys: string[]) => keys.join('+');
 
 export const KeyEnum = {
@@ -92,17 +94,22 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     keys: combineKeys([KeyEnum.Mod, 'j']),
     scopes: [HotkeyScopeEnum.Global],
   },
-  {
-    group: HotkeyGroupEnum.Essential,
-    id: HotkeyEnum.SwitchAgent,
-    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Number]),
-    nonEditable: true,
-    scopes: [HotkeyScopeEnum.Global],
-  },
+  // Desktop's number shortcuts select titlebar tabs, not agents.
+  ...(!isDesktop
+    ? [
+        {
+          group: HotkeyGroupEnum.Essential,
+          id: HotkeyEnum.SwitchAgent,
+          keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Number]),
+          nonEditable: true,
+          scopes: [HotkeyScopeEnum.Global],
+        },
+      ]
+    : []),
   {
     group: HotkeyGroupEnum.Essential,
     id: HotkeyEnum.SwitchTab,
-    keys: combineKeys([KeyEnum.Mod, KeyEnum.Number]),
+    keys: combineKeys([KeyEnum.Ctrl, KeyEnum.Number]),
     nonEditable: true,
     scopes: [HotkeyScopeEnum.Global],
   },

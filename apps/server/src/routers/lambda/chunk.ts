@@ -34,7 +34,13 @@ const chunkProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
       documentService: new DocumentService(ctx.serverDB, ctx.userId, wsId),
       embeddingModel: new EmbeddingModel(ctx.serverDB, ctx.userId, wsId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
-      knowledgeBaseSearchService: new KnowledgeBaseSearchService(ctx.serverDB, ctx.userId, wsId),
+      knowledgeBaseSearchService: new KnowledgeBaseSearchService(
+        ctx.serverDB,
+        ctx.userId,
+        wsId,
+        undefined,
+        ctx.userId,
+      ),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
     },
   });

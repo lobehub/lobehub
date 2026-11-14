@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { hierarchySearchResource } from '@/features/ResourceManager/store/projection';
 import type * as ReplicaModule from '@/libs/replica';
 import { createReplicaState } from '@/libs/replica';
+import { SortType } from '@/types/files';
 
 import {
   isExpandable,
@@ -23,6 +24,8 @@ const {
   mockRefreshFileList,
   mockResourceMove,
   mockRevalidateReplica,
+  mockSetSort,
+  mockReorder,
   mockStoreMove,
   mockUpdateResource,
 } = vi.hoisted(() => ({
@@ -34,6 +37,8 @@ const {
   mockRefreshFileList: vi.fn(),
   mockResourceMove: vi.fn(),
   mockRevalidateReplica: vi.fn(),
+  mockSetSort: vi.fn(),
+  mockReorder: vi.fn(),
   mockStoreMove: vi.fn(),
   mockUpdateResource: vi.fn(),
 }));
@@ -46,10 +51,15 @@ vi.mock('@/libs/replica', async () => ({
 vi.mock('@/features/ResourceManager/store', () => ({
   useResourceManagerStore: {
     getState: () => ({
+      setSort: mockSetSort,
       collapseHierarchySearch: mockCollapseHierarchySearch,
       patchSearchHit: mockPatchSearchHit,
     }),
   },
+}));
+
+vi.mock('@/services/knowledgeBase', () => ({
+  knowledgeBaseService: { reorderKnowledgeItems: mockReorder },
 }));
 
 vi.mock('@/services/file', () => ({
@@ -65,6 +75,9 @@ const moveCachePatch = {
 };
 
 const fileStoreState = {
+  queryParams: { libraryId: 'kb-1', parentId: null as string | null },
+  resourceList: [],
+  reorderCurrentResources: vi.fn(() => ({ commit: vi.fn(), rollback: vi.fn() })),
   applyMovedResourceToCaches: mockApplyMovedResourceToCaches,
   prepareResourceMoveCachePatch: vi.fn(async () => moveCachePatch),
   moveResource: mockStoreMove,
@@ -87,6 +100,11 @@ vi.mock('@/store/file', () => ({
 }));
 
 const createState = (): TreeState => ({
+  sorter: 'custom',
+  sortType: SortType.Asc,
+  setTreeSort: vi.fn(),
+  reorderItems: vi.fn(),
+  revalidateLoaded: vi.fn(),
   children: {},
   dropNodes: vi.fn(),
   epoch: 0,
@@ -702,7 +720,7 @@ describe('sortTreeItems', () => {
       doc('report-xiaojie', 'xiaojie 周报 — 2026-W35', '2026-08-29T02:00:00.000Z'),
     ];
 
-    expect(sortTreeItems(rows).map((item) => item.id)).toEqual([
+    expect(sortTreeItems(rows, 'createdAt', SortType.Desc).map((item) => item.id)).toEqual([
       'untitled',
       'report-xiaojie',
       'report-tc',
@@ -731,7 +749,11 @@ describe('sortTreeItems', () => {
       doc('stub-a', 'A stub'),
     ];
 
-    expect(sortTreeItems(rows).map((item) => item.id)).toEqual(['dated', 'stub-a', 'stub-b']);
+    expect(sortTreeItems(rows, 'createdAt', SortType.Desc).map((item) => item.id)).toEqual([
+      'dated',
+      'stub-b',
+      'stub-a',
+    ]);
   });
 
   it('breaks a createdAt tie by name', () => {
@@ -740,7 +762,10 @@ describe('sortTreeItems', () => {
       doc('a', 'Alpha', '2026-08-01T00:00:00.000Z'),
     ];
 
-    expect(sortTreeItems(rows).map((item) => item.id)).toEqual(['a', 'b']);
+    expect(sortTreeItems(rows, 'createdAt', SortType.Asc).map((item) => item.id)).toEqual([
+      'a',
+      'b',
+    ]);
   });
 });
 
@@ -801,5 +826,161 @@ describe('toTreeItem hasChildren', () => {
     expect(isExpandable(toTreeItem({ ...doc, hasChildren: true }))).toBe(true);
     expect(isExpandable(toTreeItem(doc))).toBe(false);
     expect(isExpandable(toTreeItem({ ...doc, fileType: CUSTOM_FOLDER_FILE_TYPE }))).toBe(true);
+  });
+});
+
+describe('TreeActionImpl sorting and reorder', () => {
+  const row = (id: string, isFolder = false) =>
+    toTreeItem({
+      id,
+      name: id,
+      fileType: isFolder ? CUSTOM_FOLDER_FILE_TYPE : 'text/plain',
+    });
+
+  beforeEach(() => {
+    mockReorder.mockReset();
+    mockSetSort.mockClear();
+    mockRefreshFileList.mockResolvedValue(undefined);
+    mockGetKnowledgeItems.mockResolvedValue({ items: [] });
+    fileStoreState.queryParams = { libraryId: 'kb-1', parentId: null };
+    fileStoreState.reorderCurrentResources.mockClear();
+  });
+
+  it('uses natural numbered names by default and keeps folders first in every mode', () => {
+    const rows = ['10_知识', '02_知识', '09_知识', '01_知识'].map((id) => row(id));
+    expect(sortTreeItems(rows).map((item) => item.id)).toEqual([
+      '01_知识',
+      '02_知识',
+      '09_知识',
+      '10_知识',
+    ]);
+    expect(sortTreeItems([row('第10章'), row('第2章')]).map((item) => item.id)).toEqual([
+      '第2章',
+      '第10章',
+    ]);
+    expect(sortTreeItems([row('10'), row('2')]).map((item) => item.id)).toEqual(['2', '10']);
+    for (const sorter of ['custom', 'name', 'size', 'createdAt'] as const) {
+      for (const direction of [SortType.Asc, SortType.Desc]) {
+        expect(sortTreeItems([row('a'), row('z', true)], sorter, direction)[0].id).toBe('z');
+      }
+    }
+  });
+
+  it('re-sorts loaded levels and sends the active order on folder expansion', async () => {
+    const state = createState();
+    state.children = { '': [row('a'), row('z')], 'level2': [row('a'), row('z')] };
+    const actions = new TreeActionImpl(
+      createSetter(() => state),
+      () => state,
+    );
+    mockGetKnowledgeItems.mockImplementation(() => new Promise(() => {}));
+    actions.setTreeSort('name', SortType.Desc);
+    expect(state.children.level2.map((item) => item.id)).toEqual(['z', 'a']);
+    void actions.loadChildren('level3');
+    expect(mockGetKnowledgeItems).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        parentId: 'level3',
+        sorter: 'name',
+        sortType: SortType.Desc,
+      }),
+    );
+  });
+
+  it.each([false, true])(
+    'optimistically reorders both surfaces and rolls back on error=%s',
+    async (fails) => {
+      const state = createState();
+      state.sorter = 'name';
+      state.sortType = SortType.Desc;
+      state.children = { '': [row('folder', true), row('a'), row('b')] };
+      const actions = new TreeActionImpl(
+        createSetter(() => state),
+        () => state,
+      );
+      let resolve!: () => void;
+      let reject!: (error: Error) => void;
+      mockReorder.mockRejectedValue(new Error('reorder failed'));
+      mockReorder.mockImplementationOnce(
+        () =>
+          new Promise<void>((yes, no) => {
+            resolve = yes;
+            reject = no;
+          }),
+      );
+      const refresh = vi.spyOn(actions, 'revalidate').mockResolvedValue();
+      const pending = actions.reorderItems('', ['b'], 'a', 'before');
+      const caught = pending.catch((error) => error);
+      await vi.waitFor(() => expect(mockReorder).toHaveBeenCalled());
+      expect(state.children[''].map((item) => item.id)).toEqual(['folder', 'b', 'a']);
+      expect(state.children[''].map((item) => item.metadata?.sortOrder)).toEqual([
+        1000, 2000, 3000,
+      ]);
+      expect(mockSetSort).toHaveBeenCalledWith('custom', SortType.Asc);
+      expect(mockReorder).toHaveBeenCalledWith({
+        knowledgeBaseId: 'kb-1',
+        parentId: null,
+        dragIds: ['b'],
+        targetId: 'a',
+        position: 'before',
+        sorter: 'name',
+        sortType: SortType.Desc,
+      });
+      const overlay = fileStoreState.reorderCurrentResources.mock.results.at(-1)!.value;
+      if (fails) {
+        reject(new Error('reorder failed'));
+        expect(await caught).toEqual(new Error('reorder failed'));
+        expect(state.children[''].map((item) => item.id)).toEqual(['folder', 'a', 'b']);
+        expect(state.children[''].every((item) => !item.metadata?.sortOrder)).toBe(true);
+        expect(overlay.rollback).toHaveBeenCalled();
+      } else {
+        resolve();
+        await pending;
+        expect(overlay.commit).toHaveBeenCalled();
+        expect(refresh).toHaveBeenCalledWith('');
+      }
+    },
+  );
+
+  it('sends only moved IDs when more than 1000 siblings are loaded', async () => {
+    const state = createState();
+    state.children = { '': Array.from({ length: 1005 }, (_, i) => row(`item-${i}`)) };
+    const actions = new TreeActionImpl(
+      createSetter(() => state),
+      () => state,
+    );
+    vi.spyOn(actions, 'revalidate').mockResolvedValue();
+    mockReorder.mockResolvedValue({ success: true });
+    await actions.reorderItems('', ['item-1004'], 'item-0', 'before');
+    expect(mockReorder).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dragIds: ['item-1004'],
+        targetId: 'item-0',
+        position: 'before',
+      }),
+    );
+    expect(mockReorder.mock.calls[0][0]).not.toHaveProperty('orderedIds');
+    expect(state.children[''].map((item) => item.id)).toEqual([
+      'item-1004',
+      ...Array.from({ length: 1004 }, (_, i) => `item-${i}`),
+    ]);
+  });
+
+  it('allows only the two cross-group boundary drops', async () => {
+    const state = createState();
+    const original = [row('f1', true), row('f2', true), row('a'), row('b')];
+    state.children = { '': original };
+    const actions = new TreeActionImpl(
+      createSetter(() => state),
+      () => state,
+    );
+    vi.spyOn(actions, 'revalidate').mockResolvedValue();
+    mockReorder.mockResolvedValue({ success: true });
+    await actions.reorderItems('', ['b'], 'f1', 'before');
+    expect(mockReorder).not.toHaveBeenCalled();
+    await actions.reorderItems('', ['b'], 'f2', 'after');
+    expect(state.children[''].map((item) => item.id)).toEqual(['f1', 'f2', 'b', 'a']);
+    state.children = { '': original };
+    await actions.reorderItems('', ['f1'], 'a', 'before');
+    expect(state.children[''].map((item) => item.id)).toEqual(['f2', 'f1', 'a', 'b']);
   });
 });

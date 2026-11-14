@@ -1,3 +1,5 @@
+import { isHomePathname } from '@/features/HomeLayout/isHomePathname';
+
 export interface ActiveConversationCoordinate {
   agentBasePath?: string;
   agentId?: string;
@@ -5,6 +7,8 @@ export interface ActiveConversationCoordinate {
   groupId?: string;
   hash: string;
   isConversation: boolean;
+  /** The Home page, which projects the inbox agent as the active agent. */
+  isHome: boolean;
   pathname: string;
   projectBasePath?: string;
   projectId?: string;
@@ -18,12 +22,14 @@ interface ResolveActiveConversationCoordinateOptions {
   params: { aid?: string; gid?: string; projectId?: string; topicId?: string };
   resolvedAgentId?: string;
   url: string;
+  workspaceSlug?: string | null;
 }
 
 export const resolveActiveConversationCoordinate = ({
   params,
   resolvedAgentId,
   url,
+  workspaceSlug,
 }: ResolveActiveConversationCoordinateOptions): ActiveConversationCoordinate => {
   const location = new URL(url, 'https://desktop.local');
   const segments = location.pathname.split('/').filter(Boolean);
@@ -75,6 +81,7 @@ export const resolveActiveConversationCoordinate = ({
     groupId: groupSegmentIndex >= 0 ? params.gid : undefined,
     hash: location.hash,
     isConversation,
+    isHome: isHomePathname(location.pathname, workspaceSlug),
     pathname: location.pathname,
     projectBasePath,
     projectId: projectConversation ? params.projectId : undefined,

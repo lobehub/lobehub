@@ -21,6 +21,7 @@ import {
   legacyGetAssistantList,
 } from './assistantsLegacy';
 import type { DiscoverService } from './index';
+import { withoutUnavailableModel } from './marketModelAvailability';
 import { isMarketNotFound, log, normalizeAuthorField } from './utils';
 
 // ============================== Assistant Market ==============================
@@ -86,7 +87,10 @@ export const getAssistantDetail = async (
       category: (data as any).category || 'general',
       // The market SDK types this as a bare record; the detail shape this
       // builds declares the agent config it actually carries.
-      config: (data.config || {}) as unknown as DiscoverAssistantDetail['config'],
+      config: ((await withoutUnavailableModel(
+        (data.config || {}) as Record<string, any>,
+        service.userInfo?.email,
+      )) ?? {}) as unknown as DiscoverAssistantDetail['config'],
       createdAt: (data as any).createdAt,
       currentVersion: data.version,
       description: (data as any).description || data.summary,

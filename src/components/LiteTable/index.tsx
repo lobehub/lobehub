@@ -411,7 +411,7 @@ const LiteTableInner = <RecordType,>({
               <tr>
                 {columns.map((column) => (
                   <th
-                    {...sx(wide ? styles.wideHeading : styles.heading, undefined, {
+                    {...sx(wide ? styles.wideHeading : styles.heading, {
                       width: column.width,
                     })}
                     key={column.key}

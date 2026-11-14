@@ -36,16 +36,40 @@ export const assertWorkspaceDeviceEditable = (
 };
 
 /**
- * In-memory cache of device-scoped skill preview roots, populated by
- * `listProjectSkills` and consumed by `assertWorkspaceRootApproved` to
- * authorize read-only file previews without persisting skill paths into
- * the DB (which would leak into the UI's working-directory list).
+ * In-memory cache of skill preview roots outside a project's working
+ * directory, populated by `listProjectSkills` and consumed by
+ * `assertWorkspaceRootApproved` to authorize read-only file previews without
+ * persisting skill paths into the DB (which would leak into the UI's
+ * working-directory list).
+ *
+ * Two kinds of grant: device skill directories (`~/.agents/skills`, …) hold
+ * unconditionally; project skill directories found in a parent of the scanned
+ * project carry that project and hold only while it is still approved, like
+ * the memory grants below. Accumulates per device so scanning project B does
+ * not revoke project A's grants, oldest evicted past the cap.
  */
-const deviceSkillRoots = new Map<string, Set<string>>();
+const MAX_SKILL_ROOTS_PER_DEVICE = 50;
 
-export const registerDeviceSkillRoots = (deviceId: string, roots: string[]) => {
-  if (roots.length === 0) return;
-  deviceSkillRoots.set(deviceId, new Set(roots));
+export interface DeviceSkillRootGrant {
+  /** The project the skill directory was found above; absent for device skills. */
+  projectRoot?: string;
+  root: string;
+}
+
+const deviceSkillRoots = new Map<string, Map<string, DeviceSkillRootGrant>>();
+
+export const registerDeviceSkillRoots = (deviceId: string, grants: DeviceSkillRootGrant[]) => {
+  if (grants.length === 0) return;
+
+  const current = deviceSkillRoots.get(deviceId) ?? new Map<string, DeviceSkillRootGrant>();
+  for (const grant of grants) {
+    if (!grant.root) continue;
+    const key = JSON.stringify([grant.projectRoot ?? null, grant.root]);
+    current.delete(key);
+    current.set(key, grant);
+  }
+  while (current.size > MAX_SKILL_ROOTS_PER_DEVICE) current.delete(current.keys().next().value!);
+  deviceSkillRoots.set(deviceId, current);
 };
 
 /**
@@ -82,9 +106,14 @@ export const registerDeviceMemoryRoot = (deviceId: string, grant: DeviceMemoryRo
   deviceMemoryRoots.set(deviceId, grants);
 };
 
-const isWithinSkillRoots = (deviceId: string, workingDirectory: string): boolean =>
-  [...(deviceSkillRoots.get(deviceId) ?? [])].some((root) =>
-    isPathWithinRoot(root, workingDirectory),
+const isWithinSkillRoots = (
+  deviceId: string,
+  workingDirectory: string,
+  isProjectApproved: (projectRoot: string) => boolean,
+): boolean =>
+  [...(deviceSkillRoots.get(deviceId)?.values() ?? [])].some(
+    ({ projectRoot, root }) =>
+      isPathWithinRoot(root, workingDirectory) && (!projectRoot || isProjectApproved(projectRoot)),
   );
 
 const isWithinMemoryGrant = (
@@ -146,7 +175,7 @@ export const assertWorkspaceRootApproved = async (
     approvedRoots.some((root) => isPathWithinRoot(root, target));
   const approved =
     isApprovedRoot(workingDirectory) ||
-    isWithinSkillRoots(deviceId, workingDirectory) ||
+    isWithinSkillRoots(deviceId, workingDirectory, isApprovedRoot) ||
     isWithinMemoryGrant(deviceId, workingDirectory, isApprovedRoot);
 
   if (!approved) {

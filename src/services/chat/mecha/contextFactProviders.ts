@@ -4,6 +4,7 @@ import { type AgentShareVisitorContext, getActivePluginIds } from '@lobechat/typ
 
 import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { lambdaClient } from '@/libs/trpc/client';
+import { agentDocumentService } from '@/services/agentDocument';
 import { messageService } from '@/services/message';
 import { notebookService } from '@/services/notebook';
 import { sandboxStorageService } from '@/services/sandboxStorage';
@@ -82,6 +83,11 @@ export const createBrowserContextFactProviders = ({
   groupId,
   shareVisitor,
 }: BrowserContextFactSource = {}): ContextFactProviders => ({
+  findAgentDocument: async (targetAgentId, documentId) => {
+    const doc = await agentDocumentService.readDocument({ agentId: targetAgentId, id: documentId });
+    return doc ? { content: doc.content, title: doc.title } : null;
+  },
+
   findTopic: async (topicId) => {
     const topic = topicSelectors.getTopicById(topicId)(getChatStoreState());
     if (!topic) return null;

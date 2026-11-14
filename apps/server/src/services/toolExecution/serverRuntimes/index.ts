@@ -13,6 +13,7 @@ import { LegacyGoalIdentifier } from '@lobechat/builtin-tool-goal';
 import type { ToolExecutionContext } from '../types';
 import { acceptanceEvidenceRuntime } from './acceptanceEvidence';
 import { activatorRuntime } from './activator';
+import { agentAccountRuntime } from './agentAccount';
 import { agentBuilderRuntime } from './agentBuilder';
 import { agentDocumentsRuntime } from './agentDocuments';
 import { agentManagementRuntime } from './agentManagement';
@@ -75,6 +76,7 @@ registerRuntimes([
   channelRuntime,
   acceptanceEvidenceRuntime,
   auvRuntime,
+  agentAccountRuntime,
   agentBuilderRuntime,
   webBrowsingRuntime,
   cloudSandboxRuntime,

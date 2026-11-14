@@ -1,6 +1,9 @@
 'use client';
 
-import { SiGit, SiGooglechrome, SiNodedotjs, SiPython } from '@icons-pack/react-simple-icons';
+import SiGit from '@icons-pack/react-simple-icons/icons/SiGit';
+import SiGooglechrome from '@icons-pack/react-simple-icons/icons/SiGooglechrome';
+import SiNodedotjs from '@icons-pack/react-simple-icons/icons/SiNodedotjs';
+import SiPython from '@icons-pack/react-simple-icons/icons/SiPython';
 import { getGoalCommand } from '@lobechat/shared-tool-ui/goal-command';
 import {
   createGrepContentInspector,

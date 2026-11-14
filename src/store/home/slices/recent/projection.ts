@@ -3,20 +3,49 @@ import type { RecentItem } from '@lobechat/types';
 import { defineReplica } from '@/libs/replica';
 import type { fileService } from '@/services/file';
 
-export interface RecentListParams {
-  limit: number;
-}
-
-/** Entry key of one recents query (`recentListMap[limit:N]`). */
-export const createRecentQueryKey = (limit: number): string => `limit:${limit}`;
+/**
+ * Which entity types a recents query asks for:
+ * - `sidebar`: documents and tasks (the home sidebar and the "all recents" drawer)
+ * - `topic`: topics with their reply previews (the Home chat-mode recents block)
+ * - `all`: every type, no previews (the desktop tray menu)
+ */
+export type RecentListTypes = 'all' | 'sidebar' | 'topic';
 
 /**
- * Recent documents / tasks / topics, one entry per requested limit (the sidebar
- * asks for `pageSize + 1`, the drawer for 50). localStorage keeps the first
- * frame of the home sidebar instant.
+ * Whose rows a recents query keeps. Workspace topics are shared, so `mine` is
+ * narrowed on the server: client-filtering the top N of a team-wide feed could
+ * starve out the viewer's own topics. `team` drops private agents / groups.
+ */
+export type RecentListView = 'mine' | 'team';
+
+export interface RecentListParams {
+  limit: number;
+  /** Defaults to `sidebar`. */
+  types?: RecentListTypes;
+  /** Unset: no ownership filter. */
+  view?: RecentListView;
+}
+
+/**
+ * Entry key of one recents query (`recentListMap[...]`). Sidebar queries keep
+ * the original `limit:N` key so their persisted rows still hydrate. The others
+ * use `/` separators: the key ends up in the SWR sync key, and a `topic:`
+ * substring would match a legacy CACHE_TIERS pattern and be persisted twice.
+ */
+export const createRecentQueryKey = (
+  limit: number,
+  { types = 'sidebar', view }: Omit<RecentListParams, 'limit'> = {},
+): string =>
+  types === 'sidebar' && !view ? `limit:${limit}` : `${types}/${view ?? 'any'}/limit:${limit}`;
+
+/**
+ * Recent documents / tasks / topics, one entry per query: the sidebar asks for
+ * `pageSize + 1` documents and tasks, the drawer for 50, Home chat mode for its
+ * own topics and the tray for every type. localStorage keeps their first frame
+ * instant.
  */
 export const recentListResource = defineReplica<RecentListParams, RecentItem[]>({
-  key: ({ limit }) => createRecentQueryKey(limit),
+  key: ({ limit, types, view }) => createRecentQueryKey(limit, { types, view }),
   name: 'recentList',
   storage: 'localStorage',
   version: 1,

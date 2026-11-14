@@ -17,7 +17,7 @@ import type {
 } from '@lobechat/types';
 
 import { canUseGatewayProtocolV2 } from '@/helpers/gatewayProtocol';
-import { lambdaClient } from '@/libs/trpc/client';
+import { createWorkspaceLambdaClient, lambdaClient } from '@/libs/trpc/client';
 import { buildLlmExecutorDeclaration } from '@/services/llmRelay';
 
 export type { ExecAgentResult, ScheduleAgentRunParams, ScheduleAgentRunResult };
@@ -309,6 +309,26 @@ export interface UpdateClientTaskThreadStatusParams {
 class AiAgentService {
   async getServerDefaultHeterogeneousCapability() {
     return await lambdaClient.aiAgent.getServerDefaultHeterogeneousCapability.query();
+  }
+
+  /** Holds the run fee of an external agent this desktop spawns itself. */
+  async beginLocalHeteroRunFee(
+    params: { topicId?: string },
+    options: { signal?: AbortSignal; workspaceId: string | null },
+  ) {
+    return await createWorkspaceLambdaClient(
+      options.workspaceId,
+    ).aiAgent.beginLocalHeteroRunFee.mutate(params, { signal: options.signal });
+  }
+
+  /** Charges or gives back that fee once the run ends, in the scope it was held in. */
+  async finishLocalHeteroRunFee(
+    params: { durationMs?: number; feeId: string; reason: 'done' | 'error' | 'interrupted' },
+    options: { signal?: AbortSignal; workspaceId: string | null },
+  ) {
+    return await createWorkspaceLambdaClient(
+      options.workspaceId,
+    ).aiAgent.finishLocalHeteroRunFee.mutate(params, { signal: options.signal });
   }
 
   /**

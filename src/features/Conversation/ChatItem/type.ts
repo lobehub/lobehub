@@ -67,6 +67,11 @@ export interface ChatItemProps extends Omit<FlexboxProps, 'children' | 'onChange
    */
   placement?: 'left' | 'right';
   /**
+   * Quiet header: name and time sit on one baseline, one colour step lighter than the message,
+   * like an IM author line. Off for the main chat, whose header stays as is.
+   */
+  quietHeader?: boolean;
+  /**
    * @description Whether to hide the avatar
    * @default false
    */

@@ -21,6 +21,7 @@ import CohereProvider from './cohere';
 import CometAPIProvider from './cometapi';
 import ComfyUIProvider from './comfyui';
 import DeepSeekProvider from './deepseek';
+import ElevenLabsProvider from './elevenlabs';
 import FalProvider from './fal';
 import FireworksAIProvider from './fireworksai';
 import GiteeAIProvider from './giteeai';
@@ -172,6 +173,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   AiHubMixProvider,
   OpenRouterProvider,
   FalProvider,
+  ElevenLabsProvider,
   OllamaProvider,
   OllamaCloudProvider,
   VLLMProvider,
@@ -325,6 +327,7 @@ export { default as CohereProviderCard } from './cohere';
 export { default as CometAPIProviderCard } from './cometapi';
 export { default as ComfyUIProviderCard } from './comfyui';
 export { default as DeepSeekProviderCard } from './deepseek';
+export { default as ElevenLabsProviderCard } from './elevenlabs';
 export { default as FalProviderCard } from './fal';
 export { default as FireworksAIProviderCard } from './fireworksai';
 export { default as GiteeAIProviderCard } from './giteeai';

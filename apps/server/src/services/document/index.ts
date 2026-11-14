@@ -32,6 +32,7 @@ import { type LobeDocument } from '@/types/document';
 
 import { EditLockService } from '../editLock';
 import { FileService } from '../file';
+import { dropPageRooms } from '../pageCollab/notify';
 import { publishResourceEvent } from '../resourceEvents';
 import { countEditorDataText } from './editorData';
 import { DocumentHistoryService } from './history';
@@ -186,6 +187,17 @@ export class DocumentService {
     doc: Pick<DocumentItem, 'visibility' | 'workspaceId'> | null | undefined,
   ): boolean {
     return Boolean(this.workspaceId && doc?.workspaceId && doc.visibility !== 'private');
+  }
+
+  async assertCanWriteBody(id: string, lockOwnerId?: string) {
+    const document = await this.documentModel.findById(id);
+    if (!this.isCollaborativeDocument(document)) return;
+    if (await this.editLockService.canWrite('document', id, lockOwnerId)) return;
+    throw new TRPCError({
+      cause: { data: { code: 'DocumentLocked' } },
+      code: 'CONFLICT',
+      message: 'Document is being edited by another user',
+    });
   }
 
   private async deleteFileRecordAndStorage(fileId: string) {
@@ -700,7 +712,9 @@ export class DocumentService {
     }
 
     // Finally delete the document itself
-    return this.documentModel.delete(id);
+    const deleted = await this.documentModel.delete(id);
+    if (document.workspaceId) dropPageRooms([id]);
+    return deleted;
   }
 
   /**
@@ -823,15 +837,14 @@ export class DocumentService {
 
       const updates: Record<string, unknown> = {};
 
-      // Room projections persist what the room already accepted. Checked before
-      // anything is persisted. `restoreFromHistoryId` is not an exemption: the
-      // client sends it with a body the server does not match against the
-      // version, so only server-side restores opt out via `writeSource`.
-      // Editor data is measured too because it can arrive without `content`.
-      if (
-        (params.content !== undefined || editorDataParam !== undefined) &&
-        params.origin !== 'room-projection'
-      ) {
+      // Checked before anything is persisted. Room projections are checked too:
+      // the room accepts browser edits without measuring them, so the
+      // projection is the only place a collaborative page's length is enforced.
+      // `restoreFromHistoryId` is not an exemption: the client
+      // sends it with a body the server does not match against the version, so
+      // only server-side restores opt out via `writeSource`. Editor data is
+      // measured too because it can arrive without `content`.
+      if (params.content !== undefined || editorDataParam !== undefined) {
         await assertDocumentWriteWithinLimit({
           charCount: Math.max(params.content?.length ?? 0, countEditorDataText(editorDataParam)),
           previousCharCount: Math.max(

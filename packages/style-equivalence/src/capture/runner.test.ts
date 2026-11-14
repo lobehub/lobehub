@@ -6,7 +6,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { analyzeRun, createRunAnalyzer } from '../analyze/diff';
 import { launchBrowser } from './browser';
-import { capturePage, captureRun, captureSections, conditionFromLabel } from './runner';
+import {
+  capturePage,
+  captureRun,
+  captureSections,
+  conditionFromLabel,
+  inspectCaseGaps,
+} from './runner';
 import type { StyleSnapshot } from './snapshot';
 import { serveDirectories } from './staticServer';
 
@@ -31,6 +37,37 @@ const write = async (name: string, html: string) => {
 
 beforeAll(async () => {
   root = await mkdtemp(path.join(tmpdir(), 'style-eq-capture-'));
+  const scrollbar = (name: string, width: string) =>
+    page(`.${name} ::-webkit-scrollbar { width: ${width}; }`).replace(
+      'class="row"',
+      `class="${name}"`,
+    );
+  await write('base-scrollbar', scrollbar('lobe-share-7976-preview', '4px'));
+  await write('head-scrollbar', scrollbar('css-1x2y3z', '4px'));
+  await write('head-scrollbar-wide', scrollbar('css-1x2y3z', '8px'));
+  await write(
+    'base-elsewhere-container',
+    page(
+      '.t { color: black; } @container grid (min-width: 560px) { .elsewhere > :nth-child(n+3) { display: flex; } } .elsewhere:has(> :where(button, a):active) { color: red; }',
+    ),
+  );
+  await write(
+    'base-document-pseudo',
+    page('.t { color: black; } ::view-transition-old(panel) { animation-duration: 240ms; }'),
+  );
+  await write(
+    'base-ancestor-not',
+    page(
+      '.t { color: black; } @media (hover: hover) and (pointer: fine) { .x1a2b3c.x1a2b3c.x1a2b3c:where(.lhewz77w:not(:hover, :focus-within) *) { opacity: 0; } }',
+    ),
+  );
+  await write(
+    'base-unparsable',
+    page(
+      '.t { color: black; }',
+      "const sheet = document.createElement('style'); sheet.textContent = '@namespace svg url(http://www.w3.org/2000/svg); @media (hover: hover) { svg|a { color: red; } }'; document.head.prepend(sheet);",
+    ),
+  );
   await write('base-hover', page('.t { color: black; } .t:hover { color: red; }'));
   await write('head-hover', page('.t { color: black; }'));
   await write(
@@ -49,6 +86,12 @@ beforeAll(async () => {
     page('.t { color: black; } .row:focus-visible .t { color: red; }'),
   );
   await write('head-ancestor-focus', page('.t { color: black; }'));
+  await write('base-checked', page('.t { color: black; } .t:checked { background-color: red; }'));
+  await write('head-checked', page('.t { color: black; } .t:checked { background-color: blue; }'));
+  await write(
+    'static-pseudo',
+    page('.t { color: black; } .t:first-child:not(:empty) { color: black; }'),
+  );
   const pair = (css: string) => `<!doctype html><html><head><style>
 body { margin: 0; font: 14px Arial; }
 ${css}
@@ -124,6 +167,63 @@ describe('captureRun + analyzeRun', () => {
     const [result] = await run('base-ancestor-focus', 'head-ancestor-focus');
     expect(result.status).toBe('difference');
     expect(result.differingConditions).toContain('light/1280/force-chain:focus-visible');
+  });
+
+  it('flags a case whose state-dependent pseudo-class rules differ as a coverage gap', async () => {
+    const [result] = await run('base-checked', 'head-checked');
+    expect(result).toMatchObject({ gaps: ['STATE_UNMODELED'], status: 'equal' });
+  });
+
+  it('reports state gaps between any two pages, such as an original head and its mutant', async () => {
+    const gaps = await inspectCaseGaps(
+      browser,
+      { base: `${server.url}/base-checked/`, head: `${server.url}/head-checked/` },
+      conditionFromLabel('light/1280/hover-target'),
+      [],
+    );
+    expect(gaps).toEqual({ 'a.tsx|A#0': ['STATE_UNMODELED'] });
+  });
+
+  it('matches an unmodeled pseudo rule kept verbatim under a different class on the same element', async () => {
+    const [same] = await run('base-scrollbar', 'head-scrollbar');
+    expect(same.gaps).toEqual([]);
+    const [changed] = await run('base-scrollbar', 'head-scrollbar-wide');
+    expect(changed.gaps).toEqual(['PSEUDO_UNMODELED']);
+  });
+
+  it('does not pin a rule on a case when only its pseudo parts were stripped', async () => {
+    const [result] = await run('base-elsewhere-container', 'head-media');
+    expect(result.gaps).toEqual([]);
+  });
+
+  it('does not pin a document-level pseudo rule on every case', async () => {
+    const [result] = await run('base-document-pseudo', 'head-media');
+    expect(result.gaps).toEqual([]);
+  });
+
+  it('keeps a rule whose functional pseudo nests a comma off cases that do not carry its class', async () => {
+    const capture = await captureRun({
+      browser,
+      conditions: { themeAttribute: 'data-theme', themes: ['light'], widths: [1280] },
+      urls: { base: `${server.url}/base-ancestor-not/`, head: `${server.url}/head-media/` },
+    });
+    expect(capture.caseGaps).toEqual({});
+    expect(capture.unparsedSelectors).toEqual([]);
+  });
+
+  it('reports a selector the page cannot evaluate instead of pinning it on every case', async () => {
+    const capture = await captureRun({
+      browser,
+      conditions: { themeAttribute: 'data-theme', themes: ['light'], widths: [1280] },
+      urls: { base: `${server.url}/base-unparsable/`, head: `${server.url}/head-media/` },
+    });
+    expect(capture.caseGaps).toEqual({});
+    expect(capture.unparsedSelectors).toEqual(['svg|a']);
+  });
+
+  it('does not flag structural pseudo-classes the default capture already evaluates', async () => {
+    const [result] = await run('static-pseudo', 'head-media');
+    expect(result.gaps).toEqual([]);
   });
 
   it('reports a theme-only difference only in that theme', async () => {

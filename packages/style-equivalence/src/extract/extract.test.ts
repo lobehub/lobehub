@@ -49,6 +49,12 @@ describe('extractFile', () => {
   it('finds the same element and condition variable on both sides of a cx → stylex.props migration', () => {
     const before = extractFile(base, 'a.tsx', options);
     const after = extractFile(head, 'a.tsx', options);
+    expect(before.prelude).toContain(
+      "import { createStaticStyles, cx, Flexbox } from '@lobehub/ui';",
+    );
+    expect(before.prelude).toContain('const styles = createStaticStyles(');
+    expect(before.prelude).not.toContain('useStore');
+    expect(before.prelude).not.toContain('indicator');
     expect(before.styleSymbols).toEqual(['styles']);
     expect(after.styleSymbols).toEqual(['styles']);
     for (const result of [before, after]) {
@@ -64,12 +70,38 @@ describe('extractFile', () => {
     }
   });
 
-  it('keeps only the style declaration closure in the prelude', () => {
-    const { prelude } = extractFile(base, 'a.tsx', options);
-    expect(prelude).toContain("import { createStaticStyles, cx, Flexbox } from '@lobehub/ui';");
-    expect(prelude).toContain('const styles = createStaticStyles(');
-    expect(prelude).not.toContain('useStore');
-    expect(prelude).not.toContain('indicator');
+  it('binds a spread of a local const that holds stylex.props', () => {
+    const code = `import * as stylex from '@stylexjs/stylex';
+const styles = stylex.create({ video: { maxHeight: '360px' }, flat: { width: '100%' } });
+export const Item = ({ flat }: { flat?: boolean }) => {
+  const videoProps = stylex.props(styles.video, flat && styles.flat);
+  return <video controls {...videoProps} />;
+};
+`;
+    const { elements } = extractFile(code, 'a.tsx', options);
+    expect(elements).toHaveLength(1);
+    expect(elements[0]).toMatchObject({
+      bindings: [
+        { expr: 'stylex.props(styles.video, flat && styles.flat)', prop: '...', spread: true },
+      ],
+      slots: ['styles.flat', 'styles.video'],
+      tag: 'video',
+      variables: [{ kind: 'boolean', name: 'flat' }],
+    });
+  });
+
+  it('leaves a spread of an unrelated local const alone', () => {
+    const code = `import * as stylex from '@stylexjs/stylex';
+const styles = stylex.create({ a: { color: 'red' } });
+export const Item = () => {
+  const rest = { title: 'x' };
+  return <span {...rest} {...stylex.props(styles.a)} />;
+};
+`;
+    const { elements } = extractFile(code, 'a.tsx', options);
+    expect(elements[0].bindings).toEqual([
+      { expr: 'stylex.props(styles.a)', prop: '...', spread: true },
+    ]);
   });
 
   it('imports the stylex namespace when the styles come from another module', () => {
@@ -106,6 +138,26 @@ export const A = () => <div className={styles.box}><span {...stylex.props(atomic
     ]);
     expect(result.prelude).toContain("import { styles } from './style';");
     expect(result.elements[0].flags).toEqual(['CROSS_COMPONENT']);
+  });
+
+  it('takes only the accessed member of an imported style object', () => {
+    const modules: Record<string, string> = {
+      './Card': `import * as stylex from '@stylexjs/stylex';
+const mediaStyles = stylex.create({ image: { width: '100%' }, video: { display: 'block' } });
+export const media = {
+  image: { classNames: { image: stylex.props(mediaStyles.image).className } },
+  video: mediaStyles.video,
+};
+`,
+    };
+    const code = `import { media } from './Card';
+export const A = ({ flat }) => <Image {...(flat ? media.image : { variant: 'outlined' })} />;
+`;
+    const [element] = extractFile(code, 'src/A.tsx', {
+      ...options,
+      readModule: (_from, specifier) => modules[specifier],
+    }).elements;
+    expect(element.slots).toEqual(['media$mediaStyles.image']);
   });
 
   it('imports JSX tags used by a kept top-level statement', () => {
@@ -231,5 +283,66 @@ ${body}
       'export const A = ({ item }) => <div {...stylex.props(styles.a, item && styles.b, item.done && styles.c)} />;',
     );
     expect(variables).toEqual([{ kind: 'unknown', name: 'item' }]);
+  });
+});
+
+describe('extractFile slot properties', () => {
+  it('records the properties each Emotion slot sets, including nested rules and conditions', () => {
+    const code = `import { createStaticStyles } from '@lobehub/ui';
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  activated: css\`
+    color: \${cssVar.colorSuccess};
+    background: \${cssVar.colorSuccessBg};
+  \`,
+  listItem: css\`
+    padding-block: 10px;
+    &:not(:last-child) { border-block-end: 1px solid red; }
+    @media (max-width: 600px) { font-size: 12px; }
+  \`,
+}));
+export const A = () => <span className={styles.activated} />;
+`;
+    expect(extractFile(code, 'a.tsx', options).slotProperties).toEqual({
+      'styles.activated': ['background', 'color'],
+      'styles.listItem': ['border-block-end', 'font-size', 'padding-block'],
+    });
+  });
+
+  it('leaves out an Emotion slot whose declarations it cannot read', () => {
+    const code = `import { createStaticStyles } from '@lobehub/ui';
+const styles = createStaticStyles(({ css }) => ({
+  mixed: css\`
+    \${mixin}
+    color: red;
+  \`,
+  computed: css\`
+    \${side}: 0;
+  \`,
+  plain: css\`color: red;\`,
+}));
+export const A = () => <span className={styles.plain} />;
+`;
+    expect(extractFile(code, 'a.tsx', options).slotProperties).toEqual({
+      'styles.plain': ['color'],
+    });
+  });
+
+  it('records the properties each StyleX slot sets as kebab-case names', () => {
+    const code = `import * as stylex from '@stylexjs/stylex';
+const styles = stylex.create({
+  activated: { color: 'green', backgroundColor: 'white', backgroundImage: 'none' },
+  dot: { borderWidth: { default: null, ':hover': '1px' }, '::placeholder': { color: 'gray' } },
+  dynamic: (size) => ({ width: size, WebkitLineClamp: 2 }),
+  spread: { ...base, color: 'red' },
+  vars: { '--accent': 'red' },
+});
+export const A = () => <span {...stylex.props(styles.activated)} />;
+`;
+    expect(extractFile(code, 'a.tsx', options).slotProperties).toEqual({
+      'styles.activated': ['background-color', 'background-image', 'color'],
+      'styles.dot': ['border-width', 'color'],
+      'styles.dynamic': ['-webkit-line-clamp', 'width'],
+      'styles.vars': ['--accent'],
+    });
   });
 });

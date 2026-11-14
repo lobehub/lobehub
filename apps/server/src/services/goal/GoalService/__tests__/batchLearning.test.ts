@@ -14,7 +14,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { TaskRunnerService } from '../../../taskRunner';
 import { UserSkillService } from '../../../userSkill';
 import { GoalCriteriaGeneratorService } from '../../criteriaGenerator';
-import { registerGoalServiceTestCleanup } from '../../testUtils';
+import { createBatchDecomposition, registerGoalServiceTestCleanup } from '../../testUtils';
 import { GoalService } from '../index';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -24,21 +24,9 @@ registerGoalServiceTestCleanup(serverDB, userId);
 
 describe('GoalService', () => {
   it('re-opens the broken unit as a new task when the canary loop restarts', async () => {
-    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
-      problemStatement: '把 50 个同构的 store 迁移到 replica',
-      rollout: {
-        recipeOutline: '把 store 换成 replica 支撑的实现',
-        repeatable: true,
-        unitCount: 50,
-        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
-        variants: [],
-      },
-      tasks: Array.from({ length: 5 }, (_, i) => ({
-        dependsOn: [],
-        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
-        title: `Unit ${i + 1}`,
-      })),
-    });
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue(
+      createBatchDecomposition(),
+    );
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({ title: 'Migrate stores' });
     await service.tick(graph.goal.id);
@@ -107,12 +95,14 @@ describe('GoalService', () => {
 
     // The plan lives as a skill in the user's library: v1 at decomposition,
     // v2 when the break revised it — each version kept whole.
+    // Named after the goal ("Migrate stores"), not the batch id.
     const planSkill = next.planSkill!;
-    expect(planSkill.name).toMatch(/^goal-plan-/);
-    const skill = await new UserSkillService(serverDB, userId).getSkill(planSkill.id);
+    expect(planSkill.name).toBe('migrate-stores-plan');
+    const skills = new UserSkillService(serverDB, userId);
+    const skill = await skills.getSkill(planSkill.id);
     expect(skill?.versions.map((version) => version.version)).toEqual([1, 2]);
     expect(skill?.content).toContain('### v2\n补上冷启动这一步');
-    expect(skill?.versions[0].content).not.toContain('### v2');
+    expect((await skills.getVersion(planSkill.id, 1))?.content).not.toContain('### v2');
     // A re-opened unit names the skill, which carries every later revision…
     expect(reopened.description).toContain(`user-skills:${planSkill.name}`);
     // …and still carries the revised plan, in case the skill does not load.
@@ -151,21 +141,9 @@ describe('GoalService', () => {
   });
 
   it('falls back to copying the revised plan when the skill revision does not land', async () => {
-    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
-      problemStatement: '把 50 个同构的 store 迁移到 replica',
-      rollout: {
-        recipeOutline: '把 store 换成 replica 支撑的实现',
-        repeatable: true,
-        unitCount: 50,
-        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
-        variants: [],
-      },
-      tasks: Array.from({ length: 5 }, (_, i) => ({
-        dependsOn: [],
-        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
-        title: `Unit ${i + 1}`,
-      })),
-    });
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue(
+      createBatchDecomposition(),
+    );
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({ title: 'Migrate stores' });
     await service.tick(graph.goal.id);
@@ -199,21 +177,9 @@ describe('GoalService', () => {
   });
 
   it('mounts what a break taught on the agent that runs the units, even in a project', async () => {
-    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
-      problemStatement: '把 50 个同构的 store 迁移到 replica',
-      rollout: {
-        recipeOutline: '把 store 换成 replica 支撑的实现',
-        repeatable: true,
-        unitCount: 50,
-        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
-        variants: [],
-      },
-      tasks: Array.from({ length: 5 }, (_, i) => ({
-        dependsOn: [],
-        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
-        title: `Unit ${i + 1}`,
-      })),
-    });
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue(
+      createBatchDecomposition(),
+    );
     await serverDB.insert(agents).values([{ id: 'agt_batch', slug: 'agt-batch', userId }]);
     await serverDB.insert(projects).values({
       coordinatorAgentId: 'agt_batch',
@@ -252,21 +218,9 @@ describe('GoalService', () => {
   });
 
   it('learns into one shared domain per agent, through the executor fallback', async () => {
-    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
-      problemStatement: '把 50 个同构的 store 迁移到 replica',
-      rollout: {
-        recipeOutline: '把 store 换成 replica 支撑的实现',
-        repeatable: true,
-        unitCount: 50,
-        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
-        variants: [],
-      },
-      tasks: Array.from({ length: 5 }, (_, i) => ({
-        dependsOn: [],
-        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
-        title: `Unit ${i + 1}`,
-      })),
-    });
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue(
+      createBatchDecomposition(),
+    );
     await serverDB.insert(agents).values([
       { id: 'agt_goal_main', slug: 'agt-goal-main', userId },
       { id: 'agt_gone_exec', slug: 'agt-gone-exec', userId },
@@ -325,21 +279,9 @@ describe('GoalService', () => {
   });
 
   it('creates one batch domain when two goals on an agent learn at the same time', async () => {
-    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
-      problemStatement: '把 50 个同构的 store 迁移到 replica',
-      rollout: {
-        recipeOutline: '把 store 换成 replica 支撑的实现',
-        repeatable: true,
-        unitCount: 50,
-        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
-        variants: [],
-      },
-      tasks: Array.from({ length: 5 }, (_, i) => ({
-        dependsOn: [],
-        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
-        title: `Unit ${i + 1}`,
-      })),
-    });
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue(
+      createBatchDecomposition(),
+    );
     await serverDB.insert(agents).values([{ id: 'agt_shared', slug: 'agt-shared', userId }]);
     const service = new GoalService(serverDB, userId);
     const graphModel = new GoalGraphModel(serverDB, userId);
@@ -376,21 +318,9 @@ describe('GoalService', () => {
   });
 
   it('moves a batch from before plan skills into one at its next revision', async () => {
-    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
-      problemStatement: '把 50 个同构的 store 迁移到 replica',
-      rollout: {
-        recipeOutline: '把 store 换成 replica 支撑的实现',
-        repeatable: true,
-        unitCount: 50,
-        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
-        variants: [],
-      },
-      tasks: Array.from({ length: 5 }, (_, i) => ({
-        dependsOn: [],
-        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
-        title: `Unit ${i + 1}`,
-      })),
-    });
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue(
+      createBatchDecomposition(),
+    );
     const service = new GoalService(serverDB, userId);
     const graph = await service.create({ title: 'Migrate stores' });
     await service.tick(graph.goal.id);
@@ -412,11 +342,13 @@ describe('GoalService', () => {
     await service.decide(graph.goal.id, decision!.id, 'revise', '补上 SSR 播种这一步');
 
     const next = (await service.graph(graph.goal.id)).goal.config!.rolloutState!;
-    const skill = await new UserSkillService(serverDB, userId).getSkill(next.planSkill!.id);
+    const skills = new UserSkillService(serverDB, userId);
+    const skill = await skills.getSkill(next.planSkill!.id);
     // The plan's earlier version becomes v1 and the revision v2, so version N
     // still reads as round N.
     expect(skill?.versions.map((version) => version.version)).toEqual([1, 2]);
-    expect(skill?.versions[0].content).toContain('把 store 换成 replica 支撑的实现');
-    expect(skill?.versions[1].content).toContain('### v2\n补上 SSR 播种这一步');
+    const [v1, v2] = await Promise.all([1, 2].map((n) => skills.getVersion(skill!.id, n)));
+    expect(v1?.content).toContain('把 store 换成 replica 支撑的实现');
+    expect(v2?.content).toContain('### v2\n补上 SSR 播种这一步');
   });
 });

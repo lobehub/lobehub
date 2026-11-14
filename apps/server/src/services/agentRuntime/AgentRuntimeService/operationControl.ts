@@ -10,7 +10,7 @@ import {
   type DeferredToolResultControlInput,
   loadDurableToolResultHooks,
 } from '../hooks/deferredToolResultControl';
-import { steerQueueScopeOf } from '../steerQueueScope';
+import { steerQueueScopeOf, subAgentSteerQueueScopeOf } from '../steerQueueScope';
 import {
   type AgentStepContinuation,
   type OperationStatusResult,
@@ -290,6 +290,35 @@ export async function readQueuedMessagesFlag(
   }
 }
 
+const SEAL_ATTEMPTS = 3;
+const SEAL_RETRY_DELAY_MS = 200;
+
+/**
+ * Seal the run before its last queue read, retrying a transient Redis error:
+ * an unsealed last read lets a steer appended after it wait behind a run that
+ * will not read again. Redis down for every attempt also fails the parent's
+ * append, so the run then ends without the seal rather than hanging on it.
+ */
+const sealForLastRead = async (operationId: string, stepIndex: number) => {
+  for (let attempt = 1; attempt <= SEAL_ATTEMPTS; attempt++) {
+    try {
+      await redisService.steerQueue.seal(operationId);
+      return;
+    } catch (error) {
+      log(
+        '[%s][%d] Sealing the steer queue failed (%d): %O',
+        operationId,
+        stepIndex,
+        attempt,
+        error,
+      );
+      if (attempt < SEAL_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, SEAL_RETRY_DELAY_MS * attempt));
+      }
+    }
+  }
+};
+
 /**
  * Join the follow-ups queued behind this run into it, right before its next
  * LLM call, instead of ending the run and starting another for them. Hands off
@@ -307,14 +336,34 @@ export async function injectQueuedFollowUp(
   operationId: string,
   stepIndex: number,
   state: AgentState,
+  options?: { lastRead?: boolean },
 ): Promise<{ messageId: string } | undefined> {
-  const scope = steerQueueScopeOf(state, deps.userId);
+  // A sub-agent has no composer of its own; its queue holds the steer
+  // instructions its parent sent while it was running.
+  const topLevelScope = steerQueueScopeOf(state, deps.userId);
+  const scope = topLevelScope ?? subAgentSteerQueueScopeOf(state, deps.userId);
   if (!scope || !deps.delegate.injectQueuedFollowUp) return;
+
+  // A sub-agent ending after this read has no hand-back to catch a steer its
+  // parent appends meanwhile. Sealed before the read, the run makes that
+  // parent take the steer back (`queueSubAgentSteer`) instead of leaving it
+  // queued behind a run that will not read again.
+  const sealing = !!options?.lastRead && !topLevelScope;
+  if (sealing) await sealForLastRead(operationId, stepIndex);
 
   try {
     if ((await redisService.steerQueue.length(scope, operationId)) === 0) return;
 
     const injected = await deps.delegate.injectQueuedFollowUp({ operationId, scope, state });
+    // It answers again with the steer in context, so it reads its queue again.
+    // A seal left in place only makes the parent wait for the result instead.
+    if (injected && sealing) {
+      await redisService.steerQueue
+        .unseal(operationId)
+        .catch((error) =>
+          log('[%s][%d] Unsealing the steer queue failed: %O', operationId, stepIndex, error),
+        );
+    }
     if (injected) {
       log(
         '[%s][%d] Joined queued follow-ups into the run as %s',

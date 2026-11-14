@@ -1,6 +1,7 @@
 import type { FixtureProfile } from './fixtureRegistry';
 
 export const migrationFixtures = [
+  ['AskUserQuestionView', 'packages/shared-tool-ui/src/AskUserQuestion/AskUserQuestionView.tsx'],
   ['AttachmentThumbs', 'src/features/Acceptance/Viewer/Evidence/attachments.tsx'],
   ['VideoEvidencePlayer', 'src/features/Acceptance/Viewer/Evidence/Video/VideoEvidencePlayer.tsx'],
   ['SidebarGroupItem', 'src/features/HomeSidebar/Body/Agent/Modals/ConfigGroupModal/GroupItem.tsx'],
@@ -8,9 +9,50 @@ export const migrationFixtures = [
   ['PreviewToolbar', 'src/features/Portal/LocalFile/PreviewToolbar.tsx'],
   ['WorkPreview', 'src/features/WorkGallery/WorkPreview.tsx'],
   ['WorkPreviewStatus', 'src/features/WorkGallery/WorkPreview.tsx'],
+  ['AcceptanceReport', 'src/features/Acceptance/Report/ReportViewer.tsx'],
+  ['AcceptanceEvidenceList', 'src/features/Acceptance/Viewer/Evidence/EvidenceList.tsx'],
+  ['VoiceMessageControl', 'src/features/ChatInput/VoiceMessage/index.tsx'],
 ] as const;
 
+const voiceMessageImporter = 'src/features/ChatInput/VoiceMessage/index.tsx';
+const voiceMessageData = 'fixtures/VoiceMessageFixtureData.ts';
+
 export const migrationProfiles: Record<string, FixtureProfile> = {
+  AskUserQuestionView: {
+    dependencies: ['lucide-react', 'path-browserify-esm'],
+    exportName: 'AskUserQuestionView',
+    selector: '[data-component-mount] [role="tab"]',
+    settleFrames: 2,
+    variants: [
+      { id: 'questions', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'escape' },
+      { id: 'dark-questions', appearance: 'dark' },
+    ],
+  },
+  VoiceMessageControl: {
+    dependencies: ['lucide-react', 'i18next', 'react-i18next'],
+    exportName: 'VoiceMessageControl',
+    selector: '[data-component-mount] [data-testid="voice-message-pill"] button',
+    settleFrames: 2,
+    variants: [
+      { id: 'recording', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'busy' },
+      { id: 'retry', states: ['default', 'hover', 'focus-visible'] },
+      { id: 'hover-expanded' },
+      { id: 'retry-hover-expanded' },
+      { id: 'disabled', states: ['default', 'hover'] },
+      { id: 'progress' },
+      { id: 'dark-recording', appearance: 'dark', states: ['default', 'focus-visible'] },
+    ],
+    boundaries: [
+      '../ActionBar/components/ChatInputAction',
+      '../hooks/useAgentId',
+      '../hooks/useEffectiveModel',
+      '../store',
+      './useVoiceMessageCapability',
+      './useVoiceMessageRecorder',
+    ].map((source) => ({ importer: voiceMessageImporter, source, replacement: voiceMessageData })),
+  },
   AttachmentThumbs: {
     dependencies: ['lucide-react', 'i18next', 'react-i18next'],
     exportName: 'AttachmentThumbs',
@@ -118,5 +160,64 @@ export const migrationProfiles: Record<string, FixtureProfile> = {
         appearance,
       })),
     ),
+  },
+  AcceptanceReport: {
+    dependencies: [
+      'lucide-react',
+      'i18next',
+      'react-i18next',
+      'react-router',
+      'path-browserify-esm',
+      'es-toolkit',
+    ],
+    settleFrames: 2,
+    variants: [
+      { id: 'horizontal' },
+      { id: 'vertical' },
+      { id: 'dark-horizontal', appearance: 'dark' },
+    ],
+    boundaries: [
+      { importer: 'src/features/Acceptance/Report/ReportViewer.tsx', source: '../hooks' },
+      { importer: 'src/features/Acceptance/Report/ReportViewer.tsx', source: './TerminalEvidence' },
+      {
+        importer: 'src/features/Acceptance/Report/MarkdownEvidence.tsx',
+        source: '@/features/FileViewer/hooks/useTextFileLoader',
+      },
+    ].map((boundary) => ({ ...boundary, replacement: 'fixtures/AcceptanceReportData.ts' })),
+  },
+  AcceptanceEvidenceList: {
+    assets: ['fixtures/AcceptanceEvidenceData.ts'],
+    dependencies: [
+      'lucide-react',
+      'i18next',
+      'react-i18next',
+      'react-router',
+      'path-browserify-esm',
+      'es-toolkit',
+    ],
+    exportName: 'EvidenceList',
+    settleFrames: 2,
+    variants: [
+      { id: 'screenshot' },
+      { id: 'tall' },
+      { id: 'unsized' },
+      { id: 'gif' },
+      { id: 'video' },
+      { id: 'dark-screenshot', appearance: 'dark' },
+    ],
+    boundaries: [
+      {
+        importer: 'src/features/Acceptance/Viewer/Evidence/EvidenceList.tsx',
+        source: '../../Report/TerminalEvidence',
+      },
+      {
+        importer: 'src/features/Acceptance/Report/MarkdownEvidence.tsx',
+        source: '@/features/FileViewer/hooks/useTextFileLoader',
+      },
+      {
+        importer: 'src/features/Acceptance/Viewer/AcceptanceScope.tsx',
+        source: './useAcceptanceBundle',
+      },
+    ].map((boundary) => ({ ...boundary, replacement: 'fixtures/AcceptanceEvidenceData.ts' })),
   },
 };

@@ -27,10 +27,10 @@ const styles = stylex.create({
     display: 'flex',
     flexShrink: 0,
     gap: '16px',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingBlockStart: '24px',
-    paddingBlockEnd: '16px',
+    paddingBlockEnd: '4px',
     paddingInline: '12px',
   },
   header: {
@@ -90,13 +90,10 @@ const LeftPanel = memo<LeftPanelProps>(
     if (isConnectorPage)
       return (
         <SkillListVariantProvider value={'page'}>
+          {/* The shared navigation header carries the title; the page actions
+              share the intro row so they line up with the list below. */}
           <div {...stylex.props(styles.pageHeader)}>
-            <Flexbox gap={4}>
-              <Text as={'h1'} fontSize={20} style={{ margin: 0 }} weight={600}>
-                {t('skillView.connectors', 'Connectors')}
-              </Text>
-              <Text type={'secondary'}>{t('skillView.connectorsDesc')}</Text>
-            </Flexbox>
+            <Text type={'secondary'}>{t('skillView.connectorsDesc')}</Text>
             <Flexbox horizontal flex={'none'} gap={8}>
               <Tooltip title={t('skillStore.title')}>
                 <Button

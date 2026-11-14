@@ -27,6 +27,8 @@
   "openChatSettings.title": "Apri Impostazioni Chat",
   "openHotkeyHelper.desc": "Visualizza le istruzioni per tutte le scorciatoie da tastiera",
   "openHotkeyHelper.title": "Apri Guida Scorciatoie",
+  "openTaskFilter.desc": "Apri il menu dei filtri nella pagina Attività",
+  "openTaskFilter.title": "Filtra attività",
   "prevTab.desc": "Passa al tab precedente nell'app Desktop; torna all'ultimo tab all'inizio",
   "prevTab.title": "Tab Precedente",
   "regenerateMessage.desc": "Rigenera l'ultimo messaggio",

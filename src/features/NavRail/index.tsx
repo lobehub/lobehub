@@ -1,6 +1,5 @@
 'use client';
 
-import { AGENT_CHAT_URL } from '@lobechat/const';
 import { cssVar, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import {
@@ -17,18 +16,19 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { isDesktop } from '@/const/version';
-import { resolveInboxAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
+import { useChannelsEnabled } from '@/features/Channels/useChannelsEnabled';
 import { MAC_VIBRANCY_BACKGROUND } from '@/features/Electron/system/macWindowFullscreen';
 import InboxButton from '@/features/HomeSidebar/Header/components/InboxButton';
 import User from '@/features/HomeSidebar/Header/components/User';
+import { messagesUnreadCount } from '@/features/MessageList/conversations';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
-import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { channelSelectors, useChannelStore } from '@/store/channel';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { isMacOS } from '@/utils/platform';
 
+import { ActiveChannelSync, useMessagesUrl } from './messagesTarget';
 import MoreMenu from './MoreMenu';
 import RailItem from './RailItem';
 import { resolveRailTab } from './railTab';
@@ -39,10 +39,16 @@ const railBackground = {
   background: isDesktop && isMacOS() ? MAC_VIBRANCY_BACKGROUND : cssVar.colorBgLayout,
 };
 
-const useMessagesUnread = () =>
-  useHomeStore((s) =>
-    homeAgentListSelectors.allAgents(s).reduce((sum, item) => sum + (item.unreadCount ?? 0), 0),
+/** The badge sums the Messages list rows, so it always matches what the list shows. */
+const useMessagesUnread = (channelsEnabled: boolean) => {
+  const channels = useChannelStore(channelSelectors.list);
+  return useHomeStore((s) =>
+    messagesUnreadCount(
+      homeAgentListSelectors.allAgents(s),
+      channelsEnabled ? channels : undefined,
+    ),
   );
+};
 
 /**
  * Global icon rail (column ①). Tabs own a list column (column ②) registered
@@ -53,14 +59,13 @@ const NavRail = memo(() => {
   const { pathname } = useActiveLocation();
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { showMarket } = useServerConfigStore(featureFlagsSelectors);
-  const unread = useMessagesUnread();
+  const channelsEnabled = useChannelsEnabled();
+  const unread = useMessagesUnread(channelsEnabled);
 
   const activeTab = resolveRailTab(pathname, activeWorkspaceSlug);
 
-  // Messages opens straight into the Lobe AI conversation, like an IM app's
-  // default channel; the conversation list sits in the list column.
-  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const messagesUrl = AGENT_CHAT_URL(resolveInboxAgentRouteId(inboxAgentId), false);
+  // Messages returns to the active Channel, or home where the conversation list lives.
+  const { activeChannelId, url: messagesUrl } = useMessagesUrl(pathname, activeWorkspaceSlug);
 
   // Tab order follows the product IA: messages, contacts, docs, tasks, projects.
   const topItems = useMemo(
@@ -76,6 +81,8 @@ const NavRail = memo(() => {
 
   return (
     <Flexbox className={stylex.props(styles.rail).className} gap={12} style={railBackground}>
+      {/* The badge counts Channel rows, so the list stays fresh whenever Channels are on. */}
+      {(activeChannelId || channelsEnabled) && <ActiveChannelSync />}
       <User lite />
       <Flexbox align={'center'} gap={RAIL_GAP}>
         {topItems.map((item) => (

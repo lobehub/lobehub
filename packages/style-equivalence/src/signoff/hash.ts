@@ -3,10 +3,12 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import type { FileExtraction, LiteralValue, StyleBinding } from '../extract';
+import { elementsOf } from '../plan/descendants';
 import { chainOf, type PlanCase, type Side } from '../plan/planFile';
 import { declarationText, resolveSlot } from '../source/declarations';
 
 export interface HashedElement {
+  attributes?: Record<string, string>;
   bindings: StyleBinding[];
   literalProps: Record<string, LiteralValue>;
   slots: string[];
@@ -14,10 +16,11 @@ export interface HashedElement {
 }
 
 export interface CaseHashInput {
+  counterpart?: Partial<Record<Side, string>>;
   declarations: Partial<Record<Side, Record<string, string>>>;
   elements: Partial<Record<Side, HashedElement[]>>;
   outcome?: string[];
-  plan?: Pick<PlanCase, 'combos' | 'flags' | 'variables'>;
+  plan?: Pick<PlanCase, 'combos' | 'flags' | 'forward' | 'inner' | 'variables'>;
   verifierMajor: string;
 }
 
@@ -61,6 +64,8 @@ export const collectCaseHashInput = (input: CollectHashInput): CaseHashInput => 
     plan: input.plan && {
       combos: input.plan.combos,
       flags: input.plan.flags,
+      forward: input.plan.forward,
+      inner: input.plan.inner,
       variables: input.plan.variables,
     },
     verifierMajor: input.verifierVersion.split('.')[0],
@@ -70,11 +75,12 @@ export const collectCaseHashInput = (input: CollectHashInput): CaseHashInput => 
     const source = input.sources[side];
     const id = input.elementIds?.[side] ?? input.plan?.elementIds[side];
     if (!extraction || !source || !id) continue;
-    const byId = new Map(extraction.elements.map((element) => [element.id, element]));
+    const byId = new Map(elementsOf(extraction).map((element) => [element.id, element]));
     const element = byId.get(id);
     if (!element) continue;
-    const chain = chainOf(element, byId);
-    result.elements[side] = chain.map(({ bindings, literalProps, slots, tag }) => ({
+    const chain = chainOf(element, byId, input.plan?.chainOmit?.[side]);
+    result.elements[side] = chain.map(({ attributes, bindings, literalProps, slots, tag }) => ({
+      ...(attributes ? { attributes } : {}),
       bindings,
       literalProps,
       slots,

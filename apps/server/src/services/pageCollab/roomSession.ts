@@ -4,7 +4,10 @@ import * as Y from 'yjs';
 import type { LobeChatDatabase } from '@/database/type';
 import { DocumentService } from '@/server/services/document';
 import type { DocumentHistorySaveSource } from '@/server/services/document/types';
-import { assertDocumentWriteWithinLimit } from '@/server/services/document/writeLimit';
+import {
+  assertDocumentWriteWithinLimit,
+  getDocumentCharLimitErrorData,
+} from '@/server/services/document/writeLimit';
 
 import { editorDataFromRow } from './editorData';
 import { openPageFork, PAGE_META_KEY, type PageFork, readPageTitle } from './fork';
@@ -15,6 +18,7 @@ import {
   PageRoomConflictError,
   type PageRoomState,
 } from './roomClient';
+import { emptyEditorData } from './seed';
 import {
   historyAttributionOf,
   type PageSession,
@@ -95,12 +99,29 @@ export class RoomPageSessions implements PageSessions {
           userId: this.writer.userId,
           workspaceId: this.writer.workspaceId,
         });
-        await room.pushUpdate(documentId, fork.diff(), { actor });
-        await this.persist(documentId, fork);
+        await room.pushUpdate(documentId, fork.diff(), {
+          actor,
+          baseServerWriteSeq: state.serverWriteSeq,
+        });
+        try {
+          await this.persist(documentId, fork);
+        } catch (error) {
+          // The room already holds the edit, and its next projection persists it.
+          log('persist after commit failed for %s: %O', documentId, error);
+        }
         return true;
       },
       draft: fork,
-      persistAs: (saveSource) => this.persist(documentId, fork, saveSource),
+      // A version the user asked for: a body refused for its length must tell
+      // them it was not saved, instead of reporting a saved version.
+      persistAs: async (saveSource) => {
+        try {
+          await this.persist(documentId, fork, saveSource);
+        } catch (error) {
+          if (getDocumentCharLimitErrorData(error)) throw error;
+          log('persist as %s failed for %s: %O', saveSource, documentId, error);
+        }
+      },
       setTitle: (next) => fork.doc.getMap(PAGE_META_KEY).set('title', next),
       title,
     };
@@ -114,15 +135,11 @@ export class RoomPageSessions implements PageSessions {
     fork: PageFork,
     saveSource: DocumentHistorySaveSource = this.writer.saveSource,
   ) {
-    try {
-      await persistPageState(this.db, documentId, Y.encodeStateAsUpdate(fork.doc), {
-        history: historyAttributionOf(this.writer),
-        saveSource,
-      });
-    } catch (error) {
-      // The room already holds the edit, and its next projection persists it.
-      log('persist after commit failed for %s: %O', documentId, error);
-    }
+    await persistPageState(this.db, documentId, Y.encodeStateAsUpdate(fork.doc), {
+      history: historyAttributionOf(this.writer),
+      saveSource,
+      writeSource: this.writer.writeSource,
+    });
   }
 
   private async getStoredTitle(documentId: string) {
@@ -135,10 +152,7 @@ export class RoomPageSessions implements PageSessions {
     const row = await this.documentService.getDocumentById(documentId);
     if (!row) throw new Error(`Page document not found: ${documentId}`);
 
-    const editorData = editorDataFromRow(row);
-    if (!editorData) return;
-
-    const seed = await openPageFork(undefined, editorData);
+    const seed = await openPageFork(undefined, editorDataFromRow(row) ?? emptyEditorData());
     if (row.title) seed.doc.getMap(PAGE_META_KEY).set('title', row.title);
     try {
       await room.pushUpdate(documentId, seed.diff(), { actor: 'bootstrap', bootstrap: true });

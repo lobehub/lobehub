@@ -1,13 +1,18 @@
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import type { CaseResult } from '../analyze/diff';
 import type { FileExtraction } from '../extract';
+import { elementsOf } from '../plan/descendants';
 import type { FilePlan, PlanCase, Side } from '../plan/planFile';
+import { readReviews, reviewScope } from '../review/store';
 import {
   type CaseHashInput,
   collectCaseHashInput,
   collectFileHashInput,
   contentHash,
 } from '../signoff/hash';
-import { readSignoffs } from '../signoff/store';
+import { counterpartOf } from '../source/counterpart';
 import type { ScopeFile } from '../source/scope';
 import type { CaseCategory } from './categorize';
 import { fileFlags, fileItemKey } from './fileItems';
@@ -25,8 +30,11 @@ export interface AssembleInput {
   extractions: Record<string, Record<Side, FileExtraction>>;
   mutation: { passed: boolean };
   plans: FilePlan[];
+  pr?: number;
+  recordsDir: string;
   roots: Record<Side, string>;
   scope: ScopeFile[];
+  unparsedSelectors: string[];
   verifierVersion: string;
 }
 
@@ -77,6 +85,28 @@ export const assembleVerdict = async (input: AssembleInput) => {
       })),
     ),
   ];
+  const readSide = (side: Side, file: string | undefined) => {
+    const absolute = file && path.join(input.roots[side], file);
+    return absolute && existsSync(absolute) ? readFileSync(absolute, 'utf8') : undefined;
+  };
+  for (const plan of input.plans)
+    for (const { elementId, side } of plan.unpaired) {
+      const extraction = input.extractions[plan.file]?.[side];
+      const element = extraction && elementsOf(extraction).find((item) => item.id === elementId);
+      const other: Side = side === 'base' ? 'head' : 'base';
+      const sources = sourcesOf(plan.file);
+      const from = readSide(side, sources[side]);
+      const to = readSide(other, sources[other]);
+      if (!element || !from || !to) continue;
+      const text = counterpartOf({
+        expr: element.bindings[0]?.expr ?? '',
+        from,
+        owner: element.owner,
+        tag: element.tag,
+        to,
+      });
+      if (text) evidence[unpairedKey(plan.file, side, elementId)].counterpart = { [other]: text };
+    }
   for (const plan of input.plans) {
     const flags = fileFlags(plan, input.extractions[plan.file] ?? {});
     if (!flags.length) continue;
@@ -94,15 +124,18 @@ export const assembleVerdict = async (input: AssembleInput) => {
       key,
     });
   }
-  const signoffs = await readSignoffs(
-    input.roots.head,
+  const { passes: signoffs, reworks } = await readReviews(
+    input.recordsDir,
     items.map((item) => item.file),
+    reviewScope(items, input.pr),
   );
   const verdict: Verdict = decideVerdict({
     calibration: input.calibration,
     items,
     mutation: input.mutation,
+    reworks,
     signoffs,
+    unparsedSelectors: input.unparsedSelectors.length,
   });
   return { evidence, verdict };
 };

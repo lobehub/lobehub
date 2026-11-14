@@ -121,6 +121,26 @@ describe('Project Router Integration', () => {
     );
   });
 
+  it('answers a duplicate identifier as CONFLICT instead of a raw query failure', async () => {
+    await caller.create({ identifier: 'LOBE', name: 'LobeHub' });
+
+    await expect(
+      caller.create({ identifier: 'LOBE', name: 'LobeHub Mobile' }),
+    ).rejects.toMatchObject({
+      code: 'CONFLICT',
+      // The code, not prose: the create forms key off it to mark the field.
+      message: 'DUPLICATE_PROJECT_IDENTIFIER',
+    });
+  });
+
+  it('answers a duplicate slug with its own code, not the identifier one', async () => {
+    await caller.create({ name: 'LobeHub', slug: 'taken-link-name' });
+
+    await expect(
+      caller.create({ name: 'LobeHub Mobile', slug: 'taken-link-name' }),
+    ).rejects.toMatchObject({ code: 'CONFLICT', message: 'DUPLICATE_PROJECT_SLUG' });
+  });
+
   it.each(['team/launch', 'roadmap?draft', '#plan', 'two--hyphens'])(
     'rejects the route-unsafe slug %s when creating a project',
     async (slug) => {

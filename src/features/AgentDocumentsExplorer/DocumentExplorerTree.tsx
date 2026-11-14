@@ -10,7 +10,7 @@ import {
   PenLineIcon,
   Trash2Icon,
 } from 'lucide-react';
-import type { ChangeEvent, CSSProperties, MouseEvent } from 'react';
+import type { ChangeEvent, CSSProperties, DragEvent, MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -42,7 +42,7 @@ import { openConvertToSkillModal, slugifySkillName } from './ConvertToSkillModal
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
 import { useDocumentTreeOps } from './hooks/useDocumentTreeOps';
 import type { AgentDocumentItem, AgentDocumentListMutator } from './types';
-import { isOrphanSkillBundleItem } from './types';
+import { isOrphanSkillBundleItem, isPendingId } from './types';
 import { canDropDocument } from './utils/canDrop';
 import { createDocumentComparator } from './utils/sortDocuments';
 
@@ -115,11 +115,17 @@ interface Props {
   agentId: string;
   data: AgentDocumentItem[];
   mutate: AgentDocumentListMutator;
+  /**
+   * Starts dragging a plain document out of the tree (e.g. into the chat
+   * input). Folders, skills and web pages never reach it.
+   */
+  onDocumentDragStart?: (doc: AgentDocumentItem, event: DragEvent<HTMLElement>) => void;
   onOpenDocument?: (documentId: string, agentDocumentId?: string) => void;
   style?: CSSProperties;
 }
 
-const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocument, style }) => {
+const DocumentExplorerTree = memo<Props>((props) => {
+  const { agentId, data, mutate, onDocumentDragStart, onOpenDocument, style } = props;
   const { t } = useTranslation(['chat', 'common']);
   const navigate = useWorkspaceAwareNavigate();
   const treeRef = useRef<ExplorerTreeHandle | null>(null);
@@ -360,6 +366,17 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
     [],
   );
 
+  const handleNodeDragStart = useCallback(
+    (node: ExplorerTreeNode<AgentDocumentItem>, event: DragEvent<HTMLElement>) => {
+      const doc = node.data;
+      if (!onDocumentDragStart || !doc || doc.isFolder) return;
+      // A row still being created has no persisted id the agent could read.
+      if (doc.category !== AGENT_DOCUMENT_CATEGORY || isPendingId(doc.id)) return;
+      onDocumentDragStart(doc, event);
+    },
+    [onDocumentDragStart],
+  );
+
   const canRename = useCallback(
     (node: ExplorerTreeNode<AgentDocumentItem>) =>
       !!node.data && node.data.category === AGENT_DOCUMENT_CATEGORY,
@@ -558,6 +575,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
           onCommitRename={handleCommitRename}
           onMove={handleMove}
           onNodeClick={handleNodeClick}
+          onNodeDragStart={onDocumentDragStart ? handleNodeDragStart : undefined}
         />
       )}
     </div>

@@ -1,20 +1,13 @@
 'use client';
 
-import { Segmented } from '@lobehub/ui';
-import { type CSSProperties, memo, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Select } from '@lobehub/ui';
+import { type CSSProperties, memo } from 'react';
 
-import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
-import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { usePermission } from '@/hooks/usePermission';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { isMobileSurface } from '@/utils/mobileSurface';
 
-import {
-  type AgentProfileTab,
-  buildAgentProfileTabOptions,
-  buildAgentProfileTabPath,
-} from './tabOptions';
+import { type AgentProfileTab, buildAgentProfileTabPath } from './tabOptions';
+import { useAgentProfileTabOptions } from './useAgentProfileTabOptions';
 
 export type { AgentProfileTab } from './tabOptions';
 
@@ -46,62 +39,40 @@ interface AgentProfileTabsProps {
   agentId: string;
 }
 
-/**
- * Segmented switcher shared by the agent profile group — Profile / Channels /
- * Statistics / Share. The surfaces are separate routes, so a segment writes the
- * URL rather than holding local state: deep links and back/forward keep working.
- */
-const AgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
-  const { t } = useTranslation(['chat', 'common', 'spend']);
+const MobileAgentProfileTabs = memo<AgentProfileTabsProps>(({ active, agentId }) => {
   const navigate = useWorkspaceAwareNavigate();
-
-  const { allowed: canEditContent } = usePermission('edit_own_content');
-  const { canEditResource, canManageResource, isAccessResolved } = useResourceAccess(
-    'agent',
-    agentId,
-  );
-  const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
-
-  const canConfigure = !!isAgentEditable && isAccessResolved && canEditContent && canEditResource;
-  const canManageShare =
-    !!isAgentEditable && isAccessResolved && canEditContent && canManageResource;
-  const { visible: shareVisible } = useAgentShareSupported(agentId);
-
-  const options = useMemo(
-    () =>
-      buildAgentProfileTabOptions({
-        active,
-        canConfigure,
-        labels: {
-          channel: t('tab.integration'),
-          // Inside the profile group the whole surface *is* the agent profile,
-          // so the first segment is the "basic" tab, not "Agent Profile" again —
-          // that broader name stays on the sidebar entry that opens the group.
-          profile: t('tab.profileBasic'),
-          share: t('share', { ns: 'common' }),
-          statistics: t('usageStats.title', { ns: 'spend' }),
-        },
-        shareSupported: shareVisible === true && canManageShare,
-      }),
-    [active, canConfigure, canManageShare, shareVisible, t],
-  );
+  const options = useAgentProfileTabOptions(active, agentId);
 
   // A lone segment is a label, not a switcher.
   if (options.length < 2) return null;
 
+  // A strip of segments cannot hold this many pages in the 44px header, so the current page is a
+  // compact menu that lists the rest.
   return (
-    <Segmented
+    <Select
       options={options}
       size={'small'}
+      style={{ maxWidth: 180, minWidth: 120 }}
       value={active}
-      // `Segmented` only fires on a *change*, so the active segment is inert —
-      // notably on `/channel/:platform`, where Channels stays selected. Going
-      // back to the platform list is the breadcrumb's job, not this switcher's.
-      onChange={(value) => navigate(buildAgentProfileTabPath(agentId, value as AgentProfileTab))}
+      // Picking the page already shown does nothing: on `/channel/:platform` Channels stays
+      // selected, and going back to the platform list is the breadcrumb's job.
+      onChange={(value) => {
+        if (value !== active) navigate(buildAgentProfileTabPath(agentId, value as AgentProfileTab));
+      }}
     />
   );
 });
 
-AgentProfileTabs.displayName = 'AgentProfileTabs';
+MobileAgentProfileTabs.displayName = 'MobileAgentProfileTabs';
+
+/**
+ * Page switcher for the agent profile group — Profile, Instruction, Engine, Channels,
+ * Statistics, … — on mobile, which has no room for a sidebar. Desktop
+ * switches them from the sidebar (`AgentSidebar/ProfileNav`). The surfaces are
+ * separate routes, so a segment writes the URL rather than holding local state:
+ * deep links and back/forward keep working.
+ */
+const AgentProfileTabs = (props: AgentProfileTabsProps) =>
+  isMobileSurface() ? <MobileAgentProfileTabs {...props} /> : null;
 
 export default AgentProfileTabs;

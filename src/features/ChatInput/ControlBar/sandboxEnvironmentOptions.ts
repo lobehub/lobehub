@@ -1,3 +1,8 @@
+import { projectCheckoutDirectory } from '@lobechat/builtin-tool-cloud-sandbox';
+import type { EnvironmentConfiguration } from '@lobechat/types';
+
+import type { SandboxSelection } from './useSandboxPlacement';
+
 /**
  * The environments a conversation may start from. A workspace-public agent runs
  * on its caller's session, so it applies published environments only — the
@@ -11,6 +16,20 @@ export const pickableEnvironments = <T extends { visibility?: string | null }>(
   sharedAgent
     ? environments.filter((environment) => environment.visibility === 'public')
     : [...environments];
+
+/** The `owner/name` of the repository an environment checks out, when it has one. */
+export const repositorySlug = (environment: {
+  configuration?: Pick<EnvironmentConfiguration, 'sources'> | null;
+}): string | undefined => {
+  const source = environment.configuration?.sources?.[0];
+  if (source?.kind !== 'git') return undefined;
+  const { url } = source;
+  try {
+    return new URL(url).pathname.replaceAll(/^\/+|\/+$/g, '').replace(/\.git$/, '') || undefined;
+  } catch {
+    return undefined;
+  }
+};
 
 /**
  * What the environment chip says. A list still loading, or one that failed to
@@ -41,3 +60,27 @@ export const environmentChipState = ({
 
   return failed ? { kind: 'loadFailed' } : { kind: 'loading' };
 };
+
+/**
+ * Where a conversation works once a repository is picked. A repository is only
+ * cloned into an empty folder, so it never inherits the folder the
+ * conversation was on: it starts in a temporary sandbox — or, in a project, in
+ * the project's own checkout of it, which every conversation there shares (the
+ * run makes the folder when it first needs it). A private checkout stays on the
+ * member's own drive; the public one is every member's.
+ */
+export const repositorySelection = (
+  environment: { id: string; name: string },
+  {
+    projectId,
+    published,
+    workspace,
+  }: { projectId?: string; published: boolean; workspace: boolean },
+): SandboxSelection =>
+  projectId
+    ? {
+        ...(workspace && { drive: published ? 'public' : 'personal' }),
+        environmentId: environment.id,
+        workingDirectory: projectCheckoutDirectory(projectId, environment.id),
+      }
+    : { environmentId: environment.id };

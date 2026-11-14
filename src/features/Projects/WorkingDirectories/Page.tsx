@@ -50,7 +50,7 @@ export function ProjectDirectoriesPage() {
       render: () => (
         <Flexbox gap={32}>
           <ProjectMemberSettings detail={detail} />
-          <MembersSettings projectId={detail.project.id} />
+          <MembersSettings project={detail.project} />
         </Flexbox>
       ),
     },
@@ -62,7 +62,12 @@ export function ProjectDirectoriesPage() {
     {
       key: 'environments',
       label: t('settings.environments'),
-      render: () => <ProjectWorkingDirectories projectId={detail.project.id} />,
+      render: () => (
+        <ProjectWorkingDirectories
+          projectId={detail.project.id}
+          shared={Boolean(detail.project.workspaceId) && detail.project.visibility === 'public'}
+        />
+      ),
     },
     {
       key: 'directories',

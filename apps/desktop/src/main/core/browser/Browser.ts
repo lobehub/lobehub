@@ -10,6 +10,7 @@ import { preloadDir, resourcesDir } from '@/const/dir';
 import { DESKTOP_EXTERNAL_NAVIGATION_HOSTS, isMac } from '@/const/env';
 import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
 import { backendProxyProtocolManager } from '@/core/infrastructure/BackendProxyProtocolManager';
+import { getRemoteDebuggingRendererArgs } from '@/modules/remoteDebugging';
 import { appendVercelCookie, setResponseHeader } from '@/utils/http-headers';
 import { createLogger } from '@/utils/logger';
 import { getSystemLanguage, resolveUILocale } from '@/utils/system-language';
@@ -17,6 +18,7 @@ import { LOADING_SCREEN_PAINTED_CHANNEL } from '~common/loadingScreen';
 import { SYSTEM_LANGUAGE_ARG_PREFIX } from '~common/systemLanguage';
 
 import type { App } from '../App';
+import { attachDevInstanceLabel, getDevInstanceLabel } from './devInstanceLabel';
 import { WindowStateManager } from './WindowStateManager';
 import { WindowThemeManager } from './WindowThemeManager';
 
@@ -241,7 +243,10 @@ export default class Browser {
       show: false,
       title,
       webPreferences: {
-        additionalArguments: [`${SYSTEM_LANGUAGE_ARG_PREFIX}${getSystemLanguage()}`],
+        additionalArguments: [
+          `${SYSTEM_LANGUAGE_ARG_PREFIX}${getSystemLanguage()}`,
+          ...getRemoteDebuggingRendererArgs(),
+        ],
         backgroundThrottling: false,
         contextIsolation: true,
         preload: path.join(preloadDir, 'index.js'),
@@ -332,6 +337,9 @@ export default class Browser {
     this.setupTopLevelNavigationListener(browserWindow);
     this.setupWillPreventUnloadListener(browserWindow);
     this.setupContextMenu(browserWindow);
+
+    const devInstanceLabel = getDevInstanceLabel();
+    if (devInstanceLabel) attachDevInstanceLabel(browserWindow, devInstanceLabel);
   }
 
   private setupTopLevelNavigationListener(browserWindow: BrowserWindow): void {
@@ -761,7 +769,6 @@ export default class Browser {
       if (requestHeaders['Origin']) {
         originMap.set(details.id, requestHeaders['Origin']);
         delete requestHeaders['Origin'];
-        logger.debug(`[${this.identifier}] Removed Origin header for: ${details.url}`);
       }
 
       appendVercelCookie(requestHeaders);

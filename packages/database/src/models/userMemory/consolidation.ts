@@ -7,6 +7,7 @@ import {
   userMemoriesContexts,
   userMemoriesDossiers,
   userMemoriesOperations,
+  users,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
@@ -112,7 +113,8 @@ export const listConsolidatedUserIds = async (db: LobeChatDatabase): Promise<str
   const rows = await db
     .selectDistinct({ userId: userMemoriesDossiers.userId })
     .from(userMemoriesDossiers)
-    .where(isNotNull(userMemoriesDossiers.userId));
+    .innerJoin(users, eq(users.id, userMemoriesDossiers.userId))
+    .where(sql`COALESCE(${users.banned}, false) = false`);
   return rows.map((r) => r.userId).filter((id): id is string => !!id);
 };
 
@@ -403,12 +405,13 @@ export class UserMemoryConsolidationModel {
    */
   listQueueEvidence = async (
     origin: string,
-  ): Promise<{ contextId: string | null; count: number; key: string }[]> => {
+  ): Promise<{ contextId: string | null; count: number; domain: string | null; key: string }[]> => {
     const queue = sql`${userMemories.metadata} -> 'consolidationQueue'`;
     return this.db
       .select({
         contextId: userMemoriesDossiers.contextId,
         count: sql<number>`count(*)::int`,
+        domain: sql<string | null>`${queue} ->> 'domain'`,
         key: sql<string>`${queue} ->> 'key'`,
       })
       .from(userMemories)
@@ -427,7 +430,26 @@ export class UserMemoryConsolidationModel {
           sql`${queue} ->> 'route' = 'evidence'`,
         ),
       )
-      .groupBy(userMemoriesDossiers.contextId, sql`${queue} ->> 'key'`);
+      .groupBy(userMemoriesDossiers.contextId, sql`${queue} ->> 'domain'`, sql`${queue} ->> 'key'`);
+  };
+
+  /** Remember merged domains on a queue lineage, so a resumed run does not merge them again. */
+  saveQueueDomains = async (origin: string, domains: Record<string, string>): Promise<void> => {
+    const queue = sql`${userMemories.metadata} -> 'consolidationQueue'`;
+    const map = sql`${JSON.stringify(domains)}::jsonb`;
+    await this.db
+      .update(userMemories)
+      .set({
+        metadata: sql`jsonb_set(${userMemories.metadata}, '{consolidationQueue,domain}', ${map} -> (${queue} ->> 'key'))`,
+      })
+      .where(
+        and(
+          eq(userMemories.userId, this.userId),
+          sql`COALESCE(${queue} ->> 'origin', ${queue} ->> 'runId') = ${origin}`,
+          sql`${queue} ->> 'route' = 'evidence'`,
+          sql`jsonb_exists(${map}, ${queue} ->> 'key')`,
+        ),
+      );
   };
 
   /** Mark legacy rows that consolidation saw but keeps in place (facts, preferences, noise). */
@@ -537,27 +559,41 @@ export class UserMemoryConsolidationModel {
         if (!before) {
           contextId = undefined;
         } else {
-          const last =
-            before.lastEvidenceAt && before.lastEvidenceAt > lastEvidence
-              ? before.lastEvidenceAt
-              : lastEvidence;
+          // NOTICE: A plan only describes the evidence it was given. When all of it is older than
+          // what the context already holds (a later chunk of an unsorted domain, a late-extracted
+          // memory), its `now` is a past state, so the evidence is filed but the current state stays.
+          const stale = !!before.lastEvidenceAt && before.lastEvidenceAt > lastEvidence;
+          const last = stale ? before.lastEvidenceAt! : lastEvidence;
+          const state = stale
+            ? {
+                nextSteps: before.nextSteps,
+                now: before.now,
+                openQuestions: before.openQuestions,
+              }
+            : { nextSteps: plan.nextSteps, now: plan.now, openQuestions: plan.openQuestions };
           await tx
             .update(userMemoriesContexts)
             .set({
               currentStatus: deriveContextStatus(last, now),
-              description: plan.now,
-              // Without a fresh embedding, the old vector still ranks better than none.
-              ...(plan.descriptionVector ? { descriptionVector: plan.descriptionVector } : {}),
               lastEvidenceAt: last,
-              nextSteps: plan.nextSteps,
-              now: plan.now,
-              openQuestions: plan.openQuestions,
-              synthesizedAt: now,
               updatedAt: now,
+              ...(stale
+                ? {}
+                : {
+                    description: plan.now,
+                    // Without a fresh embedding, the old vector still ranks better than none.
+                    ...(plan.descriptionVector
+                      ? { descriptionVector: plan.descriptionVector }
+                      : {}),
+                    nextSteps: plan.nextSteps,
+                    now: plan.now,
+                    openQuestions: plan.openQuestions,
+                    synthesizedAt: now,
+                  }),
             })
             .where(eq(userMemoriesContexts.id, contextId));
           // Unified search reads the parent memory, so its summary follows the description.
-          if (before.userMemoryId)
+          if (before.userMemoryId && !stale)
             await tx
               .update(userMemories)
               .set({ summary: plan.now, updatedAt: now })
@@ -565,7 +601,7 @@ export class UserMemoryConsolidationModel {
                 and(eq(userMemories.id, before.userMemoryId), eq(userMemories.userId, this.userId)),
               );
           await op({
-            after: { nextSteps: plan.nextSteps, now: plan.now, openQuestions: plan.openQuestions },
+            after: state,
             before,
             op: 'status',
             targets: { context: contextId },
@@ -646,20 +682,20 @@ export class UserMemoryConsolidationModel {
           else {
             const logBefore = !updatedDossiers.has(dossierId);
             updatedDossiers.add(dossierId);
+            // Same rule as the context above: older evidence is filed without rewriting `now`.
+            const stale = !!existing.lastEvidenceAt && existing.lastEvidenceAt > dLast;
+            const last = stale ? existing.lastEvidenceAt! : dLast;
             await tx
               .update(userMemoriesDossiers)
               .set({
                 activityCount: existing.activityCount + d.members.length,
-                lastEvidenceAt:
-                  existing.lastEvidenceAt && existing.lastEvidenceAt > dLast
-                    ? existing.lastEvidenceAt
-                    : dLast,
-                now: d.now,
-                summary: d.now,
+                lastEvidenceAt: last,
+                status: deriveContextStatus(last, now),
                 updatedAt: now,
+                ...(stale ? {} : { now: d.now, summary: d.now }),
               })
               .where(eq(userMemoriesDossiers.id, dossierId));
-            if (existing.userMemoryId)
+            if (existing.userMemoryId && !stale)
               await tx
                 .update(userMemories)
                 .set({ summary: d.now, updatedAt: now })
@@ -672,7 +708,7 @@ export class UserMemoryConsolidationModel {
             // A second group placed on the same dossier would log an intermediate before-image.
             if (logBefore) {
               await op({
-                after: { now: d.now },
+                after: { now: stale ? existing.now : d.now },
                 before: existing,
                 op: 'status',
                 targets: { dossier: dossierId },

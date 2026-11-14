@@ -36,7 +36,7 @@ export function ArchivedNotice({
   };
 
   return (
-    <WideScreenContainer fullWidth paddingInline={24}>
+    <WideScreenContainer fullWidth paddingInline={8}>
       <div role="status" {...stylex.props(styles.archivedNotice)}>
         <Flexbox horizontal align="center" gap={8} style={{ minWidth: 0 }}>
           <Icon icon={Archive} size={16} />

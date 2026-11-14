@@ -92,6 +92,7 @@ export const buildBatchFlowNodes = ({
               views: byId,
             }
           : ({
+              held: round.gate === 'human',
               onEnter: () => onEnter(batchStageId(batchId, group.revision)),
               onSelect,
               probes: round.probes,

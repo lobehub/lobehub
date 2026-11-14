@@ -12,6 +12,7 @@ import {
   stopPropagation,
   Tag,
 } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import {
   Eye,
   File,
@@ -130,24 +131,24 @@ const CredItem: FC<CredItemProps> = memo(
       <Flexbox
         horizontal
         align="center"
-        className={styles.container}
+        className={stylex.props(styles.container).className}
         gap={16}
         justify="space-between"
       >
         <Flexbox horizontal align="center" gap={16} style={{ flex: 1, overflow: 'hidden' }}>
-          <div className={styles.icon}>{renderAvatar()}</div>
+          <div {...stylex.props(styles.icon)}>{renderAvatar()}</div>
           <Flexbox gap={4} style={{ overflow: 'hidden' }}>
             <Flexbox horizontal align="center" gap={8}>
-              <span className={styles.title}>{cred.name}</span>
+              <span {...stylex.props(styles.title)}>{cred.name}</span>
               <Tag color={typeColors[cred.type]}>{t(`creds.types.${cred.type}`)}</Tag>
               {tags}
             </Flexbox>
             <Flexbox horizontal align="center" gap={8}>
-              <code className={styles.key}>{cred.key}</code>
+              <code {...stylex.props(styles.key)}>{cred.key}</code>
               {cred.description && (
                 <>
                   <span style={{ color: 'var(--lobe-color-text-quaternary)' }}>·</span>
-                  <span className={styles.description}>{cred.description}</span>
+                  <span {...stylex.props(styles.description)}>{cred.description}</span>
                 </>
               )}
             </Flexbox>

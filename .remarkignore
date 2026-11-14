@@ -3,3 +3,4 @@
 
 # Vendored from lobehub/lobe-design-skill via its install.sh --copy; keep upstream formatting and send local fixes upstream.
 .agents/skills/lobe-design/**
+.agents/skills/lobe-design-cli/**

@@ -1,34 +1,27 @@
-import useSWR from 'swr';
-
-import { scmKeys } from '@/libs/swr/keys';
-import { scmService } from '@/services/scm';
+import { integrationActions, integrationSelectors, useIntegrationStore } from '@/store/integration';
 
 /**
- * Everything the GitHub integration surfaces need, fetched once and shared
- * by the overview card and the detail page. `enabled` is "at least one live
+ * Everything the GitHub integration surfaces need, read once and shared by the
+ * overview card and the detail page. A reload paints the last local copy and
+ * revalidates in the background. `enabled` is "at least one live
  * installation", which is what the overview's Enabled section keys on.
  */
 export const useGithubIntegration = () => {
-  const config = useSWR(scmKeys.config(), () => scmService.getConfig());
-  const identity = useSWR(scmKeys.identity('github'), () => scmService.getIdentity('github'));
-  const installations = useSWR(scmKeys.installations(null), () => scmService.listInstallations());
-
-  const isInitialLoading =
-    config.data === undefined || installations.data === undefined || identity.data === undefined;
-  const error = config.error ?? installations.error ?? identity.error;
-  const mutate = () => {
-    void config.mutate();
-    void identity.mutate();
-    void installations.mutate();
-  };
+  const { error } = integrationActions.useFetchGithub();
+  const config = useIntegrationStore(integrationSelectors.scmConfig);
+  const identity = useIntegrationStore(integrationSelectors.scmIdentity);
+  const installations = useIntegrationStore(integrationSelectors.scmInstallations);
+  const isSettled = useIntegrationStore(integrationSelectors.isGithubSettled);
 
   return {
-    config: config.data?.github,
-    enabled: (installations.data?.length ?? 0) > 0,
+    config: config?.github,
+    enabled: (installations?.length ?? 0) > 0,
     error,
-    identity: identity.data ?? null,
-    installations: installations.data ?? [],
-    isInitialLoading,
-    mutate,
+    identity: identity?.identity ?? null,
+    installations: installations ?? [],
+    isInitialLoading: !isSettled,
+    mutate: () => {
+      void integrationActions.refreshGithub();
+    },
   };
 };

@@ -1,5 +1,8 @@
-import type { LobeAgentAgencyConfig, LobeAgentConfig } from './agent';
+import type { LobeAgentAgencyConfig, LobeAgentConfig, RemoteHeterogeneousAgentType } from './agent';
+import { LocalExecutionHeterogeneousAgentTypeSchema } from './agent/heterogeneousAgent';
 import { getWorkingDirEffectivePath } from './device';
+import type { BotWakeKind } from './signal';
+import type { ExternalWorkSummaryItem } from './work';
 
 /**
  * Channel: a shared conversation where people and Agents talk together.
@@ -8,17 +11,32 @@ import { getWorkingDirEffectivePath } from './device';
  * and operations; the internal transcript stays separate from the public timeline.
  */
 
-export const CHANNEL_RUNTIMES = [
-  'native',
-  'codex',
-  'amp',
-  'grok-build',
-  'claude-code',
-  'pi',
-] as const;
-export type ChannelRuntime = (typeof CHANNEL_RUNTIMES)[number];
+/**
+ * Runtimes a Channel can seat, derived rather than listed: LobeHub's own `native` loop plus every
+ * heterogeneous runtime that executes on its user's machine (descriptor-backed CLIs and
+ * protocol-driven local runtimes). A new local runtime joins Channels when it joins the provider
+ * registry; only runtimes known not to work are excluded below, each with its reason.
+ */
+const LOCAL_EXECUTION_RUNTIMES = LocalExecutionHeterogeneousAgentTypeSchema.options;
+
+/**
+ * Remote-task runtimes (`openclaw`, `hermes`) run a task on a remote host instead of on a seated
+ * device, so a Channel's "pick a device + working directory" premise does not hold for them.
+ * They are not part of LOCAL_EXECUTION_RUNTIMES; this list documents the exclusion and is
+ * asserted by tests so a remote runtime cannot slip in by being reclassified.
+ */
+export const CHANNEL_EXCLUDED_RUNTIMES: Readonly<Record<RemoteHeterogeneousAgentType, string>> = {
+  hermes:
+    'remote-task runtime: runs off-device, so there is no Channel device or working directory',
+  openclaw:
+    'remote-task runtime: runs off-device, so there is no Channel device or working directory',
+};
+
+export const CHANNEL_RUNTIMES = ['native', ...LOCAL_EXECUTION_RUNTIMES] as const;
+export type ChannelRuntime = 'native' | (typeof LOCAL_EXECUTION_RUNTIMES)[number];
 
 export const isChannelRuntime = (runtime: string): runtime is ChannelRuntime =>
+  !Object.hasOwn(CHANNEL_EXCLUDED_RUNTIMES, runtime) &&
   (CHANNEL_RUNTIMES as readonly string[]).includes(runtime);
 
 /**
@@ -112,12 +130,45 @@ export interface ChannelMemberConfig {
    * creator, so a workspace channel can use another member's device after its owner approves.
    */
   deviceOwnerId?: string;
+  /**
+   * This member's own reply strategy, over the channel's `ChannelConfig.wake`. Parsed by the
+   * shared wake schema; never part of the execution environment.
+   */
+  wake?: Record<string, unknown>;
   /** Set only from a device's canonical-path acknowledgement before claiming work. */
   workingDirectory?: string;
 }
 
+/**
+ * Channel-wide settings a member configures and the server validates, unlike `ChannelMetadata`.
+ * Agent members can override them in `ChannelMemberConfig`; NULL means every default applies.
+ */
+export interface ChannelConfig {
+  /** How Agents decide to answer unaddressed messages; parsed by the shared wake schema. */
+  wake?: Record<string, unknown>;
+}
+
+/**
+ * A git worktree a member's conversation branch moved into when another run held its
+ * configured directory. Cut from that directory's HEAD; the branch keeps working there until
+ * the member's environment changes.
+ */
+export interface ChannelMemberWorktree {
+  branch: string;
+  deviceId: string;
+  /** Absolute path under `~/.lobehub/worktrees/`, see `deriveWorktreePath`. */
+  path: string;
+  /** The member's configured directory it was cut from. */
+  sourceDirectory: string;
+}
+
 /** Free-form member state that does not need its own column. */
-export type ChannelMemberMetadata = Record<string, unknown>;
+export type ChannelMemberMetadata = Record<string, unknown> & {
+  /** Worktree per conversation branch: a Thread id, or `main` for the main timeline. */
+  worktrees?: Record<string, ChannelMemberWorktree>;
+  /** The configured directory could not host a worktree (e.g. not a git repo); retried later. */
+  worktreeUnavailable?: { at: string; deviceId: string; sourceDirectory: string };
+};
 
 /** Free-form channel state that does not need its own column. */
 export type ChannelMetadata = Record<string, unknown>;
@@ -131,10 +182,75 @@ export type ChannelThreadMetadata = Record<string, unknown>;
 /** Free-form public message state that does not need its own column. */
 export type ChannelMessageMetadata = Record<string, unknown>;
 
+/**
+ * The Agent that wrote a request on its requester's behalf (`lobe-channel.sendMessage`). The
+ * person stays the sender and execution identity; this only says who relayed it.
+ */
+export interface ChannelMessageVia {
+  agentId: string;
+  name: string;
+}
+
+/**
+ * Where a relayed request came from (`metadata.via.origin`), kept server-side so the target's
+ * reply can be delivered back there as a receipt.
+ */
+export interface ChannelRelayOrigin {
+  channelId: string;
+  threadId: string | null;
+}
+
+/**
+ * `metadata.receipt` of a request that brings another Channel's reply back to the Agent that
+ * relayed the original message. Its `via` names the Agent that answered.
+ */
+export interface ChannelMessageReceipt {
+  channelId: string;
+  channelTitle: string;
+  /** The published reply in that Channel. */
+  messageId: string;
+}
+
+export const channelRelayOrigin = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): ChannelRelayOrigin | undefined => {
+  const origin = (metadata?.via as { origin?: Partial<ChannelRelayOrigin> } | undefined)?.origin;
+  return typeof origin?.channelId === 'string'
+    ? { channelId: origin.channelId, threadId: origin.threadId ?? null }
+    : undefined;
+};
+
+export const channelMessageReceipt = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): ChannelMessageReceipt | undefined => {
+  const receipt = metadata?.receipt as Partial<ChannelMessageReceipt> | undefined;
+  return typeof receipt?.channelId === 'string' &&
+    typeof receipt.channelTitle === 'string' &&
+    typeof receipt.messageId === 'string'
+    ? {
+        channelId: receipt.channelId,
+        channelTitle: receipt.channelTitle,
+        messageId: receipt.messageId,
+      }
+    : undefined;
+};
+
+/** `metadata.via` of a relayed request, or undefined for anything else. */
+export const channelMessageVia = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): ChannelMessageVia | undefined => {
+  const via = metadata?.via as Partial<ChannelMessageVia> | undefined;
+  return typeof via?.agentId === 'string' && typeof via.name === 'string'
+    ? { agentId: via.agentId, name: via.name }
+    : undefined;
+};
+
 /** Effective Agent settings and Channel environment, frozen once when a job is claimed. */
 export interface ChannelExecutionConfig extends LobeAgentConfig, ChannelMemberConfig {
   provider: string;
   runtime: ChannelRuntime;
+  /** Set when the run works in its branch's worktree; `workingDirectory` is then that worktree. */
+  worktreeBranch?: string;
 }
 
 /**
@@ -167,13 +283,48 @@ export type ChannelRoutingMode = 'decision' | 'fallback';
  * - `completed`: the final reply was published.
  * - `failed`: ended without a publishable reply, or its execution failed or became unknown.
  * - `cancelled`: stopped, or it can never run (requester left, environment switched).
+ * - `silent`: a `followup` wake the Agent chose not to answer (`NO_REPLY`). Settled, not failed.
  */
-export type ChannelJobStatus = 'cancelled' | 'completed' | 'failed' | 'queued' | 'running';
+export type ChannelJobStatus =
+  'cancelled' | 'completed' | 'failed' | 'queued' | 'running' | 'silent';
+
+/**
+ * Why a job was woken, frozen when it is delivered.
+ *
+ * - `mention`: someone addressed the member (an @mention, a reply, the paired Agent of a direct
+ *   conversation) or routing chose it; it owes an answer.
+ * - `followup`: nobody addressed it; speaking is optional and it may end in `silent`.
+ *
+ * The details are what the woken Agent is told about the wake.
+ */
+export interface ChannelJobWake {
+  /**
+   * The member whose reply to the same message this wake waits for: the message's one primary
+   * responder. The job starts only after that member's job settles, with its reply in the prompt,
+   * so it can stay silent when the reply already covers the request.
+   */
+  afterMemberId?: string;
+  /** The message falls within the member's duties (`helpful`: it can settle an open question). */
+  duty?: { helpful?: boolean; matched?: string };
+  /** The member spoke here lately and this message followed. */
+  followup?: {
+    participants: { isBot: boolean; isOwner: boolean; name: string }[];
+    score?: number;
+  };
+  kind: BotWakeKind;
+  /** The message says the member's name without @-mentioning it. */
+  named?: boolean;
+  /** The rule that woke it, as the decision row records it. */
+  reason?: string;
+}
 
 /** Why a queued job cannot start yet. Typed so clients never infer it from error text. */
 export type ChannelJobBlockCode =
+  /** A deferred `followup` waiting for the message's primary responder to settle. */
+  | 'awaiting_primary'
   | 'device_approval_pending'
   | 'device_offline'
+  | 'device_required'
   | 'directory_locked'
   | 'member_busy'
   | 'unavailable'
@@ -191,9 +342,13 @@ export interface ChannelContextMessage {
   /** Stable references; URLs and document contents are resolved at execution time. */
   fileIds?: string[];
   id: string;
+  /** Set on a request that brings another Channel's reply back to the relaying Agent. */
+  receipt?: ChannelMessageReceipt;
   replyToId?: string | null;
   sequence: number;
   threadId: string | null;
+  /** Set on a request an Agent relayed for its author. */
+  via?: ChannelMessageVia;
 }
 
 /** Read-only history of the current Channel operation; scope is never supplied by the model. */
@@ -220,6 +375,49 @@ export interface ChannelHistoryPage {
   nextBeforeSequence: number | null;
 }
 
+/** Channels the run's requester belongs to, to find where to reach another Agent. */
+export interface ChannelListChannelsParams {
+  /** Only Channels where this Agent is an active member. */
+  agentId?: string;
+  limit?: number;
+  /** Case-insensitive match on the Channel title or an Agent member's name. */
+  query?: string;
+}
+
+export interface ChannelDirectoryEntry {
+  agents: Array<{ agentId: string; description: string | null; name: string }>;
+  /** The Channel this run answers in. */
+  current: boolean;
+  id: string;
+  /** `direct`: one person and its bound Agent; `group`: everything else. */
+  kind: 'direct' | 'group';
+  projectId: string | null;
+  title: string;
+}
+
+export interface ChannelDirectoryPage {
+  channels: ChannelDirectoryEntry[];
+  /** More Channels matched than were returned; narrow with `query` or `agentId`. */
+  hasMore: boolean;
+}
+
+/** A request posted into another Channel for the run's requester, @mentioning its Agents. */
+export interface ChannelSendMessageParams {
+  /** Agents to address; each must be an active member of the target Channel. */
+  agentIds: string[];
+  channelId: string;
+  content: string;
+}
+
+export interface ChannelSentMessage {
+  agents: Array<{ agentId: string; name: string }>;
+  channelId: string;
+  channelTitle: string;
+  messageId: string;
+  /** Link to the Channel the message was posted in, for the reply that mentions it. */
+  url: string;
+}
+
 export interface ChannelHistoryMessageDetail {
   attachments?: Array<{ fileType: string; id: string; name: string; size: number; url: string }>;
   message: ChannelHistoryMessage;
@@ -234,6 +432,11 @@ export interface ChannelHistoryMessageDetail {
 export interface ChannelInputManifest {
   /** Immutable at claim time; later public messages belong to the next run. */
   cutoffSequence: number;
+  /**
+   * A deferred `followup` (see `ChannelJobWake.afterMemberId`): the reply the primary responder
+   * published to the same request, delivered with the request even though it is past the cutoff.
+   */
+  primaryReplyMessageId?: string;
   /** The member that triggered this run; its user is the execution identity. */
   requesterMemberId: string;
   requestMessageId: string;
@@ -247,6 +450,16 @@ export interface ChannelInputManifest {
 /** Flat audit payload: routing decisions, claims, stops, isolation reasons. */
 export type ChannelAuditDetails = Record<string, boolean | number | string | string[] | null>;
 
+/** A member pictured in a Channel's list avatar. */
+export interface ChannelAvatarMember {
+  actorType: ChannelMemberActorType;
+  avatar: string | null;
+  backgroundColor: string | null;
+  /** The Agent id or user id; seeds a generated avatar when there is no image. */
+  id: string;
+  name: string | null;
+}
+
 /** Public client projection. No execution configuration, private topic or draft fields. */
 export interface ChannelListItem {
   /** The bound Agent of a direct conversation; null for a group. */
@@ -255,11 +468,29 @@ export interface ChannelListItem {
   canDelete: boolean;
   createdAt: Date;
   id: string;
+  /** The newest main-channel message, cut for a preview; set by the Channel list. */
+  lastMessage?: { content: string; createdAt: Date } | null;
+  /**
+   * The first members besides the caller, oldest first, for a group Channel's list avatar;
+   * set by the Channel list.
+   */
+  memberAvatars?: ChannelAvatarMember[];
+  /** Unread messages, Threads included, that @mention the caller; set by the Channel list. */
+  mentionCount?: number;
   /** The project the channel is grouped under; null for a standalone channel. */
   projectId: string | null;
+  /**
+   * Main-conversation replies still pending (queued, running, or stopping), so a list row can
+   * show them without loading the conversation; set by the Channel list.
+   */
+  replyJobs?: ChannelReplyJob[];
   sequence: number;
   status: ChannelStatus;
   title: string;
+  /** Main-channel messages the caller has not read; set by the Channel list. */
+  unreadCount?: number;
+  /** Bumped by every new message, so it orders conversations by latest activity. */
+  updatedAt?: Date;
   workspaceId: string | null;
 }
 
@@ -292,6 +523,8 @@ export interface ChannelPublicMessage {
   fileIds: string[];
   id: string;
   mentions: string[];
+  /** Another Channel's reply this request brings back to the relaying Agent; null otherwise. */
+  receipt?: ChannelMessageReceipt | null;
   recipientMemberIds: string[];
   /** Bounded public quote, including when its original is outside the loaded page. */
   replyTo?: Pick<
@@ -301,8 +534,18 @@ export interface ChannelPublicMessage {
   replyToId: string | null;
   routingStatus: ChannelMessageRoutingStatus;
   sequence: number;
+  /** The Agent topic behind a reply, only when the viewer ran it (owns that topic). */
+  sourceTopicId?: string | null;
+  sourceTopicTitle?: string | null;
   threadId: string | null;
   userId: string | null;
+  /** The Agent that relayed this request (or answered it, on a receipt); null otherwise. */
+  via?: (ChannelMessageVia & { avatar: string | null }) | null;
+  /**
+   * External Works a reply's run touched: the conversation's work summaries, for every member,
+   * without the ids that link them to the requester's Work, topic and run. Empty on requests.
+   */
+  works?: ExternalWorkSummaryItem[];
 }
 
 export interface ChannelPublicJob {
@@ -317,15 +560,32 @@ export interface ChannelPublicJob {
   publicationRevoked: boolean;
   status: ChannelJobStatus;
   threadId: string | null;
+  /** Git branch of the worktree the run works in, instead of the member's own directory. */
+  worktreeBranch?: string | null;
   writerHeld: boolean;
 }
+
+/** A pending reply in the fields its status is derived from. */
+export type ChannelReplyJob = Pick<
+  ChannelPublicJob,
+  'blockedCode' | 'id' | 'memberId' | 'publicationRevoked' | 'status' | 'threadId' | 'writerHeld'
+>;
 
 export interface ChannelPublicThread {
   followerMemberIds: string[];
   id: string;
+  /**
+   * The newest reply, for threads whose root is on the loaded main-timeline page. Absent in
+   * thread views and in views cached before summaries existed.
+   */
+  lastReply?: Pick<ChannelPublicMessage, 'author' | 'content' | 'createdAt' | 'id'> | null;
+  /** Replies in the thread, under the same conditions as `lastReply`. */
+  replyCount?: number;
   rootMessageId: string;
   rootSequence: number;
   status: ChannelThreadStatus;
+  /** Name an Agent gave the Thread when it moved its reply there; otherwise the root names it. */
+  title?: string;
 }
 
 export interface ChannelDetail {

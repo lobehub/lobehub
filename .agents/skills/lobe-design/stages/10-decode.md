@@ -1,4 +1,4 @@
-# Stage 10 · 截图解析（decode）
+# Stage 10・截图解析（decode）
 
 > 只回答一个问题：**这张图里有什么结构、什么取值，它们分别映射到宿主组件库的哪个组件（web：lobe-ui；RN：项目组件库，如 `@lobehub/ui-rn`）和哪个主题 token。**
 > 只在 screenshot-restore 场景运行。产出两张表，30 和 50 照着表执行，不再回头凭感觉看图。
@@ -27,7 +27,7 @@
 
 ## 只加载
 
-- [design.md](../references/design.md)：D-02 视觉角色 → token · D-04 几何与排版取值 · D-05 预设色阶 · D-11 合法失败格式
+- [design.md](../references/design.md)：D-02 视觉角色 → token・D-04 几何与排版取值・D-05 预设色阶・D-11 合法失败格式
 - 不加载 components.md：组件选型是 30 的事，这里只写候选。
 
 ## 步骤

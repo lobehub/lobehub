@@ -3,7 +3,6 @@
 import {
   Button,
   createModal,
-  createStaticStyles,
   Flexbox,
   type ModalInstance,
   Text,

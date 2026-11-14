@@ -11,6 +11,7 @@ import { ExecutionTargetDeviceStatus, ExecutionTargetIcon } from '@/features/Exe
 import { isDevicePresenceUnknown } from '@/store/device';
 
 import DeviceDetailPopover from './DeviceDetailPopover';
+import { getDeviceOptionState } from './deviceOptionState';
 import { handleDeviceRowKeyDown } from './deviceRowKeyDown';
 import OptionRow from './OptionRow';
 
@@ -21,8 +22,6 @@ const styles = stylex.create({
 interface DeviceOptionRowProps {
   active: boolean;
   device: DeviceListItem;
-  /** This app's own machine: described as the local process instead of by status. */
-  isCurrentMachine: boolean;
   onReconnect: () => void;
   onSelect: () => void;
   reconnecting: boolean;
@@ -36,7 +35,6 @@ interface DeviceOptionRowProps {
 const DeviceOptionRow = ({
   active,
   device,
-  isCurrentMachine,
   onReconnect,
   onSelect,
   reconnecting,
@@ -45,35 +43,35 @@ const DeviceOptionRow = ({
   const { t } = useTranslation('chat');
   // A row restored from the persisted list is neither online nor offline yet.
   const presenceUnknown = isDevicePresenceUnknown(device);
+  const { offlineLabelKey, reconnectLabelKey, selectable, showReconnect } = getDeviceOptionState(
+    device,
+    { presenceUnknown },
+  );
 
   return (
     <DeviceDetailPopover device={device}>
       <div
         data-testid={`device-option-${device.deviceId}`}
-        onKeyDown={(event) => handleDeviceRowKeyDown(event, { disabled: !device.online, onSelect })}
+        onKeyDown={(event) => handleDeviceRowKeyDown(event, { disabled: !selectable, onSelect })}
       >
         <OptionRow
           active={active}
-          disabled={!device.online}
+          disabled={!selectable}
           icon={<ExecutionTargetIcon devicePlatform={device.platform} target={'device'} />}
           label={device.friendlyName || device.hostname || device.deviceId}
           tags={tags}
           desc={
             <>
-              {isCurrentMachine ? (
-                t('heteroAgent.executionTarget.gatewayDesc')
-              ) : (
-                <ExecutionTargetDeviceStatus
-                  offlineLabel={t('heteroAgent.executionTarget.offline')}
-                  online={device.online}
-                  unknown={presenceUnknown}
-                  unknownLabel={t('heteroAgent.executionTarget.presenceChecking')}
-                  onlineLabel={t('heteroAgent.executionTarget.onlineConnections', {
-                    count: device.channels.length,
-                  })}
-                />
-              )}
-              {device.online || presenceUnknown ? null : (
+              <ExecutionTargetDeviceStatus
+                offlineLabel={t(offlineLabelKey)}
+                online={device.online}
+                unknown={presenceUnknown}
+                unknownLabel={t('heteroAgent.executionTarget.presenceChecking')}
+                onlineLabel={t('heteroAgent.executionTarget.onlineConnections', {
+                  count: device.channels.length,
+                })}
+              />
+              {showReconnect ? (
                 <Button
                   className={stylex.props(styles.reconnectButton).className}
                   icon={<Icon icon={RefreshCwIcon} size={10} />}
@@ -85,9 +83,9 @@ const DeviceOptionRow = ({
                     onReconnect();
                   }}
                 >
-                  {t('heteroAgent.executionTarget.reconnect')}
+                  {t(reconnectLabelKey)}
                 </Button>
-              )}
+              ) : null}
             </>
           }
           onClick={onSelect}

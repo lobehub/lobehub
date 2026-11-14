@@ -10,6 +10,7 @@ import AudioPlayer from '@/features/AudioPlayer';
 import { sx } from '@/styles/sx';
 
 import {
+  comparisonMedia,
   EvidenceComparisonCard,
   meaningfulEvidenceCaption,
   readEvidenceComparison,
@@ -62,7 +63,7 @@ const comparisonContent = (item: AcceptanceEvidence, action?: ReactNode, video?:
       loading={'lazy'}
       src={item.fileUrl!}
       style={{ aspectRatio: imageRatio(item), borderRadius: 0, width: '100%' }}
-      variant={'borderless'}
+      {...comparisonMedia.image}
     />
   );
   if (!action) return image;

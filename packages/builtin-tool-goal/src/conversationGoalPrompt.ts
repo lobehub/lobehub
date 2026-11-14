@@ -10,7 +10,7 @@ import { isGoalPrompt } from './goalPrompt';
  * which the server adopts as the goal's first planning turn. A `/goal` that
  * names an existing goal binds it here (`lh goal bind-topic`) instead: the
  * `goal:manage` capability a device or gateway run needs for that is granted
- * only to `/goal` runs, so this is the bind's only entry for them.
+ * only to runs the user sent (or any `/goal` run), which covers this one.
  */
 export const conversationGoalPrompt = `The user sent this request with LobeHub's /goal command (the prefix was removed before it reached you; it is not your own /goal command). They are asking you to turn the request into a long-running LobeHub Goal that you supervise from this conversation, not to do the work yourself in this run.
 
