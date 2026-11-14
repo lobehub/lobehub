@@ -1,16 +1,11 @@
 // @vitest-environment node
+import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PluginModel } from '@/database/models/plugin';
 
-import { toClientVersionLabel } from '../_helpers/legacyPluginWriteMetrics';
 import { pluginRouter } from '../plugin';
 
-const counter = vi.hoisted(() => ({ add: vi.fn() }));
-
-vi.mock('@lobechat/observability-otel/modules/legacy-plugin-write', () => ({
-  legacyPluginWriteCounter: counter,
-}));
 vi.mock('@/database/models/plugin', () => ({ PluginModel: vi.fn() }));
 vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
   const mod = await vi.importActual<{ trpc: any }>('@/libs/trpc/lambda/init');
@@ -23,98 +18,59 @@ vi.mock('@/libs/trpc/lambda/middleware', () => ({
     opts.next({ ctx: { ...opts.ctx, serverDB: opts.ctx.serverDB ?? {} } }),
 }));
 
-/**
- * Released clients still install MCPs through these two routes, so until the
- * routes are removed they must keep writing `user_installed_plugins` rows
- * exactly as before, and every call must be counted.
- */
-describe('pluginRouter legacy create routes', () => {
-  let pluginModel: {
-    create: ReturnType<typeof vi.fn>;
-    findById: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
-  };
+const call = (path: string, input: unknown) =>
+  fetchRequestHandler({
+    createContext: () => ({ userId: 'user-1' }) as never,
+    endpoint: '/trpc/lambda/plugin',
+    req: new Request(`http://localhost/trpc/lambda/plugin/${path}`, {
+      body: JSON.stringify(input),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    }),
+    router: pluginRouter,
+  });
 
-  const caller = () =>
-    pluginRouter.createCaller({
-      clientMetadata: { type: 'desktop', version: '2.1.4' },
-      userId: 'user-1',
-    } as any);
+/**
+ * New MCP installs only write `user_connectors`. The 1.0 create routes are
+ * gone, so nothing can add a `user_installed_plugins` row any more.
+ */
+describe('pluginRouter without the legacy create routes', () => {
+  const pluginModel = {
+    create: vi.fn(),
+    findById: vi.fn(),
+    query: vi.fn().mockResolvedValue([]),
+    update: vi.fn(),
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
-    pluginModel = {
-      create: vi.fn(async (row: { identifier: string }) => ({ identifier: row.identifier })),
-      findById: vi.fn().mockResolvedValue(undefined),
-      update: vi.fn(),
-    };
     vi.mocked(PluginModel).mockImplementation(function () {
       return pluginModel as any;
     });
   });
 
-  it('createOrInstallPlugin still creates a plugin row and counts the call', async () => {
-    const manifest = { api: [], identifier: 'box' };
+  it.each(['createPlugin', 'createOrInstallPlugin'])(
+    'answers %s with NOT_FOUND and writes no plugin row',
+    async (path) => {
+      const res = await call(path, {
+        customParams: { mcp: { type: 'http', url: 'https://mcp.example.com' } },
+        identifier: 'box',
+        manifest: { api: [], identifier: 'box' },
+        type: 'plugin',
+      });
 
-    const result = await caller().createOrInstallPlugin({
-      customParams: { mcp: { type: 'http', url: 'https://mcp.example.com' } },
-      identifier: 'box',
-      manifest,
-      settings: { token: 'x' },
-      type: 'plugin',
-    });
+      expect(res.status).toBe(404);
+      expect(JSON.stringify(await res.json())).toContain('NOT_FOUND');
+      expect(pluginModel.create).not.toHaveBeenCalled();
+      expect(pluginModel.update).not.toHaveBeenCalled();
+    },
+  );
 
-    expect(result).toBe('box');
-    expect(pluginModel.create).toHaveBeenCalledWith({
-      customParams: { mcp: { type: 'http', url: 'https://mcp.example.com' } },
-      identifier: 'box',
-      manifest,
-      settings: { token: 'x' },
-      type: 'plugin',
-    });
-    expect(counter.add).toHaveBeenCalledWith(1, {
-      client_type: 'desktop',
-      client_version: toClientVersionLabel('2.1.4'),
-      plugin_type: 'plugin',
-      procedure: 'createOrInstallPlugin',
-    });
-  });
-
-  it('createOrInstallPlugin still only refreshes the manifest of an existing row', async () => {
-    pluginModel.findById.mockResolvedValue({ identifier: 'box', userId: 'user-1' });
-    const manifest = { api: [{ name: 'search' }], identifier: 'box' };
-
-    const result = await caller().createOrInstallPlugin({
-      identifier: 'box',
-      manifest,
-      type: 'plugin',
-    });
-
-    expect(result).toBeUndefined();
-    expect(pluginModel.create).not.toHaveBeenCalled();
-    expect(pluginModel.update).toHaveBeenCalledWith('box', { manifest });
-    expect(counter.add).toHaveBeenCalledTimes(1);
-  });
-
-  it('createPlugin still creates a custom plugin row and counts the call', async () => {
-    const result = await caller().createPlugin({
-      customParams: { mcp: { command: 'npx', type: 'stdio' } },
-      identifier: 'my-mcp',
-      type: 'customPlugin',
-    });
-
-    expect(result).toBe('my-mcp');
-    expect(pluginModel.create).toHaveBeenCalledWith({
-      customParams: { mcp: { command: 'npx', type: 'stdio' } },
-      identifier: 'my-mcp',
-      manifest: undefined,
-      type: 'customPlugin',
-    });
-    expect(counter.add).toHaveBeenCalledWith(1, {
-      client_type: 'desktop',
-      client_version: toClientVersionLabel('2.1.4'),
-      plugin_type: 'customPlugin',
-      procedure: 'createPlugin',
-    });
+  it('keeps only the read and maintenance procedures', () => {
+    expect(Object.keys(pluginRouter._def.procedures).sort()).toEqual([
+      'getPlugins',
+      'removePlugin',
+      'updatePlugin',
+    ]);
   });
 });
