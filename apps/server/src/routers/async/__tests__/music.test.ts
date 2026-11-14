@@ -236,6 +236,34 @@ describe('musicRouter.createMusic', () => {
     );
   });
 
+  it('stores the songs of one batch concurrently, so storage needs one download of time', async () => {
+    runtime.createMusic.mockResolvedValue({
+      status: 'success',
+      tracks: [
+        { audioUrl: 'https://cdn.example.com/a.mp3', id: 'clip-a' },
+        { audioUrl: 'https://cdn.example.com/b.mp3', id: 'clip-b' },
+      ],
+    });
+    const releases: (() => void)[] = [];
+    let n = 0;
+    musicServiceMock.processTrack.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          const result = processResult(++n);
+          releases.push(() => resolve(result));
+        }),
+    );
+
+    const promise = musicRouter.createCaller(ctx).createMusic(createInput());
+    await vi.waitFor(() => expect(musicServiceMock.processTrack).toHaveBeenCalledTimes(2));
+    // Both downloads started before either finished
+    expect(releases).toHaveLength(2);
+    releases.forEach((release) => release());
+
+    await expect(promise).resolves.toEqual({ stored: 2, success: true });
+    expect(generationServiceMock.ensureTopicCover).toHaveBeenCalledTimes(1);
+  });
+
   it('fails every task and refunds when the provider reports the task failed', async () => {
     runtime.createMusic.mockResolvedValue({ inferenceId: 'music-task-2', status: 'pending' });
     runtime.handlePollMusicStatus.mockResolvedValue({

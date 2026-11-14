@@ -189,6 +189,7 @@ describe('musicRouter.createMusic (lambda)', () => {
       type: 'text2music',
     });
     fileService.getKeyFromFullUrl.mockResolvedValue('files/user/ref.mp3');
+    fileService.getFullFileUrl.mockResolvedValue('https://s3.example.com/files/user/ref.mp3');
 
     const result = await musicRouter.createCaller(ctx as any).createMusic({
       ...defaultInput,
@@ -208,6 +209,29 @@ describe('musicRouter.createMusic (lambda)', () => {
         }),
       }),
     );
+  });
+
+  it('keeps a pasted third-party reference audio URL instead of rewriting it to a key', async () => {
+    setupTransaction();
+    mockResolveMusicModelCard.mockResolvedValue({
+      outputsPerRequest: 1,
+      parameters: { prompt: { default: '' }, referenceAudioUrl: { default: null, required: true } },
+      type: 'text2music',
+    });
+    // getKeyFromFullUrl returns the pathname of any URL; the origin check must reject it
+    fileService.getKeyFromFullUrl.mockResolvedValue('audio/ref.mp3');
+    fileService.getFullFileUrl.mockResolvedValue('https://s3.example.com/audio/ref.mp3');
+
+    const result = await musicRouter.createCaller(ctx as any).createMusic({
+      ...defaultInput,
+      model: 'cover-model',
+      params: { prompt: 'jazz cover', referenceAudioUrl: 'https://cdn.other.com/audio/ref.mp3' },
+      provider: 'acme',
+    });
+
+    expect(result.data.batch.config).toMatchObject({
+      referenceAudioUrl: 'https://cdn.other.com/audio/ref.mp3',
+    });
   });
 
   describe('validation', () => {

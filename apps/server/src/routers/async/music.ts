@@ -290,73 +290,84 @@ export const musicRouter = router({
             and(eq(batches.id, generationBatchId), eq(batches.userId, ctx.userId)),
         });
 
-        let topicCoverKey: string | undefined;
+        const coverKeys: (string | undefined)[] = [];
 
-        for (const [index, { asyncTaskId, generationId }] of tasks.entries()) {
-          const track = tracks[index];
-          const duration = Date.now() - asyncTaskCreatedAt.getTime();
+        // Store the songs concurrently, so a batch finishing near the task deadline needs the
+        // time of one download rather than one per song.
+        await pMap(
+          tasks,
+          async ({ asyncTaskId, generationId }, index) => {
+            const track = tracks[index];
+            const duration = Date.now() - asyncTaskCreatedAt.getTime();
 
-          if (!track) {
-            settledTaskIds.add(asyncTaskId);
-            await asyncTaskModel.update(asyncTaskId, {
-              error: createMusicTaskError(
-                new Error(`The provider returned ${tracks.length} of ${tasks.length} songs`),
-                'process',
-              ),
-              status: AsyncTaskStatus.Error,
-            });
-            continue;
-          }
+            if (!track) {
+              settledTaskIds.add(asyncTaskId);
+              await asyncTaskModel.update(asyncTaskId, {
+                error: createMusicTaskError(
+                  new Error(`The provider returned ${tracks.length} of ${tasks.length} songs`),
+                  'process',
+                ),
+                status: AsyncTaskStatus.Error,
+              });
+              return;
+            }
 
-          // Storing is not bound by the polling timeout: the provider already produced (and
-          // billed) the song, and each download has its own timeout.
-          try {
-            const processResult = await musicService.processTrack(track);
+            // Storing is not bound by the polling timeout: the provider already produced (and
+            // billed) the song, and each download has its own timeout.
+            try {
+              const processResult = await musicService.processTrack(track);
 
-            const asset: MusicGenerationAsset = {
-              coverUrl: processResult.coverKey,
-              duration: processResult.duration,
-              mimeType: processResult.mimeType,
-              ...(track.audioUrl ? { originalUrl: track.audioUrl } : {}),
-              ...(track.id ? { providerTrackId: track.id } : {}),
-              ...(track.tags ? { tags: track.tags } : {}),
-              title: track.title || params.title || undefined,
-              type: 'audio',
-              url: processResult.audioKey,
-            };
+              const asset: MusicGenerationAsset = {
+                coverUrl: processResult.coverKey,
+                duration: processResult.duration,
+                mimeType: processResult.mimeType,
+                ...(track.audioUrl ? { originalUrl: track.audioUrl } : {}),
+                ...(track.id ? { providerTrackId: track.id } : {}),
+                ...(track.tags ? { tags: track.tags } : {}),
+                title: track.title || params.title || undefined,
+                type: 'audio',
+                url: processResult.audioKey,
+              };
 
-            await generationModel.createAssetAndFile(
-              generationId,
-              asset,
-              buildMusicGenerationFilePayload({
+              await generationModel.createAssetAndFile(
                 generationId,
-                processResult,
-                prompt: batch?.prompt,
-                title: asset.title,
-              }),
-              FileSource.MusicGeneration,
-            );
+                asset,
+                buildMusicGenerationFilePayload({
+                  generationId,
+                  processResult,
+                  prompt: batch?.prompt,
+                  title: asset.title,
+                }),
+                FileSource.MusicGeneration,
+              );
 
-            topicCoverKey ??= processResult.coverKey;
-            stored += 1;
-            settledTaskIds.add(asyncTaskId);
+              coverKeys[index] = processResult.coverKey;
+              stored += 1;
+              settledTaskIds.add(asyncTaskId);
 
-            await asyncTaskModel.update(asyncTaskId, { duration, status: AsyncTaskStatus.Success });
-          } catch (error) {
-            console.error(
-              '[music-async] Failed to store track %d of %s:',
-              index,
-              generationBatchId,
-              error,
-            );
-            settledTaskIds.add(asyncTaskId);
-            await asyncTaskModel.update(asyncTaskId, {
-              error: createMusicTaskError(error, 'process'),
-              status: AsyncTaskStatus.Error,
-            });
-          }
-        }
+              await asyncTaskModel.update(asyncTaskId, {
+                duration,
+                status: AsyncTaskStatus.Success,
+              });
+            } catch (error) {
+              console.error(
+                '[music-async] Failed to store track %d of %s:',
+                index,
+                generationBatchId,
+                error,
+              );
+              settledTaskIds.add(asyncTaskId);
+              await asyncTaskModel.update(asyncTaskId, {
+                error: createMusicTaskError(error, 'process'),
+                status: AsyncTaskStatus.Error,
+              });
+            }
+          },
+          { concurrency: Math.max(tasks.length, 1) },
+        );
 
+        // The first stored song's cover, as in batch order
+        const topicCoverKey = coverKeys.find(Boolean);
         if (topicCoverKey) {
           // The cover is decoration; its failure must not touch the stored songs
           try {

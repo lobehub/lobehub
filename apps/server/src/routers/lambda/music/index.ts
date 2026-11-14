@@ -114,12 +114,21 @@ export const musicRouter = router({
       log('Starting music creation: %O', { model, provider, songs: card.outputsPerRequest });
 
       // Store our own uploads as keys, as video does for reference images; the provider still
-      // receives the full URL.
+      // receives the full URL. A pasted third-party URL is kept as is: rewriting it to a key
+      // would later resolve it against our storage domain.
+      const getOwnStorageKey = async (url: string) => {
+        const key = await fileService.getKeyFromFullUrl(url);
+        if (!key) return null;
+        if (new URL(url).pathname.startsWith('/f/')) return key;
+
+        const storedUrl = await fileService.getFullFileUrl(key);
+        return storedUrl && new URL(storedUrl).origin === new URL(url).origin ? key : null;
+      };
       let configForDatabase: Record<string, unknown> = { ...params };
       let generationParams = params;
       if (params.referenceAudioUrl) {
         try {
-          const key = await fileService.getKeyFromFullUrl(params.referenceAudioUrl);
+          const key = await getOwnStorageKey(params.referenceAudioUrl);
           if (key) {
             configForDatabase = { ...configForDatabase, referenceAudioUrl: key };
             // A dev proxy URL (localhost) is unreachable for the provider; give it the S3 URL
