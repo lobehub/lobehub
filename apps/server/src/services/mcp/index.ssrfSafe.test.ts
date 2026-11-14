@@ -105,4 +105,13 @@ describe('MCPService over the SSRF-safe transport (`ssrfSafe` params)', () => {
 
     await expect(service.callTool(echo(guarded()))).rejects.toThrow(/SSRF blocked/);
   });
+
+  it('runs a tool through the guarded transport where the deployment allows private addresses', async () => {
+    process.env.SSRF_ALLOW_PRIVATE_IP_ADDRESS = '1';
+
+    expect(await new MCPService().callTool(echo(guarded()))).toMatchObject({
+      content: 'hi',
+      success: true,
+    });
+  });
 });
