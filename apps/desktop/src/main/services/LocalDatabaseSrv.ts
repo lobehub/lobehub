@@ -4,8 +4,10 @@ import type {
   DesktopLocalDatabaseBatchOperation,
   DesktopLocalDatabaseCollectionInfo,
   DesktopLocalDatabaseEntry,
+  DesktopLocalDatabaseKeyGroup,
+  DesktopLocalDatabaseKeyPage,
 } from '@lobechat/electron-client-ipc';
-import { and, asc, eq, gte, lt } from 'drizzle-orm';
+import { and, asc, count, eq, gte, lt, sql } from 'drizzle-orm';
 
 import { createLocalDatabaseRuntime, type LocalDatabaseRuntime } from '@/database/client';
 import { localRecords } from '@/database/schema';
@@ -102,6 +104,58 @@ export default class LocalDatabaseService extends ServiceModule {
       .where(eq(localRecords.id, storageKey(collection, key)))
       .limit(1);
     return row?.value;
+  }
+
+  async keyGroupsByPrefix(
+    collection: string,
+    prefix: string,
+    delimiter: string,
+  ): Promise<DesktopLocalDatabaseKeyGroup[]> {
+    const { lowerBound, upperBound } = prefixRange(collection, prefix);
+    const rows = await this.getRuntime()
+      .db.select({ id: localRecords.id })
+      .from(localRecords)
+      .where(and(gte(localRecords.id, lowerBound), lt(localRecords.id, upperBound)));
+    const counts = new Map<string, number>();
+
+    for (const { id } of rows) {
+      const delimiterIndex = id.indexOf(delimiter, lowerBound.length);
+      if (delimiterIndex < 0) continue;
+
+      const name = id.slice(lowerBound.length, delimiterIndex);
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+
+    return [...counts.entries()]
+      .map(([name, entryCount]) => ({ entryCount, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async keysByPrefix(
+    collection: string,
+    prefix: string,
+    { limit, search }: { limit?: number; search?: string } = {},
+  ): Promise<DesktopLocalDatabaseKeyPage> {
+    const { lowerBound, upperBound } = prefixRange(collection, prefix);
+    const keyPrefix = collectionPrefix(collection);
+    const term = search?.trim().toLowerCase();
+    // SQLite substr() counts code points while String#length counts UTF-16 units.
+    const keyStart = [...keyPrefix].length + 1;
+    const where = and(
+      gte(localRecords.id, lowerBound),
+      lt(localRecords.id, upperBound),
+      term ? sql`instr(lower(substr(${localRecords.id}, ${keyStart})), ${term}) > 0` : undefined,
+    );
+    const { db } = this.getRuntime();
+    const [{ total }] = await db.select({ total: count() }).from(localRecords).where(where);
+    const query = db
+      .select({ id: localRecords.id })
+      .from(localRecords)
+      .where(where)
+      .orderBy(asc(localRecords.id));
+    const rows = await (limit === undefined ? query : query.limit(limit));
+
+    return { keys: rows.map(({ id }) => id.slice(keyPrefix.length)), total };
   }
 
   async listCollections(): Promise<DesktopLocalDatabaseCollectionInfo[]> {

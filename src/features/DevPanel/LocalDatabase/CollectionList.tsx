@@ -5,16 +5,15 @@ import { Boxes, Table2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
-import type { LocalDatabaseCollectionInfo } from '@/libs/localDatabase';
+import type { LocalDatabaseCollectionInfo, LocalDatabaseKeyGroup } from '@/libs/localDatabase';
 
 import { inspectorStyles as styles } from '../inspectorStyles';
-import type { ReplicaResourceGroup } from './model';
 
 interface CollectionListProps {
   collections: LocalDatabaseCollectionInfo[];
   onSelectCollection: (name: string) => void;
   onSelectResource: (resource: string | null) => void;
-  resources: ReplicaResourceGroup[];
+  resources: LocalDatabaseKeyGroup[];
   selectedCollection: string | null;
   selectedResource: string | null;
 }

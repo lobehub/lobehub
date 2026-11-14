@@ -39,6 +39,10 @@ export const createElectronLocalDatabaseAdapter = (): LocalDatabaseAdapter => ({
   initialize: async () => {
     await ensureElectronIpc().localDatabase.initialize();
   },
+  keyGroupsByPrefix: async (collection, prefix, delimiter) =>
+    ensureElectronIpc().localDatabase.keyGroupsByPrefix({ collection, delimiter, prefix }),
+  keysByPrefix: async (collection, prefix, query) =>
+    ensureElectronIpc().localDatabase.keysByPrefix({ collection, prefix, ...query }),
   listCollections: async () => ensureElectronIpc().localDatabase.listCollections(),
   set: async (collection, key, value) => {
     await ensureElectronIpc().localDatabase.set({

@@ -40,6 +40,28 @@ describe('localDatabase', () => {
     ]);
   });
 
+  it('lists, searches and groups keys within one collection', async () => {
+    await localDatabase.batch([
+      { collection, key: 'replica:topicList:v1:user:Agent_1', type: 'set', value: 1 },
+      { collection, key: 'replica:topicList:v1:user:agent_2', type: 'set', value: 2 },
+      { collection, key: 'replica:agentDetail:v1:user:agent_1', type: 'set', value: 3 },
+      { collection, key: 'plain', type: 'set', value: 4 },
+      { collection: otherCollection, key: 'replica:topicList:v1:x', type: 'set', value: 5 },
+    ]);
+
+    await expect(localDatabase.keysByPrefix(collection, '', { limit: 2 })).resolves.toEqual({
+      keys: ['plain', 'replica:agentDetail:v1:user:agent_1'],
+      total: 4,
+    });
+    await expect(
+      localDatabase.keysByPrefix(collection, 'replica:topicList:', { search: 'AGENT_1' }),
+    ).resolves.toEqual({ keys: ['replica:topicList:v1:user:Agent_1'], total: 1 });
+    await expect(localDatabase.keyGroupsByPrefix(collection, 'replica:', ':')).resolves.toEqual([
+      { entryCount: 1, name: 'agentDetail' },
+      { entryCount: 2, name: 'topicList' },
+    ]);
+  });
+
   it('discovers populated collections with current entry counts', async () => {
     await localDatabase.batch([
       { collection, key: 'first', type: 'set', value: 1 },
@@ -74,6 +96,8 @@ describe('localDatabase', () => {
       entriesByPrefix: vi.fn().mockResolvedValue([]),
       get: vi.fn().mockResolvedValue({ source: 'electron' }),
       initialize: vi.fn().mockResolvedValue(undefined),
+      keyGroupsByPrefix: vi.fn().mockResolvedValue([]),
+      keysByPrefix: vi.fn().mockResolvedValue({ keys: [], total: 0 }),
       listCollections: vi.fn().mockResolvedValue([{ entryCount: 1, name: 'runtime' }]),
       set: vi.fn().mockResolvedValue(undefined),
     };
