@@ -483,8 +483,6 @@
   "plans.compare.agentRunFee": "Такса за задача на агент",
   "plans.compare.artifactSiteSize": "Максимален размер на сайт",
   "plans.compare.artifactSites": "Активни сайтове за артефакти",
-  "plans.compare.baseline": "Лимитите се сравняват като кратни на {{plan}}.",
-  "plans.compare.baselineUltra": "Лимитите се сравняват като кратни на {{plan}}, а Ultra моделите — като кратни на {{ultraPlan}}.",
   "plans.compare.concurrentAgentRuns": "Едновременни задачи на агенти",
   "plans.compare.documentCharacters": "Знаци на документ",
   "plans.compare.earlyAccess": "Ранен достъп до нови функции",

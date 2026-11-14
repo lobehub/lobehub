@@ -483,8 +483,6 @@
   "plans.compare.agentRunFee": "الرسوم لكل مهمة وكيل",
   "plans.compare.artifactSiteSize": "الحد الأقصى لحجم الموقع الواحد",
   "plans.compare.artifactSites": "مواقع القطع الأثرية النشطة",
-  "plans.compare.baseline": "تتم مقارنة الحدود كمضاعفات لـ {{plan}}.",
-  "plans.compare.baselineUltra": "تتم مقارنة الحدود كمضاعفات لـ {{plan}}، ونماذج Ultra كمضاعفات لـ {{ultraPlan}}.",
   "plans.compare.concurrentAgentRuns": "مهام الوكيل المتزامنة",
   "plans.compare.documentCharacters": "الأحرف لكل مستند",
   "plans.compare.earlyAccess": "وصول مبكر إلى الميزات الجديدة",

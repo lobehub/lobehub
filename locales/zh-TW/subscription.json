@@ -483,8 +483,6 @@
   "plans.compare.agentRunFee": "每個 Agent 任務的費用",
   "plans.compare.artifactSiteSize": "每個網站的大小上限",
   "plans.compare.artifactSites": "使用中的 Artifact 網站",
-  "plans.compare.baseline": "各項上限皆以 {{plan}} 的倍數比較。",
-  "plans.compare.baselineUltra": "各項上限以 {{plan}} 的倍數比較，Ultra 模型則以 {{ultraPlan}} 的倍數比較。",
   "plans.compare.concurrentAgentRuns": "並行 Agent 任務",
   "plans.compare.documentCharacters": "每份文件字元數",
   "plans.compare.earlyAccess": "新功能搶先體驗",

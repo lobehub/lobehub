@@ -483,8 +483,6 @@
   "plans.compare.agentRunFee": "Ajan görevi başına ücret",
   "plans.compare.artifactSiteSize": "Site başına maksimum boyut",
   "plans.compare.artifactSites": "Aktif Artifact siteleri",
-  "plans.compare.baseline": "Limitler, {{plan}} planının katları olarak karşılaştırılır.",
-  "plans.compare.baselineUltra": "Limitler {{plan}} planının, Ultra modeller ise {{ultraPlan}} planının katları olarak karşılaştırılır.",
   "plans.compare.concurrentAgentRuns": "Eşzamanlı ajan görevleri",
   "plans.compare.documentCharacters": "Belge başına karakter",
   "plans.compare.earlyAccess": "Yeni özelliklere erken erişim",

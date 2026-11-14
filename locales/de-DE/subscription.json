@@ -483,8 +483,6 @@
   "plans.compare.agentRunFee": "Gebühr pro Agent-Aufgabe",
   "plans.compare.artifactSiteSize": "Max. Größe pro Website",
   "plans.compare.artifactSites": "Aktive Artifact-Websites",
-  "plans.compare.baseline": "Limits werden als Vielfache von {{plan}} verglichen.",
-  "plans.compare.baselineUltra": "Limits werden als Vielfache von {{plan}} verglichen, Ultra-Modelle als Vielfache von {{ultraPlan}}.",
   "plans.compare.concurrentAgentRuns": "Gleichzeitige Agent-Aufgaben",
   "plans.compare.documentCharacters": "Zeichen pro Dokument",
   "plans.compare.earlyAccess": "Früher Zugriff auf neue Funktionen",
