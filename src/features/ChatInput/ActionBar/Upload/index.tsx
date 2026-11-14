@@ -1,18 +1,19 @@
 import { validateVideoFileSize } from '@lobechat/utils/client';
-import { css, cx, Icon, toast, Tooltip, Upload } from '@lobehub/ui';
-import { FileUp, FolderUp, ImageUp, Paperclip } from 'lucide-react';
+import { Icon, toast, Tooltip, Upload } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
+import { FileUp, FolderUp, ImageUp, type LucideIcon, Paperclip } from 'lucide-react';
 import { memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import TipGuide from '@/components/TipGuide';
 import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { usePermission } from '@/hooks/usePermission';
-import { useFileStore } from '@/store/file';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
+import { useChatInputUpload } from '../../hooks/useChatInputUpload';
 import { useEffectiveModel } from '../../hooks/useEffectiveModel';
 import { useLargeFileLocalPath } from '../../hooks/useLargeFileLocalPath';
 import { useChatInputStore } from '../../store';
@@ -20,27 +21,31 @@ import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
 import { ChatInputAction } from '../components/ChatInputAction';
 import { MENU_ICON_SIZE, useKnowledgeMenuItems } from './useKnowledgeMenuItems';
 
-const hotArea = css`
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background-color: transparent;
-  }
-`;
+const styles = stylex.create({
+  hotArea: {
+    '::before': {
+      content: '""',
+      position: 'absolute',
+      inset: 0,
+      backgroundColor: 'transparent',
+    },
+  },
+});
 
 interface FileUploadProps {
+  /** The trigger's icon; a paperclip unless the host's composer reads better with another. */
+  icon?: LucideIcon;
   includeKnowledge?: boolean;
 }
 
-const FileUpload = memo<FileUploadProps>(({ includeKnowledge = true }) => {
+const FileUpload = memo<FileUploadProps>(({ icon = Paperclip, includeKnowledge = true }) => {
   const { t } = useTranslation('chat');
 
   const enableKnowledgeBase = useServerConfigStore(
     (s) => featureFlagsSelectors(s).enableKnowledgeBase,
   );
 
-  const upload = useFileStore((s) => s.uploadChatFiles);
+  const upload = useChatInputUpload();
   const editor = useChatInputStore((s) => s.editor);
 
   const agentId = useAgentId();
@@ -78,7 +83,7 @@ const FileUpload = memo<FileUploadProps>(({ includeKnowledge = true }) => {
       <Tooltip title={reason}>
         <ChatInputAction
           disabled
-          icon={Paperclip}
+          icon={icon}
           showTooltip={false}
           title={t('upload.action.tooltip')}
         />
@@ -102,11 +107,11 @@ const FileUpload = memo<FileUploadProps>(({ includeKnowledge = true }) => {
             await upload(files, agentId);
           }}
         >
-          <div className={cx(hotArea)}>{t('upload.action.imageUpload')}</div>
+          <div {...stylex.props(styles.hotArea)}>{t('upload.action.imageUpload')}</div>
         </Upload>
       ) : (
         <Tooltip placement={'right'} title={t('upload.action.imageDisabled')}>
-          <div className={cx(hotArea)}>{t('upload.action.imageUpload')}</div>
+          <div {...stylex.props(styles.hotArea)}>{t('upload.action.imageUpload')}</div>
         </Tooltip>
       ),
     },
@@ -145,7 +150,7 @@ const FileUpload = memo<FileUploadProps>(({ includeKnowledge = true }) => {
             if (filesToUpload.length > 0) await upload(filesToUpload, agentId);
           }}
         >
-          <div className={cx(hotArea)}>{t('upload.action.fileUpload')}</div>
+          <div {...stylex.props(styles.hotArea)}>{t('upload.action.fileUpload')}</div>
         </Upload>
       ),
     },
@@ -185,7 +190,7 @@ const FileUpload = memo<FileUploadProps>(({ includeKnowledge = true }) => {
             if (filesToUpload.length > 0) await upload(filesToUpload, agentId);
           }}
         >
-          <div className={cx(hotArea)}>{t('upload.action.folderUpload')}</div>
+          <div {...stylex.props(styles.hotArea)}>{t('upload.action.folderUpload')}</div>
         </Upload>
       ),
     },
@@ -195,7 +200,7 @@ const FileUpload = memo<FileUploadProps>(({ includeKnowledge = true }) => {
 
   const content = (
     <ChatInputAction
-      icon={Paperclip}
+      icon={icon}
       loading={updating}
       open={dropdownOpen}
       showTooltip={false}
@@ -213,7 +218,7 @@ const FileUpload = memo<FileUploadProps>(({ includeKnowledge = true }) => {
 
   return (
     <Suspense
-      fallback={<ChatInputAction disabled icon={Paperclip} title={t('upload.action.tooltip')} />}
+      fallback={<ChatInputAction disabled icon={icon} title={t('upload.action.tooltip')} />}
     >
       {includeKnowledge && showTip ? (
         <TipGuide

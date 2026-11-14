@@ -92,12 +92,12 @@ export class TaskExternalLinkModel {
       .update(taskExternalLinks)
       .set({
         ...rest,
-        // Display metadata is replaced, but the comment bookkeeping a sync
-        // recorded is kept: read and written in the row update itself, so a
+        // Display metadata is replaced, but the comment and label bookkeeping a
+        // sync recorded is kept: read and written in the row update itself, so a
         // refresh working from an older read never drops what was recorded since.
         ...(metadata
           ? {
-              metadata: sql`jsonb_strip_nulls(jsonb_build_object('commentsSynced', ${taskExternalLinks.metadata} -> 'commentsSynced', 'syncedCommentIds', ${taskExternalLinks.metadata} -> 'syncedCommentIds')) || ${JSON.stringify(metadata)}::jsonb`,
+              metadata: sql`jsonb_strip_nulls(jsonb_build_object('commentsSynced', ${taskExternalLinks.metadata} -> 'commentsSynced', 'syncedCommentIds', ${taskExternalLinks.metadata} -> 'syncedCommentIds', 'syncedLabels', ${taskExternalLinks.metadata} -> 'syncedLabels')) || ${JSON.stringify(metadata)}::jsonb`,
             }
           : {}),
         lastSyncedAt: new Date(),
@@ -115,6 +115,17 @@ export class TaskExternalLinkModel {
       .update(taskExternalLinks)
       .set({
         metadata: sql`jsonb_set(jsonb_set(${taskExternalLinks.metadata}, '{syncedCommentIds}', coalesce(${taskExternalLinks.metadata} -> 'syncedCommentIds', '[]'::jsonb) || ${JSON.stringify(commentIds)}::jsonb), '{commentsSynced}', 'true'::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where(and(this.scope(), eq(taskExternalLinks.id, id)));
+  }
+
+  /** Record the issue's labels as applied to the link's task. */
+  async recordSyncedLabels(id: string, labels: string[]): Promise<void> {
+    await this.db
+      .update(taskExternalLinks)
+      .set({
+        metadata: sql`jsonb_set(${taskExternalLinks.metadata}, '{syncedLabels}', ${JSON.stringify(labels)}::jsonb)`,
         updatedAt: new Date(),
       })
       .where(and(this.scope(), eq(taskExternalLinks.id, id)));

@@ -2,6 +2,25 @@ import { describe, expect, it, vi } from 'vitest';
 
 import * as uuidModule from '../../utils/uuid';
 import { GoogleGenerativeAIStream } from './google';
+import { createReadableStream } from './utils';
+
+const createTextCandidate = () => ({
+  content: { parts: [{ text: '234' }], role: 'model' },
+  safetyRatings: [
+    { category: 'HARM_CATEGORY_HATE_SPEECH', probability: 'NEGLIGIBLE' },
+    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', probability: 'NEGLIGIBLE' },
+    { category: 'HARM_CATEGORY_HARASSMENT', probability: 'NEGLIGIBLE' },
+    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', probability: 'NEGLIGIBLE' },
+  ],
+});
+
+const createTextUsageMetadata = () => ({
+  promptTokenCount: 20,
+  candidatesTokenCount: 3,
+  totalTokenCount: 23,
+  promptTokensDetails: [{ modality: 'TEXT', tokenCount: 20 }],
+  candidatesTokensDetails: [{ modality: 'TEXT', tokenCount: 3 }],
+});
 
 describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
   it('should transform Vertex AI stream to protocol stream', async () => {
@@ -88,13 +107,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
       },
     ];
 
-    const mockGoogleStream = new ReadableStream({
-      start(controller) {
-        rawChunks.forEach((chunk) => controller.enqueue(chunk));
-
-        controller.close();
-      },
-    });
+    const mockGoogleStream = createReadableStream(rawChunks);
 
     const onStartMock = vi.fn();
     const onTextMock = vi.fn();
@@ -132,7 +145,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
       // requireTerminalEvent: no finishReason → stream parsing error
       'id: chat_1\n',
       'event: error\n',
-      `data: ${JSON.stringify({ body: { name: 'Stream parsing error', reason: 'unexpected_end' }, message: 'Stream ended unexpectedly', name: 'Stream parsing error', type: 'StreamChunkError' })}\n\n`,
+      `data: ${JSON.stringify({ body: { name: 'Stream parsing error', reason: 'unexpected_end' }, message: 'Stream ended unexpectedly', name: 'Stream parsing error', type: 'ProviderStreamInterrupted' })}\n\n`,
     ]);
 
     expect(onStartMock).toHaveBeenCalledTimes(1);
@@ -197,13 +210,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
       },
     ];
 
-    const mockGoogleStream = new ReadableStream({
-      start(controller) {
-        rawChunks.forEach((chunk) => controller.enqueue(chunk));
-
-        controller.close();
-      },
-    });
+    const mockGoogleStream = createReadableStream(rawChunks);
 
     const onStartMock = vi.fn();
     const onTextMock = vi.fn();
@@ -250,17 +257,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
 
     const data = [
       {
-        candidates: [
-          {
-            content: { parts: [{ text: '234' }], role: 'model' },
-            safetyRatings: [
-              { category: 'HARM_CATEGORY_HATE_SPEECH', probability: 'NEGLIGIBLE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', probability: 'NEGLIGIBLE' },
-              { category: 'HARM_CATEGORY_HARASSMENT', probability: 'NEGLIGIBLE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', probability: 'NEGLIGIBLE' },
-            ],
-          },
-        ],
+        candidates: [createTextCandidate()],
         text: () => '234',
         usageMetadata: {
           promptTokenCount: 20,
@@ -294,15 +291,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
       },
     ];
 
-    const mockGoogleStream = new ReadableStream({
-      start(controller) {
-        data.forEach((item) => {
-          controller.enqueue(item);
-        });
-
-        controller.close();
-      },
-    });
+    const mockGoogleStream = createReadableStream(data);
 
     const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
 
@@ -340,47 +329,17 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
 
     const data = [
       {
-        candidates: [
-          {
-            content: { parts: [{ text: '234' }], role: 'model' },
-            safetyRatings: [
-              { category: 'HARM_CATEGORY_HATE_SPEECH', probability: 'NEGLIGIBLE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', probability: 'NEGLIGIBLE' },
-              { category: 'HARM_CATEGORY_HARASSMENT', probability: 'NEGLIGIBLE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', probability: 'NEGLIGIBLE' },
-            ],
-          },
-        ],
-        usageMetadata: {
-          promptTokenCount: 20,
-          candidatesTokenCount: 3,
-          totalTokenCount: 23,
-          promptTokensDetails: [{ modality: 'TEXT', tokenCount: 20 }],
-          candidatesTokensDetails: [{ modality: 'TEXT', tokenCount: 3 }],
-        },
+        candidates: [createTextCandidate()],
+        usageMetadata: createTextUsageMetadata(),
         modelVersion: 'gemini-2.5-flash-preview-04-17',
       },
       {
-        usageMetadata: {
-          promptTokenCount: 20,
-          candidatesTokenCount: 3,
-          totalTokenCount: 23,
-          promptTokensDetails: [{ modality: 'TEXT', tokenCount: 20 }],
-          candidatesTokensDetails: [{ modality: 'TEXT', tokenCount: 3 }],
-        },
+        usageMetadata: createTextUsageMetadata(),
         modelVersion: 'gemini-2.5-flash-preview-04-17',
       },
     ];
 
-    const mockGoogleStream = new ReadableStream({
-      start(controller) {
-        data.forEach((item) => {
-          controller.enqueue(item);
-        });
-
-        controller.close();
-      },
-    });
+    const mockGoogleStream = createReadableStream(data);
 
     const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
 
@@ -403,7 +362,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
         // requireTerminalEvent: no finishReason → stream parsing error
         'id: chat_1',
         'event: error',
-        `data: ${JSON.stringify({ body: { name: 'Stream parsing error', reason: 'unexpected_end' }, message: 'Stream ended unexpectedly', name: 'Stream parsing error', type: 'StreamChunkError' })}\n`,
+        `data: ${JSON.stringify({ body: { name: 'Stream parsing error', reason: 'unexpected_end' }, message: 'Stream ended unexpectedly', name: 'Stream parsing error', type: 'ProviderStreamInterrupted' })}\n`,
       ].map((i) => i + '\n'),
     );
   });
@@ -458,12 +417,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
       },
     ];
 
-    const mockStream = new ReadableStream({
-      start(controller) {
-        data.forEach((item) => controller.enqueue(item));
-        controller.close();
-      },
-    });
+    const mockStream = createReadableStream(data);
 
     const protocolStream = GoogleGenerativeAIStream(mockStream);
     const decoder = new TextDecoder();
@@ -563,12 +517,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
       },
     ];
 
-    const mockStream = new ReadableStream({
-      start(controller) {
-        data.forEach((item) => controller.enqueue(item));
-        controller.close();
-      },
-    });
+    const mockStream = createReadableStream(data);
 
     const protocolStream = GoogleGenerativeAIStream(mockStream);
     const decoder = new TextDecoder();
@@ -636,12 +585,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
       },
     ];
 
-    const mockStream = new ReadableStream({
-      start(controller) {
-        data.forEach((item) => controller.enqueue(item));
-        controller.close();
-      },
-    });
+    const mockStream = createReadableStream(data);
 
     const protocolStream = GoogleGenerativeAIStream(mockStream);
     const decoder = new TextDecoder();
@@ -678,48 +622,18 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
 
     const data = [
       {
-        candidates: [
-          {
-            content: { parts: [{ text: '234' }], role: 'model' },
-            safetyRatings: [
-              { category: 'HARM_CATEGORY_HATE_SPEECH', probability: 'NEGLIGIBLE' },
-              { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', probability: 'NEGLIGIBLE' },
-              { category: 'HARM_CATEGORY_HARASSMENT', probability: 'NEGLIGIBLE' },
-              { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', probability: 'NEGLIGIBLE' },
-            ],
-          },
-        ],
-        usageMetadata: {
-          promptTokenCount: 20,
-          candidatesTokenCount: 3,
-          totalTokenCount: 23,
-          promptTokensDetails: [{ modality: 'TEXT', tokenCount: 20 }],
-          candidatesTokensDetails: [{ modality: 'TEXT', tokenCount: 3 }],
-        },
+        candidates: [createTextCandidate()],
+        usageMetadata: createTextUsageMetadata(),
         modelVersion: 'gemini-2.5-flash-preview-04-17',
       },
       {
         candidates: [{}],
-        usageMetadata: {
-          promptTokenCount: 20,
-          candidatesTokenCount: 3,
-          totalTokenCount: 23,
-          promptTokensDetails: [{ modality: 'TEXT', tokenCount: 20 }],
-          candidatesTokensDetails: [{ modality: 'TEXT', tokenCount: 3 }],
-        },
+        usageMetadata: createTextUsageMetadata(),
         modelVersion: 'gemini-2.5-flash-preview-04-17',
       },
     ];
 
-    const mockGoogleStream = new ReadableStream({
-      start(controller) {
-        data.forEach((item) => {
-          controller.enqueue(item);
-        });
-
-        controller.close();
-      },
-    });
+    const mockGoogleStream = createReadableStream(data);
 
     const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
 
@@ -743,7 +657,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
         // requireTerminalEvent: no finishReason → stream parsing error
         'id: chat_1',
         'event: error',
-        `data: ${JSON.stringify({ body: { name: 'Stream parsing error', reason: 'unexpected_end' }, message: 'Stream ended unexpectedly', name: 'Stream parsing error', type: 'StreamChunkError' })}\n`,
+        `data: ${JSON.stringify({ body: { name: 'Stream parsing error', reason: 'unexpected_end' }, message: 'Stream ended unexpectedly', name: 'Stream parsing error', type: 'ProviderStreamInterrupted' })}\n`,
       ].map((i) => i + '\n'),
     );
   });
@@ -794,12 +708,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
       },
     ];
 
-    const mockGoogleStream = new ReadableStream({
-      start(controller) {
-        rawChunks.forEach((chunk) => controller.enqueue(chunk));
-        controller.close();
-      },
-    });
+    const mockGoogleStream = createReadableStream(rawChunks);
 
     const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
 
@@ -889,12 +798,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
       },
     ];
 
-    const mockGoogleStream = new ReadableStream({
-      start(controller) {
-        rawChunks.forEach((chunk) => controller.enqueue(chunk));
-        controller.close();
-      },
-    });
+    const mockGoogleStream = createReadableStream(rawChunks);
 
     const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
 
@@ -974,12 +878,7 @@ describe('GoogleGenerativeAIStream (Vertex AI scenarios)', () => {
       },
     ];
 
-    const mockGoogleStream = new ReadableStream({
-      start(controller) {
-        rawChunks.forEach((chunk) => controller.enqueue(chunk));
-        controller.close();
-      },
-    });
+    const mockGoogleStream = createReadableStream(rawChunks);
 
     const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
 

@@ -5,7 +5,7 @@ import {
   CUSTOM_FOLDER_FILE_TYPE,
 } from '@lobechat/const';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
+import type { DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -91,6 +91,7 @@ vi.mock('@/features/ExplorerTree', async () => {
     header?: ReactNode;
     nodes: ExplorerTreeNode<unknown>[];
     onNodeClick?: (node: ExplorerTreeNode<unknown>, event: ReactMouseEvent<HTMLElement>) => void;
+    onNodeDragStart?: (node: ExplorerTreeNode<unknown>, event: ReactDragEvent<HTMLElement>) => void;
   }
 
   interface MockMenuItem {
@@ -106,6 +107,7 @@ vi.mock('@/features/ExplorerTree', async () => {
     header,
     nodes,
     onNodeClick,
+    onNodeDragStart,
   }: MockExplorerTreeProps) => {
     const renderNodes = (parentId: string | null): ReactNode =>
       nodes
@@ -120,6 +122,10 @@ vi.mock('@/features/ExplorerTree', async () => {
               data-menu-count={String(menuItems.length)}
               data-testid={`tree-node-${node.id}`}
               key={node.id}
+              onDragStart={(event) => {
+                event.stopPropagation();
+                onNodeDragStart?.(node, event);
+              }}
             >
               <button
                 data-testid={`tree-node-button-${node.id}`}
@@ -224,6 +230,27 @@ const createDocument = (overrides: Partial<AgentDocumentItem>): AgentDocumentIte
     ...overrides,
   }) as AgentDocumentItem;
 
+const skillBundleInput = (): Parameters<typeof createDocument>[0] => ({
+  category: AGENT_DOCUMENT_SKILL_CATEGORY,
+  documentId: 'skill-bundle-doc',
+  fileType: 'skills/bundle',
+  filename: 'youtube-comment-retrieval-workflow',
+  id: 'skill-bundle-row',
+  isFolder: true,
+  isSkillBundle: true,
+  templateId: 'agent-skill',
+  title: 'YouTube Comment Retrieval Workflow',
+});
+
+const notesFolderInput = (): Parameters<typeof createDocument>[0] => ({
+  documentId: 'folder-doc',
+  fileType: CUSTOM_FOLDER_FILE_TYPE,
+  filename: 'Notes',
+  id: 'folder-row',
+  isFolder: true,
+  title: 'Notes',
+});
+
 describe('DocumentExplorerTree', () => {
   beforeEach(() => {
     messageError.mockReset();
@@ -320,16 +347,7 @@ describe('DocumentExplorerTree', () => {
   });
 
   it('offers upload on a folder context menu', () => {
-    const data = [
-      createDocument({
-        documentId: 'folder-doc',
-        fileType: CUSTOM_FOLDER_FILE_TYPE,
-        filename: 'Notes',
-        id: 'folder-row',
-        isFolder: true,
-        title: 'Notes',
-      }),
-    ];
+    const data = [createDocument(notesFolderInput())];
 
     render(<DocumentExplorerTree agentId="agent-1" data={data} mutate={vi.fn()} />, {
       wrapper: MemoryRouter,
@@ -340,17 +358,7 @@ describe('DocumentExplorerTree', () => {
 
   it('renders managed skill bundle as a folder with SKILL.md underneath', () => {
     const data = [
-      createDocument({
-        category: AGENT_DOCUMENT_SKILL_CATEGORY,
-        documentId: 'skill-bundle-doc',
-        fileType: 'skills/bundle',
-        filename: 'youtube-comment-retrieval-workflow',
-        id: 'skill-bundle-row',
-        isFolder: true,
-        isSkillBundle: true,
-        templateId: 'agent-skill',
-        title: 'YouTube Comment Retrieval Workflow',
-      }),
+      createDocument(skillBundleInput()),
       createDocument({
         category: AGENT_DOCUMENT_SKILL_CATEGORY,
         documentId: 'skill-index-doc',
@@ -362,14 +370,7 @@ describe('DocumentExplorerTree', () => {
         templateId: 'agent-skill',
         title: 'Generated workflow title',
       }),
-      createDocument({
-        documentId: 'folder-doc',
-        fileType: CUSTOM_FOLDER_FILE_TYPE,
-        filename: 'Notes',
-        id: 'folder-row',
-        isFolder: true,
-        title: 'Notes',
-      }),
+      createDocument(notesFolderInput()),
     ];
 
     render(<DocumentExplorerTree agentId="agent-1" data={data} mutate={vi.fn()} />, {
@@ -390,17 +391,7 @@ describe('DocumentExplorerTree', () => {
 
   it('opens SKILL.md in the document page but does not open the empty skill bundle', () => {
     const data = [
-      createDocument({
-        category: AGENT_DOCUMENT_SKILL_CATEGORY,
-        documentId: 'skill-bundle-doc',
-        fileType: 'skills/bundle',
-        filename: 'youtube-comment-retrieval-workflow',
-        id: 'skill-bundle-row',
-        isFolder: true,
-        isSkillBundle: true,
-        templateId: 'agent-skill',
-        title: 'YouTube Comment Retrieval Workflow',
-      }),
+      createDocument(skillBundleInput()),
       createDocument({
         category: AGENT_DOCUMENT_SKILL_CATEGORY,
         documentId: 'skill-index-doc',
@@ -452,16 +443,42 @@ describe('DocumentExplorerTree', () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
+  it('only drags plain documents out of the tree', () => {
+    const onDocumentDragStart = vi.fn();
+    const data = [
+      createDocument({ documentId: 'doc-plain', id: 'plain-row', title: 'Plain' }),
+      createDocument({ documentId: 'doc-folder', id: 'folder-row', isFolder: true }),
+      createDocument({ documentId: 'doc-pending', id: 'pending:new-row', title: 'Creating' }),
+      createDocument({
+        category: AGENT_DOCUMENT_SKILL_CATEGORY,
+        documentId: 'doc-skill',
+        id: 'skill-row',
+      }),
+    ];
+
+    render(
+      <DocumentExplorerTree
+        agentId="agent-1"
+        data={data}
+        mutate={vi.fn()}
+        onDocumentDragStart={onDocumentDragStart}
+      />,
+      { wrapper: MemoryRouter },
+    );
+
+    fireEvent.dragStart(screen.getByTestId('tree-node-folder-row'));
+    fireEvent.dragStart(screen.getByTestId('tree-node-skill-row'));
+    fireEvent.dragStart(screen.getByTestId('tree-node-pending:new-row'));
+    expect(onDocumentDragStart).not.toHaveBeenCalled();
+
+    fireEvent.dragStart(screen.getByTestId('tree-node-plain-row'));
+    expect(onDocumentDragStart).toHaveBeenCalledTimes(1);
+    expect(onDocumentDragStart.mock.calls[0][0]).toMatchObject({ id: 'plain-row', title: 'Plain' });
+  });
+
   it('does not default-expand document folders', () => {
     const data = [
-      createDocument({
-        documentId: 'folder-doc',
-        fileType: CUSTOM_FOLDER_FILE_TYPE,
-        filename: 'Notes',
-        id: 'folder-row',
-        isFolder: true,
-        title: 'Notes',
-      }),
+      createDocument(notesFolderInput()),
       createDocument({
         documentId: 'nested-folder-doc',
         fileType: CUSTOM_FOLDER_FILE_TYPE,
@@ -482,19 +499,7 @@ describe('DocumentExplorerTree', () => {
 
   it('shows delete recovery action for a managed skill bundle without SKILL.md', async () => {
     const mutate = vi.fn().mockResolvedValue(undefined);
-    const data = [
-      createDocument({
-        category: AGENT_DOCUMENT_SKILL_CATEGORY,
-        documentId: 'skill-bundle-doc',
-        fileType: 'skills/bundle',
-        filename: 'youtube-comment-retrieval-workflow',
-        id: 'skill-bundle-row',
-        isFolder: true,
-        isSkillBundle: true,
-        templateId: 'agent-skill',
-        title: 'YouTube Comment Retrieval Workflow',
-      }),
-    ];
+    const data = [createDocument(skillBundleInput())];
 
     render(<DocumentExplorerTree agentId="agent-1" data={data} mutate={mutate} />, {
       wrapper: MemoryRouter,

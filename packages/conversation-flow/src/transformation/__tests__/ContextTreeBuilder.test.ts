@@ -5,6 +5,38 @@ import { BranchResolver } from '../BranchResolver';
 import { ContextTreeBuilder } from '../ContextTreeBuilder';
 import { MessageCollector } from '../MessageCollector';
 
+const createMessage = (id: string, role: Message['role'], content: string): Message => ({
+  content,
+  createdAt: 0,
+  id,
+  role,
+  updatedAt: 0,
+});
+
+const createMessageWithMetadata = (
+  id: string,
+  role: Message['role'],
+  content: string,
+  metadata: NonNullable<Message['metadata']>,
+): Message => ({
+  content,
+  createdAt: 0,
+  id,
+  metadata,
+  role,
+  updatedAt: 0,
+});
+
+const createBranchNodes = (): IdNode[] => [
+  {
+    children: [
+      { children: [], id: 'msg-2' },
+      { children: [], id: 'msg-3' },
+    ],
+    id: 'msg-1',
+  },
+];
+
 describe('ContextTreeBuilder', () => {
   const createBuilder = (
     messageMap: Map<string, Message>,
@@ -29,26 +61,8 @@ describe('ContextTreeBuilder', () => {
   describe('transformAll', () => {
     it('should transform regular message nodes', () => {
       const messageMap = new Map<string, Message>([
-        [
-          'msg-1',
-          {
-            content: 'Hello',
-            createdAt: 0,
-            id: 'msg-1',
-            role: 'user',
-            updatedAt: 0,
-          },
-        ],
-        [
-          'msg-2',
-          {
-            content: 'Hi',
-            createdAt: 0,
-            id: 'msg-2',
-            role: 'assistant',
-            updatedAt: 0,
-          },
-        ],
+        ['msg-1', createMessage('msg-1', 'user', 'Hello')],
+        ['msg-2', createMessage('msg-2', 'assistant', 'Hi')],
       ]);
 
       const builder = createBuilder(messageMap);
@@ -68,49 +82,13 @@ describe('ContextTreeBuilder', () => {
 
     it('should create branch node for multiple children', () => {
       const messageMap = new Map<string, Message>([
-        [
-          'msg-1',
-          {
-            content: 'Hello',
-            createdAt: 0,
-            id: 'msg-1',
-            metadata: { activeBranchIndex: 0 },
-            role: 'user',
-            updatedAt: 0,
-          },
-        ],
-        [
-          'msg-2',
-          {
-            content: 'Response 1',
-            createdAt: 0,
-            id: 'msg-2',
-            role: 'assistant',
-            updatedAt: 0,
-          },
-        ],
-        [
-          'msg-3',
-          {
-            content: 'Response 2',
-            createdAt: 0,
-            id: 'msg-3',
-            role: 'assistant',
-            updatedAt: 0,
-          },
-        ],
+        ['msg-1', createMessageWithMetadata('msg-1', 'user', 'Hello', { activeBranchIndex: 0 })],
+        ['msg-2', createMessage('msg-2', 'assistant', 'Response 1')],
+        ['msg-3', createMessage('msg-3', 'assistant', 'Response 2')],
       ]);
 
       const builder = createBuilder(messageMap);
-      const idNodes: IdNode[] = [
-        {
-          children: [
-            { children: [], id: 'msg-2' },
-            { children: [], id: 'msg-3' },
-          ],
-          id: 'msg-1',
-        },
-      ];
+      const idNodes: IdNode[] = createBranchNodes();
 
       const result = builder.transformAll(idNodes);
 
@@ -145,16 +123,7 @@ describe('ContextTreeBuilder', () => {
             updatedAt: 0,
           },
         ],
-        [
-          'tool-1',
-          {
-            content: 'Tool result',
-            createdAt: 0,
-            id: 'tool-1',
-            role: 'tool',
-            updatedAt: 0,
-          },
-        ],
+        ['tool-1', createMessage('tool-1', 'tool', 'Tool result')],
       ]);
 
       const builder = createBuilder(messageMap);
@@ -222,50 +191,16 @@ describe('ContextTreeBuilder', () => {
 
     it('should create compare node from user message metadata', () => {
       const messageMap = new Map<string, Message>([
-        [
-          'msg-1',
-          {
-            content: 'User message',
-            createdAt: 0,
-            id: 'msg-1',
-            metadata: { compare: true },
-            role: 'user',
-            updatedAt: 0,
-          },
-        ],
+        ['msg-1', createMessageWithMetadata('msg-1', 'user', 'User message', { compare: true })],
         [
           'msg-2',
-          {
-            content: 'Assistant 1',
-            createdAt: 0,
-            id: 'msg-2',
-            metadata: { activeColumn: true },
-            role: 'assistant',
-            updatedAt: 0,
-          },
+          createMessageWithMetadata('msg-2', 'assistant', 'Assistant 1', { activeColumn: true }),
         ],
-        [
-          'msg-3',
-          {
-            content: 'Assistant 2',
-            createdAt: 0,
-            id: 'msg-3',
-            role: 'assistant',
-            updatedAt: 0,
-          },
-        ],
+        ['msg-3', createMessage('msg-3', 'assistant', 'Assistant 2')],
       ]);
 
       const builder = createBuilder(messageMap);
-      const idNodes: IdNode[] = [
-        {
-          children: [
-            { children: [], id: 'msg-2' },
-            { children: [], id: 'msg-3' },
-          ],
-          id: 'msg-1',
-        },
-      ];
+      const idNodes: IdNode[] = createBranchNodes();
 
       const result = builder.transformAll(idNodes);
 
@@ -313,38 +248,12 @@ describe('ContextTreeBuilder', () => {
             updatedAt: 0,
           },
         ],
-        [
-          'msg-2',
-          {
-            content: 'Response 1',
-            createdAt: 0,
-            id: 'msg-2',
-            role: 'assistant',
-            updatedAt: 0,
-          },
-        ],
-        [
-          'msg-3',
-          {
-            content: 'Response 2',
-            createdAt: 0,
-            id: 'msg-3',
-            role: 'assistant',
-            updatedAt: 0,
-          },
-        ],
+        ['msg-2', createMessage('msg-2', 'assistant', 'Response 1')],
+        ['msg-3', createMessage('msg-3', 'assistant', 'Response 2')],
       ]);
 
       const builder = createBuilder(messageMap);
-      const idNodes: IdNode[] = [
-        {
-          children: [
-            { children: [], id: 'msg-2' },
-            { children: [], id: 'msg-3' },
-          ],
-          id: 'msg-1',
-        },
-      ];
+      const idNodes: IdNode[] = createBranchNodes();
 
       const result = builder.transformAll(idNodes);
 
@@ -362,48 +271,13 @@ describe('ContextTreeBuilder', () => {
 
     it('should continue with active column children in compare mode', () => {
       const messageMap = new Map<string, Message>([
-        [
-          'msg-1',
-          {
-            content: 'User',
-            createdAt: 0,
-            id: 'msg-1',
-            metadata: { compare: true },
-            role: 'user',
-            updatedAt: 0,
-          },
-        ],
+        ['msg-1', createMessageWithMetadata('msg-1', 'user', 'User', { compare: true })],
         [
           'msg-2',
-          {
-            content: 'Assistant 1',
-            createdAt: 0,
-            id: 'msg-2',
-            metadata: { activeColumn: true },
-            role: 'assistant',
-            updatedAt: 0,
-          },
+          createMessageWithMetadata('msg-2', 'assistant', 'Assistant 1', { activeColumn: true }),
         ],
-        [
-          'msg-3',
-          {
-            content: 'Assistant 2',
-            createdAt: 0,
-            id: 'msg-3',
-            role: 'assistant',
-            updatedAt: 0,
-          },
-        ],
-        [
-          'msg-4',
-          {
-            content: 'Follow-up',
-            createdAt: 0,
-            id: 'msg-4',
-            role: 'user',
-            updatedAt: 0,
-          },
-        ],
+        ['msg-3', createMessage('msg-3', 'assistant', 'Assistant 2')],
+        ['msg-4', createMessage('msg-4', 'user', 'Follow-up')],
       ]);
 
       const builder = createBuilder(messageMap);

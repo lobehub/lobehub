@@ -96,6 +96,46 @@ vi.mock('node:fs/promises', () => ({
   readFile: vi.fn().mockResolvedValue(Buffer.from('mock-zip-content')),
 }));
 
+const fileServiceMock = (mockUploadBuffer: ReturnType<typeof vi.fn>) => ({
+  createPreSignedUrl: vi.fn(),
+  createPreSignedUpload: vi.fn(),
+  createPreSignedUrlForPreview: vi.fn(),
+  deleteFile: vi.fn(),
+  deleteFiles: vi.fn(),
+  getFileByteArray: vi.fn(),
+  getFileContent: vi.fn(),
+  getFileMetadata: vi.fn(),
+  getFullFileUrl: vi.fn(),
+  getKeyFromFullUrl: vi.fn(),
+  uploadBuffer: mockUploadBuffer,
+  uploadContent: vi.fn(),
+  uploadMedia: vi.fn(),
+});
+
+const zipFileRow = (userId: string, zipHash: string, zipFileId: string) => ({
+  fileHash: zipHash,
+  fileType: 'application/zip',
+  id: zipFileId,
+  name: 'skill.zip',
+  size: 1000,
+  url: 'mock/path/skill.zip',
+  userId,
+});
+
+const globalZipRow = (userId: string, zipHash: string) => ({
+  creator: userId,
+  fileType: 'application/zip',
+  hashId: zipHash,
+  size: 1000,
+  url: 'mock/path/skill.zip',
+});
+
+const emptyZipResponse = () => ({
+  arrayBuffer: async () => new ArrayBuffer(0),
+  ok: true,
+  status: 200,
+});
+
 describe('SkillImporter', () => {
   let db: LobeChatDatabase;
   let userId: string;
@@ -217,23 +257,9 @@ describe('SkillImporter', () => {
       const zipHash = `zip-hash-${Date.now()}`;
 
       // Insert mock file record
-      await db.insert(globalFiles).values({
-        creator: userId,
-        fileType: 'application/zip',
-        hashId: zipHash,
-        size: 1000,
-        url: 'mock/path/skill.zip',
-      });
+      await db.insert(globalFiles).values(globalZipRow(userId, zipHash));
 
-      await db.insert(files).values({
-        fileHash: zipHash,
-        fileType: 'application/zip',
-        id: zipFileId,
-        name: 'skill.zip',
-        size: 1000,
-        url: 'mock/path/skill.zip',
-        userId,
-      });
+      await db.insert(files).values(zipFileRow(userId, zipHash, zipFileId));
 
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# ZIP Skill content',
@@ -265,23 +291,9 @@ describe('SkillImporter', () => {
       const zipHash = `zip-hash-res-${Date.now()}`;
       const parsedZipHash = `parsed-hash-${Date.now()}`;
 
-      await db.insert(globalFiles).values({
-        creator: userId,
-        fileType: 'application/zip',
-        hashId: zipHash,
-        size: 1000,
-        url: 'mock/path/skill.zip',
-      });
+      await db.insert(globalFiles).values(globalZipRow(userId, zipHash));
 
-      await db.insert(files).values({
-        fileHash: zipHash,
-        fileType: 'application/zip',
-        id: zipFileId,
-        name: 'skill.zip',
-        size: 1000,
-        url: 'mock/path/skill.zip',
-        userId,
-      });
+      await db.insert(files).values(zipFileRow(userId, zipHash, zipFileId));
 
       // Also create globalFiles for the parsed hash (for foreign key reference)
       await db.insert(globalFiles).values({
@@ -320,23 +332,9 @@ describe('SkillImporter', () => {
       const zipFileId = `zip-file-conflict-${Date.now()}`;
       const zipHash = `zip-hash-conflict-${Date.now()}`;
 
-      await db.insert(globalFiles).values({
-        creator: userId,
-        fileType: 'application/zip',
-        hashId: zipHash,
-        size: 1000,
-        url: 'mock/path/skill.zip',
-      });
+      await db.insert(globalFiles).values(globalZipRow(userId, zipHash));
 
-      await db.insert(files).values({
-        fileHash: zipHash,
-        fileType: 'application/zip',
-        id: zipFileId,
-        name: 'skill.zip',
-        size: 1000,
-        url: 'mock/path/skill.zip',
-        userId,
-      });
+      await db.insert(files).values(zipFileRow(userId, zipHash, zipFileId));
 
       // First, create a skill with the same name
       await importer.createUserSkill({
@@ -587,21 +585,7 @@ describe('SkillImporter', () => {
       const zipHash = `path-test-${Date.now()}`;
       const { createFileServiceModule } = await import('@/server/services/file/impls');
       const mockUploadBuffer = vi.fn().mockResolvedValue({ key: 'mock-key' });
-      (createFileServiceModule as any).mockReturnValue({
-        createPreSignedUrl: vi.fn(),
-        createPreSignedUpload: vi.fn(),
-        createPreSignedUrlForPreview: vi.fn(),
-        deleteFile: vi.fn(),
-        deleteFiles: vi.fn(),
-        getFileByteArray: vi.fn(),
-        getFileContent: vi.fn(),
-        getFileMetadata: vi.fn(),
-        getFullFileUrl: vi.fn(),
-        getKeyFromFullUrl: vi.fn(),
-        uploadBuffer: mockUploadBuffer,
-        uploadContent: vi.fn(),
-        uploadMedia: vi.fn(),
-      });
+      (createFileServiceModule as any).mockReturnValue(fileServiceMock(mockUploadBuffer));
 
       // Create new importer to pick up the mock
       const freshImporter = new SkillImporter(db, userId);
@@ -660,21 +644,7 @@ describe('SkillImporter', () => {
     it('should upload skillZipBuffer instead of full repo ZIP', async () => {
       const { createFileServiceModule } = await import('@/server/services/file/impls');
       const mockUploadBuffer = vi.fn().mockResolvedValue({ key: 'mock-key' });
-      (createFileServiceModule as any).mockReturnValue({
-        createPreSignedUrl: vi.fn(),
-        createPreSignedUpload: vi.fn(),
-        createPreSignedUrlForPreview: vi.fn(),
-        deleteFile: vi.fn(),
-        deleteFiles: vi.fn(),
-        getFileByteArray: vi.fn(),
-        getFileContent: vi.fn(),
-        getFileMetadata: vi.fn(),
-        getFullFileUrl: vi.fn(),
-        getKeyFromFullUrl: vi.fn(),
-        uploadBuffer: mockUploadBuffer,
-        uploadContent: vi.fn(),
-        uploadMedia: vi.fn(),
-      });
+      (createFileServiceModule as any).mockReturnValue(fileServiceMock(mockUploadBuffer));
 
       const freshImporter = new SkillImporter(db, userId);
       const largeRepoZip = Buffer.alloc(10_000_000); // 10MB repo ZIP
@@ -764,21 +734,7 @@ describe('SkillImporter', () => {
     it('should update skill when content changes (different zipHash)', async () => {
       const { createFileServiceModule } = await import('@/server/services/file/impls');
       const mockUploadBuffer = vi.fn().mockResolvedValue({ key: 'mock-key' });
-      (createFileServiceModule as any).mockReturnValue({
-        createPreSignedUrl: vi.fn(),
-        createPreSignedUpload: vi.fn(),
-        createPreSignedUrlForPreview: vi.fn(),
-        deleteFile: vi.fn(),
-        deleteFiles: vi.fn(),
-        getFileByteArray: vi.fn(),
-        getFileContent: vi.fn(),
-        getFileMetadata: vi.fn(),
-        getFullFileUrl: vi.fn(),
-        getKeyFromFullUrl: vi.fn(),
-        uploadBuffer: mockUploadBuffer,
-        uploadContent: vi.fn(),
-        uploadMedia: vi.fn(),
-      });
+      (createFileServiceModule as any).mockReturnValue(fileServiceMock(mockUploadBuffer));
 
       const freshImporter = new SkillImporter(db, userId);
 
@@ -969,11 +925,7 @@ description: A nested skill
     // the insert on the per-user name index with a raw "Failed query" error.
     it('recognizes a skill already installed from the same URL under another identifier', async () => {
       const url = 'https://market.lobehub.com/api/v1/skills/openclaw-skills-memory-setup/download';
-      mockSsrfSafeFetch.mockResolvedValue({
-        arrayBuffer: async () => new ArrayBuffer(0),
-        ok: true,
-        status: 200,
-      });
+      mockSsrfSafeFetch.mockResolvedValue(emptyZipResponse());
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Memory Setup Skill',
         manifest: { name: 'memory-setup', description: 'Configure persistent memory' },
@@ -993,11 +945,7 @@ description: A nested skill
 
     it('updates a skill imported under the URL identifier even after its name changed', async () => {
       const url = 'https://market.lobehub.com/api/v1/skills/openclaw-skills-memory-setup/download';
-      mockSsrfSafeFetch.mockResolvedValue({
-        arrayBuffer: async () => new ArrayBuffer(0),
-        ok: true,
-        status: 200,
-      });
+      mockSsrfSafeFetch.mockResolvedValue(emptyZipResponse());
       mockParserInstance.parseZipPackage.mockResolvedValueOnce({
         content: '# Memory Setup Skill',
         manifest: { name: 'memory-setup', description: 'Configure persistent memory' },
@@ -1028,11 +976,7 @@ description: A nested skill
         identifier: 'url.market.lobehub.com.api.v1.skills.openclaw-skills-memory-setup.download',
         name: 'my-notes',
       });
-      mockSsrfSafeFetch.mockResolvedValue({
-        arrayBuffer: async () => new ArrayBuffer(0),
-        ok: true,
-        status: 200,
-      });
+      mockSsrfSafeFetch.mockResolvedValue(emptyZipResponse());
       mockParserInstance.parseZipPackage.mockResolvedValueOnce({
         content: '# Memory Setup Skill',
         manifest: { name: 'memory-setup', description: 'Configure persistent memory' },
@@ -1061,11 +1005,7 @@ description: A nested skill
         identifier: 'openclaw-skills-memory-setup',
         name: 'my-notes',
       });
-      mockSsrfSafeFetch.mockResolvedValue({
-        arrayBuffer: async () => new ArrayBuffer(0),
-        ok: true,
-        status: 200,
-      });
+      mockSsrfSafeFetch.mockResolvedValue(emptyZipResponse());
       mockParserInstance.parseZipPackage.mockResolvedValueOnce({
         content: '# Memory Setup Skill',
         manifest: { name: 'memory-setup', description: 'Configure persistent memory' },
@@ -1086,11 +1026,7 @@ description: A nested skill
     });
 
     it('rejects a different skill with an installed name as a CONFLICT naming the installed one', async () => {
-      mockSsrfSafeFetch.mockResolvedValue({
-        arrayBuffer: async () => new ArrayBuffer(0),
-        ok: true,
-        status: 200,
-      });
+      mockSsrfSafeFetch.mockResolvedValue(emptyZipResponse());
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# Image Generation',
         manifest: { name: 'image-generation', description: 'Generate images' },
@@ -1298,23 +1234,9 @@ description: A nested skill
       const zipFileId = `zip-no-repack-${Date.now()}`;
       const zipHash = `hash-no-repack-${Date.now()}`;
 
-      await db.insert(globalFiles).values({
-        creator: userId,
-        fileType: 'application/zip',
-        hashId: zipHash,
-        size: 1000,
-        url: 'mock/path/skill.zip',
-      });
+      await db.insert(globalFiles).values(globalZipRow(userId, zipHash));
 
-      await db.insert(files).values({
-        fileHash: zipHash,
-        fileType: 'application/zip',
-        id: zipFileId,
-        name: 'skill.zip',
-        size: 1000,
-        url: 'mock/path/skill.zip',
-        userId,
-      });
+      await db.insert(files).values(zipFileRow(userId, zipHash, zipFileId));
 
       mockParserInstance.parseZipPackage.mockResolvedValue({
         content: '# User Skill',

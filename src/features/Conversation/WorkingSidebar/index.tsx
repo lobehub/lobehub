@@ -91,7 +91,7 @@ import { CANVAS_MIN_WIDTH, MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, OVERVIEW_PANEL_WIDT
 import Overview from './Overview';
 import { getStatusDeviceId } from './Overview/overviewData';
 import OverviewSlot from './OverviewSlot';
-import PullRequest from './PullRequest';
+import PullRequestSidebarTab from './PullRequest/SidebarTab';
 import { useLinkedPullRequest } from './PullRequest/useLinkedPullRequest';
 import ResourcesSection from './ResourcesSection';
 import Review from './Review';
@@ -942,13 +942,15 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     toggleTerminalPanel,
   ]);
 
-  const overviewWidth = Math.min(OVERVIEW_PANEL_WIDTH, widthBudget - 32);
+  // The floating card keeps a 16px margin on each side.
+  const overviewGutter = 32;
+  const overviewWidth = Math.min(OVERVIEW_PANEL_WIDTH, widthBudget - overviewGutter);
   const overviewPanel = (
     <OverviewSlot>
       <AnimatePresence initial={false}>
         {showWorkingOverview && overviewFits && (
           <m.div
-            animate={{ width: overviewWidth + 32 }}
+            animate={{ width: overviewWidth + overviewGutter }}
             className={styles.overviewSlot}
             exit={{ transition: overviewExitTransition, width: 0 }}
             initial={{ width: 0 }}
@@ -1121,21 +1123,17 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                   </Activity>
                 )}
                 {pullRequest && workingDirectory && (
-                  <Activity mode={showRightPanel && activeTab === 'pr' ? 'visible' : 'hidden'}>
-                    <Flexbox className={styles.pane}>
-                      <PullRequest
-                        active={!!showRightPanel && activeTab === 'pr'}
-                        {...pullRequestLink}
-                        deviceId={remoteDeviceId}
-                        key={JSON.stringify([remoteDeviceId, workingDirectory, pullRequest.number])}
-                        number={pullRequest.number}
-                        summary={pullRequest}
-                        url={pullRequest.url}
-                        workingDirectory={workingDirectory}
-                        onOpenTab={openTab}
-                      />
-                    </Flexbox>
-                  </Activity>
+                  // The PR tab renders at MIN_PANEL_WIDTH: it fits exactly when Overview does.
+                  <PullRequestSidebarTab
+                    {...pullRequestLink}
+                    active={!!showRightPanel && activeTab === 'pr'}
+                    canShow={overviewFits}
+                    className={styles.pane}
+                    deviceId={remoteDeviceId}
+                    pullRequest={pullRequest}
+                    workingDirectory={workingDirectory}
+                    onOpenTab={openTab}
+                  />
                 )}
                 <DynamicTabPanes
                   activeTab={activeTab}

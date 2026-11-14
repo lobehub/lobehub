@@ -1,7 +1,7 @@
 import { ModelProvider, nvidia as nvidiaChatModels } from 'model-bank';
 
-import { type OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { type OpenAICompatibleFactoryOptions } from '../../core/openaiCompatible';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 
 // Models that support preserved thinking (enable_thinking + clear_thinking parameters)

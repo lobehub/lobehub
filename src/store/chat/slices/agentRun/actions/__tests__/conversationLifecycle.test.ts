@@ -122,6 +122,64 @@ const createTestContext = (agentId: string = TEST_IDS.SESSION_ID) => ({
   threadId: null,
 });
 
+const createDefaultServerMessages = () => [
+  createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
+  createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
+];
+
+const createEmptyTopicPage = () => ({
+  currentPage: 0,
+  hasMore: false,
+  isExpandingPageSize: false,
+  isLoadingMore: false,
+  items: [],
+  pageSize: 20,
+  total: 0,
+});
+
+const createCodexSelectorOptions = () => ({
+  agentConfig: {
+    agencyConfig: {
+      heterogeneousProvider: { command: 'codex', type: 'codex' },
+    },
+  },
+});
+
+const createSendResponseWithTopic = (topicIdValue: string) => ({
+  assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+  messages: createDefaultServerMessages(),
+  topicId: topicIdValue,
+  topics: [],
+  userMessageId: TEST_IDS.USER_MESSAGE_ID,
+});
+
+const createSendResponseWithoutTopicId = () => ({
+  messages: createDefaultServerMessages(),
+  topics: [],
+  assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+  userMessageId: TEST_IDS.USER_MESSAGE_ID,
+});
+
+const createCreatedTopicResponse = (topicIdValue: string) => ({
+  assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+  isCreateNewTopic: true,
+  messages: [
+    createMockMessage({
+      id: TEST_IDS.USER_MESSAGE_ID,
+      role: 'user',
+      topicId: topicIdValue,
+    }),
+    createMockMessage({
+      id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+      role: 'assistant',
+      topicId: topicIdValue,
+    }),
+  ],
+  topicId: topicIdValue,
+  topics: { items: [{ id: topicIdValue, title: 'Server Topic' }], total: 1 },
+  userMessageId: TEST_IDS.USER_MESSAGE_ID,
+});
+
 describe('ConversationLifecycle actions', () => {
   describe('sendMessage', () => {
     describe('validation', () => {
@@ -901,13 +959,7 @@ describe('ConversationLifecycle actions', () => {
         // Same silent-discard shape as the gateway branch above: persistence
         // throws, the temp rows are cleaned up, and the typed text is gone.
         mockConstEnv.isDesktop = true;
-        setupMockSelectors({
-          agentConfig: {
-            agencyConfig: {
-              heterogeneousProvider: { command: 'codex', type: 'codex' },
-            },
-          },
-        });
+        setupMockSelectors(createCodexSelectorOptions());
 
         const { result } = renderHook(() => useChatStore());
         const inputEditorState = {
@@ -1279,10 +1331,7 @@ describe('ConversationLifecycle actions', () => {
         });
         vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
           assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
+          messages: createDefaultServerMessages(),
           userMessageId: TEST_IDS.USER_MESSAGE_ID,
         } as any);
 
@@ -1384,15 +1433,7 @@ describe('ConversationLifecycle actions', () => {
             activeAgentId: agentId,
             activeTopicId: undefined,
             topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
+              [topicKey]: createEmptyTopicPage(),
             },
           });
         });
@@ -1477,10 +1518,7 @@ describe('ConversationLifecycle actions', () => {
         const { result } = renderHook(() => useChatStore());
 
         vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
+          messages: createDefaultServerMessages(),
           topics: [],
           assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
         } as any);
@@ -1501,10 +1539,7 @@ describe('ConversationLifecycle actions', () => {
         const sendMessageInServerSpy = vi
           .spyOn(aiChatService, 'sendMessageInServer')
           .mockResolvedValue({
-            messages: [
-              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-            ],
+            messages: createDefaultServerMessages(),
             topics: undefined,
             assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
             userMessageId: TEST_IDS.USER_MESSAGE_ID,
@@ -1606,15 +1641,7 @@ describe('ConversationLifecycle actions', () => {
 
         const sendMessageInServerSpy = vi
           .spyOn(aiChatService, 'sendMessageInServer')
-          .mockResolvedValue({
-            messages: [
-              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-            ],
-            topics: [],
-            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-            userMessageId: TEST_IDS.USER_MESSAGE_ID,
-          } as any);
+          .mockResolvedValue(createSendResponseWithoutTopicId() as any);
 
         await act(async () => {
           await result.current.sendMessage({
@@ -1791,15 +1818,7 @@ describe('ConversationLifecycle actions', () => {
             executeClientAgent: vi.fn().mockReturnValue(executePromise),
             summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
             topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
+              [topicKey]: createEmptyTopicPage(),
             },
           });
         });
@@ -1834,25 +1853,7 @@ describe('ConversationLifecycle actions', () => {
         ).toBe(true);
 
         await act(async () => {
-          resolveServerSend({
-            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-            isCreateNewTopic: true,
-            messages: [
-              createMockMessage({
-                id: TEST_IDS.USER_MESSAGE_ID,
-                role: 'user',
-                topicId: newTopicId,
-              }),
-              createMockMessage({
-                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
-                role: 'assistant',
-                topicId: newTopicId,
-              }),
-            ],
-            topicId: newTopicId,
-            topics: { items: [{ id: newTopicId, title: 'Server Topic' }], total: 1 },
-            userMessageId: TEST_IDS.USER_MESSAGE_ID,
-          } as any);
+          resolveServerSend(createCreatedTopicResponse(newTopicId) as any);
         });
 
         await waitFor(() =>
@@ -1905,25 +1906,7 @@ describe('ConversationLifecycle actions', () => {
 
         const sendMessageInServerSpy = vi
           .spyOn(aiChatService, 'sendMessageInServer')
-          .mockResolvedValue({
-            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-            isCreateNewTopic: true,
-            messages: [
-              createMockMessage({
-                id: TEST_IDS.USER_MESSAGE_ID,
-                role: 'user',
-                topicId: newTopicId,
-              }),
-              createMockMessage({
-                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
-                role: 'assistant',
-                topicId: newTopicId,
-              }),
-            ],
-            topicId: newTopicId,
-            topics: { items: [{ id: newTopicId, title: 'Server Topic' }], total: 1 },
-            userMessageId: TEST_IDS.USER_MESSAGE_ID,
-          } as any);
+          .mockResolvedValue(createCreatedTopicResponse(newTopicId) as any);
 
         await act(async () => {
           await result.current.sendMessage({
@@ -2014,15 +1997,7 @@ describe('ConversationLifecycle actions', () => {
             isGatewayModeEnabled: () => true,
             summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
             topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
+              [topicKey]: createEmptyTopicPage(),
             },
           });
         });
@@ -2129,13 +2104,7 @@ describe('ConversationLifecycle actions', () => {
 
       it('should keep the sidebar spinner on through a hetero new-topic run and stop it at the end', async () => {
         mockConstEnv.isDesktop = true;
-        setupMockSelectors({
-          agentConfig: {
-            agencyConfig: {
-              heterogeneousProvider: { command: 'codex', type: 'codex' },
-            },
-          },
-        });
+        setupMockSelectors(createCodexSelectorOptions());
 
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
@@ -2148,38 +2117,14 @@ describe('ConversationLifecycle actions', () => {
             activeTopicId: undefined,
             summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
             topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
+              [topicKey]: createEmptyTopicPage(),
             },
           });
         });
 
-        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          isCreateNewTopic: true,
-          messages: [
-            createMockMessage({
-              id: TEST_IDS.USER_MESSAGE_ID,
-              role: 'user',
-              topicId: newTopicId,
-            }),
-            createMockMessage({
-              id: TEST_IDS.ASSISTANT_MESSAGE_ID,
-              role: 'assistant',
-              topicId: newTopicId,
-            }),
-          ],
-          topicId: newTopicId,
-          topics: { items: [{ id: newTopicId, title: 'Server Topic' }], total: 1 },
-          userMessageId: TEST_IDS.USER_MESSAGE_ID,
-        } as any);
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue(
+          createCreatedTopicResponse(newTopicId) as any,
+        );
 
         let resolveExecutor!: () => void;
         executeHeterogeneousAgentMock.mockImplementation(
@@ -2229,13 +2174,7 @@ describe('ConversationLifecycle actions', () => {
 
       it('notifies an isolated hetero caller before execution and returns its created topic', async () => {
         mockConstEnv.isDesktop = true;
-        setupMockSelectors({
-          agentConfig: {
-            agencyConfig: {
-              heterogeneousProvider: { command: 'codex', type: 'codex' },
-            },
-          },
-        });
+        setupMockSelectors(createCodexSelectorOptions());
 
         const { result } = renderHook(() => useChatStore());
         const agentId = TEST_IDS.SESSION_ID;
@@ -2248,38 +2187,14 @@ describe('ConversationLifecycle actions', () => {
             activeTopicId: undefined,
             summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
             topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
+              [topicKey]: createEmptyTopicPage(),
             },
           });
         });
 
-        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          isCreateNewTopic: true,
-          messages: [
-            createMockMessage({
-              id: TEST_IDS.USER_MESSAGE_ID,
-              role: 'user',
-              topicId: newTopicId,
-            }),
-            createMockMessage({
-              id: TEST_IDS.ASSISTANT_MESSAGE_ID,
-              role: 'assistant',
-              topicId: newTopicId,
-            }),
-          ],
-          topicId: newTopicId,
-          topics: { items: [{ id: newTopicId, title: 'Server Topic' }], total: 1 },
-          userMessageId: TEST_IDS.USER_MESSAGE_ID,
-        } as any);
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue(
+          createCreatedTopicResponse(newTopicId) as any,
+        );
 
         let resolveExecutor!: () => void;
         executeHeterogeneousAgentMock.mockImplementation(
@@ -2360,15 +2275,7 @@ describe('ConversationLifecycle actions', () => {
             executeGatewayAgent: executeGatewayAgentSpy,
             isGatewayModeEnabled: () => true,
             topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
+              [topicKey]: createEmptyTopicPage(),
             },
           });
         });
@@ -2466,15 +2373,7 @@ describe('ConversationLifecycle actions', () => {
             executeGatewayAgent: executeGatewayAgentSpy,
             isGatewayModeEnabled: () => true,
             topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
+              [topicKey]: createEmptyTopicPage(),
             },
           });
         });
@@ -2588,16 +2487,7 @@ describe('ConversationLifecycle actions', () => {
 
         const sendMessageInServerSpy = vi
           .spyOn(aiChatService, 'sendMessageInServer')
-          .mockResolvedValue({
-            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-            messages: [
-              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-            ],
-            topicId: TEST_IDS.NEW_TOPIC_ID,
-            topics: [],
-            userMessageId: TEST_IDS.USER_MESSAGE_ID,
-          } as any);
+          .mockResolvedValue(createSendResponseWithTopic(TEST_IDS.NEW_TOPIC_ID) as any);
 
         const { result } = renderHook(() => useChatStore());
         act(() => {
@@ -2639,16 +2529,7 @@ describe('ConversationLifecycle actions', () => {
 
         const sendMessageInServerSpy = vi
           .spyOn(aiChatService, 'sendMessageInServer')
-          .mockResolvedValue({
-            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-            messages: [
-              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-            ],
-            topicId: TEST_IDS.NEW_TOPIC_ID,
-            topics: [],
-            userMessageId: TEST_IDS.USER_MESSAGE_ID,
-          } as any);
+          .mockResolvedValue(createSendResponseWithTopic(TEST_IDS.NEW_TOPIC_ID) as any);
 
         const { result } = renderHook(() => useChatStore());
         act(() => {
@@ -2744,16 +2625,9 @@ describe('ConversationLifecycle actions', () => {
           });
           executeHeterogeneousAgentMock.mockResolvedValue(undefined);
 
-          return vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-            messages: [
-              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-            ],
-            topicId: TEST_IDS.NEW_TOPIC_ID,
-            topics: [],
-            userMessageId: TEST_IDS.USER_MESSAGE_ID,
-          } as any);
+          return vi
+            .spyOn(aiChatService, 'sendMessageInServer')
+            .mockResolvedValue(createSendResponseWithTopic(TEST_IDS.NEW_TOPIC_ID) as any);
         };
 
         const sendHeteroMessage = async () => {
@@ -2929,25 +2803,14 @@ describe('ConversationLifecycle actions', () => {
             executeClientAgent: vi.fn().mockResolvedValue(undefined),
             summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
             topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
+              [topicKey]: createEmptyTopicPage(),
             },
           });
         });
 
         vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
           assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
+          messages: createDefaultServerMessages(),
           topics: undefined,
           userMessageId: TEST_IDS.USER_MESSAGE_ID,
         } as any);
@@ -2991,15 +2854,7 @@ describe('ConversationLifecycle actions', () => {
             executeClientAgent: vi.fn().mockResolvedValue(undefined),
             summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
             topicDataMap: {
-              [groupKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
+              [groupKey]: createEmptyTopicPage(),
             },
           });
         });
@@ -3077,15 +2932,7 @@ describe('ConversationLifecycle actions', () => {
             executeClientAgent: vi.fn().mockResolvedValue(undefined),
             summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
             topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
+              [topicKey]: createEmptyTopicPage(),
             },
           });
         });
@@ -3112,10 +2959,7 @@ describe('ConversationLifecycle actions', () => {
         await act(async () => {
           resolveServerSend({
             assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-            messages: [
-              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-            ],
+            messages: createDefaultServerMessages(),
             topics: undefined,
             userMessageId: TEST_IDS.USER_MESSAGE_ID,
           } as any);
@@ -3144,15 +2988,7 @@ describe('ConversationLifecycle actions', () => {
             executeClientAgent: vi.fn().mockResolvedValue(undefined),
             summaryTopicTitle: vi.fn().mockResolvedValue(undefined),
             topicDataMap: {
-              [topicKey]: {
-                currentPage: 0,
-                hasMore: false,
-                isExpandingPageSize: false,
-                isLoadingMore: false,
-                items: [],
-                pageSize: 20,
-                total: 0,
-              },
+              [topicKey]: createEmptyTopicPage(),
             },
           });
         });
@@ -3189,10 +3025,7 @@ describe('ConversationLifecycle actions', () => {
         await act(async () => {
           resolveServerSend({
             assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-            messages: [
-              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-            ],
+            messages: createDefaultServerMessages(),
             topics: undefined,
             userMessageId: TEST_IDS.USER_MESSAGE_ID,
           } as any);
@@ -3215,10 +3048,7 @@ describe('ConversationLifecycle actions', () => {
         const sendMessageInServerSpy = vi
           .spyOn(aiChatService, 'sendMessageInServer')
           .mockResolvedValue({
-            messages: [
-              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-            ],
+            messages: createDefaultServerMessages(),
             topics: undefined,
             assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
             userMessageId: TEST_IDS.USER_MESSAGE_ID,
@@ -3805,10 +3635,7 @@ describe('ConversationLifecycle actions', () => {
           .mockResolvedValue({
             assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
             isCreateNewTopic: true,
-            messages: [
-              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-            ],
+            messages: createDefaultServerMessages(),
             topicId: TEST_IDS.TOPIC_ID,
             userMessageId: TEST_IDS.USER_MESSAGE_ID,
           } as any);
@@ -4002,15 +3829,7 @@ describe('ConversationLifecycle actions', () => {
 
         const sendMessageInServerSpy = vi
           .spyOn(aiChatService, 'sendMessageInServer')
-          .mockResolvedValue({
-            messages: [
-              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-            ],
-            topics: [],
-            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-            userMessageId: TEST_IDS.USER_MESSAGE_ID,
-          } as any);
+          .mockResolvedValue(createSendResponseWithoutTopicId() as any);
 
         await act(async () => {
           await result.current.sendMessage({
@@ -4051,15 +3870,7 @@ describe('ConversationLifecycle actions', () => {
 
         const sendMessageInServerSpy = vi
           .spyOn(aiChatService, 'sendMessageInServer')
-          .mockResolvedValue({
-            messages: [
-              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-            ],
-            topics: [],
-            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-            userMessageId: TEST_IDS.USER_MESSAGE_ID,
-          } as any);
+          .mockResolvedValue(createSendResponseWithoutTopicId() as any);
 
         await act(async () => {
           await result.current.sendMessage({
@@ -4090,15 +3901,7 @@ describe('ConversationLifecycle actions', () => {
 
         const sendMessageInServerSpy = vi
           .spyOn(aiChatService, 'sendMessageInServer')
-          .mockResolvedValue({
-            messages: [
-              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-            ],
-            topics: [],
-            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-            userMessageId: TEST_IDS.USER_MESSAGE_ID,
-          } as any);
+          .mockResolvedValue(createSendResponseWithoutTopicId() as any);
 
         await act(async () => {
           await result.current.sendMessage({
@@ -4128,15 +3931,7 @@ describe('ConversationLifecycle actions', () => {
 
         const sendMessageInServerSpy = vi
           .spyOn(aiChatService, 'sendMessageInServer')
-          .mockResolvedValue({
-            messages: [
-              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-            ],
-            topics: [],
-            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-            userMessageId: TEST_IDS.USER_MESSAGE_ID,
-          } as any);
+          .mockResolvedValue(createSendResponseWithoutTopicId() as any);
 
         await act(async () => {
           await result.current.sendMessage({
@@ -4171,16 +3966,7 @@ describe('ConversationLifecycle actions', () => {
 
         const sendMessageInServerSpy = vi
           .spyOn(aiChatService, 'sendMessageInServer')
-          .mockResolvedValue({
-            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-            messages: [
-              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-            ],
-            topicId: TEST_IDS.TOPIC_ID,
-            topics: [],
-            userMessageId: TEST_IDS.USER_MESSAGE_ID,
-          } as any);
+          .mockResolvedValue(createSendResponseWithTopic(TEST_IDS.TOPIC_ID) as any);
 
         executeHeterogeneousAgentMock.mockResolvedValue(undefined);
 
@@ -4253,16 +4039,9 @@ describe('ConversationLifecycle actions', () => {
             },
           });
         });
-        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
-          topicId: TEST_IDS.TOPIC_ID,
-          topics: [],
-          userMessageId: TEST_IDS.USER_MESSAGE_ID,
-        } as any);
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue(
+          createSendResponseWithTopic(TEST_IDS.TOPIC_ID) as any,
+        );
         executeHeterogeneousAgentMock.mockResolvedValue(undefined);
         const { result } = renderHook(() => useChatStore());
 
@@ -4297,16 +4076,9 @@ describe('ConversationLifecycle actions', () => {
           });
         });
 
-        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
-          topicId: TEST_IDS.TOPIC_ID,
-          topics: [],
-          userMessageId: TEST_IDS.USER_MESSAGE_ID,
-        } as any);
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue(
+          createSendResponseWithTopic(TEST_IDS.TOPIC_ID) as any,
+        );
         executeHeterogeneousAgentMock.mockResolvedValue(undefined);
 
         const { result } = renderHook(() => useChatStore());
@@ -4475,16 +4247,9 @@ describe('ConversationLifecycle actions', () => {
           useChatStore.setState({ executeGatewayAgent });
         });
 
-        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
-          topicId: TEST_IDS.TOPIC_ID,
-          topics: [],
-          userMessageId: TEST_IDS.USER_MESSAGE_ID,
-        } as any);
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue(
+          createSendResponseWithTopic(TEST_IDS.TOPIC_ID) as any,
+        );
         executeHeterogeneousAgentMock.mockResolvedValue(undefined);
 
         const { result } = renderHook(() => useChatStore());
@@ -4521,16 +4286,9 @@ describe('ConversationLifecycle actions', () => {
           useChatStore.setState({ executeGatewayAgent });
         });
 
-        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
-          topicId: TEST_IDS.TOPIC_ID,
-          topics: [],
-          userMessageId: TEST_IDS.USER_MESSAGE_ID,
-        } as any);
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue(
+          createSendResponseWithTopic(TEST_IDS.TOPIC_ID) as any,
+        );
 
         const { result } = renderHook(() => useChatStore());
         await act(async () => {
@@ -4576,16 +4334,9 @@ describe('ConversationLifecycle actions', () => {
         act(() => {
           useChatStore.setState({ executeGatewayAgent });
         });
-        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
-          topicId: TEST_IDS.TOPIC_ID,
-          topics: [],
-          userMessageId: TEST_IDS.USER_MESSAGE_ID,
-        } as any);
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue(
+          createSendResponseWithTopic(TEST_IDS.TOPIC_ID) as any,
+        );
         executeHeterogeneousAgentMock.mockResolvedValue(undefined);
 
         const { result } = renderHook(() => useChatStore());
@@ -4641,16 +4392,9 @@ describe('ConversationLifecycle actions', () => {
         act(() => {
           useChatStore.setState({ executeGatewayAgent });
         });
-        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
-          topicId: TEST_IDS.TOPIC_ID,
-          topics: [],
-          userMessageId: TEST_IDS.USER_MESSAGE_ID,
-        } as any);
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue(
+          createSendResponseWithTopic(TEST_IDS.TOPIC_ID) as any,
+        );
         executeHeterogeneousAgentMock.mockResolvedValue(undefined);
 
         try {
@@ -4709,16 +4453,9 @@ describe('ConversationLifecycle actions', () => {
         act(() => {
           useChatStore.setState({ executeGatewayAgent });
         });
-        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
-          topicId: TEST_IDS.TOPIC_ID,
-          topics: [],
-          userMessageId: TEST_IDS.USER_MESSAGE_ID,
-        } as any);
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue(
+          createSendResponseWithTopic(TEST_IDS.TOPIC_ID) as any,
+        );
         executeHeterogeneousAgentMock.mockResolvedValue(undefined);
 
         try {
@@ -4742,13 +4479,7 @@ describe('ConversationLifecycle actions', () => {
 
       it('should route new-topic heterogeneous streaming updates to the persisted topic key', async () => {
         mockConstEnv.isDesktop = true;
-        setupMockSelectors({
-          agentConfig: {
-            agencyConfig: {
-              heterogeneousProvider: { command: 'codex', type: 'codex' },
-            },
-          },
-        });
+        setupMockSelectors(createCodexSelectorOptions());
 
         const createdTopicId = 'created-topic-id';
         const { result } = renderHook(() => useChatStore());
@@ -4818,13 +4549,7 @@ describe('ConversationLifecycle actions', () => {
 
       it('reconciles a persisted heterogeneous message but skips CLI execution after cancellation', async () => {
         mockConstEnv.isDesktop = true;
-        setupMockSelectors({
-          agentConfig: {
-            agencyConfig: {
-              heterogeneousProvider: { command: 'codex', type: 'codex' },
-            },
-          },
-        });
+        setupMockSelectors(createCodexSelectorOptions());
         const { result } = renderHook(() => useChatStore());
         const controller = new AbortController();
         const onMessageAccepted = vi.fn();
@@ -4884,22 +4609,13 @@ describe('ConversationLifecycle actions', () => {
 
       it('should preserve the isNew marker for heterogeneous new-thread contexts', async () => {
         mockConstEnv.isDesktop = true;
-        setupMockSelectors({
-          agentConfig: {
-            agencyConfig: {
-              heterogeneousProvider: { command: 'codex', type: 'codex' },
-            },
-          },
-        });
+        setupMockSelectors(createCodexSelectorOptions());
 
         const { result } = renderHook(() => useChatStore());
 
         vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
           assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
+          messages: createDefaultServerMessages(),
           topicId: TEST_IDS.TOPIC_ID,
           userMessageId: TEST_IDS.USER_MESSAGE_ID,
         } as any);
@@ -5006,13 +4722,7 @@ describe('ConversationLifecycle actions', () => {
 
       it('should recover heterogeneous context selections from the persisted user message metadata', async () => {
         mockConstEnv.isDesktop = true;
-        setupMockSelectors({
-          agentConfig: {
-            agencyConfig: {
-              heterogeneousProvider: { command: 'codex', type: 'codex' },
-            },
-          },
-        });
+        setupMockSelectors(createCodexSelectorOptions());
 
         const persistedContextSelections = [
           {
@@ -5057,13 +4767,7 @@ describe('ConversationLifecycle actions', () => {
 
       it('should materialize local file mention editor data into persisted tool-result snapshots', async () => {
         mockConstEnv.isDesktop = true;
-        setupMockSelectors({
-          agentConfig: {
-            agencyConfig: {
-              heterogeneousProvider: { command: 'codex', type: 'codex' },
-            },
-          },
-        });
+        setupMockSelectors(createCodexSelectorOptions());
         mockLocalFileService.readLocalFile.mockResolvedValue({
           charCount: 17,
           content: 'export const x = 1;',
@@ -5077,16 +4781,7 @@ describe('ConversationLifecycle actions', () => {
         const { result } = renderHook(() => useChatStore());
         const sendMessageInServerSpy = vi
           .spyOn(aiChatService, 'sendMessageInServer')
-          .mockResolvedValue({
-            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-            messages: [
-              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-            ],
-            topicId: TEST_IDS.TOPIC_ID,
-            topics: [],
-            userMessageId: TEST_IDS.USER_MESSAGE_ID,
-          } as any);
+          .mockResolvedValue(createSendResponseWithTopic(TEST_IDS.TOPIC_ID) as any);
 
         executeHeterogeneousAgentMock.mockResolvedValue(undefined);
 
@@ -5155,10 +4850,7 @@ describe('ConversationLifecycle actions', () => {
         vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
           assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
           isCreateNewTopic: true,
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
+          messages: createDefaultServerMessages(),
           topicId: TEST_IDS.TOPIC_ID,
           topics: { items: [], total: 0 },
           userMessageId: TEST_IDS.USER_MESSAGE_ID,
@@ -5249,10 +4941,7 @@ describe('ConversationLifecycle actions', () => {
         const dispatchTopicSpy = vi.spyOn(result.current, 'internal_dispatchTopic');
 
         vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
+          messages: createDefaultServerMessages(),
           topics: { items: [{ id: 'new-topic', title: 'New Topic' }], total: 1 },
           topicId: 'new-topic',
           isCreateNewTopic: true,
@@ -5281,15 +4970,7 @@ describe('ConversationLifecycle actions', () => {
 
         const sendMessageInServerSpy = vi
           .spyOn(aiChatService, 'sendMessageInServer')
-          .mockResolvedValue({
-            messages: [
-              createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-              createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-            ],
-            topics: [],
-            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-            userMessageId: TEST_IDS.USER_MESSAGE_ID,
-          } as any);
+          .mockResolvedValue(createSendResponseWithoutTopicId() as any);
 
         await act(async () => {
           await result.current.sendMessage({
@@ -5454,13 +5135,7 @@ describe('ConversationLifecycle actions', () => {
 
       it('should isolate a direct mention executed by a local heterogeneous agent', async () => {
         mockConstEnv.isDesktop = true;
-        setupMockSelectors({
-          agentConfig: {
-            agencyConfig: {
-              heterogeneousProvider: { command: 'codex', type: 'codex' },
-            },
-          },
-        });
+        setupMockSelectors(createCodexSelectorOptions());
 
         const targetAgentId = 'agent-direct-codex';
         const threadId = 'thread-direct-codex';
@@ -5676,15 +5351,9 @@ describe('ConversationLifecycle actions', () => {
       it('should keep supervisor delegation for multiple @agent mentions', async () => {
         const { result } = renderHook(() => useChatStore());
 
-        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
-          topics: [],
-          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          userMessageId: TEST_IDS.USER_MESSAGE_ID,
-        } as any);
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue(
+          createSendResponseWithoutTopicId() as any,
+        );
 
         await act(async () => {
           await result.current.sendMessage({
@@ -5737,15 +5406,9 @@ describe('ConversationLifecycle actions', () => {
       it('should forward mentionedAgents to the gateway for multi-mention when gateway mode is enabled', async () => {
         const { result } = renderHook(() => useChatStore());
 
-        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
-          topics: [],
-          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          userMessageId: TEST_IDS.USER_MESSAGE_ID,
-        } as any);
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue(
+          createSendResponseWithoutTopicId() as any,
+        );
 
         const executeGatewayAgentSpy = vi.fn().mockResolvedValue({
           assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
@@ -5818,15 +5481,9 @@ describe('ConversationLifecycle actions', () => {
           },
         } as any);
 
-        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
-          messages: [
-            createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user' }),
-            createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant' }),
-          ],
-          topics: [],
-          assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
-          userMessageId: TEST_IDS.USER_MESSAGE_ID,
-        } as any);
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue(
+          createSendResponseWithoutTopicId() as any,
+        );
 
         await act(async () => {
           await result.current.sendMessage({

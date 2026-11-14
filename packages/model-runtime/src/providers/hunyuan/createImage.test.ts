@@ -1,9 +1,17 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { CreateImageOptions } from '../../core/openaiCompatibleFactory';
+import type { CreateImageOptions } from '../../core/openaiCompatible';
 import type { CreateImagePayload } from '../../types/image';
 import { createHunyuanImage } from './createImage';
+
+const createCompletedImageResponse = (imageUrl: string) => ({
+  ok: true,
+  json: async () => ({
+    status: 'completed',
+    data: [{ url: imageUrl }],
+  }),
+});
 
 vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -123,13 +131,7 @@ describe('createHunyuanImage', () => {
           ok: true,
           json: async () => ({ id: mockJobId }),
         })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            status: 'completed',
-            data: [{ url: mockImageUrl }],
-          }),
-        });
+        .mockResolvedValueOnce(createCompletedImageResponse(mockImageUrl));
 
       const payload: CreateImagePayload = {
         model: 'HY-Image-V3.0',
@@ -158,13 +160,7 @@ describe('createHunyuanImage', () => {
           ok: true,
           json: async () => ({ id: mockJobId }),
         })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            status: 'completed',
-            data: [{ url: mockImageUrl }],
-          }),
-        });
+        .mockResolvedValueOnce(createCompletedImageResponse(mockImageUrl));
 
       const payload: CreateImagePayload = {
         model: 'HY-Image-V3.0',
@@ -194,13 +190,7 @@ describe('createHunyuanImage', () => {
           ok: true,
           json: async () => ({ id: mockJobId }),
         })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            status: 'completed',
-            data: [{ url: mockImageUrl }],
-          }),
-        });
+        .mockResolvedValueOnce(createCompletedImageResponse(mockImageUrl));
 
       const payload: CreateImagePayload = {
         model: 'HY-Image-V3.0',
@@ -228,13 +218,7 @@ describe('createHunyuanImage', () => {
           ok: true,
           json: async () => ({ id: mockJobId }),
         })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            status: 'completed',
-            data: [{ url: mockImageUrl }],
-          }),
-        });
+        .mockResolvedValueOnce(createCompletedImageResponse(mockImageUrl));
 
       const payload: CreateImagePayload = {
         model: 'HY-Image-V3.0',
@@ -271,13 +255,7 @@ describe('createHunyuanImage', () => {
           ok: true,
           json: async () => ({ status: 'processing' }),
         })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            status: 'completed',
-            data: [{ url: mockImageUrl }],
-          }),
-        });
+        .mockResolvedValueOnce(createCompletedImageResponse(mockImageUrl));
 
       const payload: CreateImagePayload = {
         model: 'HY-Image-V3.0',

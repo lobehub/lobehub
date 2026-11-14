@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { REQUEST_TOPIC_ID_HEADER } from '@lobechat/const';
 import { type LobeRuntimeAI } from '@lobechat/model-runtime';
-import { ModelRuntime } from '@lobechat/model-runtime';
+import { AgentRuntimeErrorType, ModelEmptyError, ModelRuntime } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -181,6 +181,45 @@ describe('POST handler', () => {
         },
         errorType: 500,
       });
+    });
+    it('answers a structured error when the response body fails before its first byte', async () => {
+      // A routed chat buffers bytes until visible output, so an empty completion errors the
+      // body before anything is sent; returning it as-is made Next.js answer with its 500 page.
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          controller.error(new ModelEmptyError(undefined, { finishReason: 'MAX_TOKENS' }));
+        },
+      });
+      const mockRuntime: LobeRuntimeAI = {
+        baseURL: 'abc',
+        chat: vi.fn().mockResolvedValue(new Response(body)),
+      };
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
+
+      const response = await POST(request, {
+        params: Promise.resolve({ provider: 'test-provider' }),
+      });
+
+      expect(response.status).toBe(471);
+      expect(await response.json()).toMatchObject({
+        body: { provider: 'test-provider' },
+        errorType: AgentRuntimeErrorType.ModelEmptyCompletion,
+      });
+    });
+
+    it('streams a response whose body yields bytes', async () => {
+      const mockRuntime: LobeRuntimeAI = {
+        baseURL: 'abc',
+        chat: vi.fn().mockResolvedValue(new Response('event: text\ndata: "OK"\n\n')),
+      };
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
+
+      const response = await POST(request, {
+        params: Promise.resolve({ provider: 'test-provider' }),
+      });
+
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe('event: text\ndata: "OK"\n\n');
     });
   });
 });

@@ -5,6 +5,8 @@ import type { AgentDocumentListItem } from '@/services/agentDocument';
 const MAX_PERSISTED_AGENT_DOCUMENT_LISTS = 30;
 /** Reader documents whose body survives a reload, most recently used first. */
 const MAX_PERSISTED_READER_DOCUMENTS = 20;
+/** Document chat topic ids that survive a reload, most recently used first. */
+const MAX_PERSISTED_DOCUMENT_CHAT_TOPICS = 50;
 
 /**
  * One agent's full document list (documents, web clips and skill bundles),
@@ -78,6 +80,29 @@ export const agentDocumentReaderResource = defineReplica<
   key: agentDocumentReaderKey,
   name: 'agentDocumentReader',
   persist: { maxEntries: MAX_PERSISTED_READER_DOCUMENTS },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** The doc-anchored chat topic of an agent document; only its id is kept. */
+export interface AgentDocumentChatTopic {
+  topicId: string;
+}
+
+/**
+ * The floating chat panel's topic for one agent + document
+ * (`agentDocumentChatTopicMap[agentDocumentReaderKey(params)]`). The read is
+ * `getOrCreateChatTopic`, which provisions the topic on the first call and is
+ * idempotent after that, so only the resolved id is stored: a reload mounts the
+ * panel on it at once while the server confirms it.
+ */
+export const agentDocumentChatTopicResource = defineReplica<
+  AgentDocumentReaderParams,
+  AgentDocumentChatTopic
+>({
+  key: agentDocumentReaderKey,
+  name: 'agentDocumentChatTopic',
+  persist: { maxEntries: MAX_PERSISTED_DOCUMENT_CHAT_TOPICS },
   storage: 'indexedDB',
   version: 1,
 });

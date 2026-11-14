@@ -519,6 +519,14 @@ const cases: RpcCase[] = [
     success: undefined,
   },
   {
+    // A session's later calls stay on the client that created it.
+    address: address(15_000, { channel: 'cli', clientKinds: ['desktop'] }),
+    call: (g) => g.readTerminal({ ...base, client: 'desktop', cursor: 0, id: 't1' }),
+    failure: terminalThrow('readTerminal'),
+    name: 'readTerminal (pinned to the desktop)',
+    payload: { method: 'readTerminal', params: { cursor: 0, id: 't1' } },
+  },
+  {
     address: address(15_000, { channel: 'cli' }),
     call: (g) => g.closeTerminal({ ...base, id: 't1' }),
     failure: terminalThrow('closeTerminal'),

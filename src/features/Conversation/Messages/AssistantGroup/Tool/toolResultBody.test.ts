@@ -21,6 +21,20 @@ describe('hasToolResultBody', () => {
     expect(hasToolResultBody(undefined)).toBe(false);
   });
 
+  it('counts an MCP App result whose data is all for its view, with no text', () => {
+    const state = {
+      content: [],
+      mcpApp: { resourceUri: 'ui://dash/view' },
+      structuredContent: { rows: [1, 2] },
+    };
+
+    expect(hasToolResultBody({ content: '', state })).toBe(true);
+    // Nor once the host envelope wraps it
+    expect(hasToolResultBody({ content: '', state: { content: '', state, success: true } })).toBe(
+      true,
+    );
+  });
+
   it('does not count the streaming placeholder', () => {
     expect(hasToolResultBody({ content: LOADING_FLAT })).toBe(false);
     expect(hasToolResultBody({ content: LOADING_FLAT, contentLength: 12 })).toBe(false);

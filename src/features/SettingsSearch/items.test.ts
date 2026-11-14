@@ -16,7 +16,6 @@ const webContext: SettingsSearchContext = {
   enableChannels: false,
   enableComposio: true,
   enableGatewayMode: true,
-  enableWorkspace: false,
   hasEmail: true,
   hideDocs: false,
   isDesktop: false,
@@ -48,9 +47,19 @@ describe('settings search index', () => {
 
     for (const feature of LAB_FEATURES) {
       const item = labsItems.find(({ anchor }) => anchor === `labs-${feature.flag}`)!;
-      expect(item.visible?.(webContext) ?? true).toBe(
-        !feature.desktopOnly && !feature.workspaceOnly,
-      );
+      expect(item.visible?.(webContext) ?? true).toBe(!feature.desktopOnly);
+    }
+  });
+
+  it('shows workspace lab features exactly where business features are enabled', () => {
+    const labsItems = SETTINGS_SEARCH_ITEMS.filter((item) => item.tab === SettingsTabs.Labs);
+    const workspaceItems = LAB_FEATURES.filter((feature) => feature.workspaceOnly).map(({ flag }) =>
+      labsItems.find(({ anchor }) => anchor === `labs-${flag}`)!,
+    );
+
+    for (const item of workspaceItems) {
+      expect(item.visible?.(webContext)).toBe(true);
+      expect(item.visible?.({ ...webContext, enableBusinessFeatures: false })).toBe(false);
     }
   });
 

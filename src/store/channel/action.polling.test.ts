@@ -213,4 +213,34 @@ describe('Channel in-progress refresh without gateway notifications', () => {
     await tick(5000);
     expect(channelService.detail).not.toHaveBeenCalled();
   });
+
+  // A row showed a background reply as working for up to a minute after it ended.
+  it('refreshes the list quickly while a listed reply is in progress, then slows down', async () => {
+    const listed = (replyJobs: ChannelPublicJob[]) => [{ ...response.channel, replyJobs }];
+    vi.mocked(channelService.list).mockResolvedValue(listed([job()]));
+    renderHook(() => channelActions.useFetchList(), { wrapper });
+    await tick(0);
+
+    vi.mocked(channelService.list).mockResolvedValue(listed([]));
+    await tick(CHANNEL_ACTIVE_REFRESH_MS);
+    expect(useChannelStore.getState().listMap.all?.[0].replyJobs).toEqual([]);
+
+    const calls = vi.mocked(channelService.list).mock.calls.length;
+    await tick(5000);
+    expect(channelService.list).toHaveBeenCalledTimes(calls);
+  });
+
+  it('does not fast-poll the list for a reply blocked on a device', async () => {
+    vi.mocked(channelService.list).mockResolvedValue([
+      {
+        ...response.channel,
+        replyJobs: [job({ blockedCode: 'device_offline', status: 'queued', writerHeld: false })],
+      },
+    ]);
+    renderHook(() => channelActions.useFetchList(), { wrapper });
+    await tick(0);
+    const calls = vi.mocked(channelService.list).mock.calls.length;
+    await tick(5000);
+    expect(channelService.list).toHaveBeenCalledTimes(calls);
+  });
 });

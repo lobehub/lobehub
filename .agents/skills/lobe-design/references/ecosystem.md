@@ -2,17 +2,20 @@
 
 <!-- refs:meta
 tier: index
-scope: 生态包；只在需要图表 / 徽标 / emoji / 流式 markdown 时取
+scope: 生态包；组件库 / 编辑器 / 代码规范，以及图表 / 徽标 / emoji / 流式 markdown
 entries:
-  E-01  | deep | 图表,chart,折线,柱状,饼图
-  E-02  | deep | 图表颜色,主题色,series
-  E-03  | deep | 模型徽标,厂商,logo,icon
-  E-04  | deep | emoji,表情
-  E-05  | deep | 流式,markdown,streamdown
-  E-06  | deep | 边界,依赖,不引入第二个库
+  E-01  | deep | 组件库,lobe-ui,ui,@lobehub/ui
+  E-02  | deep | 编辑器,editor,lexical,ChatInput,富文本
+  E-03  | deep | 图表,chart,折线,柱状,饼图
+  E-04  | deep | 模型徽标,厂商,logo,icon
+  E-05  | deep | emoji,表情
+  E-06  | deep | 流式,markdown,streamdown
+  E-07  | deep | lint,eslint,prettier,commitlint,代码规范
+  E-08  | deep | 边界,依赖,不引入第二个库
+  E-09  | deep | 图表颜色,主题色,series
 -->
 
-界面里的模型徽标、图表、emoji 和流式 markdown 不要自己造，也不要随手引第三方。这些都有生态包覆盖，并且已经接入同一套主题。
+界面与工程侧的常用能力不要自己造，也不要随手引第三方：组件库用 `@lobehub/ui`，富文本 / 聊天输入用 `@lobehub/editor`，代码规范用 `@lobehub/lint`；模型徽标、图表、emoji 和流式 markdown 也都有对应生态包，并且已经接入同一套主题。
 
 ## 安装清单
 
@@ -26,7 +29,116 @@ entries:
 
 `@lobehub/charts` 是独立包，不是 `@lobehub/ui` 的依赖。`@lobehub/streamdown` 是直接依赖，不要再单独接一份去驱动 markdown。
 
-## E-01 `@lobehub/charts` —— 图表
+## 生态 skills（Agent 文档入口）
+
+每个有 docs 站的生态包会发布 `/skills.md`（由 `@lobehub/docs-kit` / `lobedocs build` 生成），供下游 Agent 查阅组件与 API。lobe-design 用脚本按依赖自动安装到项目的 `.agents/skills/<name>/SKILL.md`，不要让 Agent 手工 clone。
+
+```bash
+node "$LOBE_DESIGN/scripts/install-ecosystem-skills.mjs" --root .
+# 只看映射与命中：加 --list；CI 比对是否过期：加 --check；强制重拉：加 --force
+```
+
+| npm 包                                    | skill 目录名   | skills.md                                    | 状态                                 |
+| ----------------------------------------- | -------------- | -------------------------------------------- | ------------------------------------ |
+| `@lobehub/ui`                             | `lobe-ui`      | <https://ui.lobehub.com/skills.md>           | ok                                   |
+| `@lobehub/lint`（及 `@lobehub/*-config`） | `lobe-lint`    | <https://lint.lobehub.com/skills.md>         | ok                                   |
+| `@lobehub/editor`                         | `lobe-editor`  | <https://editor.lobehub.com/skills.md>       | ok                                   |
+| `@lobehub/icons`                          | `lobe-icons`   | <https://icons.lobehub.com/skills.md>        | ok                                   |
+| `@lobehub/charts`                         | `lobe-charts`  | <https://charts.lobehub.com/skills.md>       | ok                                   |
+| `@lobehub/tts`                            | `lobe-tts`     | <https://tts.lobehub.com/skills.md>          | ok                                   |
+| `@lobehub/fluent-emoji`                   | `fluent-emoji` | <https://fluent-emoji.lobehub.com/skills.md> | ok                                   |
+| `@lobehub/streamdown`                     | `streamdown`   | <https://streamdown.lobehub.com/skills.md>   | ok                                   |
+| `@lobehub/docs-kit`                       | —              | —                                            | missing（仅仓库内 `.agents/skills`） |
+| `@lobehub/ui-rn`                          | —              | —                                            | missing（暂无公开 skills.md）        |
+
+映射源文件：`scripts/ecosystem-skills.json`。装完或升级依赖后重跑脚本；`bootstrap.mjs` 默认会带上这一步。
+
+## E-01 `@lobehub/ui` —— AI 应用组件库
+
+仓库：[lobehub/lobe-ui](https://github.com/lobehub/lobe-ui)。文档与演示：[ui.lobehub.com](https://ui.lobehub.com)。
+
+LobeHub 开源的 React 组件库，面向 AI 聊天与 AIGC Web 应用：从落地页到管理后台同一套设计语言；LLM 输出（Markdown、代码、Mermaid、diff、HTML 预览）和聊天界面有现成零件，不必从零拼。
+
+### 安装与根部
+
+安装与 peer 见上文「安装清单」。根部最少：
+
+```tsx
+import '@lobehub/ui/theme.css';
+import '@lobehub/ui/style.css';
+
+import { Button, ConfigProvider } from '@lobehub/ui';
+import { motion } from 'motion/react';
+
+export default () => (
+  <ConfigProvider motion={motion}>
+    <Button type="primary">Hello AIGC</Button>
+  </ConfigProvider>
+);
+```
+
+ESM only；需要 React 19。v6 起不再依赖 Ant Design，从 5.x 升级看 [v6 migration](https://ui.lobehub.com/migration-v6)。
+
+### 入口
+
+| 入口                                                                   | 用途                             |
+| ---------------------------------------------------------------------- | -------------------------------- |
+| `@lobehub/ui`                                                          | 核心组件、`ConfigProvider`、主题 |
+| `@lobehub/ui/chat` · `@lobehub/ui/mobile`                              | 聊天与移动端                     |
+| `@lobehub/ui/dashboard` · `@lobehub/ui/pro-table` · `@lobehub/ui/form` | 后台、数据表、表单               |
+| `@lobehub/ui/awesome` · `@lobehub/ui/brand` · `@lobehub/ui/mdx`        | 落地页、品牌、MDX 文档           |
+| `@lobehub/ui/icons` · `@lobehub/ui/i18n`                               | 平台徽标、文案包                 |
+
+Agent 优先读 [skills.md](https://ui.lobehub.com/skills.md) 与 [llms.txt](https://ui.lobehub.com/llms.txt)，只使用文档里出现的组件、props 和导入路径。具体选哪个零件见 [components.md](components.md)。
+
+## E-02 `@lobehub/editor` —— 富文本 / 聊天输入
+
+仓库：[lobehub/lobe-editor](https://github.com/lobehub/lobe-editor)。文档：[editor.lobehub.com](https://editor.lobehub.com)。
+
+基于 Meta Lexical 的 React 富文本编辑器，覆盖聊天输入框、Markdown 文档与模型改稿（用户可逐条接受 / 拒绝）。不要另接一套 TipTap / Slate / 自研 Lexical 壳来做同一件事。
+
+### 安装
+
+```bash
+pnpm add @lobehub/editor
+```
+
+Peer：`react` / `react-dom` 19、`@lobehub/ui`、`motion`（与 E-01 同一套，不要锁第二套版本）。
+
+### 入口
+
+| 入口                       | 用途                                       |
+| -------------------------- | ------------------------------------------ |
+| `@lobehub/editor`          | 插件、命令、编辑器内核                     |
+| `@lobehub/editor/react`    | `Editor`、`ChatInput`、`SendButton`、hooks |
+| `@lobehub/editor/headless` | 服务端读写文档（无 DOM）                   |
+| `@lobehub/editor/renderer` | 只读渲染与 diff（SSR 友好）                |
+
+最小示例（列表 / 链接 / 代码块）：
+
+```tsx
+import { ReactCodeblockPlugin, ReactLinkPlugin, ReactListPlugin } from '@lobehub/editor';
+import { Editor, useEditor } from '@lobehub/editor/react';
+
+export default function MyEditor() {
+  const editor = useEditor();
+
+  return (
+    <Editor
+      editor={editor}
+      placeholder="Type / for commands..."
+      plugins={[ReactListPlugin, ReactLinkPlugin, ReactCodeblockPlugin]}
+      onTextChange={(ed) => {
+        console.log(ed.getDocument('markdown'));
+      }}
+    />
+  );
+}
+```
+
+聊天场景用 `ChatInput`（斜杠命令、`@` mention、附件、发送按钮），不要在 `Input.TextArea` 上重造一套。Markdown 快捷输入、粘贴与导出是一等能力：`getDocument('markdown')` / JSON。Agent 读 [skills.md](https://editor.lobehub.com/skills.md)。
+
+## E-03 `@lobehub/charts` —— 图表
 
 基于 **recharts**。单一入口，没有 exports map：
 
@@ -73,7 +185,7 @@ Next.js 里需要 `transpilePackages: ['@lobehub/charts']`。
 
 其余常用开关：`colors`、`showLegend`、`showTooltip`、`showGridLines`、`showXAxis` / `showYAxis`、`loading`、`noDataText`、`customTooltip`、`height` / `width`、`yAxisWidth`、`autoMinValue`、`minValue` / `maxValue`、`stack`。
 
-`loading` 和 `noDataText` 是内建的——**不要自己在外面包一层加载和空态**，图表已经处理了（对应 [craft.md](craft.md) 的 K-05）。
+`loading` 和 `noDataText` 是内建的 ——**不要自己在外面包一层加载和空态**，图表已经处理了（对应 [craft.md](craft.md) 的 K-05）。
 
 **三个图表不走这套 `categories` + `index` 约定**，照抄会直接报错或画不出来：
 
@@ -85,7 +197,7 @@ Next.js 里需要 `transpilePackages: ['@lobehub/charts']`。
 
 `BenchmarkRankingChart` / `BenchmarkColumnChart` 又是另一套：字段名通过 `valueKey` / `errorKey` / `iconKey` / `providerKey` 等「key 映射 props」指定，默认读 `name` / `score` / `error`。
 
-### E-02 图表颜色必须走主题
+### E-09 图表颜色必须走主题
 
 不传 `colors` 时，多数图表默认取 `useThemeColorRange()`，顺序是：
 
@@ -107,19 +219,19 @@ const theme = useTheme();
 三条约束：
 
 - `colors` 收的是**解析后的颜色值**，不接受 `"geekblue"` 这类 token 名字符串。
-- `Heatmaps` 的 `colors` 必须是真实颜色值而不是 `cssVar` 字符串——它内部用 `chroma.valid()` 校验。
-- 业务语义色要**稳定映射**：成功/增长、警告、危险/下降各自固定，不能随系列顺序漂移。否则「红色」可能只是第一个系列，不代表任何含义，用户无法信任这个颜色。
+- `Heatmaps` 的 `colors` 必须是真实颜色值而不是 `cssVar` 字符串 —— 它内部用 `chroma.valid()` 校验。
+- 业务语义色要**稳定映射**：成功 / 增长、警告、危险 / 下降各自固定，不能随系列顺序漂移。否则「红色」可能只是第一个系列，不代表任何含义，用户无法信任这个颜色。
 
 暗色模式没有专门的 prop，跟随 `data-theme`。`Heatmaps` 和 `DonutChart` 内部会按 `isDarkMode` 换阶。
 
 ### 已知坑
 
-- `BenchmarkRankingChart` / `BenchmarkColumnChart` **不自带图标和品牌色**，要由调用方传入（配合 E-03）。`highlighted: true` 只强调文字，不改柱子填充。
+- `BenchmarkRankingChart` / `BenchmarkColumnChart` **不自带图标和品牌色**，要由调用方传入（配合 E-04）。`highlighted: true` 只强调文字，不改柱子填充。
 - `ComposedChart` 在数据区间很窄时（例如 80–95% 的成功率）recharts 默认的 `[0, auto]` 会把差异压平，需要显式给 `yAxisLeft.domain` / `yAxisRight.domain`。
 - 空态 `NoData` 的默认文案是英文（「No Data」）。中文界面在应用里包一层，按界面语言统一给 `noDataText`，不要在每个调用处补。
 - 调用处传了 `data ?? []` 却没传 `loading` 时，加载中会被画成空态。加载时传 `loading`；查询失败时换成带原因和重试的失败画面，不要把空数组交给图表（K-05）。
 
-## E-03 `@lobehub/icons` —— AI 模型与厂商徽标
+## E-04 `@lobehub/icons` —— AI 模型与厂商徽标
 
 约 340 个品牌（72 个模型、136 个厂商、132 个应用），**只有 AI 相关品牌徽标，不是通用 UI 图标集**。通用图标用 `@lobehub/ui` 的 `Icon`。
 
@@ -140,18 +252,18 @@ Claude.title; // 'Claude'
 
 变体的可用性**因品牌而异**，用前别假设：
 
-| 变体      | 覆盖情况                                              |
-| --------- | ----------------------------------------------------- |
-| `Avatar`  | 340 / 340，全都有                                     |
-| `Combine` | 324 个有                                              |
-| `Color`   | 226 个有——**`OpenAI` 和 `Anthropic` 就没有 `.Color`** |
-| `Text`    | 几乎都有                                              |
+| 变体      | 覆盖情况                                               |
+| --------- | ------------------------------------------------------ |
+| `Avatar`  | 340 / 340，全都有                                      |
+| `Combine` | 324 个有                                               |
+| `Color`   | 226 个有 ——**`OpenAI` 和 `Anthropic` 就没有 `.Color`** |
+| `Text`    | 几乎都有                                               |
 
 共享 props：`size`（默认 `'1em'`）、`color`、`title`，以及全部标准 SVG 属性。`Avatar` 另有 `shape`（`circle`/`square`）、`background`、`iconMultiple`、`iconStyle`。
 
 ### 按字符串运行时解析
 
-这是这个包最有用的能力——AI 应用通常只拿到一个模型名或厂商 id，不可能静态导入 340 个品牌：
+这是这个包最有用的能力 ——AI 应用通常只拿到一个模型名或厂商 id，不可能静态导入 340 个品牌：
 
 ```tsx
 import { ModelIcon, ProviderIcon } from '@lobehub/icons';
@@ -189,7 +301,7 @@ import { ModelIcon, ProviderIcon } from '@lobehub/icons';
 
 **注意区分两个同名的东西**：`@lobehub/ui/icons` 是另一个命名空间，装的是 OAuth / 社交平台徽标（Auth0、Discord、Slack、WeChat 等）和一批 lucide 扩展图标；`@lobehub/icons` 才是 AI 品牌库。lobe-ui 只从后者转出了 `Cloudflare` 和 `Github` 两个。
 
-## E-04 `@lobehub/fluent-emoji` —— emoji 资源
+## E-05 `@lobehub/fluent-emoji` —— emoji 资源
 
 `@lobehub/ui` 的 peer，为 `FluentEmoji` 组件和 `Avatar` 的 emoji 回退（内部调 `getEmoji`）提供资源。
 
@@ -199,9 +311,9 @@ import { ModelIcon, ProviderIcon } from '@lobehub/icons';
 <FluentEmoji emoji="🤯" size={64} type="anim" />
 ```
 
-`type` 取 `anim` | `flat` | `modern` | `mono` | `raw` | `3d`。资源走 CDN，CDN 来源由 `ConfigProvider` 的 `proxy` 配置决定（默认 aliyun，可选 unpkg / jsdelivr / custom）。
+`type` 取 `anim` | `flat` | `modern` | `mono` | `raw` | `3d`。资源走 CDN，CDN 来源由 `ConfigProvider` 的 `proxy` 配置决定（默认 aliyun，可选 unpkg /jsdelivr/custom）。
 
-## E-05 `@lobehub/streamdown` —— 流式 markdown
+## E-06 `@lobehub/streamdown` —— 流式 markdown
 
 `@lobehub/ui` 的**直接依赖**，不需要单独安装，也不需要直接调用。它驱动 `Markdown` 组件的流式渲染、LaTeX 预处理和代码块淡入动画。
 
@@ -215,17 +327,72 @@ import { ModelIcon, ProviderIcon } from '@lobehub/icons';
 
 lobe-ui 根入口另外转出了 `rehypeStreamAnimated`，用于需要自定义 rehype 管线的场景。
 
-## E-06 边界
+## E-07 `@lobehub/lint` —— 代码规范
 
-| 需要                             | 归属                                                                      |
-| -------------------------------- | ------------------------------------------------------------------------- |
-| 图表                             | `@lobehub/charts`                                                         |
-| AI 模型 / 厂商徽标               | `@lobehub/icons`                                                          |
-| OAuth / 社交徽标                 | `@lobehub/ui/icons`                                                       |
-| 通用界面图标（lucide）           | `@lobehub/ui` 的 `Icon`                                                   |
-| emoji                            | `@lobehub/ui` 的 `FluentEmoji`                                            |
-| markdown / 流式输出              | `@lobehub/ui` 的 `Markdown`                                               |
-| 表格 / 徽标 / 进度 / 评分 / 加载 | `@lobehub/ui` 的 `Table` / `Badge` / `Progress` / `Rate` / `Spin` |
-| 文档站工程                       | `@lobehub/docs-kit`（`lobedocs` CLI，本仓库 `packages/`）                 |
+仓库：[lobehub/lobe-lint](https://github.com/lobehub/lobe-lint)。文档：[lint.lobehub.com](https://lint.lobehub.com)。
 
-不要为了一个图表引入第二个图表库，也不要为了一个模型徽标去抓远程 SVG——两者都会让产物脱离主题体系，直接命中 [evaluator.md](evaluator.md) 的「图表不像系统」和「设计系统不一致」。
+LobeHub 共用的 ESLint / Prettier / Stylelint / Commitlint / Remarklint /semantic-release 配置；`@lobehub/lint` 是聚合包，也可按需只装单个 `@lobehub/*-config`。不要在仓库里再维护一份平行的 ESLint 规则集。
+
+### 一键接入
+
+```bash
+npx create-lobe-lint
+# 非交互推荐预设：
+npx create-lobe-lint --preset -y
+```
+
+### 聚合包用法
+
+```bash
+pnpm add -D @lobehub/lint
+# 另装各工具 peer：eslint、prettier、stylelint、@commitlint/cli、remark-cli、semantic-release、typescript@^6
+```
+
+```js
+// eslint.config.mjs
+import { defineConfig } from '@lobehub/lint';
+
+export default defineConfig({
+  react: true, // 或 'next' / 'remix' / 'vite' / 'expo'
+});
+```
+
+```js
+// prettier.config.mjs
+import { prettier } from '@lobehub/lint';
+
+export default prettier;
+```
+
+同模式还有 `stylelint`、`commitlint`、`remarklint`、`semanticRelease` / `semanticReleaseMonoRepo`。Oxlint 走 ESM 子路径 `@lobehub/lint/oxlint` 的 `defineOxlintConfig`。changelog /release 若宿主用 cosmiconfig 旧版读不了 `.mjs`，改用 `@lobehub/lint/changelog`、`@lobehub/lint/release` 的 CJS 入口（见该包 README）。 Agent 读 [skills.md](https://lint.lobehub.com/skills.md)。
+
+### 也可拆开安装
+
+| 包                                 | 用途               |
+| ---------------------------------- | ------------------ |
+| `@lobehub/eslint-config`           | ESLint flat config |
+| `@lobehub/oxlint-config`           | Oxlint             |
+| `@lobehub/prettier-config`         | Prettier           |
+| `@lobehub/stylelint-config`        | CSS / Less         |
+| `@lobehub/commitlint-config`       | Gitmoji commit     |
+| `@lobehub/remarklint-config`       | Markdown           |
+| `@lobehub/semantic-release-config` | 发版与 changelog   |
+| `create-lobe-lint`                 | 脚手架 CLI         |
+
+## E-08 边界
+
+| 需要                              | 归属                                                              |
+| --------------------------------- | ----------------------------------------------------------------- |
+| 应用组件 / 主题 / 后台壳          | `@lobehub/ui`（E-01）                                             |
+| 富文本 / 聊天输入 / 模型改稿      | `@lobehub/editor`（E-02）                                         |
+| ESLint / Prettier / Commitlint 等 | `@lobehub/lint`（E-07）                                           |
+| 图表                              | `@lobehub/charts`                                                 |
+| AI 模型 / 厂商徽标                | `@lobehub/icons`                                                  |
+| OAuth / 社交徽标                  | `@lobehub/ui/icons`                                               |
+| 通用界面图标（lucide）            | `@lobehub/ui` 的 `Icon`                                           |
+| emoji                             | `@lobehub/ui` 的 `FluentEmoji`                                    |
+| markdown / 流式输出               | `@lobehub/ui` 的 `Markdown`                                       |
+| 表格 / 徽标 / 进度 / 评分 / 加载  | `@lobehub/ui` 的 `Table` / `Badge` / `Progress` / `Rate` / `Spin` |
+| 文档站工程                        | `@lobehub/docs-kit`（`lobedocs` CLI）                             |
+
+不要为了一个图表引入第二个图表库，也不要为了一个模型徽标去抓远程 SVG，更不要再接第二套组件库或编辑器 —— 都会让产物脱离主题体系，直接命中 [evaluator.md](evaluator.md) 的「图表不像系统」和「设计系统不一致」。

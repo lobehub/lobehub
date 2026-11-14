@@ -1,12 +1,17 @@
 import type { AgentRuntimeContext } from '@lobechat/agent-runtime';
 import { extractActivatedToolIdsFromMessages } from '@lobechat/agent-runtime';
+import { ChannelIdentifier } from '@lobechat/builtin-tool-channel';
 import { getShellSyntaxGuidance } from '@lobechat/builtin-tool-local-system';
 import { TaskIdentifier } from '@lobechat/builtin-tool-task';
 import type { OperationSkillSet, ProjectInstructionFile } from '@lobechat/context-engine';
 import { buildExpertiseContextSnapshot } from '@lobechat/context-engine';
 import type { LobeChatDatabase } from '@lobechat/database';
-import type { LobeAgentAgencyConfig, WorkspaceInitResult } from '@lobechat/types';
-import { getWorkingDirEffectivePath } from '@lobechat/types';
+import type {
+  EvalMemoryReference,
+  LobeAgentAgencyConfig,
+  WorkspaceInitResult,
+} from '@lobechat/types';
+import { getWorkingDirEffectivePath, RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import type { AgentModel } from '@/database/models/agent';
@@ -17,11 +22,13 @@ import type { TopicModel } from '@/database/models/topic';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import type { ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import type { AgentDocumentsService } from '@/server/services/agentDocuments';
+import { AgentEvalMemoryService } from '@/server/services/agentEvalMemory';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
 import { redisService } from '@/server/services/redis';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
+import { applyEvalGateToToolSet } from '../evalGate';
 import { pruneRegeneratedBranch } from '../pruneRegeneratedBranch';
 import { resolveDeviceWorkingDirectoryConfig } from '../resolveDeviceWorkingDirectory';
 import { applyShareGateToToolSet } from '../shareGate';
@@ -183,6 +190,10 @@ export interface OperationPrepInput {
   disabledPluginIds: string[];
   discovery: ToolDiscoveryResult;
   ephemeralUserMessage?: string;
+  /** The only tools an eval attempt may see or call (case environment + infrastructure). */
+  evalAllowedTools?: string[];
+  /** Isolated Memory scope of an eval trial; persona is read from it, never the caller. */
+  evalMemory?: EvalMemoryReference;
   globalMemoryEnabled: boolean;
   hasMentionedAgents: boolean;
   loadHistoryMessages: () => Promise<any[]>;
@@ -230,11 +241,17 @@ const resolveWorkspaceInit = async (
   params: {
     activeDeviceId: string | undefined;
     agencyConfig?: LobeAgentAgencyConfig;
+    /**
+     * The device is not online yet (a managed cloud device that is waking).
+     * The bound directory still resolves from the persisted rows, but the
+     * device is never scanned: only a cached scan is served.
+     */
+    deviceWaking?: boolean;
     topicId: string;
   },
 ): Promise<ResolvedWorkspaceInit> => {
   const empty: WorkspaceInitResult = { instructions: [], skills: [] };
-  const { activeDeviceId, agencyConfig, topicId } = params;
+  const { activeDeviceId, agencyConfig, deviceWaking, topicId } = params;
   if (!activeDeviceId) return { workspace: empty };
 
   try {
@@ -289,6 +306,8 @@ const resolveWorkspaceInit = async (
     const cached = workingDirs.find(
       (dir) => dir.path === boundCwd || getWorkingDirEffectivePath(dir) === boundCwd,
     );
+
+    if (deviceWaking) return { ...resolved, workspace: cached?.workspace ?? empty };
 
     if (isWorkspaceCacheFresh(cached, Date.now()) && cached?.workspace) {
       log('execAgent: reusing cached workspace init for %s', boundCwd);
@@ -444,11 +463,7 @@ export const prepareOperation = async (
     activeDeviceId,
     activeDeviceScope,
     agentPlugins,
-    builtinModels,
-    composioManifests,
-    connectorManifests,
     executionPlan,
-    lobehubSkillManifests,
     onlineDevices,
     toolsEngine,
     toolsResult,
@@ -524,10 +539,21 @@ export const prepareOperation = async (
   // 10. Fetch user persona for memory injection (reuses globalMemoryEnabled from step 8)
   let userMemory: ServerUserMemoryConfig | undefined;
 
+  // An eval attempt reads its persona from its own Memory entries (the case
+  // fixture's), never the caller's. Checking the reference sits outside the
+  // best-effort persona fetch: a foreign reference must fail the attempt.
+  const evalPersona = input.evalMemory
+    ? await new AgentEvalMemoryService(deps.db, deps.userId, deps.workspaceId).getPersonaDocument(
+        input.evalMemory,
+        { threadId: appContext?.threadId, topicId },
+      )
+    : undefined;
+
   if (globalMemoryEnabled) {
     try {
-      const personaModel = new UserPersonaModel(deps.db, deps.userId);
-      const persona = await personaModel.getLatestPersonaDocument();
+      const persona = input.evalMemory
+        ? evalPersona
+        : await new UserPersonaModel(deps.db, deps.userId).getLatestPersonaDocument();
 
       if (persona?.persona) {
         userMemory = {
@@ -629,6 +655,24 @@ export const prepareOperation = async (
     );
   }
 
+  // Eval attempts stay inside the case's environment the same way: whatever
+  // discovery merged in (always-on builtins, every plugin the account holds
+  // for other cases) is pruned to the attempt's allowlist here, so neither the
+  // first step nor a later `lobe-activator` call can reach past it.
+  if (input.evalAllowedTools) {
+    applyEvalGateToToolSet(
+      {
+        activatableToolIds,
+        enabledToolIds: toolsResult.enabledToolIds,
+        executorMap: discovery.toolExecutorMap,
+        manifestMap: discovery.toolManifestMap,
+        sourceMap: discovery.toolSourceMap,
+        tools,
+      },
+      input.evalAllowedTools,
+    );
+  }
+
   log('execAgent: prepared evalContext for executor');
 
   await throwIfExecutionAborted('operation preparation');
@@ -698,6 +742,7 @@ export const prepareOperation = async (
     buildViewedTaskContextPrompt(deps, appContext, input.taskId),
     buildViewedGoalOverview(deps, appContext),
     buildRunProjectContextPrompt(deps, appContext?.projectId, resolvedAgentId, {
+      channelMessaging: !!toolsResult.enabledToolIds?.includes(ChannelIdentifier),
       coordinationRules: !!toolsResult.enabledToolIds?.includes(TaskIdentifier),
     }),
   ]);
@@ -727,17 +772,23 @@ export const prepareOperation = async (
     };
   }
 
-  // Project skills + the root AGENTS.md are discovered server-side by
-  // scanning the device's bound project directory ("workspace init"), cached
+  // Project skills + AGENTS.md are discovered server-side by scanning the
+  // device's bound project directory and its parents up to the repository
+  // root ("workspace init"), cached
   // on `devices.workingDirs` and reused within the TTL. Skills surface in
   // `<available_skills>` (metadata only — SKILL.md bodies are read lazily at
   // activation via `local-system` readFile, which `serverRuntimes/skills.ts`
   // re-gates on `activeDeviceId`). Only `location` (the absolute SKILL.md
   // path) flows through; the directory tree is enumerated lazily, keeping the
   // op-param payload small.
+  // A waking managed device is not bound yet (see `resolveDevicePlan`), but
+  // its directory is known from the persisted rows, and the run will reach it.
+  const wakingDeviceId =
+    executionPlan?.kind === 'device-wakeable' ? executionPlan.deviceId : undefined;
   const workspaceInit = await resolveWorkspaceInit(deps, {
-    activeDeviceId,
+    activeDeviceId: activeDeviceId ?? wakingDeviceId,
     agencyConfig: agentConfig.agencyConfig ?? undefined,
+    deviceWaking: !activeDeviceId && !!wakingDeviceId,
     topicId,
   });
 
@@ -760,7 +811,7 @@ export const prepareOperation = async (
     config: workspaceInit.boundCwdConfig,
     currentDeviceId: workspaceInit.topicDeviceId,
     currentWorkingDirectory: workspaceInit.topicWorkingDirectory,
-    deviceId: activeDeviceId,
+    deviceId: activeDeviceId ?? wakingDeviceId,
     topicId,
   });
 
@@ -769,8 +820,9 @@ export const prepareOperation = async (
   // concatenate them. Returning them rather than stamping `agentConfig` keeps
   // run context off the agent's configuration.
   if (workspaceInit.workspace.instructions.length) {
-    projectInstructions = workspaceInit.workspace.instructions.map(({ content, source }) => ({
+    projectInstructions = workspaceInit.workspace.instructions.map(({ content, path, source }) => ({
       content,
+      path,
       source,
     }));
     log(
@@ -799,11 +851,16 @@ export const prepareOperation = async (
   // ContextEngine owns the Lab-controlled injection decision via enableExpertise.
   const expertiseAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
   let expertise;
-  try {
-    const expertiseModel = new ExpertiseModel(deps.db, deps.userId, deps.workspaceId);
-    expertise = await buildExpertiseContextSnapshot(expertiseModel, expertiseAgentId);
-  } catch (error) {
-    console.error('Failed to build expertise snapshot for agent:', expertiseAgentId, error);
+  // Learned expertise is the caller's account state. An eval attempt sees only
+  // what its case declares, so it is left out (its write side, Agent Signal,
+  // is suppressed on eval turns as well).
+  if (ctx.trigger !== RequestTrigger.Eval) {
+    try {
+      const expertiseModel = new ExpertiseModel(deps.db, deps.userId, deps.workspaceId);
+      expertise = await buildExpertiseContextSnapshot(expertiseModel, expertiseAgentId);
+    } catch (error) {
+      console.error('Failed to build expertise snapshot for agent:', expertiseAgentId, error);
+    }
   }
 
   return {

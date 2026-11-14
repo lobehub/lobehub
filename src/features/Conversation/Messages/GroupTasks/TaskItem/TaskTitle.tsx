@@ -36,7 +36,7 @@ interface TaskTitleProps {
   title?: string;
 }
 
-const TaskStatusIndicator = memo<{ status?: ThreadStatus }>(({ status }) => {
+export const TaskStatusIndicator = memo<{ status?: ThreadStatus }>(({ status }) => {
   const isCompleted = status === ThreadStatus.Completed;
   const isError = status === ThreadStatus.Failed || status === ThreadStatus.Cancel;
   const isProcessing = status ? isProcessingStatus(status) : false;
@@ -80,7 +80,7 @@ interface MetricsDisplayProps {
   status?: ThreadStatus;
 }
 
-const MetricsDisplay = memo<MetricsDisplayProps>(({ metrics, status }) => {
+export const MetricsDisplay = memo<MetricsDisplayProps>(({ metrics, status }) => {
   const { t } = useTranslation('chat');
   const { llmCalls, toolCalls, startTime, duration, isLoading } = metrics;
   const [elapsedTime, setElapsedTime] = useState(0);

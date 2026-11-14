@@ -1,7 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import type { AgentSenderMetadata, ComposerUserMessage, MessageMetadata } from '@lobechat/types';
-import { COMPOSER_USER_MESSAGE_METADATA_KEYS, toComposerUserMessage } from '@lobechat/types';
+import {
+  COMPOSER_USER_MESSAGE_METADATA_KEYS,
+  mergeMcpAppSource,
+  toComposerUserMessage,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
@@ -57,6 +61,12 @@ export interface QueuedFollowUp extends SteerQueueEntry {
    */
   composer?: { editorData?: Record<string, unknown>; filesPreview?: Record<string, unknown>[] };
   request: QueuedFollowUpRequest;
+  /**
+   * Queued by a parent agent for its running `callSubAgent` child (see
+   * `queueSubAgentSteer`), so it is written for exactly that run: it joins the
+   * child's turn as it is, whatever device or executor settings the run has.
+   */
+  subAgentSteer?: boolean;
   /** Who queued it; only the run owner's own follow-ups are started for them. */
   userId: string;
 }
@@ -71,11 +81,16 @@ const uniq = <T>(items: T[]) => [...new Set(items)];
 const mergeComposerUserMessages = (
   messages: (ComposerUserMessage | undefined)[],
 ): ComposerUserMessage | undefined => {
-  const metadata: Record<string, unknown[]> = {};
+  const metadata: Record<string, unknown> = {};
   for (const key of COMPOSER_USER_MESSAGE_METADATA_KEYS) {
+    if (key === 'mcpAppSource') continue;
     const values = messages.flatMap((message): unknown[] => message?.metadata?.[key] ?? []);
     if (values.length) metadata[key] = values;
   }
+  const mcpAppSource = mergeMcpAppSource(
+    messages.map((message) => message?.metadata?.mcpAppSource),
+  );
+  if (mcpAppSource) metadata.mcpAppSource = mcpAppSource;
   const editorData = messages.length === 1 ? messages[0]?.editorData : undefined;
 
   return toComposerUserMessage({ editorData, metadata: metadata as MessageMetadata });

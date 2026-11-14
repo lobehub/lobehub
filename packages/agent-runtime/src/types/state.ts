@@ -1,6 +1,7 @@
 import type {
   ActivatedStepSkill,
   ActivatedStepTool,
+  AgentDocumentIndexFacts,
   AgentGroupConfig,
   BotPlatformContext,
   DiscordContext,
@@ -18,6 +19,7 @@ import type {
   AgentSignalOperationMarker,
   ChatToolPayload,
   ChatTopicBotContext,
+  EvalConnectorSnapshots,
   EvalToolForwardingConfig,
   ExecutionPlan,
   ExpertiseContextSnapshot,
@@ -157,7 +159,17 @@ export interface AgentRunPrincipal {
  */
 export interface AgentRunPlan {
   /** Evaluation execution controls (tool forwarding) for eval runs. */
-  eval?: { caseId?: string; toolForwarding?: EvalToolForwardingConfig };
+  eval?: {
+    connectorSnapshots?: EvalConnectorSnapshots;
+    /** The only tool identifiers the attempt may see or call; see EvalRuntimeContext. */
+    allowedTools?: string[];
+    /** The eval attempt (case run or pass@k thread) this operation serves; inherited by sub-agents. */
+    attemptId?: string;
+    caseId?: string;
+    /** Isolated Memory scope of the eval trial (server-created). */
+    memory?: { fixtureHash: string; runId: string; threadId?: string; topicId: string };
+    toolForwarding?: EvalToolForwardingConfig;
+  };
   /** Where (and whether) the run executes, resolved once at the entry point. */
   execution?: ExecutionPlan;
   /** Operation-level skill set for the skill resolver. */
@@ -339,6 +351,13 @@ export interface AgentWorldSnapshot {
  */
 export interface AgentRunBinding {
   /**
+   * SIZE / UPDATED of each progressive agent-document index row, as this run
+   * first saw it. Steps render the index from here so a document the run edits
+   * does not rewrite the prompt prefix behind the index (see
+   * `freezeAgentDocumentIndexFacts`). Grows when a new document shows up.
+   */
+  agentDocumentIndex?: AgentDocumentIndexFacts;
+  /**
    * Device routed for this run. `id` stays absent until a device is bound;
    * `systemInfo` may already carry a working directory for runs whose cwd was
    * resolved from a persisted device row.
@@ -361,8 +380,8 @@ export interface AgentState {
   activatedStepTools?: ActivatedStepTool[];
   // --- Late-bound execution facts ---
   /**
-   * Execution facts bound at a step boundary (device routing). The only
-   * business slot the host may write after creation.
+   * Execution facts bound at a step boundary (device routing, agent-document
+   * index facts). The only business slot the host may write after creation.
    */
   binding?: AgentRunBinding;
 

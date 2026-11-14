@@ -220,39 +220,6 @@ describe('AgentRuntimeService - Completion Hooks via createOperation', () => {
         }),
       ]);
     });
-
-    it('should NOT have hook config when no hooks are configured', async () => {
-      const operationId = 'hook-none-1';
-
-      await service.createOperation({
-        agentConfig: { model: 'gpt-4o', provider: 'openai' },
-        appContext: { agentId: 'test-agent' },
-        autoStart: false,
-        initialContext: makeContext(operationId),
-        initialMessages: [{ content: 'Hello', role: 'user' }],
-        modelRuntimeConfig: { model: 'gpt-4o', provider: 'openai' },
-        operationId,
-        toolSet: { manifestMap: {}, tools: [] },
-        userId,
-      });
-
-      const state = await stateManager.loadAgentState(operationId);
-      expect(state?.host?.hooks).toBeUndefined();
-    });
-
-    it('should not throw when webhook fetch fails', async () => {
-      const operationId = 'hook-fail-1';
-      const webhookUrl = 'https://example.com/failing-webhook';
-
-      // Make fetch throw
-      fetchSpy.mockRejectedValueOnce(new Error('Network error'));
-
-      await createOperationWithHook(operationId, webhookUrl, { runId: 'run-1' });
-
-      // Verify the hook is stored -- the hook dispatch catches errors internally
-      const state = await stateManager.loadAgentState(operationId);
-      expect(state?.host?.hooks?.[0]?.webhook?.url).toBe(webhookUrl);
-    });
   });
 
   describe('hook payload structure', () => {

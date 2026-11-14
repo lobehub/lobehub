@@ -26,6 +26,12 @@ const reviewMetadata = {
   userId: 'user_1',
 };
 
+const oneSuccessfulPreferenceCall = () => ({
+  calls: 1,
+  errors: 0,
+  name: `${MemoryIdentifier}/${MemoryApiName.addPreferenceMemory}`,
+});
+
 describe('extractSelfIterationCompletionPayload', () => {
   it('returns undefined for an unmarked run', () => {
     expect(
@@ -99,13 +105,7 @@ describe('extractSelfIterationCompletionPayload', () => {
           status: 'finished',
           usage: {
             tools: {
-              byTool: [
-                {
-                  calls: 1,
-                  errors: 0,
-                  name: `${MemoryIdentifier}/${MemoryApiName.addPreferenceMemory}`,
-                },
-              ],
+              byTool: [oneSuccessfulPreferenceCall()],
             },
           },
         },
@@ -189,11 +189,7 @@ describe('extractSelfIterationCompletionPayload', () => {
                   errors: 0,
                   name: `${MemoryIdentifier}/${MemoryApiName.addContextMemory}`,
                 },
-                {
-                  calls: 1,
-                  errors: 0,
-                  name: `${MemoryIdentifier}/${MemoryApiName.addPreferenceMemory}`,
-                },
+                oneSuccessfulPreferenceCall(),
               ],
             },
           },
@@ -261,13 +257,7 @@ describe('extractSelfIterationCompletionPayload', () => {
           status: 'finished',
           usage: {
             tools: {
-              byTool: [
-                {
-                  calls: 1,
-                  errors: 0,
-                  name: `${MemoryIdentifier}/${MemoryApiName.addPreferenceMemory}`,
-                },
-              ],
+              byTool: [oneSuccessfulPreferenceCall()],
             },
           },
         },
@@ -295,13 +285,7 @@ describe('extractSelfIterationCompletionPayload', () => {
           status: 'finished',
           usage: {
             tools: {
-              byTool: [
-                {
-                  calls: 1,
-                  errors: 0,
-                  name: `${MemoryIdentifier}/${MemoryApiName.addPreferenceMemory}`,
-                },
-              ],
+              byTool: [oneSuccessfulPreferenceCall()],
             },
           },
         },

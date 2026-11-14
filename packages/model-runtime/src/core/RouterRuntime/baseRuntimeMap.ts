@@ -4,6 +4,7 @@ import { LobeAzureOpenAI } from '../../providers/azureOpenai';
 import { LobeBedrockAI } from '../../providers/bedrock';
 import { LobeCloudflareAI } from '../../providers/cloudflare';
 import { LobeDeepSeekAI } from '../../providers/deepseek';
+import { LobeElevenLabsAI } from '../../providers/elevenlabs';
 import { LobeFalAI } from '../../providers/fal';
 import { LobeGoogleAI } from '../../providers/google';
 import { LobeMetaAI } from '../../providers/meta';
@@ -26,6 +27,7 @@ export const baseRuntimeMap = {
   bedrock: LobeBedrockAI,
   cloudflare: LobeCloudflareAI,
   deepseek: LobeDeepSeekAI,
+  elevenlabs: LobeElevenLabsAI,
   fal: LobeFalAI,
   google: LobeGoogleAI,
   meta: LobeMetaAI,

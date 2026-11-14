@@ -1,21 +1,22 @@
 import type { DropdownItem } from '@lobehub/ui';
-import { createStaticStyles, cssVar, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CheckIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = stylex.create({
   // The packaged `extra` slot is styled for keyboard hints, so it defaults to the
   // code font. This one carries a model name, which belongs in the UI font — and
   // `inherit` cannot express that, since this span sits inside that slot.
-  value: css`
-    font-family: ${cssVar.fontFamily};
-  `,
-}));
+  value: { fontFamily: cssVar.fontFamily },
+});
 
 const checkIcon = <Icon icon={CheckIcon} size={16} />;
 
 export interface SelectorOption<T extends string> {
   desc?: string;
+  disabled?: boolean;
   label: string;
   value: T;
 }
@@ -42,12 +43,13 @@ export const buildSelectorSubmenu = <T extends string>({
   children: options.map((option) => ({
     closeOnClick: false,
     desc: option.desc,
+    disabled: option.disabled,
     extra: current === option.value ? checkIcon : undefined,
     key: `${label}-${option.value}`,
     label: option.label,
     onClick: () => onSelect(option.value),
   })),
-  extra: <span className={styles.value}>{valueLabel}</span>,
+  extra: <span {...stylex.props(styles.value)}>{valueLabel}</span>,
   key: label,
   label,
   type: 'submenu',

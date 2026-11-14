@@ -24,6 +24,8 @@ const goalModelProvider = (planningProvider?: string) =>
 
 export interface GoalListParams {
   agentId?: string;
+  /** List only archived goals; omitted, archived goals are left out. */
+  archived?: boolean;
   limit?: number;
   offset?: number;
   projectId?: string;
@@ -186,6 +188,10 @@ class GoalService {
   /** End the goal by hand and interrupt its live runs. Reopen with `resume`. */
   close = async (id: string, status: 'achieved' | 'canceled') =>
     lambdaClient.goal.close.mutate({ id, status });
+
+  /** Archive (or restore) a completed or canceled goal; archived goals leave every list. */
+  archive = async (id: string, archived: boolean) =>
+    lambdaClient.goal.archive.mutate({ archived, id });
 
   /** Resolve a pending decision gate. Does not resume a paused goal by itself. */
   decide = async (params: {

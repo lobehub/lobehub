@@ -1,7 +1,25 @@
+import { getGroupMemberAnchorIndex } from '@lobechat/types';
+
 import { buildHelperMaps } from './indexing';
 import { buildIdTree } from './structuring';
 import { Transformer } from './transformation';
 import type { Message, MessageGroupMetadata, ParseOptions, ParseResult } from './types';
+
+/**
+ * Group-member anchors are server bookkeeping under a multi-member group tool
+ * call. No assistant lists them in `tools[]`, so left in they surface as orphan
+ * tool calls. The group tool's own render shows member progress from the raw rows.
+ */
+const withoutGroupMemberAnchors = (messages: Message[]): Message[] => {
+  const roleById = new Map(messages.map((message) => [message.id, message.role]));
+  const isAnchor = (message: Message) =>
+    getGroupMemberAnchorIndex(
+      message,
+      message.parentId ? roleById.get(message.parentId) : undefined,
+    ) !== undefined;
+
+  return messages.some(isAnchor) ? messages.filter((message) => !isAnchor(message)) : messages;
+};
 
 /**
  * Main parse function - the brain of the conversation flow engine
@@ -30,7 +48,7 @@ export function parse(
   // This ensures FlatListBuilder and MessageCollector see the correct agentId
   // and won't merge messages from different agents into the same group
   // Only applies to scope: 'sub_agent' (agent-to-agent calls, not group orchestration)
-  const processedMessages = messages.map((msg) => {
+  const processedMessages = withoutGroupMemberAnchors(messages).map((msg) => {
     if (msg.metadata?.scope === 'sub_agent' && msg.metadata?.subAgentId) {
       return { ...msg, agentId: msg.metadata.subAgentId };
     }

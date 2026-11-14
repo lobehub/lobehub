@@ -16,6 +16,11 @@ import { setNamespace } from '@/utils/storeDebug';
 import { PAGE_SYNC_WAIT_MS, waitForPageSynced } from '../../collabRegistry';
 import type { DocumentStore } from '../../store';
 import { documentDetailResource } from '../document/projection';
+import {
+  type DocumentCharLimitRefusal,
+  getCharLimitRefusal,
+  notifyCharLimitRefused,
+} from './charLimit';
 import type { DocumentFormatFields } from './contentFormat';
 import { hasDocumentFormatFields, resolveDocumentContentFormat } from './contentFormat';
 import type { EditorContentState } from './initialState';
@@ -111,6 +116,9 @@ export class EditorActionImpl {
       const editorData = editor.getDocument('json');
 
       if (doc.collab) {
+        // The room persists the body on its own and reports only refusals, so
+        // a page shortened back within the refused limit is saved again.
+        const backWithinLimit = !!doc.charLimitError && markdown.length <= doc.charLimitError.limit;
         internal_dispatchDocument(
           {
             id,
@@ -121,6 +129,9 @@ export class EditorActionImpl {
               isDirty: false,
               lastSavedContent: markdown,
               lastSavedEditorData: editorData,
+              ...(backWithinLimit
+                ? { charLimitError: undefined, saveStatus: 'idle' as const }
+                : {}),
             },
           },
           'handleContentChange/collab',
@@ -130,9 +141,11 @@ export class EditorActionImpl {
 
       const markdownChanged = markdown !== doc.lastSavedContent;
       const editorDataChanged = !isEqual(editorData, doc.lastSavedEditorData);
+      // The editor state determines its markdown, so an unchanged tree under the
+      // same frontmatter is the loaded body without comparing markdown text.
       const isLoadedBody =
         !!doc.loadedBody &&
-        markdown === doc.loadedBody.content &&
+        doc.loadedBody.skillFrontmatter === doc.skillFrontmatter &&
         isEqual(editorData, doc.loadedBody.editorData);
       const contentChanged = !isLoadedBody && (markdownChanged || editorDataChanged);
 
@@ -280,7 +293,53 @@ export class EditorActionImpl {
     }
 
     await waitForPageSynced(documentId, PAGE_SYNC_WAIT_MS);
-    await documentService.snapshotPageVersion(documentId, 'manual');
+    try {
+      await documentService.snapshotPageVersion(documentId, 'manual');
+      // The version stored the room's page, which may still be over the limit when it did not grow.
+      this.#get().clearCharLimitRefusal(documentId);
+    } catch (error) {
+      const refusal = getCharLimitRefusal(
+        error,
+        (this.#get().documents[documentId]?.content ?? '').length,
+      );
+      if (!refusal) throw error;
+      this.#get().setCharLimitRefusal(documentId, refusal);
+      notifyCharLimitRefused(refusal);
+    }
+  };
+
+  /**
+   * The server stored a room page it had refused for its length. A page already
+   * over the limit is stored once it does not grow, so the client cannot tell
+   * this from the length alone.
+   */
+  clearCharLimitRefusal = (documentId: string): void => {
+    if (!this.#get().documents[documentId]?.charLimitError) return;
+    this.#get().internal_dispatchDocument(
+      {
+        id: documentId,
+        type: 'updateDocument',
+        value: { charLimitError: undefined, saveStatus: 'saved' },
+      },
+      n('clearCharLimitRefusal'),
+    );
+  };
+
+  /**
+   * Marks a room page as refused for the plan's per-page character limit: its
+   * room keeps the edits, but the stored page stays at its last accepted
+   * version until the page is shortened.
+   */
+  setCharLimitRefusal = (documentId: string, refusal: DocumentCharLimitRefusal): void => {
+    if (!this.#get().documents[documentId]) return;
+    this.#get().internal_dispatchDocument(
+      {
+        id: documentId,
+        type: 'updateDocument',
+        value: { charLimitError: refusal, saveStatus: 'failed' },
+      },
+      n('setCharLimitRefusal'),
+    );
   };
 
   /**
@@ -385,6 +444,7 @@ export class EditorActionImpl {
           lastUpdatedTime: updatedAt,
           // The editor reloads the adopted body and records it again.
           loadedBody: undefined,
+          charLimitError: undefined,
           saveBlockedByLock: false,
           saveStatus: 'saved',
         },
@@ -420,30 +480,32 @@ export class EditorActionImpl {
    * reads as an edit — opening the page marks it dirty, autosaves it and holds
    * navigation behind a "Saving…" toast although the user changed nothing.
    *
+   * Only the tree is recorded. Its markdown export costs more than the load
+   * itself on a long, deeply nested page and would run inside the route switch;
+   * `content` keeps the stored markdown, which is this body.
+   *
    * `lastSaved*` keeps the server's body: conflict reconciliation compares
    * remote rows against it, and a normalized copy there would make a remote
    * title-only change look like a body change and discard local edits.
    */
   #adoptLoadedBody = (editor: IEditor, documentId: string): void => {
     try {
-      const markdown = this.getPersistedMarkdown(
-        documentId,
-        (editor.getDocument('markdown') as unknown as string) || '',
-      );
       const editorData = editor.getDocument('json');
       if (!isValidEditorData(editorData)) return;
 
-      // The load's own change event already queued an autosave of this body.
+      // An unlocked load's own change event may have queued an autosave of this body.
       this.#get().cancelDebouncedSave(documentId);
       this.#get().internal_dispatchDocument(
         {
           id: documentId,
           type: 'updateDocument',
           value: {
-            content: markdown,
             editorData,
             isDirty: false,
-            loadedBody: { content: markdown, editorData },
+            loadedBody: {
+              editorData,
+              skillFrontmatter: this.#get().documents[documentId]?.skillFrontmatter,
+            },
           },
         },
         'adoptLoadedBody',
@@ -477,7 +539,7 @@ export class EditorActionImpl {
     if (doc.contentFormat === 'skillMarkdown') {
       if (hasValidEditorData) {
         try {
-          editor.setDocument('json', JSON.stringify(doc.editorData), { keepId: true });
+          editor.setDocument('json', doc.editorData, { keepId: true });
           return;
         } catch {
           console.warn(
@@ -499,7 +561,7 @@ export class EditorActionImpl {
     // Set content from document state
     if (hasValidEditorData) {
       try {
-        editor.setDocument('json', JSON.stringify(doc.editorData), { keepId: true });
+        editor.setDocument('json', doc.editorData, { keepId: true });
         return;
       } catch {
         // Fallback to markdown if JSON fails
@@ -634,11 +696,14 @@ export class EditorActionImpl {
                 lastSavedEditorData: structuredClone(currentEditorData),
                 // The saved body is now the editor's own serialization.
                 loadedBody: undefined,
+                // Only a saved body clears a body refused for its length.
+                charLimitError: undefined,
               }
             : {}),
           ...(savedAt ? { lastUpdatedTime: savedAt } : {}),
           saveBlockedByLock: false,
-          saveStatus: 'saved',
+          // A title save does not save a body still refused for its length.
+          saveStatus: metadataOnly && current?.charLimitError ? 'failed' : 'saved',
         },
       });
 
@@ -677,6 +742,22 @@ export class EditorActionImpl {
         this.#get().triggerDebouncedSave(id);
       }
     } catch (error) {
+      // The plan's per-document character limit refused this body. Keep it dirty
+      // and surface a persistent banner instead of a toast on every autosave; no
+      // debounced retry, since the same body would be refused again until the
+      // user shortens it (the next edit schedules the next attempt).
+      const charLimitError = getCharLimitRefusal(error, (doc.content ?? '').length);
+      if (charLimitError) {
+        internal_dispatchDocument({
+          id,
+          type: 'updateDocument',
+          value: { charLimitError, saveStatus: 'failed' },
+        });
+        if (options?.saveSource === 'manual') notifyCharLimitRefused(charLimitError);
+        if (hasMetadataChanges) throw error;
+        return;
+      }
+
       const errorCode = (error as { data?: { code?: string } })?.data?.code;
       const conflicted = errorCode === 'CONFLICT';
       // A view-level workspace member has no edit right on this document

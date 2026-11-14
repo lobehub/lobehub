@@ -15,6 +15,7 @@ export type LabStage = 'alpha' | 'beta';
  */
 type LabFeatureI18nKey =
   | 'agentGraphConfig'
+  | 'agentIdentity'
   | 'artifactDeployment'
   | 'claudeCodeSdk'
   | 'codexAppServer'
@@ -24,12 +25,15 @@ type LabFeatureI18nKey =
   | 'goals'
   | 'heteroSessionImport'
   | 'imessage'
-  | 'inputMarkdown'
   | 'messageTextSelectionActions'
   | 'oauthApps'
+  | 'pageCollab'
   | 'projects'
   | 'selfLearning'
   | 'topicBugReport';
+
+/** Locale key stems that also carry a `features.${stem}.note` line */
+type LabFeatureNoteI18nKey = 'selfLearning';
 
 export interface LabFeatureItem {
   /**
@@ -43,6 +47,11 @@ export interface LabFeatureItem {
   flag: keyof typeof labPreferSelectors;
   /** Locale key stem in the `labs` namespace: `features.${i18nKey}.title|desc` */
   i18nKey: LabFeatureI18nKey;
+  /**
+   * Second description line for what the user must know before turning it on
+   * (e.g. extra usage cost): `features.${noteI18nKey}.note`
+   */
+  noteI18nKey?: LabFeatureNoteI18nKey;
   /** Extra untranslated English synonyms for the settings search index */
   searchKeywords: string[];
   stage: LabStage;
@@ -58,10 +67,10 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
-    flag: 'enableInputMarkdown',
-    i18nKey: 'inputMarkdown',
-    searchKeywords: ['markdown', 'input markdown'],
-    stage: 'beta',
+    flag: 'enableAgentIdentity',
+    i18nKey: 'agentIdentity',
+    searchKeywords: ['agent identity', 'agent mail', 'inbox', 'address'],
+    stage: 'alpha',
   },
   {
     flag: 'enableMessageTextSelectionActions',
@@ -72,6 +81,7 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
   {
     flag: 'enableSelfLearning',
     i18nKey: 'selfLearning',
+    noteI18nKey: 'selfLearning',
     searchKeywords: [
       'self-evolving',
       'self learning',
@@ -125,6 +135,14 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     i18nKey: 'artifactDeployment',
     searchKeywords: ['artifact', 'deploy', 'publish'],
     stage: 'beta',
+  },
+  {
+    businessOnly: true,
+    flag: 'enablePageCollab',
+    i18nKey: 'pageCollab',
+    searchKeywords: ['collaboration', 'co-editing', 'realtime', 'live editing', 'page'],
+    stage: 'alpha',
+    workspaceOnly: true,
   },
   {
     desktopOnly: true,

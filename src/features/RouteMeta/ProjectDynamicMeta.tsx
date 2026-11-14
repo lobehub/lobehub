@@ -11,6 +11,7 @@ import { matchesRouteWorkspace, useRouteWorkspaceId } from './workspaceScope';
 interface ProjectIdentity {
   /** `null` once the project has loaded without a logo. */
   avatar?: string | null;
+  id?: string;
   name?: string;
 }
 
@@ -24,7 +25,7 @@ const useProjectIdentity = (params: RouteMetaParams): ProjectIdentity => {
 
   if (!project) return {};
 
-  return { avatar: project.avatar || null, name: project.name || undefined };
+  return { avatar: project.avatar || null, id: project.id, name: project.name || undefined };
 };
 
 export const useProjectConversationTitle = (params: RouteMetaParams): string | undefined => {
@@ -37,13 +38,13 @@ export const useProjectConversationTitle = (params: RouteMetaParams): string | u
 };
 
 /**
- * The project's own avatar, seeded from its name like every other project
+ * The project's own avatar, seeded from its id like every other project
  * avatar, so its tabs match the project switcher.
  */
 export const useProjectTabAvatar = (params: RouteMetaParams) => {
-  const { avatar, name } = useProjectIdentity(params);
+  const { avatar, id } = useProjectIdentity(params);
 
-  return { avatar, avatarSeed: name };
+  return { avatar, avatarSeed: id };
 };
 
 const ProjectConversationDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {

@@ -25,6 +25,11 @@ export type SetupLinkLabel =
 
 export interface SetupStep {
   /**
+   * Done before "save and connect" even though it asks for no credential: Discord's
+   * invite only needs the app ID, and a bot in no server fails the connection test.
+   */
+  beforeConnect?: boolean;
+  /**
    * Keys of the credential fields this step is about (`applicationId`, or a key
    * under `credentials`; `extras` is the platform's helper under them). While a bot is being set up they are filled in right
    * under the step; a saved bot keeps them in its credentials group instead.
@@ -108,20 +113,21 @@ export const getSetupGuide = (
       };
     }
     case 'discord': {
+      const botSettingsLink = {
+        href: appId ? buildDiscordBotPageUrl(appId) : DISCORD_DEVELOPER_PORTAL_URL,
+        label: 'openBotSettings',
+      } as const;
       return {
         guide: 'discord',
         steps: [
           { key: 'create', link: { href: DISCORD_DEVELOPER_PORTAL_URL, label: 'openConsole' } },
           { key: 'credentials', fields: ['applicationId', 'publicKey'] },
+          { key: 'bot', fields: ['botToken'], link: botSettingsLink },
+          // Without Message Content Intent the bot connects but reads empty messages, so it
+          // gets its own step instead of trailing the token copy.
+          { key: 'intent', link: botSettingsLink },
           {
-            key: 'bot',
-            fields: ['botToken'],
-            link: {
-              href: appId ? buildDiscordBotPageUrl(appId) : DISCORD_DEVELOPER_PORTAL_URL,
-              label: 'openBotSettings',
-            },
-          },
-          {
+            beforeConnect: true,
             key: 'invite',
             link: appId ? { href: buildDiscordInviteUrl(appId), label: 'inviteBot' } : undefined,
             needsApplicationId: !appId,
@@ -186,11 +192,12 @@ export const getInlineFieldKeys = (platformId: string): Set<string> =>
   );
 
 /**
- * Where the "save and connect" step goes: right after the last step that asks for a credential,
- * since everything after it (inviting the bot, turning on a webhook, subscribing to events) needs
- * the bot to be saved and running. A guide whose steps ask for nothing gets it at the end.
+ * Where the "save and connect" step goes: right after the last step that asks for a credential
+ * or is marked `beforeConnect`, since everything after it (turning on a webhook, subscribing to
+ * events) needs the bot to be saved and running. A guide whose steps ask for nothing gets it at
+ * the end.
  */
 export const connectStepIndex = (steps: SetupStep[]): number => {
-  const last = steps.findLastIndex((step) => (step.fields?.length ?? 0) > 0);
+  const last = steps.findLastIndex((step) => step.beforeConnect || (step.fields?.length ?? 0) > 0);
   return last === -1 ? steps.length : last + 1;
 };

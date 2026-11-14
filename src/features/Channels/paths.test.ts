@@ -1,20 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { channelPath, matchChannel } from './paths';
-
-describe('channelPath', () => {
-  it('builds the channel and thread paths', () => {
-    expect(channelPath('chn_1')).toBe('/channels/chn_1');
-    expect(channelPath('chn_1', 'cht_1')).toBe('/channels/chn_1?thread=cht_1');
-  });
-
-  it('opens a project Channel inside its project', () => {
-    expect(channelPath('chn_1', null, 'pro_1')).toBe('/project/pro_1/channels/chn_1');
-    expect(channelPath('chn_1', 'cht_1', 'pro_1')).toBe(
-      '/project/pro_1/channels/chn_1?thread=cht_1',
-    );
-  });
-});
+import { channelBasePath, matchChannel, matchChannelThread } from './paths';
 
 describe('matchChannel', () => {
   it.each([
@@ -23,6 +9,10 @@ describe('matchChannel', () => {
     ['/acme/channels/chn_1', 'chn_1'],
     ['/project/pro_1/channels/chn_1', 'chn_1'],
     ['/acme/project/pro_1/channels/chn_1/', 'chn_1'],
+    ['/channels/chn_1/settings', 'chn_1'],
+    ['/acme/project/pro_1/channels/chn_1/settings/', 'chn_1'],
+    ['/channels/chn_1/threads/cht_1', 'chn_1'],
+    ['/acme/project/pro_1/channels/chn_1/threads/cht_1/', 'chn_1'],
   ])('reads %s as an open Channel', (pathname, expected) => {
     expect(matchChannel(pathname)).toBe(expected);
   });
@@ -33,7 +23,34 @@ describe('matchChannel', () => {
     '/group/grp_1',
     '/agent/agt_1/channels/telegram',
     '/project/pro_1/channels',
+    '/channels/chn_1/threads',
   ])('finds no Channel in %s', (pathname) => {
     expect(matchChannel(pathname)).toBeUndefined();
+  });
+});
+
+describe('matchChannelThread', () => {
+  it.each([
+    ['/channels/chn_1/threads/cht_1', 'cht_1'],
+    ['/acme/project/pro_1/channels/chn_1/threads/cht_1/', 'cht_1'],
+  ])('reads %s as a thread page', (pathname, expected) => {
+    expect(matchChannelThread(pathname)).toBe(expected);
+  });
+
+  it.each(['/channels/chn_1', '/channels/chn_1/settings', '/channels/chn_1/threads'])(
+    'finds no thread page in %s',
+    (pathname) => {
+      expect(matchChannelThread(pathname)).toBeUndefined();
+    },
+  );
+});
+
+describe('channelBasePath', () => {
+  it.each([
+    ['/channels/chn_1', '/channels/chn_1'],
+    ['/channels/chn_1/threads/cht_1', '/channels/chn_1'],
+    ['/acme/project/pro_1/channels/chn_1/threads/cht_1/', '/acme/project/pro_1/channels/chn_1'],
+  ])('keeps the Channel page of %s', (pathname, expected) => {
+    expect(channelBasePath(pathname)).toBe(expected);
   });
 });

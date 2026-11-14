@@ -15,6 +15,7 @@ import type {
   GoalStatus,
 } from '@lobechat/types';
 import { experimentStatus } from '@lobechat/utils/goalGraph';
+import { ACCEPTANCE_STATUSES_CLOSED_BY_RETIREMENT } from '@lobechat/utils/verify/acceptanceStatus';
 import {
   and,
   asc,
@@ -39,6 +40,7 @@ import {
   goalNodeWorkVersions,
 } from '../schemas/goalGraph';
 import { briefs, tasks } from '../schemas/task';
+import { acceptances } from '../schemas/verify';
 import { works, workVersions } from '../schemas/work';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { notTrashed } from '../utils/softDelete';
@@ -303,6 +305,7 @@ export class GoalGraphModel {
         // metadata rather than the `url` column.
         metadata: workVersions.metadata,
         resourceId: works.resourceId,
+        resourceType: works.resourceType,
         status: workVersions.status,
         title: workVersions.title,
         type: works.type,
@@ -324,6 +327,7 @@ export class GoalGraphModel {
       display.set(row.versionId, {
         identifier: row.identifier,
         resourceId: row.resourceId,
+        resourceType: row.resourceType,
         status: row.status,
         title: row.title,
         type: row.type,
@@ -551,14 +555,13 @@ export class GoalGraphModel {
         ),
       );
 
+    // A task outside the ancestor chain (or no task at all) never ranks.
+    const depthOfTask = (taskId: string | null) =>
+      (taskId ? depthOf.get(taskId) : undefined) ?? Infinity;
     const depthOfRow = (row: (typeof rows)[number]) =>
       Math.min(
-        /* v8 ignore start -- unreachable `?? Infinity`: the join keeps only nodes whose taskId is in taskIds, which are exactly depthOf's keys */
-        row.nodeTaskId ? (depthOf.get(row.nodeTaskId) ?? Infinity) : Infinity,
-        /* v8 ignore stop */
-        row.subjectType === 'task' && row.carrierTaskId
-          ? (depthOf.get(row.carrierTaskId) ?? Infinity)
-          : Infinity,
+        depthOfTask(row.nodeTaskId),
+        row.subjectType === 'task' ? depthOfTask(row.carrierTaskId) : Infinity,
       );
     const [nearest] = rows.sort(
       (a, b) =>
@@ -1005,6 +1008,34 @@ export class GoalGraphModel {
         reason,
         taskId: node.taskId ?? undefined,
       });
+      // A retired node's delivery will never be judged: its outcome is
+      // discarded (see GoalService completion). Left open — awaiting sign-off,
+      // a first round that never comes (`pending` / `planned`), or rework after
+      // a reject — its acceptance stays in the active list for work the Goal
+      // already dropped. Close it in the same transaction so the node and its
+      // acceptance reach their terminal states together. A round still
+      // verifying is left to land; settling it closes it (recomputeStatus).
+      if (status === 'retired' && node.taskId) {
+        // Lock the acceptance whatever its status: a round settling right now
+        // (AcceptanceModel.settleTaskPolicyStatus) holds the same lock while it
+        // checks for retirement, so a `verifying` row skipped here cannot be
+        // written back to `delivered` after this commits unseen.
+        await tx
+          .select({ id: acceptances.id })
+          .from(acceptances)
+          .where(and(eq(acceptances.subjectType, 'task'), eq(acceptances.subjectId, node.taskId)))
+          .for('update');
+        await tx
+          .update(acceptances)
+          .set({ completedAt: new Date(), status: 'closed' })
+          .where(
+            and(
+              eq(acceptances.subjectType, 'task'),
+              eq(acceptances.subjectId, node.taskId),
+              inArray(acceptances.status, [...ACCEPTANCE_STATUSES_CLOSED_BY_RETIREMENT]),
+            ),
+          );
+      }
       return node;
     });
 

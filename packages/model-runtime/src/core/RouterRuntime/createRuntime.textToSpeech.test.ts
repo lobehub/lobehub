@@ -40,8 +40,44 @@ describe('createRouterRuntime textToSpeech', () => {
     const options = { metadata: { trigger: RequestTrigger.Tts }, onUsage };
     const result = await new Runtime().textToSpeech(payload, options);
 
-    expect(textToSpeech).toHaveBeenCalledWith(payload, options);
+    expect(textToSpeech).toHaveBeenCalledWith(
+      payload,
+      expect.objectContaining({ metadata: options.metadata }),
+    );
     expect(result).toMatchObject({ format: 'wav', usage });
-    expect(onUsage).toHaveBeenCalledWith(usage);
+    expect(onUsage).toHaveBeenCalledWith(usage, {
+      routeAttempt: expect.objectContaining({ attemptId: expect.any(String) }),
+    });
+  });
+
+  it('routes apiType elevenlabs through the ElevenLabs runtime with the channel key', async () => {
+    const fetchMock = vi.fn(
+      async () => new Response(new Uint8Array([0x49, 0x44, 0x33]), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const Runtime = createRouterRuntime({
+      id: 'lobehub',
+      routers: [
+        {
+          apiType: 'elevenlabs',
+          models: ['eleven_flash_v2_5'],
+          options: { apiKey: 'channel-xi-key' },
+        },
+      ],
+    });
+
+    const result = await new Runtime().textToSpeech(
+      { input: 'Hi', model: 'eleven_flash_v2_5', voice: 'voice-1' },
+      { metadata: { trigger: RequestTrigger.Tts } },
+    );
+
+    expect(result).toMatchObject({ format: 'mp3' });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(
+      'https://api.elevenlabs.io/v1/text-to-speech/voice-1?output_format=mp3_44100_128',
+    );
+    expect((init.headers as Record<string, string>)['xi-api-key']).toBe('channel-xi-key');
+    vi.unstubAllGlobals();
   });
 });

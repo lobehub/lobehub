@@ -79,7 +79,12 @@ export const ttsRouter = router({
         }
         if (error instanceof TTSProviderError) {
           throw new TRPCError({
-            cause: error.detail,
+            // Exposed to clients as `error.data.errorData`, so they can show the localized
+            // runtime error (e.g. `modelRuntime:InvalidProviderAPIKey`) for `errorType`.
+            cause: {
+              data: { errorType: error.errorType, provider: input.provider },
+              detail: error.detail,
+            },
             code: error.errorType === 'RateLimitExceeded' ? 'TOO_MANY_REQUESTS' : 'BAD_GATEWAY',
             message: error.message,
           });

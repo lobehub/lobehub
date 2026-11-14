@@ -18,6 +18,13 @@ vi.mock('electron', () => ({
 vi.mock('node:fs/promises', () => ({
   readFile: vi.fn(),
   readdir: vi.fn(),
+  // Instruction files are deduped by their real path (CLAUDE.md is often a
+  // symlink to AGENTS.md); no fixture here uses symlinks.
+  realpath: vi.fn(async (target: string) => target),
+  // No `.git` anywhere, so the scan stays in the working directory.
+  stat: vi.fn(async () => {
+    throw new Error('ENOENT');
+  }),
 }));
 
 vi.mock('@lobechat/device-control/claude-code-memory', () => ({
@@ -84,8 +91,8 @@ describe('WorkspaceCtr', () => {
 
       expect(result.skills.map((s) => s.name)).toEqual(['reviewer', 'spa-routes']);
       expect(result.instructions).toEqual([
-        { content: '# Agents', source: 'AGENTS.md' },
-        { content: '# Claude', source: 'CLAUDE.md' },
+        { content: '# Agents', path: '/proj/AGENTS.md', source: 'AGENTS.md' },
+        { content: '# Claude', path: '/proj/CLAUDE.md', source: 'CLAUDE.md' },
       ]);
       // Approves the scanned root for the lobe-file:// preview protocol.
       expect(mockLocalFileProtocolManager.approveIndexedProjectRoot).toHaveBeenCalledWith('/proj');

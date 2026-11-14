@@ -71,7 +71,7 @@ export const useTaskInstructionAutosave = ({
       if (jsonSignature === lastSavedJsonRef.current) return;
       lastSavedJsonRef.current = jsonSignature;
 
-      const markdown = String(editor.getDocument('markdown') ?? '');
+      const markdown = String(editor.getDocument('markdown', { format: false }) ?? '');
       updateTask(taskId, { editorData: json, instruction: markdown }, { source: 'editor' }).catch(
         (error) => {
           console.error('[TaskInstruction] Failed to save:', error);

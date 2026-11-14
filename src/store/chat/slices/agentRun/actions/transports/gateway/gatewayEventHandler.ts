@@ -44,6 +44,7 @@ import {
   resolveRuntimeEndStatus,
 } from './runtimeEndReason';
 import { applyStepMetrics } from './stepMetrics';
+import { insertStreamStartSeeds, streamStartOperationMetadata } from './streamStartSeed';
 
 // Lazy-loaded to break the import cycle:
 //   gateway.ts → gatewayEventHandler.ts → executors/index.ts (which pulls in
@@ -640,37 +641,12 @@ export const createGatewayEventHandler = (
             // interrupt instead of falling back to a placeholder-clobbering refetch.
             hasStreamedContent = true;
 
-            // The step_start uiMessages snapshot is resolved BEFORE the server
-            // creates this step's assistant row, so for every step after the
-            // first the message is NOT in the store yet. `updateMessage`
-            // dispatches on a missing id are silent no-ops, so without an
-            // insert here the whole step renders nothing until the next DB
-            // refetch — and the final step has none before agent_runtime_end,
-            // which is how "loading cleared but no text" happened.
+            // The step_start uiMessages snapshot predates this step's rows;
+            // insert the seeded ones so chunks land on a stored message.
             const stored = dbMessageSelectors.getDbMessageById(newAssistantMessageId)(get());
             if (!stored) {
-              const seed = data?.assistantMessage;
-              if (seed?.role) {
-                // Newer servers ship the message seed on stream_start — insert
-                // the shell locally so chunks land immediately, zero roundtrips.
-                get().internal_dispatchMessage(
-                  {
-                    id: newAssistantMessageId,
-                    type: 'createMessage',
-                    value: {
-                      agentId: seed.agentId ?? context.agentId,
-                      content: '',
-                      groupId: seed.groupId ?? undefined,
-                      model: seed.model ?? data?.model,
-                      parentId: seed.parentId ?? undefined,
-                      provider: seed.provider ?? data?.provider,
-                      role: 'assistant',
-                      threadId: seed.threadId ?? undefined,
-                      topicId: seed.topicId ?? context.topicId ?? undefined,
-                    },
-                  },
-                  dispatchContext,
-                );
+              if (data?.assistantMessage?.role) {
+                insertStreamStartSeeds(get, data, context, dispatchContext);
               } else {
                 // Older servers send only `{ id }` — fall back to a DB read.
                 // The row is inserted before stream_start is published, so the
@@ -717,7 +693,7 @@ export const createGatewayEventHandler = (
               dispatchContext,
             );
           }
-          get().updateOperationMetadata(operationId, { visibleLoadingDone: false });
+          get().updateOperationMetadata(operationId, streamStartOperationMetadata(data));
 
           // Native gateway streams carry `assistantMessage.id` directly on
           // stream_start and the shell-insert above guarantees a valid chunk
@@ -1313,6 +1289,16 @@ export const createGatewayEventHandler = (
                 action: 'gateway/agent_runtime_end',
               });
             }
+          } else if (data?.reason === 'interrupted' && hasStreamedContent) {
+            // MID-stream cancel. `interruptOperation` publishes this event as
+            // soon as it saves `interrupted`, while the in-flight step persists
+            // the partial text only when it returns afterwards. Any DB read here
+            // (the patch-mode refetch too: a Stop lands mid-step, so its revision
+            // is ahead of the last patch) sees the empty placeholder and wipes
+            // the streamed text, and nothing repairs it: the socket closes on
+            // this frame. Keep what was streamed — the server persists the same.
+            // Without streamed content, the optimistic `tmp_*` rows are all we
+            // have and still need the refetch below.
           } else if (data?.messagePatchMode) {
             if (
               typeof data.messageRevision === 'number' &&
@@ -1323,28 +1309,11 @@ export const createGatewayEventHandler = (
             } else {
               terminalMessages = get().dbMessagesMap[messageMapKey(context)] ?? [];
             }
-          } else if (
-            (data?.reason === 'interrupted' || data?.reason === 'waiting_for_async_tool') &&
-            hasStreamedContent
-          ) {
-            // MID-stream cancel, or a deferred-tool pause
-            // (`waiting_for_async_tool`). The server's
+          } else if (data?.reason === 'waiting_for_async_tool' && hasStreamedContent) {
+            // Deferred-tool pause. The server's
             // `AgentRuntimeCoordinator.resolveUiMessages` omits uiMessages
-            // for both statuses precisely so we can preserve the
-            // in-memory streamed content here. The executor's partial-
-            // finalize catch writes the real content to DB asynchronously,
-            // but it may not be durable yet — refetching here would race
-            // against that update and clobber the streamed content with
-            // the LOADING_FLAT placeholder. Keep what we have; the next
-            // explicit refresh (route change, user-driven mutate) picks
-            // up the finalized partial content from DB.
-            //
-            // The `hasStreamedContent` guard limits this skip to the case
-            // where server state actually landed (server-assigned assistant
-            // id from stream_start OR any chunk dispatched). If cancel
-            // arrives BEFORE any stream activity, the optimistic `tmp_*`
-            // messages are the only in-memory state and they need the
-            // refetch to be reconciled with the server-side rows.
+            // for it (as for `interrupted`) so the in-memory streamed content
+            // is preserved here instead of racing the executor's DB write.
           } else if (!isSuperseded) {
             await refreshMessagesFromDb().catch(console.error);
           }

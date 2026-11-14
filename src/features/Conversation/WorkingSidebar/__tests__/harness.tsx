@@ -131,6 +131,9 @@ const chatStore = vi.hoisted(() => ({
   activeThreadId: undefined as string | undefined,
   activeTopicId: undefined as string | undefined,
   openTopicComments: vi.fn(),
+  // useSandboxPlacement reads an unlisted topic by id and reads it back after a pick
+  refreshTopicDetail: vi.fn(),
+  useFetchTopicDetail: vi.fn(),
   portalStack: [] as Array<{ startMessageId?: string; threadId?: string; type: string }>,
   showPortal: false,
   threadMaps: {} as Record<string, any[]>,
@@ -144,6 +147,7 @@ const globalStore = vi.hoisted(() => ({
   updateSystemStatus: vi.fn(),
   toggleRightPanel: vi.fn(),
   toggleTerminalPanel: vi.fn(),
+  setWorkingSidebarPullRequestUrl: vi.fn(),
   setWorkingSidebarTab: vi.fn(),
   status: {
     portalWidth: 400 as number | undefined,

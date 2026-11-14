@@ -1,7 +1,11 @@
 import { $createParagraphNode, $createTextNode, $getRoot, createEditor } from 'lexical';
 import { describe, expect, it } from 'vitest';
 
-import { $insertChannelMentionBoundary, channelMentionIds } from './mentions';
+import {
+  $insertChannelMentionBoundary,
+  channelMentionIds,
+  channelMentionInvites,
+} from './mentions';
 
 describe('Channel mention boundaries', () => {
   const insert = (
@@ -85,5 +89,36 @@ describe('Channel recipient chips', () => {
     ).toEqual(['B', 'A']);
     expect(channelMentionIds({ root: { children: [chip('A')] } }, ['A', 'B'])).toEqual(['A']);
     expect(channelMentionIds({ root: { children: [] } }, ['A', 'B'])).toEqual([]);
+  });
+});
+
+const inviteChip = (actorType: string, id: string) => ({
+  type: 'mention',
+  metadata: { actorType, id, name: `Name ${id}`, type: 'channel-invite' },
+});
+describe('Channel invite chips', () => {
+  it('lists each outsider once, ignoring member chips, code and malformed metadata', () => {
+    expect(
+      channelMentionInvites({
+        root: {
+          children: [
+            inviteChip('user', 'user_b'),
+            chip('A'),
+            inviteChip('agent', 'agt_a'),
+            inviteChip('user', 'user_b'),
+            { type: 'code', children: [inviteChip('user', 'user_c')] },
+            inviteChip('robot', 'x'),
+            inviteChip('agent', ''),
+          ],
+        },
+      }),
+    ).toEqual([
+      { actorType: 'user', id: 'user_b', name: 'Name user_b', type: 'channel-invite' },
+      { actorType: 'agent', id: 'agt_a', name: 'Name agt_a', type: 'channel-invite' },
+    ]);
+  });
+
+  it('never treats an invite chip as an existing recipient', () => {
+    expect(channelMentionIds({ root: { children: [inviteChip('user', 'A')] } }, ['A'])).toEqual([]);
   });
 });

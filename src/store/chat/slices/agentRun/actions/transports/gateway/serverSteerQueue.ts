@@ -15,6 +15,12 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { scheduleQueuedFollowUp } from '../../lifecycle/queuedFollowUp';
+import {
+  findUntrackedHeteroMarker,
+  reattachUntrackedHeteroRun,
+  refreshUntrackedHeteroMarker,
+  releaseUntrackedMarker,
+} from './untrackedHeteroRun';
 
 const log = debug('lobe-store:server-steer-queue');
 
@@ -171,6 +177,14 @@ export const handOffQueuedMessage = (
       sendIfIdle(get, contextKey, context);
     };
 
+    // The untracked hetero run this send is held behind, if any: a follow-up
+    // the server does not take must not be held behind it again.
+    const heldMarkerId = findUntrackedHeteroMarker(get, context)?.operationId;
+    const giveUp = (reason: string) => {
+      releaseUntrackedMarker(heldMarkerId, reason);
+      keepHere();
+    };
+
     const queue = queueOf(get, contextKey);
     const index = queue.findIndex((message) => message.id === id);
     if (index < 0) return;
@@ -186,13 +200,19 @@ export const handOffQueuedMessage = (
         console.error('[serverSteerQueue] building the queued request failed:', error);
       }
     }
-    if (!request) return keepHere();
+    if (!request) return giveUp('request-unavailable');
 
-    get().updateQueuedMessage(contextKey, id, { serverDelivery: 'appending' });
+    get().updateQueuedMessage(contextKey, id, {
+      heldBehindOperationId: heldMarkerId,
+      serverDelivery: 'appending',
+    });
     let queued = false;
     let unconfirmed = false;
+    let refusal: string | undefined;
     try {
-      queued = (await appendWithRetry(id, request, findQueued(get, contextKey, id))).queued;
+      const result = await appendWithRetry(id, request, findQueued(get, contextKey, id));
+      queued = result.queued;
+      if (!result.queued) refusal = result.reason;
     } catch (error) {
       console.error('[serverSteerQueue] queueing on the server failed:', error);
       // Unless refused outright it may have been stored, and sending it from
@@ -207,7 +227,7 @@ export const handOffQueuedMessage = (
         await aiAgentService.removeQueuedFollowUp({ ...surfaceOf(request), id }).catch(() => {});
       return;
     }
-    if (!queued && !unconfirmed) return keepHere();
+    if (!queued && !unconfirmed) return giveUp(refusal ?? 'rejected');
 
     log('[%s] %s queued on the server%s', contextKey, id, unconfirmed ? ' (unconfirmed)' : '');
     get().updateQueuedMessage(contextKey, id, {
@@ -215,6 +235,7 @@ export const handOffQueuedMessage = (
       serverUnconfirmed: unconfirmed || undefined,
     });
     watchServerQueue(get, contextKey, context);
+    reattachUntrackedHeteroRun(get, context);
   };
 
   const previous = handOffChains.get(contextKey) ?? Promise.resolve();
@@ -273,8 +294,33 @@ const onServerQueueDelivered = async (
   while (hasLocalRun(get, context) && Date.now() < settleBy)
     await new Promise((resolve) => setTimeout(resolve, SERVER_QUEUE_POLL_MS));
   if (!hasLocalRun(get, context)) await syncQueuedSuccessorRun(get, context);
+  // Typed into a live hetero run this tab no longer follows: follow its reply.
+  if (!hasLocalRun(get, context)) reattachUntrackedHeteroRun(get, context);
 
   // Queued here behind the delivered ones: the server can take them now.
+  const left = queueOf(get, contextKey).filter(
+    (message) => isClientHeldQueuedMessage(message) && message.serverRequest,
+  );
+  if (left.length === 0) return sendIfIdle(get, contextKey, context);
+  for (const message of left) void handOffQueuedMessage(get, contextKey, context, message.id);
+};
+
+/**
+ * Send what waits here behind a heterogeneous run whose stream ended without
+ * its terminal frame. That path completes the local operation without the
+ * run lifecycle's queue drain, and the watch stops once nothing is held on
+ * the server, so follow-ups handed back to this client would otherwise wait
+ * for the next send. Ones that were queueable go to the server again — still
+ * steered into a live run, or handed back when it is over — the rest are sent
+ * once nothing runs here.
+ */
+export const resumeClientHeldQueue = (
+  get: Get,
+  surface: { agentId?: string; topicId: string },
+): void => {
+  if (!surface.agentId) return;
+  const context: ConversationContext = { agentId: surface.agentId, topicId: surface.topicId };
+  const contextKey = messageMapKey(context);
   const left = queueOf(get, contextKey).filter(
     (message) => isClientHeldQueuedMessage(message) && message.serverRequest,
   );
@@ -311,7 +357,9 @@ const reconcileUnconfirmed = async (
   } catch (error) {
     if (!isDefiniteRejection(error)) return 'held';
   }
-  // Not on the server and refused now: only this client holds it.
+  // Not on the server and refused now: only this client holds it, and it must
+  // not be held behind the same untracked run again when it is sent.
+  releaseUntrackedMarker(message.heldBehindOperationId, 'unconfirmed-refused');
   get().updateQueuedMessage(contextKey, message.id, {
     serverDelivery: undefined,
     serverUnconfirmed: undefined,
@@ -330,6 +378,7 @@ export const watchServerQueue = (get: Get, contextKey: string, context: Conversa
   if (watchers.has(contextKey)) return;
   watchers.add(contextKey);
   let ticksWithoutRun = 0;
+  let markerOnlyTicks = 0;
   let failures = 0;
 
   const tick = async () => {
@@ -344,11 +393,21 @@ export const watchServerQueue = (get: Get, contextKey: string, context: Conversa
     try {
       // Taken by a run but not confirmed (`delivering`) still counts as held:
       // a failed delivery returns it to the queue.
-      const notDelivered = new Set(
-        (await aiAgentService.listQueuedFollowUps(surfaceOf(held[0].serverRequest!))).map(
-          (entry) => entry.id,
-        ),
+      const entries = await aiAgentService.listQueuedFollowUps(surfaceOf(held[0].serverRequest!));
+      const notDelivered = new Set(entries.map((entry) => entry.id));
+      // Mirror which ones a run already took, so the tray stops offering to
+      // edit or withdraw them instead of failing when the user tries.
+      const delivering = new Set(
+        entries.filter((entry) => entry.delivering).map((entry) => entry.id),
       );
+      for (const message of held) {
+        if (!notDelivered.has(message.id)) continue;
+        const isDelivering = delivering.has(message.id);
+        if (!!message.serverDelivering !== isDelivering)
+          get().updateQueuedMessage(contextKey, message.id, {
+            serverDelivering: isDelivering || undefined,
+          });
+      }
       const settledDelivered = new Set<string>();
       for (const message of held) {
         if (!message.serverUnconfirmed) continue;
@@ -382,7 +441,13 @@ export const watchServerQueue = (get: Get, contextKey: string, context: Conversa
       console.error('[serverSteerQueue] reading the server queue failed:', error);
     }
 
-    ticksWithoutRun = hasLocalRun(get, context) ? 0 : ticksWithoutRun + 1;
+    // A live hetero run this tab lost track of still takes them (see `findUntrackedHeteroMarker`);
+    // confirm it with the server now and then, since no stream tells this tab it ended.
+    const markerHolds = !hasLocalRun(get, context) && !!findUntrackedHeteroMarker(get, context);
+    if (markerHolds && ++markerOnlyTicks % ORPHANED_QUEUE_TICKS === 0)
+      await refreshUntrackedHeteroMarker(get, context.topicId!);
+    const runHolds = hasLocalRun(get, context) || !!findUntrackedHeteroMarker(get, context);
+    ticksWithoutRun = runHolds ? 0 : ticksWithoutRun + 1;
     // Stopped elsewhere: that run starts nothing next, take them back now.
     const stopped =
       operationSelectors.getIdleQueueHost(context)(get())?.metadata.endedWithoutCompletion;
@@ -452,6 +517,7 @@ export const restoreServerQueuedMessages = async (
       id: entry.id,
       interruptMode: 'soft',
       serverDelivery: 'server',
+      ...(entry.delivering && { serverDelivering: true }),
       serverRequest: {
         agentId,
         appContext: { threadId: null, topicId },
@@ -499,6 +565,7 @@ export const reclaimServerQueuedMessages = (get: Get, contextKey: string): Promi
         // this client holds it now.
         if (ownsWithdrawn(message, state))
           get().updateQueuedMessage(contextKey, message.id, {
+            serverDelivering: undefined,
             serverDelivery: undefined,
             serverUnconfirmed: undefined,
           });
@@ -536,7 +603,10 @@ export const withdrawQueuedMessage = async (
       id,
     });
     // Taken but not settled: it stays shown until it lands or comes back.
-    if (state === 'delivering') return false;
+    if (state === 'delivering') {
+      get().updateQueuedMessage(contextKey, id, { serverDelivering: true });
+      return false;
+    }
     get().removeQueuedMessage(contextKey, id);
     return ownsWithdrawn(message, state);
   }

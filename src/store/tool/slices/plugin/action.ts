@@ -1,11 +1,14 @@
 import { type Schema, type ValidationResult } from '@cfworker/json-schema';
 import { type LobeTool } from '@lobechat/types';
+import { type ReadResourceResult } from '@modelcontextprotocol/client';
 import { type SWRResponse } from 'swr';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { createReplicaSlice, type ReplicaLens, type ReplicaSyncResult } from '@/libs/replica';
 import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { useClientDataSWR } from '@/libs/swr';
+import { mcpAppKeys } from '@/libs/swr/keys';
+import { mcpService } from '@/services/mcp';
 import { pluginService } from '@/services/plugin';
 import { type StoreSetter } from '@/store/types';
 import { type PluginInstallError } from '@/types/tool/plugin';
@@ -215,6 +218,28 @@ export class PluginActionImpl {
    */
   useFetchInstalledPlugins = (enable: boolean): ReplicaSyncResult =>
     this.#installedPlugins.useSync(INSTALLED_PLUGINS_PARAMS, { enabled: enable });
+
+  /**
+   * The `ui://` resource (HTML view) an MCP App tool result renders with, read
+   * from `server`, the one the tool ran on, as `agentId`'s runs resolve it, and
+   * where it ran (`onThisDevice`). The HTML is only the view's: it stays in this
+   * request's cache, not in the store.
+   */
+  useFetchMcpAppResource = (
+    identifier: string,
+    resourceUri: string,
+    {
+      agentId,
+      onThisDevice = false,
+      server,
+    }: { agentId?: string; onThisDevice?: boolean; server?: string },
+  ): SWRResponse<ReadResourceResult | undefined> =>
+    useClientDataSWR(
+      mcpAppKeys.resource(identifier, resourceUri, { agentId, onThisDevice, server }),
+      () =>
+        mcpService.readMcpAppResource(identifier, resourceUri, { agentId, onThisDevice, server }),
+      { revalidateOnFocus: false, revalidateOnReconnect: false },
+    );
 
   useCheckPluginsIsInstalled = (enable: boolean, plugins: string[]): SWRResponse => {
     return useClientDataSWR(enable ? plugins : null, this.#get().checkPluginsIsInstalled);

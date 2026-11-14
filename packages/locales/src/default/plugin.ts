@@ -1,13 +1,25 @@
 export default {
-  'builtins.lobe-channel.title': 'Channel history',
+  'builtins.lobe-channel.title': 'Channel',
   'builtins.lobe-channel.apiName.readMessages': 'Read Channel history',
   'builtins.lobe-channel.messageCount': 'Messages: {{count}}',
-  'builtins.lobe-channel.readError': 'Could not read this conversation',
+  'builtins.lobe-channel.readError': "Couldn't read this conversation. Try again in a moment.",
   'builtins.lobe-channel.chunk': 'Characters {{start}}–{{end}} of {{total}}',
   'builtins.lobe-channel.excerpt': 'Message excerpt',
   'builtins.lobe-channel.moreHistory': 'Earlier messages are available',
   'builtins.lobe-channel.empty': 'No messages are visible in this conversation.',
   'builtins.lobe-channel.apiName.readMessage': 'Read Channel message',
+  'builtins.lobe-channel.errorDetailHide': 'Hide details',
+  'builtins.lobe-channel.errorDetailShow': 'Show details',
+  'builtins.lobe-channel.apiName.listChannels': 'List Channels',
+  'builtins.lobe-channel.apiName.sendMessage': 'Message an Agent',
+  'builtins.lobe-channel.channelCount': 'Channels: {{count}}',
+  'builtins.lobe-channel.listError': "Couldn't list your Channels. Try again in a moment.",
+  'builtins.lobe-channel.noAgents': 'No Agents',
+  'builtins.lobe-channel.noChannels': 'No Channels found.',
+  'builtins.lobe-channel.openChannel': 'Open Channel',
+  'builtins.lobe-channel.sendError':
+    "The message wasn't sent. Check the Channel and its Agents, then try again.",
+  'builtins.lobe-channel.sentTo': 'Sent to {{agents}} in #{{channel}}',
 
   'builtins.lobe-attachments.apiName.readAttachment': 'Read attachment',
   'builtins.lobe-attachments.title': 'Attachments',
@@ -99,6 +111,7 @@ export default {
   'builtins.lobe-agent.apiName.analyzeMedia.result':
     'Analyze media: <question>{{question}}</question>',
   'builtins.lobe-agent.apiName.callSubAgent': 'Call sub-agent',
+  'builtins.lobe-agent.apiName.cancelSubAgent': 'Cancel sub-agent',
   'builtins.lobe-agent.subAgent.backgroundHint':
     'The result will be sent to this conversation when it finishes.',
   'builtins.lobe-agent.subAgent.backgroundRunning': 'Running in background',
@@ -270,6 +283,8 @@ export default {
   'builtins.github.render.updatedAt': 'Updated {{time}}',
   'builtins.linear.render.empty': 'No {{collection}} found',
   'builtins.linear.render.updatedAt': 'Updated {{time}}',
+  'builtins.lobe-cloud-sandbox.apiName.analyzeStorage': 'Analyze drive space',
+  'builtins.lobe-cloud-sandbox.apiName.deleteFiles': 'Delete files',
   'builtins.lobe-cloud-sandbox.apiName.editFile': 'Edit file',
   'builtins.lobe-cloud-sandbox.apiName.executeCode': 'Execute code',
   'builtins.lobe-cloud-sandbox.apiName.exportFile': 'Export file',
@@ -292,6 +307,10 @@ export default {
   'builtins.lobe-cloud-sandbox.apiName.renameLocalFile': 'Rename',
   'builtins.lobe-cloud-sandbox.apiName.searchLocalFiles': 'Search files',
   'builtins.lobe-cloud-sandbox.apiName.writeLocalFile': 'Write file',
+  'builtins.lobe-cloud-sandbox.deleteFiles.irreversible':
+    'Deleted files can’t be recovered. The drive has no trash.',
+  'builtins.lobe-cloud-sandbox.deleteFiles.title':
+    'Permanently delete {{count}} items from the drive:',
   'builtins.lobe-cloud-sandbox.inspector.noResults': 'No results',
   'builtins.lobe-cloud-sandbox.title': 'Cloud Sandbox',
   'builtins.lobe-group-agent-builder.apiName.batchCreateAgents': 'Batch create agents',
@@ -754,7 +773,7 @@ export default {
   'dev.mcp.auth.oauth': 'OAuth',
   'dev.mcp.auth.oauth.authorize': 'Authorize & Connect',
   'dev.mcp.auth.oauth.clientId.desc':
-    'Leave empty to register a client automatically (dynamic client registration)',
+    'Leave empty to identify LobeHub automatically (Client ID Metadata Document or dynamic client registration)',
   'dev.mcp.auth.oauth.clientId.label': 'OAuth Client ID',
   'dev.mcp.auth.oauth.clientId.placeholder': 'Optional',
   'dev.mcp.auth.oauth.clientSecret.desc': 'Only required for confidential OAuth clients',
@@ -903,6 +922,26 @@ export default {
   'list.item.local.title': 'Custom',
   'loading.content': 'Calling Skill…',
   'loading.plugin': 'Skill running…',
+  'mcpApp.message.confirm.cancel': 'Cancel',
+  'mcpApp.message.confirm.content':
+    'The {{app}} view wants to send this message to the conversation. Sending it starts a new reply.',
+  'mcpApp.message.confirm.ok': 'Send',
+  'mcpApp.message.confirm.title': 'Send this message from the view?',
+  'mcpApp.message.source': 'Follow-up from the {{app}} view',
+  'mcpApp.openLink.confirm.cancel': 'Cancel',
+  'mcpApp.openLink.confirm.content': 'The {{app}} view wants to open this link.',
+  'mcpApp.openLink.confirm.ok': 'Open',
+  'mcpApp.openLink.confirm.title': 'Open this link from the view?',
+  'mcpApp.toolCall.busy':
+    'The tool "{{tool}}" was not run: too many of this view\'s tool calls are waiting for approval. Try again once they are answered.',
+  'mcpApp.toolCall.confirm.cancel': 'Deny',
+  'mcpApp.toolCall.confirm.content':
+    'The {{app}} view wants to run the tool "{{tool}}" with these arguments. Your approval settings ask before it runs.',
+  'mcpApp.toolCall.confirm.ok': 'Allow',
+  'mcpApp.toolCall.confirm.title': 'Allow this tool to run?',
+  'mcpApp.toolCall.rejected':
+    'The tool "{{tool}}" was not run: it is not available to this view or was not approved.',
+  'mcpApp.waitingApproval': 'Waiting for your approval…',
   'mcpEmpty.deployment': 'No deployment options',
   'mcpEmpty.prompts': 'No prompts',
   'mcpEmpty.resources': 'No resources',

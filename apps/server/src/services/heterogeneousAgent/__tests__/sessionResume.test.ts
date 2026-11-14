@@ -12,6 +12,31 @@ const createSilentStreamManager = (): IStreamEventManager =>
     publishStreamEvent: vi.fn(async () => 'ok'),
   }) as unknown as IStreamEventManager;
 
+const createPersistenceHandler = (
+  findById: ReturnType<typeof vi.fn>,
+  updateMetadata: ReturnType<typeof vi.fn>,
+) =>
+  new HeterogeneousPersistenceHandler({
+    messageModel: {
+      findById: vi.fn(async () => null),
+      getLatestSpineMessageId: vi.fn(async () => null),
+      listMessagePluginsByTopic: vi.fn(async () => []),
+      update: vi.fn(async () => ({ success: true })),
+    } as any,
+    threadModel: {} as any,
+    topicModel: { findById, updateMetadata } as any,
+  });
+
+const createFinishTopicModel = (
+  findById: ReturnType<typeof vi.fn>,
+  updateMetadata: ReturnType<typeof vi.fn>,
+) => ({
+  findById,
+  settleRunningStatus: vi.fn(async () => undefined),
+  takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
+  updateMetadata,
+});
+
 describe('HeterogeneousAgentService — phase 2c session id persistence + resume', () => {
   beforeEach(() => {
     __resetOperationStatesForTesting();
@@ -37,16 +62,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       }));
 
       // Real handler so we exercise the persistSessionId path end-to-end
-      const handler = new HeterogeneousPersistenceHandler({
-        messageModel: {
-          findById: vi.fn(async () => null),
-          getLatestSpineMessageId: vi.fn(async () => null),
-          listMessagePluginsByTopic: vi.fn(async () => []),
-          update: vi.fn(async () => ({ success: true })),
-        } as any,
-        threadModel: {} as any,
-        topicModel: { findById, updateMetadata } as any,
-      });
+      const handler = createPersistenceHandler(findById, updateMetadata);
 
       // Seed in-memory state by ingesting one event so finish has something to drain
       await handler.ingest({
@@ -66,12 +82,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
-        topicModel: {
-          findById,
-          settleRunningStatus: vi.fn(async () => undefined),
-          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
-          updateMetadata,
-        } as any,
+        topicModel: createFinishTopicModel(findById, updateMetadata) as any,
       });
 
       await service.heteroFinish({
@@ -100,16 +111,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
         },
       }));
 
-      const handler = new HeterogeneousPersistenceHandler({
-        messageModel: {
-          findById: vi.fn(async () => null),
-          getLatestSpineMessageId: vi.fn(async () => null),
-          listMessagePluginsByTopic: vi.fn(async () => []),
-          update: vi.fn(async () => ({ success: true })),
-        } as any,
-        threadModel: {} as any,
-        topicModel: { findById, updateMetadata } as any,
-      });
+      const handler = createPersistenceHandler(findById, updateMetadata);
       await handler.ingest({
         events: [
           {
@@ -127,12 +129,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
-        topicModel: {
-          findById,
-          settleRunningStatus: vi.fn(async () => undefined),
-          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
-          updateMetadata,
-        } as any,
+        topicModel: createFinishTopicModel(findById, updateMetadata) as any,
       });
 
       await service.heteroFinish({
@@ -157,16 +154,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
         },
       }));
 
-      const handler = new HeterogeneousPersistenceHandler({
-        messageModel: {
-          findById: vi.fn(async () => null),
-          getLatestSpineMessageId: vi.fn(async () => null),
-          listMessagePluginsByTopic: vi.fn(async () => []),
-          update: vi.fn(async () => ({ success: true })),
-        } as any,
-        threadModel: {} as any,
-        topicModel: { findById, updateMetadata } as any,
-      });
+      const handler = createPersistenceHandler(findById, updateMetadata);
 
       await handler.ingest({
         events: [
@@ -185,12 +173,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
-        topicModel: {
-          findById,
-          settleRunningStatus: vi.fn(async () => undefined),
-          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
-          updateMetadata,
-        } as any,
+        topicModel: createFinishTopicModel(findById, updateMetadata) as any,
       });
 
       // Simulate: sandbox was recycled, CC exited before emitting system.init
@@ -228,16 +211,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
           runningOperation: { assistantMessageId: 'asst-busy', operationId: 'op-busy' },
         },
       }));
-      const handler = new HeterogeneousPersistenceHandler({
-        messageModel: {
-          findById: vi.fn(async () => null),
-          getLatestSpineMessageId: vi.fn(async () => null),
-          listMessagePluginsByTopic: vi.fn(async () => []),
-          update: vi.fn(async () => ({ success: true })),
-        } as any,
-        threadModel: {} as any,
-        topicModel: { findById, updateMetadata } as any,
-      });
+      const handler = createPersistenceHandler(findById, updateMetadata);
       await handler.ingest({
         events: [
           {
@@ -287,16 +261,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
         },
       }));
 
-      const handler = new HeterogeneousPersistenceHandler({
-        messageModel: {
-          findById: vi.fn(async () => null),
-          getLatestSpineMessageId: vi.fn(async () => null),
-          listMessagePluginsByTopic: vi.fn(async () => []),
-          update: vi.fn(async () => ({ success: true })),
-        } as any,
-        threadModel: {} as any,
-        topicModel: { findById, updateMetadata } as any,
-      });
+      const handler = createPersistenceHandler(findById, updateMetadata);
       await handler.ingest({
         events: [
           {
@@ -314,12 +279,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
-        topicModel: {
-          findById,
-          settleRunningStatus: vi.fn(async () => undefined),
-          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
-          updateMetadata,
-        } as any,
+        topicModel: createFinishTopicModel(findById, updateMetadata) as any,
       });
 
       await service.heteroFinish({
@@ -353,16 +313,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
         },
       }));
 
-      const handler = new HeterogeneousPersistenceHandler({
-        messageModel: {
-          findById: vi.fn(async () => null),
-          getLatestSpineMessageId: vi.fn(async () => null),
-          listMessagePluginsByTopic: vi.fn(async () => []),
-          update: vi.fn(async () => ({ success: true })),
-        } as any,
-        threadModel: {} as any,
-        topicModel: { findById, updateMetadata } as any,
-      });
+      const handler = createPersistenceHandler(findById, updateMetadata);
       await handler.ingest({
         events: [
           {
@@ -380,12 +331,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: createSilentStreamManager(),
-        topicModel: {
-          findById,
-          settleRunningStatus: vi.fn(async () => undefined),
-          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
-          updateMetadata,
-        } as any,
+        topicModel: createFinishTopicModel(findById, updateMetadata) as any,
       });
 
       await service.heteroFinish({
@@ -422,16 +368,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
         },
       }));
 
-      const handler = new HeterogeneousPersistenceHandler({
-        messageModel: {
-          findById: vi.fn(async () => null),
-          getLatestSpineMessageId: vi.fn(async () => null),
-          listMessagePluginsByTopic: vi.fn(async () => []),
-          update: vi.fn(async () => ({ success: true })),
-        } as any,
-        threadModel: {} as any,
-        topicModel: { findById, updateMetadata } as any,
-      });
+      const handler = createPersistenceHandler(findById, updateMetadata);
       await handler.ingest({
         events: [
           {
@@ -450,12 +387,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
       const service = new HeterogeneousAgentService({} as any, 'user-1', {
         persistenceHandler: handler,
         streamEventManager: stream,
-        topicModel: {
-          findById,
-          settleRunningStatus: vi.fn(async () => undefined),
-          takeRunningOperation: vi.fn(async () => ({ isRoot: true, operation: {} })),
-          updateMetadata,
-        } as any,
+        topicModel: createFinishTopicModel(findById, updateMetadata) as any,
       });
 
       // Should not throw — sessionId persistence is best-effort
@@ -485,16 +417,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
         },
       }));
 
-      const handler = new HeterogeneousPersistenceHandler({
-        messageModel: {
-          findById: vi.fn(async () => null),
-          getLatestSpineMessageId: vi.fn(async () => null),
-          listMessagePluginsByTopic: vi.fn(async () => []),
-          update: vi.fn(async () => ({ success: true })),
-        } as any,
-        threadModel: {} as any,
-        topicModel: { findById, updateMetadata } as any,
-      });
+      const handler = createPersistenceHandler(findById, updateMetadata);
 
       // Only a stream_start reporting the CC session id — NO heteroFinish. This
       // is the inactivity-watchdog path: the run starts, emits its session id,
@@ -527,16 +450,7 @@ describe('HeterogeneousAgentService — phase 2c session id persistence + resume
         metadata: { runningOperation: { assistantMessageId: 'asst-d', operationId: 'op-dedupe' } },
       }));
 
-      const handler = new HeterogeneousPersistenceHandler({
-        messageModel: {
-          findById: vi.fn(async () => null),
-          getLatestSpineMessageId: vi.fn(async () => null),
-          listMessagePluginsByTopic: vi.fn(async () => []),
-          update: vi.fn(async () => ({ success: true })),
-        } as any,
-        threadModel: {} as any,
-        topicModel: { findById, updateMetadata } as any,
-      });
+      const handler = createPersistenceHandler(findById, updateMetadata);
 
       await handler.ingest({
         events: [

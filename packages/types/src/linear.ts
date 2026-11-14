@@ -62,11 +62,27 @@ export const LINEAR_DEFAULT_IMPORT_STATE_TYPES: LinearIssueStateType[] = [
   'completed',
 ];
 
+/**
+ * `linearProjectId` value that scopes a filter or rule to the team's issues
+ * that belong to no Linear project. Linear project ids are UUIDs, so it never
+ * names a real project.
+ */
+export const LINEAR_NO_PROJECT_ID = 'none';
+
+export const isLinearNoProject = (linearProjectId: string | null | undefined): boolean =>
+  linearProjectId === LINEAR_NO_PROJECT_ID;
+
 /** Providers a task can be linked to through `task_external_links`. */
 export type TaskExternalProvider = 'linear';
 
 /** Facts about the linked Linear issue kept on the link row, for display only. */
 export interface LinearIssueLinkMetadata {
+  /**
+   * The Linear archive the task already took up. Each archive applies once, so
+   * a task restored in LobeHub stays restored while the issue stays archived.
+   * Gone once Linear restores the issue, so archiving it again applies again.
+   */
+  appliedArchivedAt?: string;
   assigneeName?: string;
   /**
    * The issue's comments were read and copied at least once. A closed task
@@ -83,6 +99,14 @@ export interface LinearIssueLinkMetadata {
    * new ones. Sync bookkeeping, not display: a display refresh keeps it.
    */
   syncedCommentIds?: string[];
+  /**
+   * The issue's Linear labels (lowercased names) when they were last applied to
+   * the task. A sync applies only what changed in Linear since, so a label removed
+   * from the task in LobeHub stays removed. One added there stays too, unless a
+   * grouped label Linear adds replaces it as its sibling. Sync bookkeeping, not
+   * display: a display refresh keeps it.
+   */
+  syncedLabels?: string[];
   teamKey?: string;
 }
 
@@ -119,8 +143,17 @@ export interface LinearIssuePage {
   issues: LinearIssueSummary[];
 }
 
+/** How many issues match a picker filter; counting stops at a limit. */
+export interface LinearIssueCount {
+  /** True when more issues match than were counted; `count` is then a lower bound. */
+  capped: boolean;
+  count: number;
+}
+
 /** Why an issue was left alone. */
 export type LinearSyncSkipReason =
+  /** Linear archived it, but the task has a live schedule or heartbeat or an open Goal; a later run retries. */
+  | 'live'
   /** Linear closed it, but the task is running; it is not interrupted. */
   | 'running'
   /** The linked task is in the trash or no longer visible to the caller. */
@@ -131,10 +164,14 @@ export type LinearSyncSkipReason =
   | 'failed'
   /** The task was synced, but its Linear comments were not; the next sync retries them. */
   | 'commentsFailed'
+  /** The task was synced, but its Linear labels were not; the next sync retries them. */
+  | 'labelsFailed'
   /** Picked for import, but Linear no longer returns it (deleted, or not visible). */
   | 'missing';
 
 export interface LinearSyncResult {
+  /** Tasks archived because their issue was archived in Linear. Absent in older results. */
+  archived?: number;
   /** Tasks closed because their issue was completed or canceled in Linear. */
   closed: number;
   /** Linear comments copied onto tasks as task comments. Absent in older results. */
@@ -142,6 +179,8 @@ export interface LinearSyncResult {
   created: number;
   /** Tasks edited in LobeHub, so their name, instruction and priority were kept. */
   keptLocalEdits: number;
+  /** Tasks whose labels changed to follow Linear. Absent in older results. */
+  labelsSynced?: number;
   /** The first skipped issues with why; `skippedCount` holds the full count. */
   skipped: { identifier: string; reason: LinearSyncSkipReason }[];
   /** Every skipped issue, including those past the `skipped` list. Absent in older results. */
@@ -190,6 +229,17 @@ export interface LinearSyncJobMetadata {
    * does not reread what earlier rounds covered. Absent: read from the start.
    */
   cursor?: string;
+  /**
+   * Times a rule run was handed to a new request because one ran out of time.
+   * Each hand-off is one more request in a chain the host cuts off a few
+   * requests deep, so a run stops handing off after a few.
+   */
+  handOffs?: number;
+  /**
+   * A rule run also reads archived issues (`kind: 'rule'`). Picked issues are
+   * looked up by id, which finds archived ones either way.
+   */
+  includeArchived?: boolean;
   /** Picked issues (`kind: 'issues'`). */
   issueIds?: string[];
   kind: 'issues' | 'rule';
@@ -207,6 +257,8 @@ export interface LinearSyncJobMetadata {
   ruleId?: string;
   /** Copy each issue's Linear comments onto its task as task comments. */
   syncComments?: boolean;
+  /** Bring each issue's Linear labels onto its task, creating the missing ones. */
+  syncLabels?: boolean;
 }
 
 export interface LinearSyncJobView {

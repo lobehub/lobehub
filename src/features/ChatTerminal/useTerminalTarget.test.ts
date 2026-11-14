@@ -1,4 +1,4 @@
-import type { DeviceListItem } from '@lobechat/types';
+import { DEVICE_TERMINAL_METADATA_KEY, type DeviceListItem } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { create } from 'zustand';
@@ -98,5 +98,26 @@ describe('useTerminalTarget', () => {
     act(() => result.current.selectTarget(LOCAL_TARGET));
 
     expect(createTab).toHaveBeenCalledWith('tpc_1', undefined, undefined);
+  });
+
+  it("offers a desktop app's remote device but not this desktop's own row", () => {
+    env.isDesktop = true;
+    env.currentDeviceId = 'dev_local';
+    const desktopChannel = { channel: 'desktop', connectedAt: '', hostname: null, platform: null };
+    const metadata = { [DEVICE_TERMINAL_METADATA_KEY]: '1' };
+    deviceStore.current.setState({
+      deviceListMap: {
+        all: [
+          { ...device('dev_local', '/home/local'), channels: [desktopChannel], metadata },
+          { ...device('dev_b', '/home/b'), channels: [desktopChannel], metadata },
+          { ...device('dev_old', '/home/old'), channels: [desktopChannel] },
+        ],
+      },
+    });
+
+    const { result } = renderHook(() => useTerminalTarget('tpc_1', 'agt_1'));
+
+    expect(result.current.targets.map((target) => target.deviceId)).toEqual(['dev_b']);
+    expect(result.current.targetDeviceId).toBe('dev_b');
   });
 });

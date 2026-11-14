@@ -17,3 +17,19 @@ export const steerQueueScopeOf = (
 
   return { threadId: origin.threadId ?? null, topicId: origin.topicId, userId };
 };
+
+/**
+ * The queue a running `callSubAgent` child reads steer instructions from: its
+ * isolation thread on the parent's topic. The parent agent fills it when it
+ * sends the child another instruction mid-run (`callSubAgent({ subAgentId })`);
+ * nobody else types behind a child run. `undefined` for a top-level run.
+ */
+export const subAgentSteerQueueScopeOf = (
+  state: AgentState,
+  userId: string,
+): SteerQueueScope | undefined => {
+  const origin = state.origin;
+  if (!origin?.topicId || !origin.threadId || !origin.lineage?.isSubAgent) return;
+
+  return { threadId: origin.threadId, topicId: origin.topicId, userId };
+};

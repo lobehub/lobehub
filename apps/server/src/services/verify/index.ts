@@ -22,6 +22,11 @@ export {
   buildCheckReviewOverlay,
 } from './acceptanceService';
 export { createVerifierAgentRunner } from './agentVerifier';
+export {
+  scheduleVerifyOnCompletion,
+  VERIFY_ON_OPERATION_COMPLETE_PATH,
+  type VerifyOnOperationCompletePayload,
+} from './completionDispatch';
 export { mapWithConcurrency } from './concurrency';
 export { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
 export {
@@ -67,4 +72,5 @@ export { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from './staleness';
 export { VerifyStatusService } from './statusService';
 export { sweepStuckVerifyRuns, type VerifySweepOutcome } from './sweep';
 export { resolveEvidenceMetadata } from './terminalEvidence';
+export { releaseUndeliveredRound } from './undeliveredRound';
 export { settleVerifierCheckFromTerminal } from './verifierTerminal';

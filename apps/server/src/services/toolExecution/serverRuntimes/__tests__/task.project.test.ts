@@ -39,7 +39,11 @@ const createdTask = {
   status: 'backlog',
 };
 
-const setup = (overrides: { parent?: { id: string; identifier: string; projectId: string } }) => {
+const setup = (
+  overrides: { parent?: { id: string; identifier: string; projectId: string } },
+  /** `null` runs outside any project; omitted runs inside the fixture project. */
+  runProjectId: string | null = 'proj-apollo',
+) => {
   const taskService = {
     createTask: vi.fn().mockResolvedValue(createdTask),
     updateTaskWithAssigneeLock: vi.fn().mockResolvedValue({}),
@@ -53,7 +57,7 @@ const setup = (overrides: { parent?: { id: string; identifier: string; projectId
     agentId: 'agt-coordinator',
     agentModel: { existsById: vi.fn().mockResolvedValue(true) } as any,
     db: {} as any,
-    projectId: 'proj-apollo',
+    projectId: runProjectId ?? undefined,
     taskCaller: { update: vi.fn().mockResolvedValue({ data: { id: 'task-1' } }) } as any,
     taskModel: taskModel as any,
     taskService: taskService as any,
@@ -149,6 +153,15 @@ describe('task runtime inside a project', () => {
     expect(taskService.createTask).toHaveBeenCalledWith(
       expect.objectContaining({ parentTaskId: 'task-parent', projectId: undefined }),
     );
+  });
+
+  it('leaves a run outside any project its tasks unfiled', async () => {
+    const { runtime, taskService } = setup({}, null);
+
+    const result = await runtime.createTask({ instruction: 'Workspace chore', name: 'Chore' });
+
+    expect(result.success).toBe(true);
+    expect(taskService.createTask.mock.calls[0][0].projectId).toBeUndefined();
   });
 
   it("checks a reassignment against the edited task's own project", async () => {

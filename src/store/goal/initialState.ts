@@ -13,9 +13,10 @@ export type { GoalListItem };
  * `running` the goal whose loop is executing right now, `achieved` the goals
  * that reached their terminal outcome. The other terminal states (`failed`,
  * `canceled`) stay reachable through `all` only — "completed" would misname
- * them.
+ * them. `archived` lists the goals the user put away, which every other tab
+ * leaves out.
  */
-export type GoalListFilter = 'all' | 'review' | 'running' | 'achieved';
+export type GoalListFilter = 'all' | 'review' | 'running' | 'achieved' | 'archived';
 export type GoalViewMode = 'card' | 'list';
 
 export interface GoalState {

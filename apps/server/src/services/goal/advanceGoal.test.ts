@@ -231,8 +231,11 @@ describe('advanceGoal trajectory recording', () => {
     // Appending is read-modify-write on one object; without this the settle,
     // sweep and manual advances that overlap on a goal would pick the same
     // `seq` and the last writer would drop the others.
-    expect(mocks.execute).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(mocks.execute.mock.calls[0][0])).toContain('pg_advisory_xact_lock');
+    expect(mocks.execute).toHaveBeenCalledTimes(2);
+    // Bounded first: an advance stuck behind a dead holder gives up instead of
+    // waiting out the function timeout with its transaction open.
+    expect(JSON.stringify(mocks.execute.mock.calls[0][0])).toContain('lock_timeout');
+    expect(JSON.stringify(mocks.execute.mock.calls[1][0])).toContain('pg_advisory_xact_lock');
   });
 
   it('writes the observation row while the goal is still running, not only at the end', async () => {

@@ -164,6 +164,11 @@ const viewSchema = {
       items: { type: 'string' },
       type: 'array',
     },
+    html: {
+      description:
+        'A self-contained HTML document (inline CSS / JS / SVG / canvas) that draws the whole card in a sandboxed frame — for visuals the layout nodes cannot express, such as an illustrated scene or an animation. It reads the output from window.widgetData and cannot load anything from the network. Takes precedence over layout. See <card_html>.',
+      type: 'string',
+    },
     layout: {
       description:
         'Declarative card template (a tree of stack / grid / text / icon / image / progress / ring / dots / sparkline / badge / divider / spacer / repeat nodes) whose values bind to the output by path. Required for outputType data; replaces the default rendering for the other types. See <card_layout>.',

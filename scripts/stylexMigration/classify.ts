@@ -6,7 +6,9 @@
  * - B: pseudo-classes / attributes on the element itself (`&:hover`) — codemod
  * - C: descendant or ancestor coupling (`& .child`, `.parent:hover &`) — manual,
  *      stylex.defaultMarker() / stylex.when.ancestor() or an xstyle prop
- * - D: tag or third-party DOM selectors (`li`, `svg`, `.ProseMirror`) — scoped CSS
+ * - D: tag or third-party DOM selectors (`li`, `svg`, `.ProseMirror`) — manual: the
+ *      component's classNames / styles slots or an xstyle prop; a createStaticStyles
+ *      fallback only for DOM no prop reaches (editor content, rendered markdown)
  */
 
 import legacyImports from './legacyImports.json';

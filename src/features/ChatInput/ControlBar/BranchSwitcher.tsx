@@ -46,7 +46,7 @@ import { gitService } from '@/services/git';
 import { useFetchGitWorkingTreeStatus } from '@/store/device';
 
 import { openCreateBranchModal } from './CreateBranchModal';
-import gitMenuTriggerStyles from './gitMenuTrigger.module.css';
+import { gitMenuTriggerStyles } from './gitMenuTrigger';
 import { openRenameBranchModal } from './RenameBranchModal';
 import { useBranchList } from './useBranchList';
 import { useSwitchWorktree } from './useSwitchWorktree';

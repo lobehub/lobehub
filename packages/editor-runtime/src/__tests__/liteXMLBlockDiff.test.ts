@@ -77,14 +77,86 @@ describe('diffLiteXMLBlocks', () => {
   });
 
   it('orders operations insert, then modify, then remove, all on original ids', () => {
-    const result = ok(doc(A, B, C), doc('<p id="a">A2</p>', '<p>new</p>', C));
+    const result = ok(doc(A, B, C), doc('<p id="a">A2</p>', '<h2>new</h2>', C));
 
     expect(result.operations.map((operation) => operation.action)).toEqual([
       'insert',
       'modify',
       'remove',
     ]);
-    expect(result.operations[0]).toEqual({ action: 'insert', afterId: 'a', litexml: '<p>new</p>' });
+    expect(result.operations[0]).toEqual({
+      action: 'insert',
+      afterId: 'a',
+      litexml: '<h2>new</h2>',
+    });
+  });
+
+  it('modifies a block rewritten in place without its id', () => {
+    const result = ok(doc(A, '<p id="b">B</p>', C), doc(A, '<p>B rewritten</p>', C));
+
+    expect(result.operations).toEqual([{ action: 'modify', litexml: '<p id="b">B rewritten</p>' }]);
+    expect(result.summary).toEqual({ inserted: 0, modified: 1, removed: 0 });
+  });
+
+  it('pairs a rewrite without its id with the most similar original in the same gap', () => {
+    const original = doc(
+      A,
+      '<p id="b">所以这块我们到现在也还没想清楚。至少我觉得，资源的使用权限、执行的成本和产物的归属，得分开看。</p>',
+      C,
+    );
+    const edited = doc(
+      A,
+      '<p>所以这块我们到现在也还没想清楚。表面上是在分资源的使用权限、执行成本和产物归属。</p>',
+      '<p>我隐约觉得，这可能碰到了人和 agent 一起工作时最根本的关系。</p>',
+      C,
+    );
+
+    const result = ok(original, edited);
+
+    expect(result.operations).toEqual([
+      {
+        action: 'insert',
+        afterId: 'b',
+        litexml: '<p>我隐约觉得，这可能碰到了人和 agent 一起工作时最根本的关系。</p>',
+      },
+      {
+        action: 'modify',
+        litexml:
+          '<p id="b">所以这块我们到现在也还没想清楚。表面上是在分资源的使用权限、执行成本和产物归属。</p>',
+      },
+    ]);
+    expect(result.summary).toEqual({ inserted: 1, modified: 1, removed: 0 });
+  });
+
+  it('drops a rewrite without ids that reads the same as the original', () => {
+    const result = ok(
+      doc(A, '<p id="b"><span id="s">Same text</span></p>', C),
+      doc(A, '<p><span>Same text</span></p>', C),
+    );
+
+    expect(result.operations).toEqual([]);
+  });
+
+  it('keeps unrelated replacements as insert plus remove', () => {
+    const result = ok(
+      doc(A, '<p id="b">Meeting notes for Monday</p>', '<p id="d">Agenda</p>', C),
+      doc(A, '<p>Budget table for Q3 planning</p>', C),
+    );
+
+    expect(result.operations.map((operation) => operation.action)).toEqual([
+      'insert',
+      'remove',
+      'remove',
+    ]);
+  });
+
+  it('does not pair blocks of different tags', () => {
+    const result = ok(doc(A, '<p id="b">Title</p>', C), doc(A, '<h2>Title</h2>', C));
+
+    expect(result.operations).toEqual([
+      { action: 'insert', afterId: 'a', litexml: '<h2>Title</h2>' },
+      { action: 'remove', id: 'b' },
+    ]);
   });
 
   it('turns a moved block into remove plus an id-free insert', () => {
@@ -226,6 +298,48 @@ describe('diffLiteXMLBlocks', () => {
     const result = diffLiteXMLBlocks(doc(A, B), `${A}${B}`);
 
     expect(result.ok).toBe(false);
+  });
+
+  describe('CDATA sections', () => {
+    const chart = (id: string, json: string) => `<chart id="${id}"><![CDATA[${json}]]></chart>`;
+    const spec = '{"type":"bar","note":"a < b && c > d"}';
+
+    it('inserts a chart with its CDATA section intact', () => {
+      const result = ok(doc(A, B), doc(A, chart('c1', spec), B));
+
+      expect(result.operations).toEqual([
+        { action: 'insert', afterId: 'a', litexml: `<chart><![CDATA[${spec}]]></chart>` },
+      ]);
+    });
+
+    it('modifies a chart whose CDATA body changed', () => {
+      const next = '{"type":"line"}';
+      const result = ok(doc(A, chart('c1', spec)), doc(A, chart('c1', next)));
+
+      expect(result.operations).toEqual([
+        { action: 'modify', litexml: `<chart id="c1"><![CDATA[${next}]]></chart>` },
+      ]);
+    });
+
+    it('returns no operations for an unchanged chart', () => {
+      const result = ok(doc(A, chart('c1', spec)), doc(A, chart('c1', spec)));
+
+      expect(result.operations).toEqual([]);
+    });
+
+    it('keeps a body split across adjacent CDATA sections', () => {
+      const split = '<chart><![CDATA[{"note":"]]]]><![CDATA[>"}]]></chart>';
+      const result = ok(doc(A), doc(A, split));
+
+      expect(result.operations).toEqual([{ action: 'insert', afterId: 'a', litexml: split }]);
+    });
+
+    it('does not read markup inside a CDATA section as tags', () => {
+      const markup = '<chart><![CDATA[<p id="x">not a block</p>]]></chart>';
+      const result = ok(doc(A), doc(A, markup));
+
+      expect(result.operations).toEqual([{ action: 'insert', afterId: 'a', litexml: markup }]);
+    });
   });
 
   it('rejects an edit that strips most ids from a similar-length document', () => {

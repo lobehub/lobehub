@@ -15,13 +15,14 @@ export interface AvatarProps {
   avatar: ChatItemProps['avatar'];
   loading?: boolean;
   onClick?: ChatItemProps['onAvatarClick'] | MouseEventHandler<HTMLDivElement>;
+  shape?: 'circle' | 'square';
   size?: number;
   style?: CSSProperties;
   unoptimized?: boolean;
 }
 
 const Avatar = memo<AvatarProps>(
-  ({ agentId, loading, avatar, unoptimized, onClick, size = 28, style, alt }) => {
+  ({ agentId, loading, avatar, unoptimized, onClick, shape = 'square', size = 28, style, alt }) => {
     const displayName = agentDisplayName(avatar);
     const contextAgentId = useConversationStore(contextSelectors.agentId);
 
@@ -40,6 +41,7 @@ const Avatar = memo<AvatarProps>(
           avatar={agentAvatar}
           background={avatar.backgroundColor}
           name={displayName}
+          shape={shape}
           size={size}
           style={style}
           title={displayName}
@@ -55,7 +57,7 @@ const Avatar = memo<AvatarProps>(
         avatar={avatar.avatar}
         background={avatar.backgroundColor}
         name={displayName}
-        shape={'square'}
+        shape={shape}
         size={size}
         style={style}
         title={displayName}

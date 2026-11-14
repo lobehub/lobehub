@@ -32,6 +32,8 @@ function expected(): Array<
     ['archive', 'mutation', 13],
     ['batchArchive', 'mutation', 13],
     ['batchDelete', 'mutation', 13],
+    ['batchRestoreDeleted', 'mutation', 13],
+    ['batchRevert', 'mutation', 13],
     ['batchUpdate', 'mutation', 13],
     ['batchUpdateStatus', 'mutation', 13],
     ['cancelTopic', 'mutation', 13],
