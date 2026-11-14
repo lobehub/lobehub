@@ -84,6 +84,19 @@ export const resolveBlockedTools =
           ...(content !== undefined && { content }),
           tools: payload.toolsCalling,
         });
+
+        // Mirror the persisted note into the runtime state: the completion
+        // lifecycle derives \`lastAssistantContent\` from \`state.messages\` and
+        // only falls back to the row when that text is empty, so a reply that
+        // already carried text would reach the user without the stop reason.
+        if (content !== undefined) {
+          const parentIndex = newState.messages.findIndex(
+            (message) => message?.id === payload.parentMessageId,
+          );
+          if (parentIndex !== -1) {
+            newState.messages[parentIndex] = { ...newState.messages[parentIndex], content };
+          }
+        }
       } catch (error) {
         await publishPersistError(host, error);
         throw error;

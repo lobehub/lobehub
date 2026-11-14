@@ -254,6 +254,29 @@ describe('resolveTools executors', () => {
       });
     });
 
+    // The completion lifecycle reads the final assistant text from the runtime
+    // state and only recovers the row when that text is empty, so a reply that
+    // already carried text must carry the note in state as well.
+    it('mirrors the note into the runtime state reply', async () => {
+      host.transports.messages.findById = vi
+        .fn()
+        .mockResolvedValue({ content: 'Running the script now.', id: 'assistant-msg-1' });
+
+      const result = await resolveBlockedTools(host)(
+        stopInstruction,
+        createState({
+          messages: [
+            { content: 'Running the script now.', id: 'assistant-msg-1', role: 'assistant' },
+          ],
+        }),
+      );
+
+      const reply = result.newState.messages.find((message) => message.id === 'assistant-msg-1');
+      expect(reply?.content).toBe(
+        'Running the script now.\n\nStopped after 3 consecutive replies called tools that do not exist.',
+      );
+    });
+
     // Image replies store serialized content parts; overwriting them with
     // text would drop the images.
     it('leaves a multimodal reply content alone', async () => {
