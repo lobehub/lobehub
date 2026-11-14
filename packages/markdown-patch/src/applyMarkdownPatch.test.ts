@@ -64,6 +64,16 @@ describe('applyMarkdownPatch', () => {
     }
   });
 
+  it('inserts the replacement text literally, including $ sequences', () => {
+    const source = '# Notes\n\nTODO\n';
+    const result = applyMarkdownPatch(source, [
+      { replace: '$$E = mc^2$$ instead of $&', search: 'TODO' },
+    ]);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.content).toBe('# Notes\n\n$$E = mc^2$$ instead of $&\n');
+  });
+
   it('rejects empty hunks array', () => {
     const result = applyMarkdownPatch('doc', []);
 
