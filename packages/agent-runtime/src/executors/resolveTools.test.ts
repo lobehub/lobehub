@@ -229,6 +229,48 @@ describe('resolveTools executors', () => {
     expect(result.newState.unresolvedToolFeedbackRounds).toBe(2);
   });
 
+  describe('stop note on the parent reply', () => {
+    const stopInstruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> = {
+      payload: {
+        parentMessageId: 'assistant-msg-1',
+        parentNote: 'Stopped after 3 consecutive replies called tools that do not exist.',
+        toolsCalling: [createToolCall()],
+        unresolvedToolNames: true,
+      },
+      type: 'resolve_blocked_tools',
+    };
+
+    it('appends the note to the text the reply already has', async () => {
+      host.transports.messages.findById = vi
+        .fn()
+        .mockResolvedValue({ content: 'Running the script now.', id: 'assistant-msg-1' });
+
+      await resolveBlockedTools(host)(stopInstruction, createState());
+
+      expect(host.transports.messages.update).toHaveBeenCalledWith('assistant-msg-1', {
+        content:
+          'Running the script now.\n\nStopped after 3 consecutive replies called tools that do not exist.',
+        tools: [createToolCall()],
+      });
+    });
+
+    // Image replies store serialized content parts; overwriting them with
+    // text would drop the images.
+    it('leaves a multimodal reply content alone', async () => {
+      host.transports.messages.findById = vi.fn().mockResolvedValue({
+        content: '[{"type":"image"}]',
+        id: 'assistant-msg-1',
+        metadata: { isMultimodal: true },
+      });
+
+      await resolveBlockedTools(host)(stopInstruction, createState());
+
+      expect(host.transports.messages.update).toHaveBeenCalledWith('assistant-msg-1', {
+        tools: [createToolCall()],
+      });
+    });
+  });
+
   it('leaves the parent untouched for ordinary blocked tools', async () => {
     const instruction: Extract<AgentInstruction, { type: 'resolve_blocked_tools' }> =
       createBlockedInstruction(createToolCall());

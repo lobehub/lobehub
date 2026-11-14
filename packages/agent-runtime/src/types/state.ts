@@ -644,8 +644,10 @@ export interface AgentState {
   toolSourceMap?: Record<string, ToolSource>;
 
   /**
-   * How many times this operation has answered unresolvable tool calls with a
-   * rejected tool result. Operation-scoped on purpose: the same rejection rows
+   * How many consecutive LLM turns this operation has answered unresolvable
+   * tool calls with a rejected tool result. Any resolved tool call reaching a
+   * tool executor resets it to 0, so it measures a model stuck on names that do not exist,
+   * not the run's lifetime total of typos. Operation-scoped on purpose: the same rejection rows
    * are also readable from the message history, but that history is rehydrated
    * from the DB on every step and carries earlier operations' rejections, so
    * counting rows there would spend a new operation's budget before it starts.
