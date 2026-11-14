@@ -269,6 +269,22 @@ describe('createOpenAICompatibleSpeech', () => {
     ).rejects.toMatchObject({ error: { message: expect.stringContaining('params.speed') } });
     expect(create).not.toHaveBeenCalled();
 
+    // `/audio/speech` cannot carry a sample rate, so a gateway Fish route refuses it.
+    await expect(
+      createOpenAICompatibleSpeech(
+        client,
+        {
+          input: 'Hi',
+          model: 'fish-audio/s2.1-pro',
+          params: { sampleRate: 44_100 },
+          voice: 'default',
+        },
+        undefined,
+        { ...context, provider: 'openrouter', requestModel: 'fish-audio/s2.1-pro' },
+      ),
+    ).rejects.toMatchObject({ error: { message: expect.stringContaining('params.sampleRate') } });
+    expect(create).not.toHaveBeenCalled();
+
     // The directed S2 family accepts instructions through the gateway.
     create.mockResolvedValue(audioResponse([0]));
     await createOpenAICompatibleSpeech(

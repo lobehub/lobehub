@@ -5,6 +5,7 @@ import {
   DEFAULT_TTS_AUDIO_FORMAT,
   FISH_AUDIO_DEFAULT_VOICE_ID,
   FISH_AUDIO_MAX_INPUT_CHARACTERS,
+  type TTSParamsIssue,
   validateTTSParams,
 } from 'model-bank';
 import fishAudioModels from 'model-bank/fishaudio';
@@ -154,7 +155,16 @@ export const createOpenAICompatibleSpeech = async (
     const card = fishCatalogModel
       ? fishAudioModels.find((item) => item.id === toFishAudioCatalogModel(fishCatalogModel))
       : undefined;
-    const issues = card?.parameters ? validateTTSParams(card.parameters, params) : [];
+    const issues: TTSParamsIssue[] = card?.parameters
+      ? validateTTSParams(card.parameters, params)
+      : [];
+    // `/audio/speech` has no sample-rate field, so a gateway could only drop it silently.
+    if (params.sampleRate !== undefined) {
+      issues.push({
+        key: 'sampleRate',
+        reason: 'is not supported through an OpenAI-compatible gateway; omit it',
+      });
+    }
     if (issues.length > 0) {
       throw AgentRuntimeError.chat({
         error: {
