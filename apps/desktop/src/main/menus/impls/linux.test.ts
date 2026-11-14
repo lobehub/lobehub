@@ -322,6 +322,38 @@ describe('LinuxMenu', () => {
       expect(mockApp.updaterManager.installNow).toHaveBeenCalled();
     });
 
+    // The shell updater only knows full releases: a downloaded core OTA update
+    // must not be hidden behind "already latest" right after a shell check.
+    it('does not claim the latest version while a core update is staged', () => {
+      mockApp.updaterManager.getUpdaterState = vi.fn(() => ({ stage: 'latest' })) as any;
+      (mockApp as any).coreUpdateManager = {
+        getStatus: vi.fn(() => ({ staged: '2.3.4-canary.1-core.45' })),
+      };
+      linuxMenu.buildAndSetAppMenu();
+
+      const template = (Menu.buildFromTemplate as any).mock.calls.at(-1)[0];
+      const fileMenu = template.find((item: any) => item.label === 'File');
+      const item = fileMenu.submenu.find((entry: any) => entry.label === 'Check for Updates');
+
+      expect(item).toBeDefined();
+      expect(item.enabled).not.toBe(false);
+      item.click();
+      expect(mockApp.updaterManager.checkForUpdates).toHaveBeenCalledWith({ manual: true });
+    });
+
+    it('reports the latest version when no core update is staged', () => {
+      mockApp.updaterManager.getUpdaterState = vi.fn(() => ({ stage: 'latest' })) as any;
+      (mockApp as any).coreUpdateManager = { getStatus: vi.fn(() => ({ staged: null })) };
+      linuxMenu.buildAndSetAppMenu();
+
+      const template = (Menu.buildFromTemplate as any).mock.calls.at(-1)[0];
+      const fileMenu = template.find((item: any) => item.label === 'File');
+
+      expect(fileMenu.submenu.find((entry: any) => entry.label === 'Check for Updates')).toBe(
+        undefined,
+      );
+    });
+
     it('sends the user to the download page when the install format cannot self-update', () => {
       mockApp.updaterManager.getUpdaterState = vi.fn(() => ({ stage: 'unsupported' })) as any;
       linuxMenu.buildAndSetAppMenu();
