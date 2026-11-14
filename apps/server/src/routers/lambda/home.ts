@@ -18,7 +18,7 @@ const homeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
     ctx: {
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, workspaceId),
       homeRepository: new HomeRepository(ctx.serverDB, ctx.userId, workspaceId),
-      homeService: new HomeService(ctx.userId),
+      homeService: new HomeService(ctx.userId, workspaceId),
     },
   });
 });
