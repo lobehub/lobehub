@@ -3,18 +3,16 @@ import { Image } from '@lobehub/ui/mdx';
 import { Fragment, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type Components } from 'react-markdown';
-import useSWR from 'swr';
 import urlJoin from 'url-join';
 
 import { CustomMDX } from '@/components/mdx';
 import CollapsibleSection from '@/components/mdx/CollapsibleSection';
 import remarkCollapsibleSections from '@/components/mdx/remarkCollapsibleSections';
 import { OFFICIAL_SITE } from '@/const/url';
-import { changelogKeys } from '@/libs/swr/keys';
-import { lambdaClient } from '@/libs/trpc/client';
 import { type Locales } from '@/locales/resources';
 import { type ChangelogIndexItem } from '@/types/changelog';
 
+import { useChangelogModalPost } from './useChangelog';
 import VersionTag from './VersionTag';
 
 interface ChangelogContentProps {
@@ -27,9 +25,7 @@ interface PostItemProps extends ChangelogIndexItem {
 }
 
 const PostItem = ({ id, versionRange, locale, showDivider = true }: PostItemProps) => {
-  const { data } = useSWR(changelogKeys.post(id, locale), async () => {
-    return await lambdaClient.changelog.getPostById.query({ id, locale });
-  });
+  const data = useChangelogModalPost(id, locale);
 
   if (!data || !data.title) return null;
 

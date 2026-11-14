@@ -645,14 +645,9 @@ export const localFileKeys = {
   ]),
 };
 
-// ---- changelog ----------------------------------------------------------
+// ---- canvas -------------------------------------------------------------
 export const canvasKeys = {
   storage: def('canvas:storage', () => ['canvas:storage']),
-};
-
-export const changelogKeys = {
-  modalIndex: def('changelog:modalIndex', () => ['changelog:modalIndex']),
-  post: def('changelog:post', (id: string, locale: string) => ['changelog:post', id, locale]),
 };
 
 // ---- agent onboarding ---------------------------------------------------
@@ -790,7 +785,6 @@ export const swrKeys = {
   agentHome: agentHomeKeys,
   auth: authKeys,
   canvas: canvasKeys,
-  changelog: changelogKeys,
   cron: cronKeys,
   device: deviceKeys,
   electron: electronKeys,

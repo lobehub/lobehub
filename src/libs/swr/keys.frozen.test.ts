@@ -22,8 +22,6 @@ const LEGACY_SWR_KEYS = [
   'botWakeKeys.decisions',
   'botWakeKeys.summary',
   'canvasKeys.storage',
-  'changelogKeys.modalIndex',
-  'changelogKeys.post',
   'channelKeys.agentEnvironment',
   'channelKeys.userCandidates',
   'channelKeys.wakeConfig',
