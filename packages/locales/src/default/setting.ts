@@ -2799,6 +2799,7 @@ When I am ___, I need ___
   'workspace.billingPage.usage.categories.chat': 'Chat',
   'workspace.billingPage.usage.categories.embedding': 'Embedding',
   'workspace.billingPage.usage.categories.imageGeneration': 'Image generation',
+  'workspace.billingPage.usage.categories.musicGeneration': 'Music generation',
   'workspace.billingPage.usage.categories.tts': 'Text to speech',
   'workspace.billingPage.usage.categories.videoGeneration': 'Video generation',
   'workspace.billingPage.usage.empty':

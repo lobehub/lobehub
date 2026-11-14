@@ -67,6 +67,7 @@
   "table.columns.type.enums.chat": "文本生成",
   "table.columns.type.enums.embedding": "嵌入",
   "table.columns.type.enums.imageGeneration": "图像生成",
+  "table.columns.type.enums.musicGeneration": "音乐生成",
   "table.columns.type.enums.speechRecognition": "语音转写",
   "table.columns.type.enums.textToSpeech": "语音合成",
   "table.columns.type.enums.videoGeneration": "视频生成",
