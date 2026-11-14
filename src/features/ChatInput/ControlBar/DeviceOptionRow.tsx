@@ -22,6 +22,8 @@ const styles = stylex.create({
 interface DeviceOptionRowProps {
   active: boolean;
   device: DeviceListItem;
+  /** Replaces the machine name, e.g. "This computer" for this desktop's own row. */
+  label?: string;
   onReconnect: () => void;
   onSelect: () => void;
   reconnecting: boolean;
@@ -35,6 +37,7 @@ interface DeviceOptionRowProps {
 const DeviceOptionRow = ({
   active,
   device,
+  label,
   onReconnect,
   onSelect,
   reconnecting,
@@ -58,7 +61,7 @@ const DeviceOptionRow = ({
           active={active}
           disabled={!selectable}
           icon={<ExecutionTargetIcon devicePlatform={device.platform} target={'device'} />}
-          label={device.friendlyName || device.hostname || device.deviceId}
+          label={label ?? (device.friendlyName || device.hostname || device.deviceId)}
           tags={tags}
           desc={
             <>
