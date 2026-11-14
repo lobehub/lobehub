@@ -1,4 +1,6 @@
+import { ChatErrorType } from '@lobechat/types';
 import { toast } from '@lobehub/ui';
+import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 import { type RuntimeMusicGenParams } from 'model-bank';
 
@@ -14,6 +16,10 @@ import { musicGenerationConfigSelectors } from '../generationConfig/selectors';
 import { generationTopicSelectors } from '../generationTopic';
 
 type Setter = StoreSetter<MusicStore>;
+
+/** Shown by `handleLobeHubModelDeprecatedError`; every other failure needs its own toast. */
+const isModelDeprecatedError = (error: unknown) =>
+  error instanceof TRPCClientError && error.message === ChatErrorType.LobeHubModelDeprecated;
 
 /**
  * Send only the params the selected model declares: the server rejects undeclared params, and
@@ -120,8 +126,18 @@ export class CreateMusicActionImpl {
       // A rejected prompt is shown on the prompt input, where the user fixes it.
       if (isGenerationPromptModerationError(error)) {
         this.#set({ blockedPrompt: parameters.prompt }, false, 'createMusic/promptBlocked');
+      } else if (isModelDeprecatedError(error)) {
+        handleLobeHubModelDeprecatedError(error);
+      } else {
+        // Anything else (invalid params, a failed topic or batch request) would otherwise only reach
+        // the console and the generate button would look unresponsive.
+        toast.error(
+          t('generation.submitFailed', {
+            message: error instanceof Error ? error.message : String(error),
+            ns: 'music',
+          }),
+        );
       }
-      handleLobeHubModelDeprecatedError(error);
       throw error;
     } finally {
       this.#set(

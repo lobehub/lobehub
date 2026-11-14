@@ -6,9 +6,15 @@ import { useMusicStore } from '@/store/music';
 
 import { buildMusicRequestParams } from './action';
 
-const { isGenerationPromptModerationErrorMock } = vi.hoisted(() => ({
+const { isGenerationPromptModerationErrorMock, toastErrorMock } = vi.hoisted(() => ({
   isGenerationPromptModerationErrorMock: vi.fn(),
+  toastErrorMock: vi.fn(),
 }));
+
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, any>>();
+  return { ...actual, toast: { ...actual.toast, error: toastErrorMock } };
+});
 
 vi.mock('@/business/client/isGenerationPromptModerationError', () => ({
   isGenerationPromptModerationError: isGenerationPromptModerationErrorMock,
@@ -131,6 +137,30 @@ describe('CreateMusicAction', () => {
     expect(state.blockedPrompt).toBe('city pop');
     expect(state.parameters.prompt).toBe('city pop');
     expect(state.isCreating).toBe(false);
+    // The blocked notice on the input explains it; no second toast
+    expect(toastErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('tells the user why any other rejected submission failed, keeping the draft', async () => {
+    vi.mocked(musicService.createMusic).mockRejectedValueOnce(
+      new Error('Invalid music params: "prompt" needs at least 10 characters'),
+    );
+
+    await expect(useMusicStore.getState().createMusic()).rejects.toThrow('Invalid music params');
+
+    // Before this, the error only reached the console and the generate button looked dead
+    expect(toastErrorMock).toHaveBeenCalledWith('generation.submitFailed');
+    expect(useMusicStore.getState().parameters.prompt).toBe('city pop');
+  });
+
+  it('refuses a prompt shorter than the model minimum without calling the server', async () => {
+    useMusicStore.setState({
+      parameters: { prompt: '和风' },
+      parametersSchema: { ...songSchema, prompt: { default: '', minLength: 10 } },
+    });
+
+    await expect(useMusicStore.getState().createMusic()).rejects.toThrow(TypeError);
+    expect(musicService.createMusic).not.toHaveBeenCalled();
   });
 
   it('refuses an empty draft without calling the server', async () => {

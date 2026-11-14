@@ -84,6 +84,9 @@ const LyricsParam = memo<{ disabled?: boolean }>(({ disabled }) => {
   const { t } = useTranslation('music');
   const { value, setValue, schema } = useMusicGenerationConfigParam('lyrics');
   const { value: instrumental } = useMusicGenerationConfigParam('instrumental');
+  const { value: autoLyrics } = useMusicGenerationConfigParam('autoLyrics');
+  // Auto-written lyrics only apply to an empty lyrics box; filled text is sung as written
+  const lyricsOverrideAutoLyrics = !!autoLyrics && !instrumental && !!value?.trim();
 
   return (
     <Flexbox gap={4}>
@@ -103,6 +106,11 @@ const LyricsParam = memo<{ disabled?: boolean }>(({ disabled }) => {
         }
         onChange={(e) => setValue(e.target.value)}
       />
+      {lyricsOverrideAutoLyrics && (
+        <Text fontSize={12} type={'warning'}>
+          {t('config.lyrics.autoLyricsIgnored')}
+        </Text>
+      )}
     </Flexbox>
   );
 });

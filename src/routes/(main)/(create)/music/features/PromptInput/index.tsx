@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -51,6 +51,7 @@ const PromptInput = memo<PromptInputProps>(({ showTitle = false }) => {
   const dismissBlockedPrompt = useMusicStore((s) => s.dismissBlockedPrompt);
   const createMusic = useMusicStore((s) => s.createMusic);
   const canSubmit = useMusicStore(musicGenerationConfigSelectors.canSubmit);
+  const promptMinLength = useMusicStore(musicGenerationConfigSelectors.promptMinLength);
   const isInit = useMusicStore((s) => s.isInit);
   const currentModel = useMusicStore(musicGenerationConfigSelectors.model);
   const currentProvider = useMusicStore(musicGenerationConfigSelectors.provider);
@@ -130,6 +131,10 @@ const PromptInput = memo<PromptInputProps>(({ showTitle = false }) => {
         header={
           isPromptBlocked ? (
             <GenerationPromptBlockedNotice onClose={dismissBlockedPrompt} />
+          ) : promptMinLength ? (
+            <Text fontSize={12} type={'warning'}>
+              {t('config.prompt.minLength', { count: promptMinLength })}
+            </Text>
           ) : undefined
         }
         leftActions={
