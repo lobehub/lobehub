@@ -1,7 +1,6 @@
 'use client';
 
 import { Button, Spin } from '@lobehub/ui';
-import { useMemo, useState } from 'react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
 
@@ -9,53 +8,43 @@ import { inspectorStyles as styles } from '../inspectorStyles';
 import CollectionList from './CollectionList';
 import {
   createLocalDatabaseTableRows,
-  filterLocalDatabaseRows,
-  filterRowsByResource,
   getLocalDatabaseColumns,
-  getReplicaResourceGroups,
   type LocalDatabaseColumn,
 } from './model';
 import RecordDetails from './RecordDetails';
-import RecordTable, { MAX_RENDERED_ROWS } from './RecordTable';
+import RecordTable from './RecordTable';
 import { useLocalDatabaseInspector } from './useLocalDatabaseInspector';
 
-const EMPTY_COLUMNS: LocalDatabaseColumn[] = [
-  { id: '__key', label: 'key' },
-  { id: 'value', label: 'value' },
-];
+const KEY_ONLY_COLUMNS: LocalDatabaseColumn[] = [{ id: '__key', label: 'key' }];
 
 const LocalDatabasePanel = () => {
-  const { collections, entries, error, isLoading, refresh, selectCollection, selectedCollection } =
-    useLocalDatabaseInspector();
-  const [rowSearch, setRowSearch] = useState('');
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [selectedResource, setSelectedResource] = useState<string | null>(null);
+  const {
+    collections,
+    error,
+    isLoading,
+    isRecordLoading,
+    keys,
+    matchingCount,
+    refresh,
+    resources,
+    search,
+    selectCollection,
+    selectKey,
+    selectResource,
+    selectedCollection,
+    selectedEntry,
+    selectedKey,
+    selectedResource,
+    setSearch,
+  } = useLocalDatabaseInspector();
 
-  const tableRows = useMemo(() => createLocalDatabaseTableRows(entries), [entries]);
-  const resources = useMemo(() => getReplicaResourceGroups(tableRows), [tableRows]);
-  const activeResource = resources.some(({ name }) => name === selectedResource)
-    ? selectedResource
-    : null;
-  const resourceRows = useMemo(
-    () => filterRowsByResource(tableRows, activeResource),
-    [activeResource, tableRows],
-  );
-  const columns = useMemo(() => {
-    const resolved = getLocalDatabaseColumns(resourceRows);
-    return resolved.length > 0 ? resolved : EMPTY_COLUMNS;
-  }, [resourceRows]);
-  const matchingRows = useMemo(
-    () => filterLocalDatabaseRows(resourceRows, rowSearch),
-    [resourceRows, rowSearch],
-  );
-  const renderedRows = matchingRows.slice(0, MAX_RENDERED_ROWS);
-  const selectedRow =
-    renderedRows.find(({ entry }) => entry.key === selectedKey) ?? renderedRows.at(0);
-
-  const resetSelection = () => {
-    setRowSearch('');
-    setSelectedKey(null);
-  };
+  const rows = createLocalDatabaseTableRows(keys);
+  const columns = rows.length > 0 ? getLocalDatabaseColumns(rows) : KEY_ONLY_COLUMNS;
+  const totalCount =
+    (selectedResource
+      ? resources.find(({ name }) => name === selectedResource)
+      : collections.find(({ name }) => name === selectedCollection)
+    )?.entryCount ?? 0;
 
   if (error) {
     return (
@@ -87,31 +76,29 @@ const LocalDatabasePanel = () => {
           collections={collections}
           resources={resources}
           selectedCollection={selectedCollection}
-          selectedResource={activeResource}
-          onSelectCollection={(name) => {
-            resetSelection();
-            setSelectedResource(null);
-            void selectCollection(name);
-          }}
-          onSelectResource={(resource) => {
-            resetSelection();
-            setSelectedResource(resource);
-          }}
+          selectedResource={selectedResource}
+          onSelectCollection={(name) => void selectCollection(name)}
+          onSelectResource={(resource) => void selectResource(resource)}
         />
         <RecordTable
           columns={columns}
           isLoading={isLoading}
-          matchingCount={matchingRows.length}
-          rowSearch={rowSearch}
-          rows={renderedRows}
-          selectedKey={selectedRow?.entry.key}
-          title={activeResource ?? selectedCollection ?? 'Local Database'}
-          totalCount={resourceRows.length}
+          matchingCount={matchingCount}
+          rowSearch={search}
+          rows={rows}
+          selectedKey={selectedKey}
+          title={selectedResource ?? selectedCollection ?? 'Local Database'}
+          totalCount={totalCount}
           onRefresh={() => void refresh()}
-          onRowSearchChange={setRowSearch}
-          onSelect={setSelectedKey}
+          onRowSearchChange={(value) => void setSearch(value)}
+          onSelect={(key) => void selectKey(key)}
         />
-        <RecordDetails key={selectedCollection ?? ''} row={selectedRow} />
+        <RecordDetails
+          entry={selectedEntry}
+          isLoading={isRecordLoading}
+          key={selectedCollection ?? ''}
+          selectedKey={selectedKey}
+        />
       </div>
     </div>
   );

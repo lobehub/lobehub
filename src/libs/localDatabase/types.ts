@@ -8,6 +8,21 @@ export interface LocalDatabaseCollectionInfo {
   name: string;
 }
 
+export interface LocalDatabaseKeyQuery {
+  limit?: number;
+  search?: string;
+}
+
+export interface LocalDatabaseKeyPage {
+  keys: string[];
+  total: number;
+}
+
+export interface LocalDatabaseKeyGroup {
+  entryCount: number;
+  name: string;
+}
+
 export type LocalDatabaseBatchOperation =
   | {
       collection: string;
@@ -34,6 +49,16 @@ export interface LocalDatabaseAdapter {
   entriesByPrefix: <T>(collection: string, prefix: string) => Promise<LocalDatabaseEntry<T>[]>;
   get: <T>(collection: string, key: string) => Promise<T | undefined>;
   initialize: () => Promise<void>;
+  keyGroupsByPrefix: (
+    collection: string,
+    prefix: string,
+    delimiter: string,
+  ) => Promise<LocalDatabaseKeyGroup[]>;
+  keysByPrefix: (
+    collection: string,
+    prefix: string,
+    query?: LocalDatabaseKeyQuery,
+  ) => Promise<LocalDatabaseKeyPage>;
   listCollections: () => Promise<LocalDatabaseCollectionInfo[]>;
   set: (collection: string, key: string, value: unknown) => Promise<void>;
 }
