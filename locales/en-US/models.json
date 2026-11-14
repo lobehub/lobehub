@@ -697,6 +697,7 @@
   "gpt-6-luna:decision.description": "GPT-6 Luna served through the Decisions API: returns typed answers with probabilities for caller-defined questions, billed on input tokens only.",
   "gpt-6-sol.description": "GPT-6 Sol is built for complex coding and agentic workflows.",
   "gpt-6.1-sol.description": "GPT-6.1 Sol delivers near-Astra performance for complex coding, computer use, and professional work at a lower cost.",
+  "gpt-6.1-terra.description": "GPT-6.1 Terra is a fast, efficient model for visual reasoning, precise computer use, and clear, natural writing.",
   "gpt-audio.description": "GPT Audio is a general chat model for audio input/output, supported in the Chat Completions API.",
   "gpt-image-1-mini.description": "A lower-cost GPT Image 1 variant with native text and image input and image output.",
   "gpt-image-1.5.description": "An enhanced GPT Image 1 model with 4× faster generation, more precise editing, and improved text rendering.",

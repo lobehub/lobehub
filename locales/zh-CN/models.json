@@ -697,6 +697,7 @@
   "gpt-6-luna:decision.description": "通过 Decisions API 提供的 GPT-6 Luna：返回带有概率的类型化答案，用于调用方定义的问题，仅按输入令牌计费。",
   "gpt-6-sol.description": "GPT-6 Sol 专为复杂的编码和代理工作流而设计。",
   "gpt-6.1-sol.description": "GPT-6.1 Sol 以更低的成本提供接近 Astra 的性能，用于复杂编码、计算机使用和专业工作。",
+  "gpt-6.1-terra.description": "GPT-6.1 Terra 是一款快速、高效的模型，擅长视觉推理、精准的计算机操作以及清晰自然的写作。",
   "gpt-audio.description": "GPT Audio 是支持音频输入/输出的通用对话模型，可通过 Chat Completions API 使用。",
   "gpt-image-1-mini.description": "GPT Image 1 的低成本变体，原生支持文本与图像输入，以及图像输出。",
   "gpt-image-1.5.description": "GPT Image 1 的增强版本，生成速度提升 4 倍，编辑更精准，文本渲染效果更佳。",
