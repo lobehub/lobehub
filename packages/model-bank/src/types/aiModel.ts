@@ -589,6 +589,11 @@ export interface AiModelSettings {
    */
   searchImpl?: ModelSearchImplementType;
   searchProvider?: string;
+  /**
+   * The user's default voice for a `tts` model, used when a speech request names no voice.
+   * Takes precedence over the card's `parameters.voice.default`.
+   */
+  ttsVoice?: string;
 }
 
 export const ExtendParamsTypeSchema = z.enum([
@@ -653,6 +658,7 @@ export const AiModelSettingsSchema = z.object({
   extendParams: z.array(ExtendParamsTypeSchema).optional(),
   searchImpl: ModelSearchImplementTypeSchema.optional(),
   searchProvider: z.string().optional(),
+  ttsVoice: z.string().optional(),
 });
 
 export interface AIChatModelCard extends AIBaseModelCard {
@@ -800,6 +806,8 @@ export interface AiProviderModelListItem {
   source?: AiModelSourceType;
   type: AiModelType;
   visible?: boolean;
+  /** Voice catalog of a built-in `tts` model, carried over from its card. */
+  voices?: TTSVoice[];
 }
 
 // Update
