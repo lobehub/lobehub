@@ -6,6 +6,7 @@ import {
   FISH_AUDIO_DEFAULT_VOICE_ID,
   FISH_AUDIO_MAX_INPUT_CHARACTERS,
   FISH_AUDIO_MAX_INSTRUCTIONS_LENGTH,
+  FISH_AUDIO_SAMPLE_RATES,
 } from 'model-bank';
 
 import {
@@ -160,6 +161,16 @@ export const buildFishAudioSpeechRequest = (
       `"${voice}" is not a Fish Audio voice id (32 hex characters, as in fish.audio/m/<id>). ${FISH_AUDIO_VOICE_HINT}`,
       AgentRuntimeErrorType.ProviderBizError,
     );
+  }
+  // The model card lists every rate Fish accepts; which ones apply depends on the format.
+  if (params.sampleRate !== undefined) {
+    const rates = FISH_AUDIO_SAMPLE_RATES[format as keyof typeof FISH_AUDIO_SAMPLE_RATES] ?? [];
+    if (!rates.includes(params.sampleRate)) {
+      throw new FishAudioSpeechError(
+        `Fish Audio ${format} does not support a ${params.sampleRate} Hz sample rate; use one of ${rates.join(', ')}`,
+        AgentRuntimeErrorType.ProviderBizError,
+      );
+    }
   }
   const text = buildFishAudioText(payload.input, requestModel, params.instructions);
 

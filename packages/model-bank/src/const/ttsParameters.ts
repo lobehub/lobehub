@@ -387,6 +387,18 @@ export const fishAudioTTSVoices: TTSVoice[] = [
   },
 ];
 
+/**
+ * Sample rates `/v1/tts` accepts per format; omitted, each format uses its own default
+ * (44.1 kHz, or 48 kHz for opus).
+ * @see https://docs.fish.audio/api-reference/endpoint/openapi-v1/text-to-speech
+ */
+export const FISH_AUDIO_SAMPLE_RATES: Record<'mp3' | 'opus' | 'pcm' | 'wav', number[]> = {
+  mp3: [32_000, 44_100],
+  opus: [48_000],
+  pcm: [8000, 16_000, 24_000, 32_000, 44_100],
+  wav: [8000, 16_000, 24_000, 32_000, 44_100],
+};
+
 /** `format`: mp3, wav, pcm and opus; there is no aac or flac output. */
 const FISH_AUDIO_TTS_FORMATS = TTS_AUDIO_FORMATS.filter(
   (format) => format !== 'aac' && format !== 'flac',
@@ -406,6 +418,11 @@ export const FISH_AUDIO_MAX_INSTRUCTIONS_LENGTH = 200;
 /** S1 takes `prosody.speed` from 0.5 to 2 but no bracketed delivery directions. */
 export const fishAudioTTSSchema: TTSModelParamsSchema = {
   format: { default: 'mp3', enum: FISH_AUDIO_TTS_FORMATS },
+  sampleRate: {
+    default: 44_100,
+    description: 'mp3: 32000 or 44100; opus: 48000; wav and pcm: 8000 to 44100',
+    enum: [...new Set(Object.values(FISH_AUDIO_SAMPLE_RATES).flat())].sort((a, b) => a - b),
+  },
   speed: { default: 1, max: 2, min: 0.5, step: 0.05 },
   voice: { default: FISH_AUDIO_DEFAULT_VOICE_ID },
 };

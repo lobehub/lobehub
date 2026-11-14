@@ -139,6 +139,32 @@ describe('TTSService with provider fishaudio', () => {
     });
   });
 
+  it('accepts a sample rate the format offers and forwards it to Fish', async () => {
+    await service.synthesize({
+      input: 'Hi',
+      model: 's2.1-pro',
+      params: { format: 'mp3', sampleRate: 32_000 },
+      provider: 'fishaudio',
+    });
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toMatchObject({
+      format: 'mp3',
+      sample_rate: 32_000,
+    });
+  });
+
+  it('rejects a sample rate outside the Fish card before calling the API', async () => {
+    await expect(
+      service.synthesize({
+        input: 'Hi',
+        model: 's2.1-pro',
+        params: { sampleRate: 22_050 },
+        provider: 'fishaudio',
+      }),
+    ).rejects.toMatchObject({ name: 'TTSRequestError', reason: 'invalid_params' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('rejects params the Fish card does not allow before calling the API', async () => {
     for (const params of [
       { speed: 3 },

@@ -185,6 +185,14 @@ describe('createFishAudioSpeech', () => {
       ],
       ['empty input', { input: '   ' }],
       ['a voice id that is not a Fish model id', { voice: 'not_a_real_voice_xyz' }],
+      [
+        'a sample rate the format does not offer (opus is 48 kHz only)',
+        { params: { format: 'opus' as const, sampleRate: 44_100 } },
+      ],
+      [
+        'a sample rate mp3 does not offer',
+        { params: { format: 'mp3' as const, sampleRate: 16_000 } },
+      ],
     ])('%s', async (_, override) => {
       await expect(
         createFishAudioSpeech(
