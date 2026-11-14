@@ -33,13 +33,6 @@ export const sessionGroups = pgTable(
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     /**
-     * Team pin of a public workspace folder: an owner/admin surfaces it under
-     * "Pinned for team" in every member's sidebar. Public folders are not
-     * listed in the workspace sidebar otherwise. Unused in personal mode.
-     */
-    pinned: boolean('pinned'),
-
-    /**
      * Visibility within the owning workspace. `public` (default) means every
      * workspace member can see the folder; `private` constrains it to the
      * creator (`user_id`). Ignored in personal mode.

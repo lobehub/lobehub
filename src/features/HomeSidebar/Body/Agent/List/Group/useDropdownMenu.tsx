@@ -21,13 +21,6 @@ interface GroupDropdownMenuProps {
   isPinned?: boolean;
   name?: string;
   openConfigGroupModal: () => void;
-  /**
-   * Pin entries of a public workspace folder (see `useFolderPinMenuItems`).
-   * Passed (even empty) for every public workspace folder, where they replace
-   * "Hide from sidebar": such a folder reaches the sidebar only through a pin,
-   * and a team pin is fixed for every member.
-   */
-  pinMenuItems?: DropdownItem[];
   visibility?: SidebarVisibility;
 }
 
@@ -38,7 +31,6 @@ export const useGroupDropdownMenu = ({
   isPinned,
   name,
   openConfigGroupModal,
-  pinMenuItems,
   visibility,
 }: GroupDropdownMenuProps): DropdownItem[] => {
   const { t } = useTranslation(['common', 'chat']);
@@ -151,10 +143,9 @@ export const useGroupDropdownMenu = ({
       { type: 'divider' as const },
       ...(isCustomGroup
         ? [
-            ...(pinMenuItems?.length ? [...pinMenuItems, { type: 'divider' as const }] : []),
             renameItem,
             configItem,
-            ...(pinMenuItems ? [] : [hideItem]),
+            hideItem,
             ...(publishItem ? [{ type: 'divider' as const }, publishItem] : []),
             { type: 'divider' as const },
             deleteItem,
@@ -175,7 +166,6 @@ export const useGroupDropdownMenu = ({
     renameGroupMenuItem,
     deleteGroupMenuItem,
     openConfigGroupModal,
-    pinMenuItems,
     setSidebarGroupVisible,
     showPublishAction,
     canEdit,

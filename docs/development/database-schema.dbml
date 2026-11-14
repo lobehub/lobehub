@@ -4097,7 +4097,6 @@ table session_groups {
   user_id text [not null]
   client_id text
   workspace_id text
-  pinned boolean
   visibility text [not null, default: 'public']
   deleted_at "timestamp with time zone"
   is_deleted boolean

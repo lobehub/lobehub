@@ -60,11 +60,6 @@ export class SessionService {
     return lambdaClient.sessionGroup.updateSessionGroup.mutate({ id, value });
   };
 
-  /** Team pin of a public workspace folder (owner/admin only). */
-  updateSessionGroupTeamPinned = (id: string, pinned: boolean) => {
-    return lambdaClient.sessionGroup.updateSessionGroupTeamPinned.mutate({ id, pinned });
-  };
-
   updateSessionGroupOrder = (sortMap: { id: string; sort: number }[]) => {
     return lambdaClient.sessionGroup.updateSessionGroupOrder.mutate({ sortMap });
   };

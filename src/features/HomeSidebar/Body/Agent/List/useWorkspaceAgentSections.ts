@@ -1,6 +1,5 @@
 'use client';
 
-import type { SidebarGroup } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { useMemo } from 'react';
 
@@ -51,18 +50,17 @@ export const useWorkspaceAgentSections = (): WorkspaceAgentSections => {
       ungrouped,
       visibilityOverrides,
     });
-    const keepFolderRows = (list: SidebarGroup[]) =>
-      list.map((group) => ({ ...group, items: keep(group.items) }));
 
     // The team section is fixed: a member's own "remove from sidebar" does
     // not apply to it. Every other section honors the member's hides.
     return {
-      folders: keepFolderRows(keepGroups(resolved.folders)),
+      folders: keepGroups(resolved.folders).map((group) => ({
+        ...group,
+        items: keep(group.items),
+      })),
       myPinned: keep(resolved.myPinned),
-      myPinnedFolders: keepFolderRows(resolved.myPinnedFolders),
       rest: keep(resolved.rest),
       teamPinned: resolved.teamPinned,
-      teamPinnedFolders: resolved.teamPinnedFolders,
     };
   }, [
     currentUserId,
@@ -97,24 +95,14 @@ export const useWorkspaceSidebarItemIds = (): WorkspaceSidebarItemIds | null => 
   return useMemo(() => {
     if (!isWorkspace) return null;
 
-    const fixed = new Set<string>();
-    for (const item of [
-      ...sections.teamPinned,
-      ...sections.teamPinnedFolders.flatMap((folder) => folder.items),
-    ])
-      fixed.add(item.id);
+    const fixed = new Set(sections.teamPinned.map((item) => item.id));
 
     const ids = new Set<string>();
     const add = (list: { id: string }[]) => list.forEach((item) => ids.add(item.id));
     add(sections.teamPinned);
     add(sections.myPinned);
     add(sections.rest);
-    for (const folder of [
-      ...sections.teamPinnedFolders,
-      ...sections.myPinnedFolders,
-      ...sections.folders,
-    ])
-      add(folder.items);
+    for (const folder of sections.folders) add(folder.items);
 
     return { fixed, listed: ids };
   }, [isWorkspace, sections]);

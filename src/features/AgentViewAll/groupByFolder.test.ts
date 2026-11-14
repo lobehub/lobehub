@@ -29,7 +29,7 @@ describe('groupItemsByFolder', () => {
     ]);
   });
 
-  it('keeps empty folders so they can still be found and pinned', () => {
+  it('keeps empty folders in the shared catalogue', () => {
     const sections = groupItemsByFolder([], [folder('empty')], 'No folder');
 
     expect(sections.map((s) => s.key)).toEqual(['folder:empty']);

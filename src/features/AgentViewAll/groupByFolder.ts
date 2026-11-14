@@ -10,9 +10,9 @@ export interface FolderSection {
 
 /**
  * Bucket the (already filtered and sorted) page items by their sidebar folder.
- * Folders keep their shared order and stay listed even when empty or filtered
- * out, so a folder can still be found and pinned from here; rows outside any
- * folder collect in a trailing bucket.
+ * Folders keep their shared order and stay listed even when empty, so the
+ * shared catalogue reads the same for everyone; rows outside any folder
+ * collect in a trailing bucket.
  */
 export const groupItemsByFolder = (
   items: SidebarAgentItem[],

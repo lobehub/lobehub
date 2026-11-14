@@ -21,7 +21,6 @@ import { useHomeStore } from '@/store/home';
 
 import { useCreateMenuItems } from '../../../../hooks';
 import { useAgentModal } from '../../ModalProvider';
-import { useFolderPinMenuItems } from '../../useFolderPinMenuItems';
 import SessionList from '../List';
 import PrivateLockIcon from '../PrivateLockIcon';
 import Actions from './Actions';
@@ -29,7 +28,7 @@ import { useGroupDropdownMenu } from './useDropdownMenu';
 
 const styles = stylex.create({ item: { paddingInlineStart: '14px' } });
 
-const GroupItem = memo<SidebarGroup>(({ items, id, name, pinned, visibility }) => {
+const GroupItem = memo<SidebarGroup>(({ items, id, name, visibility }) => {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const isUpdating = useHomeStore((s) => s.groupUpdatingId === id);
   // Public and private folders share one Agents section in a workspace.
@@ -45,16 +44,12 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name, pinned, visibility }) =
     openConfigGroupModal(visibility);
   }, [openConfigGroupModal, visibility]);
 
-  const { isPublicWorkspaceFolder, menuItems } = useFolderPinMenuItems({ id, pinned, visibility });
-  const pinMenuItems = isPublicWorkspaceFolder ? menuItems : undefined;
-
   const dropdownMenu = useGroupDropdownMenu({
     anchor,
     id,
     isCustomGroup: true,
     name,
     openConfigGroupModal: handleOpenConfigGroupModal,
-    pinMenuItems,
     visibility,
   });
 

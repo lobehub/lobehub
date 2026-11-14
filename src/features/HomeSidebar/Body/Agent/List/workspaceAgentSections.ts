@@ -29,17 +29,13 @@ export interface WorkspaceAgentSections {
   folders: SidebarGroup[];
   /** The member's own pinned rows, in their pin order. */
   myPinned: SidebarAgentItem[];
-  /** Public folders the member pinned for themselves. */
-  myPinnedFolders: SidebarGroup[];
   /**
-   * Rows outside any listed folder that the member created, used recently or
-   * added explicitly — public and private together, newest first.
+   * Rows outside the member's private folders that they created, used
+   * recently or added explicitly — public and private together, newest first.
    */
   rest: SidebarAgentItem[];
   /** Rows pinned for everyone by an owner/admin. */
   teamPinned: SidebarAgentItem[];
-  /** Public folders pinned for everyone by an owner/admin. */
-  teamPinnedFolders: SidebarGroup[];
 }
 
 const updatedAtMs = (item: SidebarAgentItem) => new Date(item.updatedAt).getTime() || 0;
@@ -72,17 +68,16 @@ export const isListedInWorkspaceSidebar = (
  * Lay out the merged workspace "Agents" section from the server's per-bucket
  * sidebar list:
  *
- * 1. Team pins — public rows and public folders with the shared `pinned`
- *    column, set by owners/admins.
+ * 1. Team pins — public rows with the shared `pinned` column, set by
+ *    owners/admins.
  * 2. My pins — ids in the member's `sidebarPinnedItemIds` that are still
- *    listed (dangling ids are skipped): rows first, then public folders. The
- *    member's private rows pinned through their own column by earlier clients
- *    follow. A team pin never repeats here.
+ *    listed (dangling ids are skipped), then the member's private rows pinned
+ *    through their own column by earlier clients. A team pin never repeats.
  * 3. Folders — only the member's private folders. Public folders are shared
- *    catalogue structure: they live on the Agents page unless pinned.
- * 4. The rest — rows outside any listed folder (including rows inside an
- *    unpinned public folder) that {@link isListedInWorkspaceSidebar} keeps,
- *    newest first.
+ *    catalogue structure browsed on the Agents page.
+ * 4. The rest — rows outside the private folders (including rows inside a
+ *    public folder) that {@link isListedInWorkspaceSidebar} keeps, newest
+ *    first.
  *
  * Every row appears at most once.
  */
@@ -100,15 +95,7 @@ export const resolveWorkspaceAgentSections = ({
   const teamPinned = pinned;
   const teamIds = new Set(teamPinned.map((item) => item.id));
 
-  const teamPinnedFolderIds = new Set(groups.filter((g) => g.pinned).map((g) => g.id));
-  const publicGroupById = new Map(groups.map((g) => [g.id, g]));
-  const myPinnedFolderIds = myPinnedIds.filter(
-    (id) => publicGroupById.has(id) && !teamPinnedFolderIds.has(id),
-  );
-  const shownPublicFolderIds = new Set([...teamPinnedFolderIds, ...myPinnedFolderIds]);
-  const hiddenPublicFolderItems = groups
-    .filter((g) => !shownPublicFolderIds.has(g.id))
-    .flatMap((g) => g.items);
+  const publicFolderItems = groups.flatMap((g) => g.items);
 
   const candidates = new Map<string, SidebarAgentItem>();
   for (const item of [
@@ -134,23 +121,16 @@ export const resolveWorkspaceAgentSections = ({
   }
 
   const notPinned = (item: SidebarAgentItem) => !myIds.has(item.id) && !teamIds.has(item.id);
-  const withoutPinnedRows = (group: SidebarGroup): SidebarGroup => ({
+
+  const folders = privateGroups.map((group) => ({
     ...group,
     items: group.items.filter(notPinned),
-  });
-
-  const teamPinnedFolders = groups
-    .filter((g) => teamPinnedFolderIds.has(g.id))
-    .map(withoutPinnedRows);
-  const myPinnedFolders = myPinnedFolderIds.map((id) =>
-    withoutPinnedRows(publicGroupById.get(id)!),
-  );
-  const folders = privateGroups.map(withoutPinnedRows);
+  }));
 
   const membership = { currentUserId, visibilityOverrides };
-  const rest = [...ungrouped, ...privateUngrouped, ...hiddenPublicFolderItems]
+  const rest = [...ungrouped, ...privateUngrouped, ...publicFolderItems]
     .filter((item) => notPinned(item) && isListedInWorkspaceSidebar(item, membership))
     .sort((a, b) => updatedAtMs(b) - updatedAtMs(a));
 
-  return { folders, myPinned, myPinnedFolders, rest, teamPinned, teamPinnedFolders };
+  return { folders, myPinned, rest, teamPinned };
 };

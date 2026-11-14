@@ -29,12 +29,8 @@ const item = (
 const mine = { userId: ME };
 const used = { lastUsedAt: new Date('2026-01-10') };
 
-const folder = (
-  id: string,
-  visibility: 'private' | 'public',
-  items: SidebarAgentItem[],
-  pinned?: boolean,
-) => ({ id, items, name: id, pinned, sort: 0, visibility }) as SidebarGroup;
+const folder = (id: string, visibility: 'private' | 'public', items: SidebarAgentItem[]) =>
+  ({ id, items, name: id, sort: 0, visibility }) as SidebarGroup;
 
 const ids = (items: { id: string }[]) => items.map((i) => i.id);
 
@@ -84,10 +80,7 @@ describe('resolveWorkspaceAgentSections', () => {
   it('puts team pins, my pins, private folders and the rest in that order of sections', () => {
     const sections = resolveWorkspaceAgentSections({
       ...base,
-      groups: [
-        folder('pub-folder', 'public', [item('in-pub-folder', 'public', '2026-01-01')]),
-        folder('team-folder', 'public', [item('in-team-folder', 'public', '2026-01-01')], true),
-      ],
+      groups: [folder('pub-folder', 'public', [item('in-pub-folder', 'public', '2026-01-01')])],
       myPinnedIds: ['pub-mine'],
       pinned: [item('team', 'public', '2026-01-01', { pinned: true })],
       privateGroups: [
@@ -102,10 +95,9 @@ describe('resolveWorkspaceAgentSections', () => {
     });
 
     expect(ids(sections.teamPinned)).toEqual(['team']);
-    expect(ids(sections.teamPinnedFolders)).toEqual(['team-folder']);
     // Preference order first, then private rows pinned through their column.
     expect(ids(sections.myPinned)).toEqual(['pub-mine', 'legacy-private-pin']);
-    // Only private folders stay in the sidebar unpinned.
+    // Only private folders stay in the sidebar.
     expect(ids(sections.folders)).toEqual(['priv-folder']);
     // Public and private rows interleave, newest first.
     expect(ids(sections.rest)).toEqual(['priv-rest', 'pub-rest']);
@@ -122,7 +114,7 @@ describe('resolveWorkspaceAgentSections', () => {
     expect(ids(sections.myPinned)).toEqual(['old-private-pin']);
   });
 
-  it('moves unpinned public folders off the sidebar but keeps the rows the member uses', () => {
+  it('moves public folders off the sidebar but keeps the rows the member uses', () => {
     const sections = resolveWorkspaceAgentSections({
       ...base,
       groups: [
@@ -135,58 +127,24 @@ describe('resolveWorkspaceAgentSections', () => {
     });
 
     expect(sections.folders).toEqual([]);
-    expect(sections.teamPinnedFolders).toEqual([]);
-    expect(sections.myPinnedFolders).toEqual([]);
     expect(ids(sections.rest)).toEqual(['i-used', 'i-created']);
-  });
-
-  it('shows a public folder the member pinned, with all its rows', () => {
-    const sections = resolveWorkspaceAgentSections({
-      ...base,
-      groups: [
-        folder('evals', 'public', [
-          item('a', 'public', '2026-01-01'),
-          item('b', 'public', '2026-01-02'),
-        ]),
-      ],
-      myPinnedIds: ['evals'],
-    });
-
-    expect(ids(sections.myPinnedFolders)).toEqual(['evals']);
-    expect(ids(sections.myPinnedFolders[0].items)).toEqual(['a', 'b']);
-    expect(sections.myPinned).toEqual([]);
-    // Rows inside a listed folder are not repeated in the rest.
-    expect(sections.rest).toEqual([]);
-  });
-
-  it('does not repeat a team-pinned folder under my pins', () => {
-    const sections = resolveWorkspaceAgentSections({
-      ...base,
-      groups: [folder('shared', 'public', [], true)],
-      myPinnedIds: ['shared'],
-    });
-
-    expect(ids(sections.teamPinnedFolders)).toEqual(['shared']);
-    expect(sections.myPinnedFolders).toEqual([]);
   });
 
   it('lists every row once: a personal pin leaves its folder and the rest', () => {
     const sections = resolveWorkspaceAgentSections({
       ...base,
-      groups: [
-        folder(
-          'f',
-          'public',
-          [item('a', 'public', '2026-01-01'), item('b', 'public', '2026-01-01')],
-          true,
-        ),
-      ],
       myPinnedIds: ['a', 'c'],
+      privateGroups: [
+        folder('f', 'private', [
+          item('a', 'private', '2026-01-01'),
+          item('b', 'private', '2026-01-01'),
+        ]),
+      ],
       ungrouped: [item('c', 'public', '2026-01-01'), item('d', 'public', '2026-01-01', mine)],
     });
 
     expect(ids(sections.myPinned)).toEqual(['a', 'c']);
-    expect(ids(sections.teamPinnedFolders[0].items)).toEqual(['b']);
+    expect(ids(sections.folders[0].items)).toEqual(['b']);
     expect(ids(sections.rest)).toEqual(['d']);
   });
 
@@ -201,15 +159,14 @@ describe('resolveWorkspaceAgentSections', () => {
     expect(sections.myPinned).toEqual([]);
   });
 
-  it('skips dangling personal pins of rows and folders that no longer exist', () => {
+  it('skips dangling personal pins of rows that no longer exist', () => {
     const sections = resolveWorkspaceAgentSections({
       ...base,
-      myPinnedIds: ['deleted', 'deleted-folder', 'kept'],
+      myPinnedIds: ['deleted', 'kept'],
       ungrouped: [item('kept', 'public', '2026-01-01')],
     });
 
     expect(ids(sections.myPinned)).toEqual(['kept']);
-    expect(sections.myPinnedFolders).toEqual([]);
   });
 
   it('dedupes a private pin recorded both in the preference and on the column', () => {

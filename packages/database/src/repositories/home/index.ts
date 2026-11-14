@@ -188,7 +188,6 @@ export class HomeRepository {
           .select({
             id: sessionGroups.id,
             name: sessionGroups.name,
-            pinned: sessionGroups.pinned,
             sort: sessionGroups.sort,
             userId: sessionGroups.userId,
             visibility: sessionGroups.visibility,
@@ -385,7 +384,6 @@ export class HomeRepository {
     groupItems: Array<{
       id: string;
       name: string;
-      pinned?: boolean | null;
       sort: number | null;
       userId: string;
       visibility: 'private' | 'public';
@@ -529,8 +527,6 @@ export class HomeRepository {
         id: g.id,
         items: itemsMap.get(g.id) || [],
         name: g.name,
-        // Only a public workspace folder can carry a team pin.
-        ...(this.workspaceId && visibility === 'public' ? { pinned: !!g.pinned } : {}),
         sort: g.sort,
         visibility,
       });

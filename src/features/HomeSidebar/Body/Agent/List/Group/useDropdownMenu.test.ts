@@ -80,49 +80,4 @@ describe('Category useGroupDropdownMenu', () => {
       visibility: 'private',
     });
   });
-
-  it('puts a public workspace folder’s pin entries first and drops the hide entry', () => {
-    const { result } = renderHook(() =>
-      useGroupDropdownMenu({
-        anchor: null,
-        id: 'group-1',
-        isCustomGroup: true,
-        name: 'Coding',
-        openConfigGroupModal: vi.fn(),
-        pinMenuItems: [{ key: 'pin' }, { key: 'pinForTeam' }] as any,
-        visibility: 'public',
-      }),
-    );
-
-    expect(getMenuLayout(result.current)).toEqual([
-      'newAgent',
-      'newGroupChat',
-      'divider',
-      'newPlatformAgent',
-      'divider',
-      'pin',
-      'pinForTeam',
-      'divider',
-      'rename',
-      'config',
-      'divider',
-      'delete',
-    ]);
-  });
-
-  it('drops the hide entry even when a member has no pin entry to offer', () => {
-    const { result } = renderHook(() =>
-      useGroupDropdownMenu({
-        anchor: null,
-        id: 'group-1',
-        isCustomGroup: true,
-        name: 'Coding',
-        openConfigGroupModal: vi.fn(),
-        pinMenuItems: [],
-        visibility: 'public',
-      }),
-    );
-
-    expect(getMenuLayout(result.current)).not.toContain('hideFromSidebar');
-  });
 });

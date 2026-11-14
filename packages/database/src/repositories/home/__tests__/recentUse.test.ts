@@ -1,12 +1,10 @@
 // The workspace sidebar lists a shared row by default only when the member
-// created it or used it recently, and lists a public folder only when it is
-// pinned. The repository supplies both signals: per-member `lastUsedAt` and
-// the folder team pin.
+// created it or used it recently. The repository supplies the per-member
+// `lastUsedAt` signal.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { AgentModel } from '../../../models/agent';
-import { SessionGroupModel } from '../../../models/sessionGroup';
 import * as Schema from '../../../schemas';
 import { HomeRepository, SIDEBAR_RECENT_USE_DAYS } from '../index';
 
@@ -57,7 +55,7 @@ afterEach(async () => {
   await clientDB.delete(Schema.workspaces);
 });
 
-describe('HomeRepository workspace sidebar signals', () => {
+describe('HomeRepository workspace recent use', () => {
   it('reports the member’s own recent use, not a teammate’s', async () => {
     const agent = await createPublicAgent('Shared');
     const usedAt = new Date(Date.now() - 2 * DAY);
@@ -100,19 +98,7 @@ describe('HomeRepository workspace sidebar signals', () => {
     expect(new Date(findItem(forB, agent.id)!.lastUsedAt!).getTime()).toBe(latest.getTime());
   });
 
-  it('exposes the team pin of a public folder to every member', async () => {
-    const folderModel = new SessionGroupModel(clientDB, memberA, ws);
-    const pinnedFolder = await folderModel.create({ name: 'Pinned' });
-    const plainFolder = await folderModel.create({ name: 'Plain' });
-    await folderModel.updateTeamPinned(pinnedFolder.id, true);
-
-    const forB = await new HomeRepository(clientDB, memberB, ws).getSidebarAgentList();
-
-    expect(forB.groups.find((g) => g.id === pinnedFolder.id)?.pinned).toBe(true);
-    expect(forB.groups.find((g) => g.id === plainFolder.id)?.pinned).toBe(false);
-  });
-
-  it('adds neither signal in personal mode', async () => {
+  it('reports no recent use in personal mode', async () => {
     const personalAgent = await new AgentModel(clientDB, memberA).create({
       systemRole: '',
       title: 'Personal',
@@ -122,11 +108,9 @@ describe('HomeRepository workspace sidebar signals', () => {
       title: 'topic',
       userId: memberA,
     });
-    const folder = await new SessionGroupModel(clientDB, memberA).create({ name: 'Personal' });
 
     const view = await new HomeRepository(clientDB, memberA).getSidebarAgentList();
 
     expect(findItem(view, personalAgent.id)!.lastUsedAt).toBeUndefined();
-    expect(view.groups.find((g) => g.id === folder.id)).not.toHaveProperty('pinned');
   });
 });

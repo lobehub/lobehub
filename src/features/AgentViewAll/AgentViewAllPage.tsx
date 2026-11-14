@@ -1,7 +1,7 @@
 'use client';
 
 import { DEFAULT_USER_AVATAR_URL } from '@lobechat/const';
-import { agentDisplayName, type SidebarAgentItem, type SidebarGroup } from '@lobechat/types';
+import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import {
   Avatar,
   Button,
@@ -22,7 +22,7 @@ import {
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import { ChevronDownIcon, ChevronRightIcon, PlusIcon } from 'lucide-react';
-import { memo, type ReactNode, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
@@ -52,7 +52,6 @@ import { useUserStore } from '@/store/user';
 import AgentCard, { AgentCardGrid } from './AgentCard';
 import AgentRow, { type AgentRowAuthor } from './AgentRow';
 import { flattenAgentBuckets } from './flattenBuckets';
-import FolderPinActions from './FolderPinActions';
 import { groupItemsByFolder } from './groupByFolder';
 import ListConfig from './ListConfig';
 import { type AgentListViewOptions, normalizeAgentListViewOptions } from './listViewOptions';
@@ -68,8 +67,6 @@ interface GroupHeaderProps {
   color?: string | null;
   count: number;
   /** Position in the group list — drives the alternating bar tint. */
-  /** Trailing controls, e.g. a folder's pin state and pin menu. */
-  extra?: ReactNode;
   index: number;
   label: string;
   onToggle: () => void;
@@ -107,7 +104,7 @@ const groupHeaderStyles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const GroupHeader = memo<GroupHeaderProps>(
-  ({ avatar, collapsed, color, count, extra, index, label, onToggle }) => (
+  ({ avatar, collapsed, color, count, index, label, onToggle }) => (
     <Flexbox
       horizontal
       align={'center'}
@@ -142,7 +139,6 @@ const GroupHeader = memo<GroupHeaderProps>(
       <Text fontSize={12} type={'secondary'}>
         {count}
       </Text>
-      {extra}
     </Flexbox>
   ),
 );
@@ -161,10 +157,6 @@ const SegmentLabel = memo<{ count: number; label: string }>(({ count, label }) =
 ));
 
 SegmentLabel.displayName = 'AgentViewAllSegmentLabel';
-
-/** A folder section's header carries its pin state and pin menu. */
-const folderExtra = (group: { folder?: SidebarGroup }) =>
-  group.folder ? <FolderPinActions folder={group.folder} /> : undefined;
 
 const AgentViewAllPage = memo(() => {
   const { t } = useTranslation('common');
@@ -396,7 +388,6 @@ const AgentViewAllPage = memo(() => {
         // avatar still gets the default one instead of a bare name.
         avatar: (userId && authorByUserId.get(userId)?.avatar) || DEFAULT_USER_AVATAR_URL,
         color: undefined as string | null | undefined,
-        folder: undefined as SidebarGroup | undefined,
         items: groupItems,
         key: `author:${userId || 'unknown'}`,
         label:
@@ -418,7 +409,6 @@ const AgentViewAllPage = memo(() => {
       return sections.map((section) => ({
         avatar: null as string | null,
         color: undefined as string | null | undefined,
-        folder: section.folder,
         items: section.items,
         key: section.key,
         label: section.label,
@@ -449,7 +439,6 @@ const AgentViewAllPage = memo(() => {
         .map(([labelId, bucket]) => ({
           avatar: null as string | null,
           color: bucket.color,
-          folder: undefined as SidebarGroup | undefined,
           items: bucket.items,
           key: `label:${labelId}`,
           label: bucket.label,
@@ -459,7 +448,6 @@ const AgentViewAllPage = memo(() => {
         groups.push({
           avatar: null,
           color: undefined,
-          folder: undefined,
           items: unlabeled,
           key: 'label:none',
           label: t('agentViewAll.groupBy.noLabel'),
@@ -698,7 +686,6 @@ const AgentViewAllPage = memo(() => {
                       collapsed={collapsed}
                       color={group.color}
                       count={group.items.length}
-                      extra={folderExtra(group)}
                       index={index}
                       label={group.label}
                       onToggle={() => toggleGroupCollapsed(group.key)}
@@ -725,7 +712,6 @@ const AgentViewAllPage = memo(() => {
                         collapsed={collapsed}
                         color={group.color}
                         count={group.items.length}
-                        extra={folderExtra(group)}
                         index={index}
                         label={group.label}
                         onToggle={() => toggleGroupCollapsed(group.key)}

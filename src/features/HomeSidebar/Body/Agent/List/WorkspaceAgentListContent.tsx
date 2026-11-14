@@ -95,8 +95,7 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
       </>
     );
 
-  const { folders, hasMore, myPinned, myPinnedFolders, rest, teamPinned, teamPinnedFolders } =
-    sections;
+  const { folders, hasMore, myPinned, rest, teamPinned } = sections;
   const teamOverflow = teamPinned.length > TEAM_PINNED_VISIBLE_LIMIT;
   const visibleTeamPinned =
     teamOverflow && !teamExpanded ? teamPinned.slice(0, TEAM_PINNED_VISIBLE_LIMIT) : teamPinned;
@@ -104,7 +103,7 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
   return (
     <>
       {!hideInbox && <InboxItem style={{ minHeight: 36 }} />}
-      {teamPinned.length + teamPinnedFolders.length > 0 && (
+      {teamPinned.length > 0 && (
         <Flexbox data-testid={'sidebar-team-pinned'} gap={1}>
           <SubHeader
             icon={UsersIcon}
@@ -126,10 +125,9 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
               onClick={() => setTeamExpanded((expanded) => !expanded)}
             />
           )}
-          {teamPinnedFolders.length > 0 && <Group dataSource={teamPinnedFolders} />}
         </Flexbox>
       )}
-      {myPinned.length + myPinnedFolders.length > 0 && (
+      {myPinned.length > 0 && (
         <Flexbox data-testid={'sidebar-my-pinned'} gap={1}>
           <SubHeader
             icon={PinIcon}
@@ -137,7 +135,6 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
             title={t('navPanel.myPinned')}
           />
           <SessionList dataSource={myPinned} />
-          {myPinnedFolders.length > 0 && <Group dataSource={myPinnedFolders} />}
         </Flexbox>
       )}
       {folders.length > 0 && <Group dataSource={folders} />}

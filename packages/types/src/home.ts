@@ -132,11 +132,6 @@ export interface SidebarGroup {
   id: string;
   items: SidebarAgentItem[];
   name: string;
-  /**
-   * Team pin of a public workspace folder (see `session_groups.pinned`).
-   * Owner/admin managed; absent or false for private folders and personal mode.
-   */
-  pinned?: boolean;
   sort: number | null;
   /**
    * Visibility of the session group itself (same semantics as

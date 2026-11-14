@@ -1,4 +1,3 @@
-import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -7,8 +6,6 @@ import { SessionGroupModel } from '@/database/models/sessionGroup';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type SessionGroupItem } from '@/types/session';
-
-import { assertCanWriteTeamPin } from './_helpers/sidebarPin';
 
 const sessionProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -99,31 +96,6 @@ export const sessionGroupRouter = router({
     .mutation(async ({ input, ctx }) => {
       return ctx.sessionGroupModel.update(input.id, input.value);
     }),
-  /**
-   * Team pin of a public workspace folder — owners/admins only, the same grant
-   * as the Agent / chat-group team pin. Members pin a folder for themselves
-   * through `workspace_user_settings.sidebarPinnedItemIds`.
-   */
-  updateSessionGroupTeamPinned: sessionProcedure
-    .use(withScopedPermission('session_group:update'))
-    .input(z.object({ id: z.string(), pinned: z.boolean() }))
-    .mutation(async ({ input, ctx }) => {
-      if (!ctx.workspaceId)
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Team pins only exist in a workspace',
-        });
-
-      await assertCanWriteTeamPin(ctx);
-
-      const updated = await ctx.sessionGroupModel.updateTeamPinned(input.id, input.pinned);
-      if (!updated)
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          message: 'Only a public workspace folder can be pinned for the team',
-        });
-    }),
-
   updateSessionGroupOrder: sessionProcedure
     .use(withScopedPermission('session_group:update'))
     .input(

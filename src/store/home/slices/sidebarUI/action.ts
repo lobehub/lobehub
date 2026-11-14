@@ -22,8 +22,7 @@ export interface PersonalPinTarget {
   id: string;
   /** Current value of the row's own `pinned` column. */
   pinned?: boolean | null;
-  /** `folder` is a public workspace folder (session group); it has no own column. */
-  type: 'agent' | 'folder' | 'group';
+  type: 'agent' | 'group';
   visibility?: 'private' | 'public' | null;
 }
 
@@ -99,16 +98,6 @@ export class SidebarUIActionImpl {
   };
 
   /**
-   * Team pin of a public workspace folder: an owner/admin surfaces it under
-   * "Pinned for team" for every member. Members pin a folder for themselves
-   * through `pinItemForMe` with `type: 'folder'`.
-   */
-  pinFolderForTeam = async (folderId: string, pinned: boolean): Promise<void> => {
-    await sessionService.updateSessionGroupTeamPinned(folderId, pinned);
-    await this.#get().refreshAgentList();
-  };
-
-  /**
    * Pin / unpin an Agent or chat group for the current member only, in the
    * merged workspace Agents section. The member's pin order lives in their
    * `sidebarPinnedItemIds` preference (newest first); the shared column on a
@@ -133,8 +122,7 @@ export class SidebarUIActionImpl {
     if (listChanged) {
       await userStore.updateWorkspaceUserPreference({ sidebarPinnedItemIds: nextIds });
     }
-    // Folders keep personal pins in the preference only.
-    if (item.type !== 'folder' && isPrivate && !!item.pinned !== pinned) await writeColumn(pinned);
+    if (isPrivate && !!item.pinned !== pinned) await writeColumn(pinned);
   };
 
   removeAgent = async (agentId: string): Promise<void> => {
