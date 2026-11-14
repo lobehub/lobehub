@@ -625,3 +625,116 @@ describe('agent-scoped connectors of an agent the caller cannot see', () => {
     expect(mcpService.readUiResource).not.toHaveBeenCalled();
   });
 });
+
+// Marketplace installs used to run as plugins, whose calls the Market was told
+// about (`tools.mcp.callTool`, `market.callCloudMcpEndpoint`)
+describe('Market call reports', () => {
+  const marketplace = {
+    ...connector,
+    metadata: { marketplaceInstalled: true, version: '1.2.0' },
+    sourceType: 'marketplace',
+    status: 'connected',
+  };
+  const reportCtx = (row: any, report = vi.fn()) => ({
+    ...makeCtx([row], [tool()]),
+    resolveToolCallReporter: vi.fn().mockResolvedValue(report),
+  });
+
+  it("reports a marketplace server's call with its session and installed version", async () => {
+    vi.mocked(mcpService.callTool).mockResolvedValue({ content: 'done' } as any);
+    const report = vi.fn();
+
+    await callConnectorToolById(
+      { args: '{"q":1}', identifier: 'my-conn', toolName: 'do_thing', topicId: 'tpc_1' },
+      reportCtx(marketplace, report),
+    );
+
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identifier: 'my-conn',
+        mcpType: 'http',
+        meta: { sessionId: 'tpc_1', version: '1.2.0' },
+        requestPayload: '{"q":1}',
+        result: { content: 'done' },
+        startTime: expect.any(Number),
+        success: true,
+        toolName: 'do_thing',
+      }),
+    );
+  });
+
+  it('reports a failed call as failed and still throws its error', async () => {
+    const failure = new Error('upstream 500');
+    vi.mocked(mcpService.callTool).mockRejectedValue(failure);
+    const report = vi.fn();
+
+    await expect(
+      callConnectorToolById(
+        { identifier: 'my-conn', toolName: 'do_thing' },
+        reportCtx(marketplace, report),
+      ),
+    ).rejects.toBe(failure);
+
+    expect(report).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorCode: 'CALL_FAILED',
+        errorMessage: 'upstream 500',
+        success: false,
+      }),
+    );
+  });
+
+  it('reports a market-hosted (cloud) server as cloud', async () => {
+    callCloudMcpEndpoint.mockResolvedValue({ content: [{ text: 'found', type: 'text' }] });
+    const report = vi.fn();
+    const ctx = {
+      ...reportCtx(
+        { ...marketplace, credentials: null, mcpConnectionType: 'cloud', mcpServerUrl: null },
+        report,
+      ),
+      resolveCloudMcpCaller: vi
+        .fn()
+        .mockResolvedValue({ discoverService: { callCloudMcpEndpoint } }),
+    };
+
+    await callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx);
+
+    expect(report).toHaveBeenCalledWith(
+      expect.objectContaining({ mcpType: 'cloud', success: true }),
+    );
+  });
+
+  it('does not report custom servers, or rows without an endpoint of their own', async () => {
+    vi.mocked(mcpService.callTool).mockResolvedValue({ content: 'done' } as any);
+    const custom = reportCtx({ ...connector, sourceType: 'custom' });
+    // A Composio connection is a marketplace row its own executor runs
+    const composio = reportCtx({
+      ...marketplace,
+      mcpConnectionType: null,
+      mcpServerUrl: null,
+      metadata: { composio: { toolkit: 'gmail' } },
+    });
+
+    await callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, custom);
+    // This route has no endpoint to call it on
+    await expect(
+      callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, composio),
+    ).rejects.toThrow();
+
+    expect(custom.resolveToolCallReporter).not.toHaveBeenCalled();
+    expect(composio.resolveToolCallReporter).not.toHaveBeenCalled();
+  });
+
+  it('still runs the call when no reporter can be resolved', async () => {
+    vi.mocked(mcpService.callTool).mockResolvedValue({ content: 'done' } as any);
+    const ctx = {
+      ...makeCtx([marketplace], [tool()]),
+      resolveToolCallReporter: vi.fn().mockRejectedValue(new Error('db down')),
+    };
+
+    await expect(
+      callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx),
+    ).resolves.toEqual({ content: 'done' });
+  });
+});

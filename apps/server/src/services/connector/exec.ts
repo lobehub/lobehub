@@ -1,4 +1,4 @@
-import { isMarketplaceInstallRunnable } from '@lobechat/const';
+import { hasCallableMcpEndpoint, isMarketplaceInstallRunnable } from '@lobechat/const';
 import { getMcpServerFingerprint, isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 
@@ -30,6 +30,23 @@ export class ConnectorToolCallError extends Error {
   }
 }
 
+/** A finished connector tool call, as the Market's call report reads it. */
+export interface ConnectorToolCallReport {
+  errorCode?: string;
+  errorMessage?: string;
+  identifier: string;
+  /** The connector's transport: `http` or `cloud`. */
+  mcpType: string;
+  meta: { sessionId?: string; version?: string };
+  requestPayload: unknown;
+  result?: unknown;
+  startTime: number;
+  success: boolean;
+  toolName: string;
+}
+
+export type ConnectorToolCallReporter = (report: ConnectorToolCallReport) => void;
+
 export interface ConnectorExecContext extends ConnectorToolSyncContext {
   /** Visibility-aware: decides whether the caller may act as the given agent. */
   agentModel: Pick<AgentModel, 'existsById'>;
@@ -50,6 +67,12 @@ export interface ConnectorExecContext extends ConnectorToolSyncContext {
    * formatted as returned (base64 data).
    */
   resolveFileService?: () => FileService | undefined;
+  /**
+   * Reports a marketplace MCP server's call to the Market, resolved only for
+   * such a call. `undefined` (or no resolver): nothing is reported, e.g. the
+   * user turned telemetry off.
+   */
+  resolveToolCallReporter?: () => Promise<ConnectorToolCallReporter | undefined>;
   /** `userId` decides the caller's `mcp_apps` flag. */
   userId?: string | null;
 }
@@ -128,6 +151,8 @@ export const callConnectorToolById = async (
     /** With `fromApp`: the server the view came from; its calls reach no other. */
     server?: string;
     toolName: string;
+    /** The conversation the call runs in, reported as the call's session. */
+    topicId?: string;
   },
   ctx: ConnectorExecContext,
 ): Promise<unknown> => {
@@ -211,6 +236,60 @@ export const callConnectorToolById = async (
     );
   }
 
+  const report = await resolveReporter(connector, ctx);
+  if (!report) return runConnectorTool(connector, params, ctx);
+
+  const startTime = Date.now();
+  let failure: Error | undefined;
+  let result: unknown;
+  try {
+    result = await runConnectorTool(connector, params, ctx);
+    return result;
+  } catch (error) {
+    failure = error instanceof Error ? error : new Error(String(error));
+    throw error;
+  } finally {
+    report({
+      errorCode: failure ? 'CALL_FAILED' : undefined,
+      errorMessage: failure?.message,
+      identifier: connector.identifier,
+      mcpType: connector.mcpConnectionType ?? ConnectorMcpConnectionType.http,
+      meta: { sessionId: params.topicId, version: installedVersion(connector.metadata) },
+      requestPayload: params.args,
+      result,
+      startTime,
+      success: !failure,
+      toolName: params.toolName,
+    });
+  }
+};
+
+/**
+ * The Market reporter for a marketplace MCP server's call, the way its plugin's
+ * calls were reported (`tools.mcp.callTool`, `market.callCloudMcpEndpoint`).
+ * Rows without an endpoint (Composio, skill projections) run elsewhere. A
+ * reporter that can't be resolved never fails the call.
+ */
+const resolveReporter = async (connector: DecryptedConnector, ctx: ConnectorExecContext) => {
+  if (connector.sourceType !== 'marketplace' || !hasCallableMcpEndpoint(connector)) return;
+  try {
+    return await ctx.resolveToolCallReporter?.();
+  } catch {
+    return undefined;
+  }
+};
+
+/** The manifest version a marketplace install recorded. */
+const installedVersion = (metadata: unknown): string | undefined => {
+  const version = (metadata as { version?: unknown } | null)?.version;
+  return typeof version === 'string' ? version : undefined;
+};
+
+const runConnectorTool = async (
+  connector: DecryptedConnector,
+  params: { args?: string; fromApp?: boolean; toolName: string },
+  ctx: ConnectorExecContext,
+): Promise<unknown> => {
   // A market-hosted stdio server: no session to open, the market's cloud
   // gateway runs the tool by identifier.
   if (connector.mcpConnectionType === ConnectorMcpConnectionType.cloud) {

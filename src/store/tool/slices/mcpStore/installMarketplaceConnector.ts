@@ -46,9 +46,15 @@ const buildCreatePayload = ({
   description,
   icon,
   identifier,
+  manifest,
   name,
 }: InstallMarketplaceConnectorParams): CreateConnectorPayload => {
-  const metadata: Record<string, unknown> = { avatar: icon, description };
+  // The version goes with each call the Market is told about
+  const metadata: Record<string, unknown> = {
+    avatar: icon,
+    description,
+    version: manifest.version,
+  };
   if (connection.headers) metadata.customHeaders = connection.headers;
   const base = { identifier, metadata, name, sourceType: 'marketplace' as const };
 

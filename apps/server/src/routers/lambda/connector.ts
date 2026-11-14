@@ -63,7 +63,7 @@ import {
 } from '@/server/utils/connectorAttribution';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
-import { resolveRequestCloudMcpCaller } from './_helpers/cloudMcpCaller';
+import { withRequestConnectorCallers } from './_helpers/connectorCallContext';
 import {
   assertConnectorCredentialsManageable,
   assertConnectorMaintainable,
@@ -75,7 +75,6 @@ import {
   resolveConnectorToolPermission,
   resolveDefaultPermission,
 } from './_helpers/connectorToolPermission';
-import { resolveRequestFileService } from './_helpers/requestFileService';
 import { upsertConnectorEntry } from './_helpers/upsertConnectorEntry';
 
 const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -872,15 +871,13 @@ export const connectorRouter = router({
         /** With `fromApp`: the server the view came from (`getMcpServerFingerprint`). */
         server: z.string().optional(),
         toolName: z.string().min(1),
+        /** The conversation the call runs in, reported as the call's session. */
+        topicId: z.string().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        return await callConnectorToolById(input, {
-          ...ctx,
-          resolveFileService: () => resolveRequestFileService(ctx),
-          resolveCloudMcpCaller: () => resolveRequestCloudMcpCaller(ctx),
-        });
+        return await callConnectorToolById(input, withRequestConnectorCallers(ctx));
       } catch (err: any) {
         if (err instanceof ConnectorToolCallError) {
           throw new TRPCError({ cause: err, code: err.code, message: err.message });

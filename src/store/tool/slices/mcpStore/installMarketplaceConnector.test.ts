@@ -76,6 +76,25 @@ describe('installMarketplaceConnector', () => {
     });
   });
 
+  // Each call reported to the Market names the version that was installed
+  it('records the manifest version it installed', async () => {
+    await installMarketplaceConnector(
+      {
+        connection: { type: 'http', url: 'https://mcp.example.com' },
+        identifier: 'market-mcp',
+        isOAuth: false,
+        manifest: { ...manifest, version: '1.2.0' },
+        name: 'Market MCP',
+        signal: new AbortController().signal,
+      },
+      () => state,
+    );
+
+    expect(vi.mocked(state.createConnector).mock.calls[0][0].metadata).toMatchObject({
+      version: '1.2.0',
+    });
+  });
+
   it('stores a stdio command on the connector', async () => {
     await install({ args: ['-y', 'pkg'], command: 'npx', env: { A: '1' }, type: 'stdio' });
 

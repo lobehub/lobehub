@@ -48,6 +48,48 @@ function calculateObjectSizeBytes(obj: any): number {
   }
 }
 
+/**
+ * Report a tool call this machine ran to the Market, without affecting the
+ * call. The server reports the calls it runs (`tools.mcp.callTool`,
+ * `market.callCloudMcpEndpoint`, `connector.callTool`).
+ */
+const reportLocalCall = (call: {
+  args?: string;
+  command?: string;
+  customPluginInfo?: CallReportRequest['customPluginInfo'];
+  failure?: unknown;
+  identifier: string;
+  isCustomPlugin: boolean;
+  mcpType?: string;
+  result?: MCPToolCallResult;
+  sessionId?: string;
+  startTime: number;
+  toolName: string;
+  version: string;
+}) => {
+  const success = call.failure === undefined;
+  const reportData: CallReportRequest = {
+    callDurationMs: Date.now() - call.startTime,
+    customPluginInfo: call.customPluginInfo,
+    errorCode: success ? undefined : 'CALL_FAILED',
+    errorMessage: success ? undefined : (call.failure as Error)?.message,
+    identifier: call.identifier,
+    isCustomPlugin: call.isCustomPlugin,
+    metadata: { appVersion: CURRENT_VERSION, command: call.command, mcpType: call.mcpType },
+    methodName: call.toolName,
+    methodType: 'tool' as const,
+    requestSizeBytes: calculateObjectSizeBytes(safeParseJSON(call.args) || call.args),
+    responseSizeBytes: success && call.result ? calculateObjectSizeBytes(call.result.state) : 0,
+    sessionId: call.sessionId,
+    success,
+    version: call.version,
+  };
+
+  discoverService.reportPluginCall(reportData).catch((reportError) => {
+    console.warn('Failed to report MCP tool call:', reportError);
+  });
+};
+
 /** A tool a local MCP server lists, as the desktop main process reports it. */
 export interface LocalMcpTool {
   description?: string;
@@ -286,22 +328,49 @@ class MCPService {
           throw new Error(VIEW_SERVER_MOVED);
         }
         throwIfAborted(signal);
-        const result = await ensureElectronIpc().mcp.callTool(
-          serializeMcpIpcPayload({
-            args: safeParseJSON(args) ?? {},
-            env: config.env,
-            ...(fromMcpApp && { fromApp: true }),
-            mcpApps,
-            params: {
-              args: config.args ?? [],
+        const startTime = Date.now();
+        let failure: unknown;
+        let result: MCPToolCallResult | undefined;
+        try {
+          const serialized = await ensureElectronIpc().mcp.callTool(
+            serializeMcpIpcPayload({
+              args: safeParseJSON(args) ?? {},
+              env: config.env,
+              ...(fromMcpApp && { fromApp: true }),
+              mcpApps,
+              params: {
+                args: config.args ?? [],
+                command: config.command,
+                name: detail.identifier,
+                type: 'stdio',
+              },
+              toolName: apiName,
+            }),
+          );
+          result = await markLocalView(deserializeMcpIpcPayload<MCPToolCallResult>(serialized));
+          return result;
+        } catch (error) {
+          failure = error ?? new Error('MCP tool call failed');
+          throw error;
+        } finally {
+          // A marketplace server's calls are reported as its plugin's were
+          if (connector.sourceType === 'marketplace') {
+            const version = (detail.metadata as { version?: unknown } | null)?.version;
+            reportLocalCall({
+              args,
               command: config.command,
-              name: detail.identifier,
-              type: 'stdio',
-            },
-            toolName: apiName,
-          }),
-        );
-        return markLocalView(deserializeMcpIpcPayload<MCPToolCallResult>(result));
+              failure,
+              identifier,
+              isCustomPlugin: false,
+              mcpType: 'stdio',
+              result,
+              sessionId: topicId,
+              startTime,
+              toolName: apiName,
+              version: typeof version === 'string' ? version : 'unknown',
+            });
+          }
+        }
       }
       try {
         return (await lambdaClient.connector.callTool.mutate(
@@ -312,6 +381,7 @@ class MCPService {
             ...(fromMcpApp && { fromApp: true, server }),
             identifier,
             toolName: apiName,
+            topicId,
           },
           { signal },
         )) as MCPToolCallResult;
@@ -389,9 +459,7 @@ class MCPService {
 
     // Record call start time
     const callStartTime = Date.now();
-    let success = false;
-    let errorCode: string | undefined;
-    let errorMessage: string | undefined;
+    let failure: unknown;
     let result: MCPToolCallResult | undefined;
 
     try {
@@ -437,12 +505,9 @@ class MCPService {
         result = await toolsClient.mcp.callTool.mutate(data, { signal });
       }
 
-      success = true;
       return result;
     } catch (error) {
-      const err = error as Error;
-      errorCode = 'CALL_FAILED';
-      errorMessage = err.message;
+      failure = error ?? new Error('MCP tool call failed');
 
       // Rethrow error, maintain original error handling logic
       throw error;
@@ -451,40 +516,19 @@ class MCPService {
       // Cloud type: reporting is handled by server-side via market.callCloudMcpEndpoint
       // Only report from frontend for calls that ran on this machine (desktop only)
       if (isStdio || isLocalHttp) {
-        const callEndTime = Date.now();
-        const callDurationMs = callEndTime - callStartTime;
-
-        // Calculate request size
-        const inputParams = safeParseJSON(args) || args;
-        const requestSizeBytes = calculateObjectSizeBytes(inputParams);
-        // Calculate response size
-        const responseSizeBytes = success && result ? calculateObjectSizeBytes(result.state) : 0;
-
-        // Construct report data
-        const reportData: CallReportRequest = {
-          callDurationMs,
+        reportLocalCall({
+          args,
+          command: plugin.customParams?.mcp?.command,
           customPluginInfo: meta.customPluginInfo,
-          errorCode,
-          errorMessage,
+          failure,
           identifier,
           isCustomPlugin,
-          metadata: {
-            appVersion: CURRENT_VERSION,
-            command: plugin.customParams?.mcp?.command,
-            mcpType: plugin.customParams?.mcp?.type,
-          },
-          methodName: apiName,
-          methodType: 'tool' as const,
-          requestSizeBytes,
-          responseSizeBytes,
+          mcpType: plugin.customParams?.mcp?.type,
+          result,
           sessionId: topicId,
-          success,
+          startTime: callStartTime,
+          toolName: apiName,
           version: meta.version,
-        };
-
-        // Asynchronously report without affecting main flow
-        discoverService.reportPluginCall(reportData).catch((reportError) => {
-          console.warn('Failed to report MCP tool call:', reportError);
         });
       }
     }
