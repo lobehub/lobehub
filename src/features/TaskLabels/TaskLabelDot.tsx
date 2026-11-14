@@ -23,7 +23,7 @@ interface TaskLabelDotProps {
 const TaskLabelDot = memo<TaskLabelDotProps>(({ color, size }) => (
   <span
     aria-hidden
-    {...sx([styles.dot], undefined, {
+    {...sx(styles.dot, {
       ...(color ? { backgroundColor: color } : undefined),
       ...(size ? { height: size, width: size } : undefined),
     })}

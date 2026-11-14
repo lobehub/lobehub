@@ -209,7 +209,7 @@ export const VideoEvidenceDiscussion = ({
             const messages = item.commentIds?.length ?? 1;
             return (
               <div
-                {...stylex.props([styles.item, isOpen && styles.itemOpen])}
+                {...stylex.props(styles.item, isOpen && styles.itemOpen)}
                 id={`video-thread-${item.threadId}`}
                 key={item.threadId}
               >
@@ -225,7 +225,7 @@ export const VideoEvidenceDiscussion = ({
                   <span {...stylex.props(styles.stamp)}>{formatVideoTime(item.time.start)}</span>
                   {/* Open, the thread below names the author and says it in full. */}
                   <span {...stylex.props(styles.author)}>{isOpen ? '' : item.authorName}</span>
-                  <span {...stylex.props([styles.excerpt, item.resolved && styles.resolved])}>
+                  <span {...stylex.props(styles.excerpt, item.resolved && styles.resolved)}>
                     {isOpen ? '' : item.comment}
                   </span>
                   {messages > 1 && (
@@ -243,7 +243,7 @@ export const VideoEvidenceDiscussion = ({
                     </span>
                   )}
                   <Icon
-                    {...stylex.props([styles.chevron, isOpen && styles.chevronOpen])}
+                    {...stylex.props(styles.chevron, isOpen && styles.chevronOpen)}
                     icon={ChevronRight}
                     size={14}
                   />

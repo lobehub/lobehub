@@ -145,7 +145,7 @@ const OnboardingChecklistCard = ({ detail, onComposerRequest }: ProjectOnboardin
       </Flexbox>
       <div {...stylex.props(styles.bar)}>
         <div
-          {...sx(styles.fill, undefined, {
+          {...sx(styles.fill, {
             width: `${(checklist.completed / checklist.total) * 100}%`,
           })}
         />
