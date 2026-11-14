@@ -273,7 +273,7 @@ export function registerAgentCommand(program: Command) {
     .option('--disable-graph', 'Disable graph runtime')
     .option(
       '--agency-config-file <path>',
-      'agencyConfig JSON file, deep-merged into the agent (send `null` to clear a nested key)',
+      'agencyConfig JSON file, deep-merged into the agent (`null` is stored as the value; it deletes only `heterogeneousProvider.env` keys)',
     )
     .option(
       '--config-file <path>',
@@ -324,8 +324,9 @@ export function registerAgentCommand(program: Command) {
           return;
         }
 
-        // agencyConfig is deep-merged server-side, so a nested key is removed by
-        // sending it as `null` (e.g. `{ "heterogeneousProvider": null }`); omitted keys are kept.
+        // agencyConfig is deep-merged server-side: omitted keys are kept and a
+        // `null` is stored as the value (e.g. `{ "heterogeneousProvider": null }`
+        // clears the provider). Only `heterogeneousProvider.env` keys are deleted by `null`.
         if (options.agencyConfigFile) {
           try {
             value.agencyConfig = await readAgencyConfig(options.agencyConfigFile);

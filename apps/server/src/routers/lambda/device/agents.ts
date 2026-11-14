@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { router } from '@/libs/trpc/lambda';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
+import { heterogeneousEnvSchema } from '../_schema/heterogeneousEnv';
 import { deviceProcedure } from './procedures';
 
 // Derive the zod enum from the canonical config so new platforms are
@@ -112,7 +113,7 @@ export const agentsRouter = router({
     .input(
       z.object({
         deviceId: z.string(),
-        env: z.record(z.string(), z.string()).optional(),
+        env: heterogeneousEnvSchema.optional(),
         force: z.boolean().optional(),
       }),
     )
@@ -134,7 +135,7 @@ export const agentsRouter = router({
         command: z.string().optional(),
         cwd: z.string().optional(),
         deviceId: z.string(),
-        env: z.record(z.string(), z.string()).optional(),
+        env: heterogeneousEnvSchema.optional(),
         type: z.enum([
           'codebuddy',
           'codex',

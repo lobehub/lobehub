@@ -10,7 +10,7 @@ import { merge } from '@/utils/merge';
 
 import type { AgentItem } from '../../schemas';
 import { agents, sessionGroups } from '../../schemas';
-import { sanitizeAgentApiConfig } from '../../utils/sanitizeAgentApiConfig';
+import { normalizeAgencyConfigForWrite } from '../../utils/normalizeAgencyConfigForWrite';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { RESERVED_AGENT_SLUGS } from './constants';
 import { type AgentModelContext } from './context';
@@ -127,7 +127,7 @@ export const stripImmutableFields = <T extends Record<string, any>>(data: T): T 
 
 export const update = async (ctx: AgentModelContext, agentId: string, data: Partial<AgentItem>) => {
   const apiSafeData = Object.hasOwn(data, 'agencyConfig')
-    ? { ...data, agencyConfig: sanitizeAgentApiConfig(data.agencyConfig) }
+    ? { ...data, agencyConfig: normalizeAgencyConfigForWrite(data.agencyConfig) }
     : data;
   const sanitizedData = stripImmutableFields(apiSafeData);
   await assertNotAgentBuilderProtectedWrite(ctx, agentId, sanitizedData);
@@ -281,7 +281,7 @@ export const updateConfig = async (
     delete mergedApiConfig.source;
   }
 
-  mergedValue.agencyConfig = sanitizeAgentApiConfig(mergedValue.agencyConfig) ?? null;
+  mergedValue.agencyConfig = normalizeAgencyConfigForWrite(mergedValue.agencyConfig) ?? null;
 
   // The inbox is LobeHub's built-in default cloud agent; it must never be
   // turned into a heterogeneous (external-CLI) agent. Two independent inputs can

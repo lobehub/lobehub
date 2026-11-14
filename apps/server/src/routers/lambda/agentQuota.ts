@@ -15,6 +15,7 @@ import { AccountNotSignedInOnDeviceError, AgentQuotaService } from '@/server/ser
 import { resolveDeviceRowId } from '@/server/services/agentQuota/resolveDeviceRowId';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
+import { heterogeneousEnvSchema } from './_schema/heterogeneousEnv';
 import { assertWorkspaceDeviceVisible } from './deviceWorkspaceGuard';
 
 const quotaProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
@@ -83,7 +84,7 @@ export const agentQuotaRouter = router({
       z.object({
         command: z.string().optional(),
         deviceId: z.string(),
-        env: z.record(z.string(), z.string()).optional(),
+        env: heterogeneousEnvSchema.optional(),
         force: z.boolean().optional(),
       }),
     )
@@ -135,7 +136,7 @@ export const agentQuotaRouter = router({
     .input(
       z.object({
         deviceId: z.string(),
-        env: z.record(z.string(), z.string()).optional(),
+        env: heterogeneousEnvSchema.optional(),
         force: z.boolean().optional(),
       }),
     )
