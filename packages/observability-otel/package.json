@@ -10,6 +10,7 @@
     "./modules/agent-runtime": "./src/modules/agent-runtime/index.ts",
     "./modules/agent-signal": "./src/modules/agent-signal/index.ts",
     "./modules/bot-wake": "./src/modules/bot-wake/index.ts",
+    "./modules/legacy-plugin-write": "./src/modules/legacy-plugin-write/index.ts",
     "./modules/memory-user-memory": "./src/modules/memory-user-memory/index.ts",
     "./modules/onboarding-understanding": "./src/modules/onboarding-understanding/index.ts",
     "./modules/fts-search-reindex": "./src/modules/fts-search-reindex/index.ts",
