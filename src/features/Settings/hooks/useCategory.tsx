@@ -10,7 +10,6 @@ import {
   BrainCircuit,
   ChartColumnBigIcon,
   ChartPieIcon,
-  Coins,
   ContainerIcon,
   CreditCard,
   Database,
@@ -140,8 +139,12 @@ export const useCategory = () => {
     if (enableBusinessFeatures) {
       const subscriptionItems: CategoryItem[] = [
         { icon: Map, key: SettingsTabs.Plans, label: tSubscription('tab.plans') },
-        { icon: ChartPieIcon, key: SettingsTabs.Usage, label: t('tab.usage') },
-        { icon: Coins, key: SettingsTabs.Credits, label: tSubscription('tab.credits') },
+        // One entry for usage and balance: `/settings/credits` redirects into it.
+        {
+          icon: ChartPieIcon,
+          key: SettingsTabs.Usage,
+          label: tSubscription('tab.usageAndBalance'),
+        },
         { icon: CreditCard, key: SettingsTabs.Billing, label: tSubscription('tab.billing') },
         { icon: Gift, key: SettingsTabs.Referral, label: tSubscription('tab.referral') },
       ];

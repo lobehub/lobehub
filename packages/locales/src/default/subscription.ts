@@ -1021,4 +1021,59 @@ export default {
   'creditsChip.usageTitle': 'Usage',
   'creditsChip.usageTooltip': 'Usage in the current billing cycle',
   'usage.window.used': '{{percent}}% used',
+  'credits.autoTopUp.adjust': 'Adjust',
+  'credits.autoTopUp.collapse': 'Collapse',
+  'credits.autoTopUp.disabled': 'Auto top-up is off',
+  'credits.autoTopUp.enable.addPaymentMethod': 'Add a card',
+  'credits.autoTopUp.enable.chargeFailed':
+    'Auto top-up is on, but this charge failed. Check your payment method.',
+  'credits.autoTopUp.enable.chargeNow':
+    'Your balance is {{balance}}, at or below {{threshold}}. Turning this on charges {{amount}} now to bring it to {{target}}.',
+  'credits.autoTopUp.enable.chargeNowCapped':
+    "Your balance is {{balance}}, at or below {{threshold}}. Turning this on charges {{amount}} now, all that this month's limit has left, bringing it to {{newBalance}}.",
+  'credits.autoTopUp.enable.desc':
+    'When your balance runs low, it is refilled from your saved payment method, so requests keep going after your plan limits run out. You can turn it off anytime.',
+  'credits.autoTopUp.enable.failed': "Couldn't turn on auto top-up. Please try again.",
+  'credits.autoTopUp.enable.giftBadge': '$1 free for your first card',
+  'credits.autoTopUp.enable.limitReached':
+    "Auto top-up is on, but this month's charge limit is reached, so nothing was added.",
+  'credits.autoTopUp.enable.limitReachedNow':
+    "Your balance is {{balance}}, at or below {{threshold}}, but this month's limit is used up, so nothing is charged now.",
+  'credits.autoTopUp.enable.noChargeNow':
+    'Your balance is {{balance}}, above {{threshold}}, so nothing is charged now. Auto top-up runs once it drops to {{threshold}}.',
+  'credits.autoTopUp.enable.noPaymentMethod': 'Add a card first',
+  'credits.autoTopUp.enable.overflowNote':
+    'This also turns on "{{overflow}}". Without it, requests stop at your plan limits and auto top-up never runs.',
+  'credits.autoTopUp.enable.paymentMethod': 'Payment method',
+  'credits.autoTopUp.enable.submit': 'Turn on auto top-up',
+  'credits.autoTopUp.enable.submitAndCharge': 'Turn on and pay {{amount}}',
+  'credits.autoTopUp.enable.success': 'Auto top-up is on',
+  'credits.autoTopUp.enable.successCharged': 'Auto top-up is on. {{amount}} was added.',
+  'credits.autoTopUp.enable.title': 'Turn on auto top-up',
+  'credits.autoTopUp.enable.waitingForPaymentMethod':
+    'Add the card in the new tab, then come back here to turn it on.',
+  'credits.autoTopUp.recommended': 'Recommended',
+  'credits.autoTopUp.setupAndEnable': 'Add card and turn on',
+  'credits.autoTopUp.summary': 'Refill to {{target}} when the balance is at or below {{threshold}}',
+  'credits.autoTopUp.summaryMonthly': 'Charged this month: {{amount}} / {{limit}}',
+  'credits.autoTopUp.summaryNoCard':
+    'Add a card to refill the balance automatically, so requests keep going after your limits run out',
+  'credits.autoTopUp.summaryOff': '{{summary}}, so requests keep going after your limits run out',
+  'creditsChip.autoTopUp.enable': 'Turn on auto top-up',
+  'limitation.insufficientBudget.rescue.autoTopUp.cta': 'Turn on auto top-up & continue',
+  'limitation.insufficientBudget.rescue.autoTopUp.ctaNoCard': 'Add card & turn on auto top-up',
+  'limitation.insufficientBudget.rescue.autoTopUp.success.desc':
+    '{{amount}} was added, so you can continue now. The balance refills automatically when it runs low.',
+  'limitation.insufficientBudget.rescue.autoTopUp.success.descNoCharge':
+    'The balance refills automatically when it runs low. You can continue now.',
+  'limitation.insufficientBudget.rescue.autoTopUp.success.title': 'Auto top-up is on',
+  'limitation.insufficientBudget.rescue.autoTopUp.title': 'Turn on auto top-up',
+  'limitation.insufficientBudget.rescue.upgrade.short': '{{multiple}}× usage',
+  'limitation.insufficientBudget.rescue.upgrade.shortUltra': '{{multiple}}× Ultra usage',
+  'tab.usageAndBalance': 'Usage & Balance',
+  'usage.overview.records': 'Top-up history',
+  'usage.overview.topUpOnce': 'Top up once',
+  'usage.tabs.detail': 'Details',
+  'usage.tabs.overview': 'Overview',
+  'usage.tabs.records': 'Top-up history',
 };
