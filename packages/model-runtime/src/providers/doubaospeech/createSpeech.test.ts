@@ -124,22 +124,42 @@ describe('createDoubaoSpeech', () => {
     });
   });
 
-  it('sends opus as ogg_opus at 48 kHz whatever the requested rate', async () => {
-    const result = await createDoubaoSpeech(
-      {
-        input: 'Hi',
-        model: 'seed-tts-2.0',
-        params: { format: 'opus', sampleRate: 24_000 },
-        voice: VOICE,
-      },
-      options,
-    );
+  it('sends opus as ogg_opus at 48 kHz', async () => {
+    for (const sampleRate of [undefined, 48_000]) {
+      const result = await createDoubaoSpeech(
+        {
+          input: 'Hi',
+          model: 'seed-tts-2.0',
+          params: { format: 'opus', sampleRate },
+          voice: VOICE,
+        },
+        options,
+      );
 
-    expect(lastRequest(fetchMock).body.req_params.audio_params).toEqual({
-      format: 'ogg_opus',
-      sample_rate: 48_000,
+      expect(lastRequest(fetchMock).body.req_params.audio_params).toEqual({
+        format: 'ogg_opus',
+        sample_rate: 48_000,
+      });
+      expect(result.format).toBe('opus');
+    }
+  });
+
+  it('refuses an opus request at a rate other than 48 kHz before calling Doubao', async () => {
+    await expect(
+      createDoubaoSpeech(
+        {
+          input: 'Hi',
+          model: 'seed-tts-2.0',
+          params: { format: 'opus', sampleRate: 24_000 },
+          voice: VOICE,
+        },
+        options,
+      ),
+    ).rejects.toMatchObject({
+      error: { message: expect.stringContaining('only produced at 48000 Hz') },
+      errorType: AgentRuntimeErrorType.ProviderBizError,
     });
-    expect(result.format).toBe('opus');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('replaces a service-filled default voice of another vendor with the Doubao default', async () => {

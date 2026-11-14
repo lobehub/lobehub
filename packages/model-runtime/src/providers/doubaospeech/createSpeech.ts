@@ -163,9 +163,17 @@ export const buildDoubaoSpeechRequest = (
   }
 
   const audioParams: Record<string, unknown> = { format: upstreamFormat };
-  // Opus is only produced at 48 kHz; any other rate is rejected upstream.
-  if (format === 'opus') audioParams.sample_rate = 48_000;
-  else if (params.sampleRate !== undefined) audioParams.sample_rate = params.sampleRate;
+  // Opus is only produced at 48 kHz: refuse another explicit rate rather than silently
+  // returning audio at a rate the caller did not ask for.
+  if (format === 'opus') {
+    if (params.sampleRate !== undefined && params.sampleRate !== 48_000) {
+      throw new DoubaoSpeechError(
+        `Doubao Speech opus is only produced at 48000 Hz; ${params.sampleRate} Hz is not supported`,
+        AgentRuntimeErrorType.ProviderBizError,
+      );
+    }
+    audioParams.sample_rate = 48_000;
+  } else if (params.sampleRate !== undefined) audioParams.sample_rate = params.sampleRate;
   if (params.speed !== undefined) audioParams.speech_rate = toRate(params.speed);
   if (params.volume !== undefined) audioParams.loudness_rate = toRate(params.volume);
 
