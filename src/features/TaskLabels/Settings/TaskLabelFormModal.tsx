@@ -150,7 +150,7 @@ const TaskLabelFormContent = memo<TaskLabelFormModalOptions>(({ isGroup, label, 
                 aria-label={preset}
                 key={preset}
                 role={'button'}
-                {...sx([styles.swatch, color === preset && styles.swatchActive], undefined, {
+                {...sx(styles.swatch, color === preset && styles.swatchActive, {
                   backgroundColor: preset,
                 })}
                 onClick={() => setColor(preset)}

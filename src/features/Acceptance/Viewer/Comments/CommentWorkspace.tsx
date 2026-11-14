@@ -245,7 +245,7 @@ export const DraftNote = ({
 }: DraftNoteProps) => {
   const { t } = useTranslation('verify');
   return (
-    <div {...stylex.props([styles.note, active && styles.noteActive])}>
+    <div {...stylex.props(styles.note, active && styles.noteActive)}>
       <Flexbox horizontal align={'center'} gap={8}>
         <span {...stylex.props(styles.badge)}>{index}</span>
         <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ minWidth: 0 }}>
@@ -306,7 +306,7 @@ export const DraftFooter = ({
     <>
       <div
         aria-live={'polite'}
-        {...stylex.props([styles.status, error && styles.statusError])}
+        {...stylex.props(styles.status, error && styles.statusError)}
         role={error ? 'alert' : undefined}
       >
         {status}

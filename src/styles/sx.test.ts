@@ -20,7 +20,8 @@ describe('sx', () => {
 
   it('drops falsy styles and class names', () => {
     const active = false;
-    const props = sx(styles.root, active && styles.active, undefined, '');
+    const callerClassName: string | undefined = undefined;
+    const props = sx(styles.root, active && styles.active, callerClassName, '');
 
     expect(props.className).toContain('styles.root');
     expect(props.className).not.toContain('styles.active');
