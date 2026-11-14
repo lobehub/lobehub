@@ -114,6 +114,57 @@ export async function countFulfilledMemberAnchors(
 }
 
 /**
+ * The group tool result once every member of a multi-member action is done.
+ *
+ * Per-member anchors answer `<callId>::m<i>`, an id no assistant tool call
+ * carries, so the context engine drops them as orphan tool messages: only the
+ * group tool message reaches the supervisor's next LLM turn. For
+ * `executeAgentTasks` that message must therefore carry every member's answer
+ * (same shape as the client orchestrator's batch result) — a bare "all
+ * completed" receipt left the supervisor without any result, and it kept
+ * re-dispatching the same tasks to get one.
+ */
+export async function formatGroupMemberResults(
+  deps: Pick<GroupMemberDeps, 'serverDB'>,
+  groupToolMessageId: string,
+  expectedMembers: number,
+): Promise<string> {
+  const receipt = `All ${expectedMembers} agent members completed.`;
+  const children = await deps.serverDB.query.messages.findMany({
+    where: (m, { and, eq }) => and(eq(m.parentId, groupToolMessageId), eq(m.role, 'tool')),
+  });
+
+  const results: { content: string; index: number; title: string }[] = [];
+  for (const child of children) {
+    const plugin = await deps.serverDB.query.messagePlugins.findFirst({
+      where: (mp, { eq }) => eq(mp.id, child.id),
+    });
+    if (plugin?.apiName !== 'executeAgentTasks') return receipt;
+
+    const index = Number(plugin.toolCallId?.match(/::m(\d+)$/)?.[1]);
+    if (!Number.isInteger(index)) continue;
+
+    let task: { agentId?: string; title?: string } | undefined;
+    try {
+      task = JSON.parse(plugin.arguments || '{}')?.tasks?.[index];
+    } catch {
+      task = undefined;
+    }
+    results.push({
+      content: child.content || 'Agent member completed without a textual answer.',
+      index,
+      title: task?.title || task?.agentId || `Task ${index + 1}`,
+    });
+  }
+  if (results.length === 0) return receipt;
+
+  return results
+    .sort((a, b) => a.index - b.index)
+    .map(({ content, index, title }) => `${index + 1}. ${title}\n${content}`)
+    .join('\n\n');
+}
+
+/**
  * Completion bridge for the group orchestration "call agent member" path
  * (`lobe-group-management`: speak / broadcast / delegate / executeAgentTask(s)).
  * Mirrors {@link completeSubAgentBridge} but enforces a K=N member barrier:
@@ -315,7 +366,7 @@ export async function completeGroupMemberBarrier(
       operationId: parentOperationId,
       toolMessageId: groupToolMessageId,
       result: {
-        content: `All ${expectedMembers} agent members completed.`,
+        content: await formatGroupMemberResults(deps, groupToolMessageId, expectedMembers),
         state: { expectedMembers, status: 'completed' },
         success: true,
       },

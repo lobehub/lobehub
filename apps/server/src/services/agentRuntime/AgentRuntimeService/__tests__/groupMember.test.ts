@@ -422,6 +422,56 @@ describe('AgentRuntimeService', () => {
       expect(resumeSpy).toHaveBeenCalled();
     });
 
+    // T-2706: member anchors answer `<callId>::m<i>`, which the context engine
+    // drops as orphan tool messages — the group tool result is the only thing
+    // the resumed supervisor sees, so it must carry every member's answer.
+    it('executeAgentTasks: hands every member answer to the supervisor in task order', async () => {
+      const args = JSON.stringify({
+        tasks: [
+          { agentId: 'agt-a', instruction: 'audit A', title: 'Audit A' },
+          { agentId: 'agt-b', instruction: 'audit B' },
+        ],
+      });
+      const plugins: Record<string, unknown> = {
+        'anchor-0': { apiName: 'executeAgentTasks', arguments: args, toolCallId: 'call-1::m0' },
+        'anchor-1': { apiName: 'executeAgentTasks', arguments: args, toolCallId: 'call-1::m1' },
+      };
+      (service as any).serverDB.query = {
+        messagePlugins: {
+          findFirst: vi.fn(async ({ where }: any) => {
+            let id = '';
+            where({ id: 'id' }, { eq: (_: unknown, value: string) => (id = value) });
+            return plugins[id];
+          }),
+        },
+        messages: {
+          findMany: vi.fn().mockResolvedValue([
+            { content: 'B found nothing', id: 'anchor-1', role: 'tool' },
+            { content: 'A found 3 issues', id: 'anchor-0', role: 'tool' },
+          ]),
+        },
+      };
+
+      await service.completeGroupActionMember({
+        anchorMessageId: 'anchor-1',
+        expectedMembers: 2,
+        finalState: memberState as any,
+        groupToolMessageId: 'grp-tool-1',
+        mode: 'isolated',
+        onComplete: 'resume',
+        operationId: 'child-2',
+        parentOperationId: 'parent-1',
+        reason: 'done',
+      });
+
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'grp-tool-1',
+        expect.objectContaining({
+          content: '1. Audit A\nA found 3 issues\n\n2. agt-b\nB found nothing',
+        }),
+      );
+    });
+
     it('completes a multi-member empty-reason denial and retains it after callback replay', async () => {
       const privateContent = 'synthetic-private-member-answer';
       const defaultReason = 'Blocked by afterToolCall hook.';
