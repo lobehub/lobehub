@@ -11,16 +11,17 @@ import {
   Text,
 } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { BookOpen, FileText, Settings, SquareTerminal } from 'lucide-react';
+import { BookOpen, FileText, Settings, SquareTerminal, UserRound } from 'lucide-react';
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
 import { ModelIcon } from '@/components/LobeIcons';
 import { ArticleSkeleton } from '@/components/Skeleton';
+import UserAvatar from '@/components/UserAvatar';
+import { stopCardClick } from '@/features/MemberProfileCard/stopCardClick';
 import { useWorkspaceMemberProfile } from '@/features/MemberProfileCard/useWorkspaceMemberProfile';
 import ModelSelect from '@/features/ModelSelect';
-import { stopCardClick } from '@/features/ProfileHoverCard';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
@@ -29,7 +30,6 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import AgentProfileCard from '.';
-import AgentHoverCard from './AgentHoverCard';
 import { resolveAgentRuntimeLabel } from './runtime';
 import {
   type AgentProfilePreview as AgentPreview,
@@ -92,10 +92,9 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
 
     const updateMemberAgentConfig = useAgentGroupStore((s) => s.updateMemberAgentConfig);
     const listEntry = useHomeStore(homeAgentListSelectors.getAgentById(agentId));
-    const isHover = trigger === 'hover';
     // In a workspace, the member who created the Agent is the one to ask about it.
-    // Load the member directory only once the hover card opens, whatever page hosts it.
-    useFetchWorkspaceMembers({ enabled: isHover && open && !!listEntry?.userId });
+    // Load the member directory only once the card opens, whatever page hosts it.
+    useFetchWorkspaceMembers({ enabled: open && !!listEntry?.userId });
     const creator = useWorkspaceMemberProfile(listEntry?.userId);
 
     const { detail: fetched, isLoading } = useAgentProfileDetail(agentId, open && !!canConfigure);
@@ -217,28 +216,25 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
         </Flexbox>
       ) : null;
 
+    const creatorSection = creator ? (
+      <Flexbox horizontal align={'center'} className={styles.footer} gap={8}>
+        <Icon className={styles.statItem} icon={UserRound} size={14} />
+        <Text fontSize={12} type={'secondary'}>
+          {t('agentProfile.creator')}
+        </Text>
+        <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
+          <UserAvatar avatar={creator.avatar} name={creator.name} shape={'circle'} size={18} />
+          <Text ellipsis fontSize={12}>
+            {creator.name}
+          </Text>
+        </Flexbox>
+      </Flexbox>
+    ) : null;
+
     const content = showSkeleton ? (
       <div style={{ padding: 16, width: 280 }}>
         <ArticleSkeleton avatar rows={2} />
       </div>
-    ) : isHover ? (
-      <AgentHoverCard
-        agentId={agentId}
-        avatar={merged.avatar}
-        backgroundColor={merged.backgroundColor}
-        creator={creator}
-        description={merged.description ?? listEntry?.description}
-        loading={footerLoading}
-        model={merged.model ?? listEntry?.model}
-        runtimeLabel={runtimeLabel}
-        title={agentDisplayName(merged, t('defaultSession', { ns: 'common' }))}
-        inventory={
-          canConfigure
-            ? { files: fileCount, knowledgeBases: knowledgeCount, skills: pluginCount }
-            : undefined
-        }
-        onHeaderClick={canConfigure ? handleHeaderClick : undefined}
-      />
     ) : (
       <AgentProfileCard
         agentId={agentId}
@@ -261,6 +257,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
         }
         onHeaderClick={canConfigure ? handleHeaderClick : undefined}
       >
+        {creatorSection}
         {modelSection}
       </AgentProfileCard>
     );
@@ -270,7 +267,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
         classNames={trigger === 'click' ? { trigger: styles.trigger } : undefined}
         nativeButton={false}
         open={open}
-        placement={isHover ? 'top' : 'right'}
+        placement={trigger === 'hover' ? 'top' : 'right'}
         trigger={trigger}
         content={
           <div role="presentation" onClick={stopCardClick}>

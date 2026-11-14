@@ -3,9 +3,8 @@
 import { Popover } from '@lobehub/ui';
 import { memo, type PropsWithChildren, type ReactNode } from 'react';
 
-import { stopCardClick } from '@/features/ProfileHoverCard';
-
 import MemberProfileCard from '.';
+import { stopCardClick } from './stopCardClick';
 import { useWorkspaceMemberProfile } from './useWorkspaceMemberProfile';
 
 const POPOVER_STYLES = { content: { borderRadius: 12, overflow: 'hidden', padding: 0 } } as const;
