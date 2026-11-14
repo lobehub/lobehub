@@ -21,7 +21,6 @@ describe('provider artwork', () => {
     expect((wordmark.match(/<svg /g) || []).length).toBe(2);
   });
 
-  // Mapped locally until @lobehub/icons maps the id (see ./lobeIconMappings).
   it.each(['elevenlabs', 'ElevenLabs'])(
     'renders the official %s avatar and wordmark',
     (provider) => {
