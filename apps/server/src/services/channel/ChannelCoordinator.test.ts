@@ -6,12 +6,29 @@ import { ChannelCoordinator } from './ChannelCoordinator';
 const { executions, executeToolCall, interruptTask } = vi.hoisted(() => ({
   interruptTask: vi.fn().mockResolvedValue({ success: true }),
   executions: {
+    input: vi.fn(),
     publish: vi.fn(),
     releaseWriter: vi.fn(),
     retireReservation: vi.fn().mockResolvedValue(false),
     revokeExpiredLease: vi.fn(),
   },
   executeToolCall: vi.fn(),
+}));
+const { findTopic, generateTopicTitle, updateTopic } = vi.hoisted(() => ({
+  findTopic: vi.fn(),
+  generateTopicTitle: vi.fn(),
+  updateTopic: vi.fn(),
+}));
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: class {
+    findById = findTopic;
+    update = updateTopic;
+  },
+}));
+vi.mock('@/server/services/systemAgent', () => ({
+  SystemAgentService: class {
+    generateTopicTitle = generateTopicTitle;
+  },
 }));
 vi.mock('@/database/repositories/channel', () => ({
   ChannelExecutionRepository: class {
@@ -44,6 +61,7 @@ describe('Channel completion physical writer confirmation', () => {
     runtime = 'codex',
     leaseOwner: string | null = null,
     status = 'done',
+    topicId: string | null = null,
   ) => {
     const job = {
       channelId: 'channel',
@@ -53,6 +71,7 @@ describe('Channel completion physical writer confirmation', () => {
       manifest: {},
       operationId: 'op',
       publicationRevoked,
+      topicId,
       writerHeld: true,
     };
     const operation = { id: 'op', status, userId: 'user', workspaceId: null };
@@ -86,6 +105,36 @@ describe('Channel completion physical writer confirmation', () => {
       expect(executions.publish).toHaveBeenCalledTimes(revoked ? 0 : 1);
     },
   );
+
+  it('names an untitled topic from the request and the published reply', async () => {
+    executeToolCall.mockResolvedValue({ success: true, state: { exited: true } });
+    executions.input.mockResolvedValue([{ content: 'What can you do?' }]);
+    findTopic.mockResolvedValue({ title: null });
+    generateTopicTitle.mockResolvedValue('Assistant abilities');
+
+    await coordinator(false, 'codex', null, 'done', 'topic').complete('channel', 'job', 'op');
+
+    await vi.waitFor(() =>
+      expect(updateTopic).toHaveBeenCalledWith('topic', { title: 'Assistant abilities' }),
+    );
+    expect(generateTopicTitle).toHaveBeenCalledWith({
+      lastAssistantContent: 'Final reply',
+      topicId: 'topic',
+      userPrompt: 'What can you do?',
+    });
+  });
+
+  it('keeps the title of a topic that already has one', async () => {
+    executeToolCall.mockResolvedValue({ success: true, state: { exited: true } });
+    findTopic.mockResolvedValue({ title: 'Existing' });
+
+    await coordinator(false, 'codex', null, 'done', 'topic').complete('channel', 'job', 'op');
+
+    await vi.waitFor(() => expect(findTopic).toHaveBeenCalledWith('topic'));
+    await Promise.resolve();
+    expect(generateTopicTitle).not.toHaveBeenCalled();
+    expect(updateTopic).not.toHaveBeenCalled();
+  });
 
   it('releases a completed writer only after the device confirms termination', async () => {
     executeToolCall.mockResolvedValue({ success: true, state: { exited: true } });

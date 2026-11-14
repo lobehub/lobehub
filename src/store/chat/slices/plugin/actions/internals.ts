@@ -8,6 +8,7 @@ import {
   composioStoreSelectors,
   lobehubSkillStoreSelectors,
   pluginSelectors,
+  toolSelectors,
 } from '@/store/tool/selectors';
 import { type StoreSetter } from '@/store/types';
 
@@ -47,6 +48,13 @@ export class PluginInternalsActionImpl {
         manifests[plugin.identifier] = plugin.manifest as ToolManifest;
         sourceMap[plugin.identifier] = 'mcp';
       }
+    }
+
+    // MCP connectors (every install now): the tools engine lets one replace a
+    // same-named plugin, so the names it offered come from the connector
+    for (const manifest of toolSelectors.executableConnectorManifests(toolStoreState)) {
+      manifests[manifest.identifier] = manifest;
+      sourceMap[manifest.identifier] = 'mcp';
     }
 
     // Get all builtin tools

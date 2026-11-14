@@ -7,6 +7,7 @@ export * from './agentHookResponse';
 export * from './agentMail';
 export * from './agentOperation';
 export * from './agentQuota';
+export * from './agentRunBoard';
 export * from './aiChat';
 export * from './aiProvider';
 export * from './apiKey';
@@ -82,14 +83,17 @@ export * from './trash';
 export * from './understanding';
 export * from './user';
 export * from './userMemory';
+export * from './userSkill';
 export * from './verify';
 export * from './widget';
 export * from './work';
+export * from './workspaceMember';
 // FIXME: I think we need a refactor for the "openai" types
 // it more likes the UI message payload
 export * from './acceptanceComment';
 export * from './acceptanceFlow';
 export * from './acceptanceReview';
+export * from './acceptanceReviewRound';
 export * from './agentRuntime';
 export * from './oauthApp';
 export * from './openai/chat';

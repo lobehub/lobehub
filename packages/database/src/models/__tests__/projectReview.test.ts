@@ -2,9 +2,9 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { ProjectRepository } from '../../repositories/project';
 import { projectMembers, projectSites, users, workspaceMembers, workspaces } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { ProjectModel } from '../project';
 import { ProjectMemberModel, ProjectSiteModel } from '../projectReview';
 import { WorkspaceMemberModel } from '../workspaceMember';
 
@@ -13,7 +13,7 @@ const ownerId = 'project-review-owner';
 const guestId = 'project-review-guest';
 
 const createProject = () =>
-  new ProjectModel(serverDB, ownerId).create({ identifier: 'SITE', name: 'Fieldnotes' });
+  new ProjectRepository(serverDB, ownerId).create({ identifier: 'SITE', name: 'Fieldnotes' });
 
 beforeEach(async () => {
   await serverDB.delete(users);
@@ -119,7 +119,7 @@ describe('ProjectMemberModel', () => {
       { workspaceId, userId: guestId },
     ]);
     projectId = (
-      await new ProjectModel(serverDB, ownerId, workspaceId).create({
+      await new ProjectRepository(serverDB, ownerId, workspaceId).create({
         identifier: 'SITE',
         name: 'Fieldnotes',
       })

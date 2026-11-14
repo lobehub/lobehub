@@ -146,11 +146,7 @@ export const queryMemories = async (
     eq(userMemories.memoryLayer, resolvedLayer),
   ];
 
-  const filters = conditions.filter((condition): condition is SQL => condition !== undefined);
-  const whereClause =
-    filters.length > 0
-      ? and(...filters)
-      : /* v8 ignore next -- unreachable: eq()/inArray() always yield SQL, so filters is never empty */ undefined;
+  const whereClause = and(...conditions);
 
   const applyOrder = order === 'asc' ? asc : desc;
 
@@ -245,15 +241,7 @@ export const queryMemories = async (
             )
           : undefined,
       ];
-      const contextWhereClause = contextFilters.some(
-        (condition): condition is SQL => condition !== undefined,
-      )
-        ? and(
-            ...(contextFilters.filter(
-              (condition): condition is SQL => condition !== undefined,
-            ) as SQL[]),
-          )
-        : /* v8 ignore next -- unreachable: the first filter is the always-defined layer whereClause */ undefined;
+      const contextWhereClause = and(...contextFilters);
 
       const rowsQuery = ctx.db
         .select({
@@ -355,15 +343,7 @@ export const queryMemories = async (
             )
           : undefined,
       ];
-      const activityWhereClause = activityFilters.some(
-        (condition): condition is SQL => condition !== undefined,
-      )
-        ? and(
-            ...(activityFilters.filter(
-              (condition): condition is SQL => condition !== undefined,
-            ) as SQL[]),
-          )
-        : /* v8 ignore next -- unreachable: the first filter is the always-defined layer whereClause */ undefined;
+      const activityWhereClause = and(...activityFilters);
 
       const rowsQuery = ctx.db
         .select({
@@ -463,15 +443,7 @@ export const queryMemories = async (
           ? or(...tags.map((tag) => sql<boolean>`${tag} = ANY(${userMemoriesExperiences.tags})`))
           : undefined,
       ];
-      const experienceWhereClause = experienceFilters.some(
-        (condition): condition is SQL => condition !== undefined,
-      )
-        ? and(
-            ...(experienceFilters.filter(
-              (condition): condition is SQL => condition !== undefined,
-            ) as SQL[]),
-          )
-        : /* v8 ignore next -- unreachable: the first filter is the always-defined layer whereClause */ undefined;
+      const experienceWhereClause = and(...experienceFilters);
 
       const rowsQuery = ctx.db
         .select({
@@ -559,15 +531,7 @@ export const queryMemories = async (
           ? or(...tags.map((tag) => sql<boolean>`${tag} = ANY(${userMemoriesIdentities.tags})`))
           : undefined,
       ];
-      const identityWhereClause = identityFilters.some(
-        (condition): condition is SQL => condition !== undefined,
-      )
-        ? and(
-            ...(identityFilters.filter(
-              (condition): condition is SQL => condition !== undefined,
-            ) as SQL[]),
-          )
-        : /* v8 ignore next -- unreachable: the first filter is the always-defined layer whereClause */ undefined;
+      const identityWhereClause = and(...identityFilters);
 
       const rowsQuery = ctx.db
         .select({
@@ -662,15 +626,7 @@ export const queryMemories = async (
           ? or(...tags.map((tag) => sql<boolean>`${tag} = ANY(${userMemoriesPreferences.tags})`))
           : undefined,
       ];
-      const preferenceWhereClause = preferenceFilters.some(
-        (condition): condition is SQL => condition !== undefined,
-      )
-        ? and(
-            ...(preferenceFilters.filter(
-              (condition): condition is SQL => condition !== undefined,
-            ) as SQL[]),
-          )
-        : /* v8 ignore next -- unreachable: the first filter is the always-defined layer whereClause */ undefined;
+      const preferenceWhereClause = and(...preferenceFilters);
 
       const rowsQuery = ctx.db
         .select({

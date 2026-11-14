@@ -28,7 +28,7 @@ import {
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
 import { prepareClaudeCodeLobeHubCli } from './lobeHubCliPlugin';
-import { getHeterogeneousAgentPresetEnv } from './presetEnv';
+import { getHeterogeneousAgentSpawnEnv } from './presetEnv';
 import { assertSpawnableWorkingDirectory } from './workingDirectory';
 
 export interface SpawnAgentOptions {
@@ -92,8 +92,6 @@ export interface SpawnAgentOptions {
    * events still carry the conventional shape.
    */
   operationId: string;
-  /** (Devin ACP only) Global `--permission-mode` value, placed before `acp`. */
-  permissionMode?: string;
   /**
    * User prompt. A plain string is sugar for a single text block; the array
    * form supports mixed text + image content blocks (URL / path / base64).
@@ -506,11 +504,11 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     options.inputOptions,
   );
   const inputPlan = { ...promptPlan, args: [...lobeHubCli.args, ...promptPlan.args] };
-  const childEnv: NodeJS.ProcessEnv = {
-    ...process.env,
-    ...getHeterogeneousAgentPresetEnv(options.agentType),
-    ...options.env,
-  };
+  const childEnv: NodeJS.ProcessEnv = getHeterogeneousAgentSpawnEnv(
+    options.agentType,
+    options.env,
+    process.env,
+  );
   // Codex builds each shell command's env from `[shell_environment_policy]`,
   // not from its own process env, so a user's `inherit = "core"` strips the
   // run context `lh` needs. Forward it as `shell_environment_policy.set.*`

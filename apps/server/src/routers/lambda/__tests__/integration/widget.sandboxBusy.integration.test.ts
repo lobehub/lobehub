@@ -11,6 +11,7 @@ import { WidgetSandboxError } from '@/server/services/widget/sandbox/types';
 import { WIDGET_BUSY_DEFER_DEADLINE_MS } from '@/server/services/widget/sandboxBusy';
 
 import { widgetRouter } from '../../widget';
+import { signedCallbackRequest } from './callbackRequest';
 import { cleanupTestUser, createTestUser } from './setup';
 
 let testDB: LobeChatDatabase;
@@ -82,6 +83,8 @@ describe('widget scheduled runs when the sandbox is busy', { timeout: 60_000 }, 
   }, 300_000);
 
   beforeEach(async () => {
+    vi.stubEnv('APP_URL', 'https://app.test/');
+    vi.stubEnv('KEY_VAULTS_SECRET', Buffer.alloc(32, 7).toString('base64'));
     runSandbox.mockReset();
     db = await getTestDB();
     testDB = db;
@@ -96,13 +99,7 @@ describe('widget scheduled runs when the sandbox is busy', { timeout: 60_000 }, 
   });
 
   const post = async (path: string, body: unknown) =>
-    (
-      await widgetWorkflowApp.request(path, {
-        body: JSON.stringify(body),
-        headers: { 'content-type': 'application/json' },
-        method: 'POST',
-      })
-    ).json();
+    (await widgetWorkflowApp.request(signedCallbackRequest(path, body))).json();
 
   /** A published, hourly widget whose slot is due. */
   const dueWidget = async () => {

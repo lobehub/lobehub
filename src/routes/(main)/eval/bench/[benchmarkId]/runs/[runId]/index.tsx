@@ -134,7 +134,7 @@ const RunDetail = memo(() => {
                 <span className={styles.panelLabel}>{t('run.detail.report')}</span>
               </header>
               <div className={styles.panelBody}>
-                <StatsCards metrics={runDetail.metrics ?? undefined} />
+                <StatsCards k={k} metrics={runDetail.metrics ?? undefined} />
                 {hasResults && (
                   <BenchmarkCharts
                     benchmarkId={benchmarkId!}

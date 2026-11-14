@@ -32,7 +32,7 @@ export interface ResolveSafeMaxTokensOptions {
 /**
  * Thrown when the estimated prompt tokens leave less room than
  * `minOutputTokens` for completion (or already exceed the model's context
- * window). Caught by `openaiCompatibleFactory` and surfaced as an
+ * window). Caught by `openaiCompatible` and surfaced as an
  * `ExceededContextWindow` chat error carrying structured diagnostic fields
  * — see for the rationale of failing fast instead of issuing a
  * doomed upstream request.

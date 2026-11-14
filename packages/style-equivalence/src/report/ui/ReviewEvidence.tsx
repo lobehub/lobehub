@@ -3,7 +3,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 
 import type { ReviewView } from '../api';
-import { hasScreenshots, reviewGrid } from '../review';
+import { hasScreenshots, reviewGrid, showsAgentNote } from '../review';
 import { RestDifferences } from './RestDifferences';
 import { Legend, ShotGrid } from './ShotGrid';
 import { StyleDetails } from './StyleDetails';
@@ -40,7 +40,7 @@ export const ReviewEvidence = ({
 }) => {
   const grid = reviewGrid(item.combos, conditions, item.comboDifferences);
   const visual = hasScreenshots(item);
-  const note = notes === 'needed' ? item.needsAgent : Boolean(item.note);
+  const note = showsAgentNote(item, notes);
   return (
     <Flexbox gap={24}>
       {item.category === 'blocking' && (

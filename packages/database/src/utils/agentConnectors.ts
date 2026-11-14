@@ -11,11 +11,15 @@ interface AgentConnectorHandoverParams {
 
 type Db = LobeChatDatabase | Transaction;
 
+// Dataset connections never follow normal Agent ownership or scope transfers.
+const ordinaryConnection = () => sql`COALESCE(${userConnectors.metadata} ->> 'agentEval', '') = ''`;
+
 /** Agent-OWNED connector rows on these agents attributed to someone other than the recipient. */
 const foreignAgentScopedRows = (params: AgentConnectorHandoverParams) =>
   and(
     inArray(userConnectors.agentId, params.agentIds),
     ne(userConnectors.userId, params.recipientId),
+    ordinaryConnection(),
   );
 
 /** Base rows another member owns that are MOUNTED by these agents (the Linked flow). */
@@ -23,6 +27,7 @@ const foreignMountedRows = (params: AgentConnectorHandoverParams) =>
   and(
     inArray(sql`${userConnectors.metadata} ->> 'mountedByAgentId'`, params.agentIds),
     ne(userConnectors.userId, params.recipientId),
+    ordinaryConnection(),
   );
 
 /**
@@ -136,7 +141,7 @@ export const rehomeAgentConnectorsForScopeTransfer = async (
   const scopedRows = await db
     .update(userConnectors)
     .set({ userId: targetUserId, workspaceId: targetWorkspaceId })
-    .where(inArray(userConnectors.agentId, agentIds))
+    .where(and(inArray(userConnectors.agentId, agentIds), ordinaryConnection()))
     .returning({ id: userConnectors.id });
 
   if (scopedRows.length > 0) {
@@ -160,7 +165,12 @@ export const rehomeAgentConnectorsForScopeTransfer = async (
   await db
     .update(userConnectors)
     .set({ metadata: sql`${userConnectors.metadata} - 'mountedByAgentId'` })
-    .where(inArray(sql`${userConnectors.metadata} ->> 'mountedByAgentId'`, agentIds));
+    .where(
+      and(
+        inArray(sql`${userConnectors.metadata} ->> 'mountedByAgentId'`, agentIds),
+        ordinaryConnection(),
+      ),
+    );
 };
 
 /**

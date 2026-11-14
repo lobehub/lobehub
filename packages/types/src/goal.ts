@@ -2,7 +2,7 @@ import type { GoalReportDispatch, GoalReportState } from './goalReport';
 import type { GoalRolloutPolicy, GoalRolloutState } from './goalRollout';
 import type { InitialGoalOverviewContext } from './stepContext';
 import type { AcceptanceStatus, VerifyCheckTally } from './verify';
-import type { WorkType } from './work';
+import type { WorkResourceType, WorkType } from './work';
 
 // ============================================
 // Goal — independent target entity (`goals` table)
@@ -305,6 +305,13 @@ export interface GoalManagerState {
    * owner can edit.
    */
   dispatchNeverStarted?: boolean;
+  /**
+   * Set when this turn's `execAgent` call failed and returned without an
+   * operation id. Unlike `dispatchNeverStarted` it does not prove no run exists,
+   * but the call is over, so no late operation id can still be recorded; an
+   * owner closing the Goal may settle the turn once it is past the turn timeout.
+   */
+  dispatchReturnedWithoutRun?: boolean;
   /**
    * Consecutive turns that ended in an error without committing a plan. Reset by
    * a turn that commits a plan or ends without an error. Reaching the limit
@@ -619,8 +626,10 @@ export type GoalDecisionStatus = 'pending' | 'resolved' | 'canceled';
  * Coordinator options carry it implicitly through their fixed ids
  * (`retry` / `retire` / `fail`); options the main Agent writes for its own
  * question name it, so its wording never has to match a reserved id.
+ * `retry_after_reset` leaves a Task stopped by a usage limit held until the
+ * limit resets; `retry` sends it back now.
  */
-export type GoalDecisionOptionEffect = 'retry' | 'retire';
+export type GoalDecisionOptionEffect = 'retry' | 'retire' | 'retry_after_reset';
 
 export interface GoalDecisionOption {
   /**
@@ -750,6 +759,8 @@ export interface GoalGraphWorkVersionDisplay {
   mimeType?: string;
   /** Canonical resource identity — the document id an in-app link addresses. */
   resourceId: string | null;
+  /** What the Work is beyond its type, e.g. `github_pull_request`; draws its state glyph. */
+  resourceType?: WorkResourceType;
   status: string | null;
   title: string | null;
   type: WorkType;

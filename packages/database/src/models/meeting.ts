@@ -2,6 +2,7 @@ import type {
   MeetingActionItem,
   MeetingChapter,
   MeetingDecision,
+  MeetingError,
   MeetingLanguage,
   MeetingPlatform,
   MeetingRealtimeProvider,
@@ -74,6 +75,12 @@ export class MeetingStateError extends Error {
     this.name = 'MeetingStateError';
   }
 }
+
+/** Statuses minutes may be (re)generated from: the transcript is final. */
+const SUMMARIZABLE_STATUSES = new Set<MeetingStatus>(['ready', 'summarizing']);
+
+/** Statuses a refine pass may (re)start from: audio is stored and nothing is recording. */
+const REFINABLE_STATUSES = new Set<MeetingStatus>(['failed', 'ready', 'transcribing']);
 
 const isLive = (status: MeetingStatus) =>
   (MEETING_LIVE_STATUSES as readonly MeetingStatus[]).includes(status);
@@ -338,39 +345,8 @@ export class MeetingModel {
         ).values(),
       ];
 
-      const speakerIds = await this.ensureSpeakers(
-        tx,
-        meetingId,
-        batch.map((segment) => segment.speakerLabel).filter((label): label is string => !!label),
-      );
-
-      const now = new Date();
-      const rows = await tx
-        .insert(meetingSegments)
-        .values(
-          batch.map((segment) => ({
-            endMs: segment.endMs,
-            meetingId,
-            seq: segment.seq,
-            source: segment.source,
-            speakerId: segment.speakerLabel ? speakerIds.get(segment.speakerLabel) : null,
-            startMs: segment.startMs,
-            text: segment.text,
-          })),
-        )
-        .onConflictDoUpdate({
-          set: {
-            endMs: sql`excluded.end_ms`,
-            speakerId: sql`excluded.speaker_id`,
-            startMs: sql`excluded.start_ms`,
-            text: sql`excluded.text`,
-            updatedAt: now,
-          },
-          target: [meetingSegments.meetingId, meetingSegments.source, meetingSegments.seq],
-        })
-        .returning();
-
-      await tx.update(meetings).set({ updatedAt: now }).where(eq(meetings.id, meetingId));
+      const rows = await this.upsertSegments(tx, meetingId, batch);
+      await tx.update(meetings).set({ updatedAt: new Date() }).where(eq(meetings.id, meetingId));
 
       const byKey = new Map(rows.map((row) => [`${row.source}:${row.seq}`, row]));
       return segments.map((segment) => byKey.get(`${segment.source}:${segment.seq}`)!);
@@ -393,6 +369,195 @@ export class MeetingModel {
   }
 
   // ── Minutes ──
+
+  // ── Refine ──
+
+  /**
+   * Enter `transcribing` for a refine pass and clear the previous failure.
+   * Allowed once audio is stored and recording has stopped, including a retry
+   * after `failed` or a re-run over a `ready` meeting.
+   */
+  async startRefine(id: string) {
+    return this.db.transaction(async (tx) => {
+      const meeting = await this.lockManageable(id, tx);
+      if (!meeting) return undefined;
+      if (!REFINABLE_STATUSES.has(meeting.status)) {
+        throw new MeetingStateError(meeting.status, 'refine');
+      }
+
+      const [updated] = await tx
+        .update(meetings)
+        .set({ error: null, status: 'transcribing', updatedAt: new Date() })
+        .where(eq(meetings.id, id))
+        .returning();
+
+      return updated;
+    });
+  }
+
+  /**
+   * Replace the whole refined transcript in one transaction and mark the
+   * meeting `ready` — or `summarizing` when minutes are generated next, so a
+   * reader polling the meeting never sees a `ready` without minutes. Re-running
+   * a refine therefore never leaves segments of an earlier pass behind. The
+   * realtime draft is kept for comparison.
+   */
+  async completeRefine(
+    id: string,
+    segments: Omit<AppendMeetingSegmentInput, 'source'>[],
+    options: { next?: 'ready' | 'summarizing' } = {},
+  ) {
+    return this.db.transaction(async (tx) => {
+      const meeting = await this.lockManageable(id, tx);
+      if (!meeting) return undefined;
+      if (meeting.status !== 'transcribing') {
+        throw new MeetingStateError(meeting.status, 'complete the refine of');
+      }
+
+      await tx
+        .delete(meetingSegments)
+        .where(and(eq(meetingSegments.meetingId, id), eq(meetingSegments.source, 'refine')));
+      if (segments.length > 0) {
+        await this.upsertSegments(
+          tx,
+          id,
+          segments.map((segment) => ({ ...segment, source: 'refine' as const })),
+        );
+      }
+
+      const [updated] = await tx
+        .update(meetings)
+        .set({ error: null, status: options.next ?? 'ready', updatedAt: new Date() })
+        .where(eq(meetings.id, id))
+        .returning();
+
+      return updated;
+    });
+  }
+
+  /** Record why the refine pass failed; the meeting moves to `failed` until retried. */
+  async failRefine(id: string, error: MeetingError) {
+    return this.db.transaction(async (tx) => {
+      const meeting = await this.lockManageable(id, tx);
+      if (!meeting) return undefined;
+      if (meeting.status !== 'transcribing') {
+        throw new MeetingStateError(meeting.status, 'fail the refine of');
+      }
+
+      const [updated] = await tx
+        .update(meetings)
+        .set({ error, status: 'failed', updatedAt: new Date() })
+        .where(eq(meetings.id, id))
+        .returning();
+
+      return updated;
+    });
+  }
+
+  // ── Minutes ──
+
+  /**
+   * Enter `summarizing` for a minutes pass and clear the previous failure.
+   * Allowed once the transcript is final (`ready`), and while `summarizing`
+   * so a pass interrupted mid-way can be run again.
+   */
+  async startMinutes(id: string) {
+    return this.db.transaction(async (tx) => {
+      const meeting = await this.lockManageable(id, tx);
+      if (!meeting) return undefined;
+      if (!SUMMARIZABLE_STATUSES.has(meeting.status)) {
+        throw new MeetingStateError(meeting.status, 'summarize');
+      }
+
+      const [updated] = await tx
+        .update(meetings)
+        .set({ error: null, status: 'summarizing', updatedAt: new Date() })
+        .where(eq(meetings.id, id))
+        .returning();
+
+      return updated;
+    });
+  }
+
+  /** Store the generated minutes and mark the meeting `ready`, in one transaction. */
+  async completeMinutes(id: string, input: SaveMeetingMinutesInput) {
+    return this.db.transaction(async (tx) => {
+      const meeting = await this.lockManageable(id, tx);
+      if (!meeting) return undefined;
+      if (!SUMMARIZABLE_STATUSES.has(meeting.status)) {
+        throw new MeetingStateError(meeting.status, 'complete the minutes of');
+      }
+
+      const now = new Date();
+      const [minutes] = await tx
+        .insert(meetingMinutes)
+        .values({ ...input, meetingId: id })
+        .onConflictDoUpdate({ set: { ...input, updatedAt: now }, target: meetingMinutes.meetingId })
+        .returning();
+
+      const [updated] = await tx
+        .update(meetings)
+        .set({ error: null, status: 'ready', updatedAt: now })
+        .where(eq(meetings.id, id))
+        .returning();
+
+      return { meeting: updated, minutes };
+    });
+  }
+
+  /**
+   * Record why minutes generation failed. The meeting stays `ready` — its
+   * transcript is complete and readable — with `error.stage = 'minutes'`
+   * until a retry succeeds.
+   */
+  async failMinutes(id: string, error: MeetingError) {
+    return this.db.transaction(async (tx) => {
+      const meeting = await this.lockManageable(id, tx);
+      if (!meeting) return undefined;
+      if (!SUMMARIZABLE_STATUSES.has(meeting.status)) {
+        throw new MeetingStateError(meeting.status, 'fail the minutes of');
+      }
+
+      const [updated] = await tx
+        .update(meetings)
+        .set({ error, status: 'ready', updatedAt: new Date() })
+        .where(eq(meetings.id, id))
+        .returning();
+
+      return updated;
+    });
+  }
+
+  /**
+   * Read-modify-write the action items under a row lock, so two confirmations
+   * of the same minutes (two tabs, a retry) never overwrite each other's task
+   * links. `update` receives the stored items and returns the new list.
+   */
+  async updateActionItems(
+    meetingId: string,
+    update: (items: MeetingActionItem[]) => MeetingActionItem[],
+  ) {
+    return this.db.transaction(async (tx) => {
+      const meeting = await this.lockManageable(meetingId, tx);
+      if (!meeting) return undefined;
+
+      const [minutes] = await tx
+        .select()
+        .from(meetingMinutes)
+        .where(eq(meetingMinutes.meetingId, meetingId))
+        .limit(1)
+        .for('update');
+      if (!minutes) return undefined;
+
+      const [updated] = await tx
+        .update(meetingMinutes)
+        .set({ actionItems: update(minutes.actionItems), updatedAt: new Date() })
+        .where(eq(meetingMinutes.id, minutes.id))
+        .returning();
+
+      return updated;
+    });
+  }
 
   /**
    * Create or replace the meeting's minutes; omitted fields keep their stored value.
@@ -465,6 +630,44 @@ export class MeetingModel {
 
       return updated;
     });
+  }
+
+  private async upsertSegments(
+    tx: Transaction,
+    meetingId: string,
+    batch: AppendMeetingSegmentInput[],
+  ) {
+    const speakerIds = await this.ensureSpeakers(
+      tx,
+      meetingId,
+      batch.map((segment) => segment.speakerLabel).filter((label): label is string => !!label),
+    );
+
+    const now = new Date();
+    return tx
+      .insert(meetingSegments)
+      .values(
+        batch.map((segment) => ({
+          endMs: segment.endMs,
+          meetingId,
+          seq: segment.seq,
+          source: segment.source,
+          speakerId: segment.speakerLabel ? speakerIds.get(segment.speakerLabel) : null,
+          startMs: segment.startMs,
+          text: segment.text,
+        })),
+      )
+      .onConflictDoUpdate({
+        set: {
+          endMs: sql`excluded.end_ms`,
+          speakerId: sql`excluded.speaker_id`,
+          startMs: sql`excluded.start_ms`,
+          text: sql`excluded.text`,
+          updatedAt: now,
+        },
+        target: [meetingSegments.meetingId, meetingSegments.source, meetingSegments.seq],
+      })
+      .returning();
   }
 
   private async ensureSpeakers(tx: Transaction, meetingId: string, labels: string[]) {

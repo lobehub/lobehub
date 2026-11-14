@@ -1,11 +1,17 @@
 import type { UIChatMessage } from '@lobechat/types';
 import { useMemo, useRef } from 'react';
-import useSWR from 'swr';
 
-import { agentSignalKeys } from '@/libs/swr/keys';
-import { agentSignalService } from '@/services/agentSignal';
+import {
+  agentSignalActions,
+  type AgentSignalReceiptsParams,
+  type AgentSignalReceiptView,
+  agentSignalSelectors,
+  useAgentSignalStore,
+} from '@/store/agentSignal';
 
 import { collectSteerChains } from '../../store/slices/data/steerChains';
+
+export type { AgentSignalReceiptView } from '@/store/agentSignal';
 
 /** Poll cadence for the active conversation's Agent Signal receipt surface. */
 const AGENT_SIGNAL_RECEIPT_INITIAL_REFRESH_INTERVAL_MS = 3000;
@@ -16,9 +22,7 @@ const AGENT_SIGNAL_RECEIPT_MAX_REFRESH_INTERVAL_MS = 60_000;
 /** Maximum time to wait for async Agent Signal receipts in the current agent/topic scope. */
 const AGENT_SIGNAL_RECEIPT_POLLING_TIMEOUT_MS = 5 * 60_000;
 
-export type AgentSignalReceiptView = Awaited<
-  ReturnType<typeof agentSignalService.listReceipts>
->['receipts'][number];
+const EMPTY_RECEIPTS: AgentSignalReceiptView[] = [];
 
 export const useAgentSignalReceipts = (input: {
   agentId?: string | null;
@@ -29,80 +33,51 @@ export const useAgentSignalReceipts = (input: {
 }) => {
   // TODO: Migrate Agent Signal receipt visibility to a dedicated product capability flag.
   const shouldFetch = input.enabled === true && Boolean(input.agentId && input.topicId);
-  const scopeKey = shouldFetch ? `${input.agentId}:${input.topicId}` : undefined;
-  const pollingKey = shouldFetch ? `${scopeKey}:${input.pollingSignal ?? ''}` : undefined;
-  const pollingKeyRef = useRef<string | undefined>(undefined);
+  const params = useMemo<AgentSignalReceiptsParams | null>(
+    () => (shouldFetch ? { agentId: input.agentId!, topicId: input.topicId! } : null),
+    [shouldFetch, input.agentId, input.topicId],
+  );
+  const scopeKey = params ? `${params.agentId}:${params.topicId}` : undefined;
+  const pollingKey = scopeKey ? `${scopeKey}:${input.pollingSignal ?? ''}` : undefined;
   const scopeKeyRef = useRef<string | undefined>(undefined);
-  const latestCreatedAtRef = useRef<number | undefined>(undefined);
-  const pollingRef = useRef<{ emptyRefreshes: number; startedAt?: number }>({ emptyRefreshes: 0 });
-  const receiptsRef = useRef<AgentSignalReceiptView[]>([]);
+  const pollingKeyRef = useRef<string | undefined>(undefined);
+  const pollingRef = useRef<{ params: AgentSignalReceiptsParams | null; startedAt?: number }>({
+    params: null,
+  });
 
+  // Opening a topic (again) reconciles its whole head; polls stay incremental.
   if (scopeKeyRef.current !== scopeKey) {
     scopeKeyRef.current = scopeKey;
-    latestCreatedAtRef.current = undefined;
-    receiptsRef.current = [];
+    if (params) agentSignalActions.requestFullReceiptHead(params);
   }
 
   if (pollingKeyRef.current !== pollingKey) {
     pollingKeyRef.current = pollingKey;
-    pollingRef.current = {
-      emptyRefreshes: 0,
-      ...(shouldFetch ? { startedAt: Date.now() } : {}),
-    };
+    pollingRef.current = { params, ...(params ? { startedAt: Date.now() } : {}) };
+    if (params) agentSignalActions.resetReceiptPolling(params);
   }
 
-  const { data, isLoading } = useSWR(
-    shouldFetch ? agentSignalKeys.receipts(input.agentId!, input.topicId!) : null,
-    async () => {
-      const result = await agentSignalService.listReceipts({
-        agentId: input.agentId!,
-        limit: 20,
-        ...(latestCreatedAtRef.current === undefined
-          ? {}
-          : { sinceCreatedAt: latestCreatedAtRef.current }),
-        topicId: input.topicId!,
-      });
+  agentSignalActions.useFetchReceipts(params, {
+    refreshInterval: () => {
+      const { params: polled, startedAt } = pollingRef.current;
+      if (!polled || startedAt === undefined) return 0;
 
-      const nextReceipts =
-        latestCreatedAtRef.current === undefined
-          ? result.receipts
-          : mergeReceiptRefresh(receiptsRef.current, result.receipts);
-      const latestCreatedAt = nextReceipts[0]?.createdAt;
+      const elapsedMs = Date.now() - startedAt;
+      const remainingMs = AGENT_SIGNAL_RECEIPT_POLLING_TIMEOUT_MS - elapsedMs;
 
-      receiptsRef.current = nextReceipts;
-      latestCreatedAtRef.current =
-        latestCreatedAt === undefined ? latestCreatedAtRef.current : latestCreatedAt;
-      pollingRef.current.emptyRefreshes =
-        result.receipts.length === 0 ? pollingRef.current.emptyRefreshes + 1 : 0;
+      if (remainingMs <= 0) return 0;
 
-      return {
-        ...result,
-        receipts: nextReceipts,
-      };
+      const emptyRefreshBackoffStep = Math.max(agentSignalActions.getEmptyRefreshes(polled) - 1, 0);
+      const nextIntervalMs = Math.min(
+        AGENT_SIGNAL_RECEIPT_INITIAL_REFRESH_INTERVAL_MS * 2 ** emptyRefreshBackoffStep,
+        AGENT_SIGNAL_RECEIPT_MAX_REFRESH_INTERVAL_MS,
+      );
+
+      return Math.min(nextIntervalMs, remainingMs);
     },
-    {
-      refreshInterval: () => {
-        if (!shouldFetch || pollingRef.current.startedAt === undefined) return 0;
+  });
 
-        const elapsedMs = Date.now() - pollingRef.current.startedAt;
-        const remainingMs = AGENT_SIGNAL_RECEIPT_POLLING_TIMEOUT_MS - elapsedMs;
-
-        if (remainingMs <= 0) return 0;
-
-        const emptyRefreshBackoffStep = Math.max(pollingRef.current.emptyRefreshes - 1, 0);
-        const nextIntervalMs = Math.min(
-          AGENT_SIGNAL_RECEIPT_INITIAL_REFRESH_INTERVAL_MS * 2 ** emptyRefreshBackoffStep,
-          AGENT_SIGNAL_RECEIPT_MAX_REFRESH_INTERVAL_MS,
-        );
-
-        return Math.min(nextIntervalMs, remainingMs);
-      },
-      refreshWhenHidden: false,
-      revalidateOnFocus: false,
-    },
-  );
-
-  const receipts = data?.receipts ?? [];
+  const receipts = useAgentSignalStore(agentSignalSelectors.getReceipts(params)) ?? EMPTY_RECEIPTS;
 
   const receiptsByAnchor = useMemo(
     () =>
@@ -113,10 +88,7 @@ export const useAgentSignalReceipts = (input: {
     [input.displayMessages, receipts],
   );
 
-  return {
-    isLoading,
-    receiptsByAnchor,
-  };
+  return { receiptsByAnchor };
 };
 
 interface GroupAgentSignalReceiptsByEffectiveAnchorInput {
@@ -195,19 +167,4 @@ const groupAgentSignalReceiptsByEffectiveAnchor = ({
   }
 
   return receiptsByAnchor;
-};
-
-const mergeReceiptRefresh = (
-  currentReceipts: AgentSignalReceiptView[],
-  newReceipts: AgentSignalReceiptView[],
-) => {
-  if (newReceipts.length === 0) return currentReceipts;
-
-  const mergedById = new Map(currentReceipts.map((receipt) => [receipt.id, receipt]));
-
-  for (const receipt of newReceipts) {
-    mergedById.set(receipt.id, receipt);
-  }
-
-  return [...mergedById.values()].sort((a, b) => b.createdAt - a.createdAt).slice(0, 20);
 };

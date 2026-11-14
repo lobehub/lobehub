@@ -21,7 +21,7 @@ import { TopicModel } from '@/database/models/topic';
 import { resolveScmCloneCredential } from '@/server/services/scm/cloneCredential';
 
 import { sandboxStorageBinding } from './binding';
-import { driveFolderExists } from './driveFolder';
+import { driveFolderExists, ensureDriveFolder } from './driveFolder';
 import { resolveSandboxStorageClaim } from './entitlement';
 import { type SandboxInitialization, toSandboxInitialization } from './environmentInit';
 import type { SandboxSessionSpecification } from './types';
@@ -365,10 +365,20 @@ const resolvePlacement = async ({
 
     // Deleted since it was picked — by this member in another tab, or by a
     // colleague on the public drive. Recreating it silently would bring back
-    // an empty folder under a name someone chose to remove.
+    // an empty folder under a name someone chose to remove. A repository's
+    // checkout is the exception: the environment fills the folder, so a
+    // project conversation's checkout is made on its first run, and made
+    // again — a fresh clone — after someone removes it.
     if ((await driveFolderExists({ claim, path: folder, userId, workspaceId })) === false) {
-      log('Folder %o on topic %s is no longer on the drive', folder, topicId);
-      return fallBack('directoryMissing');
+      const checkout = !!topic?.metadata?.sandboxEnvironmentId;
+      if (
+        !checkout ||
+        !(await ensureDriveFolder({ claim, path: folder, topicId, userId, workspaceId }))
+      ) {
+        log('Folder %o on topic %s is no longer on the drive', folder, topicId);
+        return fallBack('directoryMissing');
+      }
+      log('Created checkout folder %o for topic %s', folder, topicId);
     }
 
     log('Drive for topic %s: cwd=%o drive=%s', topicId, folder, drive);

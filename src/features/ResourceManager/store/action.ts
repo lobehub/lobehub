@@ -15,7 +15,7 @@ import { useFileStore } from '@/store/file';
 import type { StoreSetter } from '@/store/types';
 import { flattenActions } from '@/store/utils/flattenActions';
 import type { FilesTabs, ResourceSourceFilter, SortType } from '@/types/files';
-import type { ResourceItem, ResourceQueryParams } from '@/types/resource';
+import type { ResourceItem, ResourceQueryParams, ResourceSorter } from '@/types/resource';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { ResourceListVisibilityFilter, SelectAllState, State, ViewMode } from './initialState';
@@ -30,7 +30,7 @@ import {
   hierarchySearchResource,
   type HierarchySearchValue,
 } from './projection';
-import { getExplorerSearchParams } from './selectors';
+import { getDefaultLibrarySort, getExplorerSearchParams } from './selectors';
 
 const n = setNamespace('resourceManager');
 
@@ -82,6 +82,8 @@ const toExplorerSearchQuery = (params: ExplorerSearchParams): ResourceQueryParam
   filesOnly: !params.libraryId,
   libraryId: params.libraryId,
   q: params.q,
+  sorter: params.sorter,
+  sortType: params.sortType,
   showFilesInKnowledgeBase: !params.libraryId,
   sourceFilter: params.sourceFilter,
   visibility: params.visibility,
@@ -570,7 +572,12 @@ export class ResourceManagerStoreActionImpl {
     if (this.#get().libraryId === libraryId) return;
     // A sidebar search is scoped to one library; carrying it over to the next
     // library would show results the user never asked for.
-    this.#set({ libraryId, librarySearchQuery: '' });
+    this.#set({
+      ...getDefaultLibrarySort(libraryId),
+      libraryId,
+      librarySearchQuery: '',
+      sortLibraryId: libraryId,
+    });
   };
 
   setLibrarySearchQuery = (librarySearchQuery: string): void => {
@@ -661,12 +668,16 @@ export class ResourceManagerStoreActionImpl {
     });
   };
 
-  setSorter = (sorter: 'name' | 'createdAt' | 'size'): void => {
-    this.#set({ sorter });
+  setSort = (sorter: ResourceSorter, sortType: SortType): void => {
+    this.#set({ sorter, sortType, sortLibraryId: this.#get().libraryId });
+  };
+
+  setSorter = (sorter: ResourceSorter): void => {
+    this.#set({ sorter, sortLibraryId: this.#get().libraryId });
   };
 
   setSortType = (sortType: SortType): void => {
-    this.#set({ sortType });
+    this.#set({ sortType, sortLibraryId: this.#get().libraryId });
   };
 
   setViewMode = (viewMode: ViewMode): void => {
@@ -753,6 +764,8 @@ export const store: CreateStore =
   (publicState) =>
   (...params) => ({
     ...initialState,
+    ...getDefaultLibrarySort(publicState?.libraryId),
+    sortLibraryId: publicState?.libraryId,
     ...publicState,
     ...flattenActions<Action>([createResourceManagerStoreSlice(...params)]),
   });

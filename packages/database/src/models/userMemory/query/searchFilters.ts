@@ -8,7 +8,7 @@ import type { UserMemoryQueryContext } from './context';
 import type { LayerBaseMemorySignals, SearchLayerKey } from './types';
 import { coerceDate } from './utils';
 
-const HYBRID_SEARCH_OVERFETCH_MULTIPLIER = 3;
+export const HYBRID_SEARCH_OVERFETCH_MULTIPLIER = 3;
 
 export function getSearchLimit(key: SearchLayerKey, params: SearchMemoryParams) {
   return params.topK?.[key] ?? DEFAULT_HYBRID_SEARCH_LIMIT;

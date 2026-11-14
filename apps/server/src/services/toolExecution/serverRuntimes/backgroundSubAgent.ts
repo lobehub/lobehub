@@ -14,6 +14,12 @@ export interface BackgroundSubAgentRefusal {
 }
 
 interface BackgroundSubAgentCheckParams {
+  /**
+   * The sub-agent thread this call continues (`subAgentId`). While that thread
+   * still runs in the background, the call steers it or replaces its run, so it
+   * adds no run to the count.
+   */
+  continuesThreadId?: string;
   db: LobeChatDatabase;
   groupId?: string | null;
   /** How to call the tool in the foreground instead, for the refusal text. */
@@ -35,7 +41,8 @@ interface BackgroundSubAgentCheckParams {
 export const checkBackgroundSubAgentAllowed = async (
   params: BackgroundSubAgentCheckParams,
 ): Promise<BackgroundSubAgentRefusal | undefined> => {
-  const { db, groupId, retryHint, threadId, topicId, userId, workspaceId } = params;
+  const { continuesThreadId, db, groupId, retryHint, threadId, topicId, userId, workspaceId } =
+    params;
 
   if (groupId) {
     return {
@@ -54,7 +61,9 @@ export const checkBackgroundSubAgentAllowed = async (
     scope: 'running',
     topicId,
   });
-  if (running.length >= MAX_RUNNING_BACKGROUND_SUB_AGENTS) {
+  const continuesRunning =
+    !!continuesThreadId && running.some((call) => call.state?.threadId === continuesThreadId);
+  if (running.length >= MAX_RUNNING_BACKGROUND_SUB_AGENTS && !continuesRunning) {
     return {
       code: 'BACKGROUND_SUB_AGENT_LIMIT',
       message: `${running.length} background runs are already going in this conversation (limit ${MAX_RUNNING_BACKGROUND_SUB_AGENTS}). Wait for their results to arrive, or ${retryHint.charAt(0).toLowerCase()}${retryHint.slice(1)}`,

@@ -19,7 +19,8 @@ const log = debug('lobe-server:workflows:run-thread-trajectory');
 export const runThreadTrajectoryHandler = async (
   context: WorkflowContext<RunThreadTrajectoryPayload>,
 ) => {
-  const { runId, testCaseId, threadId, topicId, userId } = context.requestPayload ?? {};
+  const { executionId, runId, testCaseId, threadId, topicId, userId } =
+    context.requestPayload ?? {};
 
   log('Starting: runId=%s testCaseId=%s threadId=%s', runId, testCaseId, threadId);
 
@@ -40,6 +41,7 @@ export const runThreadTrajectoryHandler = async (
     // Record thread as errored so aggregation can proceed
     await runStep(context, 'thread-trajectory:handle-load-error', async () => {
       await service.recordThreadCompletion({
+        executionId,
         runId,
         status: 'error',
         telemetry: { completionReason: 'error', errorMessage: data.error },
@@ -61,6 +63,7 @@ export const runThreadTrajectoryHandler = async (
   // Step 2: Execute agent for this thread
   const result = await runStep(context, 'thread-trajectory:exec-agent', () =>
     service.executeThreadTrajectory({
+      executionId,
       envPrompt,
       run,
       runId,
@@ -77,6 +80,7 @@ export const runThreadTrajectoryHandler = async (
     // Check if all threads are done and handle finalization.
     await runStep(context, 'thread-trajectory:handle-exec-error', async () => {
       const { allRunDone } = await service.recordThreadCompletion({
+        executionId: result.executionId,
         runId,
         status: 'error',
         telemetry: { completionReason: 'error', errorMessage: result.error },

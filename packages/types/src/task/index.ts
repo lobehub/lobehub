@@ -657,6 +657,8 @@ export interface TaskDetailData {
   name?: string | null;
   parent?: { id?: string; agentId?: string | null; identifier: string; name: string | null } | null;
   priority?: number | null;
+  /** The project this task is filed under; null when it has none. */
+  projectId?: string | null;
   schedule?: {
     maxExecutions?: number | null;
     pattern?: string | null;

@@ -28,6 +28,11 @@ const useTopicTitle = (
     return topic?.title || undefined;
   });
 
+// Known from the route alone, so a background tab whose agent is not loaded still
+// swaps a cached legacy default image for the generated character.
+const agentAvatarIdentity = (agentId: string | undefined) =>
+  agentId ? ({ avatarKind: 'agent', avatarSeed: agentId } as const) : undefined;
+
 const AgentDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
   const routeWorkspaceId = useRouteWorkspaceId(params);
   const meta = useAgentStore((state) => {
@@ -44,7 +49,8 @@ const AgentDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
 
   usePublishDynamicRouteMeta(
     {
-      avatar: meta.avatar,
+      avatar: hasMeta ? (meta.avatar ?? null) : undefined,
+      ...agentAvatarIdentity(params.aid),
       backgroundColor: meta.backgroundColor,
       title: [topicTitle, agentTitle].filter(Boolean).join(' · ') || undefined,
     },
@@ -78,7 +84,8 @@ const createAgentSectionDynamicMeta = (titleKey: string) => {
 
     usePublishDynamicRouteMeta(
       {
-        avatar: meta.avatar,
+        avatar: hasMeta ? (meta.avatar ?? null) : undefined,
+        ...agentAvatarIdentity(params.aid),
         backgroundColor: meta.backgroundColor,
         title: [translate(titleKey), agentTitle].filter(Boolean).join(' · ') || undefined,
       },
@@ -92,6 +99,12 @@ const createAgentSectionDynamicMeta = (titleKey: string) => {
 
 export const TopicsDynamicMeta = createAgentSectionDynamicMeta('navigation.topics');
 export const ProfileDynamicMeta = createAgentSectionDynamicMeta('navigation.profile');
+export const EngineDynamicMeta = createAgentSectionDynamicMeta('navigation.engine');
+export const InstructionDynamicMeta = createAgentSectionDynamicMeta('navigation.instruction');
+export const EnvironmentDynamicMeta = createAgentSectionDynamicMeta('navigation.environment');
+export const ToolsDynamicMeta = createAgentSectionDynamicMeta('navigation.tools');
+export const KnowledgeDynamicMeta = createAgentSectionDynamicMeta('navigation.knowledge');
+export const SkillsDynamicMeta = createAgentSectionDynamicMeta('navigation.skills');
 export const ChannelDynamicMeta = createAgentSectionDynamicMeta('navigation.channels');
 export const StatisticsDynamicMeta = createAgentSectionDynamicMeta('navigation.stats');
 export const ShareDynamicMeta = createAgentSectionDynamicMeta('navigation.agentShare');

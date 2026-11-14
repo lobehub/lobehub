@@ -21,8 +21,10 @@ import { createWidgetDryRunAudit } from '@/server/services/widget/dryRunAudit';
 import { stateHasEntityFileEdits } from '@/server/services/workRegistration';
 
 import { hookDispatcher } from '../hooks';
-import { EVAL_TOOL_FORWARDING_HOOK_ID } from './constants';
-import { createEvalToolForwardingHook } from './evalToolForwardingHook';
+import { createEvalConnectorHook } from './evalConnectorHook';
+import { createEvalToolGateHook } from './evalToolGateHook';
+import { DurableStatusUnavailableError } from './executionErrors';
+import { withGraphSteerReopen } from './graphSteerReopen';
 import type { AgentRuntimeServiceContext } from './types';
 
 const log = debug('lobe-server:agent-runtime-service');
@@ -45,6 +47,13 @@ export type RuntimeFactoryDeps = Pick<
 >;
 
 /**
+ * Local deliveries are not redelivered when they throw, so a step that refused
+ * to run on an unreadable durable status retries here, the way QStash would
+ * redeliver it (same budget as its default `retries`).
+ */
+export const LOCAL_DURABLE_STATUS_RETRY_DELAYS_MS = [1000, 2000, 4000] as const;
+
+/**
  * Setup execution callback for LocalQueueServiceImpl
  * This breaks the circular dependency by using callback injection
  */
@@ -59,7 +68,22 @@ export function setupLocalExecutionCallback(deps: RuntimeFactoryDeps): void {
       // toolMessageId, resumeAsyncTool, …) ride the request body into
       // executeStep. Without this spread, local/in-memory resumes silently
       // lose their intervention/resume signal.
-      await deps.executeStep({ context, operationId, stepIndex, ...payload });
+      for (let attempt = 0; ; attempt++) {
+        try {
+          await deps.executeStep({ context, operationId, stepIndex, ...payload });
+          return;
+        } catch (error) {
+          const delay = LOCAL_DURABLE_STATUS_RETRY_DELAYS_MS[attempt];
+          if (!(error instanceof DurableStatusUnavailableError) || delay === undefined) throw error;
+          log(
+            '[%s][%d] Durable status unavailable; retrying in %dms',
+            operationId,
+            stepIndex,
+            delay,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
     });
   }
 }
@@ -156,6 +180,7 @@ export async function createAgentRuntime(
   {
     abortSignal,
     agentState,
+    bindAgentDocumentIndex,
     operationId,
     stepIndex,
     tracingContextEngine,
@@ -169,6 +194,7 @@ export async function createAgentRuntime(
      * Works, so loading should cover that window).
      */
     agentState?: any;
+    bindAgentDocumentIndex?: RuntimeExecutorContext['bindAgentDocumentIndex'];
     operationId: string;
     stepIndex: number;
     tracingContextEngine?: (input: unknown, output: unknown, metadata?: unknown) => void;
@@ -215,13 +241,27 @@ export async function createAgentRuntime(
     userId: origin?.userId,
   };
 
+  // The gate registers first so a refused call never reaches the forwarder.
+  if (origin?.trigger === RequestTrigger.Eval && plan?.eval?.allowedTools) {
+    hookDispatcher.registerRuntimeToolHooks(operationId, [
+      createEvalToolGateHook(plan.eval.allowedTools),
+    ]);
+  }
+
   if (
     origin?.trigger === RequestTrigger.Eval &&
-    plan?.eval?.toolForwarding &&
-    !hookDispatcher.hasHook(operationId, EVAL_TOOL_FORWARDING_HOOK_ID)
+    (plan?.eval?.connectorSnapshots || plan?.eval?.toolForwarding)
   ) {
-    hookDispatcher.register(operationId, [
-      createEvalToolForwardingHook(plan.eval.toolForwarding, plan.eval.caseId),
+    hookDispatcher.registerRuntimeToolHooks(operationId, [
+      createEvalConnectorHook(
+        { db: deps.serverDB, userId: deps.userId, workspaceId: deps.workspaceId },
+        plan.eval.connectorSnapshots ?? {},
+        {
+          attemptId: plan.eval.attemptId,
+          caseId: plan.eval.caseId,
+          legacyIdentifiers: Object.keys(plan.eval.toolForwarding ?? {}),
+        },
+      ),
     ]);
   }
 
@@ -232,6 +272,7 @@ export async function createAgentRuntime(
   // Create streaming executor context
   const executorContext: RuntimeExecutorContext = {
     abortSignal,
+    bindAgentDocumentIndex,
     // The factory may be a Graph-aware dispatcher that still returns the
     // default agent for ordinary conversations. Keep the early visible
     // output end behavior tied to the actual agent, not factory presence.
@@ -248,6 +289,7 @@ export async function createAgentRuntime(
     botContext: principal?.actor?.bot,
     execSubAgent: deps.delegate.execSubAgent,
     execVirtualSubAgent: deps.delegate.execVirtualSubAgent,
+    cancelVirtualSubAgent: deps.delegate.cancelVirtualSubAgent,
     execGroupMember: deps.delegate.execGroupMember,
     onGroupMemberResult: (params) => deps.completeGroupMemberBarrier(params),
     hookDispatcher,
@@ -269,7 +311,7 @@ export async function createAgentRuntime(
 
   // Create Agent Runtime instance
   const runtime = new AgentRuntime(agent as any, {
-    executors: createRuntimeExecutors(executorContext),
+    executors: withGraphSteerReopen(createRuntimeExecutors(executorContext), operationId),
   });
 
   return { agent, runtime };

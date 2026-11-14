@@ -27,9 +27,8 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
 import { assertConnectorMaintainable } from './_helpers/connectorManagePolicy';
 
-const composioProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
+const composioDbProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
-  const client = getComposioClient();
   const wsId = ctx.workspaceId ?? undefined;
   // Workspace-scoped. A Composio connection bound to a workspace agent (or a
   // workspace's base tools) must land as a workspace-dimension row
@@ -44,9 +43,14 @@ const composioProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
   const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId);
 
   return opts.next({
-    ctx: { ...ctx, composioClient: client, connectorModel, connectorToolModel, pluginModel },
+    ctx: { ...ctx, connectorModel, connectorToolModel, pluginModel },
   });
 });
+
+// Stored plugin listings do not require the external Composio service to be configured.
+const composioProcedure = composioDbProcedure.use(async (opts) =>
+  opts.next({ ctx: { composioClient: getComposioClient() } }),
+);
 
 // Writes: in a workspace, require at least the member role (blocks viewers).
 // Personal mode passes through. The workspace connector policy is layered on
@@ -399,7 +403,7 @@ export const composioRouter = router({
       return { success: true };
     }),
 
-  getComposioPlugins: composioProcedure.query(async ({ ctx }) => {
+  getComposioPlugins: composioDbProcedure.query(async ({ ctx }) => {
     const allPlugins = await ctx.pluginModel.query();
     return allPlugins.filter((plugin) => plugin.customParams?.composio);
   }),

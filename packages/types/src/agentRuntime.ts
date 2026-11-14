@@ -51,6 +51,8 @@ export enum RequestTrigger {
   InputCompletion = 'input_completion',
   Memory = 'memory',
   MultimodalAnalysis = 'multimodal_analysis',
+  /** Text-to-music generation from a music generation topic. */
+  Music = 'music',
   Notify = 'notify',
   Onboarding = 'onboarding',
   Openapi = 'openapi',

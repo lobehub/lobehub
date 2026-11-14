@@ -3,6 +3,8 @@ import {
   type AgentRuntimeContext,
   type AgentState,
   findCurrentTurnPendingToolMessages,
+  isGraphAgentIntermediateResult,
+  isGraphAgentOutputExtraction,
 } from '@lobechat/agent-runtime';
 import { type ChatToolPayload } from '@lobechat/types';
 import debug from 'debug';
@@ -27,6 +29,24 @@ const LLM_NEXT_PHASES = new Set([
   'sub_agent_result',
   'sub_agents_batch_result',
 ]);
+
+/**
+ * A sub-agent's answer: the model replied without asking for a tool, so no
+ * tool result follows it to read a steer at. A top-level run hands a follow-up
+ * that missed its last decision point to the next turn; a sub-agent has no
+ * next turn for its parent's steer instruction, so the instruction joins here
+ * instead and the sub-agent answers again with it in context.
+ */
+const isSubAgentAnswer = (context: AgentRuntimeContext, state: AgentState): boolean => {
+  if (!state.origin?.lineage?.isSubAgent || context.phase !== 'llm_result') return false;
+  // A graph node's output extraction is no answer: the graph needs that reply
+  // back as an `llm_result`, and the node's own answer before it was the read.
+  if (isGraphAgentOutputExtraction(state)) return false;
+  const payload = context.payload as
+    { hasToolsCalling?: boolean; result?: { tool_calls?: unknown[] } } | undefined;
+
+  return !payload?.hasToolsCalling && !payload?.result?.tool_calls?.length;
+};
 
 /** What this module reads off the service. */
 export type StepPrepareDeps = Pick<
@@ -252,14 +272,23 @@ export async function prepareStepInput(
   // the whole run. Re-entered like an async-tool resume: messages refreshed
   // from the DB (which now hold the steer message) and a `user_input` phase
   // anchored on it. Not while a tool of this turn still waits for approval —
-  // the agent has to park for that first.
+  // the agent has to park for that first. A sub-agent also takes its parent's
+  // steer instruction at an answer (see `isSubAgentAnswer`). A graph routes a
+  // node's answer before its terminal node on to the next node, so a steer
+  // joins there too — the node answers again with it, and later nodes work
+  // with the correction — but only the terminal node's answer is the run's
+  // last read.
+  const subAgentAnswer = !!currentContext && isSubAgentAnswer(currentContext, currentState);
+  const subAgentFinalAnswer = subAgentAnswer && !isGraphAgentIntermediateResult(currentState);
   if (
     currentContext &&
     !forcedFinishState &&
-    LLM_NEXT_PHASES.has(currentContext.phase) &&
+    (LLM_NEXT_PHASES.has(currentContext.phase) || subAgentAnswer) &&
     findCurrentTurnPendingToolMessages(currentState.messages).length === 0
   ) {
-    const injected = await deps.injectQueuedFollowUp(operationId, stepIndex, currentState);
+    const injected = await deps.injectQueuedFollowUp(operationId, stepIndex, currentState, {
+      lastRead: subAgentFinalAnswer,
+    });
     if (injected) {
       currentState = structuredClone(currentState);
       currentState.messages = await deps.refreshMessagesFromDB(currentState);

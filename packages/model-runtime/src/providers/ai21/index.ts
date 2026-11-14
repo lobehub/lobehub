@@ -1,6 +1,6 @@
 import { ModelProvider } from 'model-bank';
 
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 
 export const LobeAi21AI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.ai21.com/studio/v1',

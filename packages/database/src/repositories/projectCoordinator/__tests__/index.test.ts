@@ -23,18 +23,20 @@ import {
   widgets,
 } from '../../../schemas';
 import { ChannelRepository } from '../../channel';
+import { ProjectRepository } from '../../project';
 import { ProjectCoordinatorRepository } from '../index';
 
 const serverDB = await getTestDB();
 const userId = 'project-coordinator-user';
 const otherUserId = 'project-coordinator-other-user';
 const model = new ProjectModel(serverDB, userId);
+const projectRepo = new ProjectRepository(serverDB, userId);
 const repo = new ProjectCoordinatorRepository(serverDB, userId);
 const otherRepo = new ProjectCoordinatorRepository(serverDB, otherUserId);
 let identifierSequence = 0;
 
 const createProject = (input: { coordinatorAgentId?: string; name: string }) =>
-  model.create({ ...input, identifier: `C${String(++identifierSequence).padStart(5, '0')}` });
+  projectRepo.create({ ...input, identifier: `C${String(++identifierSequence).padStart(5, '0')}` });
 
 /** Projects created before main agents were ordinary agents got a virtual coordinator. */
 const createLegacyProject = async (name: string) => {

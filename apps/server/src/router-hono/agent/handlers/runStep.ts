@@ -12,6 +12,7 @@ import {
   type AgentExecutionResult,
   type AgentStepContinuation,
   scheduleOpportunisticStaleSweep,
+  scheduleOpportunisticVerifySweep,
 } from '@/server/services/agentRuntime';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { runWithInvocationDeadline } from '@/server/utils/invocationDeadline';
@@ -234,6 +235,9 @@ export async function runStep(c: Context): Promise<Response> {
     // inactivity watchdog. Fire-and-forget: it is background repair and must
     // not add latency to, or fail, this delivery.
     scheduleOpportunisticStaleSweep();
+    // Same for verification rounds stranded in `verifying`: their sweep route
+    // expects a QStash Schedule no deployment registers.
+    scheduleOpportunisticVerifySweep();
 
     // Get userId from operation metadata stored in Redis
     const coordinator = new AgentRuntimeCoordinator();

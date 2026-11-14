@@ -1,6 +1,6 @@
 import { ModelProvider } from 'model-bank';
 
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 
 export const LobeStreamLakeAI = createOpenAICompatibleRuntime({
   baseURL: 'https://wanqing.streamlakeapi.com/api/gateway/v1/endpoints',

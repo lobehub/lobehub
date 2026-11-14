@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 
 import { qstashClient } from '@/libs/qstash';
 
+import { qstashAuth } from '../middlewares/qstashAuth';
 import { onThreadComplete } from './handlers/onThreadComplete';
 import { onTrajectoryComplete } from './handlers/onTrajectoryComplete';
 import {
@@ -116,7 +117,7 @@ app.post(
 );
 
 // Plain completion webhooks posted by AgentRuntimeService — not Upstash workflows.
-app.post('/on-trajectory-complete', onTrajectoryComplete);
-app.post('/on-thread-complete', onThreadComplete);
+app.post('/on-trajectory-complete', qstashAuth(), onTrajectoryComplete);
+app.post('/on-thread-complete', qstashAuth(), onThreadComplete);
 
 export default app;

@@ -62,6 +62,17 @@ const fileDoc = (
   updatedAt: new Date('2024-01-02T00:00:00.000Z'),
 });
 
+const existingNotesFolder = () => ({
+  accessSelf: AgentAccess.READ | AgentAccess.WRITE | AgentAccess.LIST,
+  content: '',
+  createdAt: new Date('2024-01-01T00:00:00.000Z'),
+  documentId: 'folder-doc-1',
+  fileType: 'custom/folder',
+  filename: 'notes',
+  id: 'folder-agent-doc-1',
+  updatedAt: new Date('2024-01-02T00:00:00.000Z'),
+});
+
 describe('AgentDocumentVfsService', () => {
   beforeEach(() => {
     vi.mocked(FileService).mockClear();
@@ -74,16 +85,7 @@ describe('AgentDocumentVfsService', () => {
   });
 
   it('rejects copying a directory into its own subtree', async () => {
-    mockAgentDocumentModel.findByParentAndFilename.mockResolvedValue({
-      accessSelf: AgentAccess.READ | AgentAccess.WRITE | AgentAccess.LIST,
-      content: '',
-      createdAt: new Date('2024-01-01T00:00:00.000Z'),
-      documentId: 'folder-doc-1',
-      fileType: 'custom/folder',
-      filename: 'notes',
-      id: 'folder-agent-doc-1',
-      updatedAt: new Date('2024-01-02T00:00:00.000Z'),
-    });
+    mockAgentDocumentModel.findByParentAndFilename.mockResolvedValue(existingNotesFolder());
 
     const service = new AgentDocumentVfsService(db, userId);
 
@@ -96,16 +98,7 @@ describe('AgentDocumentVfsService', () => {
   });
 
   it('rejects renaming a directory into its own subtree', async () => {
-    mockAgentDocumentModel.findByParentAndFilename.mockResolvedValue({
-      accessSelf: AgentAccess.READ | AgentAccess.WRITE | AgentAccess.LIST,
-      content: '',
-      createdAt: new Date('2024-01-01T00:00:00.000Z'),
-      documentId: 'folder-doc-1',
-      fileType: 'custom/folder',
-      filename: 'notes',
-      id: 'folder-agent-doc-1',
-      updatedAt: new Date('2024-01-02T00:00:00.000Z'),
-    });
+    mockAgentDocumentModel.findByParentAndFilename.mockResolvedValue(existingNotesFolder());
 
     const service = new AgentDocumentVfsService(db, userId);
 
@@ -175,16 +168,7 @@ describe('AgentDocumentVfsService', () => {
   });
 
   it('rejects recursive directory copy when direct children exceed the safety cap', async () => {
-    const sourceFolder = {
-      accessSelf: AgentAccess.READ | AgentAccess.WRITE | AgentAccess.LIST,
-      content: '',
-      createdAt: new Date('2024-01-01T00:00:00.000Z'),
-      documentId: 'folder-doc-1',
-      fileType: 'custom/folder',
-      filename: 'notes',
-      id: 'folder-agent-doc-1',
-      updatedAt: new Date('2024-01-02T00:00:00.000Z'),
-    };
+    const sourceFolder = existingNotesFolder();
     mockAgentDocumentModel.listByParentAndFilename.mockImplementation(
       async (_agentId, _parentId, filename) => (filename === 'notes' ? [sourceFolder] : []),
     );

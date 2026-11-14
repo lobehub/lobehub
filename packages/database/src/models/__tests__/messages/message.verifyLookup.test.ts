@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { users } from '../../../schemas';
+import { topics, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
 
@@ -57,6 +57,26 @@ describe('MessageModel.findVerifyMessageByOperationId', () => {
 
     const found = await messageModel.findVerifyMessageByOperationId('op-2');
     expect(found).toBeUndefined();
+  });
+
+  it('narrows the lookup to the given topic', async () => {
+    await serverDB.insert(topics).values([
+      { id: 'verify-lookup-tpc-a', userId },
+      { id: 'verify-lookup-tpc-b', userId },
+    ]);
+    const card = await messageModel.create({
+      content: '',
+      metadata: { verifyOperationId: 'op-4' },
+      role: 'verify',
+      topicId: 'verify-lookup-tpc-a',
+    });
+
+    expect(
+      (await messageModel.findVerifyMessageByOperationId('op-4', 'verify-lookup-tpc-a'))?.id,
+    ).toBe(card.id);
+    expect(
+      await messageModel.findVerifyMessageByOperationId('op-4', 'verify-lookup-tpc-b'),
+    ).toBeUndefined();
   });
 
   it('is scoped to the owning user', async () => {

@@ -35,10 +35,11 @@ import type {
 } from '@lobechat/electron-client-ipc';
 import { createRuntimeProbeCache } from '@lobechat/heterogeneous-agents/runtimeProbeCache';
 import { executeDeviceOperation } from '@lobechat/local-file-shell/shell';
-import { app, powerSaveBlocker } from 'electron';
+import { powerSaveBlocker } from 'electron';
 
 import { isDev } from '@/const/env';
 import { getDesktopEnv } from '@/env';
+import { getDesktopDeviceMetadata } from '@/utils/deviceMetadata';
 import { createLogger } from '@/utils/logger';
 import { getDesktopUserAgent } from '@/utils/user-agent';
 import { safeGetPath } from '@/utils/user-path';
@@ -679,12 +680,7 @@ export default class GatewayConnectionService extends ServiceModule {
           deviceId: identity.deviceId,
           hostname: os.hostname(),
           identitySource: identity.identitySource,
-          metadata: {
-            appVersion: app.getVersion(),
-            electron: process.versions.electron,
-            node: process.versions.node,
-            osRelease: os.release(),
-          },
+          metadata: getDesktopDeviceMetadata(),
           platform: process.platform,
         },
         { serverUrl, token },

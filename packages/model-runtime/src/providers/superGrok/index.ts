@@ -1,6 +1,6 @@
 import { ModelProvider } from 'model-bank';
 
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import {
   handleXAIChatCompletionPayload,

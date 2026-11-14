@@ -112,10 +112,10 @@ export const SETTINGS_SECTION_SHAPES: Record<string, SettingsSectionsShape> = {
       {
         blocks: [
           {
-            caption: ['subscription', 'usage.overview.section.balance'],
+            caption: ['subscription', 'usage.overview.section.credits'],
             cellHeight: 95,
             labels: [
-              ['subscription', 'usage.window.credits'],
+              ['subscription', 'usage.overview.credits.topUp'],
               ['subscription', 'usage.window.referral'],
             ],
           },

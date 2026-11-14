@@ -165,7 +165,7 @@ describe('task lifecycle — following the agent stream', () => {
     followAgentRun.mockReset();
     pollAgentRunStatus.mockReset();
     client.task.find.query.mockResolvedValue({
-      data: { assigneeAgentId: 'agt_1', identifier: 'T-1', status: 'pending' },
+      data: { assigneeAgentId: 'agt_1', identifier: 'T-1', status: 'backlog' },
     });
     client.task.updateStatus.mutate.mockResolvedValue({ data: { identifier: 'T-1' } });
     client.task.run.mutate.mockResolvedValue({

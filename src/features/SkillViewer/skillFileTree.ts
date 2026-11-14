@@ -34,3 +34,14 @@ export const skillFileTree = (
       );
   return sort(root);
 };
+
+/**
+ * The file a reader sees: the one they picked, while the version on screen
+ * ships it. A version without it — the reader picked a script in v2, then
+ * switched to v1 — shows its `SKILL.md` rather than an empty viewer.
+ */
+export const shownSkillFile = (
+  selected: string,
+  files: readonly { path: string }[],
+  index = 'SKILL.md',
+): string => (files.some((file) => file.path === selected) ? selected : index);

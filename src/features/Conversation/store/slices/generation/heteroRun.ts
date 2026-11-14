@@ -1,4 +1,4 @@
-import { LOADING_FLAT } from '@lobechat/const';
+import { isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
 import { type HeteroAttachedFileRef } from '@lobechat/heterogeneous-agents';
 import type {
   ChatImageItem,
@@ -88,7 +88,8 @@ export const ensureEffectiveAgencyAccess = async (agentId: string) => {
  */
 export const getEffectiveAgencyConfig = (agentId: string, topic?: ChatTopic | null) => {
   const agentState = getAgentStoreState();
-  const sharedAgencyConfig = agentSelectors.getAgentConfigById(agentId)(agentState)?.agencyConfig;
+  const agentConfig = agentSelectors.getAgentConfigById(agentId)(agentState);
+  const sharedAgencyConfig = agentConfig?.agencyConfig;
   const agent = agentByIdSelectors.getAgentById(agentId)(agentState);
   const currentUserId = userProfileSelectors.userId(getUserStoreState());
   // Author-or-admin, mirroring the picker (`useAgentManagementAccess`) and the
@@ -120,6 +121,7 @@ export const getEffectiveAgencyConfig = (agentId: string, topic?: ChatTopic | nu
     },
     getTopicBoundDeviceId(topic, agentId),
     getElectronStoreState().gatewayDeviceInfo?.deviceId,
+    { isHetero: isHeterogeneousAgentModelId(agentConfig?.model) },
   );
 
   return {
@@ -205,6 +207,8 @@ export const runHeterogeneousFromExistingMessage = async (
     /** Non-image attachments from the original user message — forwarded to the CLI as download links */
     attachedFiles?: HeteroAttachedFileRef[];
     context: ConversationContext;
+    /** Continues a run that already paid its agent fee, so this one holds none. */
+    continuesRun?: boolean;
     heterogeneousProvider: HeterogeneousProviderConfig;
     /** Image attachments from the original user message — forwarded to the CLI for vision support */
     imageList?: ChatImageItem[];
@@ -302,6 +306,7 @@ export const runHeterogeneousFromExistingMessage = async (
     assistantMessageId: assistantMsg.id,
     attachedFiles: attachedFiles?.length ? attachedFiles : undefined,
     context,
+    continuesRun: params.continuesRun,
     heterogeneousProvider: effectiveHeterogeneousProvider,
     imageList: imageList?.length ? imageList : undefined,
     message: prompt,

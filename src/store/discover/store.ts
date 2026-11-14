@@ -11,6 +11,8 @@ import { type AssistantAction } from './slices/assistant/action';
 import { createAssistantSlice } from './slices/assistant/action';
 import { type GroupAgentAction } from './slices/groupAgent/action';
 import { createGroupAgentSlice } from './slices/groupAgent/action';
+import { type MarketAction } from './slices/market';
+import { createMarketSlice } from './slices/market';
 import { type MCPAction } from './slices/mcp';
 import { createMCPSlice } from './slices/mcp';
 import { type ModelAction } from './slices/model/action';
@@ -29,6 +31,7 @@ import { createUserSlice } from './slices/user';
 //  ===============  Aggregate createStoreFn ============ //
 
 export type DiscoverStore = MCPAction &
+  MarketAction &
   AssistantAction &
   GroupAgentAction &
   ProviderAction &
@@ -41,6 +44,7 @@ export type DiscoverStore = MCPAction &
   DiscoverStoreState;
 
 type DiscoverStoreAction = MCPAction &
+  MarketAction &
   AssistantAction &
   GroupAgentAction &
   ProviderAction &
@@ -61,6 +65,7 @@ const createStore: StateCreator<DiscoverStore, [['zustand/devtools', never]]> = 
   ...initialState,
   ...flattenActions<DiscoverStoreAction>([
     createMCPSlice(...parameters),
+    createMarketSlice(...parameters),
     createAssistantSlice(...parameters),
     createGroupAgentSlice(...parameters),
     createProviderSlice(...parameters),

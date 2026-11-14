@@ -184,8 +184,21 @@ export const DEFAULT_DOCS_PAGE_SECTION_VIEW: DocsPageSectionView = {
   type: 'all',
 };
 
+/** How the Contacts list is ordered: by name, or most recently updated first. */
+export type ContactListSortBy = 'title' | 'updatedAt';
+
+/** How a sidebar Channel section orders its Channels. */
+export interface ChannelListSort {
+  /** `updatedAt` follows the latest message, so it orders by activity. */
+  by: 'createdAt' | 'title' | 'updatedAt';
+  order: 'asc' | 'desc';
+}
+
 /** How the sidebar project list is ordered; `manual` follows the shared drag order. */
 export type ProjectListSortBy = 'manual' | 'createdAt' | 'updatedAt';
+
+/** How the projects page lays out projects: folder cards or compact rows. */
+export type ProjectListViewMode = 'folder' | 'list';
 
 export interface SystemStatus {
   /**
@@ -230,6 +243,10 @@ export interface SystemStatus {
    * scalars instead of index-merging arrays.
    */
   assigneeAgentSelectorCollapsedGroups?: Record<string, boolean>;
+  /**
+   * Order of the sidebar Channel sections. Device-local view setting.
+   */
+  channelListSort?: ChannelListSort;
   chatInputHeight?: number;
   /**
    * Which topicGroups are collapsed, bucketed by group mode. We persist the
@@ -239,6 +256,8 @@ export interface SystemStatus {
    * match and every group would render collapsed.
    */
   collapsedTopicGroupKeysByMode?: Partial<Record<TopicGroupMode, string[]>>;
+  /** Order of the Contacts list; absent means by name. Device-local view setting. */
+  contactListSortBy?: ContactListSortBy;
   disabledModelProvidersSortType?: string;
   disabledModelsSortType?: string;
   /**
@@ -247,9 +266,9 @@ export interface SystemStatus {
    */
   dismissedBannerIds?: string[];
   /**
-   * Keys of goal asks (clarification rounds, gates, sign-offs) the user waved
-   * off the approval island. Only the island honours them — the same ask stays
-   * in the Home inbox. Append-only and capped, see `appendDismissedIslandKey`.
+   * @deprecated Island dismissals live on the server now (`addIslandDismissals`),
+   * shared by every client. Read once to upload what this client dismissed
+   * before, then ignored; see `islandDismissalsUploaded`.
    */
   dismissedIslandItemKeys?: string[];
   dismissedProjectOnboarding?: Record<string, boolean>;
@@ -296,14 +315,25 @@ export interface SystemStatus {
   homeGoalsCollapsed?: boolean;
   homeRecentsCount?: number;
   /**
-   * Agent picked from the home AgentSelect dropdown. When unset the home page
-   * falls back to the inbox agent. Persisted so the choice survives reloads.
+   * Agent picked from the home AgentSelect dropdown, keyed by cache scope
+   * (`${userId}:${workspaceId}`, see `buildCacheScope`). A scope without an
+   * entry falls back to its own inbox agent. Persisted so the choice survives
+   * reloads.
+   *
+   * Keyed by scope rather than stored once (or in the `workspace` overlay,
+   * which is shared by every workspace and falls back to the personal value):
+   * an agent only exists in the scope it was picked in, and a single value let
+   * the personal inbox reach a workspace home after a switch, where every
+   * config save and send against it returned NOT_FOUND until the workspace
+   * agent list loaded.
    */
-  homeSelectedAgentId?: string;
+  homeSelectedAgentIdByScope?: Record<string, string>;
   homeTaskCount?: number;
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
   imageTopicViewMode?: 'grid' | 'list';
+  /** This client's legacy `dismissedIslandItemKeys` have been uploaded to the server. */
+  islandDismissalsUploaded?: boolean;
   isShowCredit?: boolean;
   knowledgeBaseModalViewMode?: 'list' | 'masonry';
   language?: LocaleMode;
@@ -315,6 +345,8 @@ export interface SystemStatus {
    * Remember user's last selected image generation provider
    */
   lastSelectedImageProvider?: string;
+  lastSelectedMusicModel?: string;
+  lastSelectedMusicProvider?: string;
   lastSelectedVideoModel?: string;
   lastSelectedVideoProvider?: string;
   latestChangelogId?: string;
@@ -344,6 +376,7 @@ export interface SystemStatus {
    * ModelSwitchPanel width
    */
   modelSwitchPanelWidth?: number;
+  musicTopicViewMode?: 'grid' | 'list';
   noWideScreen?: boolean;
   pageAgentPanelWidth?: number;
   /**
@@ -368,6 +401,8 @@ export interface SystemStatus {
    * order itself is shared and lives on `projects.sort_order`.
    */
   projectListSortBy?: ProjectListSortBy;
+  /** Layout of the projects page. Device-local view setting. */
+  projectListViewMode?: ProjectListViewMode;
   /**
    * Per byProject group (keyed by the group id, e.g. `project-id:<id>`): how its
    * topics are sectioned. Absent means `none`.
@@ -479,7 +514,7 @@ export interface SystemStatus {
      */
     completedTasks?: 'all' | 'day' | 'month' | 'none' | 'week';
     /** `label:<groupId>` groups by one label group. */
-    groupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status' | `label:${string}`;
+    groupBy: 'assignee' | 'member' | 'none' | 'priority' | 'project' | 'status' | `label:${string}`;
     /** @deprecated Replaced by `completedTasks`; read once to migrate. */
     hideCompleted?: boolean;
     nestedSubTasks: boolean;
@@ -487,8 +522,14 @@ export interface SystemStatus {
     orderCompletedByRecency: boolean;
     orderDirection: 'asc' | 'desc';
     showSubTasks: boolean;
-    subGroupBy: 'assignee' | 'member' | 'none' | 'priority' | 'status' | `label:${string}`;
+    subGroupBy:
+      'assignee' | 'member' | 'none' | 'priority' | 'project' | 'status' | `label:${string}`;
   };
+  /**
+   * Home team board: the attention list folded to a slim rail so the timeline
+   * gets the width. Persisted, like the other folded panels.
+   */
+  teamBoardAttentionCollapsed?: boolean;
   /**
    * Height of the chat bottom terminal panel. Persisted so resizing survives remounts.
    */
@@ -691,6 +732,8 @@ export const INITIAL_STATUS = {
   terminalPanelHeight: 320,
   tokenDisplayFormatShort: true,
   topicPageSize: 20,
+  // Songs rarely carry cover art, so music topics read better as a titled list
+  musicTopicViewMode: 'list' as const,
   verifyReportPanelWidth: 300,
   videoPanelWidth: 320,
   videoTopicViewMode: 'grid' as const,

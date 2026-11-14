@@ -1,3 +1,4 @@
+import { agentDocumentIndex } from './agentDocumentIndex';
 import { agentIdentity } from './agentIdentity';
 import { agentRunSlots } from './agentRunSlots';
 import { agentSignal } from './agentSignal';
@@ -7,11 +8,13 @@ import { linear } from './linear';
 import { pageCollab } from './pageCollab';
 import { skillTools } from './skillTools';
 import { steerQueue } from './steerQueue';
+import { taskRunDelivery } from './taskRunDelivery';
 import { threadStartFence } from './threadStartFence';
 import { workspaceRescan } from './workspaceRescan';
 
 /** Business Redis API. Providers, keys and expiry policy stay inside each domain. */
 export const redisService = {
+  agentDocumentIndex,
   agentIdentity,
   agentRunSlots,
   agentSignal,
@@ -21,6 +24,7 @@ export const redisService = {
   pageCollab,
   skillTools,
   steerQueue,
+  taskRunDelivery,
   threadStartFence,
   workspaceRescan,
 };

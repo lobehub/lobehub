@@ -137,6 +137,20 @@ const countRoomBlocks = (doc: Y.Doc) =>
     .toDelta()
     .filter((op: { insert: unknown }) => typeof op.insert !== 'string').length;
 
+// A body someone emptied leaves tombstones under the root; a room whose body
+// never arrived has none. Renames replace the meta map's value, so they do not count.
+const hasErasedBody = (state: Uint8Array) => {
+  const doc = new Y.Doc();
+  Y.applyUpdate(doc, state);
+  const meta = doc.getMap(PAGE_META_KEY);
+  for (const structs of doc.store.clients.values()) {
+    for (const struct of structs) {
+      if (struct.deleted && !(struct instanceof Y.Item && struct.parent === meta)) return true;
+    }
+  }
+  return false;
+};
+
 export const projectPageState = async (state: Uint8Array) => {
   const fork = await openPageFork(state);
   try {
@@ -145,6 +159,7 @@ export const projectPageState = async (state: Uint8Array) => {
       (exported.editorData as SerializedEditor | undefined)?.root?.children?.length ?? 0;
     return {
       ...exported,
+      erasedBody: hasErasedBody(state),
       /** The room holds blocks the binding did not export: projecting would erase them. */
       lostBlocks: exportedBlocks === 0 && countRoomBlocks(fork.doc) > 0,
       title: readPageTitle(fork.doc),

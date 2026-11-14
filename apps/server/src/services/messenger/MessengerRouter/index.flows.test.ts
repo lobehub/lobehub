@@ -49,7 +49,9 @@ vi.mock('@/business/server/bot/featureAccess', async () =>
 vi.mock('@/envs/gateway', async () => (await import('./testUtils')).gatewayEnvModule());
 vi.mock('../installations', async () => (await import('./testUtils')).installationsModule());
 vi.mock('../oauth/slackOAuth', async () => (await import('./testUtils')).slackOAuthModule());
-vi.mock('@/server/featureFlags', async () => (await import('./testUtils')).featureFlagsModule());
+vi.mock('@lobechat/business-const', async () =>
+  (await import('./testUtils')).businessConstModule(),
+);
 vi.mock('@/config/messenger', async () => (await import('./testUtils')).messengerConfigModule());
 vi.mock('chat', async () => (await import('./testUtils')).chatModule());
 vi.mock('@chat-adapter/state-ioredis', async () =>

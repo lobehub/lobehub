@@ -21,6 +21,7 @@ export type {
   MuxAgentEventMessage,
   MuxClientMessage,
   MuxDocAwarenessEntry,
+  MuxDocCapacity,
   MuxDocClientMessage,
   MuxDocServerMessage,
   MuxErrorMessage,

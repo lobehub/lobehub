@@ -78,4 +78,20 @@ describe('ConversationRow', () => {
 
     expect(row.textContent).toBe('Dario');
   });
+
+  // The row said a green "running" with a spinner; it now reads like the header's typing line.
+  it('says typing in place of the preview while the Agent replies', () => {
+    render(
+      createElement(ConversationRow, {
+        avatar: null,
+        preview: 'last message',
+        title: 'Dario',
+        typing: true,
+        url: '/channels/chn_dario',
+      }),
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent('activity.typing');
+    expect(screen.queryByText('last message')).toBeNull();
+  });
 });

@@ -530,6 +530,7 @@ export class TaskDetailService {
       name: task.name,
       parent,
       priority: task.priority,
+      projectId: task.projectId,
       startedAt: task.startedAt ? new Date(task.startedAt).toISOString() : undefined,
       status: task.status,
       userId: task.assigneeUserId,

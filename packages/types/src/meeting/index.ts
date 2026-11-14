@@ -57,6 +57,37 @@ export type MeetingSegmentSource = (typeof MEETING_SEGMENT_SOURCES)[number];
 export const MEETING_VISIBILITIES = ['private', 'public'] as const;
 export type MeetingVisibility = (typeof MEETING_VISIBILITIES)[number];
 
+/** Pipeline stage a meeting failed in: the refine transcript, or the minutes generated from it. */
+export const MEETING_ERROR_STAGES = ['refine', 'minutes'] as const;
+export type MeetingErrorStage = (typeof MEETING_ERROR_STAGES)[number];
+
+/**
+ * Why a post-recording stage failed, chosen so the UI can say what to fix:
+ * `provider_not_configured` → set up the transcription model / key,
+ * `quota_exceeded` → top up or wait, `provider_unavailable` → retry later,
+ * `audio_missing` / `audio_unsupported` → the recording itself is unusable,
+ * `transcript_empty` → nothing was said that minutes could cover.
+ */
+export const MEETING_ERROR_CODES = [
+  'audio_missing',
+  'audio_unsupported',
+  'provider_not_configured',
+  'provider_unavailable',
+  'quota_exceeded',
+  'summarization_failed',
+  'transcript_empty',
+  'transcription_failed',
+] as const;
+export type MeetingErrorCode = (typeof MEETING_ERROR_CODES)[number];
+
+/** Last failure of a meeting's post-recording pipeline; cleared when the stage is retried. */
+export interface MeetingError {
+  code: MeetingErrorCode;
+  /** Provider or server detail, for support; not shown as the primary message. */
+  message?: string;
+  stage: MeetingErrorStage;
+}
+
 /** A titled span of the meeting timeline. */
 export interface MeetingChapter {
   endMs: number;

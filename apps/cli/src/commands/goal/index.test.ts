@@ -28,7 +28,6 @@ const { mockClient } = vi.hoisted(() => ({
       graph: { query: vi.fn() },
       resume: { mutate: vi.fn() },
       retireNodes: { mutate: vi.fn() },
-      setBudget: { mutate: vi.fn() },
       supervision: { query: vi.fn() },
       tick: { mutate: vi.fn() },
     },
@@ -700,43 +699,6 @@ describe('goal supervision command', () => {
     expect(mockClient.goal.supervision.query).toHaveBeenCalledWith({ id: 'goal-1' });
     expect(JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0]))).toEqual(data);
     expect(mockClient.goal.tick.mutate).not.toHaveBeenCalled();
-  });
-});
-
-describe('goal set-budget command', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.spyOn(log, 'info').mockImplementation(() => {});
-  });
-
-  it('edits the limits a goal was created with, so it can continue instead of being copied', async () => {
-    mockClient.goal.setBudget.mutate.mockResolvedValue({ message: 'Goal budget updated' });
-
-    await createProgram().parseAsync([
-      'node',
-      'test',
-      'goal',
-      'set-budget',
-      'goal-1',
-      '--max-manager-turns',
-      '60',
-      '--max-concurrent-tasks',
-      '1',
-      '--max-attempts-per-task',
-      '5',
-      '--max-steps-per-run',
-      'none',
-    ]);
-
-    expect(mockClient.goal.setBudget.mutate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'goal-1',
-        maxAttemptsPerTask: 5,
-        maxConcurrentTasks: 1,
-        maxManagerTurns: 60,
-        maxStepsPerRun: null,
-      }),
-    );
   });
 });
 

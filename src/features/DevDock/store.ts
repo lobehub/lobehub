@@ -33,10 +33,24 @@ const readPersisted = (): DevDockUIState => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_UI;
-    return { ...DEFAULT_UI, ...(JSON.parse(raw) as Partial<DevDockUIState>) };
+
+    // The open panel is never restored: a panel that hangs while mounting (Local Database
+    // reads every entry of the local database) would come back before the user can close it.
+    return {
+      ...DEFAULT_UI,
+      ...(JSON.parse(raw) as Partial<DevDockUIState>),
+      activePanelId: null,
+    };
   } catch {
     return DEFAULT_UI;
   }
+};
+
+const persist = (state: DevDockUIState) => {
+  if (typeof localStorage === 'undefined') return;
+
+  const { activePanelId: _activePanelId, ...rest } = state;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
 };
 
 export interface DevDockStore extends DevDockUIState {
@@ -53,30 +67,7 @@ export interface DevDockStore extends DevDockUIState {
 export const useDevDockStore = create<DevDockStore>((set, get) => {
   const update = (patch: Partial<DevDockUIState>) => {
     set(patch);
-    if (typeof localStorage === 'undefined') return;
-    const {
-      activePanelId,
-      expanded,
-      maximized,
-      mesurer,
-      panelHeight,
-      pinOverrides,
-      reactScan,
-      scrollDebug,
-    } = get();
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        activePanelId,
-        expanded,
-        maximized,
-        mesurer,
-        panelHeight,
-        pinOverrides,
-        reactScan,
-        scrollDebug,
-      }),
-    );
+    persist(get());
   };
 
   return {

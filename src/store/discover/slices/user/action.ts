@@ -74,6 +74,14 @@ export class UserActionImpl {
       queryKey: active ? queryKey : undefined,
     };
   };
+
+  /**
+   * Refetch every community profile on screen after the viewer edited their
+   * Market profile or claimed resources.
+   */
+  refreshUserProfiles = async (): Promise<void> => {
+    await this.#profile.revalidate();
+  };
 }
 
 export type UserAction = Pick<UserActionImpl, keyof UserActionImpl>;

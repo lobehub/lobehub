@@ -35,9 +35,11 @@ export const onTrajectoryComplete = async (c: Context) => {
       duration,
       errorDetail,
       errorMessage,
+      executionId,
       llmCalls,
       steps,
       toolCalls,
+      topicId,
       totalTokens,
     } = body;
 
@@ -63,7 +65,7 @@ export const onTrajectoryComplete = async (c: Context) => {
 
     // Check if run was aborted — skip processing to avoid overwriting abort state
     const runModel = new AgentEvalRunModel(db, userId, wsId);
-    const run = await runModel.findById(runId);
+    const run = await runModel.findSummaryById(runId);
     if (run?.status === 'aborted') {
       log('Run aborted, skipping: runId=%s testCaseId=%s', runId, testCaseId);
       return c.json({ cancelled: true });
@@ -72,6 +74,7 @@ export const onTrajectoryComplete = async (c: Context) => {
     const service = new AgentEvalRunService(db, userId, wsId);
 
     const { allDone, completedCount } = await service.recordTrajectoryCompletion({
+      executionId,
       runId,
       status,
       telemetry: {
@@ -86,6 +89,7 @@ export const onTrajectoryComplete = async (c: Context) => {
         totalTokens,
       },
       testCaseId,
+      topicId,
     });
 
     log('Completion check: %d completed, allDone=%s', completedCount, allDone);

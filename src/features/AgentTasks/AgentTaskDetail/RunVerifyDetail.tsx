@@ -10,7 +10,7 @@ import { useVerifyResults } from '@/features/Acceptance';
 const styles = createStaticStyles(({ css }) => ({
   check: css`
     padding-block: 6px;
-    padding-inline: 10px;
+    padding-inline: 12px;
 
     & + & {
       border-block-start: 1px solid ${cssVar.colorBorderSecondary};

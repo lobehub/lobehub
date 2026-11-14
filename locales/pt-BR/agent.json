@@ -359,8 +359,6 @@
   "channel.qq.webhookMigrationTitle": "Considere migrar para o modo WebSocket",
   "channel.quickSetup.connect.desc": "Salva o que você preencheu acima e coloca o bot online. Todo o resto pode ser alterado depois.",
   "channel.quickSetup.connect.title": "Salvar e conectar",
-  "channel.quickSetup.discord.bot.desc": "Na página do Bot, redefina o Token e copie-o, depois ative a Intenção de Conteúdo de Mensagem.",
-  "channel.quickSetup.discord.bot.title": "Obtenha o token do bot e permita o conteúdo da mensagem",
   "channel.quickSetup.discord.create.desc": "No Portal de Desenvolvedores, clique em Nova Aplicação e nomeie-a.",
   "channel.quickSetup.discord.create.title": "Crie uma aplicação",
   "channel.quickSetup.discord.credentials.desc": "Ambos estão em Informações Gerais.",

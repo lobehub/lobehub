@@ -1,0 +1,177 @@
+---
+title: Music Generation
+description: >-
+  Generate songs with MiniMax Music and ACE-Step 1.5 through fal on the Music
+  page, or submit and poll music generation tasks through the LobeHub API.
+tags:
+  - LobeHub
+  - Music Generation
+  - Text to Music
+  - fal
+  - MiniMax Music
+  - ACE-Step
+---
+
+# Music Generation
+
+The **Music** page turns a prompt, lyrics, and style into playable songs. It lists every enabled model of type **Music** (`text2music`). The music models ship with the [fal](https://fal.ai/) provider: MiniMax Music and ACE-Step 1.5, both run on fal's queue API.
+
+<Callout type={'info'}>
+  fal is the only music channel. MiniMax has stopped selling its official music API to new accounts, so LobeHub calls MiniMax Music through fal instead of MiniMax directly. Your MiniMax provider key is not used for music.
+</Callout>
+
+## Set up fal
+
+### Get a fal key
+
+1. Sign up at [fal.ai](https://fal.ai/) and add credit under **Billing**. Music requests fail with an exhausted-balance error when the account has no credit.
+2. Open [API Keys](https://fal.ai/dashboard/keys), click **Add key**, and copy the key. fal shows it only once. fal's own SDKs read this key from the `FAL_KEY` variable.
+
+### Configure it in LobeHub
+
+**In Settings (any deployment):**
+
+1. Open **Settings → Provider → Fal**.
+2. Turn the provider on, paste the key into **API Key**, and click **Check** next to **Connectivity Check**. It shows **Check Passed** for a working key. fal has no chat model, so the check calls fal's platform API with your key instead of sending a chat message; a wrong key fails the check.
+3. Open the **Model List** of fal and switch to the **Music** tab. The four music models below are enabled by default.
+
+**On a self-hosted server**, set the key as an environment variable so every user can use fal without entering a key. LobeHub reads `FAL_API_KEY`, and also accepts `FAL_KEY`, the name fal uses:
+
+```bash
+# Docker: add the key to the env file you pass with --env-file
+echo 'FAL_KEY=your-fal-key' >> lobehub.env
+docker run -it -d -p 3210:3210 --network pg --env-file lobehub.env --name lobehub lobehub/lobehub
+```
+
+```yaml
+# docker-compose.yml → services.lobe.environment
+FAL_KEY: ${FAL_KEY}
+```
+
+See [fal environment variables](/docs/self-hosting/environment-variables/model-provider#fal) for `ENABLED_FAL` and `FAL_MODEL_LIST`.
+
+## Models
+
+| Model                              | ID                          | Inputs                                                                       | Price              |
+| ---------------------------------- | --------------------------- | ---------------------------------------------------------------------------- | ------------------ |
+| MiniMax Music 2.6                  | `fal-ai/minimax-music/v2.6` | Style description, lyrics, write lyrics for me, instrumental, audio settings | $0.15 per song     |
+| MiniMax Music 3                    | `minimax/music-3`           | Style description, lyrics (required), duration up to 300 s                   | $0.002 per second  |
+| MiniMax Music 01 (Reference Audio) | `fal-ai/minimax-music`      | Lyrics (required, up to 600 characters), reference audio (required)          | $0.035 per song    |
+| ACE-Step 1.5                       | `fal-ai/ace-step-1.5`       | Description, style tags, lyrics, instrumental, duration 10–600 s             | $0.0006 per second |
+
+On fal, only MiniMax Music 01 accepts a reference song; MiniMax Music 2.6 and Music 3 do not. Pick **MiniMax Music 01 (Reference Audio)** when you want a song in the style of an existing track.
+
+### MiniMax Music parameters
+
+| Field in the page                        | `params` key                        | Notes                                                                                                                                                |
+| ---------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Prompt                                   | `prompt`                            | Style description: genre, mood, instruments, vocals. Required for 2.6 (10–2000 characters) and Music 3. Music 01 uses it only when lyrics are empty. |
+| **Lyrics**                               | `lyrics`                            | Mark sections with `[Verse]`, `[Chorus]`, `[Bridge]`. Up to 3500 characters on 2.6, 600 on Music 01. Required for Music 3 and Music 01.              |
+| **Write lyrics for me**                  | `autoLyrics`                        | 2.6 only. Leave the lyrics empty to have MiniMax write them from the prompt.                                                                         |
+| **Instrumental**                         | `instrumental`                      | 2.6 only. No vocals; lyrics are not sent.                                                                                                            |
+| **Duration**                             | `duration`                          | Music 3 only, 1–300 s.                                                                                                                               |
+| **Reference Audio**                      | `referenceAudioUrl`                 | Music 01 only. An MP3 or WAV with music and vocals, longer than 15 s. Upload a file or paste a public URL. The song follows its style.               |
+| **Audio Format / Sample Rate / Bitrate** | `format` / `sampleRate` / `bitrate` | 2.6 only. `mp3` or `wav`; 16000–44100 Hz; 32–256 kbps.                                                                                               |
+
+### ACE-Step 1.5 parameters
+
+| Field in the page | `params` key   | Notes                                                                                         |
+| ----------------- | -------------- | --------------------------------------------------------------------------------------------- |
+| Prompt            | `prompt`       | Description of the song, up to 512 characters.                                                |
+| **Style**         | `style`        | Comma-separated style tags such as `synthwave, female vocals, 120 BPM`, up to 256 characters. |
+| **Lyrics**        | `lyrics`       | Up to 4096 characters, 50+ languages. Leave empty for an untexted song.                       |
+| **Instrumental**  | `instrumental` | No vocals. LobeHub sends `[Instrumental]` as the lyrics.                                      |
+| **Duration**      | `duration`     | 10–600 s, default 30 s. Billing follows the stored length.                                    |
+
+The prompt and style are sent to ACE-Step together as one caption.
+
+## On the Music page
+
+1. Open the **Music** page. It is next to **Image** and **Video** in the creation mode switch, or go to `/music` directly.
+2. Choose a fal model under **Model**. The page opens on the model you used last, or the first enabled music model.
+3. Describe the song in the prompt box, for example `A warm acoustic pop song about a late-night train ride`.
+4. Fill in the fields the selected model shows. Each model declares its own parameters, so a field appears only when the model supports it (see the tables above). **Duration** and the audio format settings are under the **Audio Settings** button next to the model picker. For **Reference Audio**, upload a file or paste an audio URL and press Enter. fal downloads the reference itself, so a pasted URL must be public, and an uploaded file only works when your LobeHub file storage serves public URLs.
+5. Click **Generate**. It stays disabled until the draft has a prompt, lyrics, a style, or reference audio, and every required field is filled. Song cards appear as **Queued…**, then **Generating…**. MiniMax Music usually takes under a minute; ACE-Step 1.5 can take about three minutes. LobeHub polls fal in the background, so you can leave the page.
+6. When a song finishes, its card shows the cover, title, duration, and tags, with a player. Press play to listen, or click the download button in the player to save the file. The file is stored in LobeHub, not only on fal.
+
+A failed song shows the reason with **Retry** and **Copy Error Message**. If fal rejects the key, the card says **Fal API Key is invalid or missing** and links to the provider settings with **Open Settings**. Other fal errors (no balance, moderation, rate limit, timeout) are shown on the card as well.
+
+## Through the API
+
+The Music page calls the LobeHub `lambda` tRPC API. You can call it with a LobeHub API key from **Settings → API Keys**; the key needs the `model:invoke` scope. Set these variables first:
+
+```bash
+export LOBEHUB_URL=https://your-lobehub.example.com   # or http://localhost:3010
+export LOBEHUB_API_KEY=sk-lh-xxxxxxxxxxxxxxxx
+```
+
+**1. Create a music topic.** Songs belong to a topic of type `music`.
+
+```bash
+curl -s -X POST "$LOBEHUB_URL/trpc/lambda/generationTopic.createTopic" \
+  -H "X-API-Key: $LOBEHUB_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"json":{"type":"music","title":"API test"}}'
+# → {"result":{"data":{"json":"<generationTopicId>"}}}
+```
+
+**2. Submit the generation.** Set `provider` to `fal` and `model` to an enabled fal music model. `params` may only contain the parameters that model declares; unknown keys are rejected.
+
+```bash
+curl -s -X POST "$LOBEHUB_URL/trpc/lambda/music.createMusic" \
+  -H "X-API-Key: $LOBEHUB_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"json":{
+    "generationTopicId":"<generationTopicId>",
+    "provider":"fal",
+    "model":"fal-ai/minimax-music/v2.6",
+    "params":{
+      "prompt":"Warm acoustic pop, gentle female vocals, 90 BPM",
+      "lyrics":"[Verse]\nCity lights are fading slow\n[Chorus]\nRide the night train home"
+    }}}'
+```
+
+Other `params` for the same call:
+
+```jsonc
+// ACE-Step 1.5 with style tags and a 60-second length
+{ "prompt": "Driving night-time synth track", "style": "synthwave, female vocals, 120 BPM",
+  "lyrics": "[Verse]\nNeon on the water", "duration": 60 }
+
+// ACE-Step 1.5 instrumental
+{ "prompt": "Calm lo-fi piano for studying", "style": "lo-fi, piano, rain", "instrumental": true, "duration": 30 }
+
+// MiniMax Music 01 following a reference song
+{ "lyrics": "[Verse]\nWalking home under the summer rain", "referenceAudioUrl": "https://example.com/reference.mp3" }
+```
+
+The response contains the batch and one entry per song in `data.generations`. Each entry has an `id` (the generation id) and an `asyncTaskId`:
+
+```json
+{ "result": { "data": { "json": {
+  "success": true,
+  "data": {
+    "batch": { "id": "<batchId>", "model": "<model>", "provider": "<provider>" },
+    "generations": [{ "id": "<generationId>", "asyncTaskId": "<asyncTaskId>" }]
+  }
+} } } }
+```
+
+**3. Poll until each song finishes.** The server polls the provider; you only read the task status. Call this for each entry in `data.generations` until `status` is `success` or `error`:
+
+```bash
+curl -s -G "$LOBEHUB_URL/trpc/lambda/generation.getGenerationStatus" \
+  -H "X-API-Key: $LOBEHUB_API_KEY" \
+  --data-urlencode 'input={"json":{"asyncTaskId":"<asyncTaskId>","generationId":"<generationId>"}}'
+```
+
+`status` moves through `pending` → `processing` → `success`; a request the provider rejects goes to `error`. On `success`, `generation.asset.url` is the audio file stored in LobeHub, and `generation.asset` also has the duration, title, cover, and tags when the provider returns them. On `error`, `error.body.detail` has fal's message; an invalid key gives `error.body.errorType` `InvalidProviderAPIKey`.
+
+## Troubleshooting
+
+| Symptom                                      | Cause and fix                                                                                      |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| No music models on the Music page            | fal is off, or its music models are disabled. Turn fal on and check **Model List → Music**.        |
+| **Fal API Key is invalid or missing**        | The key is wrong or revoked. Paste a valid key in **Settings → Provider → Fal**, or set `FAL_KEY`. |
+| Exhausted balance error                      | The fal account has no credit. Add credit under fal **Billing**.                                   |
+| MiniMax Music 01 rejects the reference audio | Use an MP3 or WAV longer than 15 s that has both music and vocals.                                 |

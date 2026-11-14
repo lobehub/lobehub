@@ -13,8 +13,11 @@ import type {
   ToolSource,
 } from '@lobechat/context-engine';
 import type {
+  AgentRunInitRequest,
   AgentShareVisitorContext,
   ChatTopicBotContext,
+  EvalConnectorSnapshots,
+  EvalMemoryReference,
   EvalToolForwardingConfig,
   ExpertiseContextSnapshot,
   FrozenCredentialFacts,
@@ -614,6 +617,12 @@ export interface OperationCreationParams {
    */
   parentOperationId?: string;
   /**
+   * Create the operation without its init: the step-0 worker runs it from this
+   * request. The init's own fields (`toolSet`, `initialMessages`, …) are then
+   * ignored and `initialContext` is only the placeholder step 0 is queued with.
+   */
+  pendingInitRequest?: AgentRunInitRequest;
+  /**
    * A project's root instruction files, collected once during operation prep.
    * Run context for the context engine to inject — see `expertise`.
    */
@@ -724,6 +733,24 @@ export interface StartExecutionResult {
   success: boolean;
 }
 export interface EvalRuntimeContext {
+  /**
+   * The only tool identifiers an attempt may see or call: what the case
+   * declares (its connectors, mocked services and forwarded tools) plus the
+   * runtime's own infrastructure tools. Absent when the case does not declare
+   * an environment of its own (an Evaluation Lab run on a real Agent keeps the
+   * Agent's tools). Enforced twice: the operation's tool set is pruned to it
+   * before the first step, and a `beforeToolCall` hook refuses anything else.
+   */
+  allowedTools?: string[];
+  /**
+   * The eval attempt this run serves: one case run, or one pass@k thread of
+   * it, including the sub-agents it forks. Mocks key their session on it.
+   */
+  attemptId?: string;
   caseId?: string;
+  /** Exact connection references plus target/tool fingerprints; no credentials. */
+  connectorSnapshots?: EvalConnectorSnapshots;
+  /** Server-created isolated Memory scope of this trial; never taken from user input. */
+  memory?: EvalMemoryReference;
   toolForwarding?: EvalToolForwardingConfig;
 }

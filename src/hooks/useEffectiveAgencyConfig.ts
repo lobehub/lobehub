@@ -1,3 +1,4 @@
+import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { LobeAgentAgencyConfig } from '@lobechat/types';
 import { resolveAgentAgencyConfig } from '@lobechat/types';
 
@@ -92,6 +93,10 @@ export const useEffectiveAgencyConfig = (
   const agent = useAgentStore((s) =>
     agentId ? agentByIdSelectors.getAgentById(agentId)(s) : undefined,
   );
+  const isModelOnlyHetero = useAgentStore(
+    (s) =>
+      !!agentId && isHeterogeneousAgentModelId(agentByIdSelectors.getAgentModelById(agentId)(s)),
+  );
   const { canManageAgent, isAccessLoading } = useAgentManagementAccess(agentId);
   const usesWorkspaceMemberSelection =
     !!agent?.workspaceId && agent.visibility !== 'private' && !canManageAgent;
@@ -153,6 +158,7 @@ export const useEffectiveAgencyConfig = (
     },
     topicDeviceId,
     currentDeviceId,
+    { isHetero: isModelOnlyHetero },
   );
   // Managers and private-agent owners also keep their `local` pick in the
   // per-user override, so any workspace agent must wait for the preference

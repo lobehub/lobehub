@@ -26,6 +26,7 @@ vi.mock('electron', () => ({
     on: vi.fn(),
     commandLine: {
       appendSwitch: vi.fn(),
+      hasSwitch: vi.fn(() => false),
     },
     dock: {
       setIcon: vi.fn(),

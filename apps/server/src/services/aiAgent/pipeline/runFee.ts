@@ -1,4 +1,3 @@
-import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import { nanoid } from '@lobechat/utils';
 
 import {
@@ -6,7 +5,6 @@ import {
   rebindAgentRunFee,
   releaseAgentRunFee,
 } from '@/business/server/agent-run/runFee';
-import type { AgentConfigWithId } from '@/server/services/agent';
 
 import type { InternalExecAgentParams } from '../types';
 
@@ -18,12 +16,15 @@ import type { InternalExecAgentParams } from '../types';
  * - a continuation of a run already started (approval or tool-result resume,
  *   steer), which belongs to the run that held the fee;
  * - a sub-agent or group member, which is a step of its root run;
- * - Workspace runs, which bill elsewhere;
- * - an external agent (Claude Code, Codex, …), which runs on the user's device.
+ * - Workspace runs, which bill elsewhere.
+ *
+ * An external agent (Claude Code, Codex, …) the server dispatches to a device
+ * or sandbox pays the fee like any other run: it is held here, bound to the
+ * hetero operation once that row exists, and settled by `heteroFinish`.
  */
 export const shouldHoldRunFee = (
   params: InternalExecAgentParams,
-  { agentConfig, workspaceId }: { agentConfig: AgentConfigWithId; workspaceId?: string },
+  { workspaceId }: { workspaceId?: string },
 ): boolean => {
   const { appContext } = params;
   if (workspaceId) return false;
@@ -33,12 +34,6 @@ export const shouldHoldRunFee = (
     appContext?.orchestrationRole === 'member'
   )
     return false;
-  if (
-    agentConfig.agencyConfig?.heterogeneousProvider?.type ||
-    isHeterogeneousAgentModelId(agentConfig.model)
-  )
-    return false;
-
   const continuesRun =
     !!params.resume ||
     !!params.resumeApproval ||

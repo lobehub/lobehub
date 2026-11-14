@@ -1,5 +1,4 @@
 import type { ChatModelCard } from '@lobechat/types';
-import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { ModelProvider } from 'model-bank';
 import type { ChatResponse, Tool } from 'ollama/browser';
 import { Ollama } from 'ollama/browser';
@@ -10,7 +9,7 @@ import {
   parseStructuredOutputText,
   parseStructuredToolArguments,
   StructuredOutputError,
-} from '../../core/openaiCompatibleFactory/structuredOutput';
+} from '../../core/openaiCompatible/structuredOutput';
 import { convertIterableToStream, createModelPullStream, OllamaStream } from '../../core/streams';
 import type {
   ChatMethodOptions,
@@ -27,6 +26,7 @@ import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { createErrorResponse } from '../../utils/errorResponse';
+import { imageUrlToBase64 } from '../../utils/imageToBase64';
 import { StreamingResponse } from '../../utils/response';
 import { parseDataUri } from '../../utils/uriParser';
 import type { OllamaMessage } from './type';

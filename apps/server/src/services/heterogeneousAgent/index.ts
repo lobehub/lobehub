@@ -98,6 +98,20 @@ export interface HeterogeneousFinishParams {
 type HeterogeneousFinishError = NonNullable<HeterogeneousFinishParams['error']>;
 
 /**
+ * A producer's clean `agent_runtime_end` must stay off the stream: heteroFinish
+ * publishes the run's end after clearing the topic's running marker, and an
+ * earlier end lets a client reconnect on that marker and complete the run twice.
+ * A stop stays published because a CLI that exits 0 reports it to heteroFinish
+ * as `success`, so this event is the only signal that the user stopped the run.
+ */
+const isCleanRuntimeEnd = (event: AgentStreamEvent): boolean => {
+  if (event.type !== 'agent_runtime_end') return false;
+
+  const reason = (event.data as { reason?: string } | undefined)?.reason;
+  return !reason || reason === 'success' || reason === 'complete';
+};
+
+/**
  * Older or partially upgraded `lh hetero exec` producers can flatten an
  * adapter-classified terminal error before calling `heteroFinish`. Reclassify
  * the final payload at the server boundary so a recognizable authentication
@@ -299,6 +313,10 @@ export class HeterogeneousAgentService {
       );
     }
     for (const event of unpublished) {
+      if (isCleanRuntimeEnd(event)) {
+        this.persistenceHandler.markEventPublished(operationId, event);
+        continue;
+      }
       // Each event already carries operationId; the wire shape matches
       // gateway-driven runs, which also name the step's assistant row on
       // `stream_start` (see `publishData`).

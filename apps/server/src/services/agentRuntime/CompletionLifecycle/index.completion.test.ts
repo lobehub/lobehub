@@ -50,7 +50,7 @@ describe('CompletionLifecycle.dispatchHooks — verify plan race', () => {
       .spyOn(verifyServices, 'instantiateVerifyPlanOnStart')
       .mockReturnValue(instantiation);
     const runVerifySpy = vi
-      .spyOn(verifyServices, 'runVerifyOnCompletion')
+      .spyOn(verifyServices, 'scheduleVerifyOnCompletion')
       .mockResolvedValue(undefined);
 
     // A top-level task op registers the (still-pending) instantiation at start.
@@ -84,6 +84,58 @@ describe('CompletionLifecycle.dispatchHooks — verify plan race', () => {
     } as any);
 
     expect(instantiateSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('CompletionLifecycle.waitForVerifyPlan', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  const startWithPendingPlan = async () => {
+    const lifecycle = buildLifecycle();
+    let settle: () => void = () => {};
+    vi.spyOn(verifyServices, 'instantiateVerifyPlanOnStart').mockReturnValue(
+      new Promise<void>((resolve) => {
+        settle = resolve;
+      }),
+    );
+    await lifecycle.recordStart({ operationId: 'op-1', taskId: 'task-1' } as any);
+    return { lifecycle, settle };
+  };
+
+  const track = (promise: Promise<void>) => {
+    const state = { done: false };
+    void promise.then(() => {
+      state.done = true;
+    });
+    return state;
+  };
+
+  it('resolves once the plan has settled', async () => {
+    const { lifecycle, settle } = await startWithPendingPlan();
+    const wait = track(lifecycle.waitForVerifyPlan('op-1'));
+
+    await flushMicrotasks();
+    expect(wait.done).toBe(false);
+
+    settle();
+    await flushMicrotasks();
+    expect(wait.done).toBe(true);
+  });
+
+  it('stops waiting at the bound so a slow plan cannot hold the dispatch', async () => {
+    const { lifecycle } = await startWithPendingPlan();
+    vi.useFakeTimers();
+    const wait = lifecycle.waitForVerifyPlan('op-1', 1000);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(wait).resolves.toBeUndefined();
+  });
+
+  it('returns at once for an operation with no plan in flight', async () => {
+    await expect(buildLifecycle().waitForVerifyPlan('op-none')).resolves.toBeUndefined();
   });
 });
 
@@ -155,7 +207,7 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
     vi.spyOn(lifecycle as any, 'createVerifyMessage').mockResolvedValue(undefined);
     vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
     vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
-    vi.spyOn(verifyServices, 'runVerifyOnCompletion').mockResolvedValue(undefined);
+    vi.spyOn(verifyServices, 'scheduleVerifyOnCompletion').mockResolvedValue(undefined);
     // The recall gate falls back to the op row when metadata carries no trigger.
     (lifecycle as any).agentOperationModel = { findById: vi.fn(async () => null) };
   };

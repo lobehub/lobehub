@@ -14,23 +14,23 @@ import { useTranslation } from 'react-i18next';
 
 import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useHomeStore } from '@/store/home';
 import { useProjectStore } from '@/store/project';
 
 import {
+  buildCreateProjectRequest,
+  DEFAULT_MAIN_AGENT_MODE,
   getCreateProjectInput,
+  getProjectConflictField,
   getProjectFieldSuggestions,
   isProjectIdentifierValid,
+  type MainAgentMode,
+  reserveProjectIds,
 } from '../createProjectForm';
-import MainAgentField from '../MainAgentField';
+import MainAgentSection from '../MainAgentSection';
 import { useDefaultMainAgent } from '../useDefaultMainAgent';
 import { parseGithubRepository } from './githubRepository';
 import RepositoryList from './RepositoryList';
-
-/** Server codes for a taken slug or identifier; see `rethrowDuplicateProjectField`. */
-const DUPLICATE_FIELD = {
-  DUPLICATE_PROJECT_IDENTIFIER: 'identifier',
-  DUPLICATE_PROJECT_SLUG: 'name',
-} as const;
 
 interface FormState {
   /** Default branch of the picked repository; unknown for a pasted URL. */
@@ -41,6 +41,7 @@ interface FormState {
   loading: boolean;
   /** Explicit pick in this dialog; otherwise the workspace inbox agent, LobeAI. */
   mainAgentId?: string;
+  mainAgentMode: MainAgentMode;
   name: string;
   nameEdited: boolean;
   url: string;
@@ -48,8 +49,8 @@ interface FormState {
 
 /**
  * New project from a GitHub repository: pick one the connected GitHub App can
- * read, or paste a URL, and the project is named after it, led by the default
- * main agent, and created with the repository attached as its environment —
+ * read, or paste a URL, and the project is named after it, led by an agent of
+ * its own unless the person picks an existing one, and created with the repository attached as its environment —
  * no fields to fill unless the defaults are wrong.
  */
 const CreateFromGithubContent = () => {
@@ -60,10 +61,14 @@ const CreateFromGithubContent = () => {
   const [form, setForm] = useState<FormState>({
     identifier: '',
     loading: false,
+    mainAgentMode: DEFAULT_MAIN_AGENT_MODE,
     name: '',
     nameEdited: false,
     url: '',
   });
+
+  // Taken once per open dialog: the dedicated agent's previewed character is seeded by it.
+  const [reservedIds] = useState(reserveProjectIds);
 
   const repository = parseGithubRepository(form.url);
   const urlInvalid = Boolean(form.url.trim()) && !repository;
@@ -107,21 +112,29 @@ const CreateFromGithubContent = () => {
     setForm((current) => ({ ...current, loading: true }));
     try {
       const project = await createProject({
-        ...createInput,
-        coordinatorAgentId: mainAgentId,
+        ...buildCreateProjectRequest(createInput, {
+          ids: reservedIds,
+          mainAgentId,
+          mainAgentMode: form.mainAgentMode,
+        }),
         repository: {
           defaultBranch: form.defaultBranch,
           name: repository.fullName,
           url: repository.url,
         },
       });
+      if (form.mainAgentMode === 'dedicated') {
+        // The project created an agent and maybe the Project label; show both.
+        const { refreshAgentLabels, refreshAgentList } = useHomeStore.getState();
+        void Promise.all([refreshAgentList(), refreshAgentLabels()]);
+      }
       close();
       navigate(`/project/${project.slug ?? project.id}`);
     } catch (error) {
-      const duplicate =
-        error instanceof Error
-          ? DUPLICATE_FIELD[error.message as keyof typeof DUPLICATE_FIELD]
-          : undefined;
+      // A taken slug also comes back as a conflict; this dialog has no slug
+      // input, so it reports it on the name the slug is derived from.
+      const field = getProjectConflictField(error);
+      const duplicate = field === 'slug' ? 'name' : field;
       if (duplicate) {
         setForm((current) => ({ ...current, duplicate }));
       } else {
@@ -212,16 +225,15 @@ const CreateFromGithubContent = () => {
           </Text>
         )}
         {repository && (
-          <Flexbox gap={6}>
-            <Text fontSize={13} weight={500}>
-              {t('create.mainAgentLabel')}
-            </Text>
-            <MainAgentField
-              agentId={mainAgentId}
-              disabled={form.loading}
-              onChange={(id) => setForm((current) => ({ ...current, mainAgentId: id }))}
-            />
-          </Flexbox>
+          <MainAgentSection
+            agentId={mainAgentId}
+            dedicatedAgentId={reservedIds.agentId}
+            disabled={form.loading}
+            mode={form.mainAgentMode}
+            projectName={form.name}
+            onAgentChange={(id) => setForm((current) => ({ ...current, mainAgentId: id }))}
+            onModeChange={(mainAgentMode) => setForm((current) => ({ ...current, mainAgentMode }))}
+          />
         )}
       </Flexbox>
       <ModalFooter>

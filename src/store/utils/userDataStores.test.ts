@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const resetGatewayMuxRegistry = vi.hoisted(() => vi.fn());
 const storeResets = vi.hoisted(() => [] as Array<() => void>);
+const expertiseReset = vi.hoisted(() => vi.fn());
 const pageReset = vi.hoisted(() => vi.fn());
 const resourcePermissionReset = vi.hoisted(() => vi.fn());
 const sandboxReset = vi.hoisted(() => vi.fn());
+const statsReset = vi.hoisted(() => vi.fn());
 const workReset = vi.hoisted(() => vi.fn());
 const fakeStore = vi.hoisted(() => () => ({
   getState: () => {
@@ -25,6 +27,7 @@ vi.mock('@/store/chat', () => ({ useChatStore: fakeStore() }));
 vi.mock('@/store/discover', () => ({ useDiscoverStore: fakeStore() }));
 vi.mock('@/store/document', () => ({ useDocumentStore: fakeStore() }));
 vi.mock('@/store/eval', () => ({ useEvalStore: fakeStore() }));
+vi.mock('@/store/expertise', () => ({ expertiseActions: { reset: expertiseReset } }));
 vi.mock('@/store/file', () => ({ useFileStore: fakeStore() }));
 vi.mock('@/store/home', () => ({ useHomeStore: fakeStore() }));
 vi.mock('@/store/image', () => ({ useImageStore: fakeStore() }));
@@ -36,6 +39,7 @@ vi.mock('@/store/resourcePermission', () => ({
   resourcePermissionActions: { reset: resourcePermissionReset },
 }));
 vi.mock('@/store/sandbox', () => ({ sandboxActions: { reset: sandboxReset } }));
+vi.mock('@/store/stats', () => ({ statsActions: { reset: statsReset } }));
 vi.mock('@/store/session', () => ({ useSessionStore: fakeStore() }));
 vi.mock('@/store/task', () => ({ useTaskStore: fakeStore() }));
 vi.mock('@/store/tool', () => ({ useToolStore: fakeStore() }));
@@ -48,9 +52,11 @@ describe('stores.reset', () => {
   beforeEach(() => {
     resetGatewayMuxRegistry.mockClear();
     storeResets.length = 0;
+    expertiseReset.mockClear();
     pageReset.mockClear();
     resourcePermissionReset.mockClear();
     sandboxReset.mockClear();
+    statsReset.mockClear();
     workReset.mockClear();
   });
 
@@ -64,10 +70,14 @@ describe('stores.reset', () => {
     expect(resetGatewayMuxRegistry).toHaveBeenCalledTimes(1);
     expect(storeResets).toHaveLength(19);
     expect(pageReset).toHaveBeenCalledTimes(1);
+    // The rule sheet and agent portraits must not leak into the next identity.
+    expect(expertiseReset).toHaveBeenCalledTimes(1);
     // Confirmed manage grants and the memory-only collaborator roster must not
     // outlive the data context, even when the next one reuses the scope string.
     expect(resourcePermissionReset).toHaveBeenCalledTimes(1);
     expect(sandboxReset).toHaveBeenCalledTimes(1);
+    // Another identity must not paint the previous one's usage numbers.
+    expect(statsReset).toHaveBeenCalledTimes(1);
     expect(workReset).toHaveBeenCalledTimes(1);
     for (const reset of storeResets) expect(reset).toHaveBeenCalledTimes(1);
     expect(order[0]).toBe('mux');

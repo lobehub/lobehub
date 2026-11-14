@@ -12,6 +12,7 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
 
 import TopicActions from './TopicActions';
+import { useConversationTopic } from './useConversationTopic';
 
 interface ToolbarProps {
   /** Shown while the open conversation has no titled topic. @default the side chat's title */
@@ -42,7 +43,7 @@ const Toolbar = memo<ToolbarProps>(({ fallbackTitle, onCollapse, topicLocked }) 
     s.switchTopic,
     topicSelectors.currentTopics(s),
   ]);
-  const currentTopic = useChatStore(topicSelectors.currentActiveTopic);
+  const currentTopic = useConversationTopic();
 
   const isLoadingTopics = topics === undefined;
   const topicTitle = currentTopic?.title || fallbackTitle || t('goalChat.title');

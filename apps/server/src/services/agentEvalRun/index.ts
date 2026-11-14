@@ -4,8 +4,12 @@ import type { AgentEvalRunModel } from '@/database/models/agentEval';
 
 import { evaluateAndFinalizeRun } from './aggregate';
 import { recordTrajectoryCompletion } from './completion';
+import { assertRunConnectorBindings } from './connectorBindings';
 import { createRun } from './createRun';
 import { createEvalRunDeps } from './deps';
+import { dispatchQueuedCases } from './queue';
+import { rejudgeRun } from './rejudge';
+import { rerunUnverifiedCases } from './rerun';
 import { executeResumedThreadTrajectory, executeResumedTrajectory } from './resumeExecution';
 import { canResumeTrajectory, getResumableCases, resumeTrajectory } from './resumeTarget';
 import {
@@ -45,12 +49,20 @@ export class AgentEvalRunService {
     this.runModel = this.deps.runModel;
   }
 
+  assertConnectorBindings(...args: StageArgs<typeof assertRunConnectorBindings>) {
+    return assertRunConnectorBindings(this.deps, ...args);
+  }
+
   createRun(...args: StageArgs<typeof createRun>) {
     return createRun(this.deps, ...args);
   }
 
   deleteRun(...args: StageArgs<typeof deleteRun>) {
     return deleteRun(this.deps, ...args);
+  }
+
+  dispatchQueuedCases(...args: StageArgs<typeof dispatchQueuedCases>) {
+    return dispatchQueuedCases(this.deps, ...args);
   }
 
   abortRun(...args: StageArgs<typeof abortRun>) {
@@ -63,6 +75,18 @@ export class AgentEvalRunService {
 
   retrySingleCase(...args: StageArgs<typeof retrySingleCase>) {
     return retrySingleCase(this.deps, ...args);
+  }
+
+  rerunUnverifiedCases(...args: StageArgs<typeof rerunUnverifiedCases>) {
+    return rerunUnverifiedCases(this.deps, ...args);
+  }
+
+  /**
+   * Grade a finished run again with the current judge setup, reusing its
+   * recorded trajectories (no model runs again).
+   */
+  rejudgeRun(...args: StageArgs<typeof rejudgeRun>) {
+    return rejudgeRun(this.deps, ...args);
   }
 
   canResumeTrajectory(...args: StageArgs<typeof canResumeTrajectory>) {

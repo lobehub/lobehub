@@ -11,6 +11,9 @@ callers do not choose a provider, prefix, key, SET options or claim lifetime.
   a day. Atomic append (bounded), drain and restore; the runtime drains it into the next turn.
   Writes return `undefined` without Redis, and the caller tells the client to send directly.
 - `linear`: single-use OAuth state for "Connect Linear" (ten minutes, deleted on first read).
+- `agentDocumentIndex`: the agent-document index snapshot and change notes one conversation
+  (topic/thread/agent) renders from, for a day. `undefined` without Redis; the runtime then
+  takes a fresh snapshot every run.
 - `pageCollab`: a digest of the body each page's last room projection wrote, for a day, so the
   next projection can tell that something wrote the body outside the room. `null` without Redis.
 - `agentSignal`: spend bounds for background self-iteration — classifier calls per user per UTC
@@ -18,6 +21,9 @@ callers do not choose a provider, prefix, key, SET options or claim lifetime.
   distinct topics one nightly review may cover. Its keys live in the `agent-signal` namespace
   next to the Agent Signal runtime stores. Each count returns `undefined` without Redis; the
   Agent Signal caller decides whether that fails open or closed.
+- `taskRunDelivery`: one settle per operation for a Task run's `onComplete` redeliveries — a
+  ten minute lease while settling, a three day marker once settled. `unavailable` without Redis;
+  the webhook then settles anyway.
 - `agentIdentity`: replay claims on agent-account provider webhooks, one per provider event
   id, in the `agent-identity` namespace. `releaseWebhookEvent` gives a claim back when the
   delivery failed after it was claimed. Without Redis the claim falls back to a process-local one.

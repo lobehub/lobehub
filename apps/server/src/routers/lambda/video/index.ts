@@ -25,7 +25,6 @@ import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPer
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { chargeAfterGenerate } from '@/business/server/video-generation/chargeAfterGenerate';
 import { chargeBeforeGenerate } from '@/business/server/video-generation/chargeBeforeGenerate';
-import { getVideoFreeQuota } from '@/business/server/video-generation/getVideoFreeQuota';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
 import { GenerationTopicModel } from '@/database/models/generationTopic';
@@ -586,11 +585,13 @@ export const videoRouter = router({
       }));
     }),
 
+  /**
+   * @deprecated The daily free video quota is retired. Kept for released desktop builds and
+   * web pages loaded before the removal, which still query it; always reports no quota.
+   */
   getVideoFreeQuota: authedProcedure
     .input(z.object({ model: z.string() }))
-    .query(async ({ ctx, input }) => {
-      return getVideoFreeQuota(ctx.userId, input.model);
-    }),
+    .query((): { limit: number; used: number } | null => null),
 });
 
 export type VideoRouter = typeof videoRouter;

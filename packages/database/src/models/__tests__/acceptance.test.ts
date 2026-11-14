@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { ProjectRepository } from '../../repositories/project';
 import {
   acceptanceComments,
   acceptances,
@@ -108,7 +109,10 @@ describe('AcceptanceModel', () => {
 
   it('stores the project on the acceptance and becomes ungrouped when it is deleted', async () => {
     const projectModel = new ProjectModel(serverDB, userId);
-    const project = await projectModel.create({ identifier: 'ACPT', name: 'Acceptance project' });
+    const project = await new ProjectRepository(serverDB, userId).create({
+      identifier: 'ACPT',
+      name: 'Acceptance project',
+    });
     const model = new AcceptanceModel(serverDB, userId);
 
     const first = await model.ensureForSubject('topic', topicId);
@@ -123,8 +127,10 @@ describe('AcceptanceModel', () => {
   });
 
   it('files an acceptance under a project and takes it back out', async () => {
-    const projectModel = new ProjectModel(serverDB, userId);
-    const project = await projectModel.create({ identifier: 'MOVE', name: 'Move target' });
+    const project = await new ProjectRepository(serverDB, userId).create({
+      identifier: 'MOVE',
+      name: 'Move target',
+    });
     const model = new AcceptanceModel(serverDB, userId);
     const acceptance = await model.ensureForSubject('topic', topicId);
 
@@ -143,9 +149,9 @@ describe('AcceptanceModel', () => {
   });
 
   it('fills a project only on an ungrouped acceptance it owns', async () => {
-    const projectModel = new ProjectModel(serverDB, userId);
-    const first = await projectModel.create({ identifier: 'FILA', name: 'First' });
-    const second = await projectModel.create({ identifier: 'FILB', name: 'Second' });
+    const projectRepo = new ProjectRepository(serverDB, userId);
+    const first = await projectRepo.create({ identifier: 'FILA', name: 'First' });
+    const second = await projectRepo.create({ identifier: 'FILB', name: 'Second' });
     const model = new AcceptanceModel(serverDB, userId);
     const acceptance = await model.ensureForSubject('topic', topicId);
 
@@ -270,9 +276,9 @@ describe('AcceptanceModel', () => {
   });
 
   it('filters flat and paged lists by project before applying limits', async () => {
-    const projectModel = new ProjectModel(serverDB, userId);
-    const alpha = await projectModel.create({ identifier: 'ALPHA', name: 'Alpha project' });
-    const beta = await projectModel.create({ identifier: 'BETA', name: 'Beta project' });
+    const projectRepo = new ProjectRepository(serverDB, userId);
+    const alpha = await projectRepo.create({ identifier: 'ALPHA', name: 'Alpha project' });
+    const beta = await projectRepo.create({ identifier: 'BETA', name: 'Beta project' });
     const model = new AcceptanceModel(serverDB, userId);
 
     await model.create({ projectId: alpha.id, subjectId: 'alpha-1', subjectType: 'standalone' });
@@ -289,7 +295,7 @@ describe('AcceptanceModel', () => {
   });
 
   it('filters by project to only the unfiled acceptances when projectId is null', async () => {
-    const alpha = await new ProjectModel(serverDB, userId).create({
+    const alpha = await new ProjectRepository(serverDB, userId).create({
       identifier: 'ALPHA',
       name: 'Alpha project',
     });

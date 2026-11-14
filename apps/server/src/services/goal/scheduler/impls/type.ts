@@ -4,6 +4,11 @@ export interface ScheduleGoalAdvanceParams {
   /** Seconds to wait before advancing. Defaults to 0 (as soon as possible). */
   delay?: number;
   goalId: string;
+  /**
+   * This advance only re-checks something still pending, so another one aimed at
+   * the same moment can replace it. Leave unset for a timer that must fire itself.
+   */
+  poll?: boolean;
   /** What made this goal advanceable. Survives the queue hop onto the trajectory. */
   trigger?: GoalAdvanceTrigger;
   userId: string;

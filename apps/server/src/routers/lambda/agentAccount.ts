@@ -363,14 +363,16 @@ export const agentAccountRouter = router({
       }),
 
     unreadCount: agentAccountProcedure
-      .input(z.object({ agentId: z.string().min(1) }))
+      .input(z.object({ accountId: z.string().min(1).optional(), agentId: z.string().min(1) }))
       .query(async ({ ctx, input }) => {
         await assertAgentUsableBy(ctx.serverDB, input.agentId, {
           userId: ctx.userId,
           workspaceId: ctx.workspaceId ?? undefined,
         });
 
-        return { unreadCount: await ctx.agentInboxModel.unreadCount(input.agentId) };
+        return {
+          unreadCount: await ctx.agentInboxModel.unreadCount(input.agentId, input.accountId),
+        };
       }),
 
     get: agentAccountProcedure.input(idInput).query(async ({ ctx, input }) => {
@@ -388,14 +390,14 @@ export const agentAccountRouter = router({
       })),
 
     markAllRead: agentAccountProcedure
-      .input(z.object({ agentId: z.string().min(1) }))
+      .input(z.object({ accountId: z.string().min(1).optional(), agentId: z.string().min(1) }))
       .mutation(async ({ ctx, input }) => {
         await assertAgentUsableBy(ctx.serverDB, input.agentId, {
           userId: ctx.userId,
           workspaceId: ctx.workspaceId ?? undefined,
         });
 
-        return { count: await ctx.agentInboxModel.markAllRead(input.agentId) };
+        return { count: await ctx.agentInboxModel.markAllRead(input.agentId, input.accountId) };
       }),
   }),
 });

@@ -468,13 +468,14 @@ export class AgentInboxModel {
       .where(and(eq(agentInboxMessages.id, id), this.ownership()));
   };
 
-  markAllRead = async (agentId: string): Promise<number> => {
+  markAllRead = async (agentId: string, accountId?: string): Promise<number> => {
     const rows = await this.db
       .update(agentInboxMessages)
       .set({ readAt: new Date(), updatedAt: new Date() })
       .where(
         and(
           eq(agentInboxMessages.agentId, agentId),
+          accountId ? eq(agentInboxMessages.accountId, accountId) : undefined,
           isNull(agentInboxMessages.readAt),
           this.ownership(),
         ),
@@ -582,13 +583,14 @@ export class AgentInboxModel {
     return row;
   };
 
-  unreadCount = async (agentId: string): Promise<number> => {
+  unreadCount = async (agentId: string, accountId?: string): Promise<number> => {
     const [row] = await this.db
       .select({ value: count() })
       .from(agentInboxMessages)
       .where(
         and(
           eq(agentInboxMessages.agentId, agentId),
+          accountId ? eq(agentInboxMessages.accountId, accountId) : undefined,
           isNull(agentInboxMessages.readAt),
           this.ownership(),
         ),

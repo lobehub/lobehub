@@ -22,6 +22,7 @@ import { settingsSelectors } from '@/store/user/selectors';
 import Breadcrumb from '../shared/Breadcrumb';
 import TaskDetailCopyActions from './TaskDetailCopyActions';
 import TaskDetailHeaderActions from './TaskDetailHeaderActions';
+import { TASK_DETAIL_PAGE_WIDTH } from './taskDetailLayoutStyles';
 import TaskDetailSections from './TaskDetailSections';
 import TaskDetailSkeleton from './TaskDetailSkeleton';
 import { useTaskFindBar } from './TaskFind';
@@ -129,7 +130,7 @@ const TaskDetailPage = memo<TaskDetailPageProps>(({ taskId, showTaskAgentPanelTo
           {/* Detail is prose — instruction, deliverables, activity — so it keeps the
               centered reading column rather than the list page's full-bleed rows,
               whose value is the horizontal room for their metadata columns. */}
-          <WideScreenContainer>
+          <WideScreenContainer minWidth={TASK_DETAIL_PAGE_WIDTH}>
             {isInitialLoading ? <TaskDetailSkeleton chrome={'body'} /> : <TaskDetailSections />}
           </WideScreenContainer>
         </Flexbox>

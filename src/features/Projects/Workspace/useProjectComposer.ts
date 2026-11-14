@@ -97,6 +97,14 @@ const isAbort = (error: unknown) =>
 /** The project home composer's key for its draft attachments and context selections. */
 export const getProjectComposerContextKey = (projectId: string) => `project-home:${projectId}`;
 
+/** The picked folder could not be reached: its device is offline, or the folder is gone. */
+export class DirectoryUnavailableError extends Error {
+  constructor(cause: unknown) {
+    super('The project folder is not reachable', { cause });
+    this.name = 'DirectoryUnavailableError';
+  }
+}
+
 export class AttachmentsNotReadyError extends Error {
   constructor() {
     super('Attachments are still uploading');
@@ -109,11 +117,18 @@ export const useProjectComposer = (
   mode: ProjectComposerMode,
   /** The project agent the message goes to; the main agent unless the user picked another. */
   agentId: string,
+  /**
+   * Where the conversation works: a project repository in the cloud sandbox
+   * (the server picks the first when unset), or a project folder on a device.
+   */
+  place: { directoryId?: string; environmentId?: string } = {},
 ) => {
+  const { directoryId, environmentId } = place;
   const { t } = useTranslation('project');
   const navigate = useWorkspaceAwareNavigate();
   const workspaceSlug = useActiveWorkspaceSlug();
   const createProjectTopic = useProjectDirectoryStore((s) => s.createProjectTopic);
+  const startDirectoryTopic = useProjectDirectoryStore((s) => s.startTopic);
   const createTask = useTaskStore((s) => s.createTask);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const clearChatUploadFileList = useFileStore((s) => s.clearChatUploadFileList);
@@ -154,8 +169,16 @@ export const useProjectComposer = (
       // owns it from the start, and the message is sent into that exact topic.
       // Sending here rather than after the page loads keeps the attachments,
       // which cannot travel through the URL.
+      //
+      // A folder on a device is checked first — the device must be online and
+      // the folder still there — so a conversation never starts somewhere the
+      // person did not pick.
       const [topic] = await Promise.all([
-        createProjectTopic({ agentId, projectId: project.id, title }),
+        directoryId
+          ? startDirectoryTopic(directoryId, agentId, title).catch((error: unknown) => {
+              throw new DirectoryUnavailableError(error);
+            })
+          : createProjectTopic({ agentId, environmentId, projectId: project.id, title }),
         ensureAgentConfigLoaded(agentId),
       ]);
       // Open the conversation right away: the send shows its message there

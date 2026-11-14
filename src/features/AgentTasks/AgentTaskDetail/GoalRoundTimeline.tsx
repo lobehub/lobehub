@@ -36,7 +36,7 @@ const styles = createStaticStyles(({ css }) => ({
   rail: css`
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
+    gap: 4px;
     align-items: center;
 
     min-width: 0;

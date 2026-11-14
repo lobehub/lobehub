@@ -26,6 +26,7 @@ const startRolloutInput = z
   .object({
     probeNodeIds: z.array(z.string().min(1)).min(2).max(10),
     recipe: z.string().trim().min(1).max(8000),
+    skillName: z.string().trim().max(80).optional(),
     trigger: z.enum(['canary', 'full']).optional(),
     unitNodeIds: z.array(z.string().min(1)).max(60).optional(),
     variants: z

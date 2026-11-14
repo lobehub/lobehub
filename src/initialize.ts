@@ -7,6 +7,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import utc from 'dayjs/plugin/utc';
 import { enableMapSet, enablePatches } from 'immer';
 
+import { installRenderProfile } from '@/libs/renderProfile';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
 
 enablePatches();
@@ -38,6 +39,10 @@ if (typeof window !== 'undefined') {
     }
   });
 }
+
+// Profiling builds start counting renders before the first commit, so a test
+// can read the first page open as the `boot` scenario.
+installRenderProfile();
 
 if (__DEV__ && __REACT_SCAN__) {
   void import('react-scan').then(({ scan }) => {

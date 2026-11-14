@@ -2,7 +2,15 @@ import { CHANNEL_URL } from '@lobechat/const';
 import type { ChannelDetail } from '@lobechat/types';
 import { ActionIcon, Button, DropdownMenu, Flexbox, Popover, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { Bot, FolderCog, MoreHorizontal, Settings, UserPlus, Users } from 'lucide-react';
+import {
+  Bot,
+  CircleUserRound,
+  FolderCog,
+  MoreHorizontal,
+  Settings,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -103,7 +111,20 @@ export function MemberStatus({
   return (
     <Flexbox horizontal align="center" gap={4}>
       <FailureIndicator detail={detail} />
-      {direct ? null : memberPanel ? (
+      {direct ? (
+        memberPanel && (
+          <ActionIcon
+            active={memberPanel.open}
+            aria-controls={memberPanel.open ? memberPanel.id : undefined}
+            aria-expanded={memberPanel.open}
+            aria-label={t(memberPanel.open ? 'profile.hide' : 'profile.show')}
+            icon={CircleUserRound}
+            size="small"
+            title={t(memberPanel.open ? 'profile.hide' : 'profile.show')}
+            onClick={memberPanel.onToggle}
+          />
+        )
+      ) : memberPanel ? (
         <ActionIcon
           active={memberPanel.open}
           aria-controls={memberPanel.open ? memberPanel.id : undefined}

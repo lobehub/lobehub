@@ -305,10 +305,11 @@ describe('WorkspaceMemberModel', () => {
       expect(row.deletedAt).not.toBeNull();
     });
 
-    it('clears their job title and responsibilities so a re-invite starts without them', async () => {
+    it('clears their job title, responsibilities and config so a re-invite starts without them', async () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
       await model.addMember({ userId: memberId, workspaceId });
       await model.updateMemberProfile(workspaceId, memberId, {
+        badgeColor: '#1f8a5b',
         title: 'Designer',
         responsibilities: 'Design system',
       });
@@ -318,6 +319,7 @@ describe('WorkspaceMemberModel', () => {
 
       expect(revived.title).toBeNull();
       expect(revived.responsibilities).toBeNull();
+      expect(revived.config).toEqual({});
     });
 
     it('drops their team memberships so a re-invite does not restore them', async () => {
@@ -593,6 +595,34 @@ describe('WorkspaceMemberModel', () => {
       expect(cleared?.title).toBeNull();
       // an omitted field is left untouched
       expect(cleared?.responsibilities).toBe('Owns the mobile roadmap');
+      expect(cleared?.config).toEqual({});
+    });
+
+    it('keeps the badge color in config, leaving other config keys and fields alone', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ userId: memberId, workspaceId });
+      await serverDB
+        .update(workspaceMembers)
+        .set({ config: { other: 1 } as never })
+        .where(
+          and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, memberId)),
+        );
+
+      const colored = await model.updateMemberProfile(workspaceId, memberId, {
+        badgeColor: '#1f8a5b',
+        title: 'Designer',
+      });
+      expect(colored?.config).toEqual({ badgeColor: '#1f8a5b', other: 1 });
+      expect(colored?.title).toBe('Designer');
+
+      const recolored = await model.updateMemberProfile(workspaceId, memberId, {
+        badgeColor: '#123456',
+      });
+      expect(recolored?.config).toEqual({ badgeColor: '#123456', other: 1 });
+      expect(recolored?.title).toBe('Designer');
+
+      const reset = await model.updateMemberProfile(workspaceId, memberId, { badgeColor: null });
+      expect(reset?.config).toEqual({ other: 1 });
     });
 
     it('keeps the profile per workspace', async () => {

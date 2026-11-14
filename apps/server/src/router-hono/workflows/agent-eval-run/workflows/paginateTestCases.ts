@@ -4,6 +4,7 @@ import { chunk } from 'es-toolkit/compat';
 
 import { AgentEvalRunModel, AgentEvalTestCaseModel } from '@/database/models/agentEval';
 import { getServerDB } from '@/database/server';
+import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import {
   AgentEvalRunWorkflow,
   type PaginateTestCasesPayload,
@@ -59,7 +60,7 @@ export const paginateTestCasesHandler = async (
   // Check if run was aborted before paginating
   const runStatus = await runStep(context, 'agent-eval-run:check-abort', async () => {
     const runModel = new AgentEvalRunModel(db, userId, wsId);
-    const run = await runModel.findById(runId);
+    const run = await runModel.findSummaryById(runId);
     return run?.status;
   });
 
@@ -68,11 +69,23 @@ export const paginateTestCasesHandler = async (
     return { cancelled: true };
   }
 
+  // A run with a concurrency limit starts only as many cases as it allows; each
+  // case that ends starts the next waiting one (see services/agentEvalRun/queue).
+  if (!cursor) {
+    const queued = await runStep(context, 'agent-eval-run:dispatch-queued', () =>
+      new AgentEvalRunService(db, userId, wsId).dispatchQueuedCases(runId),
+    );
+    if (queued) {
+      log('Queued run: started %d cases', queued.length);
+      return { queuedStarted: queued.length, success: true };
+    }
+  }
+
   // Paginate through test cases
   const testCaseBatch = await runStep(context, 'agent-eval-run:get-test-cases-page', async () => {
     // Get run to find datasetId and userId
     const runModel = new AgentEvalRunModel(db, userId, wsId);
-    const run = await runModel.findById(runId);
+    const run = await runModel.findSummaryById(runId);
     if (!run) return { ids: [] };
 
     // Get test cases for this dataset

@@ -7,7 +7,7 @@ import { ListTodo } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DEFAULT_AVATAR } from '@/const/meta';
+import { toStackAvatar } from '@/components/AgentAvatar/stackAvatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
@@ -32,10 +32,9 @@ const GroupTasksAvatar = memo<{ avatars: { avatar?: string; background?: string 
           avatarShape={'square'}
           cornerShape={'square'}
           size={28}
-          avatars={avatars.map((a) => ({
-            avatar: a.avatar || DEFAULT_AVATAR,
-            background: a.background,
-          }))}
+          avatars={avatars.map((a, index) =>
+            toStackAvatar({ avatar: a.avatar, background: a.background }, index),
+          )}
         />
         <Block
           align={'center'}

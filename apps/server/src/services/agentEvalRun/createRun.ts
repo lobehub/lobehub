@@ -1,23 +1,33 @@
 import { idGenerator } from '@lobechat/database';
 import type {
+  EvalCaseEnvironment,
   EvalRunAgentSnapshot,
+  EvalRunConfig,
   EvalRunInputConfig,
   ImportedMessage,
   ToolIntervention,
 } from '@lobechat/types';
-import { getActivePluginIds } from '@lobechat/types';
+import { evalCaseVersionOf, getActivePluginIds } from '@lobechat/types';
 import { clampToolIdentifier } from '@lobechat/utils/clampToolIdentifier';
 import { eq, inArray, sql } from 'drizzle-orm';
 
 import { agentEvalRunTopics, messagePlugins, messages, topics } from '@/database/schemas';
 
+import type { CaseAgentRun } from './caseAgent';
+import { ensureCaseAgents, loadCaseAgentBase } from './caseAgent';
+import { withResolvedEnvironments } from './caseEnvironment';
+import { selectCases } from './caseSelection';
+import { snapshotCaseConnectors } from './connectorBindings';
 import { EVAL_HISTORY_TAIL_METADATA_KEY } from './constants';
+import { createEvalRunDeps } from './deps';
 import type { EvalRunDeps } from './types';
 
 const EVAL_HISTORY_MESSAGE_BATCH_SIZE = 500;
 
 /** Thrown when a caller-supplied run id exists with non-equivalent create params. */
 export const RUN_CREATE_ID_CONFLICT = 'Run id already exists with different create parameters';
+export const RUN_DATASET_NOT_FOUND = 'Dataset not found';
+export const RUN_EMPTY_SELECTION = 'Select at least one test case';
 
 /** Stable JSON stringify: sorts object keys recursively, drops undefined. */
 const stableStringify = (value: unknown): string => {
@@ -75,7 +85,14 @@ export async function createRun(
 
     targetAgentId = parent.targetAgentId ?? undefined;
     datasetId = parent.datasetId;
-    inputConfig = (parent.config as EvalRunInputConfig | undefined) ?? undefined;
+    const {
+      connectorSnapshots: _parentBindings,
+      agentSnapshot: _parentAgent,
+      caseVersion: _parentVersion,
+      executionMode: _parentMode,
+      ...parentInput
+    } = parent.config ?? {};
+    inputConfig = parentInput;
   }
 
   // External execution is driven case-by-case through `runExecuteCase`, which
@@ -98,13 +115,23 @@ export async function createRun(
   // be inferred from status once the run reaches a terminal state, and the
   // idempotency check below must compare it.
   const executionMode = isExternal ? ('external' as const) : ('internal' as const);
-  const config = { ...inputConfig, agentSnapshot, executionMode };
+  // The version of the cases the run is made on: a leaderboard counts only runs on
+  // the dataset's current version, since cases are edited in place.
+  const datasetRow = await deps.datasetModel.findById(datasetId);
+  if (!datasetRow) throw new Error(RUN_DATASET_NOT_FOUND);
+  const caseVersion = evalCaseVersionOf(datasetRow.metadata);
+  const config: EvalRunConfig = {
+    ...inputConfig,
+    agentSnapshot,
+    ...(caseVersion && { caseVersion }),
+    executionMode,
+  };
 
   // Idempotent create: a caller-supplied id that already exists returns the
   // existing run when the immutable create params are equivalent (datasetId /
   // experimentId / parentRunId / targetAgentId / executionMode / input config
-  // — the agent snapshot is excluded since it is re-captured server-side on
-  // every create).
+  // — the agent snapshot and case version are excluded since they are
+  // captured server-side on every create).
   const matchesExisting = (existing: {
     config?: unknown;
     datasetId: string;
@@ -114,6 +141,8 @@ export async function createRun(
   }) => {
     const {
       agentSnapshot: _existingSnapshot,
+      connectorSnapshots: _existingBindings,
+      caseVersion: _existingCaseVersion,
       executionMode: existingMode,
       ...existingConfig
     } = (existing.config ?? {}) as Record<string, unknown>;
@@ -135,16 +164,37 @@ export async function createRun(
     }
   }
 
+  // The run's cases: the dataset, narrowed by `config.caseSelection` when an
+  // internal run picks some of them (an external worker applies the selection
+  // itself). Their mock connectors must be installed in this account before
+  // any of their Agents exists; checked before the run row so a missing or
+  // unreachable mock leaves no run behind.
+  const datasetCases = await withResolvedEnvironments(
+    deps,
+    await deps.testCaseModel.findByDatasetId(datasetId),
+  );
+  const testCases = isExternal ? datasetCases : selectCases(datasetCases, config?.caseSelection);
+  if (!isExternal && testCases.length === 0) throw new Error(RUN_EMPTY_SELECTION);
+  config.connectorSnapshots = await snapshotCaseConnectors(deps, datasetId, testCases);
+
   const { mode: _mode, ...restParams } = params;
-  let run;
   try {
-    run = await deps.runModel.create({
-      ...restParams,
-      datasetId,
-      targetAgentId,
-      config,
-      // External runs start claimable; internal runs wait for `startRun`.
-      status: isExternal ? 'pending' : 'idle',
+    // An idempotent retry must only see a run once all its case setup exists.
+    // Keep every model used by that setup on the same transaction connection.
+    return await deps.db.transaction(async (tx) => {
+      const txDeps = createEvalRunDeps(tx, deps.userId, deps.workspaceId);
+      const run = await txDeps.runModel.create({
+        ...restParams,
+        datasetId,
+        targetAgentId,
+        config,
+        // External runs start claimable; internal runs wait for `startRun`.
+        status: isExternal ? 'pending' : 'idle',
+      });
+
+      if (!isExternal) await createRunTopics(txDeps, run, testCases);
+      if (params.experimentId) await txDeps.experimentModel.touch(params.experimentId);
+      return run;
     });
   } catch (error) {
     // Race-safe idempotency: a concurrent create with the same caller id won
@@ -160,35 +210,29 @@ export async function createRun(
     }
     throw error;
   }
-
-  if (params.experimentId) {
-    await deps.experimentModel.touch(params.experimentId);
-  }
-
-  // External runs create Topics/RunTopics on demand (per executed case).
-  if (isExternal) return run;
-
-  // Pre-create Topics and RunTopics for all test cases (status='pending')
-  const testCases = await deps.testCaseModel.findByDatasetId(datasetId);
-
-  if (testCases.length > 0) {
-    await createRunTopics(deps, run.id, targetAgentId, testCases);
-  }
-
-  return run;
 }
 
-export function createRunTopics(
+/**
+ * Creates each case's topic, restored history and pending RunTopic. The topic
+ * belongs to the Agent the case runs on: its hidden case Agent when the case
+ * brings its own setup or the run picks a model, otherwise the target Agent.
+ */
+export async function createRunTopics(
   deps: EvalRunDeps,
-  runId: string,
-  targetAgentId: string | null | undefined,
-  testCases: Array<{
-    content: { input: string; messages?: ImportedMessage[] };
+  run: CaseAgentRun,
+  rawTestCases: Array<{
+    content: { environment?: EvalCaseEnvironment; input: string; messages?: ImportedMessage[] };
+    environmentId?: string | null;
     id: string;
     sortOrder: number | null;
   }>,
 ) {
+  const runId = run.id;
+  const testCases = await withResolvedEnvironments(deps, rawTestCases);
+  const caseAgentBase = await loadCaseAgentBase(deps, run, testCases);
+
   return deps.db.transaction(async (tx) => {
+    const agentIds = await ensureCaseAgents(tx, deps, run, testCases, caseAgentBase);
     const preparedCases = testCases.map((testCase) => ({
       testCase,
       topicId: idGenerator('topics'),
@@ -196,7 +240,7 @@ export function createRunTopics(
 
     await tx.insert(topics).values(
       preparedCases.map(({ testCase, topicId }) => ({
-        agentId: targetAgentId ?? null,
+        agentId: agentIds.get(testCase.id) ?? null,
         id: topicId,
         title: `[${(testCase.sortOrder ?? 0) + 1}] ${testCase.content.input.slice(0, 50) || 'Topic'}...`,
         trigger: 'eval' as const,
@@ -247,7 +291,7 @@ export function createRunTopics(
         };
       });
 
-      const messageRows = preparedMessages.map(({ createdAt, id, message, updatedAt }, index) => ({
+      const messageRows = preparedMessages.map(({ createdAt, id, message, updatedAt }) => ({
         agentId: null,
         content: message.content,
         createdAt: new Date(createdAt),
@@ -341,6 +385,7 @@ export function createRunTopics(
 
     await tx.insert(agentEvalRunTopics).values(
       preparedCases.map(({ testCase, topicId }) => ({
+        evalResult: { executionId: crypto.randomUUID() },
         runId,
         status: 'pending' as const,
         testCaseId: testCase.id,

@@ -115,4 +115,34 @@ describe('IdentityExtractor', () => {
     expect(result).not.toBe('');
     expect(result).toBe(renderPlaceholderTemplate(identityPrompt, expectedProps));
   });
+
+  it('keeps an identity whose role the model left as null', async () => {
+    const extractor = new IdentityExtractor(extractorConfig);
+    const identity = {
+      details: null,
+      memoryCategory: 'personal',
+      memoryType: 'fact',
+      summary: 'Summary',
+      tags: [],
+      title: 'Identity',
+      withIdentity: {
+        description: 'Description',
+        episodicDate: null,
+        extractedLabels: [],
+        relationship: 'self',
+        role: null,
+        scoreConfidence: 0.8,
+        sourceIds: [],
+        sourceEvidence: null,
+        type: 'personal',
+      },
+    };
+    (runtimeMock.generateObject as any) = vi
+      .fn()
+      .mockResolvedValue({ add: [identity], remove: null, update: null });
+
+    const result = await extractor.structuredCall(templateOptions);
+
+    expect(result.add?.[0]?.withIdentity.role).toBeNull();
+  });
 });

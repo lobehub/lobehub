@@ -31,6 +31,12 @@ export interface TaskLabelRef {
 export const TASK_LABEL_NAME_MAX_LENGTH = 64;
 
 /**
+ * The only color values a label may hold: chips render them straight into an
+ * inline `background`, so anything else is a CSS injection point.
+ */
+export const TASK_LABEL_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+
+/**
  * Separator for addressing a grouped label by path (`Type/Bug`). Names are
  * unique per scope, so the bare name also resolves; the path form only reads
  * better and is checked against the group.

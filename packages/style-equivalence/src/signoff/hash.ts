@@ -16,6 +16,7 @@ export interface HashedElement {
 }
 
 export interface CaseHashInput {
+  counterpart?: Partial<Record<Side, string>>;
   declarations: Partial<Record<Side, Record<string, string>>>;
   elements: Partial<Record<Side, HashedElement[]>>;
   outcome?: string[];

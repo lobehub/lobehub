@@ -47,6 +47,9 @@ class ProjectService {
     return { ...response, data: projects };
   };
 
+  /** Folder-card content (recent topics, task progress, members) for every visible project. */
+  listOverviews = async () => lambdaClient.project.listOverviews.query();
+
   detail = async (id: string) => lambdaClient.project.detail.query({ id });
 
   delete = async (id: string) => lambdaClient.project.delete.mutate({ id });
@@ -58,7 +61,9 @@ class ProjectService {
     params: {
       avatar?: string;
       coordinatorAgentId?: string;
+      dedicatedAgentId?: string;
       description?: string;
+      id?: string;
       identifier?: string;
       name: string;
       repository?: { defaultBranch?: string; name: string; url: string };

@@ -184,6 +184,43 @@ describe('AgentMailModel', () => {
 
     expect(thread.map((row) => row.direction)).toEqual(['inbound', 'outbound']);
   });
+
+  it('knows whether the agent already wrote to an address in a thread', async () => {
+    await AgentMailModel.record(
+      serverDB,
+      mail({
+        cc: [{ address: 'Copy@Example.com' }],
+        deliveredAt: new Date('2026-10-03T00:00:00Z'),
+        direction: 'outbound',
+        fromAddress: AGENT_ADDRESS,
+        providerMessageId: 'msg_sent',
+        threadKey: 't-sent',
+        to: [{ address: 'Friend@Example.com' }],
+      }),
+      { userId },
+    );
+
+    const inThread = (address: string, threadKey = 't-sent') => ({
+      accountId,
+      address,
+      threadKey,
+    });
+
+    // A To recipient and a Cc one both count, however they were capitalised.
+    expect(await AgentMailModel.hasSentInThreadTo(serverDB, inThread('friend@example.com'))).toBe(
+      true,
+    );
+    expect(await AgentMailModel.hasSentInThreadTo(serverDB, inThread(' copy@example.com '))).toBe(
+      true,
+    );
+    // Other threads and other addresses were never written to.
+    expect(
+      await AgentMailModel.hasSentInThreadTo(serverDB, inThread('friend@example.com', 't-x')),
+    ).toBe(false);
+    expect(await AgentMailModel.hasSentInThreadTo(serverDB, inThread('stranger@example.com'))).toBe(
+      false,
+    );
+  });
 });
 
 describe('AgentInboxModel entries', () => {

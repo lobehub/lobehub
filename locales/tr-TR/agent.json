@@ -359,8 +359,6 @@
   "channel.qq.webhookMigrationTitle": "WebSocket moduna geçmeyi düşünün",
   "channel.quickSetup.connect.desc": "Yukarıda doldurduğunuz bilgileri kaydeder ve botu çevrimiçi hale getirir. Geri kalan her şey daha sonra değiştirilebilir.",
   "channel.quickSetup.connect.title": "Kaydet ve bağlan",
-  "channel.quickSetup.discord.bot.desc": "Bot sayfasında, Jetonu Sıfırla'ya tıklayın ve kopyalayın, ardından Mesaj İçeriği Niyeti'ni etkinleştirin.",
-  "channel.quickSetup.discord.bot.title": "Bot jetonunu alın ve mesaj içeriğine izin verin",
   "channel.quickSetup.discord.create.desc": "Geliştirici Portalında, Yeni Uygulama'ya tıklayın ve bir ad verin.",
   "channel.quickSetup.discord.create.title": "Bir uygulama oluşturun",
   "channel.quickSetup.discord.credentials.desc": "Her ikisi de Genel Bilgiler'de bulunur.",

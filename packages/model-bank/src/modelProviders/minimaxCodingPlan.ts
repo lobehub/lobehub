@@ -3,9 +3,10 @@ import type { ModelProviderCard } from '../types';
 // ref: https://platform.minimax.io/docs/coding-plan/intro
 const MinimaxCodingPlan: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'MiniMax-M2.7',
+  // The plan's text model is now M3.1 Flash; the M2 line was retired upstream.
+  checkModel: 'MiniMax-M3.1-Flash',
   description:
-    'MiniMax Token Plan provides access to MiniMax models including M2.7 for coding tasks via a fixed-fee subscription.',
+    'MiniMax Token Plan provides access to MiniMax models including M3.1 Flash for coding tasks via a fixed-fee subscription.',
   disableBrowserRequest: true,
   id: 'minimaxcodingplan',
   modelList: { showModelFetcher: false },

@@ -1,4 +1,5 @@
 declare module 'verification:component' {
+  import type { AskUserQuestionViewProps } from '@lobechat/shared-tool-ui/ask-user';
   import type { WorkSummaryItem } from '@lobechat/types';
   import type { ListProps } from '@lobehub/ui';
   import type { LucideIcon } from 'lucide-react';
@@ -87,6 +88,7 @@ declare module 'verification:component' {
     onLineWrappingChange: () => void;
   }>;
   export const FilePathDisplay: ComponentType<{ filePath: string; isDirectory: boolean }>;
+  export const AskUserQuestionView: ComponentType<AskUserQuestionViewProps>;
   export const OptionCard: ComponentType<{
     description: string;
     disabled: boolean;
@@ -96,6 +98,23 @@ declare module 'verification:component' {
     recommendedText: string;
     selected: boolean;
     onToggle: () => void;
+  }>;
+  export const VoiceMessageControl: ComponentType<{
+    actionLabel: string;
+    actionText?: string;
+    cancelLabel: string;
+    durationLabel: string;
+    errorText?: string;
+    expanded?: boolean;
+    groupLabel: string;
+    isRetry?: boolean;
+    onAction: () => void;
+    onCancel: () => void;
+    progress?: number;
+    sendDisabled?: boolean;
+    statusAnnouncement: string;
+    tooltip?: string;
+    waveform: number[];
   }>;
   export const OptionRow: ComponentType<{
     active: boolean;
@@ -107,6 +126,8 @@ declare module 'verification:component' {
     tag: string;
     onClick: () => void;
   }>;
+  export const AcceptanceReport: ComponentType<{ runId?: string }>;
+  export const AcceptanceEvidenceList: ComponentType<{ evidence: unknown[] }>;
 }
 
 declare module 'verification:locale/chat' {

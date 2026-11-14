@@ -47,14 +47,16 @@ const setup = (sourceAccepts: boolean) => {
       approvalClaim: {},
       approvalSourceToolMessageIds: [],
       autoStart: true,
-      discovery: {
-        credentialFactsPromise: Promise.resolve(undefined),
-        modelMediaCapabilities: {},
-        toolsResult: { enabledToolIds: [] },
+      init: {
+        discovery: {
+          credentialFactsPromise: Promise.resolve(undefined),
+          modelMediaCapabilities: {},
+          toolsResult: { enabledToolIds: [] },
+        },
+        initialContext: {},
+        prep: { allMessages: [], deviceSystemInfo: {} },
       },
-      initialContext: {},
       operationId: 'op-new',
-      prep: { allMessages: [], deviceSystemInfo: {} },
       updateAbortedAssistantMessage: vi.fn(),
       userInterventionConfig: { approvalMode: 'manual' },
       ...extra,

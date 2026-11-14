@@ -250,6 +250,20 @@ describe('WorkModel coverage · facade', () => {
 });
 
 describe('WorkModel coverage · queries', () => {
+  it('lists summary cards by Work id, dropping ids the caller cannot see', async () => {
+    const mine = await model().registerExternal(
+      externalParams({ resourceId: 'LOB-ids-1', toolCallId: 'ids-1' }),
+    );
+    const theirs = await new WorkModel(serverDB, otherUserId).registerExternal(
+      externalParams({ resourceId: 'LOB-ids-2', toolCallId: 'ids-2' }),
+    );
+
+    const summaries = await model().listSummariesByIds([mine!.id, mine!.id, theirs!.id, '']);
+    expect(summaries.map((summary) => summary.id)).toEqual([mine!.id]);
+    expect(summaries[0]).toMatchObject({ resourceId: 'LOB-ids-1', type: 'external' });
+    expect(await model().listSummariesByIds([])).toEqual([]);
+  });
+
   it('caps each root operation’s version events at the limit', async () => {
     await model().registerExternal(
       externalParams({ resourceId: 'LOB-cap-1', rootOperationId: 'op-cap', toolCallId: 'c1' }),

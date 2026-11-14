@@ -141,6 +141,7 @@ const SearchResultsOverlay = memo(() => {
           />
           <div style={{ flex: 1, minHeight: 0 }}>
             <VirtualizedFileList
+              allowReorder={false}
               columnWidths={columnWidths}
               data={data}
               hasMore={hasMore}

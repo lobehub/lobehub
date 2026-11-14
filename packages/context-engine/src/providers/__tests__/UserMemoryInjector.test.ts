@@ -3,6 +3,22 @@ import { describe, expect, it } from 'vitest';
 import type { PipelineContext } from '../../types';
 import { UserMemoryInjector } from '../UserMemoryInjector';
 
+const testContextMemory = () => ({
+  memories: {
+    contexts: [{ description: 'Test', id: 'ctx-1', title: 'Test' }],
+    experiences: [],
+    preferences: [],
+  },
+});
+
+const emptyMemoryInput = () => ({
+  memories: {
+    contexts: [],
+    experiences: [],
+    preferences: [],
+  },
+});
+
 describe('UserMemoryInjector', () => {
   const createContext = (messages: any[] = []): PipelineContext => ({
     initialState: {
@@ -58,13 +74,7 @@ describe('UserMemoryInjector', () => {
     });
 
     it('should skip injection when all memory arrays are empty', async () => {
-      const provider = new UserMemoryInjector({
-        memories: {
-          contexts: [],
-          experiences: [],
-          preferences: [],
-        },
-      });
+      const provider = new UserMemoryInjector(emptyMemoryInput());
 
       const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
 
@@ -75,13 +85,7 @@ describe('UserMemoryInjector', () => {
     });
 
     it('should skip injection when no user messages exist', async () => {
-      const provider = new UserMemoryInjector({
-        memories: {
-          contexts: [{ description: 'Test', id: 'ctx-1', title: 'Test' }],
-          experiences: [],
-          preferences: [],
-        },
-      });
+      const provider = new UserMemoryInjector(testContextMemory());
 
       const context = createContext([{ content: 'System prompt', id: 'sys-1', role: 'system' }]);
 
@@ -254,13 +258,7 @@ describe('UserMemoryInjector', () => {
 
   describe('integration with BaseFirstUserContentProvider', () => {
     it('should append to existing system injection message', async () => {
-      const provider = new UserMemoryInjector({
-        memories: {
-          contexts: [{ description: 'Test', id: 'ctx-1', title: 'Test' }],
-          experiences: [],
-          preferences: [],
-        },
-      });
+      const provider = new UserMemoryInjector(testContextMemory());
 
       const context = createContext([
         { content: 'System prompt', id: 'sys-1', role: 'system' },
@@ -280,13 +278,7 @@ describe('UserMemoryInjector', () => {
     });
 
     it('should work with multimodal messages', async () => {
-      const provider = new UserMemoryInjector({
-        memories: {
-          contexts: [{ description: 'Test', id: 'ctx-1', title: 'Test' }],
-          experiences: [],
-          preferences: [],
-        },
-      });
+      const provider = new UserMemoryInjector(testContextMemory());
 
       const context = createContext([
         {
@@ -309,13 +301,7 @@ describe('UserMemoryInjector', () => {
 
   describe('metadata', () => {
     it('should set userMemoryInjected to true when memories exist', async () => {
-      const provider = new UserMemoryInjector({
-        memories: {
-          contexts: [{ description: 'Test', id: 'ctx-1', title: 'Test' }],
-          experiences: [],
-          preferences: [],
-        },
-      });
+      const provider = new UserMemoryInjector(testContextMemory());
 
       const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
 
@@ -325,13 +311,7 @@ describe('UserMemoryInjector', () => {
     });
 
     it('should set userMemoryInjected when config has memories even if empty', async () => {
-      const provider = new UserMemoryInjector({
-        memories: {
-          contexts: [],
-          experiences: [],
-          preferences: [],
-        },
-      });
+      const provider = new UserMemoryInjector(emptyMemoryInput());
 
       const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
 

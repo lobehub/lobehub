@@ -14,7 +14,10 @@ import type { OpenAIChatMessage, UIChatMessage } from '@/types/index';
 
 import type { AgentInfo } from '../../processors/GroupRoleTransform';
 import type { AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
-import type { AgentContextDocument } from '../../providers/AgentDocumentInjector';
+import type {
+  AgentContextDocument,
+  AgentDocumentChangesByMessage,
+} from '../../providers/AgentDocumentInjector';
 import type { AgentManagementContext } from '../../providers/AgentManagementContextInjector';
 import type { BotPlatformContext } from '../../providers/BotPlatformContextInjector';
 import type { DiscordContext } from '../../providers/DiscordContextProvider';
@@ -298,6 +301,12 @@ export interface MessagesEngineParams {
   knowledge?: KnowledgeConfig;
   /** Agent document configuration for context injection */
   agentDocuments?: AgentContextDocument[];
+  /**
+   * Agent-document change notes keyed by the user message each belongs to.
+   * The host passes them when `agentDocuments` renders the index from a
+   * snapshot (see `resolveAgentDocumentIndex`).
+   */
+  agentDocumentChanges?: AgentDocumentChangesByMessage;
 
   // ========== Skills ==========
   /** Skills configuration */

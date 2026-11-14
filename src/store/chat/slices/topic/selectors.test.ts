@@ -247,6 +247,44 @@ describe('topicSelectors', () => {
     });
   });
 
+  describe('currentTopicDeviceId', () => {
+    const stateWithTopicMetadata = (topicMeta: Record<string, unknown> | undefined) =>
+      merge(initialStore, {
+        ...topicState(
+          topicMapKey({ agentId: 'test' }),
+          [{ id: 'topic-device', metadata: topicMeta }],
+          1,
+        ),
+        activeTopicId: 'topic-device',
+      }) as ChatStore;
+
+    it('prefers the running operation device over the bound device', () => {
+      const state = stateWithTopicMetadata({
+        boundDeviceId: 'device-bound',
+        runningOperation: { deviceId: 'device-running', operationId: 'op-1' },
+      });
+
+      expect(topicSelectors.currentTopicDeviceId(state)).toBe('device-running');
+    });
+
+    it('falls back to the bound device when no run is in flight', () => {
+      const state = stateWithTopicMetadata({
+        boundDeviceId: 'device-bound',
+        runningOperation: null,
+      });
+
+      expect(topicSelectors.currentTopicDeviceId(state)).toBe('device-bound');
+    });
+
+    it('returns undefined when the topic has neither', () => {
+      expect(topicSelectors.currentTopicDeviceId(stateWithTopicMetadata({}))).toBeUndefined();
+      expect(
+        topicSelectors.currentTopicDeviceId(stateWithTopicMetadata(undefined)),
+      ).toBeUndefined();
+      expect(topicSelectors.currentTopicDeviceId(initialStore)).toBeUndefined();
+    });
+  });
+
   describe('currentActiveTopic', () => {
     it('should return undefined if there is no active topic', () => {
       const topic = topicSelectors.currentActiveTopic(initialStore);

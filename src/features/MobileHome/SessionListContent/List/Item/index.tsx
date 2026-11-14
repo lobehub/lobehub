@@ -1,4 +1,3 @@
-import { DEFAULT_AVATAR } from '@lobechat/const';
 import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { useState } from 'react';
@@ -28,7 +27,7 @@ const AgentItem = ({ item, groupId }: { item: SidebarAgentItem; groupId?: string
       actions={<Actions groupId={groupId} item={item} setOpen={setOpen} />}
       active={item.type === 'group' ? activeGroupId === item.id : activeAgentId === item.id}
       agentId={item.id}
-      avatar={item.avatar || DEFAULT_AVATAR}
+      avatar={item.avatar || ''}
       avatarBackground={item.backgroundColor || undefined}
       date={item.updatedAt?.valueOf()}
       key={item.id}

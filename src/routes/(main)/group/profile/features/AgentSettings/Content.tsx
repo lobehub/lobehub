@@ -4,7 +4,6 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
-import { DEFAULT_AVATAR } from '@/const/meta';
 import { AgentSettings as Settings, SettingsModalLayout } from '@/features/AgentSetting';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -63,7 +62,7 @@ const Content = memo(() => {
 
   return (
     <SettingsModalLayout
-      avatar={currentGroup?.avatar || DEFAULT_AVATAR}
+      avatar={currentGroup?.avatar || ''}
       background={currentGroup?.backgroundColor || undefined}
       title={displayTitle}
     >

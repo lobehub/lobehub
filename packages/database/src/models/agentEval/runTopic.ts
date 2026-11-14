@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, lt, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, or, sql } from 'drizzle-orm';
 
 import {
   agentEvalRuns,
@@ -150,41 +150,6 @@ export class AgentEvalRunTopicModel {
     return row;
   };
 
-  /**
-   * Batch mark timed-out RunTopics:
-   * Per-row check: created_at + timeoutMs < NOW()
-   * Returns the updated rows so callers can compute per-row duration.
-   */
-  batchMarkAborted = async (runId: string) => {
-    return this.db
-      .update(agentEvalRunTopics)
-      .set({ status: 'error', evalResult: { error: 'Aborted' } })
-      .where(
-        and(
-          this.ownership(),
-          eq(agentEvalRunTopics.runId, runId),
-          or(eq(agentEvalRunTopics.status, 'pending'), eq(agentEvalRunTopics.status, 'running')),
-        ),
-      )
-      .returning();
-  };
-
-  batchMarkTimeout = async (runId: string, timeoutMs: number) => {
-    const deadline = new Date(Date.now() - timeoutMs);
-    return this.db
-      .update(agentEvalRunTopics)
-      .set({ status: 'timeout' })
-      .where(
-        and(
-          this.ownership(),
-          eq(agentEvalRunTopics.runId, runId),
-          eq(agentEvalRunTopics.status, 'running'),
-          lt(agentEvalRunTopics.createdAt, deadline),
-        ),
-      )
-      .returning();
-  };
-
   deleteByRunAndTestCase = async (runId: string, testCaseId: string) => {
     return this.db
       .delete(agentEvalRunTopics)
@@ -224,6 +189,7 @@ export class AgentEvalRunTopicModel {
       Partial<AgentEvalRunTopicItem>,
       'createdAt' | 'evalResult' | 'passed' | 'score' | 'status'
     >,
+    options?: { allowAborted?: boolean; executionId?: string; status?: string },
   ) => {
     const [result] = await this.db
       .update(agentEvalRunTopics)
@@ -233,6 +199,39 @@ export class AgentEvalRunTopicModel {
           this.ownership(),
           eq(agentEvalRunTopics.runId, runId),
           eq(agentEvalRunTopics.topicId, topicId),
+          options && 'executionId' in options
+            ? sql`${agentEvalRunTopics.evalResult}->>'executionId' IS NOT DISTINCT FROM ${options.executionId ?? null}::text`
+            : undefined,
+          options?.status ? eq(agentEvalRunTopics.status, options.status as any) : undefined,
+          options?.allowAborted
+            ? undefined
+            : sql`COALESCE(${agentEvalRunTopics.evalResult}->>'completionReason', '') <> 'aborted'`,
+        ),
+      )
+      .returning();
+    return result;
+  };
+
+  /** Merge operation identity without replacing a completion that raced ahead of startup. */
+  mergeExecutionResult = async (
+    runId: string,
+    topicId: string,
+    executionId: string,
+    value: Record<string, unknown>,
+  ) => {
+    const [result] = await this.db
+      .update(agentEvalRunTopics)
+      .set({
+        evalResult: sql`COALESCE(${agentEvalRunTopics.evalResult}, '{}'::jsonb) || ${JSON.stringify(value)}::jsonb`,
+      })
+      .where(
+        and(
+          this.ownership(),
+          eq(agentEvalRunTopics.runId, runId),
+          eq(agentEvalRunTopics.topicId, topicId),
+          sql`${agentEvalRunTopics.evalResult}->>'executionId' = ${executionId}`,
+          sql`COALESCE(${agentEvalRunTopics.evalResult}->>'completionReason', '') <> 'aborted'`,
+          sql`${agentEvalRunTopics.status} IS DISTINCT FROM 'timeout'`,
         ),
       )
       .returning();

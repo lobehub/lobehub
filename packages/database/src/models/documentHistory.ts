@@ -1,3 +1,4 @@
+import type { SQL } from 'drizzle-orm';
 import { and, desc, eq, lt, or } from 'drizzle-orm';
 
 import type { DocumentHistoryItem, NewDocumentHistory } from '../schemas';
@@ -97,18 +98,20 @@ export class DocumentHistoryModel {
     documentId,
     limit = 50,
   }: QueryDocumentHistoryParams): Promise<DocumentHistoryItem[]> => {
-    const conditions = [eq(documentHistories.documentId, documentId), this.ownership()];
+    // and() skips undefined entries, so or()'s `SQL | undefined` goes in as-is.
+    const conditions: (SQL | undefined)[] = [
+      eq(documentHistories.documentId, documentId),
+      this.ownership(),
+    ];
 
     if (beforeSavedAt !== undefined) {
       if (beforeId !== undefined) {
-        const cursorCondition = or(
-          lt(documentHistories.savedAt, beforeSavedAt),
-          and(eq(documentHistories.savedAt, beforeSavedAt), lt(documentHistories.id, beforeId)),
+        conditions.push(
+          or(
+            lt(documentHistories.savedAt, beforeSavedAt),
+            and(eq(documentHistories.savedAt, beforeSavedAt), lt(documentHistories.id, beforeId)),
+          ),
         );
-        /* v8 ignore next -- unreachable: or() over two defined conditions always returns SQL */
-        if (cursorCondition) {
-          conditions.push(cursorCondition);
-        }
       } else {
         conditions.push(lt(documentHistories.savedAt, beforeSavedAt));
       }

@@ -170,6 +170,8 @@ describe('useModelDetailPanel', () => {
     });
     expect(result.current.hasCachedInputPricing).toBe(true);
     expect(result.current.getUnitPriceSuffix('millionTokens')).toBe('/M tokens');
+    // Per-song music prices need their unit, or "$0.174" reads as a flat fee
+    expect(result.current.getUnitPriceSuffix('song')).toBe('/song');
   });
 
   it('formats original unit prices for tiered and lookup units', () => {

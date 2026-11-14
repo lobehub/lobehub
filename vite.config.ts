@@ -17,6 +17,7 @@ import {
   sharedOptimizeDeps,
   sharedPwaGlobIgnores,
   sharedPwaRuntimeCaching,
+  sharedRendererAlias,
   sharedRendererDedupe,
   sharedRendererDefine,
   sharedRendererPlugins,
@@ -141,6 +142,7 @@ export default defineConfig({
     bundledDev: false,
   },
   resolve: {
+    alias: sharedRendererAlias(),
     dedupe: sharedRendererDedupe,
     tsconfigPaths: true,
   },

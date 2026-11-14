@@ -10,6 +10,17 @@ import {
 import type { RelayRuntime } from './executor';
 import { LlmRelayExecutor, NON_PREFERRED_CLAIM_DELAY_MS } from './executor';
 
+const uploaderOptions = (
+  fetcher: typeof fetch,
+  onRejected: ConstructorParameters<typeof RelayBatchUploader>[0]['onRejected'],
+) => ({
+  callId: 'c',
+  clientId: 'tab-1',
+  fetch: fetcher,
+  leaseToken: 'l',
+  onRejected,
+});
+
 const PAYLOAD = { messages: [{ content: 'hi', role: 'user' }], model: 'qwen3', stream: true };
 
 const callData = (overrides: Partial<LlmExecuteData> = {}): LlmExecuteData => ({
@@ -480,13 +491,7 @@ describe('RelayBatchUploader', () => {
   it('sends an empty heartbeat batch while the model produces nothing', async () => {
     vi.useFakeTimers();
     const server = createServer();
-    const uploader = new RelayBatchUploader({
-      callId: 'c',
-      clientId: 'tab-1',
-      fetch: server.fetch,
-      leaseToken: 'l',
-      onRejected: vi.fn(),
-    });
+    const uploader = new RelayBatchUploader(uploaderOptions(server.fetch, vi.fn()));
 
     await uploader.claim();
     expect(server.batches).toHaveLength(1);
@@ -500,13 +505,7 @@ describe('RelayBatchUploader', () => {
   it('batches chunks every 200ms and flushes at once past 64KB', async () => {
     vi.useFakeTimers();
     const server = createServer();
-    const uploader = new RelayBatchUploader({
-      callId: 'c',
-      clientId: 'tab-1',
-      fetch: server.fetch,
-      leaseToken: 'l',
-      onRejected: vi.fn(),
-    });
+    const uploader = new RelayBatchUploader(uploaderOptions(server.fetch, vi.fn()));
     await uploader.claim();
 
     uploader.push({ data: 'a', type: 'text' });
@@ -525,13 +524,7 @@ describe('RelayBatchUploader', () => {
   it('flushes on chunk arrival when its timer is throttled (background tab)', async () => {
     vi.useFakeTimers();
     const server = createServer();
-    const uploader = new RelayBatchUploader({
-      callId: 'c',
-      clientId: 'tab-1',
-      fetch: server.fetch,
-      leaseToken: 'l',
-      onRejected: vi.fn(),
-    });
+    const uploader = new RelayBatchUploader(uploaderOptions(server.fetch, vi.fn()));
     await uploader.claim();
 
     uploader.push({ data: 'a', type: 'text' });
@@ -557,13 +550,7 @@ describe('RelayBatchUploader', () => {
         }),
     ) as unknown as typeof fetch;
     const onRejected = vi.fn();
-    const uploader = new RelayBatchUploader({
-      callId: 'c',
-      clientId: 'tab-1',
-      fetch: stalled,
-      leaseToken: 'l',
-      onRejected,
-    });
+    const uploader = new RelayBatchUploader(uploaderOptions(stalled, onRejected));
 
     const claimed = uploader.claim();
     await vi.advanceTimersByTimeAsync(LLM_RELAY_REQUEST_TIMEOUT_MS * 3 + 2000);
@@ -582,13 +569,7 @@ describe('RelayBatchUploader', () => {
           signal.addEventListener('abort', () => reject(new Error('aborted')));
         }),
     ) as unknown as typeof fetch;
-    const uploader = new RelayBatchUploader({
-      callId: 'c',
-      clientId: 'tab-1',
-      fetch: stalled,
-      leaseToken: 'l',
-      onRejected: vi.fn(),
-    });
+    const uploader = new RelayBatchUploader(uploaderOptions(stalled, vi.fn()));
 
     const claimed = uploader.claim();
     await vi.waitFor(() => expect(signal).toBeDefined());
@@ -608,13 +589,7 @@ describe('RelayBatchUploader', () => {
         init.signal!.addEventListener('abort', () => reject(new Error('aborted')));
       });
     }) as unknown as typeof fetch;
-    const uploader = new RelayBatchUploader({
-      callId: 'c',
-      clientId: 'tab-1',
-      fetch: stalledOnBatch,
-      leaseToken: 'l',
-      onRejected: vi.fn(),
-    });
+    const uploader = new RelayBatchUploader(uploaderOptions(stalledOnBatch, vi.fn()));
 
     expect(await uploader.claim()).toBe(true);
     uploader.push({ data: 'a'.repeat(LLM_RELAY_FLUSH_BYTES), type: 'text' });
@@ -636,13 +611,7 @@ describe('RelayBatchUploader', () => {
       if (failures-- > 0) throw new TypeError('network');
       return new Response(JSON.stringify({ ackSeq: batch.seq }));
     }) as unknown as typeof fetch;
-    const uploader = new RelayBatchUploader({
-      callId: 'c',
-      clientId: 'tab-1',
-      fetch: flaky,
-      leaseToken: 'l',
-      onRejected: vi.fn(),
-    });
+    const uploader = new RelayBatchUploader(uploaderOptions(flaky, vi.fn()));
 
     const claimed = uploader.claim();
     await vi.advanceTimersByTimeAsync(1000);

@@ -33,6 +33,17 @@ afterEach(async () => {
   await serverDB.delete(aiProviders).where(eq(aiProviders.userId, userId));
 });
 
+const customProviderRow = (
+  providerId: string,
+  existingKeyVaults: Record<string, string>,
+): typeof aiProviders.$inferInsert => ({
+  id: providerId,
+  keyVaults: JSON.stringify(existingKeyVaults),
+  name: 'AiHubMix',
+  source: 'custom',
+  userId,
+});
+
 describe('AiProviderModel', () => {
   describe('create', () => {
     it('should create a new ai provider', async () => {
@@ -326,13 +337,7 @@ describe('AiProviderModel', () => {
         bearerToken: 'existing-bearer-token',
       };
 
-      await serverDB.insert(aiProviders).values({
-        id: providerId,
-        keyVaults: JSON.stringify(existingKeyVaults),
-        name: 'AiHubMix',
-        source: 'custom',
-        userId,
-      });
+      await serverDB.insert(aiProviders).values(customProviderRow(providerId, existingKeyVaults));
 
       const mockEncryptor = vi.fn().mockImplementation((s: string) => Promise.resolve(s));
       const mockDecryptor = vi
@@ -369,13 +374,7 @@ describe('AiProviderModel', () => {
         oauthAccessToken: 'ghu_oauth_token',
       };
 
-      await serverDB.insert(aiProviders).values({
-        id: providerId,
-        keyVaults: JSON.stringify(existingKeyVaults),
-        name: 'AiHubMix',
-        source: 'custom',
-        userId,
-      });
+      await serverDB.insert(aiProviders).values(customProviderRow(providerId, existingKeyVaults));
 
       const mockEncryptor = vi.fn().mockImplementation((s: string) => Promise.resolve(s));
       const mockDecryptor = vi
@@ -442,13 +441,7 @@ describe('AiProviderModel', () => {
         oauthAccessToken: 'oauth-token',
       };
 
-      await serverDB.insert(aiProviders).values({
-        id: providerId,
-        keyVaults: JSON.stringify(existingKeyVaults),
-        name: 'AiHubMix',
-        source: 'custom',
-        userId,
-      });
+      await serverDB.insert(aiProviders).values(customProviderRow(providerId, existingKeyVaults));
 
       const mockEncryptor = vi.fn().mockImplementation((s: string) => Promise.resolve(s));
       const mockDecryptor = vi

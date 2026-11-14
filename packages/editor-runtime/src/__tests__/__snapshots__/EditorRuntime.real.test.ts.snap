@@ -38,47 +38,47 @@ exports[`EditorRuntime - Real Cases > modifyNodes - batch modify all paragraphs 
 exports[`EditorRuntime - Real Cases > modifyNodes - batch remove paragraphs > should remove 7 paragraphs in a single call 1`] = `
 "<?xml version="1.0" encoding="UTF-8"?>
 <root>
-  <p id="lwap">
-    <span id="m1v0">杭州，一座被诗意浸润的千年古都，静静地依偎在钱塘江畔，宛如一幅徐徐展开的水墨长卷。这里不仅是浙江省的政治、经济、文化中心，更是中国七大古都之一，承载着2200余年的历史记忆。从南宋临安的繁华盛景到今日数字经济的创新高地，杭州始终以"人间天堂"的美誉，向世界展示着东方文明的独特魅力。</span>
+  <p id="3">
+    <span id="4">杭州，一座被诗意浸润的千年古都，静静地依偎在钱塘江畔，宛如一幅徐徐展开的水墨长卷。这里不仅是浙江省的政治、经济、文化中心，更是中国七大古都之一，承载着2200余年的历史记忆。从南宋临安的繁华盛景到今日数字经济的创新高地，杭州始终以"人间天堂"的美誉，向世界展示着东方文明的独特魅力。</span>
   </p>
-  <h2 id="m7fb">
-    <span id="mczm">地理与气候</span>
+  <h2 id="5">
+    <span id="6">地理与气候</span>
   </h2>
-  <p id="mijx">
-    <span id="mo48">杭州地处钱塘江下游，京杭大运河南端，东临杭州湾，西接天目山。全市总面积16850平方公里，常住人口超过1200万。杭州属于亚热带季风气候，四季分明，雨量充沛，年平均气温17.8℃，气候宜人。</span>
+  <p id="7">
+    <span id="8">杭州地处钱塘江下游，京杭大运河南端，东临杭州湾，西接天目山。全市总面积16850平方公里，常住人口超过1200万。杭州属于亚热带季风气候，四季分明，雨量充沛，年平均气温17.8℃，气候宜人。</span>
   </p>
-  <h2 id="mtoj">
-    <span id="mz8u">历史文化</span>
+  <h2 id="9">
+    <span id="10">历史文化</span>
   </h2>
-  <p id="n4t5">
-    <span id="nadg">杭州是吴越文化和南宋文化的发源地之一。公元1138年，南宋定都临安（今杭州），使其成为当时世界上最繁华的城市之一。杭州拥有丰富的历史文化遗产，包括西湖文化景观、京杭大运河、良渚古城遗址等世界文化遗产。</span>
+  <p id="11">
+    <span id="12">杭州是吴越文化和南宋文化的发源地之一。公元1138年，南宋定都临安（今杭州），使其成为当时世界上最繁华的城市之一。杭州拥有丰富的历史文化遗产，包括西湖文化景观、京杭大运河、良渚古城遗址等世界文化遗产。</span>
   </p>
-  <p id="vbpc">
-    <span id="vh9n">南宋时期（1127-1279年）是杭州历史上的黄金时代。宋室南渡后定都临安（今杭州），使其成为当时世界上人口最多、经济最繁荣的城市之一。马可·波罗在游记中称杭州为"世界上最美丽华贵之天城"。南宋时期杭州的工商业、文化艺术、科学技术都达到了空前的高度：</span>
+  <p id="64">
+    <span id="65">南宋时期（1127-1279年）是杭州历史上的黄金时代。宋室南渡后定都临安（今杭州），使其成为当时世界上人口最多、经济最繁荣的城市之一。马可·波罗在游记中称杭州为"世界上最美丽华贵之天城"。南宋时期杭州的工商业、文化艺术、科学技术都达到了空前的高度：</span>
   </p>
-  <ul id="t5t2">
-    <li id="tbdd">
-      <span id="tgxo" bold="true">经济繁荣</span>
-      <span id="tmhz">：丝绸、瓷器、茶叶贸易发达，出现了世界上最早的纸币"交子"</span>
+  <ul id="50">
+    <li id="51">
+      <span id="52" bold="true">经济繁荣</span>
+      <span id="53">：丝绸、瓷器、茶叶贸易发达，出现了世界上最早的纸币"交子"</span>
     </li>
-    <li id="ts2a">
-      <span id="txml" bold="true">文化鼎盛</span>
-      <span id="u36w">：宋词达到艺术高峰，苏轼、柳永、李清照等文人雅士云集</span>
+    <li id="54">
+      <span id="55" bold="true">文化鼎盛</span>
+      <span id="56">：宋词达到艺术高峰，苏轼、柳永、李清照等文人雅士云集</span>
     </li>
-    <li id="u8r7">
-      <span id="uebi" bold="true">科技创新</span>
-      <span id="ujvt">：活字印刷术、指南针、火药等重大发明得到广泛应用</span>
+    <li id="57">
+      <span id="58" bold="true">科技创新</span>
+      <span id="59">：活字印刷术、指南针、火药等重大发明得到广泛应用</span>
     </li>
-    <li id="upg4">
-      <span id="uv0f" bold="true">城市建设</span>
-      <span id="v0kq">：形成了"前朝后市"的格局，御街、清河坊等商业区繁华异常</span>
+    <li id="60">
+      <span id="61" bold="true">城市建设</span>
+      <span id="62">：形成了"前朝后市"的格局，御街、清河坊等商业区繁华异常</span>
     </li>
   </ul>
-  <h2 id="nfxr">
-    <span id="nli2">西湖风光</span>
+  <h2 id="13">
+    <span id="14">西湖风光</span>
   </h2>
-  <p id="nr2d">
-    <span id="nwmo">西湖是杭州的灵魂，也是中国最著名的风景名胜之一。西湖十景（如苏堤春晓、断桥残雪、雷峰夕照等）闻名遐迩。西湖不仅自然风光秀丽，更承载着深厚的文化内涵，历代文人墨客在此留下了无数诗词歌赋。</span>
+  <p id="15">
+    <span id="16">西湖是杭州的灵魂，也是中国最著名的风景名胜之一。西湖十景（如苏堤春晓、断桥残雪、雷峰夕照等）闻名遐迩。西湖不仅自然风光秀丽，更承载着深厚的文化内涵，历代文人墨客在此留下了无数诗词歌赋。</span>
   </p>
 </root>"
 `;
@@ -86,14 +86,14 @@ exports[`EditorRuntime - Real Cases > modifyNodes - batch remove paragraphs > sh
 exports[`EditorRuntime - Real Cases > modifyNodes - remove then add > should remove 13 paragraphs then insert a list > remove 13 paragraphs 1`] = `
 "<?xml version="1.0" encoding="UTF-8"?>
 <root>
-  <p id="wihj">
-    <span id="wo1u">杭州是中国著名的旅游城市，素有"人间天堂"的美誉。这里既有美丽的自然风光，又有深厚的历史文化底蕴。</span>
+  <p id="17541">
+    <span id="17542">杭州是中国著名的旅游城市，素有"人间天堂"的美誉。这里既有美丽的自然风光，又有深厚的历史文化底蕴。</span>
   </p>
-  <h2 id="wtm5">
-    <span id="wz6g">必游景点</span>
+  <h2 id="17543">
+    <span id="17544">必游景点</span>
   </h2>
-  <h2 id="562n">
-    <span id="5bmy">美食推荐</span>
+  <h2 id="17597">
+    <span id="17598">美食推荐</span>
   </h2>
 </root>"
 `;

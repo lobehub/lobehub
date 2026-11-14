@@ -3,18 +3,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
 
-const { executions, execAgent, notifyChannel } = vi.hoisted(() => ({
+const {
+  createChannelWorktree,
+  executions,
+  execAgent,
+  getScopedOnlineDevices,
+  notifyChannel,
+  openChannelReply,
+} = vi.hoisted(() => ({
+  createChannelWorktree: vi.fn(),
   executions: {
     accepted: vi.fn(),
+    assignWorktree: vi.fn(),
     candidates: vi.fn(),
     heartbeat: vi.fn(),
     claim: vi.fn(),
     finishDispatch: vi.fn(),
     input: vi.fn(),
+    openingReply: vi.fn(),
+    primaryReply: vi.fn(),
     recentContext: vi.fn(),
+    worktreeCandidate: vi.fn(),
+    worktreeUnavailable: vi.fn(),
   },
   execAgent: vi.fn(),
+  getScopedOnlineDevices: vi.fn(),
   notifyChannel: vi.fn(),
+  openChannelReply: vi.fn(),
 }));
 vi.mock('@/database/repositories/channel', () => ({
   ChannelExecutionRepository: class {
@@ -30,9 +45,7 @@ vi.mock('@/server/services/aiAgent', () => ({
 }));
 vi.mock('@/server/globalConfig', () => ({ getServerDefaultAgentConfig: () => ({}) }));
 vi.mock('@/server/services/deviceGateway', () => ({ deviceGateway: {} }));
-vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
-  getScopedOnlineDevices: vi.fn().mockResolvedValue([]),
-}));
+vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({ getScopedOnlineDevices }));
 vi.mock('@/server/services/queue/impls', () => ({ isQueueAgentRuntimeEnabled: () => false }));
 vi.mock('./attachments', () => ({ resolveChannelAttachments: vi.fn().mockResolvedValue({}) }));
 vi.mock('./ChannelRoutingService', () => ({
@@ -42,8 +55,10 @@ vi.mock('./ChannelRoutingService', () => ({
 }));
 vi.mock('./notify', () => ({ notifyChannel }));
 vi.mock('./queue', () => ({ registerLocalChannelAdvance: vi.fn(), wakeChannel: vi.fn() }));
+vi.mock('./replyOpening', () => ({ openChannelReply }));
+vi.mock('./worktree', () => ({ createChannelWorktree }));
 
-const coordinator = (count = 3, recovering = false) => {
+const coordinator = (count = 3, recovering = false, members: unknown[] = []) => {
   const pending = Array.from({ length: count }, (_, index) => ({
     id: `job-${index}`,
     memberId: `job-${index}`,
@@ -67,15 +82,18 @@ const coordinator = (count = 3, recovering = false) => {
   const select = vi
     .fn()
     .mockReturnValueOnce(query([{ id: 'channel', workspaceId: null }]))
-    .mockReturnValueOnce(query([]));
+    .mockReturnValueOnce(query(members));
   return new ChannelCoordinator({ select } as never);
 };
 
 describe('Channel concurrent startup', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    getScopedOnlineDevices.mockResolvedValue([]);
     executions.input.mockResolvedValue([]);
     executions.recentContext.mockResolvedValue({ messages: [], omitted: 0 });
+    executions.primaryReply.mockResolvedValue(null);
+    executions.openingReply.mockResolvedValue(undefined);
     executions.heartbeat.mockResolvedValue(true);
     execAgent.mockResolvedValue({ success: true });
     executions.claim.mockImplementation(async (_channelId, id: string) => ({
@@ -187,5 +205,101 @@ describe('Channel concurrent startup', () => {
     await coordinator().advance('channel');
     expect(execAgent).toHaveBeenCalledTimes(2);
     expect(executions.accepted).not.toHaveBeenCalledWith('channel', 'job-0');
+  });
+
+  it('hands a deferred follow-up the primary responder’s reply', async () => {
+    executions.primaryReply.mockResolvedValue({
+      author: { id: 'agt-coder', name: 'Coder', type: 'agent' },
+      content: 'Fixed in the tokenizer.',
+      id: 'reply',
+      replyToId: 'message',
+      sequence: 2,
+      threadId: null,
+    });
+    await coordinator(1).advance('channel');
+
+    expect(executions.primaryReply).toHaveBeenCalledWith('channel', 'job-0');
+    const [{ prompt }] = execAgent.mock.calls[0];
+    expect(prompt).toContain('<channel_reply from="Coder" type="agent"');
+    expect(prompt).toContain('Fixed in the tokenizer.');
+  });
+
+  it('opens the reply before claiming it, and continues from the acknowledgement', async () => {
+    const order: string[] = [];
+    openChannelReply.mockImplementation(async () => {
+      order.push('open');
+    });
+    const claim = executions.claim.getMockImplementation()!;
+    executions.claim.mockImplementation(async (...args: Parameters<typeof claim>) => {
+      order.push('claim');
+      return claim(...args);
+    });
+    executions.openingReply.mockResolvedValue('收到，我先翻一下昨天的报错日志。');
+    await coordinator(1).advance('channel');
+
+    expect(openChannelReply).toHaveBeenCalledWith(expect.anything(), 'channel', 'job-0');
+    expect(order).toEqual(['open', 'claim']);
+    const [{ prompt }] = execAgent.mock.calls[0];
+    expect(prompt).toContain('<channel_opening');
+    expect(prompt).toContain('收到，我先翻一下昨天的报错日志。');
+  });
+
+  describe('a job waiting on its directory', () => {
+    const candidate = {
+      branch: 'lobe-channel/0123456789ab-main',
+      deviceId: 'device-1',
+      deviceUserId: 'owner',
+      memberId: 'job-0',
+      sourceDirectory: '/repo',
+      threadId: null,
+    };
+    const online = () => {
+      getScopedOnlineDevices.mockResolvedValue([{ deviceId: 'device-1', online: true }]);
+      return [{ config: { deviceId: 'device-1', deviceOwnerId: 'owner' } }];
+    };
+
+    it('moves its branch into a worktree and starts it there', async () => {
+      const claim = executions.claim.getMockImplementation()!;
+      executions.claim.mockResolvedValueOnce(null).mockImplementation(claim);
+      executions.worktreeCandidate.mockResolvedValue(candidate);
+      executions.assignWorktree.mockResolvedValue(true);
+      createChannelWorktree.mockResolvedValue({ path: '/home/.lobehub/worktrees/repo/wt' });
+
+      await coordinator(1, false, online()).advance('channel');
+
+      expect(createChannelWorktree).toHaveBeenCalledWith(candidate, null);
+      expect(executions.assignWorktree).toHaveBeenCalledWith(
+        'channel',
+        candidate,
+        '/home/.lobehub/worktrees/repo/wt',
+      );
+      expect(executions.claim).toHaveBeenCalledTimes(2);
+      expect(execAgent).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps waiting when the directory cannot host a worktree', async () => {
+      executions.claim.mockResolvedValue(null);
+      executions.worktreeCandidate.mockResolvedValue(candidate);
+      createChannelWorktree.mockResolvedValue({ error: 'not a git repository' });
+
+      await coordinator(1, false, online()).advance('channel');
+
+      expect(executions.worktreeUnavailable).toHaveBeenCalledWith(
+        'channel',
+        candidate,
+        'not a git repository',
+      );
+      expect(executions.claim).toHaveBeenCalledTimes(1);
+      expect(execAgent).not.toHaveBeenCalled();
+    });
+
+    it('does not ask an offline device for a worktree', async () => {
+      executions.claim.mockResolvedValue(null);
+      executions.worktreeCandidate.mockResolvedValue(candidate);
+
+      await coordinator(1).advance('channel');
+
+      expect(createChannelWorktree).not.toHaveBeenCalled();
+    });
   });
 });

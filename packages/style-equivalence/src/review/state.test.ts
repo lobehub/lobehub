@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import { decideVerdict, type VerdictItem } from '../verdict';
-import { passRecord, resolvedReworks, reviewItems, reworkRecord } from './state';
+import {
+  agentPassRecord,
+  asksAgentNote,
+  passRecord,
+  resolvedReworks,
+  reviewItems,
+  reworkRecord,
+} from './state';
 import type { Reviews, ReworkRecord } from './store';
 
 const item = (overrides: Partial<VerdictItem> = {}): VerdictItem => ({
@@ -179,5 +186,58 @@ describe('review state', () => {
       'now',
     );
     expect(resolved).toMatchObject([{ key: 'src/A.tsx|A#0', resolvedAt: 'now' }]);
+  });
+});
+
+describe('agentPassRecord', () => {
+  const reviewed = (items: VerdictItem[], reviews = empty()) =>
+    reviewItems(verdictOf(items, reviews).items, reviews, context())[0];
+
+  it('signs an item the tool rendered equal once the agent confirms the uncovered part', () => {
+    const record = agentPassRecord(reviewed([item()]), '两边一致', 'now');
+    const reviews = empty();
+    reviews.passes.set(record!.key, record!);
+
+    expect(record).toMatchObject({ hash: 'h1', note: '两边一致', signer: 'agent' });
+    expect(stateOf([item()], reviews)).toBe('passed');
+  });
+
+  it('signs an item that was waiting for the agent note', () => {
+    const waiting = reviewed([item({ flags: ['STATE_UNMODELED'] })]);
+    expect(waiting.state).toBe('waiting-agent');
+    expect(agentPassRecord(waiting, '两边一致', 'now')).toMatchObject({ signer: 'agent' });
+  });
+
+  it('leaves rendered differences and one-sided elements to a person', () => {
+    expect(
+      agentPassRecord(reviewed([item({ category: 'difference' })]), '两边一致', 'now'),
+    ).toBeUndefined();
+    expect(
+      agentPassRecord(
+        reviewed([item({ category: 'unpaired', flags: ['UNPAIRED'] })]),
+        '两边一致',
+        'now',
+      ),
+    ).toBeUndefined();
+  });
+
+  it('does not override a send-back from a person', () => {
+    const reviews = empty();
+    reviews.reworks.set('src/A.tsx|A#0', rework());
+    expect(agentPassRecord(reviewed([item()], reviews), '两边一致', 'now')).toBeUndefined();
+  });
+});
+
+describe('asksAgentNote', () => {
+  it('asks the agent about every rendered-equal item still waiting for a person', () => {
+    expect(asksAgentNote({ category: 'needs-signoff', state: 'todo' })).toBe(true);
+    expect(asksAgentNote({ category: 'needs-signoff', state: 'waiting-agent' })).toBe(true);
+  });
+
+  it('leaves differences, one-sided elements and decided items alone', () => {
+    expect(asksAgentNote({ category: 'difference', state: 'todo' })).toBe(false);
+    expect(asksAgentNote({ category: 'unpaired', state: 'todo' })).toBe(false);
+    expect(asksAgentNote({ category: 'needs-signoff', state: 'passed' })).toBe(false);
+    expect(asksAgentNote({ category: 'needs-signoff', state: 'reworked' })).toBe(false);
   });
 });

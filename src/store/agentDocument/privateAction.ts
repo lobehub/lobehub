@@ -5,6 +5,8 @@ import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { type AgentDocumentState } from './initialState';
 import {
+  type AgentDocumentChatTopic,
+  agentDocumentChatTopicResource,
   agentDocumentListResource,
   type AgentDocumentReaderDetail,
   agentDocumentReaderResource,
@@ -16,10 +18,22 @@ type Setter = StoreSetter<AgentDocumentState>;
 const READER_ACCESS_LOST = ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHORIZED'] as const;
 
 export class AgentDocumentPrivateAction {
+  readonly chatTopic;
   readonly list;
   readonly reader;
 
   constructor(set: Setter, get: () => AgentDocumentState) {
+    this.chatTopic = createReplicaSlice(agentDocumentChatTopicResource, {
+      actionPrefix: 'agentDocumentChatTopic',
+      fetcher: async (params) => {
+        const { topicId } = await agentDocumentService.getOrCreateChatTopic(params);
+        return { topicId };
+      },
+      get,
+      set,
+      stateKey: 'agentDocumentChatTopicReplica',
+      view: recordLens<AgentDocumentState, AgentDocumentChatTopic>('agentDocumentChatTopicMap'),
+    });
     this.list = createReplicaSlice(agentDocumentListResource, {
       actionPrefix: 'agentDocumentList',
       fetcher: (agentId) => agentDocumentService.listDocuments({ agentId }),

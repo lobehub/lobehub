@@ -32,7 +32,7 @@ recovery through the ordinary dispatcher. Recovery instructions require checking
 and reusing saved work and reconciling external side effects before replay. This
 instruction is not an exactly-once guarantee for arbitrary external systems.
 
-A five-second scheduled Goal advance checks the asynchronous diagnosis. Existing
+A scheduled Goal advance checks the asynchronous diagnosis, every five seconds at first and backing off to once a minute the longer it stays open. Existing
 sweep infrastructure provides the fallback if the callback is lost. Queue mode
 is required for durable wakeups; local in-process timers alone cannot survive a
 restart. A lost diagnostic dispatch response can be adopted from the dedicated

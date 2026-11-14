@@ -86,6 +86,7 @@ export const getAppConfig = () => {
        * save over HTTP and the page agent writes back to the stored row.
        */
       ENABLE_PAGE_COLLAB: z.boolean().optional(),
+      ENABLE_WORKSPACE_PAGE_COLLAB: z.boolean().optional(),
       /**
        * Opt-out for LLM generation tracing, which is on by default whenever S3
        * is configured and records system prompts plus generation input/output
@@ -161,6 +162,7 @@ export const getAppConfig = () => {
       ENABLE_AGENT_GATEWAY: process.env.ENABLE_AGENT_GATEWAY === '1',
       ENABLE_PAGE_COLLAB: process.env.ENABLE_PAGE_COLLAB === '1',
       DISABLE_LLM_GENERATION_TRACING_S3: process.env.DISABLE_LLM_GENERATION_TRACING_S3 === '1',
+      ENABLE_WORKSPACE_PAGE_COLLAB: process.env.ENABLE_WORKSPACE_PAGE_COLLAB === '1',
       AGENT_GATEWAY_URL: process.env.AGENT_GATEWAY_URL,
       AGENT_GATEWAY_PROTOCOL: process.env.AGENT_GATEWAY_PROTOCOL || undefined,
       AGENT_GATEWAY_INTERNAL_URL: process.env.AGENT_GATEWAY_INTERNAL_URL || undefined,

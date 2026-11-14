@@ -1,6 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
+import type * as LobeConst from '@lobechat/const';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,6 +24,7 @@ const mocks = vi.hoisted(() => ({
       isEnabled?: boolean;
       metadata?: { description?: string };
       mcpConnectionType?: string;
+      mcpServerUrl?: string;
       name: string;
       sourceType: string;
       status?: string;
@@ -40,6 +42,12 @@ const mocks = vi.hoisted(() => ({
     uninstallMCPPlugin: vi.fn(),
     updateToolPermission: vi.fn(),
   },
+  manageable: {
+    canManage: true,
+    canManageCredentials: true,
+    isPending: false,
+    restrictedByPolicy: false,
+  },
 }));
 
 vi.mock('react-i18next', () => ({
@@ -49,9 +57,14 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@lobechat/const', () => ({
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  hasCallableMcpEndpoint: (await importOriginal<typeof LobeConst>()).hasCallableMcpEndpoint,
   getComposioAppByIdentifier: () => undefined,
   getLobehubSkillProviderById: () => undefined,
+}));
+
+vi.mock('@/hooks/useConnectorManagePolicy', () => ({
+  useConnectorManageable: () => mocks.manageable,
 }));
 
 // The manage gate pulls in the user store chain — irrelevant to these render
@@ -113,6 +126,82 @@ describe('ConnectorDetail', () => {
     ];
     mocks.toolState.syncing = false;
     mocks.toolState.uninstalledBuiltinTools = [];
+    mocks.manageable.canManageCredentials = true;
+  });
+
+  describe('Refresh', () => {
+    const refresh = () => fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+
+    it("re-reads a legacy plugin's projected tools from the plugin", () => {
+      render(<ConnectorDetail connectorId="connector-1" />);
+      refresh();
+
+      expect(mocks.toolState.syncPluginTools).toHaveBeenCalledWith('notion');
+      expect(mocks.toolState.syncConnectorTools).not.toHaveBeenCalled();
+    });
+
+    // A fresh marketplace install has no legacy plugin row to bootstrap from
+    it.each([
+      { mcpConnectionType: 'http', mcpServerUrl: 'https://mcp.notion.com/mcp' },
+      { mcpConnectionType: 'stdio' },
+      { mcpConnectionType: 'cloud' },
+    ])('syncs a connector-path install from its own server: %o', (endpoint) => {
+      mocks.toolState.connectors[0] = { ...mocks.toolState.connectors[0], ...endpoint };
+
+      render(<ConnectorDetail connectorId="connector-1" />);
+      refresh();
+
+      expect(mocks.toolState.syncConnectorTools).toHaveBeenCalledWith('connector-1');
+      expect(mocks.toolState.syncPluginTools).not.toHaveBeenCalled();
+    });
+
+    it('needs the credentials permission only for a sync that connects to the server', () => {
+      mocks.manageable.canManageCredentials = false;
+      mocks.toolState.connectors[0] = {
+        ...mocks.toolState.connectors[0],
+        mcpConnectionType: 'stdio',
+      };
+      const { unmount } = render(<ConnectorDetail connectorId="connector-1" />);
+      expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
+      unmount();
+
+      // A cloud server's tools come from the market manifest
+      mocks.toolState.connectors[0] = {
+        ...mocks.toolState.connectors[0],
+        mcpConnectionType: 'cloud',
+      };
+      render(<ConnectorDetail connectorId="connector-1" />);
+      expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
+    });
+  });
+
+  // A protocol-link stdio MCP is a custom connector now, no longer a custom
+  // plugin whose command Settings could edit
+  it.each([
+    { mcpConnectionType: 'http', mcpServerUrl: 'https://mcp.example.com' },
+    { mcpConnectionType: 'stdio' },
+  ])('offers Edit for a custom connector: %o', (endpoint) => {
+    mocks.toolState.connectors[0] = {
+      ...mocks.toolState.connectors[0],
+      ...endpoint,
+      sourceType: ConnectorSourceType.custom,
+    };
+
+    render(<ConnectorDetail connectorId="connector-1" />);
+
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeEnabled();
+    expect(screen.getByTestId('custom-connector-modal')).toBeInTheDocument();
+  });
+
+  it('offers no Edit for a marketplace connector', () => {
+    mocks.toolState.connectors[0] = {
+      ...mocks.toolState.connectors[0],
+      mcpConnectionType: 'stdio',
+    };
+
+    render(<ConnectorDetail connectorId="connector-1" />);
+
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
   });
 
   it('uses lifecycle actions instead of the generic marketplace uninstall action', () => {

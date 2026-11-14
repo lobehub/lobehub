@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   publishAgentRuntimeInit: vi.fn(),
   readDeviceSystemInfo: vi.fn(),
   recordStart: vi.fn(),
+  waitForVerifyPlan: vi.fn(),
   resolveDeviceDispatchAuthorizationFailure: vi.fn(),
   resolveSandboxSessionConfig: vi.fn(),
   scheduleTimedOutDispatchConfirmation: vi.fn(),
@@ -32,7 +33,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/server/services/agentRuntime/CompletionLifecycle', () => ({
   CompletionLifecycle: vi.fn().mockImplementation(function () {
-    return { completeOperation: mocks.completeOperation, recordStart: mocks.recordStart };
+    return {
+      completeOperation: mocks.completeOperation,
+      recordStart: mocks.recordStart,
+      waitForVerifyPlan: mocks.waitForVerifyPlan,
+    };
   }),
 }));
 
@@ -191,6 +196,7 @@ const finalizeParams = (fields: Record<string, unknown>) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.recordStart.mockResolvedValue(true);
+  mocks.waitForVerifyPlan.mockResolvedValue(undefined);
   mocks.signHeteroOperationJWT.mockResolvedValue('op-jwt');
   mocks.signUserJWT.mockResolvedValue('user-jwt');
   mocks.finalizeHeteroDispatchError.mockResolvedValue(true);
@@ -229,6 +235,54 @@ describe('Channel history context', () => {
       expect(signed.capabilities.includes('channel:read')).toBe(channel);
     },
   );
+});
+
+describe('goal management capability', () => {
+  it.each([
+    // The user typed this turn, so "run a goal" works without the `/goal` prefix.
+    ['a chat turn the user sent', { trigger: 'chat' }, true],
+    ['a run the user scheduled', { trigger: 'scheduled', userMessageId: undefined }, true],
+    // A server-started `chat` delivery (background results) writes no user row.
+    ['a chat delivery with no user turn', { trigger: 'chat', userMessageId: undefined }, false],
+    // Goal planning and supervision turns carry no trigger: no goal spawns goals.
+    ['a goal planning turn', { trigger: undefined }, false],
+    ['a bot message', { trigger: 'bot' }, false],
+    ['an inbox wakeup', { trigger: 'inbox' }, false],
+  ])('for %s: %s', async (_, overrides, granted) => {
+    const { deps } = createDeps();
+    await dispatchHeteroAgent(
+      deps,
+      createCtx(
+        {
+          boundDeviceId: 'dev-1',
+          executionTarget: 'device',
+          heterogeneousProvider: { type: 'claude-code' },
+        },
+        { prompt: 'run a goal to polish the mailbox', ...overrides },
+      ),
+      createInput('claude-code'),
+    );
+    const signed = mocks.signHeteroOperationJWT.mock.calls[0][0];
+    expect(signed.capabilities.includes('goal:manage')).toBe(granted);
+  });
+
+  it('keeps it out of a Task run the user did not type', async () => {
+    const { deps } = createDeps();
+    await dispatchHeteroAgent(
+      deps,
+      createCtx(
+        {
+          boundDeviceId: 'dev-1',
+          executionTarget: 'device',
+          heterogeneousProvider: { type: 'claude-code' },
+        },
+        { prompt: 'Implement this step of the goal', trigger: 'chat' },
+      ),
+      createInput('claude-code', { operationTaskId: 'task_1' }),
+    );
+    const signed = mocks.signHeteroOperationJWT.mock.calls[0][0];
+    expect(signed.capabilities).not.toContain('goal:manage');
+  });
 });
 
 describe('dispatchHeteroAgent — preparation failures', () => {
@@ -536,6 +590,35 @@ describe('dispatchHeteroAgent — local CLI agents', () => {
       heteroType: 'claude-code',
     });
     expect(result).toMatchObject({ status: 'created', success: true, token: 'user-jwt' });
+  });
+
+  // Regression: the plan was started without being waited for, so a dispatch that
+  // returned first lost it and the builder's `plan state` read null all run.
+  it('holds the dispatch until the verify plan has settled', async () => {
+    const { deps } = createDeps();
+    let settlePlan = () => {};
+    mocks.waitForVerifyPlan.mockReturnValue(
+      new Promise<void>((resolve) => {
+        settlePlan = resolve;
+      }),
+    );
+
+    const dispatch = dispatchHeteroAgent(
+      deps,
+      createCtx({
+        boundDeviceId: 'dev-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type: 'claude-code' },
+      }),
+      createInput('claude-code'),
+    );
+    await vi.waitFor(() => expect(mocks.waitForVerifyPlan).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mocks.dispatchAgentRun).not.toHaveBeenCalled();
+
+    settlePlan();
+    await dispatch;
+    expect(mocks.dispatchAgentRun).toHaveBeenCalledTimes(1);
   });
 
   it('sends the Claude Code account the agent is routed to', async () => {

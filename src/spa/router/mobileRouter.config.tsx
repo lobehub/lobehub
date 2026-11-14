@@ -23,6 +23,7 @@ import { mobileUnsupportedRoutes, mobileWorkspaceRoutes } from '@/spa/router/mob
 import { mobileWorkspaceSettingsChildren } from '@/spa/router/mobileWorkspaceSettingsRoutes';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { LegacySandboxStorageRedirect } from '@/spa/router/sandboxStorageRedirect';
+import { statsPageLoader } from '@/spa/router/statsPageLoader';
 import { SettingsTabs } from '@/store/global/initialState';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
@@ -44,7 +45,13 @@ const personalSettingsTabRoutes: RouteObject[] = [...new Set(Object.values(Setti
   .flatMap((tab) => {
     const meta = createSettingsTitleRouteMeta(tab);
     return [
-      { element: settingsTabElement, handle: { meta, settingsTab: tab }, path: tab },
+      {
+        element: settingsTabElement,
+        handle: { meta, settingsTab: tab },
+        // `/settings/stats` matches this static segment, not `:tab`.
+        loader: tab === SettingsTabs.Stats ? statsPageLoader : undefined,
+        path: tab,
+      },
       { element: settingsTabSubElement, handle: { meta, settingsTab: tab }, path: `${tab}/:sub` },
     ];
   });
@@ -295,6 +302,15 @@ export const sharedMainAreaChildren: RouteObject[] = [
         }),
         handle: { meta: routeMeta({ icon: BotIcon, titleKey: 'navigation.agents' }) },
         index: true,
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/agents/[id]'),
+          'Mobile > Agents > Contact',
+          { preloadId: 'mobile-agents' },
+        ),
+        handle: { meta: routeMeta({ icon: BotIcon, titleKey: 'navigation.agents' }) },
+        path: ':id',
       },
     ],
     errorElement: <ErrorBoundary resetPath=".." />,

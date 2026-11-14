@@ -5,11 +5,12 @@ import { act, renderHook } from '@testing-library/react';
 import type { MouseEvent } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useAgentConversationLink } from './useAgentConversationLink';
+import { useAgentConversationLink, useInboxConversationLink } from './useAgentConversationLink';
 
 const state = vi.hoisted(() => ({
   directChannelId: undefined as string | undefined,
   enabled: true,
+  inboxAgentId: 'agt_inbox' as string | undefined,
   navigate: vi.fn(),
   openDirect: vi.fn(),
   pathname: '/',
@@ -25,6 +26,18 @@ vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
 }));
 vi.mock('@/libs/replica', () => ({ cacheScope: { get: () => state.scope } }));
 
+vi.mock('@/features/AgentRoute/useResolvedAgentRouteId', () => ({
+  resolveInboxAgentRouteId: (id?: string) => id ?? 'inbox',
+}));
+vi.mock('@/features/HomeSidebar/Body/Agent/List/usePreservedAgentUrl', () => ({
+  usePreservedAgentUrl: (id: string) => `/agent/${id}`,
+}));
+vi.mock('@/store/agent', () => ({
+  useAgentStore: (selector: (s: object) => unknown) => selector({}),
+}));
+vi.mock('@/store/agent/selectors', () => ({
+  builtinAgentSelectors: { inboxAgentId: () => state.inboxAgentId },
+}));
 vi.mock('@/features/Channels/useChannelsEnabled', () => ({
   useChannelsEnabled: () => state.enabled,
 }));
@@ -50,6 +63,7 @@ describe('useAgentConversationLink', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     state.directChannelId = undefined;
     state.enabled = true;
+    state.inboxAgentId = 'agt_inbox';
     state.pathname = '/';
     state.scope = 'personal';
     state.slug = null;
@@ -58,6 +72,28 @@ describe('useAgentConversationLink', () => {
   it('links an Agent row to its direct Channel', () => {
     state.directChannelId = 'chn_000000000001';
     expect(render().result.current).toEqual({ url: '/channels/chn_000000000001' });
+  });
+
+  it('keeps the Agent page while the Agent id is still loading', () => {
+    state.directChannelId = 'chn_000000000001';
+    const { result } = renderHook(() => useAgentConversationLink(undefined, '/agent/inbox'));
+    expect(result.current).toEqual({ onClick: undefined, url: '/agent/inbox' });
+  });
+
+  it('links the inbox Agent row to its direct Channel', () => {
+    state.directChannelId = 'chn_000000000001';
+    const { result } = renderHook(() => useInboxConversationLink());
+    expect(result.current).toEqual({ url: '/channels/chn_000000000001' });
+  });
+
+  it('opens a missing inbox direct Channel on click', async () => {
+    state.openDirect.mockResolvedValue('chn_000000000002');
+    const { result } = renderHook(() => useInboxConversationLink());
+
+    await act(async () => result.current.onClick?.(click()));
+
+    expect(state.openDirect).toHaveBeenCalledWith('agt_inbox');
+    expect(state.navigate).toHaveBeenCalledWith('/channels/chn_000000000002');
   });
 
   it('keeps the Agent page while Channels are off', () => {

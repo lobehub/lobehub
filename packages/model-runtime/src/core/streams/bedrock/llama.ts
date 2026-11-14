@@ -2,8 +2,12 @@ import type { InvokeModelWithResponseStreamResponse } from '@aws-sdk/client-bedr
 
 import type { ChatStreamCallbacks } from '../../../types';
 import { nanoid } from '../../../utils/uuid';
+import {
+  createEventCallbacksTransformer,
+  createModelEventTransformer,
+  createSSEEncoder,
+} from '../events';
 import type { StreamContext, StreamProtocolChunk } from '../protocol';
-import { createCallbacksTransformer, createSSEProtocolTransformer } from '../protocol';
 import { createBedrockStream } from './common';
 
 interface AmazonBedrockInvocationMetrics {
@@ -41,6 +45,7 @@ export const AWSBedrockLlamaStream = (
   const stream = res instanceof ReadableStream ? res : createBedrockStream(res);
 
   return stream
-    .pipeThrough(createSSEProtocolTransformer(transformLlamaStream, streamStack))
-    .pipeThrough(createCallbacksTransformer(cb));
+    .pipeThrough(createModelEventTransformer(transformLlamaStream, streamStack))
+    .pipeThrough(createEventCallbacksTransformer(cb))
+    .pipeThrough(createSSEEncoder());
 };
