@@ -58,6 +58,8 @@ jobs:
   # 检查 commit type
   # ============================================
   check-trigger:
+    # Official publishing needs upstream credentials; forks can explicitly opt in.
+    if: github.repository == 'lobehub/lobehub' || vars.ENABLE_UPSTREAM_PUBLISH_WORKFLOWS == 'true'
     name: Check Canary Trigger
     runs-on: ubuntu-latest
     outputs:

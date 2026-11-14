@@ -16,6 +16,8 @@ concurrency:
 
 jobs:
   sync-branches:
+    # Official publishing needs upstream credentials; forks can explicitly opt in.
+    if: github.repository == 'lobehub/lobehub' || vars.ENABLE_UPSTREAM_PUBLISH_WORKFLOWS == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v2

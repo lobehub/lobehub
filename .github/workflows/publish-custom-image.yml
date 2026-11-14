@@ -36,6 +36,9 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Set up QEMU for ARM64 builds
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
