@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, confirmModal, cssVar, Flexbox, toast } from '@lobehub/ui';
-import { BookMinusIcon, FileBoxIcon, Trash2Icon } from 'lucide-react';
+import { ActionIcon, Button, confirmModal, cssVar, Flexbox, toast } from '@lobehub/ui';
+import { BookMinusIcon, FileBoxIcon, MessageSquarePlusIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,6 +16,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useFileStore } from '@/store/file';
 
 import AddButton from '../../Header/AddButton';
+import { useAddSelectionToChat } from '../hooks/useAddSelectionToChat';
 import BatchActionsDropdown from '../ToolBar/BatchActionsDropdown';
 import SortDropdown from '../ToolBar/SortDropdown';
 import SourceFilter from '../ToolBar/SourceFilter';
@@ -61,10 +62,30 @@ const Header = memo(() => {
   const hasSelected = selectAllState === 'all' || selectCount > 0;
   const isWorkspaceDeleteAll = !!activeWorkspaceId && selectAllState === 'all';
   const batchTransferActions = useFileBatchTransferActions(selectCount);
+  const { addSelectionToChat, adding } = useAddSelectionToChat();
 
   // Outside a library the explorer is the drive: its header switches file types
   const leftContent = hasSelected ? (
     <Flexbox horizontal align={'center'} gap={8} style={{ marginLeft: 0 }}>
+      {/* Reading files into a chat changes nothing in the library, so no edit permission is needed. */}
+      {isMobile ? (
+        <ActionIcon
+          icon={MessageSquarePlusIcon}
+          loading={adding}
+          title={t('FileManager.actions.addToChat')}
+          onClick={addSelectionToChat}
+        />
+      ) : (
+        <Button
+          icon={MessageSquarePlusIcon}
+          loading={adding}
+          size={'small'}
+          onClick={addSelectionToChat}
+        >
+          {t('FileManager.actions.addToChat')}
+        </Button>
+      )}
+
       {libraryId ? (
         <ActionIcon
           disabled={!canEditResources}
