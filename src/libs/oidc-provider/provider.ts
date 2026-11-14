@@ -16,8 +16,11 @@ import {
   accessTokenTTL,
   defaultResourceFor,
   extensionCorsDecision,
+  extensionGrantScopes,
   extensionResourceServer,
+  interactionPathFor,
   isAcceptanceReviewClient,
+  issuesRefreshToken,
   reviewResourceServer,
 } from './acceptanceReview';
 import { isOIDCUserBanned } from './access-control';
@@ -308,15 +311,34 @@ export const createOIDCProvider = async (db: LobeChatDatabase): Promise<Provider
           logProvider('No ui_locales provided in authorization request');
         }
 
-        const interactionUrl = `/oauth/consent/${interaction.uid}${query}`;
+        const interactionUrl = `${interactionPathFor(ctx.oidc?.client?.clientId, interaction.prompt.name, interaction.uid)}${query}`;
         logProvider('Generated interaction URL: %s', interactionUrl);
         // ---> End of added logs <---
         return interactionUrl;
       },
     },
 
+    issueRefreshToken: async (_ctx, client, source) => issuesRefreshToken(client, source.scopes),
+
     // 6. Key configuration - using RS256 JWKS
     jwks: jwks as { keys: any[] },
+
+    loadExistingGrant: async (ctx) => {
+      const { client, provider, result, session } = ctx.oidc;
+      const grantId = result?.consent?.grantId || session!.grantIdFor(client!.clientId);
+      if (grantId) return provider.Grant.find(grantId);
+
+      const scopes = extensionGrantScopes(client?.clientId);
+      if (!scopes || !session?.accountId) return undefined;
+      const grant = new provider.Grant({
+        accountId: session.accountId,
+        clientId: client!.clientId,
+      });
+      grant.addOIDCScope(scopes.oidc);
+      grant.addResourceScope(scopes.resource, scopes.resourceScope);
+      await grant.save();
+      return grant;
+    },
 
     // 2. PKCE configuration
     pkce: {

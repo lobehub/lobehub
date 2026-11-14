@@ -36,6 +36,33 @@ export const extensionCorsDecision = (clientId: string | undefined, origin: stri
   return ACCEPTANCE_EXTENSION_IDS.some((id) => origin === `chrome-extension://${id}`);
 };
 
+// The extension is first-party and its redirect only reaches the extension itself, so a reviewer
+// with a web session signs in without the login and consent pages.
+export const EXTENSION_SIGN_IN_PATH = '/oidc/extension-sign-in';
+
+export const interactionPathFor = (clientId: string | undefined, prompt: string, uid: string) =>
+  isAcceptanceExtensionClient(clientId) && prompt === 'login'
+    ? `${EXTENSION_SIGN_IN_PATH}/${uid}`
+    : `/oauth/consent/${uid}`;
+
+export const extensionGrantScopes = (clientId: string | undefined) =>
+  isAcceptanceExtensionClient(clientId)
+    ? {
+        oidc: `openid profile ${ACCEPTANCE_EXTENSION_SCOPE}`,
+        resource: ACCEPTANCE_EXTENSION_RESOURCE,
+        resourceScope: ACCEPTANCE_EXTENSION_SCOPE,
+      }
+    : null;
+
+// oidc-provider drops offline_access from a request that does not prompt for consent, and with
+// it the refresh token; the extension cannot stay signed in without one.
+export const issuesRefreshToken = (
+  client: { clientId: string; grantTypeAllowed: (type: string) => boolean },
+  scopes: Set<string>,
+) =>
+  client.grantTypeAllowed('refresh_token') &&
+  (scopes.has('offline_access') || isAcceptanceExtensionClient(client.clientId));
+
 export const defaultResourceFor = (clientId: string | undefined, fallback: string) =>
   isAcceptanceExtensionClient(clientId) ? ACCEPTANCE_EXTENSION_RESOURCE : fallback;
 
