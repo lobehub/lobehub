@@ -4,6 +4,7 @@ import type { Context } from 'hono';
 import { getServerDB } from '@/database/server';
 import { failStuckTasks } from '@/server/services/taskLifecycle/failStuckTasks';
 import { reconcileOrphanedTaskRuns } from '@/server/services/taskLifecycle/reconcile';
+import { reconcileCompletedTaskRuns } from '@/server/services/taskLifecycle/reconcileCompleted';
 import { reconcileInterruptedTaskRuns } from '@/server/services/taskLifecycle/reconcileInterrupted';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 import { TaskResultCallbackRedisStore } from '@/server/services/taskResultBridge/redisStore';
@@ -11,7 +12,7 @@ import { TaskResultCallbackRedisStore } from '@/server/services/taskResultBridge
 const log = debug('lobe-server:workflows:task:watchdog');
 
 /**
- * Cron-style watchdog. Two nets over Tasks that are `running` with nothing
+ * Cron-style watchdog. Recovery nets over Tasks that are `running` with nothing
  * behind them:
  *
  * 1. `lastHeartbeatAt + heartbeatTimeout < now()` — the automation-heartbeat
@@ -22,6 +23,9 @@ const log = debug('lobe-server:workflows:task:watchdog');
  *    run ends without ever delivering its terminal state.
  * 3. A `running` run row whose operation was interrupted and that no run took
  *    over (see {@link reconcileInterruptedTaskRuns}) — parked as `paused`.
+ *
+ * 4. A successful operation whose terminal delivery was lost: settle only its
+ *    run row, preserving the Task outcome and avoiding duplicate callbacks.
  *
  * No per-user authentication: this is a global sweep registered as a QStash
  * Schedule (cron). Signature verification is handled by the `qstashAuth`
@@ -41,6 +45,7 @@ export async function watchdog(c: Context) {
     // An interrupted run is not an outcome the net above may converge; a run
     // nothing took over is handed back to a person instead.
     const interrupted = await reconcileInterruptedTaskRuns(db);
+    const completed = await reconcileCompletedTaskRuns(db);
 
     const recoverableCallbacks = await TaskResultCallbackRedisStore.findRecoverableScopes();
     const recoveredCallbacks: string[] = [];
@@ -68,15 +73,17 @@ export async function watchdog(c: Context) {
     }
 
     log(
-      'Watchdog scan: checked=%d failed=%d orphaned=%d interrupted=%d callbacks=%d',
+      'Watchdog scan: checked=%d failed=%d orphaned=%d interrupted=%d completed=%d callbacks=%d',
       checked,
       failed.length,
       reconciled.converged.length,
       interrupted.paused.length,
+      completed.converged.length,
       recoveredCallbacks.length,
     );
     return c.json({
       checked,
+      completed,
       failed,
       interrupted,
       orphaned: reconciled,
