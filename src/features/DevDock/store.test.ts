@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MIN_PANEL_HEIGHT, useDevDockStore } from './store';
 
@@ -70,5 +70,25 @@ describe('DevDock store', () => {
     useDevDockStore.getState().setPinned('reload', false);
 
     expect(useDevDockStore.getState().pinOverrides).toEqual({ reload: false });
+  });
+
+  it('opens the Local Database panel without persisting it as the active panel', () => {
+    useDevDockStore.getState().togglePanel('local-database');
+
+    expect(useDevDockStore.getState().activePanelId).toBe('local-database');
+    expect(readPersisted().activePanelId).toBeNull();
+  });
+
+  it('drops a persisted Local Database panel on boot', async () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ activePanelId: 'local-database', panelHeight: 500 }),
+    );
+
+    vi.resetModules();
+    const { useDevDockStore: bootedStore } = await import('./store');
+
+    expect(bootedStore.getState().activePanelId).toBeNull();
+    expect(bootedStore.getState().panelHeight).toBe(500);
   });
 });
