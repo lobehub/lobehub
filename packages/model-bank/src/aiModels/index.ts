@@ -37,6 +37,7 @@ import { default as infiniai } from './infiniai';
 import { default as internlm } from './internlm';
 import { default as jina } from './jina';
 import { default as kimicodingplan } from './kimiCodingPlan';
+import { default as liquidinference } from './liquidinference';
 import { default as lmstudio } from './lmstudio';
 import { default as longcat } from './longcat';
 import { default as magpie } from './magpie';
@@ -152,6 +153,7 @@ const staticModelMap: ModelsMap = {
   internlm,
   jina,
   kimicodingplan,
+  liquidinference,
   lmstudio,
   longcat,
   magpie,
@@ -273,6 +275,7 @@ export { default as infiniai } from './infiniai';
 export { default as internlm } from './internlm';
 export { default as jina } from './jina';
 export { default as kimicodingplan } from './kimiCodingPlan';
+export { default as liquidinference } from './liquidinference';
 export { default as lmstudio } from './lmstudio';
 export { default as longcat } from './longcat';
 export { default as magpie } from './magpie';
