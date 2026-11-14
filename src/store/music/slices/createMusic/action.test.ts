@@ -6,14 +6,15 @@ import { useMusicStore } from '@/store/music';
 
 import { buildMusicRequestParams } from './action';
 
-const { isGenerationPromptModerationErrorMock, toastErrorMock } = vi.hoisted(() => ({
+const { isGenerationPromptModerationErrorMock, toastErrorMock, toastInfoMock } = vi.hoisted(() => ({
   isGenerationPromptModerationErrorMock: vi.fn(),
   toastErrorMock: vi.fn(),
+  toastInfoMock: vi.fn(),
 }));
 
 vi.mock('@lobehub/ui', async (importOriginal) => {
   const actual = await importOriginal<Record<string, any>>();
-  return { ...actual, toast: { ...actual.toast, error: toastErrorMock } };
+  return { ...actual, toast: { ...actual.toast, error: toastErrorMock, info: toastInfoMock } };
 });
 
 vi.mock('@/business/client/isGenerationPromptModerationError', () => ({
@@ -151,6 +152,19 @@ describe('CreateMusicAction', () => {
     // Before this, the error only reached the console and the generate button looked dead
     expect(toastErrorMock).toHaveBeenCalledWith('generation.submitFailed');
     expect(useMusicStore.getState().parameters.prompt).toBe('city pop');
+  });
+
+  it('treats a refresh failure after an accepted submission as started, not failed', async () => {
+    refreshGenerationBatches.mockRejectedValueOnce(new Error('network down'));
+
+    // Resolves: the server accepted the batch, so the user must not be invited to resubmit
+    await expect(useMusicStore.getState().createMusic()).resolves.toBeUndefined();
+
+    expect(musicService.createMusic).toHaveBeenCalledTimes(1);
+    expect(toastErrorMock).not.toHaveBeenCalled();
+    expect(toastInfoMock).toHaveBeenCalledWith('generation.submittedRefreshFailed');
+    expect(useMusicStore.getState().parameters.prompt).toBe('');
+    expect(useMusicStore.getState().isCreating).toBe(false);
   });
 
   it('refuses a prompt shorter than the model minimum without calling the server', async () => {

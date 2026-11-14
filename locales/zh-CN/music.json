@@ -48,6 +48,7 @@
   "generation.status.invalidApiKeyHint": "请在服务商设置中检查密钥后重试。",
   "generation.status.queued": "排队中…",
   "generation.submitFailed": "未能开始生成：{{message}}",
+  "generation.submittedRefreshFailed": "已开始生成。如果没有看到新歌曲，请刷新页面。",
   "notice.modelRemoved": "{{name}} 已不再提供当前模型，请切换到可用模型。",
   "notice.providerDisabled": "当前模型的服务商 {{name}} 已停用，请启用该服务商或切换到可用模型。",
   "topic.createNew": "创作新话题",

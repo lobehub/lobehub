@@ -113,10 +113,8 @@ export class CreateMusicActionImpl {
         provider,
       });
 
-      // 3. Show the new batch
-      await this.#get().refreshGenerationBatches();
-
-      // 4. Clear the prompt; lyrics, title and style stay for the next variation
+      // 3. Clear the prompt; lyrics, title and style stay for the next variation. The server
+      // accepted the batch, so a later refresh failure must not invite a duplicate (charged) retry.
       this.#set(
         (state) => ({ parameters: { ...state.parameters, prompt: '' } }),
         false,
@@ -145,6 +143,15 @@ export class CreateMusicActionImpl {
         false,
         'createMusic/endCreateMusic',
       );
+    }
+
+    // 4. Show the new batch. The generation already started, so a failed refresh only hides it
+    // until the list reloads; tell the user instead of reporting a failed submission.
+    try {
+      await this.#get().refreshGenerationBatches();
+    } catch (error) {
+      console.error('[createMusic] failed to refresh batches after submitting', error);
+      toast.info(t('generation.submittedRefreshFailed', { ns: 'music' }));
     }
   };
 

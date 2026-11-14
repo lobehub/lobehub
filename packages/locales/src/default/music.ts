@@ -44,6 +44,8 @@ export default {
   'generation.song.fileName': 'Song',
   'generation.song.untitled': 'Song {{index}}',
   'generation.submitFailed': 'Could not start generating: {{message}}',
+  'generation.submittedRefreshFailed':
+    'Generation started. Refresh the page if the new song does not appear.',
   'generation.status.failed': 'Generation Failed',
   'generation.status.generating': 'Generating…',
   'generation.status.generatingHint': 'A song usually takes 1–3 minutes',

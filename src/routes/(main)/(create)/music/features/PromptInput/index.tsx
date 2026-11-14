@@ -1,6 +1,7 @@
 'use client';
 
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -35,6 +36,14 @@ import MusicModelItem from '../ModelSelect/MusicModelItem';
 import AudioSettings, { useHasAudioSettings } from './AudioSettings';
 import MusicParams from './MusicParams';
 import PromptTitle from './Title';
+
+const styles = stylex.create({
+  // Same inset as the blocked-prompt notice so the hint does not touch the input border
+  promptHint: {
+    paddingBlockStart: '8px',
+    paddingInline: '12px',
+  },
+});
 
 interface PromptInputProps {
   disableAnimation?: boolean;
@@ -132,9 +141,11 @@ const PromptInput = memo<PromptInputProps>(({ showTitle = false }) => {
           isPromptBlocked ? (
             <GenerationPromptBlockedNotice onClose={dismissBlockedPrompt} />
           ) : promptMinLength ? (
-            <Text fontSize={12} type={'warning'}>
-              {t('config.prompt.minLength', { count: promptMinLength })}
-            </Text>
+            <div className={stylex.props(styles.promptHint).className}>
+              <Text fontSize={12} type={'warning'}>
+                {t('config.prompt.minLength', { count: promptMinLength })}
+              </Text>
+            </div>
           ) : undefined
         }
         leftActions={

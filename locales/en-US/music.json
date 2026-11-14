@@ -48,6 +48,7 @@
   "generation.status.invalidApiKeyHint": "Check the key in the provider settings, then retry.",
   "generation.status.queued": "Queued…",
   "generation.submitFailed": "Could not start generating: {{message}}",
+  "generation.submittedRefreshFailed": "Generation started. Refresh the page if the new song does not appear.",
   "notice.modelRemoved": "The current model is no longer available from {{name}}. Please switch to an available model.",
   "notice.providerDisabled": "The provider {{name}} for the current model is disabled. Please enable it or switch to an available model.",
   "topic.createNew": "Create New Topic",
