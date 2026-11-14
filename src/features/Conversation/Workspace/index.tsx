@@ -10,6 +10,8 @@ import OverviewSlot from '@/features/Conversation/WorkingSidebar/OverviewSlot';
 import HeaderSlot from '@/routes/(main)/agent/(chat)/_layout/HeaderSlot';
 import Portal from '@/routes/(main)/agent/features/Portal';
 
+import { useScrollerEndBleed } from './useScrollerEndBleed';
+
 const styles = createStaticStyles(({ css }) => ({
   // Named container queried by ChatHeader and the list top spacer: when this
   // column is wide enough, the header floats above the full-bleed message
@@ -33,6 +35,10 @@ const ConversationWorkspace = ({
   const rowRef = useRef<HTMLDivElement>(null);
   const rowSize = useSize(rowRef);
 
+  // The message scroller runs underneath the floating Overview card, so its
+  // scrollbar sits on the window edge rather than between messages and card.
+  const { hostRef: bodyRef, panelRef: overviewSlotRef } = useScrollerEndBleed();
+
   return (
     <HeaderSlot.Provider>
       <OverviewSlot.Provider>
@@ -55,11 +61,11 @@ const ConversationWorkspace = ({
               style={{ minHeight: 0, minWidth: 0 }}
             >
               {header}
-              <Flexbox horizontal flex={1} style={{ minHeight: 0, minWidth: 0 }}>
+              <Flexbox horizontal flex={1} ref={bodyRef} style={{ minHeight: 0, minWidth: 0 }}>
                 <Flexbox flex={1} style={{ minHeight: 0, minWidth: 0 }}>
                   {children}
                 </Flexbox>
-                <OverviewSlot.Outlet />
+                <OverviewSlot.Outlet slotRef={overviewSlotRef} />
               </Flexbox>
             </Flexbox>
             <Portal />

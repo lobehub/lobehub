@@ -87,7 +87,7 @@ import {
 import FilesPane from './Files/FilesPane';
 import { useFilesPaneLocation } from './Files/useFilesPaneLocation';
 import { sidebarWidthBudget } from './fitsBesidePortal';
-import { CANVAS_MIN_WIDTH, MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, OVERVIEW_PANEL_WIDTH } from './layout';
+import { CANVAS_MIN_WIDTH, MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, OVERVIEW_CARD } from './layout';
 import Overview from './Overview';
 import { getStatusDeviceId } from './Overview/overviewData';
 import OverviewSlot from './OverviewSlot';
@@ -138,13 +138,16 @@ const styles = createStaticStyles(({ css }) => ({
     min-height: 0;
   `,
   overviewPanel: css`
+    pointer-events: auto;
+
     overflow: hidden;
     display: flex;
     flex-direction: column;
     flex-shrink: 0;
 
-    max-height: calc(100% - 32px);
-    margin: 16px;
+    max-height: calc(100% - ${OVERVIEW_CARD.margin * 2}px);
+    margin-block: ${OVERVIEW_CARD.margin}px;
+    margin-inline: ${OVERVIEW_CARD.margin}px ${OVERVIEW_CARD.margin + OVERVIEW_CARD.scrollbarLane}px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 16px;
 
@@ -942,15 +945,13 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     toggleTerminalPanel,
   ]);
 
-  // The floating card keeps a 16px margin on each side.
-  const overviewGutter = 32;
-  const overviewWidth = Math.min(OVERVIEW_PANEL_WIDTH, widthBudget - overviewGutter);
+  const overviewWidth = Math.min(OVERVIEW_CARD.width, widthBudget - OVERVIEW_CARD.gutter);
   const overviewPanel = (
     <OverviewSlot>
       <AnimatePresence initial={false}>
         {showWorkingOverview && overviewFits && (
           <m.div
-            animate={{ width: overviewWidth + overviewGutter }}
+            animate={{ width: overviewWidth + OVERVIEW_CARD.gutter }}
             className={styles.overviewSlot}
             exit={{ transition: overviewExitTransition, width: 0 }}
             initial={{ width: 0 }}
