@@ -212,7 +212,7 @@ export const messagesReducer = (
         } else {
           const index = message.tools.findIndex((tool) => tool.id === value.id);
 
-          if (index > 0) return;
+          if (index !== -1) return;
           message.tools.push(value);
         }
 
