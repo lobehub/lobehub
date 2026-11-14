@@ -163,6 +163,12 @@ export interface ModelTokensUsage {
    * Generated video tokens, billed through the `videoGeneration` pricing unit.
    */
   outputVideoTokens?: number;
+  /**
+   * Provider-reported billable units for the request (e.g. fal's
+   * `x-fal-billable-units` response header), billed through the
+   * `providerBillableUnit` pricing unit.
+   */
+  providerBillableUnits?: number;
   rejectedPredictionTokens?: number;
 
   // Total tokens
@@ -199,6 +205,9 @@ export const ModelUsageSchema = z.object({
   // Prediction tokens
   acceptedPredictionTokens: z.number().optional(),
   rejectedPredictionTokens: z.number().optional(),
+
+  // Provider-reported billable units
+  providerBillableUnits: z.number().optional(),
 
   // Total tokens
   totalInputTokens: z.number().optional(),
