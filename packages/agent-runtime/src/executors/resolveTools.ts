@@ -25,6 +25,19 @@ const createSession = (state: AgentState, operationId: string): RuntimeSessionWi
 });
 
 /**
+ * A resolved tool call reached a tool executor, so the model is naming real
+ * tools again: clear the unresolved-name feedback count so it only ever
+ * measures consecutive rejected turns. Without this, two early misses from a
+ * tool surface that changed under the model would let a single typo many
+ * successful steps later end the run.
+ *
+ * Applied on executor entry, before any branch, so every outcome of the call
+ * (run, failed, deferred to a sub-agent or client, aborted) carries the reset.
+ */
+export const resetUnresolvedToolFeedback = (state: AgentState): AgentState =>
+  state.unresolvedToolFeedbackRounds ? { ...state, unresolvedToolFeedbackRounds: 0 } : state;
+
+/**
  * `resolve_blocked_tools` executor — turns policy-blocked tool calls into
  * persisted rejected tool messages so the runtime can continue planning.
  */
@@ -58,7 +71,17 @@ export const resolveBlockedTools =
     // never learns its tool name was wrong.
     if (payload.unresolvedToolNames) {
       try {
+        let content: string | undefined;
+        if (payload.parentNote) {
+          const parent = await transports.messages.findById(payload.parentMessageId);
+          // A multimodal reply stores serialized content parts, not text to
+          // append to; its rejected tool rows still carry the note.
+          if (!parent?.metadata?.isMultimodal) {
+            content = [parent?.content, payload.parentNote].filter(Boolean).join('\n\n');
+          }
+        }
         await transports.messages.update(payload.parentMessageId, {
+          ...(content !== undefined && { content }),
           tools: payload.toolsCalling,
         });
       } catch (error) {

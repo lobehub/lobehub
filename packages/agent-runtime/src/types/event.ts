@@ -79,6 +79,7 @@ export type FinishReason =
   | 'agent_decision' // Agent decided to finish
   | 'queued_message_interrupt' // Soft interrupt: user queued a message during execution
   | 'error_recovery' // Finished due to unrecoverable error
+  | 'tool_name_unresolved' // Stopped after consecutive tool calls named tools that do not exist
   | 'system_shutdown'; // System is shutting down
 
 export interface AgentEventDone {
