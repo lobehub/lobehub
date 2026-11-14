@@ -50,7 +50,13 @@ const resolveMaxRepairRounds = async (
  * inherit `taskDrivenAt` and never settle the Task, and inherit the rejected
  * review as if it were its own.
  */
-const ROUND_SETTLE_KEYS = ['autoRepair', 'goalReview', 'taskDrivenAt'] as const;
+const ROUND_SETTLE_KEYS = [
+  'autoRepair',
+  'goalReview',
+  'taskDrivenAt',
+  'taskDriveClaimedAt',
+  'taskDriveClaimId',
+] as const;
 
 export const carriedRunPolicy = (metadata: Record<string, unknown>): Record<string, unknown> => {
   const policy = { ...metadata };
