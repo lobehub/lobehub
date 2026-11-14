@@ -1,0 +1,54 @@
+---
+title: 在 LobeHub 中使用 EmpirioLabs AI API Key
+description: 在 LobeHub 中配置 EmpirioLabs AI API Key，使用其对话模型，并生成图片和视频。
+tags:
+  - EmpirioLabs AI
+  - API Key
+  - 图片生成
+  - 视频生成
+---
+
+# 在 LobeHub 中使用 EmpirioLabs AI
+
+[EmpirioLabs AI](https://empiriolabs.ai) 为开源、专有与定制技术栈提供专业的 AI 模型托管服务。在 LobeHub 中，一个 EmpirioLabs AI API Key 即可使用其对话、图片生成和视频生成模型。
+
+<Steps>
+  ### 步骤一：获取 EmpirioLabs AI API Key
+
+  - 注册或登录 [EmpirioLabs AI](https://platform.empiriolabs.ai)；
+  - 打开 [API Keys](https://platform.empiriolabs.ai/dashboard/api-keys) 页面，创建一个密钥。密钥以 `sk-empiriolabs-` 开头；
+  - 复制密钥并妥善保存。
+
+  ### 步骤二：在 LobeHub 中配置 EmpirioLabs AI
+
+  - 打开 **应用设置 → AI 服务商**，选择 **EmpirioLabs AI**（可在服务商搜索框中输入 `Empirio` 快速定位）；
+  - 将密钥粘贴到 **API Key** 输入框。修改会自动保存；
+  - 打开服务商名称右侧的开关；
+  - 点击 **检查** 验证密钥。
+
+  ### 步骤三：选择模型
+
+  **模型列表** 中列出了内置的对话、图片和视频模型。点击 **获取模型列表** 可读取 API 当前提供的对话模型，然后启用需要的模型。完整的模型目录见 [EmpirioLabs AI 模型页面](https://empiriolabs.ai/models)。
+
+  <Callout type={'warning'}>
+    请求会计入你的 EmpirioLabs AI 账户。大量生成图片或视频前，请先查看 [EmpirioLabs AI 定价](https://empiriolabs.ai/pricing)。
+  </Callout>
+</Steps>
+
+## 生成图片和视频
+
+- **图片**：在 LobeHub 的图片生成中选择 EmpirioLabs AI 的图片模型。每个模型显示的选项（例如宽高比、分辨率、随机种子）就是该模型支持的参数；
+- **视频**：在 LobeHub 的视频生成中选择 EmpirioLabs AI 的视频模型。视频以任务方式生成，任务完成后 LobeHub 会显示结果。大多数视频需要 1 到 15 分钟；
+- **参考图片**：你添加的图片会以 URL 的形式发送给 EmpirioLabs AI，因此自托管的 LobeHub 需要使用可从公网访问的文件存储。
+
+## 常见问题
+
+**密钥被拒绝（401）**：密钥缺失、填写有误或已不存在。请在 [API Keys](https://platform.empiriolabs.ai/dashboard/api-keys) 页面创建或复制密钥，并粘贴到 **API Key** 输入框。
+
+**余额不足（402）**：账户余额不足以支付本次请求。请在 [EmpirioLabs AI 控制台](https://platform.empiriolabs.ai) 的 Billing 页面充值。
+
+**请求过多（429）**：账户已达到速率限制。请稍候再试。
+
+**列表中找不到某个模型**：点击 **获取模型列表**，或按 [模型页面](https://empiriolabs.ai/models) 上的模型 ID 手动添加。
+
+自托管部署请参阅 [模型服务商环境变量](/zh/docs/self-hosting/environment-variables/model-provider#empiriolabs-ai) 中的 `EMPIRIOLABS_API_KEY`。

@@ -58,6 +58,7 @@ export { LobeCometAPIAI } from './providers/cometapi';
 export { LobeComfyUI } from './providers/comfyui';
 export { LobeDeepSeekAI } from './providers/deepseek';
 export { LobeElevenLabsAI } from './providers/elevenlabs';
+export { LobeEmpirioLabsAI } from './providers/empiriolabs';
 export { LobeGLMCodingPlanAI } from './providers/glmCodingPlan';
 export { LobeGoogleAI } from './providers/google';
 export * from './providers/google/modelId';
