@@ -1,5 +1,7 @@
+import { isDesktop } from '@lobechat/const';
 import type { McpAppThreadEntry } from '@lobechat/const/mcpApp';
 
+import { isInstalledPluginAvailableInCurrentEnv } from '@/helpers/toolAvailability';
 import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 import type { ToolStore } from '@/store/tool/store';
 
@@ -39,6 +41,13 @@ export const selectMcpAppEntrypoints = (
     if (connector && !connector.isEnabled) return [];
     const isMcp = connector && (connector.mcpServerUrl || connector.mcpConnectionType === 'stdio');
     const plugin = state.installedPlugins.find((item) => item.identifier === identifier);
+    // An app only a desktop can run (stdio) is offered there alone: elsewhere opening it always fails
+    if (
+      isMcp
+        ? connector.mcpConnectionType === 'stdio' && !isDesktop
+        : plugin && !isInstalledPluginAvailableInCurrentEnv(plugin)
+    )
+      return [];
     const entries = isMcp
       ? connector.tools.flatMap((tool) => {
           const entry = tool.metadata?.threadEntry as McpAppThreadEntry | undefined;

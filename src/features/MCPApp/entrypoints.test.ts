@@ -1,8 +1,19 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ToolStore } from '@/store/tool/store';
 
 import { mcpEntryTabKey, parseMcpEntryTab, selectMcpAppEntrypoints } from './entrypoints';
+
+const env = vi.hoisted(() => ({ desktop: false }));
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  get isDesktop() {
+    return env.desktop;
+  },
+}));
+afterEach(() => {
+  env.desktop = false;
+});
 
 const entry = { title: 'Notes', toolName: 'open' };
 const state = {
@@ -41,5 +52,41 @@ describe('sidebar app entries', () => {
       toolName: 'open/page',
     });
     expect(parseMcpEntryTab('mcp-entry:bad:%XX')).toBeUndefined();
+  });
+  it('offers apps only a desktop can run (stdio) on the desktop alone', () => {
+    const open = { title: 'Local', toolName: 'open' };
+    const desktopOnly = {
+      ...state,
+      agentConnectors: {},
+      connectors: [
+        {
+          id: 'local',
+          identifier: 'local-connector',
+          isEnabled: true,
+          mcpConnectionType: 'stdio',
+          tools: [{ metadata: { threadEntry: open }, permission: 'auto', toolName: 'open' }],
+        },
+      ],
+      installedPlugins: [
+        ...(state.installedPlugins as object[]),
+        {
+          customParams: { mcp: { command: 'local-mcp', type: 'stdio' } },
+          identifier: 'local-plugin',
+          manifest: { mcpAppEntrypoints: [open] },
+        },
+      ],
+    } as unknown as ToolStore;
+
+    // The remote plugin stays; both stdio apps are left out on the web
+    expect(selectMcpAppEntrypoints(desktopOnly, true).map((item) => item.identifier)).toEqual([
+      'notes',
+    ]);
+
+    env.desktop = true;
+    expect(selectMcpAppEntrypoints(desktopOnly, true).map((item) => item.identifier)).toEqual([
+      'notes',
+      'local-plugin',
+      'local-connector',
+    ]);
   });
 });

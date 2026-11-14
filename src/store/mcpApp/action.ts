@@ -85,6 +85,25 @@ export class McpAppActionImpl {
       useGlobalStore.getState().openWorkingSidebar(mcpAppTabKey(id));
   };
   /**
+   * A host instance mounted the view's frame: from now on it is the one whose
+   * app may end the view. A frame reopened elsewhere (the tab closed, then View)
+   * takes over from the instance it replaces.
+   */
+  ownFrame = (id: string, owner: number) => {
+    const view = useMcpAppStore.getState().views[id];
+    if (!enabled() || !view || view.frameOwner === owner) return;
+    useMcpAppStore.setState(
+      (s) => ({ views: { ...s.views, [id]: { ...s.views[id], frameOwner: owner } } }),
+      false,
+      'mcpApp/ownFrame',
+    );
+  };
+  /** Whether `owner` still runs the view's frame, so its app's requests still count. */
+  ownsFrame = (id: string, owner: number) => {
+    const current = useMcpAppStore.getState().views[id]?.frameOwner;
+    return current === undefined || current === owner;
+  };
+  /**
    * Whether `request` is still the call a tab shows: an older instance of the
    * tab (closed and reopened since) must not act on the current one.
    */

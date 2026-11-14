@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { mcpAppActions } from '@/store/mcpApp/action';
 import { mcpAppContext } from '@/store/mcpApp/context';
@@ -24,6 +24,9 @@ export interface AppPresentationOptions {
   title?: string;
   toolCallId: string;
 }
+
+// Numbers host instances, so a frame knows which one mounted it
+let lastHostInstance = 0;
 
 /** Ownership and protocol callbacks shared by the inline and sidebar hosts. */
 export const useMcpAppPresentation = ({
@@ -87,6 +90,12 @@ export const useMcpAppPresentation = ({
 
   const mode = view?.mode ?? 'inline';
   const supported = !view?.availableModes || view.availableModes.includes(mode);
+  // The host whose location the view is in mounts its frame and owns it
+  const [instance] = useState(() => ++lastHostInstance);
+  const runsFrame = enabled && !!view?.placed && mode === location;
+  useEffect(() => {
+    if (runsFrame) mcpAppActions.ownFrame(toolCallId, instance);
+  }, [instance, runsFrame, toolCallId]);
   const presentation: NonNullable<McpAppViewProps['presentation']> = {
     hostModes: panelAvailable ? ['inline', 'fullscreen'] : ['inline'],
     mode,
@@ -98,7 +107,11 @@ export const useMcpAppPresentation = ({
       setTimeout(() => mcpAppActions.setMode(toolCallId, requested), 0);
       return requested;
     },
-    onTeardown: () => mcpAppActions.dismiss(toolCallId),
+    // An app that finishes leaving after its frame was reopened elsewhere (tab
+    // closed, then View) must not end the instance that replaced it
+    onTeardown: () => {
+      if (mcpAppActions.ownsFrame(toolCallId, instance)) mcpAppActions.dismiss(toolCallId);
+    },
     onUpdateModelContext: (params) => mcpAppContext.update(toolCallId, params),
     onDispose: () => mcpAppContext.clear(toolCallId),
     preferred,

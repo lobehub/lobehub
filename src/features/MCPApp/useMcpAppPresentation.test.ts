@@ -149,6 +149,37 @@ describe('MCP App placement from declarations', () => {
     expect(result.current.view?.dismissed).toBe(true);
   });
 
+  it("ignores a replaced panel frame's late teardown, but not the current one's", () => {
+    mcpAppActions.registerPanel('topic');
+    const panel = { ...options, location: 'fullscreen' as const, preferred: 'fullscreen' as const };
+    const first = renderHook(() => useMcpAppPresentation(panel));
+    decide();
+    const firstPresentation = first.result.current.presentation;
+    // The tab closes while the app saves, then View opens it again
+    first.unmount();
+    const second = renderHook(() => useMcpAppPresentation(panel));
+
+    act(() => firstPresentation.onTeardown());
+    expect(second.result.current.view?.dismissed).toBeFalsy();
+
+    act(() => second.result.current.presentation.onTeardown());
+    expect(second.result.current.view?.dismissed).toBe(true);
+  });
+
+  it('ends the view when its app leaves and no other frame took over', () => {
+    mcpAppActions.registerPanel('topic');
+    const { result, unmount } = renderHook(() =>
+      useMcpAppPresentation({ ...options, preferred: 'inline' }),
+    );
+    decide();
+    const presentation = result.current.presentation;
+    unmount();
+
+    act(() => presentation.onTeardown());
+
+    expect(useMcpAppStore.getState().views.call.dismissed).toBe(true);
+  });
+
   it('falls back when an app cannot run inline on an inline-only host', () => {
     const { result } = renderHook(() => useMcpAppPresentation(options));
     decide();

@@ -10,6 +10,8 @@ import { createDevtools } from '../middleware/createDevtools';
 export interface McpAppViewState {
   availableModes?: McpAppDisplayMode[];
   dismissed?: boolean;
+  /** The host instance whose frame runs the app now; see `mcpAppActions.ownFrame`. */
+  frameOwner?: number;
   icon?: string;
   identifier: string;
   /**
