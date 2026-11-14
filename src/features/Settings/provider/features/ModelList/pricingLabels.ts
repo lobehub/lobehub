@@ -13,7 +13,8 @@ type PricingLabelKey =
   | 'providerModels.item.pricing.inputCharts'
   | 'providerModels.item.pricing.inputMinutes'
   | 'providerModels.item.pricing.inputTokens'
-  | 'providerModels.item.pricing.outputTokens';
+  | 'providerModels.item.pricing.outputTokens'
+  | 'providerModels.item.pricing.song';
 
 type Translate = (key: PricingLabelKey, options: { amount: string }) => string;
 
@@ -94,6 +95,15 @@ export const formatModelPricingLabels = (
       labels = [
         typeof inputRate === 'number' &&
           t('providerModels.item.pricing.inputMinutes', { amount: format(inputRate) }),
+      ];
+      break;
+    }
+    case 'text2music': {
+      const songRate = findUnit(pricing, 'musicGeneration');
+      labels = [
+        songRate?.strategy === 'fixed' &&
+          songRate.unit === 'song' &&
+          t('providerModels.item.pricing.song', { amount: format(songRate.rate) }),
       ];
       break;
     }

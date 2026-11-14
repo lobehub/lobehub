@@ -1,0 +1,102 @@
+---
+title: Music Generation
+description: >-
+  Generate songs from a prompt, lyrics, and style on the Music page, or submit
+  and poll music generation tasks through the LobeHub API.
+tags:
+  - LobeHub
+  - Music Generation
+  - Text to Music
+  - Lyrics
+---
+
+# Music Generation
+
+The **Music** page turns a prompt, lyrics, and style into playable songs. It lists every enabled model of type **Music** (`text2music`) from your configured providers, so you need a provider with at least one music model turned on under **Settings → Provider → Model List → Music**.
+
+## On the Music page
+
+1. Open the **Music** page. It is next to **Image** and **Video** in the creation mode switch, or go to `/music` directly.
+2. Choose a model under **Model**. The page opens on the model you used last, or the first enabled music model.
+3. Describe the song in the prompt box, for example `A warm acoustic pop song about a late-night train ride`.
+4. Fill in the fields the selected model shows. Each model declares its own parameters, so a field appears only when the model supports it:
+   - **Lyrics**: one line per row, with section tags such as `[Verse]` and `[Chorus]`.
+   - **Style** and **Exclude Styles**: genre, mood, vocals, tempo.
+   - **Title**, **Duration**, **Instrumental**, **Write lyrics for me**.
+   - **Reference Audio**: upload a file or paste an audio URL and press Enter.
+   - **Audio Settings**: **Audio Format**, **Sample Rate**, **Bitrate**.
+5. Click **Generate**. It stays disabled until the draft has a prompt, lyrics, a style, or reference audio, and every required field is filled. Song cards appear as **Queued…**, then **Generating…** (usually 1–3 minutes).
+6. When a song finishes, its card shows the cover, title, duration, and tags, with a player. Press play to listen, or download the file.
+
+A failed song shows the reason with **Retry** and **Copy Error Message**. If the provider rejects the API key, the card says so and links to the provider settings with **Open Settings**.
+
+## Through the API
+
+The Music page calls the LobeHub `lambda` tRPC API. You can call it with a LobeHub API key from **Settings → API Keys**; the key needs the `model:invoke` scope. Set these variables first:
+
+```bash
+export LOBEHUB_URL=https://your-lobehub.example.com   # or http://localhost:3010
+export LOBEHUB_API_KEY=sk-lh-xxxxxxxxxxxxxxxx
+```
+
+**1. Create a music topic.** Songs belong to a topic of type `music`.
+
+```bash
+curl -s -X POST "$LOBEHUB_URL/trpc/lambda/generationTopic.createTopic" \
+  -H "X-API-Key: $LOBEHUB_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"json":{"type":"music","title":"API test"}}'
+# → {"result":{"data":{"json":"<generationTopicId>"}}}
+```
+
+**2. Submit the generation.** Set `provider` and `model` to an enabled music model. `params` may only contain the parameters that model declares; unknown keys are rejected.
+
+```bash
+curl -s -X POST "$LOBEHUB_URL/trpc/lambda/music.createMusic" \
+  -H "X-API-Key: $LOBEHUB_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"json":{
+    "generationTopicId":"<generationTopicId>",
+    "provider":"<provider>",
+    "model":"<model>",
+    "params":{
+      "prompt":"A warm acoustic pop song about a late-night train ride",
+      "lyrics":"[Verse]\nCity lights are fading slow\n[Chorus]\nRide the night train home"
+    }}}'
+```
+
+The response contains the batch and one entry per song in `data.generations`. Each entry has an `id` (the generation id) and an `asyncTaskId`:
+
+```json
+{ "result": { "data": { "json": {
+  "success": true,
+  "data": {
+    "batch": { "id": "<batchId>", "model": "<model>", "provider": "<provider>" },
+    "generations": [{ "id": "<generationId>", "asyncTaskId": "<asyncTaskId>" }]
+  }
+} } } }
+```
+
+**3. Poll until each song finishes.** The server polls the provider; you only read the task status. Call this for each entry in `data.generations` until `status` is `success` or `error`:
+
+```bash
+curl -s -G "$LOBEHUB_URL/trpc/lambda/generation.getGenerationStatus" \
+  -H "X-API-Key: $LOBEHUB_API_KEY" \
+  --data-urlencode 'input={"json":{"asyncTaskId":"<asyncTaskId>","generationId":"<generationId>"}}'
+```
+
+`status` moves through `pending` → `processing` → `success`; a request the provider rejects goes to `error`. On `success`, `generation.asset.url` is the audio file stored in LobeHub, and `generation.asset` also has the duration, title, cover, and tags when the provider returns them. On `error`, `error.body.detail` has the provider's message.
+
+## Parameters
+
+| Parameter                           | Meaning                                                |
+| ----------------------------------- | ------------------------------------------------------ |
+| `prompt`                            | Free-form description of the song: genre, mood, scene. |
+| `lyrics`                            | Song lyrics, optionally with tags such as `[Verse]`.   |
+| `style` / `negativeStyle`           | Style tags to use or avoid.                            |
+| `title`                             | Song title.                                            |
+| `instrumental`                      | No vocals; lyrics are not sent.                        |
+| `autoLyrics`                        | Let the model write lyrics from the prompt.            |
+| `duration`                          | Target length in seconds.                              |
+| `referenceAudioUrl`                 | Public URL of a reference track to cover or follow.    |
+| `format` / `sampleRate` / `bitrate` | Output audio settings.                                 |

@@ -1,0 +1,100 @@
+---
+title: 音乐生成
+description: 在音乐页面根据提示词、歌词与风格生成歌曲，或通过 LobeHub API 提交并轮询音乐生成任务。
+tags:
+  - LobeHub
+  - 音乐生成
+  - 文生音乐
+  - 歌词
+---
+
+# 音乐生成
+
+**音乐** 页面可以根据提示词、歌词与风格生成可播放的歌曲。页面会列出已配置服务商中所有已启用的 **音乐**（`text2music`）类型模型，因此需要先在 **设置 → 服务商 → 模型列表 → 音乐** 中开启至少一个音乐模型。
+
+## 在音乐页面生成
+
+1. 打开 **音乐** 页面：在创作模式切换中与 **图片**、**视频** 并列，也可以直接访问 `/music`。
+2. 在 **模型** 中选择模型。页面默认打开上次使用的模型，否则选中第一个已启用的音乐模型。
+3. 在提示词输入框描述歌曲，例如 `一首关于深夜列车的温暖原声流行歌`。
+4. 填写所选模型显示的字段。每个模型声明自己支持的参数，只有模型支持的字段才会出现：
+   - **歌词**：每行一句，可用 `[Verse]`、`[Chorus]` 等标签标记段落。
+   - **风格** 与 **排除风格**：曲风、情绪、人声、速度。
+   - **标题**、**时长**、**纯音乐**、**帮我写歌词**。
+   - **参考音频**：上传文件，或粘贴音频链接后按回车。
+   - **音频设置**：**音频格式**、**采样率**、**码率**。
+5. 点击 **生成**。草稿需要包含提示词、歌词、风格或参考音频之一，且所有必填字段已填写，按钮才可用。歌曲卡片先显示 **排队中…**，再显示 **生成中…**（通常 1–3 分钟）。
+6. 歌曲完成后，卡片显示封面、标题、时长、标签和播放器。点击播放即可试听，也可以下载文件。
+
+生成失败的歌曲会显示原因，并提供 **重试** 与 **复制错误信息**。如果服务商拒绝了 API Key，卡片会说明原因，并通过 **前往设置** 打开服务商设置。
+
+## 通过 API 生成
+
+音乐页面调用的是 LobeHub 的 `lambda` tRPC API。你可以使用 **设置 → API Keys** 中创建的 LobeHub API Key 调用，密钥需要 `model:invoke` 权限。先设置以下变量：
+
+```bash
+export LOBEHUB_URL=https://your-lobehub.example.com   # 或 http://localhost:3010
+export LOBEHUB_API_KEY=sk-lh-xxxxxxxxxxxxxxxx
+```
+
+**1. 创建音乐话题。** 歌曲归属于类型为 `music` 的话题。
+
+```bash
+curl -s -X POST "$LOBEHUB_URL/trpc/lambda/generationTopic.createTopic" \
+  -H "X-API-Key: $LOBEHUB_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"json":{"type":"music","title":"API test"}}'
+# → {"result":{"data":{"json":"<generationTopicId>"}}}
+```
+
+**2. 提交生成。** 把 `provider` 与 `model` 设为一个已启用的音乐模型。`params` 只能包含该模型声明的参数，未知字段会被拒绝。
+
+```bash
+curl -s -X POST "$LOBEHUB_URL/trpc/lambda/music.createMusic" \
+  -H "X-API-Key: $LOBEHUB_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"json":{
+    "generationTopicId":"<generationTopicId>",
+    "provider":"<provider>",
+    "model":"<model>",
+    "params":{
+      "prompt":"A warm acoustic pop song about a late-night train ride",
+      "lyrics":"[Verse]\nCity lights are fading slow\n[Chorus]\nRide the night train home"
+    }}}'
+```
+
+响应包含批次信息，`data.generations` 中每首歌一项，每项有 `id`（生成 ID）和 `asyncTaskId`：
+
+```json
+{ "result": { "data": { "json": {
+  "success": true,
+  "data": {
+    "batch": { "id": "<batchId>", "model": "<model>", "provider": "<provider>" },
+    "generations": [{ "id": "<generationId>", "asyncTaskId": "<asyncTaskId>" }]
+  }
+} } } }
+```
+
+**3. 轮询直到每首歌完成。** 服务端负责轮询服务商，你只需读取任务状态。对 `data.generations` 中的每一项调用以下接口，直到 `status` 为 `success` 或 `error`：
+
+```bash
+curl -s -G "$LOBEHUB_URL/trpc/lambda/generation.getGenerationStatus" \
+  -H "X-API-Key: $LOBEHUB_API_KEY" \
+  --data-urlencode 'input={"json":{"asyncTaskId":"<asyncTaskId>","generationId":"<generationId>"}}'
+```
+
+`status` 依次为 `pending` → `processing` → `success`；服务商拒绝的请求会变为 `error`。成功时，`generation.asset.url` 是保存在 LobeHub 中的音频文件，服务商返回时 `generation.asset` 还包含时长、标题、封面和标签。失败时，`error.body.detail` 是服务商返回的信息。
+
+## 参数
+
+| 参数                                  | 含义                     |
+| ----------------------------------- | ---------------------- |
+| `prompt`                            | 歌曲的自由描述：曲风、情绪、场景。      |
+| `lyrics`                            | 歌词，可带 `[Verse]` 等段落标签。 |
+| `style` / `negativeStyle`           | 想要或要避免的风格标签。           |
+| `title`                             | 歌曲标题。                  |
+| `instrumental`                      | 纯音乐，不发送歌词。             |
+| `autoLyrics`                        | 由模型根据提示词写歌词。           |
+| `duration`                          | 目标时长（秒）。               |
+| `referenceAudioUrl`                 | 用于翻唱或参考的音频公开链接。        |
+| `format` / `sampleRate` / `bitrate` | 输出音频设置。                |

@@ -32,7 +32,7 @@ export const generationTopics = pgTable(
     /** Topic cover image URL */
     coverUrl: text('cover_url'),
 
-    /** Topic type: 'image' or 'video' */
+    /** Topic type: 'image', 'video' or 'music' */
     type: varchar('type', { length: 32 }).notNull().default('image'),
 
     /**

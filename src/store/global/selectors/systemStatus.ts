@@ -526,6 +526,7 @@ const agentListSidebarSectionCollapsed = (s: GlobalState) =>
   s.status.agentListSidebarSectionCollapsed ?? false;
 const imageTopicViewMode = (s: GlobalState) => s.status.imageTopicViewMode || 'grid';
 const imageTopicPanelWidth = (s: GlobalState) => s.status.imageTopicPanelWidth;
+const musicTopicViewMode = (s: GlobalState) => s.status.musicTopicViewMode || 'list';
 const verifyReportPanelWidth = (s: GlobalState) => s.status.verifyReportPanelWidth || 300;
 const videoPanelWidth = (s: GlobalState) => s.status.videoPanelWidth;
 const videoTopicViewMode = (s: GlobalState) => s.status.videoTopicViewMode || 'grid';
@@ -656,6 +657,7 @@ export const systemStatusSelectors = {
   topicOnlyMine,
   topicPageSize,
   videoPanelWidth,
+  musicTopicViewMode,
   videoTopicViewMode,
   videoTopicPanelWidth,
   wideScreen,

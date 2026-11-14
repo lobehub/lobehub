@@ -4,6 +4,7 @@ export { default as GenerationMediaModeSegment } from './GenerationMediaModeSegm
 export { default as GenerationModelNotice } from './GenerationModelNotice';
 export {
   useImageGenerationModelNotice,
+  useMusicGenerationModelNotice,
   useVideoGenerationModelNotice,
 } from './GenerationModelNotice/useGenerationModelNotice';
 export { default as GenerationPromptBlockedNotice } from './GenerationPromptBlockedNotice';

@@ -19,7 +19,7 @@ export const API_KEY_FULL_ACCESS_SCOPE = '*';
 
 /**
  * The selectable scope catalog. `model:invoke` is its own tier because it is
- * the one that burns money (chat/completions, image, video, asr).
+ * the one that burns money (chat/completions, image, video, music, asr).
  *
  * Deliberately absent (a restricted key can never obtain them):
  * - `api_key:*` — keys must not mint keys (self-provisioning)
@@ -290,6 +290,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // numeric telemetry attached to a goal / agent / task / project — same
   // domain as the subjects that own it
   metric: rw('agent:read', 'agent:write'),
+  // submits paid music generation tasks
+  music: { any: 'model:invoke' },
   notebook: rw('knowledge:read', 'knowledge:write'),
   notification: rw('user:read', 'user:write'),
   oauthApp: 'blocked',

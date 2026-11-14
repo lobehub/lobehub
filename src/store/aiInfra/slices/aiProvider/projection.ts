@@ -89,6 +89,7 @@ export type AiProviderRuntimeStateView = AiProviderRuntimeState & {
   enabledChatModelList?: EnabledProviderWithModels[];
   enabledEmbeddingModelList?: EnabledProviderWithModels[];
   enabledImageModelList?: EnabledProviderWithModels[];
+  enabledMusicModelList?: EnabledProviderWithModels[];
   enabledVideoModelList?: EnabledProviderWithModels[];
   isDisplaySnapshot?: true;
 };
@@ -102,6 +103,7 @@ const RUNTIME_STATE_DISPLAY_FIELDS = [
   'enabledEmbeddingModelList',
   'enabledImageAiProviders',
   'enabledImageModelList',
+  'enabledMusicModelList',
   'enabledVideoAiProviders',
   'enabledVideoModelList',
   'modelRedirects',
