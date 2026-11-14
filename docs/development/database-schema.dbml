@@ -1556,6 +1556,28 @@ table chat_groups_agents {
   }
 }
 
+table user_connector_links {
+  id text [pk, not null]
+  user_connector_id uuid [not null]
+  user_id text [not null]
+  name varchar(255) [not null]
+  external_account_id text
+  profile jsonb
+  status text [not null]
+  credentials text [not null]
+  token_expires_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_connector_id, name) [name: 'user_connector_links_connector_name_unique', unique]
+    (user_connector_id, external_account_id) [name: 'user_connector_links_connector_external_account_unique', unique]
+    user_id [name: 'user_connector_links_user_id_idx']
+    token_expires_at [name: 'user_connector_links_token_expires_at_idx']
+  }
+}
+
 table user_connector_tools {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_connector_id uuid [not null]

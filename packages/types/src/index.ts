@@ -94,6 +94,7 @@ export * from './acceptanceComment';
 export * from './acceptanceFlow';
 export * from './acceptanceReview';
 export * from './agentRuntime';
+export * from './connector';
 export * from './oauthApp';
 export * from './openai/chat';
 export * from './openai/plugin';

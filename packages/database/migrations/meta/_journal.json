@@ -1491,6 +1491,13 @@
       "when": 1794296581452,
       "tag": "0212_workspace_member_config",
       "breakpoints": true
+    },
+    {
+      "idx": 213,
+      "version": "7",
+      "when": 1794564751677,
+      "tag": "0213_add_user_connector_links",
+      "breakpoints": true
     }
   ],
   "version": "6"

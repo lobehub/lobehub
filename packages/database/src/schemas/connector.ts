@@ -1,4 +1,9 @@
-import type { CustomPluginParams, ToolManifest } from '@lobechat/types';
+import type {
+  ConnectorLinkProfile,
+  ConnectorLinkStatus,
+  CustomPluginParams,
+  ToolManifest,
+} from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -12,6 +17,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
+import { idGenerator } from '../utils/idGenerator';
 import { timestamps, timestamptz, varchar255 } from './_helpers';
 import { agents } from './agent';
 import { users } from './user';
@@ -246,6 +252,40 @@ export const userConnectors = pgTable(
 
 export type NewUserConnector = typeof userConnectors.$inferInsert;
 export type UserConnectorItem = typeof userConnectors.$inferSelect;
+
+export const userConnectorLinks = pgTable(
+  'user_connector_links',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => idGenerator('connectorLinks'))
+      .notNull(),
+    userConnectorId: uuid('user_connector_id')
+      .references(() => userConnectors.id, { onDelete: 'cascade' })
+      .notNull(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    name: varchar255('name').notNull(),
+    externalAccountId: text('external_account_id'),
+    profile: jsonb('profile').$type<ConnectorLinkProfile>(),
+    status: text('status').$type<ConnectorLinkStatus>().notNull(),
+    credentials: text('credentials').notNull(),
+    tokenExpiresAt: timestamptz('token_expires_at'),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex('user_connector_links_connector_name_unique').on(t.userConnectorId, t.name),
+    uniqueIndex('user_connector_links_connector_external_account_unique')
+      .on(t.userConnectorId, t.externalAccountId)
+      .where(sql`${t.externalAccountId} IS NOT NULL`),
+    index('user_connector_links_user_id_idx').on(t.userId),
+    index('user_connector_links_token_expires_at_idx').on(t.tokenExpiresAt),
+  ],
+);
+
+export type UserConnectorLinkItem = typeof userConnectorLinks.$inferSelect;
+export type NewUserConnectorLink = typeof userConnectorLinks.$inferInsert;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // user_connector_tools — types & consts
