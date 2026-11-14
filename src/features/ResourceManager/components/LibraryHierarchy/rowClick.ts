@@ -21,3 +21,20 @@ export const isRowOwnClick = ({ currentTarget, target }: RowClickEvent): boolean
   const element = target instanceof Element ? target : target.parentElement;
   return !element?.closest(ROW_ACTIONS_SELECTOR);
 };
+
+export type FolderRowClickAction = 'ignore' | 'navigate' | 'toggle';
+
+/**
+ * What a click on a folder row does. Opening a folder already expands it (the
+ * sidebar expands the breadcrumb chain), so clicking the folder the explorer
+ * already shows toggles it like the caret instead of re-navigating; any other
+ * folder opens. Flat search-result rows have no caret and always open.
+ */
+export const resolveFolderRowClick = (
+  event: RowClickEvent,
+  { flat, isActive }: { flat?: boolean; isActive: boolean },
+): FolderRowClickAction => {
+  if (!isRowOwnClick(event)) return 'ignore';
+
+  return isActive && !flat ? 'toggle' : 'navigate';
+};

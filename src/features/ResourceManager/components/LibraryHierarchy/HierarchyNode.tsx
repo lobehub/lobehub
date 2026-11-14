@@ -32,7 +32,7 @@ import { useFileItemDropdown } from '../Explorer/ItemDropdown/useFileItemDropdow
 import FolderAddButton from './FolderAddButton';
 import HierarchyNodeMenuButton from './HierarchyNodeMenuButton';
 import HierarchyNodeToggle from './HierarchyNodeToggle';
-import { isRowOwnClick } from './rowClick';
+import { isRowOwnClick, resolveFolderRowClick } from './rowClick';
 import { isHierarchyNodeActive, resolveDeletedFolderRedirect } from './selection';
 import { styles } from './styles';
 
@@ -306,13 +306,10 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     if (item.isFolder) {
       const isActive = isHierarchyNodeActive(item, selectedKey);
 
-      // Opening a folder expands it (via the breadcrumb effect), so clicking the
-      // folder the explorer already shows toggles it instead of re-navigating,
-      // mirroring the caret.
       const handleRowClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!isRowOwnClick(e)) return;
-        if (isActive && !flat) onToggle(item.id);
-        else handleFolderClick(item.id);
+        const action = resolveFolderRowClick(e, { flat, isActive });
+        if (action === 'toggle') onToggle(item.id);
+        else if (action === 'navigate') handleFolderClick(item.id);
       };
 
       return (

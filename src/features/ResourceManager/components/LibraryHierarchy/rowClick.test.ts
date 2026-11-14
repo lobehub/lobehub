@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { isRowOwnClick } from './rowClick';
+import { isRowOwnClick, resolveFolderRowClick } from './rowClick';
 
 const buildRow = () => {
   const row = document.createElement('div');
@@ -51,5 +51,50 @@ describe('isRowOwnClick', () => {
 
     expect(isRowOwnClick({ currentTarget: row, target: menuItem })).toBe(false);
     expect(isRowOwnClick({ currentTarget: row, target: null })).toBe(false);
+  });
+});
+
+describe('resolveFolderRowClick', () => {
+  it('toggles the active folder instead of re-navigating into it', () => {
+    const row = buildRow();
+    const name = row.querySelector('.name');
+
+    expect(resolveFolderRowClick({ currentTarget: row, target: name }, { isActive: true })).toBe(
+      'toggle',
+    );
+  });
+
+  it('navigates into a folder that is not active', () => {
+    const row = buildRow();
+    const name = row.querySelector('.name');
+
+    expect(resolveFolderRowClick({ currentTarget: row, target: name }, { isActive: false })).toBe(
+      'navigate',
+    );
+  });
+
+  it('always navigates from a flat search-result row, which has no caret', () => {
+    const row = buildRow();
+    const name = row.querySelector('.name');
+
+    expect(
+      resolveFolderRowClick({ currentTarget: row, target: name }, { flat: true, isActive: true }),
+    ).toBe('navigate');
+  });
+
+  it('ignores clicks on the row actions and from portaled menus', () => {
+    const row = buildRow();
+    const menuItem = document.createElement('div');
+    document.body.append(menuItem);
+
+    expect(
+      resolveFolderRowClick(
+        { currentTarget: row, target: row.querySelector('.more') },
+        { isActive: true },
+      ),
+    ).toBe('ignore');
+    expect(
+      resolveFolderRowClick({ currentTarget: row, target: menuItem }, { isActive: false }),
+    ).toBe('ignore');
   });
 });
