@@ -118,44 +118,46 @@ function EnabledChannelPage() {
         onOpenSideBrowser={(url) => openBrowser(channelBrowserSessionId(channelId), url)}
       >
         <Flexbox horizontal ref={conversationRef} {...stylex.props(styles.conversations)}>
-          {pageThreadId ? (
+          {/* The Channel stays mounted behind a thread page, so its composer keeps the draft. */}
+          <ChannelConversation
+            channelId={channelId}
+            hidden={!!pageThreadId}
+            inert={
+              !!pageThreadId ||
+              (!!(threadId || threadDraft || portalOpen) &&
+                (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT) ||
+              (membersOpen && (conversationWidth ?? 1000) < MEMBER_FLOAT_BREAKPOINT) ||
+              (!!visibleTopic && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
+            }
+            key={channelId}
+            onOpenThread={(nextThreadId, toggle) => {
+              setTopic(null);
+              // A send that finishes behind an open report (toggle: false) must not close it.
+              if (toggle !== false) clearPortalStack();
+              // Under a report the thread only looks closed, so bring it back, don't toggle it off.
+              panel.openThread(nextThreadId, portalOpen ? false : toggle);
+            }}
+            onOpenTopic={(next) => {
+              panel.close();
+              setMembersChannelId(null);
+              clearPortalStack();
+              setTopic({ ...next, channelId });
+            }}
+            onStartThread={(draft) => {
+              setTopic(null);
+              clearPortalStack();
+              panel.openDraft(draft);
+            }}
+          />
+          {pageThreadId && (
             <ChannelConversation
               channelId={channelId}
-              key={`${channelId}:${pageThreadId}`}
-              threadId={pageThreadId}
               inert={
                 (membersOpen && (conversationWidth ?? 1000) < MEMBER_FLOAT_BREAKPOINT) ||
                 (portalOpen && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
               }
-            />
-          ) : (
-            <ChannelConversation
-              channelId={channelId}
-              key={channelId}
-              inert={
-                (!!(threadId || threadDraft || portalOpen) &&
-                  (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT) ||
-                (membersOpen && (conversationWidth ?? 1000) < MEMBER_FLOAT_BREAKPOINT) ||
-                (!!visibleTopic && (conversationWidth ?? 1000) < THREAD_FLOAT_BREAKPOINT)
-              }
-              onOpenThread={(nextThreadId, toggle) => {
-                setTopic(null);
-                // A send that finishes behind an open report (toggle: false) must not close it.
-                if (toggle !== false) clearPortalStack();
-                // Under a report the thread only looks closed, so bring it back, don't toggle it off.
-                panel.openThread(nextThreadId, portalOpen ? false : toggle);
-              }}
-              onOpenTopic={(next) => {
-                panel.close();
-                setMembersChannelId(null);
-                clearPortalStack();
-                setTopic({ ...next, channelId });
-              }}
-              onStartThread={(draft) => {
-                setTopic(null);
-                clearPortalStack();
-                panel.openDraft(draft);
-              }}
+              key={`${channelId}:${pageThreadId}`}
+              threadId={pageThreadId}
             />
           )}
           {detail &&

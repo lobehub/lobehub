@@ -38,6 +38,8 @@ import { type ChannelReplyTarget, useReplyTarget } from './useReplyTarget';
 
 interface ChannelConversationProps {
   channelId: string;
+  /** Covered by a thread page: still mounted, so the composer keeps the draft it was writing. */
+  hidden?: boolean;
   /** Mounted beside a thread panel that covers it, so keep it out of the tab order. */
   inert?: boolean;
   onOpenThread?: (threadId: string, toggle?: boolean) => void;
@@ -48,6 +50,7 @@ interface ChannelConversationProps {
 
 const Timeline = ({
   channelId,
+  hidden,
   inert,
   threadId = null,
   onOpenThread,
@@ -60,7 +63,7 @@ const Timeline = ({
   const reply = useReplyTarget(channelDraftKey(channelId, threadId));
   const [jumpTarget, setJumpTarget] = useState<ChannelReplyTarget | null>(null);
   const [highlighted, setHighlighted] = useState<string | null>(null);
-  const followSent = useFollowSent(threadId, onOpenThread);
+  const followSent = useFollowSent(threadId, onOpenThread, !!hidden);
   useEffect(() => {
     if (!highlighted) return;
     const timer = setTimeout(() => setHighlighted(null), 1600);
@@ -104,16 +107,20 @@ const Timeline = ({
   }, [detail, jumpTarget]);
 
   useEffect(() => {
+    // A Channel covered by a thread page has no layout: scrolling it there targets a zero-height
+    // box, so the scroll is deferred and replayed once the Channel is visible again.
+    if (hidden) return;
     const feed = feedRef.current;
     if (feed && followLatest.current && before === undefined) feed.scrollTop = feed.scrollHeight;
-  }, [feedTail, before]);
+  }, [feedTail, before, hidden]);
 
   useEffect(() => {
-    if (threadId || sequence === undefined || before !== undefined) return;
+    // A Channel covered by a thread page is not being read: mark it read once it is back.
+    if (hidden || threadId || sequence === undefined || before !== undefined) return;
     void channelActions
       .markRead(channelId, sequence)
       .catch((error: unknown) => console.error('Failed to mark Channel read', error));
-  }, [channelId, threadId, sequence, before]);
+  }, [channelId, hidden, threadId, sequence, before]);
 
   const activeMembers = detail?.members.filter((member) => member.status === 'active') ?? [];
   const thread = threadId ? detail?.threads.find((entry) => entry.id === threadId) : undefined;
@@ -136,7 +143,7 @@ const Timeline = ({
     <Flexbox
       data-channel-conversation={threadId || 'main'}
       inert={inert}
-      {...stylex.props(styles.body)}
+      {...stylex.props(styles.body, hidden && styles.bodyCovered)}
     >
       <AsyncBoundary
         data={detail}
