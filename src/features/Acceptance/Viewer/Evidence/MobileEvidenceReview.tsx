@@ -265,7 +265,6 @@ export const MobileEvidenceReview = memo<{ model: RejectReviewModel }>(({ model 
                       autoSize={{ maxRows: 10, minRows: 4 }}
                       placeholder={t('acceptance.review.rejectPlaceholder')}
                       style={{ fontSize: 16 }}
-                      styles={{ input: { fontSize: 16 } }}
                       value={comment}
                       onChange={(event) => model.setComment(event.target.value)}
                       onPaste={handlePaste}
