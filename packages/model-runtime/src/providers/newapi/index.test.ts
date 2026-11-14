@@ -238,6 +238,100 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       expect(result).toHaveLength(1);
     });
 
+    it('keeps an image-generation model without a local parameter definition', async () => {
+      const mockClient = createModelsClient();
+      mockClient.models.list.mockResolvedValue({
+        data: [
+          {
+            created: 123,
+            id: 'gpt-image-2.5',
+            object: 'model',
+            owned_by: 'openai',
+            supported_endpoint_types: ['openai', 'image-generation'],
+          },
+        ],
+      });
+
+      mockFetch.mockResolvedValue({ ok: false });
+      mockProcessMultiProviderModelList.mockImplementation((models) => models);
+
+      await params.models({ client: mockClient as any });
+
+      expect(mockProcessMultiProviderModelList).toHaveBeenCalledWith(
+        [
+          expect.objectContaining({
+            id: 'gpt-image-2.5',
+            fallbackParameters: { prompt: { default: '' } },
+          }),
+        ],
+        'newapi',
+      );
+    });
+
+    it('uses pricing endpoint types when the model entry omits them', async () => {
+      const mockClient = createModelsClient('gpt-image-2.5');
+
+      mockFetch.mockResolvedValue({
+        json: async () => ({
+          data: [
+            {
+              enable_groups: ['default'],
+              model_name: 'gpt-image-2.5',
+              quota_type: 1,
+              supported_endpoint_types: ['image-generation'],
+            },
+          ],
+          success: true,
+        }),
+        ok: true,
+      });
+      mockProcessMultiProviderModelList.mockImplementation((models) => models);
+
+      await params.models({ client: mockClient as any });
+
+      expect(mockProcessMultiProviderModelList).toHaveBeenCalledWith(
+        [
+          expect.objectContaining({
+            id: 'gpt-image-2.5',
+            fallbackParameters: { prompt: { default: '' } },
+          }),
+        ],
+        'newapi',
+      );
+    });
+
+    it('keeps an image-generation model that only appears in pricing', async () => {
+      const mockClient = createModelsClient();
+
+      mockFetch.mockResolvedValue({
+        json: async () => ({
+          data: [
+            {
+              enable_groups: ['default'],
+              model_name: 'gpt-image-2.5',
+              quota_type: 1,
+              supported_endpoint_types: ['openai', 'image-generation'],
+            },
+          ],
+          success: true,
+        }),
+        ok: true,
+      });
+      mockProcessMultiProviderModelList.mockImplementation((models) => models);
+
+      await params.models({ client: mockClient as any });
+
+      expect(mockProcessMultiProviderModelList).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'gpt-image-2.5',
+            fallbackParameters: { prompt: { default: '' } },
+          }),
+        ]),
+        'newapi',
+      );
+    });
+
     it('should handle successful pricing fetch and enrich models', async () => {
       const mockClient = createModelsClient();
 
