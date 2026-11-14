@@ -32,6 +32,14 @@ export interface UserModelRowFacts {
 /** What a model can take natively, as the run decided it. */
 export type ModelMediaCapabilities = Pick<ModelAbilities, 'audio' | 'video' | 'vision'>;
 
+/** What automatic context compression measures the conversation against. */
+export interface CompressionModelFacts {
+  /** The window the threshold is computed from: the user's own model row, else the model-bank card. */
+  maxWindowToken?: number;
+  /** The model-bank card's share of the window that triggers compression. */
+  modelThresholdRatio?: number;
+}
+
 /**
  * Every model fact an operation read once when it was created: the cards the
  * rules match against, the user's own model row, the media capabilities and the
@@ -45,6 +53,11 @@ export type ModelMediaCapabilities = Pick<ModelAbilities, 'audio' | 'video' | 'v
 export interface FrozenModelFacts {
   /** The provider's card for `model` plus, when it exists, the canonical card of the same id under another provider. */
   cards: ModelCardFacts[];
+  /**
+   * Absent when the user's model row could not be read at creation, and on
+   * operations created before it existed; each step then resolves it live.
+   */
+  compression?: CompressionModelFacts;
   mediaCapabilities?: ModelMediaCapabilities;
   /** The model the facts were read for; a mismatch (e.g. a compression model) means resolve live. */
   model: string;

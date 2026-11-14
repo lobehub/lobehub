@@ -257,6 +257,23 @@ describe('aiModelSelectors', () => {
         aiModelSelectors.modelContextWindowTokens('model4', 'provider2')(mockState),
       ).toBeUndefined();
     });
+
+    it('should get the model compression threshold ratio', () => {
+      const state = {
+        ...mockState,
+        enabledAiModels: [
+          { ...mockState.enabledAiModels![0], compressionThresholdRatio: 0.75 },
+          ...mockState.enabledAiModels!.slice(1),
+        ],
+      } as typeof mockState;
+
+      expect(aiModelSelectors.modelCompressionThresholdRatio('model1', 'provider1')(state)).toBe(
+        0.75,
+      );
+      expect(
+        aiModelSelectors.modelCompressionThresholdRatio('model4', 'provider2')(mockState),
+      ).toBeUndefined();
+    });
   });
 
   describe('modelDisabledParams', () => {
