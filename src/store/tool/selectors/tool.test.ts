@@ -209,3 +209,76 @@ describe('toolSelectors', () => {
     });
   });
 });
+
+// Marketplace and custom MCP installs land only in `user_connectors` now: chat
+// must discover and activate them the way it did their plugin rows
+describe('MCP connectors in tool discovery', () => {
+  const connectorTool = (toolName: string) => ({
+    crudType: 'read',
+    description: `${toolName} tool`,
+    displayName: null,
+    id: toolName,
+    inputSchema: { properties: {}, type: 'object' },
+    permission: 'auto',
+    toolName,
+    userConnectorId: 'c',
+  });
+  const marketplace = (identifier: string, patch: Record<string, unknown> = {}) => ({
+    id: identifier,
+    identifier,
+    isEnabled: true,
+    mcpConnectionType: 'http',
+    mcpServerUrl: `https://${identifier}.example.com/mcp`,
+    metadata: { marketplaceInstalled: true },
+    name: `${identifier} name`,
+    sourceType: 'marketplace',
+    status: 'connected',
+    tools: [connectorTool('search')],
+    ...patch,
+  });
+  const state = (connectors: unknown[]) =>
+    ({ ...mockState, connectors }) as unknown as ToolStoreState;
+
+  it('lists a finished marketplace install and a custom connector', () => {
+    const s = state([
+      marketplace('notes-mcp'),
+      marketplace('my-custom', { metadata: {}, sourceType: 'custom' }),
+    ]);
+
+    const ids = toolSelectors.availableToolsForDiscovery(s).map((tool) => tool.identifier);
+
+    expect(ids).toEqual(expect.arrayContaining(['notes-mcp', 'my-custom']));
+    expect(toolSelectors.availableToolsForDiscovery(s)).toContainEqual({
+      description: 'notes-mcp name connector with 1 tools',
+      identifier: 'notes-mcp',
+      name: 'notes-mcp name',
+    });
+  });
+
+  it('leaves out unfinished installs, stdio servers off desktop, and plugin-served ids', () => {
+    const s = state([
+      marketplace('pending-mcp', { metadata: {}, status: 'disconnected' }),
+      marketplace('local-mcp', { mcpConnectionType: 'stdio', mcpServerUrl: null }),
+      // A plugin row still serves this identifier: one entry, the plugin's
+      marketplace('plugin-1'),
+    ]);
+
+    const ids = toolSelectors.availableToolsForDiscovery(s).map((tool) => tool.identifier);
+
+    expect(ids).not.toContain('pending-mcp');
+    expect(ids).not.toContain('local-mcp');
+    expect(ids.filter((id) => id === 'plugin-1')).toHaveLength(1);
+  });
+
+  it("reads a connector-only identifier's manifest from its connector", () => {
+    const s = state([marketplace('notes-mcp'), marketplace('plugin-1')]);
+
+    expect(toolSelectors.getManifestById('notes-mcp')(s)).toMatchObject({
+      api: [expect.objectContaining({ name: 'search' })],
+      identifier: 'notes-mcp',
+      type: 'mcp',
+    });
+    // A plugin row keeps serving its identifier
+    expect(toolSelectors.getManifestById('plugin-1')(s)?.api).toEqual([{ name: 'api-1' }]);
+  });
+});

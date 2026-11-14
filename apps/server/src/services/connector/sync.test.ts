@@ -228,6 +228,31 @@ describe('syncConnectorToolsById', () => {
     ]);
   });
 
+  it('drops only the auto tools the server no longer lists when asked to', async () => {
+    vi.mocked(mcpService.listRawTools).mockResolvedValue([
+      { description: 'Kept', inputSchema: { type: 'object' }, name: 'kept' },
+    ]);
+    const deleteToolsNotIn = vi.fn();
+    const connectorToolModel = {
+      deleteToolsNotIn,
+      queryByConnector: async () => [
+        { permission: 'auto', toolName: 'kept' },
+        { permission: 'auto', toolName: 'gone' },
+        { permission: 'needs_approval', toolName: 'gated' },
+      ],
+      upsertMany: vi.fn(),
+    };
+    const connectorModel = { findById: async () => httpConnector(null), updateStatus: vi.fn() };
+
+    await syncConnectorToolsById('c1', { connectorModel, connectorToolModel } as any);
+    expect(deleteToolsNotIn).not.toHaveBeenCalled();
+
+    await syncConnectorToolsById('c1', { connectorModel, connectorToolModel } as any, {
+      pruneMissingAutoTools: true,
+    });
+    expect(deleteToolsNotIn).toHaveBeenCalledWith('c1', ['kept', 'gated']);
+  });
+
   it.each([true, false])(
     "lists on a session announcing MCP Apps under the user's flag (%s)",
     async (enabled) => {

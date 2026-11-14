@@ -1,4 +1,5 @@
 import { AGENT_PLAN_FILE_TYPE, isDesktop } from '@lobechat/const';
+import type { AvailablePluginInfo } from '@lobechat/context-engine';
 import type { ContextFactProviders, ContextFactRequest, CredentialSummary } from '@lobechat/mecha';
 import { type AgentShareVisitorContext, getActivePluginIds } from '@lobechat/types';
 
@@ -27,6 +28,7 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 import { getUserStoreState } from '@/store/user';
 import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user/selectors';
 
@@ -199,13 +201,31 @@ export const createBrowserContextFactProviders = ({
     return result.data as CredentialSummary[];
   },
 
-  listCustomPlugins: async () =>
-    pluginSelectors.installedCustomPluginMetaList(getToolStoreState()).map((plugin) => ({
-      description: plugin.description,
-      identifier: plugin.identifier,
-      name: plugin.title || plugin.identifier,
-      type: 'custom' as const,
-    })),
+  // Custom connectors (every install now) and the custom plugin rows older
+  // installs left, one entry per identifier: the server provider's rule.
+  listCustomPlugins: async () => {
+    const toolState = getToolStoreState();
+    const plugins = new Map<string, AvailablePluginInfo>();
+    for (const connector of connectorSelectors.customConnectors(toolState)) {
+      const description = connector.metadata?.description;
+      plugins.set(connector.identifier, {
+        description: typeof description === 'string' ? description : undefined,
+        identifier: connector.identifier,
+        name: connector.name || connector.identifier,
+        type: 'custom',
+      });
+    }
+    for (const plugin of pluginSelectors.installedCustomPluginMetaList(toolState)) {
+      if (plugins.has(plugin.identifier)) continue;
+      plugins.set(plugin.identifier, {
+        description: plugin.description,
+        identifier: plugin.identifier,
+        name: plugin.title || plugin.identifier,
+        type: 'custom',
+      });
+    }
+    return [...plugins.values()];
+  },
 
   listEnabledProviders: async () =>
     (getAiInfraStoreState().enabledChatModelList || []).map((provider) => ({

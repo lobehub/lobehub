@@ -1,3 +1,10 @@
+import {
+  hasCallableMcpEndpoint,
+  isMarketplaceInstallCompleted,
+  isMarketplaceInstallRunnable,
+} from '@lobechat/const';
+
+import type { ToolStoreState } from '../../initialState';
 import type { ToolStore } from '../../store';
 import type { AgentBoundConnector, ConnectorTool, ConnectorWithTools } from './types';
 
@@ -38,18 +45,65 @@ const connectedConnectors = (s: ToolStore): ConnectorWithTools[] =>
 const customConnectors = (s: ToolStore): ConnectorWithTools[] =>
   (s.connectors ?? []).filter((c) => c.sourceType === 'custom');
 
+/**
+ * Marketplace MCPs whose install finished on the connector path. An OAuth row
+ * can connect after the user canceled, so only the install's own mark counts.
+ */
+const installedMarketplaceConnectors = (s: ToolStoreState): ConnectorWithTools[] =>
+  (s.connectors ?? []).filter(
+    (c) =>
+      c.sourceType === 'marketplace' &&
+      hasCallableMcpEndpoint(c) &&
+      isMarketplaceInstallCompleted(c.metadata),
+  );
+
+const isMarketplaceConnectorInstalled =
+  (identifier: string) =>
+  (s: ToolStoreState): boolean =>
+    installedMarketplaceConnectors(s).some((c) => c.identifier === identifier);
+
+/**
+ * Finished marketplace installs that have no legacy plugin row. Lists show
+ * them beside installed plugins; one with a legacy row is listed as that plugin.
+ */
+const marketplaceMcpConnectors = (s: ToolStoreState): ConnectorWithTools[] => {
+  const legacy = new Set((s.installedPlugins ?? []).map((plugin) => plugin.identifier));
+  return installedMarketplaceConnectors(s).filter((c) => !legacy.has(c.identifier));
+};
+
+/**
+ * The marketplace connector `identifier`'s tools run on, whether or not a
+ * legacy plugin row remains: a call goes to a connector with an endpoint
+ * before the plugin, so its connection settings are edited on the connector.
+ */
+const marketplaceMcpConnectorByIdentifier =
+  (identifier: string) =>
+  (s: ToolStoreState): ConnectorWithTools | undefined =>
+    (s.connectors ?? []).find(
+      (c) =>
+        c.identifier === identifier && c.sourceType === 'marketplace' && hasCallableMcpEndpoint(c),
+    );
+
+/** MCP servers the user added as connectors: custom ones and marketplace installs. */
+const userMcpConnectors = (s: ToolStoreState): ConnectorWithTools[] => [
+  ...(s.connectors ?? []).filter((c) => c.sourceType === 'custom'),
+  ...marketplaceMcpConnectors(s),
+];
+
 /** Remote marketplace OAuth MCPs also execute with server-held credentials. */
-const executableMcpConnectors = (s: ToolStore): ConnectorWithTools[] => {
+const executableMcpConnectors = (
+  s: Pick<ToolStoreState, 'connectors' | 'installedPlugins'>,
+): ConnectorWithTools[] => {
   // A late OAuth callback may connect after the user canceled installation.
-  // Marketplace tools enter the runtime only after the plugin install completes.
+  // Marketplace tools enter the runtime only once the install has finished and
+  // the row is connected, the rule every call path applies.
   const installed = new Set((s.installedPlugins ?? []).map((plugin) => plugin.identifier));
   return (s.connectors ?? []).filter(
     (c) =>
       c.sourceType === 'custom' ||
       (c.sourceType === 'marketplace' &&
-        !!c.mcpServerUrl &&
-        c.status === 'connected' &&
-        installed.has(c.identifier)),
+        hasCallableMcpEndpoint(c) &&
+        isMarketplaceInstallRunnable(c, installed.has(c.identifier))),
   );
 };
 
@@ -166,6 +220,10 @@ export const connectorSelectors = {
   connectorToolsGrouped,
   customConnectors,
   executableMcpConnectors,
+  installedMarketplaceConnectors,
+  isMarketplaceConnectorInstalled,
+  marketplaceMcpConnectorByIdentifier,
+  marketplaceMcpConnectors,
   connectorToolsGroupedByIdentifier:
     (identifier: string) =>
     (s: ToolStore): GroupedTools => {
@@ -182,4 +240,5 @@ export const connectorSelectors = {
       return connector ? (s.connectorSyncing[connector.id] ?? false) : false;
     },
   notConnectedConnectors,
+  userMcpConnectors,
 };

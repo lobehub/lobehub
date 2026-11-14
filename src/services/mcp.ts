@@ -1,4 +1,10 @@
-import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
+import {
+  CURRENT_VERSION,
+  hasCallableMcpEndpoint,
+  isDesktop,
+  isMarketplaceInstallRunnable,
+  keepsDesktopStdioExecution,
+} from '@lobechat/const';
 import {
   getMcpServerFingerprint,
   isSyncedMcpToolVisibleTo,
@@ -41,6 +47,48 @@ function calculateObjectSizeBytes(obj: any): number {
     return 0;
   }
 }
+
+/**
+ * Report a tool call this machine ran to the Market, without affecting the
+ * call. The server reports the calls it runs (`tools.mcp.callTool`,
+ * `market.callCloudMcpEndpoint`, `connector.callTool`).
+ */
+const reportLocalCall = (call: {
+  args?: string;
+  command?: string;
+  customPluginInfo?: CallReportRequest['customPluginInfo'];
+  failure?: unknown;
+  identifier: string;
+  isCustomPlugin: boolean;
+  mcpType?: string;
+  result?: MCPToolCallResult;
+  sessionId?: string;
+  startTime: number;
+  toolName: string;
+  version: string;
+}) => {
+  const success = call.failure === undefined;
+  const reportData: CallReportRequest = {
+    callDurationMs: Date.now() - call.startTime,
+    customPluginInfo: call.customPluginInfo,
+    errorCode: success ? undefined : 'CALL_FAILED',
+    errorMessage: success ? undefined : (call.failure as Error)?.message,
+    identifier: call.identifier,
+    isCustomPlugin: call.isCustomPlugin,
+    metadata: { appVersion: CURRENT_VERSION, command: call.command, mcpType: call.mcpType },
+    methodName: call.toolName,
+    methodType: 'tool' as const,
+    requestSizeBytes: calculateObjectSizeBytes(safeParseJSON(call.args) || call.args),
+    responseSizeBytes: success && call.result ? calculateObjectSizeBytes(call.result.state) : 0,
+    sessionId: call.sessionId,
+    success,
+    version: call.version,
+  };
+
+  discoverService.reportPluginCall(reportData).catch((reportError) => {
+    console.warn('Failed to report MCP tool call:', reportError);
+  });
+};
 
 /** A tool a local MCP server lists, as the desktop main process reports it. */
 export interface LocalMcpTool {
@@ -217,21 +265,28 @@ class MCPService {
 
     // Connector-first: HTTP connectors use their server-held credentials.
     // Standalone desktop stdio connectors use local IPC; configured device
-    // gateways keep the existing server route for conversation calls.
+    // gateways keep the existing server route for conversation calls, except
+    // for marketplace and protocol-link stdio installs, which ran here as plugins.
     // Only connectors with a real MCP endpoint are routed here — Lobehub/Composio
     // skills synced into the connector store have no mcpServerUrl and keep their
     // original executor path.
     const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
-    const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
     const installPlugin = pluginSelectors.getInstalledPluginById(identifier)(s);
     const customPlugin = pluginSelectors.getCustomPluginById(identifier)(s);
 
     const plugin = installPlugin || customPlugin;
+    // An unfinished marketplace install (an interrupted reinstall over a plugin
+    // row, a late OAuth callback after a cancel) is not routed to: its tool rows
+    // may not match its endpoint. A plugin row still serves the call.
+    const resolved = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
+    const connector =
+      resolved && isMarketplaceInstallRunnable(resolved, !!plugin) ? resolved : undefined;
 
     // An agent's own connectors may not be loaded on the client yet; with no
     // plugin to fall back to, let the server resolve the identifier for the agent.
+    // A market-hosted (cloud) connector has no URL: the server's connector route runs it.
     const isConnector = connector
-      ? connector.isEnabled && (!!connector.mcpServerUrl || connector.mcpConnectionType === 'stdio')
+      ? connector.isEnabled && hasCallableMcpEndpoint(connector)
       : !!agentId && !plugin;
     if (isConnector) {
       const { lambdaClient } = await import('@/libs/trpc/client');
@@ -239,7 +294,10 @@ class MCPService {
         connector &&
         isDesktop &&
         connector.mcpConnectionType === 'stdio' &&
-        (fromMcpApp || getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured === false);
+        (fromMcpApp ||
+          // These stdio servers ran on this desktop as plugins, gateway or not
+          keepsDesktopStdioExecution(connector) ||
+          getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured === false);
       // A view's calls run where its result was produced
       if (fromMcpApp && !!runsHere !== !!onThisDevice) throw new Error(VIEW_SITE_MISMATCH);
       if (runsHere) {
@@ -270,22 +328,49 @@ class MCPService {
           throw new Error(VIEW_SERVER_MOVED);
         }
         throwIfAborted(signal);
-        const result = await ensureElectronIpc().mcp.callTool(
-          serializeMcpIpcPayload({
-            args: safeParseJSON(args) ?? {},
-            env: config.env,
-            ...(fromMcpApp && { fromApp: true }),
-            mcpApps,
-            params: {
-              args: config.args ?? [],
+        const startTime = Date.now();
+        let failure: unknown;
+        let result: MCPToolCallResult | undefined;
+        try {
+          const serialized = await ensureElectronIpc().mcp.callTool(
+            serializeMcpIpcPayload({
+              args: safeParseJSON(args) ?? {},
+              env: config.env,
+              ...(fromMcpApp && { fromApp: true }),
+              mcpApps,
+              params: {
+                args: config.args ?? [],
+                command: config.command,
+                name: detail.identifier,
+                type: 'stdio',
+              },
+              toolName: apiName,
+            }),
+          );
+          result = await markLocalView(deserializeMcpIpcPayload<MCPToolCallResult>(serialized));
+          return result;
+        } catch (error) {
+          failure = error ?? new Error('MCP tool call failed');
+          throw error;
+        } finally {
+          // A marketplace server's calls are reported as its plugin's were
+          if (connector.sourceType === 'marketplace') {
+            const version = (detail.metadata as { version?: unknown } | null)?.version;
+            reportLocalCall({
+              args,
               command: config.command,
-              name: detail.identifier,
-              type: 'stdio',
-            },
-            toolName: apiName,
-          }),
-        );
-        return markLocalView(deserializeMcpIpcPayload<MCPToolCallResult>(result));
+              failure,
+              identifier,
+              isCustomPlugin: false,
+              mcpType: 'stdio',
+              result,
+              sessionId: topicId,
+              startTime,
+              toolName: apiName,
+              version: typeof version === 'string' ? version : 'unknown',
+            });
+          }
+        }
       }
       try {
         return (await lambdaClient.connector.callTool.mutate(
@@ -296,6 +381,7 @@ class MCPService {
             ...(fromMcpApp && { fromApp: true, server }),
             identifier,
             toolName: apiName,
+            topicId,
           },
           { signal },
         )) as MCPToolCallResult;
@@ -373,9 +459,7 @@ class MCPService {
 
     // Record call start time
     const callStartTime = Date.now();
-    let success = false;
-    let errorCode: string | undefined;
-    let errorMessage: string | undefined;
+    let failure: unknown;
     let result: MCPToolCallResult | undefined;
 
     try {
@@ -421,12 +505,9 @@ class MCPService {
         result = await toolsClient.mcp.callTool.mutate(data, { signal });
       }
 
-      success = true;
       return result;
     } catch (error) {
-      const err = error as Error;
-      errorCode = 'CALL_FAILED';
-      errorMessage = err.message;
+      failure = error ?? new Error('MCP tool call failed');
 
       // Rethrow error, maintain original error handling logic
       throw error;
@@ -435,40 +516,19 @@ class MCPService {
       // Cloud type: reporting is handled by server-side via market.callCloudMcpEndpoint
       // Only report from frontend for calls that ran on this machine (desktop only)
       if (isStdio || isLocalHttp) {
-        const callEndTime = Date.now();
-        const callDurationMs = callEndTime - callStartTime;
-
-        // Calculate request size
-        const inputParams = safeParseJSON(args) || args;
-        const requestSizeBytes = calculateObjectSizeBytes(inputParams);
-        // Calculate response size
-        const responseSizeBytes = success && result ? calculateObjectSizeBytes(result.state) : 0;
-
-        // Construct report data
-        const reportData: CallReportRequest = {
-          callDurationMs,
+        reportLocalCall({
+          args,
+          command: plugin.customParams?.mcp?.command,
           customPluginInfo: meta.customPluginInfo,
-          errorCode,
-          errorMessage,
+          failure,
           identifier,
           isCustomPlugin,
-          metadata: {
-            appVersion: CURRENT_VERSION,
-            command: plugin.customParams?.mcp?.command,
-            mcpType: plugin.customParams?.mcp?.type,
-          },
-          methodName: apiName,
-          methodType: 'tool' as const,
-          requestSizeBytes,
-          responseSizeBytes,
+          mcpType: plugin.customParams?.mcp?.type,
+          result,
           sessionId: topicId,
-          success,
+          startTime: callStartTime,
+          toolName: apiName,
           version: meta.version,
-        };
-
-        // Asynchronously report without affecting main flow
-        discoverService.reportPluginCall(reportData).catch((reportError) => {
-          console.warn('Failed to report MCP tool call:', reportError);
         });
       }
     }
@@ -519,21 +579,28 @@ class MCPService {
     }
 
     const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
-    const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
+    const resolved = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
     // Same test as `invokeMcpToolCall`: only an enabled connector with its own
-    // endpoint serves the view. Any other (e.g. the endpoint-less row a plugin's
-    // tools are synced to) leaves it to the plugin.
-    const connectorServes =
-      !!connector?.isEnabled &&
-      (!!connector.mcpServerUrl || connector.mcpConnectionType === 'stdio');
+    // endpoint and a finished install serves the view. Any other (e.g. the
+    // endpoint-less row a plugin's tools are synced to) leaves it to the plugin.
+    const serves = (c: typeof resolved, hasPluginRow: boolean) =>
+      !!c?.isEnabled &&
+      (!!c.mcpServerUrl || c.mcpConnectionType === 'stdio') &&
+      isMarketplaceInstallRunnable(c, hasPluginRow);
 
     // A conversation opened cold has not loaded the installed plugins yet, and an
     // unloaded list would lose a plugin's view or send it to the connector route.
     // Load the server's records first, as the tool call did before it ran.
-    if (!connectorServes && !pluginSelectors.isInstalledPluginsServerConfirmed(s)) {
+    if (!serves(resolved, false) && !pluginSelectors.isInstalledPluginsServerConfirmed(s)) {
       await s.refreshPlugins();
       s = getToolStoreState();
     }
+
+    const plugin =
+      pluginSelectors.getInstalledPluginById(identifier)(s) ||
+      pluginSelectors.getCustomPluginById(identifier)(s);
+    const connectorServes = serves(resolved, !!plugin);
+    const connector = connectorServes ? resolved : undefined;
 
     // Stdio connectors run on a desktop app, never on the server, so only the
     // desktop can read their view: it spawns the same command over IPC.
@@ -571,10 +638,6 @@ class MCPService {
       );
       return deserializeMcpIpcPayload(result) as ReadResourceResult;
     }
-
-    const plugin =
-      pluginSelectors.getInstalledPluginById(identifier)(s) ||
-      pluginSelectors.getCustomPluginById(identifier)(s);
 
     // Same resolution as `invokeMcpToolCall`: the view comes from the connector
     // the tool ran on. The agent's lists are loaded by now, so an identifier

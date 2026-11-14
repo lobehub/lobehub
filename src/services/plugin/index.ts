@@ -12,6 +12,10 @@ export interface InstallPluginParams {
 }
 
 export class PluginService {
+  /**
+   * @deprecated No in-app caller: marketplace MCPs install as connectors
+   * (`connector.create`). Kept until the legacy create routes are removed.
+   */
   installPlugin = async (plugin: InstallPluginParams): Promise<void> => {
     await lambdaClient.plugin.createOrInstallPlugin.mutate(plugin);
   };
@@ -24,6 +28,10 @@ export class PluginService {
     await lambdaClient.plugin.removePlugin.mutate({ id: identifier });
   };
 
+  /**
+   * @deprecated No in-app caller: custom MCPs are added as connectors
+   * (`connector.create`). Kept until the legacy create routes are removed.
+   */
   createCustomPlugin = async (customPlugin: LobeToolCustomPlugin): Promise<void> => {
     await lambdaClient.plugin.createPlugin.mutate({ ...customPlugin, type: 'customPlugin' });
   };

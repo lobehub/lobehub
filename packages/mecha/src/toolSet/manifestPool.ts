@@ -1,4 +1,5 @@
 import { isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import { hasMandatoryApproval, mayRequireMandatoryApproval } from '@lobechat/const/plugin';
 import type { LobeToolManifest } from '@lobechat/context-engine';
 import type { BuiltinToolResolveContext, LobeBuiltinTool } from '@lobechat/types';
 import debug from 'debug';
@@ -38,8 +39,25 @@ export const disabledToolDescription = (toolName: string): string =>
   `that they have manually disabled "${toolName}" and can re-enable it in Settings > Connectors.`;
 
 /**
+ * A synced connector tool's `humanIntervention`: `needs_approval` →
+ * `required`; `disabled` → `required` too (the manifest adds the blocking
+ * description and execution refuses it). A tool its manifest made mandatory
+ * (`metadata.mandatoryApproval`) is `always` whatever its permission, since
+ * auto-run and headless skip `required` but never `always`.
+ */
+export const connectorToolIntervention = (
+  tool: Pick<ConnectorToolFacts, 'metadata' | 'permission'>,
+): 'always' | 'required' | undefined => {
+  if (tool.permission === 'disabled') return 'required';
+  if (hasMandatoryApproval(tool.metadata)) return 'always';
+  return tool.permission === 'needs_approval' ? 'required' : undefined;
+};
+
+/**
  * Patch a manifest's `api[]` with connector tool permissions:
- * `needs_approval` → `humanIntervention: 'required'`; `disabled` → the
+ * `needs_approval` → `humanIntervention: 'required'`, or `always` where the
+ * tool (or, failing that, the manifest) can ask for `always` itself, so a
+ * permission never loosens it into one auto-run skips; `disabled` → the
  * blocking description plus `humanIntervention: 'required'`. The disabled
  * hard-block is enforced separately at execution time; this surfaces the
  * permission to the model and the approval prompt.
@@ -48,6 +66,7 @@ export function patchManifestWithPermissions<M extends { api: readonly { name: s
   manifest: M,
   toolPermissions: ConnectorToolPermissions,
 ): M {
+  const manifestIntervention = (manifest as { humanIntervention?: unknown }).humanIntervention;
   const patchedApi = manifest.api.map((api) => {
     const permission = toolPermissions.get(api.name);
     if (permission === 'disabled') {
@@ -58,7 +77,13 @@ export function patchManifestWithPermissions<M extends { api: readonly { name: s
       };
     }
     if (permission === 'needs_approval') {
-      return { ...api, humanIntervention: 'required' as const };
+      const own = (api as { humanIntervention?: unknown }).humanIntervention;
+      return {
+        ...api,
+        humanIntervention: mayRequireMandatoryApproval(own ?? manifestIntervention)
+          ? ('always' as const)
+          : ('required' as const),
+      };
     }
     return api;
   });
@@ -68,10 +93,10 @@ export function patchManifestWithPermissions<M extends { api: readonly { name: s
 /**
  * A connector's tools as one MCP manifest: every synced tool the model may
  * see is listed (disabled ones with the blocking description), permissions
- * become `humanIntervention`. Tools only views may call are left out. Returns
- * nothing for a disabled connector or one with no tools for the model — such a
- * connector must not replace a same-named plugin while contributing nothing
- * to call.
+ * become `humanIntervention` (`connectorToolIntervention`). Tools only views
+ * may call are left out. Returns nothing for a disabled connector or one with
+ * no tools for the model — such a connector must not replace a same-named
+ * plugin while contributing nothing to call.
  */
 export const buildConnectorManifest = (connector: ConnectorFacts): LobeToolManifest | undefined => {
   if (!connector.isEnabled) return undefined;
@@ -84,17 +109,12 @@ export const buildConnectorManifest = (connector: ConnectorFacts): LobeToolManif
       string,
       unknown
     >;
-    if (tool.permission === 'disabled') {
-      return {
-        description: disabledToolDescription(tool.toolName),
-        humanIntervention: 'required' as const,
-        name: tool.toolName,
-        parameters,
-      };
-    }
     return {
-      description: tool.description ?? '',
-      humanIntervention: tool.permission === 'needs_approval' ? ('required' as const) : undefined,
+      description:
+        tool.permission === 'disabled'
+          ? disabledToolDescription(tool.toolName)
+          : (tool.description ?? ''),
+      humanIntervention: connectorToolIntervention(tool),
       name: tool.toolName,
       parameters,
     };

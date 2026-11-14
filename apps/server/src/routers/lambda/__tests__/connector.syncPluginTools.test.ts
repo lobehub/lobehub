@@ -186,7 +186,7 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
     // Opening connector details automatically calls syncPluginTools. The old
     // update replaced metadata with display fields only, erasing the account id
     // needed for execution and remote revocation.
-    connectorModelMock.queryByIdentifiers.mockResolvedValueOnce([
+    connectorModelMock.queryByIdentifiers.mockResolvedValue([
       {
         id: 'conn-existing',
         metadata: {
@@ -213,6 +213,39 @@ describe('connectorRouter.syncPluginTools — customPlugin guard', () => {
         mountedByAgentId: 'agent-1',
       }),
     });
+  });
+
+  // A marketplace MCP reinstalled on the connector path keeps its plugin row and
+  // that row's old manifest; opening Settings must not sync it over the tools
+  // the reinstall synced from the server
+  it.each([
+    ['an HTTP', { mcpConnectionType: 'http', mcpServerUrl: 'https://mcp.example.com' }],
+    ['a cloud', { mcpConnectionType: 'cloud', mcpServerUrl: null }],
+    ['a stdio', { mcpConnectionType: 'stdio', mcpServerUrl: null }],
+  ])('leaves %s connector installed for the identifier as it is', async (_, endpoint) => {
+    connectorModelMock.queryByIdentifiers.mockResolvedValue([
+      {
+        id: 'conn-installed',
+        metadata: { description: 'Synced from the server' },
+        sourceType: 'marketplace',
+        userId: 'user_test',
+        ...endpoint,
+      },
+    ]);
+    pluginModelMock.findById.mockResolvedValueOnce({
+      type: 'plugin',
+      manifest: {
+        api: [{ description: 'Old search', name: 'search', parameters: {} }],
+        meta: { description: 'Old manifest', title: 'Search MCP' },
+      },
+    });
+
+    const result = await callerFor().syncPluginTools({ identifier: 'search-mcp' });
+
+    expect(result).toEqual({ connectorId: 'conn-installed', toolCount: 0 });
+    expect(connectorModelMock.update).not.toHaveBeenCalled();
+    expect(connectorModelMock.create).not.toHaveBeenCalled();
+    expect(connectorToolModelMock.upsertMany).not.toHaveBeenCalled();
   });
 
   it('also defers when plugin has type=customPlugin AND has a manifest (no half-baked row written)', async () => {

@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
     authorizedByName?: string | null;
     identifier: string;
   }>,
+  marketplaceConnectors: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -74,6 +75,7 @@ vi.mock('@/store/tool/slices/connector/selectors', () => ({
     agentConnectors: () => () => mocks.agentConnectors,
     connectorList: () => mocks.connectorList,
     customConnectors: () => [],
+    marketplaceMcpConnectors: () => mocks.marketplaceConnectors,
   },
 }));
 vi.mock('@/store/tool/selectors', () => ({
@@ -142,6 +144,39 @@ describe('PluginTag row variant', () => {
   beforeEach(() => {
     mocks.agentConnectors = [];
     mocks.connectorList = [];
+    mocks.marketplaceConnectors = [];
+  });
+
+  // `isPluginInstalled` counts it, so no remote lookup would fill the gap
+  it('resolves a marketplace MCP installed as a connector alone, with its tools', () => {
+    mocks.marketplaceConnectors = [
+      {
+        identifier: 'github-mcp',
+        metadata: { avatar: '🐙', description: 'Work with GitHub' },
+        name: 'GitHub',
+        tools: [
+          { description: 'Open an issue', displayName: null, toolName: 'create_issue' },
+          { description: null, displayName: null, toolName: 'search' },
+        ],
+      },
+    ];
+    const onOpen = vi.fn();
+    render(<PluginTag pluginId="github-mcp" variant="row" onOpen={onOpen} />);
+
+    expect(screen.queryByText(/tools\.notInstalled/)).toBeNull();
+    expect(screen.getByText('settingAgent.tools.type.plugin')).toBeTruthy();
+    expect(screen.getByText('settingAgent.tools.toolCount')).toBeTruthy();
+    fireEvent.click(screen.getByText('GitHub'));
+    expect(onOpen).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: 'Work with GitHub',
+        identifier: 'github-mcp',
+        tools: [
+          { description: 'Open an issue', name: 'create_issue' },
+          { description: null, name: 'search' },
+        ],
+      }),
+    );
   });
 
   it('names the kind of tool and shows whose credentials it runs under', () => {

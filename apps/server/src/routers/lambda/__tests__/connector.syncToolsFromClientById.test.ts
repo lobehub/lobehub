@@ -109,6 +109,152 @@ describe('connectorRouter.syncToolsFromClientById', () => {
     ]);
   });
 
+  it('makes a new tool need approval when its manifest requires intervention', async () => {
+    await caller().syncToolsFromClientById({
+      id: CONNECTOR_ID,
+      tools: [
+        { humanIntervention: 'required', toolName: 'send_mail' },
+        { humanIntervention: 'always', toolName: 'delete_file' },
+        { humanIntervention: 'never', toolName: 'list_files' },
+        { toolName: 'read_file' },
+      ],
+    });
+
+    expect(connectorToolModelMock.upsertMany).toHaveBeenCalledWith(CONNECTOR_ID, [
+      expect.objectContaining({ defaultPermission: 'needs_approval', toolName: 'send_mail' }),
+      expect.objectContaining({ defaultPermission: 'needs_approval', toolName: 'delete_file' }),
+      expect.objectContaining({ defaultPermission: 'auto', toolName: 'list_files' }),
+      expect.objectContaining({ defaultPermission: 'auto', toolName: 'read_file' }),
+    ]);
+  });
+
+  // The connector manifest carries one permission per tool, so a rule list that
+  // asks for approval for some arguments must not land as `auto`
+  it('makes a new tool need approval when any of its intervention rules requires it', async () => {
+    await caller().syncToolsFromClientById({
+      id: CONNECTOR_ID,
+      tools: [
+        {
+          humanIntervention: [
+            { match: { path: '/tmp/*' }, policy: 'never' },
+            { match: { recursive: 'true' }, policy: 'always' },
+          ],
+          toolName: 'remove_path',
+        },
+        {
+          humanIntervention: [
+            { match: { mode: 'draft' }, policy: 'never' },
+            { policy: 'required' },
+          ],
+          toolName: 'publish_post',
+        },
+        { humanIntervention: [{ policy: 'never' }], toolName: 'list_posts' },
+      ],
+    });
+
+    expect(connectorToolModelMock.upsertMany).toHaveBeenCalledWith(CONNECTOR_ID, [
+      expect.objectContaining({ defaultPermission: 'needs_approval', toolName: 'remove_path' }),
+      expect.objectContaining({ defaultPermission: 'needs_approval', toolName: 'publish_post' }),
+      expect.objectContaining({ defaultPermission: 'auto', toolName: 'list_posts' }),
+    ]);
+  });
+
+  // A dynamic resolver does not run on a connector: either of its outcomes counts
+  it('makes a new tool need approval when its dynamic config can require it', async () => {
+    await caller().syncToolsFromClientById({
+      id: CONNECTOR_ID,
+      tools: [
+        { humanIntervention: { dynamic: { default: 'always', type: 'x' } }, toolName: 'a' },
+        { humanIntervention: { dynamic: { default: 'never', type: 'x' } }, toolName: 'b' },
+        {
+          humanIntervention: { dynamic: { default: 'never', policy: 'required', type: 'x' } },
+          toolName: 'c',
+        },
+        {
+          humanIntervention: { dynamic: { default: 'never', policy: 'never', type: 'x' } },
+          toolName: 'd',
+        },
+      ],
+    });
+
+    expect(connectorToolModelMock.upsertMany).toHaveBeenCalledWith(CONNECTOR_ID, [
+      expect.objectContaining({ defaultPermission: 'needs_approval', toolName: 'a' }),
+      // An unset `policy` is `always` when the resolver matches
+      expect.objectContaining({ defaultPermission: 'needs_approval', toolName: 'b' }),
+      expect.objectContaining({ defaultPermission: 'needs_approval', toolName: 'c' }),
+      expect.objectContaining({ defaultPermission: 'auto', toolName: 'd' }),
+    ]);
+  });
+
+  // The connector manifest maps `needs_approval` to `required`, which auto-run
+  // and headless skip; a manifest's `always` must survive as its own mark
+  it('marks a tool whose manifest can ask for always approval, on every sync', async () => {
+    await caller().syncToolsFromClientById({
+      id: CONNECTOR_ID,
+      tools: [
+        { humanIntervention: 'always', toolName: 'delete_file' },
+        { humanIntervention: 'always', toolName: 'wipe', visibility: ['model'] },
+        {
+          humanIntervention: [
+            { match: { path: '/tmp/*' }, policy: 'never' },
+            { match: { recursive: 'true' }, policy: 'always' },
+          ],
+          toolName: 'remove_path',
+        },
+        { humanIntervention: { dynamic: { default: 'never', type: 'x' } }, toolName: 'audited' },
+        { humanIntervention: 'required', toolName: 'send_mail' },
+        {
+          humanIntervention: { dynamic: { default: 'never', policy: 'required', type: 'x' } },
+          toolName: 'publish',
+        },
+        { toolName: 'read_file', visibility: ['app'] },
+      ],
+    });
+
+    expect(connectorToolModelMock.upsertMany).toHaveBeenCalledWith(CONNECTOR_ID, [
+      expect.objectContaining({ metadata: { mandatoryApproval: true }, toolName: 'delete_file' }),
+      expect.objectContaining({
+        metadata: { mandatoryApproval: true, visibility: ['model'] },
+        toolName: 'wipe',
+      }),
+      expect.objectContaining({ metadata: { mandatoryApproval: true }, toolName: 'remove_path' }),
+      expect.objectContaining({ metadata: { mandatoryApproval: true }, toolName: 'audited' }),
+      expect.objectContaining({ metadata: null, toolName: 'send_mail' }),
+      expect.objectContaining({ metadata: null, toolName: 'publish' }),
+      expect.objectContaining({ metadata: { visibility: ['app'] }, toolName: 'read_file' }),
+    ]);
+  });
+
+  it('drops the auto tools an install no longer lists, keeping permission tombstones', async () => {
+    connectorToolModelMock.queryByConnector = vi.fn().mockResolvedValue([
+      { permission: 'auto', toolName: 'kept' },
+      { permission: 'auto', toolName: 'removed_auto' },
+      { permission: 'needs_approval', toolName: 'removed_gated' },
+      { permission: 'disabled', toolName: 'removed_disabled' },
+    ]);
+    connectorToolModelMock.deleteToolsNotIn = vi.fn();
+
+    await caller().syncToolsFromClientById({
+      id: CONNECTOR_ID,
+      pruneMissingAutoTools: true,
+      tools: [{ toolName: 'kept' }],
+    });
+
+    expect(connectorToolModelMock.deleteToolsNotIn).toHaveBeenCalledWith(CONNECTOR_ID, [
+      'kept',
+      'removed_gated',
+      'removed_disabled',
+    ]);
+  });
+
+  it('leaves the stored tools alone without an install', async () => {
+    connectorToolModelMock.deleteToolsNotIn = vi.fn();
+
+    await caller().syncToolsFromClientById({ id: CONNECTOR_ID, tools: [{ toolName: 'kept' }] });
+
+    expect(connectorToolModelMock.deleteToolsNotIn).not.toHaveBeenCalled();
+  });
+
   it('rejects an unknown connector id', async () => {
     connectorModelMock.findById.mockResolvedValue(undefined);
 

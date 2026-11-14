@@ -69,13 +69,17 @@ const connectorTools = [
 
 interface RunOptions {
   agentId?: string;
+  /** Override the connector's transport (`http` by default). */
+  connection?: { mcpConnectionType: string; mcpServerUrl: string | null };
   installed?: boolean;
+  metadata?: Record<string, unknown>;
   /** The agent's own `plugins` config — i.e. what the user pinned. */
   plugins?: string[];
   /** This turn's @-mention picks. */
   selectedToolIds?: string[];
   shareGate?: unknown;
   sourceType?: 'custom' | 'marketplace';
+  status?: string;
 }
 
 const connectorModel = {
@@ -86,9 +90,11 @@ const connectorModel = {
 const run = (options: RunOptions = {}) => {
   const connector = {
     ...customConnector,
+    ...options.connection,
+    ...(options.metadata && { metadata: options.metadata }),
     agentId: options.agentId ?? null,
     sourceType: options.sourceType ?? 'custom',
-    status: 'connected',
+    status: options.status ?? 'connected',
   };
   connectorModel.resolveAll.mockReset().mockResolvedValue([connector]);
   connectorModel.resolveByIdentifiers
@@ -207,6 +213,74 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
     expect(result.toolManifestMap[YINGMI]).toBeDefined();
     const activated = result.toolsEngine!.generateToolsDetailed(explicitConnectorInput(YINGMI));
     expect(activated.enabledToolIds).toContain(YINGMI);
+  });
+
+  it.each([
+    { label: 'http', connection: undefined },
+    { label: 'cloud', connection: { mcpConnectionType: 'cloud', mcpServerUrl: null } },
+  ])('treats a connector-only marketplace install as installed: $label', async ({ connection }) => {
+    // No user_installed_plugins row: the connector's own mark is the install
+    const result = await run({
+      connection,
+      installed: false,
+      metadata: { marketplaceInstalled: true },
+      sourceType: 'marketplace',
+    });
+    expect(result.toolManifestMap[YINGMI]).toBeDefined();
+    expect((result.toolManifestMap[YINGMI] as any).mcpParams.type).toBe(
+      connection?.mcpConnectionType ?? 'http',
+    );
+    const activated = result.toolsEngine!.generateToolsDetailed({
+      context: { isExplicitActivation: true },
+      model: 'test-model',
+      provider: 'test-provider',
+      skipDefaultTools: true,
+      toolIds: [YINGMI],
+    });
+    expect(activated.enabledToolIds).toContain(YINGMI);
+  });
+
+  // A reinstall over a plugin row rewrites the endpoint and resets the row to
+  // disconnected until its tools sync: the old tools must not run against it
+  it('rejects a pending reinstall over a plugin row until its connector is connected', async () => {
+    const result = await run({
+      installed: true,
+      sourceType: 'marketplace',
+      status: 'disconnected',
+    });
+    expect(result.toolManifestMap[YINGMI]).toBeUndefined();
+  });
+
+  it('keeps an endpoint-less plugin projection on its plugin row whatever its status', async () => {
+    const result = await run({
+      connection: { mcpConnectionType: null as never, mcpServerUrl: null },
+      installed: true,
+      sourceType: 'marketplace',
+      status: 'disconnected',
+    });
+    // Not routed as an MCP connector, but not filtered out of discovery either
+    expect(result.toolSourceMap[YINGMI]).not.toBe('mcp');
+  });
+
+  // An OAuth re-authorization leaves a finished install disconnected until its
+  // callback connects it: the client already hides it, so must a server run
+  it('rejects a finished install while it is not connected', async () => {
+    const result = await run({
+      installed: false,
+      metadata: { marketplaceInstalled: true },
+      sourceType: 'marketplace',
+      status: 'disconnected',
+    });
+    expect(result.toolManifestMap[YINGMI]).toBeUndefined();
+  });
+
+  it('rejects an unfinished cloud marketplace install that has no plugin row', async () => {
+    const result = await run({
+      connection: { mcpConnectionType: 'cloud', mcpServerUrl: null },
+      installed: false,
+      sourceType: 'marketplace',
+    });
+    expect(result.toolManifestMap[YINGMI]).toBeUndefined();
   });
 
   it('keeps an unmentioned, unpinned connector discoverable without enabling it', async () => {
