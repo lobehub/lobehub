@@ -252,6 +252,7 @@ vi.mock('./ActionTag', () => ({
   INSERT_ACTION_TAG_COMMAND: 'insert-action-tag',
   useSlashActionItems: () => [],
 }));
+vi.mock('./ImageRefTag', () => ({ useImageRefTagSync: vi.fn() }));
 vi.mock('./MentionMenu', () => ({ createMentionMenu: vi.fn(() => vi.fn(() => null)) }));
 vi.mock('./Placeholder', () => ({
   default: () => <span>placeholder</span>,
