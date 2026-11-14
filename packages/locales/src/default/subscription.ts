@@ -1061,12 +1061,6 @@ export default {
   'credits.autoTopUp.summaryOff': '{{summary}}, so requests keep going after your limits run out',
   'creditsChip.autoTopUp.enable': 'Turn on auto top-up',
   'creditsChip.autoTopUp.topUpOnce': 'Top up once',
-  'limitation.insufficientBudget.rescue.autoTopUp.benefit':
-    'Refills your balance when it runs low, so limits stop interrupting you',
-  'limitation.insufficientBudget.rescue.autoTopUp.benefitNoCard':
-    'Add a card to refill the balance automatically, so requests keep going after your limits run out',
-  'limitation.insufficientBudget.rescue.autoTopUp.benefitNoCardGift':
-    'Add a card to refill the balance automatically, and get $1 for your first card',
   'limitation.insufficientBudget.rescue.autoTopUp.cta': 'Turn on auto top-up & continue',
   'limitation.insufficientBudget.rescue.autoTopUp.ctaNoCard': 'Add card & turn on auto top-up',
   'limitation.insufficientBudget.rescue.autoTopUp.success.desc':
@@ -1075,13 +1069,8 @@ export default {
     'The balance refills automatically when it runs low. You can continue now.',
   'limitation.insufficientBudget.rescue.autoTopUp.success.title': 'Auto top-up is on',
   'limitation.insufficientBudget.rescue.autoTopUp.title': 'Turn on auto top-up',
-  'limitation.insufficientBudget.rescue.referral.link': 'Invite friends, get ${{reward}}',
-  'limitation.insufficientBudget.rescue.upgrade.ctaPlan': 'Upgrade to {{plan}} & continue',
   'limitation.insufficientBudget.rescue.upgrade.short': '{{multiple}}× usage',
   'limitation.insufficientBudget.rescue.upgrade.shortUltra': '{{multiple}}× Ultra usage',
-  'limitation.insufficientBudget.rescue.topUpOnce': 'Top up ${{quantity}} once',
-  'limitation.insufficientBudget.rescue.topUpOnceWithFee':
-    'Top up ${{quantity}} once (plus a {{fee}}% service fee)',
   'tab.usageAndBalance': 'Usage & Balance',
   'usage.overview.records': 'Top-up history',
   'usage.overview.topUpOnce': 'Top up once',
