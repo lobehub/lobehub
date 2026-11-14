@@ -7,7 +7,7 @@ import {
   GetObjectCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
-  paginateListParts,
+  ListPartsCommand,
   PutObjectCommand,
   S3Client,
   UploadPartCommand,
@@ -264,14 +264,39 @@ export class S3 {
       uploadedParts && !expectedFile ? [...uploadedParts] : [];
 
     if (!uploadedParts || expectedFile) {
-      for await (const page of paginateListParts(
-        { client: this.client },
-        { Bucket: this.bucket, Key: key, UploadId: uploadId },
-      )) {
+      // The SDK paginator follows NextPartNumberMarker without checking
+      // IsTruncated. Stores such as Ceph RGW answer the last page with
+      // NextPartNumberMarker="0" (which means "from the start"), so the
+      // paginator would list the same parts forever. Page manually, stop on
+      // IsTruncated, and guard against a marker that does not advance.
+      let partNumberMarker: string | undefined;
+
+      for (;;) {
+        const page = await this.client.send(
+          new ListPartsCommand({
+            Bucket: this.bucket,
+            Key: key,
+            ...(partNumberMarker === undefined ? {} : { PartNumberMarker: partNumberMarker }),
+            UploadId: uploadId,
+          }),
+        );
+
         for (const part of page.Parts ?? []) {
           if (!part.ETag || !part.PartNumber) continue;
           parts.push({ ETag: part.ETag, PartNumber: part.PartNumber, Size: part.Size });
         }
+
+        const nextMarker = page.NextPartNumberMarker;
+        if (
+          !page.IsTruncated ||
+          !nextMarker ||
+          nextMarker === partNumberMarker ||
+          nextMarker === '0'
+        ) {
+          break;
+        }
+
+        partNumberMarker = nextMarker;
       }
     }
 
