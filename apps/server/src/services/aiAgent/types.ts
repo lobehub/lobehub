@@ -211,6 +211,13 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   /** Initial step count offset for resumed operations (accumulated from previous runs) */
   initialStepCount?: number;
   /**
+   * Set only by the `aiAgent.execAgent` route: step 0 of a send that defers its
+   * init may run in this invocation after the response (`agent_inline_first_step`).
+   * Carries when the route's request started, the clock its time budget counts
+   * from. Never client-passable.
+   */
+  inlineFirstStep?: { requestStartedAt: number };
+  /**
    * This start came from a person waiting at a composer, not from a background
    * producer (task callback, cron, bot, API). Interactive starts serialize only
    * on the short topic-start reservation and never on `runningOperation` — the

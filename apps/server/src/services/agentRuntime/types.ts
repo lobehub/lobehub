@@ -168,6 +168,14 @@ export interface AgentExecutionParams {
    */
   finishAfterAsyncTool?: boolean;
   /**
+   * How step 0 of an `agent_inline_first_step` run reached this worker: run
+   * inline by the `execAgent` invocation (`inline`), or the queued fallback
+   * delivery published next to it (`inline_fallback`). Absent for every other
+   * delivery. Recorded on the step span; a lock-conflict re-delivery of the
+   * fallback carries it on, so it still checks whether the inline run settled.
+   */
+  firstStepDispatch?: 'inline' | 'inline_fallback';
+  /**
    * Watchdog payload to enforce a group member's timeout: when the member op
    * hasn't reached a terminal state by its deadline, interrupt it and bridge a
    * `timeout` completion so the parked supervisor resumes/finishes instead of
@@ -580,6 +588,13 @@ export interface OperationCreationParams {
   initialMessages?: any[];
   /** Initial step count offset for resumed operations (accumulated from previous runs) */
   initialStepCount?: number;
+  /**
+   * The caller runs step 0 itself, right after this returns
+   * (`agent_inline_first_step`). The queued delivery of step 0 is still
+   * published, as the fallback for a run that never starts: later, and marked so
+   * it is a no-op once the inline run settled the step.
+   */
+  inlineFirstStep?: boolean;
   /**
    * Server-authored provenance for a continuation created from a durable human
    * intervention claim. It is persisted in both agent_operations.metadata and
