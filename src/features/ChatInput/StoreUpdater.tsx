@@ -20,7 +20,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     canRecordVoiceMessage,
     chatInputEditorRef,
     contextSelectionKey,
-    contextWindowMessages,
+    contextWindow,
     draftKey,
     feature = DEFAULT_CHAT_INPUT_FEATURE,
     mobile,
@@ -48,7 +48,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('canRecordVoiceMessage', canRecordVoiceMessage);
     useStoreUpdater('contextSelectionKey', contextSelectionKey);
     useStoreUpdater('uploadContextKey', uploadContextKey);
-    useStoreUpdater('contextWindowMessages', contextWindowMessages);
+    useStoreUpdater('contextWindow', contextWindow);
 
     // Sync draftKey before paint: the draft-transition subscriber
     // (useChatInputDraft) swaps the editor document on this change, and doing
