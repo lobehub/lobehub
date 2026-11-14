@@ -27,6 +27,7 @@ import { messengerWebhook } from './handlers/messengerWebhook';
 import { platformWebhook } from './handlers/platformWebhook';
 import { reapOperations } from './handlers/reapOperations';
 import { runStep, runStepHealth } from './handlers/runStep';
+import { shellExpire } from './handlers/shellExpire';
 import { subAgentCallback } from './handlers/subAgentCallback';
 import { toolResult } from './handlers/toolResult';
 import { bearerSecretAuth } from './middlewares/bearerSecretAuth';
@@ -58,8 +59,12 @@ app.post('/webhooks/channel-callback', qstashAuth(), channelCallback);
 // owner's direct Channel (QStash)
 app.post('/webhooks/inbox-report', qstashAuth(), agentInboxReport);
 
-// POST /api/agent/tool-result — gateway-side tool result LPUSH'd to Redis
+// POST /api/agent/tool-result — gateway-side tool result: LPUSH'd to Redis,
+// or written into a parked operation's placeholder when `deferred`.
 app.post('/tool-result', serviceTokenAuth(), toolResult);
+
+// POST /api/agent/shell-expire — deadline for a parked shell command (QStash)
+app.post('/shell-expire', qstashAuth(), shellExpire);
 
 // LLM relay: the user's device runs one LLM attempt for a device-only model
 // provider. Auth is the per-call lease token carried by `llm_execute`.

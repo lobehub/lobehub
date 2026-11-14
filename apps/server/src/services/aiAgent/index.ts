@@ -50,6 +50,11 @@ import type {
   SubAgentBridgeParams,
 } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
+import {
+  completeDeferredShell,
+  type CompleteDeferredShellOutcome,
+  type CompleteDeferredShellParams,
+} from '@/server/services/agentRuntime/AgentRuntimeService/asyncShellResult';
 import type {
   ExecGroupMemberParams,
   ExecGroupMemberResult,
@@ -401,6 +406,32 @@ export class AiAgentService {
    */
   completeSubAgentBridge(params: SubAgentBridgeParams): Promise<boolean> {
     return this.agentRuntimeService.completeSubAgentBridge(params);
+  }
+
+  /**
+   * Finish a shell command that outlived its tool call.
+   *
+   * Driven by `/api/agent/tool-result` when the gateway forwards a device's
+   * late `deferred` result. Routed through the AiAgentService like the other
+   * bridges so the placeholder backfill and the resume barrier stay
+   * workspace-scoped.
+   */
+  completeDeferredShell(
+    params: CompleteDeferredShellParams,
+  ): Promise<CompleteDeferredShellOutcome> {
+    return completeDeferredShell(
+      {
+        // The parked step never returned through `ServerToolTransport`, so this
+        // is the only place an `afterToolCall` policy can see its answer.
+        controlCompletedToolResult: (input) =>
+          this.agentRuntimeService.controlCompletedToolResult(input),
+        messageModel: this.messageModel,
+        serverDB: this.db,
+        tryResumeParentFromAsyncTool: (resumeParams, options) =>
+          this.agentRuntimeService.tryResumeParentFromAsyncTool(resumeParams, options),
+      },
+      params,
+    );
   }
 
   /**

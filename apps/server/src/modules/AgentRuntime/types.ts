@@ -240,6 +240,25 @@ export interface IStreamEventManager {
   ) => Promise<StreamHistoryPage>;
 
   /**
+   * Optional: tell the gateway that this operation is deliberately silent
+   * because it is waiting on a deferred tool result.
+   *
+   * The gateway's inactivity watchdog treats silence as a dead agent-runtime
+   * function. A parked operation emits nothing until its result arrives — for a
+   * shell command that can be tens of minutes — so without this it is rewritten
+   * as `Operation abandoned: inactivity_watchdog` mid-wait. The deadline
+   * replaces the watchdog window until the first real event clears it.
+   *
+   * Absent on managers without a gateway (local/desktop runs have no watchdog
+   * to satisfy). Resolves to `false` when the gateway does not implement the
+   * route, so callers can fall back to their own timeout.
+   */
+  markOperationParked?: (
+    operationId: string,
+    params: { parkedUntil: number; reason?: string },
+  ) => Promise<boolean>;
+
+  /**
    * Optional: open a one-shot relay channel on the gateway, owned by `userId`.
    * Present only with a gateway, like {@link sendLlmExecute}.
    */

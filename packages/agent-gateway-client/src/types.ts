@@ -508,6 +508,12 @@ export interface HeartbeatMessage {
  */
 export interface ToolResultMessage {
   content: string | null;
+  /**
+   * This result belongs to a tool that outlived its dispatch (a background
+   * shell command). The server has no waiter for it — the run is parked — so
+   * it is routed to the resume path instead of the blocking queue.
+   */
+  deferred?: boolean;
   error?: {
     message: string;
     type?: string;
