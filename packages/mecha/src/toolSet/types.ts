@@ -24,7 +24,10 @@ export interface ToolRuleDeviceAccess {
 /** Everything the tool rules read about the run. Assembled by the host. */
 export interface ToolRuleRequest {
   agent: {
-    chatConfig?: Pick<LobeAgentChatConfig, 'enableAgentMode' | 'searchMode' | 'toolMode'> | null;
+    chatConfig?: Pick<
+      LobeAgentChatConfig,
+      'enableAgentMode' | 'searchMode' | 'skillActivateMode' | 'toolMode'
+    > | null;
     /** Pinned plugin identifiers (tri-state entries already collapsed). */
     plugins?: readonly string[] | null;
   };
