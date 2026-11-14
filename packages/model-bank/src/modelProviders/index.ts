@@ -24,6 +24,7 @@ import DeepSeekProvider from './deepseek';
 import ElevenLabsProvider from './elevenlabs';
 import FalProvider from './fal';
 import FireworksAIProvider from './fireworksai';
+import FlexAIProvider from './flexai';
 import GiteeAIProvider from './giteeai';
 import GithubProvider from './github';
 import GithubCopilotProvider from './githubCopilot';
@@ -226,6 +227,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   QiniuProvider,
   ReplicateProvider,
   NebiusProvider,
+  FlexAIProvider,
   CometAPIProvider,
   VercelAIGatewayProvider,
   CerebrasProvider,
@@ -330,6 +332,7 @@ export { default as DeepSeekProviderCard } from './deepseek';
 export { default as ElevenLabsProviderCard } from './elevenlabs';
 export { default as FalProviderCard } from './fal';
 export { default as FireworksAIProviderCard } from './fireworksai';
+export { default as FlexAIProviderCard } from './flexai';
 export { default as GiteeAIProviderCard } from './giteeai';
 export { default as GithubProviderCard } from './github';
 export { default as GithubCopilotProviderCard } from './githubCopilot';

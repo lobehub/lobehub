@@ -352,6 +352,29 @@ If you need to use Azure OpenAI to provide model services, you can refer to the 
 - Default: `-`
 - Example: `-all,+accounts/fireworks/models/llama-v3p3-70b-instruct,+accounts/fireworks/models/deepseek-v3`
 
+## FlexAI
+
+### `FLEXAI_API_KEY`
+
+- Type: Required
+- Description: This is the API key you created in the FlexAI dashboard
+- Default: `-`
+- Example: `sk-xxxxxx...xxxxxx`
+
+### `FLEXAI_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the model list, use `+` to add a model, use `-` to hide a model, use `model_name=display_name` to customize the display name of a model, separated by commas. Definition syntax rules see [model-list][model-list]
+- Default: `-`
+- Example: `-all,+Llama-3.3-70B-Instruct-FP8,+Qwen3.8-Flash-Next`
+
+### `FLEXAI_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the FlexAI API base URL. Only set this when routing through a gateway that speaks the same API; the hosted service needs no override
+- Default: `https://api.flex.ai/v1`
+- Example: `https://your-gateway.example.com/v1`
+
 ## Ollama
 
 ### `ENABLED_OLLAMA`

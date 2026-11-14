@@ -21,6 +21,7 @@ import { LobeDeepSeekAI } from './providers/deepseek';
 import { LobeElevenLabsAI } from './providers/elevenlabs';
 import { LobeFalAI } from './providers/fal';
 import { LobeFireworksAI } from './providers/fireworksai';
+import { LobeFlexAI } from './providers/flexai';
 import { LobeGiteeAI } from './providers/giteeai';
 import { LobeGithubAI } from './providers/github';
 import { LobeGithubCopilotAI } from './providers/githubCopilot';
@@ -111,6 +112,7 @@ export const providerRuntimeMap = {
   elevenlabs: LobeElevenLabsAI,
   fal: LobeFalAI,
   fireworksai: LobeFireworksAI,
+  flexai: LobeFlexAI,
   giteeai: LobeGiteeAI,
   github: LobeGithubAI,
   githubcopilot: LobeGithubCopilotAI,
