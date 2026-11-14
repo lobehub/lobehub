@@ -3,20 +3,14 @@ import * as stylex from '@stylexjs/stylex';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 
-import type { InternalLinkReference } from '@/features/EntityLink';
 import { PortalContent } from '@/features/Portal/router';
 import RightPanel from '@/features/RightPanel';
 
 import { styles } from './styles';
 import { THREAD_FLOAT_BREAKPOINT } from './ThreadPanel';
-import { usePortalPanel } from './usePortalPanel';
+import { useChannelPortalViewType, usePortalPanel } from './usePortalPanel';
 
-/** Entity details a Channel can show beside its feed; anything else follows its own route. */
-export const CHANNEL_ENTITY_PORTAL_SCOPE = [
-  'acceptance',
-] as const satisfies readonly InternalLinkReference['type'][];
-
-/** A report or web page opened from a link in the feed, beside the Channel like a thread. */
+/** A report, profile, task or web page opened from a link in the feed, beside the Channel. */
 export function PortalPanel({
   availableWidth = 1000,
   channelId,
@@ -25,6 +19,7 @@ export function PortalPanel({
   channelId: string;
 }): ReactNode {
   const { close, open } = usePortalPanel(channelId);
+  const viewType = useChannelPortalViewType();
   const [preferredWidth, setPreferredWidth] = useState(720);
   const narrow = availableWidth < THREAD_FLOAT_BREAKPOINT;
   const maxWidth = narrow ? availableWidth : availableWidth - 360;
@@ -51,7 +46,7 @@ export function PortalPanel({
     >
       {open && (
         <Flexbox {...stylex.props(styles.body)}>
-          <PortalContent onClose={close} />
+          <PortalContent onClose={close} viewType={viewType} />
         </Flexbox>
       )}
     </RightPanel>
