@@ -113,7 +113,7 @@ describe('resolveLlmExecutionSite', () => {
     }
   });
 
-  it('relays a custom provider with client requests enabled, with its sdkType', async () => {
+  it('relays a keyed custom provider on a private network, with its sdkType', async () => {
     providerRow.current = {
       fetchOnClient: true,
       keyVaults: { apiKey: 'sk-local', baseURL: 'http://127.0.0.1:1234/v1' },
@@ -134,6 +134,20 @@ describe('resolveLlmExecutionSite', () => {
     };
 
     expect(await resolve('my-local-llm', executor(['my-local-llm']))).toEqual({ site: 'server' });
+  });
+
+  // A keyed public endpoint the user calls from the browser is still one the
+  // server can reach; relaying it would stall background runs (tasks, bots)
+  // that have no device attached.
+  it('keeps a keyed public provider on the server even with client requests enabled', async () => {
+    providerRow.current = {
+      fetchOnClient: true,
+      keyVaults: { apiKey: 'sk-test', baseURL: 'https://api.openai.com/v1' },
+    };
+    expect(await resolve('openai', executor(['openai']))).toEqual({ site: 'server' });
+
+    providerRow.current = { fetchOnClient: true, keyVaults: { apiKey: 'sk-test' } };
+    expect(await resolve('openai', executor(['openai']))).toEqual({ site: 'server' });
   });
 
   // The client store sends a provider with only a base URL from the device

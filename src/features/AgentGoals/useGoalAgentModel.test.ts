@@ -74,7 +74,7 @@ vi.mock('@/features/ChatInput/hooks/useAgentModelSelection', () => ({
 
 // `ollama` is reached from this device; the others from the server.
 vi.mock('@/store/aiInfra', () => ({
-  aiProviderSelectors: { isProviderFetchOnClient: (id: string) => () => id === 'ollama' },
+  aiProviderSelectors: { isProviderDeviceOnly: (id: string) => () => id === 'ollama' },
   useAiInfraStore: (selector: (s: any) => unknown) =>
     selector({ enabledChatModelList: [{ id: 'openai' }, { id: 'ollama' }, { id: 'google' }] }),
 }));

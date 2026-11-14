@@ -52,14 +52,27 @@ describe('decisionModelProviders', () => {
     ).toHaveLength(1);
   });
 
-  it('excludes client-only providers and empty groups', () => {
-    expect(decisionModelProviders([], providers, {})).toEqual([]);
+  it('keeps a keyed provider the user calls from the browser: the server can call it too', () => {
     expect(
       decisionModelProviders([model('jev')], providers, {
         typesafe: {
           config: {},
           settings: {},
           keyVaults: { apiKey: 'test-key' },
+          fetchOnClient: true,
+        },
+      }),
+    ).toHaveLength(1);
+  });
+
+  it('excludes device-only providers and empty groups', () => {
+    expect(decisionModelProviders([], providers, {})).toEqual([]);
+    expect(
+      decisionModelProviders([model('jev')], providers, {
+        typesafe: {
+          config: {},
+          settings: {},
+          keyVaults: { apiKey: 'test-key', baseURL: 'http://192.168.1.2:8000/v1' },
           fetchOnClient: true,
         },
       }),

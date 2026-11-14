@@ -268,9 +268,9 @@ export interface ProviderFetchOnClientConfig {
 }
 
 /**
- * Whether requests to `provider` must leave from the user's device rather than
- * the server — the single rule the client and the server both apply, so the
- * server never relays a call the client did not prepare for (or the reverse).
+ * Whether requests to `provider` leave from the user's device rather than the
+ * server when the browser makes them. Whether a server-run call is relayed to
+ * the device is the narrower {@link isProviderDeviceOnly}.
  *
  * 1. A provider that disables browser requests always runs on the server.
  * 2. Local providers (magpie / Ollama / LM Studio / Unsloth) follow `fetchOnClient`, default the device.
@@ -292,6 +292,103 @@ export const isProviderFetchOnClient = (
   if (hasEndpoint && !hasApiKey) return true;
 
   return config?.fetchOnClient ?? false;
+};
+
+/**
+ * Loopback, RFC 1918, link-local (`169.254/16`) and shared-address
+ * (`100.64/10`, CGNAT and Tailscale) IPv4 hosts; `0.0.0.0` names this host.
+ */
+const isPrivateIPv4 = (ip: string) => {
+  if (ip === '0.0.0.0') return true;
+
+  const parts = ip.match(/^(\d+)\.(\d+)\.\d+\.\d+$/);
+  if (!parts) return false;
+  const [a, b] = [Number(parts[1]), Number(parts[2])];
+  return (
+    a === 127 ||
+    a === 10 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254) ||
+    (a === 100 && b >= 64 && b <= 127)
+  );
+};
+
+/** Names only a local resolver answers: mDNS `.local` and the private-use TLDs. */
+const LOCAL_NAME_SUFFIXES = ['.localhost', '.local', '.lan', '.internal', '.home.arpa'];
+
+/**
+ * Loopback (`::1`), unique-local (`fc00::/7`), link-local (`fe80::/10`) and
+ * IPv4-mapped IPv6 hosts. A URL keeps the brackets around the address.
+ */
+const isPrivateIPv6 = (hostname: string) => {
+  const address = hostname.slice(1, -1);
+  if (address === '::1' || address === '::') return true;
+
+  // `::ffff:192.168.1.2` and its packed form `::ffff:c0a8:102` reach the same IPv4 host.
+  const mapped = address.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  if (mapped) return isPrivateIPv4(mapped[1]);
+
+  const packed = address.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (packed) {
+    const [hi, lo] = [parseInt(packed[1], 16), parseInt(packed[2], 16)];
+    return isPrivateIPv4(`${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`);
+  }
+
+  const first = parseInt(address.split(':')[0] || '0', 16);
+  return (first & 0xfe00) === 0xfc00 || (first & 0xffc0) === 0xfe80;
+};
+
+/**
+ * Loopback, `localhost`, private and link-local addresses, local-only names
+ * and single-label hosts (`http://dev-box:8000`): hosts a cloud server cannot
+ * reach.
+ */
+const isPrivateNetworkUrl = (url: string) => {
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  if (hostname.startsWith('[') && hostname.endsWith(']')) return isPrivateIPv6(hostname);
+  if (/^[\d.]+$/.test(hostname)) return isPrivateIPv4(hostname);
+
+  const name = hostname.replace(/\.$/, '');
+  return !name.includes('.') || LOCAL_NAME_SUFFIXES.some((suffix) => name.endsWith(suffix));
+};
+
+/**
+ * Whether only the user's device can reach `provider`, so a server-run call
+ * has to be relayed to it (`agent_llm_relay`) — the rule the client and the
+ * server both apply to decide that.
+ *
+ * Narrower than {@link isProviderFetchOnClient}: a provider with an API key on
+ * a public endpoint is one the server can call itself even when the user chose
+ * to call it from the browser (`fetchOnClient`), so background runs (tasks,
+ * bots, schedules) that have no device attached keep working on it.
+ *
+ * 1. A provider that disables browser requests always runs on the server.
+ * 2. Local providers (magpie / Ollama / LM Studio / Unsloth) follow `fetchOnClient`, default the device.
+ * 3. Only a base URL: an endpoint the server may not reach, so the device.
+ * 4. A key and a loopback / private-network base URL: `fetchOnClient`, default
+ *    the server — an unset flag keeps the server call it makes today, so a
+ *    self-hosted endpoint the server reaches is not parked for a device.
+ * 5. Otherwise the server.
+ */
+export const isProviderDeviceOnly = (
+  provider: string,
+  config: ProviderFetchOnClientConfig | undefined,
+): boolean => {
+  if (isProviderDisableBrowserRequest(provider)) return false;
+
+  if (LOCAL_FETCH_ON_CLIENT_PROVIDERS.has(provider)) return config?.fetchOnClient ?? true;
+
+  const baseURL = config?.keyVaults?.baseURL;
+  if (!baseURL) return false;
+  if (!config?.keyVaults?.apiKey) return true;
+
+  return isPrivateNetworkUrl(baseURL) && (config.fetchOnClient ?? false);
 };
 
 /**

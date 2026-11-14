@@ -1,16 +1,16 @@
 import type { EnabledAiModel, EnabledProvider } from 'model-bank';
-import { isProviderFetchOnClient } from 'model-bank/modelProviders';
+import { isProviderDeviceOnly } from 'model-bank/modelProviders';
 
 import type { AiProviderRuntimeConfig } from '@/types/aiProvider';
 
-/** Channel routing runs on the server, so client-only providers cannot participate. */
+/** Channel routing runs on the server, so device-only providers cannot participate. */
 export const decisionModelProviders = (
   models: EnabledAiModel[],
   providers: EnabledProvider[],
   runtimeConfig: Record<string, AiProviderRuntimeConfig>,
 ) =>
   providers
-    .filter((provider) => !isProviderFetchOnClient(provider.id, runtimeConfig[provider.id]))
+    .filter((provider) => !isProviderDeviceOnly(provider.id, runtimeConfig[provider.id]))
     .map((provider) => ({
       ...provider,
       name: provider.name || provider.id,
