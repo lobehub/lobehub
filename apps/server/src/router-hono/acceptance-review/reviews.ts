@@ -9,6 +9,7 @@ import {
   updateAcceptanceReviewMarkSchema,
 } from '@lobechat/types';
 import type { Context } from 'hono';
+import pMap from 'p-map';
 
 import { AcceptanceReviewModel } from '@/database/models/acceptanceReview';
 import { ProjectModel } from '@/database/models/project';
@@ -28,6 +29,8 @@ import { parseBody } from './parseBody';
 import { loadAuthors, screenshotResolver, toMarkDto, toReviewDto } from './reviewMapping';
 
 type ReviewContext = Context<ReviewEnv>;
+
+const IO_CONCURRENCY = 5;
 
 const reviews = (c: ReviewContext) => new AcceptanceReviewModel(c.get('db'));
 
@@ -96,14 +99,15 @@ export const describeReview = async (
   return toReviewDto(row, {
     markCount: marks.length,
     marks: options.withMarks
-      ? await Promise.all(
-          marks.map(async (mark) =>
+      ? await pMap(
+          marks,
+          async (mark) =>
             toMarkDto(mark, {
               replyCount: replies?.get(mark.id),
               result: projection.results.get(mark.id),
               screenshot: await screenshot(mark.screenshotFileId),
             }),
-          ),
+          { concurrency: IO_CONCURRENCY },
         )
       : undefined,
     projection,
@@ -148,7 +152,9 @@ export const listReviews = async (c: ReviewContext) => {
   ]);
   return c.json({
     draft: draft ? await describeReview(c, scope, draft) : null,
-    items: await Promise.all(submitted.map((row) => describeReview(c, scope, row))),
+    items: await pMap(submitted, (row) => describeReview(c, scope, row), {
+      concurrency: IO_CONCURRENCY,
+    }),
   });
 };
 
@@ -206,7 +212,9 @@ export const discardReview = async (c: ReviewContext) => {
   if (draft.error) return draft.error;
   const marks = await reviews(c).listMarks(draft.row.id);
   await reviews(c).discard(draft.row.id);
-  await Promise.all(marks.map((mark) => removeScreenshot(c, mark.screenshotFileId)));
+  await pMap(marks, (mark) => removeScreenshot(c, mark.screenshotFileId), {
+    concurrency: IO_CONCURRENCY,
+  });
   return c.body(null, 204);
 };
 
