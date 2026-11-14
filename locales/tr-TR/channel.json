@@ -30,7 +30,7 @@
   "chooseDevice": "Bir cihaz seçin",
   "chooseDirectory": "Dizin seçin",
   "closeThread": "Konuyu kapat",
-  "composer": "Bir mesaj gönder · yanıtlayacak kişiyi seçmek için @ yazın",
+  "composer": "#{{name}} kanalına mesaj gönderin",
   "composer.actions": "Daha fazla işlem",
   "composer.mention": "Birini etiketle",
   "conversationEmpty": "Sohbete başlayın",
