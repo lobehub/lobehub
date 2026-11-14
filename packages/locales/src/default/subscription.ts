@@ -566,6 +566,7 @@ export default {
   'plans.compare.unlimited': 'Unlimited',
   'plans.compare.usageBase': 'Standard',
   'plans.compare.usageMultiple': '{{multiple}}×',
+  'plans.compare.usageMultipleOf': '{{multiple}}× {{plan}}',
   'plans.credit.api': 'Custom API',
   'plans.credit.apiDesc': 'Requires your own model API configuration',
   'plans.credit.apiProvider':

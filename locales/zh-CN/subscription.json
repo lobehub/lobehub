@@ -514,6 +514,7 @@
   "plans.compare.unlimited": "不限",
   "plans.compare.usageBase": "标准",
   "plans.compare.usageMultiple": "{{multiple}} 倍",
+  "plans.compare.usageMultipleOf": "{{plan}} 的 {{multiple}} 倍",
   "plans.credit.api": "自定义 API",
   "plans.credit.apiDesc": "需配置你自己的模型 API",
   "plans.credit.apiProvider": "支持 OpenAI / Anthropic / OpenRouter 等 20+ 主流模型提供商",
