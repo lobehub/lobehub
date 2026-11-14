@@ -21,6 +21,7 @@ const {
   mockGetMcpList,
   mockGetMcpManifest,
   mockInstallMarketplaceConnector,
+  mockQueryConnectorsByIdentifiers,
   mockQueryPlugins,
   mockResolveConnectors,
   mockUpdatePlugin,
@@ -31,6 +32,7 @@ const {
   mockGetMcpList: vi.fn(),
   mockGetMcpManifest: vi.fn(),
   mockInstallMarketplaceConnector: vi.fn(),
+  mockQueryConnectorsByIdentifiers: vi.fn(),
   mockQueryPlugins: vi.fn(),
   mockResolveConnectors: vi.fn(),
   mockUpdatePlugin: vi.fn(),
@@ -76,7 +78,10 @@ vi.mock('@/database/models/plugin', () => ({
 
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn(function () {
-    return { resolveAll: mockResolveConnectors };
+    return {
+      queryByIdentifiers: mockQueryConnectorsByIdentifiers,
+      resolveAll: mockResolveConnectors,
+    };
   }),
 }));
 
@@ -125,6 +130,7 @@ describe('agentManagementRuntime', () => {
     mockExistsById.mockResolvedValue(true);
     mockServiceUpdateConfig.mockImplementation((...args) => mockUpdateConfig(...args));
     mockResolveConnectors.mockResolvedValue([]);
+    mockQueryConnectorsByIdentifiers.mockResolvedValue([]);
     mockQueryPlugins.mockResolvedValue([]);
     mockGetMcpManifest.mockRejectedValue(new Error('not in marketplace'));
     mockInstallMarketplaceConnector.mockResolvedValue({ status: 'installed' });
@@ -555,6 +561,43 @@ describe('agentManagementRuntime', () => {
       expect(result.state.tools.map((t: any) => [t.identifier, t.installed])).toEqual([
         ['tavily', false],
         ['github', true],
+      ]);
+    });
+
+    it('marks marketplace MCPs installed as connectors, once their install finished', async () => {
+      mockGetMcpList.mockResolvedValue({
+        items: [
+          { identifier: 'fetch-mcp', name: 'Fetch' },
+          { identifier: 'half-mcp', name: 'Half' },
+          { identifier: 'custom-mcp', name: 'Custom' },
+        ],
+        totalCount: 3,
+      });
+      const connector = {
+        mcpConnectionType: 'cloud',
+        metadata: { marketplaceInstalled: true },
+        sourceType: 'marketplace',
+      };
+      mockQueryConnectorsByIdentifiers.mockResolvedValue([
+        { ...connector, identifier: 'fetch-mcp' },
+        // An install still running (or interrupted) is not one yet
+        { ...connector, identifier: 'half-mcp', metadata: {} },
+        // A custom connector is not this marketplace MCP
+        { ...connector, identifier: 'custom-mcp', sourceType: 'custom' },
+      ]);
+
+      const result = await createRuntime().searchMarketTools({ query: 'mcp' });
+
+      expect(mockQueryConnectorsByIdentifiers).toHaveBeenCalledWith([
+        'fetch-mcp',
+        'half-mcp',
+        'custom-mcp',
+      ]);
+      expect(result.content).toContain('- Fetch (fetch-mcp) [installed]');
+      expect(result.state.tools.map((t: any) => [t.identifier, t.installed])).toEqual([
+        ['fetch-mcp', true],
+        ['half-mcp', false],
+        ['custom-mcp', false],
       ]);
     });
 

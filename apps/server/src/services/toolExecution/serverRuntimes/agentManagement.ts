@@ -456,7 +456,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
       },
 
       searchMarketTools: (params: SearchMarketToolsParams): Promise<ToolExecutionResult> =>
-        searchMarketTools({ discoverService, pluginModel }, params),
+        searchMarketTools({ connectorModel, discoverService, pluginModel }, params),
 
       updateAgent: async (params: UpdateAgentParams): Promise<ToolExecutionResult> => {
         try {

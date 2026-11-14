@@ -1,6 +1,9 @@
 import type { MarketToolItem, SearchMarketToolsParams } from '@lobechat/builtin-tool-agent-builder';
+import { hasCallableMcpEndpoint, isMarketplaceInstallCompleted } from '@lobechat/const';
 
+import type { ConnectorModel } from '@/database/models/connector';
 import type { PluginModel } from '@/database/models/plugin';
+import { ConnectorSourceType } from '@/database/schemas';
 import type { DiscoverService } from '@/server/services/discover';
 
 import type { ToolExecutionResult } from '../types';
@@ -9,18 +12,31 @@ import type { ToolExecutionResult } from '../types';
 export const MAX_MARKET_TOOLS_PAGE_SIZE = 20;
 
 export interface MarketToolSearchDeps {
+  connectorModel: Pick<ConnectorModel, 'queryByIdentifiers'>;
   discoverService: Pick<DiscoverService, 'getMcpList'>;
   pluginModel: Pick<PluginModel, 'query'>;
 }
 
+/** A marketplace connector whose install finished: the row `installPlugin` answers `exists` for. */
+const isFinishedMarketplaceConnector = (connector: {
+  mcpConnectionType?: string | null;
+  mcpServerUrl?: string | null;
+  metadata?: unknown;
+  sourceType?: string | null;
+}) =>
+  connector.sourceType === ConnectorSourceType.marketplace &&
+  hasCallableMcpEndpoint(connector) &&
+  isMarketplaceInstallCompleted(connector.metadata);
+
 /**
  * Server-side `searchMarketTools`, shared by Agent Builder and Agent Management.
  *
- * Each result is marked `installed` against the caller's installed plugins so
- * the model can skip a redundant install and go straight to pinning the id.
+ * Each result is marked `installed` against the caller's installs, a finished
+ * marketplace connector or a plugin row from before connectors, so the model
+ * can skip a redundant install and go straight to pinning the id.
  */
 export const searchMarketTools = async (
-  { discoverService, pluginModel }: MarketToolSearchDeps,
+  { connectorModel, discoverService, pluginModel }: MarketToolSearchDeps,
   params: SearchMarketToolsParams,
 ): Promise<ToolExecutionResult> => {
   try {
@@ -29,7 +45,13 @@ export const searchMarketTools = async (
       discoverService.getMcpList({ category: params.category, pageSize, q: params.query }),
       pluginModel.query(),
     ]);
-    const installedIds = new Set(installedPlugins.map((plugin) => plugin.identifier));
+    const connectors = await connectorModel.queryByIdentifiers(
+      response.items.map((item) => item.identifier),
+    );
+    const installedIds = new Set([
+      ...installedPlugins.map((plugin) => plugin.identifier),
+      ...connectors.filter(isFinishedMarketplaceConnector).map((connector) => connector.identifier),
+    ]);
 
     const tools: MarketToolItem[] = response.items.map((item) => ({
       author: item.author,

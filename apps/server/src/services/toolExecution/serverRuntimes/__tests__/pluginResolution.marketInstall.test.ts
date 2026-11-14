@@ -12,6 +12,7 @@ import {
   type MarketMcpManifest,
 } from '@/server/services/connector/marketplaceInstall';
 
+import { searchMarketTools } from '../marketToolSearch';
 import { resolveOrInstallMarketPlugin } from '../pluginResolution';
 
 vi.mock('@/business/client/model-bank/loadModels', () => ({
@@ -159,6 +160,34 @@ describe('resolveOrInstallMarketPlugin — server-side marketplace install', () 
     expect(resolution).toEqual({ source: 'connector', status: 'loadable' });
     expect(await db.select().from(userConnectors)).toEqual(before);
     expect(await db.select().from(userInstalledPlugins)).toEqual([]);
+  });
+
+  it('reports the install as installed in the next marketplace search', async () => {
+    const search = () =>
+      searchMarketTools(
+        {
+          connectorModel,
+          discoverService: {
+            getMcpList: vi.fn().mockResolvedValue({
+              items: [{ identifier: IDENTIFIER, name: 'Fetch' }],
+              totalCount: 1,
+            }),
+          },
+          pluginModel,
+        },
+        { query: 'fetch' },
+      );
+    expect((await search()).state.tools).toEqual([
+      expect.objectContaining({ identifier: IDENTIFIER, installed: false }),
+    ]);
+
+    await installFromServer();
+
+    const result = await search();
+    expect(result.state.tools).toEqual([
+      expect.objectContaining({ identifier: IDENTIFIER, installed: true }),
+    ]);
+    expect(result.content).toContain(`(${IDENTIFIER}) [installed]`);
   });
 
   it('keeps reading a plugin row an earlier server install wrote', async () => {

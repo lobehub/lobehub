@@ -173,7 +173,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
       },
 
       searchMarketTools: (params: SearchMarketToolsParams): Promise<ToolExecutionResult> =>
-        searchMarketTools({ discoverService, pluginModel }, params),
+        searchMarketTools({ connectorModel, discoverService, pluginModel }, params),
 
       updateConfig: async (
         params: UpdateAgentConfigParams,
