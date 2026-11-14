@@ -268,6 +268,35 @@ describe('MeetingRecorderController', () => {
     expect(harness.api.refine).toHaveBeenCalledWith('mtg_1');
   });
 
+  it('uploads the kept recording when the stop landed but its answer was lost', async () => {
+    const uploadRecording = vi
+      .fn<(file: File) => Promise<string>>()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce('file_2');
+    harness = createHarness({ uploadRecording });
+
+    // The first stop never answers, the server applies it anyway; every later
+    // attempt is answered with the conflict of a meeting that already moved on.
+    harness.api.finish.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    harness.api.finish.mockImplementation(async () => {
+      throw Object.assign(new Error('Meeting is already transcribing'), {
+        data: { code: 'CONFLICT' },
+      });
+    });
+
+    await harness.controller.start({ title: 'x' });
+    harness.push(voiced());
+    harness.push(voiced());
+    await harness.controller.stop();
+    expect(harness.recorder).toMatchObject({ error: 'upload_failed', phase: 'done' });
+
+    await harness.controller.retryUpload();
+
+    expect(harness.api.finish).toHaveBeenCalledTimes(2);
+    expect(harness.api.attachAudio).toHaveBeenCalledWith('mtg_1', 'file_2');
+    expect(harness.recorder).toMatchObject({ error: undefined, phase: 'done' });
+  });
+
   it('says the upload failed because the connection is down', async () => {
     harness = createHarness({
       network: {

@@ -124,6 +124,13 @@ const recordingExtension = (mimeType: string) =>
   mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : 'webm';
 
 /**
+ * `finish` on a meeting that already left the live states answers CONFLICT. On the
+ * upload retry that means the stop landed and only its response was lost.
+ */
+const isMeetingAlreadyFinished = (error: unknown) =>
+  (error as { data?: { code?: string } } | undefined)?.data?.code === 'CONFLICT';
+
+/**
  * The app-wide meeting recorder. One instance lives for the whole SPA, so a
  * recording keeps going while the user moves between pages; components only
  * read the store and call these methods.
@@ -447,8 +454,17 @@ export class MeetingRecorderController {
   }
 
   async #saveFinish(meetingId: string) {
-    if (this.#pendingFinishMs === undefined) return;
-    await this.#deps.api.finish(meetingId, this.#pendingFinishMs);
+    const durationMs = this.#pendingFinishMs;
+    if (durationMs === undefined) return;
+
+    try {
+      await this.#deps.api.finish(meetingId, durationMs);
+    } catch (error) {
+      // The stop may have been applied while its response was lost; a retry then
+      // answers CONFLICT. Treat it as saved, otherwise the kept audio never uploads.
+      if (!isMeetingAlreadyFinished(error)) throw error;
+    }
+
     this.#pendingFinishMs = undefined;
   }
 
