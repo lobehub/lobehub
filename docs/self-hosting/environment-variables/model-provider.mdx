@@ -895,6 +895,29 @@ NewAPI is a multi-provider model aggregation service that supports automatic mod
 - Default: `-`
 - Example: `-all,+claude-opus-4-1-20250805,+claude-opus-4-20250514=claude-opus-4`
 
+## Standard Compute
+
+### `STANDARDCOMPUTE_API_KEY`
+
+- Type: Required
+- Description: This is the API key you created in the Standard Compute dashboard.
+- Default: -
+- Example: `sk-xxxxxx...xxxxxx`
+
+### `STANDARDCOMPUTE_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the API endpoint. Set it to the US endpoint to send requests there.
+- Default: `https://api.stdcmpt.com/v1`
+- Example: `https://us.stdcmpt.com/v1`
+
+### `STANDARDCOMPUTE_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the Standard Compute model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
+- Default: `-`
+- Example: `-all,+StandardCompute,+anthropic/claude-sonnet-5.5=Claude Sonnet 5.5`
+
 ## Straico
 
 ### `STRAICO_API_KEY`

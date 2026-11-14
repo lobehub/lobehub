@@ -245,6 +245,9 @@ export const getLLMConfig = () => {
       ENABLED_ZENMUX: z.boolean(),
       ZENMUX_API_KEY: z.string().optional(),
 
+      ENABLED_STANDARDCOMPUTE: z.boolean(),
+      STANDARDCOMPUTE_API_KEY: z.string().optional(),
+
       ENABLED_STRAICO: z.boolean(),
       STRAICO_API_KEY: z.string().optional(),
 
@@ -510,6 +513,9 @@ export const getLLMConfig = () => {
 
       ENABLED_ZENMUX: !!process.env.ZENMUX_API_KEY,
       ZENMUX_API_KEY: process.env.ZENMUX_API_KEY,
+
+      ENABLED_STANDARDCOMPUTE: !!process.env.STANDARDCOMPUTE_API_KEY,
+      STANDARDCOMPUTE_API_KEY: process.env.STANDARDCOMPUTE_API_KEY,
 
       ENABLED_STRAICO: !!process.env.STRAICO_API_KEY,
       STRAICO_API_KEY: process.env.STRAICO_API_KEY,
