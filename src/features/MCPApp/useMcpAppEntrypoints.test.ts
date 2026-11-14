@@ -35,7 +35,7 @@ vi.mock('@/store/tool/selectors', () => ({
   pluginSelectors: { isInstalledPluginsServerConfirmed: () => true },
 }));
 vi.mock('@/services/mcp', () => ({
-  mcpService: { getStreamableMcpServerManifest: mocks.discover },
+  mcpService: { getPluginMcpManifest: mocks.discover },
 }));
 vi.mock('@/services/plugin', () => ({ pluginService: { updatePluginManifest: mocks.save } }));
 beforeEach(() => {
@@ -69,10 +69,15 @@ describe('gated entrypoint discovery refresh', () => {
         identifier: 'notes',
         customParams: { mcp: { type: 'http', url: 'https://example.com/mcp' } },
         manifest: { api: [] },
+        settings: { API_KEY: 'secret' },
       },
     ];
     const { rerender, unmount } = renderHook(() => useMcpAppEntrypoints());
     await waitFor(() => expect(mocks.save).toHaveBeenCalledOnce());
+    // Read as the plugin's tool calls are: with its settings (credentials)
+    expect(mocks.discover).toHaveBeenCalledWith(
+      expect.objectContaining({ identifier: 'notes', settings: { API_KEY: 'secret' } }),
+    );
     mocks.state.installedPlugins = [...mocks.state.installedPlugins];
     rerender();
     expect(mocks.discover).toHaveBeenCalledOnce();

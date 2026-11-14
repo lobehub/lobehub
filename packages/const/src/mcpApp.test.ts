@@ -100,6 +100,58 @@ describe('withListingUiMeta', () => {
       ]).contents,
     ).toEqual([own]);
   });
+
+  it('keeps the listing CSP for a read that declares only display preferences', () => {
+    const read = {
+      contents: [
+        {
+          _meta: { 'openai/ui': { preferredDisplayMode: 'fullscreen' } },
+          text: '',
+          uri: 'ui://app',
+        },
+      ],
+    };
+
+    expect(lacksUiResourceMeta(read, true)).toBe(true);
+    expect(
+      withListingUiMeta(read, 'ui://app', [{ _meta: { ui: { csp } }, uri: 'ui://app' }], true)
+        .contents,
+    ).toEqual([
+      {
+        _meta: { 'openai/ui': { preferredDisplayMode: 'fullscreen' }, 'ui': { csp } },
+        text: '',
+        uri: 'ui://app',
+      },
+    ]);
+  });
+
+  it("keeps a read's own legacy CSP whole and fills only the display keys it lacks", () => {
+    const widgetCSP = { connect_domains: ['https://own.example.com'] };
+    const read = {
+      contents: [{ _meta: { 'openai/widgetCSP': widgetCSP }, text: '', uri: 'ui://app' }],
+    };
+
+    expect(lacksUiResourceMeta(read, true)).toBe(false);
+    expect(
+      withListingUiMeta(
+        read,
+        'ui://app',
+        [
+          {
+            _meta: { 'lobehub/ui': { preferredDisplayMode: 'inline' }, 'ui': { csp } },
+            uri: 'ui://app',
+          },
+        ],
+        true,
+      ).contents,
+    ).toEqual([
+      {
+        _meta: { 'lobehub/ui': { preferredDisplayMode: 'inline' }, 'openai/widgetCSP': widgetCSP },
+        text: '',
+        uri: 'ui://app',
+      },
+    ]);
+  });
 });
 
 describe('getMcpServerFingerprint', () => {

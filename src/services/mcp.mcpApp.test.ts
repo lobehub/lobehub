@@ -273,6 +273,41 @@ describe('mcpService tool discovery on desktop with MCP Apps on', () => {
   });
 });
 
+describe('mcpService.getPluginMcpManifest', () => {
+  it('reads a plugin manifest with the settings its tool calls send', async () => {
+    const http = vi.spyOn(mcpService, 'getStreamableMcpServerManifest').mockResolvedValue({});
+    const stdio = vi.spyOn(mcpService, 'getStdioMcpServerManifest').mockResolvedValue({});
+
+    await mcpService.getPluginMcpManifest({
+      customParams: { mcp: { type: 'http', url: 'https://example.com/mcp' } },
+      identifier: 'notes',
+      settings: { API_KEY: 'secret' },
+    });
+    await mcpService.getPluginMcpManifest({
+      customParams: { mcp: { command: 'dash-mcp', type: 'stdio' } },
+      identifier: 'dash',
+      settings: { TOKEN: 'stdio-secret' },
+    });
+
+    expect(http).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: { API_KEY: 'secret' },
+        identifier: 'notes',
+        url: 'https://example.com/mcp',
+      }),
+    );
+    expect(stdio).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'dash-mcp',
+        env: { TOKEN: 'stdio-secret' },
+        name: 'dash',
+      }),
+    );
+    http.mockRestore();
+    stdio.mockRestore();
+  });
+});
+
 describe('mcpService.readMcpAppResource for stdio connectors', () => {
   const stdioConnector = {
     id: 'conn_1',

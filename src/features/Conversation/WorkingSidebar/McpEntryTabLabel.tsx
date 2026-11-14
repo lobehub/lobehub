@@ -1,8 +1,9 @@
 import { useTranslation } from 'react-i18next';
 
-import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import { parseMcpEntryTab, selectMcpAppEntrypoints } from '@/features/MCPApp/entrypoints';
 import { useToolStore } from '@/store/tool';
+
+import { LazyPluginAvatar } from './LazyPluginAvatar';
 
 export const McpEntryTabLabel = ({ tab, agentId }: { tab: string; agentId?: string }) => {
   const parsed = parseMcpEntryTab(tab);
@@ -24,5 +25,5 @@ export const McpEntryTabIcon = ({ tab, agentId }: { tab: string; agentId?: strin
         (entry) => entry.identifier === parsed?.identifier && entry.toolName === parsed?.toolName,
       )?.icon,
   );
-  return <PluginAvatar avatar={icon || 'MCP_AVATAR'} size={14} />;
+  return <LazyPluginAvatar avatar={icon || 'MCP_AVATAR'} size={14} />;
 };

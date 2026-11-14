@@ -164,10 +164,15 @@ export class McpAppActionImpl {
     if (mode === 'fullscreen') useGlobalStore.getState().openWorkingSidebar(mcpAppTabKey(id));
     return mode;
   };
+  /**
+   * Numbers every entrypoint call, across tabs: a tab closed and reopened while
+   * its first call runs must not give the new call a number the old one has.
+   */
+  #lastEntryRequest = 0;
   /** An entrypoint tab starts its `{}` tool call; returns the call's number, 0 when off. */
   startEntry = (id: string) => {
     if (!enabled()) return 0;
-    const request = (useMcpAppStore.getState().entries[id]?.request ?? 0) + 1;
+    const request = ++this.#lastEntryRequest;
     useMcpAppStore.setState(
       (s) => ({ entries: { ...s.entries, [id]: { request, status: 'opening' } } }),
       false,

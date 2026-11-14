@@ -75,6 +75,12 @@ export interface AppViewSession {
   bridge: AppBridge;
   /** End the session at once: the view is already gone. */
   dispose: () => void;
+  /**
+   * The view is leaving: its context was cleared and must stay so, though its
+   * frame still runs (finishing, or waiting for its teardown). Later model
+   * context updates from it are dropped.
+   */
+  retire: () => void;
   /** Let the view finish, within {@link APP_VIEW_TEARDOWN_TIMEOUT_MS}, then end the session. */
   teardown: () => Promise<void>;
 }
@@ -127,6 +133,8 @@ export const connectAppView = ({
     }
   };
 
+  // Set once the view starts leaving; see `AppViewSession.retire`
+  let retiring = false;
   const { bridge, dispose, teardown } = connectMcpAppBridge(target, {
     ...(getContext().lifecycle && {
       lifecycle: {
@@ -135,7 +143,9 @@ export const connectAppView = ({
         onRequestDisplayMode: (mode, modes) =>
           getContext().lifecycle!.onRequestDisplayMode(mode, modes),
         onTeardown: () => getContext().lifecycle!.onTeardown(),
-        onUpdateModelContext: (params) => getContext().lifecycle!.onUpdateModelContext(params),
+        onUpdateModelContext: (params) => {
+          if (!retiring) getContext().lifecycle!.onUpdateModelContext(params);
+        },
       } satisfies NonNullable<McpAppBridgeHost['lifecycle']>,
     }),
     // Views may only call tools on the server that rendered them, and
@@ -269,7 +279,11 @@ export const connectAppView = ({
     },
     // Prompts go at once; calls that need none still run while the view
     // finishes (saves its edits), and end with it
+    retire: () => {
+      retiring = true;
+    },
     teardown: async () => {
+      retiring = true;
       approvals.abort();
       try {
         await teardown(APP_VIEW_TEARDOWN_TIMEOUT_MS);

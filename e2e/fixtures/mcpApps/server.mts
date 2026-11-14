@@ -428,9 +428,10 @@ export const createMcpAppsFixtureServer = async (port = DEFAULT_PORT) => {
       if (assignedSessionId) sessions.set(assignedSessionId, session);
       await writeWebResponse(webResponse, response);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      // The details stay in the fixture's log; the client only learns the request failed
+      console.error('[mcp-apps-fixture] request failed:', error);
       response.writeHead(500, addCorsHeaders(new Headers({ 'Content-Type': 'application/json' })));
-      response.end(JSON.stringify({ error: 'MCP fixture request failed', message }));
+      response.end(JSON.stringify({ error: 'MCP fixture request failed' }));
     }
   });
 

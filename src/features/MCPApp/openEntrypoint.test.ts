@@ -87,6 +87,21 @@ describe('openMcpAppEntrypoint', () => {
     expect(entry()?.result?.content).toBe('second');
   });
 
+  it('ignores a call that answers after its tab was closed and reopened', async () => {
+    let failOld!: (error: Error) => void;
+    mocks.invoke.mockReturnValueOnce(new Promise((_, reject) => (failOld = reject)));
+    mocks.invoke.mockResolvedValueOnce(viewResult('reopened'));
+
+    const old = openMcpAppEntrypoint(call);
+    await vi.waitFor(() => expect(mocks.invoke).toHaveBeenCalledTimes(1));
+    mcpAppActions.forgetEntries([call.id]);
+    await openMcpAppEntrypoint(call);
+    failOld(new Error('late failure'));
+    await old;
+
+    expect(entry()).toMatchObject({ result: { content: 'reopened' }, status: 'ready' });
+  });
+
   it('marks the tab failed so Retry can open it again', async () => {
     mocks.invoke.mockRejectedValueOnce(new Error('offline'));
     mocks.invoke.mockResolvedValueOnce(viewResult('retried'));

@@ -57,20 +57,8 @@ export const useMcpAppEntrypoints = (agentId?: string) => {
           import('@/services/mcp'),
           import('@/services/plugin'),
         ]);
-        const manifest =
-          config.type === 'stdio'
-            ? await mcpService.getStdioMcpServerManifest({
-                ...config,
-                command: config.command!,
-                name: plugin.identifier,
-              })
-            : config.type === 'http' && config.url
-              ? await mcpService.getStreamableMcpServerManifest({
-                  ...config,
-                  identifier: plugin.identifier,
-                  url: config.url,
-                })
-              : undefined;
+        // Same params as the plugin's tool calls: its settings carry credentials
+        const manifest = await mcpService.getPluginMcpManifest(plugin);
         if (!manifest) return;
         await pluginService.updatePluginManifest(plugin.identifier, manifest);
         await state.refreshPlugins();

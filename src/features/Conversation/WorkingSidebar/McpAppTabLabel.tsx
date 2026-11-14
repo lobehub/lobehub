@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
 
-import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import { mcpAppSelectors, useMcpAppStore } from '@/store/mcpApp/store';
+
+import { LazyPluginAvatar } from './LazyPluginAvatar';
 
 export const McpAppTabLabel = ({ id }: { id: string }) => {
   const view = useMcpAppStore(mcpAppSelectors.view(id));
@@ -11,5 +12,5 @@ export const McpAppTabLabel = ({ id }: { id: string }) => {
 
 export const McpAppTabIcon = ({ id }: { id: string }) => {
   const icon = useMcpAppStore((s) => s.views[id]?.icon);
-  return <PluginAvatar avatar={icon ?? 'MCP_AVATAR'} size={14} />;
+  return <LazyPluginAvatar avatar={icon ?? 'MCP_AVATAR'} size={14} />;
 };

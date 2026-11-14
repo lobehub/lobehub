@@ -4,7 +4,6 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { mcpEntryInstanceId, mcpEntryTabKey } from '@/features/MCPApp/entrypoints';
-import { openMcpAppEntrypoint } from '@/features/MCPApp/openEntrypoint';
 import { useMcpAppEntrypoints } from '@/features/MCPApp/useMcpAppEntrypoints';
 import { mcpAppSelectors, useMcpAppStore } from '@/store/mcpApp/store';
 
@@ -128,13 +127,17 @@ export const useOpenMenuItems = ({
                     const id = mcpEntryInstanceId(scope, key);
                     const running = mcpAppSelectors.entry(id)(useMcpAppStore.getState());
                     // An app already open in its tab is shown, not opened again
+                    // Loaded on the click: the tool-call stack stays out of the sidebar's first load
                     if (!openedTabs.includes(key) || !running || running.status === 'error')
-                      void openMcpAppEntrypoint({
-                        agentId,
-                        id,
-                        identifier: entry.identifier,
-                        toolName: entry.toolName,
-                      });
+                      void import('@/features/MCPApp/openEntrypoint').then(
+                        ({ openMcpAppEntrypoint }) =>
+                          openMcpAppEntrypoint({
+                            agentId,
+                            id,
+                            identifier: entry.identifier,
+                            toolName: entry.toolName,
+                          }),
+                      );
                   }
                   openTab(key);
                   requestTabFocus(key);

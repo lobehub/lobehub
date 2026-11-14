@@ -735,6 +735,36 @@ class MCPService {
     return (await toolsClient.mcp.readUiResource.mutate({ params, uri })) as ReadResourceResult;
   }
 
+  /**
+   * An installed plugin's MCP manifest, read with the same params its tool
+   * calls use: the stored connection with the user's plugin settings merged
+   * in (`buildPluginMcpParams`). `undefined` for a plugin with no MCP server.
+   */
+  async getPluginMcpManifest(plugin: {
+    customParams?: { mcp?: any } | null;
+    identifier: string;
+    settings?: unknown;
+  }) {
+    const { params } = buildPluginMcpParams(plugin, plugin.identifier);
+    if (params.type === 'stdio' && params.command) {
+      return this.getStdioMcpServerManifest({
+        args: params.args,
+        command: params.command,
+        env: params.env,
+        name: plugin.identifier,
+      });
+    }
+    if (params.type === 'http' && params.url) {
+      return this.getStreamableMcpServerManifest({
+        auth: params.auth,
+        headers: params.headers,
+        identifier: plugin.identifier,
+        url: params.url,
+      });
+    }
+    return undefined;
+  }
+
   async getStreamableMcpServerManifest(
     params: {
       auth?: {

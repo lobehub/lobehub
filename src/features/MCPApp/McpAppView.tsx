@@ -223,6 +223,8 @@ const McpAppView = memo<McpAppViewProps>(
           bridgeRef.current = undefined;
           return;
         }
+        // Its context goes now and stays gone while the frame finishes
+        session.retire();
         onDispose?.();
         const retired = retireAppFrame(frame, {
           // Not removed after all: a session started since replaces this one
