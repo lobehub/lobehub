@@ -504,3 +504,98 @@ describe('buildOpenAIPayload Kimi thinking semantics', () => {
     });
   });
 });
+
+describe('OpenAI reasoning model sampling params (#22657)', () => {
+  let chatCreateSpy: Mock;
+  let responsesCreateSpy: Mock;
+
+  const samplingParams = {
+    frequency_penalty: 0.3,
+    presence_penalty: 0.2,
+    temperature: 1,
+    top_p: 1,
+  };
+
+  beforeEach(() => {
+    loadModelsMock.mockResolvedValue([]);
+    chatCreateSpy = vi
+      .spyOn(OpenAI.Chat.Completions.prototype, 'create')
+      .mockResolvedValue(new ReadableStream() as any) as unknown as Mock;
+    responsesCreateSpy = vi
+      .spyOn(OpenAI.Responses.prototype, 'create')
+      .mockResolvedValue(new ReadableStream() as any) as unknown as Mock;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // GPT-5.x / GPT-6 hit the factory's built-in Responses rules; o-series stays on Chat Completions.
+  it.each([
+    { api: 'responses', model: 'gpt-6-luna' },
+    { api: 'responses', model: 'gpt-5.4' },
+    { api: 'chat', model: 'o3' },
+  ])('drops sampling params for $model on the $api path', async ({ api, model }) => {
+    const instance = new LobeOpenCodeCodingPlanAI({ apiKey: 'test' });
+
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model,
+      ...samplingParams,
+    });
+
+    const [usedSpy, unusedSpy] =
+      api === 'responses'
+        ? [responsesCreateSpy, chatCreateSpy]
+        : [chatCreateSpy, responsesCreateSpy];
+    expect(usedSpy).toHaveBeenCalledOnce();
+    expect(unusedSpy).not.toHaveBeenCalled();
+    const body = JSON.parse(JSON.stringify(usedSpy.mock.calls[0][0]));
+    expect(body).not.toHaveProperty('top_p');
+    expect(body).not.toHaveProperty('temperature');
+    expect(body).not.toHaveProperty('frequency_penalty');
+    expect(body).not.toHaveProperty('presence_penalty');
+  });
+
+  it('keeps sampling params for non-reasoning models', async () => {
+    const instance = new LobeOpenCodeCodingPlanAI({ apiKey: 'test' });
+
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model: 'glm-5',
+      ...samplingParams,
+    });
+
+    expect(chatCreateSpy.mock.calls[0][0]).toMatchObject(samplingParams);
+  });
+
+  it('drops sampling params for reasoning models discovered as Responses models', async () => {
+    vi.resetModules();
+    const { LobeOpenCodeCodingPlanAI: Runtime } = await import('./index');
+    const model = 'o4-mini';
+    vi.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          'opencode-go': {
+            models: { [model]: { id: model, provider: { npm: '@ai-sdk/openai' } } },
+          },
+        }),
+      ),
+    );
+    const instance = new Runtime({ apiKey: 'test' });
+
+    await instance.chat({
+      messages: [{ content: 'Hello', role: 'user' }],
+      model,
+      ...samplingParams,
+    });
+
+    expect(responsesCreateSpy).toHaveBeenCalledOnce();
+    expect(chatCreateSpy).not.toHaveBeenCalled();
+    const body = JSON.parse(JSON.stringify(responsesCreateSpy.mock.calls[0][0]));
+    expect(body).not.toHaveProperty('top_p');
+    expect(body).not.toHaveProperty('temperature');
+    expect(body).not.toHaveProperty('frequency_penalty');
+    expect(body).not.toHaveProperty('presence_penalty');
+  });
+});
