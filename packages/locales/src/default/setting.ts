@@ -2101,6 +2101,13 @@ When I am ___, I need ___
   'systemAgent.inputCompletion.modelDesc':
     'Suggests text while you type. When enabled, this model generates the suggestions.',
   'systemAgent.inputCompletion.title': 'Input Suggestions',
+  'systemAgent.meetingMinutes.modelDesc':
+    'Writes the summary, chapters, decisions and to-dos of a meeting from its transcript.',
+  'systemAgent.meetingMinutes.title': 'Meeting Minutes',
+  'systemAgent.meetingTranscription.modelDesc':
+    'Transcribes meeting recordings after they end, with speakers and timestamps. Pick a diarizing model (such as gpt-4o-transcribe-diarize) to label who spoke. Also drafts the live transcript where realtime transcription is unavailable.',
+  'systemAgent.meetingTranscription.placeholder': 'Select a speech-to-text model',
+  'systemAgent.meetingTranscription.title': 'Meeting Transcription',
   'systemAgent.userMemoryEmbedding.label': 'Model',
   'systemAgent.userMemoryEmbedding.modelDesc':
     'Model used to embed memory content for retrieval. The context limit caps each embedding input.',
