@@ -16,6 +16,7 @@ import { mcpService } from '@/server/services/mcp';
 import {
   installMarketplaceMcpConnector,
   type MarketMcpManifest,
+  MARKETPLACE_INSTALL_LEASE_MS,
   pickMarketplaceDeployment,
 } from './marketplaceInstall';
 
@@ -256,19 +257,100 @@ describe('installMarketplaceMcpConnector', () => {
     expect(await connectorRows()).toEqual([before]);
   });
 
+  it('creates the connector once for concurrent installs of one server', async () => {
+    const outcomes = await Promise.all([
+      installMarketplaceMcpConnector(scope, 'fetch-mcp', cloudManifest),
+      installMarketplaceMcpConnector(scope, 'fetch-mcp', cloudManifest),
+    ]);
+
+    expect(outcomes.filter((outcome) => outcome.status === 'installed')).toHaveLength(1);
+    const rows = await connectorRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].metadata).toMatchObject({ marketplaceInstalled: true });
+    expect(await db.select().from(userConnectorTools)).toHaveLength(2);
+  });
+
+  describe('over an unfinished marketplace install', () => {
+    const staleAt = () => new Date(Date.now() - MARKETPLACE_INSTALL_LEASE_MS - 60_000);
+    const seedUnfinished = async (row: Partial<typeof userConnectors.$inferInsert> = {}) => {
+      const [seeded] = await db
+        .insert(userConnectors)
+        .values({
+          identifier: 'fetch-mcp',
+          mcpConnectionType: 'cloud',
+          metadata: { cloudEndPoint: true },
+          name: 'Interrupted',
+          sourceType: 'marketplace',
+          status: 'disconnected',
+          userId,
+          ...row,
+        })
+        .returning();
+      return seeded;
+    };
+
+    it('reports an install still inside its lease as in progress and leaves it', async () => {
+      const seeded = await seedUnfinished();
+
+      expect(await installMarketplaceMcpConnector(scope, 'fetch-mcp', cloudManifest)).toEqual({
+        blocker: 'in-progress',
+        status: 'blocked',
+      });
+      expect(await connectorRows()).toEqual([seeded]);
+    });
+
+    it('takes over an interrupted install once its lease has run out', async () => {
+      const seeded = await seedUnfinished({ updatedAt: staleAt() });
+      await db.insert(userConnectorTools).values({
+        crudType: 'read',
+        permission: 'auto',
+        toolName: 'half-synced',
+        userConnectorId: seeded.id,
+        userId,
+      });
+
+      expect(await installMarketplaceMcpConnector(scope, 'fetch-mcp', cloudManifest)).toEqual({
+        status: 'installed',
+      });
+      const [connector] = await connectorRows();
+      expect(connector.id).not.toBe(seeded.id);
+      expect(connector).toMatchObject({ name: 'Fetch', status: 'connected' });
+      expect(connector.metadata).toMatchObject({ marketplaceInstalled: true });
+      expect(
+        (await db.select().from(userConnectorTools)).map((tool) => tool.toolName).sort(),
+      ).toEqual(['fetch', 'purge']);
+    });
+
+    it('leaves an interrupted install a pre-connector plugin row makes callable', async () => {
+      const seeded = await seedUnfinished({ updatedAt: staleAt() });
+      await db
+        .insert(userInstalledPlugins)
+        .values({ identifier: 'fetch-mcp', type: 'plugin', userId });
+
+      expect(await installMarketplaceMcpConnector(scope, 'fetch-mcp', cloudManifest)).toEqual({
+        blocker: 'conflict',
+        status: 'blocked',
+      });
+      expect(await connectorRows()).toEqual([seeded]);
+    });
+  });
+
   it.each([
     ['a custom connector', { sourceType: 'custom' }],
-    // A web install that never finished (its OAuth was canceled) is not overwritten
+    // A row without an endpoint only projects tools another executor runs
     [
-      'an unfinished marketplace install',
-      { mcpServerUrl: 'https://mcp.example.com/mcp', sourceType: 'marketplace' },
+      'an endpoint-less marketplace row',
+      { mcpConnectionType: null, mcpServerUrl: null, sourceType: 'marketplace' },
     ],
   ])('refuses to overwrite %s of the same identifier', async (_, row) => {
     await db.insert(userConnectors).values({
       identifier: 'fetch-mcp',
       mcpConnectionType: 'http',
+      mcpServerUrl: 'https://mcp.example.com/mcp',
       name: 'Existing',
       status: 'disconnected',
+      // Past the lease, so only the kind of row keeps it
+      updatedAt: new Date(Date.now() - MARKETPLACE_INSTALL_LEASE_MS - 60_000),
       userId,
       ...row,
     } as typeof userConnectors.$inferInsert);
@@ -313,6 +395,30 @@ describe('installMarketplaceMcpConnector', () => {
       expect(await connectorRows()).toEqual([
         expect.objectContaining({ userId: memberId, workspaceId }),
       ]);
+    });
+
+    it("leaves another member's interrupted install for them or an admin to remove", async () => {
+      await seedWorkspace('all_members');
+      await db.insert(userConnectors).values({
+        identifier: 'fetch-mcp',
+        mcpConnectionType: 'cloud',
+        name: 'Interrupted',
+        sourceType: 'marketplace',
+        status: 'disconnected',
+        updatedAt: new Date(Date.now() - MARKETPLACE_INSTALL_LEASE_MS - 60_000),
+        userId,
+        workspaceId,
+      });
+      const before = await connectorRows();
+
+      expect(
+        await installMarketplaceMcpConnector(
+          { serverDB: db, userId: memberId, workspaceId },
+          'fetch-mcp',
+          cloudManifest,
+        ),
+      ).toEqual({ blocker: 'conflict', status: 'blocked' });
+      expect(await connectorRows()).toEqual(before);
     });
 
     it('applies the admins-only connector policy', async () => {

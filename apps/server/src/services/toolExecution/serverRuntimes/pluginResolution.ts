@@ -109,6 +109,12 @@ const NEEDS_USER_INSTALL: Record<
     message: 'Not allowed to add workspace connectors',
     type: 'PluginInstallForbidden',
   },
+  'in-progress': {
+    content: (id) =>
+      `Marketplace MCP "${id}" is already being installed: an install started in the last few minutes has not finished. Try installPlugin again in a few minutes. Nothing was changed.`,
+    message: 'Plugin install already in progress',
+    type: 'PluginInstallInProgress',
+  },
   'local-only': {
     content: (id) =>
       `Marketplace MCP "${id}" has no remote endpoint: it runs as a local (stdio) process, which only the LobeHub desktop app can start. Ask the user to install it from the marketplace in the desktop app. Nothing was changed.`,

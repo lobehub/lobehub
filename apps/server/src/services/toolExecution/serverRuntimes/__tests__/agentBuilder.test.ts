@@ -577,6 +577,7 @@ describe('agentBuilderRuntime', () => {
       ['local-only', 'PluginNeedsDesktop', 'desktop app'],
       ['conflict', 'PluginIdentifierConflict', 'already exists'],
       ['forbidden', 'PluginInstallForbidden', 'admins'],
+      ['in-progress', 'PluginInstallInProgress', 'already being installed'],
       ['no-tools', 'PluginHasNoTools', 'lists no tools'],
     ])(
       'refuses a marketplace MCP it cannot install (%s) and pins nothing',

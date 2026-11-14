@@ -3,7 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { ConnectorCredentials } from '../../schemas';
-import { agentEvalDatasets, agents, userConnectors, users, workspaces } from '../../schemas';
+import {
+  agentEvalDatasets,
+  agents,
+  userConnectors,
+  userConnectorTools,
+  users,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ConnectorModel } from '../connector';
 import { EvalConnectorUpdateError } from '../connectorEval';
@@ -342,6 +349,88 @@ describe('ConnectorModel', () => {
 
       expect(callGateKeeper.encrypt).toHaveBeenCalledOnce();
       expect(result.credentials).toBe(`call:${JSON.stringify(apikeyCredentials)}`);
+    });
+  });
+
+  describe('createUnlessIdentifierHeld', () => {
+    const marketplaceInput = {
+      identifier: 'fetch-mcp',
+      name: 'Fetch',
+      sourceType: 'marketplace',
+      status: 'disconnected',
+    };
+    const fetchRows = () =>
+      serverDB.select().from(userConnectors).where(eq(userConnectors.identifier, 'fetch-mcp'));
+
+    it('creates a base connector when no base row of the scope holds the identifier', async () => {
+      // Another scope's row and an agent's own row do not hold the base identifier
+      await new ConnectorModel(serverDB, userId).create(marketplaceInput);
+      await serverDB.insert(agents).values({ id: 'held-agent', userId, workspaceId });
+      await new ConnectorModel(serverDB, userId, workspaceId).create({
+        ...marketplaceInput,
+        agentId: 'held-agent',
+      });
+
+      const result = await new ConnectorModel(
+        serverDB,
+        userId,
+        workspaceId,
+      ).createUnlessIdentifierHeld(marketplaceInput);
+
+      expect(result).toEqual({
+        created: expect.objectContaining({ agentId: null, identifier: 'fetch-mcp', workspaceId }),
+      });
+      expect(await fetchRows()).toHaveLength(3);
+    });
+
+    it('returns the holding row and writes nothing when it may not be replaced', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const holder = await model.create(marketplaceInput);
+      const canReplace = vi.fn(() => false);
+
+      expect(
+        await model.createUnlessIdentifierHeld(
+          { ...marketplaceInput, name: 'Other' },
+          { canReplace },
+        ),
+      ).toEqual({ holder: expect.objectContaining({ id: holder.id, name: 'Fetch' }) });
+      expect(canReplace).toHaveBeenCalledWith(expect.objectContaining({ id: holder.id }));
+      expect(await fetchRows()).toEqual([expect.objectContaining({ id: holder.id })]);
+    });
+
+    it('replaces a holding row it may replace, with its tools', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const holder = await model.create(marketplaceInput);
+      await serverDB.insert(userConnectorTools).values({
+        crudType: 'read',
+        permission: 'auto',
+        toolName: 'stale',
+        userConnectorId: holder.id,
+        userId,
+      });
+
+      const result = await model.createUnlessIdentifierHeld(
+        { ...marketplaceInput, name: 'Fetch again' },
+        { canReplace: () => true },
+      );
+
+      expect(result).toEqual({ created: expect.objectContaining({ name: 'Fetch again' }) });
+      expect(await fetchRows()).toEqual([
+        expect.objectContaining({ id: 'created' in result ? result.created.id : undefined }),
+      ]);
+      expect(await serverDB.select().from(userConnectorTools)).toEqual([]);
+    });
+
+    it('creates the connector once for concurrent calls', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+
+      const results = await Promise.all([
+        model.createUnlessIdentifierHeld(marketplaceInput),
+        model.createUnlessIdentifierHeld(marketplaceInput),
+      ]);
+
+      expect(results.filter((result) => 'created' in result)).toHaveLength(1);
+      expect(await fetchRows()).toHaveLength(1);
     });
   });
 

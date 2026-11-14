@@ -6,7 +6,7 @@ import pMap from 'p-map';
 
 import type { ConnectorCredentials, NewUserConnector, UserConnectorItem } from '../schemas';
 import { agentEvalDatasets, ConnectorStatus, userConnectors, userConnectorTools } from '../schemas';
-import type { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase, Transaction } from '../type';
 import {
   buildWorkspacePayload,
   buildWorkspaceWhere,
@@ -307,62 +307,116 @@ export class ConnectorModel {
   create = async (
     params: CreateConnectorParams,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
-  ): Promise<UserConnectorItem> => {
-    return this.db.transaction(async (tx) => {
-      if (!this.evaluationDatasetId && params.metadata?.agentEval) {
-        throw new EvalConnectorUpdateError(
-          'Use the Dataset connection API for evaluation connections',
-        );
-      }
-      if (this.evaluationDatasetId) {
-        const [dataset] = await tx
-          .select({ id: agentEvalDatasets.id })
-          .from(agentEvalDatasets)
-          .where(
-            and(
-              eq(agentEvalDatasets.id, this.evaluationDatasetId),
-              buildWorkspaceWhere(
-                { userId: this.userId, workspaceId: this.workspaceId },
-                agentEvalDatasets,
-              ),
-            ),
-          )
-          .for('share');
-        if (!dataset) throw new EvalConnectorUpdateError('Dataset not found');
-        if (params.credentials && !gateKeeper)
-          throw new EvalConnectorUpdateError('Secure connection storage is unavailable');
-        if (params.agentId || params.metadata?.mountedByAgentId)
-          throw new EvalConnectorUpdateError(
-            'Evaluation connections cannot be assigned to a normal Agent',
-          );
-        const marker = params.metadata?.agentEval;
-        params = {
-          ...params,
-          metadata: {
-            ...params.metadata,
-            agentEval: {
-              ...(marker && typeof marker === 'object' && !Array.isArray(marker) ? marker : {}),
-              datasetId: this.evaluationDatasetId,
-            },
-          },
-        };
-      }
-      const credentials = params.credentials
-        ? await encryptCredentials(params.credentials, gateKeeper)
-        : null;
+  ): Promise<UserConnectorItem> =>
+    this.db.transaction((tx) => this.insertInTransaction(tx, params, gateKeeper));
 
-      const [result] = await tx
-        .insert(userConnectors)
-        .values(
-          buildWorkspacePayload(
-            { userId: this.userId, workspaceId: this.workspaceId },
-            { ...params, credentials },
+  /**
+   * Create a base connector (`agent_id IS NULL`) unless a row in this scope
+   * already holds its identifier. The lookup and the insert are one step,
+   * serialized on a transaction-scoped advisory lock keyed by the scope and
+   * identifier: the identifier indexes are not unique, so two concurrent
+   * callers would otherwise both find it free and both insert. `canReplace`
+   * may let the holding row go: it is deleted, with its tools, in that step.
+   */
+  createUnlessIdentifierHeld = async (
+    params: Omit<CreateConnectorParams, 'agentId'>,
+    options: {
+      canReplace?: (holder: UserConnectorItem) => boolean;
+      gateKeeper?: GateKeeper;
+    } = {},
+  ): Promise<{ created: UserConnectorItem } | { holder: UserConnectorItem }> => {
+    const { canReplace, gateKeeper = this.gateKeeper } = options;
+    const scopeKey = this.workspaceId ? `workspace:${this.workspaceId}` : `user:${this.userId}`;
+
+    return this.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${`user_connectors:${scopeKey}:${params.identifier}`}))`,
+      );
+
+      const [holder] = await tx
+        .select()
+        .from(userConnectors)
+        .where(
+          and(
+            this.ownership(),
+            eq(userConnectors.identifier, params.identifier),
+            isNull(userConnectors.agentId),
           ),
         )
-        .returning();
+        .orderBy(asc(userConnectors.createdAt))
+        .limit(1);
 
-      return result;
+      if (holder) {
+        if (!canReplace?.(holder)) return { holder };
+        await tx
+          .delete(userConnectors)
+          .where(and(eq(userConnectors.id, holder.id), this.ownership()));
+      }
+
+      return {
+        created: await this.insertInTransaction(tx, { ...params, agentId: null }, gateKeeper),
+      };
     });
+  };
+
+  private insertInTransaction = async (
+    tx: Transaction,
+    params: CreateConnectorParams,
+    gateKeeper: GateKeeper | undefined,
+  ): Promise<UserConnectorItem> => {
+    if (!this.evaluationDatasetId && params.metadata?.agentEval) {
+      throw new EvalConnectorUpdateError(
+        'Use the Dataset connection API for evaluation connections',
+      );
+    }
+    if (this.evaluationDatasetId) {
+      const [dataset] = await tx
+        .select({ id: agentEvalDatasets.id })
+        .from(agentEvalDatasets)
+        .where(
+          and(
+            eq(agentEvalDatasets.id, this.evaluationDatasetId),
+            buildWorkspaceWhere(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              agentEvalDatasets,
+            ),
+          ),
+        )
+        .for('share');
+      if (!dataset) throw new EvalConnectorUpdateError('Dataset not found');
+      if (params.credentials && !gateKeeper)
+        throw new EvalConnectorUpdateError('Secure connection storage is unavailable');
+      if (params.agentId || params.metadata?.mountedByAgentId)
+        throw new EvalConnectorUpdateError(
+          'Evaluation connections cannot be assigned to a normal Agent',
+        );
+      const marker = params.metadata?.agentEval;
+      params = {
+        ...params,
+        metadata: {
+          ...params.metadata,
+          agentEval: {
+            ...(marker && typeof marker === 'object' && !Array.isArray(marker) ? marker : {}),
+            datasetId: this.evaluationDatasetId,
+          },
+        },
+      };
+    }
+    const credentials = params.credentials
+      ? await encryptCredentials(params.credentials, gateKeeper)
+      : null;
+
+    const [result] = await tx
+      .insert(userConnectors)
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { ...params, credentials },
+        ),
+      )
+      .returning();
+
+    return result;
   };
 
   /**

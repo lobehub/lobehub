@@ -7,8 +7,9 @@ import debug from 'debug';
 
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
+import { PluginModel } from '@/database/models/plugin';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
-import type { ConnectorMetadata } from '@/database/schemas';
+import type { ConnectorMetadata, UserConnectorItem } from '@/database/schemas';
 import {
   ConnectorMcpConnectionType,
   ConnectorSourceType,
@@ -55,10 +56,12 @@ export type MarketplaceDeployment =
  * - `local-only`: it has no remote endpoint, only a local (stdio) process;
  * - `no-tools`: it lists no tools, so the install would load nothing;
  * - `conflict`: another connector already holds the identifier;
+ * - `in-progress`: an install of it started under
+ *   {@link MARKETPLACE_INSTALL_LEASE_MS} ago and has not finished;
  * - `forbidden`: the workspace lets only owners and admins add connectors.
  */
 export type MarketplaceInstallBlocker =
-  'config' | 'conflict' | 'forbidden' | 'local-only' | 'no-tools' | 'oauth';
+  'config' | 'conflict' | 'forbidden' | 'in-progress' | 'local-only' | 'no-tools' | 'oauth';
 
 export type MarketplaceInstallOutcome =
   /** A connector was created, its tools synced, and the install marked finished. */
@@ -130,15 +133,45 @@ export const pickMarketplaceDeployment = (
   return { blocker: 'local-only' };
 };
 
-const isFinishedMarketplaceInstall = (connector: {
-  mcpConnectionType?: string | null;
-  mcpServerUrl?: string | null;
-  metadata?: unknown;
-  sourceType?: string | null;
-}) =>
-  connector.sourceType === ConnectorSourceType.marketplace &&
-  hasCallableMcpEndpoint(connector) &&
-  isMarketplaceInstallCompleted(connector.metadata);
+/**
+ * How long an unfinished marketplace install may hold its row: past it, the
+ * install is taken for dead (its process stopped between creating the row and
+ * marking it), and the next install of the same server replaces the row. It is
+ * well beyond the time one server run may take.
+ */
+export const MARKETPLACE_INSTALL_LEASE_MS = 10 * 60 * 1000;
+
+type HolderVerdict =
+  'exists' | 'replace' | Extract<MarketplaceInstallBlocker, 'conflict' | 'in-progress'>;
+
+/**
+ * What an install does about the base row already holding its identifier:
+ * - `exists`: a finished marketplace install, left as it is;
+ * - `in-progress`: an unfinished marketplace install inside the lease, which
+ *   its install (this server's, or the web's) may still finish;
+ * - `replace`: the caller's own unfinished marketplace install past the lease,
+ *   which no run can call: a retry takes it over;
+ * - `conflict`: anything else (a custom or builtin connector, a row without an
+ *   endpoint, another member's row, a pre-connector install its plugin row
+ *   makes callable).
+ */
+const judgeHolder = (
+  holder: Pick<
+    UserConnectorItem,
+    'mcpConnectionType' | 'mcpServerUrl' | 'metadata' | 'sourceType' | 'updatedAt' | 'userId'
+  >,
+  { hasPluginRow, userId }: { hasPluginRow: boolean; userId: string },
+): HolderVerdict => {
+  if (holder.sourceType !== ConnectorSourceType.marketplace || !hasCallableMcpEndpoint(holder))
+    return 'conflict';
+  if (isMarketplaceInstallCompleted(holder.metadata)) return 'exists';
+  if (hasPluginRow) return 'conflict';
+  if (Date.now() - holder.updatedAt.getTime() < MARKETPLACE_INSTALL_LEASE_MS) return 'in-progress';
+  return holder.userId === userId ? 'replace' : 'conflict';
+};
+
+const holderOutcome = (verdict: Exclude<HolderVerdict, 'replace'>): MarketplaceInstallOutcome =>
+  verdict === 'exists' ? { status: 'exists' } : { blocker: verdict, status: 'blocked' };
 
 /** The member policy the connector router's `create` applies to a workspace connector. */
 const canAddConnector = async ({ serverDB, userId, workspaceId }: MarketplaceInstallScope) => {
@@ -162,8 +195,11 @@ const REPLACE_TOOLS = { pruneMissingAutoTools: true };
  * its tools, then the `marketplaceInstalled` mark, which alone makes the row
  * callable. No `user_installed_plugins` row is written.
  *
- * The install never overwrites a stored row, so a failed tool sync only has to
- * delete the row it created.
+ * The row is claimed in one serialized step (`createUnlessIdentifierHeld`), so
+ * concurrent installs of one server create it once. The install never
+ * overwrites a row someone may still use, only an interrupted install's (see
+ * {@link judgeHolder}), so a failed tool sync only has to delete the row it
+ * created.
  */
 export const installMarketplaceMcpConnector = async (
   scope: MarketplaceInstallScope,
@@ -172,13 +208,15 @@ export const installMarketplaceMcpConnector = async (
 ): Promise<MarketplaceInstallOutcome> => {
   const { serverDB, userId, workspaceId } = scope;
 
-  const existing = await new ConnectorModel(serverDB, userId, workspaceId).findScopedByIdentifier(
-    identifier,
-  );
+  const [existing, pluginRow] = await Promise.all([
+    new ConnectorModel(serverDB, userId, workspaceId).findScopedByIdentifier(identifier),
+    new PluginModel(serverDB, userId, workspaceId).findById(identifier),
+  ]);
+  const holderContext = { hasPluginRow: !!pluginRow, userId };
+  // Answered before any write; the claim below judges the holder again under its lock.
   if (existing) {
-    return isFinishedMarketplaceInstall(existing)
-      ? { status: 'exists' }
-      : { blocker: 'conflict', status: 'blocked' };
+    const verdict = judgeHolder(existing, holderContext);
+    if (verdict !== 'replace') return holderOutcome(verdict);
   }
 
   if (!(await canAddConnector(scope))) return { blocker: 'forbidden', status: 'blocked' };
@@ -217,21 +255,29 @@ export const installMarketplaceMcpConnector = async (
   if (deployment.headers) metadata.customHeaders = deployment.headers;
   if (deployment.type === 'cloud') metadata.cloudEndPoint = deployment.cloudEndPoint;
 
-  const created = await connectorModel.create({
-    agentId: null,
-    credentials: token ? JSON.stringify({ token, type: 'bearer' }) : null,
-    identifier,
-    isEnabled: true,
-    mcpConnectionType:
-      deployment.type === 'cloud'
-        ? ConnectorMcpConnectionType.cloud
-        : ConnectorMcpConnectionType.http,
-    mcpServerUrl: deployment.type === 'http' ? deployment.url : null,
-    metadata,
-    name: manifest.name || identifier,
-    sourceType: ConnectorSourceType.marketplace,
-    status: ConnectorStatus.disconnected,
-  });
+  const claim = await connectorModel.createUnlessIdentifierHeld(
+    {
+      credentials: token ? JSON.stringify({ token, type: 'bearer' }) : null,
+      identifier,
+      isEnabled: true,
+      mcpConnectionType:
+        deployment.type === 'cloud'
+          ? ConnectorMcpConnectionType.cloud
+          : ConnectorMcpConnectionType.http,
+      mcpServerUrl: deployment.type === 'http' ? deployment.url : null,
+      metadata,
+      name: manifest.name || identifier,
+      sourceType: ConnectorSourceType.marketplace,
+      status: ConnectorStatus.disconnected,
+    },
+    { canReplace: (holder) => judgeHolder(holder, holderContext) === 'replace' },
+  );
+  if ('holder' in claim) {
+    const verdict = judgeHolder(claim.holder, holderContext);
+    // Judged live under the lock: a lease that ran out since is the next try's to take.
+    return holderOutcome(verdict === 'replace' ? 'in-progress' : verdict);
+  }
+  const { created } = claim;
 
   try {
     const { toolCount } = cloudTools
