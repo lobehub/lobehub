@@ -182,6 +182,13 @@ export class GatewayManager {
       await concurrent.stop().catch((err) => {
         log('Failed to stop replaced client %s: %O', key, err);
       });
+
+      // stopClient / stop retired this client during that wait — opening it
+      // now would reconnect a bot the user just disconnected.
+      if (this.clients.get(key) !== client) {
+        log('Client %s was retired before it started, skipping start', key);
+        return;
+      }
     }
 
     try {
