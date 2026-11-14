@@ -43,6 +43,7 @@ describe('Channel reply opening', () => {
     const candidate = await execution.openingCandidate(channel.id, job.id);
 
     expect(candidate).toMatchObject({
+      addressed: true,
       agent: { id: agent.agentId, name: 'Coder' },
       canOpenThread: true,
       recent: [],
@@ -269,14 +270,62 @@ describe('Channel reply opening', () => {
     expect(await execution.openingReply(channel.id, job.id)).toBe('On it.');
   });
 
-  it('never opens a wake that may stay silent', async () => {
-    const { channel, job } = await mentionAgent();
-    await db
+  const asFollowup = async (jobId: string, wake: Record<string, unknown>) =>
+    db
       .update(channelJobs)
-      .set({ wake: { kind: 'followup', reason: 'followup-window' } as never })
-      .where(eq(channelJobs.id, job.id));
+      .set({ wake: { kind: 'followup', ...wake } as never })
+      .where(eq(channelJobs.id, jobId));
 
-    expect(await execution.openingCandidate(channel.id, job.id)).toBeUndefined();
+  it('opens a follow-up that leads the message, telling the opener it was not addressed', async () => {
+    const { channel, job } = await mentionAgent();
+    await asFollowup(job.id, { named: true, reason: 'named-in-text' });
+
+    expect(await execution.openingCandidate(channel.id, job.id)).toMatchObject({
+      addressed: false,
+    });
+  });
+
+  it('commits a follow-up that acknowledges to answer', async () => {
+    const { channel, job } = await mentionAgent();
+    await asFollowup(job.id, { named: true, reason: 'named-in-text' });
+
+    await execution.open(channel.id, job.id, {
+      ack: 'Got it, I will read the doc first.',
+      threadTitle: 'Doc review',
+    });
+
+    // The acknowledgement said it will answer: no longer a wake that may stay silent.
+    const opened = await jobById(db, job.id);
+    expect(opened.wake).toMatchObject({ kind: 'mention', named: true, reason: 'named-in-text' });
+    expect(opened.threadId).not.toBeNull();
+    expect(await execution.openingReply(channel.id, job.id)).toBe(
+      'Got it, I will read the doc first.',
+    );
+    await execution.claim(channel.id, job.id, lease);
+    expect(await execution.silence(channel.id, job.id, 'NO_REPLY')).toBe(false);
+  });
+
+  it('keeps a follow-up that does not acknowledge optional, and in place', async () => {
+    const { channel, job } = await mentionAgent();
+    await asFollowup(job.id, { reason: 'followup-window' });
+
+    expect(await execution.open(channel.id, job.id, { threadTitle: 'Doc review' })).toBe(true);
+
+    const opened = await jobById(db, job.id);
+    expect(opened.wake).toMatchObject({ kind: 'followup' });
+    expect(opened.threadId).toBeNull();
+    expect(
+      await db.select().from(channelThreads).where(eq(channelThreads.channelId, channel.id)),
+    ).toEqual([]);
+    await execution.claim(channel.id, job.id, lease);
+    expect(await execution.silence(channel.id, job.id, 'NO_REPLY')).toBe(true);
+  });
+
+  it('never opens a follow-up deferred behind another member’s answer', async () => {
+    const { channel, coder, reviewerJob } = await mentionTwoAgents();
+    await asFollowup(reviewerJob.id, { afterMemberId: coder.id, reason: 'routing-deferred' });
+
+    expect(await execution.openingCandidate(channel.id, reviewerJob.id)).toBeUndefined();
   });
 
   it('records an opening that changed nothing, so the opener is not asked again', async () => {

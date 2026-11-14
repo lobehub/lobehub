@@ -91,7 +91,7 @@ describe('application generation chains', () => {
       recentMessages: ['alice: deploy failed again'],
     });
 
-    expect(BOT_REPLY_OPENER_PROMPT_VERSION).toBe('v3');
+    expect(BOT_REPLY_OPENER_PROMPT_VERSION).toBe('v4');
     expect(BOT_REPLY_OPENER_JSON_SCHEMA.name).toBe('bot_reply_opener');
     expect(BOT_REPLY_OPENER_JSON_SCHEMA.schema.required).toEqual([
       'acknowledge',
@@ -119,6 +119,21 @@ describe('application generation chains', () => {
     // A threadless platform's group chat is neither a thread nor a DM.
     expect(messages[1].content).not.toContain('direct message');
     expect(messages[1].content).not.toContain('may move the conversation');
+  });
+
+  it('tells an opener woken without being addressed to acknowledge only a clear request', () => {
+    const woken = chainBotReplyOpener({
+      canOpenThread: true,
+      message: 'Cook 昨天那个 PR 合了吗',
+      notAddressed: true,
+    });
+    expect(woken.messages[1].content).toContain('You were not @-mentioned or replied to');
+    expect(woken.messages[1].content).toContain('Acknowledging commits you to answer');
+    expect(woken.messages[1].content).not.toContain('Message to you');
+
+    const asked = chainBotReplyOpener({ canOpenThread: true, message: 'Cook 帮我看下这个 PR' });
+    expect(asked.messages[1].content).not.toContain('You were not @-mentioned');
+    expect(asked.messages[1].content).toContain('Message to you');
   });
 
   it('tells a Channel opener that its acknowledgement announces the thread opening under it', () => {

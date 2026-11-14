@@ -49,6 +49,8 @@ const decide = async (
           botNames: [agentDisplayName(candidate.agent)].filter((name): name is string => !!name),
           canOpenThread: candidate.canOpenThread,
           message: candidate.request.content,
+          // Woken by its own rules, not asked: it acknowledges only a clear request for work.
+          ...(!candidate.addressed && { notAddressed: true }),
           recentMessages: candidate.recent.map((message) => describe(message, candidate.agent.id)),
         },
         controller.signal,
@@ -65,7 +67,8 @@ const decide = async (
 /**
  * Opens an Agent member's reply before its run, as an IM bot does: a one-sentence
  * acknowledgement when the work takes a while, and a Thread under the request when the answer
- * runs long. Only an owed answer opens; a wake that may stay silent never does. Runs once per
+ * runs long. An owed answer opens; so does a follow-up leading the message, whose acknowledgement
+ * commits it to answer. A follow-up deferred behind another member never does. Runs once per
  * job, before the claim, so the run's topic, branch and worktree follow the Thread.
  *
  * Never throws. A failed or slow opener is recorded as an opening that changed nothing, and the

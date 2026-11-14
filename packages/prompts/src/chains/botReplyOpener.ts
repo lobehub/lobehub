@@ -1,6 +1,6 @@
 import type { OpenAIChatMessage } from '@lobechat/types';
 
-export const BOT_REPLY_OPENER_PROMPT_VERSION = 'v3';
+export const BOT_REPLY_OPENER_PROMPT_VERSION = 'v4';
 
 export const BOT_REPLY_PLACEMENTS = ['channel', 'thread'] as const;
 export type BotReplyPlacement = (typeof BOT_REPLY_PLACEMENTS)[number];
@@ -48,6 +48,14 @@ const ACK_BEFORE_THREAD = `How your acknowledgement is shown: it is posted right
 - "placement" "channel": a short, natural "got it, let me look into this", for example "Got it, let me see how to approach this." or "收到，我来看看这个事情怎么做。"
 Write your own sentence for this person and this request; the examples show the intent, not words to reuse.`;
 
+/**
+ * When nobody addressed the assistant, the acknowledgement is also its commitment to answer, so it
+ * is posted only for a message that clearly asks it to work.
+ */
+const NOT_ADDRESSED = `You were not @-mentioned or replied to. You were woken because the message may concern you: it says your name, follows up on something you said, or falls within your duties. People also talk about you without asking you anything.
+- Set "acknowledge" true only when the message clearly asks you to do something that takes real work. Acknowledging commits you to answer.
+- When it only talks about you, is meant for someone else, or you are unsure: "acknowledge" false, "ack" empty, "placement" "channel", "title" empty. You decide later whether to speak at all.`;
+
 export interface BotReplyOpenerInput {
   /**
    * Where the acknowledgement lands: `before-thread` posts it in the conversation the person is
@@ -63,6 +71,11 @@ export interface BotReplyOpenerInput {
   /** Whether the reply can move into a new thread; false in a DM, an existing thread or a threadless platform. */
   canOpenThread: boolean;
   message: string;
+  /**
+   * The assistant was woken without being addressed (its name in the text, a follow-up, its
+   * duties): acknowledge only a clear request for work. Absent: the message was addressed to it.
+   */
+  notAddressed?: boolean;
   /** Short transcript of the messages just before this one, oldest first. */
   recentMessages?: string[];
 }
@@ -85,10 +98,13 @@ const buildState = (input: BotReplyOpenerInput): string => {
       : 'A thread is not available here: you answer where the message was sent.',
   );
   if (input.ackPlacement === 'before-thread') sections.push(ACK_BEFORE_THREAD);
+  if (input.notAddressed) sections.push(NOT_ADDRESSED);
   if (input.recentMessages?.length) {
     sections.push(`Earlier messages (oldest first):\n${input.recentMessages.join('\n')}`);
   }
-  sections.push(`Message to you:\n"""\n${input.message.trim()}\n"""`);
+  sections.push(
+    `${input.notAddressed ? 'Message' : 'Message to you'}:\n"""\n${input.message.trim()}\n"""`,
+  );
 
   return sections.join('\n\n');
 };
