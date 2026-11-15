@@ -312,7 +312,10 @@ describe('InboxMessageDetail', () => {
     fireEvent.click(newest.querySelector('[aria-label="identity.more"]')!);
     fireEvent.click(await screen.findByText('identity.inbox.action.trashOne'));
 
-    await waitFor(() => expect(detailProps.onReseated).toHaveBeenCalledWith('old'));
+    // The call also carries the inbox id of the row the list keeps, so the
+    // neighbours stay on the conversation the reader came from; here the mail
+    // left behind is its own inbox row.
+    await waitFor(() => expect(detailProps.onReseated).toHaveBeenCalledWith('old', 'old'));
     expect(detailProps.onEmptied).not.toHaveBeenCalled();
   });
 
