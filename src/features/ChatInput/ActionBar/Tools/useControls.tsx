@@ -40,7 +40,6 @@ import { useConnectorConfigure } from '@/features/Connectors/CustomConnectorModa
 import { openPluginEditDrawer } from '@/features/PluginDevModal/imperative';
 import { createSkillStoreModal } from '@/features/SkillStore';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -204,7 +203,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     builtinToolSelectors.fixedDisplayMetaList({ isManualMode: isManualSkillMode }),
     isEqual,
   );
-  const plugins = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
 
   // Memory and web browsing are runtime-managed builtin tools: `hidden` keeps them
   // out of `metaList`, and the shared engine rules force their enabled state from
@@ -591,7 +589,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   useFetchInstalledPlugins();
   useFetchUninstalledBuiltinTools(true);
   useFetchAgentSkills(true);
-  useCheckPluginsIsInstalled(plugins);
 
   // Load user's Composio integrations via SWR (from database)
   useFetchUserComposioConnections(isComposioEnabledInEnv);

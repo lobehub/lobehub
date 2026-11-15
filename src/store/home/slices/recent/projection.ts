@@ -29,8 +29,7 @@ export interface RecentListParams {
 /**
  * Entry key of one recents query (`recentListMap[...]`). Sidebar queries keep
  * the original `limit:N` key so their persisted rows still hydrate. The others
- * use `/` separators: the key ends up in the SWR sync key, and a `topic:`
- * substring would match a legacy CACHE_TIERS pattern and be persisted twice.
+ * use `/` separators, which keeps their entry keys stable for persisted rows.
  */
 export const createRecentQueryKey = (
   limit: number,
