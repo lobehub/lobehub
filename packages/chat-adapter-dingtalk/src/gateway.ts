@@ -11,7 +11,6 @@ const noop: GatewayLogger = () => {};
 
 const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 60_000;
-const MAX_RECONNECT_ATTEMPTS = 10;
 
 /**
  * An idle DingTalk stream carries no frames at all (measured: none in five
@@ -204,22 +203,15 @@ export class DingTalkStreamConnection {
   private scheduleReconnect(): void {
     if (this.stopped || this.reconnectTimer) return;
 
-    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-      this.log('Max reconnect attempts reached (%d), giving up', MAX_RECONNECT_ATTEMPTS);
-      return;
-    }
-
+    // No retry budget: the owning client already reported this connection as running, so
+    // giving up would leave the bot silently offline until its next refresh. Retries back
+    // off to one per RECONNECT_MAX_DELAY_MS and continue until the stream is back or closed.
     this.reconnectAttempts++;
     const delay = Math.min(
       RECONNECT_BASE_DELAY_MS * 2 ** (this.reconnectAttempts - 1),
       RECONNECT_MAX_DELAY_MS,
     );
-    this.log(
-      'Reconnecting in %dms (attempt %d/%d)',
-      delay,
-      this.reconnectAttempts,
-      MAX_RECONNECT_ATTEMPTS,
-    );
+    this.log('Reconnecting in %dms (attempt %d)', delay, this.reconnectAttempts);
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
