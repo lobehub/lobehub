@@ -42,13 +42,16 @@ export const uploadShareVisitorFile = async ({
   file,
   onStatusUpdate,
   shareId,
+  uploadId,
 }: {
   abortController?: AbortController;
   file: File;
   onStatusUpdate?: OnStatusUpdate;
   shareId: string;
+  /** Id of the chip this upload reports to; defaults to the file name. */
+  uploadId?: string;
 }): Promise<{ id: string; url: string }> => {
-  const statusId = file.name;
+  const statusId = uploadId ?? file.name;
   const { detectedMimeType, file: normalizedFile } = await normalizeUploadedFileType(file);
   const extensionAudioMime = audioMimeFromExtension(normalizedFile.name);
 
