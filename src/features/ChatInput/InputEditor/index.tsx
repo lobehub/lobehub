@@ -72,7 +72,7 @@ import Placeholder, { type PlaceholderVariant } from './Placeholder';
 import { createChatInputRichPlugins } from './plugins';
 import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
 import { useLocalFileTag } from './useLocalFileTag';
-import { useMentionCategories } from './useMentionCategories';
+import { MentionSourceSync, useMentionCategories } from './useMentionCategories';
 
 const fallback = createStaticStyles(({ css }) => ({
   editor: css`
@@ -599,6 +599,7 @@ const InputEditor = memo<{
 
   return (
     <>
+      <MentionSourceSync />
       <InputHistoryPopup
         activeIndex={inputHistory.popup.activeIndex}
         container={(slashMenuRef as any)?.current ?? null}

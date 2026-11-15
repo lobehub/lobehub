@@ -48,6 +48,20 @@ type Setter = StoreSetter<DiscoverStore>;
 export const createAssistantSlice = (set: Setter, get: () => DiscoverStore, _api?: unknown) =>
   new AssistantActionImpl(set, get, _api);
 
+/**
+ * The params an assistant list query is stored under: the UI language and the
+ * page / page size defaults the market endpoint applies. A reader that only
+ * needs the stored rows builds the `assistantListQueryKey` from this.
+ */
+export const normalizeAssistantListParams = (
+  params: AssistantQueryParams = {},
+): AssistantListParams => ({
+  ...params,
+  locale: globalHelpers.getCurrentLanguage(),
+  page: params.page ? Number(params.page) : 1,
+  pageSize: params.pageSize ? Number(params.pageSize) : 21,
+});
+
 export class AssistantActionImpl {
   readonly #categories;
   readonly #detail;
@@ -114,12 +128,7 @@ export class AssistantActionImpl {
     options: { enabled?: boolean } = {},
   ): AssistantSyncResult => {
     const { enabled = true } = options;
-    const normalized: AssistantListParams = {
-      ...params,
-      locale: globalHelpers.getCurrentLanguage(),
-      page: params.page ? Number(params.page) : 1,
-      pageSize: params.pageSize ? Number(params.pageSize) : 21,
-    };
+    const normalized = normalizeAssistantListParams(params);
     const queryKey = assistantListQueryKey(normalized);
     const sync = this.#list.useSync(normalized, { enabled, revalidateOnFocus: false });
     return this.#toSyncResult(sync, queryKey, !!this.#get().assistantListMap[queryKey], enabled);
