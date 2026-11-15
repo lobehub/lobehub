@@ -483,8 +483,6 @@
   "plans.compare.agentRunFee": "Taxa por tarefa de agente",
   "plans.compare.artifactSiteSize": "Tamanho máximo por site",
   "plans.compare.artifactSites": "Sites de Artefatos ativos",
-  "plans.compare.baseline": "Os limites são comparados como múltiplos de {{plan}}.",
-  "plans.compare.baselineUltra": "Os limites são comparados como múltiplos de {{plan}}, e os modelos Ultra como múltiplos de {{ultraPlan}}.",
   "plans.compare.concurrentAgentRuns": "Tarefas de agente simultâneas",
   "plans.compare.documentCharacters": "Caracteres por documento",
   "plans.compare.earlyAccess": "Acesso antecipado a novos recursos",

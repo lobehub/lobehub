@@ -483,8 +483,6 @@
   "plans.compare.agentRunFee": "エージェントタスクごとの料金",
   "plans.compare.artifactSiteSize": "サイトあたりの最大サイズ",
   "plans.compare.artifactSites": "有効なアーティファクトサイト",
-  "plans.compare.baseline": "上限は{{plan}}の倍数で比較されます。",
-  "plans.compare.baselineUltra": "上限は{{plan}}の倍数、Ultraモデルは{{ultraPlan}}の倍数で比較されます。",
   "plans.compare.concurrentAgentRuns": "同時エージェントタスク",
   "plans.compare.documentCharacters": "ドキュメントあたりの文字数",
   "plans.compare.earlyAccess": "新機能への早期アクセス",

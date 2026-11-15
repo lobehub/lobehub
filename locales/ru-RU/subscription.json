@@ -483,8 +483,6 @@
   "plans.compare.agentRunFee": "Плата за задачу агента",
   "plans.compare.artifactSiteSize": "Макс. размер сайта",
   "plans.compare.artifactSites": "Активные сайты артефактов",
-  "plans.compare.baseline": "Лимиты указаны как множители от {{plan}}.",
-  "plans.compare.baselineUltra": "Лимиты указаны как множители от {{plan}}, а модели Ultra — как множители от {{ultraPlan}}.",
   "plans.compare.concurrentAgentRuns": "Одновременные задачи агента",
   "plans.compare.documentCharacters": "Символов в документе",
   "plans.compare.earlyAccess": "Ранний доступ к новым функциям",

@@ -483,8 +483,6 @@
   "plans.compare.agentRunFee": "에이전트 작업당 요금",
   "plans.compare.artifactSiteSize": "사이트당 최대 크기",
   "plans.compare.artifactSites": "활성 아티팩트 사이트",
-  "plans.compare.baseline": "한도는 {{plan}}의 배수로 비교됩니다.",
-  "plans.compare.baselineUltra": "한도는 {{plan}}의 배수로, Ultra 모델은 {{ultraPlan}}의 배수로 비교됩니다.",
   "plans.compare.concurrentAgentRuns": "동시 에이전트 작업",
   "plans.compare.documentCharacters": "문서당 문자 수",
   "plans.compare.earlyAccess": "새 기능 얼리 액세스",
