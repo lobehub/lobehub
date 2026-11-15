@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import type { QueuedFollowUpWaitReason } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
@@ -15,6 +16,7 @@ import {
   assertAgentRelayHop,
 } from '@/server/services/aiAgent/sourceAttribution';
 import type { QueuedFollowUp } from '@/server/services/aiAgent/steerQueue';
+import { resolveHeteroWaitReasons } from '@/server/services/aiAgent/steerQueue/heteroListener';
 import { findOwnLiveRuns, isRunAlive } from '@/server/services/aiAgent/steerQueue/liveRuns';
 import { redisService } from '@/server/services/redis';
 import {
@@ -275,6 +277,15 @@ export const agentSteerQueueRouter = router({
     const { delivering, waiting } = snapshot;
     const own = (entry: QueuedFollowUp) => entry.userId === ctx.userId;
     const waitingIds = new Set(waiting.map((entry) => entry.id));
+    // Explains the queue only; a failed read leaves the rows without a reason.
+    const wait = await resolveHeteroWaitReasons(
+      { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+      scope,
+      waiting.filter(own),
+    ).catch((error) => {
+      log('list: resolving wait reasons failed: %O', error);
+      return { listening: false, reasons: new Map<string, QueuedFollowUpWaitReason>() };
+    });
     return [
       ...waiting.filter(own).map((entry) => ({ entry, delivering: false })),
       // An entry returned to the queue mid-read is listed once, as waiting.
@@ -294,6 +305,14 @@ export const agentSteerQueueRouter = router({
         prompt: entry.request.prompt,
         selectedSkillIds: entry.request.selectedSkillIds,
         selectedToolIds: entry.request.selectedToolIds,
+        /**
+         * The running CLI run takes it into its live session at its next read,
+         * instead of leaving it for the run end.
+         */
+        joinsLiveRun:
+          !isDelivering && wait.listening && !wait.reasons.has(entry.id) ? true : undefined,
+        /** Why it waits for the running CLI run to end instead of joining it. */
+        waitReason: isDelivering ? undefined : wait.reasons.get(entry.id),
       }));
   }),
 

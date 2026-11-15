@@ -10,6 +10,7 @@ import {
   returnHeteroSteer,
   takeHeteroSteer,
 } from './hetero';
+import { heteroSteerHoldReason } from './holdReason';
 import type { QueuedFollowUp } from './index';
 
 const mocks = vi.hoisted(() => ({
@@ -113,6 +114,31 @@ describe('canSteerHeteroRun', () => {
   });
 });
 
+describe('heteroSteerHoldReason', () => {
+  const run = { acceptsImages: false, agentId: 'agt-1' };
+
+  it('gives no reason for plain text to the running agent', () => {
+    expect(heteroSteerHoldReason(followUp('a', 1), run)).toBeUndefined();
+  });
+
+  it.each([
+    ['attachments', { fileIds: ['f1'] }],
+    ['empty', { prompt: ' ' }],
+    ['selection', { userMessage: { metadata: { quote: 'x' } } }],
+    ['toolSelection', { selectedToolIds: ['t1'] }],
+    ['mentions', { mentionedAgents: [{ id: 'a2', name: 'B' }] }],
+    ['otherAgent', { agentId: 'agt-2' }],
+    ['imagesNeedNewerCli', { prompt: '![i](https://app.lobehub.com/f/file_1)' }],
+  ])('names %s', (reason, request) => {
+    expect(heteroSteerHoldReason(followUp('a', 1, request as any), run)).toBe(reason);
+  });
+
+  it('takes pasted images from a CLI that accepts them', () => {
+    const entry = followUp('a', 1, { prompt: '![i](https://app.lobehub.com/f/file_1)' });
+    expect(heteroSteerHoldReason(entry, { ...run, acceptsImages: true })).toBeUndefined();
+  });
+});
+
 describe('takeHeteroSteer', () => {
   it('hands out the first follow-up and returns the rest to the queue', async () => {
     mocks.drain.mockResolvedValue([followUp('a', 1), followUp('b', 2)]);
@@ -132,6 +158,15 @@ describe('takeHeteroSteer', () => {
 
     expect(mocks.settle.mock.calls[0][2]).toEqual(['a', 'b']);
     expect(mocks.deliveries.size).toBe(0);
+  });
+
+  it('reports the held follow-up and its reason', async () => {
+    mocks.drain.mockResolvedValue([followUp('a', 1, { fileIds: ['f1'] })]);
+    const onHold = vi.fn();
+
+    await takeHeteroSteer(ctx, { agentId: 'agt-1', onHold, operationId: 'op-1', scope });
+
+    expect(onHold).toHaveBeenCalledWith({ entryId: 'a', reason: 'attachments' });
   });
 
   describe('images pasted into the body', () => {

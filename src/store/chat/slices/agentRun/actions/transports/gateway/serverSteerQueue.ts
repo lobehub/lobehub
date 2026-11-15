@@ -397,16 +397,23 @@ export const watchServerQueue = (get: Get, contextKey: string, context: Conversa
       const notDelivered = new Set(entries.map((entry) => entry.id));
       // Mirror which ones a run already took, so the tray stops offering to
       // edit or withdraw them instead of failing when the user tries.
-      const delivering = new Set(
-        entries.filter((entry) => entry.delivering).map((entry) => entry.id),
-      );
+      const byId = new Map(entries.map((entry) => [entry.id, entry]));
       for (const message of held) {
-        if (!notDelivered.has(message.id)) continue;
-        const isDelivering = delivering.has(message.id);
-        if (!!message.serverDelivering !== isDelivering)
-          get().updateQueuedMessage(contextKey, message.id, {
-            serverDelivering: isDelivering || undefined,
-          });
+        const entry = byId.get(message.id);
+        if (!entry) continue;
+        // Also mirror when it joins the run, or why it waits for the run end,
+        // so each row says its own timing.
+        const next = {
+          serverDelivering: entry.delivering || undefined,
+          serverJoinsLiveRun: entry.joinsLiveRun || undefined,
+          serverWaitReason: entry.waitReason ?? undefined,
+        };
+        if (
+          message.serverDelivering !== next.serverDelivering ||
+          message.serverJoinsLiveRun !== next.serverJoinsLiveRun ||
+          message.serverWaitReason !== next.serverWaitReason
+        )
+          get().updateQueuedMessage(contextKey, message.id, next);
       }
       const settledDelivered = new Set<string>();
       for (const message of held) {
@@ -518,6 +525,8 @@ export const restoreServerQueuedMessages = async (
       interruptMode: 'soft',
       serverDelivery: 'server',
       ...(entry.delivering && { serverDelivering: true }),
+      ...(entry.joinsLiveRun && { serverJoinsLiveRun: true }),
+      ...(entry.waitReason && { serverWaitReason: entry.waitReason }),
       serverRequest: {
         agentId,
         appContext: { threadId: null, topicId },

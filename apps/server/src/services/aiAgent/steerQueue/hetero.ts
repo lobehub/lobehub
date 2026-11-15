@@ -13,6 +13,7 @@ import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 
 import type { ComposerRunContext } from '../composerRun';
 import { buildUserTurnMetadata } from '../pipeline/userTurnMetadata';
+import { type HeteroSteerHold, heteroSteerHoldReason } from './holdReason';
 import {
   ackFollowUps,
   checkFollowUpAccess,
@@ -52,21 +53,12 @@ export interface HeteroSteerMessage {
   messageId: string;
 }
 
-/**
- * Whether a follow-up can be typed into the running agent session: plain text
- * for the same agent. Attachments, attached selections, tool or skill
- * selections and @-mentions need a turn configured for them, and wait for the
- * run to end.
- */
-export const canSteerHeteroRun = (entry: QueuedFollowUp, agentId: string | null): boolean => {
-  const { request } = entry;
-  if (!request.prompt.trim()) return false;
-  if (request.fileIds?.length) return false;
-  if (request.userMessage?.metadata) return false;
-  if (request.selectedToolIds?.length || request.selectedSkillIds?.length) return false;
-  if (request.mentionedAgents?.length) return false;
-  return !!agentId && request.agentId === agentId;
-};
+/** Whether a follow-up can be typed into the running session, see {@link heteroSteerHoldReason}. */
+export const canSteerHeteroRun = (
+  entry: Pick<QueuedFollowUp, 'request'>,
+  agentId: string | null,
+  acceptsImages?: boolean,
+): boolean => !heteroSteerHoldReason(entry, { acceptsImages, agentId });
 
 /**
  * Keeps the leases of the deliveries the run still holds from lapsing. Called
@@ -100,11 +92,16 @@ export const takeHeteroSteer = async (
   params: {
     acceptsImages?: boolean;
     agentId: string | null;
+    /**
+     * Told which follow-up waits for the run to end and why. Called on every
+     * take that holds one back, so the caller reports only changes.
+     */
+    onHold?: (hold: HeteroSteerHold) => void;
     operationId: string;
     scope: SteerQueueScope;
   },
 ): Promise<HeteroSteerMessage | undefined> => {
-  const { acceptsImages, agentId, operationId, scope } = params;
+  const { acceptsImages, agentId, onHold, operationId, scope } = params;
 
   const drained = await drainOwnFollowUps(ctx, scope, operationId);
   if (drained.entries.length === 0) return;
@@ -112,18 +109,15 @@ export const takeHeteroSteer = async (
   const held = await redisService.steerQueue.listHeteroDeliveries<HeteroSteerDelivery>(operationId);
 
   const [first, ...rest] = drained.entries;
-  if (!canSteerHeteroRun(first, agentId)) {
-    await returnFollowUps(scope, drained, drained.entries, 'needs a turn of its own');
+  const holdReason = heteroSteerHoldReason(first, { acceptsImages, agentId });
+  if (holdReason) {
+    // Asked again on every poll: the caller logs the hold once, not this.
+    await returnFollowUps(scope, drained, drained.entries, holdReason, { quiet: true });
+    onHold?.({ entryId: first.id, reason: holdReason });
     return;
   }
 
-  // A session that only takes text gets no image follow-up: decided from the
-  // markdown alone, since the run asks again on every poll.
   const hasImages = collectMarkdownImageUrls(first.request.prompt).length > 0;
-  if (hasImages && !acceptsImages) {
-    await returnFollowUps(scope, drained, drained.entries, 'its images need a turn of their own');
-    return;
-  }
 
   let imageList: InlineImage[] = [];
   if (hasImages) {

@@ -1,4 +1,9 @@
-import type { ConversationContext, OpenAIChatMessage, UIChatMessage } from '@lobechat/types';
+import type {
+  ConversationContext,
+  OpenAIChatMessage,
+  QueuedFollowUpWaitReason,
+  UIChatMessage,
+} from '@lobechat/types';
 
 import type { PlaceholderVariant } from '@/features/ChatInput/InputEditor/Placeholder';
 import type { SendButtonProps } from '@/features/ChatInput/store/initialState';
@@ -90,6 +95,51 @@ export const getQueuedHintKey = ({
     return merged ? 'inputQueue.queuedRunEndMergeHint' : 'inputQueue.queuedRunEndHint';
 
   return merged ? 'inputQueue.queuedMergeHint' : 'inputQueue.queuedHint';
+};
+
+type QueuedHintKey = ReturnType<typeof getQueuedHintKey>;
+
+export type QueuedRowHint =
+  | { key: QueuedHintKey }
+  | {
+      key: 'inputQueue.waitReasonHint';
+      reasonKey: `inputQueue.waitReason.${QueuedFollowUpWaitReason}`;
+      timingKey: QueuedHintKey;
+    };
+
+/**
+ * Resolves one QueueTray row's caption from what the server reports about it,
+ * falling back to the queue-wide timing.
+ *
+ * Use when:
+ * - Captioning a row that may wait behind a heterogeneous CLI run. That run
+ *   takes some follow-ups into its live session and leaves others to its end,
+ *   so one caption for the whole queue cannot be right for every row.
+ *
+ * Returns:
+ * - `key`: a `chat` namespace key under `inputQueue`.
+ * - `reasonKey`: set with `inputQueue.waitReasonHint`, the key naming why the
+ *   row waits; `timingKey` is then the run-end timing it is shown with.
+ */
+export const getQueuedRowHint = ({
+  count,
+  message,
+  waitsForRunEnd,
+}: {
+  count: number;
+  message: Pick<QueuedMessage, 'serverJoinsLiveRun' | 'serverWaitReason'>;
+  waitsForRunEnd: boolean;
+}): QueuedRowHint => {
+  if (message.serverWaitReason)
+    return {
+      key: 'inputQueue.waitReasonHint',
+      reasonKey: `inputQueue.waitReason.${message.serverWaitReason}`,
+      timingKey: getQueuedHintKey({ count, waitsForRunEnd: true }),
+    };
+  // Taken into the live session at its next read, one at a time.
+  if (message.serverJoinsLiveRun) return { key: 'inputQueue.queuedHint' };
+
+  return { key: getQueuedHintKey({ count, waitsForRunEnd }) };
 };
 
 const isSupportedChatInputMessage = (

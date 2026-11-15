@@ -207,6 +207,13 @@ export const RedisKeys = {
      */
     heteroDeliveries: (operationId: string): string => `hetero_deliveries:v1:${operationId}`,
     /**
+     * Whether a heterogeneous run's producer (`lh hetero exec`) is taking
+     * follow-ups into its live session, and which queued one it holds back
+     * and why. Refreshed on every poll, so it expires once the producer stops.
+     * Full key: agentSteer:hetero_listener:v1:{operationId}
+     */
+    heteroListener: (operationId: string): string => `hetero_listener:v1:${operationId}`,
+    /**
      * Marks a sub-agent run whose final queue read came back empty: it ends
      * without reading again, so a steer appended behind it must be taken back.
      * Full key: agentSteer:sealed_run:v1:{operationId}
