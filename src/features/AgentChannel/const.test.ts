@@ -2,14 +2,12 @@ import * as Icons from '@lobehub/ui/icons';
 import { describe, expect, it } from 'vitest';
 
 import { getPlatformIcon } from './const';
-import { WECOM_COLOR_PRIMARY, WeComIcon } from './WeComIcon';
 
 describe('getPlatformIcon', () => {
-  it('resolves WeCom by id and by display name, with a brand-color variant', () => {
-    expect(getPlatformIcon('wecom')).toBe(WeComIcon);
-    expect(getPlatformIcon('WeCom')).toBe(WeComIcon);
-    expect('Color' in WeComIcon).toBe(true);
-    expect(WeComIcon.colorPrimary).toBe(WECOM_COLOR_PRIMARY);
+  it('resolves WeCom from @lobehub/ui/icons by id and by display name', () => {
+    expect(getPlatformIcon('wecom')).toBe(Icons.WeCom);
+    expect(getPlatformIcon('WeCom')).toBe(Icons.WeCom);
+    expect('Color' in Icons.WeCom).toBe(true);
   });
 
   it('keeps resolving the other platforms from @lobehub/ui/icons', () => {
