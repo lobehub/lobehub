@@ -113,6 +113,16 @@ export interface WorkspaceUserPreference {
    */
   sidebarHiddenGroupIds?: string[];
   /**
+   * Agents / chat groups this member pinned for themselves in the merged
+   * workspace "Agents" section (newest first). Personal: it never changes
+   * another member's sidebar. Team pins — the ones every member sees — stay on
+   * the shared `agents.pinned` / `chat_groups.pinned` columns, which only
+   * workspace owners and admins may write for public rows. A private row's
+   * own `pinned` column is read as this member's pin too, since only its
+   * creator can see it.
+   */
+  sidebarPinnedItemIds?: string[];
+  /**
    * Per-member pins for sidebar items.
    *
    * @deprecated Pinning is workspace-shared again — it lives on the

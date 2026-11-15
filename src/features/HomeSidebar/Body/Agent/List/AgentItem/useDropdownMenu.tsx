@@ -48,6 +48,7 @@ import { getDeleteErrorMessageKey } from '@/utils/forbiddenError';
 
 import { useRevealSidebarSection } from '../../../../hooks';
 import { useSidebarItemVisibility } from '../../useSidebarItemVisibility';
+import { useSidebarPinMenuItems } from '../../useSidebarPinMenuItems';
 import { getAgentPublishErrorKey } from './agentMenuVisibility';
 
 const BUILTIN_SLUGS = new Set<string>(Object.values(BUILTIN_AGENT_SLUGS));
@@ -149,6 +150,7 @@ export const useAgentDropdownMenu = ({
   const activeWorkspaceId = useActiveWorkspaceId();
   const currentUserId = useUserStore(userProfileSelectors.userId);
   const { isSidebarItemVisible, setSidebarItemVisible } = useSidebarItemVisibility();
+  const refreshWorkspaceUserPreference = useUserStore((s) => s.refreshWorkspaceUserPreference);
   const isShownInSidebar =
     sidebarVisibilityEnabled && isSidebarItemVisible({ id, slug, type: 'agent', userId });
   const isPrivate = visibility === 'private';
@@ -207,21 +209,34 @@ export const useAgentDropdownMenu = ({
   // vanish from the sidebar.
   const revealSidebarSection = useRevealSidebarSection();
 
+  // Workspace: a personal pin for every member plus an owner/admin-only team
+  // pin on public rows. Personal mode keeps the single column-backed pin.
+  const { isTeamPinned, menuItems: workspacePinItems } = useSidebarPinMenuItems({
+    id,
+    pinned,
+    type: 'agent',
+    visibility,
+  });
+
   return useMemo(
     () => () =>
       [
-        ...(canEdit
-          ? [
-              {
-                icon: <Icon icon={pinned ? PinOff : Pin} />,
-                key: 'pin',
-                label: t(pinned ? 'pinOff' : 'pin'),
-                onClick: () => pinAgent(id, !pinned),
-                sfSymbol: pinned ? 'pin.slash' : 'pin',
-              },
-            ]
-          : []),
-        ...(isShownInSidebar
+        ...(activeWorkspaceId
+          ? workspacePinItems
+          : canEdit
+            ? [
+                {
+                  icon: <Icon icon={pinned ? PinOff : Pin} />,
+                  key: 'pin',
+                  label: t(pinned ? 'pinOff' : 'pin'),
+                  onClick: () => pinAgent(id, !pinned),
+                  sfSymbol: pinned ? 'pin.slash' : 'pin',
+                },
+              ]
+            : []),
+        // Team-pinned rows are the fixed section every member sees; hiding
+        // them would do nothing there.
+        ...(isShownInSidebar && !isTeamPinned
           ? [
               {
                 icon: <Icon icon={EyeOffIcon} />,
@@ -501,7 +516,12 @@ export const useAgentDropdownMenu = ({
                           onOk: async () => {
                             try {
                               await agentService.publishAgentToWorkspace(id);
-                              await refreshAgentList();
+                              // Publishing moves a private pin into this
+                              // member's personal pin list server-side.
+                              await Promise.all([
+                                refreshAgentList(),
+                                refreshWorkspaceUserPreference(),
+                              ]);
                               revealSidebarSection('agent');
                               toast.success(
                                 t('agent.publishToWorkspaceSuccess', {
@@ -549,7 +569,7 @@ export const useAgentDropdownMenu = ({
                             try {
                               await agentService.setAgentVisibility(id, 'private');
                               await refreshAgentList();
-                              revealSidebarSection('private');
+                              revealSidebarSection('agent');
                               toast.success(t('makePrivate.success', { ns: 'common' }));
                             } catch (error) {
                               console.error('Failed to make agent private:', error);
@@ -598,6 +618,8 @@ export const useAgentDropdownMenu = ({
       ] as DropdownItem[],
     [
       activeWorkspaceId,
+      workspacePinItems,
+      isTeamPinned,
       canCreate,
       canConfigure,
       canEdit,
@@ -633,6 +655,7 @@ export const useAgentDropdownMenu = ({
       isShownInSidebar,
       setSidebarItemVisible,
       refreshAgentList,
+      refreshWorkspaceUserPreference,
       revealSidebarSection,
       t,
     ],
