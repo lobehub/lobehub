@@ -269,6 +269,7 @@ vi.mock('./marketMentionItems', () => ({
   toMarketSkillItem: vi.fn(),
 }));
 vi.mock('./useMentionCategories', () => ({
+  MentionSourceSync: () => null,
   useMentionCategories: () => ({
     categories: [],
     market: {

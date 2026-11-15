@@ -6,8 +6,6 @@ import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 
 import AsyncError from '@/components/AsyncError';
-import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
-import { useFetchNotebookDocuments } from '@/hooks/useFetchNotebookDocuments';
 import { getMessageListCacheIdentity, isMessageListServerVerified } from '@/services/message/cache';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
@@ -18,7 +16,7 @@ import {
 } from '@/store/chat/utils/interventionSync';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useUserStore } from '@/store/user';
-import { authSelectors, labPreferSelectors, settingsSelectors } from '@/store/user/selectors';
+import { authSelectors, labPreferSelectors } from '@/store/user/selectors';
 
 import WideScreenContainer from '../../WideScreenContainer';
 import SkeletonList from '../components/SkeletonList';
@@ -36,6 +34,7 @@ import {
 import AgentSignalReceiptList from './components/AgentSignalReceiptList';
 import CompressedHistoryGap from './components/CompressedHistoryGap';
 import CompressedMemberRow from './components/CompressedMemberRow';
+import ConversationContextLoader from './components/ConversationContextLoader';
 import PreviewTail from './components/PreviewTail';
 import { resolveTopicPreview } from './components/PreviewTail/resolveTopicPreview';
 import { usePreviewHandoff } from './components/PreviewTail/usePreviewHandoff';
@@ -149,7 +148,7 @@ export interface ChatListProps {
  *
  * Uses ConversationStore for message data and fetching.
  */
-const ChatList = memo<ChatListProps>(
+const ChatListContent = memo<ChatListProps>(
   ({
     defaultWorkflowExpandLevel,
     disableActionsBar,
@@ -169,7 +168,6 @@ const ChatList = memo<ChatListProps>(
     // The chat store owns the transcript; this view keeps its sync mounted.
     const context = useConversationStore((s) => s.context);
     const paging = context.messageReadMode === 'forward' ? 'forward' : 'backward';
-    const enableUserMemories = useUserStore(settingsSelectors.memoryEnabled);
     const skipFetch = useConversationStore(dataSelectors.skipFetch);
     const useFetchMessages = useChatStore((s) => s.useFetchMessages);
     const activeAgentId = useChatStore((s) => s.activeAgentId);
@@ -285,8 +283,7 @@ const ChatList = memo<ChatListProps>(
     const overlayHeight = useConversationStore(inputSelectors.chatInputOverlayHeight);
     const latestMessageId = displayMessageIds.at(-1);
 
-    // Skip fetching notebook and memories for share pages — topic shares may be
-    // anonymous, and agent-share visitors are not the owner these APIs scope to.
+    // Agent-share visitors are not the owner the receipt APIs scope to.
     const isSharePage = !!context.topicShareId || !!context.agentShareId;
     // TODO: Migrate Agent Signal receipts behind a dedicated user-visible receipt capability.
     const canShowAgentSignalReceipts = enableSelfLearning && !isSharePage;
@@ -298,21 +295,8 @@ const ChatList = memo<ChatListProps>(
       topicId: canShowAgentSignalReceipts ? context.topicId : undefined,
     });
 
-    // Ensure this conversation's agent config (meta) is loaded into the agent
-    // store, so message author titles resolve via useAgentMeta instead of
-    // falling back to "Untitled Agent". Route-level layouts already init the
-    // active agent, but secondary mounts never do — e.g. the share page mounts
-    // an arbitrary author's agent; without this they render "未命名助理".
-    // Idempotent: SWR dedupes against any route-level init by the same key,
-    // and is gated on isLogin (no fetch for anonymous share viewers).
-    // Agent-share visitors are signed in but NOT the owner: the owner-scoped
-    // config API resolves to null and `markAgentNotFound` would wipe the
-    // share-seeded agentMap entry, so skip the fetch entirely — the visitor
-    // page already seeds the meta from `getSharedAgent`.
     const isLogin = useUserStore(authSelectors.isLogin);
     const isAgentShareVisitor = !!context.agentShareId;
-    const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
-    useFetchAgentConfig(isLogin && !isAgentShareVisitor, context.agentId);
     const messageAuthorAgentIds = useMemo(
       () =>
         [...new Set(displayMessages.map((message) => message.agentId).filter(Boolean))].filter(
@@ -320,15 +304,6 @@ const ChatList = memo<ChatListProps>(
         ) as string[],
       [context.agentId, displayMessages],
     );
-
-    // Fetch conversation context data when a conversation is visible (skip for share pages).
-    // NOTE: the agent-document list is intentionally NOT pre-warmed here — this
-    // mount discarded its result (nothing in the message list renders documents),
-    // yet it pulled the full unbounded list into the homepage batch. The surfaces
-    // that actually render documents (working sidebar / doc page) fetch on their
-    // own mount; the slash menu fetches the slim `non-web` variant.
-    useFetchNotebookDocuments(isSharePage ? undefined : context.topicId!);
-    useFetchTopicMemories(enableUserMemories && !isSharePage ? context.topicId : undefined);
 
     // Use selectors for data
 
@@ -545,6 +520,15 @@ const ChatList = memo<ChatListProps>(
     );
   },
 );
+
+ChatListContent.displayName = 'ConversationChatListContent';
+
+const ChatList = memo<ChatListProps>((props) => (
+  <>
+    <ConversationContextLoader />
+    <ChatListContent {...props} />
+  </>
+));
 
 ChatList.displayName = 'ConversationChatList';
 

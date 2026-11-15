@@ -141,6 +141,9 @@ export const virtuaListSlice: StateCreator<State & VirtuaListAction, [], [], Vir
   },
 
   setActiveIndex: (index) => {
+    // Scroll handlers call this on every scroll event; skipping equal values
+    // keeps activeIndex subscribers (minimap) from waking up for nothing.
+    if (get().activeIndex === index) return;
     set({ activeIndex: index });
   },
 

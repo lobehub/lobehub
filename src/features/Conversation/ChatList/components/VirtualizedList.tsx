@@ -166,7 +166,6 @@ const VirtualizedList = memo<VirtualizedListProps>(
     const scrollToBottom = useConversationStore((s) => s.scrollToBottom);
     const resetVisibleItems = useConversationStore((s) => s.resetVisibleItems);
     const setActiveIndex = useConversationStore((s) => s.setActiveIndex);
-    const activeIndex = useConversationStore(virtuaListSelectors.activeIndex);
 
     const earlierHistory = useEarlierHistoryTrigger({ loadEarlierMessages, virtuaRef });
     const laterHistory = useLaterHistoryTrigger({
@@ -282,7 +281,10 @@ const VirtualizedList = memo<VirtualizedListProps>(
           ? Math.max(0, activeFromFindRaw - LEADING_ROWS)
           : null;
 
-      if (activeFromFind !== activeIndex) setActiveIndex(activeFromFind);
+      // Not a render subscription: the list never displays activeIndex, and
+      // subscribing re-rendered the whole list each time scrolling or the mount
+      // seed moved it. The action ignores unchanged values.
+      setActiveIndex(activeFromFind);
 
       const hasUserScrollIntent =
         Date.now() - lastUserScrollIntentAtRef.current <= USER_SCROLL_INTENT_TTL_MS;
@@ -318,7 +320,6 @@ const VirtualizedList = memo<VirtualizedListProps>(
         recordScroll(ref.scrollOffset, isAtBottom);
       }
     }, [
-      activeIndex,
       getDistanceToBottom,
       historyTrigger,
       markUserScrolling,
