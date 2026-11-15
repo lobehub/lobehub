@@ -22,7 +22,7 @@ import {
   MARKETPLACE_INSTALL_LEASE_MS,
   pickMarketplaceDeployment,
 } from './marketplaceInstall';
-import { buildConnectorMcpParams, syncConnectorToolsById } from './sync';
+import { syncConnectorToolsById } from './sync';
 
 vi.mock('@/server/services/mcp', () => ({ mcpService: { listRawTools: vi.fn() } }));
 vi.mock('@/server/services/mcp/featureGate', () => ({
@@ -199,8 +199,6 @@ describe('installMarketplaceMcpConnector', () => {
       expect.objectContaining({
         headers: { 'X-Client': 'lobehub' },
         name: 'remote-mcp',
-        // The listing's endpoint is reached over the SSRF-safe transport
-        ssrfSafe: true,
         type: 'http',
         url: 'https://mcp.example.com/mcp',
       }),
@@ -216,25 +214,8 @@ describe('installMarketplaceMcpConnector', () => {
     expect(connector.metadata).toMatchObject({
       customHeaders: { 'X-Client': 'lobehub' },
       marketplaceInstalled: true,
-      ssrfSafeTransport: true,
     });
     expect(await pluginRows()).toEqual([]);
-  });
-
-  it('keeps every later call to an HTTP install on the SSRF-safe transport', async () => {
-    vi.mocked(mcpService.listRawTools).mockResolvedValue([{ name: 'search' }] as never);
-    await installMarketplaceMcpConnector(scope, 'remote-mcp', httpManifest);
-
-    const [row] = await connectorRows();
-    const connector = (await new ConnectorModel(db, userId).findById(row.id))!;
-    const tools = await db.select().from(userConnectorTools);
-
-    // A conversation's tool calls (`toolExecution` runs the manifest's params),
-    // and the `connector.callTool` / view / re-sync paths (`buildConnectorMcpParams`)
-    expect(buildConnectorManifests([connector], tools)).toEqual([
-      expect.objectContaining({ mcpParams: expect.objectContaining({ ssrfSafe: true }) }),
-    ]);
-    expect(buildConnectorMcpParams(connector)).toMatchObject({ ssrfSafe: true, type: 'http' });
   });
 
   it("keeps the approval the marketplace manifest asks for on an HTTP server's tools", async () => {
@@ -317,6 +298,7 @@ describe('installMarketplaceMcpConnector', () => {
     await syncConnectorToolsById(row.id, {
       connectorModel: new ConnectorModel(db, userId),
       connectorToolModel: new ConnectorToolModel(db, userId),
+      serverDB: undefined,
       userId,
     });
 
@@ -390,6 +372,7 @@ describe('installMarketplaceMcpConnector', () => {
       await syncConnectorToolsById(row.id, {
         connectorModel: new ConnectorModel(db, userId),
         connectorToolModel: new ConnectorToolModel(db, userId),
+        serverDB: undefined,
         userId,
       });
 
@@ -425,6 +408,7 @@ describe('installMarketplaceMcpConnector', () => {
       await syncConnectorToolsById(row.id, {
         connectorModel: new ConnectorModel(db, userId),
         connectorToolModel: new ConnectorToolModel(db, userId),
+        serverDB: undefined,
         userId,
       });
 

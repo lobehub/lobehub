@@ -76,17 +76,6 @@ describe('buildConnectorManifests mcpParams headers', () => {
   });
 });
 
-describe('buildConnectorManifests SSRF-safe transport', () => {
-  it('has a marked connector called over the SSRF-safe transport', () => {
-    expect(mcpParamsOf(httpConnector(null, { ssrfSafeTransport: true }))).toMatchObject({
-      ssrfSafe: true,
-      type: 'http',
-      url: 'https://mcp.example.com',
-    });
-    expect(mcpParamsOf(httpConnector(null))).not.toHaveProperty('ssrfSafe');
-  });
-});
-
 describe('buildConnectorManifests cloud connectors', () => {
   it('routes a cloud connector to the cloud executor by identifier', () => {
     const connector = {

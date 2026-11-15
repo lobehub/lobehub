@@ -3,7 +3,6 @@ import {
   MANDATORY_APPROVAL_KEY,
   marketplaceToolIntervention,
   marketplaceToolPoliciesOf,
-  requiresSsrfSafeTransport,
   withMandatoryApprovalMark,
 } from '@lobechat/const';
 import {
@@ -89,8 +88,6 @@ export const buildConnectorMcpParams = (
     ...(connectorConnectVia(connector.metadata) === 'device' && { connectVia: 'device' as const }),
     headers: mergedHeaders,
     name: connector.identifier,
-    // On every request to it, the listing and tool calls alike
-    ...(requiresSsrfSafeTransport(connector.metadata) ? { ssrfSafe: true } : {}),
     type: 'http',
     url: connector.mcpServerUrl,
   };

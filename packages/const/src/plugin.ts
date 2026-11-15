@@ -66,21 +66,6 @@ export const isMarketplaceInstallCompleted = (metadata: unknown): boolean =>
   (metadata as Record<string, unknown>)[MARKETPLACE_INSTALL_COMPLETED_KEY] === true;
 
 /**
- * `user_connectors.metadata` key on a connector whose endpoint nobody vouched
- * for: a marketplace MCP an agent (Agent Builder / Agent Management) installed
- * on its own, from the listing's URL. Every request the server sends it goes
- * through the SSRF-safe transport, so an endpoint that later resolves or
- * redirects to a private, loopback or metadata address can't make the server
- * reach it.
- */
-export const SSRF_SAFE_TRANSPORT_KEY = 'ssrfSafeTransport';
-
-export const requiresSsrfSafeTransport = (metadata: unknown): boolean =>
-  !!metadata &&
-  typeof metadata === 'object' &&
-  (metadata as Record<string, unknown>)[SSRF_SAFE_TRANSPORT_KEY] === true;
-
-/**
  * `user_connectors.metadata` key holding, on a marketplace MCP an agent
  * installed from an HTTP listing, the approval the market manifest gives each
  * tool it lists: tool name → its `humanIntervention` (`null` for none). What

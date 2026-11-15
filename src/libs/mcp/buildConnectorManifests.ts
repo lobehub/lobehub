@@ -1,4 +1,3 @@
-import { requiresSsrfSafeTransport } from '@lobechat/const';
 import { buildConnectorManifest, resolveConnectorLinkParam } from '@lobechat/mecha';
 import type { ToolManifest } from '@lobechat/types';
 import { connectorConnectVia, connectorDeviceBinding } from '@lobechat/utils/mcpEndpoint';
@@ -110,8 +109,6 @@ function buildMcpParams(connector: DecryptedConnector) {
     ...(connectorConnectVia(connector.metadata) === 'device' && { connectVia: 'device' as const }),
     headers: mergedHeaders,
     name: connector.identifier,
-    // As `buildConnectorMcpParams` sets it: the runtime's tool calls stay guarded
-    ...(requiresSsrfSafeTransport(connector.metadata) ? { ssrfSafe: true } : {}),
     type: 'http' as const,
     url: connector.mcpServerUrl ?? '',
   };

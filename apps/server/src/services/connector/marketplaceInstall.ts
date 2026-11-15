@@ -5,7 +5,6 @@ import {
   isMarketplaceInstallCompleted,
   MARKETPLACE_INSTALL_COMPLETED_KEY,
   MARKETPLACE_TOOL_POLICIES_KEY,
-  SSRF_SAFE_TRANSPORT_KEY,
 } from '@lobechat/const';
 import debug from 'debug';
 
@@ -319,10 +318,6 @@ export const installMarketplaceMcpConnector = async (
   if (deployment.type === 'cloud') {
     metadata.cloudEndPoint = deployment.cloudEndPoint;
   } else {
-    // The endpoint is the listing's, not one the user entered: an agent's
-    // install must not make the server reach a private or metadata address, at
-    // the tool sync below nor on any later call (the listing's DNS may change).
-    metadata[SSRF_SAFE_TRANSPORT_KEY] = true;
     // The manifest's approval of each tool, for this sync and every later one:
     // nor may its server add tools the market never declared that run unasked
     metadata[MARKETPLACE_TOOL_POLICIES_KEY] = Object.fromEntries(
@@ -355,16 +350,16 @@ export const installMarketplaceMcpConnector = async (
   const rollback = () => connectorModel.deleteIfMetadataContains(created.id, attempt);
 
   try {
-    // Listed before anything is written to the row: over the SSRF-safe
-    // transport for an HTTP server, as the row's mark asks, and held to the
-    // market tool policies it stores
+    // Listed before anything is written to the row (the server's MCP client
+    // sends every HTTP request through the SSRF-safe fetch), held to the market
+    // tool policies it stores
     const syncInputs =
       deployment.type === 'cloud'
         ? await toClientToolSyncInputs(marketTools, userId)
         : (
             await listConnectorToolSyncInputs(
               created.id,
-              { connectorModel, connectorToolModel, userId },
+              { connectorModel, connectorToolModel, serverDB, userId },
               {
                 humanInterventions: new Map(
                   marketTools.map((tool) => [tool.toolName, tool.humanIntervention]),

@@ -7,7 +7,6 @@ import {
   partitionMcpToolsForViews,
   withListingUiMeta,
 } from '@lobechat/const/mcpApp';
-import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import {
   type CheckMcpInstallResult,
   ConnectorErrorCode,
@@ -101,9 +100,6 @@ const isMcpToolFailure = (error: unknown): error is ProtocolError | SdkError =>
   ProtocolError.isInstance(error) ||
   (SdkError.isInstance(error) &&
     (error.code === SdkErrorCode.RequestTimeout || error.code === SdkErrorCode.ConnectionClosed));
-
-const ssrfSafeMcpFetch = (url: string | URL, init?: RequestInit) =>
-  ssrfSafeFetch(url.toString(), init);
 
 export class MCPService {
   // Store instances of the custom MCPClient, keyed by serialized MCPClientParams
@@ -440,8 +436,7 @@ export class MCPService {
     }
 
     // A session announces its capabilities once, at initialize, so sessions
-    // with and without MCP Apps are cached apart. A guarded (`ssrfSafe`) and an
-    // unguarded session differ in their params, so they are apart too.
+    // with and without MCP Apps are cached apart.
     const key = `${this.serializeParams(params)}${mcpApps ? '#mcp-apps' : ''}`;
 
     if (!skipCache && this.clients.has(key)) {
@@ -451,10 +446,7 @@ export class MCPService {
     const connection = this.getConnectionLogMetadata(params);
     log(`No cached client found, Initializing new client.`);
     try {
-      const client = new MCPClient(params, {
-        fetch: params.type === 'http' && params.ssrfSafe ? ssrfSafeMcpFetch : undefined,
-        mcpApps,
-      });
+      const client = new MCPClient(params, { mcpApps });
       await client.initialize({
         onProgress: (progress) => {
           log(`New client initializing... ${progress.progress}/${progress.total}`);

@@ -109,20 +109,6 @@ describe('buildConnectorMcpParams', () => {
     expect(buildConnectorMcpParams(connector)).toEqual((manifest as any).mcpParams);
   });
 
-  it('keeps a connector marked for the SSRF-safe transport guarded, as agent runs do', () => {
-    const connector = httpConnector(null, { ssrfSafeTransport: true });
-    const [manifest] = buildConnectorManifests(
-      [connector],
-      [{ toolName: 'do_thing', userConnectorId: 'c1' } as any],
-    );
-
-    expect(buildConnectorMcpParams(connector)).toMatchObject({ ssrfSafe: true, type: 'http' });
-    // Equal params: a view's read and the tool calls stay on the one guarded session
-    expect(buildConnectorMcpParams(connector)).toEqual((manifest as any).mcpParams);
-    // Unmarked rows don't carry the key, so their cached sessions are unchanged
-    expect(buildConnectorMcpParams(httpConnector(null))).not.toHaveProperty('ssrfSafe');
-  });
-
   it('builds http params with bearer auth', () => {
     expect(buildConnectorMcpParams(httpConnector({ token: 'tok', type: 'bearer' }))).toEqual({
       auth: { token: 'tok', type: 'bearer' },

@@ -10,16 +10,14 @@ import {
 import { toRecord } from '@lobechat/utils/object';
 import {
   Client,
-  type FetchLike,
   InsufficientScopeError,
-  type Progress,
   SdkError,
   SdkErrorCode,
   SdkHttpError,
   StreamableHTTPClientTransport,
-  type Transport,
   UnauthorizedError,
 } from '@modelcontextprotocol/client';
+import { type Progress, type Transport } from '@modelcontextprotocol/client';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import debug from 'debug';
 
@@ -188,11 +186,6 @@ async function preCheckStdioCommand(params: {
 
 export interface MCPClientOptions {
   /**
-   * The fetch an HTTP transport sends its requests with, such as an SSRF-safe
-   * one for an endpoint nobody vouched for. Unset: the global fetch.
-   */
-  fetch?: FetchLike;
-  /**
    * Advertise MCP Apps (SEP-1865) during `initialize`, so servers expose their
    * interactive views. Off: the client announces itself as it did before MCP
    * Apps, and servers answer as they would any other client.
@@ -218,7 +211,7 @@ export class MCPClient {
   /** When the last `getToolUiResourceUri` listing failed, while no listing has succeeded */
   private uiResourceListFailedAt?: number;
 
-  constructor(params: MCPClientParams, { fetch, mcpApps = false }: MCPClientOptions = {}) {
+  constructor(params: MCPClientParams, { mcpApps = false }: MCPClientOptions = {}) {
     this.mcpApps = mcpApps;
     this.params = params;
     this.mcp = new Client(
@@ -277,7 +270,7 @@ export class MCPClient {
         // it makes (including redirects and OAuth) goes through the SSRF-safe
         // fetch: this client runs on the server, never on the user's device.
         this.transport = new StreamableHTTPClientTransport(new URL(params.url), {
-          fetch: fetch ?? mcpSsrfSafeFetch,
+          fetch: mcpSsrfSafeFetch,
           requestInit: { headers },
         });
 
