@@ -46,6 +46,9 @@ const styles = StyleSheet.create({
   },
 });
 
+/** Older mail is read in pages; a thread longer than this many does not step past itself. */
+const MAX_SEEK_PAGES = 5;
+
 interface AgentMailProps {
   agentId: string;
   /** Read-only viewer: addresses and mail stay readable, nothing can be opened or released. */
@@ -104,12 +107,18 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
   const location = useLocation();
   // Held until the URL open settles, which seeds it with the read it made.
   const conversation = useMailConversation(mailbox.data ? messageId : undefined, folder);
+  // A reseat can land on a mail the list has no row for (sent mail carries no
+  // inbox id), so the row the conversation was reached from is kept beside it:
+  // without it Previous/Next lose the place the reader was reading.
+  const [reseat, setReseat] = useState<{ id: string; rowId: string }>();
+  const reseatRowId = reseat?.id === messageId ? reseat.rowId : undefined;
   const conversationIds = new Set(
     (conversation.data ?? []).flatMap((mail) =>
       mail.inboxMessageId ? [mail.id, mail.inboxMessageId] : [mail.id],
     ),
   );
   if (messageId) conversationIds.add(messageId);
+  if (reseatRowId) conversationIds.add(reseatRowId);
   const found = findNeighbors(list.items ?? [], conversationIds);
   // A conversation whose row is briefly out of the list (reseated onto another
   // of its mails, or mid-write) keeps the neighbours it last had there.
@@ -159,8 +168,19 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
 
   const stepTo = async (direction: 'nextId' | 'previousId') => {
     let target = neighbors[direction];
-    if (!target && direction === 'nextId' && list.hasMore) {
-      target = findNeighbors(await list.loadNextPage(), conversationIds).nextId;
+    // The open conversation can span whole pages, so one page of older mail may
+    // hold nothing but the same thread: keep paging until a different one shows.
+    let rows = list.items ?? [];
+    for (
+      let page = 0;
+      !target && direction === 'nextId' && list.hasMore && page < MAX_SEEK_PAGES;
+      page++
+    ) {
+      const next = await list.loadNextPage();
+      // A page that adds no rows never landed; asking again would only spin.
+      if (next.length <= rows.length) break;
+      target = findNeighbors(next, conversationIds).nextId;
+      rows = next;
     }
     if (target) openById(target);
   };
@@ -187,7 +207,11 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
     onGoToTrash: () => changeView('trash'),
     onNext: () => void stepTo('nextId'),
     onPrevious: () => void stepTo('previousId'),
-    onReseated: landOn,
+    onReseated: (id, listRowId) => {
+      // Kept so the neighbours stay on the conversation the reader came from.
+      if (listRowId) setReseat({ id, rowId: listRowId });
+      landOn(id);
+    },
     onRestored: openById,
     refresh,
   };

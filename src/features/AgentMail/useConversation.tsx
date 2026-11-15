@@ -34,7 +34,7 @@ export interface UseConversationOptions {
   /** Undo failed; the trash is where the mail can still be restored from. */
   onGoToTrash: () => void;
   /** The mail the URL names left this view but its conversation lives on here. */
-  onReseated: (id: string) => void;
+  onReseated: (id: string, listRowId?: string) => void;
   /** Undo brought back the mail the URL named. */
   onRestored: (id: string) => void;
   /** Revalidate the list and the counts. */
@@ -212,7 +212,12 @@ export const useConversation = (
       // The pane remounts under the new id; seeded so it never shows a read
       // that raced the write and still holds the mail just taken out.
       await mutateCache(mailConversationKey(reseatId, folder), remaining, { revalidate: false });
-      optionsRef.current.onReseated(reseatId);
+      optionsRef.current.onReseated(
+        reseatId,
+        // The list row stands for the conversation's inbox mail; a reseat to a
+        // sent mail has no inbox id of its own, so hand the row over as well.
+        remaining.find((row) => row.inboxMessageId)?.inboxMessageId,
+      );
     }
 
     try {
