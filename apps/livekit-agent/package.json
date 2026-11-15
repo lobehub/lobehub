@@ -11,12 +11,10 @@
   },
   "dependencies": {
     "@livekit/agents": "^1.10.0",
-    "@livekit/agents-plugin-openai": "^1.10.0",
     "@livekit/agents-plugin-silero": "^1.10.0",
     "@livekit/rtc-node": "^1.2.2",
     "@lobechat/livekit-bridge": "workspace:*",
     "dotenv": "^17.4.2",
-    "openai": "^6.0.0",
     "tsx": "^4.23.12",
     "zod": "^4.4.3"
   }

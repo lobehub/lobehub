@@ -3,10 +3,11 @@
 import { conversationConfigSchema, livekitConnectionSchema } from '@lobechat/livekit-bridge';
 import { Alert, Button, Flexbox, Input, InputPassword, Select, Switch } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
+import { SettingsChunkSkeleton } from '@/components/Skeleton/Settings/Page';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import SettingHeader from '@/features/Settings/features/SettingHeader';
 import TTSVoiceSelect from '@/features/Settings/provider/features/ModelList/CreateNewModelModal/TTSVoiceSelect';
@@ -15,25 +16,31 @@ import { useAiInfraStore } from '@/store/aiInfra';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
-const Page = ({ showSettingHeader = true }: { showSettingHeader?: boolean }) => {
+const ConversationForm = ({ showSettingHeader = true }: { showSettingHeader?: boolean }) => {
   const { t } = useTranslation('setting');
   const settings = useUserStore(settingsSelectors.currentSettings);
   const ready = useUserStore((s) => s.isUserStateInit);
-  const [connection, setConnection] = useState({ url: '', apiKey: '', apiSecret: '' });
-  const [config, setConfig] = useState(() => conversationConfigSchema.parse({}));
+  const [connection, setConnection] = useState(() => ({
+    url: '',
+    apiKey: '',
+    apiSecret: '',
+    ...settings.keyVaults?.livekit,
+  }));
+  const [config, setConfig] = useState(() =>
+    conversationConfigSchema.parse(settings.general?.conversation ?? {}),
+  );
   const [busy, setBusy] = useState(false);
   const [feedback, setFeedback] = useState<'saved' | 'connected' | 'error'>();
   const form = useForm();
   const models = useAiInfraStore((s) => s.enabledAiModels);
+  const builtinModels = useAiInfraStore((s) => s.builtinAiModelList);
+  const selectedVoiceCard = builtinModels.find(
+    (m) => m.id === config.tts.model && m.providerId === config.tts.provider,
+  );
   const selectedModel = models?.find(
     (m) => m.id === config.tts.model && m.providerId === config.tts.provider,
   );
   const providers = useAiInfraStore((s) => s.enabledAiProviders);
-  useEffect(() => {
-    if (!ready) return;
-    setConnection({ url: '', apiKey: '', apiSecret: '', ...settings.keyVaults?.livekit });
-    setConfig(conversationConfigSchema.parse(settings.general?.conversation ?? {}));
-  }, [ready, settings.general?.conversation, settings.keyVaults?.livekit]);
   const save = async (test: boolean) => {
     setBusy(true);
     setFeedback(undefined);
@@ -169,7 +176,7 @@ const Page = ({ showSettingHeader = true }: { showSettingHeader?: boolean }) => 
                   children: (
                     <TTSVoiceSelect
                       value={config.voice || undefined}
-                      voices={selectedModel?.voices}
+                      voices={selectedVoiceCard?.voices}
                       defaultVoice={
                         (selectedModel?.parameters as { voice?: { default?: string } } | undefined)
                           ?.voice?.default
@@ -230,4 +237,9 @@ const Page = ({ showSettingHeader = true }: { showSettingHeader?: boolean }) => 
     </>
   );
 };
+const Page = (props: { showSettingHeader?: boolean }) => {
+  const ready = useUserStore((s) => s.isUserStateInit);
+  return ready ? <ConversationForm {...props} /> : <SettingsChunkSkeleton />;
+};
+
 export default Page;

@@ -1,4 +1,6 @@
 export default {
+  'voiceCall.workerUnavailable':
+    'No ready LobeHub worker joined. Start the worker on the same LiveKit server configured in Settings → Conversation.',
   'voiceCall.agentState.connecting': 'Connecting…',
   'voiceCall.agentState.disconnected': 'Call ended',
   'voiceCall.agentState.failed': 'Voice worker unavailable',

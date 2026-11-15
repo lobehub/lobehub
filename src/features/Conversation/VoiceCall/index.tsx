@@ -3,7 +3,7 @@
 import { conversationConfigSchema } from '@lobechat/livekit-bridge';
 import { Flexbox, Popover } from '@lobehub/ui';
 import { Phone, PhoneOff } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
 
@@ -24,6 +24,7 @@ import { CallPanel } from './CallPanel';
 import { VoiceCallClient } from './client';
 import { getVoiceReply } from './reply';
 import { uploadTalkFrame } from './uploadFrame';
+import { VoiceWorkerUnavailableError } from './waitForWorker';
 
 export const VoiceCall = () => {
   const preferences = useUserStore(
@@ -45,10 +46,10 @@ export const VoiceCall = () => {
   const model = useAgentStore(agentByIdSelectors.getAgentModelById(context.agentId));
   const provider = useAgentStore(agentByIdSelectors.getAgentModelProviderById(context.agentId));
   const { canUploadImage } = useMediaUploadAbility(model, provider, context.agentId);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<'error' | 'workerUnavailable' | undefined>();
   const call = useRef<{ client: VoiceCallClient; roomName?: string } | undefined>(undefined);
 
-  const end = async () => {
+  const end = useCallback(async () => {
     const current = call.current;
     call.current = undefined;
     setActiveClient(undefined);
@@ -57,30 +58,30 @@ export const VoiceCall = () => {
     if (!current) return;
     await current.client.close().catch(() => {});
     if (current.roomName) await livekitService.endSession(current.roomName).catch(() => {});
-  };
+  }, []);
 
   // A call belongs to one existing conversation. Navigation must release the mic.
   useEffect(
     () => () => {
       void end();
     },
-    [context.agentId, context.topicId],
+    [context.agentId, context.topicId, end],
   );
 
-  const start = async () => {
+  const start = useCallback(async () => {
     if (!configured || !config.enabled || !config.tts.model) {
       navigate('/settings/conversation');
       return;
     }
     if (call.current || !context.topicId || !writable) return;
-    setError(false);
+    setError(undefined);
     setStatus('connecting');
     const client = new VoiceCallClient({
       onDisconnected: (unexpected) => {
-        setError(unexpected);
+        if (unexpected) setError((previous) => previous ?? 'error');
         void end();
       },
-      onError: () => setError(true),
+      onError: () => setError('error'),
       onSpeech: handleConversationSpeech,
       onWorking: (working) => setStatus(working ? 'working' : 'connected'),
       onTurn: async (text, signal) => {
@@ -124,13 +125,23 @@ export const VoiceCall = () => {
       setVideo(session.config.mode === 'video' && canUploadImage);
       await client.connect(session.serverUrl, session.token);
       if (call.current === current) setStatus('connected');
-    } catch {
+    } catch (cause) {
       if (call.current === current) {
-        setError(true);
+        setError(cause instanceof VoiceWorkerUnavailableError ? 'workerUnavailable' : 'error');
         await end();
       }
     }
-  };
+  }, [
+    configured,
+    config.enabled,
+    config.tts.model,
+    navigate,
+    context,
+    writable,
+    store,
+    canUploadImage,
+    end,
+  ]);
 
   useEffect(() => {
     if (search.get('conversation') !== 'start' || !context.topicId || !writable) return;
@@ -138,7 +149,7 @@ export const VoiceCall = () => {
     next.delete('conversation');
     setSearch(next, { replace: true });
     void start();
-  }, [search, context.topicId, writable]);
+  }, [search, context.topicId, writable, start, setSearch]);
   const active = status !== 'idle';
 
   return (
@@ -166,7 +177,7 @@ export const VoiceCall = () => {
           }}
         />
       </Popover>
-      {error && <span role="alert">{t('voiceCall.error')}</span>}
+      {error && <span role="alert">{t(`voiceCall.${error}`)}</span>}
     </Flexbox>
   );
 };

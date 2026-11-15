@@ -1,13 +1,12 @@
 import { fileURLToPath } from 'node:url';
 
 import { cli, defineAgent, ServerOptions, voice } from '@livekit/agents';
-import * as openai from '@livekit/agents-plugin-openai';
 import * as silero from '@livekit/agents-plugin-silero';
 import { VOICE_AGENT_NAME, voiceJobSchema } from '@lobechat/livekit-bridge';
 import dotenv from 'dotenv';
 
 import { LobeHubBridge } from './bridge.js';
-import { createSpeechClient } from './speech.js';
+import { LobeHubSTT, LobeHubTTS } from './speech.js';
 
 dotenv.config({ path: fileURLToPath(new URL('../../../.env', import.meta.url)) });
 
@@ -18,16 +17,10 @@ export default defineAgent({
   entry: async (ctx) => {
     const { participantIdentity, config } = voiceJobSchema.parse(JSON.parse(ctx.job.metadata));
     const bridge = new LobeHubBridge(ctx.room, participantIdentity);
-    const client = createSpeechClient(bridge);
     const session = new voice.AgentSession({
       vad: ctx.proc.userData.vad as silero.VAD,
-      stt: new openai.STT({
-        client,
-        useRealtime: false,
-        model: 'user-configured',
-        language: config.language,
-      }),
-      tts: new openai.TTS({ client, model: 'user-configured', voice: 'alloy' }),
+      stt: new LobeHubSTT(bridge, config.language),
+      tts: new LobeHubTTS(bridge),
       // No LLM is configured here. LobeHub owns all model/harness selection and tools.
       turnHandling: {
         turnDetection: 'vad',

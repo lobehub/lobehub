@@ -3204,6 +3204,7 @@
   "voiceCall.needsConversation": "请先发送消息以开始对话。",
   "voiceCall.start": "对话",
   "voiceCall.videoNotice": "摄像头或屏幕画面会随每个语音轮次保存，并通过当前智能体的模型或执行框架处理。",
+  "voiceCall.workerUnavailable": "LobeHub 工作进程尚未就绪。请在「设置 → 对话」配置的同一 LiveKit 服务器上启动工作进程。",
   "voiceDictation.action": "使用麦克风听写",
   "voiceDictation.cancel": "取消听写",
   "voiceDictation.connecting": "正在连接…",

@@ -56,7 +56,7 @@ export class LivekitService {
   async endSession(roomName: string) {
     // A caller may delete only the rooms minted in their own namespace.
     if (!roomName.startsWith(voiceRoomPrefix(this.userId))) throw new Error('Invalid voice room');
-    await this.adminRequest('DeleteRoom', { room: roomName }, roomName);
+    await this.adminRequest('DeleteRoom', { room: roomName });
   }
 
   async checkConnection() {
@@ -64,9 +64,9 @@ export class LivekitService {
     return { ok: true as const };
   }
 
-  private async adminRequest(method: 'ListRooms' | 'DeleteRoom', body: object, room?: string) {
+  private async adminRequest(method: 'ListRooms' | 'DeleteRoom', body: object) {
     const token = new AccessToken(this.connection.apiKey, this.connection.apiSecret, { ttl: '1m' });
-    token.addGrant(room ? { room, roomAdmin: true } : { roomList: true });
+    token.addGrant(method === 'DeleteRoom' ? { roomCreate: true } : { roomList: true });
     const url = this.connection.url.replace(/^ws/, 'http').replace(/\/$/, '');
     const response = await ssrfSafeFetch(`${url}/twirp/livekit.RoomService/${method}`, {
       method: 'POST',

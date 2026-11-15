@@ -3204,6 +3204,7 @@
   "voiceCall.needsConversation": "Send a message to start a conversation first.",
   "voiceCall.start": "Conversation",
   "voiceCall.videoNotice": "Camera or screen frames are saved with each spoken turn and sent through this agent’s usual model or harness.",
+  "voiceCall.workerUnavailable": "No ready LobeHub worker joined. Start the worker on the same LiveKit server configured in Settings → Conversation.",
   "voiceDictation.action": "Dictate with microphone",
   "voiceDictation.cancel": "Cancel dictation",
   "voiceDictation.connecting": "Connecting…",

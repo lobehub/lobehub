@@ -1,4 +1,5 @@
 packages:
+  - '../../packages/livekit-bridge'
   - '../../packages/agent-gateway-client'
   - '../../packages/agent-tracing'
   - '../../packages/device-control'

@@ -21,6 +21,8 @@ import {
   Track,
 } from 'livekit-client';
 
+import { waitForVoiceWorker } from './waitForWorker';
+
 interface VoiceCallOptions {
   onDisconnected: (unexpected: boolean) => void;
   onError: (error: unknown) => void;
@@ -35,7 +37,7 @@ export class VoiceCallClient {
   private active?: { controller: AbortController; requestId: string };
   private closed = false;
   private readonly speech = new Set<AbortController>();
-  private workerTimer?: ReturnType<typeof setTimeout>;
+  private readonly connectionController = new AbortController();
   readonly preview = document.createElement('video');
 
   constructor(private readonly options: VoiceCallOptions) {
@@ -43,9 +45,6 @@ export class VoiceCallClient {
     this.preview.muted = true;
     this.preview.playsInline = true;
     this.preview.style.cssText = 'width:100%;max-height:240px;object-fit:contain;border-radius:8px';
-    this.room.on(RoomEvent.ParticipantConnected, (participant) => {
-      if (participant.kind === ParticipantKind.AGENT) clearTimeout(this.workerTimer);
-    });
     this.room.on(RoomEvent.Disconnected, (reason) => {
       if (this.closed) return;
       void this.close();
@@ -144,23 +143,18 @@ export class VoiceCallClient {
 
   async connect(serverUrl: string, token: string) {
     await this.room.startAudio();
-    await this.room.connect(serverUrl, token);
+    await this.room.connect(serverUrl, token, {
+      websocketTimeout: 10_000,
+      peerConnectionTimeout: 15_000,
+      maxRetries: 1,
+    });
     if (this.closed) {
       await this.room.disconnect();
       return;
     }
     await this.room.localParticipant.setMicrophoneEnabled(true);
     if (this.closed) await this.room.disconnect();
-    if (
-      !this.closed &&
-      ![...this.room.remoteParticipants.values()].some((p) => p.kind === ParticipantKind.AGENT)
-    ) {
-      this.workerTimer = setTimeout(() => {
-        this.options.onError(new Error('The voice worker did not join the call'));
-        this.options.onDisconnected(true);
-        void this.close();
-      }, 30_000);
-    }
+    if (!this.closed) await waitForVoiceWorker(this.room, this.connectionController.signal);
   }
 
   async captureFrame(): Promise<File | undefined> {
@@ -195,7 +189,7 @@ export class VoiceCallClient {
   async close() {
     if (this.closed) return;
     this.closed = true;
-    clearTimeout(this.workerTimer);
+    this.connectionController.abort();
     this.preview.pause();
     this.preview.srcObject = null;
     for (const controller of this.speech) controller.abort();
