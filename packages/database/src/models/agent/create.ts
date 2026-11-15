@@ -6,7 +6,7 @@ import pMap from 'p-map';
 import type { AgentItem } from '../../schemas';
 import { agents, agentsToSessions, sessions } from '../../schemas';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
-import { sanitizeAgentApiConfig } from '../../utils/sanitizeAgentApiConfig';
+import { normalizeAgencyConfigForWrite } from '../../utils/normalizeAgencyConfigForWrite';
 import { buildWorkspacePayload } from '../../utils/workspace';
 import { RESERVED_AGENT_SLUGS } from './constants';
 import { type AgentModelContext } from './context';
@@ -26,7 +26,7 @@ export const create = async (
 ): Promise<AgentItem> => {
   const config = stripReservedSlug(input);
   const agencyConfig = ctx.withWorkspaceSelectionPolicyDefaults(
-    sanitizeAgentApiConfig(config.agencyConfig),
+    normalizeAgencyConfigForWrite(config.agencyConfig),
   );
 
   await ctx.assertWorkspaceDeviceBinding(ctx.workspaceId ?? null, agencyConfig);
@@ -62,7 +62,7 @@ export const batchCreate = async (
   const normalizedConfigs = configs.map((config) => ({
     ...stripReservedSlug(config),
     agencyConfig: ctx.withWorkspaceSelectionPolicyDefaults(
-      sanitizeAgentApiConfig(config.agencyConfig),
+      normalizeAgencyConfigForWrite(config.agencyConfig),
     ),
   }));
 

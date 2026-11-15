@@ -69,20 +69,20 @@ Only specified fields are updated.
 lh agent edit [agentId] [--slug <slug>] [-t <title>] [-d <desc>] [-m <model>] [-p <provider>] [-s <role>] [--graph-file <path>] [--enable-graph] [--disable-graph] [--agency-config-file <path>] [--config-file <path>] [--json [fields]]
 ```
 
-| Option                        | Description                                                                                              |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `--slug <slug>`               | Agent slug, alternative to `agentId`                                                                     |
-| `-t, --title <title>`         | New title                                                                                                |
-| `-d, --description <desc>`    | New description                                                                                          |
-| `-m, --model <model>`         | New model ID                                                                                             |
-| `-p, --provider <provider>`   | New provider ID                                                                                          |
-| `-s, --system-role <role>`    | New system role prompt                                                                                   |
-| `--graph-file <path>`         | AgentGraph JSON file                                                                                     |
-| `--enable-graph`              | Enable graph runtime                                                                                     |
-| `--disable-graph`             | Disable graph runtime                                                                                    |
-| `--agency-config-file <path>` | `agencyConfig` JSON, deep-merged into the agent (send `null` to clear a nested key)                      |
-| `--config-file <path>`        | Agent config JSON for fields without a dedicated flag; deep-merged server-side, identity fields rejected |
-| `--json [fields]`             | Output the updated agent as JSON, optionally selecting fields                                            |
+| Option                        | Description                                                                                                                       |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `--slug <slug>`               | Agent slug, alternative to `agentId`                                                                                              |
+| `-t, --title <title>`         | New title                                                                                                                         |
+| `-d, --description <desc>`    | New description                                                                                                                   |
+| `-m, --model <model>`         | New model ID                                                                                                                      |
+| `-p, --provider <provider>`   | New provider ID                                                                                                                   |
+| `-s, --system-role <role>`    | New system role prompt                                                                                                            |
+| `--graph-file <path>`         | AgentGraph JSON file                                                                                                              |
+| `--enable-graph`              | Enable graph runtime                                                                                                              |
+| `--disable-graph`             | Disable graph runtime                                                                                                             |
+| `--agency-config-file <path>` | `agencyConfig` JSON, deep-merged into the agent (`null` is stored as the value; it deletes only `heterogeneousProvider.env` keys) |
+| `--config-file <path>`        | Agent config JSON for fields without a dedicated flag; deep-merged server-side, identity fields rejected                          |
+| `--json [fields]`             | Output the updated agent as JSON, optionally selecting fields                                                                     |
 
 ---
 
