@@ -7,7 +7,7 @@ const LiveKit: ModelProviderCard = {
   description: 'LiveKit Inference provides language models through one LiveKit Cloud project.',
   id: 'livekit',
   modelsUrl: 'https://docs.livekit.io/agents/models/inference/',
-  name: 'LiveKit Inference',
+  name: 'LiveKit',
   settings: {
     disableBrowserRequest: true,
     showAddNewModel: false,

@@ -7,13 +7,13 @@ import { DEFAULT_MODEL_PROVIDER_LIST, getProviderDisplayName, LiveKitProviderCar
 
 const getModels = () => LOBE_DEFAULT_MODEL_LIST.filter((model) => model.providerId === 'livekit');
 
-describe('LiveKit Inference built-in provider', () => {
+describe('LiveKit built-in provider', () => {
   it('resolves a native provider and a supported chat connection-check model', () => {
     expect(ModelProvider.LiveKit).toBe('livekit');
     expect(DEFAULT_MODEL_PROVIDER_LIST.find((provider) => provider.id === 'livekit')).toBe(
       LiveKitProviderCard,
     );
-    expect(getProviderDisplayName('livekit')).toBe('LiveKit Inference');
+    expect(getProviderDisplayName('livekit')).toBe('LiveKit');
     expect(getModels().find((model) => model.id === LiveKitProviderCard.checkModel)?.type).toBe(
       'chat',
     );
