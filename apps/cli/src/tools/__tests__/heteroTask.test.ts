@@ -920,7 +920,7 @@ describe('cancelHeteroTask (process-group kill)', () => {
     });
 
     it('kills orphaned wrapper groups and confirms once they exit', async () => {
-      findOperationProcessGroupsMock.mockResolvedValue([6001, 6002]);
+      findOperationProcessGroupsMock.mockResolvedValueOnce([6001, 6002]).mockResolvedValueOnce([]);
       const alive = new Set([6001, 6002]);
       const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
         const group = Math.abs(pid);
@@ -943,6 +943,48 @@ describe('cancelHeteroTask (process-group kill)', () => {
         success: true,
         taskId: 'op-orphan',
       });
+    });
+
+    it('kills groups the wrapper detached once the wrapper is gone', async () => {
+      // A live wrapper is matched by argv; the detached Codex app-server only
+      // shows up through its environment after the wrapper exits.
+      findOperationProcessGroupsMock.mockResolvedValueOnce([6001]).mockResolvedValueOnce([7001]);
+      const alive = new Set([6001, 7001]);
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
+        const group = Math.abs(pid);
+        if (signal === 'SIGINT' || signal === 'SIGKILL') alive.delete(group);
+        if (signal === 0 && !alive.has(group)) {
+          throw Object.assign(new Error('No such process'), { code: 'ESRCH' });
+        }
+        return true;
+      });
+
+      const result = await cancelHeteroTask({ signal: 'SIGINT', taskId: 'op-codex' });
+
+      expect(findOperationProcessGroupsMock).toHaveBeenCalledTimes(2);
+      expect(killSpy).toHaveBeenCalledWith(-7001, 'SIGKILL');
+      expect(result).toEqual({
+        exited: true,
+        processGroups: [6001, 7001],
+        reason: 'orphan_terminated',
+        signal: 'SIGINT',
+        success: true,
+        taskId: 'op-codex',
+      });
+    });
+
+    it('does not confirm the exit when the recheck cannot read the process table', async () => {
+      findOperationProcessGroupsMock
+        .mockResolvedValueOnce([6001])
+        .mockRejectedValueOnce(new Error('ps timed out'));
+      vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
+        if (signal === 0) throw Object.assign(new Error('No such process'), { code: 'ESRCH' });
+        return true;
+      });
+
+      const result = await cancelHeteroTask({ signal: 'SIGINT', taskId: 'op-recheck' });
+
+      expect(result).toMatchObject({ exited: false, reason: 'lookup_failed', success: false });
     });
 
     it('escalates to SIGKILL and stays unconfirmed when an orphan survives', async () => {

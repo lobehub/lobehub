@@ -519,51 +519,74 @@ async function cancelUntrackedHeteroExec(
     return { message: `No task found with taskId: ${taskId}`, success: false };
   }
 
-  let processGroups: number[];
-  try {
-    processGroups = await findOperationProcessGroups(taskId);
-  } catch (error) {
-    log.warn(
-      `cancelHeteroTask: process lookup failed for ${taskId}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    return {
-      exited: false,
-      message: `Could not inspect running processes for taskId: ${taskId}`,
-      reason: 'lookup_failed',
-      signal,
-      success: false,
-      taskId,
-    };
-  }
+  const lookup = async (): Promise<number[] | CancelUntrackedHeteroTaskResult> => {
+    try {
+      return await findOperationProcessGroups(taskId);
+    } catch (error) {
+      log.warn(
+        `cancelHeteroTask: process lookup failed for ${taskId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return {
+        exited: false,
+        message: `Could not inspect running processes for taskId: ${taskId}`,
+        reason: 'lookup_failed',
+        signal,
+        success: false,
+        taskId,
+      };
+    }
+  };
 
-  if (processGroups.length === 0) {
+  // The wrapper's detached group also holds its native agent and tools, so a
+  // group signal reaches the whole writer tree even after the wrapper died.
+  const terminate = async (groups: number[], firstSignal: NodeJS.Signals) => {
+    const signalGroups = (groupSignal: NodeJS.Signals) => {
+      for (const pgid of groups) {
+        try {
+          process.kill(-pgid, groupSignal);
+        } catch {
+          // ESRCH: already gone. Anything else surfaces through the liveness wait.
+        }
+      }
+    };
+    signalGroups(firstSignal);
+    if (
+      await waitForUnixProcessGroupsExit(
+        groups,
+        firstSignal === 'SIGKILL' ? CANCEL_FORCE_MS : CANCEL_GRACE_MS,
+      )
+    )
+      return true;
+    if (firstSignal === 'SIGKILL') return false;
+    signalGroups('SIGKILL');
+    return waitForUnixProcessGroupsExit(groups, CANCEL_FORCE_MS);
+  };
+
+  const found = await lookup();
+  if (!Array.isArray(found)) return found;
+  if (found.length === 0) {
     return { exited: true, reason: 'not_found', signal, success: true, taskId };
   }
 
   log.warn(
-    `cancelHeteroTask: terminating orphaned process groups for ${taskId}: ${processGroups.join(', ')}`,
+    `cancelHeteroTask: terminating orphaned process groups for ${taskId}: ${found.join(', ')}`,
   );
+  const processGroups = [...found];
+  let exited = await terminate(found, signal);
 
-  // The wrapper's detached group also holds its native agent and tools, so a
-  // group signal reaches the whole writer tree even after the wrapper died.
-  const signalGroups = (groupSignal: NodeJS.Signals) => {
-    for (const pgid of processGroups) {
-      try {
-        process.kill(-pgid, groupSignal);
-      } catch {
-        // ESRCH: already gone. Anything else surfaces through the liveness wait.
-      }
+  if (exited) {
+    // A live wrapper is matched without reading environments, so groups it
+    // detached itself (e.g. the Codex app-server) are only visible once it is
+    // gone. Confirm nothing of the run is left before reporting the exit.
+    const remaining = await lookup();
+    if (!Array.isArray(remaining)) return remaining;
+    if (remaining.length > 0) {
+      log.warn(
+        `cancelHeteroTask: terminating remaining process groups for ${taskId}: ${remaining.join(', ')}`,
+      );
+      processGroups.push(...remaining);
+      exited = await terminate(remaining, 'SIGKILL');
     }
-  };
-
-  signalGroups(signal);
-  let exited = await waitForUnixProcessGroupsExit(
-    processGroups,
-    signal === 'SIGKILL' ? CANCEL_FORCE_MS : CANCEL_GRACE_MS,
-  );
-  if (!exited && signal !== 'SIGKILL') {
-    signalGroups('SIGKILL');
-    exited = await waitForUnixProcessGroupsExit(processGroups, CANCEL_FORCE_MS);
   }
 
   return exited
