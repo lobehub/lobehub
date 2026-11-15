@@ -40,6 +40,12 @@ describe('dingtalk platform definition', () => {
     expect(resolveConnectionMode(dingtalk, { connectionMode: 'webhook' })).toBe('webhook');
   });
 
+  it('lets the external message gateway host its Stream connection', () => {
+    // The gateway's `dingtalk` platform holds the Stream socket and forwards
+    // signed callbacks, so Stream mode is not restricted to Webhook there.
+    expect(dingtalk.messageGatewayUnsupported).toBeFalsy();
+  });
+
   it('creates clients through the DingTalk factory', () => {
     expect(dingtalk.clientFactory).toBeInstanceOf(DingTalkClientFactory);
     const client = platformRegistry.createClient('dingtalk', {

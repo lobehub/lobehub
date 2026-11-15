@@ -28,8 +28,6 @@ LobeHub supports two connection modes for DingTalk robots:
 - **WebSocket** — Uses DingTalk's **Stream mode** (Stream 模式): LobeHub keeps an outbound long-lived connection to DingTalk, so no public callback URL is required. This is DingTalk's recommended mode and the default for new bots.
 - **Webhook** — Uses DingTalk's **HTTP callback** (HTTP 回调) mode: DingTalk posts each message to a LobeHub callback URL. Use this mode if your robot already has a message receiving address configured.
 
-> **LobeHub Cloud:** Only Webhook mode is available for DingTalk for now. Set the robot to **HTTP 回调**. Self-hosted deployments can use either mode, unless they run an external message gateway.
-
 > **Note:** The mode you select in LobeHub must match the **message receiving mode** (消息接收模式) set on the robot in the DingTalk developer console.
 
 ## Step 1: Create a DingTalk Internal App Robot
@@ -60,8 +58,8 @@ LobeHub supports two connection modes for DingTalk robots:
 
   On the robot configuration page, set **消息接收模式** (Message Receiving Mode):
 
-  - **Stream 模式** (Stream mode) — Matches LobeHub's default **WebSocket** connection mode. No callback address is needed. Not available on LobeHub Cloud yet.
-  - **HTTP 回调** (HTTP callback) — For LobeHub's **Webhook** mode, including all robots on LobeHub Cloud. You will paste the LobeHub callback URL here after Step 2.
+  - **Stream 模式** (Stream mode) — Matches LobeHub's default **WebSocket** connection mode. No callback address is needed.
+  - **HTTP 回调** (HTTP callback) — For LobeHub's **Webhook** mode. You will paste the LobeHub callback URL here after Step 2.
 
   Save the robot configuration.
 
