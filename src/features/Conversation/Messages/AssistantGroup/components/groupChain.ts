@@ -237,7 +237,14 @@ const toRenderSegments = (
   markTaskCompletionNotices(
     segments.map((segment) =>
       segment.kind === 'answer'
-        ? { block: toRenderableBlock(segment.block, () => false), kind: 'answer' }
+        ? {
+            block: {
+              ...toRenderableBlock(segment.block, () => false),
+              // Prose keeps its identity when tools arrive or its projection ends.
+              renderKey: segment.block.id,
+            },
+            kind: 'answer',
+          }
         : {
             ...segment,
             blocks: segment.blocks.map((block) => toRenderableBlock(block, isBreakout)),
