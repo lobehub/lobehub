@@ -28,6 +28,10 @@ const renderTextLink = (att: BotMessageAttachment): string => {
  * the other platforms. Every attachment that did not arrive as media is
  * reported in `failures`, even when a link stood in for it, so the agent never
  * claims a file was attached.
+ *
+ * A failed text leg is re-thrown after the images were attempted, as Feishu and
+ * WeChat let it throw: the reply (and any link lines) never reached the user, so
+ * the send must not read as delivered even when an image got through.
  */
 export const sendDingTalkAttachments = async (
   api: DingTalkApiClient,
@@ -66,11 +70,13 @@ export const sendDingTalkAttachments = async (
   const combinedText = [leadingText, fallbackLines.join('\n')]
     .filter((s) => s && s.trim())
     .join('\n\n');
+  let textError: unknown;
   if (combinedText) {
     try {
       await sendDingTalkText(api, applicationId, conversation, combinedText);
     } catch (error) {
       log('sendDingTalkAttachments: text leg failed: %O', error);
+      textError = error;
     }
   }
 
@@ -99,6 +105,8 @@ export const sendDingTalkAttachments = async (
       );
     }
   }
+
+  if (textError !== undefined) throw textError;
 
   return { delivered, failures };
 };

@@ -58,6 +58,30 @@ describe('sendDingTalkAttachments', () => {
     ]);
   });
 
+  it('still sends the images but fails the call when the text leg is rejected', async () => {
+    const textError = new Error('text rejected');
+    api.sendGroupMessage.mockImplementation(async (_target: unknown, msg: { msgKey: string }) => {
+      if (msg.msgKey === 'sampleText') throw textError;
+      return { processQueryKey: 'k' };
+    });
+
+    await expect(
+      sendDingTalkAttachments(
+        api as any,
+        'dingapp',
+        group,
+        [{ fetchUrl: 'https://cdn.example/a.png', name: 'a.png', type: 'image' }],
+        'the answer',
+      ),
+    ).rejects.toBe(textError);
+
+    // The image was still attempted (and landed), so a caller must not retry it as success.
+    expect(api.sendGroupMessage.mock.calls.map(([, msg]) => msg.msgKey)).toEqual([
+      'sampleText',
+      'sampleImageMsg',
+    ]);
+  });
+
   it('falls back to a link when DingTalk rejects an image', async () => {
     api.sendSingleMessage
       .mockRejectedValueOnce(new Error('invalid photoURL'))
