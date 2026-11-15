@@ -5,6 +5,7 @@ import { memo, type ReactNode } from 'react';
 import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import type { AgentProfilePreview } from '@/features/AgentProfileCard/useAgentProfileDetail';
+import { useIsMobile } from '@/hooks/useIsMobile';
 
 import MemberProfilePopup from './MemberProfilePopup';
 import { isAgentMention } from './mentionTarget';
@@ -26,6 +27,9 @@ interface MentionProfileTriggerProps {
  */
 const MentionProfileTrigger = memo<MentionProfileTriggerProps>(({ agent, children, id, type }) => {
   const isAgent = isAgentMention(id, type);
+  // Touch screens have no hover: a tap opens the card there instead.
+  const isMobile = useIsMobile();
+  const trigger = isMobile ? 'click' : 'hover';
   // The member card reads the shared directory; the request is deduplicated
   // across every mention on the page.
   useFetchWorkspaceMembers({ enabled: !!id && !isAgent });
@@ -34,12 +38,16 @@ const MentionProfileTrigger = memo<MentionProfileTriggerProps>(({ agent, childre
 
   if (isAgent)
     return (
-      <AgentProfilePopup agent={agent} agentId={id} trigger={'hover'}>
+      <AgentProfilePopup agent={agent} agentId={id} placement={'top'} trigger={trigger}>
         <span style={{ display: 'inline' }}>{children}</span>
       </AgentProfilePopup>
     );
 
-  return <MemberProfilePopup userId={id}>{children}</MemberProfilePopup>;
+  return (
+    <MemberProfilePopup trigger={trigger} userId={id}>
+      {children}
+    </MemberProfilePopup>
+  );
 });
 
 MentionProfileTrigger.displayName = 'MentionProfileTrigger';
