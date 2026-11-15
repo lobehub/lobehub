@@ -527,8 +527,15 @@ export interface ChannelPublicJob {
   blockedCode: ChannelJobBlockCode | null;
   /** Server-computed for the current member: its requester or an admin. */
   canStop: boolean;
+  /**
+   * The device the reply runs on, waits for or failed to reach, when known: the claimed
+   * device, a failed dispatch's route, or the Agent's own bound device.
+   */
+  deviceId?: string | null;
   /** Failure diagnostic only. */
   errorMessage: string | null;
+  /** Category of a failure (a `ChatErrorType`), for a localized explanation. */
+  errorType?: string | null;
   id: string;
   memberId: string;
   messageId: string;
