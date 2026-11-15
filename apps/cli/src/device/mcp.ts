@@ -120,9 +120,11 @@ export async function executeDeviceMcpCall(
  * (connect's `cleanup()` right before `process.exit`) still closes each
  * server's stdin; awaiting the result waits for the teardowns to settle.
  */
-export function disposeDeviceMcp(): Promise<void> {
+export async function disposeDeviceMcp(): Promise<void> {
   const instance = runtimeInstance;
   runtime = undefined;
   runtimeInstance = undefined;
-  return instance?.dispose() ?? Promise.resolve();
+  // `dispose()` starts every disconnect before its first await, so this call
+  // is already under way when an un-awaited caller moves on.
+  await instance?.dispose();
 }
