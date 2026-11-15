@@ -635,7 +635,7 @@ const Section = ({ section }: { section: SettingsSectionSkeleton }) => {
     case 'banner': {
       return (
         <Flexbox className={stylex.props(styles.banner).className} gap={20} padding={24}>
-          <Flexbox gap={10}>
+          <Flexbox gap={16}>
             <SkeletonBar height={24} width={320} />
             <SkeletonBar height={14} width={440} />
           </Flexbox>
