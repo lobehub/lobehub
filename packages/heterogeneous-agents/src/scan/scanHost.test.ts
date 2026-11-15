@@ -4,10 +4,12 @@ import path from 'node:path';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { HETEROGENEOUS_AGENT_CONFIGS, REMOTE_HETEROGENEOUS_AGENT_CONFIGS } from '../config';
 import {
   probeRemotePlatform,
   resolveRemotePlatformCommand,
   resolveRemotePlatformRuntime,
+  scanHeterogeneousAgentsOnHost,
 } from './scanHost';
 
 vi.mock('node:child_process', () => ({ execFile: vi.fn() }));
@@ -222,5 +224,46 @@ describe('platform command scanning', () => {
       available: false,
       reason: 'hermes was not found or failed validation',
     });
+  });
+});
+
+describe('scanHeterogeneousAgentsOnHost', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    detectHeterogeneousCliCommandMock.mockResolvedValue({ available: true, version: '1.0.0' });
+    detectValidatedCommandCandidatesMock.mockResolvedValue({ available: false });
+  });
+
+  it('probes every known agent type without a filter', async () => {
+    const agents = await scanHeterogeneousAgentsOnHost();
+
+    expect(Object.keys(agents).sort()).toEqual(
+      [...HETEROGENEOUS_AGENT_CONFIGS, ...REMOTE_HETEROGENEOUS_AGENT_CONFIGS]
+        .map((config) => config.type)
+        .sort(),
+    );
+  });
+
+  it('probes only the requested CLI agent', async () => {
+    await expect(scanHeterogeneousAgentsOnHost({ agentTypes: ['codex'] })).resolves.toEqual({
+      codex: { available: true, version: '1.0.0' },
+    });
+    expect(detectHeterogeneousCliCommandMock).toHaveBeenCalledTimes(1);
+    expect(detectValidatedCommandCandidatesMock).not.toHaveBeenCalled();
+  });
+
+  it('probes only the requested platform agent', async () => {
+    const agents = await scanHeterogeneousAgentsOnHost({ agentTypes: ['hermes'] });
+
+    expect(Object.keys(agents)).toEqual(['hermes']);
+    expect(detectHeterogeneousCliCommandMock).not.toHaveBeenCalled();
+  });
+
+  it('treats an empty filter as a full scan', async () => {
+    const agents = await scanHeterogeneousAgentsOnHost({ agentTypes: [] });
+
+    expect(Object.keys(agents)).toHaveLength(
+      HETEROGENEOUS_AGENT_CONFIGS.length + REMOTE_HETEROGENEOUS_AGENT_CONFIGS.length,
+    );
   });
 });

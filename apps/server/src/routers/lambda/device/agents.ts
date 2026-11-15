@@ -70,22 +70,32 @@ export const agentsRouter = router({
       }
     }),
   /**
-   * Scan the given device for every known heterogeneous agent type in one
-   * pass. Dispatches a `scanHeterogeneousAgents` tool call to the device via
-   * the gateway; the device probes each binary and returns an availability
-   * map. On gateway failure (offline device, older client without the tool)
+   * Scan the given device for heterogeneous agents — every known type, or just
+   * `agentTypes`. Dispatches a `scanHeterogeneousAgents` tool call to the
+   * device via the gateway; the device probes each binary and returns an
+   * availability map. On gateway failure (offline device, older client without the tool)
    * returns an empty map plus the error so the client can distinguish
    * "nothing installed" from "scan failed".
    */
   scanAgents: deviceProcedure
-    .input(z.object({ deviceId: z.string() }))
+    .input(
+      z.object({
+        /**
+         * Probe only these agent types. The connect wizard asks one type per
+         * call so rows render as each probe settles; device clients that
+         * predate the filter ignore it and answer with the full map.
+         */
+        agentTypes: z.array(z.string()).optional(),
+        deviceId: z.string(),
+      }),
+    )
     .query(
       async ({ ctx, input }): Promise<{ agents: HeterogeneousAgentScanMap; error?: string }> => {
         const result = await deviceGateway.executeToolCall(
           { deviceId: input.deviceId, userId: ctx.userId, workspaceId: ctx.workspaceId },
           {
             apiName: 'scanHeterogeneousAgents',
-            arguments: JSON.stringify({}),
+            arguments: JSON.stringify(input.agentTypes ? { agentTypes: input.agentTypes } : {}),
             identifier: 'local',
           },
           SCAN_TIMEOUT_MS,
