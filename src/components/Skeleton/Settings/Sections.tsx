@@ -17,7 +17,6 @@ import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 import { sx } from '@/styles/sx';
 
 import SkeletonBar from '../Bar';
-import { SettingsProfileRowSkeleton } from './Profile';
 
 /** A static copy key: `[namespace, key]`. */
 export type SettingsSkeletonTextKey = readonly [namespace: string, key: string];
@@ -59,11 +58,6 @@ export type SettingsSectionSkeleton =
        * snippet (its copy button sits inside).
        */
       field?: boolean | 'input' | 'snippet';
-      /**
-       * Profile-style rows instead of `rows`: a static label column, a value bar
-       * of `valueWidth`, and one 22px action per entry of `actions`.
-       */
-      fields?: { actions: number; label: SettingsSkeletonTextKey; valueWidth: number }[];
       /** Label + description on the left, control on the right. */
       rows?: number;
       variant: 'form';
@@ -141,7 +135,10 @@ export type SettingsSectionSkeleton =
       variant: 'cards';
     })
   | {
-      /** An outlined block with an avatar and two text lines. */
+      /**
+       * A filled lead block above the groups: a large title, a description, a
+       * full-width input with a trailing button, and a short line under it.
+       */
       variant: 'banner';
     };
 
@@ -168,9 +165,7 @@ export type SettingsSectionsFrame = 'container' | 'header' | 'none';
 
 const styles = stylex.create({
   banner: {
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: cssVar.colorBorderSecondary,
+    backgroundColor: cssVar.colorFillQuaternary,
     borderRadius: cssVar.borderRadiusLG,
   },
   card: {
@@ -287,47 +282,6 @@ const FormRows = ({ rows }: { rows: number }) => (
           </Flexbox>
           <SkeletonBar height={32} width={widthAt(index, [88, 152])} />
         </Flexbox>
-      </Flexbox>
-    ))}
-  </Flexbox>
-);
-
-const FieldRow = ({
-  actions,
-  label,
-  valueWidth,
-}: {
-  actions: number;
-  label: SettingsSkeletonTextKey;
-  valueWidth: number;
-}) => {
-  const text = useStaticText(label);
-  return (
-    <SettingsProfileRowSkeleton
-      bodyWidth={valueWidth}
-      label={text}
-      labelWidth={96}
-      actionNode={
-        <Flexbox horizontal gap={8}>
-          {Array.from({ length: actions }).map((_, index) => (
-            <SkeletonBar height={22} key={index} width={22} />
-          ))}
-        </Flexbox>
-      }
-    />
-  );
-};
-
-const FieldRows = ({
-  fields,
-}: {
-  fields: { actions: number; label: SettingsSkeletonTextKey; valueWidth: number }[];
-}) => (
-  <Flexbox>
-    {fields.map((field, index) => (
-      <Flexbox key={index}>
-        {index > 0 && <div {...stylex.props(styles.divider)} />}
-        <FieldRow {...field} />
       </Flexbox>
     ))}
   </Flexbox>
@@ -680,17 +634,19 @@ const Section = ({ section }: { section: SettingsSectionSkeleton }) => {
   switch (section.variant) {
     case 'banner': {
       return (
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={stylex.props(styles.banner).className}
-          gap={16}
-          padding={18}
-        >
-          <SkeletonBar height={48} radius={'50%'} width={48} />
+        <Flexbox className={stylex.props(styles.banner).className} gap={20} padding={24}>
           <Flexbox gap={10}>
-            <SkeletonBar height={18} width={240} />
-            <SkeletonBar height={12} width={360} />
+            <SkeletonBar height={24} width={320} />
+            <SkeletonBar height={14} width={440} />
+          </Flexbox>
+          <Flexbox gap={12}>
+            <Flexbox horizontal align={'center'} gap={8}>
+              <Flexbox flex={1}>
+                <SkeletonBar height={40} />
+              </Flexbox>
+              <SkeletonBar height={40} width={136} />
+            </Flexbox>
+            <SkeletonBar height={22} width={176} />
           </Flexbox>
         </Flexbox>
       );
@@ -760,13 +716,7 @@ const Section = ({ section }: { section: SettingsSectionSkeleton }) => {
     case 'form': {
       return (
         <Group {...section}>
-          {section.field ? (
-            <Field kind={section.field} />
-          ) : section.fields ? (
-            <FieldRows fields={section.fields} />
-          ) : (
-            <FormRows rows={section.rows ?? 2} />
-          )}
+          {section.field ? <Field kind={section.field} /> : <FormRows rows={section.rows ?? 2} />}
         </Group>
       );
     }
