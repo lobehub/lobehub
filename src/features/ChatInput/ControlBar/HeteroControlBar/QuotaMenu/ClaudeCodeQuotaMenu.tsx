@@ -239,15 +239,11 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
   const getWindows = useCallback(
     (quota: ClaudeCodeQuotaSnapshot): QuotaWindowItem[] => [
       {
-        compactGroup: 'global',
-        compactLabel: t('heteroAgent.quota.session'),
         key: 'session',
         label: t('heteroAgent.quota.session'),
         window: quota.session,
       },
       {
-        compactGroup: 'global',
-        compactLabel: t('heteroAgent.quota.weekly'),
         key: 'weekly',
         label: t('heteroAgent.quota.weekly'),
         window: quota.weekly,
@@ -255,8 +251,6 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
       ...(quota.scopedWeekly
         ? [
             {
-              compactGroup: 'scopedWeekly',
-              compactLabel: quota.scopedWeekly.modelName,
               key: 'scopedWeekly',
               label: t('heteroAgent.claudeQuota.scopedWeekly', {
                 model: quota.scopedWeekly.modelName,

@@ -15,15 +15,13 @@ import {
   useAgentQuotaStore,
 } from '@/store/agentQuota';
 
+import { getWindowLeftPercent, pickBindingWindow } from './bindingWindow';
+
 const QUOTA_STALE_MS = 60_000;
 const QUOTA_RETRY_COOLDOWN_MS = 60_000;
 
 const styles = stylex.create({
-  compactItem: { color: 'inherit' },
-  // [data-quota-level='low']
-  compactItemLow: { color: cssVar.colorWarningText },
   compactItems: { display: 'inline-flex', gap: '4px', alignItems: 'center' },
-  compactSeparator: { color: cssVar.colorTextQuaternary },
   emptyState: { paddingBlock: '10px', fontSize: '12px', color: cssVar.colorTextDescription },
   error: {
     padding: '8px',
@@ -101,9 +99,10 @@ const styles = stylex.create({
   // nothing to act on until reset → grey the whole row out
   windowExhausted: { opacity: 0.45 },
   windowLabel: { flex: 'none', width: '84px', color: cssVar.colorTextSecondary },
+  // The window the badge reports: same name, full-strength label.
+  windowLabelBinding: { fontWeight: 600, color: cssVar.colorText },
 });
 
-const clampPercent = (value: number) => Math.min(100, Math.max(0, Math.round(value)));
 const LOW_QUOTA_THRESHOLD = 15;
 
 const isLowQuota = (leftPercent: number) => leftPercent < LOW_QUOTA_THRESHOLD;
@@ -131,19 +130,9 @@ export interface QuotaSnapshotBase {
 }
 
 export interface QuotaWindowItem {
-  /** Windows in the same compact group collapse to their tightest remaining value. */
-  compactGroup?: string;
-  /** Optional scope label shown before this window's compact percentage. */
-  compactLabel?: string;
   key: string;
   label: string;
   window: HeteroQuotaWindow | null;
-}
-
-interface CompactQuotaItem {
-  key: string;
-  label?: string;
-  leftPercent: number;
 }
 
 export interface QuotaMenuHelpers<S> {
@@ -219,8 +208,8 @@ interface PendingQuotaError<S> {
 }
 
 /**
- * Shared quota popover for local CLI agents: gauge trigger with the tightest
- * remaining percent in each compact group, plus per-window progress bars and
+ * Shared quota popover for local CLI agents: gauge trigger naming the window
+ * that is currently limiting (least remaining) and its percent, plus per-window progress bars and
  * reset countdowns. Agent specifics come in through the props.
  */
 const QuotaMenu = <S extends QuotaSnapshotBase>({
@@ -505,23 +494,9 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   );
 
   const windows = quota ? getWindows(quota) : [];
-  const compactItemsByGroup = new Map<string, CompactQuotaItem>();
-  for (const item of windows) {
-    if (!item.window) continue;
-
-    const leftPercent = clampPercent(100 - item.window.usedPercent);
-    const compactGroup = item.compactGroup ?? 'default';
-    const existing = compactItemsByGroup.get(compactGroup);
-
-    if (!existing || leftPercent < existing.leftPercent) {
-      compactItemsByGroup.set(compactGroup, {
-        key: compactGroup,
-        label: item.compactLabel,
-        leftPercent,
-      });
-    }
-  }
-  const compactItems = [...compactItemsByGroup.values()];
+  // One badge, one window: a bare percent from an unnamed window read as the
+  // short window having dropped, and several badges side by side crowd the bar.
+  const binding = pickBindingWindow(windows, now);
   const hasQuotaData = hasQuotaDataForSnapshot(quota);
   const manualRefreshErrorText =
     refreshError && (getRefreshErrorText?.(refreshError) || t('heteroAgent.quota.refreshFailed'));
@@ -555,8 +530,9 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   const renderQuotaWindow = ({ key, label, window }: QuotaWindowItem) => {
     if (!window) return null;
 
-    const leftPercent = clampPercent(100 - window.usedPercent);
+    const leftPercent = getWindowLeftPercent(window, now);
     const resetShort = window.resetsAt ? formatDuration(window.resetsAt - now) : undefined;
+    const isBinding = key === binding?.key;
     const exhausted = leftPercent === 0;
     // Exhausted reads as "nothing to do until reset" → grey it out, not alarm-orange.
     const lowQuota = !exhausted && isLowQuota(leftPercent);
@@ -573,8 +549,11 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       >
         <Text
           ellipsis
-          className={stylex.props(styles.windowLabel).className}
+          data-quota-binding={isBinding || undefined}
           style={{ fontSize: 12 }}
+          className={
+            stylex.props(styles.windowLabel, isBinding && styles.windowLabelBinding).className
+          }
         >
           {label}
         </Text>
@@ -687,12 +666,28 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
     </Flexbox>
   );
 
-  const triggerQuotaLevel =
-    compactItems.length === 1
-      ? isLowQuota(compactItems[0].leftPercent)
-        ? 'low'
-        : 'normal'
-      : undefined;
+  const triggerQuotaLevel = binding
+    ? isLowQuota(binding.leftPercent)
+      ? 'low'
+      : 'normal'
+    : undefined;
+  const bindingReset = binding?.resetsAt ? formatDuration(binding.resetsAt - now) : undefined;
+  const triggerTooltip = binding ? (
+    <Flexbox gap={2}>
+      <span>{tooltip}</span>
+      <span>
+        {[
+          binding.label,
+          t('heteroAgent.quota.left', { percent: binding.leftPercent }),
+          bindingReset && t('heteroAgent.quota.resetsIn', { duration: bindingReset }),
+        ]
+          .filter(Boolean)
+          .join(' · ')}
+      </span>
+    </Flexbox>
+  ) : (
+    tooltip
+  );
 
   const trigger = (
     <button
@@ -708,37 +703,10 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       )}
     >
       <Icon icon={GaugeIcon} size={14} />
-      {compactItems.length > 0 && (
+      {binding && (
         <span {...stylex.props(styles.compactItems)}>
-          {compactItems.map((item, index) => {
-            const itemQuotaLevel =
-              compactItems.length > 1
-                ? isLowQuota(item.leftPercent)
-                  ? 'low'
-                  : 'normal'
-                : undefined;
-            return (
-              <span key={item.key}>
-                {index > 0 && (
-                  <span aria-hidden {...stylex.props(styles.compactSeparator)}>
-                    {' · '}
-                  </span>
-                )}
-                <span
-                  data-quota-level={itemQuotaLevel}
-                  {...stylex.props(
-                    styles.compactItem,
-                    itemQuotaLevel === 'low' && styles.compactItemLow,
-                  )}
-                >
-                  {item.label && `${item.label} `}
-                  {item.leftPercent === 0 && !item.label
-                    ? t('heteroAgent.quota.exhausted')
-                    : t('heteroAgent.quota.compactLeft', { percent: item.leftPercent })}
-                </span>
-              </span>
-            );
-          })}
+          {`${binding.label} `}
+          {t('heteroAgent.quota.compactLeft', { percent: binding.leftPercent })}
         </span>
       )}
       <Icon icon={ChevronDownIcon} size={12} />
@@ -753,7 +721,7 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
       trigger="click"
       onOpenChange={handleOpenChange}
     >
-      <div>{open ? trigger : <Tooltip title={tooltip}>{trigger}</Tooltip>}</div>
+      <div>{open ? trigger : <Tooltip title={triggerTooltip}>{trigger}</Tooltip>}</div>
     </Popover>
   );
 };

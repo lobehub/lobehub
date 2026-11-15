@@ -144,7 +144,13 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
           </div>
         ),
         Skeleton: { Button: () => <div data-testid="skeleton" /> },
-        Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+        Text: ({
+          children,
+          'data-quota-binding': binding,
+        }: {
+          'children'?: ReactNode;
+          'data-quota-binding'?: boolean;
+        }) => <span data-quota-binding={binding}>{children}</span>,
         Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
       };
     },
@@ -417,6 +423,46 @@ describe('CodexQuotaMenu', () => {
     expect(screen.queryByText(error)).toBeNull();
   });
 
+  it('names the window behind the badge so a weekly drop does not read as the 5h one', async () => {
+    const now = Date.now();
+    mockService.getCodexQuota.mockResolvedValue(
+      codexSnapshot({
+        session: { resetsAt: now + 286 * 60_000, usedPercent: 2, windowMinutes: 300 },
+        weekly: { resetsAt: now + 1064 * 60_000, usedPercent: 39, windowMinutes: 10_080 },
+      }),
+    );
+
+    render(<CodexQuotaMenu command="codex" />);
+
+    expect(await screen.findByText('98%')).toBeTruthy();
+    const trigger = screen.getByRole('button', { name: 'heteroAgent.codexQuota.tooltip' });
+    // Only one value, and it carries the window name next to the same number as its row.
+    expect(trigger.textContent).toBe('heteroAgent.quota.weekly heteroAgent.quota.compactLeft:61');
+    expect(screen.getByText('61%')).toBeTruthy();
+    // The popover marks the same window as the one limiting the user.
+    const bindingLabels = document.querySelectorAll('[data-quota-binding]');
+    expect(bindingLabels).toHaveLength(1);
+    expect(bindingLabels[0].textContent).toBe('heteroAgent.quota.weekly');
+  });
+
+  it('drops a window whose reset has passed back to full instead of keeping the old value', async () => {
+    const now = Date.now();
+    mockService.getCodexQuota.mockResolvedValue(
+      codexSnapshot({
+        session: { resetsAt: now + 286 * 60_000, usedPercent: 2, windowMinutes: 300 },
+        weekly: { resetsAt: now - 60_000, usedPercent: 39, windowMinutes: 10_080 },
+      }),
+    );
+
+    render(<CodexQuotaMenu command="codex" />);
+
+    expect(await screen.findByText('100%')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'heteroAgent.codexQuota.tooltip' }).textContent).toBe(
+      'heteroAgent.codexQuota.fiveHour heteroAgent.quota.compactLeft:98',
+    );
+    expect(screen.queryByText('61%')).toBeNull();
+  });
+
   it('renders windows and the reset-credits footer', async () => {
     const resetsAt = Date.now() + 60 * 60_000;
     mockService.getCodexQuota.mockResolvedValue(
@@ -431,7 +477,9 @@ describe('CodexQuotaMenu', () => {
 
     expect(await screen.findByText('81%')).toBeTruthy();
     expect(screen.getByText('12%')).toBeTruthy();
-    expect(screen.getByText('heteroAgent.quota.compactLeft:12')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'heteroAgent.codexQuota.tooltip' }).textContent).toBe(
+      'heteroAgent.quota.weekly heteroAgent.quota.compactLeft:12',
+    );
     expect(
       screen
         .getByRole('button', { name: 'heteroAgent.codexQuota.tooltip' })
@@ -497,7 +545,10 @@ describe('CodexQuotaMenu', () => {
 
     render(<CodexQuotaMenu />);
 
-    expect(await screen.findByText('heteroAgent.quota.compactLeft:80')).toBeTruthy();
+    const trigger = screen.getByRole('button', { name: 'heteroAgent.codexQuota.tooltip' });
+    await waitFor(() =>
+      expect(trigger.textContent).toBe('heteroAgent.quota.weekly heteroAgent.quota.compactLeft:80'),
+    );
     expect(screen.getByText('heteroAgent.codexQuota.fiveHour')).toBeTruthy();
     expect(screen.getByText('heteroAgent.quota.weekly')).toBeTruthy();
     expect(screen.queryByText('Codex Other · heteroAgent.quota.session')).toBeNull();
