@@ -499,7 +499,10 @@ sequenceDiagram
 
 本地运行时（`localMode`）的回复走 `thread.post` → `DingTalkAdapter.postMessage`，同样 sessionWebhook 优先。
 
-### 11.4 未覆盖
+### 11.4 外部 message gateway
 
-- 外部 message gateway 服务（仓库外）需要实现 `dingtalk` 平台的 Stream 连接后，Cloud 的 gateway 模式才会为钉钉建立长连接；本仓库内的 `GatewayManager` 进程内客户端已可用。
+启用外部 message gateway 时，Stream 长连接由网关的 `dingtalk` 平台托管：网关注册 Stream、回 ACK，并把机器人回调原文按 HTTP 回调同样的 `timestamp` + `sign` 签名转发到 `/api/agent/webhooks/dingtalk/:clientId`，服务端沿用 Webhook 的验签与处理链路。部署顺序：网关先上线 `dingtalk` 平台，服务端再放开 Stream。
+
+### 11.5 未覆盖
+
 - 出站文件 / 语音 / 视频需要旧版媒体上传接口的 `mediaId`，目前降级为链接。
