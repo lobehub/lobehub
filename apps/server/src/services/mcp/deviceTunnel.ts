@@ -2,6 +2,7 @@ import { BRANDING_NAME } from '@lobechat/business-const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import type { GatewayMcpParams } from '@lobechat/device-gateway-client';
 import type { DeviceClient } from '@lobechat/types';
+import type { McpDeviceBinding } from '@lobechat/utils/mcpEndpoint';
 import debug from 'debug';
 
 import type { HttpMCPClientParams, McpTool, StdioMCPParams } from '@/libs/mcp/types';
@@ -10,6 +11,7 @@ import {
   clientKindFromChannels,
   resolveMcpClientKinds,
 } from '@/server/services/deviceGateway/deviceChannels';
+import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 
 const log = debug('lobe-server:mcp:device-tunnel');
@@ -30,6 +32,51 @@ export class McpDeviceUnavailableError extends Error {
   constructor(identifier: string) {
     super(mcpDeviceUnavailableMessage(identifier));
     this.name = 'McpDeviceUnavailableError';
+  }
+}
+
+/** Code of the error an MCP server bound to a device fails with when that device can't run it. */
+export const MCP_BOUND_DEVICE_UNAVAILABLE = 'MCP_BOUND_DEVICE_UNAVAILABLE';
+
+/**
+ * Why the device an MCP server is bound to can't run it:
+ * - `not_found`: removed, unshared, or no longer visible to the caller;
+ * - `offline`: registered but not connected;
+ * - `unsupported`: connected only through an `lh connect` that predates MCP.
+ */
+export type McpBoundDeviceUnavailableReason = 'not_found' | 'offline' | 'unsupported';
+
+/**
+ * What a user reads when the device an MCP server is bound to can't run it. A
+ * bound server never moves to another device, so each reason names the fix.
+ */
+export const mcpBoundDeviceUnavailableMessage = (
+  identifier: string,
+  reason: McpBoundDeviceUnavailableReason,
+  deviceName?: string,
+) => {
+  const device = deviceName ? `"${deviceName}"` : 'its device';
+  switch (reason) {
+    case 'offline': {
+      return `MCP server '${identifier}' is bound to ${device}, which is offline. Open the ${BRANDING_NAME} desktop app or run \`lh connect\` on that computer, then try again. A bound MCP server never runs on another device.`;
+    }
+    case 'unsupported': {
+      return `MCP server '${identifier}' is bound to ${device}, which is online but can't run MCP servers: its \`lh connect\` is too old. Update the CLI or open the ${BRANDING_NAME} desktop app on that computer, then try again.`;
+    }
+    default: {
+      return `MCP server '${identifier}' is bound to a device that is no longer available (it was removed or is no longer shared with you). Edit the MCP server to choose another device, or let it pick one automatically.`;
+    }
+  }
+};
+
+export class McpBoundDeviceUnavailableError extends Error {
+  readonly code = MCP_BOUND_DEVICE_UNAVAILABLE;
+  readonly reason: McpBoundDeviceUnavailableReason;
+
+  constructor(identifier: string, reason: McpBoundDeviceUnavailableReason, deviceName?: string) {
+    super(mcpBoundDeviceUnavailableMessage(identifier, reason, deviceName));
+    this.name = 'McpBoundDeviceUnavailableError';
+    this.reason = reason;
   }
 }
 
@@ -67,6 +114,8 @@ export const toGatewayMcpParams = (
 export interface McpDeviceTarget {
   clientKinds: DeviceClient[];
   deviceId: string;
+  /** The device's pool: a workspace device is addressed under its workspace. */
+  workspaceId?: string;
 }
 
 /**
@@ -109,15 +158,66 @@ export const findPersonalMcpDevice = async (
 };
 
 /**
+ * The device an MCP server is bound to, when it can run the server now. Bound
+ * servers never fall back to another device, so every way that device can't
+ * run it throws {@link McpBoundDeviceUnavailableError} with its reason.
+ *
+ * The lookup is scoped to the binding's pool through the scoped device helper
+ * (not the raw gateway pool), so device visibility applies: a workspace device
+ * that was unshared, or another member's private one, reads as `not_found`.
+ * A workspace device is also rechecked against the registry the way every
+ * workspace dispatch is (`resolveDeviceDispatchAuthorizationFailure`).
+ */
+export const resolveBoundMcpDevice = async ({
+  binding,
+  identifier,
+  serverDB,
+  userId,
+}: {
+  binding: McpDeviceBinding;
+  identifier: string;
+  serverDB: LobeChatDatabase;
+  userId: string;
+}): Promise<McpDeviceTarget> => {
+  const { deviceId, workspaceId } = binding;
+
+  if (await resolveDeviceDispatchAuthorizationFailure(serverDB, userId, deviceId, workspaceId)) {
+    throw new McpBoundDeviceUnavailableError(identifier, 'not_found');
+  }
+
+  const devices = await getScopedOnlineDevices(serverDB, userId, workspaceId);
+  const device = devices.find((item) => item.deviceId === deviceId);
+  if (!device) throw new McpBoundDeviceUnavailableError(identifier, 'not_found');
+
+  const deviceName = device.friendlyName || device.hostname || undefined;
+  if (!device.online) throw new McpBoundDeviceUnavailableError(identifier, 'offline', deviceName);
+
+  // Unlabelled channels (an older gateway) keep the desktop routing, as an
+  // active run device does: the user chose this device explicitly.
+  const clientKinds = await resolveMcpClientKinds(
+    userId,
+    deviceId,
+    workspaceId,
+    clientKindFromChannels(device.channels),
+  );
+  if (!clientKinds) throw new McpBoundDeviceUnavailableError(identifier, 'unsupported', deviceName);
+
+  return { clientKinds, deviceId, workspaceId };
+};
+
+/**
  * List an MCP server's tools on the user's own device, for a server this
  * deployment must not connect to itself (`shouldConnectViaDevice`): an
  * install, a tool refresh or a connection test the user started. It runs on
- * the device and client a tool call would, so both reach the server alike.
+ * the device and client a tool call would, so both reach the server alike: the
+ * bound device when the server has one (`params.boundDevice`), else the user's
+ * newest capable personal device.
  *
- * Throws {@link McpDeviceUnavailableError} when no device of theirs can run
- * it, and the device's own reason when the listing fails there.
+ * Throws {@link McpBoundDeviceUnavailableError} when the bound device can't run
+ * it, {@link McpDeviceUnavailableError} when no device of theirs can, and the
+ * device's own reason when the listing fails there.
  */
-export const listMcpToolsOnPersonalDevice = async ({
+export const listMcpToolsOnDevice = async ({
   mcpApps,
   params,
   serverDB,
@@ -130,7 +230,14 @@ export const listMcpToolsOnPersonalDevice = async ({
 }): Promise<McpTool[]> => {
   if (!serverDB || !userId) throw new McpDeviceUnavailableError(params.name);
 
-  const device = await findPersonalMcpDevice(serverDB, userId);
+  const device = params.boundDevice
+    ? await resolveBoundMcpDevice({
+        binding: params.boundDevice,
+        identifier: params.name,
+        serverDB,
+        userId,
+      })
+    : await findPersonalMcpDevice(serverDB, userId);
   if (!device) throw new McpDeviceUnavailableError(params.name);
 
   log('listing tools of %s (%s) on device %s', params.name, params.type, device.deviceId);
@@ -141,5 +248,6 @@ export const listMcpToolsOnPersonalDevice = async ({
     mcpApps,
     params: toGatewayMcpParams(params),
     userId,
+    workspaceId: device.workspaceId,
   });
 };
