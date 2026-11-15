@@ -1,4 +1,22 @@
 export default {
+  'voiceCall.agentState.connecting': 'Connecting…',
+  'voiceCall.agentState.disconnected': 'Call ended',
+  'voiceCall.agentState.failed': 'Voice worker unavailable',
+  'voiceCall.agentState.idle': 'Ready',
+  'voiceCall.agentState.initializing': 'Preparing audio…',
+  'voiceCall.agentState.listening': 'Listening',
+  'voiceCall.agentState.pre-connect-buffering': 'Getting ready…',
+  'voiceCall.agentState.speaking': 'Speaking',
+  'voiceCall.agentState.thinking': 'Agent is working — check chat for tool approvals',
+  'voiceCall.deviceError': 'Could not access this device. Check your browser permissions.',
+  'voiceCall.enableAudio': 'Enable audio',
+  'voiceCall.end': 'End conversation',
+  'voiceCall.error':
+    'The call could not continue. Check microphone permissions, the voice service, or the agent response, then try again.',
+  'voiceCall.needsConversation': 'Send a message to start a conversation first.',
+  'voiceCall.start': 'Conversation',
+  'voiceCall.videoNotice':
+    'Camera or screen frames are saved with each spoken turn and sent through this agent’s usual model or harness.',
   'directMention.progress.elapsed': '{{time}}',
   'directMention.progress.running': 'Running',
   'directMention.progress.thinking': 'Thinking…',

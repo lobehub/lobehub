@@ -77,6 +77,7 @@ export enum SettingsTabs {
   /** @deprecated Use Appearance instead */
   Common = 'common',
   Connector = 'connector',
+  Conversation = 'conversation',
   Credits = 'credits',
   Creds = 'credential',
   Devices = 'devices',

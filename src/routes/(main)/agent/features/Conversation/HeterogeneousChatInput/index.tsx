@@ -39,7 +39,7 @@ import { shouldShowHeteroModelSelector } from './shouldShowHeteroModelSelector';
 const leftActions: ActionKeys[] = [];
 // Voice messages are transcribed before they reach the CLI, so they sit beside Send like on the
 // agent composer. Hidden while the input is blocked: a recording could not be sent anyway.
-const rightActions: ActionKeys[] = ['voiceMessage'];
+const rightActions: ActionKeys[] = ['conversation', 'voiceMessage'];
 const blockedRightActions: ActionKeys[] = [];
 
 /**

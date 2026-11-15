@@ -1,3 +1,5 @@
+import type { LivekitConnection } from '@lobechat/livekit-bridge';
+
 export interface OpenAICompatibleKeyVault {
   apiKey?: string;
   baseURL?: string;
@@ -100,5 +102,7 @@ export interface SearchEngineKeyVaults {
 }
 
 export interface UserKeyVaults extends SearchEngineKeyVaults {
+  /** Stored using the existing encrypted user key vault. */
+  livekit?: LivekitConnection;
   search1api?: OpenAICompatibleKeyVault;
 }

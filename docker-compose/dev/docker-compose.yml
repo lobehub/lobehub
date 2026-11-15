@@ -1,5 +1,14 @@
 name: lobehub
 services:
+  livekit:
+    image: livekit/livekit-server:v1.13.11
+    profiles: [talk]
+    command: ['--dev', '--bind', '0.0.0.0', '--node-ip', '127.0.0.1']
+    ports:
+      - '127.0.0.1:7880:7880'
+      - '127.0.0.1:7881:7881'
+      - '127.0.0.1:7882:7882/udp'
+    restart: unless-stopped
   network-service:
     image: alpine
     container_name: lobe-network

@@ -1,4 +1,36 @@
 export default {
+  'tab.conversation': 'Conversation',
+  'conversation.title': 'Conversation',
+  'conversation.description':
+    'Voice and video conversations use your current LobeHub agent, model, tools, and history. Configure your personal LiveKit connection here.',
+  'conversation.connection': 'LiveKit connection',
+  'conversation.url': 'Server URL',
+  'conversation.apiKey': 'API key',
+  'conversation.apiSecret': 'API secret',
+  'conversation.save': 'Save',
+  'conversation.test': 'Save and test connection',
+  'conversation.saved': 'Saved',
+  'conversation.connected': 'Connection verified',
+  'conversation.error':
+    'Could not save or connect. Check the server URL, credentials, and worker configuration.',
+  'conversation.preferences': 'Conversation preferences',
+  'conversation.enabled': 'Enable conversations',
+  'conversation.mode': 'Mode',
+  'conversation.voiceMode': 'Voice',
+  'conversation.videoMode': 'Voice and video',
+  'conversation.tts': 'Speech output model',
+  'conversation.voice': 'Voice',
+  'conversation.language': 'Recognition language',
+  'conversation.silence': 'Pause before responding (ms)',
+  'conversation.speechInput': 'Speech recognition',
+  'conversation.speechInputDescription':
+    'Uses your speech recognition model in Service Model settings. Speech providers use your existing provider credentials.',
+  'conversation.worker':
+    'A LobeHub LiveKit worker must be running on the same LiveKit server. Testing checks the server credentials; starting a conversation also requires the worker.',
+  'conversation.videoDescription':
+    'Video mode shares a camera or screen frame with each spoken turn when the current model supports images. Frames are saved in the conversation.',
+  'conversation.modelPlaceholder': 'Choose an enabled speech model',
+  'conversation.configureModels': 'Configure providers and models',
   'systemAgent.channelRouting.title': 'Channel decision model',
   'systemAgent.channelRouting.modelDesc':
     'Choose which Agents reply to messages without @mentions. When off, all eligible Agents reply.',

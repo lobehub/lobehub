@@ -7,6 +7,9 @@ import { SettingsTabs } from '@/store/global/initialState';
 const loading = (_debugId: string) => () => createElement(SettingsChunkSkeleton);
 
 export const componentMap = {
+  [SettingsTabs.Conversation]: dynamic(() => import('../conversation'), {
+    loading: loading('Settings > Conversation'),
+  }),
   [SettingsTabs.Advanced]: dynamic(() => import('../advanced'), {
     loading: loading('Settings > Advanced'),
   }),

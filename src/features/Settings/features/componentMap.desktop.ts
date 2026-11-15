@@ -10,6 +10,7 @@ import Advanced from '../advanced';
 import APIKey from '../apikey';
 import Appearance from '../appearance';
 import Connector from '../connector';
+import Conversation from '../conversation';
 import Creds from '../creds';
 import Devices from '../devices';
 import Environments from '../environments';
@@ -34,6 +35,7 @@ import Tools from '../tools';
 import Trash from '../trash';
 
 export const componentMap = {
+  [SettingsTabs.Conversation]: Conversation,
   [SettingsTabs.Advanced]: Advanced,
   [SettingsTabs.Labs]: Labs,
   [SettingsTabs.Appearance]: Appearance,

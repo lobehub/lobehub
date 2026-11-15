@@ -2,6 +2,7 @@ import VoiceDictation from '../Dictation';
 import VoiceMessage from '../VoiceMessage';
 import AgentMode from './AgentMode';
 import Clear from './Clear';
+import { ConversationAction } from './ConversationAction';
 import History from './History';
 import Memory from './Memory';
 import Mention from './Mention';
@@ -33,6 +34,7 @@ export const actionMap = {
   typo: Typo,
   voiceDictation: VoiceDictation,
   voiceMessage: VoiceMessage,
+  conversation: ConversationAction,
 } as const;
 
 export type ActionKey = keyof typeof actionMap;

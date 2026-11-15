@@ -82,6 +82,7 @@ import { klavisRouter } from './klavis';
 import { knowledgeRouter } from './knowledge';
 import { knowledgeBaseRouter } from './knowledgeBase';
 import { linearRouter } from './linear';
+import { livekitRouter } from './livekit';
 import { llmGenerationTracingRouter } from './llmGenerationTracing';
 import { marketRouter } from './market';
 import { meetingRouter } from './meeting';
@@ -186,6 +187,7 @@ export const lambdaRouter = router({
   group: agentGroupRouter,
   healthcheck: publicProcedure.query(() => "i'm live!"),
   home: homeRouter,
+  livekit: livekitRouter,
   image: imageRouter,
   importer: importerRouter,
   composio: composioRouter,

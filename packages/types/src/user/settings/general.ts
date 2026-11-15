@@ -1,3 +1,4 @@
+import type { ConversationConfig } from '@lobechat/livekit-bridge';
 import type { HighlighterProps, LobePrimaryColor, MermaidProps, NeutralColors } from '@lobehub/ui';
 
 import type { ResponseAnimationStyle } from '../../aiProvider';
@@ -9,6 +10,8 @@ export type ContextMenuMode = 'disabled' | 'default';
 export interface UserGeneralConfig {
   animationMode?: AnimationMode;
   contextMenuMode?: ContextMenuMode;
+  /** Personal live conversation preferences, shared by all chats. */
+  conversation?: ConversationConfig;
   costEstimateWarningThreshold?: number;
   /**
    * Whether to auto-scroll during AI streaming output

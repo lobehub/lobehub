@@ -17,7 +17,7 @@ import { HOME_INPUT_BODY_HEIGHT, HOME_UPLOAD_CONTEXT_KEY } from './constants';
 import ModeSelect from './ModeSelect';
 
 const leftActions: ActionKeys[] = ['plus'];
-const rightActions: ActionKeys[] = ['model'];
+const rightActions: ActionKeys[] = ['model', 'conversation'];
 
 const CONTAINER_RADIUS = 20;
 /** Clearance from the container edge to the round controls sitting in its corners. */
@@ -75,7 +75,7 @@ const HomeEditorInput = memo<HomeEditorInputProps>(
         allowExpand={false}
         contextSelectionKey={contextSelectionKey}
         leftActions={leftActions}
-        rightActions={rightActions}
+        rightActions={mode === 'task' ? ['model'] : rightActions}
         slashPlacement="bottom"
         uploadContextKey={HOME_UPLOAD_CONTEXT_KEY}
         chatInputEditorRef={(instance) => {

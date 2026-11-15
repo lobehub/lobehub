@@ -25,10 +25,16 @@ import { useSendMenuItems } from './useSendMenuItems';
 // Single-row editor for the channel composer; it still grows with content.
 const SLIM_INPUT_PROPS = { defaultHeight: 36 };
 
-const contextWindowRightActions: ActionKeys[] = ['model', 'voiceMessage', 'contextWindow'];
+const contextWindowRightActions: ActionKeys[] = [
+  'model',
+  'conversation',
+  'voiceMessage',
+  'contextWindow',
+];
 const promptTransformRightActions: ActionKeys[] = [
   'model',
   'promptTransform',
+  'conversation',
   'voiceMessage',
   'contextWindow',
 ];

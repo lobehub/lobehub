@@ -155,6 +155,7 @@ export const useCategory = () => {
 
     // Agent group — which models an agent uses and what it can do.
     const agentItems: CategoryItem[] = [
+      { icon: MessageCircleIcon, key: SettingsTabs.Conversation, label: t('tab.conversation') },
       // Provider settings should not depend on Advanced tools: new users may need
       // non-LobeHub providers, and desktop users often bring their own API keys.
       showProvider && {
