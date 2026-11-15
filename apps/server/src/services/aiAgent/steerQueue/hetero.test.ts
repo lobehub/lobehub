@@ -20,7 +20,12 @@ const mocks = vi.hoisted(() => ({
   findById: vi.fn(),
   isRunAlive: vi.fn(),
   renew: vi.fn(),
+  resolveInlineImages: vi.fn(),
   settle: vi.fn(),
+}));
+
+vi.mock('@/server/services/file/inlineImages', () => ({
+  resolveInlineImages: mocks.resolveInlineImages,
 }));
 
 vi.mock('@/server/services/redis', () => ({
@@ -86,6 +91,7 @@ beforeEach(() => {
   mocks.findById.mockResolvedValue(undefined);
   mocks.settle.mockResolvedValue(undefined);
   mocks.renew.mockResolvedValue(true);
+  mocks.resolveInlineImages.mockResolvedValue([]);
 });
 
 describe('canSteerHeteroRun', () => {
@@ -123,6 +129,40 @@ describe('takeHeteroSteer', () => {
 
     expect(mocks.settle.mock.calls[0][2]).toEqual(['a', 'b']);
     expect(mocks.deliveries.size).toBe(0);
+  });
+
+  describe('images pasted into the body', () => {
+    const pasted = '![image.png](https://app.lobehub.com/f/file_1)\n\nCI 挂了';
+    const image = { id: 'file_1', url: 'https://bucket.example.com/files/1.png?X-Amz-Signature=s' };
+
+    it('hands them over with the text when the session takes images', async () => {
+      mocks.drain.mockResolvedValue([followUp('a', 1, { prompt: pasted }), followUp('b', 2)]);
+      mocks.resolveInlineImages.mockResolvedValue([image]);
+
+      await expect(
+        takeHeteroSteer(ctx, { acceptsImages: true, agentId: 'agt-1', operationId: 'op-1', scope }),
+      ).resolves.toEqual({ content: pasted, imageList: [image], messageId: 'msg-a' });
+
+      expect(mocks.resolveInlineImages).toHaveBeenCalledWith(ctx, pasted);
+      expect(mocks.settle.mock.calls[0][2]).toEqual(['b']);
+      expect(mocks.deliveries.has('msg-a')).toBe(true);
+    });
+
+    it('leaves the follow-up to a turn of its own when the session only takes text', async () => {
+      mocks.drain.mockResolvedValue([followUp('a', 1, { prompt: pasted }), followUp('b', 2)]);
+      mocks.resolveInlineImages.mockResolvedValue([image]);
+
+      await expect(take()).resolves.toBeUndefined();
+
+      expect(mocks.settle.mock.calls[0][2]).toEqual(['a', 'b']);
+      expect(mocks.deliveries.size).toBe(0);
+    });
+
+    it('steers as text when the links name no image of the user', async () => {
+      mocks.drain.mockResolvedValue([followUp('a', 1, { prompt: pasted })]);
+
+      await expect(take()).resolves.toEqual({ content: pasted, messageId: 'msg-a' });
+    });
   });
 
   it('does not send a follow-up twice when its batch lapsed back', async () => {

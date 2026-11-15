@@ -85,11 +85,15 @@ function extractStorageKeyFromUrl(url: string): string | undefined {
   }
 }
 
-export async function extractFileIdsFromEditorData(
-  json: unknown,
+/**
+ * Resolve file URLs (proxy `/f/{fileId}` form or pre-signed storage URLs) to
+ * the fileIds of the caller's files, deduped, proxy matches first. Storage
+ * URLs are looked up by key within the caller's user / workspace scope.
+ */
+export async function resolveFileIdsFromUrls(
+  urls: string[],
   ctx: { db: LobeChatDatabase; userId: string; workspaceId?: string },
 ): Promise<string[]> {
-  const urls = collectAttachmentUrlsFromEditorData(json);
   if (urls.length === 0) return [];
 
   const seen = new Set<string>();
@@ -127,4 +131,11 @@ export async function extractFileIdsFromEditorData(
   }
 
   return [...seen];
+}
+
+export async function extractFileIdsFromEditorData(
+  json: unknown,
+  ctx: { db: LobeChatDatabase; userId: string; workspaceId?: string },
+): Promise<string[]> {
+  return resolveFileIdsFromUrls(collectAttachmentUrlsFromEditorData(json), ctx);
 }
