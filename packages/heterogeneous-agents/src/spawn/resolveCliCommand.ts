@@ -307,6 +307,28 @@ const mergePathValues = (...values: Array<string | undefined>): string | undefin
   return segments.length > 0 ? segments.join(path.delimiter) : undefined;
 };
 
+/**
+ * The PATH a child spawned by this process should search: the login shell's
+ * PATH (the Windows registry's on Windows) merged ahead of the inherited one.
+ *
+ * Use when: a long-lived host started by a service manager (launchd, systemd)
+ * spawns user tools — `npx`, `uvx`, nvm-installed binaries — that only the
+ * user's login shell puts on PATH.
+ * Returns: the inherited PATH when nothing could be recovered; never throws.
+ */
+export const resolveUserSpawnPath = async (
+  currentPath: string | undefined = process.env.PATH,
+): Promise<string | undefined> => {
+  try {
+    const recovered = isWindows()
+      ? await getWindowsRegistryPath()
+      : await getCurrentLoginShellPath();
+    return mergePathValues(recovered, currentPath) ?? currentPath;
+  } catch {
+    return currentPath;
+  }
+};
+
 const recoverProbeEnvironment = async (
   probeEnv?: NodeJS.ProcessEnv,
 ): Promise<RecoveredProbeEnvironment | undefined> => {

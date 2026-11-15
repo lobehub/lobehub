@@ -174,6 +174,8 @@ export class GatewayHttpClient {
   async executeMcpCall(mcpCall: {
     apiName: string;
     arguments: string;
+    /** The device's client that runs the call; omitted, `resolveClientKinds` decides. */
+    clientKinds?: DeviceClient[];
     deviceId?: string;
     identifier: string;
     params: GatewayMcpParams;
@@ -181,9 +183,9 @@ export class GatewayHttpClient {
     userId: string;
     workspaceId?: string;
   }): Promise<DeviceToolCallResult> {
-    const { deviceId, timeout, userId, workspaceId, ...toolCall } = mcpCall;
+    const { clientKinds, deviceId, timeout, userId, workspaceId, ...toolCall } = mcpCall;
     return this.postToolCall(
-      { deviceId, timeout, userId, workspaceId },
+      { clientKinds, deviceId, timeout, userId, workspaceId },
       { ...toolCall, type: 'mcp' },
     );
   }

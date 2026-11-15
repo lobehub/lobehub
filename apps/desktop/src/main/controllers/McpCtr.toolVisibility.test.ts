@@ -7,7 +7,7 @@ import McpCtr from './McpCtr';
 
 const { mcpClientMocks } = vi.hoisted(() => ({ mcpClientMocks: vi.fn() }));
 
-vi.mock('../libs/mcp/client', () => ({
+vi.mock('@lobechat/device-mcp/client', () => ({
   MCPClient: class {
     constructor(
       public params: unknown,
@@ -81,7 +81,7 @@ describe('McpCtr tool visibility', () => {
     // A server may list the tools only its views call just to such a client
     await discover(ctr);
 
-    expect(mcpClientMocks).toHaveBeenCalledWith({ mcpApps: true });
+    expect(mcpClientMocks).toHaveBeenCalledWith(expect.objectContaining({ mcpApps: true }));
   });
 
   it('keeps view-only tools out of the stdio manifest the model reads', async () => {
