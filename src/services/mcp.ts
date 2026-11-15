@@ -324,10 +324,17 @@ class MCPService {
           (isDeviceHttp && (fromMcpApp ? !!onThisDevice : true)));
       // A view's calls run where its result was produced
       if (fromMcpApp && !!runsHere !== !!onThisDevice) throw new Error(VIEW_SITE_MISMATCH);
-      if (runsHere) {
-        // Persisted connector projections omit env secrets and may be stale.
-        // This protected read retains the connector's credential ownership gate.
-        const detail = await lambdaClient.connector.getForEdit.query({ id: connector.id });
+      // Persisted connector projections omit env secrets and may be stale.
+      // This protected read retains the connector's credential ownership gate,
+      // and carries the current binding: a connector rebound to another device
+      // since this projection loaded runs there, through the server.
+      const detail = runsHere
+        ? await lambdaClient.connector.getForEdit.query({ id: connector.id })
+        : undefined;
+      const reboundElsewhere =
+        !!detail && runsOnAnotherDevice(connectorDeviceBinding(detail)?.deviceId);
+      if (reboundElsewhere && fromMcpApp) throw new Error(VIEW_SITE_MISMATCH);
+      if (connector && detail && !reboundElsewhere) {
         if (!detail.isEnabled) throw new Error('Connector is disabled');
         const tool = detail.tools.find((item) => item.toolName === apiName);
         if (!tool || tool.permission === 'disabled') {

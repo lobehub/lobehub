@@ -63,7 +63,10 @@ import {
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
 import { toClientToolSyncInputs } from '../_helpers/clientToolSyncInputs';
 import { withRequestConnectorCallers } from '../_helpers/connectorCallContext';
-import { assertConnectorDeviceBindingAllowed } from '../_helpers/connectorDeviceBinding';
+import {
+  assertBoundDeviceOperable,
+  assertConnectorDeviceBindingAllowed,
+} from '../_helpers/connectorDeviceBinding';
 import {
   assertConnectorCredentialsManageable,
   assertConnectorMaintainable,
@@ -307,15 +310,18 @@ const connectorCoreRouter = router({
    */
   getDeviceMcpManifest: wsCompatProcedure
     .use(serverDatabase)
+    // Starts the server on a device: read-only viewers never operate one
+    .use(requireWorkspaceRoleWhenScoped('member'))
     .input(DeviceMcpManifestInputSchema)
-    .mutation(({ ctx, input }) =>
-      getDeviceMcpManifest({
+    .mutation(async ({ ctx, input }) => {
+      await assertBoundDeviceOperable(ctx, input.boundDeviceId);
+      return getDeviceMcpManifest({
         connection: input,
         serverDB: ctx.serverDB,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId ?? undefined,
-      }),
-    ),
+      });
+    }),
 
   /**
    * The exact redirect URI the server will send to the OAuth/DCR endpoints.

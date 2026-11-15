@@ -137,6 +137,28 @@ describe('a connector bound to a device', () => {
   });
 });
 
+describe('a connector rebound since this client loaded it', () => {
+  it('leaves the call to the server when the fresh binding names another device', async () => {
+    const { lambdaClient } = await import('@/libs/trpc/client');
+    // The stored projection is still unbound, so the call looks local
+    mockGetToolStoreState.mockReturnValue({ connectors: [lanConnector()] });
+    vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue({
+      ...lanConnector('office-nas'),
+      credentials: null,
+      tools: [{ permission: 'auto', toolName: 'list_files' }],
+    } as never);
+    vi.mocked(lambdaClient.connector.callTool.mutate).mockResolvedValue({
+      content: 'ok',
+      success: true,
+    } as never);
+
+    await mcpService.invokeMcpToolCall(payload, {});
+
+    expect(lambdaClient.connector.callTool.mutate).toHaveBeenCalledOnce();
+    expect(mockElectronIpc.mcp.callTool).not.toHaveBeenCalled();
+  });
+});
+
 describe('testing a server bound to a device', () => {
   it('starts a stdio server bound to another machine there, through the server', async () => {
     const { lambdaClient } = await import('@/libs/trpc/client');

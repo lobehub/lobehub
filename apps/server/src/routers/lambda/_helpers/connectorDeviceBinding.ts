@@ -1,12 +1,16 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 import { TRPCError } from '@trpc/server';
 
+import type { WorkspaceRole } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { DeviceModel } from '@/database/models/device';
+
+import { canOperateWorkspaceDevice } from '../deviceWorkspaceGuard';
 
 interface DeviceBindingCtx {
   serverDB: LobeChatDatabase;
   userId: string;
   workspaceId?: string | null;
+  workspaceRole?: WorkspaceRole;
 }
 
 /**
@@ -51,6 +55,36 @@ export const assertConnectorDeviceBindingAllowed = async (
       message: ctx.workspaceId
         ? 'A workspace MCP server can only be bound to a shared (public) device of this workspace.'
         : 'An MCP server can only be bound to one of your own devices.',
+    });
+  }
+};
+
+/**
+ * Whether the caller may run an MCP server on a bound device right now (a
+ * connection test starts its stdio command or reaches its network there). In
+ * a workspace that is operating the machine, so the device guard's rule
+ * applies: any member on a public device, never a viewer, and a private one
+ * only for its enroller or an owner. A personal binding only ever reaches the
+ * caller's own devices (the gateway pool is per user), so it needs no check.
+ *
+ * Throws `NOT_FOUND` for a device outside the workspace, `FORBIDDEN` otherwise.
+ */
+export const assertBoundDeviceOperable = async (
+  ctx: DeviceBindingCtx,
+  deviceId: string | undefined,
+): Promise<void> => {
+  if (!deviceId || !ctx.workspaceId) return;
+
+  const row = await new DeviceModel(
+    ctx.serverDB,
+    ctx.userId,
+    ctx.workspaceId,
+  ).findWorkspaceDeviceById(deviceId);
+  if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'Workspace device not found.' });
+  if (!canOperateWorkspaceDevice(ctx.workspaceRole, ctx.userId, row)) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'You cannot run an MCP server on this workspace device.',
     });
   }
 };

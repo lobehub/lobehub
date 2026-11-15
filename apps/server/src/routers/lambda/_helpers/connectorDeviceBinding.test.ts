@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { assertConnectorDeviceBindingAllowed } from './connectorDeviceBinding';
+import {
+  assertBoundDeviceOperable,
+  assertConnectorDeviceBindingAllowed,
+} from './connectorDeviceBinding';
 
 const findWorkspaceDeviceById = vi.hoisted(() => vi.fn());
 const findPersonalByDeviceId = vi.hoisted(() => vi.fn());
@@ -81,5 +84,45 @@ describe('assertConnectorDeviceBindingAllowed', () => {
     await expect(
       assertConnectorDeviceBindingAllowed(personal, { boundDeviceId: 42 }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+});
+
+describe('assertBoundDeviceOperable', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const publicDevice = { deviceId: 'ws-nas', userId: 'enroller', visibility: 'public' };
+
+  it('lets a member run an MCP server on a public workspace device', async () => {
+    findWorkspaceDeviceById.mockResolvedValue(publicDevice);
+
+    await expect(
+      assertBoundDeviceOperable({ ...workspace, workspaceRole: 'member' }, 'ws-nas'),
+    ).resolves.toBeUndefined();
+  });
+
+  // A connection test starts the stdio command on that machine
+  it('refuses a workspace viewer, even on a public device', async () => {
+    findWorkspaceDeviceById.mockResolvedValue(publicDevice);
+
+    await expect(
+      assertBoundDeviceOperable({ ...workspace, workspaceRole: 'viewer' }, 'ws-nas'),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it("refuses another member's private device", async () => {
+    findWorkspaceDeviceById.mockResolvedValue({ ...publicDevice, visibility: 'private' });
+
+    await expect(
+      assertBoundDeviceOperable({ ...workspace, workspaceRole: 'member' }, 'ws-nas'),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('needs no check without a binding or for a personal binding', async () => {
+    await assertBoundDeviceOperable({ ...workspace, workspaceRole: 'viewer' }, undefined);
+    await assertBoundDeviceOperable(personal, 'my-laptop');
+
+    expect(DeviceModel).not.toHaveBeenCalled();
   });
 });
