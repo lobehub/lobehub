@@ -59,6 +59,9 @@ const ConversationMessage = memo<ConversationMessageProps>(
           tabIndex={0}
           onClick={onToggle}
           onKeyDown={(event) => {
+            // A key pressed on the star or the More control belongs to it, not
+            // to the summary, so Enter there must not also fold the body.
+            if (event.target !== event.currentTarget) return;
             if (event.key !== 'Enter' && event.key !== ' ') return;
             event.preventDefault();
             onToggle();
