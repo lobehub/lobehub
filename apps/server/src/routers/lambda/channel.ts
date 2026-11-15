@@ -229,6 +229,13 @@ export const channelRouter = router({
       const access = await ctx.channelService.openDirect(input.agentId);
       return { data: access?.channel.id ?? null, success: true };
     }),
+  /** The personal conversation with a contact; both people must still be contacts. */
+  openPeer: channelProcedure
+    .input(z.object({ userId: z.string().min(1).max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      const access = await ctx.channelService.openPeer(input.userId);
+      return { data: access.channel.id, success: true };
+    }),
   list: channelProcedure.query(async ({ ctx }) => ({
     data: await ctx.channelService.repository.list(),
     success: true,

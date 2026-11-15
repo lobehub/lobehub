@@ -12,6 +12,7 @@ const {
   findAccess,
   findDevice,
   findDirectAccess,
+  findSharedAgent,
   getAgent,
   notify,
   querySystemInfo,
@@ -22,6 +23,7 @@ const {
   findAccess: vi.fn(),
   findDevice: vi.fn(),
   findDirectAccess: vi.fn(),
+  findSharedAgent: vi.fn(),
   getAgent: vi.fn(),
   notify: vi.fn(),
   querySystemInfo: vi.fn(),
@@ -37,6 +39,11 @@ vi.mock('@/database/repositories/channel', async (original) => ({
   },
 }));
 vi.mock('@/database/models/project', () => ({ ProjectModel: class {} }));
+vi.mock('@/database/models/contact', () => ({
+  ContactModel: class {
+    findAgentAccess = findSharedAgent;
+  },
+}));
 vi.mock('@/database/models/device', () => ({
   DeviceModel: class {
     findPersonalByDeviceId = findDevice;
@@ -125,6 +132,26 @@ describe('the direct Channel of a new Agent', () => {
     getAgent.mockResolvedValue(null);
     await expect(createDirect()).resolves.toBeUndefined();
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('opens a contact’s shared Agent in a personal conversation without a device', async () => {
+    getAgent.mockResolvedValue(null);
+    findSharedAgent.mockResolvedValue({ name: null, ownerId: 'other', title: 'Shared Helper' });
+    await createDirect();
+    expect(create).toHaveBeenCalledWith({
+      agentConfig: {},
+      agentId: 'agt_new',
+      title: 'Shared Helper',
+    });
+  });
+
+  it('never opens a shared Agent in a workspace', async () => {
+    getAgent.mockResolvedValue(null);
+    findSharedAgent.mockResolvedValue({ name: null, ownerId: 'other', title: 'Shared Helper' });
+    await expect(
+      new ChannelService({} as never, 'owner', 'ws_1').createDirect('agt_1'),
+    ).resolves.toBeUndefined();
+    expect(findSharedAgent).not.toHaveBeenCalled();
   });
 });
 

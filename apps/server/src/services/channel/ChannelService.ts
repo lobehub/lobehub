@@ -7,8 +7,10 @@ import {
   defaultChannelAgentDirectory,
   isChannelRuntime,
 } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
 import pMap from 'p-map';
 
+import { ContactModel } from '@/database/models/contact';
 import { DeviceModel } from '@/database/models/device';
 import { ProjectModel } from '@/database/models/project';
 import type {
@@ -17,6 +19,7 @@ import type {
   ChannelStopScope,
 } from '@/database/repositories/channel';
 import { ChannelError, ChannelRepository } from '@/database/repositories/channel';
+import { users } from '@/database/schemas';
 import { AgentService } from '@/server/services/agent';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
@@ -198,12 +201,27 @@ export class ChannelService {
    */
   createDirect = async (agentId: string) => {
     const agent = await this.agentService.getAgentConfigById(agentId);
-    if (!agent) return;
+    if (!agent) return this.createSharedDirect(agentId);
     if (!isChannelRuntime(agentRuntime(agent))) return;
     return this.repository.create({
       agentConfig: {},
       agentId,
       title: agentDisplayName(agent, 'Agent').slice(0, CHANNEL_LIMITS.titleLength),
+    });
+  };
+
+  /**
+   * A contact's shared Agent: only a personal direct conversation, which the repository rechecks
+   * against the contact entry and the live share. It always runs in the cloud as its owner.
+   */
+  private createSharedDirect = async (agentId: string) => {
+    if (this.workspaceId) return;
+    const shared = await new ContactModel(this.db, this.userId).findAgentAccess(agentId);
+    if (!shared) return;
+    return this.repository.create({
+      agentConfig: {},
+      agentId,
+      title: agentDisplayName(shared, 'Agent').slice(0, CHANNEL_LIMITS.titleLength),
     });
   };
 
@@ -216,6 +234,26 @@ export class ChannelService {
     const existing = await this.repository.findDirectAccess(agentId);
     if (existing) return existing.channel.isDeleted ? undefined : existing;
     return this.createDirect(agentId);
+  };
+
+  /**
+   * The personal conversation with a contact. The stored title is the other person's name for
+   * whoever opened it; clients title it with whoever the viewer is talking to.
+   */
+  openPeer = async (peerUserId: string) => {
+    const [peer] = await this.db
+      .select({ fullName: users.fullName, username: users.username })
+      .from(users)
+      .where(eq(users.id, peerUserId))
+      .limit(1);
+    if (!peer) throw new ChannelError('NOT_FOUND', 'User not found');
+    const title = (peer.fullName?.trim() || peer.username || 'Conversation').slice(
+      0,
+      CHANNEL_LIMITS.titleLength,
+    );
+    const access = await this.repository.openPeer(peerUserId, title);
+    await this.changed(access.channel.id);
+    return access;
   };
 
   /**

@@ -72,6 +72,32 @@ Updating Agent settings affects the next claim, including already queued request
 rewrites an earlier job snapshot. A private, trashed, deleted or moved Agent fails the requester
 access check before any topic or operation is created.
 
+## Shared Agents from contacts
+
+A personal direct conversation can also bind another person's Agent that the requester added to
+their address book (`user_contacts`) through its link share. `requireChannelAgent` and
+`resolveExecutionConfig` accept it only for that conversation shape, and only while the contact
+entry exists, the share is `link` and the Agent is not trashed; groups and workspace channels
+never take one. The claim freezes `executionConfig.share` (owner, share and the Agent's scope):
+
+- The run executes as the owner, like a visit to the share page. Its topic and operation belong
+  to the owner and the Agent's scope, with the requester as `topics.senderId`, so the owner's own
+  lists never show it. Owner defaults apply; the requester's never do.
+- It is always a Native cloud run: no device, no Channel project, no attachments (sending refuses
+  them because the owner's run cannot read the requester's files).
+- The coordinator rechecks the live share and its monthly spend limit before submission and runs
+  under the share's `shareGate`, which also removes Channel tools. The Agent answers from the
+  request and its recent public context.
+- A topic ends at the share's `maxTurnsPerTopic`; the next request starts a new one.
+
+## Conversations between contacts
+
+`channels.peerUserId` marks a personal conversation between two people who are mutual contacts
+(`openPeer`). One exists per pair, whoever opened it: no unique index backs this, so `openPeer` takes an advisory lock on the pair before looking for it. Both people are owner members. It takes no
+Agents and no third person, so messages never route. Sending rechecks the contact relation in
+both directions: removing a contact silences the conversation and keeps its history. The list
+reports `peerUserId` relative to the viewer. Either account's deletion removes it.
+
 ## Delivery-key retirement rollout
 
 Migration `0197_channel_jobs_message_member_unique` enforces one job per message and Agent

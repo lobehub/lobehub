@@ -58,6 +58,7 @@ import { comfyuiRouter } from './comfyui';
 import { composioRouter } from './composio';
 import { configRouter } from './config';
 import { connectorRouter } from './connector';
+import { contactRouter } from './contact';
 import { dashboardRouter } from './dashboard';
 import { deviceRouter } from './device';
 import { deviceMetricRouter } from './deviceMetric';
@@ -154,6 +155,7 @@ export const lambdaRouter = router({
   canvas: canvasRouter,
   changelog: changelogRouter,
   channel: channelRouter,
+  contact: contactRouter,
   brief: briefRouter,
   aiAgent: aiAgentRouter,
   aiChat: aiChatRouter,
