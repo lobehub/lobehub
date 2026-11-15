@@ -39,31 +39,6 @@ export const isChannelRuntime = (runtime: string): runtime is ChannelRuntime =>
   !Object.hasOwn(CHANNEL_EXCLUDED_RUNTIMES, runtime) &&
   (CHANNEL_RUNTIMES as readonly string[]).includes(runtime);
 
-/**
- * The device a Channel seats an Agent on until someone picks another: the one the Agent is bound
- * to, else this person's own desktop for an Agent that runs on its user's machine (`local`, or an
- * external runtime with no target). Never another available or online device.
- */
-export const defaultChannelAgentDevice = ({
-  agencyConfig,
-  localDeviceId,
-  runtime,
-  workspaceScoped,
-}: {
-  agencyConfig?: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | null;
-  /** This person's own desktop, when they act from one. */
-  localDeviceId?: string;
-  runtime: string;
-  /** The Agent runs on workspace devices only, never a personal desktop. */
-  workspaceScoped?: boolean;
-}): string | undefined => {
-  const target = agencyConfig?.executionTarget;
-  if (target === 'none' || target === 'sandbox' || target === 'auto') return;
-  const localDefault =
-    !workspaceScoped && (target === 'local' || (target === undefined && runtime !== 'native'));
-  return agencyConfig?.boundDeviceId || (localDefault ? localDeviceId : undefined);
-};
-
 /** The directory on that device: the Agent's own choice there, else the device's default. */
 export const defaultChannelAgentDirectory = (
   agencyConfig: Pick<LobeAgentAgencyConfig, 'workingDirByDevice'> | null | undefined,

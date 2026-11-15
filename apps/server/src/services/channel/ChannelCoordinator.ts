@@ -107,9 +107,7 @@ export class ChannelCoordinator {
               claim = await claimNow();
             await Promise.all([
               notifyChannel(this.db, channelId),
-              claim
-                ? this.dispatch(claim, channel.workspaceId, channel.projectId)
-                : undefined,
+              claim ? this.dispatch(claim, channel.workspaceId, channel.projectId) : undefined,
             ]);
           }
         },
@@ -163,17 +161,19 @@ export class ChannelCoordinator {
     )
       throw new Error('Incomplete Channel execution claim');
     const config: ChannelExecutionConfig = structuredClone(job.executionConfig);
-    // The claimed Channel environment is authoritative for this run.
-    config.agencyConfig = {
-      ...config.agencyConfig,
-      executionTarget: config.deviceId ? 'device' : 'none',
-      executionTargetSelectionPolicy: 'fixed',
-      boundDeviceId: config.deviceId,
-      workingDirByDevice:
-        config.deviceId && config.workingDirectory
+    // A device a member picked for this Agent in the Channel is authoritative for the run.
+    // Without one the Channel binds nothing: the Agent runs where its own settings say, as the
+    // requester's ordinary conversation with it would.
+    if (config.deviceId)
+      config.agencyConfig = {
+        ...config.agencyConfig,
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+        boundDeviceId: config.deviceId,
+        workingDirByDevice: config.workingDirectory
           ? { [config.deviceId]: config.workingDirectory }
           : {},
-    };
+      };
     const completion: AgentHook = {
       id: `channel:${job.id}`,
       type: 'onComplete',
@@ -238,9 +238,10 @@ export class ChannelCoordinator {
         additionalPluginIds: [ChannelIdentifier],
         agentId: member.agentId,
         agentConfigSnapshot: config,
+        // No device picked in the Channel: the requester's own device for this Agent applies.
+        snapshotFollowsCallerDevice: !config.deviceId,
         appContext: { ...(projectId ? { projectId } : {}), topicId: topic.id },
         deviceId: config.deviceId,
-        disableLocalSystem: !config.deviceId,
         ...attachments,
         hooks: [completion],
         instructions: CHANNEL_INSTRUCTIONS,
@@ -434,7 +435,10 @@ export class ChannelCoordinator {
         ? await this.executions.revokeExpiredLease(job.channelId, job.id)
         : 'settled';
       if (dispatch === 'live') continue;
-      if (row.config?.runtime === 'native') {
+      // A Native run, or any run with no device picked in the Channel, went through the
+      // ordinary pipeline, which knows where it routed the run; stop it there. Only a run on a
+      // device picked in the Channel needs that device to confirm the external process exited.
+      if (row.config?.runtime === 'native' || !row.config?.deviceId) {
         const result = await this.service(
           row.operation.userId,
           row.operation.workspaceId,
@@ -442,12 +446,16 @@ export class ChannelCoordinator {
           operationId: job.operationId,
           topicId: row.operation.topicId ?? undefined,
         });
+        // The ordinary pipeline may have run it on a device. A terminal status does not prove that
+        // process exited (a lost acknowledgement can fail the operation while it runs on), so an
+        // unconfirmed device cancellation keeps the writer, as for a device picked in the Channel.
+        if (result.deviceCancellationConfirmed === false) continue;
         if (
           !result.success &&
           !['done', 'error', 'interrupted', 'abandoned'].includes(row.operation.status)
         )
           continue;
-        if (row.config.deviceId) {
+        if (row.config?.runtime === 'native' && row.config.deviceId) {
           const stopped = await deviceGateway.executeToolCall(
             {
               deviceId: row.config.deviceId,
@@ -462,7 +470,7 @@ export class ChannelCoordinator {
             continue;
         }
         await this.executions.releaseWriter(job.channelId, job.id);
-      } else if (row.config?.deviceId) {
+      } else {
         // Use the frozen identity even if runtime cleanup already removed the topic marker.
         const result = await deviceGateway.executeToolCall(
           {

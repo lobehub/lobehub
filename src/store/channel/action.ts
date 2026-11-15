@@ -1,4 +1,3 @@
-import { isDesktop } from '@lobechat/const';
 import type { ChannelPublicThread, ChannelStatus, ChannelThreadStatus } from '@lobechat/types';
 
 import { cacheScope } from '@/libs/replica';
@@ -10,7 +9,6 @@ import {
   type ChannelViewParams,
   type ChannelWakeConfig,
 } from '@/services/channel';
-import { getElectronStoreState } from '@/store/electron';
 
 import {
   addOutgoing,
@@ -117,11 +115,7 @@ class ChannelActionImpl {
   openDirect = async (agentId: string) => {
     const existing = channelSelectors.directByAgent(agentId)(useChannelStore.getState());
     if (existing) return existing.id;
-    // On desktop, name this machine so a direct Channel to a local Agent can run here.
-    const localDeviceId = isDesktop
-      ? await getElectronStoreState().resolveGatewayDeviceId()
-      : undefined;
-    const channelId = await channelService.openDirect({ agentId, localDeviceId });
+    const channelId = await channelService.openDirect({ agentId });
     if (channelId) await this.#refreshAfterWrite(this.refreshList);
     return channelId ?? undefined;
   };
