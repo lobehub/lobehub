@@ -377,6 +377,24 @@ describe('DingTalkStreamConnection', () => {
       conn.close();
     });
 
+    it('keeps retrying at the capped delay while registration stays down', async () => {
+      const { api, ws, conn } = await connected();
+      api.openStreamConnection.mockRejectedValue(new Error('503 Service Unavailable'));
+
+      ws.close(1006, 'network');
+      // Well past the old 10-attempt budget (~5 minutes of backoff).
+      await vi.advanceTimersByTimeAsync(30 * 60_000);
+      const attempts = api.openStreamConnection.mock.calls.length;
+      expect(attempts).toBeGreaterThan(11);
+
+      // Registration recovers: the next capped retry reconnects.
+      api.openStreamConnection.mockResolvedValue({ endpoint: 'wss://x/connect', ticket: 'back' });
+      await vi.advanceTimersByTimeAsync(61_000);
+      expect(MockWebSocket.instances.at(-1)!.url).toMatch(/ticket=back$/);
+      expect(MockWebSocket.instances.at(-1)!.readyState).toBe(MockWebSocket.OPEN);
+      conn.close();
+    });
+
     it('does not reconnect after close()', async () => {
       const { api, ws, conn } = await connected();
       conn.close();
