@@ -1,7 +1,7 @@
 import { TRPCError } from '@trpc/server';
 
-import type { ConnectorModel } from '@/database/models/connector';
-import type { ConnectorMetadata, UserConnectorItem } from '@/database/schemas';
+import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
+import type { ConnectorMetadata } from '@/database/schemas';
 import { ConnectorStatus } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
@@ -54,7 +54,7 @@ export async function upsertConnectorEntry(
           workspaceId: ctx.workspaceId,
         });
 
-  const refresh = async (row: Pick<UserConnectorItem, 'id' | 'metadata' | 'userId'>) => {
+  const refresh = async (row: Pick<DecryptedConnector, 'id' | 'metadata' | 'userId'>) => {
     const writable = canWrite && (!isWorkspaceNonOwner(ctx) || row.userId === ctx.userId);
     if (writable) {
       // Preserve runtime-owned metadata (especially Composio account identity)
