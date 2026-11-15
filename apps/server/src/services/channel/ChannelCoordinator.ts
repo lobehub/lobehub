@@ -446,6 +446,10 @@ export class ChannelCoordinator {
           operationId: job.operationId,
           topicId: row.operation.topicId ?? undefined,
         });
+        // The ordinary pipeline may have run it on a device. A terminal status does not prove that
+        // process exited (a lost acknowledgement can fail the operation while it runs on), so an
+        // unconfirmed device cancellation keeps the writer, as for a device picked in the Channel.
+        if (result.deviceCancellationConfirmed === false) continue;
         if (
           !result.success &&
           !['done', 'error', 'interrupted', 'abandoned'].includes(row.operation.status)

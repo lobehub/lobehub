@@ -152,6 +152,20 @@ describe('Channel completion physical writer confirmation', () => {
     expect(executions.releaseWriter).not.toHaveBeenCalled();
   });
 
+  // An unbound coding Agent may still have run on a device through its own settings; a failed
+  // operation does not prove its CLI exited, so the writer waits for confirmed cancellation.
+  it('keeps an unbound external writer while its device cancellation is unconfirmed', async () => {
+    interruptTask.mockResolvedValueOnce({ deviceCancellationConfirmed: false, success: false });
+    await coordinator(true, 'codex', null, 'error', null, null).complete('channel', 'job', 'op');
+    expect(executions.releaseWriter).not.toHaveBeenCalled();
+  });
+
+  it('releases an ended unbound external writer that left no device process behind', async () => {
+    interruptTask.mockResolvedValueOnce({ success: false });
+    await coordinator(true, 'codex', null, 'error', null, null).complete('channel', 'job', 'op');
+    expect(executions.releaseWriter).toHaveBeenCalledWith('channel', 'job');
+  });
+
   it('releases a completed writer only after the device confirms termination', async () => {
     executeToolCall.mockResolvedValue({ success: true, state: { exited: true } });
     await coordinator().complete('channel', 'job', 'op');
