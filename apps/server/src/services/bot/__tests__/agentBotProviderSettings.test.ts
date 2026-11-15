@@ -384,6 +384,7 @@ describe('status reactions of an existing bot', () => {
 describe('invalidateBotAfterUpdate — credential changes on an in-process-only platform', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockStartClient.mockResolvedValue('started');
     inProcess.canHost = true;
     gatewayState.useMessageGateway = false;
   });
@@ -414,6 +415,25 @@ describe('invalidateBotAfterUpdate — credential changes on an in-process-only 
 
     expect(mockStartClient).not.toHaveBeenCalled();
     expect(mockStopClient).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not restart when a full save resends the stored secret unchanged', async () => {
+    await invalidateBotAfterUpdate(
+      { ...existing, credentials: { botId: 'bot-1', secret: 'same' } },
+      { credentials: { botId: 'bot-1', secret: 'same' } },
+    );
+
+    expect(mockInvalidateBot).toHaveBeenCalledWith('wecom', 'bot-1');
+    expect(mockStartClient).not.toHaveBeenCalled();
+  });
+
+  it('restarts when the stored secret differs from the saved one', async () => {
+    await invalidateBotAfterUpdate(
+      { ...existing, credentials: { botId: 'bot-1', secret: 'old' } },
+      { credentials: { botId: 'bot-1', secret: 'new' } },
+    );
+
+    expect(mockStartClient).toHaveBeenCalledWith('wecom', 'bot-1', 'user-1');
   });
 
   it('keeps the save successful when the restart fails', async () => {

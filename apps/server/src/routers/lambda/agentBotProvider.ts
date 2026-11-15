@@ -41,6 +41,7 @@ import { flattenBotWakeSettings } from '@/server/services/conversationWake/confi
 import { GatewayService } from '@/server/services/gateway';
 import {
   canHostInProcessConnections,
+  getInProcessConnectionUnavailableReason,
   inProcessConnectionUnavailableMessage,
 } from '@/server/services/gateway/inProcessConnections';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
@@ -216,6 +217,14 @@ export const agentBotProviderRouter = router({
           code: 'BAD_REQUEST',
           message: 'Enter the real credential value — the masked placeholder cannot be saved.',
         });
+      }
+
+      // A bot this deployment can never connect would only fail later, on connect.
+      const unavailableReason = getInProcessConnectionUnavailableReason(
+        platformRegistry.getPlatform(input.platform),
+      );
+      if (unavailableReason) {
+        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: unavailableReason });
       }
 
       await assertBotFeatureAccess({
@@ -706,6 +715,7 @@ export const agentBotProviderRouter = router({
         await invalidateBotAfterUpdate(
           {
             applicationId: existing.applicationId,
+            credentials: existing.credentials,
             platform: existing.platform,
             settings: existing.settings,
             userId: ctx.userId,

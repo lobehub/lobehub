@@ -16,3 +16,11 @@ export const canHostInProcessConnections = (): boolean =>
 
 export const inProcessConnectionUnavailableMessage = (platformName: string): string =>
   `${platformName} replies over its own long connection, which this deployment cannot hold in the process that answers messages (it needs a single long-running server without the external message gateway)`;
+
+/** Why a new bot on `platform` cannot run on this deployment, or `undefined` when it can. */
+export const getInProcessConnectionUnavailableReason = (
+  platform: { name: string; requiresInProcessConnection?: boolean } | undefined,
+): string | undefined =>
+  platform?.requiresInProcessConnection && !canHostInProcessConnections()
+    ? inProcessConnectionUnavailableMessage(platform.name)
+    : undefined;

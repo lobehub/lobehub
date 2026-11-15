@@ -20,8 +20,17 @@ vi.mock('@/business/server/bot/featureAccess', () => ({
   withBotPlatformAccessMeta: vi.fn((meta: any) => meta),
 }));
 
+const WECOM = vi.hoisted(() => ({
+  connectionMode: 'websocket',
+  id: 'wecom',
+  name: 'WeCom',
+  requiresInProcessConnection: true,
+  schema: [],
+}));
+
 vi.mock('@/server/services/bot/platforms', () => ({
   platformRegistry: {
+    getPlatform: vi.fn((id: string) => (id === 'wecom' ? WECOM : undefined)),
     listSerializedPlatforms: vi.fn(() => [
       { connectionMode: 'websocket', id: 'qq', name: 'QQ', schema: [] },
       {
@@ -42,6 +51,9 @@ vi.mock('@/server/services/gateway/MessageGatewayClient', () => ({
 vi.mock('@/server/services/bot/BotMessageRouter', () => ({ getBotMessageRouter: vi.fn() }));
 vi.mock('@/server/services/gateway/runtimeStatus', () => ({ getBotRuntimeStatus: vi.fn() }));
 vi.mock('@/database/models/agentBotProvider', () => ({ AgentBotProviderModel: vi.fn() }));
+vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
+  KeyVaultsGateKeeper: { initWithEnvKey: vi.fn(async () => ({})) },
+}));
 
 const { agentBotProviderRouter } = await import('../agentBotProvider');
 
@@ -82,5 +94,23 @@ describe('agentBotProviderRouter.listPlatforms', () => {
   it('leaves it available where connections run in-process', async () => {
     const platforms = await agentBotProviderRouter.createCaller(ctx).listPlatforms();
     expect(platforms.every((p) => !(p as any).unavailableReason)).toBe(true);
+  });
+});
+
+describe('agentBotProviderRouter.create', () => {
+  afterEach(() => {
+    gateway.enabled = false;
+  });
+
+  it('refuses a WeCom bot where it could never connect', async () => {
+    gateway.enabled = true;
+    await expect(
+      agentBotProviderRouter.createCaller(ctx).create({
+        agentId: 'agt-1',
+        applicationId: 'bot-1',
+        credentials: { secret: 'x' },
+        platform: 'wecom',
+      }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
   });
 });

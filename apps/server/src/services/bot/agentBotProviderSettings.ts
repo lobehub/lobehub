@@ -174,6 +174,11 @@ export async function assertWatchKeywordsWritable(params: {
 
 interface BotInvalidationTarget {
   applicationId: string;
+  /**
+   * Previous decrypted credentials. Lets an in-process connection restart only when they
+   * really changed: a full save resends the stored (unmasked) values unchanged.
+   */
+  credentials?: Record<string, unknown> | null;
   platform: string;
   /** Previous settings — enables capability-delta detection (e.g. watch keywords). */
   settings?: Record<string, unknown> | null;
@@ -188,6 +193,19 @@ interface BotInvalidationDelta {
   platform?: string;
   settings?: Record<string, unknown>;
 }
+
+const haveCredentialsChanged = (
+  previous: Record<string, unknown> | null | undefined,
+  next: Record<string, unknown>,
+): boolean => {
+  // Without the previous values, assume a change: a missed restart drops every message.
+  if (!previous) return true;
+  const keys = new Set([...Object.keys(previous), ...Object.keys(next)]);
+  for (const key of keys) {
+    if ((previous[key] ?? '') !== (next[key] ?? '')) return true;
+  }
+  return false;
+};
 
 /**
  * Drop the cached `RegisteredBot` so the next inbound webhook re-reads the
@@ -242,13 +260,16 @@ export async function invalidateBotAfterUpdate(
   if (
     !shouldStopRuntime &&
     value.credentials !== undefined &&
+    haveCredentialsChanged(existing.credentials, value.credentials) &&
     platformRegistry.getPlatform(existing.platform)?.requiresInProcessConnection &&
     canHostInProcessConnections()
   ) {
-    try {
-      await service.startClient(existing.platform, existing.applicationId, existing.userId);
-    } catch (error) {
-      log('Restart after credential change failed for %s: %O', existing.platform, error);
-    }
+    // Not awaited: the subscribe handshake can take up to its connect timeout, and the save has
+    // already succeeded. The client records the outcome in its runtime status.
+    void service
+      .startClient(existing.platform, existing.applicationId, existing.userId)
+      .catch((error) => {
+        log('Restart after credential change failed for %s: %O', existing.platform, error);
+      });
   }
 }
