@@ -389,7 +389,12 @@ export class ConnectorModel {
     );
   };
 
-  /** The oldest base row of this scope holding `identifier`. */
+  /**
+   * The oldest base row of this scope holding `identifier`, locked until `tx`
+   * ends: the caller judges and may delete the row as read, so a rewrite of it
+   * ({@link update}, a re-add) either lands first, and is what gets judged, or
+   * waits for the caller.
+   */
   private findBaseHolder = async (
     tx: Transaction,
     identifier: string,
@@ -405,7 +410,8 @@ export class ConnectorModel {
         ),
       )
       .orderBy(asc(userConnectors.createdAt))
-      .limit(1);
+      .limit(1)
+      .for('update');
     return holder;
   };
 

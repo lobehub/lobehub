@@ -421,6 +421,46 @@ describe('ConnectorModel', () => {
       expect(await serverDB.select().from(userConnectorTools)).toEqual([]);
     });
 
+    it('judges a holder a re-add is rewriting only once the re-add has landed', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const holder = await model.create({ ...marketplaceInput, metadata: { stale: true } });
+
+      // A re-add (the web install's `update`) holds the row while it rewrites it
+      let land!: () => void;
+      const landing = new Promise<void>((resolve) => (land = resolve));
+      let locked!: () => void;
+      const rowLocked = new Promise<void>((resolve) => (locked = resolve));
+      const reAdd = serverDB.transaction(async (tx) => {
+        await tx
+          .select()
+          .from(userConnectors)
+          .where(eq(userConnectors.id, holder.id))
+          .for('update');
+        locked();
+        await landing;
+        await tx
+          .update(userConnectors)
+          .set({ metadata: { readded: true } })
+          .where(eq(userConnectors.id, holder.id));
+      });
+      await rowLocked;
+
+      // Only the stale row may be replaced, not the one the re-add rewrote
+      const claim = model.createUnlessIdentifierHeld(
+        { ...marketplaceInput, name: 'Fetch again' },
+        { canReplace: (row) => row.metadata?.stale === true },
+      );
+      // The claim reaches the row before the re-add lands
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      land();
+      await reAdd;
+
+      expect(await claim).toEqual({ holder: expect.objectContaining({ id: holder.id }) });
+      expect(await fetchRows()).toEqual([
+        expect.objectContaining({ id: holder.id, metadata: { readded: true } }),
+      ]);
+    });
+
     it('creates the connector once for concurrent calls', async () => {
       const model = new ConnectorModel(serverDB, userId);
 
