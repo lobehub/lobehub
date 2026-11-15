@@ -890,7 +890,7 @@ const connectorCoreRouter = router({
 
       return writeConnectorToolSyncInputs(
         input.id,
-        await toClientToolSyncInputs(input.tools, ctx.userId),
+        await toClientToolSyncInputs(input.tools, ctx.userId, target.metadata),
         ctx,
         { pruneMissingAutoTools: input.pruneMissingAutoTools },
       );

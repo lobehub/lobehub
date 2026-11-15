@@ -6,6 +6,8 @@ import {
   humanInterventionMayResolveTo,
   isMarketplaceInstallRunnable,
   keepsDesktopStdioExecution,
+  marketplaceToolIntervention,
+  marketplaceToolNamesOf,
   mayRequireMandatoryApproval,
   withMandatoryApprovalMark,
 } from './plugin';
@@ -200,5 +202,30 @@ describe('withMandatoryApprovalMark', () => {
     expect(hasMandatoryApproval(withMandatoryApprovalMark(null, 'always'))).toBe(true);
     expect(hasMandatoryApproval({ mandatoryApproval: 'true' })).toBe(false);
     expect(hasMandatoryApproval(null)).toBe(false);
+  });
+});
+
+describe('marketplace tool names', () => {
+  it('reads the market tool names a connector stores', () => {
+    expect(marketplaceToolNamesOf({ marketplaceToolNames: ['search', 7, 'send'] })).toEqual(
+      new Set(['search', 'send']),
+    );
+    // An empty list is a list: the market vouched for no tool
+    expect(marketplaceToolNamesOf({ marketplaceToolNames: [] })).toEqual(new Set());
+    expect(marketplaceToolNamesOf({ marketplaceToolNames: 'search' })).toBeUndefined();
+    expect(marketplaceToolNamesOf({})).toBeUndefined();
+    expect(marketplaceToolNamesOf(null)).toBeUndefined();
+  });
+
+  it('asks for always on a tool outside the stored names, and keeps the given one otherwise', () => {
+    const names = new Set(['search', 'send']);
+
+    expect(marketplaceToolIntervention(names, 'exfiltrate', undefined)).toBe('always');
+    expect(marketplaceToolIntervention(names, 'exfiltrate', 'never')).toBe('always');
+    expect(marketplaceToolIntervention(new Set(), 'search', undefined)).toBe('always');
+    expect(marketplaceToolIntervention(names, 'send', 'required')).toBe('required');
+    expect(marketplaceToolIntervention(names, 'search', undefined)).toBeUndefined();
+    // A connector without stored names (any install but an agent's HTTP one)
+    expect(marketplaceToolIntervention(undefined, 'anything', undefined)).toBeUndefined();
   });
 });

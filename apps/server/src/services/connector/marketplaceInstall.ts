@@ -4,6 +4,7 @@ import {
   hasCallableMcpEndpoint,
   isMarketplaceInstallCompleted,
   MARKETPLACE_INSTALL_COMPLETED_KEY,
+  MARKETPLACE_TOOL_NAMES_KEY,
   SSRF_SAFE_TRANSPORT_KEY,
 } from '@lobechat/const';
 import debug from 'debug';
@@ -241,7 +242,9 @@ const INSTALL_ATTEMPT_KEY = 'marketplaceInstallAttempt';
  * only while no one has re-added the identifier over the row.
  *
  * An HTTP server's tools are the ones it lists, each with the approval the
- * marketplace manifest gives it: the listing cannot carry one.
+ * marketplace manifest gives it: the listing cannot carry one. The row keeps
+ * the manifest's tool names, so a tool the server lists outside them, now or
+ * at any later sync, needs approval on every call.
  */
 export interface MarketplaceInstallOptions {
   /**
@@ -320,6 +323,8 @@ export const installMarketplaceMcpConnector = async (
     // install must not make the server reach a private or metadata address, at
     // the tool sync below nor on any later call (the listing's DNS may change).
     metadata[SSRF_SAFE_TRANSPORT_KEY] = true;
+    // Nor may its server add tools the market never listed that run unasked
+    metadata[MARKETPLACE_TOOL_NAMES_KEY] = marketTools.map((tool) => tool.toolName);
   }
 
   const attempt = { [INSTALL_ATTEMPT_KEY]: randomUUID() };
@@ -348,7 +353,8 @@ export const installMarketplaceMcpConnector = async (
 
   try {
     // Listed before anything is written to the row: over the SSRF-safe
-    // transport for an HTTP server, as the row's mark asks
+    // transport for an HTTP server, as the row's mark asks, and held to the
+    // market tool names it stores
     const syncInputs =
       deployment.type === 'cloud'
         ? await toClientToolSyncInputs(marketTools, userId)

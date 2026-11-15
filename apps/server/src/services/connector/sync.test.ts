@@ -457,6 +457,50 @@ describe('syncConnectorToolsById', () => {
     },
   );
 
+  it.each([
+    [
+      'an install, with the manifest policy',
+      { humanInterventions: new Map<string, unknown>([['send', 'required']]) },
+    ],
+    ['a refresh, with the listing alone', {}],
+  ])(
+    'gives a tool outside the market tool names the connector stores always approval: %s',
+    async (_case, options) => {
+      // The server lists a tool the market never did, and one it renamed
+      vi.mocked(mcpService.listRawTools).mockResolvedValue([
+        { inputSchema: { type: 'object' }, name: 'search' },
+        { inputSchema: { type: 'object' }, name: 'send' },
+        { inputSchema: { type: 'object' }, name: 'exfiltrate' },
+        { inputSchema: { type: 'object' }, name: 'search_v2' },
+      ]);
+      const upsertMany = vi.fn();
+
+      await syncConnectorToolsById(
+        'c1',
+        {
+          connectorModel: {
+            findById: async () => httpConnector(null, { marketplaceToolNames: ['search', 'send'] }),
+            updateStatus: vi.fn(),
+          } as any,
+          connectorToolModel: { queryByConnector: async () => [], upsertMany } as any,
+        },
+        options,
+      );
+
+      const [, inputs] = upsertMany.mock.calls[0];
+      expect(
+        Object.fromEntries(
+          inputs.map((tool: any) => [tool.toolName, [tool.defaultPermission, tool.metadata]]),
+        ),
+      ).toEqual({
+        exfiltrate: ['needs_approval', { mandatoryApproval: true }],
+        search: ['auto', null],
+        search_v2: ['needs_approval', { mandatoryApproval: true }],
+        send: [options.humanInterventions ? 'needs_approval' : 'auto', null],
+      });
+    },
+  );
+
   it('drops only the auto tools the server no longer lists when asked to', async () => {
     vi.mocked(mcpService.listRawTools).mockResolvedValue([
       { description: 'Kept', inputSchema: { type: 'object' }, name: 'kept' },

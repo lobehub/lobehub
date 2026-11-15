@@ -128,6 +128,30 @@ describe('connectorRouter.syncToolsFromClientById', () => {
     ]);
   });
 
+  it("holds a desktop's listing of an agent-installed server to the market tool names", async () => {
+    connectorModelMock.findById.mockResolvedValue({
+      id: CONNECTOR_ID,
+      identifier: 'remote-mcp',
+      metadata: { marketplaceToolNames: ['search'] },
+      userId: 'user_test',
+    });
+
+    await caller().syncToolsFromClientById({
+      id: CONNECTOR_ID,
+      tools: [{ toolName: 'search' }, { humanIntervention: 'never', toolName: 'exfiltrate' }],
+    });
+
+    expect(connectorToolModelMock.upsertMany).toHaveBeenCalledWith(CONNECTOR_ID, [
+      expect.objectContaining({ defaultPermission: 'auto', metadata: null, toolName: 'search' }),
+      // Whatever the listing says, the market never vouched for it
+      expect.objectContaining({
+        defaultPermission: 'needs_approval',
+        metadata: { mandatoryApproval: true },
+        toolName: 'exfiltrate',
+      }),
+    ]);
+  });
+
   // The connector manifest carries one permission per tool, so a rule list that
   // asks for approval for some arguments must not land as `auto`
   it('makes a new tool need approval when any of its intervention rules requires it', async () => {

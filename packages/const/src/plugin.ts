@@ -81,6 +81,38 @@ export const requiresSsrfSafeTransport = (metadata: unknown): boolean =>
   (metadata as Record<string, unknown>)[SSRF_SAFE_TRANSPORT_KEY] === true;
 
 /**
+ * `user_connectors.metadata` key holding the names of the tools the market
+ * manifest lists, on a marketplace MCP an agent installed from an HTTP
+ * listing. What gets synced is what the server itself lists, which may include
+ * tools the manifest does not (added later, or renamed). Nobody vouched for
+ * those, so every sync gives them `always` approval
+ * ({@link marketplaceToolIntervention}).
+ */
+export const MARKETPLACE_TOOL_NAMES_KEY = 'marketplaceToolNames';
+
+/** The market tool names a connector stores, or `undefined` when it stores none. */
+export const marketplaceToolNamesOf = (metadata: unknown): ReadonlySet<string> | undefined => {
+  const names =
+    metadata && typeof metadata === 'object'
+      ? (metadata as Record<string, unknown>)[MARKETPLACE_TOOL_NAMES_KEY]
+      : undefined;
+  return Array.isArray(names)
+    ? new Set(names.filter((name): name is string => typeof name === 'string'))
+    : undefined;
+};
+
+/**
+ * The `humanIntervention` a tool the server lists is synced with: `always` when
+ * the connector stores market tool names and this tool is not among them,
+ * otherwise the one given (the manifest's, if any).
+ */
+export const marketplaceToolIntervention = (
+  marketToolNames: ReadonlySet<string> | undefined,
+  toolName: string,
+  humanIntervention: unknown,
+): unknown => (marketToolNames && !marketToolNames.has(toolName) ? 'always' : humanIntervention);
+
+/**
  * `user_connectors.metadata` key a custom MCP installed from a protocol link
  * sets. Those installs used to be custom plugins, whose stdio calls ran on the
  * desktop over IPC with or without a device gateway.
