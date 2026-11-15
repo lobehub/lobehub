@@ -224,14 +224,20 @@ export const resolveOrInstallMarketPlugin = async (
   const [manifest, detail] = await Promise.all([
     // Not a marketplace plugin (or the market is unreachable) when it fails.
     deps.discoverService.getMcpManifest({ identifier }).catch(() => undefined),
-    deps.discoverService.getMcpDetail({ identifier }).catch(() => undefined),
+    // Settled here, judged once the manifest shows a marketplace MCP
+    deps.discoverService.getMcpDetail({ identifier }).then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error }),
+    ),
   ]);
   if (!manifest || typeof manifest !== 'object') return resolveExisting();
 
   // Whether the market hosts a stdio server is on its detail, not its manifest:
   // the web install reads it there too, and without it a hosted server would
-  // be refused as one only the desktop app can run.
-  const hosted = (detail as { haveCloudEndpoint?: unknown } | undefined)?.haveCloudEndpoint;
+  // be refused as one only the desktop app can run. A detail it cannot read
+  // fails the install, as it fails the web's, rather than reading as "not hosted".
+  if ('error' in detail) throw detail.error;
+  const hosted = (detail.value as { haveCloudEndpoint?: unknown } | undefined)?.haveCloudEndpoint;
   const outcome = await deps.installMarketplaceConnector(identifier, {
     ...(manifest as MarketMcpManifest),
     ...(hosted === undefined ? {} : { haveCloudEndpoint: hosted }),

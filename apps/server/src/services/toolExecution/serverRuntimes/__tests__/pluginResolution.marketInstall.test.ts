@@ -52,14 +52,18 @@ const connectorModel = new ConnectorModel(db, userId);
 
 const installFromServer = (
   served: MarketMcpManifest = manifest,
-  detail: { haveCloudEndpoint?: unknown } = { haveCloudEndpoint: true },
+  /** The market's detail of the MCP, or the error reading it fails with. */
+  detail: { haveCloudEndpoint?: unknown } | Error = { haveCloudEndpoint: true },
 ) =>
   resolveOrInstallMarketPlugin(
     IDENTIFIER,
     {
       connectorModel,
       discoverService: {
-        getMcpDetail: vi.fn().mockResolvedValue(detail),
+        getMcpDetail:
+          detail instanceof Error
+            ? vi.fn().mockRejectedValue(detail)
+            : vi.fn().mockResolvedValue(detail),
         getMcpManifest: vi.fn().mockResolvedValue(served),
       },
       installMarketplaceConnector: (identifier, fetched) =>
@@ -165,6 +169,16 @@ describe('resolveOrInstallMarketPlugin — server-side marketplace install', () 
 
     expect(installedNow).toBe(false);
     expect(resolution).toEqual({ blocker: 'local-only', status: 'needs-user-install' });
+    expect(await db.select().from(userConnectors)).toEqual([]);
+    expect(await db.select().from(userInstalledPlugins)).toEqual([]);
+  });
+
+  it('fails, writing nothing, when it cannot read whether the market hosts the MCP', async () => {
+    // Not knowing is not "not hosted": a hosted server must not be refused as desktop-only
+    await expect(installFromServer(manifest, new Error('market unavailable'))).rejects.toThrow(
+      'market unavailable',
+    );
+
     expect(await db.select().from(userConnectors)).toEqual([]);
     expect(await db.select().from(userInstalledPlugins)).toEqual([]);
   });
