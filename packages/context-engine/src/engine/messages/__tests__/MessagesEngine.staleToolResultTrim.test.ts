@@ -111,12 +111,13 @@ describe('MessagesEngine — prompt-cache TTL for the stale tool result trim', (
   const T0 = Date.parse('2026-11-10T08:00:00Z');
   const GAP = 30 * 60_000;
 
-  // A 30-minute turn gap over a large live prefix: cold under a 5m cache (the
-  // trim is free), warm under the 1h cache (Anthropic's provider default), where
-  // rewriting the 500k prefix at the 2× write price cannot pay off.
+  // A 30-minute turn gap with a large live doc after the stale read: cold under
+  // a 5m cache (the trim is free), warm under the 1h cache (Anthropic's provider
+  // default), where rewriting the 500k span between the trim and the trigger at
+  // the 2× write price cannot pay off.
   const turnAfterGap = (): UIChatMessage[] => [
-    { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' } as UIChatMessage,
     ...supersededReadMessages(),
+    { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' } as UIChatMessage,
     {
       content: 'previous turn done',
       createdAt: T0,

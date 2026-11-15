@@ -887,10 +887,12 @@ describe('StaleToolResultTrimProcessor', () => {
   describe('long-lived provider caches', () => {
     const T0 = Date.parse('2026-09-20T08:00:00Z');
     const HOUR = 3_600_000;
+    // The large live doc sits between the stale read and the trigger, inside
+    // the span a warm trim would rewrite, so a warm verdict cannot pay off.
     const turnAfter = (gapMs: number) => [
-      { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' },
       readFileResult('/a.ts', 'x'.repeat(5000), [0, 200]),
       writeFileResult('/a.ts'),
+      { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' },
       { content: 'filler', id: 'f1', role: 'assistant' },
       { content: 'filler', id: 'f2', role: 'assistant' },
       { content: 'filler', id: 'f3', role: 'assistant' },
@@ -920,7 +922,7 @@ describe('StaleToolResultTrimProcessor', () => {
         skippedReason: 'warm-cache',
         trimmedMessages: 0,
       });
-      expect(result.messages[1].content).toBe('x'.repeat(5000));
+      expect(result.messages[0].content).toBe('x'.repeat(5000));
     });
 
     it('trims a DeepSeek prefix once the gap exceeds the 72h upper bound', async () => {

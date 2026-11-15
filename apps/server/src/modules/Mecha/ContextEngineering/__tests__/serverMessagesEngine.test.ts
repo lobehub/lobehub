@@ -706,13 +706,14 @@ describe('serverMessagesEngine', () => {
     });
 
     it("prices the warmth check with the model's forwarded cache TTL", async () => {
-      // A 30-minute turn gap over a large live prefix: cold under a 5m cache,
-      // warm under the 1h cache (Anthropic's provider default).
+      // A 30-minute turn gap with a large live doc between the stale read and
+      // the trigger: cold under a 5m cache, warm under the 1h cache (Anthropic's
+      // provider default), where rewriting that span cannot pay off.
       const T0 = Date.parse('2026-11-10T08:00:00Z');
       const turnAfterGap = () =>
         [
-          { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' },
           ...supersededReadMessages(),
+          { content: 'z'.repeat(500_000), id: 'big-live-doc', role: 'assistant' },
           { content: 'previous turn done', createdAt: T0, id: 'prev', role: 'assistant' },
           { content: 'next task', createdAt: T0 + 30 * 60_000, id: 'trigger', role: 'user' },
         ] as unknown as UIChatMessage[];
