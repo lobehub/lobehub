@@ -330,6 +330,12 @@ export interface InternalExecAgentParams extends ExecAgentParams {
   /** Abort startup before the agent runtime operation is created */
   signal?: AbortSignal;
   /**
+   * With `agentConfigSnapshot`, still layer the caller's own device override on top, as an
+   * ordinary conversation would. Set by a Channel run whose member has no device picked in the
+   * Channel; the snapshot keeps deciding everything else. Server-only, never client-passable.
+   */
+  snapshotFollowsCallerDevice?: boolean;
+  /**
    * The send directly steered the turn it replaces: an interrupting "send
    * now", not a follow-up that waited in queue and started as the next turn.
    * The user message is persisted with `metadata.steer` so it renders as a

@@ -238,6 +238,8 @@ export class ChannelCoordinator {
         additionalPluginIds: [ChannelIdentifier],
         agentId: member.agentId,
         agentConfigSnapshot: config,
+        // No device picked in the Channel: the requester's own device for this Agent applies.
+        snapshotFollowsCallerDevice: !config.deviceId,
         appContext: { ...(projectId ? { projectId } : {}), topicId: topic.id },
         deviceId: config.deviceId,
         ...attachments,
@@ -433,7 +435,10 @@ export class ChannelCoordinator {
         ? await this.executions.revokeExpiredLease(job.channelId, job.id)
         : 'settled';
       if (dispatch === 'live') continue;
-      if (row.config?.runtime === 'native') {
+      // A Native run, or any run with no device picked in the Channel, went through the
+      // ordinary pipeline, which knows where it routed the run; stop it there. Only a run on a
+      // device picked in the Channel needs that device to confirm the external process exited.
+      if (row.config?.runtime === 'native' || !row.config?.deviceId) {
         const result = await this.service(
           row.operation.userId,
           row.operation.workspaceId,
@@ -446,7 +451,7 @@ export class ChannelCoordinator {
           !['done', 'error', 'interrupted', 'abandoned'].includes(row.operation.status)
         )
           continue;
-        if (row.config.deviceId) {
+        if (row.config?.runtime === 'native' && row.config.deviceId) {
           const stopped = await deviceGateway.executeToolCall(
             {
               deviceId: row.config.deviceId,
@@ -461,7 +466,7 @@ export class ChannelCoordinator {
             continue;
         }
         await this.executions.releaseWriter(job.channelId, job.id);
-      } else if (row.config?.deviceId) {
+      } else {
         // Use the frozen identity even if runtime cleanup already removed the topic marker.
         const result = await deviceGateway.executeToolCall(
           {
