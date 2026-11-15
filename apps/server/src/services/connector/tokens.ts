@@ -51,10 +51,15 @@ const hasKnownExpiry = (connector: DecryptedConnector): boolean =>
  * to expire). Persists the rotated credentials and returns the connector with
  * fresh credentials in memory. No-op for non-oauth2 connectors or when the
  * token is still valid / not refreshable.
+ *
+ * The rotated token is written through the row's own scope
+ * (`ConnectorModel.forRow`): a private agent's workspace run can resolve its
+ * owner's personal connector, and a refresh token the server already rotated
+ * must not be dropped because the run's model is workspace-scoped.
  */
 export const ensureFreshConnectorToken = async (
   connector: DecryptedConnector,
-  connectorModel: ConnectorModel,
+  runConnectorModel: ConnectorModel,
 ): Promise<DecryptedConnector> => {
   const creds = connector.credentials;
   const oidc = connector.oidcConfig;
@@ -63,6 +68,7 @@ export const ensureFreshConnectorToken = async (
     return connector;
   }
   if (!oidc?.issuer || !oidc.clientId) return connector;
+  const connectorModel = runConnectorModel.forRow(connector);
 
   try {
     const metadata = await discoverConnectorAuthorizationServerMetadata(oidc.issuer);

@@ -128,6 +128,7 @@ const run = (options: RunOptions = {}) => {
       prompt: '470008 呢',
       provider: 'test-provider',
       resolvedAgentId: 'agent-1',
+      topicId: 'tpc-1',
       runFacts: {
         deviceSystemInfo: vi.fn().mockResolvedValue(undefined),
         userPreference: vi.fn().mockResolvedValue(undefined),
@@ -375,7 +376,7 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
       expect(connectorModel.resolveAll).not.toHaveBeenCalled();
       expect(connectorModel.resolveByIdentifiers).toHaveBeenCalledWith(
         [YINGMI],
-        'agent-1',
+        { agentId: 'agent-1', topicId: 'tpc-1' },
         gateKeeper,
       );
       expect(result.toolManifestMap[YINGMI]).toBeDefined();

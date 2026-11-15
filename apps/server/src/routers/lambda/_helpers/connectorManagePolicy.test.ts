@@ -81,6 +81,27 @@ describe('connectorManagePolicy', () => {
         assertConnectorMaintainable(ctxFor('member'), { agentId: 'a1' }),
       ).resolves.toBeUndefined();
     });
+
+    it('keeps a private row to its creator and the workspace owner, whatever the policy', async () => {
+      workspaceMocks.getConnectorMemberManage.mockResolvedValue('admins_only');
+      const privateRow = (userId?: string) => ({ userId, visibility: 'private' as const });
+
+      // The creator maintains (and creates) their own private connector even
+      // when admins restricted the shared ones.
+      await expect(
+        assertConnectorMaintainable(ctxFor('member'), privateRow('me')),
+      ).resolves.toBeUndefined();
+      await expect(
+        assertConnectorMaintainable(ctxFor('member'), privateRow()),
+      ).resolves.toBeUndefined();
+      // An admin does not co-maintain someone else's private connector.
+      await expect(
+        assertConnectorMaintainable(ctxFor('admin'), privateRow('someone-else')),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(
+        assertConnectorMaintainable(ctxFor('owner'), privateRow('someone-else')),
+      ).resolves.toBeUndefined();
+    });
   });
 
   describe('assertConnectorCredentialsManageable', () => {
@@ -101,6 +122,23 @@ describe('connectorManagePolicy', () => {
 
       await expect(
         assertConnectorCredentialsManageable(ctxFor('member'), { userId: 'me' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    });
+
+    it("reads a private row's credentials as its creator or the owner only", async () => {
+      workspaceMocks.getConnectorMemberManage.mockResolvedValue('admins_only');
+
+      await expect(
+        assertConnectorCredentialsManageable(ctxFor('member'), {
+          userId: 'me',
+          visibility: 'private',
+        }),
+      ).resolves.toBeUndefined();
+      await expect(
+        assertConnectorCredentialsManageable(ctxFor('admin'), {
+          userId: 'someone-else',
+          visibility: 'private',
+        }),
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
     });
   });

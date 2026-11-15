@@ -10,6 +10,8 @@ import { safeParseJSON } from '@/utils/safeParseJSON';
  * Context for remote tool execution, derived from the invoking message
  */
 export interface RemoteToolExecutorContext {
+  /** Agent ID from the message that triggered this tool call */
+  agentId?: string;
   /** Stable tool call ID */
   sourceToolCallId?: string;
   /** Topic ID from the message that triggered this tool call */
@@ -39,7 +41,7 @@ const createFailedResult = (
   success: false,
 });
 
-export const composioExecutor: RemoteToolExecutor = async (p, _context) => {
+export const composioExecutor: RemoteToolExecutor = async (p, context) => {
   const identifier = p.identifier;
   const composioServers = useToolStore.getState().composioServers || [];
   const server = composioServers.find((s) => s.identifier === identifier);
@@ -50,10 +52,14 @@ export const composioExecutor: RemoteToolExecutor = async (p, _context) => {
 
   const args = safeParseJSON(p.arguments) || {};
 
+  // Name the conversation, so the server resolves the connection this agent
+  // loads there (a private agent's own topic may use its owner's private one).
   const result = await useToolStore.getState().callComposioTool({
+    agentId: context?.agentId,
     identifier,
     toolArgs: args,
     toolSlug: p.apiName,
+    topicId: context?.topicId,
   });
 
   if (!result.success) {

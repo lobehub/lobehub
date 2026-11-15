@@ -246,7 +246,11 @@ export const resolveWidgetEnv = async (
     ...new Set(requirements.map((r) => r.connector).filter((c): c is string => !!c)),
   ];
   const resolved = identifiers.length
-    ? await connectorModel.resolveByIdentifiers(identifiers, scope.agentId ?? undefined)
+    ? // No topic: a widget renders for whoever views it, so it only ever
+      // resolves shared connectors, never a member's private one.
+      await connectorModel.resolveByIdentifiers(identifiers, {
+        agentId: scope.agentId ?? undefined,
+      })
     : [];
 
   const byIdentifier = new Map<string, DecryptedConnector>();

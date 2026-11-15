@@ -36,7 +36,7 @@ vi.mock('@/store/serverConfig/store', () => ({
 }));
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
-    connector: { callTool: { mutate: vi.fn() }, getForEdit: { query: vi.fn() } },
+    connector: { callTool: { mutate: vi.fn() }, getForRun: { query: vi.fn() } },
   },
   toolsClient: { mcp: { callTool: { mutate: vi.fn() } } },
 }));
@@ -82,7 +82,7 @@ beforeEach(() => {
   environment.isDesktop = true;
   toolState.current = { connectors: [marketplace] };
   pluginLookup.getInstalledPluginById.mockReturnValue(() => undefined);
-  vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue(detail as never);
+  vi.mocked(lambdaClient.connector.getForRun.query).mockResolvedValue(detail as never);
   ipc.callTool.mockResolvedValue(superjson.serialize(localResult));
 });
 
@@ -128,7 +128,7 @@ describe('Market call reports for connector calls', () => {
       sourceType: 'custom',
     };
     toolState.current = { connectors: [custom] };
-    vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue({
+    vi.mocked(lambdaClient.connector.getForRun.query).mockResolvedValue({
       ...detail,
       ...custom,
     } as never);

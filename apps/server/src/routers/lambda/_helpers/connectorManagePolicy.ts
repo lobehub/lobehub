@@ -1,4 +1,4 @@
-import type { WorkspaceConnectorMemberManage } from '@lobechat/types';
+import type { ConnectorVisibility, WorkspaceConnectorMemberManage } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
 import { WorkspaceModel } from '@/database/models/workspace';
@@ -17,7 +17,12 @@ interface ConnectorManageCtx {
 interface ConnectorRowRef {
   agentId?: string | null;
   userId?: string | null;
+  /** A new row's requested visibility, or the existing row's. */
+  visibility?: ConnectorVisibility | null;
 }
+
+/** A member's own connector (私人): never co-maintained, whatever the policy says. */
+const isPrivateRow = (row?: ConnectorRowRef) => row?.visibility === 'private';
 
 export const isWorkspaceConnectorAdmin = (
   ctx: Pick<ConnectorManageCtx, 'workspaceId' | 'workspaceRole'>,
@@ -52,7 +57,9 @@ const forbidden = () =>
  * Gate a maintenance write (connect, re-authorize, edit, sync, remove) on a
  * workspace connector by the workspace's member policy. Shared rows are
  * co-maintained, so the creator does not matter here; agent-scoped rows belong
- * to their agent's setup and keep the creator-or-owner rule.
+ * to their agent's setup and keep the creator-or-owner rule. A private row is
+ * its creator's own: the member policy (which governs the shared connectors)
+ * does not apply, and only the creator or the workspace owner may touch it.
  */
 export const assertConnectorMaintainable = async (
   ctx: ConnectorManageCtx,
@@ -62,6 +69,11 @@ export const assertConnectorMaintainable = async (
   if (row?.agentId) {
     // A new agent row is gated by the caller's edit rights on that agent.
     if (row.userId) assertWorkspaceRowManageable(ctx, row.userId, 'connector');
+    return;
+  }
+  if (isPrivateRow(row)) {
+    // A new private row is created by the caller, who owns it.
+    assertWorkspaceRowManageable(ctx, row?.userId ?? ctx.userId, 'connector');
     return;
   }
   if (!(await canManageWorkspaceConnectors(ctx))) throw forbidden();
@@ -78,6 +90,8 @@ export const assertConnectorCredentialsManageable = async (
   row: ConnectorRowRef,
 ): Promise<void> => {
   if (!ctx.workspaceId) return;
-  if (!row.agentId && !(await canManageWorkspaceConnectors(ctx))) throw forbidden();
+  if (!row.agentId && !isPrivateRow(row) && !(await canManageWorkspaceConnectors(ctx))) {
+    throw forbidden();
+  }
   assertWorkspaceRowManageable(ctx, row.userId, 'connector');
 };

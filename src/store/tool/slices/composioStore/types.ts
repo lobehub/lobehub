@@ -41,9 +41,17 @@ export interface CreateComposioServerParams {
 }
 
 export interface CallComposioToolParams {
+  /** The agent the call runs for, from the invoking message. */
+  agentId?: string;
   identifier: string;
   toolArgs?: Record<string, unknown>;
   toolSlug: string;
+  /**
+   * The conversation the call belongs to, from the invoking message. The server
+   * resolves the connection in that conversation's scope (a private agent's own
+   * topic may use its owner's private connection).
+   */
+  topicId?: string;
 }
 
 export interface CallComposioToolResult {

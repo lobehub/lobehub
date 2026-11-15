@@ -150,7 +150,7 @@ export class ComposioStoreActionImpl {
   }
 
   callComposioTool = async (params: CallComposioToolParams): Promise<CallComposioToolResult> => {
-    const { identifier, toolSlug, toolArgs } = params;
+    const { agentId, identifier, toolSlug, toolArgs, topicId } = params;
 
     const toolId = `${identifier}:${toolSlug}`;
 
@@ -164,9 +164,11 @@ export class ComposioStoreActionImpl {
 
     try {
       const response = await toolsClient.composio.executeAction.mutate({
+        agentId,
         identifier,
         toolArgs,
         toolSlug,
+        topicId,
       });
 
       this.#set(

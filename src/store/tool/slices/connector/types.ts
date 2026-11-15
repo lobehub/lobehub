@@ -1,3 +1,5 @@
+import type { ConnectorVisibility } from '@lobechat/types';
+
 import type { ConnectorToolPermission } from '@/database/schemas';
 
 export interface ConnectorTool {
@@ -37,6 +39,11 @@ export interface ConnectorWithTools {
   tools: ConnectorTool[];
   /** Creator attribution — drives the workspace row-level manage gate. */
   userId?: string | null;
+  /**
+   * Workspace only: `private` is the creator's own connector, offered only to
+   * their private agents. Absent on rows from older servers (shared).
+   */
+  visibility?: ConnectorVisibility;
 }
 
 /**
