@@ -19,6 +19,7 @@ import { useAcceptanceComments } from './Comments/hooks';
 import ReviewerApprovalBar from './Comments/ReviewerApprovalBar';
 import AcceptanceOriginTopic from './Conversation/AcceptanceOriginTopic';
 import AcceptanceResources from './Evidence/AcceptanceResources';
+import { collectResources } from './Evidence/resources';
 import { AcceptanceFlow } from './Flow/AcceptanceFlow';
 import { getFlowNodeCount, resolveAcceptanceTab } from './Flow/flowNavigation';
 import AcceptanceEnterFocus from './Focus/AcceptanceEnterFocus';
@@ -87,13 +88,7 @@ export const AcceptanceOverview = ({
   // A Goal decision gate reviews its own frozen dossier, not a checklist.
   const gateDossier =
     data?.subject.type === 'goal_gate' ? rounds.at(-1)?.run.metadata?.releaseGate : undefined;
-  const resourceCount = new Set(
-    checks.flatMap((check) =>
-      (check.evidence ?? [])
-        .filter((evidence) => evidence.fileUrl || evidence.documentId)
-        .map((evidence) => evidence.fileId ?? evidence.documentId ?? evidence.id),
-    ),
-  ).size;
+  const resourceCount = collectResources(data?.checks ?? []).length;
 
   return (
     <>

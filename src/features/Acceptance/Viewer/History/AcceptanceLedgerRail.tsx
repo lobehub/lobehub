@@ -1,6 +1,6 @@
 'use client';
 
-import { DraggablePanel, Flexbox, Icon, Text, useResponsive } from '@lobehub/ui';
+import { DraggablePanel, Flexbox, Icon, useResponsive } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { PanelRightOpen } from 'lucide-react';
@@ -11,23 +11,41 @@ import { AcceptanceDrawer } from '../../AcceptanceDrawer';
 import ReportViewer from '../../Report/ReportViewer';
 import { resolveRoundParam } from '../../utils';
 import { useAcceptanceScope } from '../AcceptanceScope';
-import { checkFilterState } from '../Checks/checkState';
 import { originTopicPanelProps } from '../Conversation/originConversation';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { canViewAcceptanceHistory } from '../visibility';
-import LedgerPanel, { type AcceptanceRound } from './LedgerPanel';
+import AcceptanceInteractionCost from './AcceptanceInteractionCost';
+import LedgerPanel from './LedgerPanel';
+import { type AcceptanceRound, buildRoundCards } from './roundState';
 import { useAcceptanceRailState } from './useAcceptanceRailState';
 
 const styles = stylex.create({
-  chipCount: { fontSize: '11px', fontWeight: 500, color: cssVar.colorTextSecondary },
+  chipCount: {
+    fontSize: '12px',
+    fontWeight: 500,
+    lineHeight: '20px',
+    color: cssVar.colorTextSecondary,
+  },
   toggle: {
     cursor: 'pointer',
     position: 'absolute',
     zIndex: 10,
     insetBlockStart: '16px',
     insetInlineEnd: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    alignItems: 'center',
+    appearance: 'none',
+    margin: '0',
     paddingBlock: '8px',
-    paddingInline: '5px',
+    paddingInline: '4px',
+    font: 'inherit',
+    color: cssVar.colorText,
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '2px' },
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
@@ -57,19 +75,6 @@ const AcceptanceLedgerRail = () => {
 
   const urlRoundRaw = searchParams.get('report');
   const reportRound = embedded ? null : resolveRoundParam(data.rounds, urlRoundRaw);
-  const reviewableChecks = data.checks;
-  const reviewByRound = (() => {
-    const map = new Map<number, { accepted: number; total: number }>();
-    for (const check of reviewableChecks) {
-      const round = check.resultRound;
-      if (round === undefined || round === null) continue;
-      const cur = map.get(round) ?? { accepted: 0, total: 0 };
-      cur.total += 1;
-      if (checkFilterState(check) === 'accepted') cur.accepted += 1;
-      map.set(round, cur);
-    }
-    return map;
-  })();
 
   const openReport = (round: AcceptanceRound | null) => {
     if (embedded) return;
@@ -104,10 +109,10 @@ const AcceptanceLedgerRail = () => {
 
   const ledger = (
     <LedgerPanel
+      cards={buildRoundCards(data)}
+      footer={<AcceptanceInteractionCost data={data} />}
       hideCollapse={isNarrowViewport}
       highlight={highlightRound}
-      reviewByRound={reviewByRound}
-      rounds={data.rounds}
       onCollapse={() => onExpandChange(false)}
       onOpenReport={openReport}
     />
@@ -116,16 +121,16 @@ const AcceptanceLedgerRail = () => {
   return (
     <>
       {!focused && !expand && (
-        <Flexbox
-          align={'center'}
-          className={stylex.props(styles.toggle).className}
-          gap={5}
+        <button
+          aria-label={t('acceptance.ledger.expand')}
           title={t('acceptance.ledger.expand')}
+          type={'button'}
+          {...stylex.props(styles.toggle)}
           onClick={() => onExpandChange(true)}
         >
           <Icon icon={PanelRightOpen} size={14} />
-          <Text className={stylex.props(styles.chipCount).className}>{data.rounds.length}</Text>
-        </Flexbox>
+          <span {...stylex.props(styles.chipCount)}>{(data.rounds ?? []).length}</span>
+        </button>
       )}
       {isNarrowViewport ? (
         <AcceptanceDrawer

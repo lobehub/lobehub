@@ -111,7 +111,7 @@ const FeedbackRow = memo<{ item: RejectFeedbackItem }>(({ item }) => {
             {authorLabel}
           </Text>
           {metaBits.length > 0 && (
-            <Text ellipsis fontSize={11} type={'secondary'}>
+            <Text ellipsis fontSize={12} type={'secondary'}>
               {metaBits.join(' · ')}
             </Text>
           )}
@@ -133,9 +133,7 @@ const Notice = memo<{ icon: typeof MessagesSquare; spin?: boolean; text: string 
   ({ icon, spin, text }) => (
     <Flexbox horizontal align={'center'} gap={8} {...stylex.props(styles.box, styles.summary)}>
       <Icon color={cssVar.colorTextTertiary} icon={icon} size={16} spin={spin} />
-      <Text fontSize={13} type={'secondary'}>
-        {text}
-      </Text>
+      <Text type={'secondary'}>{text}</Text>
     </Flexbox>
   ),
 );
@@ -218,7 +216,7 @@ const RejectFeedbackPreview = memo<{ acceptanceId: string }>(({ acceptanceId }) 
         }}
       >
         <Icon icon={MessagesSquare} size={16} />
-        <Text strong fontSize={13} style={{ flex: 1, minWidth: 0 }}>
+        <Text strong style={{ flex: 1, minWidth: 0 }}>
           {[t('acceptance.reject.included', { count: feedback.length }), ...breakdown].join(' · ')}
         </Text>
         <Flexbox horizontal {...stylex.props(styles.avatarStack)}>

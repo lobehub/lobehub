@@ -24,8 +24,8 @@ import RejectFeedbackPreview from './RejectFeedbackPreview';
 
 const styles = stylex.create({
   warning: {
-    paddingBlock: '10px',
-    paddingInline: '14px',
+    paddingBlock: '12px',
+    paddingInline: '16px',
     borderRadius: cssVar.borderRadiusLG,
     backgroundColor: cssVar.colorWarningBg,
     backgroundImage: 'none',
@@ -68,7 +68,7 @@ const AcceptContent = memo<AcceptContentProps>(({ exceptions, onConfirm, subject
       <Text>{translate('acceptance.accept.summary', { title: subjectTitle })}</Text>
       {exceptions.length > 0 && (
         <Flexbox className={stylex.props(styles.warning).className} gap={4}>
-          <Text strong fontSize={13}>
+          <Text strong>
             {translate('acceptance.accept.exceptionsTitle', { count: exceptions.length })}
           </Text>
           {exceptions.map((title) => (
@@ -138,7 +138,7 @@ const RejectContent = memo<RejectContentProps>(({ acceptanceId, dispatchAvailabl
       {/* What the repair prompt carries besides the reason leads the dialog —
             otherwise nobody can tell whether teammates' notes go along. */}
       <RejectFeedbackPreview acceptanceId={acceptanceId} />
-      <Text fontSize={13} type={'secondary'}>
+      <Text type={'secondary'}>
         {translate(
           dispatchAvailable ? 'acceptance.reject.description' : 'acceptance.reject.descriptionCopy',
         )}
@@ -208,7 +208,7 @@ const GroupFeedbackContent = memo<GroupFeedbackContentProps>(
 
     return (
       <Flexbox gap={16}>
-        <Text fontSize={13} type={'secondary'}>
+        <Text type={'secondary'}>
           {description ?? translate('acceptance.group.feedbackDescription', { label: groupLabel })}
         </Text>
         <Flexbox gap={8}>

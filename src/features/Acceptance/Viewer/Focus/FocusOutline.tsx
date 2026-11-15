@@ -89,7 +89,7 @@ export const FocusOutline = memo<FocusOutlineProps>(
                       style={{
                         color: cssVar.colorTextQuaternary,
                         fontFamily: cssVar.fontFamilyCode,
-                        fontSize: 11,
+                        fontSize: 12,
                       }}
                     >
                       C{check.seq}
@@ -103,7 +103,7 @@ export const FocusOutline = memo<FocusOutlineProps>(
         })}
         {standingChecks.length > 0 && onEditStandingCheck && (
           <Flexbox gap={4} paddingBlock={8} paddingInline={8} {...stylex.props(styles.row)}>
-            <Text fontSize={11} type={'secondary'}>
+            <Text fontSize={12} type={'secondary'}>
               {t('acceptance.checkCreate.pendingGroup')}
             </Text>
             {standingChecks.map((item) => (

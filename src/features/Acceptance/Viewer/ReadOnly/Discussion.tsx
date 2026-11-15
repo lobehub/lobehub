@@ -1,7 +1,7 @@
 import type { AcceptanceCommentItem } from '@lobechat/types';
-import { Avatar, Button, Empty, Flexbox, Spin, Text } from '@lobehub/ui';
+import { Avatar, Button, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { BadgeCheck, GitCommitHorizontal } from 'lucide-react';
+import { BadgeCheck, GitCommitHorizontal, Info, MessagesSquare, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { useActivityTime } from '@/hooks/useActivityTime';
@@ -15,6 +15,7 @@ import { styles } from '../Comments/styles';
 import { groupCommentThreads } from '../Comments/threads';
 import TimelineEvent from '../Comments/TimelineEvent';
 import { useAcceptanceCommentList } from '../Comments/useAcceptanceCommentList';
+import QuietState from '../QuietState';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 
 export const ReadComment = ({
@@ -75,9 +76,16 @@ const ReadDiscussion = () => {
   if (!data && isLoading) return <Spin size="middle" />;
   if (!data && error)
     return (
-      <Empty description={t('acceptance.comments.loadFailed')}>
-        <Button onClick={() => void mutate()}>{t('report.actions.retry')}</Button>
-      </Empty>
+      <QuietState
+        icon={Info}
+        title={t('acceptance.comments.loadFailedTitle')}
+        tone={'warning'}
+        action={
+          <Button icon={<Icon icon={RefreshCw} />} onClick={() => void mutate()}>
+            {t('report.actions.retry')}
+          </Button>
+        }
+      />
     );
 
   const items = data?.items ?? [];
@@ -91,7 +99,8 @@ const ReadDiscussion = () => {
     })),
     threads: groupCommentThreads(items),
   });
-  if (timeline.length === 0) return <Empty description={t('acceptance.comments.empty')} />;
+  if (timeline.length === 0)
+    return <QuietState icon={MessagesSquare} title={t('acceptance.comments.emptyTitle')} />;
 
   return (
     <Flexbox gap={16}>

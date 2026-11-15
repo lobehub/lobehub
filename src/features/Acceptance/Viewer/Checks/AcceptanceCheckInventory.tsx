@@ -1,27 +1,28 @@
 'use client';
 
 import { isDraftVerifyRun } from '@lobechat/const/verify';
-import { ActionIcon, Flexbox, Select, Text, toast, useResponsive } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Select, toast, useResponsive } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useSingleton } from '@/hooks/useSingleton';
 import { verifyService } from '@/services/verify';
 import { useVerifyStore } from '@/store/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { hasVisualEvidence } from '../Evidence/evidence';
 import AcceptanceInteractionCost from '../History/AcceptanceInteractionCost';
+import { RunsPanelContext } from '../History/runsPanel';
 import { acceptanceCheckPath, useAcceptanceRouteBase } from '../routes';
 import { checksForTurn } from '../turnChecks';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { useAcceptanceTurn } from '../useAcceptanceTurn';
-import { canReviewAcceptance } from '../visibility';
+import { canReviewAcceptance, canViewAcceptanceHistory } from '../visibility';
 import CheckList from './CheckList';
 import {
   type CheckFilter,
@@ -35,8 +36,60 @@ import {
 import { EMPTY_ID_SET, setAggregateEntry } from './expandState';
 import { collectGroupFeedback } from './readPresentation';
 
+const FILTER_TABS = [
+  { key: 'pending', labelKey: 'acceptance.focus.state.pending' },
+  { key: 'needsFix', labelKey: 'acceptance.focus.state.needsFix' },
+  { key: 'accepted', labelKey: 'acceptance.focus.state.accepted' },
+  { key: 'ignored', labelKey: 'acceptance.focus.state.ignored' },
+  { key: 'all', labelKey: 'acceptance.filter.allLabel' },
+] as const;
+
 const styles = stylex.create({
   filters: { width: { 'default': null, '@media (width <= 767px)': '100%' } },
+  filterTabs: {
+    display: 'flex',
+    flex: '1',
+    gap: '4px',
+    alignItems: 'center',
+    minWidth: 0,
+    overflowX: 'auto',
+    scrollbarWidth: 'none',
+  },
+  filterTab: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    flex: 'none',
+    gap: '6px',
+    alignItems: 'center',
+    height: '28px',
+    margin: 0,
+    paddingBlock: 0,
+    paddingInline: '8px',
+    borderWidth: 0,
+    borderStyle: 'none',
+    borderColor: 'currentcolor',
+    borderRadius: '6px',
+    font: 'inherit',
+    fontSize: '14px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    whiteSpace: 'nowrap',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    outlineWidth: { 'default': 0, ':focus-visible': '2px' },
+    outlineStyle: { 'default': 'none', ':focus-visible': 'solid' },
+    outlineColor: cssVar.colorPrimary,
+    outlineOffset: '2px',
+  },
+  filterTabActive: {
+    fontWeight: 500,
+    color: { 'default': cssVar.colorText, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': cssVar.colorFillSecondary, ':hover': cssVar.colorFillSecondary },
+  },
+  filterCount: {
+    fontSize: '12px',
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 400,
+    color: cssVar.colorTextTertiary,
+  },
   filterSelect: {
     width: { 'default': '118px', '@media (width <= 767px)': '0' },
     flex: { 'default': null, '@media (width <= 767px)': '1' },
@@ -104,15 +157,15 @@ const AcceptanceCheckInventory = ({
       setCollapsedById((map) => setAggregateEntry(map, acceptanceId, update)),
     [acceptanceId],
   );
-  const seededIds = useSingleton(() => new Set<string>());
+  const [seededIds, setSeededIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [urlSeed, setUrlSeed] = useState<{ acceptanceId: string; filter: CheckFilter }>();
 
-  useEffect(() => {
-    if (!data || data.checks.length === 0) return;
-    if (seededIds.has(acceptanceId)) return;
-    seededIds.add(acceptanceId);
+  const seedChecks = data?.checks ?? [];
+  if (data && seedChecks.length > 0 && !seededIds.has(acceptanceId)) {
+    setSeededIds(new Set(seededIds).add(acceptanceId));
     setExpanded(
       new Set(
-        data.checks
+        seedChecks
           .filter(
             (check) =>
               window.matchMedia('(min-width: 768px)').matches &&
@@ -123,43 +176,37 @@ const AcceptanceCheckInventory = ({
       ),
     );
     setCollapsedGroups(
-      shouldGroupChecks(data.checks.length)
+      shouldGroupChecks(seedChecks.length)
         ? new Set(
-            groupChecks(data.checks, t('acceptance.group.uncategorized'))
+            groupChecks(seedChecks, t('acceptance.group.uncategorized'))
               .filter((group) => isGroupFullyAccepted(group.checks))
               .map((group) => group.key),
           )
         : new Set(),
     );
-    const defaultFilter: CheckFilter = data.rounds.length > 1 ? 'pending' : 'all';
+    const defaultFilter: CheckFilter = (data.rounds ?? []).length > 1 ? 'pending' : 'all';
     if (embedded) {
       setLocalFilter(defaultFilter);
     } else if (!urlFilterRaw && !roundFilter && defaultFilter !== 'all') {
-      setSearchParams(
-        (prev) => {
-          const params = new URLSearchParams(prev);
-          params.set('filter', defaultFilter);
-          return params;
-        },
-        { replace: true },
-      );
+      setUrlSeed({ acceptanceId, filter: defaultFilter });
     }
-  }, [
-    acceptanceId,
-    data,
-    embedded,
-    seededIds,
-    setCollapsedGroups,
-    setExpanded,
-    setSearchParams,
-    t,
-    urlFilterRaw,
-    roundFilter,
-    md,
-  ]);
+  }
+
+  useEffect(() => {
+    if (!urlSeed) return;
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        params.set('filter', urlSeed.filter);
+        return params;
+      },
+      { replace: true },
+    );
+  }, [setSearchParams, urlSeed]);
 
   if (!data) return null;
 
+  const hasRunsPanel = use(RunsPanelContext);
   const canReview =
     canReviewAcceptance(data) &&
     (roundFilter === null || roundFilter === data.rounds.at(-1)?.run.roundIndex);
@@ -228,11 +275,27 @@ const AcceptanceCheckInventory = ({
           flex={1}
           gap={8}
         >
-          <Text strong style={{ fontSize: 14, whiteSpace: 'nowrap' }}>
-            {t('acceptance.checks.title')}
-          </Text>
+          <div
+            aria-label={t('acceptance.checks.title')}
+            role={'group'}
+            {...stylex.props(styles.filterTabs)}
+          >
+            {FILTER_TABS.map(({ key, labelKey }) => (
+              <button
+                aria-pressed={filter === key}
+                key={key}
+                type={'button'}
+                {...stylex.props(styles.filterTab, filter === key && styles.filterTabActive)}
+                onClick={() => setFilter(key)}
+              >
+                {t(labelKey)}
+                <span {...stylex.props(styles.filterCount)}>
+                  {key === 'all' ? counts.total : counts[key]}
+                </span>
+              </button>
+            ))}
+          </div>
           {titleExtra}
-          <Flexbox flex={1} />
           {toolbar}
         </Flexbox>
         <Flexbox
@@ -241,31 +304,6 @@ const AcceptanceCheckInventory = ({
           className={stylex.props(styles.filters).className}
           gap={8}
         >
-          <Select
-            className={stylex.props(styles.filterSelect).className}
-            value={filter}
-            variant={'filled'}
-            options={[
-              { label: t('acceptance.filter.all', { count: counts.total }), value: 'all' },
-              {
-                label: t('acceptance.filter.pending', { count: counts.pending }),
-                value: 'pending',
-              },
-              {
-                label: t('acceptance.filter.needsFix', { count: counts.needsFix }),
-                value: 'needsFix',
-              },
-              {
-                label: t('acceptance.filter.accepted', { count: counts.accepted }),
-                value: 'accepted',
-              },
-              {
-                label: t('acceptance.filter.ignored', { count: counts.ignored }),
-                value: 'ignored',
-              },
-            ]}
-            onChange={(value) => setFilter(value as CheckFilter)}
-          />
           {data.rounds.length > 1 && (
             <Select
               className={stylex.props(styles.filterSelect).className}
@@ -312,6 +350,7 @@ const AcceptanceCheckInventory = ({
         onOpenCheck={openCheckPage}
         onOpenTrace={onOpenTrace}
         onRound={setRoundFilter}
+        onShowAll={() => setFilter('all')}
         onDismissProposal={
           canReview
             ? async (input) => {
@@ -370,8 +409,12 @@ const AcceptanceCheckInventory = ({
         }
       />
       {/* After the list, never inside it: the checks are the decision surface,
-          and a row sitting among them reads as one more thing to review. */}
-      <AcceptanceInteractionCost data={data} />
+          and a row sitting among them reads as one more thing to review. Whoever
+          can open the Runs panel already reads the cost there; a host that
+          mounts the inventory alone has no such panel. */}
+      {!(hasRunsPanel && canViewAcceptanceHistory(data.isOwner)) && (
+        <AcceptanceInteractionCost data={data} />
+      )}
     </>
   );
 };

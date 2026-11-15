@@ -1,19 +1,21 @@
 'use client';
 
 import type { AcceptanceCommentThread } from '@lobechat/types';
-import { Button, Flexbox, Text } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { BadgeCheck, Undo2 } from 'lucide-react';
+import { BadgeCheck, Info, MessagesSquare, RefreshCw, Undo2 } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
+import { useVerifyStore } from '@/store/verify';
 import { buildAuthReturnUrl, currentReturnPath } from '@/utils/authReturnUrl';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
+import QuietState from '../QuietState';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import AccessRequestEntry from './AccessRequestEntry';
 import { commentAnchorId, useCommentAnchor } from './anchor';
@@ -70,11 +72,6 @@ const local = stylex.create({
   composer: {
     marginBlockStart: '12px',
     marginBlockEnd: '4px',
-  },
-  empty: {
-    paddingBlock: '16px',
-    fontSize: '13px',
-    color: cssVar.colorTextTertiary,
   },
   feed: {
     flex: '1',
@@ -324,9 +321,24 @@ const AcceptanceDiscussion = memo<{ onOpenChecks?: () => void }>(({ onOpenChecks
     </Flexbox>
   ) : error ? (
     // A read that failed says nothing about permission.
-    <Text fontSize={13} type={'secondary'}>
-      {t('acceptance.comments.loadFailed')}
-    </Text>
+    <QuietState
+      icon={Info}
+      title={t('acceptance.comments.loadFailedTitle')}
+      tone={'warning'}
+      action={
+        <Button
+          icon={<Icon icon={RefreshCw} />}
+          onClick={() =>
+            void useVerifyStore
+              .getState()
+              .refreshAcceptanceComments(acceptanceId)
+              .catch(() => undefined)
+          }
+        >
+          {t('report.actions.retry')}
+        </Button>
+      }
+    />
   ) : isLoading ? null : isSignedIn ? ( // Neither line below is true yet while the answer is in flight.
     <Text fontSize={13} type={'secondary'}>
       {t('acceptance.comments.readOnly')}
@@ -341,8 +353,8 @@ const AcceptanceDiscussion = memo<{ onOpenChecks?: () => void }>(({ onOpenChecks
     <div {...stylex.props(local.container)}>
       <div {...stylex.props(local.layout)}>
         <Flexbox {...stylex.props(local.feed)}>
-          {timeline.length === 0 && (
-            <span {...stylex.props(local.empty)}>{t('acceptance.comments.empty')}</span>
+          {timeline.length === 0 && !error && (
+            <QuietState icon={MessagesSquare} title={t('acceptance.comments.emptyTitle')} />
           )}
           {ungrouped ? (
             <>

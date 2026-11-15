@@ -82,46 +82,36 @@ const drawButton = () => screen.queryByRole('button', { name: 'acceptance.review
 const doneButton = () => screen.queryByRole('button', { name: 'acceptance.review.confirmRegions' });
 const submitButton = () =>
   screen.queryByRole('button', { name: 'acceptance.review.confirmReject' });
+const follows = (before: Element, after: Element) =>
+  Boolean(before.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING);
 
-describe('MobileEvidenceReview notes button', () => {
-  it('keeps the notes closed by default and opens them on tap', () => {
+describe('MobileEvidenceReview notes', () => {
+  it('keeps the notes field on the page, with no button to open it', () => {
     render(<MobileEvidenceReview model={buildModel()} />);
 
-    // Closed: the field is not on the page; the button says so itself.
-    expect(supplementButton()).toHaveAttribute('aria-expanded', 'false');
-    expect(supplementButton()).toHaveTextContent('acceptance.review.supplementButton');
-    expect(supplementField()).not.toBeInTheDocument();
-
-    // Tapping the button opens the field in place.
-    fireEvent.click(supplementButton()!);
-    expect(supplementButton()).toHaveAttribute('aria-expanded', 'true');
+    expect(supplementButton()).not.toBeInTheDocument();
     expect(supplementField()).toBeInTheDocument();
+    expect(screen.getByText('acceptance.review.supplement')).toBeInTheDocument();
+    expect(screen.getByText('acceptance.review.draftSaved')).toBeInTheDocument();
     expect(screen.getByText('upload-stub')).toBeInTheDocument();
   });
 
-  it('continues the reviewer action after opening: typing lands in the model', () => {
+  it('sends what the reviewer types to the model', () => {
     const setComment = vi.fn();
     render(<MobileEvidenceReview model={buildModel({ setComment })} />);
 
-    fireEvent.click(supplementButton()!);
     fireEvent.change(supplementField()!, { target: { value: 'wrong color here' } });
 
     expect(setComment).toHaveBeenCalledWith('wrong color here');
   });
 
-  it('closes on a second tap, keeping the button honest about saved content', () => {
+  it('shows a restored draft in the field', () => {
     render(<MobileEvidenceReview model={buildModel({ comment: 'already typed' })} />);
 
-    // A restored draft opens itself — never hide words the user wrote.
-    expect(supplementField()).toBeInTheDocument();
-
-    fireEvent.click(supplementButton()!);
-    expect(supplementField()).not.toBeInTheDocument();
-    // The closed button names the draft instead of the plain label.
-    expect(supplementButton()).toHaveTextContent('acceptance.review.supplementButtonDraft');
+    expect(supplementField()).toHaveValue('already typed');
   });
 
-  it('auto-opens when screenshots are already attached', () => {
+  it('shows screenshots that are already attached', () => {
     render(
       <MobileEvidenceReview
         model={buildModel({
@@ -130,47 +120,102 @@ describe('MobileEvidenceReview notes button', () => {
       />,
     );
 
-    expect(supplementField()).toBeInTheDocument();
+    expect(screen.getByText('shot.png')).toBeInTheDocument();
   });
 
-  it('keeps marked regions visible without auto-opening the notes', () => {
+  it('lists marked regions above the notes field', () => {
     render(
       <MobileEvidenceReview
         model={buildModel({ annotations: [region], editableAnnotations: [region] })}
       />,
     );
 
-    // Regions have their own always-visible section; the notes stay closed.
-    expect(screen.getByText('acceptance.review.regionComments')).toBeInTheDocument();
-    expect(supplementField()).not.toBeInTheDocument();
-    expect(supplementButton()).toHaveAttribute('aria-expanded', 'false');
+    const regions = screen.getByText('acceptance.review.regionComments');
+    expect(follows(regions, supplementField()!)).toBe(true);
+  });
+
+  it('has no region section until a region is marked', () => {
+    render(<MobileEvidenceReview model={withImage()} />);
+
+    expect(screen.queryByText('acceptance.review.regionComments')).toBeNull();
+    expect(screen.queryByText('acceptance.review.mobileRegionCommentsEmpty')).toBeNull();
   });
 });
 
 describe('MobileEvidenceReview image switcher', () => {
-  it('keeps one full-width control under the image: arrows at the edges, zoom in the middle', () => {
+  it('keeps one full-width control under the image: image steps first, zoom after them', () => {
     const stepZoom = vi.fn();
     render(<MobileEvidenceReview model={withImage({ stepZoom, zoom: 1.5 })} />);
 
-    // The control follows the stage instead of sitting above it.
     const stage = screen.getByText('stage-stub');
+    const previous = screen.getByRole('button', { name: 'acceptance.review.previousImage' });
     const next = screen.getByRole('button', { name: 'acceptance.review.nextImage' });
-    expect(stage.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: 'acceptance.review.previousImage' }),
-    ).toBeInTheDocument();
+    const zoomOut = screen.getByRole('button', { name: 'acceptance.review.zoomOut' });
+    const zoomIn = screen.getByRole('button', { name: 'acceptance.review.zoomIn' });
+    expect(follows(stage, previous)).toBe(true);
+    expect(follows(previous, next)).toBe(true);
+    expect(follows(next, zoomOut)).toBe(true);
+    expect(follows(zoomOut, zoomIn)).toBe(true);
 
-    // The zoom sits between the arrows and reads the model's zoom, whether a
-    // pinch or a button set it; the buttons step from there.
+    // The zoom reads the model's zoom, whether a pinch or a button set it.
     expect(screen.getByText('150%')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'acceptance.review.zoomIn' }));
+    fireEvent.click(zoomIn);
     expect(stepZoom).toHaveBeenCalledWith(1);
-    fireEvent.click(screen.getByRole('button', { name: 'acceptance.review.zoomOut' }));
+    fireEvent.click(zoomOut);
     expect(stepZoom).toHaveBeenCalledWith(-1);
 
-    // No explanatory copy and no image counter — the arrows say where you are.
     expect(screen.queryByText('acceptance.review.mobileBrowseHint')).toBeNull();
-    expect(screen.queryByText('acceptance.review.imageNumber')).toBeNull();
+  });
+
+  it('counts the image between the two arrows', () => {
+    const second = { fileUrl: 'https://example.com/second.png', id: 'e2' };
+    render(
+      <MobileEvidenceReview
+        model={withImage({
+          activeEvidence: second,
+          activeIndex: 1,
+          evidence: [evidenceItem, second],
+        })}
+      />,
+    );
+
+    const counter = screen.getByText('2 / 2');
+    expect(counter).toHaveAttribute('aria-label', 'acceptance.review.imageNumber');
+    expect(
+      follows(screen.getByRole('button', { name: 'acceptance.review.previousImage' }), counter),
+    ).toBe(true);
+    expect(
+      follows(counter, screen.getByRole('button', { name: 'acceptance.review.nextImage' })),
+    ).toBe(true);
+  });
+
+  it('steps between images and stops at both ends', () => {
+    const selectEvidence = vi.fn();
+    const second = { fileUrl: 'https://example.com/second.png', id: 'e2' };
+    const { unmount } = render(
+      <MobileEvidenceReview
+        model={withImage({ evidence: [evidenceItem, second], selectEvidence })}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'acceptance.review.previousImage' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'acceptance.review.nextImage' }));
+    expect(selectEvidence).toHaveBeenCalledWith(1);
+    unmount();
+
+    render(
+      <MobileEvidenceReview
+        model={withImage({
+          activeEvidence: second,
+          activeIndex: 1,
+          evidence: [evidenceItem, second],
+          selectEvidence,
+        })}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'acceptance.review.nextImage' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'acceptance.review.previousImage' }));
+    expect(selectEvidence).toHaveBeenCalledWith(0);
   });
 
   it('disables the zoom buttons at the ends of the range', () => {
@@ -183,15 +228,23 @@ describe('MobileEvidenceReview image switcher', () => {
     expect(screen.getByRole('button', { name: 'acceptance.review.zoomIn' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'acceptance.review.zoomOut' })).toBeEnabled();
   });
+
+  it('has no switcher when there is no image', () => {
+    render(<MobileEvidenceReview model={buildModel()} />);
+
+    expect(screen.queryByRole('button', { name: 'acceptance.review.nextImage' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'acceptance.review.zoomIn' })).toBeNull();
+  });
 });
 
 describe('MobileEvidenceReview marking mode', () => {
-  it('enters marking mode from the button beside the notes button', () => {
+  it('enters marking mode from the button between the switcher and the notes', () => {
     const advance = vi.fn();
     render(<MobileEvidenceReview model={withImage({ advance })} />);
 
-    expect(drawButton()).toBeInTheDocument();
-    expect(supplementButton()).toBeInTheDocument();
+    const zoomIn = screen.getByRole('button', { name: 'acceptance.review.zoomIn' });
+    expect(follows(zoomIn, drawButton()!)).toBe(true);
+    expect(follows(drawButton()!, supplementField()!)).toBe(true);
 
     fireEvent.click(drawButton()!);
     expect(advance).toHaveBeenCalledWith('toggle-draw');
@@ -201,9 +254,8 @@ describe('MobileEvidenceReview marking mode', () => {
     const advance = vi.fn();
     render(<MobileEvidenceReview model={withImage({ advance, drawing: true })} />);
 
-    // The two-button row, the note and the submit all step aside.
     expect(drawButton()).not.toBeInTheDocument();
-    expect(supplementButton()).not.toBeInTheDocument();
+    expect(supplementField()).not.toBeInTheDocument();
     expect(submitButton()).not.toBeInTheDocument();
 
     // What is left is about the regions: the list (empty so far) and the hint.
@@ -238,7 +290,30 @@ describe('MobileEvidenceReview marking mode', () => {
     render(<MobileEvidenceReview model={buildModel()} />);
 
     expect(drawButton()).not.toBeInTheDocument();
-    expect(supplementButton()).toBeInTheDocument();
+    expect(supplementField()).toBeInTheDocument();
     expect(submitButton()).toBeInTheDocument();
+  });
+});
+
+describe('MobileEvidenceReview submit', () => {
+  it('submits from the bottom action once the review can be sent', () => {
+    const submitReject = vi.fn();
+    const { unmount } = render(<MobileEvidenceReview model={buildModel()} />);
+    expect(submitButton()).toBeDisabled();
+    unmount();
+
+    render(<MobileEvidenceReview model={buildModel({ canSubmit: true, submitReject })} />);
+    expect(follows(supplementField()!, submitButton()!)).toBe(true);
+    fireEvent.click(submitButton()!);
+    expect(submitReject).toHaveBeenCalled();
+  });
+
+  it('reports a failed submit above the button, but not while marking', () => {
+    const { unmount } = render(<MobileEvidenceReview model={withImage({ failed: true })} />);
+    expect(screen.getByRole('alert')).toHaveTextContent('acceptance.review.submitFailed');
+    unmount();
+
+    render(<MobileEvidenceReview model={withImage({ drawing: true, failed: true })} />);
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

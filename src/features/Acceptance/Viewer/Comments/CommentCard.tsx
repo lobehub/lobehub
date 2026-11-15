@@ -161,7 +161,7 @@ const CommentCard = memo<CommentCardProps>(
           {variant === 'plain' && <CommentAvatar comment={comment} size={18} />}
           {variant === 'feed' && <CommentAvatar comment={comment} size={TIMELINE_NODE} />}
           <Text
-            fontSize={13}
+            fontSize={14}
             weight={600}
             {...stylex.props(nameOverride ? styles.headline : styles.authorName)}
           >

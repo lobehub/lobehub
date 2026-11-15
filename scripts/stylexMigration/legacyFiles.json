@@ -68,8 +68,6 @@
   "packages/builtin-tools/src/codex/ErrorInspector.tsx",
   "packages/builtin-tools/src/github/RunCommandInspector.tsx",
   "packages/shared-tool-ui/src/styles.ts",
-  "src/features/Acceptance/Viewer/Flow/FlowCanvas.tsx",
-  "src/features/Acceptance/Viewer/Review/rejectModalShell.ts",
   "src/features/AgentBreadcrumb/index.tsx",
   "src/features/AgentBuilder/TopicSelector.tsx",
   "src/features/AgentChannel/PlatformCard.tsx",

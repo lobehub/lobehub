@@ -15,6 +15,7 @@ import CollaboratorConversationRail from './Conversation/CollaboratorConversatio
 import { FlowPanelHostContext } from './Flow/FlowPanelHost';
 import AcceptanceFocusWorkspace from './Focus/AcceptanceFocusWorkspace';
 import AcceptanceLedgerRail from './History/AcceptanceLedgerRail';
+import { RunsPanelContext } from './History/runsPanel';
 
 const phone = '@media (width <= 767px)';
 
@@ -26,7 +27,7 @@ const styles = stylex.create({
   },
   flowPanel: {
     flex: 'none',
-    width: { default: 'min(440px, 42%)', [phone]: '100%' },
+    width: { default: 'min(480px, 42%)', [phone]: '100%' },
     height: { default: '100%', [phone]: '50%' },
     minHeight: 0,
     display: { 'default': null, ':empty': 'none' },
@@ -64,29 +65,31 @@ const AcceptancePage = ({
   return (
     <AcceptanceScope acceptanceId={acceptanceId} embedded={embedded}>
       <AcceptanceBundleGate>
-        <FlowPanelHostContext value={flowPanelHost}>
-          <Flexbox horizontal {...stylex.props(styles.page)}>
-            <Flexbox
-              horizontal
-              flex={1}
-              style={{ minHeight: 0, minWidth: 0, position: 'relative' }}
-            >
-              <Flexbox flex={1} {...sx(styles.contentFrame, { minWidth: 0 })}>
-                <Flexbox
-                  flex={focused ? 1 : undefined}
-                  gap={16}
-                  style={{ minHeight: focused ? 0 : undefined, width: '100%' }}
-                >
-                  {focused ? <AcceptanceFocusWorkspace /> : null}
+        <RunsPanelContext value>
+          <FlowPanelHostContext value={flowPanelHost}>
+            <Flexbox horizontal {...stylex.props(styles.page)}>
+              <Flexbox
+                horizontal
+                flex={1}
+                style={{ minHeight: 0, minWidth: 0, position: 'relative' }}
+              >
+                <Flexbox flex={1} {...sx(styles.contentFrame, { minWidth: 0 })}>
+                  <Flexbox
+                    flex={focused ? 1 : undefined}
+                    gap={16}
+                    style={{ minHeight: focused ? 0 : undefined, width: '100%' }}
+                  >
+                    {focused ? <AcceptanceFocusWorkspace /> : null}
+                  </Flexbox>
+                  {!focused && <AcceptanceOverview onDraftToComposer={onDraftToComposer} />}
                 </Flexbox>
-                {!focused && <AcceptanceOverview onDraftToComposer={onDraftToComposer} />}
+                <AcceptanceLedgerRail />
+                {!embedded && <CollaboratorConversationRail />}
               </Flexbox>
-              <AcceptanceLedgerRail />
-              {!embedded && <CollaboratorConversationRail />}
+              <div ref={setFlowPanelHostContext} {...stylex.props(styles.flowPanel)} />
             </Flexbox>
-            <div ref={setFlowPanelHostContext} {...stylex.props(styles.flowPanel)} />
-          </Flexbox>
-        </FlowPanelHostContext>
+          </FlowPanelHostContext>
+        </RunsPanelContext>
       </AcceptanceBundleGate>
     </AcceptanceScope>
   );

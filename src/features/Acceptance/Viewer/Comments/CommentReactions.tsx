@@ -34,7 +34,7 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
     borderRadius: '999px',
-    fontSize: '13px',
+    fontSize: '14px',
     lineHeight: 1,
     backgroundColor: cssVar.colorFillQuaternary,
   },

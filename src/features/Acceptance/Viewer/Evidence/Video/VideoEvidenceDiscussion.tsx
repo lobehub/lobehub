@@ -1,7 +1,7 @@
 'use client';
 
 import type { AcceptanceReviewAnnotation, VerifyEvidenceChapter } from '@lobechat/types';
-import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { CheckCircle2, ChevronRight, MessageSquare } from 'lucide-react';
@@ -12,75 +12,61 @@ import { useTranslation } from 'react-i18next';
 import { useOptionalAcceptanceScope } from '../../AcceptanceScope';
 import { commentAnchorId } from '../../Comments/anchor';
 import { type EvidenceOverlay, overlayColor } from '../overlay';
+import { buildVideoStory, type StoryNote } from './story';
 import { useVideoThreads, type VideoThread } from './useVideoThreads';
 import {
   VideoEvidencePlayer,
   type VideoEvidencePlayerHandle,
   type VideoMark,
 } from './VideoEvidencePlayer';
-import { formatVideoTime } from './videoTime';
+import {
+  StoryBadge,
+  StoryChapter,
+  StoryDot,
+  StoryItem,
+  StoryList,
+  StoryText,
+  StoryTitle,
+  StoryWho,
+} from './VideoStory';
 
 const styles = stylex.create({
-  badgeColor: (color: string) => ({ backgroundColor: color }),
   item: {
     scrollMarginBlock: 96,
-    borderRadius: cssVar.borderRadius,
-    transition: `background ${cssVar.motionDurationMid}`,
   },
-  itemOpen: {
-    backgroundColor: cssVar.colorFillQuaternary,
-    boxShadow: `inset 0 0 0 1px ${cssVar.colorBorderSecondary}`,
+  story: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+    paddingInline: 8,
   },
-  row: {
-    cursor: 'pointer',
+  heading: {
+    display: 'flex',
+    gap: 8,
+    alignItems: 'baseline',
+  },
+  count: {
+    fontSize: 12,
+    lineHeight: '20px',
+    color: cssVar.colorTextSecondary,
+  },
+  who: {
     display: 'flex',
     gap: 8,
     alignItems: 'center',
-    width: '100%',
-    minHeight: 36,
-    paddingBlock: 6,
-    paddingInline: 8,
-    borderWidth: 0,
-    borderRadius: cssVar.borderRadius,
-    fontSize: 14,
-    color: cssVar.colorText,
-    textAlign: 'start',
-    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
-    outline: { 'default': null, ':focus-visible': `2px solid ${cssVar.colorPrimaryBorder}` },
-    outlineOffset: { 'default': null, ':focus-visible': -2 },
-  },
-  badge: {
-    flex: 'none',
-    width: 18,
-    height: 18,
-    borderRadius: '50%',
-    fontSize: 11,
-    fontWeight: 600,
-    lineHeight: '18px',
-    color: cssVar.colorTextLightSolid,
-    textAlign: 'center',
-  },
-  stamp: {
-    flex: 'none',
-    fontFamily: cssVar.fontFamilyCode,
-    fontSize: 12,
-    fontVariantNumeric: 'tabular-nums',
-    color: cssVar.colorTextSecondary,
+    minWidth: 0,
   },
   author: {
     overflow: 'hidden',
-    flex: 'none',
-    maxWidth: '30%',
+    minWidth: 0,
     fontSize: 12,
+    lineHeight: '20px',
     color: cssVar.colorTextSecondary,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-    display: { 'default': null, '@media (width <= 767px)': 'none' },
   },
   excerpt: {
     overflow: 'hidden',
-    flex: '1',
-    minWidth: 0,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
@@ -95,6 +81,7 @@ const styles = stylex.create({
   },
   chevron: {
     flex: 'none',
+    marginInlineStart: 'auto',
     color: cssVar.colorTextTertiary,
     transition: {
       'default': `transform ${cssVar.motionDurationMid}`,
@@ -102,21 +89,10 @@ const styles = stylex.create({
     },
   },
   chevronOpen: { transform: 'rotate(90deg)' },
-  thread: {
-    paddingBlockStart: 0,
-    paddingBlockEnd: 12,
-    paddingInlineStart: 36,
-    paddingInlineEnd: 12,
-  },
 });
 
-/**
- * A video with its discussion. The posted comments sit under the player as an
- * index in timeline order — number, moment, who, the first line — so a reader
- * can scan them without the full threads stacking up below the recording.
- * Opening one pauses on its frame, lifts its region and unfolds the thread with
- * its replies and resolve action; a pin on the timeline opens the same row.
- */
+type ThreadStoryNote = StoryNote & { thread: VideoThread };
+
 export const VideoEvidenceDiscussion = ({
   evidenceId,
   src,
@@ -171,6 +147,12 @@ export const VideoEvidenceDiscussion = ({
     ),
   ];
 
+  const story = buildVideoStory<ThreadStoryNote>(
+    chapters ?? [],
+    threads.map((thread) => ({ key: thread.threadId, start: thread.time.start, thread })),
+  );
+  const seek = (start: number) => player.current?.focus({ start }, { reveal: false });
+
   // Opening a row keeps the reader on the thread they asked for: the player
   // moves to the moment where it stands, without scrolling the row away (on a
   // phone the two do not fit on one screen).
@@ -184,6 +166,7 @@ export const VideoEvidenceDiscussion = ({
         activeMark={openId}
         caption={caption}
         chapters={chapters}
+        claimList={false}
         handleRef={player}
         marks={marks}
         src={src}
@@ -199,64 +182,106 @@ export const VideoEvidenceDiscussion = ({
           );
         }}
       />
-      {threads.length > 0 && (
-        <Flexbox gap={4}>
-          <Text fontSize={12} style={{ paddingInline: 8 }} type={'secondary'}>
-            {t('acceptance.comments.video.listTitle', { count: threads.length })}
-          </Text>
-          {threads.map((item, index) => {
-            const isOpen = openId === item.threadId;
-            const messages = item.commentIds?.length ?? 1;
-            return (
-              <div
-                {...stylex.props(styles.item, isOpen && styles.itemOpen)}
-                id={`video-thread-${item.threadId}`}
-                key={item.threadId}
-              >
-                <button
-                  aria-expanded={isOpen}
-                  {...stylex.props(styles.row)}
-                  type={'button'}
-                  onClick={() => select(item)}
-                >
-                  <span {...stylex.props(styles.badge, styles.badgeColor(overlayColor(item)))}>
-                    {index + 1}
-                  </span>
-                  <span {...stylex.props(styles.stamp)}>{formatVideoTime(item.time.start)}</span>
-                  {/* Open, the thread below names the author and says it in full. */}
-                  <span {...stylex.props(styles.author)}>{isOpen ? '' : item.authorName}</span>
-                  <span {...stylex.props(styles.excerpt, item.resolved && styles.resolved)}>
-                    {isOpen ? '' : item.comment}
-                  </span>
-                  {messages > 1 && (
-                    <span
-                      {...stylex.props(styles.meta)}
-                      title={t('acceptance.comments.sectionMessages', { count: messages })}
+      {story.length > 0 && (
+        <div {...stylex.props(styles.story)}>
+          <div {...stylex.props(styles.heading)}>
+            <StoryTitle>{t('acceptance.video.story.title')}</StoryTitle>
+            {threads.length > 0 && (
+              <span {...stylex.props(styles.count)}>
+                {t('acceptance.comments.video.listTitle', { count: threads.length })}
+              </span>
+            )}
+          </div>
+          <StoryList>
+            {story.map((entry, index) => {
+              switch (entry.type) {
+                case 'chapter': {
+                  return (
+                    <StoryChapter
+                      first={index === 0}
+                      key={entry.id}
+                      label={entry.label}
+                      time={entry.time}
+                      onSeek={() => seek(entry.time)}
+                    />
+                  );
+                }
+                case 'claim': {
+                  return (
+                    <StoryItem
+                      key={entry.id}
+                      marker={<StoryDot kind={entry.claim.kind} />}
+                      time={entry.time}
+                      head={
+                        <>
+                          <StoryWho>{t(`acceptance.video.claim.${entry.claim.kind}`)}</StoryWho>
+                          <StoryText>{entry.claim.note}</StoryText>
+                        </>
+                      }
+                      onSeek={() => seek(entry.time)}
+                    />
+                  );
+                }
+                case 'note': {
+                  const item = entry.note.thread;
+                  const isOpen = openId === item.threadId;
+                  const messages = item.commentIds?.length ?? 1;
+                  return (
+                    <StoryItem
+                      active={isOpen}
+                      expanded={isOpen}
+                      id={`video-thread-${item.threadId}`}
+                      key={entry.id}
+                      marker={<StoryBadge color={overlayColor(item)}>{entry.index}</StoryBadge>}
+                      time={entry.time}
+                      xstyle={styles.item}
+                      head={
+                        <>
+                          <span {...stylex.props(styles.who)}>
+                            <span {...stylex.props(styles.author)}>{item.authorName}</span>
+                            {messages > 1 && (
+                              <span
+                                {...stylex.props(styles.meta)}
+                                title={t('acceptance.comments.sectionMessages', {
+                                  count: messages,
+                                })}
+                              >
+                                <Icon icon={MessageSquare} size={12} />
+                                {messages}
+                              </span>
+                            )}
+                            {item.resolved && (
+                              <span
+                                {...stylex.props(styles.meta)}
+                                title={t('acceptance.comments.resolved')}
+                              >
+                                <Icon icon={CheckCircle2} size={14} />
+                              </span>
+                            )}
+                            <Icon
+                              {...stylex.props(styles.chevron, isOpen && styles.chevronOpen)}
+                              icon={ChevronRight}
+                              size={14}
+                            />
+                          </span>
+                          {/* Open, the thread below says it in full. */}
+                          {!isOpen && (
+                            <StoryText xstyle={[styles.excerpt, item.resolved && styles.resolved]}>
+                              {item.comment}
+                            </StoryText>
+                          )}
+                        </>
+                      }
+                      onSeek={() => select(item)}
                     >
-                      <Icon icon={MessageSquare} size={12} />
-                      {messages}
-                    </span>
-                  )}
-                  {item.resolved && (
-                    <span {...stylex.props(styles.meta)} title={t('acceptance.comments.resolved')}>
-                      <Icon icon={CheckCircle2} size={14} />
-                    </span>
-                  )}
-                  <Icon
-                    {...stylex.props(styles.chevron, isOpen && styles.chevronOpen)}
-                    icon={ChevronRight}
-                    size={14}
-                  />
-                </button>
-                {isOpen && (
-                  <div {...stylex.props(styles.thread)} id={commentAnchorId(item.threadId)}>
-                    {item.panel}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </Flexbox>
+                      {isOpen && <div id={commentAnchorId(item.threadId)}>{item.panel}</div>}
+                    </StoryItem>
+                  );
+                }
+              }
+            })}
+          </StoryList>
+        </div>
       )}
     </Flexbox>
   );
