@@ -121,7 +121,7 @@ const styles = stylex.create({
     width: 18,
     height: 18,
     borderRadius: '50%',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 600,
     lineHeight: '18px',
     color: cssVar.colorTextLightSolid,

@@ -53,7 +53,7 @@ const AcceptanceStatusPill = ({ menu, pending, size = 13, status }: AcceptanceSt
     >
       <Icon icon={verdictMeta.icon} size={size} spin={verdictMeta.spin} />
       {verdictMeta.label}
-      {menu ? <Icon icon={ChevronDown} size={11} /> : null}
+      {menu ? <Icon icon={ChevronDown} size={12} /> : null}
     </span>
   );
 

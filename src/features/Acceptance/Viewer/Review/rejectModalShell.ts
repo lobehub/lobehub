@@ -109,4 +109,12 @@ export const rejectModalTitle = (title: string, description?: string) => ({
   title,
 });
 
+const CHECK_CODE = /^(C\d+)\s*·\s*(\S.*)$/s;
+
+export const rejectModalHeading = (checkTitle: string): { code?: string; title: string } => {
+  const match = CHECK_CODE.exec(checkTitle.trim());
+  if (!match) return { title: checkTitle };
+  return { code: match[1], title: match[2] };
+};
+
 export const canDismissRejectModal = (loading: boolean) => !loading;

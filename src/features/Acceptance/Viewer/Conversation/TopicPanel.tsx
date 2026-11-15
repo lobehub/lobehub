@@ -36,7 +36,7 @@ const TopicPanel = memo<OriginTopicPanelProps>(
             background={agentBackgroundColor ?? undefined}
             size={20}
           />
-          <Text ellipsis strong style={{ flex: 1, minWidth: 0, fontSize: 13 }}>
+          <Text ellipsis strong style={{ flex: 1, minWidth: 0, fontSize: 14 }}>
             {title}
           </Text>
           <ActionIcon

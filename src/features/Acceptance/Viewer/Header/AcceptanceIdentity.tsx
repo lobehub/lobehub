@@ -41,7 +41,7 @@ const styles = stylex.create({
     transition: 'opacity 150ms ease',
   },
   metaRow: {
-    fontSize: '13px',
+    fontSize: '14px',
     color: cssVar.colorTextSecondary,
   },
 });

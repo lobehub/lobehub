@@ -50,7 +50,7 @@ const styles = stylex.create({
     paddingInline: '6px',
     borderStyle: 'none',
     borderRadius: cssVar.borderRadiusSM,
-    fontSize: '13px',
+    fontSize: '14px',
     color: cssVar.colorText,
     textAlign: 'start',
     backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
@@ -59,7 +59,7 @@ const styles = stylex.create({
   time: {
     flex: 'none',
     fontFamily: cssVar.fontFamilyCode,
-    fontSize: '11px',
+    fontSize: '12px',
     fontVariantNumeric: 'tabular-nums',
     color: cssVar.colorTextTertiary,
   },

@@ -2,20 +2,10 @@
 
 import '@xyflow/react/dist/style.css';
 
-import {
-  ActionIcon,
-  Button,
-  Empty,
-  Flexbox,
-  Select,
-  Text,
-  useAppElement,
-  useResponsive,
-} from '@lobehub/ui';
+import { Empty, Flexbox, useAppElement, useResponsive } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { MarkerType, ReactFlowProvider } from '@xyflow/react';
-import { Maximize2, Minimize2 } from 'lucide-react';
 import { use, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +14,6 @@ import { sx } from '@/styles/sx';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { acceptanceContentLayout } from '../layout';
-import { AcceptancePlanReview } from '../Plan/AcceptancePlanReview';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { FlowCanvas } from './FlowCanvas';
 import { buildFlowGraph } from './flowGraph';
@@ -34,6 +23,8 @@ import { FlowNode } from './FlowNode';
 import { FlowOutline } from './FlowOutline';
 import { FlowPanelHostContext } from './FlowPanelHost';
 import { FlowResults } from './FlowResults';
+import { walkNeighbors, walkOrder } from './flowStoryboard';
+import { FlowToolbar } from './FlowToolbar';
 
 const narrow = '@media (width <= 640px)';
 
@@ -62,7 +53,7 @@ const styles = stylex.create({
   details: {
     overflow: 'hidden',
     flex: 'none',
-    width: { default: 'min(440px, 42%)', [narrow]: '100%' },
+    width: { default: 'min(480px, 42%)', [narrow]: '100%' },
     height: { default: '100%', [narrow]: '40%' },
     minHeight: 0,
   },
@@ -148,6 +139,13 @@ export function AcceptanceFlow() {
     focus,
   );
   if (!views.length) return <Empty description={t('flow.empty')} />;
+  const steps = walkOrder(graph.nodes);
+  const stepNumbers = new Map(steps.map((step, index) => [step.id, index + 1]));
+  const storyboardNodes = graph.nodes.map((node) =>
+    stepNumbers.has(node.id)
+      ? { ...node, data: { ...node.data, order: stepNumbers.get(node.id) } }
+      : node,
+  );
   const edgeSelection = graph.transitions.get(selected ?? '');
   const checkSelection =
     graph.checks.get(selected ?? '') ??
@@ -158,6 +156,8 @@ export function AcceptanceFlow() {
             item.node.id === edgeSelection.edge.targetNodeKey,
         )
       : undefined);
+  const selectedStepId = [...graph.checks].find(([, item]) => item === checkSelection)?.[0];
+  const walk = walkNeighbors(steps, selectedStepId);
   const attempts = (checkSelection?.view.run?.attempts ?? []).filter(
     (a) =>
       a.nodeId === checkSelection?.node.id &&
@@ -181,6 +181,8 @@ export function AcceptanceFlow() {
       edges={checkSelection.view.version.edges}
       key={`${checkSelection.view.id}:${selected}`}
       node={checkSelection.node}
+      nodes={checkSelection.view.version.nodes}
+      position={walk.position ? { index: walk.position, total: steps.length } : undefined}
       selectedEdge={edgeSelection?.edge}
       canReview={Boolean(
         data?.canReview &&
@@ -206,53 +208,26 @@ export function AcceptanceFlow() {
         wrap="wrap"
         {...sx(styles.toolbar, { maxWidth: contentMeasure })}
       >
-        <Flexbox horizontal align="center" gap={4}>
-          <Button size="small" type="text" onClick={() => setFocus(undefined)}>
-            {t('flow.allGroups')}
-          </Button>
-          {crumbs.map((crumb) => (
-            <Flexbox horizontal align="center" gap={4} key={crumb.id}>
-              <Text type="secondary">/</Text>
-              <Button size="small" type="text" onClick={() => setFocus(crumb.id)}>
-                {crumb.title}
-              </Button>
-            </Flexbox>
-          ))}
-        </Flexbox>
-        <Flexbox horizontal align="center" gap={8} wrap="wrap">
-          <AcceptancePlanReview runId={candidates[0]?.run?.verifyRunId} />
-          <Button
-            size="small"
-            type="text"
-            onClick={() => setDisplay(showOutline ? 'graph' : 'outline')}
-          >
-            {t(showOutline ? 'flow.graphView' : 'flow.outlineView')}
-          </Button>
-          <Select
-            size="small"
-            style={{ width: 120, flexShrink: 0 }}
-            value={activeKey}
-            options={keys.map((key) => ({
-              value: key,
-              label:
-                key === 'pending'
-                  ? t('flow.pendingPlan')
-                  : t('acceptance.round', { round: Number(key) }),
-            }))}
-            onChange={(value: string) => {
-              setRoundKey(value);
-              setFocus(undefined);
-              setSelected(undefined);
-            }}
-          />
-          <ActionIcon
-            aria-label={t(fullscreen ? 'flow.exitFullscreen' : 'flow.fullscreen')}
-            icon={fullscreen ? Minimize2 : Maximize2}
-            ref={fullscreenButton}
-            title={t(fullscreen ? 'flow.exitFullscreen' : 'flow.fullscreen')}
-            onClick={() => setFullscreen((value) => !value)}
-          />
-        </Flexbox>
+        <FlowToolbar
+          activeKey={activeKey}
+          crumbs={crumbs}
+          fullscreen={fullscreen}
+          fullscreenButtonRef={fullscreenButton}
+          keys={keys}
+          runId={candidates[0]?.run?.verifyRunId}
+          showOutline={showOutline}
+          stepCount={steps.length}
+          walk={walk}
+          onDisplayChange={setDisplay}
+          onFocus={setFocus}
+          onSelect={setSelected}
+          onToggleFullscreen={() => setFullscreen((value) => !value)}
+          onRoundChange={(value) => {
+            setRoundKey(value);
+            setFocus(undefined);
+            setSelected(undefined);
+          }}
+        />
       </Flexbox>
       <Flexbox horizontal flex={fullscreen ? 1 : undefined} {...stylex.props(styles.workspace)}>
         {showOutline ? (
@@ -265,7 +240,7 @@ export function AcceptanceFlow() {
               edges={graphEdges}
               fullscreen={fullscreen}
               nodeTypes={nodeTypes}
-              nodes={graph.nodes}
+              nodes={storyboardNodes}
               viewKey={focus ?? activeKey}
               onSelect={setSelected}
             />

@@ -11,6 +11,7 @@ import { verifyService } from '@/services/verify';
 import { useVerifyStore } from '@/store/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
+import { decisionSegments } from '../Checks/checkDecision';
 import { isException } from '../Checks/checkState';
 import { useAcceptanceComments } from '../Comments/hooks';
 import { flowPlanPhase } from '../Plan/planReview';
@@ -138,6 +139,7 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
         repairing={acceptance.status === 'repairing'}
         rerunAvailable={embedded}
         rerunPending={false}
+        segments={decisionSegments(checks)}
         state={barState}
         statusText={statusText}
         subText={subTextWithApprovals || undefined}
@@ -235,7 +237,6 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
           }
         }}
       />
-      <Flexbox style={{ height: 8 }} />
       <FeedbackDrawer
         entries={feedbackEntries}
         open={feedbackOpen}

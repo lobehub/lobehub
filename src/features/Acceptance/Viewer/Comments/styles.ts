@@ -105,7 +105,7 @@ export const styles = stylex.create({
   },
   event: {
     paddingBlock: '2px',
-    fontSize: '13px',
+    fontSize: '14px',
     color: cssVar.colorTextSecondary,
   },
   eventDot: {
@@ -148,7 +148,7 @@ export const styles = stylex.create({
   },
   panelBody: {
     paddingBlockStart: '6px',
-    fontSize: '13px',
+    fontSize: '14px',
     lineHeight: 1.65,
     overflowWrap: 'anywhere',
     whiteSpace: 'pre-wrap',
@@ -175,7 +175,7 @@ export const styles = stylex.create({
     width: '100%',
     padding: 0,
     borderStyle: 'none',
-    fontSize: '13px',
+    fontSize: '14px',
     color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorTextSecondary },
     textAlign: 'start',
     backgroundColor: 'transparent',

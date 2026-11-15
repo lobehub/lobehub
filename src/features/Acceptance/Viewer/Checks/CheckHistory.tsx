@@ -62,8 +62,9 @@ export const IgnoredNote = memo<{ review: AcceptanceCheckReviewEntry }>(({ revie
  */
 export const FeedbackCard = memo<{
   evidenceById: Map<string, AcceptanceEvidence>;
+  hideHeader?: boolean;
   review: AcceptanceCheckReviewEntry;
-}>(({ evidenceById, review }) => {
+}>(({ evidenceById, hideHeader, review }) => {
   const { t } = useTranslation('verify');
   const hydrated = useIsHydrated();
   if (review.action === 'accept') return <AcceptedNote review={review} />;
@@ -78,15 +79,17 @@ export const FeedbackCard = memo<{
 
   return (
     <Flexbox gap={8}>
-      <Flexbox horizontal align={'center'} gap={6}>
-        <Icon color={cssVar.colorError} icon={MessageSquareX} size={13} />
-        <Text style={{ color: cssVar.colorError, fontSize: 12 }}>
-          {t('acceptance.review.feedbackLabel')}
-        </Text>
-        <Text fontSize={12} type={'secondary'}>
-          {hydrated ? dayjs(review.createdAt).format('MM-DD HH:mm') : null}
-        </Text>
-      </Flexbox>
+      {!hideHeader && (
+        <Flexbox horizontal align={'center'} gap={6}>
+          <Icon color={cssVar.colorError} icon={MessageSquareX} size={13} />
+          <Text style={{ color: cssVar.colorError, fontSize: 12 }}>
+            {t('acceptance.review.feedbackLabel')}
+          </Text>
+          <Text fontSize={12} type={'secondary'}>
+            {hydrated ? dayjs(review.createdAt).format('MM-DD HH:mm') : null}
+          </Text>
+        </Flexbox>
+      )}
       {review.comment && <Text style={{ fontSize: 12 }}>{review.comment}</Text>}
       <AttachmentThumbs attachments={review.attachments} />
       {[...groups.entries()].map(([evidenceId, annotations]) => {

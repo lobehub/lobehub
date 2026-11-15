@@ -27,15 +27,15 @@ const coarse = '@media (pointer: coarse)';
 const styles = stylex.create({
   badge: {
     position: 'absolute',
-    insetBlockStart: '-9px',
-    insetInlineStart: '-9px',
+    insetBlockStart: '-10px',
+    insetInlineStart: '-10px',
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '18px',
-    height: '18px',
+    width: '20px',
+    height: '20px',
     borderRadius: '50%',
-    fontSize: '11px',
+    fontSize: '12px',
     fontWeight: 600,
     lineHeight: 1,
     color: cssVar.colorTextLightSolid,
@@ -48,13 +48,13 @@ const styles = stylex.create({
   badgeDelete: {
     cursor: 'pointer',
     position: 'absolute',
-    insetBlockStart: { default: '-9px', [coarse]: '-12px' },
-    insetInlineEnd: { default: '-9px', [coarse]: '-12px' },
+    insetBlockStart: { default: '-10px', [coarse]: '-12px' },
+    insetInlineEnd: { default: '-10px', [coarse]: '-12px' },
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: { default: '18px', [coarse]: '24px' },
-    height: { default: '18px', [coarse]: '24px' },
+    width: { default: '20px', [coarse]: '24px' },
+    height: { default: '20px', [coarse]: '24px' },
     borderStyle: 'none',
     borderRadius: '50%',
     color: cssVar.colorTextLightSolid,
@@ -211,6 +211,7 @@ interface AnnotationCanvasProps {
    */
   imageWidth?: number;
   onDraw: (rect: Rect) => void;
+  onLoad?: React.ReactEventHandler<HTMLImageElement>;
   onRemove: (index: number) => void;
   /** Reposition / resize an existing region. */
   onUpdate: (index: number, rect: Rect) => void;
@@ -222,7 +223,7 @@ interface AnnotationCanvasProps {
  * corner handle to resize; each region carries its own note.
  */
 export const AnnotationCanvas = memo<AnnotationCanvasProps>(
-  ({ annotations, drawing = true, imageWidth, onDraw, onRemove, onUpdate, src }) => {
+  ({ annotations, drawing = true, imageWidth, onDraw, onLoad, onRemove, onUpdate, src }) => {
     const { draft, handlers, imageRef, startEdit } = useAnnotationGesture({
       drawing,
       onDraw,
@@ -246,6 +247,7 @@ export const AnnotationCanvas = memo<AnnotationCanvasProps>(
           draggable={false}
           ref={imageRef}
           src={src}
+          onLoad={onLoad}
           // Zoomed width comes from the host (viewport × zoom); the frame
           // shrink-wraps the image, so overlays track exactly.
           {...sx(styles.image, imageWidth ? { maxWidth: 'none', width: imageWidth } : undefined)}
