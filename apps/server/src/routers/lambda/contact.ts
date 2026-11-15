@@ -68,7 +68,7 @@ export const contactRouter = router({
     return { success: true };
   }),
 
-  /** A person's relation to me plus, for my contacts, the Agents they share. */
+  /** A person's profile, their relation to me and the Agents they share by link. */
   userProfile: contactProcedure.input(z.object({ userId })).query(async ({ ctx, input }) => {
     const [user, relation, sharedAgents] = await Promise.all([
       ctx.contactModel.findUser(input.userId),

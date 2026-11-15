@@ -163,12 +163,10 @@ describe('shared Agents', () => {
     expect(await aliceModel.findUser('missing')).toBeUndefined();
   });
 
-  it('lists a person’s shared Agents only to their contacts', async () => {
-    expect(await aliceModel.listSharedAgentsOf(bob)).toEqual([]);
-    const { requestId } = await aliceModel.sendRequest(bob);
-    await bobModel.acceptRequest(requestId);
-    const agentsOfBob = await aliceModel.listSharedAgentsOf(bob);
-    expect(agentsOfBob.map((a) => a.agentId)).toEqual([bobAgent]);
+  it('lists a person’s link-shared Agents to anyone, contact or not', async () => {
+    expect((await carolModel.listSharedAgentsOf(bob)).map((a) => a.agentId)).toEqual([bobAgent]);
+    await serverDB.update(agentShares).set({ visibility: 'private' });
+    expect(await carolModel.listSharedAgentsOf(bob)).toEqual([]);
   });
 });
 

@@ -12,7 +12,7 @@ import { and, eq, ne } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import type { ChannelItem, ChannelMemberItem } from '../../schemas';
-import { agents, agentShares, channelMembers, userContacts, userSettings } from '../../schemas';
+import { agents, agentShares, channelMembers, userSettings } from '../../schemas';
 import type { Transaction } from '../../type';
 import { agentUsableByWhere } from '../../utils/agent-access';
 import { mergeAgentDefaultConfig } from '../../utils/agentConfig';
@@ -37,9 +37,9 @@ export interface ChannelAddAgentInput {
 }
 
 /**
- * Another person's Agent that `userId` reached through their contact entry and its live link
- * share. Only a personal direct conversation can hold one: the share admits one person at a
- * time, and its limits are counted per person.
+ * Another person's Agent that `userId` may talk to through its live link share. A link share is
+ * open to anyone signed in, so no contact entry is needed; only a personal direct conversation
+ * can hold one, because the share admits one person at a time and counts its limits per person.
  */
 export const findSharedChannelAgent = async (
   tx: Transaction,
@@ -57,13 +57,11 @@ export const findSharedChannelAgent = async (
       title: agents.title,
       workspaceId: agents.workspaceId,
     })
-    .from(userContacts)
-    .innerJoin(agents, eq(agents.id, userContacts.agentId))
+    .from(agents)
     .innerJoin(agentShares, eq(agentShares.agentId, agents.id))
     .where(
       and(
-        eq(userContacts.userId, userId),
-        eq(userContacts.agentId, agentId),
+        eq(agents.id, agentId),
         eq(agentShares.visibility, 'link'),
         notTrashed(agents.isDeleted),
         ne(agents.userId, userId),

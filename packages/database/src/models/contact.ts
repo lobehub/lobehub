@@ -350,9 +350,11 @@ export class ContactModel {
     return { ...row, ownerId: row.ownerId };
   };
 
-  /** Agents a person shares by link, for their profile card. Only visible to their contacts. */
+  /**
+   * Agents a person shares by link, for their profile card. A link share is open to anyone
+   * signed in, so the list is too; it does not need the person as a contact.
+   */
   listSharedAgentsOf = async (ownerId: string): Promise<ContactAgentProfile[]> => {
-    if (ownerId !== this.userId && !(await this.isContact(ownerId))) return [];
     const rows = await this.db
       .select(agentProfileColumns)
       .from(agentShares)

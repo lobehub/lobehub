@@ -3,7 +3,6 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { ContactModel } from '../../../models/contact';
 import {
   agents,
   agentShares,
@@ -55,8 +54,6 @@ afterEach(async () => {
   await fixture.cleanup();
 });
 
-const addContact = () => new ContactModel(db, visitorId).addAgent('shared-helper');
-
 const send = async (channelId: string, requestKey: string) => {
   const message = await visitor.send(channelId, {
     content: `Request ${requestKey}`,
@@ -68,12 +65,15 @@ const send = async (channelId: string, requestKey: string) => {
 };
 
 describe('a contact’s shared Agent in a direct conversation', () => {
-  it('needs the contact entry to open the conversation', async () => {
+  it('opens through the live share without a contact entry, but never from a bare Agent id', async () => {
     await expect(visitor.create({ agentId, title: 'Shared Helper' })).rejects.toThrow(
       'Agent not found',
     );
-    await addContact();
-    const { channel } = await visitor.create({ agentId, title: 'Shared Helper' });
+    const { channel } = await visitor.create({
+      agentId,
+      sharedAgent: true,
+      title: 'Shared Helper',
+    });
     expect(channel).toMatchObject({ agentId, userId: visitorId, workspaceId: null });
 
     const [listed] = await visitor.list();
@@ -82,18 +82,20 @@ describe('a contact’s shared Agent in a direct conversation', () => {
   });
 
   it('cannot be added to a group', async () => {
-    await addContact();
     const { channel } = await visitor.create({ title: 'Group' });
     await expect(visitor.addAgent(channel.id, { agentId })).rejects.toThrow('Agent not found');
   });
 
   it('runs as its owner, on an owner topic tagged with the visitor', async () => {
-    await addContact();
     await db.insert(userSettings).values([
       { defaultAgent: { config: { params: { temperature: 0.1 } } }, id: ownerId },
       { defaultAgent: { config: { params: { temperature: 0.9 } } }, id: visitorId },
     ]);
-    const { channel } = await visitor.create({ agentId, title: 'Shared Helper' });
+    const { channel } = await visitor.create({
+      agentId,
+      sharedAgent: true,
+      title: 'Shared Helper',
+    });
     const job = await send(channel.id, 'first');
 
     const claim = (await execution.claim(channel.id, job.id, lease))!;
@@ -113,8 +115,11 @@ describe('a contact’s shared Agent in a direct conversation', () => {
   });
 
   it('is blocked once the owner pauses the share', async () => {
-    await addContact();
-    const { channel } = await visitor.create({ agentId, title: 'Shared Helper' });
+    const { channel } = await visitor.create({
+      agentId,
+      sharedAgent: true,
+      title: 'Shared Helper',
+    });
     await db.update(agentShares).set({ visibility: 'private' }).where(eq(agentShares.id, shareId));
     const job = await send(channel.id, 'paused');
 
@@ -124,8 +129,11 @@ describe('a contact’s shared Agent in a direct conversation', () => {
   });
 
   it('refuses attachments, which the owner’s run could not read', async () => {
-    await addContact();
-    const { channel } = await visitor.create({ agentId, title: 'Shared Helper' });
+    const { channel } = await visitor.create({
+      agentId,
+      sharedAgent: true,
+      title: 'Shared Helper',
+    });
     const [file] = await db
       .insert(files)
       .values({
@@ -147,8 +155,11 @@ describe('a contact’s shared Agent in a direct conversation', () => {
   });
 
   it('continues its topic until the share’s per-topic turn limit', async () => {
-    await addContact();
-    const { channel } = await visitor.create({ agentId, title: 'Shared Helper' });
+    const { channel } = await visitor.create({
+      agentId,
+      sharedAgent: true,
+      title: 'Shared Helper',
+    });
     const claim = async (key: string) =>
       (await execution.claim(channel.id, (await send(channel.id, key)).id, lease))!;
     const finish = async (jobId: string) => {

@@ -10,7 +10,8 @@ import {
 import { eq } from 'drizzle-orm';
 import pMap from 'p-map';
 
-import { ContactModel } from '@/database/models/contact';
+import { AgentShareModel } from '@/database/models/agentShare';
+import { ContactModel, parseContactHandle } from '@/database/models/contact';
 import { DeviceModel } from '@/database/models/device';
 import { ProjectModel } from '@/database/models/project';
 import type {
@@ -211,8 +212,9 @@ export class ChannelService {
   };
 
   /**
-   * A contact's shared Agent: only a personal direct conversation, which the repository rechecks
-   * against the contact entry and the live share. It always runs in the cloud as its owner.
+   * Another person's Agent the caller added to their contacts through its link share; the entry
+   * shows they reached the share. The repository rechecks the live share. Always a personal
+   * direct conversation, run in the cloud as the owner.
    */
   private createSharedDirect = async (agentId: string) => {
     if (this.workspaceId) return;
@@ -221,7 +223,35 @@ export class ChannelService {
     return this.repository.create({
       agentConfig: {},
       agentId,
+      sharedAgent: true,
       title: agentDisplayName(shared, 'Agent').slice(0, CHANNEL_LIMITS.titleLength),
+    });
+  };
+
+  /**
+   * The direct conversation with another person's Agent, opened from its share (id, handle or
+   * pasted link) — no contact entry or friendship needed, since a link share is open to anyone
+   * signed in. Adding it to contacts stays optional. One's own Agent opens as usual.
+   */
+  openShared = async (share: string) => {
+    if (this.workspaceId)
+      throw new ChannelError('BAD_REQUEST', 'A shared Agent is messaged from a personal scope');
+    const key = parseContactHandle(share);
+    const found = key ? await AgentShareModel.findBySlugOrId(this.db, key) : null;
+    if (!found || found.visibility !== 'link')
+      throw new ChannelError('NOT_FOUND', 'Agent not found');
+    if (found.ownerId === this.userId) return this.openDirect(found.agentId);
+
+    const existing = await this.repository.findDirectAccess(found.agentId);
+    if (existing) return existing.channel.isDeleted ? undefined : existing;
+    return this.repository.create({
+      agentConfig: {},
+      agentId: found.agentId,
+      sharedAgent: true,
+      title: agentDisplayName({ name: found.agentName, title: found.agentTitle }, 'Agent').slice(
+        0,
+        CHANNEL_LIMITS.titleLength,
+      ),
     });
   };
 

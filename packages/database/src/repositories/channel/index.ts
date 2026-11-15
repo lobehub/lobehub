@@ -109,6 +109,8 @@ export class ChannelRepository {
     title: string;
     /** Workspace people a group starts with, checked the same way as adding them later. */
     userIds?: string[];
+    /** The direct conversation binds another person's Agent through its live link share. */
+    sharedAgent?: boolean;
     visibility?: ChannelVisibility;
   }) =>
     this.db.transaction(async (tx) => {
@@ -125,9 +127,10 @@ export class ChannelRepository {
           'A direct conversation requires an Agent and private visibility',
         );
       if (agentId) {
-        // A personal direct conversation may bind a contact's shared Agent.
+        // Only the service opens one with another person's shared Agent, after resolving the
+        // share the person reached; a plain Agent id never does.
         await requireChannelAgent(tx, this.workspaceId, this.userId, agentId, {
-          allowShared: true,
+          allowShared: !!params.sharedAgent,
         });
         const existing = await this.findDirect(tx, agentId);
         if (existing) return existing;

@@ -72,12 +72,15 @@ Updating Agent settings affects the next claim, including already queued request
 rewrites an earlier job snapshot. A private, trashed, deleted or moved Agent fails the requester
 access check before any topic or operation is created.
 
-## Shared Agents from contacts
+## Shared Agents
 
-A personal direct conversation can also bind another person's Agent that the requester added to
-their address book (`user_contacts`) through its link share. `requireChannelAgent` and
-`resolveExecutionConfig` accept it only for that conversation shape, and only while the contact
-entry exists, the share is `link` and the Agent is not trashed; groups and workspace channels
+A personal direct conversation can also bind another person's Agent through its live link share.
+A link share is open to anyone signed in, so neither friendship nor a contact entry is needed:
+`ChannelService.openShared` opens the conversation from the share id, handle or pasted link, and
+`createSharedDirect` from an Agent the person added to their contacts (which shows they reached the
+share). Only those paths pass `sharedAgent` to `create`; a bare Agent id never binds someone else's
+Agent. `requireChannelAgent` and `resolveExecutionConfig` then accept it for that conversation
+shape only, while the share is `link` and the Agent is not trashed; groups and workspace channels
 never take one. The claim freezes `executionConfig.share` (owner, share and the Agent's scope):
 
 - The run executes as the owner, like a visit to the share page. Its topic and operation belong
