@@ -238,6 +238,16 @@ export const readChannelView = async (
         // Only a bounded diagnostic message crosses the public boundary, never the raw error.
         errorMessage: sql<string | null>`CASE WHEN ${channelJobs.status} = 'failed'
           THEN left(${agentOperations.error}->>'message', 2000) ELSE NULL END`,
+        // The error's category, so a client can explain a known failure in the viewer's language.
+        errorType: sql<string | null>`CASE WHEN ${channelJobs.status} = 'failed'
+          THEN ${agentOperations.error}->>'type' ELSE NULL END`,
+        // The device the reply runs on, waits for, or failed to reach: the claimed device, the
+        // one a failed dispatch was routed to, or the Agent's own bound device.
+        deviceId: sql<string | null>`COALESCE(
+          ${channelJobs.deviceId},
+          ${agentOperations.error}->'deviceRoute'->>'deviceId',
+          ${channelJobs.executionConfig}->'agencyConfig'->>'boundDeviceId'
+        )`,
         writerHeld: channelJobs.writerHeld,
         worktreeBranch: sql<string | null>`${channelJobs.executionConfig}->>'worktreeBranch'`,
         operationStatus: agentOperations.status,

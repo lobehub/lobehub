@@ -13,6 +13,7 @@ export default {
     'Add your first payment method and $1 lands in your account instantly — no charge, no subscription required.',
   'billing.cardBindingGift.title': 'Add a payment method, get $1',
   'billing.closed': 'Closed',
+  'billing.oneTimeValidUntil': 'One-time payment · Valid until',
   'billing.validUntil': 'Valid until',
   'billing.created': 'Payment date',
   'billing.draft': 'Draft',
@@ -84,7 +85,9 @@ export default {
   'creditsChip.balance': 'Balance {{amount}}',
   'creditsChip.viewDetails': 'View details',
   'creditsChip.viewUsage': 'View usage',
+  'creditsChip.balanceInUse': 'In use',
   'creditsChip.balanceNote.limit': 'Monthly limit reached. Requests now use your balance.',
+  'creditsChip.balanceNote.plan': 'Plan limit reached. Requests now use your balance.',
   'creditsChip.balanceNote.subscription':
     'Subscription usage has run out. Requests now use your balance.',
   'compareAllPlans': 'View all plans',
@@ -545,9 +548,8 @@ export default {
   'plans.compare.agentRunFee': 'Fee per agent task',
   'plans.compare.artifactSiteSize': 'Max size per site',
   'plans.compare.artifactSites': 'Active Artifact sites',
-  'plans.compare.baseline': 'Limits are compared as multiples of {{plan}}.',
-  'plans.compare.baselineUltra':
-    'Limits are compared as multiples of {{plan}}, and Ultra models as multiples of {{ultraPlan}}.',
+  'plans.compare.baselineNote':
+    'Each limit is shown as a multiple of the plan marked Standard in its row.',
   'plans.compare.concurrentAgentRuns': 'Concurrent agent tasks',
   'plans.compare.documentCharacters': 'Characters per document',
   'plans.compare.earlyAccess': 'Early access to new features',
@@ -558,15 +560,14 @@ export default {
   'plans.compare.monthlySpend': 'Monthly limit',
   'plans.compare.monthlySpend.desc': 'Resets at the start of each billing month',
   'plans.compare.rolling5hSpend': '5-hour limit',
-  'plans.compare.rolling5hSpend.desc': 'Resets 5 hours after your first request',
   'plans.compare.rolling7dSpend': 'Weekly limit',
-  'plans.compare.rolling7dSpend.desc': 'Resets 7 days after your first request',
   'plans.compare.sandboxStorage': 'Cloud sandbox storage',
   'plans.compare.ultraWeeklySpend': 'Ultra model weekly limit',
   'plans.compare.ultraWeeklySpend.desc': 'Counts toward the weekly limit and has its own limit',
   'plans.compare.unlimited': 'Unlimited',
   'plans.compare.usageBase': 'Standard',
   'plans.compare.usageMultiple': '{{multiple}}×',
+  'plans.compare.usageMultipleOf': '{{multiple}}× {{plan}}',
   'plans.credit.api': 'Custom API',
   'plans.credit.apiDesc': 'Requires your own model API configuration',
   'plans.credit.apiProvider':
@@ -612,13 +613,12 @@ export default {
     'Usage across your billing month has a limit too. It resets when the next billing month starts.',
   'plans.limits.rolling5hSpend': '5-hour limit',
   'plans.limits.rolling5hSpend.multiple': '5-hour limit: {{multiple}}× that of {{plan}}',
-  'plans.limits.rolling5hSpend.tooltip':
-    'Usage within any 5 hours has a limit too. The window starts with your first request and resets 5 hours later.',
+  'plans.limits.rolling5hSpend.tooltip': 'Usage within a 5-hour window has its own limit.',
   'plans.limits.rolling5hSpend.unavailable': 'No 5-hour limit',
   'plans.limits.rolling7dSpend': 'Weekly limit',
   'plans.limits.rolling7dSpend.multiple': 'Weekly limit: {{multiple}}× that of {{plan}}',
   'plans.limits.rolling7dSpend.tooltip':
-    'The model usage your plan allows in any 7 days. The week starts with your first request and resets 7 days later. Usage across your billing month has a limit as well.',
+    'The model usage your plan allows in a week. Usage across your billing month has a limit as well.',
   'plans.limits.sandboxStorage': '{{value}} cloud sandbox storage',
   'plans.limits.support': '{{value}}',
   'plans.limits.topUpRate': 'Top-up discount',
@@ -851,6 +851,7 @@ export default {
   'referral.hero.title': 'Invite friends, you both earn <0>${{reward}} in referral rewards</0>',
   'referral.inviteCode.description': 'Share your invite code so friends can register with it',
   'referral.inviteCode.title': 'Your invite code',
+  'referral.inviteLink.copy': 'Copy invite link',
   'referral.inviteLink.description':
     'Copy and share your invite link. You both earn referral rewards after your friend pays.',
   'referral.inviteLink.title': 'Your invite link',
@@ -890,6 +891,7 @@ export default {
   'referral.table.columns.inviterRewardAmount': 'My reward',
   'referral.table.columns.rewardedAt': 'Reward time',
   'referral.table.columns.status': 'Status',
+  'referral.table.empty': 'No one has signed up with your link yet',
   'referral.table.status.pending_reward': 'Pending reward',
   'referral.table.status.registered': 'Registered',
   'referral.table.status.revoked': 'Revoked',
@@ -903,10 +905,7 @@ export default {
   'summary.dueBy': 'Due on {{date}}',
   'summary.nextMonthlyPayment': 'Your next monthly payment',
   'summary.nextPayment': 'Your next payment',
-  'summary.oneTimePaymentDesc':
-    'This plan was purchased with a one-time payment and will not renew automatically.',
   'summary.paymentInformation': 'Billing information',
-  'summary.planValidUntil': 'Plan valid until',
   'summary.storageSettings': 'Storage pay-as-you-go',
   'summary.storageMonthlyDesc':
     'This amount covers storage overage for the current monthly billing period.',
@@ -969,7 +968,6 @@ export default {
   'usage.window.rule.planUltraWeek': 'Ultra model weekly limit',
   'usage.storage.sandboxStorage.pool': 'Sandbox drives (workspace pool)',
   'usage.window.credits': 'Balance',
-  'usage.window.notStarted': 'Starts with your next request',
   'usage.window.overflow.desc': 'When a limit runs out, keep going on your balance.',
   'usage.window.overflow.limit': '{{spent}} / {{limit}} this month',
   'usage.window.overflow.off': 'Off: requests pause when a limit runs out',
@@ -1021,4 +1019,58 @@ export default {
   'creditsChip.usageTitle': 'Usage',
   'creditsChip.usageTooltip': 'Usage in the current billing cycle',
   'usage.window.used': '{{percent}}% used',
+  'credits.autoTopUp.adjust': 'Adjust',
+  'credits.autoTopUp.collapse': 'Collapse',
+  'credits.autoTopUp.disabled': 'Auto top-up is off',
+  'credits.autoTopUp.enable.addPaymentMethod': 'Add a card',
+  'credits.autoTopUp.enable.chargeFailed':
+    'Auto top-up is on, but this charge failed. Check your payment method.',
+  'credits.autoTopUp.enable.chargeNow':
+    'Your balance is {{balance}}, at or below {{threshold}}. Turning this on charges {{amount}} now to bring it to {{target}}.',
+  'credits.autoTopUp.enable.chargeNowCapped':
+    "Your balance is {{balance}}, at or below {{threshold}}. Turning this on charges {{amount}} now, all that this month's limit has left, bringing it to {{newBalance}}.",
+  'credits.autoTopUp.enable.desc':
+    'When your balance runs low, it is refilled from your saved payment method, so requests keep going after your plan limits run out. You can turn it off anytime.',
+  'credits.autoTopUp.enable.failed': "Couldn't turn on auto top-up. Please try again.",
+  'credits.autoTopUp.enable.giftBadge': '$1 free for your first card',
+  'credits.autoTopUp.enable.limitReached':
+    "Auto top-up is on, but this month's charge limit is reached, so nothing was added.",
+  'credits.autoTopUp.enable.limitReachedNow':
+    "Your balance is {{balance}}, at or below {{threshold}}, but this month's limit is used up, so nothing is charged now.",
+  'credits.autoTopUp.enable.noChargeNow':
+    'Your balance is {{balance}}, above {{threshold}}, so nothing is charged now. Auto top-up runs once it drops to {{threshold}}.',
+  'credits.autoTopUp.enable.noPaymentMethod': 'Add a card first',
+  'credits.autoTopUp.enable.overflowNote':
+    'This also turns on "{{overflow}}". Without it, requests stop at your plan limits and auto top-up never runs.',
+  'credits.autoTopUp.enable.paymentMethod': 'Payment method',
+  'credits.autoTopUp.enable.submit': 'Turn on auto top-up',
+  'credits.autoTopUp.enable.submitAndCharge': 'Turn on and pay {{amount}}',
+  'credits.autoTopUp.enable.success': 'Auto top-up is on',
+  'credits.autoTopUp.enable.successCharged': 'Auto top-up is on. {{amount}} was added.',
+  'credits.autoTopUp.enable.title': 'Turn on auto top-up',
+  'credits.autoTopUp.enable.waitingForPaymentMethod':
+    'Add the card in the new tab, then come back here to turn it on.',
+  'credits.autoTopUp.recommended': 'Recommended',
+  'credits.autoTopUp.setupAndEnable': 'Add card and turn on',
+  'credits.autoTopUp.summary': 'Refill to {{target}} when the balance is at or below {{threshold}}',
+  'credits.autoTopUp.summaryMonthly': 'Charged this month: {{amount}} / {{limit}}',
+  'credits.autoTopUp.summaryNoCard':
+    'Add a card to refill the balance automatically, so requests keep going after your limits run out',
+  'credits.autoTopUp.summaryOff': '{{summary}}, so requests keep going after your limits run out',
+  'creditsChip.autoTopUp.enable': 'Turn on auto top-up',
+  'limitation.insufficientBudget.rescue.autoTopUp.cta': 'Turn on auto top-up & continue',
+  'limitation.insufficientBudget.rescue.autoTopUp.ctaNoCard': 'Add card & turn on auto top-up',
+  'limitation.insufficientBudget.rescue.autoTopUp.success.desc':
+    '{{amount}} was added, so you can continue now. The balance refills automatically when it runs low.',
+  'limitation.insufficientBudget.rescue.autoTopUp.success.descNoCharge':
+    'The balance refills automatically when it runs low. You can continue now.',
+  'limitation.insufficientBudget.rescue.autoTopUp.success.title': 'Auto top-up is on',
+  'limitation.insufficientBudget.rescue.autoTopUp.title': 'Turn on auto top-up',
+  'limitation.insufficientBudget.rescue.upgrade.short': '{{multiple}}× usage',
+  'limitation.insufficientBudget.rescue.upgrade.shortUltra': '{{multiple}}× Ultra usage',
+  'usage.overview.records': 'Top-up history',
+  'usage.overview.topUpOnce': 'Top up once',
+  'usage.tabs.detail': 'Details',
+  'usage.tabs.overview': 'Overview',
+  'usage.tabs.records': 'Top-up history',
 };

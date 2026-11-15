@@ -129,6 +129,25 @@ describe('music generationConfig', () => {
     expect(canSubmit({ instrumental: true, prompt: 'pop' })).toBe(true);
   });
 
+  it('blocks a prompt shorter than the model minimum and reports the required length', () => {
+    const base = {
+      ...useMusicStore.getState(),
+      parametersSchema: { prompt: { default: '', minLength: 10, required: true } },
+    };
+    const state = (prompt: string) => ({ ...base, parameters: { prompt } }) as typeof base;
+
+    expect(musicGenerationConfigSelectors.promptMinLength(state('和风'))).toBe(10);
+    expect(musicGenerationConfigSelectors.canSubmit(state('和风'))).toBe(false);
+    // An empty prompt is caught by the required rule, not reported as too short
+    expect(musicGenerationConfigSelectors.promptMinLength(state(''))).toBeUndefined();
+    expect(
+      musicGenerationConfigSelectors.promptMinLength(state('日系和风抒情流行，少女伤感')),
+    ).toBeUndefined();
+    expect(musicGenerationConfigSelectors.canSubmit(state('日系和风抒情流行，少女伤感'))).toBe(
+      true,
+    );
+  });
+
   it('canSubmit accepts lyrics or style without a prompt but requires declared reference audio', () => {
     const base = { ...useMusicStore.getState(), parametersSchema: songSchema };
 

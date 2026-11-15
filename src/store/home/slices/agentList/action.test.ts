@@ -21,6 +21,7 @@ import { getAgentStoreState } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
+import { reorderItems } from './action';
 import { initialAgentListState } from './initialState';
 import { agentListResource } from './projection';
 
@@ -129,5 +130,71 @@ describe('sidebar agent list replica', () => {
     reject(new Error('boom'));
     await expect(rename).rejects.toThrow('boom');
     expect(useHomeStore.getState().agentGroups[0].items[0].title).toBe('Old');
+  });
+
+  it('reorders the pinned rows right away, saves in order, and rolls back on failure', async () => {
+    vi.spyOn(homeService, 'getSidebarAgentList').mockResolvedValue(
+      response({ pinned: [agent('a'), agent('b'), agent('c')] }),
+    );
+    sync();
+    await waitFor(() => expect(useHomeStore.getState().pinnedAgents).toHaveLength(3));
+    const pinnedIds = () => useHomeStore.getState().pinnedAgents.map((item) => item.id);
+
+    let reject!: (error: Error) => void;
+    const save = vi
+      .spyOn(homeService, 'updatePinnedOrder')
+      .mockImplementation(() => new Promise<void>((_, fail) => (reject = fail)));
+
+    const reorder = useHomeStore.getState().reorderPinnedAgents(['c', 'a', 'b']);
+    expect(pinnedIds()).toEqual(['c', 'a', 'b']);
+    await waitFor(() => expect(save).toHaveBeenCalledWith(['c', 'a', 'b']));
+
+    reject(new Error('boom'));
+    await expect(reorder).rejects.toThrow('boom');
+    expect(pinnedIds()).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('reorderPinnedAgents across a scope change', () => {
+  it.each([
+    ['another workspace', (from: string) => from.replace(/:[^:]*$/, ':ws-2')],
+    // Same workspace slot, different account: comparing only the workspace
+    // would let user A's order go out on user B's session.
+    ['another account in the same workspace', (from: string) => `other-user:${from.split(':')[1]}`],
+  ])('drops a save still queued after switching to %s', async (_, next) => {
+    vi.spyOn(homeService, 'getSidebarAgentList').mockResolvedValue(
+      response({ pinned: [agent('a'), agent('b'), agent('c')] }),
+    );
+    sync();
+    await waitFor(() => expect(useHomeStore.getState().pinnedAgents).toHaveLength(3));
+
+    let finishFirst!: () => void;
+    const save = vi
+      .spyOn(homeService, 'updatePinnedOrder')
+      .mockImplementationOnce(() => new Promise<void>((resolve) => (finishFirst = resolve)))
+      .mockResolvedValue(undefined);
+
+    const first = useHomeStore.getState().reorderPinnedAgents(['c', 'a', 'b']);
+    const second = useHomeStore.getState().reorderPinnedAgents(['b', 'c', 'a']);
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+
+    scope = next(scope);
+    finishFirst();
+    // The skipped save is not an error for the caller.
+    await act(() => Promise.all([first, second]));
+
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('reorderItems', () => {
+  it('puts the named rows first in order and keeps the rest after them', () => {
+    const items = [agent('a'), agent('b'), agent('c'), agent('d')];
+    expect(reorderItems(items, ['c', 'gone', 'a']).map((item) => item.id)).toEqual([
+      'c',
+      'a',
+      'b',
+      'd',
+    ]);
   });
 });

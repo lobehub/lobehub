@@ -66,7 +66,7 @@ class ChannelService {
     userIds: string[];
   }) => lambdaClient.channel.createGroupFromDirect.mutate(input);
   /** The caller's direct Channel with an Agent, opened if missing; null when it cannot answer there. */
-  openDirect = async (input: { agentId: string; localDeviceId?: string }) =>
+  openDirect = async (input: { agentId: string }) =>
     (await lambdaClient.channel.openDirect.mutate(input)).data;
   detail = async (params: ChannelViewParams): Promise<ChannelDetail> =>
     (await lambdaClient.channel.detail.query(params)).data;

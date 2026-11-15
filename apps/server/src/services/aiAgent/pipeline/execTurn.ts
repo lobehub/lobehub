@@ -278,6 +278,7 @@ export const execAgentTurn = async (
         appContext,
         chatConfigOverride,
         agentConfigSnapshot: params.agentConfigSnapshot,
+        snapshotFollowsCallerDevice: params.snapshotFollowsCallerDevice,
         identifier,
         instructions,
         modelOverride,

@@ -51,6 +51,13 @@ type AgentVisibility = (typeof AGENT_VISIBILITIES)[number];
 const readAgencyConfig = (agencyConfigFile: string): Promise<Record<string, unknown>> =>
   readJsonObjectFile(agencyConfigFile, 'agencyConfig');
 
+interface AgentListOptions {
+  json?: string | boolean;
+  keyword?: string;
+  limit?: string;
+  tag?: string;
+}
+
 export function registerAgentCommand(program: Command) {
   const agent = program.command('agent').description('Manage agents');
   registerAgentSpaceFsCommand(agent);
@@ -64,8 +71,9 @@ export function registerAgentCommand(program: Command) {
     .description('List agents')
     .option('-L, --limit <n>', 'Maximum number of items', '30')
     .option('-k, --keyword <keyword>', 'Filter by keyword')
+    .option('--tag <tag>', 'Only agents carrying this tag')
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
-    .action(async (options: { json?: string | boolean; keyword?: string; limit?: string }) => {
+    .action(async (options: AgentListOptions) => {
       const client = await getTrpcClient();
 
       // The inbox (Lobe AI) is a real assistant the user can open, and this is
@@ -77,12 +85,25 @@ export function registerAgentCommand(program: Command) {
         keyword?: string;
         limit?: number;
         offset?: number;
+        tag?: string;
       } = { includeInbox: true };
       if (options.keyword) input.keyword = options.keyword;
+      if (options.tag?.trim()) input.tag = options.tag.trim();
       if (options.limit) input.limit = Number.parseInt(options.limit, 10);
 
       const result = await client.agent.queryAgents.query(input);
-      const items = Array.isArray(result) ? result : ((result as any).items ?? []);
+      const listed: any[] = Array.isArray(result) ? result : ((result as any).items ?? []);
+      // An older server drops the unknown `tag` input and returns an unfiltered
+      // page whose rows carry no `tags`: keep only rows that really carry the
+      // tag, so unrelated agents are never printed as a filtered result.
+      const tag = input.tag;
+      const items =
+        tag === undefined
+          ? listed
+          : listed.filter((a) => Array.isArray(a?.tags) && a.tags.includes(tag));
+      if (tag !== undefined && listed.length > 0 && !listed.some((a) => Array.isArray(a?.tags))) {
+        log.warn('This server does not filter agents by tag; upgrade it to use --tag.');
+      }
 
       if (options.json !== undefined) {
         const fields = typeof options.json === 'string' ? options.json : undefined;
@@ -182,6 +203,11 @@ export function registerAgentCommand(program: Command) {
     .option('-p, --provider <provider>', 'Provider ID')
     .option('-s, --system-role <role>', 'System role prompt')
     .option('--group <groupId>', 'Group ID')
+    .option(
+      '--tag <tag>',
+      'Tag the agent (repeatable), e.g. so an app can find the agents it created',
+      (tag: string, tags: string[] = []) => [...tags, tag],
+    )
     .addOption(
       new Option(
         '--visibility <visibility>',
@@ -197,6 +223,7 @@ export function registerAgentCommand(program: Command) {
         model?: string;
         provider?: string;
         systemRole?: string;
+        tag?: string[];
         title?: string;
         visibility?: AgentVisibility;
       }) => {
@@ -209,6 +236,8 @@ export function registerAgentCommand(program: Command) {
         if (options.model) config.model = options.model;
         if (options.provider) config.provider = options.provider;
         if (options.systemRole) config.systemRole = options.systemRole;
+        const tags = [...new Set((options.tag ?? []).map((t) => t.trim()).filter(Boolean))];
+        if (tags.length > 0) config.tags = tags;
 
         const input: Record<string, any> = { config };
         if (options.group) input.groupId = options.group;

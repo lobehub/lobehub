@@ -35,14 +35,13 @@ export default {
   'environment.agentUnavailable':
     'This Agent is no longer available. Remove it and choose another.',
   'environment.checkingDevice': 'Checking status',
-  'environment.chooseDevice': 'Choose a device',
+  'environment.followAgent': "Use the Agent's own settings",
   'environment.configurationFailed': 'Could not load this Agent’s settings. Try again.',
   'environment.configurationLoading': 'Loading this Agent’s settings…',
   'environment.connectorUpgradeRequired':
     'This device’s LobeHub connector needs an update. Update LobeHub Desktop or the LobeHub CLI on that device, then reconnect and try again.',
   'environment.deviceLabel': 'Device for {{name}}',
   'environment.deviceOffline': 'This device is offline. Reconnect it or choose another device.',
-  'environment.deviceRequired': 'Choose an online device for this coding Agent.',
   'environment.deviceUnreachable':
     'Could not connect to the device to check the working directory. Check the device connection and try again.',
   'environment.deviceUnavailable':
@@ -56,8 +55,6 @@ export default {
   'environment.directoryRequired': 'Choose a working directory on this device.',
   'environment.inherited.deviceOffline':
     'This Agent’s device is offline. Reconnect the device, or remove the Agent.',
-  'environment.inherited.deviceRequired':
-    'This coding Agent has no default device. Choose one in its settings, or remove the Agent.',
   'environment.inherited.deviceUnavailable':
     'This Agent’s device is unavailable in the current space. Change it in the Agent’s settings, or remove the Agent.',
   'environment.directoryUnavailable':
@@ -74,7 +71,6 @@ export default {
   'environment.unsupportedRuntime': 'This Agent cannot run in a channel yet. Choose another Agent.',
   'directoryRequired': 'Choose a working directory for each device.',
   'deviceRequired': 'Choose an online device and a working directory for each coding Agent.',
-  'noDevice': 'No device',
   'chooseDevice': 'Choose a device',
   'noDevices': 'No device is connected. Connect one, then choose it here.',
   'offline': 'Offline',

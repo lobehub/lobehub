@@ -4,6 +4,7 @@ import type { DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorCredentials } from '@/database/schemas';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { mcpService } from '@/server/services/mcp';
+import { listMcpToolsOnDevice } from '@/server/services/mcp/deviceTunnel';
 
 import {
   buildConnectorMcpParams,
@@ -12,6 +13,9 @@ import {
 } from './sync';
 
 vi.mock('@/server/services/mcp', () => ({ mcpService: { listRawTools: vi.fn() } }));
+const gateway = vi.hoisted(() => ({ isConfigured: false }));
+vi.mock('@/server/services/deviceGateway', () => ({ deviceGateway: gateway }));
+vi.mock('@/server/services/mcp/deviceTunnel', () => ({ listMcpToolsOnDevice: vi.fn() }));
 const mcpAppsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
 vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mcpAppsEnabled }));
 vi.mock('./tokens', () => ({ ensureFreshConnectorToken: async (connector: unknown) => connector }));
@@ -202,6 +206,92 @@ describe('buildConnectorMcpParams', () => {
   });
 });
 
+describe('a connector bound to a device', () => {
+  const stdioConnector = (metadata: Record<string, unknown> | null, workspaceId?: string) =>
+    ({
+      credentials: null,
+      id: 'c1',
+      identifier: 'local-conn',
+      isEnabled: true,
+      mcpConnectionType: 'stdio',
+      mcpServerUrl: null,
+      mcpStdioConfig: { args: ['serve'], command: 'my-mcp' },
+      metadata,
+      name: 'Local Connector',
+      oidcConfig: null,
+      userId: 'creator',
+      workspaceId: workspaceId ?? null,
+    }) as any;
+
+  it('carries the binding, in its workspace, into the params agent runs use', () => {
+    const connector = stdioConnector({ boundDeviceId: 'ws-nas' }, 'ws1');
+    const [manifest] = buildConnectorManifests(
+      [connector],
+      [{ toolName: 'do_thing', userConnectorId: 'c1' } as any],
+    );
+
+    expect(buildConnectorMcpParams(connector)).toMatchObject({
+      boundDevice: { deviceId: 'ws-nas', workspaceId: 'ws1' },
+    });
+    expect(buildConnectorMcpParams(connector)).toEqual((manifest as any).mcpParams);
+  });
+
+  it('ignores a binding left on a server the server reaches itself', () => {
+    expect(
+      buildConnectorMcpParams(httpConnector(null, { boundDeviceId: 'nas' })),
+    ).not.toHaveProperty('boundDevice');
+  });
+
+  it("lets any member refresh a workspace connector's tools on its bound device", async () => {
+    gateway.isConfigured = true;
+    vi.mocked(listMcpToolsOnDevice).mockResolvedValue([
+      { description: 'Do', inputSchema: { type: 'object' }, name: 'do_thing' },
+    ]);
+    try {
+      const result = await syncConnectorToolsById('c1', {
+        connectorModel: {
+          findById: async () => stdioConnector({ boundDeviceId: 'ws-nas' }, 'ws1'),
+          updateStatus: vi.fn(),
+        } as any,
+        connectorToolModel: { upsertMany: vi.fn() } as any,
+        serverDB: {} as any,
+        userId: 'another-member',
+      });
+
+      expect(result).toEqual({ toolCount: 1 });
+      expect(listMcpToolsOnDevice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          params: expect.objectContaining({
+            boundDevice: { deviceId: 'ws-nas', workspaceId: 'ws1' },
+          }),
+          userId: 'another-member',
+        }),
+      );
+    } finally {
+      gateway.isConfigured = false;
+    }
+  });
+
+  it("still keeps an unbound workspace connector's device refresh to its creator", async () => {
+    gateway.isConfigured = true;
+    try {
+      await expect(
+        syncConnectorToolsById('c1', {
+          connectorModel: {
+            findById: async () => stdioConnector(null, 'ws1'),
+            updateStatus: vi.fn(),
+          } as any,
+          connectorToolModel: { upsertMany: vi.fn() } as any,
+          serverDB: {} as any,
+          userId: 'another-member',
+        }),
+      ).rejects.toThrow(/only the member who set it up/);
+    } finally {
+      gateway.isConfigured = false;
+    }
+  });
+});
+
 describe('syncConnectorToolsById', () => {
   it("syncs view-only tools too, recording each tool's MCP Apps visibility", async () => {
     vi.mocked(mcpService.listRawTools).mockResolvedValue([
@@ -226,6 +316,31 @@ describe('syncConnectorToolsById', () => {
       expect.objectContaining({ metadata: null, toolName: 'show_dashboard' }),
       expect.objectContaining({ metadata: { visibility: ['app'] }, toolName: 'load_page' }),
     ]);
+  });
+
+  it('drops only the auto tools the server no longer lists when asked to', async () => {
+    vi.mocked(mcpService.listRawTools).mockResolvedValue([
+      { description: 'Kept', inputSchema: { type: 'object' }, name: 'kept' },
+    ]);
+    const deleteToolsNotIn = vi.fn();
+    const connectorToolModel = {
+      deleteToolsNotIn,
+      queryByConnector: async () => [
+        { permission: 'auto', toolName: 'kept' },
+        { permission: 'auto', toolName: 'gone' },
+        { permission: 'needs_approval', toolName: 'gated' },
+      ],
+      upsertMany: vi.fn(),
+    };
+    const connectorModel = { findById: async () => httpConnector(null), updateStatus: vi.fn() };
+
+    await syncConnectorToolsById('c1', { connectorModel, connectorToolModel } as any);
+    expect(deleteToolsNotIn).not.toHaveBeenCalled();
+
+    await syncConnectorToolsById('c1', { connectorModel, connectorToolModel } as any, {
+      pruneMissingAutoTools: true,
+    });
+    expect(deleteToolsNotIn).toHaveBeenCalledWith('c1', ['kept', 'gated']);
   });
 
   it.each([true, false])(

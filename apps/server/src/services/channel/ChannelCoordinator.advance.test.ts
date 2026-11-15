@@ -118,6 +118,45 @@ describe('Channel concurrent startup', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
+  // A Channel binds no device by default: an unbound run keeps the Agent's own settings and the
+  // requester's device for it, while a device picked in the Channel pins the run there.
+  it.each([
+    ['no device picked', { agencyConfig: { boundDeviceId: 'mac', executionTarget: 'device' } }],
+    [
+      'a device picked in the Channel',
+      { agencyConfig: { boundDeviceId: 'mac' }, deviceId: 'dev-2', workingDirectory: '/repo' },
+    ],
+  ])('dispatches with %s', async (_, environment) => {
+    const claim = executions.claim.getMockImplementation()!;
+    executions.claim.mockImplementation(async (...args: Parameters<typeof claim>) => {
+      const claimed = await claim(...args);
+      return {
+        ...claimed,
+        job: { ...claimed.job, executionConfig: { runtime: 'codex', ...environment } },
+      };
+    });
+
+    await coordinator(1).advance('channel');
+
+    const [params] = execAgent.mock.calls[0];
+    if ('deviceId' in environment) {
+      expect(params).toMatchObject({ deviceId: 'dev-2', snapshotFollowsCallerDevice: false });
+      expect(params.agentConfigSnapshot.agencyConfig).toEqual({
+        boundDeviceId: 'dev-2',
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+        workingDirByDevice: { 'dev-2': '/repo' },
+      });
+    } else {
+      expect(params).toMatchObject({ deviceId: undefined, snapshotFollowsCallerDevice: true });
+      expect(params).not.toHaveProperty('disableLocalSystem');
+      expect(params.agentConfigSnapshot.agencyConfig).toEqual({
+        boundDeviceId: 'mac',
+        executionTarget: 'device',
+      });
+    }
+  });
+
   it('notifies the claimed reply state before runtime startup resolves', async () => {
     const gate = Promise.withResolvers<{ success: boolean }>();
     execAgent.mockReturnValue(gate.promise);

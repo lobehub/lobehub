@@ -42,6 +42,7 @@ export interface ResolveRunAgentConfigInput {
    * language appended to the system role) must be read for this user instead.
    */
   shareVisitorUserId?: string;
+  snapshotFollowsCallerDevice?: InternalExecAgentParams['snapshotFollowsCallerDevice'];
   throwIfExecutionAborted: (stage: string) => Promise<void>;
   toolModeOverride?: InternalExecAgentParams['toolModeOverride'];
 }
@@ -198,7 +199,12 @@ export const resolveRunAgentConfig = async (
   const scope = (appContext?.scope ?? undefined) as MessageMapScope | undefined;
   const [overrides, canManageAgent, userLocale, pageSandboxAvailable] = await Promise.all([
     input.agentConfigSnapshot
-      ? Promise.resolve({} as WorkspaceMemberOverrides)
+      ? // The snapshot decided model and mode; only the caller's device may still follow them.
+        input.snapshotFollowsCallerDevice
+        ? loadWorkspaceMemberOverrides(deps, resolvedAgentId).then(
+            ({ device }): WorkspaceMemberOverrides => ({ device }),
+          )
+        : Promise.resolve({} as WorkspaceMemberOverrides)
       : loadWorkspaceMemberOverrides(deps, resolvedAgentId),
     resolveCanManage(deps, row, agentWorkspaceId, isPublicWorkspaceAgent),
     // A share visitor replies in their own language, not the owner's.

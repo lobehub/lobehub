@@ -2,13 +2,14 @@ import { isRecord, toRecord } from '@lobechat/utils/object';
 
 import type { ToolCRUDType } from '@/database/schemas';
 
-/** The expected HTTP connection failures normalized by MCPClient.initialize. */
+/** The expected HTTP connection failures normalized by MCPClient. */
 export const getMCPConnectionErrorType = (error: unknown) => {
   const type = toRecord(toRecord(error)?.data)?.type;
   if (
     type === 'AUTHORIZATION_ERROR' ||
     type === 'INITIALIZATION_TIMEOUT' ||
-    type === 'CONNECTION_FAILED'
+    type === 'CONNECTION_FAILED' ||
+    type === 'SSRF_BLOCKED'
   )
     return type;
 };

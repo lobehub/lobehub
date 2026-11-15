@@ -21,7 +21,6 @@ import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { shouldHardNavigateToWorkbench } from '@/libs/next/workbenchNavigation';
-import { useClientDataSWR } from '@/libs/swr';
 import { useAgentStore } from '@/store/agent';
 import {
   agentDocumentActions,
@@ -33,12 +32,9 @@ import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { useEntityLinkHostDismiss, useEntityLinkPortal } from '../host';
 import { type InternalLinkReference, isBareLinkLabel, isEntityIdLabel } from '../internalLink';
-import {
-  getPreviewData,
-  InternalEntityPreview,
-  internalEntityPreviewKey,
-} from './InternalEntityPreview';
+import { InternalEntityPreview } from './InternalEntityPreview';
 import { useAcceptanceBrowserUrl } from './useAcceptanceBrowserUrl';
+import { useEntityPreview } from './useEntityPreview';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   browser: css`
@@ -106,7 +102,6 @@ interface InternalEntityLinkProps {
 }
 
 export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, reference }) => {
-  const { t } = useTranslation('chat');
   const { t: tVerify } = useTranslation('verify');
   const navigate = useWorkspaceAwareNavigate();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
@@ -129,8 +124,9 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
     s.openVerifyReport,
   ]);
   // A pasted URL says nothing about what it points to, so resolve the entity's
-  // own title and show that instead — the same read the hover preview makes,
-  // under the same key, so the eager fetch also makes the hover card instant.
+  // own title and show that instead — the same preview replica the hover card
+  // reads, so the eager fetch also makes the card instant, and a reload paints
+  // the remembered title instead of flashing the URL first.
   // Bare links are sparse in real messages, which is why prefetching the full
   // preview beats a dedicated title read. Cross-workspace links are skipped:
   // the ambient client resolves against the ACTIVE scope, where a
@@ -140,12 +136,8 @@ export const InternalEntityLink = memo<InternalEntityLinkProps>(({ href, label, 
     reference.type !== 'route' &&
     !reference.workspaceSlug &&
     (isBareLinkLabel(label, href) || isEntityIdLabel(label, reference));
-  const { data: entity } = useClientDataSWR(
-    shouldResolveTitle ? internalEntityPreviewKey(reference) : null,
-    () => getPreviewData(reference, t),
-    { revalidateOnFocus: false },
-  );
-  const displayLabel = (shouldResolveTitle && entity?.title) || label;
+  const { title: entityTitle } = useEntityPreview(reference, shouldResolveTitle);
+  const displayLabel = (shouldResolveTitle && entityTitle) || label;
   // A click on the link opens the acceptance in the side panel, which another
   // surface (a session overlay) can cover; this one-click way out to the full
   // browser page needs no hover on the preview first. Mobile opens it in a

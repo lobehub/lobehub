@@ -10,8 +10,10 @@ const DESKTOP_ONLY: DeviceClient[] = ['desktop'];
  * capability is declared rather than listed here:
  *
  * - builtin device tools → the manifest's `deviceClients`
- * - MCP calls → desktop only (`lh connect` has no MCP client and would
- *   dispatch the call by `apiName` to a same-named local tool)
+ * - MCP calls → the client `resolveMcpClientKinds` picked for the device,
+ *   passed explicitly by the tunnel. Desktop only when a caller passes none:
+ *   that is the one client known to run them without reading the device's
+ *   system info (an older `lh connect` dispatches them by `apiName`)
  * - message API → desktop only (only the desktop app implements a messenger)
  * - RPC → `deviceRpcClients` in `@lobechat/device-control`
  *

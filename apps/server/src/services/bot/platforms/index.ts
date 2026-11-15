@@ -10,6 +10,7 @@ import { PlatformRegistry } from './registry';
 import { slack } from './slack/definition';
 import { telegram } from './telegram/definition';
 import { wechat } from './wechat/definition';
+import { wecom } from './wecom/definition';
 
 export {
   allowFromField,
@@ -126,6 +127,7 @@ export { qq } from './qq/definition';
 export { slack } from './slack/definition';
 export { telegram } from './telegram/definition';
 export { wechat } from './wechat/definition';
+export { wecom } from './wecom/definition';
 
 export const platformRegistry = new PlatformRegistry();
 
@@ -138,3 +140,4 @@ platformRegistry.register(lark);
 platformRegistry.register(qq);
 platformRegistry.register(wechat);
 platformRegistry.register(line);
+platformRegistry.register(wecom);

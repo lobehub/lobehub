@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { discoverService } from '@/services/discover';
 import { mcpService } from '@/services/mcp';
-import { pluginService } from '@/services/plugin';
 import { globalHelpers } from '@/store/global/helpers';
 import { type CheckMcpInstallResult } from '@/types/plugins';
 import { MCPInstallStep } from '@/types/plugins';
@@ -23,6 +22,7 @@ vi.mock('@/utils/platform', async (importOriginal) => ({
 vi.mock('@/libs/trpc/client', () => ({
   asyncClient: {},
   lambdaClient: {
+    connector: { syncToolsFromClientById: { mutate: vi.fn() } },
     market: {
       getMcpCategories: { query: vi.fn() },
       getMcpDetail: { query: vi.fn() },
@@ -707,7 +707,16 @@ describe('mcpStore actions', () => {
       vi.spyOn(discoverService, 'getMCPPluginManifest').mockResolvedValue(mockManifest as any);
       vi.spyOn(mcpService, 'checkInstallation').mockResolvedValue(mockCheckResult);
       vi.spyOn(mcpService, 'getStdioMcpServerManifest').mockResolvedValue(mockServerManifest);
-      vi.spyOn(pluginService, 'installPlugin').mockResolvedValue(undefined);
+      // The install lands in user_connectors (payloads: installMarketplaceConnector.test.ts)
+      const row = { id: 'connector-1', metadata: null } as any;
+      const createConnector = vi.fn(async () => {
+        useToolStore.setState({ connectors: [row] });
+        return { id: row.id, isNew: true };
+      });
+      const syncConnectorTools = vi.fn();
+      const fetchConnectors = vi.fn();
+      act(() => useToolStore.setState({ createConnector, fetchConnectors, syncConnectorTools }));
+      act(() => useToolStore.setState({ updateConnector: vi.fn() }));
       vi.spyOn(discoverService, 'reportMcpInstallResult').mockResolvedValue(undefined as any);
       vi.spyOn(discoverService, 'getMcpDetail').mockResolvedValue(mockPlugin as any);
     });
@@ -733,8 +742,10 @@ describe('mcpStore actions', () => {
         });
         expect(mcpService.checkInstallation).toHaveBeenCalled();
         expect(mcpService.getStdioMcpServerManifest).toHaveBeenCalled();
-        expect(pluginService.installPlugin).toHaveBeenCalled();
-        expect(result.current.refreshPlugins).toHaveBeenCalled();
+        expect(result.current.syncConnectorTools).toHaveBeenCalledWith('connector-1', {
+          pruneMissingAutoTools: true,
+        });
+        expect(result.current.refreshPlugins).not.toHaveBeenCalled(); // no legacy plugin row
       });
 
       it('should update progress through installation steps', async () => {
@@ -842,7 +853,7 @@ describe('mcpStore actions', () => {
         });
 
         expect(installResult).toBe(false);
-        expect(pluginService.installPlugin).not.toHaveBeenCalled();
+        expect(useToolStore.getState().createConnector).not.toHaveBeenCalled();
       });
 
       it('should skip dependencies check when skipDepsCheck is true', async () => {
@@ -867,7 +878,7 @@ describe('mcpStore actions', () => {
         });
 
         expect(installResult).toBe(true);
-        expect(pluginService.installPlugin).toHaveBeenCalled();
+        expect(useToolStore.getState().createConnector).toHaveBeenCalled();
       });
     });
 
@@ -898,7 +909,7 @@ describe('mcpStore actions', () => {
         });
 
         expect(installResult).toBe(false);
-        expect(pluginService.installPlugin).not.toHaveBeenCalled();
+        expect(useToolStore.getState().createConnector).not.toHaveBeenCalled();
       });
     });
 
@@ -964,8 +975,6 @@ describe('mcpStore actions', () => {
           });
         });
 
-        const installPluginSpy = vi.spyOn(pluginService, 'installPlugin');
-
         let installResult;
         await act(async () => {
           installResult = await result.current.installMCPPlugin('test-plugin');
@@ -973,16 +982,9 @@ describe('mcpStore actions', () => {
 
         expect(installResult).toBe(true);
 
-        // Should create cloud type connection
-        expect(installPluginSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            customParams: expect.objectContaining({
-              mcp: expect.objectContaining({
-                type: 'cloud',
-                cloudEndPoint: true,
-              }),
-            }),
-          }),
+        // Should create a cloud type connector
+        expect(result.current.createConnector).toHaveBeenCalledWith(
+          expect.objectContaining({ mcpConnectionType: 'cloud', sourceType: 'marketplace' }),
         );
 
         // Should NOT call stdio connection
@@ -1169,18 +1171,12 @@ describe('mcpStore actions', () => {
           });
         });
 
-        const installPluginSpy = vi.spyOn(pluginService, 'installPlugin');
-
         await act(async () => {
           await result.current.installMCPPlugin('test-plugin');
         });
 
-        expect(installPluginSpy).toHaveBeenCalledWith(
-          expect.objectContaining({
-            manifest: expect.objectContaining({
-              version: '1.5.0',
-            }),
-          }),
+        expect(discoverService.reportMcpInstallResult).toHaveBeenCalledWith(
+          expect.objectContaining({ success: true, version: '1.5.0' }),
         );
       });
     });
@@ -1211,7 +1207,7 @@ describe('mcpStore actions', () => {
         });
 
         // Should not install if cancelled
-        expect(pluginService.installPlugin).not.toHaveBeenCalled();
+        expect(useToolStore.getState().createConnector).not.toHaveBeenCalled();
       });
     });
 
@@ -1298,7 +1294,7 @@ describe('mcpStore actions', () => {
         });
 
         expect(installResult).toBeUndefined();
-        expect(pluginService.installPlugin).not.toHaveBeenCalled();
+        expect(useToolStore.getState().createConnector).not.toHaveBeenCalled();
       });
 
       it('should return undefined if installation check fails', async () => {

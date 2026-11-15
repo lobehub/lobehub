@@ -293,6 +293,38 @@ describe('createRouterRuntime music', () => {
     );
   });
 
+  it('carries the request trigger so a lobehub route attempt passes the dev context guard', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    const createMusic = vi.fn(async () => ({ inferenceId: 'task-1', status: 'pending' as const }));
+
+    class MockMusicRuntime implements LobeRuntimeAI {
+      createMusic = createMusic;
+    }
+
+    const Runtime = createRouterRuntime({
+      id: 'lobehub',
+      routers: [
+        {
+          apiType: 'fal',
+          models: ['song-model'],
+          options: [{ apiKey: 'channel-a', id: 'a' }],
+          runtime: MockMusicRuntime as any,
+        },
+      ],
+    });
+    const runtime = new Runtime({ userId: 'user-1' });
+
+    // Without a trigger the development guard rejects the attempt before it reaches the channel
+    await expect(runtime.createMusic(payload)).rejects.toThrow('"missingTrigger":true');
+    expect(createMusic).not.toHaveBeenCalled();
+
+    await expect(runtime.createMusic(payload, { metadata: { trigger: 'music' } })).resolves.toEqual(
+      expect.objectContaining({ inferenceId: 'task-1' }),
+    );
+    expect(createMusic).toHaveBeenCalledTimes(1);
+    vi.unstubAllEnvs();
+  });
+
   it('reports runtimes without music support', async () => {
     class ChatOnlyRuntime implements LobeRuntimeAI {}
 

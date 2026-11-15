@@ -1,6 +1,9 @@
 'use client';
 
-import { cx, useVideo } from '@lobehub/ui';
+import { useVideo } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
+
+import { sx } from '@/styles/sx';
 
 import { styles } from './styles';
 import { isOnFrame } from './videoTime';
@@ -32,20 +35,21 @@ const Regions = ({ active, regions }: { active?: string; regions: FrameRegion[] 
     .map((region) => (
       <div
         key={region.key}
-        style={{ ...percent(region.rect), borderColor: region.color }}
-        className={
-          region.label === undefined && region.color === undefined ? styles.region : styles.mark
-        }
+        {...sx(
+          region.label === undefined && region.color === undefined ? styles.region : styles.mark,
+          { ...percent(region.rect), borderColor: region.color },
+        )}
       >
         {region.label !== undefined ? (
           <span
-            className={cx(styles.markBadge, region.key === active && styles.markBadgeActive)}
-            style={{ background: region.color }}
+            {...sx(styles.markBadge, region.key === active && styles.markBadgeActive, {
+              background: region.color,
+            })}
           >
             {region.label}
           </span>
         ) : region.comment ? (
-          <span className={styles.regionLabel}>{region.comment}</span>
+          <span {...stylex.props(styles.regionLabel)}>{region.comment}</span>
         ) : null}
       </div>
     ));
@@ -56,5 +60,5 @@ export const FrameRegions = ({ active, regions }: { active?: string; regions: Fr
   regions.length > 0 ? <Regions active={active} regions={regions} /> : null;
 
 export const DraftRegion = ({ rect }: { rect: Rect }) => (
-  <div className={styles.draft} style={percent(rect)} />
+  <div {...sx(styles.draft, percent(rect))} />
 );

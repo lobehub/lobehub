@@ -18,6 +18,16 @@ describe('UserPreferenceSchema', () => {
     },
   );
 
+  // The rail order is replaced as a whole on every write, so it must survive intact.
+  it('preserves the workspace rail order instead of stripping it', () => {
+    const parsed = UserPreferenceSchema.parse({
+      telemetry: null,
+      workspace: { order: ['ws-2', 'ws-1'] },
+    });
+
+    expect(parsed).toMatchObject({ workspace: { order: ['ws-2', 'ws-1'] } });
+  });
+
   it('preserves the meeting auto-create switch', () => {
     const parsed = UserPreferenceSchema.parse({
       meeting: { autoCreateTasks: true },

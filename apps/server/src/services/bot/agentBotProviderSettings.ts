@@ -1,3 +1,4 @@
+import debug from 'debug';
 import { eq } from 'drizzle-orm';
 
 import { assertBotFeatureAccess } from '@/business/server/bot/featureAccess';
@@ -9,6 +10,7 @@ import {
   hasPassiveListeningRule,
 } from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
+import { resolveReplyConnectionHost } from '@/server/services/gateway/replyConnectionHost';
 
 import { getBotMessageRouter } from './BotMessageRouter';
 import {
@@ -19,6 +21,8 @@ import {
   resolveConnectionMode,
   validateAccessSettings,
 } from './platforms';
+
+const log = debug('lobe-server:bot:provider-settings');
 
 /**
  * Merge schema defaults into incoming settings before persisting, so the DB
@@ -170,6 +174,11 @@ export async function assertWatchKeywordsWritable(params: {
 
 interface BotInvalidationTarget {
   applicationId: string;
+  /**
+   * Previous decrypted credentials. Lets an in-process connection restart only when they
+   * really changed: a full save resends the stored (unmasked) values unchanged.
+   */
+  credentials?: Record<string, unknown> | null;
   platform: string;
   /** Previous settings — enables capability-delta detection (e.g. watch keywords). */
   settings?: Record<string, unknown> | null;
@@ -179,10 +188,24 @@ interface BotInvalidationTarget {
 
 interface BotInvalidationDelta {
   applicationId?: string;
+  credentials?: Record<string, unknown>;
   enabled?: boolean;
   platform?: string;
   settings?: Record<string, unknown>;
 }
+
+const haveCredentialsChanged = (
+  previous: Record<string, unknown> | null | undefined,
+  next: Record<string, unknown>,
+): boolean => {
+  // Without the previous values, assume a change: a missed restart drops every message.
+  if (!previous) return true;
+  const keys = new Set([...Object.keys(previous), ...Object.keys(next)]);
+  for (const key of keys) {
+    if ((previous[key] ?? '') !== (next[key] ?? '')) return true;
+  }
+  return false;
+};
 
 /**
  * Drop the cached `RegisteredBot` so the next inbound webhook re-reads the
@@ -230,4 +253,28 @@ export async function invalidateBotAfterUpdate(
   }
 
   await getBotMessageRouter().invalidateBot(existing.platform, existing.applicationId);
+
+  // A platform that replies over its own connection signs what it forwards with its credentials,
+  // and the reloaded webhook adapter now verifies with the new ones: restart the connection on
+  // them, or every inbound message is refused from here on.
+  const replyHost =
+    platformRegistry.getPlatform(existing.platform)?.repliesOverConnection &&
+    resolveReplyConnectionHost(existing.platform);
+  if (
+    replyHost &&
+    !shouldStopRuntime &&
+    value.credentials !== undefined &&
+    haveCredentialsChanged(existing.credentials, value.credentials)
+  ) {
+    const restart = service
+      .startClient(existing.platform, existing.applicationId, existing.userId)
+      .catch((error) => {
+        log('Restart after credential change failed for %s: %O', existing.platform, error);
+      });
+    // In-process, the subscribe handshake can take up to its connect timeout and the save has
+    // already succeeded, so it is not awaited; the client records the outcome in its runtime
+    // status. A gateway connect returns at once, and on serverless a promise left running after
+    // the response may never finish.
+    if (replyHost === 'message-gateway') await restart;
+  }
 }

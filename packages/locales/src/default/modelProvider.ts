@@ -62,6 +62,18 @@ export default {
   'cloudflare.baseURLOrAccountID.desc': 'Enter your Cloudflare account ID or custom API address',
   'cloudflare.baseURLOrAccountID.placeholder': 'Cloudflare Account ID / custom API URL',
   'cloudflare.baseURLOrAccountID.title': 'Cloudflare Account ID / API Address',
+  'doubaospeech.accessToken.desc':
+    'Legacy speech console only: the Access Token paired with the App ID. Leave empty when using an API Key',
+  'doubaospeech.accessToken.placeholder': 'Access Token',
+  'doubaospeech.accessToken.title': 'Access Token (legacy console)',
+  'doubaospeech.apiKey.desc':
+    'API Key from the new Volcengine speech console (API Key management). Recommended; it takes precedence over App ID + Access Token',
+  'doubaospeech.apiKey.placeholder': 'Doubao Speech API Key',
+  'doubaospeech.apiKey.title': 'API Key',
+  'doubaospeech.appId.desc':
+    'Legacy speech console only: the App ID of your application, used together with the Access Token',
+  'doubaospeech.appId.placeholder': 'App ID',
+  'doubaospeech.appId.title': 'App ID (legacy console)',
   'comfyui.apiKey.desc': 'API key for Bearer Token authentication',
   'comfyui.apiKey.placeholder': 'Enter API key',
   'comfyui.apiKey.required': 'Please enter the API key',

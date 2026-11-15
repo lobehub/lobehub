@@ -1,5 +1,8 @@
+import type { AntigravityQuotaParams } from '@lobechat/heterogeneous-agents/quota';
+
 import type { ClaudeCodeAccountProfiles } from '@/modules/heterogeneousAgent/claudeCodeAccounts';
 import type { RemoteServerAuth } from '@/modules/heterogeneousAgent/fileStorePort';
+import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
 
 import type HeterogeneousAgentImplementation from './HeterogeneousAgentImpl';
 import type { LhHeteroExecCancellationResult } from './HeterogeneousAgentImpl';
@@ -101,6 +104,22 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   @IpcMethod()
   async listModels(...args: Parameters<Implementation['listModels']>) {
     return (await this.getImplementation()).listModels(...args);
+  }
+
+  @IpcMethod()
+  async getAntigravityQuota(params: AntigravityQuotaParams = {}) {
+    const [{ getAntigravityQuota }, { buildInheritedSpawnEnv }] = await Promise.all([
+      import('@lobechat/device-control'),
+      import('./HeterogeneousAgentImpl'),
+    ]);
+    return getAntigravityQuota({
+      ...params,
+      env: {
+        ...buildInheritedSpawnEnv(),
+        ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
+        ...params.env,
+      },
+    });
   }
 
   @IpcMethod()

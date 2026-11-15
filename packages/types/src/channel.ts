@@ -39,31 +39,6 @@ export const isChannelRuntime = (runtime: string): runtime is ChannelRuntime =>
   !Object.hasOwn(CHANNEL_EXCLUDED_RUNTIMES, runtime) &&
   (CHANNEL_RUNTIMES as readonly string[]).includes(runtime);
 
-/**
- * The device a Channel seats an Agent on until someone picks another: the one the Agent is bound
- * to, else this person's own desktop for an Agent that runs on its user's machine (`local`, or an
- * external runtime with no target). Never another available or online device.
- */
-export const defaultChannelAgentDevice = ({
-  agencyConfig,
-  localDeviceId,
-  runtime,
-  workspaceScoped,
-}: {
-  agencyConfig?: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'> | null;
-  /** This person's own desktop, when they act from one. */
-  localDeviceId?: string;
-  runtime: string;
-  /** The Agent runs on workspace devices only, never a personal desktop. */
-  workspaceScoped?: boolean;
-}): string | undefined => {
-  const target = agencyConfig?.executionTarget;
-  if (target === 'none' || target === 'sandbox' || target === 'auto') return;
-  const localDefault =
-    !workspaceScoped && (target === 'local' || (target === undefined && runtime !== 'native'));
-  return agencyConfig?.boundDeviceId || (localDefault ? localDeviceId : undefined);
-};
-
 /** The directory on that device: the Agent's own choice there, else the device's default. */
 export const defaultChannelAgentDirectory = (
   agencyConfig: Pick<LobeAgentAgencyConfig, 'workingDirByDevice'> | null | undefined,
@@ -552,8 +527,15 @@ export interface ChannelPublicJob {
   blockedCode: ChannelJobBlockCode | null;
   /** Server-computed for the current member: its requester or an admin. */
   canStop: boolean;
+  /**
+   * The device the reply runs on, waits for or failed to reach, when known: the claimed
+   * device, a failed dispatch's route, or the Agent's own bound device.
+   */
+  deviceId?: string | null;
   /** Failure diagnostic only. */
   errorMessage: string | null;
+  /** Category of a failure (a `ChatErrorType`), for a localized explanation. */
+  errorType?: string | null;
   id: string;
   memberId: string;
   messageId: string;

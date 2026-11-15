@@ -1,4 +1,6 @@
+import { ChatErrorType } from '@lobechat/types';
 import { toast } from '@lobehub/ui';
+import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 import { type RuntimeMusicGenParams } from 'model-bank';
 
@@ -14,6 +16,10 @@ import { musicGenerationConfigSelectors } from '../generationConfig/selectors';
 import { generationTopicSelectors } from '../generationTopic';
 
 type Setter = StoreSetter<MusicStore>;
+
+/** Shown by `handleLobeHubModelDeprecatedError`; every other failure needs its own toast. */
+const isModelDeprecatedError = (error: unknown) =>
+  error instanceof TRPCClientError && error.message === ChatErrorType.LobeHubModelDeprecated;
 
 /**
  * Send only the params the selected model declares: the server rejects undeclared params, and
@@ -107,10 +113,8 @@ export class CreateMusicActionImpl {
         provider,
       });
 
-      // 3. Show the new batch
-      await this.#get().refreshGenerationBatches();
-
-      // 4. Clear the prompt; lyrics, title and style stay for the next variation
+      // 3. Clear the prompt; lyrics, title and style stay for the next variation. The server
+      // accepted the batch, so a later refresh failure must not invite a duplicate (charged) retry.
       this.#set(
         (state) => ({ parameters: { ...state.parameters, prompt: '' } }),
         false,
@@ -120,8 +124,18 @@ export class CreateMusicActionImpl {
       // A rejected prompt is shown on the prompt input, where the user fixes it.
       if (isGenerationPromptModerationError(error)) {
         this.#set({ blockedPrompt: parameters.prompt }, false, 'createMusic/promptBlocked');
+      } else if (isModelDeprecatedError(error)) {
+        handleLobeHubModelDeprecatedError(error);
+      } else {
+        // Anything else (invalid params, a failed topic or batch request) would otherwise only reach
+        // the console and the generate button would look unresponsive.
+        toast.error(
+          t('generation.submitFailed', {
+            message: error instanceof Error ? error.message : String(error),
+            ns: 'music',
+          }),
+        );
       }
-      handleLobeHubModelDeprecatedError(error);
       throw error;
     } finally {
       this.#set(
@@ -129,6 +143,15 @@ export class CreateMusicActionImpl {
         false,
         'createMusic/endCreateMusic',
       );
+    }
+
+    // 4. Show the new batch. The generation already started, so a failed refresh only hides it
+    // until the list reloads; tell the user instead of reporting a failed submission.
+    try {
+      await this.#get().refreshGenerationBatches();
+    } catch (error) {
+      console.error('[createMusic] failed to refresh batches after submitting', error);
+      toast.info(t('generation.submittedRefreshFailed', { ns: 'music' }));
     }
   };
 

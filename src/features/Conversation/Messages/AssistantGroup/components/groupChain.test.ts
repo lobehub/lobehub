@@ -120,3 +120,51 @@ describe('buildChainView MCP App views', () => {
     expect(viewKey([appTool, nextTool])).toBe(alone);
   });
 });
+
+describe('buildChainView answer keys', () => {
+  const tool = (id: string) => ({
+    apiName: 'read',
+    arguments: '{}',
+    id,
+    identifier: 'test',
+    result: { content: 'done', id: `${id}-result` },
+    type: 'default' as const,
+  });
+  const answers = (blocks: AssistantContentBlock[], isGenerating: boolean) =>
+    buildChainView(
+      { blocks, id: 'group' },
+      { hasActiveOperation: isGenerating, isGenerating },
+    ).segments.flatMap((segment) =>
+      segment.kind === 'answer'
+        ? [{ content: segment.block.content, key: segment.block.renderKey }]
+        : [],
+    );
+
+  it.each([
+    'I am inspecting the credentials.',
+    '## Inspection\n\nI am inspecting the credential storage.',
+  ])('preserves the streamed prose key when the same step gains tool calls: %s', (content) => {
+    const first = { content: '', id: 'first', tools: [tool('a'), tool('b')] };
+    const prose = { content, id: 'prose' };
+    const before = answers([first, prose], true);
+    expect(before).toEqual([{ content: prose.content, key: 'prose' }]);
+    expect(answers([first, { ...prose, tools: [tool('c')] }], true)).toEqual(before);
+  });
+
+  it.each(['A short summary.', '## Summary\n\nThe implementation is complete.'])(
+    'preserves narration and final answer keys when generation ends: %s',
+    (content) => {
+      const blocks = [
+        { content: '', id: 'first', tools: [tool('a'), tool('b')] },
+        { content: 'Inspecting credentials.', id: 'middle', tools: [tool('c')] },
+        { content, id: 'final' },
+      ];
+      const streaming = answers(blocks, true);
+      expect(streaming).toEqual([
+        { content: 'Inspecting credentials.', key: 'middle' },
+        { content, key: 'final' },
+      ]);
+      expect(answers(blocks, false)).toEqual(streaming);
+    },
+  );
+});

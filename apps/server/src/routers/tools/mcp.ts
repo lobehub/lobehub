@@ -1,4 +1,5 @@
 import {
+  getDisabledPluginIds,
   GetStreamableMcpServerManifestInputSchema,
   StreamableHTTPAuthSchema,
 } from '@lobechat/types';
@@ -9,6 +10,7 @@ import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { ConnectorToolPermission } from '@/database/schemas';
@@ -137,12 +139,26 @@ export const mcpRouter = router({
         args: z.any(), // Arguments for the tool call
         /** An MCP App view's `tools/call`: only tools visible to the app run. */
         fromApp: z.boolean().optional(),
+        fromEntrypoint: z.boolean().optional(),
+        agentId: z.string().optional(),
         meta: metaSchema, // Optional metadata for reporting
         params: mcpClientParamsSchema, // Use the unified schema for client params
         toolName: z.string(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      if (input.fromEntrypoint && input.agentId) {
+        const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+        const config = await agentModel.getAgentConfigById(input.agentId);
+        if (
+          !config ||
+          getDisabledPluginIds(config.plugins ?? undefined).includes(input.params.name)
+        )
+          throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'This app is unavailable for the agent',
+          });
+      }
       // ── Connector tool permission gate ────────────────────────────────────
       // If the connector identifier matches a user_connectors entry, check whether
       // this specific tool has been disabled by the user. Disabled tools are still
@@ -199,6 +215,7 @@ export const mcpRouter = router({
           argsStr: input.args,
           clientParams: input.params,
           fromApp: input.fromApp,
+          fromEntrypoint: input.fromEntrypoint,
           mcpApps: await isMcpAppsEnabled(ctx.userId),
           processContentBlocks: boundProcessContentBlocks,
           toolName: input.toolName,

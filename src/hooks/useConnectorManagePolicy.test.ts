@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useConnectorManageable } from './useConnectorManagePolicy';
+import { useConnectorManageable, useConnectorManageableChecker } from './useConnectorManagePolicy';
 
 const mocks = vi.hoisted(() => ({
   error: undefined as Error | undefined,
@@ -14,9 +14,13 @@ vi.mock('@/libs/swr', () => ({
   useClientDataSWR: () => ({ data: mocks.policy, error: mocks.error }),
 }));
 
-vi.mock('@/hooks/useResourceManageable', () => ({
-  useResourceManageable: (userId?: string | null) => !userId || userId === 'me',
-}));
+vi.mock('@/hooks/useResourceManageable', () => {
+  const isCreatorOrOwner = (userId?: string | null) => !userId || userId === 'me';
+  return {
+    useResourceManageable: isCreatorOrOwner,
+    useResourceManageableChecker: () => isCreatorOrOwner,
+  };
+});
 
 const manageable = (connector?: { agentId?: string | null; userId?: string | null }) =>
   renderHook(() => useConnectorManageable(connector)).result.current;
@@ -76,5 +80,25 @@ describe('useConnectorManageable', () => {
 
     expect(manageable({ agentId: 'a1', userId: 'me' })).toMatchObject({ canManage: true });
     expect(manageable({ agentId: 'a1', userId: 'arvin' })).toMatchObject({ canManage: false });
+  });
+});
+
+describe('useConnectorManageableChecker', () => {
+  beforeEach(() => {
+    mocks.error = undefined;
+    mocks.policy = { canEditPolicy: false, canManage: true, memberManage: 'all_members' };
+  });
+
+  const check = (connector: { agentId?: string | null; userId?: string | null }) =>
+    renderHook(() => useConnectorManageableChecker()).result.current(connector);
+
+  // One hook call answers for every row of a list, by the same rule
+  it('answers each row as useConnectorManageable does', () => {
+    for (const connector of [{ userId: 'me' }, { userId: 'arvin' }, { agentId: 'a1' }]) {
+      expect(check(connector)).toEqual(manageable(connector));
+    }
+
+    mocks.policy = undefined;
+    expect(check({ userId: 'me' })).toMatchObject({ canManageCredentials: false, isPending: true });
   });
 });

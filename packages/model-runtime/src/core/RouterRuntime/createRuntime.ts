@@ -549,7 +549,7 @@ export const createRouterRuntime = ({
     async createMusic(payload: CreateMusicPayload, options?: CreateMusicOptions) {
       // One attempt on the first sorted channel, through the normal route lifecycle so attempt
       // reporting and `onRouteSuccess` affinity still apply; music never falls back.
-      const routeContext = { method: 'createMusic' as const };
+      const routeContext = { metadata: options?.metadata, method: 'createMusic' as const };
       const { matchedRouter: router, routerOptions } = await selectRouteOptions(
         this.deps,
         payload.model,

@@ -16,6 +16,7 @@ import {
   users,
 } from '@/database/schemas';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { TopicStartReservationError } from '@/server/services/aiAgent/topicStartReservation';
 
 import { GoalService } from './index';
 import * as scheduler from './scheduler';
@@ -94,6 +95,34 @@ describe('GoalManagerService with a planning turn whose dispatch never wrote a r
 
     await editReceipt(goalId, { startedAt: hoursAgo(2) });
     expect((await service().close(goalId, 'achieved')).status).toBe('achieved');
+  });
+
+  // The planning topic was busy, so the dispatch was refused its reservation
+  // before the planning message or any operation was written — the call has
+  // returned, so the turn is over just like a dispatch that failed outright.
+  it('lets the owner close the goal once a dispatch refused its topic is past the turn timeout', async () => {
+    const goalId = await managedGoal();
+    vi.spyOn(AiAgentService.prototype, 'execAgent').mockRejectedValue(
+      new TopicStartReservationError('Topic tpc remained busy while starting operation x'),
+    );
+    await service().tick(goalId);
+    const receipt = (await model().findById(goalId))!.config!.managerState!;
+    expect(receipt.dispatchNeverStarted).toBe(true);
+    expect(receipt.consumed).toBeFalsy();
+
+    await editReceipt(goalId, { startedAt: hoursAgo(2) });
+    expect((await service().close(goalId, 'achieved')).status).toBe('achieved');
+    expect((await model().findById(goalId))!.config!.managerState!.consumed).toBe(true);
+  });
+
+  it('still refuses a dispatch refused its topic while it is inside the turn timeout', async () => {
+    const goalId = await managedGoal();
+    vi.spyOn(AiAgentService.prototype, 'execAgent').mockRejectedValue(
+      new TopicStartReservationError('Topic tpc remained busy while starting operation x'),
+    );
+    await service().tick(goalId);
+
+    await expect(service().close(goalId, 'achieved')).rejects.toThrow(/not closed/);
   });
 
   it('refuses to settle a turn whose dispatch may still be pending', async () => {

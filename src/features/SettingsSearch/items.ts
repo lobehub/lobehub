@@ -672,20 +672,20 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     ns: 'subscription',
     tab: SettingsTabs.Billing,
   },
-  // Credits
+  // Usage and balance (balance anchors keep their `credits-` ids for old links)
   {
     anchor: 'credits-balance',
     keywords: ['balance', 'credits'],
     labelKey: 'balance.title',
     ns: 'subscription',
-    tab: SettingsTabs.Credits,
+    tab: SettingsTabs.Usage,
   },
   {
     anchor: 'credits-top-up',
     keywords: ['top up', 'topup', 'buy credits', 'recharge'],
     labelKey: 'credits.topUp.title',
     ns: 'subscription',
-    tab: SettingsTabs.Credits,
+    tab: SettingsTabs.Usage,
   },
   {
     anchor: 'credits-cost-estimate-hint',
@@ -693,7 +693,7 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     keywords: ['cost estimate'],
     labelKey: 'credits.costEstimateHint.title',
     ns: 'subscription',
-    tab: SettingsTabs.Credits,
+    tab: SettingsTabs.Usage,
   },
   {
     anchor: 'credits-auto-top-up',
@@ -701,14 +701,14 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     keywords: ['auto top up', 'automatic recharge'],
     labelKey: 'credits.autoTopUp.title',
     ns: 'subscription',
-    tab: SettingsTabs.Credits,
+    tab: SettingsTabs.Usage,
   },
   {
     anchor: 'credits-packages',
     keywords: ['package', 'budget'],
     labelKey: 'credits.packages.title',
     ns: 'subscription',
-    tab: SettingsTabs.Credits,
+    tab: SettingsTabs.Usage,
   },
   // Plans
   {

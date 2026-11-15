@@ -59,6 +59,8 @@ export interface MusicPollingOptions {
 export interface CreateMusicOptions extends MusicPollingOptions {
   /** Webhook the provider calls on completion. Some providers require it even when polling. */
   callbackUrl?: string;
+  /** Request metadata (e.g. `trigger`) the router records on the route attempt. */
+  metadata?: Record<string, unknown>;
   signal?: AbortSignal;
   /**
    * For asynchronous providers: poll until the task finishes and return the tracks instead

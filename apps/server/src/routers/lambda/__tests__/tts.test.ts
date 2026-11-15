@@ -281,6 +281,71 @@ describe('ttsRouter.synthesize', () => {
       });
     });
   });
+
+  describe.each([
+    {
+      defaultVoice: 'default',
+      invalid: { speed: 2.5 },
+      invalidMessage: 'params.speed must be between 0.5 and 2',
+      model: 's2.1-pro',
+      name: 'Fish Audio',
+      provider: 'fishaudio',
+    },
+    {
+      defaultVoice: 'zh_female_vv_uranus_bigtts',
+      invalid: { pitch: 13 },
+      invalidMessage: 'params.pitch must be between -12 and 12',
+      model: 'seed-tts-2.0',
+      name: 'Doubao Speech',
+      provider: 'doubaospeech',
+    },
+  ])('provider $provider', ({ defaultVoice, invalid, invalidMessage, model, name, provider }) => {
+    it('routes to its runtime with the card default voice', async () => {
+      textToSpeechMock.mockResolvedValue({
+        audio: new Uint8Array([4, 5]).buffer,
+        format: 'mp3',
+        usage: { inputCharacters: 2 },
+      });
+
+      const res = await caller.synthesize({ input: 'Hi', model, provider });
+
+      expect(initModelRuntimeFromDB).toHaveBeenCalledWith(
+        expect.anything(),
+        'u1',
+        provider,
+        undefined,
+      );
+      expect(textToSpeechMock).toHaveBeenCalledWith(
+        { input: 'Hi', model, params: {}, voice: defaultVoice, voiceIsDefault: true },
+        { metadata: { trigger: 'tts' }, user: 'u1' },
+      );
+      expect(res).toMatchObject({ format: 'mp3', mimeType: 'audio/mpeg' });
+    });
+
+    it('rejects invalid params before calling the runtime', async () => {
+      await expect(
+        caller.synthesize({ input: 'Hi', model, params: invalid, provider }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining(invalidMessage),
+      });
+      expect(textToSpeechMock).not.toHaveBeenCalled();
+    });
+
+    it('reports missing credentials with the InvalidProviderAPIKey copy', async () => {
+      vi.mocked(initModelRuntimeFromDB).mockRejectedValueOnce({
+        errorType: 'InvalidProviderAPIKey',
+      });
+
+      const error = await caller.synthesize({ input: 'Hi', model, provider }).catch((e) => e);
+
+      expect(error).toMatchObject({
+        code: 'BAD_GATEWAY',
+        message: `${name} API Key is incorrect or empty, please check your ${name} API Key and try again. Set it in Settings → AI Providers → ${name}, or in the server environment.`,
+      });
+      expect(error.cause).toMatchObject({ data: { errorType: 'InvalidProviderAPIKey', provider } });
+    });
+  });
 });
 
 describe('ttsRouter.synthesize saved default voice', () => {

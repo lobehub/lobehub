@@ -5,6 +5,8 @@ export default {
   'config.duration.label': 'Duration',
   'config.format.label': 'Audio Format',
   'config.instrumental.label': 'Instrumental',
+  'config.lyrics.autoLyricsIgnored':
+    'These lyrics are sung as written. Clear them to have lyrics written from the description.',
   'config.lyrics.instrumentalHint': 'Instrumental tracks have no vocals, so lyrics are not used',
   'config.lyrics.label': 'Lyrics',
   'config.lyrics.placeholder':
@@ -12,6 +14,7 @@ export default {
   'config.model.label': 'Model',
   'config.negativeStyle.label': 'Exclude Styles',
   'config.negativeStyle.placeholder': 'e.g. heavy metal, screaming',
+  'config.prompt.minLength': 'Describe the song in at least {{count}} characters',
   'config.prompt.placeholder': 'Describe the song: genre, mood, instruments, vocals',
   'config.referenceAudio.hint': '{{min}}s – {{max}}s, up to {{size}} MB',
   'config.referenceAudio.invalidUrl': 'Enter a URL that starts with http:// or https://',
@@ -40,6 +43,9 @@ export default {
   'generation.metadata.instrumental': 'Instrumental',
   'generation.song.fileName': 'Song',
   'generation.song.untitled': 'Song {{index}}',
+  'generation.submitFailed': 'Could not start generating: {{message}}',
+  'generation.submittedRefreshFailed':
+    'Generation started. Refresh the page if the new song does not appear.',
   'generation.status.failed': 'Generation Failed',
   'generation.status.generating': 'Generating…',
   'generation.status.generatingHint': 'A song usually takes 1–3 minutes',

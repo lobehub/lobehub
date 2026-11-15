@@ -4,7 +4,6 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import {
   agentDisplayName,
   CHANNEL_LIMITS,
-  defaultChannelAgentDevice,
   defaultChannelAgentDirectory,
   isChannelRuntime,
 } from '@lobechat/types';
@@ -120,7 +119,9 @@ export class ChannelService {
       config.deviceId = device.deviceId;
       config.deviceOwnerId = device.userId;
       config.workingDirectory = path.canonicalPath;
-    } else if (runtime !== 'native' || input.workingDirectory) {
+    } else if (input.workingDirectory) {
+      // A directory only means something on a device. Without one the Agent runs where its own
+      // settings say, as in an ordinary conversation.
       throw new ChannelError('BAD_REQUEST', 'Choose an online device and working directory');
     }
     return { agentId: input.agentId, config, description: input.description, name: input.name };
@@ -191,27 +192,16 @@ export class ChannelService {
   };
 
   /**
-   * The direct conversation between a person and an Agent, titled with the Agent's name. The Agent
-   * keeps the device and directory a new Channel would give it, checked the same way. An external
-   * Agent with no device yet still gets its conversation; it asks for a device in the Channel
-   * before it can reply.
+   * The direct conversation between a person and an Agent, titled with the Agent's name. A Channel
+   * binds no device by default: the Agent runs where its own settings say, as in an ordinary
+   * conversation, until a member picks a device for it in the Channel.
    */
-  createDirect = async (agentId: string, { localDeviceId }: { localDeviceId?: string } = {}) => {
+  createDirect = async (agentId: string) => {
     const agent = await this.agentService.getAgentConfigById(agentId);
     if (!agent) return;
-    const runtime = agentRuntime(agent);
-    if (!isChannelRuntime(runtime)) return;
-    const deviceId = defaultChannelAgentDevice({
-      agencyConfig: agent.agencyConfig,
-      localDeviceId,
-      runtime,
-    });
-    const { config } =
-      deviceId || runtime === 'native'
-        ? await this.resolveAgent({ agentId, deviceId }, agent)
-        : { config: {} };
+    if (!isChannelRuntime(agentRuntime(agent))) return;
     return this.repository.create({
-      agentConfig: config,
+      agentConfig: {},
       agentId,
       title: agentDisplayName(agent, 'Agent').slice(0, CHANNEL_LIMITS.titleLength),
     });
@@ -222,10 +212,10 @@ export class ChannelService {
    * Channels. An existing conversation opens as it is, without probing its device again; one the
    * person moved to the trash stays there, and the Agent opens as before.
    */
-  openDirect = async (agentId: string, options: { localDeviceId?: string } = {}) => {
+  openDirect = async (agentId: string) => {
     const existing = await this.repository.findDirectAccess(agentId);
     if (existing) return existing.channel.isDeleted ? undefined : existing;
-    return this.createDirect(agentId, options);
+    return this.createDirect(agentId);
   };
 
   /**

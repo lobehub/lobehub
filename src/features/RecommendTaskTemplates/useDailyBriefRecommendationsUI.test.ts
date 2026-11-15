@@ -11,7 +11,6 @@ import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope } from '@/libs/replica';
-import { CACHE_TIERS } from '@/libs/swr/localStorageProvider';
 import { taskTemplateService } from '@/services/taskTemplate';
 
 import { dailyRecommendKey, dailyRecommendResource } from './projection';
@@ -156,24 +155,9 @@ describe('resolveDailyBriefRecommendationRequest', () => {
     expect(dailyRecommendResource.syncKey!(ai)).toEqual(dailyRecommendResource.syncKey!(research));
   });
 
-  // The SWR tier persists every key whose serialized form contains a
-  // CACHE_TIERS pattern; the replica must stay the only persisted copy.
-  it('keeps the replica sync key out of the SWR persistence tiers', () => {
-    vi.spyOn(cacheScope, 'get').mockReturnValue('user-1:personal');
-    const serialized = JSON.stringify(
-      dailyRecommendResource.syncKey!({
-        count: 3,
-        interestKeys: ['ai'],
-        locale: 'zh-CN',
-        refreshSeed: '',
-      }),
-    );
-
+  it('persists the recommendations under the replica namespace', () => {
     expect(dailyRecommendResource.storage).toBeDefined();
     expect(dailyRecommendResource.namespace).toBe('replica:taskTemplateDailyRecommend:v2');
-    expect(
-      [...CACHE_TIERS.idb, ...CACHE_TIERS.local].filter((p) => serialized.includes(p)),
-    ).toEqual([]);
   });
 
   it('keeps refresh seed, count, and locale in the entry key', () => {
@@ -321,9 +305,9 @@ describe('useDailyBriefRecommendationsUI', () => {
     });
   });
 
-  // Regression: the recommendations were persisted by the SWR localStorage tier
-  // (`taskTemplate:` in CACHE_TIERS). They are a localStorage replica now: a
-  // reload paints the persisted cards before the network answers.
+  // Regression: the recommendations used to be persisted by the removed SWR
+  // localStorage tier. They are a localStorage replica now: a reload paints the
+  // persisted cards before the network answers.
   it('paints persisted cards on reload while the request is still pending', async () => {
     await seed([template]);
     vi.mocked(taskTemplateService.listDailyRecommend).mockImplementation(pending);

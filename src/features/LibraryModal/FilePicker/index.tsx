@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Alert,
   Button,
   Center,
   createModal,
@@ -12,25 +13,20 @@ import {
 } from '@lobehub/ui';
 import { t } from 'i18next';
 import { FileSearch, ServerCrash } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
-import useSWRInfinite from 'swr/infinite';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import type { ExistingEditorAttachment } from '@/features/EditorCanvas/editorAttachments';
-import { resourceService } from '@/services/resource';
 import { useGlobalStore } from '@/store/global';
 import { KnowledgeType } from '@/types/knowledgeBase';
-import type { ResourceItem } from '@/types/resource';
 
 import Item from '../AssignKnowledgeBase/Item';
 import MasonryItem from '../AssignKnowledgeBase/Item/MasonryItem';
 import Loading from '../AssignKnowledgeBase/Loading';
 import ViewSwitcher from '../AssignKnowledgeBase/ViewSwitcher';
 import { type ViewMode } from '../AssignKnowledgeBase/ViewSwitcher';
-
-const PAGE_SIZE = 50;
+import { type AttachableFile, useLibraryFiles } from './useLibraryFiles';
 
 const styles = createStaticStyles(({ css }) => ({
   grid: css`
@@ -43,65 +39,30 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-interface ResourcePage {
-  hasMore: boolean;
-  items: ResourceItem[];
-}
-
 interface FilePickerProps {
   onSelect: (attachments: ExistingEditorAttachment[]) => void;
 }
 
-const isAttachableFile = (
-  item: ResourceItem,
-): item is ResourceItem & { sourceType: 'file'; url: string } =>
-  item.sourceType === 'file' && Boolean(item.url);
-
 const FilePicker = memo<FilePickerProps>(({ onSelect }) => {
   const { t } = useTranslation(['file', 'chat', 'common']);
   const { close } = useModalContext();
-  const workspaceId = useActiveWorkspaceId();
   const viewMode = useGlobalStore((s) => s.status.knowledgeBaseModalViewMode || 'list') as ViewMode;
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
-  const getKey = useCallback(
-    (pageIndex: number, previousPage: ResourcePage | null) => {
-      if (previousPage && !previousPage.hasMore) return null;
-      return ['comment-library-files', workspaceId, pageIndex * PAGE_SIZE] as const;
-    },
-    [workspaceId],
-  );
-
-  const { data, error, isLoading, isValidating, mutate, setSize } = useSWRInfinite<ResourcePage>(
-    getKey,
-    ([, , offset]: readonly [string, string | null, number]) =>
-      resourceService.queryResources({
-        limit: PAGE_SIZE,
-        offset,
-        showFilesInKnowledgeBase: true,
-      }),
-    { revalidateFirstPage: false },
-  );
-
-  const files = useMemo(() => {
-    const uniqueFiles = new Map<string, ResourceItem & { sourceType: 'file'; url: string }>();
-    for (const item of data?.flatMap((page) => page?.items ?? []) ?? []) {
-      if (!isAttachableFile(item)) continue;
-      uniqueFiles.set(item.fileId || item.id, item);
-    }
-    return [...uniqueFiles.values()];
-  }, [data]);
-  const lastPage = data?.findLast(Boolean);
-  const hasMore = Boolean(lastPage?.hasMore);
-
-  useEffect(() => {
-    if (!isLoading && !isValidating && files.length === 0 && hasMore) {
-      void setSize((current) => current + 1);
-    }
-  }, [files.length, hasMore, isLoading, isValidating, setSize]);
+  const {
+    error,
+    files,
+    hasMore,
+    isAttachable,
+    isLoading,
+    isLoadingMore,
+    loadMore,
+    refreshError,
+    retry,
+  } = useLibraryFiles();
 
   const handleSelect = useCallback(
-    (file: ResourceItem & { sourceType: 'file'; url: string }) => {
+    (file: AttachableFile) => {
       onSelect([
         {
           fileId: file.fileId || file.id,
@@ -117,16 +78,16 @@ const FilePicker = memo<FilePickerProps>(({ onSelect }) => {
   );
 
   const renderAction = useCallback(
-    (file: ResourceItem & { sourceType: 'file'; url: string }) => (
-      <Button type={'primary'} onClick={() => handleSelect(file)}>
+    (file: AttachableFile) => (
+      <Button disabled={!isAttachable} onClick={() => handleSelect(file)}>
         {t('knowledgeBase.library.action.add', { ns: 'chat' })}
       </Button>
     ),
-    [handleSelect, t],
+    [handleSelect, isAttachable, t],
   );
 
   const renderItem = useCallback(
-    (file: ResourceItem & { sourceType: 'file'; url: string }) => (
+    (file: AttachableFile) => (
       <Item
         action={renderAction(file)}
         fileType={file.fileType}
@@ -139,10 +100,6 @@ const FilePicker = memo<FilePickerProps>(({ onSelect }) => {
     [renderAction],
   );
 
-  const loadMore = useCallback(() => {
-    if (hasMore && !isValidating) void setSize((current) => current + 1);
-  }, [hasMore, isValidating, setSize]);
-
   return (
     <Flexbox height={500} width={'100%'}>
       <Flexbox horizontal align={'center'} justify={'flex-end'} style={{ paddingBlockEnd: 12 }}>
@@ -151,13 +108,25 @@ const FilePicker = memo<FilePickerProps>(({ onSelect }) => {
           onViewChange={(mode) => updateSystemStatus({ knowledgeBaseModalViewMode: mode })}
         />
       </Flexbox>
-      {isLoading && files.length === 0 ? (
+      {!!refreshError && (
+        <Alert
+          description={t('networkError', { ns: 'file' })}
+          style={{ marginBlockEnd: 12 }}
+          type={'warning'}
+          action={
+            <Button size={'small'} onClick={() => void retry()}>
+              {t('retry', { ns: 'common' })}
+            </Button>
+          }
+        />
+      )}
+      {isLoading ? (
         <Loading />
-      ) : error && files.length === 0 ? (
+      ) : error ? (
         <Center flex={1} gap={12} padding={40}>
           <Icon icon={ServerCrash} size={80} />
           {t('networkError', { ns: 'file' })}
-          <Button onClick={() => void mutate()}>{t('retry', { ns: 'common' })}</Button>
+          <Button onClick={() => void retry()}>{t('retry', { ns: 'common' })}</Button>
         </Center>
       ) : files.length === 0 ? (
         <Center flex={1} padding={40}>
@@ -190,7 +159,7 @@ const FilePicker = memo<FilePickerProps>(({ onSelect }) => {
             />
           ))}
           {hasMore && (
-            <Button loading={isValidating} type={'text'} onClick={loadMore}>
+            <Button loading={isLoadingMore} type={'text'} onClick={loadMore}>
               {t('loadMore', { ns: 'file' })}
             </Button>
           )}

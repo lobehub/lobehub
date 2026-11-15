@@ -142,7 +142,23 @@ export interface ComposioConnectorMetadata {
 export interface ConnectorMetadata {
   [key: string]: unknown;
   avatar?: string;
+  /**
+   * Stdio / device-routed HTTP only: the device this connector always runs on,
+   * through the device gateway. Absent means the device is picked automatically
+   * (the run's device, else the newest capable personal one). A personal
+   * connector binds one of its owner's personal devices, a workspace connector
+   * a public device of its workspace. Never falls back: an offline bound device
+   * fails the call (`connectorDeviceBinding` in `@lobechat/utils/mcpEndpoint`).
+   */
+  boundDeviceId?: string;
   composio?: ComposioConnectorMetadata;
+  /**
+   * HTTP only: `device` reaches the MCP server from the user's device through
+   * the device gateway, whatever its address looks like (Tailscale MagicDNS,
+   * `.local`, intranet DNS). Absent means `auto`: decided by the address
+   * (`shouldConnectViaDevice` in `@lobechat/utils/mcpEndpoint`).
+   */
+  connectVia?: 'device';
   customHeaders?: Record<string, string>;
   description?: string;
   /**

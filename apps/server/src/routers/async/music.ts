@@ -236,7 +236,11 @@ export const musicRouter = router({
         try {
           submitted = await modelRuntime.createMusic(
             { model: resolvedModelId, params: toRuntimeMusicParams(params) },
-            { callbackUrl: callbackUrl.toString(), signal },
+            {
+              callbackUrl: callbackUrl.toString(),
+              metadata: { trigger: RequestTrigger.Music },
+              signal,
+            },
           );
         } catch (error) {
           throw new MusicStageError('submit', error);
