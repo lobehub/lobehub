@@ -104,6 +104,17 @@ describe('pickModelConfigFormValues', () => {
     ).toBe('my voice');
   });
 
+  it('drops the cache duration once the model is no longer a chat model', () => {
+    const withTTL = { ...formValues, settings: { contextCachingTTL: '5m' } };
+
+    expect(pickModelConfigFormValues(withTTL).settings?.contextCachingTTL).toBe('5m');
+    for (const type of ['embedding', 'tts', 'image']) {
+      expect(
+        pickModelConfigFormValues({ ...withTTL, type }).settings?.contextCachingTTL,
+      ).toBeUndefined();
+    }
+  });
+
   it('drops the TTS default voice once the model is no longer a TTS model', () => {
     expect(
       pickModelConfigFormValues({ ...formValues, settings: { ttsVoice: 'Kore' }, type: 'chat' })

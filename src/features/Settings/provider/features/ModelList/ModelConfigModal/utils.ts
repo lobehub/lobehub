@@ -1,6 +1,8 @@
 import type { FormValues } from '@lobehub/ui/form';
 import type { UpdateAiModelParams } from 'model-bank';
 
+import { hasContextCachingTTL } from '../CreateNewModelModal/contextCachingTTLState';
+
 const EDITABLE_ABILITIES = [
   'functionCall',
   'vision',
@@ -36,10 +38,13 @@ export const pickModelConfigFormValues = (
     contextWindowTokens: values.contextWindowTokens as number | null | undefined,
     displayName: values.displayName as string | null | undefined,
     settings: {
-      // Cleared → undefined: the stored row drops it and the provider default applies.
-      contextCachingTTL: (settings.contextCachingTTL ?? undefined) as NonNullable<
-        UpdateAiModelParams['settings']
-      >['contextCachingTTL'],
+      // Cleared → undefined: the stored row drops it and the provider default applies. Only a
+      // chat model has one; switching the type away drops a leftover value.
+      contextCachingTTL: hasContextCachingTTL(values.type as string | undefined)
+        ? ((settings.contextCachingTTL ?? undefined) as NonNullable<
+            UpdateAiModelParams['settings']
+          >['contextCachingTTL'])
+        : undefined,
       extendParams: (settings.extendParams ?? undefined) as NonNullable<
         UpdateAiModelParams['settings']
       >['extendParams'],

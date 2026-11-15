@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { getContextCachingTTLState } from '../contextCachingTTLState';
+import {
+  getContextCachingTTLState,
+  hasContextCachingTTL,
+  omitContextCachingTTLUnlessChat,
+} from '../contextCachingTTLState';
 
 describe('getContextCachingTTLState', () => {
   it('offers only the TTLs Anthropic can request, with 1h in effect by default', () => {
@@ -39,6 +43,37 @@ describe('getContextCachingTTLState', () => {
       defaultTTL: '5m',
       effectiveTTL: '24h',
       isDefault: false,
+    });
+  });
+});
+
+describe('hasContextCachingTTL', () => {
+  it('applies to chat models and to a model whose type is not picked yet', () => {
+    expect(hasContextCachingTTL('chat')).toBe(true);
+    expect(hasContextCachingTTL(undefined)).toBe(true);
+    expect(hasContextCachingTTL('tts')).toBe(false);
+    expect(hasContextCachingTTL('embedding')).toBe(false);
+  });
+});
+
+describe('omitContextCachingTTLUnlessChat', () => {
+  it('keeps the cache duration a chat model is created with', () => {
+    const values = { id: 'm', settings: { contextCachingTTL: '5m' }, type: 'chat' };
+
+    expect(omitContextCachingTTLUnlessChat(values)).toBe(values);
+  });
+
+  it('drops a cache duration picked before the type was switched away from chat', () => {
+    const values = {
+      id: 'm',
+      settings: { contextCachingTTL: '1h', ttsVoice: 'Kore' },
+      type: 'tts',
+    };
+
+    expect(omitContextCachingTTLUnlessChat(values)).toEqual({
+      id: 'm',
+      settings: { contextCachingTTL: undefined, ttsVoice: 'Kore' },
+      type: 'tts',
     });
   });
 });

@@ -34,3 +34,19 @@ export const getContextCachingTTLState = (
     requestable: isContextCachingTTLRequestable(provider),
   };
 };
+
+/** Prompt caching only applies to chat models; a model being created may have no type yet. */
+export const hasContextCachingTTL = (type?: string | null): boolean => !type || type === 'chat';
+
+/**
+ * Drop the cache duration from a non-chat model's values, so picking one and then switching the
+ * type away does not store a setting the model never uses.
+ */
+export const omitContextCachingTTLUnlessChat = <
+  T extends { settings?: { contextCachingTTL?: unknown } | null; type?: string | null },
+>(
+  values: T,
+): T =>
+  hasContextCachingTTL(values.type) || !values.settings
+    ? values
+    : ({ ...values, settings: { ...values.settings, contextCachingTTL: undefined } } as T);

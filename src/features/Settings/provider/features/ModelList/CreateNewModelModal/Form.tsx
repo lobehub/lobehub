@@ -1,5 +1,5 @@
 import { Checkbox, Input, Select } from '@lobehub/ui';
-import { Form, type FormInstance, type FormValues, useForm, useWatch } from '@lobehub/ui/form';
+import { Form, type FormInstance, type FormValues, useForm } from '@lobehub/ui/form';
 import type { AiModelType, AiProviderModelListItem } from 'model-bank';
 import { memo, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,7 @@ import ContextCachingTTLSelect from './ContextCachingTTLSelect';
 import { getContextCachingTTLState } from './contextCachingTTLState';
 import ExtendParamsSelect from './ExtendParamsSelect';
 import TTSVoiceSelect from './TTSVoiceSelect';
+import { useModelConfigFields } from './useModelConfigFields';
 import { CUSTOM_MODEL_TYPES, hasDuplicateModelId } from './utils';
 
 interface ModelConfigFormProps {
@@ -36,13 +37,13 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
   }) => {
     const { t } = useTranslation('modelProvider');
     const provider = useAiInfraStore((s) => s.activeAiProvider);
-    // Prompt caching only applies to chat models; a new model has no type yet.
-    const showContextCachingTTL = !!provider && (!type || type === 'chat');
 
     const formInstance = useForm<FormValues>({ initialValues });
-    // Follow the type picked in the form, so choosing `tts` while creating or editing a
-    // model shows the voice field right away.
-    const currentType = (useWatch(formInstance, 'type') as AiModelType | undefined) ?? type;
+    const { showContextCachingTTL, showTTSVoice } = useModelConfigFields(
+      formInstance,
+      type,
+      provider,
+    );
 
     const modelTypeOptions = useMemo(
       () =>
@@ -108,7 +109,7 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
               placeholder={t('providerModels.item.modelConfig.displayName.placeholder')}
             />
           </Form.Field>
-          {currentType === 'tts' && (
+          {showTTSVoice && (
             <Form.Field
               extra={t('providerModels.item.modelConfig.ttsVoice.extra')}
               label={t('providerModels.item.modelConfig.ttsVoice.title')}
@@ -131,7 +132,7 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
           >
             <MaxTokenSlider />
           </Form.Field>
-          {showContextCachingTTL && (
+          {showContextCachingTTL && provider && (
             <Form.Field
               label={t('providerModels.item.modelConfig.contextCachingTTL.title')}
               name={'settings.contextCachingTTL'}
