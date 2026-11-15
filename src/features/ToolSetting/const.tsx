@@ -22,6 +22,7 @@ const CHANNEL_DISPLAY_NAME: Record<string, string> = {
   kagi: 'Kagi',
   naive: 'Naive',
   search1api: 'Search1API',
+  searchapi: 'SearchApi',
   searxng: 'SearXNG',
   tavily: 'Tavily',
 };
