@@ -329,7 +329,7 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
       createUnlessIdentifierHeld: vi.fn().mockResolvedValue({ created: { id: 'conn-new' } }),
       findScopedByIdentifier: vi.fn().mockResolvedValue(null),
       queryByIdentifiers: vi.fn().mockResolvedValue([]),
-      update: vi.fn().mockResolvedValue(undefined),
+      update: vi.fn().mockResolvedValue(true),
     };
     connectorToolModelMock = { upsertMany: vi.fn() };
     pluginModelMock = { findById: vi.fn() };
@@ -425,6 +425,43 @@ describe('connectorRouter.create — sourceType handling on existing rows', () =
       'conn-claimed',
       expect.objectContaining({ mcpServerUrl: 'https://mcp.example.com', sourceType: 'custom' }),
     );
+  });
+
+  it('re-adds over the row that replaced the one it read, not over the deleted one', async () => {
+    // An Agent Builder install took over the stale unfinished row this add read
+    // (deleting it) before the update: the add lands on the install's new row.
+    const stale = {
+      agentId: null,
+      id: 'conn-stale',
+      identifier: 'legacy-mcp',
+      userId: 'user_test',
+    };
+    connectorModelMock.findScopedByIdentifier
+      .mockResolvedValueOnce(stale)
+      .mockResolvedValueOnce({ ...stale, id: 'conn-replacement' });
+    connectorModelMock.update.mockResolvedValueOnce(false);
+
+    const result = await caller().create(baseCustomInput);
+
+    expect(result).toEqual({ id: 'conn-replacement', isNew: false });
+    expect(connectorModelMock.update).toHaveBeenLastCalledWith(
+      'conn-replacement',
+      expect.objectContaining({ mcpServerUrl: 'https://mcp.example.com' }),
+    );
+    expect(connectorModelMock.createUnlessIdentifierHeld).not.toHaveBeenCalled();
+  });
+
+  it('reports a conflict instead of a deleted id when the retry misses too', async () => {
+    connectorModelMock.findScopedByIdentifier.mockResolvedValue({
+      agentId: null,
+      id: 'conn-gone',
+      identifier: 'legacy-mcp',
+      userId: 'user_test',
+    });
+    connectorModelMock.update.mockResolvedValue(false);
+
+    await expect(caller().create(baseCustomInput)).rejects.toMatchObject({ code: 'CONFLICT' });
+    expect(connectorModelMock.update).toHaveBeenCalledTimes(2);
   });
 
   it('moves an agent connector to the base scope only through the identifier lock', async () => {

@@ -455,6 +455,7 @@ const connectorCoreRouter = router({
     // client-side caches can't answer this reliably (the connector list may
     // not be fetched yet), and rollback-on-sync-failure must never delete a
     // connector the user already had.
+    // Nothing when the row is gone by its update (see the retry below).
     const reAdd = async (existing: {
       agentId: string | null;
       id: string;
@@ -462,30 +463,40 @@ const connectorCoreRouter = router({
       userId: string;
     }) => {
       await assertWritable(existing);
-      await ctx.connectorModel.update(existing.id, row);
-      return { id: existing.id, isNew: false };
+      const updated = await ctx.connectorModel.update(existing.id, row);
+      return updated ? { id: existing.id, isNew: false } : undefined;
     };
 
-    const existing = await ctx.connectorModel.findScopedByIdentifier(input.identifier, agentId);
-    if (existing) return reAdd(existing);
-    await assertWritable();
+    const add = async () => {
+      const existing = await ctx.connectorModel.findScopedByIdentifier(input.identifier, agentId);
+      if (existing) return reAdd(existing);
+      await assertWritable();
 
-    if (agentId) {
-      const created = await ctx.connectorModel.create({
+      if (agentId) {
+        const created = await ctx.connectorModel.create({
+          ...row,
+          agentId,
+          identifier: input.identifier,
+        });
+        return { id: created.id, isNew: true };
+      }
+      // A base row is claimed under the identifier lock every base-row writer
+      // takes (an Agent Builder install among them), so concurrent adds create it once.
+      const claim = await ctx.connectorModel.createUnlessIdentifierHeld({
         ...row,
-        agentId,
         identifier: input.identifier,
       });
-      return { id: created.id, isNew: true };
-    }
-    // A base row is claimed under the identifier lock every base-row writer
-    // takes (an Agent Builder install among them), so concurrent adds create it once.
-    const claim = await ctx.connectorModel.createUnlessIdentifierHeld({
-      ...row,
-      identifier: input.identifier,
-    });
-    if ('holder' in claim) return reAdd(claim.holder);
-    return { id: claim.created.id, isNew: true };
+      if ('holder' in claim) return reAdd(claim.holder);
+      return { id: claim.created.id, isNew: true };
+    };
+
+    // The row a re-add read can be deleted before its update: an Agent Builder
+    // install replaces a stale unfinished one under the identifier lock. The add
+    // then starts over against what holds the identifier now, once: the
+    // replacement is fresh, so no install takes it over in turn.
+    const result = (await add()) ?? (await add());
+    if (!result) throw new TRPCError({ code: 'CONFLICT', message: 'Connector changed, try again' });
+    return result;
   }),
 
   /** Update connector configuration while preserving server-resolved OAuth state. */

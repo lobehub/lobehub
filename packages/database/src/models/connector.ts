@@ -1062,19 +1062,24 @@ export class ConnectorModel {
     return row ?? null;
   };
 
+  /**
+   * Returns whether the row was there to update: one deleted after the caller
+   * read it (a claim that replaced it, see {@link createUnlessIdentifierHeld})
+   * is not, and its writer must look again for what holds it now.
+   */
   update = async (
     id: string,
     patch: UpdateConnectorParams,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
-  ): Promise<void> => {
-    await this.db.transaction(async (tx) => {
+  ): Promise<boolean> =>
+    this.db.transaction(async (tx) => {
       const [current] = await tx
         .select()
         .from(userConnectors)
         .where(and(eq(userConnectors.id, id), this.ownership()))
         .limit(1)
         .for('update');
-      if (!current) return;
+      if (!current) return false;
       const normalized = await normalizeEvalConnectorPatch(
         current,
         patch,
@@ -1124,8 +1129,8 @@ export class ConnectorModel {
           updatedAt: new Date(),
         })
         .where(and(eq(userConnectors.id, id), this.ownership()));
+      return true;
     });
-  };
 
   updateStatus = async (id: string, status: ConnectorStatus): Promise<void> => {
     await this.db

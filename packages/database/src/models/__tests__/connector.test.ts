@@ -935,13 +935,26 @@ describe('ConnectorModel', () => {
       const created = await otherModel.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       const model = new ConnectorModel(serverDB, userId);
-      await model.update(created.id, { name: 'Hacked' });
+      await expect(model.update(created.id, { name: 'Hacked' })).resolves.toBe(false);
 
       const [row] = await serverDB
         .select()
         .from(userConnectors)
         .where(eq(userConnectors.id, created.id));
       expect(row.name).toBe('Linear');
+    });
+
+    it('reports a row a claim replaced after it was read as not updated', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const read = await model.create(createBuiltinConnectorInput('linear', 'Linear'));
+      const claim = await model.createUnlessIdentifierHeld(
+        createBuiltinConnectorInput('linear', 'Linear'),
+        { canReplace: () => true },
+      );
+      if (!('created' in claim)) throw new Error('the claim should replace the row it read');
+
+      await expect(model.update(read.id, { name: 'Re-added' })).resolves.toBe(false);
+      await expect(model.update(claim.created.id, { name: 'Re-added' })).resolves.toBe(true);
     });
   });
 
