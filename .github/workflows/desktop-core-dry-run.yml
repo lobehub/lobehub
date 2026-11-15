@@ -23,7 +23,7 @@ jobs:
     name: Build core (darwin)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
