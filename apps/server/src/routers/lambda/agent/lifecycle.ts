@@ -63,21 +63,17 @@ export const lifecycleRouter = router({
       z.object({
         config: CreateAgentSchema.optional(),
         groupId: z.string().optional(),
-        /** The caller's own desktop, where a direct Channel to a local Agent runs. */
-        localDeviceId: z.string().min(1).optional(),
         visibility: z.enum(['private', 'public']).optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { localDeviceId, ...params } = input;
-      const result = await ctx.agentService.createAgent(params);
+      const result = await ctx.agentService.createAgent(input);
       // A hidden (virtual) copy, such as a Market agent run from an @ mention, is
       // never a conversation of its own, so it gets no direct Channel.
-      if (params.config?.virtual) return result;
+      if (input.config?.virtual) return result;
       await createAgentDirectChannel({
         agentId: result.agentId,
         db: ctx.serverDB,
-        localDeviceId,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId ?? undefined,
       });

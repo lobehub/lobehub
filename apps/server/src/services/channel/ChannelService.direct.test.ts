@@ -73,8 +73,7 @@ describe('the direct Channel of a new Agent', () => {
     }));
     querySystemInfo.mockResolvedValue({ homePath: '/Users/owner' });
   });
-  const createDirect = (localDeviceId?: string) =>
-    new ChannelService({} as never, 'owner').createDirect('agt_new', { localDeviceId });
+  const createDirect = () => new ChannelService({} as never, 'owner').createDirect('agt_new');
 
   it.each([
     ['its personal name', { name: ' 小满 ', title: 'Health Assistant' }, '小满'],
@@ -85,76 +84,32 @@ describe('the direct Channel of a new Agent', () => {
       { name: 'x'.repeat(CHANNEL_LIMITS.titleLength + 20) },
       'x'.repeat(CHANNEL_LIMITS.titleLength),
     ],
-  ])('binds a native Agent and titles the Channel with %s', async (_, identity, title) => {
+  ])('titles the Channel with %s', async (_, identity, title) => {
     getAgent.mockResolvedValue({ model: 'gpt-5', ...identity });
-    await expect(createDirect('desktop')).resolves.toEqual({ channel: { id: 'chn_1' } });
+    await expect(createDirect()).resolves.toEqual({ channel: { id: 'chn_1' } });
     expect(getAgent).toHaveBeenCalledTimes(1);
-    // A native Agent with no device of its own answers without one, even from a desktop.
-    expect(findDevice).not.toHaveBeenCalled();
     expect(create).toHaveBeenCalledWith({ agentConfig: {}, agentId: 'agt_new', title });
   });
 
+  // A Channel binds no device by default: the Agent runs where its own settings say. Opening the
+  // conversation used to probe the bound device and failed while it was offline.
   it.each([
+    ['a native Agent bound to a device', { boundDeviceId: 'mac', executionTarget: 'device' }],
     [
-      'its own directory on that device',
-      { workingDirByDevice: { mac: { path: '/repo' } } },
-      null,
-      '/real/repo',
+      'an external Agent bound to a device with a directory',
+      { ...claudeCode, boundDeviceId: 'mac', workingDirByDevice: { mac: { path: '/repo' } } },
     ],
-    ["the device's default directory", {}, '/projects', '/real/projects'],
-    ["the device's home folder", {}, null, '/real/Users/owner'],
-  ])(
-    'seats an external Agent on its bound device in %s',
-    async (_, directories, defaultCwd, workingDirectory) => {
-      getAgent.mockResolvedValue({
-        agencyConfig: { ...claudeCode, ...directories, boundDeviceId: 'mac' },
-        name: 'Claude',
-      });
-      findDevice.mockResolvedValue({
-        defaultCwd,
-        deviceId: 'mac',
-        platform: 'darwin',
-        userId: 'owner',
-      });
+    ['a local external Agent', claudeCode],
+    ['an external Agent that runs in a sandbox', { ...claudeCode, executionTarget: 'sandbox' }],
+  ])('opens %s without binding or probing a device', async (_, agencyConfig) => {
+    getAgent.mockResolvedValue({ agencyConfig, model: 'gpt-5', name: 'Windy' });
 
-      await createDirect('desktop');
+    await expect(createDirect()).resolves.toEqual({ channel: { id: 'chn_1' } });
 
-      expect(findDevice).toHaveBeenCalledWith('mac');
-      expect(create).toHaveBeenCalledWith({
-        agentConfig: { deviceId: 'mac', deviceOwnerId: 'owner', workingDirectory },
-        agentId: 'agt_new',
-        title: 'Claude',
-      });
-    },
-  );
-
-  it("seats a local external Agent on its creator's desktop", async () => {
-    getAgent.mockResolvedValue({ agencyConfig: claudeCode, name: 'Claude' });
-    await createDirect('desktop');
-    expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agentConfig: {
-          deviceId: 'desktop',
-          deviceOwnerId: 'owner',
-          workingDirectory: '/real/Users/owner',
-        },
-      }),
-    );
-  });
-
-  it.each([
-    ['a local external Agent created away from a desktop', claudeCode, undefined],
-    [
-      'an external Agent that runs in a sandbox',
-      { ...claudeCode, executionTarget: 'sandbox' },
-      'desktop',
-    ],
-  ])('opens the conversation without a device for %s', async (_, agencyConfig, localDeviceId) => {
-    getAgent.mockResolvedValue({ agencyConfig, name: 'Claude' });
-    await expect(createDirect(localDeviceId)).resolves.toEqual({ channel: { id: 'chn_1' } });
-    // Its device is chosen in the Channel; nothing is probed before then.
     expect(findDevice).not.toHaveBeenCalled();
-    expect(create).toHaveBeenCalledWith({ agentConfig: {}, agentId: 'agt_new', title: 'Claude' });
+    expect(statPath).not.toHaveBeenCalled();
+    expect(querySystemInfo).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledWith({ agentConfig: {}, agentId: 'agt_new', title: 'Windy' });
   });
 
   it('opens nothing for a runtime Channels do not support', async () => {
@@ -162,23 +117,13 @@ describe('the direct Channel of a new Agent', () => {
       agencyConfig: { heterogeneousProvider: { type: 'openclaw' } },
       name: 'Agent',
     });
-    await expect(createDirect('desktop')).resolves.toBeUndefined();
+    await expect(createDirect()).resolves.toBeUndefined();
     expect(create).not.toHaveBeenCalled();
   });
 
   it('opens nothing for an Agent the creator cannot reach', async () => {
     getAgent.mockResolvedValue(null);
-    await expect(createDirect('desktop')).resolves.toBeUndefined();
-    expect(create).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    ['a device that is not the creator’s', () => findDevice.mockResolvedValue(undefined)],
-    ['a device that cannot be reached', () => statPath.mockResolvedValue(undefined)],
-  ])('refuses %s rather than seat the Agent where it cannot run', async (_, arrange) => {
-    getAgent.mockResolvedValue({ agencyConfig: claudeCode, name: 'Claude' });
-    arrange();
-    await expect(createDirect('desktop')).rejects.toBeInstanceOf(ChannelError);
+    await expect(createDirect()).resolves.toBeUndefined();
     expect(create).not.toHaveBeenCalled();
   });
 });
