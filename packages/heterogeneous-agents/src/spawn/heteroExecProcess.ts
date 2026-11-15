@@ -217,13 +217,31 @@ export const readProcfsOperationCandidates = async (
   return candidates;
 };
 
+/**
+ * Per-call `ps` budget. Two calls plus the caller's 2s grace and 3s force wait
+ * must fit the server's 10s cancel round trip.
+ */
+const PS_TIMEOUT_MS = 2000;
+
 const runPs = (args: string[]) =>
   new Promise<string>((resolve, reject) => {
     execFile(
       'ps',
       args,
-      { maxBuffer: 64 * 1024 * 1024, timeout: 3000, windowsHide: true },
-      (error, output) => (error ? reject(error) : resolve(String(output))),
+      { maxBuffer: 64 * 1024 * 1024, timeout: PS_TIMEOUT_MS, windowsHide: true },
+      (error, output) => {
+        if (!error) return resolve(String(output));
+        // Node reports a timeout only as `Command failed`; name it so the log
+        // says why the lookup gave up.
+        const { killed, signal } = error as { killed?: boolean; signal?: NodeJS.Signals | null };
+        reject(
+          killed
+            ? new Error(`ps ${args.join(' ')} timed out after ${PS_TIMEOUT_MS}ms (${signal})`, {
+                cause: error,
+              })
+            : error,
+        );
+      },
     );
   });
 
@@ -236,22 +254,39 @@ const runPs = (args: string[]) =>
  *   exited, which {@link findHeteroExecProcesses} cannot see.
  *
  * Expects:
- * - A Unix host: procfs on Linux, `ps -E` elsewhere. Callers must not use this
- *   on Windows.
+ * - A Unix host: procfs on Linux, `ps` elsewhere. Callers must not use this on
+ *   Windows.
  *
  * Returns:
  * - The distinct process group ids; an empty list when nothing is running.
  * - Rejects when the process table cannot be read, so callers never mistake a
  *   failed lookup for a confirmed exit.
+ *
+ * Outside Linux a live wrapper is found from argv alone. Only when no wrapper
+ * survives does it read environments with `ps -E`, which is far heavier (MBs of
+ * output) and was seen exceeding its timeout inside a busy connect daemon. That
+ * listing covers this user's processes only: the caller cannot signal another
+ * user's processes anyway.
  */
 export const findOperationProcessGroups = async (operationId: string): Promise<number[]> => {
-  const candidates =
-    process.platform === 'linux'
-      ? await readProcfsOperationCandidates()
-      : parsePsOperationCandidates(
-          await runPs(['-A', '-ww', '-o', 'pid=,pgid=,args=']),
-          await runPs(['-A', '-E', '-ww', '-o', 'pid=,pgid=,args=']),
-        );
-  const pgid = candidates.find((candidate) => candidate.pid === process.pid)?.pgid;
-  return collectOperationProcessGroups(candidates, operationId, { pgid, pid: process.pid });
+  const self = (candidates: OperationProcessCandidate[]) => ({
+    pgid: candidates.find((candidate) => candidate.pid === process.pid)?.pgid,
+    pid: process.pid,
+  });
+
+  if (process.platform === 'linux') {
+    const candidates = await readProcfsOperationCandidates();
+    return collectOperationProcessGroups(candidates, operationId, self(candidates));
+  }
+
+  const argsOutput = await runPs(['-A', '-ww', '-o', 'pid=,pgid=,args=']);
+  const argvOnly = parsePsOperationCandidates(argsOutput, '');
+  const wrapperGroups = collectOperationProcessGroups(argvOnly, operationId, self(argvOnly));
+  if (wrapperGroups.length > 0) return wrapperGroups;
+
+  const candidates = parsePsOperationCandidates(
+    argsOutput,
+    await runPs(['-U', String(process.getuid!()), '-E', '-ww', '-o', 'pid=,pgid=,args=']),
+  );
+  return collectOperationProcessGroups(candidates, operationId, self(candidates));
 };
