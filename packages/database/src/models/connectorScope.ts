@@ -1,7 +1,7 @@
 import { RequestTrigger } from '@lobechat/types';
-import { and, eq, exists, isNull, notInArray, or, sql } from 'drizzle-orm';
+import { and, eq, exists, isNull, ne, notExists, notInArray, or, sql } from 'drizzle-orm';
 
-import { agentEvalDatasets, agents, topics, userConnectors } from '../schemas';
+import { agentEvalDatasets, agents, topics, topicShares, userConnectors } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { CHANNEL_TOPIC_TRIGGER } from '../utils/topicVisibility';
 import { buildWorkspaceWhere, normalizeWorkspaceId } from '../utils/workspace';
@@ -116,14 +116,16 @@ const ownersPrivateRows = (
  *   owner's personal rows (`workspace_id IS NULL`).
  *
  * "Own direct topic" means the topic belongs to this agent and this user, is
- * not a group topic, and is not a channel / bot / share transcript. A private
+ * not a group topic, is not a channel / bot / share transcript, and has no
+ * share link (`topic_shares.visibility` other than the owner-only `private`:
+ * a link visitor reads the live transcript, later tool results included). A private
  * agent can still be pulled into conversations other members read (a group
  * supervisor dispatch, `callAgent` from a shared agent, a topic of another
  * agent); there the topic proof fails and the private rows stay out, so a
  * private connector's results never land in a shared conversation. Without a
  * `topicId` the run gets the shared rows only.
  *
- * Every check is in SQL (two uncorrelated EXISTS, evaluated once per query), so
+ * Every check is in SQL (uncorrelated subqueries, evaluated once per query), so
  * a caller cannot widen the scope by passing an agent or topic it does not own.
  */
 export const connectorRunScope = (
@@ -152,10 +154,19 @@ export const connectorRunScope = (
       ),
     );
 
+  const linkShare = db
+    .select({ id: topicShares.id })
+    .from(topicShares)
+    .where(and(eq(topicShares.topicId, topicId), ne(topicShares.visibility, 'private')));
+
   return and(
     or(
       sharedRows(workspaceId),
-      and(ownersPrivateRows(db, scope.userId, workspaceId, agentId), exists(ownDirectTopic)),
+      and(
+        ownersPrivateRows(db, scope.userId, workspaceId, agentId),
+        exists(ownDirectTopic),
+        notExists(linkShare),
+      ),
     ),
     ordinaryConnection(),
   );

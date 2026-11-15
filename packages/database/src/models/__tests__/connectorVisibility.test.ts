@@ -7,6 +7,7 @@ import {
   agents,
   chatGroups,
   topics,
+  topicShares,
   userConnectors,
   userConnectorTools,
   users,
@@ -189,6 +190,29 @@ describe('connector visibility — runtime resolution', () => {
         topicId: 'cv-topic-shared-surface',
       }),
     ).toEqual(['ws-shared-linear']);
+  });
+
+  it('keeps private rows out of a topic shared by link, and only while it is', async () => {
+    await seedConnectors();
+    const model = new ConnectorModel(serverDB, owner, workspaceId);
+    const run = { agentId: privateAgent, topicId: privateTopic };
+    const ownerRows = ['owner-personal-gmail', 'owner-private-notion', 'ws-shared-linear'];
+    const setShare = (visibility: 'link' | 'private') =>
+      serverDB
+        .insert(topicShares)
+        .values({ topicId: privateTopic, userId: owner, visibility, workspaceId })
+        .onConflictDoUpdate({ set: { visibility }, target: topicShares.topicId });
+
+    // An owner-only share is read by the owner alone, so the topic stays private.
+    await setShare('private');
+    expect(await resolvedIdentifiers(model, run)).toEqual(ownerRows);
+
+    // Anyone holding the link reads the live transcript.
+    await setShare('link');
+    expect(await resolvedIdentifiers(model, run)).toEqual(['ws-shared-linear']);
+
+    await setShare('private');
+    expect(await resolvedIdentifiers(model, run)).toEqual(ownerRows);
   });
 
   it('never resolves the owner’s private rows for anyone else', async () => {
