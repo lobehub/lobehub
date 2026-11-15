@@ -175,10 +175,10 @@ sign: Base64( HmacSHA256( key = clientSecret, message = timestamp + "\n" + clien
 
 ### 4.6 心跳与存活检测
 
-- **服务端心跳**：服务端定期下发 `ping` 系统帧，客户端回显即可保活（协议原文）。
-- **客户端存活检测（工程建议）**：全局 `WebSocket` 无法发送协议层 ping 帧，因此用「空闲看门狗」判断半开连接：任意帧都会刷新 `lastFrameAt`，超过 `idleTimeoutMs`（默认 180 秒，可配置）没有任何帧就主动关闭并重连。检查周期为 `idleTimeoutMs / 4`。
-  - 服务端 `ping` 的实际间隔官方未写（未核实）；默认值取得较宽，避免误判抖动。实测后可按真实间隔收紧。
-  - 官方 Node SDK 的 `keepAlive` 选项（默认关闭）是每 8 秒发协议层 ping、未收到 pong 即断开，思路相同。
+- **服务端 `ping` 系统帧**：收到时原样回显即可（协议原文）。
+- **空闲连接没有任何帧**：实测一条健康的空闲 Stream 连接 5 分钟内没有收到任何帧（包括 `ping`），所以「多久没收到帧」不能用来判断连接死活，否则会把健康连接反复重连。
+- **客户端存活检测**：用 `ws` 客户端发协议层 ping（`pingIntervalMs`，默认 30 秒）。一个周期内没收到 pong 即判定为半开连接：先摘下该 socket、`terminate()`，再立即走重连；被摘下的 socket 之后迟到的 `close` 不再触发重连。实测钉钉服务端会正常回 pong。
+  - 官方 Node SDK 的 `keepAlive` 选项（默认关闭）也是发协议层 ping、未收到 pong 即断开，思路相同。
 
 ### 4.7 重连
 
@@ -186,12 +186,12 @@ sign: Base64( HmacSHA256( key = clientSecret, message = timestamp + "\n" + clien
 | ------------------------------------------------ | ------------------------------ |
 | `disconnect` 系统帧                              | 立即关闭当前 socket → 重连     |
 | socket 意外关闭（网络、服务端负载均衡）          | 重连                           |
-| 空闲超时                                         | 关闭 → 重连                    |
+| 一个 ping 周期内未收到 pong（半开连接）          | 摘下 socket → 重连             |
 | 重连时注册接口失败或握手前关闭                   | 继续按退避重试                 |
 | `close()`、`abortSignal` 触发、`durationMs` 到期 | 不重连（由调用方决定是否重启） |
 
 - **每次重连都重新调用 `connections/open`**（ticket 单次有效）。
-- 退避：`1s × 2^(n-1)`，上限 60 秒，最多 10 次；握手成功后计数清零（与官方 SDK 指数退避一致，上限相同）。
+- 退避：`1s × 2^(n-1)`，上限 60 秒，**不设重试次数上限**：上层已把连接视为运行中，放弃重试会让机器人静默离线到下次刷新，所以一直按 60 秒间隔重试，直到恢复或被 `close()`；握手成功后计数清零。
 - 首次 `connect()` 失败不会进入重连循环，直接 reject，交给上层把运行状态标为错误。
 - 旧 socket 的事件在被替换后一律忽略，避免重复重连。
 
@@ -434,24 +434,23 @@ sequenceDiagram
 | `types.ts`            | 回调载荷、Stream 帧、OpenAPI 请求 / 响应类型与常量                                                                             |
 | `api.ts`              | `DingTalkApiClient`：token 缓存 / 刷新、Stream 注册、单聊 / 群聊 /sessionWebhook 发送、文件下载；`DingTalkApiError` 与错误分类 |
 | `crypto.ts`           | 回调签名与校验（HTTP 回调模式 + gateway 转发共用）                                                                             |
-| `gateway.ts`          | `DingTalkStreamConnection`：注册、握手、ping/ACK、转发、看门狗、重连                                                           |
+| `gateway.ts`          | `DingTalkStreamConnection`：注册、握手、ping/ACK、转发、协议层 ping 存活检测、重连                                             |
 | `format-converter.ts` | mdast ⇄ markdown、出站模板选择、markdown 标题生成                                                                              |
 | `adapter.ts`          | `DingTalkAdapter`（chat SDK `Adapter`）：验签、解析、thread 编码、发送与回退                                                   |
 
 ### 10.2 单元测试
 
-`bunx vitest run`（包目录）覆盖：gateway 握手 /ping 回显 / CALLBACK ACK 与签名转发 / 404 topic /disconnect 重连 / 退避与计数重置 / 空闲看门狗 /abort/durationMs；入站单聊、群聊 @、外部联系人、richText、picture、audio、video、file、空消息、自身消息、验签失败与过期；出站 sessionWebhook 优先、单聊 batchSend、群聊 groupMessages、sessionWebhook 失效回退、过期跳过、限流映射、token 过期刷新重试、错误分类表、UTF-8 截断。
+`bunx vitest run`（包目录）覆盖：gateway 握手 /ping 回显 / CALLBACK ACK 与签名转发 / 404 topic /disconnect 重连 / 退避与计数重置 / 注册长时间失败后持续重试 / 回 pong 的空闲连接不重连 / 未回 pong 的半开连接被替换 /abort/durationMs；入站单聊、群聊 @、外部联系人、richText、picture、audio、video、file、空消息、自身消息、验签失败与过期；出站 sessionWebhook 优先、单聊 batchSend、群聊 groupMessages、sessionWebhook 失效回退、过期跳过、限流映射、token 过期刷新重试、错误分类表、UTF-8 截断。
 
 ### 10.3 未实测清单
 
-| #   | 项                                                                            |
-| --- | ----------------------------------------------------------------------------- |
-| D1  | 真实企业中 Stream 单聊、群聊 @ 收发                                           |
-| D2  | `sessionWebhook` 实际有效期与失效时的 `errcode`                               |
-| D3  | 服务端 `ping` 的实际间隔（决定 `idleTimeoutMs` 能否收紧）                     |
-| D4  | 群聊 `text.content` 是否总是去掉 @机器人（含多人 @ 场景）                     |
-| D5  | 20001 配额耗尽载荷形态                                                        |
-| D6  | 入站图片下载码有效期、下载后 MIME（当前图片 / 音视频不预设 MIME，由下游嗅探） |
+| #   | 项                                                                             |
+| --- | ------------------------------------------------------------------------------ |
+| D1  | 真实企业中 Stream 单聊、群聊 @ 的回复回推（入站已实测：单聊与群聊 @ 均能收到） |
+| D2  | `sessionWebhook` 实际有效期与失效时的 `errcode`                                |
+| D4  | 群聊 `text.content` 是否总是去掉 @机器人（含多人 @ 场景）                      |
+| D5  | 20001 配额耗尽载荷形态                                                         |
+| D6  | 入站图片下载码有效期、下载后 MIME（当前图片 / 音视频不预设 MIME，由下游嗅探）  |
 
 ## 11. 服务端平台接入（`apps/server/src/services/bot/platforms/dingtalk/`）
 
