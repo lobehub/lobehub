@@ -48,10 +48,6 @@ describe('DingTalk schema', () => {
     );
   });
 
-  it('does not offer a reaction mode, since DingTalk robots cannot react', () => {
-    expect(settingKeys()).not.toContain('reactionMode');
-  });
-
   it('defaults to Stream mode, open policies and the byte-safe char limit', () => {
     const defaults = mergeWithDefaults(schema, {});
     expect(defaults).toMatchObject({

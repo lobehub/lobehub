@@ -16,14 +16,14 @@ describe('DingTalkFormatConverter', () => {
   });
 
   // Unclosed brackets / parens must not make the link patterns rescan the rest of
-  // the line from every start position (polynomial ReDoS on agent output).
+  // the line from every start position (polynomial ReDoS on agent output). At this
+  // size a polynomial scan runs far past the test timeout, so finishing is the guard;
+  // the assertions pin the outcome rather than a machine-dependent duration.
   it.each([
     ['unclosed brackets', '['.repeat(50_000)],
     ['unclosed link targets', '[]('.repeat(50_000)],
-  ])('handles %s in linear time', (_, text) => {
-    const started = performance.now();
-    converter.deriveTitle(text);
-    converter.toOutboundMessage(text, text);
-    expect(performance.now() - started).toBeLessThan(500);
+  ])('treats %s as plain text', (_, text) => {
+    expect(converter.toOutboundMessage(text, text).msgKey).toBe('sampleText');
+    expect(typeof converter.deriveTitle(text)).toBe('string');
   });
 });
