@@ -105,16 +105,20 @@ def run(args, capture=False, data=None, check=True):
 def ask(label, default='', secret=False):
     if not interactive:
         return default
-    with open('/dev/tty', 'r+') as tty:
-        prompt = label + (f' [{default}]' if default and not secret else '') + '：'
-        if secret:
-            return getpass.getpass(prompt, stream=tty) or default
-        tty.write(prompt)
-        tty.flush()
-        answer = tty.readline()
-        if not answer:
-            fail('终端输入已关闭。')
-        return answer.strip() or default
+    prompt = label + (f' [{default}]' if default and not secret else '') + '：'
+    if secret:
+        # getpass manages the tty mode itself; do not pass a read/write tty stream.
+        return getpass.getpass(prompt) or default
+    # /dev/tty is not seekable. Separate write and read handles so Python never
+    # tries to seek between the prompt and the answer.
+    with open('/dev/tty', 'w') as output:
+        output.write(prompt)
+        output.flush()
+    with open('/dev/tty', 'r') as input_stream:
+        answer = input_stream.readline()
+    if not answer:
+        fail('终端输入已关闭。')
+    return answer.strip() or default
 
 
 def confirm(message):
