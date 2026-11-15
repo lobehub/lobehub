@@ -11,8 +11,8 @@ import type * as HeteroSpawn from '@lobechat/heterogeneous-agents/spawn';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { HeteroTraceRecorder } from '../utils/HeteroTraceRecorder';
-import { registerHeteroCommand } from './hetero';
+import { HeteroTraceRecorder } from '../../utils/HeteroTraceRecorder';
+import { registerHeteroCommand } from './index';
 
 const {
   mockCreateCodexAgentHandle,
@@ -51,12 +51,12 @@ vi.mock('@lobechat/heterogeneous-agents/rpc', async (importOriginal) => ({
   createPiRpcAgentHandle: mockCreatePiRpcAgentHandle,
 }));
 
-vi.mock('../api/client', () => ({
+vi.mock('../../api/client', () => ({
   getTrpcClient: mockGetTrpcClient,
 }));
 
 const { mockRenewalStop } = vi.hoisted(() => ({ mockRenewalStop: vi.fn() }));
-vi.mock('../utils/OperationTokenRenewal', () => ({
+vi.mock('../../utils/OperationTokenRenewal', () => ({
   createOperationTokenRenewal: () => ({ active: true, stop: mockRenewalStop }),
 }));
 

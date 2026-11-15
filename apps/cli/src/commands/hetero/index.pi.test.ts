@@ -8,7 +8,7 @@ import type * as HeteroRpc from '@lobechat/heterogeneous-agents/rpc';
 import { Command } from 'commander';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { registerHeteroCommand } from './hetero';
+import { registerHeteroCommand } from './index';
 
 const { createHandle, finish, ingest } = vi.hoisted(() => ({
   createHandle: vi.fn(),
@@ -23,12 +23,12 @@ vi.mock('@lobechat/heterogeneous-agents/rpc', async (importOriginal) => ({
 vi.mock('@lobechat/heterogeneous-agents/resolveCliCommand', () => ({
   resolveHeteroSpawnCommand: async () => ({ command: 'pi' }),
 }));
-vi.mock('../api/client', () => ({
+vi.mock('../../api/client', () => ({
   getTrpcClient: async () => ({
     aiAgent: { heteroFinish: { mutate: finish }, heteroIngest: { mutate: ingest } },
   }),
 }));
-vi.mock('../utils/OperationTokenRenewal', () => ({
+vi.mock('../../utils/OperationTokenRenewal', () => ({
   createOperationTokenRenewal: () => ({ active: true, stop: vi.fn() }),
 }));
 

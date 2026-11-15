@@ -40,16 +40,16 @@ import { toCodexServiceTier } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import type { Command } from 'commander';
 
-import { getTrpcClient } from '../api/client';
-import { cliVersion } from '../pkg';
-import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
-import { withHeteroSteer } from '../utils/heteroSteer';
-import { HeteroTraceRecorder } from '../utils/HeteroTraceRecorder';
-import { log } from '../utils/logger';
-import { createOperationHeartbeat } from '../utils/OperationHeartbeat';
-import { createOperationTokenRenewal } from '../utils/OperationTokenRenewal';
-import { createLocalTraceStore } from '../utils/traceStore';
-import { TrpcIngestSink } from '../utils/TrpcIngestSink';
+import { getTrpcClient } from '../../api/client';
+import { cliVersion } from '../../pkg';
+import { CoalescingBatchIngester } from '../../utils/CoalescingBatchIngester';
+import { withHeteroSteer } from '../../utils/heteroSteer';
+import { HeteroTraceRecorder } from '../../utils/HeteroTraceRecorder';
+import { log } from '../../utils/logger';
+import { createOperationHeartbeat } from '../../utils/OperationHeartbeat';
+import { createOperationTokenRenewal } from '../../utils/OperationTokenRenewal';
+import { createLocalTraceStore } from '../../utils/traceStore';
+import { TrpcIngestSink } from '../../utils/TrpcIngestSink';
 
 const DSH_AGENT_TYPE = 'deepseek-harness';
 export const SUPPORTED_AGENT_TYPES = new Set<string>([
