@@ -125,6 +125,25 @@ export class SidebarUIActionImpl {
     if (isPrivate && !!item.pinned !== pinned) await writeColumn(pinned);
   };
 
+  /**
+   * Reorder the member's own pins in the merged workspace Agents section.
+   * `ids` is the new order of the rows the sidebar shows; ids in the stored
+   * list that are not shown right now (hidden or dangling) keep their place
+   * after them, so a reorder never unpins anything.
+   */
+  reorderMyPinned = async (ids: string[]): Promise<void> => {
+    const userStore = getUserStoreState();
+    const current = userStore.workspaceUserPreference.sidebarPinnedItemIds ?? [];
+    const shown = new Set(ids);
+    const nextIds = [...ids, ...current.filter((id) => !shown.has(id))].slice(
+      0,
+      MAX_SIDEBAR_PINNED_ITEMS,
+    );
+    if (nextIds.length === current.length && nextIds.every((id, i) => id === current[i])) return;
+
+    await userStore.updateWorkspaceUserPreference({ sidebarPinnedItemIds: nextIds });
+  };
+
   removeAgent = async (agentId: string): Promise<void> => {
     await agentService.removeAgent(agentId);
     await this.#get().refreshAgentList();

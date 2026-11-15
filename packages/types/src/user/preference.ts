@@ -364,6 +364,13 @@ export interface UserPreference {
    */
   sidebarHiddenGroupIds?: string[];
   /**
+   * Personal-mode order of the pinned Agents / chat groups at the top of the
+   * sidebar, set by drag and drop. Written only through
+   * `home.updatePinnedOrder`; deliberately absent from
+   * {@link UserPreferenceSchema} for the same reason as `islandDismissals`.
+   */
+  sidebarPinnedOrder?: string[];
+  /**
    * @deprecated Use settings.general.telemetry instead
    */
   telemetry?: boolean | null;

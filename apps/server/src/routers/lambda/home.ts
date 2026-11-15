@@ -10,6 +10,8 @@ import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { type HomeBriefData, HomeService } from '@/server/services/home';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 
+import { assertCanWriteTeamPin, MAX_SIDEBAR_PINNED_ITEMS } from './_helpers/sidebarPin';
+
 const homeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const workspaceId = ctx.workspaceId ?? undefined;
@@ -80,6 +82,18 @@ export const homeRouter = router({
     .input(z.object({ keyword: z.string() }))
     .query(async ({ input, ctx }) => {
       return ctx.homeRepository.searchAgents(input.keyword);
+    }),
+
+  /**
+   * Save the drag-and-drop order of the sidebar's pinned rows. In a workspace
+   * these are the team pins every member sees, so only owners/admins may
+   * reorder them; in personal mode they are the user's own pins.
+   */
+  updatePinnedOrder: homeProcedure
+    .input(z.object({ ids: z.array(z.string().max(255)).max(MAX_SIDEBAR_PINNED_ITEMS) }))
+    .mutation(async ({ input, ctx }) => {
+      await assertCanWriteTeamPin(ctx);
+      await ctx.homeRepository.updatePinnedOrder(input.ids);
     }),
 
   updateAgentSessionGroupId: homeProcedure

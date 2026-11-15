@@ -89,10 +89,22 @@ type Setter = StoreSetter<HomeStore>;
 export const createAgentListSlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>
   new AgentListActionImpl(set, get, _api);
 
+/**
+ * Put the rows named in `ids` first, in that order; rows it does not name keep
+ * their relative order after them.
+ */
+export const reorderItems = (items: SidebarAgentItem[], ids: readonly string[]) => {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const listed = ids.flatMap((id) => byId.get(id) ?? []);
+  const listedIds = new Set(listed.map((item) => item.id));
+  return [...listed, ...items.filter((item) => !listedIds.has(item.id))];
+};
+
 export class AgentListActionImpl {
   readonly #set: Setter;
   readonly #agentList;
   readonly #agents;
+  #pinnedOrderQueue: Promise<unknown> = Promise.resolve();
 
   constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
     void _api;
@@ -135,6 +147,26 @@ export class AgentListActionImpl {
       id,
       (item) => ({ ...item, ...patch }),
       () => getAgentStoreState().updateAgentMetaById(id, patch, { rethrow: true }),
+    );
+  };
+
+  /**
+   * Reorder the `pinned` rows (team pins in a workspace, the user's own pins
+   * in personal mode) by drag and drop: the sidebar moves now and rolls back
+   * if the save fails. Saves run one after another, so quick successive drags
+   * reach the server in the order they were made.
+   */
+  reorderPinnedAgents = async (ids: string[]): Promise<void> => {
+    await this.#agentList.optimistic(
+      AGENT_LIST_KEY,
+      (data) => (data ? { ...data, pinned: reorderItems(data.pinned, ids) } : data),
+      () => {
+        const operation = this.#pinnedOrderQueue
+          .catch(() => undefined)
+          .then(() => homeService.updatePinnedOrder(ids));
+        this.#pinnedOrderQueue = operation;
+        return operation;
+      },
     );
   };
 
