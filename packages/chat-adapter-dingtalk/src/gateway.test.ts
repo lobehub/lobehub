@@ -5,69 +5,93 @@ import type { DingTalkGatewayOptions } from './gateway';
 import { DEFAULT_STREAM_SUBSCRIPTIONS, DingTalkStreamConnection } from './gateway';
 import { DINGTALK_STREAM_TOPICS } from './types';
 
-// ---- Mock WebSocket ----
+// ---- Mock WebSocket (`ws`) ----
 
-class MockWebSocket {
-  static OPEN = 1;
-  static CLOSED = 3;
-  static instances: MockWebSocket[] = [];
-  /** When false, the socket never opens (simulates a rejected handshake). */
-  static autoOpen = true;
+const { MockWebSocket } = vi.hoisted(() => {
+  class MockWebSocket {
+    static OPEN = 1;
+    static CLOSED = 3;
+    static instances: MockWebSocket[] = [];
+    /** When false, the socket never opens (simulates a rejected handshake). */
+    static autoOpen = true;
 
-  readyState = 0;
-  url: string;
-  sentMessages: string[] = [];
-  closeCalls: Array<{ code?: number; reason?: string }> = [];
-  /** Half-open TCP: the peer never answers the close frame, so no `close` event fires. */
-  hangOnClose = false;
-  private listeners = new Map<string, Array<(...args: any[]) => void>>();
+    readyState = 0;
+    url: string;
+    sentMessages: string[] = [];
+    closeCalls: Array<{ code?: number; reason?: string }> = [];
+    /** Half-open TCP: the peer never answers the close frame, so no `close` event fires. */
+    hangOnClose = false;
+    /** When false the peer swallows pings (half-open socket). */
+    answerPings = true;
+    pings = 0;
+    terminated = false;
+    private listeners = new Map<string, Array<(...args: any[]) => void>>();
 
-  constructor(url: string) {
-    this.url = url;
-    MockWebSocket.instances.push(this);
-    if (MockWebSocket.autoOpen) {
-      setTimeout(() => {
-        this.readyState = MockWebSocket.OPEN;
-        this.emit('open', {});
-      }, 0);
+    constructor(url: string) {
+      this.url = url;
+      MockWebSocket.instances.push(this);
+      if (MockWebSocket.autoOpen) {
+        setTimeout(() => {
+          this.readyState = MockWebSocket.OPEN;
+          this.emit('open', {});
+        }, 0);
+      }
+    }
+
+    addEventListener(event: string, fn: (...args: any[]) => void) {
+      this.listeners.set(event, [...(this.listeners.get(event) || []), fn]);
+    }
+
+    removeEventListener(event: string, fn: (...args: any[]) => void) {
+      this.listeners.set(
+        event,
+        (this.listeners.get(event) || []).filter((f) => f !== fn),
+      );
+    }
+
+    /** `ws`-style listener registration (used for `pong`). */
+    on(event: string, fn: (...args: any[]) => void) {
+      this.addEventListener(event, fn);
+    }
+
+    ping() {
+      this.pings++;
+      if (this.answerPings) setTimeout(() => this.emit('pong', undefined), 0);
+    }
+
+    terminate() {
+      this.terminated = true;
+      this.close(1006, 'terminated');
+    }
+
+    send(data: string) {
+      this.sentMessages.push(data);
+    }
+
+    close(code?: number, reason?: string) {
+      this.closeCalls.push({ code, reason });
+      if (this.hangOnClose) return;
+      if (this.readyState === MockWebSocket.CLOSED) return;
+      this.readyState = MockWebSocket.CLOSED;
+      this.emit('close', { code: code ?? 1000, reason: reason ?? '' });
+    }
+
+    emit(event: string, data: any) {
+      for (const fn of this.listeners.get(event) || []) fn(data);
+    }
+
+    simulateFrame(frame: Record<string, any>) {
+      this.emit('message', { data: JSON.stringify(frame) });
+    }
+
+    sent(): Array<Record<string, any>> {
+      return this.sentMessages.map((m) => JSON.parse(m));
     }
   }
+  return { MockWebSocket };
+});
 
-  addEventListener(event: string, fn: (...args: any[]) => void) {
-    this.listeners.set(event, [...(this.listeners.get(event) || []), fn]);
-  }
-
-  removeEventListener(event: string, fn: (...args: any[]) => void) {
-    this.listeners.set(
-      event,
-      (this.listeners.get(event) || []).filter((f) => f !== fn),
-    );
-  }
-
-  send(data: string) {
-    this.sentMessages.push(data);
-  }
-
-  close(code?: number, reason?: string) {
-    this.closeCalls.push({ code, reason });
-    if (this.hangOnClose) return;
-    if (this.readyState === MockWebSocket.CLOSED) return;
-    this.readyState = MockWebSocket.CLOSED;
-    this.emit('close', { code: code ?? 1000, reason: reason ?? '' });
-  }
-
-  emit(event: string, data: any) {
-    for (const fn of this.listeners.get(event) || []) fn(data);
-  }
-
-  simulateFrame(frame: Record<string, any>) {
-    this.emit('message', { data: JSON.stringify(frame) });
-  }
-
-  sent(): Array<Record<string, any>> {
-    return this.sentMessages.map((m) => JSON.parse(m));
-  }
-}
+vi.mock('ws', () => ({ default: MockWebSocket }));
 
 // ---- Helpers ----
 
@@ -104,7 +128,6 @@ describe('DingTalkStreamConnection', () => {
   beforeEach(() => {
     MockWebSocket.instances = [];
     MockWebSocket.autoOpen = true;
-    vi.stubGlobal('WebSocket', MockWebSocket);
     fetchMock = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -307,32 +330,40 @@ describe('DingTalkStreamConnection', () => {
       conn.close();
     });
 
-    it('replaces a silent (half-open) connection after the idle timeout', async () => {
-      const { api, ws, conn } = await connected({ idleTimeoutMs: 10_000 });
+    it('keeps a silent connection that answers pings (idle streams carry no frames)', async () => {
+      const { api, ws, conn } = await connected({ pingIntervalMs: 10_000 });
 
-      await vi.advanceTimersByTimeAsync(5000);
-      ws.simulateFrame({
-        data: '{"opaque":"1"}',
-        headers: { messageId: 'p', topic: 'ping' },
-        type: 'SYSTEM',
-      });
-      await vi.advanceTimersByTimeAsync(8000);
-      expect(ws.readyState).toBe(MockWebSocket.OPEN); // ping reset the idle clock
+      await vi.advanceTimersByTimeAsync(300_000);
 
-      await vi.advanceTimersByTimeAsync(5000);
-      expect(ws.closeCalls.at(-1)).toEqual({ code: 4000, reason: 'Idle timeout' });
-
-      await vi.advanceTimersByTimeAsync(1100);
-      expect(api.openStreamConnection).toHaveBeenCalledTimes(2);
+      expect(ws.pings).toBeGreaterThanOrEqual(29);
+      expect(ws.readyState).toBe(MockWebSocket.OPEN);
+      expect(ws.terminated).toBe(false);
+      expect(api.openStreamConnection).toHaveBeenCalledTimes(1);
       conn.close();
     });
 
-    it('reconnects after the idle timeout even when the half-open socket never emits close', async () => {
-      const { api, ws, conn } = await connected({ idleTimeoutMs: 10_000 });
+    it('replaces a half-open connection that stops answering pings', async () => {
+      const { api, ws, conn } = await connected({ pingIntervalMs: 10_000 });
+      ws.answerPings = false;
+
+      await vi.advanceTimersByTimeAsync(10_000); // ping sent, no pong
+      expect(ws.terminated).toBe(false);
+      await vi.advanceTimersByTimeAsync(10_000); // pong window missed
+      expect(ws.terminated).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(1100);
+      expect(api.openStreamConnection).toHaveBeenCalledTimes(2);
+      expect(MockWebSocket.instances).toHaveLength(2);
+      conn.close();
+    });
+
+    it('reconnects once even when the half-open socket never emits close', async () => {
+      const { api, ws, conn } = await connected({ pingIntervalMs: 10_000 });
+      ws.answerPings = false;
       ws.hangOnClose = true;
 
-      await vi.advanceTimersByTimeAsync(15_000);
-      expect(ws.closeCalls.at(-1)).toEqual({ code: 4000, reason: 'Idle timeout' });
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(ws.terminated).toBe(true);
 
       await vi.advanceTimersByTimeAsync(1100);
       expect(api.openStreamConnection).toHaveBeenCalledTimes(2);
