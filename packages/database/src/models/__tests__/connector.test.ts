@@ -985,6 +985,50 @@ describe('ConnectorModel', () => {
     });
   });
 
+  describe('updateMetadataIfContains', () => {
+    const tag = { installAttempt: 'attempt-1' };
+
+    it('replaces the metadata while it still has the tag', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const created = await model.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: { avatar: 'a.png', ...tag },
+      });
+
+      expect(await model.updateMetadataIfContains(created.id, tag, { avatar: 'done.png' })).toBe(
+        true,
+      );
+      expect((await model.findById(created.id))?.metadata).toEqual({ avatar: 'done.png' });
+    });
+
+    it('keeps metadata rewritten since', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const created = await model.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: tag,
+      });
+      await model.update(created.id, { metadata: { avatar: 'readded.png' } });
+
+      expect(await model.updateMetadataIfContains(created.id, tag, { avatar: 'done.png' })).toBe(
+        false,
+      );
+      expect((await model.findById(created.id))?.metadata).toEqual({ avatar: 'readded.png' });
+    });
+
+    it("does not update another user's row", async () => {
+      const otherModel = new ConnectorModel(serverDB, otherUserId);
+      const created = await otherModel.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: tag,
+      });
+
+      expect(
+        await new ConnectorModel(serverDB, userId).updateMetadataIfContains(created.id, tag, {}),
+      ).toBe(false);
+      expect((await otherModel.findById(created.id))?.metadata).toEqual(tag);
+    });
+  });
+
   describe('deleteIfMetadataContains', () => {
     const tag = { installAttempt: 'attempt-1' };
 

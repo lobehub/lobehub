@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorToolModel } from '@/database/models/connectorTool';
 import {
   userConnectors,
   userConnectorTools,
@@ -21,7 +22,7 @@ import {
   MARKETPLACE_INSTALL_LEASE_MS,
   pickMarketplaceDeployment,
 } from './marketplaceInstall';
-import { buildConnectorMcpParams } from './sync';
+import { buildConnectorMcpParams, syncConnectorToolsById } from './sync';
 
 vi.mock('@/server/services/mcp', () => ({ mcpService: { listRawTools: vi.fn() } }));
 vi.mock('@/server/services/mcp/featureGate', () => ({
@@ -276,6 +277,39 @@ describe('installMarketplaceMcpConnector', () => {
     ).toEqual({ delete: 'always', search: undefined, send: 'required' });
   });
 
+  it('keeps an `always` tool mandatory through the refreshes that follow the install', async () => {
+    vi.mocked(mcpService.listRawTools).mockResolvedValue([
+      { name: 'search' },
+      { name: 'delete' },
+    ] as never);
+    await installMarketplaceMcpConnector(scope, 'remote-mcp', {
+      ...httpManifest,
+      api: [
+        { name: 'search', parameters: {} },
+        { humanIntervention: 'always', name: 'delete', parameters: {} },
+      ],
+    });
+    const [row] = await connectorRows();
+
+    // The background (and manual) refresh syncs the listing alone, without the manifest
+    await syncConnectorToolsById(row.id, {
+      connectorModel: new ConnectorModel(db, userId),
+      connectorToolModel: new ConnectorToolModel(db, userId),
+      userId,
+    });
+
+    const tools = await db
+      .select()
+      .from(userConnectorTools)
+      .where(eq(userConnectorTools.userConnectorId, row.id));
+    const connector = (await new ConnectorModel(db, userId).findById(row.id))!;
+    const [manifest] = buildConnectorManifests([connector], tools);
+    // `always` is the approval auto-run and headless runs still ask for
+    expect(
+      Object.fromEntries(manifest.api.map((api) => [api.name, api.humanIntervention])),
+    ).toEqual({ delete: 'always', search: undefined });
+  });
+
   it('removes the connector it created when the server cannot be reached', async () => {
     vi.mocked(mcpService.listRawTools).mockRejectedValue(new Error('connect ECONNREFUSED'));
 
@@ -324,6 +358,39 @@ describe('installMarketplaceMcpConnector', () => {
       expect((await db.select().from(userConnectorTools)).map((tool) => tool.toolName)).toEqual([
         'search',
       ]);
+    },
+  );
+
+  it.each([
+    [
+      'finished',
+      { customHeaders: { 'X-Team': 'web' }, marketplaceInstalled: true, version: '0.3.0' },
+      { status: 'exists' },
+    ],
+    [
+      'still running',
+      { customHeaders: { 'X-Team': 'web' }, version: '0.3.0' },
+      { blocker: 'in-progress', status: 'blocked' },
+    ],
+  ])(
+    'leaves a connector the web re-added while its listing succeeds to that install (%s)',
+    async (_, webMetadata, reported) => {
+      vi.mocked(mcpService.listRawTools).mockImplementation(async () => {
+        // The web install re-adds the identifier over this install's row with
+        // the headers its user entered (`connector.create` updates the row)
+        const [row] = await connectorRows();
+        await new ConnectorModel(db, userId).update(row.id, { metadata: webMetadata });
+        return [{ name: 'search' }] as never;
+      });
+
+      expect(await installMarketplaceMcpConnector(scope, 'remote-mcp', httpManifest)).toEqual(
+        reported,
+      );
+
+      const [connector, ...others] = await connectorRows();
+      expect(others).toEqual([]);
+      // Not replaced by this install's own snapshot
+      expect(connector.metadata).toEqual(webMetadata);
     },
   );
 

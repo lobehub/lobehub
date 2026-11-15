@@ -182,6 +182,19 @@ const judgeHolder = (
 const holderOutcome = (verdict: Exclude<HolderVerdict, 'replace'>): MarketplaceInstallOutcome =>
   verdict === 'exists' ? { status: 'exists' } : { blocker: verdict, status: 'blocked' };
 
+/**
+ * The outcome of an install that lost the row to its live holder (judged under
+ * the claim's lock, or after a re-add): no holder left, or a lease that ran out
+ * since, is the next try's to take.
+ */
+const liveHolderOutcome = (
+  holder: Parameters<typeof judgeHolder>[0] | null,
+  context: Parameters<typeof judgeHolder>[1],
+): MarketplaceInstallOutcome => {
+  const verdict = holder ? judgeHolder(holder, context) : 'in-progress';
+  return holderOutcome(verdict === 'replace' ? 'in-progress' : verdict);
+};
+
 /** The member policy the connector router's `create` applies to a workspace connector. */
 const canAddConnector = async ({ serverDB, userId, workspaceId }: MarketplaceInstallScope) => {
   if (!workspaceId) return true;
@@ -212,7 +225,8 @@ const INSTALL_ATTEMPT_KEY = 'marketplaceInstallAttempt';
  * concurrent installs of one server create it once. The install never
  * overwrites a row someone may still use, only an interrupted install's (see
  * {@link judgeHolder}), so a failed tool sync only has to delete the row it
- * created, and only while no one has re-added the identifier over it.
+ * created. Its rollback and its finishing mark both apply only while no one has
+ * re-added the identifier over the row.
  *
  * An HTTP server's tools are the ones it lists, each with the approval the
  * marketplace manifest gives it: the listing cannot carry one.
@@ -299,11 +313,7 @@ export const installMarketplaceMcpConnector = async (
     },
     { canReplace: (holder) => judgeHolder(holder, holderContext) === 'replace' },
   );
-  if ('holder' in claim) {
-    const verdict = judgeHolder(claim.holder, holderContext);
-    // Judged live under the lock: a lease that ran out since is the next try's to take.
-    return holderOutcome(verdict === 'replace' ? 'in-progress' : verdict);
-  }
+  if ('holder' in claim) return liveHolderOutcome(claim.holder, holderContext);
   const { created } = claim;
   // The identifier may be re-added over the row meanwhile (the web install):
   // the row is new, so its sync only adds tools, never pruning the re-add's,
@@ -334,10 +344,18 @@ export const installMarketplaceMcpConnector = async (
     }
 
     // Written last, without the attempt tag: until its tools are synced the row
-    // must stay uncallable.
-    await connectorModel.update(created.id, {
-      metadata: { ...metadata, [MARKETPLACE_INSTALL_COMPLETED_KEY]: true },
+    // must stay uncallable. Only while the row is still this install's: a re-add
+    // meanwhile (the web install) wrote its own metadata, such as headers its
+    // user entered, and that install finishes the row.
+    const completed = await connectorModel.updateMetadataIfContains(created.id, attempt, {
+      ...metadata,
+      [MARKETPLACE_INSTALL_COMPLETED_KEY]: true,
     });
+    if (!completed)
+      return liveHolderOutcome(
+        await connectorModel.findScopedByIdentifier(identifier),
+        holderContext,
+      );
   } catch (error) {
     // A failed rollback is only logged: an unmarked row stays uncallable.
     await rollback().catch((rollbackError) => {
