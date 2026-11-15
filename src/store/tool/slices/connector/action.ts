@@ -3,6 +3,7 @@ import { connectorMcpEndpoint, isDeviceOnlyMcpEndpoint } from '@lobechat/utils/m
 import type { SWRResponse } from 'swr';
 
 import type { ConnectorToolPermission } from '@/database/schemas';
+import { resolveLocalConnectorHttpParams } from '@/libs/mcp/localConnector';
 import {
   cacheScope,
   createReplicaSlice,
@@ -533,9 +534,8 @@ export class ConnectorActionImpl {
     if (!isDesktop) return false;
 
     // `getForEdit` returns the decrypted user-set credentials (bearer/apikey/
-    // header) needed to connect locally. OAuth2 tokens are machine-managed and
-    // never leave the server — but OAuth against a localhost endpoint would be
-    // server-unreachable anyway, so that combination stays on the server path.
+    // header) needed to connect locally; an OAuth connector's access token is
+    // fetched on its own (`resolveLocalConnectorHttpParams`).
     const detail = await lambdaClient.connector.getForEdit.query({ id });
     const isStdio = detail.mcpConnectionType === 'stdio';
     // A localhost / LAN address, or one the user set to connect through the device
@@ -557,23 +557,11 @@ export class ConnectorActionImpl {
         },
       });
     } else {
-      const credentials = detail.credentials;
-      const auth =
-        credentials?.type === 'bearer'
-          ? { token: credentials.token, type: 'bearer' as const }
-          : credentials?.type === 'apikey'
-            ? { token: credentials.apiKey, type: 'bearer' as const }
-            : undefined;
-      // Custom headers live in metadata.customHeaders; legacy rows stored them
-      // as a 'header' credential — merge both, mirroring the server-side
-      // buildConnectorMcpParams.
-      const headerCreds = credentials?.type === 'header' ? credentials.headers : undefined;
-      const customHeaders = detail.metadata?.customHeaders as Record<string, string> | undefined;
-      const headers =
-        headerCreds || customHeaders ? { ...headerCreds, ...customHeaders } : undefined;
-      tools = await mcpService.listLocalMcpTools({
-        http: { auth, headers, name: detail.identifier, url: detail.mcpServerUrl! },
-      });
+      // The same credentials and headers its tool calls send
+      const http = await resolveLocalConnectorHttpParams(detail, (connectorId) =>
+        lambdaClient.connector.getLocalCallToken.mutate({ id: connectorId }),
+      );
+      tools = await mcpService.listLocalMcpTools({ http });
     }
 
     await lambdaClient.connector.syncToolsFromClientById.mutate({

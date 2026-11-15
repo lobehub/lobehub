@@ -35,6 +35,7 @@ import {
   ConnectorToolCallError,
   readConnectorUiResourceById,
 } from '@/server/services/connector/exec';
+import { getConnectorLocalCallToken } from '@/server/services/connector/localCallToken';
 import {
   buildAuthorizationUrl,
   discoverConnectorOAuth,
@@ -302,6 +303,11 @@ export const connectorRouter = router({
       const tools = await ctx.connectorToolModel.queryByConnector(connector.id);
       return { ...rest, credentials: safeCredentials, oidcConfig: safeOidcConfig, tools };
     }),
+
+  /** The OAuth access token a device-routed connector's local desktop call sends. */
+  getLocalCallToken: connectorWriteProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(({ ctx, input }) => getConnectorLocalCallToken(ctx, input.id)),
 
   /**
    * Test an HTTP MCP server the user set to connect through their device: its

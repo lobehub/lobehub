@@ -182,10 +182,14 @@ export const syncConnectorToolsById = async (
   connectorId: string,
   /**
    * `userId` decides the `mcp_apps` flag: with it on, view-only tools are listed
-   * too. `serverDB` finds the user's desktop device for a connector the server
-   * can't reach itself (`shouldConnectViaDevice`); without it such a sync fails.
+   * too. `serverDB` finds the user's device for a connector the server can't
+   * reach itself (`shouldConnectViaDevice`). Required, so each caller decides:
+   * `undefined` fails such a sync instead of tunneling it to a device.
    */
-  ctx: ConnectorToolSyncContext & { serverDB?: LobeChatDatabase; userId?: string | null },
+  ctx: ConnectorToolSyncContext & {
+    serverDB: LobeChatDatabase | undefined;
+    userId?: string | null;
+  },
   options: ConnectorToolSyncOptions = {},
 ): Promise<{ toolCount: number }> => {
   let connector = await ctx.connectorModel.findById(connectorId);

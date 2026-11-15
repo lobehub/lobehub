@@ -29,7 +29,7 @@ import { type ReadResourceResult } from '@modelcontextprotocol/client';
 import { omit } from 'es-toolkit/compat';
 
 import { type MCPToolCallResult } from '@/libs/mcp';
-import { localConnectorHttpParams } from '@/libs/mcp/localConnector';
+import { resolveLocalConnectorHttpParams } from '@/libs/mcp/localConnector';
 import { renderMcpArgs, renderMcpUrlTemplate } from '@/libs/mcp/urlTemplate';
 import { getMCPConnectionErrorType } from '@/libs/mcp/utils';
 import { toolsClient } from '@/libs/trpc/client';
@@ -333,7 +333,9 @@ class MCPService {
           throw new Error(`Tool '${apiName}' can only be called from its interactive view`);
         }
         if (detail.mcpConnectionType !== 'stdio') {
-          const http = localConnectorHttpParams(detail);
+          const http = await resolveLocalConnectorHttpParams(detail, (id) =>
+            lambdaClient.connector.getLocalCallToken.mutate({ id }),
+          );
           if (fromMcpApp && !(await isViewServer(server, { ...http, type: 'http' })))
             throw new Error(VIEW_SERVER_MOVED);
           throwIfAborted(signal);
@@ -698,7 +700,9 @@ class MCPService {
         const { lambdaClient } = await import('@/libs/trpc/client');
         const detail = await lambdaClient.connector.getForEdit.query({ id: connector.id });
         if (!detail.isEnabled) return;
-        const http = localConnectorHttpParams(detail);
+        const http = await resolveLocalConnectorHttpParams(detail, (id) =>
+          lambdaClient.connector.getLocalCallToken.mutate({ id }),
+        );
         if (!(await reaches({ ...http, type: 'http' }))) return;
         return deserializeMcpIpcPayload(
           await ensureElectronIpc().mcp.readUiResource(serializeMcpIpcPayload({ http, uri })),
@@ -811,7 +815,13 @@ class MCPService {
       const serializedResult = await ensureElectronIpc().mcp.getStreamableMcpServerManifest(
         serialized as any,
       );
-      return deserializeMcpIpcPayload(serializedResult) as any;
+      const manifest = deserializeMcpIpcPayload(serializedResult) as any;
+      // The desktop builds `mcpParams` from the connection alone. Server-side
+      // agent runs route by the persisted `mcpParams`, so the choice must stay
+      // in it, as the device-gateway manifest below keeps it.
+      return connectVia === 'device' && manifest?.mcpParams
+        ? { ...manifest, mcpParams: { ...manifest.mcpParams, connectVia } }
+        : manifest;
     }
 
     // On the web, a server set to connect through the device is read on the

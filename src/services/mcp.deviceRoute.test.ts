@@ -39,6 +39,7 @@ vi.mock('@/libs/trpc/client', () => ({
       callTool: { mutate: vi.fn() },
       getDeviceMcpManifest: { mutate: vi.fn() },
       getForEdit: { query: vi.fn() },
+      getLocalCallToken: { mutate: vi.fn() },
     },
   },
   toolsClient: {
@@ -75,7 +76,13 @@ vi.mock('@/store/tool/selectors', () => ({
 }));
 
 const TAILNET_URL = 'https://nas.tail1234.ts.net/mcp';
-const manifest = { api: [], identifier: 'nas', meta: { title: 'NAS' }, version: '1' };
+const manifest = {
+  api: [],
+  identifier: 'nas',
+  mcpParams: { name: 'nas', type: 'http', url: TAILNET_URL },
+  meta: { title: 'NAS' },
+  version: '1',
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -108,7 +115,11 @@ describe('getStreamableMcpServerManifest routing', () => {
       url: TAILNET_URL,
     });
 
-    expect(result).toEqual(manifest);
+    // Server-side agent runs route by the persisted `mcpParams`: the choice stays
+    expect(result).toEqual({
+      ...manifest,
+      mcpParams: { ...manifest.mcpParams, connectVia: 'device' },
+    });
     expect(ipcPayload()).toMatchObject({ identifier: 'nas', url: TAILNET_URL });
     // The routing choice is not a connection parameter
     expect(ipcPayload()).not.toHaveProperty('connectVia');
@@ -245,6 +256,34 @@ describe('invokeMcpToolCall routing for HTTP servers', () => {
         toolName: 'list_files',
       });
       expect(lambdaClient.connector.callTool.mutate).not.toHaveBeenCalled();
+    });
+
+    // `getForEdit` leaves OAuth tokens out; the call fetches the current one
+    it("sends an OAuth connector's access token with a call it runs over IPC", async () => {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      environment.isDesktop = true;
+      useConnector({ connectVia: 'device' });
+      vi.mocked(lambdaClient.connector.getForEdit.query).mockResolvedValue({
+        ...connector,
+        credentials: null,
+        metadata: { connectVia: 'device' },
+        oidcConfig: { clientId: 'cid', issuer: 'https://auth.example.com' },
+        tools: [{ permission: 'auto', toolName: 'list_files' }],
+      } as never);
+      vi.mocked(lambdaClient.connector.getLocalCallToken.mutate).mockResolvedValue({
+        accessToken: 'fresh-access',
+        type: 'oauth2',
+      } as never);
+
+      await mcpService.invokeMcpToolCall(payload as ChatToolPayload, {});
+
+      expect(lambdaClient.connector.getLocalCallToken.mutate).toHaveBeenCalledWith({
+        id: 'nas-id',
+      });
+      const sent = superjson.deserialize(mockElectronIpc.mcp.callTool.mock.calls[0][0]);
+      expect(sent).toMatchObject({
+        http: { auth: { accessToken: 'fresh-access', type: 'oauth2' }, url: TAILNET_URL },
+      });
     });
 
     it('leaves one set to connect through the device to the server on the web', async () => {

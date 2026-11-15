@@ -132,7 +132,8 @@ export const scheduleStaleConnectorToolsRefresh = (
       try {
         after(async () => {
           try {
-            const { toolCount } = await syncConnectorToolsById(id, ctx);
+            // Device-routed connectors were skipped above: none tunnels here
+            const { toolCount } = await syncConnectorToolsById(id, { ...ctx, serverDB: undefined });
             log('auto-refreshed connector %s: %d tools', id, toolCount);
           } catch (err) {
             // Remote unreachable / auth failure / etc. — best-effort background
