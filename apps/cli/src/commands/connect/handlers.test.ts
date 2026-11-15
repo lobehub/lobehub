@@ -1,6 +1,7 @@
 import type { GatewayClient, ToolCallRequestMessage } from '@lobechat/device-gateway-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { executeDeviceMcpCall } from '../../device/mcp';
 import { executeToolCall } from '../../tools';
 import { bindGatewayClientHandlers, type GatewayHandlerContext } from './handlers';
 
@@ -9,6 +10,10 @@ vi.mock('../../tools', () => ({
 }));
 
 vi.mock('../../daemon/manager', () => ({ appendLog: vi.fn() }));
+
+vi.mock('../../device/mcp', () => ({
+  executeDeviceMcpCall: vi.fn().mockResolvedValue({ content: 'mcp tool ran', success: true }),
+}));
 
 const createClient = () => {
   const handlers: Record<string, (...args: any[]) => Promise<void>> = {};
@@ -48,6 +53,7 @@ describe('bindGatewayClientHandlers tool_call_request routing', () => {
 
   beforeEach(() => {
     vi.mocked(executeToolCall).mockClear();
+    vi.mocked(executeDeviceMcpCall).mockClear();
     ({ client, handlers } = createClient());
     bindGatewayClientHandlers(client as unknown as GatewayClient, createContext());
   });
@@ -57,6 +63,40 @@ describe('bindGatewayClientHandlers tool_call_request routing', () => {
     await handlers.tool_call_request(toolCallRequest({}));
 
     expect(executeToolCall).toHaveBeenCalledTimes(2);
+  });
+
+  it('runs a tunneled MCP call on the MCP runtime, not the same-named local tool', async () => {
+    const params = {
+      args: ['--stdio'],
+      command: 'mcp-server',
+      name: 'some-mcp-server',
+      type: 'stdio' as const,
+    };
+    await handlers.tool_call_request({
+      ...toolCallRequest({ identifier: 'some-mcp-server', params, type: 'mcp' }),
+      timeout: 30_000,
+    });
+
+    expect(executeToolCall).not.toHaveBeenCalled();
+    expect(executeDeviceMcpCall).toHaveBeenCalledWith(
+      { apiName: 'runCommand', arguments: '{"command":"id"}', params, timeout: 30_000 },
+      expect.any(Function),
+    );
+    expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+      requestId: 'req-1',
+      result: expect.objectContaining({ content: 'mcp tool ran', success: true }),
+    });
+  });
+
+  it('fails an MCP call that carries no connection params', async () => {
+    await handlers.tool_call_request(toolCallRequest({ type: 'mcp' }));
+
+    expect(executeDeviceMcpCall).not.toHaveBeenCalled();
+    expect(executeToolCall).not.toHaveBeenCalled();
+    expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+      requestId: 'req-1',
+      result: expect.objectContaining({ success: false }),
+    });
   });
 
   it('never runs a same-named local tool for a call kind it does not support', async () => {

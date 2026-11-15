@@ -1,13 +1,21 @@
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 
-import type { AudioContent, ImageContent, ResourceContent, ToolCallContent } from './types';
+import type {
+  AudioContent,
+  ImageContent,
+  ResourceContent,
+  TextContent,
+  ToolCallContent,
+} from './types';
 
 /**
  * Stores one media block a tool returned and answers the key the result keeps
  * in place of its base64 bytes. `path` is a suggested storage path
  * (`mcp/<images|audios>/<day>/<uuid>.<ext>`); a host with its own naming may
- * ignore it.
+ * ignore it. Answers `undefined` when this host cannot store media right now
+ * (e.g. no server credentials): the block is then replaced by a text note the
+ * model can explain, instead of failing a tool call that already ran.
  */
 export type McpMediaUploader = (media: {
   /** The block's bytes as the server sent them (base64, no `data:` prefix). */
@@ -17,7 +25,7 @@ export type McpMediaUploader = (media: {
   hash: string;
   mimeType: string;
   path: string;
-}) => Promise<string>;
+}) => Promise<string | undefined>;
 
 /** Resolves a key {@link McpMediaUploader} returned to a URL the chat can load. */
 export type McpMediaUrlResolver = (key: string) => Promise<string>;
@@ -86,6 +94,11 @@ const uploadMediaBlock = async (
   return upload({ base64, buffer, filename, hash, mimeType, path: filePath });
 };
 
+const mediaUnavailable = (mediaType: MediaContentType, mimeType: string): TextContent => ({
+  text: `[The MCP tool returned ${mediaType === 'image' ? 'an image' : 'audio'} (${mimeType}) that this device could not upload, so it is not shown.]`,
+  type: 'text',
+});
+
 /**
  * Replace the base64 bytes of every image / audio block (and media `resource`
  * blobs) with the key the uploader stored them under, so a tool result stays
@@ -101,6 +114,7 @@ export const uploadMediaBlocks = (
         const mediaType = block.type;
         const mimeType = normalizeMimeType(block.mimeType, mediaType);
         const data = await uploadMediaBlock(upload, block.data, mediaType, mimeType);
+        if (data === undefined) return mediaUnavailable(mediaType, mimeType);
 
         return { ...block, data, mimeType };
       }
@@ -114,6 +128,7 @@ export const uploadMediaBlocks = (
 
         const mimeType = normalizeMimeType(resource.mimeType, mediaType);
         const data = await uploadMediaBlock(upload, resource.blob, mediaType, mimeType);
+        if (data === undefined) return mediaUnavailable(mediaType, mimeType);
         const metadata = resourceBlock._meta ? { _meta: resourceBlock._meta } : {};
 
         if (mediaType === 'image') {
