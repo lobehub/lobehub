@@ -43,6 +43,7 @@ import { agentChatTopicListLoader } from '@/spa/router/agentChatTopicListLoader'
 import { agentPageChildren } from '@/spa/router/agentPageRoutes';
 import { evalRoute } from '@/spa/router/evalRoutes';
 import { homeInboxLoader } from '@/spa/router/homeInboxLoader';
+import { meetingRoutes } from '@/spa/router/meetingRoutes';
 import { memoryChildren } from '@/spa/router/memoryRoutes';
 import { onboardingRoute } from '@/spa/router/onboardingRoute';
 import { pageListLoader } from '@/spa/router/pageListLoader';
@@ -509,6 +510,8 @@ export const sharedMainAreaChildren: RouteObject[] = [
       { preloadId: 'tasks' },
     ),
   },
+
+  ...meetingRoutes,
 
   // Pages live in Docs: /page → /resource, /page/:id → /resource/page/:id.
   ...(['page', 'page/:id'] as const).map((path) => ({

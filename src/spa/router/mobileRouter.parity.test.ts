@@ -40,6 +40,8 @@ const MOBILE_UNSUPPORTED = [
   /^\/(acme\/)?eval(\/|$)/,
   // Multi-agent Channels currently use the desktop home sidebar and conversation layout.
   /^\/(acme\/)?channels(\/|$)/,
+  // Meeting notes record and transcribe on the desktop's local engine.
+  /^\/(acme\/)?meeting(\/|$)/,
 ];
 
 const desktopUrls = [...new Set(collectLeafPatterns(mainAreaMetaRoutes).map(toSampleUrl))]

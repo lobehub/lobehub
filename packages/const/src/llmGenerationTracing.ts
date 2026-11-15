@@ -29,6 +29,7 @@ export const TRACING_SCENARIOS = {
   GoalExplore: 'goal_explore',
   HomeBrief: 'home_brief',
   InputCompletion: 'input_completion',
+  MeetingMinutes: 'meeting_minutes',
   MemoryExtract: 'memory_extract',
   OnboardingTaskRecommendation: 'onboarding_task_recommendation',
   SignalFeedbackDomain: 'signal_feedback_domain',

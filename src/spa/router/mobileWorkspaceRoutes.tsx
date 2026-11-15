@@ -293,4 +293,7 @@ export const mobileUnsupportedRoutes: RouteObject[] = [
   // Multi-agent Channels currently use the desktop home sidebar and conversation layout.
   { element: redirectElement('..'), path: 'channels/*' },
   { element: redirectElement('..'), path: 'eval/*' },
+  // Meeting notes record and transcribe on the desktop's local engine; the mobile
+  // home has no entry for them yet, so the surface stays desktop-only.
+  { element: redirectElement('..'), path: 'meeting/*' },
 ];

@@ -39,6 +39,7 @@ export const STORE_DEFAULTS: ElectronMainStore = {
   imessageBridgeConfigs: [],
   lastWorkspaceSlugByAccount: {},
   locale: 'auto',
+  localAsr: { diarization: true, language: 'zh', provider: 'cloud' },
   localFileWorkspaceRoots: [],
   networkProxy: defaultProxySettings,
   pendingRestoreRoute: '',

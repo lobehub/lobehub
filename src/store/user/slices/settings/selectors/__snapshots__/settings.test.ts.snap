@@ -82,6 +82,14 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "model": "gpt-5.6-luna",
     "provider": "openai",
   },
+  "meetingMinutes": {
+    "model": "gpt-5.6-luna",
+    "provider": "openai",
+  },
+  "meetingTranscription": {
+    "model": "gpt-4o-transcribe-diarize",
+    "provider": "openai",
+  },
   "memoryAnalysisAgentConfig": {
     "model": "gpt-5.6-luna",
     "provider": "openai",

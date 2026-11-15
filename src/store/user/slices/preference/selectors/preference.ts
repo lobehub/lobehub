@@ -14,6 +14,10 @@ const topicIncludeCompleted = (s: UserStore): boolean =>
 
 const hideSyncAlert = (s: UserStore) => s.preference.hideSyncAlert;
 
+/** Create tasks from meeting action items without waiting for confirmation. */
+const autoCreateMeetingTasks = (s: UserStore): boolean =>
+  s.preference.meeting?.autoCreateTasks ?? false;
+
 const hideSettingsMoveGuide = (s: UserStore) => s.preference.guide?.moveSettingsToAvatar;
 
 /** Whether the "Pages and Resources are now Docs" notice was acknowledged. */
@@ -32,6 +36,7 @@ const terminalFontFamily = (s: UserStore): string | undefined =>
   s.preference.terminalFontFamily?.trim() || undefined;
 
 export const preferenceSelectors = {
+  autoCreateMeetingTasks,
   defaultOpenInApp,
   docsMergedNoticeSeen,
   fontFamily,

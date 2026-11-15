@@ -15,6 +15,7 @@ import GitCtr from './GitCtr';
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import HeteroSessionCtr from './HeteroSessionCtr';
 import ImessageBridgeCtr from './ImessageBridgeCtr';
+import LocalAsrCtr from './LocalAsrCtr';
 import LocalDatabaseCtr from './LocalDatabaseCtr';
 import LocalFileCtr from './LocalFileCtr';
 import McpCtr from './McpCtr';
@@ -50,6 +51,7 @@ export const controllerIpcConstructors = [
   DevtoolsCtr,
   GatewayConnectionCtr,
   GitCtr,
+  LocalAsrCtr,
   LocalDatabaseCtr,
   LocalFileCtr,
   ImessageBridgeCtr,

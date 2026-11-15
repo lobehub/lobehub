@@ -17,4 +17,13 @@ describe('UserPreferenceSchema', () => {
       expect(parsed).toMatchObject({ [key]: ['id-1', 'id-2'] });
     },
   );
+
+  it('preserves the meeting auto-create switch', () => {
+    const parsed = UserPreferenceSchema.parse({
+      meeting: { autoCreateTasks: true },
+      telemetry: null,
+    });
+
+    expect(parsed.meeting).toEqual({ autoCreateTasks: true });
+  });
 });
