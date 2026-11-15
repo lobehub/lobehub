@@ -490,13 +490,14 @@ const connectorCoreRouter = router({
       return { id: claim.created.id, isNew: true };
     };
 
-    // The row a re-add read can be deleted before its update: an Agent Builder
-    // install replaces a stale unfinished one under the identifier lock. The add
-    // then starts over against what holds the identifier now, once: the
-    // replacement is fresh, so no install takes it over in turn.
-    const result = (await add()) ?? (await add());
-    if (!result) throw new TRPCError({ code: 'CONFLICT', message: 'Connector changed, try again' });
-    return result;
+    const added = await add();
+    if (added) return added;
+    // The row the re-add read was deleted before its update (an Agent Builder
+    // install replaces a stale unfinished one under the identifier lock): start
+    // over once, against the fresh replacement no install takes over in turn.
+    const retried = await add();
+    if (retried) return retried;
+    throw new TRPCError({ code: 'CONFLICT', message: 'Connector changed, try again' });
   }),
 
   /** Update connector configuration while preserving server-resolved OAuth state. */
