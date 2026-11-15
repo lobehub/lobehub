@@ -26,7 +26,7 @@ const mocks = vi.hoisted(() => {
       chatInputState.inputCompletionErrorDismissed = true;
     }),
     getMessages: vi.fn(() => []),
-    inputCompletionError: undefined as { message: string } | undefined,
+    inputCompletionError: undefined as { errorType?: string; message: string } | undefined,
     inputCompletionErrorDismissed: false,
     pauseInputCompletion: vi.fn((error: { message: string }) => {
       chatInputState.inputCompletionError = error;
@@ -35,8 +35,14 @@ const mocks = vi.hoisted(() => {
   };
 
   return {
+    activeWorkspaceId: null as string | null,
     chainInputCompletion: vi.fn(),
     chatInputState,
+    defaultInputCompletionConfig: {
+      enabled: false,
+      model: 'gpt-5.6-luna',
+      provider: 'lobehub',
+    },
     generateJSON: vi.fn(),
     inputCompletionConfig: {
       enabled: false,
@@ -150,6 +156,10 @@ vi.mock('react-hotkeys-hook', () => ({
   }),
 }));
 
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  getActiveWorkspaceId: () => mocks.activeWorkspaceId,
+  useActiveWorkspaceId: () => mocks.activeWorkspaceId,
+}));
 vi.mock('@/components/DragUploadZone', () => ({
   usePasteFile: vi.fn(),
   useUploadFiles: () => ({ handleUploadFiles: vi.fn() }),
@@ -212,6 +222,7 @@ vi.mock('@/store/user', () => {
 vi.mock('@/store/user/selectors', () => ({
   settingsSelectors: { getHotkeyById: () => () => 'alt+enter' },
   systemAgentSelectors: {
+    defaultInputCompletion: () => mocks.defaultInputCompletionConfig,
     inputCompletion: () => mocks.inputCompletionConfig,
   },
   userGeneralSettingsSelectors: {
@@ -296,12 +307,14 @@ vi.mock('./useMentionCategories', () => ({
 describe('ChatInput InputEditor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.generateJSON.mockReset();
     permission.allowed = false;
     platform.isMobile = false;
     userSettings.enablePasteAutoConvert = true;
     mocks.inputCompletionConfig.enabled = false;
     mocks.inputCompletionConfig.model = 'gpt-4o-mini';
     mocks.inputCompletionConfig.provider = 'openai';
+    mocks.activeWorkspaceId = null;
     mocks.chatInputState.inputCompletionError = undefined;
     mocks.chatInputState.inputCompletionErrorDismissed = false;
     mocks.chainInputCompletion.mockReturnValue({
@@ -468,6 +481,106 @@ describe('ChatInput InputEditor', () => {
     resolveOlderRequest({ data: { completion: 'older completion' } });
 
     await expect(olderCompletion).resolves.toBeNull();
+    expect(mocks.chatInputState.inputCompletionError?.message).toBe('InsufficientBudgetForModel');
+  });
+
+  it('falls back to the default model when the personal provider has no key in a workspace', async () => {
+    permission.allowed = true;
+    mocks.activeWorkspaceId = 'ws-1';
+    mocks.inputCompletionConfig.enabled = true;
+    mocks.inputCompletionConfig.model = 'deepseek-v4-flash';
+    mocks.inputCompletionConfig.provider = 'deepseek';
+    mocks.generateJSON
+      .mockRejectedValueOnce(new Error('InvalidProviderAPIKey'))
+      .mockResolvedValueOnce({ data: { completion: ' world' } })
+      .mockResolvedValueOnce({ data: { completion: ' again' } });
+
+    render(<InputEditor />);
+
+    const autoCompleteProps = await getAutoCompleteProps();
+
+    await expect(
+      autoCompleteProps.onAutoComplete({
+        abortSignal: new AbortController().signal,
+        afterText: '',
+        input: 'hello',
+        suggestionId: 'suggestion-1',
+      }),
+    ).resolves.toBe(' world');
+
+    expect(mocks.chatInputState.inputCompletionError).toBeUndefined();
+    expect(mocks.generateJSON).toHaveBeenCalledTimes(2);
+    expect(mocks.generateJSON.mock.calls[0][0]).toMatchObject({
+      model: 'deepseek-v4-flash',
+      provider: 'deepseek',
+    });
+    expect(mocks.generateJSON.mock.calls[1][0]).toMatchObject({
+      model: 'gpt-5.6-luna',
+      provider: 'lobehub',
+    });
+
+    await expect(
+      autoCompleteProps.onAutoComplete({
+        abortSignal: new AbortController().signal,
+        afterText: '',
+        input: 'hello again',
+        suggestionId: 'suggestion-2',
+      }),
+    ).resolves.toBe(' again');
+
+    expect(mocks.generateJSON).toHaveBeenCalledTimes(3);
+    expect(mocks.generateJSON.mock.calls[2][0]).toMatchObject({
+      model: 'gpt-5.6-luna',
+      provider: 'lobehub',
+    });
+  });
+
+  it('pauses instead of falling back when the personal key is invalid outside a workspace', async () => {
+    permission.allowed = true;
+    mocks.inputCompletionConfig.enabled = true;
+    mocks.inputCompletionConfig.model = 'deepseek-v4-flash';
+    mocks.inputCompletionConfig.provider = 'deepseek';
+    mocks.generateJSON.mockRejectedValueOnce(new Error('InvalidProviderAPIKey'));
+
+    render(<InputEditor />);
+
+    const autoCompleteProps = await getAutoCompleteProps();
+
+    await expect(
+      autoCompleteProps.onAutoComplete({
+        abortSignal: new AbortController().signal,
+        afterText: '',
+        input: 'hello',
+        suggestionId: 'suggestion-1',
+      }),
+    ).resolves.toBeNull();
+
+    expect(mocks.generateJSON).toHaveBeenCalledTimes(1);
+    expect(mocks.chatInputState.inputCompletionError?.errorType).toBe('InvalidProviderAPIKey');
+  });
+
+  it('pauses on non-credential errors in a workspace without retrying', async () => {
+    permission.allowed = true;
+    mocks.activeWorkspaceId = 'ws-1';
+    mocks.inputCompletionConfig.enabled = true;
+    mocks.inputCompletionConfig.model = 'deepseek-v4-flash';
+    mocks.inputCompletionConfig.provider = 'deepseek';
+    mocks.generateJSON.mockRejectedValueOnce(new Error('InsufficientBudgetForModel'));
+
+    render(<InputEditor />);
+
+    const autoCompleteProps = await getAutoCompleteProps();
+
+    await expect(
+      autoCompleteProps.onAutoComplete({
+        abortSignal: new AbortController().signal,
+        afterText: '',
+        input: 'hello',
+        suggestionId: 'suggestion-1',
+      }),
+    ).resolves.toBeNull();
+
+    expect(mocks.generateJSON).toHaveBeenCalledTimes(1);
     expect(mocks.chatInputState.inputCompletionError?.message).toBe('InsufficientBudgetForModel');
   });
 });
