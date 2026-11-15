@@ -154,6 +154,10 @@ export async function listHeterogeneousAgentModels(
 export async function dispatchAgentRun(
   getClient: DeviceClientGetter,
   params: {
+    /** The agent's own spawn command; see the request message. */
+    agentCommand?: string;
+    /** The agent's own env; see the request message. */
+    agentEnv?: Record<string, string>;
     agentId?: string;
     agentType: HeterogeneousAgentType;
     assistantMessageId: string;

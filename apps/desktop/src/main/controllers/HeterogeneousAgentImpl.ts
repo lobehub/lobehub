@@ -44,11 +44,7 @@ import type {
   HeterogeneousAgentCancellationResult,
   HeterogeneousAgentCancellationSignal,
 } from '@lobechat/heterogeneous-agents/protocol';
-import {
-  buildHeteroExecStdinPayload,
-  buildHeterogeneousPrompt,
-  stripInheritedRunIdentity,
-} from '@lobechat/heterogeneous-agents/protocol';
+import { buildHeterogeneousPrompt } from '@lobechat/heterogeneous-agents/protocol';
 import {
   CLAUDE_CODE_QUOTA_FRESH_MS,
   createQuotaCacheKey,
@@ -125,8 +121,12 @@ import {
   type HeteroInflightRun,
   HeteroInflightRunRegistry,
 } from '@/modules/heterogeneousAgent/inflightRunRegistry';
+import { buildInheritedSpawnEnv } from '@/modules/heterogeneousAgent/inheritedSpawnEnv';
 import { fetchKimiCodeQuota } from '@/modules/heterogeneousAgent/kimiCodeQuota';
-import { buildLhHeteroExecEnv } from '@/modules/heterogeneousAgent/lhHeteroExecEnv';
+import {
+  buildLhHeteroExecEnv,
+  buildLhHeteroExecInvocation,
+} from '@/modules/heterogeneousAgent/lhHeteroExecEnv';
 import { PiRpcPool } from '@/modules/heterogeneousAgent/piRpcPool';
 import type { HostedProviderBinding } from '@/modules/heterogeneousAgent/providerBindingHost';
 import {
@@ -172,33 +172,6 @@ import {
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 
 const logger = createLogger('controllers:HeterogeneousAgentCtr');
-
-// Anthropic auth env vars that must NOT be inherited from the desktop process
-// when spawning a local CLI agent. A developer with `ANTHROPIC_API_KEY` (or an
-// auth token / base url) exported in their shell would otherwise have it
-// forwarded to `claude`, which then switches from its own subscription login to
-// that key — an expired / wrong key surfaces as a baffling "Invalid API key"
-// and the run exits non-zero. Agents that genuinely want an API key still set
-// it through `session.env`, which is spread AFTER the inherited env below and
-// therefore wins.
-const STRIPPED_INHERITED_ENV_KEYS = [
-  'ANTHROPIC_API_KEY',
-  'ANTHROPIC_AUTH_TOKEN',
-  'ANTHROPIC_BASE_URL',
-] as const;
-
-/**
- * Inherited `process.env` without the Anthropic auth vars or an ancestor agent run's
- * identity (a Desktop launched from an agent shell carries its JWT file, which the CLI
- * prefers over any token). Pure and exported so the invariant is unit-tested directly.
- */
-export const buildInheritedSpawnEnv = (
-  sourceEnv: NodeJS.ProcessEnv = process.env,
-): NodeJS.ProcessEnv => {
-  const env = stripInheritedRunIdentity(sourceEnv);
-  for (const key of STRIPPED_INHERITED_ENV_KEYS) delete env[key];
-  return env;
-};
 
 const appendLoopbackNoProxy = (env: NodeJS.ProcessEnv): void => {
   const entries = new Set([
@@ -3379,6 +3352,10 @@ export default class HeterogeneousAgentCtr {
   spawnLhHeteroExec(params: {
     /** Account-routing env (`CLAUDE_CONFIG_DIR` of the routed login), if any. */
     accountEnv?: Record<string, string>;
+    /** The agent's own spawn command (`heterogeneousProvider.command`), passed as `--command`. */
+    agentCommand?: string;
+    /** The agent's own env, carried in the stdin envelope and applied over its preset env. */
+    agentEnv?: Record<string, string>;
     agentId?: string;
     agentType: string;
     assistantMessageId?: string;
@@ -3405,6 +3382,8 @@ export default class HeterogeneousAgentCtr {
     onChildSpawned?: (child: ChildProcess) => void;
   }): Promise<{ reason?: string; status: 'accepted' | 'rejected' }> {
     const {
+      agentCommand,
+      agentEnv,
       agentType,
       args: extraArgs,
       cwd,
@@ -3435,32 +3414,20 @@ export default class HeterogeneousAgentCtr {
     const rawDumpDir =
       this.shouldTraceCliOutput && workDirUsable ? this.resolveTraceRootDir(workDir) : undefined;
 
-    const args = [
-      'hetero',
-      'exec',
-      '--type',
+    const { args, stdinPayload } = buildLhHeteroExecInvocation({
+      agentCommand,
+      agentEnv,
       agentType,
-      '--operation-id',
-      operationId,
-      '--topic',
-      topicId,
-      '--render',
-      'none',
-      '--input-json',
-      '-',
-      '--cwd',
-      workDir,
-      ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
-      ...(rawDumpDir ? ['--raw-dump', rawDumpDir] : []),
-      ...(extraArgs ?? []),
-    ];
-
-    const stdinPayload = buildHeteroExecStdinPayload({
+      extraArgs,
       imageList,
-      isNewSession: !resumeSessionId,
+      operationId,
       prompt,
+      rawDumpDir,
       resumeFallbackSystemContext,
+      resumeSessionId,
       systemContext,
+      topicId,
+      workDir,
     });
     const cliScript = resolveCliScript();
     if (!existsSync(cliScript)) {

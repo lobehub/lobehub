@@ -55,7 +55,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   private getClaudeCodeAccounts = (): Promise<ClaudeCodeAccountProfiles> => {
     this.claudeCodeAccountsPromise ??= Promise.all([
       import('@/modules/heterogeneousAgent/claudeCodeAccountsHost'),
-      import('./HeterogeneousAgentImpl'),
+      import('@/modules/heterogeneousAgent/inheritedSpawnEnv'),
     ])
       .then(([{ createClaudeCodeAccountProfiles }, { buildInheritedSpawnEnv }]) =>
         createClaudeCodeAccountProfiles(this.app, () => buildInheritedSpawnEnv()),
@@ -146,7 +146,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   async getClaudeCodeInheritedRoutingEnv() {
     const [{ buildInheritedSpawnEnv }, { CLAUDE_CODE_EXTERNAL_ROUTING_ENV_KEYS }] =
       await Promise.all([
-        import('./HeterogeneousAgentImpl'),
+        import('@/modules/heterogeneousAgent/inheritedSpawnEnv'),
         import('@lobechat/heterogeneous-agents/quota'),
       ]);
     const inherited = buildInheritedSpawnEnv();

@@ -249,6 +249,19 @@ export interface RpcResponseMessage {
 
 /** Server → Client: request the desktop to spawn `lh hetero exec`. */
 export interface AgentRunRequestMessage {
+  /**
+   * The agent's own spawn command (`heterogeneousProvider.command`), passed to
+   * `lh hetero exec --command`. Only sent to the requester's own personal
+   * device, for an agent they can manage. Optional — an older device ignores it.
+   */
+  agentCommand?: string;
+  /**
+   * The agent's own env (`heterogeneousProvider.env`, plus the DeepSeek Harness
+   * key), applied over the agent's preset env. Same audience as
+   * {@link agentCommand}: never sent to a workspace device, where an agent's
+   * author could otherwise set variables on another member's machine.
+   */
+  agentEnv?: Record<string, string>;
   agentId?: string;
   agentType: string;
   /**

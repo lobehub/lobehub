@@ -27,6 +27,7 @@ import { resolveDeviceWorkingDirectoryConfig } from '../../resolveDeviceWorkingD
 import type { ExecRunContext } from '../../types';
 import { selectCodexDeviceDispatch } from '../codexDeviceRuntime';
 import { traceHeteroStage } from '../sendTracing';
+import { resolveOwnDeviceLaunch } from './ownDeviceLaunch';
 import type { PreparedHeteroRun } from './prepare';
 import { scheduleTimedOutDispatchConfirmation } from './timeoutConfirmation';
 import type { HeteroDispatchDeps, HeteroDispatchInput, HeteroRun } from './types';
@@ -89,6 +90,7 @@ export const dispatchToCliDevice = async (
   params: {
     agentConfig: ExecRunContext['agentConfig'];
     appContext: ExecRunContext['appContext'];
+    canManageAgent: boolean;
     cliDeviceWorkspaceId?: string;
     heteroPlan: CliDispatchPlan;
     heteroType: HeteroDispatchInput['heteroType'];
@@ -107,6 +109,7 @@ export const dispatchToCliDevice = async (
   const {
     agentConfig,
     appContext,
+    canManageAgent,
     cliDeviceWorkspaceId,
     heteroPlan,
     heteroType,
@@ -141,15 +144,15 @@ export const dispatchToCliDevice = async (
       { error: 'No bound device', message: 'Hetero agent requires a bound device' },
     );
   }
-  // The Codex runtime, the device row and the Claude Code account are three
-  // independent reads keyed only by the device, so they run together. All of
+  // The Codex runtime, the device row, the Claude Code account and the
+  // agent's own launch config are independent reads, so they run together. All of
   // them are reads: a rejected Codex runtime below still leaves nothing written.
   // The device row lives in the DB (the gateway only knows live connections),
   // so read it directly rather than via deviceGateway. The bound device may be
   // personal (userId-scoped) or a workspace device (workspace-scoped) — look
   // up both so its defaultCwd resolves.
   const deviceModelForCwd = new DeviceModel(deps.db, deps.userId, deps.workspaceId);
-  const [codexRuntime, boundDevice, claudeAccountRouting] = await settleInOrder([
+  const [codexRuntime, boundDevice, claudeAccountRouting, ownDeviceLaunch] = await settleInOrder([
     traceHeteroStage('device codex_runtime', () =>
       selectCodexDeviceDispatch({
         db: deps.db,
@@ -173,6 +176,14 @@ export const dispatchToCliDevice = async (
       resolveClaudeAccountRouting(deps, {
         agentId: resolvedAgentId,
         deviceId: dispatchDeviceId,
+        heteroType,
+        heterogeneousProvider,
+      }),
+    ),
+    traceHeteroStage('device own_launch', () =>
+      resolveOwnDeviceLaunch(deps, {
+        canManageAgent,
+        deviceWorkspaceId: cliDeviceWorkspaceId,
         heteroType,
         heterogeneousProvider,
       }),
@@ -279,6 +290,7 @@ export const dispatchToCliDevice = async (
     : await traceHeteroStage('device gateway_dispatch', () =>
         deviceGateway.dispatchAgentRun({
           ...heteroParams,
+          ...ownDeviceLaunch,
           agentId: resolvedAgentId,
           // Only a live client advertising the native protocol receives these wrapper flags.
           args: nativeCodex ? [...(heteroExecArgs ?? []), ...nativeCodex.args] : heteroExecArgs,
