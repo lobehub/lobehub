@@ -1,7 +1,9 @@
+import { builtinTools } from '@lobechat/builtin-tools';
 import { getComposioAppByIdentifier, hasCallableMcpEndpoint } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
 import { upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import {
@@ -73,6 +75,9 @@ import { resolveDefaultPermission } from '../_helpers/connectorToolPermission';
 import { upsertConnectorEntry } from '../_helpers/upsertConnectorEntry';
 import { connectorAgentScopeRouter } from './agentScope';
 import { connectorProcedure, connectorWriteProcedure } from './procedures';
+
+/** Per-connector DB reads and writes a request runs at once, however many rows it covers. */
+const DB_CONCURRENCY = 5;
 
 const oidcConfigSchema = z.object({
   authorizationEndpoint: z.string().optional(),
@@ -148,8 +153,9 @@ const connectorCoreRouter = router({
       connectors.map((c) => resolveConnectorAuthorizerId(c)),
     );
 
-    const toolsByConnector = await Promise.all(
-      connectors.map(async (c) => {
+    const toolsByConnector = await pMap(
+      connectors,
+      async (c) => {
         const tools = await ctx.connectorToolModel.queryByConnector(c.id);
         // Never ship decrypted OAuth tokens or the client secret to the browser.
         const { credentials: _credentials, oidcConfig, ...rest } = c;
@@ -162,7 +168,8 @@ const connectorCoreRouter = router({
           oidcConfig: safeOidcConfig,
           tools,
         };
-      }),
+      },
+      { concurrency: DB_CONCURRENCY },
     );
 
     return toolsByConnector;
@@ -185,8 +192,9 @@ const connectorCoreRouter = router({
         connectors.map((c) => resolveConnectorAuthorizerId(c)),
       );
 
-      return Promise.all(
-        connectors.map(async (c) => {
+      return pMap(
+        connectors,
+        async (c) => {
           const tools = await ctx.connectorToolModel.queryByConnector(c.id);
           const { credentials: _credentials, oidcConfig, ...rest } = c;
           const safeOidcConfig = oidcConfig
@@ -200,7 +208,8 @@ const connectorCoreRouter = router({
             oidcConfig: safeOidcConfig,
             tools,
           };
-        }),
+        },
+        { concurrency: DB_CONCURRENCY },
       );
     }),
 
@@ -232,25 +241,23 @@ const connectorCoreRouter = router({
     const agentMetas = agentIds.length > 0 ? await agentModel.getAgentAvatarsByIds(agentIds) : [];
     const agentMetaById = new Map(agentMetas.map((m) => [m.id, m]));
 
-    return Promise.all(
-      connectors
-        .filter((c) => !!c.agentId && agentMetaById.has(c.agentId))
-        .map(async (c) => {
-          const tools = await ctx.connectorToolModel.queryByConnector(c.id);
-          const { credentials: _credentials, oidcConfig, ...rest } = c;
-          const safeOidcConfig = oidcConfig
-            ? { ...oidcConfig, clientSecret: undefined }
-            : oidcConfig;
-          const meta = agentMetaById.get(c.agentId!);
-          return {
-            ...rest,
-            agentAvatar: meta?.avatar ?? null,
-            agentName: meta?.name ?? null,
-            agentTitle: meta?.title ?? null,
-            oidcConfig: safeOidcConfig,
-            tools,
-          };
-        }),
+    return pMap(
+      connectors.filter((c) => !!c.agentId && agentMetaById.has(c.agentId)),
+      async (c) => {
+        const tools = await ctx.connectorToolModel.queryByConnector(c.id);
+        const { credentials: _credentials, oidcConfig, ...rest } = c;
+        const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
+        const meta = agentMetaById.get(c.agentId!);
+        return {
+          ...rest,
+          agentAvatar: meta?.avatar ?? null,
+          agentName: meta?.name ?? null,
+          agentTitle: meta?.title ?? null,
+          oidcConfig: safeOidcConfig,
+          tools,
+        };
+      },
+      { concurrency: DB_CONCURRENCY },
     );
   }),
 
@@ -770,10 +777,10 @@ const connectorCoreRouter = router({
       await assertConnectorMaintainable(ctx, target);
 
       const tools = await ctx.connectorToolModel.queryByConnector(input.id);
-      await Promise.all(
-        tools.map((t) =>
-          ctx.connectorToolModel.updatePermission(t.id, ConnectorToolPermission.auto),
-        ),
+      await pMap(
+        tools,
+        (t) => ctx.connectorToolModel.updatePermission(t.id, ConnectorToolPermission.auto),
+        { concurrency: DB_CONCURRENCY },
       );
       return { toolCount: tools.length };
     }),
@@ -911,7 +918,6 @@ const connectorCoreRouter = router({
   syncBuiltinTool: connectorProcedure
     .input(z.object({ identifier: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
-      const { builtinTools } = await import('@lobechat/builtin-tools');
       const tool = builtinTools.find((t) => t.identifier === input.identifier);
 
       if (!tool) {
