@@ -105,8 +105,14 @@ describe('AntigravityAdapter', () => {
       tool(3, { state: 'ACTIVE', tool_info: { name: 'run_command' } }),
       tool(3),
     ].flatMap(adapt);
+    const calls = events.filter(
+      (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0].data.toolsCalling[0].arguments).toBe('{"CommandLine":"echo hello"}');
     const starts = events.filter((e) => e.type === 'tool_start');
     expect(starts).toHaveLength(1);
+    expect(events.indexOf(calls[0])).toBeLessThan(events.indexOf(starts[0]));
     expect(starts[0].data).toEqual({
       toolCallId: 'agy_conv-1_3',
       toolCalling: {
@@ -122,13 +128,27 @@ describe('AntigravityAdapter', () => {
     );
   });
 
+  it('publishes explicitly empty parameters without waiting for completion', () => {
+    const adapter = new AntigravityAdapter();
+    adapter.adapt(init);
+    const events = adapter.adapt(
+      tool(3, { state: 'ACTIVE', tool_info: { name: 'list_resources', parameters: {} } }),
+    );
+    expect(events.map((e) => e.type)).toEqual(['stream_chunk', 'tool_start']);
+    expect(events[0].data.toolsCalling[0].arguments).toBe('{}');
+  });
+
   it('starts an interrupted tool before settling it', () => {
     const adapter = new AntigravityAdapter();
     adapter.adapt(init);
     adapter.adapt(tool(3, { state: 'ACTIVE', tool_info: { name: 'run_command' } }));
-    expect(adapter.flush().map((e) => e.type)).toEqual(
-      expect.arrayContaining(['tool_start', 'tool_result', 'tool_end']),
-    );
+    expect(adapter.flush().map((e) => e.type)).toEqual([
+      'stream_chunk',
+      'tool_start',
+      'tool_result',
+      'tool_end',
+      'stream_end',
+    ]);
   });
 
   it('updates a running tool with its final arguments and error exactly once', () => {

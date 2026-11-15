@@ -197,23 +197,11 @@ export class AntigravityAdapter implements AgentEventAdapter {
       };
       pending = { payload, stepIndex: this.stepIndex };
       this.pendingTools.set(index, pending);
-      this.stepTools.push(payload);
-      events.push(
-        this.event('stream_chunk', {
-          chunkType: 'tools_calling',
-          toolsCalling: [...this.stepTools],
-        }),
-      );
-    } else if (info?.parameters !== undefined && pending.payload.arguments !== args) {
+    } else if (info?.parameters !== undefined) {
       pending.payload.arguments = args;
-      events.push(
-        this.event('stream_chunk', {
-          chunkType: 'tools_calling',
-          toolsCalling: [...this.stepTools],
-        }),
-      );
     }
-    // Recorders snapshot arguments from tool_start, so wait until they are known.
+    // Persistence snapshots tools_calling, while trace recorders snapshot tool_start.
+    // Neither may publish a name-only ACTIVE update with placeholder arguments.
     if (info?.parameters !== undefined || step.state === 'DONE')
       events.push(...this.startTool(pending));
     if (step.state === 'DONE') {
@@ -230,7 +218,16 @@ export class AntigravityAdapter implements AgentEventAdapter {
   private startTool(tool: PendingTool): HeterogeneousAgentEvent[] {
     if (tool.started) return [];
     tool.started = true;
+    this.stepTools.push(tool.payload);
     return [
+      this.event(
+        'stream_chunk',
+        {
+          chunkType: 'tools_calling',
+          toolsCalling: this.stepTools.map((payload) => ({ ...payload })),
+        },
+        tool.stepIndex,
+      ),
       this.event(
         'tool_start',
         { toolCalling: { ...tool.payload }, toolCallId: tool.payload.id },
@@ -271,7 +268,9 @@ export class AntigravityAdapter implements AgentEventAdapter {
   private handleResult(result: UnknownRecord): HeterogeneousAgentEvent[] {
     this.resultReceived = true;
     this.sessionId ??= pickString(result.conversation_id);
-    const events: HeterogeneousAgentEvent[] = [];
+    const hasPendingTools = this.pendingTools.size > 0;
+    // Materialize unfinished tools in their owning turn before a fallback response opens a new one.
+    const events = this.settlePendingTools('Antigravity ended before this tool returned a result.');
     if (result.status === 'SUCCESS') {
       // result.response repeats the streamed answer. Use it only when no final
       // response was streamed, never as another delta after agent_response.
@@ -289,7 +288,7 @@ export class AntigravityAdapter implements AgentEventAdapter {
           this.event('stream_chunk', { chunkType: 'text', content: result.response }),
         );
       }
-      if (this.pendingTools.size) {
+      if (hasPendingTools) {
         events.push(
           this.event('error', {
             agentType: IDENTIFIER,
@@ -313,10 +312,7 @@ export class AntigravityAdapter implements AgentEventAdapter {
         ),
       );
     }
-    events.push(
-      ...this.settlePendingTools('Antigravity ended before this tool returned a result.'),
-      ...this.closeStream(),
-    );
+    events.push(...this.closeStream());
     // Result counters are cumulative across a resumed conversation, so they are
     // not emitted as `result_usage`: trace recorders treat that phase as the
     // run total. Step_update usage (turn_metadata) is the only per-run source.
