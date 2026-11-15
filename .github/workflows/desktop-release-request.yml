@@ -24,7 +24,7 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           sparse-checkout: .github/scripts
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: '24.11.1'
       - name: Validate release intent
