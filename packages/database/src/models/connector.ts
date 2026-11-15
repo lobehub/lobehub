@@ -548,7 +548,9 @@ export class ConnectorModel {
    * {@link deleteIfMetadataContains} deletes: a writer that tagged the row
    * finishes it only if no one has re-added it since, whose writer owns it now.
    * An evaluation connection is left alone (its provenance goes through
-   * {@link update}). Returns whether it did.
+   * {@link update}). In a transaction, a write that lands holds the row's lock
+   * until it ends, so the writer's other writes to the row land with it, before
+   * any {@link update}. Returns whether it did.
    */
   updateMetadataIfContains = async (
     id: string,

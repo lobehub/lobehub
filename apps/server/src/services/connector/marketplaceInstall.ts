@@ -23,7 +23,11 @@ import { buildCloudMcpManifest, cloudManifestTools } from '@/libs/mcp/cloudManif
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { canManageWorkspaceConnectors } from '@/server/routers/lambda/_helpers/connectorManagePolicy';
 
-import { syncConnectorToolsById, syncConnectorToolsFromList } from './sync';
+import {
+  buildListedToolSyncInputs,
+  listConnectorToolSyncInputs,
+  writeConnectorToolSyncInputs,
+} from './sync';
 
 const log = debug('lobe-server:connector:marketplace-install');
 
@@ -225,8 +229,8 @@ const INSTALL_ATTEMPT_KEY = 'marketplaceInstallAttempt';
  * concurrent installs of one server create it once. The install never
  * overwrites a row someone may still use, only an interrupted install's (see
  * {@link judgeHolder}), so a failed tool sync only has to delete the row it
- * created. Its rollback and its finishing mark both apply only while no one has
- * re-added the identifier over the row.
+ * created. Its rollback and its finishing writes (tools, status, mark) apply
+ * only while no one has re-added the identifier over the row.
  *
  * An HTTP server's tools are the ones it lists, each with the approval the
  * marketplace manifest gives it: the listing cannot carry one.
@@ -315,43 +319,54 @@ export const installMarketplaceMcpConnector = async (
   );
   if ('holder' in claim) return liveHolderOutcome(claim.holder, holderContext);
   const { created } = claim;
-  // The identifier may be re-added over the row meanwhile (the web install):
-  // the row is new, so its sync only adds tools, never pruning the re-add's,
-  // and the rollback leaves a re-added row with its tools.
+  // The identifier may be re-added over the row meanwhile (the web install),
+  // which then owns it: the rollback leaves a re-added row as it is.
   const rollback = () => connectorModel.deleteIfMetadataContains(created.id, attempt);
 
   try {
-    const { toolCount } =
+    // Listed before anything is written to the row: over the SSRF-safe
+    // transport for an HTTP server, as the row's mark asks
+    const syncInputs =
       deployment.type === 'cloud'
-        ? await syncConnectorToolsFromList(created.id, marketTools, {
-            connectorModel,
-            connectorToolModel,
-          })
-        : // Over the SSRF-safe transport, as the row's mark asks
-          await syncConnectorToolsById(
-            created.id,
-            { connectorModel, connectorToolModel, userId },
-            {
-              humanInterventions: new Map(
-                marketTools.map((tool) => [tool.toolName, tool.humanIntervention]),
-              ),
-            },
-          );
+        ? buildListedToolSyncInputs(marketTools)
+        : (
+            await listConnectorToolSyncInputs(
+              created.id,
+              { connectorModel, connectorToolModel, userId },
+              {
+                humanInterventions: new Map(
+                  marketTools.map((tool) => [tool.toolName, tool.humanIntervention]),
+                ),
+              },
+            )
+          ).syncInputs;
 
-    if (toolCount === 0) {
+    if (syncInputs.length === 0) {
       await rollback();
       return { blocker: 'no-tools', status: 'blocked' };
     }
 
-    // Written last, without the attempt tag: until its tools are synced the row
-    // must stay uncallable. Only while the row is still this install's: a re-add
-    // meanwhile (the web install) wrote its own metadata, such as headers its
-    // user entered, and that install finishes the row.
-    const completed = await connectorModel.updateMetadataIfContains(created.id, attempt, {
-      ...metadata,
-      [MARKETPLACE_INSTALL_COMPLETED_KEY]: true,
+    // The tools, the status and the mark, which alone makes the row callable,
+    // land together, and only while the row is still this install's: the
+    // conditional mark write holds the row's lock to the commit, so a re-add
+    // (the web install, which takes the same lock) either waits for it or, made
+    // before, leaves this install nothing to write over its metadata (headers
+    // its user entered…), tools or status.
+    const finished = await serverDB.transaction(async (tx) => {
+      const txDB = tx as unknown as LobeChatDatabase;
+      const txConnectorModel = new ConnectorModel(txDB, userId, workspaceId);
+      const marked = await txConnectorModel.updateMetadataIfContains(created.id, attempt, {
+        ...metadata,
+        [MARKETPLACE_INSTALL_COMPLETED_KEY]: true,
+      });
+      if (!marked) return false;
+      await writeConnectorToolSyncInputs(created.id, syncInputs, {
+        connectorModel: txConnectorModel,
+        connectorToolModel: new ConnectorToolModel(txDB, userId, workspaceId),
+      });
+      return true;
     });
-    if (!completed)
+    if (!finished)
       return liveHolderOutcome(
         await connectorModel.findScopedByIdentifier(identifier),
         holderContext,

@@ -365,22 +365,41 @@ describe('installMarketplaceMcpConnector', () => {
     [
       'finished',
       { customHeaders: { 'X-Team': 'web' }, marketplaceInstalled: true, version: '0.3.0' },
+      'connected',
       { status: 'exists' },
     ],
     [
       'still running',
       { customHeaders: { 'X-Team': 'web' }, version: '0.3.0' },
+      'disconnected',
       { blocker: 'in-progress', status: 'blocked' },
     ],
-  ])(
+  ] as const)(
     'leaves a connector the web re-added while its listing succeeds to that install (%s)',
-    async (_, webMetadata, reported) => {
+    async (_, webMetadata, webStatus, reported) => {
       vi.mocked(mcpService.listRawTools).mockImplementation(async () => {
         // The web install re-adds the identifier over this install's row with
-        // the headers its user entered (`connector.create` updates the row)
+        // the headers its user entered (`connector.create` updates the row),
+        // and syncs the tools its own endpoint lists
         const [row] = await connectorRows();
-        await new ConnectorModel(db, userId).update(row.id, { metadata: webMetadata });
-        return [{ name: 'search' }] as never;
+        await new ConnectorModel(db, userId).update(row.id, {
+          metadata: webMetadata,
+          status: webStatus,
+        });
+        await db.insert(userConnectorTools).values({
+          crudType: 'read',
+          description: 'Search (web endpoint)',
+          metadata: { mandatoryApproval: true },
+          permission: 'needs_approval',
+          toolName: 'search',
+          userConnectorId: row.id,
+          userId,
+        });
+        // What this install's endpoint listed
+        return [
+          { description: 'Search (old endpoint)', name: 'search' },
+          { name: 'purge' },
+        ] as never;
       });
 
       expect(await installMarketplaceMcpConnector(scope, 'remote-mcp', httpManifest)).toEqual(
@@ -389,8 +408,26 @@ describe('installMarketplaceMcpConnector', () => {
 
       const [connector, ...others] = await connectorRows();
       expect(others).toEqual([]);
-      // Not replaced by this install's own snapshot
+      // Neither its metadata, status nor tools are replaced by this install's own
       expect(connector.metadata).toEqual(webMetadata);
+      expect(connector.status).toBe(webStatus);
+      expect(
+        (await db.select().from(userConnectorTools)).map(
+          ({ description, metadata, permission, toolName }) => ({
+            description,
+            metadata,
+            permission,
+            toolName,
+          }),
+        ),
+      ).toEqual([
+        {
+          description: 'Search (web endpoint)',
+          metadata: { mandatoryApproval: true },
+          permission: 'needs_approval',
+          toolName: 'search',
+        },
+      ]);
     },
   );
 
