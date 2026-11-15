@@ -36,8 +36,8 @@ import { getConnectorLocalCallToken } from '@/server/services/connector/localCal
 import { getConnectorRedirectUri } from '@/server/services/connector/oauth';
 import { loadConnectorPresentation } from '@/server/services/connector/presentation';
 import {
-  pruneMissingAutoConnectorTools,
   syncConnectorToolsById,
+  writeConnectorToolSyncInputs,
 } from '@/server/services/connector/sync';
 import {
   DeviceMcpManifestInputSchema,
@@ -876,18 +876,12 @@ const connectorCoreRouter = router({
       // Same gate as `syncTools` — rewrites the connector's tool rows.
       await assertConnectorMaintainable(ctx, target);
 
-      const syncInputs = await toClientToolSyncInputs(input.tools, ctx.userId);
-
-      await ctx.connectorToolModel.upsertMany(input.id, syncInputs);
-      if (input.pruneMissingAutoTools) {
-        await pruneMissingAutoConnectorTools(
-          ctx.connectorToolModel,
-          input.id,
-          syncInputs.map((tool) => tool.toolName),
-        );
-      }
-      await ctx.connectorModel.updateStatus(input.id, ConnectorStatus.connected);
-      return { toolCount: syncInputs.length };
+      return writeConnectorToolSyncInputs(
+        input.id,
+        await toClientToolSyncInputs(input.tools, ctx.userId),
+        ctx,
+        { pruneMissingAutoTools: input.pruneMissingAutoTools },
+      );
     }),
 
   /**

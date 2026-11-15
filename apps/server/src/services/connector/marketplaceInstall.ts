@@ -21,13 +21,10 @@ import {
 import type { LobeChatDatabase } from '@/database/type';
 import { buildCloudMcpManifest, cloudManifestTools } from '@/libs/mcp/cloudManifest';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { toClientToolSyncInputs } from '@/server/routers/lambda/_helpers/clientToolSyncInputs';
 import { canManageWorkspaceConnectors } from '@/server/routers/lambda/_helpers/connectorManagePolicy';
 
-import {
-  buildListedToolSyncInputs,
-  listConnectorToolSyncInputs,
-  writeConnectorToolSyncInputs,
-} from './sync';
+import { listConnectorToolSyncInputs, writeConnectorToolSyncInputs } from './sync';
 
 const log = debug('lobe-server:connector:marketplace-install');
 
@@ -328,7 +325,7 @@ export const installMarketplaceMcpConnector = async (
     // transport for an HTTP server, as the row's mark asks
     const syncInputs =
       deployment.type === 'cloud'
-        ? buildListedToolSyncInputs(marketTools)
+        ? await toClientToolSyncInputs(marketTools, userId)
         : (
             await listConnectorToolSyncInputs(
               created.id,

@@ -403,6 +403,60 @@ describe('syncConnectorToolsById', () => {
     ]);
   });
 
+  it.each([
+    [
+      'an install applies the manifest policy',
+      { humanInterventions: new Map([['board', 'always']]) },
+    ],
+    ['a refresh keeps the stored mark', {}],
+  ])(
+    "keeps a mandatory tool's MCP App metadata under the mcp_apps flag: %s",
+    async (_case, options) => {
+      mcpAppsEnabled.mockResolvedValueOnce(true);
+      vi.mocked(mcpService.listRawTools).mockResolvedValue([
+        {
+          _meta: {
+            'lobehub/ui': { entrypoints: [{ type: 'thread' }] },
+            'ui': { resourceUri: 'ui://board', visibility: ['model', 'app'] },
+          },
+          inputSchema: { type: 'object' },
+          name: 'board',
+        },
+      ]);
+      const upsertMany = vi.fn();
+
+      await syncConnectorToolsById(
+        'c1',
+        {
+          connectorModel: {
+            findById: async () => httpConnector(null),
+            updateStatus: vi.fn(),
+          } as any,
+          connectorToolModel: {
+            queryByConnector: async () => [
+              { metadata: { mandatoryApproval: true }, permission: 'auto', toolName: 'board' },
+            ],
+            upsertMany,
+          } as any,
+          userId: 'user-1',
+        },
+        options,
+      );
+
+      expect(upsertMany).toHaveBeenCalledWith('c1', [
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            entrypoints: [{ type: 'thread' }],
+            mandatoryApproval: true,
+            threadEntry: expect.objectContaining({ toolName: 'board' }),
+            visibility: ['model', 'app'],
+          }),
+          toolName: 'board',
+        }),
+      ]);
+    },
+  );
+
   it('drops only the auto tools the server no longer lists when asked to', async () => {
     vi.mocked(mcpService.listRawTools).mockResolvedValue([
       { description: 'Kept', inputSchema: { type: 'object' }, name: 'kept' },

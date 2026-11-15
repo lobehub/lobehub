@@ -153,22 +153,6 @@ export const pruneMissingAutoConnectorTools = async (
   await connectorToolModel.deleteToolsNotIn(connectorId, [...listedToolNames, ...tombstones]);
 };
 
-/** A tool the caller already listed (a desktop listing, a cloud server's market manifest). */
-export interface ConnectorListedTool {
-  description?: string;
-  /**
-   * A manifest tool's `humanIntervention` (cloud marketplace installs):
-   * `required` / `always`, or rules or a dynamic config that can ask for
-   * either, make a newly synced tool need approval. One that can ask for
-   * `always` keeps it on every sync, since no approval mode waives it.
-   */
-  humanIntervention?: unknown;
-  inputSchema?: Record<string, unknown>;
-  toolName: string;
-  /** The MCP tool's `_meta.ui.visibility`, when it declares one. */
-  visibility?: string[];
-}
-
 type ConnectorToolWriteContext = {
   connectorModel: Pick<ConnectorModel, 'updateStatus'>;
   connectorToolModel: Pick<
@@ -176,20 +160,6 @@ type ConnectorToolWriteContext = {
     'deleteToolsNotIn' | 'queryByConnector' | 'upsertMany'
   >;
 };
-
-/** The sync inputs of a tool list the caller already holds. */
-export const buildListedToolSyncInputs = (tools: ConnectorListedTool[]): SyncToolInput[] =>
-  tools.map((t) => ({
-    crudType: inferCrudType(t.toolName),
-    // Applies to new tools only: a synced tool keeps the permission it has
-    defaultPermission: resolveConnectorToolPermission(t.humanIntervention),
-    description: t.description,
-    inputSchema: t.inputSchema,
-    // Refreshed on every sync, unlike the permission: an `always` the
-    // manifest asks for stays mandatory whatever the permission is
-    metadata: withMandatoryApprovalMark(buildMcpToolMetadata(t.visibility), t.humanIntervention),
-    toolName: t.toolName,
-  }));
 
 /**
  * Store the connector's tool sync inputs and mark it `connected`. A tool
@@ -254,26 +224,13 @@ const listOnDevice = async (
   });
 };
 
-/**
- * Store a tool list the caller already holds, without reaching the server,
- * and mark the connector `connected`. A tool synced before keeps the
- * permission it has.
- */
-export const syncConnectorToolsFromList = async (
-  connectorId: string,
-  tools: ConnectorListedTool[],
-  ctx: ConnectorToolWriteContext,
-  options: ConnectorToolSyncOptions = {},
-): Promise<{ toolCount: number }> =>
-  writeConnectorToolSyncInputs(connectorId, buildListedToolSyncInputs(tools), ctx, options);
-
 export interface ConnectorToolListOptions {
   /**
    * By tool name, the `humanIntervention` a marketplace manifest gives a tool
    * the server lists, which an MCP listing cannot carry (an HTTP marketplace
-   * install). It applies as a listed tool's does in
-   * {@link syncConnectorToolsFromList}. Without it (a refresh), a synced tool
-   * keeps the mandatory approval it has.
+   * install). It applies as a client-listed tool's does in
+   * `toClientToolSyncInputs`. Without it (a refresh), a synced tool keeps the
+   * mandatory approval it has.
    */
   humanInterventions?: ReadonlyMap<string, unknown>;
   /** List with this account's credentials instead of the connector's primary one. */
