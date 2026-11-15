@@ -34,6 +34,8 @@ const GroupConversation = memo<GroupConversationProps>(({ active, conversation }
     id,
     memberAvatars,
     pinned: pinned ?? false,
+    // The Messages list ignores the sidebar visibility preference.
+    sidebarVisibilityEnabled: false,
     title,
     userId,
     visibility,
