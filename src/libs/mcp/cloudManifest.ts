@@ -28,9 +28,13 @@ export const buildCloudMcpManifest = (params: {
     apiArray = lobeChatApi;
     log('[Cloud MCP] Using existing LobeChat API format');
   } else if (mcpTools && Array.isArray(mcpTools)) {
-    // Convert MCP tools format to LobeChat api format
+    // Convert MCP tools format to LobeChat api format. The approval a tool
+    // asks for carries over, as it does from the LobeChat format.
     apiArray = mcpTools.map((tool: any) => ({
       description: tool.description || '',
+      ...(tool.humanIntervention === undefined
+        ? {}
+        : { humanIntervention: tool.humanIntervention }),
       name: tool.name,
       parameters: tool.inputSchema || {},
     }));

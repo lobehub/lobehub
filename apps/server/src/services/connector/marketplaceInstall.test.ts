@@ -277,6 +277,28 @@ describe('installMarketplaceMcpConnector', () => {
     ).toEqual({ delete: 'always', search: undefined, send: 'required' });
   });
 
+  it("keeps the approval a tools-format manifest asks for on an HTTP server's tools", async () => {
+    vi.mocked(mcpService.listRawTools).mockResolvedValue([
+      { name: 'search' },
+      { name: 'delete' },
+    ] as never);
+
+    await installMarketplaceMcpConnector(scope, 'remote-mcp', {
+      ...httpManifest,
+      tools: [{ name: 'search' }, { humanIntervention: 'always', name: 'delete' }],
+    });
+
+    const tools = await db.select().from(userConnectorTools);
+    expect(
+      tools
+        .map(({ metadata, permission, toolName }) => ({ metadata, permission, toolName }))
+        .sort((a, b) => a.toolName.localeCompare(b.toolName)),
+    ).toEqual([
+      { metadata: { mandatoryApproval: true }, permission: 'needs_approval', toolName: 'delete' },
+      { metadata: null, permission: 'auto', toolName: 'search' },
+    ]);
+  });
+
   it('keeps an `always` tool mandatory through the refreshes that follow the install', async () => {
     vi.mocked(mcpService.listRawTools).mockResolvedValue([
       { name: 'search' },
