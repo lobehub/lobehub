@@ -38,8 +38,6 @@ const styles = stylex.create({
     display: 'flex',
     flex: 'none',
     gap: '8px',
-    padding: '3px',
-    margin: '-3px',
   },
   // Stage and notes side by side — the pointer that circles a region is the
   // same one that types about it, so neither should scroll the other away.
@@ -103,7 +101,7 @@ const styles = stylex.create({
     outlineWidth: '2px',
     outlineStyle: 'solid',
     outlineColor: cssVar.colorPrimary,
-    outlineOffset: '1px',
+    outlineOffset: '-2px',
   },
   // The zoom pill floats bottom-center over the stage — controls live with
   // the thing they control, not in a detached toolbar row.

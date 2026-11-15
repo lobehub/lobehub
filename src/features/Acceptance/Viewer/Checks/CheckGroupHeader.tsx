@@ -17,10 +17,13 @@ import { decisionSegments } from './checkDecision';
 import { isException, isGroupFullyAccepted, userReviewState } from './checkState';
 import type { AcceptanceCheck } from './types';
 
+const phone = '@media (width <= 767px)';
+
 const styles = stylex.create({
   header: {
     cursor: 'pointer',
     display: 'flex',
+    flexWrap: { default: null, [phone]: 'wrap' },
     gap: '8px',
     alignItems: 'center',
     minHeight: '44px',
@@ -35,6 +38,7 @@ const styles = stylex.create({
     cursor: 'pointer',
     display: 'flex',
     gap: '8px',
+    flexBasis: { default: null, [phone]: '100%' },
     alignItems: 'center',
     minWidth: 0,
     margin: 0,

@@ -39,6 +39,7 @@ export const decisionBarStyles = stylex.create({
     marginBlockEnd: '-20px',
     paddingBlockStart: '16px',
     paddingBlockEnd: { default: '16px', [phone]: 'max(16px, env(safe-area-inset-bottom))' },
+    paddingInline: { default: '16px', [phone]: 0 },
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorBorderSecondary,
@@ -59,11 +60,11 @@ export const decisionBarStyles = stylex.create({
   tallyRow: {
     display: { default: 'flex', [phone]: 'none' },
     flexWrap: 'wrap',
-    columnGap: '16px',
+    columnGap: '12px',
   },
   tally: {
     display: 'inline-flex',
-    gap: '4px',
+    gap: '6px',
     alignItems: 'center',
     fontSize: '12px',
     lineHeight: '20px',
@@ -78,8 +79,16 @@ export const decisionBarStyles = stylex.create({
   dotAccepted: { backgroundColor: cssVar.colorSuccess },
   dotNeedsFix: { backgroundColor: cssVar.colorError },
   dotIgnored: { backgroundColor: cssVar.colorTextQuaternary },
+  mark: {
+    display: 'flex',
+    flex: 'none',
+    alignItems: 'center',
+    height: '22px',
+  },
   statusText: {
+    fontSize: '14px',
     fontWeight: 500,
+    lineHeight: '22px',
     color: cssVar.colorText,
   },
   summary: {

@@ -5,11 +5,13 @@ import { ActionIcon } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { X } from 'lucide-react';
-import { useState } from 'react';
+import { use, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { GoalDecisionAsker } from '@/features/AgentGoals/GoalDecision';
 
+import { FlowPanelHostContext } from '../Flow/FlowPanelHost';
 import GateDecision, { type GateDecisionKind } from './GateDecision';
 import GateLead from './GateLead';
 import GateSection from './GateSection';
@@ -83,6 +85,7 @@ interface GateReviewProps {
 const GateReview = ({ dossier, inModal, onClose, onDecided }: GateReviewProps) => {
   const { t } = useTranslation('verify');
   const [selected, setSelected] = useState<GateSelection>();
+  const panelHost = use(FlowPanelHostContext);
   const summary = summarizeGate(dossier);
   const selectedKey = selectionKey(selected);
 
@@ -151,9 +154,7 @@ const GateReview = ({ dossier, inModal, onClose, onDecided }: GateReviewProps) =
     </div>
   );
 
-  const panel = selected && (
-    <UnitPanel selection={selected} onClose={() => setSelected(undefined)} />
-  );
+  const closePanel = () => setSelected(undefined);
 
   if (!inModal)
     return (
@@ -162,9 +163,16 @@ const GateReview = ({ dossier, inModal, onClose, onDecided }: GateReviewProps) =
           {report}
           <GateDecision dossier={dossier} onDecided={onDecided} />
         </div>
-        {panel}
+        {selected &&
+          (panelHost ? (
+            createPortal(<UnitPanel docked selection={selected} onClose={closePanel} />, panelHost)
+          ) : (
+            <UnitPanel selection={selected} onClose={closePanel} />
+          ))}
       </div>
     );
+
+  const panel = selected && <UnitPanel selection={selected} onClose={closePanel} />;
 
   return (
     <div {...stylex.props(styles.frame)}>

@@ -130,17 +130,19 @@ const DecisionBar = memo<DecisionBarProps>(
             })}
           />
         )}
-        <Flexbox horizontal align={'center'} gap={8} {...stylex.props(styles.summary)}>
-          <DecisionStatusMark
-            allConfirmed={allConfirmed}
-            decidedCount={decidedCount}
-            justCompleted={justCompleted}
-            repairing={repairing}
-            settledNeedsFix={settledNeedsFix}
-            state={state}
-            totalCount={totalCount}
-          />
-          <Flexbox gap={2} style={{ flex: '0 1 auto', minWidth: 0 }}>
+        <Flexbox horizontal align={'flex-start'} gap={10} {...stylex.props(styles.summary)}>
+          <span {...stylex.props(styles.mark)}>
+            <DecisionStatusMark
+              allConfirmed={allConfirmed}
+              decidedCount={decidedCount}
+              justCompleted={justCompleted}
+              repairing={repairing}
+              settledNeedsFix={settledNeedsFix}
+              state={state}
+              totalCount={totalCount}
+            />
+          </span>
+          <Flexbox gap={0} style={{ flex: '0 1 auto', minWidth: 0 }}>
             <Text ellipsis {...stylex.props(styles.statusText)}>
               {statusText}
             </Text>
