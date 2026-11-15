@@ -253,7 +253,7 @@ describe('a connector bound to a device', () => {
           findById: async () => stdioConnector({ boundDeviceId: 'ws-nas' }, 'ws1'),
           updateStatus: vi.fn(),
         } as any,
-        connectorToolModel: { upsertMany: vi.fn() } as any,
+        connectorToolModel: { queryByConnector: async () => [], upsertMany: vi.fn() } as any,
         serverDB: {} as any,
         userId: 'another-member',
       });
