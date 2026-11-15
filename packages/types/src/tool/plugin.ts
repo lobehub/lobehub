@@ -71,6 +71,11 @@ export interface CustomPluginParams {
     headers?: Record<string, string>;
     /** HTTP only: where the server is reached from. Absent means `auto`. */
     connectVia?: McpConnectVia;
+    /**
+     * Connectors only: the device a server that runs on the user's device is
+     * pinned to (`metadata.boundDeviceId`). Absent: picked automatically.
+     */
+    boundDeviceId?: string;
   };
   useProxy?: boolean;
 }

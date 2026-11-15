@@ -1,6 +1,6 @@
 import { getComposioAppByIdentifier, hasCallableMcpEndpoint } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
-import { GetStreamableMcpServerManifestInputSchema, upsertPluginMode } from '@lobechat/types';
+import { upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -48,7 +48,10 @@ import {
   pruneMissingAutoConnectorTools,
   syncConnectorToolsById,
 } from '@/server/services/connector/sync';
-import { getDeviceMcpManifest } from '@/server/services/mcp/deviceManifest';
+import {
+  DeviceMcpManifestInputSchema,
+  getDeviceMcpManifest,
+} from '@/server/services/mcp/deviceManifest';
 import {
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,
@@ -58,6 +61,7 @@ import {
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
 import { toClientToolSyncInputs } from '../_helpers/clientToolSyncInputs';
 import { withRequestConnectorCallers } from '../_helpers/connectorCallContext';
+import { assertConnectorDeviceBindingAllowed } from '../_helpers/connectorDeviceBinding';
 import {
   assertConnectorCredentialsManageable,
   assertConnectorMaintainable,
@@ -289,15 +293,21 @@ const connectorCoreRouter = router({
     .mutation(({ ctx, input }) => getConnectorLocalCallToken(ctx, input.id)),
 
   /**
-   * Test an HTTP MCP server the user set to connect through their device: its
-   * manifest, read on their own desktop app. A mutation so the credentials
-   * travel in the body, not the URL.
+   * Test an MCP server that runs on the user's device (an HTTP server set to
+   * connect through it, or one bound to a device): its manifest, read on the
+   * device its calls will run on. A mutation so the credentials travel in the
+   * body, not the URL.
    */
   getDeviceMcpManifest: wsCompatProcedure
     .use(serverDatabase)
-    .input(GetStreamableMcpServerManifestInputSchema)
+    .input(DeviceMcpManifestInputSchema)
     .mutation(({ ctx, input }) =>
-      getDeviceMcpManifest({ connection: input, serverDB: ctx.serverDB, userId: ctx.userId }),
+      getDeviceMcpManifest({
+        connection: input,
+        serverDB: ctx.serverDB,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      }),
     ),
 
   /**
@@ -414,6 +424,7 @@ const connectorCoreRouter = router({
     if (existing && existing.userId !== ctx.userId)
       await assertConnectorCredentialsManageable(ctx, existing);
     else await assertConnectorMaintainable(ctx, { agentId, userId: existing?.userId });
+    await assertConnectorDeviceBindingAllowed(ctx, input.metadata, existing?.metadata);
     if (existing) {
       await ctx.connectorModel.update(existing.id, {
         ...fields,
@@ -570,6 +581,7 @@ const connectorCoreRouter = router({
       // A patch may keep the stored credentials while repointing the server
       // URL, which would send them elsewhere — creator/owner only.
       await assertConnectorCredentialsManageable(ctx, target);
+      await assertConnectorDeviceBindingAllowed(ctx, input.patch.metadata, target.metadata);
 
       const { credentials, ...patch } = input.patch;
       // Preserve the server-owned `composio.linkedByUserId` from the stored row
