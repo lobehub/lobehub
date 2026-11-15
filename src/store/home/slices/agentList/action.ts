@@ -101,6 +101,9 @@ export const reorderItems = (items: SidebarAgentItem[], ids: readonly string[]) 
   return [...listed, ...items.filter((item) => !listedIds.has(item.id))];
 };
 
+/** A pinned-order save dropped because the active workspace changed meanwhile. */
+class WorkspaceSwitchedError extends Error {}
+
 export class AgentListActionImpl {
   readonly #set: Setter;
   readonly #agentList;
@@ -161,20 +164,27 @@ export class AgentListActionImpl {
    */
   reorderPinnedAgents = async (ids: string[]): Promise<void> => {
     const workspaceId = getActiveWorkspaceId();
-    await this.#agentList.optimistic(
-      AGENT_LIST_KEY,
-      (data) => (data ? { ...data, pinned: reorderItems(data.pinned, ids) } : data),
-      () => {
-        const operation = this.#pinnedOrderQueue
-          .catch(() => undefined)
-          .then(async () => {
-            if (getActiveWorkspaceId() !== workspaceId) return;
-            await homeService.updatePinnedOrder(ids);
-          });
-        this.#pinnedOrderQueue = operation;
-        return operation;
-      },
-    );
+    try {
+      await this.#agentList.optimistic(
+        AGENT_LIST_KEY,
+        (data) => (data ? { ...data, pinned: reorderItems(data.pinned, ids) } : data),
+        () => {
+          const operation = this.#pinnedOrderQueue
+            .catch(() => undefined)
+            .then(async () => {
+              // Failing the save rolls the unsaved order back out of the list.
+              if (getActiveWorkspaceId() !== workspaceId) throw new WorkspaceSwitchedError();
+              await homeService.updatePinnedOrder(ids);
+            });
+          this.#pinnedOrderQueue = operation;
+          return operation;
+        },
+      );
+    } catch (error) {
+      // Nothing to report: the user left the workspace the drag was made in.
+      if (error instanceof WorkspaceSwitchedError) return;
+      throw error;
+    }
   };
 
   /** Fetch orchestration only; read the list through `homeAgentListSelectors`. */
