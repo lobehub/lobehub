@@ -111,7 +111,7 @@ const MailPage = ({ agentId, disabled }: AgentMailProps) => {
   // inbox id), so the row the conversation was reached from is kept beside it:
   // without it Previous/Next lose the place the reader was reading.
   const [reseat, setReseat] = useState<{ id: string; rowId: string }>();
-  const reseatRowId = reseat?.id === messageId ? reseat.rowId : undefined;
+  const reseatRowId = reseat && reseat.id === messageId ? reseat.rowId : undefined;
   const conversationIds = new Set(
     (conversation.data ?? []).flatMap((mail) =>
       mail.inboxMessageId ? [mail.id, mail.inboxMessageId] : [mail.id],

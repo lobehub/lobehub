@@ -216,7 +216,7 @@ export const useConversation = (
         reseatId,
         // The list row stands for the conversation's inbox mail; a reseat to a
         // sent mail has no inbox id of its own, so hand the row over as well.
-        remaining.find((row) => row.inboxMessageId)?.inboxMessageId,
+        remaining.find((row) => row.inboxMessageId)?.inboxMessageId ?? undefined,
       );
     }
 
