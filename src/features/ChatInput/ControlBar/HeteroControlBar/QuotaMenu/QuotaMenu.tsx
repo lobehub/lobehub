@@ -135,6 +135,8 @@ export interface QuotaWindowItem {
   compactGroup?: string;
   /** Optional scope label shown before this window's compact percentage. */
   compactLabel?: string;
+  /** Listed in the panel only, not in the compact trigger. */
+  hideInCompact?: boolean;
   key: string;
   label: string;
   window: HeteroQuotaWindow | null;
@@ -510,8 +512,13 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   );
 
   const windows = quota ? getWindows(quota) : [];
+  // A window hidden from the compact trigger still shows there when it is the only one,
+  // so the trigger never loses its value.
+  const compactWindows = windows.some((item) => item.window && !item.hideInCompact)
+    ? windows.filter((item) => !item.hideInCompact)
+    : windows;
   const compactItemsByGroup = new Map<string, CompactQuotaItem>();
-  for (const item of windows) {
+  for (const item of compactWindows) {
     if (!item.window) continue;
 
     const leftPercent = clampPercent(100 - item.window.usedPercent);

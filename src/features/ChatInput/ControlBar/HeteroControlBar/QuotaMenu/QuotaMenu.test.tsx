@@ -41,6 +41,9 @@ vi.mock('@/features/AgentQuotaCalendar', () => ({
 }));
 
 vi.mock('@/features/ChatInput/hooks/useAgentId', () => ({ useAgentId: () => 'agent-1' }));
+vi.mock('../../HeteroModel/useEffectiveHeteroProvider', () => ({
+  useSelectedHeteroModel: () => undefined,
+}));
 
 const { confirmModalMock, toastErrorMock, toastSuccessMock } = vi.hoisted(() => ({
   confirmModalMock: vi.fn(),

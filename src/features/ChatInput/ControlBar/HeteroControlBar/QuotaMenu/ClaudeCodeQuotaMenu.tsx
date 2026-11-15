@@ -13,6 +13,7 @@ import { fetchClaudeCodeQuotaSnapshot } from '@/services/heteroAgentQuota';
 import { getAgentQuotaStoreState } from '@/store/agentQuota';
 import { getElectronStoreState } from '@/store/electron';
 
+import { useSelectedHeteroModel } from '../../HeteroModel/useEffectiveHeteroProvider';
 import QuotaAccountSwitcher from './QuotaAccountSwitcher';
 import type { FetchQuotaOptions, QuotaWindowItem } from './QuotaMenu';
 import QuotaMenu, { createQuotaSourceKey } from './QuotaMenu';
@@ -20,6 +21,7 @@ import {
   buildClaudePanelSnapshot,
   hasRenderableWindow,
   isQuotaStale,
+  isScopedQuotaModel,
   newestCapturedAt,
 } from './quotaViewModel';
 
@@ -94,6 +96,7 @@ interface ClaudeCodeQuotaMenuProps {
 const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
+  const selectedModel = useSelectedHeteroModel();
   const sourceKey = createQuotaSourceKey('claude-code', agentId, deviceId ?? 'local', env);
   // A persisted account becomes eligible for a device only after this mounted
   // menu has observed that device return the same external account identity.
@@ -257,6 +260,8 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
             {
               compactGroup: 'scopedWeekly',
               compactLabel: quota.scopedWeekly.modelName,
+              // A model's own weekly limit only bounds runs on that model.
+              hideInCompact: !isScopedQuotaModel(selectedModel, quota.scopedWeekly.modelName),
               key: 'scopedWeekly',
               label: t('heteroAgent.claudeQuota.scopedWeekly', {
                 model: quota.scopedWeekly.modelName,
@@ -266,7 +271,7 @@ const ClaudeCodeQuotaMenu = memo<ClaudeCodeQuotaMenuProps>(({ deviceId, env }) =
           ]
         : []),
     ],
-    [t],
+    [selectedModel, t],
   );
 
   const getReasonText = useCallback(
