@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import { cssVar, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { ChevronDown, ChevronUp, MoreHorizontal, PinIcon, UsersIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useMemo, useState } from 'react';
@@ -113,14 +113,21 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
           />
           <SessionList dataSource={visibleTeamPinned} />
           {teamOverflow && (
+            // Subordinate to the team pins above, so it reads lighter and
+            // smaller than an agent row instead of competing with them.
             <NavItem
+              data-testid={'sidebar-team-pinned-toggle'}
               icon={teamExpanded ? ChevronUp : ChevronDown}
+              iconSize={14}
+              titleColor={cssVar.colorTextDescription}
               title={
-                teamExpanded
-                  ? t('navPanel.showLessTeamPinned')
-                  : t('navPanel.showMoreTeamPinned', {
-                      count: teamPinned.length - TEAM_PINNED_VISIBLE_LIMIT,
-                    })
+                <span style={{ fontSize: 12 }}>
+                  {teamExpanded
+                    ? t('navPanel.showLessTeamPinned')
+                    : t('navPanel.showMoreTeamPinned', {
+                        count: teamPinned.length - TEAM_PINNED_VISIBLE_LIMIT,
+                      })}
+                </span>
               }
               onClick={() => setTeamExpanded((expanded) => !expanded)}
             />
