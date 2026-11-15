@@ -411,6 +411,11 @@ export interface UserPreference {
    * whether to include completed topics in the topic list
    */
   topicIncludeCompleted?: boolean;
+  /**
+   * Whether a running topic row shows its elapsed run time next to the spinner.
+   * Turning it off gives the title the width the timer took.
+   */
+  topicShowRunningTime?: boolean;
   topicSortBy?: TopicSortBy;
   /**
    * whether to use cmd + enter to send message
@@ -492,6 +497,7 @@ export const UserPreferenceSchema = z
       .enum(['byTime', 'byProject', 'flat', 'byStatus', 'byAgent', 'byDevice'])
       .optional(),
     topicIncludeCompleted: z.boolean().optional(),
+    topicShowRunningTime: z.boolean().optional(),
     topicSortBy: z.enum(['createdAt', 'updatedAt']).optional(),
     useCmdEnterToSend: z.boolean().optional(),
     workspace: z.object({ order: z.array(z.string()).optional() }).optional(),
