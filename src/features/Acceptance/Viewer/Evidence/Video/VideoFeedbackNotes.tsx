@@ -30,10 +30,10 @@ export const VideoFeedbackNotes = ({ notes }: { notes: AcceptanceReviewAnnotatio
                 color: cssVar.colorErrorText,
                 flex: 'none',
                 fontFamily: cssVar.fontFamilyCode,
-                fontSize: 11,
+                fontSize: 12,
               }}
             >
-              <Icon icon={note.time?.end === undefined ? Flag : Repeat} size={11} />
+              <Icon icon={note.time?.end === undefined ? Flag : Repeat} size={12} />
               {note.time
                 ? note.time.end === undefined
                   ? formatVideoTime(note.time.start)

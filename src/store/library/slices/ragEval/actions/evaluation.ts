@@ -1,7 +1,6 @@
-import { type CreateNewEvalEvaluation, type RAGEvalDataSetItem } from '@lobechat/types';
-import { type SWRResponse } from 'swr';
+import { type CreateNewEvalEvaluation } from '@lobechat/types';
 
-import { mutate, useClientDataSWR } from '@/libs/swr';
+import { mutate } from '@/libs/swr';
 import { ragEvalKeys } from '@/libs/swr/keys';
 import { ragEvalService } from '@/services/ragEval';
 import { type KnowledgeBaseStore } from '@/store/library/store';
@@ -16,11 +15,10 @@ export const createRagEvalEvaluationSlice = (
 
 export class RAGEvalEvaluationActionImpl {
   readonly #get: () => KnowledgeBaseStore;
-  readonly #set: Setter;
 
-  constructor(set: Setter, get: () => KnowledgeBaseStore, _api?: unknown) {
+  constructor(_set: Setter, get: () => KnowledgeBaseStore, _api?: unknown) {
+    void _set;
     void _api;
-    this.#set = set;
     this.#get = get;
   }
 
@@ -44,20 +42,6 @@ export class RAGEvalEvaluationActionImpl {
 
   runEvaluation = async (id: string): Promise<void> => {
     await ragEvalService.startEvaluationTask(id);
-  };
-
-  useFetchEvaluationList = (knowledgeBaseId: string): SWRResponse<RAGEvalDataSetItem[]> => {
-    return useClientDataSWR<RAGEvalDataSetItem[]>(
-      ragEvalKeys.evaluationList(knowledgeBaseId),
-      () => ragEvalService.getEvaluationList(knowledgeBaseId),
-      {
-        fallbackData: [],
-        onSuccess: () => {
-          if (!this.#get().initDatasetList)
-            this.#set({ initDatasetList: true }, false, 'useFetchDatasets/init');
-        },
-      },
-    );
   };
 }
 

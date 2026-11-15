@@ -1,4 +1,4 @@
-import type { AgentPromptInput } from '@lobechat/heterogeneous-agents/spawn';
+import type { AgentContentBlock, AgentPromptInput } from '@lobechat/heterogeneous-agents/spawn';
 
 import { log } from './logger';
 
@@ -10,16 +10,36 @@ export interface HeteroSteerClient {
     };
     waitHeteroSteer: {
       mutate: (
-        input: { blockMs?: number; operationId: string },
+        input: { acceptsImages?: boolean; blockMs?: number; operationId: string },
         options?: { signal?: AbortSignal },
       ) => Promise<{
-        message: { content: string; messageId: string } | null;
+        message: HeteroSteerMessage | null;
         /** `false` for a run the user does not type into (a child run): stop polling. */
         steerable?: false;
       }>;
     };
   };
 }
+
+/** A follow-up to type into the session; `imageList` holds images pasted into its body. */
+export interface HeteroSteerMessage {
+  content: string;
+  imageList?: { id: string; url: string }[];
+  messageId: string;
+}
+
+/** The prompt a follow-up is typed in as: its text, then its images as image blocks. */
+export const buildSteerPrompt = (message: HeteroSteerMessage): AgentPromptInput => {
+  const images = message.imageList ?? [];
+  if (images.length === 0) return message.content;
+  return [
+    { text: message.content, type: 'text' },
+    ...images.map(({ id, url }): AgentContentBlock => ({
+      source: { id, type: 'url', url },
+      type: 'image',
+    })),
+  ];
+};
 
 export interface HeteroSteerContext {
   getTrpcClient: () => Promise<HeteroSteerClient>;
@@ -83,11 +103,14 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
   const poll = async () => {
     const client = await context.getTrpcClient();
     while (!abort.signal.aborted) {
-      let message: { content: string; messageId: string } | null;
+      let message: HeteroSteerMessage | null;
       try {
         const res = await client.aiAgent.waitHeteroSteer.mutate(
           // The first poll answers at once, so the run is marked steerable early.
-          supported ? { operationId } : { blockMs: 1, operationId },
+          // The session takes image blocks, so pasted images come along.
+          supported
+            ? { acceptsImages: true, operationId }
+            : { acceptsImages: true, blockMs: 1, operationId },
           { signal: abort.signal },
         );
         if (res.steerable === false) return;
@@ -104,7 +127,15 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
       }
       if (!message) continue;
 
-      const accepted = await send(message.content, { uuid: message.messageId }).catch(() => false);
+      const steer = message;
+      const options = { uuid: steer.messageId };
+      const accepted = await send(buildSteerPrompt(steer), options).catch(async (error) => {
+        if (!steer.imageList?.length) return false;
+        // An image that cannot be fetched must not cost the message: its
+        // markdown still names the image.
+        log.debug('Steer images failed, sending the text: %s', String(error));
+        return send(steer.content, options).catch(() => false);
+      });
       if (accepted) {
         delivered.add(message.messageId);
         continue;

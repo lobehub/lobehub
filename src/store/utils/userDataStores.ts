@@ -9,6 +9,7 @@ import { useChatStore } from '@/store/chat';
 import { resetGatewayMuxRegistry } from '@/store/chat/slices/agentRun/actions/transports/gateway/muxRegistry';
 import { useDiscoverStore } from '@/store/discover';
 import { useDocumentStore } from '@/store/document';
+import { documentCommentActions } from '@/store/documentComment';
 import { useEvalStore } from '@/store/eval';
 import { expertiseActions } from '@/store/expertise';
 import { useFileStore } from '@/store/file';
@@ -16,6 +17,7 @@ import { useHomeStore } from '@/store/home';
 import { useImageStore } from '@/store/image';
 import { integrationActions } from '@/store/integration';
 import { useKnowledgeBaseStore } from '@/store/library';
+import { mcpAppActions } from '@/store/mcpApp/action';
 import { useMentionStore } from '@/store/mention';
 import { messengerActions } from '@/store/messenger';
 import { useNotebookStore } from '@/store/notebook';
@@ -61,10 +63,12 @@ const resetableStores: ResetableStoreApi[] = [
 
 const resetableActions: ResetableStore[] = [
   channelActions,
+  mcpAppActions,
   agentDocumentActions,
   expertiseActions,
   integrationActions,
   messengerActions,
+  documentCommentActions,
   pageActions,
   projectFileActions,
   resourcePermissionActions,

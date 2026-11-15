@@ -2,14 +2,18 @@ import type { Edge, Node } from '@xyflow/react';
 
 import type { FlowVersion } from './flowNavigation';
 import { getFlowNodeState } from './flowNodeState';
+import { latestThumbnail } from './flowStoryboard';
 
 export interface FlowGraphData extends Record<string, unknown> {
   collapsed?: boolean;
   onEnter?: () => void;
   onToggle?: () => void;
+  order?: number;
   passed?: number;
+  review?: 'accepted' | 'rejected';
   reviewed?: number;
   state?: 'passed' | 'failed' | 'uncertain' | 'blocked' | 'partial';
+  thumbnail?: string;
   title: string;
   total?: number;
 }
@@ -137,8 +141,8 @@ export function buildFlowGraph(
     if (stacked) for (const node of siblings) depths.set(node.id, 0);
     const parts = orderedSiblings.map((node) => {
       const id = graphId(view, node.id);
-      // Two title lines, two expected lines and the footer; the card clamps to this box.
-      if (!node.subFlowId) return { node, id, width: 260, height: 132 };
+      // The screenshot frame, two title lines and the footer; the card clamps to this box.
+      if (!node.subFlowId) return { node, id, width: 260, height: 244 };
       const child = collapsed.has(id) ? undefined : layout(view, node.id, id);
       return { node, id, child, width: child?.width ?? 320, height: child?.height ?? 96 };
     });
@@ -184,6 +188,8 @@ export function buildFlowGraph(
               node.entryRequired,
             ),
             attempts: visits.length,
+            review: visits.at(-1)?.review ?? undefined,
+            thumbnail: latestThumbnail(visits),
             evidence: visits.flatMap((v) => v.evidence.filter((e) => e.fileUrl)).length,
           };
       resultNodes.push({

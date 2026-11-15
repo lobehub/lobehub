@@ -1,7 +1,9 @@
 import type { DocumentCommentThreadPage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { ANCHORED_EAGER_PAGE_LIMIT, nextEagerPageCount, partitionThreadPage } from './hooks';
+import { partitionThreadPage } from '@/store/documentComment';
+
+import { ANCHORED_EAGER_PAGE_LIMIT, getFeedPaginationState, shouldLoadEagerPage } from './hooks';
 
 const thread = (id: string, anchored: boolean) =>
   ({
@@ -17,25 +19,68 @@ const mixedPage: DocumentCommentThreadPage = {
   nextCursor: 'next',
 };
 
-describe('nextEagerPageCount', () => {
-  it('requests one more page while under the budget', () => {
-    expect(nextEagerPageCount(1, ANCHORED_EAGER_PAGE_LIMIT)).toBe(2);
-    expect(nextEagerPageCount(ANCHORED_EAGER_PAGE_LIMIT - 1, ANCHORED_EAGER_PAGE_LIMIT)).toBe(
-      ANCHORED_EAGER_PAGE_LIMIT,
-    );
+const feed = (overrides: Partial<Parameters<typeof shouldLoadEagerPage>[0] & object> = {}) => ({
+  currentPage: 0,
+  hasMore: true,
+  items: [],
+  pageSize: 50,
+  ...overrides,
+});
+
+describe('shouldLoadEagerPage', () => {
+  it('asks for one more page while under the budget', () => {
+    expect(shouldLoadEagerPage(feed(), ANCHORED_EAGER_PAGE_LIMIT)).toBe(true);
+    expect(
+      shouldLoadEagerPage(
+        feed({ currentPage: ANCHORED_EAGER_PAGE_LIMIT - 2 }),
+        ANCHORED_EAGER_PAGE_LIMIT,
+      ),
+    ).toBe(true);
   });
 
   it('stops at the budget instead of draining every page', () => {
-    expect(nextEagerPageCount(ANCHORED_EAGER_PAGE_LIMIT, ANCHORED_EAGER_PAGE_LIMIT)).toBe(
-      ANCHORED_EAGER_PAGE_LIMIT,
-    );
-    expect(nextEagerPageCount(ANCHORED_EAGER_PAGE_LIMIT + 3, ANCHORED_EAGER_PAGE_LIMIT)).toBe(
-      ANCHORED_EAGER_PAGE_LIMIT + 3,
-    );
+    expect(
+      shouldLoadEagerPage(
+        feed({ currentPage: ANCHORED_EAGER_PAGE_LIMIT - 1 }),
+        ANCHORED_EAGER_PAGE_LIMIT,
+      ),
+    ).toBe(false);
   });
 
   it('never fetches ahead with a zero budget (the panel is closed or it is the document list)', () => {
-    expect(nextEagerPageCount(1, 0)).toBe(1);
+    expect(shouldLoadEagerPage(feed(), 0)).toBe(false);
+  });
+
+  it('waits while a page is loading, stops on a failed page, and stops when exhausted', () => {
+    expect(shouldLoadEagerPage(feed({ isLoadingMore: true }), 4)).toBe(false);
+    expect(shouldLoadEagerPage(feed({ loadMoreError: new Error('x') }), 4)).toBe(false);
+    expect(shouldLoadEagerPage(feed({ hasMore: false }), 4)).toBe(false);
+    expect(shouldLoadEagerPage(undefined, 4)).toBe(false);
+  });
+});
+
+describe('getFeedPaginationState', () => {
+  it('shows a loading placeholder only while nothing has painted', () => {
+    const state = { enabled: true, error: undefined, isValidating: true };
+    expect(getFeedPaginationState(undefined, state).isLoadingInitial).toBe(true);
+    // A feed hydrated from the replica paints at once, even while revalidating.
+    expect(getFeedPaginationState(feed(), state).isLoadingInitial).toBe(false);
+  });
+
+  it('keeps a painted feed on a refresh failure and reports an initial error otherwise', () => {
+    const state = { enabled: true, error: new Error('offline'), isValidating: false };
+    expect(getFeedPaginationState(feed(), state)).toMatchObject({
+      hasMore: false,
+      isInitialError: false,
+    });
+    expect(getFeedPaginationState(undefined, state).isInitialError).toBe(true);
+  });
+
+  it('is idle while disabled', () => {
+    expect(
+      getFeedPaginationState(undefined, { enabled: false, error: undefined, isValidating: false })
+        .isLoadingInitial,
+    ).toBe(false);
   });
 });
 

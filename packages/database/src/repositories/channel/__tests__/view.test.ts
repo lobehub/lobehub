@@ -117,6 +117,46 @@ describe('Channel public view', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
+  it('summarizes each thread under its root on the main timeline only', async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    const root = await asOwner.send(channel.id, {
+      content: 'Root',
+      requestKey: 'root',
+      routing: 'fallback',
+    });
+    const quiet = await asOwner.send(channel.id, {
+      content: 'Quiet root',
+      requestKey: 'quiet',
+      routing: 'fallback',
+    });
+    const thread = await asOwner.createThread(channel.id, { rootMessageId: root.id });
+    const empty = await asOwner.createThread(channel.id, { rootMessageId: quiet.id });
+    for (const content of ['First reply', 'Latest reply'])
+      await asOwner.send(channel.id, {
+        content,
+        requestKey: content,
+        routing: 'fallback',
+        threadId: thread.id,
+      });
+
+    const main = await asOwner.detail(channel.id);
+    expect(main.threads.find((entry) => entry.id === thread.id)).toMatchObject({
+      lastReply: { author: { type: 'user' }, content: 'Latest reply' },
+      replyCount: 2,
+    });
+    expect(main.threads.find((entry) => entry.id === empty.id)).toMatchObject({
+      lastReply: null,
+      replyCount: 0,
+    });
+    // A root outside the loaded page and a thread view skip the summary scan.
+    const older = await asOwner.detail(channel.id, { before: quiet.sequence, limit: 1 });
+    expect(older.threads.find((entry) => entry.id === empty.id)).not.toHaveProperty('replyCount');
+    const inThread = await asOwner.detail(channel.id, { threadId: thread.id });
+    expect(inThread.threads.find((entry) => entry.id === thread.id)).not.toHaveProperty(
+      'replyCount',
+    );
+  });
+
   it.each([false, true])(
     'includes the reply author so a new thread can answer without a mention (workspace: %s)',
     async (workspace) => {

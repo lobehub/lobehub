@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { ModelIcon } from '@/components/LobeIcons';
 import { usePermission } from '@/hooks/usePermission';
 import { useProviderName } from '@/hooks/useProviderName';
+import { aiProviderService } from '@/services/aiProvider';
 import { chatService } from '@/services/chat';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { getRuntimeErrorMessage } from '@/utils/locale/runtimeErrorMessage';
@@ -59,6 +60,11 @@ export type CheckErrorRender = (props: {
 
 interface ConnectionCheckerProps {
   checkErrorRender?: CheckErrorRender;
+  /**
+   * `credentials`: verify the key on the server without a check model, for providers that
+   * serve no chat models. Defaults to a chat round-trip with `model`.
+   */
+  checkMode?: 'chat' | 'credentials';
   model: string;
   onAfterCheck: () => Promise<void>;
   onBeforeCheck: () => Promise<boolean>;
@@ -66,7 +72,14 @@ interface ConnectionCheckerProps {
 }
 
 const Checker = memo<ConnectionCheckerProps>(
-  ({ model, provider, checkErrorRender: CheckErrorRender, onBeforeCheck, onAfterCheck }) => {
+  ({
+    checkMode = 'chat',
+    model,
+    provider,
+    checkErrorRender: CheckErrorRender,
+    onBeforeCheck,
+    onAfterCheck,
+  }) => {
     const { t } = useTranslation('setting');
     const { allowed: canManageProvider } = usePermission('manage_provider_key');
 
@@ -118,10 +131,40 @@ const Checker = memo<ConnectionCheckerProps>(
       setCheckModel(model);
     }, [model]);
 
+    const checkCredentials = async () => {
+      setLoading(true);
+      try {
+        const result = await aiProviderService.checkProviderConnectivity(provider);
+        if (result.ok) {
+          setPass(true);
+          return;
+        }
+
+        const errorType =
+          ('errorType' in result && typeof result.errorType === 'string' && result.errorType) ||
+          'ConnectionCheckFailed';
+        setError({
+          body: { error: result.error, provider },
+          message: result.error,
+          type: errorType as ChatMessageError['type'],
+        });
+      } catch (error) {
+        setError({
+          body: { provider },
+          message: (error as Error)?.message,
+          type: 'ConnectionCheckFailed',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
     const checkConnection = async () => {
       // Clear previous check results immediately
       setPass(false);
       setError(undefined);
+
+      if (checkMode === 'credentials') return checkCredentials();
 
       let isError = false;
 
@@ -182,39 +225,41 @@ const Checker = memo<ConnectionCheckerProps>(
     return (
       <Flexbox gap={8}>
         <Flexbox horizontal gap={8}>
-          <Select
-            virtual
-            disabled={!canManageProvider}
-            listItemHeight={36}
-            options={sortedModels.map((id) => ({ label: id, value: id }))}
-            popupClassName={stylex.props(styles.popup).className}
-            suffixIcon={isProviderConfigUpdating && <Spin size="small" />}
-            value={checkModel}
-            optionRender={({ value }) => {
-              return (
-                <Flexbox horizontal align={'center'} gap={6}>
-                  <ModelIcon model={value as string} size={20} />
-                  {value}
-                </Flexbox>
-              );
-            }}
-            style={{
-              flex: 1,
-              overflow: 'hidden',
-            }}
-            onSelect={async (value) => {
-              if (!canManageProvider) return;
+          {checkMode !== 'credentials' && (
+            <Select
+              virtual
+              disabled={!canManageProvider}
+              listItemHeight={36}
+              options={sortedModels.map((id) => ({ label: id, value: id }))}
+              popupClassName={stylex.props(styles.popup).className}
+              suffixIcon={isProviderConfigUpdating && <Spin size="small" />}
+              value={checkModel}
+              optionRender={({ value }) => {
+                return (
+                  <Flexbox horizontal align={'center'} gap={6}>
+                    <ModelIcon model={value as string} size={20} />
+                    {value}
+                  </Flexbox>
+                );
+              }}
+              style={{
+                flex: 1,
+                overflow: 'hidden',
+              }}
+              onSelect={async (value) => {
+                if (!canManageProvider) return;
 
-              // Update local state
-              setCheckModel(value);
-              setPass(false);
-              setError(undefined);
+                // Update local state
+                setCheckModel(value);
+                setPass(false);
+                setError(undefined);
 
-              // Persist the selected model to provider config
-              // This allows the model to be retained after page refresh
-              await updateAiProviderConfig(provider, { checkModel: value });
-            }}
-          />
+                // Persist the selected model to provider config
+                // This allows the model to be retained after page refresh
+                await updateAiProviderConfig(provider, { checkModel: value });
+              }}
+            />
+          )}
           <Button
             disabled={!canManageProvider || isProviderConfigUpdating}
             icon={pass ? CircleCheckIcon : undefined}

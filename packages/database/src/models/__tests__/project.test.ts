@@ -1097,6 +1097,38 @@ describe('ProjectModel', () => {
     ]);
   });
 
+  // A Channel run topic carries the requester's Channel request and the history
+  // the Agent read there; the project sidebar must not become a second door into
+  // that transcript for members who are not in the Channel.
+  it("keeps a Channel's run topics out of the project conversation listing", async () => {
+    const project = await createProject(repo, { name: 'Channel host' });
+    const [channelAgent] = await serverDB
+      .insert(agents)
+      .values({ title: 'Channel responder', userId, visibility: 'public' })
+      .returning();
+    await serverDB.insert(topics).values([
+      {
+        agentId: channelAgent.id,
+        id: 'project-regular-topic',
+        projectId: project.id,
+        title: 'Planning',
+        userId,
+      },
+      {
+        agentId: channelAgent.id,
+        id: 'project-channel-topic',
+        projectId: project.id,
+        title: 'Launch checklist from the Channel',
+        trigger: 'channel',
+        userId,
+      },
+    ]);
+
+    const list = await model.listTopics(project.id);
+
+    expect(list.map((topic) => topic.id)).toEqual(['project-regular-topic']);
+  });
+
   // The project sidebar renders a running row's elapsed clock from this. Rows
   // the client holds no local operation for (every non-active running topic
   // after a refresh) otherwise show a spinner with no timer.

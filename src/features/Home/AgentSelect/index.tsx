@@ -21,12 +21,11 @@ import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
-import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
 import AgentList from './AgentList';
-import { useResolvedHomeAgentId } from './useResolvedHomeAgentId';
+import { useResolvedHomeAgentId, useSelectHomeAgent } from './useResolvedHomeAgentId';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chevron: css`
@@ -76,7 +75,7 @@ const AgentSelect = memo(() => {
   const [open, setOpen] = useState(false);
   const { error, mutate } = useFetchAgentList();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+  const selectHomeAgent = useSelectHomeAgent();
   const { agentId: resolvedAgentId, isInbox } = useResolvedHomeAgentId();
   const displayAgentId = resolvedAgentId ?? '';
   const inboxMeta = useAgentStore(agentSelectors.getAgentMetaById(inboxAgentId ?? ''));
@@ -98,7 +97,7 @@ const AgentSelect = memo(() => {
 
   const handleSelect = useCallback(
     (agentId: string) => {
-      updateSystemStatus({ homeSelectedAgentId: agentId });
+      selectHomeAgent(agentId);
       setOpen(false);
 
       const agentState = useAgentStore.getState();
@@ -111,7 +110,7 @@ const AgentSelect = memo(() => {
         })
         .catch((error) => console.error('[AgentSelect] failed to prefetch agent config', error));
     },
-    [updateSystemStatus],
+    [selectHomeAgent],
   );
 
   return (

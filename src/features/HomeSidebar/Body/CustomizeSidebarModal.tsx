@@ -75,7 +75,6 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
   { id: 'favorites', labelKey: 'favorite.section' },
   { id: 'recents', labelKey: 'recents' },
   { id: 'project', labelKey: 'tab.projects', routeId: 'project' },
-  { id: 'private', labelKey: 'navPanel.privateAgents' },
   { alwaysVisible: true, id: 'agent', labelKey: 'navPanel.agent' },
   { id: 'image', labelKey: 'tab.generation', routeId: 'image' },
   { id: 'community', labelKey: 'tab.community', routeId: 'community' },
@@ -83,9 +82,6 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
   { id: 'memory', labelKey: 'tab.memory', routeId: 'memory' },
 ];
 
-// Private is workspace-only; in personal mode every row is implicitly
-// owner-private, so hide it from the customizer where toggling it on
-// would render an empty accordion no user can populate.
 // Dashboards also stay out until the `dashboard` feature flag is on for the
 // user, and Goals until the user turns on its lab; a dropped id is restored by
 // `withAllKnownKeys` once it is.
@@ -100,7 +96,6 @@ export const getAvailableSidebarItems = (
     if (item.id === 'dashboard' && !dashboardEnabled) return false;
     if (item.id === 'goals' && !goalsEnabled) return false;
     if (isWorkspaceMode && (item.id === 'memory' || item.id === 'dashboard')) return false;
-    if (!isWorkspaceMode && item.id === 'private') return false;
     return true;
   });
 
@@ -187,12 +182,8 @@ const SortableItem = memo<{
   onToggle: (key: string) => void;
 }>(({ id, hiddenSections, onToggle }) => {
   const { t } = useTranslation('common');
-  const isWorkspaceMode = !!useActiveWorkspaceSlug();
   const item = ITEM_MAP.get(id);
-  // In workspace mode the Agent bucket pairs with Private, so the label
-  // switches to "Public" — mirroring the sidebar header.
-  const labelKey =
-    item?.id === 'agent' && isWorkspaceMode ? 'navPanel.publicAgents' : item?.labelKey;
+  const labelKey = item?.labelKey;
   const {
     attributes,
     isDragging,
@@ -346,8 +337,7 @@ const AccordionGroup = memo<{ children: React.ReactNode }>(({ children }) => {
 
 const OverlayItem = memo<{ id: string }>(({ id }) => {
   const { t } = useTranslation('common');
-  const isWorkspaceMode = !!useActiveWorkspaceSlug();
-  const agentLabelKey = isWorkspaceMode ? 'navPanel.publicAgents' : 'navPanel.agent';
+  const agentLabelKey = 'navPanel.agent';
 
   // Accordion group overlay: render a compact representation
   if (id === ACCORDION_GROUP_ID) {

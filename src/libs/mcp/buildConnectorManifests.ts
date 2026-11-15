@@ -12,10 +12,13 @@ import type { UserConnectorToolItem } from '@/database/schemas';
  * - 'auto'           → humanIntervention: undefined (AI calls freely)
  * - 'needs_approval' → humanIntervention: 'required' (human must confirm)
  * - 'disabled'       → tool included with blocking description; AI knows it exists but is told it cannot be called
+ * A tool whose manifest made approval mandatory (`metadata.mandatoryApproval`)
+ * is `humanIntervention: 'always'` unless disabled: auto-run cannot skip it.
  */
 export function buildConnectorManifests(
   connectors: DecryptedConnector[],
   tools: UserConnectorToolItem[],
+  mcpApps = false,
 ): ToolManifest[] {
   const toolsByConnector = new Map<string, UserConnectorToolItem[]>();
   for (const tool of tools) {
@@ -29,12 +32,15 @@ export function buildConnectorManifests(
   for (const connector of connectors) {
     // The listing and the permission mapping are the shared rule; the server
     // adds the endpoint and credentials the runtime needs to call it.
-    const manifest = buildConnectorManifest({
-      identifier: connector.identifier,
-      isEnabled: connector.isEnabled,
-      name: connector.name,
-      tools: toolsByConnector.get(connector.id) ?? [],
-    });
+    const manifest = buildConnectorManifest(
+      {
+        identifier: connector.identifier,
+        isEnabled: connector.isEnabled,
+        name: connector.name,
+        tools: toolsByConnector.get(connector.id) ?? [],
+      },
+      mcpApps,
+    );
     if (!manifest) continue;
 
     manifests.push({
@@ -65,6 +71,17 @@ function buildMcpParams(connector: DecryptedConnector) {
   // mirror the sync/callTool path in services/connector/sync.ts.
   const customHeaders = connector.metadata?.customHeaders as Record<string, string> | undefined;
   const mergedHeaders = headers || customHeaders ? { ...headers, ...customHeaders } : undefined;
+
+  // A marketplace stdio server the market hosts: the tool executor calls it
+  // through the market's cloud gateway by identifier.
+  if (connector.mcpConnectionType === 'cloud') {
+    return {
+      headers: mergedHeaders,
+      name: connector.identifier,
+      type: 'cloud' as const,
+      url: (connector.metadata?.cloudEndPoint as string | undefined) ?? '',
+    };
+  }
 
   return {
     auth,

@@ -14,6 +14,7 @@ import path from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { getAntigravityQuota } from '../antigravityQuota';
 import {
   APP_UPDATE_UNSUPPORTED_MESSAGE,
   CLI_UPDATE_UNSUPPORTED_MESSAGE,
@@ -71,7 +72,21 @@ const makeDeps = (): DeviceControlDeps => ({
   })),
 });
 
+vi.mock('../antigravityQuota', () => ({
+  getAntigravityQuota: vi.fn(async () => ({ status: 'ok', groups: [] })),
+}));
+
 describe('executeDeviceRpc', () => {
+  it('routes Antigravity quota RPCs through the shared host sampler', async () => {
+    const params = { command: '/custom/agy', env: { AGY_PROFILE: 'fixture' }, force: true };
+    expect(DEVICE_RPC_METHODS).toContain('getAntigravityQuota');
+    await expect(executeDeviceRpc('getAntigravityQuota', params, makeDeps())).resolves.toEqual({
+      status: 'ok',
+      groups: [],
+    });
+    expect(getAntigravityQuota).toHaveBeenCalledWith(params);
+  });
+
   it.each(['getCliUpdateState', 'checkCliUpdate', 'restartCli'])(
     'rejects missing CLI handler %s with a stable reason',
     async (method) => {
@@ -146,7 +161,9 @@ describe('executeDeviceRpc', () => {
     };
 
     expect(result.skills.map((s) => s.name)).toEqual(['spa-routes']);
-    expect(result.instructions).toEqual([{ content: '# Agents', source: 'AGENTS.md' }]);
+    expect(result.instructions).toEqual([
+      { content: '# Agents', path: path.join(root, 'AGENTS.md'), source: 'AGENTS.md' },
+    ]);
     expect(deps.approveProjectRoot).toHaveBeenCalledWith(root);
   });
 

@@ -1,7 +1,9 @@
 'use client';
 
 import type { AcceptanceCommentItem } from '@lobechat/types';
-import { Button, createStaticStyles, cssVar, Flexbox, Tooltip } from '@lobehub/ui';
+import { Button, Flexbox, Tooltip } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,52 +12,40 @@ import { commentAuthorName, CommentAvatar } from './CommentCard';
 
 const MAX_FACES = 8;
 
-const styles = createStaticStyles(({ css }) => ({
-  aside: css`
-    position: sticky;
-    inset-block-start: 20px;
-
-    display: flex;
-    flex: none;
-    flex-direction: column;
-    gap: 16px;
-
-    width: 296px;
-
-    font-size: 13px;
-
-    @container (width < 720px) {
-      position: static;
-      width: auto;
-    }
-
-    @media (width <= 767px) {
-      position: static;
-      order: -1;
-    }
-  `,
-  list: css`
-    display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
-    gap: 12px 16px;
-    align-items: center;
-
-    margin: 0;
-  `,
-  term: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-  value: css`
-    overflow: hidden;
-
-    min-width: 0;
-    margin: 0;
-
-    color: ${cssVar.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+const styles = stylex.create({
+  aside: {
+    position: {
+      'default': 'sticky',
+      '@container (width < 720px)': 'static',
+      '@media (width <= 767px)': 'static',
+    },
+    insetBlockStart: '20px',
+    display: 'flex',
+    flex: 'none',
+    flexDirection: 'column',
+    gap: '16px',
+    width: { 'default': '296px', '@container (width < 720px)': 'auto' },
+    fontSize: '13px',
+    order: { 'default': null, '@media (width <= 767px)': -1 },
+  },
+  list: {
+    display: 'grid',
+    gridTemplateColumns: 'max-content minmax(0, 1fr)',
+    rowGap: '12px',
+    columnGap: '16px',
+    alignItems: 'center',
+    margin: '0',
+  },
+  term: { color: cssVar.colorTextTertiary },
+  value: {
+    overflow: 'hidden',
+    minWidth: '0',
+    margin: '0',
+    color: cssVar.colorText,
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+});
 
 interface DiscussionAsideProps {
   items: AcceptanceCommentItem[];
@@ -84,23 +74,23 @@ const DiscussionAside = memo<DiscussionAsideProps>(
     }, [items]);
 
     return (
-      <aside aria-label={t('acceptance.comments.aside.label')} className={styles.aside}>
+      <aside aria-label={t('acceptance.comments.aside.label')} {...stylex.props(styles.aside)}>
         {status && (
           <div aria-label={t('acceptance.comments.aside.status')}>
             <AcceptanceStatusPill status={status} />
           </div>
         )}
-        <dl className={styles.list}>
+        <dl {...stylex.props(styles.list)}>
           {latestRound !== undefined && (
             <>
-              <dt className={styles.term}>{t('acceptance.comments.aside.round')}</dt>
-              <dd className={styles.value}>{latestRound}</dd>
+              <dt {...stylex.props(styles.term)}>{t('acceptance.comments.aside.round')}</dt>
+              <dd {...stylex.props(styles.value)}>{latestRound}</dd>
             </>
           )}
           {faces.length > 0 && (
             <>
-              <dt className={styles.term}>{t('acceptance.comments.participants')}</dt>
-              <dd className={styles.value}>
+              <dt {...stylex.props(styles.term)}>{t('acceptance.comments.participants')}</dt>
+              <dd {...stylex.props(styles.value)}>
                 <Flexbox horizontal gap={4} wrap={'wrap'}>
                   {faces.slice(0, MAX_FACES).map((comment) => (
                     <Tooltip key={comment.id} title={commentAuthorName(comment.author)}>
@@ -115,8 +105,8 @@ const DiscussionAside = memo<DiscussionAsideProps>(
           )}
           {approvers.length > 0 && (
             <>
-              <dt className={styles.term}>{t('acceptance.comments.aside.approvals')}</dt>
-              <dd className={styles.value}>{approvers.join(', ')}</dd>
+              <dt {...stylex.props(styles.term)}>{t('acceptance.comments.aside.approvals')}</dt>
+              <dd {...stylex.props(styles.value)}>{approvers.join(', ')}</dd>
             </>
           )}
         </dl>

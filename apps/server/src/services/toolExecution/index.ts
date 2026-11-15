@@ -1,30 +1,26 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { DEFAULT_TOOL_RESULT_MAX_LENGTH, truncateToolResult } from '@lobechat/prompts/toolResult';
-import { type ChatToolPayload } from '@lobechat/types';
-import { safeParseJSON } from '@lobechat/utils';
+import { type ChatToolPayload, type DeviceClient } from '@lobechat/types';
 import { isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
 import debug from 'debug';
 
 import { ConnectorToolPermission } from '@/database/schemas';
-import {
-  type CloudMCPParams,
-  type HttpMCPClientParams,
-  type StdioMCPParams,
-  type ToolCallContent,
-} from '@/libs/mcp';
+import { type CloudMCPParams, type HttpMCPClientParams, type StdioMCPParams } from '@/libs/mcp';
 import {
   buildBlockedToolResponse,
   getConnectorToolPermission,
 } from '@/libs/mcp/connectorPermissionCheck';
 import { deviceGateway } from '@/server/services/deviceGateway';
-import { resolveDeviceClientKind } from '@/server/services/deviceGateway/deviceChannels';
+import {
+  clientKindFromChannels,
+  resolveMcpClientKinds,
+} from '@/server/services/deviceGateway/deviceChannels';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
-import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
-import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
+import { callCloudMcpTool, runtimeCloudMcpCaller } from '../mcp/cloudTool';
 import { type BuiltinToolsExecutor } from './builtin';
 import { classifyToolError, getToolAccessDeniedError } from './errorClassification';
 import { buildMcpAuthorizationErrorContent, isMcpAuthorizationError } from './mcpAuthError';
@@ -37,6 +33,13 @@ import {
 } from './types';
 
 const log = debug('lobe-server:tool-execution-service');
+
+/** The device a device-only MCP call runs on, and which of its clients runs it. */
+interface McpTunnelTarget {
+  clientKinds: DeviceClient[];
+  deviceId: string;
+  workspaceId?: string;
+}
 
 interface ToolExecutionServiceDeps {
   builtinToolsExecutor: BuiltinToolsExecutor;
@@ -326,13 +329,13 @@ export class ToolExecutionService {
         return await this.executeCloudMCPTool(payload, context, mcpParams);
       }
 
-      // Stdio must run on a desktop device. Without a configured gateway or a
+      // Stdio must run on the user's own device. Without a configured gateway or a
       // reachable device, fail instead of executing the command on the server.
       // Private HTTP also uses the device when a gateway is configured, while
       // self-hosted servers without one can still access their LAN over HTTP.
       if (mcpParams.type === 'stdio' || (isDeviceOnlyMcp && deviceGateway.isConfigured)) {
         if (!deviceGateway.isConfigured) {
-          const message = `MCP server '${identifier}' uses stdio and must run on a desktop device, but this server's device gateway is not configured. Configure a device gateway on the server and connect the desktop app on the machine that hosts this MCP server, then retry.`;
+          const message = `MCP server '${identifier}' uses stdio and must run on your own device, not in the cloud, but this server's device gateway is not configured. Configure a device gateway on the server, then open the ${BRANDING_NAME} desktop app or run \`lh connect\` on the machine that hosts this MCP server, and retry.`;
           return {
             content: message,
             error: { code: 'MCP_GATEWAY_NOT_CONFIGURED', message },
@@ -345,7 +348,7 @@ export class ToolExecutionService {
           : undefined;
         if (!tunnelTarget) {
           log('Device-only MCP %s:%s has no reachable device — failing fast', identifier, apiName);
-          const message = `MCP server '${identifier}' only your own machine can reach (stdio or local network). No online ${BRANDING_NAME} desktop app was found to run it (a device connected only through the \`lh connect\` CLI cannot run MCP servers) — open the ${BRANDING_NAME} desktop app on the machine that hosts this MCP server, then retry.`;
+          const message = `MCP server '${identifier}' only your own machine can reach (stdio or local network), and no online device can run it. Open the ${BRANDING_NAME} desktop app or run \`lh connect\` (update the CLI if it is older) on the machine that hosts this MCP server, then retry.`;
           return {
             content: message,
             error: { code: 'MCP_DEVICE_UNAVAILABLE', message },
@@ -414,7 +417,7 @@ export class ToolExecutionService {
    */
   private async resolveMcpTunnelTarget(
     context: ToolExecutionContext,
-  ): Promise<{ deviceId: string; workspaceId?: string } | undefined> {
+  ): Promise<McpTunnelTarget | undefined> {
     // Workspace devices live under the `workspace:<id>` principal in the
     // gateway, so device lookup AND the tunneled call itself must carry the
     // same scope — resolved the way the local-system/browser device runtimes
@@ -422,16 +425,16 @@ export class ToolExecutionService {
     // workspace when the run context lost it).
     const workspaceId = await resolveRunWorkspaceId(context);
     if (context.activeDeviceId) {
-      // Only the desktop app handles `mcp` tool calls; a device whose only
-      // live connection is `lh connect` answers them with `Unknown tool API`.
-      // Such an active device is skipped: personal runs fall through to the
-      // newest desktop device below, workspace runs fail closed.
-      const clientKind =
+      // The desktop app and an `lh connect` that reports MCP support run the
+      // call; a device whose only client is an older CLI cannot. Such an
+      // active device is skipped: personal runs fall through to the newest
+      // capable device below, workspace runs fail closed.
+      const clientKinds =
         context.userId !== undefined
-          ? await resolveDeviceClientKind(context.userId, context.activeDeviceId, workspaceId)
-          : 'unknown';
-      if (clientKind !== 'cli-only') return { deviceId: context.activeDeviceId, workspaceId };
-      log('Active device %s is CLI-only; not tunneling MCP to it', context.activeDeviceId);
+          ? await resolveMcpClientKinds(context.userId, context.activeDeviceId, workspaceId)
+          : ['desktop' as const];
+      if (clientKinds) return { clientKinds, deviceId: context.activeDeviceId, workspaceId };
+      log('Active device %s cannot run MCP calls; not tunneling to it', context.activeDeviceId);
     }
     // The implicit fallback is PERSONAL-scope only. In a workspace run the
     // connector may have been authorized by ANOTHER member, and tunneling its
@@ -446,16 +449,23 @@ export class ToolExecutionService {
     if (!context.userId || !context.serverDB) return undefined;
     try {
       const devices = await getScopedOnlineDevices(context.serverDB, context.userId, undefined);
-      // Already sorted online-first / most-recently-active; drop offline rows.
-      // Only the desktop app handles `mcp` tool calls — the CLI's
-      // tool_call_request handler ignores `toolCall.type`/`params`, so a
-      // device whose only live connection is `lh connect` would fail the call.
-      const newest = devices.find(
-        (d) =>
-          d.online &&
-          d.channels?.some((c) => c.channel === 'desktop' || c.channel === 'desktop-dev'),
-      );
-      return newest ? { deviceId: newest.deviceId, workspaceId: undefined } : undefined;
+      // Already sorted online-first / most-recently-active: the newest online
+      // device that can run the call wins.
+      for (const device of devices) {
+        if (!device.online) continue;
+        // A device whose clients are unlabelled is not picked implicitly: it
+        // could be an older CLI that would mis-dispatch the call.
+        const clientKind = clientKindFromChannels(device.channels);
+        if (clientKind === 'unknown') continue;
+        const clientKinds = await resolveMcpClientKinds(
+          context.userId,
+          device.deviceId,
+          undefined,
+          clientKind,
+        );
+        if (clientKinds) return { clientKinds, deviceId: device.deviceId, workspaceId: undefined };
+      }
+      return undefined;
     } catch {
       return undefined;
     }
@@ -475,7 +485,7 @@ export class ToolExecutionService {
     payload: ChatToolPayload,
     context: ToolExecutionContext,
     mcpParams: StdioMCPParams | HttpMCPClientParams,
-    target: { deviceId: string; workspaceId?: string },
+    target: McpTunnelTarget,
   ): Promise<ToolExecutionResult> {
     const { identifier, apiName, arguments: args } = payload;
 
@@ -533,6 +543,9 @@ export class ToolExecutionService {
                 type: 'http',
                 url: mcpParams.url,
               },
+        // Pin the client resolved for this device, so the call never lands on
+        // one of its clients that cannot run it.
+        clientKinds: target.clientKinds,
         userId: context.userId!,
         // Address the workspace device pool when the run is workspace-scoped —
         // omitting this would route the call to the personal pool and miss an
@@ -579,35 +592,14 @@ export class ToolExecutionService {
     log('Executing Cloud MCP tool: %s:%s via cloud gateway', identifier, apiName);
 
     try {
-      // Create DiscoverService with user context
-      const discoverService = new DiscoverService({
-        userInfo: context.userId ? { userId: context.userId } : undefined,
-      });
-
-      // Parse arguments
-      const apiParams = safeParseJSON(args) || {};
-
-      // Call cloud MCP endpoint via Market API
-      // Returns CloudGatewayResponse: { content: ToolCallContent[], isError?: boolean }
-      const cloudResult = await discoverService.callCloudMcpEndpoint({
-        apiParams,
-        identifier,
-        toolName: apiName,
-      });
-
-      const cloudResultContent = (cloudResult?.content ?? []) as ToolCallContent[];
-
-      // Convert content blocks to string (same as market router does)
-      const content = contentBlocksToString(cloudResultContent);
-      const state = { ...cloudResult, content: cloudResultContent };
+      const { content, state, success } = await callCloudMcpTool(
+        { args, identifier, toolName: apiName },
+        runtimeCloudMcpCaller(context.userId),
+      );
 
       log('Cloud MCP tool execution successful for: %s:%s', identifier, apiName);
 
-      return {
-        content,
-        state,
-        success: !cloudResult?.isError,
-      };
+      return { content, state, success };
     } catch (error) {
       log('Cloud MCP tool execution failed for %s:%s: %O', identifier, apiName, error);
       return {

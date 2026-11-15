@@ -312,6 +312,12 @@ export interface AgentInstructionResolveBlockedTools extends AgentInstructionBas
     blockedContentByCallId?: Record<string, string>;
     /** Optional machine-readable blocked reason */
     blockedReason?: string;
+    /**
+     * Appended to the parent assistant's stored text, in the same write that
+     * advertises the tools when {@link unresolvedToolNames} is set. Used when
+     * the run stops on these calls, so the reply itself says why.
+     */
+    parentNote?: string;
     /** Parent message ID (assistant message) */
     parentMessageId: string;
     /** Tool calls that were blocked and need tool results */
@@ -327,7 +333,8 @@ export interface AgentInstructionResolveBlockedTools extends AgentInstructionBas
      *   lists the matching call. An unadvertised rejection never reaches the
      *   model, which is the feedback this whole path exists to deliver.
      * - The instruction counts as one round against
-     *   {@link AgentState.unresolvedToolFeedbackRounds}.
+     *   {@link AgentState.unresolvedToolFeedbackRounds}, which a later
+     *   resolved tool call resets.
      */
     unresolvedToolNames?: boolean;
   };

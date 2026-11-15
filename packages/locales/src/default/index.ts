@@ -32,6 +32,7 @@ import migration from './migration';
 import modelProvider from './modelProvider';
 import modelRuntime from './modelRuntime';
 import models from './models';
+import music from './music';
 import notification from './notification';
 import oauth from './oauth';
 import onboarding from './onboarding';
@@ -91,6 +92,7 @@ const resources = {
   modelProvider,
   modelRuntime,
   models,
+  music,
   notification,
   oauth,
   onboarding,

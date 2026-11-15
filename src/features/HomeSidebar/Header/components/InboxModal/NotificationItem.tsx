@@ -22,10 +22,14 @@ import { useTranslation } from 'react-i18next';
 import AgentAvatar from '@/components/AgentAvatar';
 import { ProductLogo } from '@/components/Branding';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useAppOrigin } from '@/hooks/useAppOrigin';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { formatNotificationRelativeTime } from './formatNotificationRelativeTime';
 import { createNotificationDetailModal } from './NotificationDetailModal';
+import { getNotificationTabRoutes } from './notificationTabRoutes';
+import { resolveNotificationAction } from './resolveNotificationAction';
 import { toNotificationPreview } from './toNotificationPreview';
 import { useNotificationAgentMeta } from './useNotificationAgentMeta';
 
@@ -78,6 +82,7 @@ const NotificationItem = memo<NotificationItemProps>(
     const { i18n, t } = useTranslation('notification');
     const { close } = useModalContext();
     const navigate = useWorkspaceAwareNavigate();
+    const appOrigin = useAppOrigin();
     const TypeIcon = TYPE_ICON_MAP[type] || BellIcon;
     const dateLocale = i18n.resolvedLanguage || i18n.language;
     const preview = useMemo(() => toNotificationPreview(content), [content]);
@@ -93,13 +98,18 @@ const NotificationItem = memo<NotificationItemProps>(
 
       if (!actionUrl) return;
 
-      if (/^https?:\/\//i.test(actionUrl)) {
-        window.open(actionUrl, '_blank', 'noopener,noreferrer');
+      const action = resolveNotificationAction(actionUrl, {
+        appOrigin,
+        desktopTabRoutes: getNotificationTabRoutes(),
+      });
+
+      if (action.type === 'external') {
+        openTrustedExternalUrl(action.url);
       } else {
-        navigate(actionUrl);
+        navigate(action.path);
         close();
       }
-    }, [actionUrl, close, handleMarkAsRead, navigate]);
+    }, [actionUrl, appOrigin, close, handleMarkAsRead, navigate]);
 
     // The row only shows a two-line preview, so a click must always give access
     // to the full body — the detail modal is the only place a content-only

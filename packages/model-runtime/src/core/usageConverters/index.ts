@@ -8,10 +8,14 @@ export {
 export {
   convertOpenAISpeechTokenUsage,
   convertTextToSpeechUsage,
+  countFishAudioBilledBytes,
   countMiniMaxSpeechCharacters,
   countTextToSpeechCharacters,
+  isFishAudioSpeechModel,
+  isFishAudioSpeechRoute,
   isMiniMaxSpeechModel,
   isTokenBilledTextToSpeech,
+  toFishAudioCatalogModel,
 } from './tts';
 export {
   computeChatCost,

@@ -3,8 +3,8 @@
 export interface GenerationLayoutCommonProps {
   breadcrumb: { href: string; title: string }[];
   generationTopicsSelector: (s: any) => any;
-  namespace: 'image' | 'video';
+  namespace: 'image' | 'music' | 'video';
   navKey: string;
   useStore: (selector: (s: any) => any) => any;
-  viewModeStatusKey: 'imageTopicViewMode' | 'videoTopicViewMode';
+  viewModeStatusKey: 'imageTopicViewMode' | 'musicTopicViewMode' | 'videoTopicViewMode';
 }

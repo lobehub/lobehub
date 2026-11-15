@@ -121,6 +121,7 @@ export class MessageModel {
   listBackgroundSubAgentCalls: MessageBackgroundSubAgentQueries['listBackgroundSubAgentCalls'];
   claimBackgroundSubAgentDelivery: MessageBackgroundSubAgentQueries['claimBackgroundSubAgentDelivery'];
   releaseBackgroundSubAgentDelivery: MessageBackgroundSubAgentQueries['releaseBackgroundSubAgentDelivery'];
+  releaseCancelSuppressedDelivery: MessageBackgroundSubAgentQueries['releaseCancelSuppressedDelivery'];
 
   private readonly annotations: MessageAnnotationMutations;
 
@@ -213,6 +214,7 @@ export class MessageModel {
     this.listBackgroundSubAgentCalls = backgroundSubAgents.listBackgroundSubAgentCalls;
     this.claimBackgroundSubAgentDelivery = backgroundSubAgents.claimBackgroundSubAgentDelivery;
     this.releaseBackgroundSubAgentDelivery = backgroundSubAgents.releaseBackgroundSubAgentDelivery;
+    this.releaseCancelSuppressedDelivery = backgroundSubAgents.releaseCancelSuppressedDelivery;
     this.getLastMainThreadSpineMessageId = spine.getLastMainThreadSpineMessageId;
     this.isMessageDescendantOf = spine.isMessageDescendantOf;
     this.getLatestSpineMessageId = spine.getLatestSpineMessageId;

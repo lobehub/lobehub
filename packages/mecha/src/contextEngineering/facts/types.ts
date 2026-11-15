@@ -1,6 +1,7 @@
 import type { CredSummary } from '@lobechat/builtin-tool-creds';
 import type {
   AgentContextDocument,
+  AgentDocumentChangesByMessage,
   AgentManagementContext,
   AvailablePluginInfo,
   AvailableProviderInfo,
@@ -158,6 +159,13 @@ export interface ContextFactProviders {
    * on a host with no identity store.
    */
   listAgentAccountContext?: (agentId?: string) => Promise<AgentAccountContext | undefined>;
+  /**
+   * Change notes for an index rendered from a snapshot, keyed by user message.
+   * Only a host whose `listAgentDocuments` returns snapshot rows provides it.
+   */
+  listAgentDocumentChanges?: (
+    agentId: string,
+  ) => Promise<AgentDocumentChangesByMessage | undefined>;
   /** Context documents attached to an agent. */
   listAgentDocuments?: (agentId: string) => Promise<AgentContextDocument[] | undefined>;
   /** Connector identifiers (Composio services, LobeHub skill providers) connected for the agent. */
@@ -196,6 +204,7 @@ export interface ContextFactProviders {
 }
 
 export interface GatheredContextFacts {
+  agentDocumentChanges?: AgentDocumentChangesByMessage;
   agentDocuments?: AgentContextDocument[];
   step: ContextStepSnapshot & { agentManagementContext?: AgentManagementContext };
   variables: ContextVariables;

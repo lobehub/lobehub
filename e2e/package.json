@@ -10,6 +10,7 @@
     "test:community": "cucumber-js --config cucumber.config.js src/features/community/",
     "test:headed": "cross-env HEADLESS=false cucumber-js --config cucumber.config.js",
     "test:oidc": "cucumber-js --config cucumber.config.js --tags '@oidc'",
+    "test:perf": "cross-env E2E_PERF=1 cucumber-js --config cucumber.config.js",
     "test:routes": "cucumber-js --config cucumber.config.js --tags '@routes'",
     "test:routes:ci": "cucumber-js --config cucumber.config.js --tags '@routes and not @ci-skip'",
     "test:smoke": "cucumber-js --config cucumber.config.js --tags '@smoke'",

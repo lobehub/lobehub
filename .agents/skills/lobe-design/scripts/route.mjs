@@ -80,10 +80,19 @@ export function route(instruction, { hasBrief = false } = {}) {
   // 2) concern hits per stage (00 excluded: it always runs first).
   //    A named rule id is authoritative: keyword hits are then only reported (e.g. 「LOBE-RAW-COLOR 报错」
   //    must go to 50, not to 70 because of the word「报错」).
+  //    Scenario hits are computed first. Stage-keyword hits fully contained in a longer scenario
+  //    signal (e.g. 「AI 味」inside「去 AI 味」, 「好看」inside「更好看」) are dropped so a macro
+  //    polish is not collapsed into fine 50. Independent keywords and named rule ids still route.
   const concernTable = Object.entries(stages)
     .filter(([id]) => id !== '00-brief')
     .map(([id, s]) => [id, s.keywords]);
-  const concernHits = findHits(text, concernTable);
+  const scenarioHits = findHits(
+    text,
+    Object.entries(scenarios).map(([id, s]) => [id, s.signals]),
+  );
+  const concernHits = findHits(text, concernTable).filter(
+    (h) => !scenarioHits.some((o) => o.end - o.start > h.end - h.start && o.start <= h.start && o.end >= h.end),
+  );
   const keywordStages = ruleStages.length
     ? stageOrder.filter((id) => ruleStages.includes(id))
     : stageOrder.filter((id) => concernHits.some((h) => h.owner === id));
@@ -96,11 +105,7 @@ export function route(instruction, { hasBrief = false } = {}) {
   const concernStages = stageOrder.filter((id) => keywordStages.includes(id) || intentStages.includes(id) || modelStages.includes(id));
   if (intentStages.length) reasons.push(`抽象指令已归一化：${intent.notes.join('；')}`);
 
-  // 3) scenario detection
-  const scenarioHits = findHits(
-    text,
-    Object.entries(scenarios).map(([id, s]) => [id, s.signals]),
-  );
+  // 3) scenario detection (scenarioHits already computed above, before contained-keyword filtering)
   const hitSet = new Set(scenarioHits.map((h) => h.owner));
   let scenario = null;
   const buildHit = scenarios['operate-build'].buildSignals.some((w) => text.includes(w.toLowerCase()));

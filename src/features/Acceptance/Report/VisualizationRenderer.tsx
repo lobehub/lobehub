@@ -73,6 +73,7 @@ const styles = stylex.create({
   },
   body: { minWidth: '0', padding: '14px' },
   card: {
+    containerType: 'inline-size',
     overflow: 'hidden',
     borderWidth: '1px',
     borderStyle: 'solid',
@@ -123,7 +124,7 @@ const styles = stylex.create({
     display: 'grid',
     gridTemplateColumns: {
       'default': 'minmax(120px, 1fr) minmax(240px, 2.4fr) auto',
-      '@media (width <= 640px)': '1fr auto',
+      '@container (width <= 520px)': '1fr auto',
     },
     gap: '16px',
     alignItems: 'center',
@@ -180,8 +181,8 @@ const styles = stylex.create({
     display: 'flex',
     flexDirection: 'column',
     gap: '9px',
-    gridColumn: { 'default': null, '@media (width <= 640px)': '1 / -1' },
-    gridRow: { 'default': null, '@media (width <= 640px)': 2 },
+    gridColumn: { 'default': null, '@container (width <= 520px)': '1 / -1' },
+    gridRow: { 'default': null, '@container (width <= 520px)': 2 },
   },
   valueText: {
     display: 'flex',

@@ -75,6 +75,7 @@
     "@lobechat/device-control": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",
     "@lobechat/device-identity": "workspace:*",
+    "@lobechat/device-mcp": "workspace:*",
     "@lobechat/device-sandbox": "workspace:*",
     "@lobechat/electron-client-ipc": "workspace:*",
     "@lobechat/electron-mac-notifications": "workspace:*",

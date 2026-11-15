@@ -16,6 +16,7 @@ export const toContextSnapshot = ({
   additionalVariables,
   agentAccountContext,
   agentBuilderContext,
+  agentDocumentChanges,
   agentDocuments,
   agentGroup,
   agentIdentity,
@@ -28,6 +29,7 @@ export const toContextSnapshot = ({
   documentReferences,
   enableAgentMode,
   enableExpertise,
+  enableMcpAppContext,
   enableHistoryCount,
   enableStaleToolResultTrim,
   evalContext,
@@ -58,6 +60,7 @@ export const toContextSnapshot = ({
   workspaceContext,
 }: ServerMessagesEngineParams): ContextSnapshot => ({
   agent: {
+    documentChanges: agentDocumentChanges,
     documents: agentDocuments,
     enableHistoryCount,
     enableStaleToolResultTrim,
@@ -85,6 +88,7 @@ export const toContextSnapshot = ({
     additionalContexts,
     enableAgentMode,
     enableExpertise,
+    enableMcpAppContext,
     expertise,
     forceFinish,
     formatHistorySummary,

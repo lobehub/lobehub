@@ -33,8 +33,9 @@ export interface UseProjectSkillsResult {
 
 /**
  * Shared scan + handlers for filesystem-backed skills. Project skills live
- * under `.agents/skills` / `.claude/skills` in `workingDirectory`; device
- * skills live under those directories in the execution device's home.
+ * under `.agents/skills` / `.claude/skills` / `.codex/skills` in
+ * `workingDirectory` and its parents up to the repository root; device skills
+ * live under those directories in the execution device's home.
  *
  * `deviceId` picks the transport for both listing and preview: when set, the
  * scan and file reads run on that bound device via RPC (`device.listProjectSkills`
@@ -98,7 +99,10 @@ export const useProjectSkills = (
   const openSkillFile = useCallback(
     (skill: ProjectSkillItem, filePath: string) => {
       openLocalFile({
-        allowExternalFilePreview: skill.scope === 'device',
+        // Project skills found in a parent of the working directory preview
+        // against their own source directory, outside the project scope too.
+        allowExternalFilePreview:
+          skill.scope === 'device' || (!!skill.previewRoot && skill.previewRoot !== previewRoot),
         // A bound device (remote, or this machine as a device) reads the preview
         // over RPC, exactly like the Files tab; an undefined deviceId falls back to
         // local Electron IPC. The old `isRemote` no-op predated remote preview.

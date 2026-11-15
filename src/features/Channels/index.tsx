@@ -4,8 +4,9 @@ import { useSize } from 'ahooks';
 import { Hash } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
+import { Navigate, useParams } from 'react-router';
 
+import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
 import NotFound from '@/components/404';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { EntityLinkHostProvider } from '@/features/EntityLink/host';
@@ -33,6 +34,8 @@ function EnabledChannelPage() {
   const { t } = useTranslation('channel');
   const { channelId } = useParams<{ channelId: string }>();
   const panel = useThreadPanel(channelId ?? '');
+  // Member cards on message avatars and the member panel read this directory.
+  useFetchWorkspaceMembers();
   const [membersChannelId, setMembersChannelId] = useState<string | null>(null);
   const memberPanelId = useId();
   const conversationRef = useRef<HTMLDivElement>(null);
@@ -64,6 +67,7 @@ function EnabledChannelPage() {
     thread: !!(threadId || threadDraft || pageThreadId),
   });
   if (!channelId) return null;
+  if (panel.legacyPageUrl) return <Navigate replace to={panel.legacyPageUrl} />;
 
   return (
     <Flexbox {...stylex.props(styles.layout)}>

@@ -29,6 +29,7 @@ export const ThreadPageTitle = ({
     threadTitle(
       threadView?.rootMessage ??
         detail.messages.find((message) => message.id === thread?.rootMessageId),
+      thread,
     ) || t('thread');
   const channelTitle = detail.channel.title || t('title');
 

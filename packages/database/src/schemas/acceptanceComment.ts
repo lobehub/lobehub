@@ -12,6 +12,7 @@ import { index, jsonb, pgTable, text, uniqueIndex, uuid } from 'drizzle-orm/pg-c
 
 import { createNanoId } from '../utils/idGenerator';
 import { createdAt, timestamptz, updatedAt } from './_helpers';
+import { acceptanceReviewMarks } from './acceptanceReview';
 import { agents } from './agent';
 import { users } from './user';
 import { acceptances, verifyEvidence, verifyRuns } from './verify';
@@ -116,6 +117,13 @@ export const acceptanceComments = pgTable(
      * Other producers' keys remain separate from this typed anchor.
      */
     metadata: jsonb('metadata').$type<AcceptanceCommentMetadata>(),
+    /**
+     * Set on replies under a review mark. The mark itself carries the reviewer's
+     * remark; only the discussion under it lives in this table.
+     */
+    reviewMarkId: uuid('review_mark_id').references(() => acceptanceReviewMarks.id, {
+      onDelete: 'cascade',
+    }),
     /** Client-generated idempotency key for retried creates. */
     clientId: text('client_id').notNull(),
 
@@ -145,6 +153,7 @@ export const acceptanceComments = pgTable(
     index('acceptance_comments_author_user_id_idx').on(t.authorUserId),
     index('acceptance_comments_author_agent_id_idx').on(t.authorAgentId),
     index('acceptance_comments_workspace_id_idx').on(t.workspaceId),
+    index('acceptance_comments_review_mark_id_idx').on(t.reviewMarkId),
   ],
 );
 

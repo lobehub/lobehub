@@ -38,6 +38,11 @@ vi.mock('@/store/channel', () => ({
   channelSelectors: { list: () => home.channels },
   useChannelStore: (selector: (state: object) => unknown) => selector({}),
 }));
+vi.mock('@/store/project', () => ({
+  useCurrentProjectList: () => [{ avatar: null, id: 'pro_1', name: 'Apollo' }],
+  useProjectStore: (selector: (state: object) => unknown) =>
+    selector({ useFetchProjectList: () => ({}) }),
+}));
 vi.mock('@/features/Channels/useChannelsEnabled', () => ({
   useChannelsEnabled: () => home.channelsEnabled,
 }));
@@ -255,7 +260,7 @@ describe('MessageList Body Channel rows', () => {
     ...patch,
   });
 
-  it('lists group Channels as rows, leaving out direct, project and archived ones', () => {
+  it('lists group and project Channels as rows, leaving out direct and archived ones', () => {
     home.channels = [
       channel({ id: 'chn_team', title: 'Team' }),
       channel({ agentId: 'agt_nasa', id: 'chn_direct', title: 'Nasa' }),
@@ -267,7 +272,7 @@ describe('MessageList Body Channel rows', () => {
 
     expect(screen.getByText('# Team')).toBeInTheDocument();
     expect(screen.queryByText('# Nasa')).not.toBeInTheDocument();
-    expect(screen.queryByText('# Project')).not.toBeInTheDocument();
+    expect(screen.getByText('# Project')).toBeInTheDocument();
     expect(screen.queryByText('# Old')).not.toBeInTheDocument();
   });
 

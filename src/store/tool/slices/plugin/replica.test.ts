@@ -29,7 +29,6 @@ import { pluginSelectors } from './selectors';
 
 vi.mock('@/services/plugin', () => ({
   pluginService: {
-    createCustomPlugin: vi.fn(),
     getInstalledPlugins: vi.fn(),
     uninstallPlugin: vi.fn(),
     updatePlugin: vi.fn(),
@@ -383,7 +382,7 @@ describe('installed plugins replica', () => {
   });
 
   describe('install / uninstall propagation', () => {
-    it('shows a newly installed plugin and persists it', async () => {
+    it('shows a plugin the server now lists and persists it', async () => {
       await loadFromServer([plugin('p1')]);
       vi.mocked(pluginService.getInstalledPlugins).mockResolvedValue([
         plugin('p1'),
@@ -391,12 +390,9 @@ describe('installed plugins replica', () => {
       ]);
 
       await act(async () => {
-        await useToolStore
-          .getState()
-          .installCustomPlugin({ identifier: 'custom-1', type: 'customPlugin' } as any);
+        await useToolStore.getState().refreshPlugins();
       });
 
-      expect(pluginService.createCustomPlugin).toHaveBeenCalled();
       expect(ids()).toEqual(['p1', 'custom-1']);
       await waitFor(async () =>
         expect((await readPersisted())?.map((p) => p.identifier)).toEqual(['p1', 'custom-1']),
@@ -412,6 +408,8 @@ describe('installed plugins replica', () => {
       // The follow-up refresh has not caught up yet: the removal must still hold.
       vi.mocked(pluginService.getInstalledPlugins).mockImplementation(pending);
 
+      // No marketplace connector backs these legacy rows.
+      act(() => useToolStore.setState({ connectors: [], fetchConnectors: async () => {} }));
       void useToolStore.getState().uninstallMCPPlugin('p1');
       expect(ids()).toEqual(['p1', 'p2']);
 

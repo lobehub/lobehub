@@ -47,6 +47,9 @@ class ProjectService {
     return { ...response, data: projects };
   };
 
+  /** Folder-card content (recent topics, task progress, members) for every visible project. */
+  listOverviews = async () => lambdaClient.project.listOverviews.query();
+
   detail = async (id: string) => lambdaClient.project.detail.query({ id });
 
   delete = async (id: string) => lambdaClient.project.delete.mutate({ id });

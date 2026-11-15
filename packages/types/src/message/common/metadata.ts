@@ -686,6 +686,11 @@ export interface MessageMetadata {
    */
   instruction?: string;
   /**
+   * The run was stopped while generating this assistant turn. Set by the server
+   * runtime, including on a placeholder stopped before its first output.
+   */
+  interruptedMidStream?: boolean;
+  /**
    * Flag indicating if message content is multimodal (serialized MessageContentPart[])
    */
   isMultimodal?: boolean;

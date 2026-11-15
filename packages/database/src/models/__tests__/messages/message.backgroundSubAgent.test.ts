@@ -167,4 +167,51 @@ describe('MessageModel background sub-agent calls', () => {
       expect(await messageModel.claimBackgroundSubAgentDelivery(['b'], 'when-2')).toEqual(['b']);
     });
   });
+
+  describe('releaseCancelSuppressedDelivery', () => {
+    it('hands back a cancel claim once, so the finished answer is delivered once', async () => {
+      await seedCall({ id: 'c', state: { background: true, status: 'pending', threadId: 't' } });
+      await messageModel.claimBackgroundSubAgentDelivery(['c'], 'when-cancel', {
+        suppressedByCancel: true,
+      });
+      expect(await readState('c')).toMatchObject({
+        cancelSuppressed: true,
+        deliveredAt: 'when-cancel',
+      });
+      // The run still finishes with an answer, recorded as a state merge.
+      await messageModel.updateToolMessage('c', { pluginState: { status: 'completed' } });
+
+      expect(await messageModel.releaseCancelSuppressedDelivery(['c'])).toEqual(['c']);
+      expect(await readState('c')).toEqual({
+        background: true,
+        status: 'completed',
+        threadId: 't',
+      });
+
+      // A real delivery claims it next; a second release must not undo that claim.
+      expect(await messageModel.claimBackgroundSubAgentDelivery(['c'], 'when-2')).toEqual(['c']);
+      expect(await messageModel.releaseCancelSuppressedDelivery(['c'])).toEqual([]);
+      expect(await readState('c')).toMatchObject({ deliveredAt: 'when-2' });
+    });
+
+    it('leaves a delivery claim alone', async () => {
+      await seedCall({ id: 'd', state: { background: true, status: 'completed' } });
+      await messageModel.claimBackgroundSubAgentDelivery(['d'], 'when-1');
+
+      expect(await messageModel.releaseCancelSuppressedDelivery(['d'])).toEqual([]);
+      expect(await readState('d')).toMatchObject({ deliveredAt: 'when-1' });
+    });
+
+    it('cannot release another user’s row', async () => {
+      await seedCall({
+        id: 'foreign-cancel',
+        ownerId: otherUserId,
+        state: { background: true, cancelSuppressed: true, deliveredAt: 'x', status: 'pending' },
+        topicId: 'bsa-other-topic',
+      });
+
+      expect(await messageModel.releaseCancelSuppressedDelivery(['foreign-cancel'])).toEqual([]);
+      expect(await readState('foreign-cancel')).toHaveProperty('deliveredAt', 'x');
+    });
+  });
 });

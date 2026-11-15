@@ -62,6 +62,31 @@ describe('buildConnectorManifest', () => {
     expect(built.meta.description).toBe('Dashboard connector with 3 tools');
   });
 
+  // Auto-run and headless skip `required` but never `always`
+  it('keeps a tool its manifest made mandatory on always, whatever its permission', () => {
+    const mandatory = { mandatoryApproval: true };
+    const built = buildConnectorManifest({
+      identifier: 'cloud-mail',
+      isEnabled: true,
+      name: 'Cloud Mail',
+      tools: [
+        { metadata: mandatory, permission: 'needs_approval', toolName: 'send' },
+        { metadata: { ...mandatory, visibility: ['model'] }, permission: 'auto', toolName: 'wipe' },
+        { metadata: mandatory, permission: 'disabled', toolName: 'purge' },
+        { metadata: { mandatoryApproval: 'yes' }, permission: 'auto', toolName: 'read' },
+      ],
+    })!;
+
+    expect(built.api.map((a) => [a.name, a.humanIntervention])).toEqual([
+      ['send', 'always'],
+      ['wipe', 'always'],
+      // Execution refuses a disabled tool regardless
+      ['purge', 'required'],
+      ['read', undefined],
+    ]);
+    expect(built.api[2].description).toContain('[TOOL DISABLED]');
+  });
+
   it('builds nothing when every tool is for views only', () => {
     expect(
       buildConnectorManifest({
@@ -92,6 +117,47 @@ describe('patchManifestWithPermissions', () => {
     expect(patched.api[0]).toMatchObject({ humanIntervention: 'required' });
     expect(patched.api[1].description).toContain('[TOOL DISABLED]');
     expect(patched.api[2]).toEqual({ name: 'c', parameters: {} });
+  });
+
+  it("never loosens a manifest's own always into a required that auto-run skips", () => {
+    const patched = patchManifestWithPermissions(
+      {
+        api: [
+          { humanIntervention: 'always', name: 'a' },
+          { humanIntervention: [{ match: { force: true }, policy: 'always' }], name: 'b' },
+          { humanIntervention: { dynamic: { default: 'never', type: 'audit' } }, name: 'c' },
+          { humanIntervention: 'required', name: 'd' },
+          { name: 'e' },
+          { humanIntervention: 'always', name: 'f' },
+        ] as { humanIntervention?: unknown; name: string }[],
+      },
+      new Map([
+        ['a', 'needs_approval'],
+        ['b', 'needs_approval'],
+        ['c', 'needs_approval'],
+        ['d', 'needs_approval'],
+        ['e', 'needs_approval'],
+        ['f', 'auto'],
+      ]),
+    );
+
+    expect(patched.api.map((a) => [a.name, a.humanIntervention])).toEqual([
+      ['a', 'always'],
+      ['b', 'always'],
+      // A dynamic config's unset `policy` is `always` on a match
+      ['c', 'always'],
+      ['d', 'required'],
+      ['e', 'required'],
+      ['f', 'always'],
+    ]);
+  });
+
+  it('reads a manifest-level always where the tool sets none, as the runtime does', () => {
+    const patched = patchManifestWithPermissions(
+      { api: [{ name: 'a' }], humanIntervention: 'always' },
+      new Map([['a', 'needs_approval']]),
+    );
+    expect(patched.api[0]).toMatchObject({ humanIntervention: 'always' });
   });
 });
 

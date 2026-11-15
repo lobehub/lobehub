@@ -66,6 +66,7 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
     additionalContexts: run.additionalContexts,
     enableAgentMode: run.enableAgentMode,
     enableExpertise: run.enableExpertise,
+    enableMcpAppContext: run.enableMcpAppContext,
     expertise: run.expertise,
     forceFinish: run.forceFinish,
     formatHistorySummary: run.formatHistorySummary,
@@ -75,6 +76,7 @@ export const buildMessagesEngineParams = (snapshot: ContextSnapshot): MessagesEn
     stepContext: run.stepContext,
 
     // --- agent definition ---
+    agentDocumentChanges: agent.documentChanges,
     agentDocuments: agent.documents,
     agentIdentity: agent.identity,
     enableHistoryCount: agent.enableHistoryCount,

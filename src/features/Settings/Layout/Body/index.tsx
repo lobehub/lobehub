@@ -13,10 +13,11 @@ import { isModifierClick } from '@/utils/navigation';
 
 import { SettingsGroupKey, useCategory } from '../../hooks/useCategory';
 import { useExpandedSettingsGroups } from '../../hooks/useExpandedSettingsGroups';
+import { usePersonalSettingsSearchScope } from '../../hooks/useSettingsSearchScope';
 
 const Body = memo(() => {
   const categoryGroups = useCategory();
-  const searchScope = useMemo(() => ({ categoryGroups }), [categoryGroups]);
+  const searchScope = usePersonalSettingsSearchScope(categoryGroups);
   const navigate = useWorkspaceAwareNavigate();
   const location = useActiveLocation();
 

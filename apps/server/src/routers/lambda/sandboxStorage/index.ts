@@ -1,5 +1,6 @@
 import { mergeRouters } from '@/libs/trpc/lambda';
 
+import { cleanupRouter } from './cleanup';
 import { downloadRouter } from './download';
 import { filesRouter } from './files';
 import { instanceBuildRouter } from './instanceBuild';
@@ -24,6 +25,7 @@ import { storageRouter } from './storage';
  */
 export const sandboxStorageRouter = mergeRouters(
   filesRouter,
+  cleanupRouter,
   downloadRouter,
   storageRouter,
   instancesRouter,

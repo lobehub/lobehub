@@ -12,6 +12,7 @@ import {
   buildResourcePermissionState,
 } from '@/server/services/resourcePermission';
 
+import { releasePrivatePin } from '../_helpers/sidebarPin';
 import { getWorkspaceGroupVirtualAgentIds } from '../_helpers/workspaceAgentGuard';
 import { agentGroupProcedureWrite, PERMISSION_WRITE_CONCURRENCY } from './procedures';
 
@@ -86,6 +87,20 @@ export const visibilityRouter = router({
           });
       }
 
+      // Release a private pin before the group goes public, as
+      // `publishAgentToWorkspace` does.
+      if (ctx.workspaceId) {
+        const before = await ctx.chatGroupModel.findById(input.id);
+        if (before?.pinned && before.visibility === 'private' && before.userId === ctx.userId) {
+          await releasePrivatePin({
+            clearPinned: () => ctx.chatGroupModel.update(input.id, { pinned: false }),
+            creatorId: before.userId,
+            db: ctx.serverDB,
+            itemId: input.id,
+            workspaceId: ctx.workspaceId,
+          });
+        }
+      }
       const result = await ctx.chatGroupModel.publishToWorkspace(input.id);
       if (ctx.workspaceId) {
         const permissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
@@ -187,6 +202,17 @@ export const visibilityRouter = router({
           code: 'BAD_REQUEST',
           message:
             'Cannot publish a group that still contains private agents. Publish or remove those agents first.',
+        });
+      }
+
+      // Before the group turns public (see `publishGroupToWorkspace`).
+      if (input.visibility === 'public' && group.pinned) {
+        await releasePrivatePin({
+          clearPinned: () => ctx.chatGroupModel.update(input.id, { pinned: false }),
+          creatorId: group.userId,
+          db: ctx.serverDB,
+          itemId: input.id,
+          workspaceId: ctx.workspaceId,
         });
       }
 

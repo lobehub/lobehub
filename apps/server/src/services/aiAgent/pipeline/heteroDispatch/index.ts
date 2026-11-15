@@ -7,7 +7,6 @@ import { resolveHeterogeneousRuntimeConfig } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
-import { resolveExecutionPlan, resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import {
   createAgentStateManager,
@@ -15,16 +14,17 @@ import {
 } from '@/server/modules/AgentRuntime/factory';
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 import { hookDispatcher } from '@/server/services/agentRuntime/hooks';
-import { findWakeableManagedDevices } from '@/server/services/deviceGateway/managedDeviceWake';
 
-import { supportsCloudHeterogeneousSandbox } from '../../helpers/heteroErrors';
 import type { ExecRunContext } from '../../types';
-import { dispatchToCliDevice, dispatchToWakingCliDevice } from './device';
+import { traceHeteroStage } from '../sendTracing';
+import { isDeferredHeteroDispatchEnabled, shouldDeferHeteroDispatch } from './deferDispatchGate';
+import { deferCliDeviceDispatch, dispatchToCliDevice, dispatchToWakingCliDevice } from './device';
 import { prepareHeteroRun } from './prepare';
 import { dispatchToPlatformDevice } from './remote';
+import { resolveHeteroRouting } from './routing';
 import { spawnInCloudSandbox } from './sandbox';
 import type { HeteroDispatchDeps, HeteroDispatchInput, HeteroRun } from './types';
-import { failHeteroDispatch, heteroErrorResult } from './utils';
+import { failHeteroDispatch, heteroErrorResult, settleInOrder } from './utils';
 
 export type { HeteroDispatchDeps, HeteroDispatchInput } from './types';
 
@@ -62,20 +62,13 @@ export const dispatchHeteroAgent = async (
     userMessageId,
   } = ctx;
   const {
-    canManageAgent,
-    effectiveRequestedDeviceId,
     heteroType,
     heterogeneousProvider,
     hooks,
-    isPublicWorkspaceAgent,
-    localDeviceId,
     maxSteps,
-    memberDeviceOverride,
     operationTaskId,
     parentOperationId,
     pinnedHeterogeneousTopicModel,
-    requestTrigger,
-    requestedDeviceId,
     topicStartOwnerOperationId,
   } = input;
 
@@ -112,36 +105,78 @@ export const dispatchHeteroAgent = async (
   // re-authorizes its operation token against this exact principal. Do not
   // mint a token or dispatch/spawn when persistence fails.
   const completionLifecycle = new CompletionLifecycle(deps.db, deps.userId, deps.workspaceId);
-  const operationPersisted = await completionLifecycle.recordStart({
-    requireReservation: !!input.reservedOperationId,
-    agentId: persistAgentId,
-    appContext: { ...appContext, sourceMessageId: userMessageId },
-    chatGroupId: appContext?.groupId ?? null,
-    maxSteps,
-    metadata: {
-      _hooks: serializedHooks,
-      assistantMessageId,
-      heterogeneousRuntimeConfig: runtimeConfig,
-    },
-    operationId,
-    parentOperationId,
-    provider: heteroType,
-    taskId: operationTaskId ?? null,
-    threadId: appContext?.threadId ?? null,
-    topicId,
-    trigger,
-  });
+  const operationPersisted = await traceHeteroStage('record_start', () =>
+    completionLifecycle.recordStart({
+      requireReservation: !!input.reservedOperationId,
+      agentId: persistAgentId,
+      appContext: { ...appContext, sourceMessageId: userMessageId },
+      chatGroupId: appContext?.groupId ?? null,
+      maxSteps,
+      metadata: {
+        _hooks: serializedHooks,
+        assistantMessageId,
+        heterogeneousRuntimeConfig: runtimeConfig,
+      },
+      operationId,
+      parentOperationId,
+      provider: heteroType,
+      taskId: operationTaskId ?? null,
+      threadId: appContext?.threadId ?? null,
+      topicId,
+      trigger,
+    }),
+  );
   if (!operationPersisted) {
     hookDispatcher.unregister(operationId);
     throw new Error('Failed to persist heterogeneous agent operation');
   }
 
-  await input.onOperationCreated?.(operationId);
+  await traceHeteroStage('operation_created', async () => input.onOperationCreated?.(operationId));
 
-  // The builder runs elsewhere and this request ends once it is dispatched, so
-  // the plan has to be in place first or the builder finds no criteria to file
-  // evidence against.
-  await completionLifecycle.waitForVerifyPlan(operationId);
+  // Only a plain composer send may answer before its device dispatch; the flag
+  // read overlaps the reads below and never rejects.
+  const deferDispatchPromise = shouldDeferHeteroDispatch(
+    {
+      // A Task run and an isolation-thread child are settled by callers that
+      // read the result, on top of what `execAgent` counts as orchestration.
+      hasOrchestration: Boolean(
+        input.hasOrchestration !== false ||
+        parentOperationId ||
+        topicStartOwnerOperationId ||
+        appContext?.isolationThread ||
+        operationTaskId ||
+        input.reservedOperationId,
+      ),
+      trigger,
+    },
+    () => isDeferredHeteroDispatchEnabled(deps.userId),
+  );
+
+  // Three independent waits, overlapped:
+  // - the verify plan: the builder runs elsewhere and this request ends once
+  //   it is dispatched, so the plan has to be in place before the dispatch or
+  //   the builder finds no criteria to file evidence against. It never throws,
+  //   and neither the preparation nor the routing reads the plan;
+  // - the run preparation: resume session, operation JWT, topic repos, GitHub
+  //   token, recovery history, sandbox placement, system contexts and the CLI
+  //   request (the JWT is still minted only after the row above persisted);
+  // - the routing: execution plans and device workspaces, reads only.
+  // A failure rethrows in this order, the order they used to run in.
+  const [, prepared, routing] = await settleInOrder([
+    traceHeteroStage('wait_verify_plan', () => completionLifecycle.waitForVerifyPlan(operationId)),
+    traceHeteroStage('prepare', () => prepareHeteroRun(deps, ctx, input, operationId)),
+    traceHeteroStage('resolve_routing', () => resolveHeteroRouting(deps, ctx, input)),
+  ]);
+  const {
+    cliDeviceId,
+    cliDeviceWorkspaceId,
+    deviceAccessDenied,
+    deviceHeteroPlan,
+    remoteDeviceId,
+    remoteDeviceUserId,
+    remoteDeviceWorkspaceId,
+    wakeableCliDevices,
+  } = routing;
 
   const run: HeteroRun = {
     agentId: resolvedAgentId,
@@ -150,82 +185,6 @@ export const dispatchHeteroAgent = async (
     topicId,
     userMessageId: userMessageId ?? parentMessageId ?? '',
   };
-
-  // Resume session, operation JWT, topic repos, GitHub token, recovery
-  // history, sandbox placement, system contexts and the CLI request.
-  const prepared = await prepareHeteroRun(deps, ctx, input, operationId);
-
-  const platformPlan = isRemoteHetero
-    ? resolveExecutionPlan({
-        agencyConfig: agentConfig.agencyConfig,
-        canUseDevice,
-        clientExecutionAvailable: Boolean(localDeviceId),
-        isHetero: true,
-        localDeviceId,
-        requestedDeviceId: effectiveRequestedDeviceId,
-        sandboxExecutionAvailable: false,
-        trigger: requestTrigger,
-        workspaceScoped: resolveWorkspaceScoped(
-          isPublicWorkspaceAgent && !canManageAgent,
-          memberDeviceOverride,
-        ),
-      })
-    : undefined;
-  const remoteDeviceId = platformPlan?.kind === 'device' ? platformPlan.deviceId : undefined;
-  const remoteDeviceWorkspaceId = remoteDeviceId
-    ? await deps.resolveDeviceWorkspaceId(remoteDeviceId)
-    : undefined;
-  const usesCallersPersonalDevice =
-    platformPlan?.kind === 'device' &&
-    !remoteDeviceWorkspaceId &&
-    (effectiveRequestedDeviceId === remoteDeviceId ||
-      (platformPlan.target === 'local' &&
-        agentConfig.agencyConfig?.executionTargetSelectionPolicy !== 'fixed') ||
-      (!canManageAgent && memberDeviceOverride?.boundDeviceId === remoteDeviceId));
-  const remoteDeviceUserId = usesCallersPersonalDevice
-    ? deps.userId
-    : (agentConfig.userId ?? deps.userId);
-
-  // Resolve CLI-device routing before persisting the marker. Cancellation
-  // must address the same device even though local CLI agents use a different
-  // dispatch transport from notify-based platform agents.
-  // A bound managed cloud device that is offline resolves to
-  // `device-wakeable`: it is woken and the dispatch waits for it.
-  const wakeableCliDevices =
-    !isRemoteHetero && canUseDevice
-      ? await findWakeableManagedDevices(
-          { db: deps.db, userId: deps.userId, workspaceId: deps.workspaceId },
-          [requestedDeviceId, agentConfig.agencyConfig?.boundDeviceId],
-        )
-      : [];
-  const cliPlanParams = {
-    agencyConfig: agentConfig.agencyConfig,
-    clientExecutionAvailable: false,
-    isHetero: true,
-    requestedDeviceId,
-    sandboxExecutionAvailable: supportsCloudHeterogeneousSandbox(heteroType),
-    trigger: requestTrigger,
-    wakeableDeviceIds: wakeableCliDevices.map((device) => device.deviceId),
-  };
-  const deviceHeteroPlan = !isRemoteHetero
-    ? resolveExecutionPlan({ ...cliPlanParams, canUseDevice })
-    : undefined;
-  const cliDeviceId =
-    deviceHeteroPlan?.kind === 'device' || deviceHeteroPlan?.kind === 'device-wakeable'
-      ? deviceHeteroPlan.deviceId
-      : undefined;
-  // Whether the sandbox is a fallback for a sender denied the agent's device:
-  // with access the same request would have routed to a device. Lets a failed
-  // sandbox run tell the sender why it ran there instead.
-  const deviceAccessDenied =
-    deviceHeteroPlan?.kind === 'sandbox' &&
-    !canUseDevice &&
-    ['device', 'device-wakeable'].includes(
-      resolveExecutionPlan({ ...cliPlanParams, canUseDevice: true }).kind,
-    );
-  const cliDeviceWorkspaceId = cliDeviceId
-    ? await deps.resolveDeviceWorkspaceId(cliDeviceId)
-    : undefined;
 
   // Register the run's lifecycle hooks so the hetero terminal path fires
   // onComplete/onError through the same `hookDispatcher` the normal LLM
@@ -262,10 +221,12 @@ export const dispatchHeteroAgent = async (
     threadId: appContext?.threadId ?? undefined,
   };
   if (topicStartOwnerOperationId) {
-    const attached = await deps.topicModel.appendRunningOperationChild(
-      topicId,
-      topicStartOwnerOperationId,
-      childOperation,
+    const attached = await traceHeteroStage('running_marker', () =>
+      deps.topicModel.appendRunningOperationChild(
+        topicId,
+        topicStartOwnerOperationId,
+        childOperation,
+      ),
     );
     if (!attached) {
       const message = 'Group supervisor finished before this member could start.';
@@ -298,10 +259,8 @@ export const dispatchHeteroAgent = async (
     // callAgent resume bridge) never fire. Nest under the parent's own
     // marker instead of claiming the topic-level root outright, so the
     // parent's marker survives for the rest of its still-running turn.
-    const attachedToParent = await deps.topicModel.appendRunningOperationChild(
-      topicId,
-      parentOperationId,
-      childOperation,
+    const attachedToParent = await traceHeteroStage('running_marker', () =>
+      deps.topicModel.appendRunningOperationChild(topicId, parentOperationId, childOperation),
     );
     if (!attachedToParent) {
       // Parent isn't (or is no longer) the topic's current root marker —
@@ -309,7 +268,9 @@ export const dispatchHeteroAgent = async (
       // Fall back to claiming the marker directly so this child is still
       // discoverable by its own operationId, rather than permanently
       // unrecognized by heteroIngest/heteroFinish.
-      await deps.topicModel.updateMetadata(topicId, { runningOperation: childOperation });
+      await traceHeteroStage('running_marker', () =>
+        deps.topicModel.updateMetadata(topicId, { runningOperation: childOperation }),
+      );
     }
   } else if (!appContext?.isolationThread) {
     // The receipt previously had a separate projection write after this marker.
@@ -317,10 +278,12 @@ export const dispatchHeteroAgent = async (
     // while retaining the previous operation's displayed configuration.
     // Task drawer follow-ups can omit taskId; receipt ownership is independent
     // of Task lifecycle association, while isolated children keep the root receipt.
-    await deps.topicModel.updateMetadata(topicId, {
-      heteroRuntimeConfig: runtimeConfig,
-      runningOperation: childOperation,
-    });
+    await traceHeteroStage('running_marker', () =>
+      deps.topicModel.updateMetadata(topicId, {
+        heteroRuntimeConfig: runtimeConfig,
+        runningOperation: childOperation,
+      }),
+    );
   }
 
   // Always persist operation metadata (userId/workspaceId) to the state
@@ -333,13 +296,15 @@ export const dispatchHeteroAgent = async (
   // watchdog abandons it).
   const persistOperationMetadata = async () => {
     try {
-      await createAgentStateManager().createOperationMetadata(operationId, {
-        ...(topicStartOwnerOperationId && {
-          mirrorToOperationId: topicStartOwnerOperationId,
+      await traceHeteroStage('operation_metadata', () =>
+        createAgentStateManager().createOperationMetadata(operationId, {
+          ...(topicStartOwnerOperationId && {
+            mirrorToOperationId: topicStartOwnerOperationId,
+          }),
+          userId: deps.userId,
+          workspaceId: deps.workspaceId,
         }),
-        userId: deps.userId,
-        workspaceId: deps.workspaceId,
-      });
+      );
     } catch (err) {
       log('execAgent: failed to persist hetero operation metadata: %O', err);
     }
@@ -361,18 +326,20 @@ export const dispatchHeteroAgent = async (
   }
 
   if (isRemoteHetero) {
-    const failure = await dispatchToPlatformDevice(deps, run, {
-      agentConfig,
-      canUseDevice,
-      deviceAccessReason,
-      heteroType,
-      persistOperationMetadata,
-      prompt,
-      remoteDeviceId,
-      remoteDeviceUserId,
-      remoteDeviceWorkspaceId,
-      topicStartOwnerOperationId,
-    });
+    const failure = await traceHeteroStage('platform_dispatch', () =>
+      dispatchToPlatformDevice(deps, run, {
+        agentConfig,
+        canUseDevice,
+        deviceAccessReason,
+        heteroType,
+        persistOperationMetadata,
+        prompt,
+        remoteDeviceId,
+        remoteDeviceUserId,
+        remoteDeviceWorkspaceId,
+        topicStartOwnerOperationId,
+      }),
+    );
     if (failure) return failure;
   } else {
     // Local CLI hetero (Amp / Claude Code / Codex / Kimi Code / OpenCode /
@@ -409,14 +376,16 @@ export const dispatchHeteroAgent = async (
     // probes Redis synchronously, so guard construction too, not just publish.
     try {
       await persistOperationMetadata();
-      await createStreamEventManager().publishAgentRuntimeInit(operationId, {
-        agentId: resolvedAgentId,
-        assistantMessageId,
-        heteroType,
-        mirrorToOperationId: topicStartOwnerOperationId,
-        topicId,
-        userId: deps.userId,
-      });
+      await traceHeteroStage('stream_init', () =>
+        createStreamEventManager().publishAgentRuntimeInit(operationId, {
+          agentId: resolvedAgentId,
+          assistantMessageId,
+          heteroType,
+          mirrorToOperationId: topicStartOwnerOperationId,
+          topicId,
+          userId: deps.userId,
+        }),
+      );
     } catch (err) {
       log('execAgent: failed to init stream for local hetero: %O', err);
     }
@@ -433,25 +402,39 @@ export const dispatchHeteroAgent = async (
     let failure: ExecAgentResult | undefined;
     switch (heteroPlan.kind) {
       case 'sandbox': {
-        failure = await spawnInCloudSandbox(deps, run, {
-          deviceAccessDenied,
-          heteroType,
-          prepared,
-        });
+        failure = await traceHeteroStage('sandbox_spawn', () =>
+          spawnInCloudSandbox(deps, run, { deviceAccessDenied, heteroType, prepared }),
+        );
         break;
       }
       case 'device-wakeable': {
         // Wakes the device and dispatches after the response, once it is
         // online (or when the wait times out, through the offline handling).
-        failure = await dispatchToWakingCliDevice(deps, run, {
-          ...cliDispatchParams,
-          device: wakeableCliDevices.find((device) => device.deviceId === heteroPlan.deviceId)!,
-          heteroPlan,
-        });
+        failure = await traceHeteroStage('waking_device_dispatch', () =>
+          dispatchToWakingCliDevice(deps, run, {
+            ...cliDispatchParams,
+            device: wakeableCliDevices.find((device) => device.deviceId === heteroPlan.deviceId)!,
+            heteroPlan,
+          }),
+        );
+        break;
+      }
+      case 'device': {
+        // Behind `agent_deferred_hetero_dispatch` a plain chat send answers
+        // now and the device steps run after the response.
+        if (await deferDispatchPromise) {
+          deferCliDeviceDispatch(deps, run, { ...cliDispatchParams, heteroPlan });
+          break;
+        }
+        failure = await traceHeteroStage('device_dispatch', () =>
+          dispatchToCliDevice(deps, run, { ...cliDispatchParams, heteroPlan }),
+        );
         break;
       }
       default: {
-        failure = await dispatchToCliDevice(deps, run, { ...cliDispatchParams, heteroPlan });
+        failure = await traceHeteroStage('device_dispatch', () =>
+          dispatchToCliDevice(deps, run, { ...cliDispatchParams, heteroPlan }),
+        );
       }
     }
     if (failure) return failure;
@@ -460,7 +443,7 @@ export const dispatchHeteroAgent = async (
   let gatewayToken: string | undefined;
   if (!deps.withholdGatewayToken) {
     try {
-      gatewayToken = await signUserJWT(deps.userId);
+      gatewayToken = await traceHeteroStage('sign_gateway_token', () => signUserJWT(deps.userId));
     } catch {
       // non-critical
     }

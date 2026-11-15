@@ -5,6 +5,7 @@ import {
 } from '@lobechat/const';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
+import { buildInjectCredsResult } from '../injectResult';
 import { buildRequestCredsInputResult } from '../requestCredsInput';
 import type {
   ConnectComposioServiceParams,
@@ -49,6 +50,8 @@ export interface ICredsService {
       env?: Record<string, string>;
       files?: Array<{ filename: string; key: string; path: string }>;
     };
+    /** Environment variable names each key injected (names only, never values). */
+    envVarsByKey?: Record<string, string[]>;
     notFound?: string[];
     success: boolean;
     unsupportedInSandbox?: string[];
@@ -249,34 +252,17 @@ export class CredsExecutionRuntime {
         userId,
       });
 
-      const credentials = result.credentials || {};
-      const notFound = result.notFound || [];
-      const unsupportedInSandbox = result.unsupportedInSandbox || [];
-
-      // Build response content
-      const injectedKeys = args.keys.filter((k) => !notFound.includes(k));
-      let content = '';
-
-      if (injectedKeys.length > 0) {
-        content = `Credentials injected successfully: ${injectedKeys.join(', ')}.`;
-      }
-
-      if (notFound.length > 0) {
-        content += ` Not found: ${notFound.join(', ')}. Please configure them in Settings > Credentials.`;
-      }
-
-      if (unsupportedInSandbox.length > 0) {
-        content += ` Not supported in sandbox: ${unsupportedInSandbox.join(', ')}.`;
-      }
+      const summary = buildInjectCredsResult(args.keys, result);
 
       return {
-        content: content.trim(),
+        content: summary.content,
         state: {
-          credentials,
-          injected: injectedKeys,
-          notFound,
-          success: notFound.length === 0,
-          unsupportedInSandbox,
+          credentials: summary.credentials,
+          envVarsByKey: summary.envVarsByKey,
+          injected: summary.injected,
+          notFound: summary.notFound,
+          success: summary.notFound.length === 0,
+          unsupportedInSandbox: summary.unsupportedInSandbox,
         },
         success: true,
       };

@@ -7,6 +7,7 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import { RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -23,6 +24,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { initModelRuntimeForRequest } from '@/server/modules/AgentRuntime/llmRelay/oneShot';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { getUserScopedAiProviderRuntimeState } from '@/server/services/aiProviderAccess';
 import { type AiProviderDetailItem, type AiProviderRuntimeState } from '@/types/aiProvider';
 import {
@@ -72,6 +74,20 @@ const resolveProviderBindingAgentTypes = (
     ]),
   );
 
+/**
+ * A provider error keeps its reason under `error.message` (e.g. a device-only provider
+ * checked from the CLI with no tab to run it); the type alone does not tell the user what to do.
+ */
+const formatConnectivityError = (error: any): string => {
+  const errorType = error?.errorType || error?.type;
+  const reason = typeof error?.error?.message === 'string' ? error.error.message : undefined;
+
+  if (errorType) return reason ? `${errorType}: ${reason}` : errorType;
+  if (typeof error === 'string') return error;
+
+  return error?.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+};
+
 export const aiProviderRouter = router({
   checkProviderConnectivity: aiProviderProcedure
     .use(withScopedPermission('ai_provider:update'))
@@ -87,6 +103,32 @@ export const aiProviderRouter = router({
         input.id,
         KeyVaultsGateKeeper.getUserKeyVaults,
       );
+
+      // Providers without chat models verify the key through the runtime's
+      // credential check instead of a chat round-trip, unless a model is asked for.
+      const checkMode =
+        detail?.settings?.checkMode ??
+        DEFAULT_MODEL_PROVIDER_LIST.find((card) => card.id === input.id)?.settings?.checkMode;
+      if (checkMode === 'credentials' && !input.model) {
+        try {
+          // Credential checks call the provider from the server; they are never relayed to a device.
+          const modelRuntime = await initModelRuntimeFromDB(
+            ctx.serverDB,
+            ctx.userId,
+            input.id,
+            ctx.workspaceId ?? undefined,
+          );
+          const result = await modelRuntime.checkCredentials();
+          if (!result) {
+            return { error: 'This provider does not support a credential check.', ok: false };
+          }
+
+          return { ok: true, ...result };
+        } catch (error: any) {
+          const errorType: string | undefined = error?.errorType || error?.type;
+          return { error: formatConnectivityError(error), errorType, ok: false };
+        }
+      }
 
       const model = input.model || detail?.checkModel;
       if (!model) {
@@ -126,19 +168,7 @@ export const aiProviderRouter = router({
         const errorBody = await response.text();
         return { error: errorBody, model, ok: false, status: response.status };
       } catch (error: any) {
-        const errorType = error.errorType || error.type;
-        // A provider error keeps its reason under `error.message` (e.g. a device-only
-        // provider checked from the CLI with no tab to run it); the type alone does
-        // not tell the user what to do.
-        const reason = typeof error.error?.message === 'string' ? error.error.message : undefined;
-        const msg = errorType
-          ? reason
-            ? `${errorType}: ${reason}`
-            : errorType
-          : typeof error === 'string'
-            ? error
-            : error.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
-        return { error: msg, model, ok: false };
+        return { error: formatConnectivityError(error), model, ok: false };
       }
     }),
 

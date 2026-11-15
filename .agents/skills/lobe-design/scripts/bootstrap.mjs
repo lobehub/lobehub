@@ -9,6 +9,7 @@
 //   · 文件不存在 → 建立
 // 块外的内容从不改写——这是本脚本唯一的硬保证，由 tests 锁住。
 // --check 额外 WARN：项目层 .agents/ux/product.md / components.md 缺失或过期（不单独判 FAIL）。
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -334,6 +335,7 @@ function main() {
   新接入或 ≤ 5.5.0 的旧块：精简 + 宿主语言。块内第一行记下 <!-- lobe-design:mode=… lang=… -->，
   之后重跑沿用它；显式 --compact / --full / --lang 覆盖并改写这一行。BEGIN / END 标记不变。
   --json                                        JSON 输出
+  --skip-ecosystem-skills                       跳过依赖扫描与生态 skills.md 安装
 
 托管块
   只维护 ${BEGIN}
@@ -386,6 +388,27 @@ function main() {
     writeFileSync(guide.path, text);
   }
   const result = { root, file: guide.name, action, version: SKILL_VERSION, created: !guide.existed, mode: mode.compact ? 'compact' : 'full', lang: mode.compact ? mode.lang : 'zh', projectLayer };
+
+  // 按 package.json 依赖安装 / 更新 @lobehub/* 的 docs skills.md（失败只警告，不回滚托管块）。
+  if (!args.includes('--skip-ecosystem-skills')) {
+    const ecoScript = join(skillDir, 'scripts/install-ecosystem-skills.mjs');
+    if (existsSync(ecoScript)) {
+      const eco = spawnSync(process.execPath, [ecoScript, '--root', root, ...(json ? ['--json'] : [])], {
+        encoding: 'utf8',
+        stdio: json ? ['ignore', 'pipe', 'pipe'] : 'inherit',
+      });
+      if (json && eco.stdout) {
+        try { result.ecosystemSkills = JSON.parse(eco.stdout); }
+        catch { result.ecosystemSkills = { raw: eco.stdout, status: eco.status }; }
+      }
+      if (eco.status && eco.status !== 0) {
+        const detail = (eco.stderr || eco.stdout || '').trim();
+        if (!json) console.warn(`警告：生态 skills 安装退出码 ${eco.status}${detail ? ` — ${detail.split('\n')[0]}` : ''}`);
+        else result.ecosystemSkillsError = { status: eco.status, detail };
+      }
+    }
+  }
+
   if (json) console.log(JSON.stringify(result, null, 2));
   else {
     console.log(`${guide.existed ? '更新' : '建立'} ${guide.name}：托管块 ${action}（skill ${SKILL_VERSION}，${mode.compact ? `精简 · ${mode.lang}` : '完整 · zh'}）\n块外内容未改动。`);

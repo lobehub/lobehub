@@ -108,8 +108,20 @@ describe('webhooks hono routes', () => {
       '/api/webhooks/memory-user-memory/consolidation',
       '/api/webhooks/memory-user-memory/persona/update-writing',
       '/api/webhooks/memory-user-memory/pipelines/extract/chat-topic/cancel',
+      '/api/webhooks/music/:provider',
       '/api/webhooks/video/:provider',
     ]);
+  });
+
+  it('acknowledges music gateway callbacks without doing any work', async () => {
+    const response = await app.request('/api/webhooks/music/fal', {
+      body: JSON.stringify({ code: 200, data: { callbackType: 'complete' } }),
+      headers: { 'content-type': 'application/json' },
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ received: true });
   });
 
   it('serves the GitHub App and Linear install and OAuth redirects as GET', () => {

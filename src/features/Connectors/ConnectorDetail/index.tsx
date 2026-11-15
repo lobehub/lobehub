@@ -1,4 +1,8 @@
-import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
+import {
+  getComposioAppByIdentifier,
+  getLobehubSkillProviderById,
+  hasCallableMcpEndpoint,
+} from '@lobechat/const';
 import { Button, confirmModal, Flexbox, Tabs, Text, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
@@ -139,6 +143,10 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     const updateToolPermission = useToolStore((s) => s.updateToolPermission);
 
     const isMcpConnector = connector?.sourceType === ConnectorSourceType.custom;
+    // The edit modal stores a server URL or a stdio command, args and env
+    const isEditable =
+      isMcpConnector &&
+      (connector?.mcpConnectionType === 'http' || connector?.mcpConnectionType === 'stdio');
     const isBuiltin = connector?.sourceType === ConnectorSourceType.builtin;
     const isMarketplace = connector?.sourceType === ConnectorSourceType.marketplace;
 
@@ -206,17 +214,23 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
       [connectorId, notifyActionError, settlePermissionRejection],
     );
 
-    // Custom connector sync uses the stored credentials (on desktop it reads them
-    // through the creator/owner-only edit read), so it follows the credentials
-    // gate. Builtin/marketplace bootstrap syncs are no-ops for non-managers.
-    const canSync = canManageCredentials || connector?.sourceType !== ConnectorSourceType.custom;
+    // A marketplace row without an endpoint only projects a legacy plugin's
+    // tools; one installed on the connector path syncs from its own server.
+    const isPluginProjection = isMarketplace && !!connector && !hasCallableMcpEndpoint(connector);
+    // A sync that connects to the server uses the stored credentials (on desktop
+    // it reads them through the creator/owner-only edit read), so it follows the
+    // credentials gate. Builtin/manifest bootstrap syncs are no-ops for non-managers.
+    const syncsFromServer =
+      connector?.sourceType === ConnectorSourceType.custom ||
+      (isMarketplace && !isPluginProjection && connector?.mcpConnectionType !== 'cloud');
+    const canSync = canManageCredentials || !syncsFromServer;
 
     const handleSync = useCallback(async () => {
       if (!connector) return;
       try {
         if (connector.sourceType === ConnectorSourceType.builtin) {
           await syncBuiltinTool(connector.identifier);
-        } else if (connector.sourceType === ConnectorSourceType.marketplace) {
+        } else if (isPluginProjection) {
           await syncPluginTools(connector.identifier);
         } else {
           await syncConnectorTools(connectorId);
@@ -227,6 +241,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
     }, [
       connector,
       connectorId,
+      isPluginProjection,
       notifyActionError,
       syncBuiltinTool,
       syncPluginTools,
@@ -318,8 +333,8 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
             {syncLabel}
           </Button>
         </ManageTooltip>
-        {/* Edit button for custom MCP connectors — only http type has a server URL to edit */}
-        {isMcpConnector && connector?.mcpConnectionType === 'http' && (
+        {/* Edit button for custom MCP connectors: their server URL or stdio command */}
+        {isEditable && (
           <ManageTooltip title={credentialsTooltip}>
             <Button
               disabled={!canManageCredentials}
@@ -534,8 +549,8 @@ const ConnectorDetail = memo<ConnectorDetailProps>(
         <div {...stylex.props(styles.body)}>
           {tab === 'tools' ? tools : overview}
 
-          {/* Edit modal — only http connectors have a server URL to edit */}
-          {isMcpConnector && connector?.mcpConnectionType === 'http' && (
+          {/* Edit modal for an http or stdio custom connector */}
+          {isEditable && (
             <CustomConnectorModal
               connectorId={connectorId}
               open={customModalOpen}

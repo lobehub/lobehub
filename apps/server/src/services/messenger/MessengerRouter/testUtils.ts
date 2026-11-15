@@ -6,6 +6,7 @@
  * all suites share one set of mock functions. The bot loaders import the
  * router lazily so this module never loads it before the mocks are in place.
  */
+import type * as BusinessConst from '@lobechat/business-const';
 import { vi } from 'vitest';
 
 export const mockGetBotFeatureAccessState = vi.fn();
@@ -49,12 +50,19 @@ export const slackOAuthModule = () => ({
   verifySignature: (...args: any[]) => mockVerifySignature(...args),
 });
 
-export const mockGetServerFeatureFlagsStateFromRuntimeConfig = vi.fn();
-/** Factory for `vi.mock('@/server/featureFlags')`. */
-export const featureFlagsModule = () => ({
-  getServerFeatureFlagsStateFromRuntimeConfig: (...args: any[]) =>
-    mockGetServerFeatureFlagsStateFromRuntimeConfig(...args),
-});
+/** Mutable `ENABLE_BUSINESS_FEATURES`: workspace scopes exist only where it is on. */
+export const businessConstState = { enableBusinessFeatures: true };
+/** Factory for `vi.mock('@lobechat/business-const')`. */
+export const businessConstModule = async () => {
+  const actual = await vi.importActual<typeof BusinessConst>('@lobechat/business-const');
+  return {
+    ...actual,
+    // A getter so per-test mutation is observed by the already-imported router.
+    get ENABLE_BUSINESS_FEATURES() {
+      return businessConstState.enableBusinessFeatures;
+    },
+  };
+};
 
 /** Factory for `vi.mock('@/config/messenger')`. */
 export const messengerConfigModule = () => ({
@@ -438,8 +446,7 @@ export function resetMessengerRouterMocks() {
   mockListUserWorkspaces.mockResolvedValue([
     { id: 'workspace-1', name: 'Workspace 1', role: 'owner' },
   ]);
-  mockGetServerFeatureFlagsStateFromRuntimeConfig.mockReset();
-  mockGetServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({ enableWorkspace: true });
+  businessConstState.enableBusinessFeatures = true;
   mockGetBotFeatureAccessState.mockReset();
   mockGetBotFeatureAccessState.mockResolvedValue({ allowed: true });
   mockAgentModelConstructor.mockReset();

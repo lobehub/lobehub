@@ -25,6 +25,7 @@ import {
   runtimeEnvironmentBinaries,
 } from '@/modules/binaries';
 import { generateCliWrapper, getCliWrapperDir } from '@/modules/cliEmbedding';
+import { syncDebugLogging } from '@/modules/debugLogging';
 import { PermissionGuide } from '@/modules/permissionGuide/PermissionGuide';
 import { applyRemoteDebuggingSwitch } from '@/modules/remoteDebugging';
 import { ScreenCaptureManager } from '@/modules/screenCapture/ScreenCaptureManager';
@@ -34,7 +35,6 @@ import LocalDatabaseService from '@/services/LocalDatabaseSrv';
 import { createLogger } from '@/utils/logger';
 import * as electronIs from '@/utils/platform';
 import { refreshShellPath } from '@/utils/shellPath';
-import { applyDebugLogging } from '@/utils/structuredLog';
 
 import { BrowserManager } from './browser/BrowserManager';
 import { backendProxyProtocolManager } from './infrastructure/BackendProxyProtocolManager';
@@ -130,7 +130,7 @@ export class App {
     logger.debug('Initializing App');
     // Initialize store manager
     this.storeManager = new StoreManager(this);
-    applyDebugLogging(this.storeManager.get('debugLoggingEnabled', false));
+    syncDebugLogging(this.storeManager);
 
     this.rendererUrlManager = new RendererUrlManager();
     // Wire the backend reverse-proxy as an `app://` interceptor: keeps

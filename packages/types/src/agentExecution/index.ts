@@ -737,12 +737,52 @@ export interface ExecSubAgentResult {
   error?: string;
   /** Operation ID for tracking execution status */
   operationId: string;
+  /**
+   * The thread's previous run was still going, so no run was started: the
+   * instruction was queued behind that run (`operationId`) and joins it before
+   * its next LLM call.
+   */
+  steered?: boolean;
   /** Whether the execution was created successfully */
   success: boolean;
   /** The Thread ID where the execution is isolated */
   threadId: string;
   /** Short-lived Gateway ticket for streaming this run (absent when withheld) */
   token?: string;
+}
+
+/**
+ * Parameters for cancelVirtualSubAgent - stop a running `lobe-agent.callSubAgent`
+ * child run on behalf of the agent that dispatched it.
+ */
+export interface CancelVirtualSubAgentParams {
+  /** The dispatching agent; the sub-agent's thread must belong to it */
+  agentId: string;
+  /** The sub-agent's isolation thread id (its `<sub_agent id>`) */
+  threadId: string;
+  /** The topic the sub-agent was dispatched from */
+  topicId: string;
+}
+
+/**
+ * Result from cancelVirtualSubAgent
+ *
+ * - `cancelled`: the run was asked to stop and acknowledged it.
+ * - `not_running`: there is no live run on the thread; nothing was stopped.
+ * - `failed`: the thread is not a cancellable sub-agent, or the stop could not
+ *   be confirmed (`error` says which).
+ */
+export interface CancelVirtualSubAgentResult {
+  error?: string;
+  /** The stopped (or last) run of the sub-agent */
+  operationId?: string;
+  status: 'cancelled' | 'failed' | 'not_running';
+  /**
+   * For `cancelled`: whether the run already reached its end. `false` means it
+   * is still finishing its current step and refuses follow-ups until then.
+   */
+  stopped?: boolean;
+  threadId: string;
 }
 
 /**
