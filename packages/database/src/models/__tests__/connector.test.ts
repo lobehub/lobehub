@@ -421,6 +421,21 @@ describe('ConnectorModel', () => {
       expect(await serverDB.select().from(userConnectorTools)).toEqual([]);
     });
 
+    it('replaces nothing while any of duplicate base holders may not go', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      // Rows a writer from before the identifier lock could leave side by side
+      const stale = await model.create({ ...marketplaceInput, metadata: { stale: true } });
+      const live = await model.create({ ...marketplaceInput, metadata: { stale: false } });
+
+      expect(
+        await model.createUnlessIdentifierHeld(
+          { ...marketplaceInput, name: 'Fetch again' },
+          { canReplace: (row) => row.metadata?.stale === true },
+        ),
+      ).toEqual({ holder: expect.objectContaining({ id: live.id }) });
+      expect((await fetchRows()).map((row) => row.id).sort()).toEqual([live.id, stale.id].sort());
+    });
+
     it('judges a holder a re-add is rewriting only once the re-add has landed', async () => {
       const model = new ConnectorModel(serverDB, userId);
       const holder = await model.create({ ...marketplaceInput, metadata: { stale: true } });

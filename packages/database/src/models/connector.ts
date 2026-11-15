@@ -320,8 +320,9 @@ export class ConnectorModel {
    * serialized on the identifier lock every base-row writer takes
    * ({@link lockBaseIdentifier}): the identifier indexes are not unique, so two
    * concurrent callers would otherwise both find it free and both insert.
-   * `canReplace` may let the holding row go: it is deleted, with its tools, in
-   * that step.
+   * `canReplace` may let the holding rows go: they are deleted, with their
+   * tools, in that step. Every holder is judged (rows written before the lock
+   * may duplicate the identifier), and one that may not go keeps it.
    */
   createUnlessIdentifierHeld = async (
     params: Omit<CreateConnectorParams, 'agentId'>,
@@ -335,12 +336,19 @@ export class ConnectorModel {
     return this.db.transaction(async (tx) => {
       await this.lockBaseIdentifier(tx, params.identifier);
 
-      const holder = await this.findBaseHolder(tx, params.identifier);
-      if (holder) {
-        if (!canReplace?.(holder)) return { holder };
-        await tx
-          .delete(userConnectors)
-          .where(and(eq(userConnectors.id, holder.id), this.ownership()));
+      const holders = await this.findBaseHolders(tx, params.identifier);
+      const kept = holders.find((holder) => !canReplace?.(holder));
+      if (kept) return { holder: kept };
+      if (holders.length > 0) {
+        await tx.delete(userConnectors).where(
+          and(
+            inArray(
+              userConnectors.id,
+              holders.map((holder) => holder.id),
+            ),
+            this.ownership(),
+          ),
+        );
       }
 
       return {
@@ -363,8 +371,9 @@ export class ConnectorModel {
     this.db.transaction(async (tx) => {
       await this.lockBaseIdentifier(tx, identifier);
 
-      const holder = await this.findBaseHolder(tx, identifier);
-      if (holder) return holder.id === id ? { moved: true as const } : { holder };
+      const holders = await this.findBaseHolders(tx, identifier);
+      if (holders.some((holder) => holder.id === id)) return { moved: true as const };
+      if (holders.length > 0) return { holder: holders[0] };
 
       await tx
         .update(userConnectors)
@@ -392,16 +401,16 @@ export class ConnectorModel {
   };
 
   /**
-   * The oldest base row of this scope holding `identifier`, locked until `tx`
-   * ends: the caller judges and may delete the row as read, so a rewrite of it
-   * ({@link update}, a re-add) either lands first, and is what gets judged, or
-   * waits for the caller.
+   * The base rows of this scope holding `identifier`, oldest first, locked until
+   * `tx` ends: the caller judges and may delete them as read, so a rewrite of
+   * one ({@link update}, a re-add) either lands first, and is what gets judged,
+   * or waits for the caller.
    */
-  private findBaseHolder = async (
+  private findBaseHolders = async (
     tx: Transaction,
     identifier: string,
-  ): Promise<UserConnectorItem | undefined> => {
-    const [holder] = await tx
+  ): Promise<UserConnectorItem[]> =>
+    tx
       .select()
       .from(userConnectors)
       .where(
@@ -412,10 +421,7 @@ export class ConnectorModel {
         ),
       )
       .orderBy(asc(userConnectors.createdAt))
-      .limit(1)
       .for('update');
-    return holder;
-  };
 
   private insertInTransaction = async (
     tx: Transaction,
