@@ -1,4 +1,4 @@
-import type { ChannelJobBlockCode, LobeAgentConfig } from '@lobechat/types';
+import type { ChannelExecutionConfig, ChannelJobBlockCode, LobeAgentConfig } from '@lobechat/types';
 import { and, asc, eq, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
@@ -30,8 +30,23 @@ export interface ChannelClaimOptions {
   leaseOwner: string;
   /** Trusted presence snapshot from the current Gateway scope; omitted by storage-only callers. */
   onlineDeviceIds?: string[];
+  /**
+   * The device a run with no device picked in the Channel will route to, from the Agent's own
+   * settings as the requester's ordinary conversation would resolve them; undefined when it
+   * needs none or would wake it. Lets an offline Agent-bound device wait like a Channel one.
+   * Only consulted with `onlineDeviceIds`.
+   */
+  routedDeviceId?: (run: ChannelRoutedDeviceInput) => Promise<string | undefined>;
   /** Trusted server defaults from getServerDefaultAgentConfig(); use {} when unconfigured. */
   serverDefaultAgentConfig: PartialDeep<LobeAgentConfig>;
+}
+
+export interface ChannelRoutedDeviceInput {
+  agentId: string;
+  executionConfig: ChannelExecutionConfig;
+  /** The requester: the run executes as them, with their device preference for the Agent. */
+  userId: string;
+  workspaceId: string | null;
 }
 
 export interface ChannelClaim {
@@ -44,20 +59,25 @@ export interface ChannelClaim {
 
 const DIRECTORY_LOCK = 'channel_jobs_active_directory_unique';
 
-/** Records why a queued job cannot start; clients read the code, never the text. */
+/**
+ * Records why a queued job cannot start; clients read the code, never the text. A job waiting
+ * for a device also records which one in `deviceId`, so it can be shown before any claim sets
+ * it. Only a claim gives a job its writer, so a queued job's device holds no directory.
+ */
 const block = async (
   tx: Transaction,
   job: ChannelJobItem,
   code: ChannelJobBlockCode,
   reason: string,
+  deviceId: string | null = null,
 ) => {
-  if (job.blockedCode === code && job.blockedReason === reason) return;
+  if (job.blockedCode === code && job.blockedReason === reason && job.deviceId === deviceId) return;
 
   await tx
     .update(channelJobs)
-    .set({ blockedCode: code, blockedReason: reason })
+    .set({ blockedCode: code, blockedReason: reason, deviceId })
     .where(eq(channelJobs.id, job.id));
-  await audit(tx, job.channelId, 'job_blocked', job.id, { code, reason });
+  await audit(tx, job.channelId, 'job_blocked', job.id, { code, deviceId, reason });
 };
 
 /** Settles a job that must never run, e.g. its requester left or its branch was archived. */
@@ -344,12 +364,24 @@ export const claimJob = async (
     return null;
   }
 
-  if (
-    member.config?.deviceId &&
-    options.onlineDeviceIds &&
-    !options.onlineDeviceIds.includes(member.config.deviceId)
-  ) {
-    await block(tx, job, 'device_offline', 'Waiting for the configured device to connect');
+  // A device picked in the Channel, else the one the Agent's own settings route the run to.
+  const routedDeviceId = options.onlineDeviceIds
+    ? (member.config?.deviceId ??
+      (await options.routedDeviceId?.({
+        agentId: member.agentId!,
+        executionConfig,
+        userId: requester.userId!,
+        workspaceId: channel.workspaceId,
+      })))
+    : undefined;
+  if (routedDeviceId && !options.onlineDeviceIds!.includes(routedDeviceId)) {
+    await block(
+      tx,
+      job,
+      'device_offline',
+      'Waiting for the configured device to connect',
+      routedDeviceId,
+    );
     return null;
   }
 
@@ -395,7 +427,8 @@ export const claimJob = async (
           claimedAt: sql`clock_timestamp()`,
           blockedCode: null,
           blockedReason: null,
-          deviceId: member.config!.deviceId,
+          // Only a device picked in the Channel; a wait marker from `block` must not linger.
+          deviceId: member.config!.deviceId ?? null,
           executionConfig,
           leaseExpiresAt: new Date(now.getTime() + options.leaseMs),
           leaseOwner: options.leaseOwner,
