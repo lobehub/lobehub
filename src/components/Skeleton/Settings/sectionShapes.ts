@@ -76,11 +76,13 @@ export const SETTINGS_SECTION_SHAPES: Record<string, SettingsSectionsShape> = {
   referral: {
     sections: [
       {
-        rows: [
+        desc: true,
+        fields: [
           { actions: 1, label: ['subscription', 'referral.inviteLink.title'], valueWidth: 360 },
           { actions: 2, label: ['subscription', 'referral.inviteCode.title'], valueWidth: 96 },
         ],
-        variant: 'banner',
+        titleWidth: 280,
+        variant: 'form',
       },
       {
         columns: 4,

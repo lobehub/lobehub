@@ -17,6 +17,7 @@ import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 import { sx } from '@/styles/sx';
 
 import SkeletonBar from '../Bar';
+import { SettingsProfileRowSkeleton } from './Profile';
 
 /** A static copy key: `[namespace, key]`. */
 export type SettingsSkeletonTextKey = readonly [namespace: string, key: string];
@@ -58,6 +59,11 @@ export type SettingsSectionSkeleton =
        * snippet (its copy button sits inside).
        */
       field?: boolean | 'input' | 'snippet';
+      /**
+       * Profile-style rows instead of `rows`: a static label column, a value bar
+       * of `valueWidth`, and one 22px action per entry of `actions`.
+       */
+      fields?: { actions: number; label: SettingsSkeletonTextKey; valueWidth: number }[];
       /** Label + description on the left, control on the right. */
       rows?: number;
       variant: 'form';
@@ -135,12 +141,7 @@ export type SettingsSectionSkeleton =
       variant: 'cards';
     })
   | {
-      /**
-       * Labelled field rows under the head, each a 56px row with a hairline above it:
-       * the label, a value bar, and one 24px action per entry of `actions`.
-       */
-      rows?: { actions: number; label: SettingsSkeletonTextKey; valueWidth: number }[];
-      /** An outlined block with an icon and two text lines. */
+      /** An outlined block with an avatar and two text lines. */
       variant: 'banner';
     };
 
@@ -171,11 +172,6 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: cssVar.borderRadiusLG,
-  },
-  bannerRow: {
-    borderBlockStartWidth: '1px',
-    borderBlockStartStyle: 'solid',
-    borderBlockStartColor: cssVar.colorBorderSecondary,
   },
   card: {
     overflow: 'hidden',
@@ -291,6 +287,47 @@ const FormRows = ({ rows }: { rows: number }) => (
           </Flexbox>
           <SkeletonBar height={32} width={widthAt(index, [88, 152])} />
         </Flexbox>
+      </Flexbox>
+    ))}
+  </Flexbox>
+);
+
+const FieldRow = ({
+  actions,
+  label,
+  valueWidth,
+}: {
+  actions: number;
+  label: SettingsSkeletonTextKey;
+  valueWidth: number;
+}) => {
+  const text = useStaticText(label);
+  return (
+    <SettingsProfileRowSkeleton
+      bodyWidth={valueWidth}
+      label={text}
+      labelWidth={96}
+      actionNode={
+        <Flexbox horizontal gap={8}>
+          {Array.from({ length: actions }).map((_, index) => (
+            <SkeletonBar height={22} key={index} width={22} />
+          ))}
+        </Flexbox>
+      }
+    />
+  );
+};
+
+const FieldRows = ({
+  fields,
+}: {
+  fields: { actions: number; label: SettingsSkeletonTextKey; valueWidth: number }[];
+}) => (
+  <Flexbox>
+    {fields.map((field, index) => (
+      <Flexbox key={index}>
+        {index > 0 && <div {...stylex.props(styles.divider)} />}
+        <FieldRow {...field} />
       </Flexbox>
     ))}
   </Flexbox>
@@ -515,38 +552,6 @@ const Detail = ({
   </Flexbox>
 );
 
-const BannerRow = ({
-  actions,
-  label,
-  valueWidth,
-}: {
-  actions: number;
-  label: SettingsSkeletonTextKey;
-  valueWidth: number;
-}) => {
-  const text = useStaticText(label);
-  return (
-    <Flexbox
-      horizontal
-      align={'center'}
-      className={stylex.props(styles.bannerRow).className}
-      gap={12}
-      height={56}
-      paddingInline={20}
-    >
-      <Flexbox flex={'none'} style={{ color: cssVar.colorTextSecondary }} width={112}>
-        {text ?? <SkeletonBar height={14} width={72} />}
-      </Flexbox>
-      <Flexbox flex={1}>
-        <SkeletonBar height={16} width={valueWidth} />
-      </Flexbox>
-      {Array.from({ length: actions }).map((_, index) => (
-        <SkeletonBar height={24} key={index} width={24} />
-      ))}
-    </Flexbox>
-  );
-};
-
 const QuotaCaption = ({ caption }: { caption?: SettingsSkeletonTextKey }) => {
   const text = useStaticText(caption);
   return (
@@ -675,17 +680,18 @@ const Section = ({ section }: { section: SettingsSectionSkeleton }) => {
   switch (section.variant) {
     case 'banner': {
       return (
-        <Flexbox className={stylex.props(styles.banner).className}>
-          <Flexbox horizontal align={'center'} gap={16} height={92} paddingInline={20}>
-            <SkeletonBar height={48} radius={cssVar.borderRadiusLG} width={48} />
-            <Flexbox gap={10}>
-              <SkeletonBar height={18} width={240} />
-              <SkeletonBar height={12} width={360} />
-            </Flexbox>
+        <Flexbox
+          horizontal
+          align={'center'}
+          className={stylex.props(styles.banner).className}
+          gap={16}
+          padding={18}
+        >
+          <SkeletonBar height={48} radius={'50%'} width={48} />
+          <Flexbox gap={10}>
+            <SkeletonBar height={18} width={240} />
+            <SkeletonBar height={12} width={360} />
           </Flexbox>
-          {section.rows?.map((row, index) => (
-            <BannerRow key={index} {...row} />
-          ))}
         </Flexbox>
       );
     }
@@ -754,7 +760,13 @@ const Section = ({ section }: { section: SettingsSectionSkeleton }) => {
     case 'form': {
       return (
         <Group {...section}>
-          {section.field ? <Field kind={section.field} /> : <FormRows rows={section.rows ?? 2} />}
+          {section.field ? (
+            <Field kind={section.field} />
+          ) : section.fields ? (
+            <FieldRows fields={section.fields} />
+          ) : (
+            <FormRows rows={section.rows ?? 2} />
+          )}
         </Group>
       );
     }
