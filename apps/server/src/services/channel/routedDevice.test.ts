@@ -109,6 +109,43 @@ describe('resolveChannelRoutedDevice', () => {
     });
   });
 
+  it("checks a continued conversation's device, not the binding it supersedes", async () => {
+    // The requester moved their own binding to an offline device after a run on `device-1`.
+    pools([online('device-1')]);
+    loadWorkspaceMemberOverrides.mockResolvedValue({
+      device: { boundDeviceId: 'offline-device', executionTarget: 'device' },
+    });
+    const continued = {
+      ...run(claudeOnDevice),
+      continuation: { agentId: 'agt', metadata: { boundDeviceId: 'device-1' } } as never,
+    };
+    expect(await resolveChannelRoutedDevice(db(), continued, presence())).toEqual({
+      deviceId: 'device-1',
+      online: true,
+    });
+  });
+
+  it('keeps the binding when the workspace fixes the target or the pin was an auto pick', async () => {
+    const pinned = { agentId: 'agt', metadata: { boundDeviceId: 'device-1' } } as never;
+    const fixed = { ...claudeOnDevice, executionTargetSelectionPolicy: 'fixed' };
+    expect(
+      await resolveChannelRoutedDevice(db(), { ...run(fixed), continuation: pinned }, presence()),
+    ).toEqual({ deviceId: 'agent-device', online: false });
+    const auto = { ...claudeOnDevice, executionTarget: 'auto' };
+    expect(
+      (await resolveChannelRoutedDevice(db(), { ...run(auto), continuation: pinned }, presence()))
+        ?.deviceId,
+    ).not.toBe('device-1');
+  });
+
+  it('leaves a project-directory conversation to the run', async () => {
+    const continued = {
+      ...run(claudeOnDevice),
+      continuation: { agentId: 'agt', metadata: {}, projectWorkingDirectoryId: 'dir' } as never,
+    };
+    expect(await resolveChannelRoutedDevice(db(), continued, presence())).toBeUndefined();
+  });
+
   it('reports the routed device offline when neither pool has it', async () => {
     pools([online('device-1')], [online('other-laptop')]);
     expect(await resolveChannelRoutedDevice(db(), run(claudeOnDevice), presence())).toEqual({

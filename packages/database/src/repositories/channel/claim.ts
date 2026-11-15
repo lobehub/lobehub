@@ -19,7 +19,7 @@ import { uniqueViolationConstraint } from '../../utils/uniqueViolation';
 import { resolveExecutionConfig } from './agent';
 import { AWAITING_PRIMARY_REASON, findThread } from './delivery';
 import { buildManifest } from './manifest';
-import { resolveTopic } from './topic';
+import { continuationTopic, resolveTopic } from './topic';
 import { audit } from './transaction';
 import { assignedWorktree } from './worktree';
 
@@ -50,6 +50,11 @@ export interface ChannelRoutedDevice {
 
 export interface ChannelRoutedDeviceInput {
   agentId: string;
+  /**
+   * The topic this run will continue, if any. A conversation stays on the device it ran on, so
+   * its pin can outrank the Agent's binding.
+   */
+  continuation?: Pick<TopicItem, 'agentId' | 'groupId' | 'metadata' | 'projectWorkingDirectoryId'>;
   executionConfig: ChannelExecutionConfig;
   /** The requester: the run executes as them, with their device preference for the Agent. */
   userId: string;
@@ -377,6 +382,15 @@ export const claimJob = async (
     options.onlineDeviceIds && !channelDeviceId
       ? await options.routedDevice?.({
           agentId: member.agentId!,
+          continuation: await continuationTopic(
+            tx,
+            channel,
+            job,
+            member,
+            requester.userId!,
+            request.sequence,
+            executionConfig,
+          ),
           executionConfig,
           userId: requester.userId!,
           workspaceId: channel.workspaceId,

@@ -11,15 +11,11 @@ import { CHANNEL_TOPIC_TRIGGER } from '../../utils/topicVisibility';
 const TOPIC_STALE_THRESHOLD = 4 * 60 * 60 * 1000;
 
 /**
- * Resolve continuation from the source-side job history, without Channel fields on topics.
- *
- * One topic per member, requester and branch (the main timeline or a Thread). The requester is
- * the run's execution identity: the topic is theirs, and it holds what their runs did with
- * their credentials, devices and tool results. Sharing it with another requester's run would
- * hand that private transcript to someone else, so a member's work for other people reaches
- * this topic only as public replies (marked `self` in the prompt).
+ * The topic this job continues, when it may: the requester's latest settled run for this member
+ * and branch, with an unchanged execution config and a fresh enough topic. Undefined starts a new
+ * topic. Read-only, so a claim can ask before it commits to running.
  */
-export const resolveTopic = async (
+export const continuationTopic = async (
   tx: Transaction,
   channel: ChannelItem,
   job: ChannelJobItem,
@@ -64,7 +60,38 @@ export const resolveTopic = async (
     topic.workspaceId === channel.workspaceId &&
     !topic.isDeleted &&
     (job.threadId || Date.now() - topic.updatedAt.getTime() <= TOPIC_STALE_THRESHOLD)
-  ) {
+  )
+    return topic;
+};
+
+/**
+ * Resolve continuation from the source-side job history, without Channel fields on topics.
+ *
+ * One topic per member, requester and branch (the main timeline or a Thread). The requester is
+ * the run's execution identity: the topic is theirs, and it holds what their runs did with
+ * their credentials, devices and tool results. Sharing it with another requester's run would
+ * hand that private transcript to someone else, so a member's work for other people reaches
+ * this topic only as public replies (marked `self` in the prompt).
+ */
+export const resolveTopic = async (
+  tx: Transaction,
+  channel: ChannelItem,
+  job: ChannelJobItem,
+  member: ChannelMemberItem,
+  userId: string,
+  requestSequence: number,
+  executionConfig: ChannelExecutionConfig,
+) => {
+  const topic = await continuationTopic(
+    tx,
+    channel,
+    job,
+    member,
+    userId,
+    requestSequence,
+    executionConfig,
+  );
+  if (topic) {
     // A Channel that belongs to a project runs inside it, so the topic it works in
     // must say which project it belongs to: that binding is what the run resolves
     // its project context from (project prompt, coordinator scope, task ownership).

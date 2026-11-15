@@ -8,7 +8,7 @@ import type {
   ChannelRoutedDeviceInput,
 } from '@/database/repositories/channel';
 import { agents } from '@/database/schemas';
-import { resolveExecutionPlan } from '@/helpers/executionTarget';
+import { defaultsToAuto, resolveExecutionPlan } from '@/helpers/executionTarget';
 import { supportsCloudHeterogeneousSandbox } from '@/server/services/aiAgent/helpers/heteroErrors';
 import {
   loadWorkspaceMemberOverrides,
@@ -72,7 +72,7 @@ export const createRoutedDevicePresence = (
  */
 export const resolveChannelRoutedDevice = async (
   db: LobeChatDatabase,
-  { agentId, executionConfig, userId, workspaceId }: ChannelRoutedDeviceInput,
+  { agentId, continuation, executionConfig, userId, workspaceId }: ChannelRoutedDeviceInput,
   presence: RoutedDevicePresence,
 ): Promise<ChannelRoutedDevice | undefined> => {
   const heteroType = executionConfig.agencyConfig?.heterogeneousProvider?.type;
@@ -105,7 +105,31 @@ export const resolveChannelRoutedDevice = async (
     workspaceId: agentWorkspaceId,
   });
 
-  const wakeable = await findWakeableManagedDevices(scope, [agencyConfig?.boundDeviceId]);
+  // A continued conversation stays on the device it ran on, as `turnSetup` routes it: the topic's
+  // pin beats the Agent binding unless the workspace fixes the target, or the target is `auto`
+  // and the pin was only an earlier auto pick. A project-directory topic routes to its
+  // directory's device, which only the run resolves, so it is not gated here.
+  if (continuation?.projectWorkingDirectoryId) return;
+  const topicPinnedDeviceId =
+    !continuation?.groupId || continuation.agentId === agentId
+      ? continuation?.metadata?.boundDeviceId
+      : undefined;
+  const fixedSelection = !!workspaceId && agencyConfig?.executionTargetSelectionPolicy === 'fixed';
+  const autoTarget = agencyConfig?.executionTarget === 'auto' || defaultsToAuto(agencyConfig, true);
+  const pinnedDeviceId =
+    topicPinnedDeviceId &&
+    !fixedSelection &&
+    (!autoTarget || continuation?.metadata?.deviceBindingPinned === true)
+      ? topicPinnedDeviceId
+      : undefined;
+
+  const wakeable = await findWakeableManagedDevices(scope, [
+    pinnedDeviceId ?? agencyConfig?.boundDeviceId,
+  ]);
+  if (pinnedDeviceId) {
+    if (wakeable.length) return;
+    return { deviceId: pinnedDeviceId, online: await presence.isOnline(userId, pinnedDeviceId) };
+  }
   const plan = resolveExecutionPlan({
     agencyConfig,
     clientExecutionAvailable: false,
