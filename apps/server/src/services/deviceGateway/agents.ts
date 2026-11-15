@@ -259,6 +259,8 @@ export async function executeMcpCall(
   mcpCall: {
     apiName: string;
     arguments: string;
+    /** Which of the device's clients runs the call (see `resolveMcpClientKinds`). */
+    clientKinds?: DeviceClient[];
     deviceId: string;
     identifier: string;
     params: GatewayMcpParams;

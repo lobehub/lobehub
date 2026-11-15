@@ -851,6 +851,7 @@ export default {
   'referral.hero.title': 'Invite friends, you both earn <0>${{reward}} in referral rewards</0>',
   'referral.inviteCode.description': 'Share your invite code so friends can register with it',
   'referral.inviteCode.title': 'Your invite code',
+  'referral.inviteLink.copy': 'Copy invite link',
   'referral.inviteLink.description':
     'Copy and share your invite link. You both earn referral rewards after your friend pays.',
   'referral.inviteLink.title': 'Your invite link',
@@ -890,6 +891,7 @@ export default {
   'referral.table.columns.inviterRewardAmount': 'My reward',
   'referral.table.columns.rewardedAt': 'Reward time',
   'referral.table.columns.status': 'Status',
+  'referral.table.empty': 'No one has signed up with your link yet',
   'referral.table.status.pending_reward': 'Pending reward',
   'referral.table.status.registered': 'Registered',
   'referral.table.status.revoked': 'Revoked',
