@@ -20,9 +20,9 @@ const purgePreview = vi.fn();
 const getBySubject = vi.fn();
 let output: ReturnType<typeof vi.spyOn>;
 
-const run = async (args: string[], options?: { deprecated?: boolean }) => {
+const run = async (args: string[]) => {
   const program = new Command().exitOverride().configureOutput({ writeErr: () => {} });
-  registerAcceptanceCommands(program, options);
+  registerAcceptanceCommands(program);
   await program.parseAsync(['node', 'lh', 'acceptance', ...args]);
 };
 
@@ -117,10 +117,5 @@ describe('acceptance delete', () => {
     expect(remove).not.toHaveBeenCalled();
     expect(JSON.parse(lastLine())).toEqual({ deleted: 1, failedIds: [idB], purged: false });
     expect(process.exitCode).toBe(1);
-  });
-
-  it('is not part of the legacy verify alias', async () => {
-    await expect(run(['delete', idA, '--yes'], { deprecated: true })).rejects.toThrow();
-    expect(remove).not.toHaveBeenCalled();
   });
 });
