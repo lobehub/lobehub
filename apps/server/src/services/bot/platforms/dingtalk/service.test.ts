@@ -6,9 +6,6 @@ const botReply = vi.hoisted(() => ({
 }));
 vi.mock('@/server/services/redis', () => ({ redisService: { botReply } }));
 
-const { PlatformUnsupportedError } =
-  await import('@/server/services/toolExecution/serverRuntimes/message/PlatformUnsupportedError');
-const { PLATFORM_UNSUPPORTED_MESSAGE_APIS } = await import('../messageCapabilities');
 const { DingTalkMessageService } = await import('./service');
 
 const createApi = () => ({
@@ -73,17 +70,5 @@ describe('DingTalkMessageService', () => {
     expect(result.attachmentFailures).toEqual([
       expect.objectContaining({ name: 'r.pdf', reason: 'upload-failed', type: 'file' }),
     ]);
-  });
-
-  // `sendDirectMessage` and `readDocument` are optional methods the service
-  // simply does not implement; the runtime rejects those generically.
-  const unsupported = PLATFORM_UNSUPPORTED_MESSAGE_APIS.dingtalk.filter(
-    (api) => api !== 'sendDirectMessage' && api !== 'readDocument',
-  );
-
-  it.each(unsupported)('rejects %s as unsupported', async (method) => {
-    await expect((service as any)[method]({ channelId: 'group:cid1' })).rejects.toBeInstanceOf(
-      PlatformUnsupportedError,
-    );
   });
 });

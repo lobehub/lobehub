@@ -183,6 +183,16 @@ describe('getSetupGuide', () => {
     expect(DINGTALK_CONSOLE_URL).toMatch(/^https:\/\/open-dev\.dingtalk\.com\//);
   });
 
+  it('finishes the DingTalk console setup before connecting in Stream mode only', () => {
+    const steps = (connectionMode: string) =>
+      getSetupGuide('dingtalk', { appName: 'Moss', connectionMode })!.steps;
+
+    // Stream mode connects on save, so robot, permission and publish come first.
+    expect(connectStepIndex(steps('websocket'))).toBe(steps('websocket').length);
+    // Webhook mode needs the save to produce the callback URL the robot step uses.
+    expect(connectStepIndex(steps('webhook'))).toBe(1);
+  });
+
   it('tells DingTalk webhook bots to configure HTTP callback, not Stream mode', () => {
     const stepKeys = (connectionMode: string) =>
       getSetupGuide('dingtalk', { appName: 'Moss', connectionMode })!.steps.map((step) => step.key);
@@ -254,8 +264,8 @@ describe('getSetupGuide', () => {
     expect(at('discord')).toEqual(['create', 'credentials', 'bot', 'intent', 'invite', 'connect']);
     expect(at('telegram')).toEqual(['botfather', 'token', 'connect', 'privacy']);
     expect(at('line')).toEqual(['account', 'messagingApi', 'credentials', 'connect', 'webhook']);
-    // Stream mode needs the saved bot's connection, so the robot setup follows the save.
-    expect(at('dingtalk')).toEqual(['create', 'connect', 'robot', 'permissions', 'publish']);
+    // Stream mode connects on save, so the DingTalk console setup comes first.
+    expect(at('dingtalk')).toEqual(['create', 'robot', 'permissions', 'publish', 'connect']);
     expect(connectStepIndex([{ key: 'only' }])).toBe(1);
     expect(
       connectStepIndex([

@@ -158,20 +158,22 @@ export const getSetupGuide = (
       };
     }
     case 'dingtalk': {
+      // The robot, its receiving mode and the send permission only take effect once a
+      // version is published. In Stream mode the connection opens on save, so the whole
+      // console setup comes first; in webhook mode the save is what produces the
+      // callback URL the robot step asks for, so those steps follow it.
+      const beforeConnect = connectionMode !== 'webhook';
       return {
         guide: 'dingtalk',
-        // The robot, its receiving mode and the send permission only take effect once a
-        // version is published, so they follow the save. In webhook mode that save is also
-        // what produces the callback URL the robot step asks for.
         steps: [
           {
             key: 'create',
             fields: ['applicationId', 'clientSecret'],
             link: { href: DINGTALK_CONSOLE_URL, label: 'openConsole' },
           },
-          { key: connectionMode === 'webhook' ? 'robotWebhook' : 'robot' },
-          { key: 'permissions' },
-          { key: 'publish' },
+          { beforeConnect, key: beforeConnect ? 'robot' : 'robotWebhook' },
+          { beforeConnect, key: 'permissions' },
+          { beforeConnect, key: 'publish' },
         ],
       };
     }
