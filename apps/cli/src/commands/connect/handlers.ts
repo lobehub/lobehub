@@ -96,16 +96,25 @@ export function bindGatewayClientHandlers(
     // round trip, so reporting this back is what separates a slow tool from
     // slow transport.
     const startedAt = performance.now();
+    const dispatch = async () => {
+      const type = toolCall.type ?? 'tool';
+      // Route on the explicit discriminator, never on the apiName alone: a
+      // call of a kind this client does not run (e.g. an MCP server's
+      // `runCommand`) must fail instead of reaching a same-named local tool.
+      if (type !== 'tool') {
+        const message = `This device's lh connect does not support "${type}" tool calls. Update the LobeHub CLI and retry.`;
+        return { content: message, error: message, state: undefined, success: false };
+      }
+      // Computer Use's `runCommand` shares its apiName with the shell tool, and
+      // the browser's apis (`click`, `screenshot`, …) are routed by identifier too.
+      return toolCall.identifier === COMPUTER_USE_IDENTIFIER
+        ? executeComputerUseCall(computerUse, toolCall.apiName, toolCall.arguments, timeout)
+        : toolCall.identifier === BROWSER_IDENTIFIER
+          ? executeBrowserCall(browser, toolCall.apiName, toolCall.arguments, timeout)
+          : executeToolCall(toolCall.apiName, toolCall.arguments, timeout, getToolAuth());
+    };
     const result = await executeDeviceOperation({ apiName: toolCall.apiName, operationId }, () =>
-      maintenance.run(() =>
-        // Computer Use's `runCommand` shares its apiName with the shell tool, and
-        // the browser's apis (`click`, `screenshot`, …) are routed by identifier too.
-        toolCall.identifier === COMPUTER_USE_IDENTIFIER
-          ? executeComputerUseCall(computerUse, toolCall.apiName, toolCall.arguments, timeout)
-          : toolCall.identifier === BROWSER_IDENTIFIER
-            ? executeBrowserCall(browser, toolCall.apiName, toolCall.arguments, timeout)
-            : executeToolCall(toolCall.apiName, toolCall.arguments, timeout, getToolAuth()),
-      ),
+      maintenance.run(dispatch),
     ).catch((err: Error) => ({
       content: '',
       error: err.message,
