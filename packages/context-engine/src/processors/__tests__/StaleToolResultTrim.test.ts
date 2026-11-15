@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { PipelineContext } from '../../types';
 import { cacheEconomicsForProvider, StaleToolResultTrimProcessor } from '../StaleToolResultTrim';
@@ -807,6 +807,33 @@ describe('StaleToolResultTrimProcessor', () => {
 
       expect(result.messages[0].content).toBe('p'.repeat(101));
       expect(result.metadata.staleToolResultTrim?.trimmedMessages ?? 0).toBe(0);
+    });
+
+    // Regression: after each accepting turn the replay pruned trimmed reads
+    // from every path it had ever seen, so a long history of distinct files
+    // cost O(turns²) per request.
+    it('prunes trimmed reads only from the accepted rows’ paths', async () => {
+      const turns = 60;
+      const messages = Array.from({ length: turns }, (_, i) => [
+        { content: `turn ${i}`, id: `user-${i}`, role: 'user' },
+        readFileResult(`/f${i}.ts`, 'x'.repeat(5000)),
+        writeFileResult(`/f${i}.ts`),
+      ]).flat();
+      messages.push(...recencyPadding(3), { content: 'last', id: 'user-last', role: 'user' });
+
+      const filter = vi.spyOn(Array.prototype, 'filter');
+      let result;
+      let filterCalls: number;
+      try {
+        result = await createProcessor().process(createContext(messages));
+      } finally {
+        // mockRestore clears the recorded calls, so read the count first.
+        filterCalls = filter.mock.calls.length;
+        filter.mockRestore();
+      }
+
+      expect(result.metadata.staleToolResultTrim?.trimmedMessages).toBe(turns);
+      expect(filterCalls).toBeLessThanOrEqual(turns * 2);
     });
   });
 

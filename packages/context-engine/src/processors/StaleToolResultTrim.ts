@@ -425,11 +425,20 @@ export class StaleToolResultTrimProcessor extends BaseProcessor {
           this.savedCharsOf(messages[candidate.index], candidate),
         );
       }
-      for (const [path, reads] of replay.untrimmedReadsByPath) {
-        replay.untrimmedReadsByPath.set(
-          path,
-          reads.filter((read) => !trimmed.has(read.index)),
-        );
+      // Only the accepted rows' own paths can hold them; scanning every path
+      // per turn would grow quadratically over a long history of distinct files.
+      const touchedPaths = new Set<string>();
+      for (const candidate of current.accepted) {
+        const m = messages[candidate.index];
+        const path = pathOf(m, getPlugin(m));
+        if (path) touchedPaths.add(path);
+      }
+      for (const path of touchedPaths) {
+        const reads = replay.untrimmedReadsByPath.get(path);
+        if (!reads) continue;
+        const remaining = reads.filter((read) => !trimmed.has(read.index));
+        if (remaining.length > 0) replay.untrimmedReadsByPath.set(path, remaining);
+        else replay.untrimmedReadsByPath.delete(path);
       }
     }
 
