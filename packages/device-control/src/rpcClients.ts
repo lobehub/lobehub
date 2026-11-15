@@ -9,10 +9,11 @@ import type { DeviceRpcMethod } from './dispatch';
 
 /**
  * RPC methods only the desktop app implements: the CLI daemon passes no
- * handler for them (no recoverable trash, no self-update), so a call that lands
- * on `lh connect` is rejected.
+ * handler for them (no recoverable trash, no self-update, no MCP client), so a
+ * call that lands on `lh connect` is rejected.
  */
 const DESKTOP_ONLY_RPC_METHODS: ReadonlySet<string> = new Set<DeviceRpcMethod>([
+  'listMcpTools',
   'trashLocalFiles',
   'getAppUpdateState',
   'checkAppUpdate',

@@ -712,30 +712,82 @@ export default class McpCtr extends ControllerModule {
         }),
       }));
 
-    if (input.http) {
-      const client = await this.createClient(
-        { ...input.http, type: 'http' },
-        { mcpApps: input.mcpApps },
-      );
+    const params: MCPClientParams = input.http
+      ? { ...input.http, type: 'http' }
+      : {
+          args: input.stdio.args || [],
+          command: input.stdio.command,
+          env: input.stdio.env,
+          name: input.stdio.name,
+          type: 'stdio',
+        };
+    return serializePayload(toListed(await this.listServerTools(params, input.mcpApps)));
+  }
+
+  /**
+   * The device-gateway `listMcpTools` RPC: the cloud server can't reach this
+   * MCP server (stdio, an endpoint on this machine's network, or one the user
+   * set to connect through this device), so it asks this machine for the tool
+   * list and maps it as it maps its own listings. The tools go back as listed.
+   */
+  async listToolsForGateway({
+    mcpApps,
+    params,
+  }: {
+    mcpApps?: boolean;
+    params:
+      | {
+          auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+          headers?: Record<string, string>;
+          name: string;
+          type: 'http';
+          url: string;
+        }
+      | {
+          args: string[];
+          command: string;
+          env?: Record<string, string>;
+          name: string;
+          type: 'stdio';
+        };
+  }): Promise<McpTool[]> {
+    const client: MCPClientParams =
+      params.type === 'http'
+        ? {
+            auth: params.auth,
+            headers: params.headers,
+            name: params.name,
+            type: 'http',
+            url: params.url,
+          }
+        : {
+            args: params.args ?? [],
+            command: params.command,
+            env: params.env,
+            name: params.name,
+            type: 'stdio',
+          };
+    return this.listServerTools(client, mcpApps);
+  }
+
+  /**
+   * Every tool a server lists, including the ones only its views may call. HTTP
+   * lists on a one-off session; stdio on the pooled one its calls reuse.
+   */
+  private async listServerTools(params: MCPClientParams, mcpApps?: boolean): Promise<McpTool[]> {
+    if (params.type === 'http') {
+      const client = await this.createClient(params, { mcpApps });
       try {
-        return serializePayload(toListed(await client.listTools()));
+        return await client.listTools();
       } finally {
         await client.disconnect();
       }
     }
 
-    const params: MCPClientParams = {
-      args: input.stdio.args || [],
-      command: input.stdio.command,
-      env: input.stdio.env,
-      name: input.stdio.name,
-      type: 'stdio',
-    };
     let client: MCPClient | undefined;
     try {
-      client = await this.acquireClient(params, { mcpApps: input.mcpApps });
-      const tools = await this.withClientLease(client, () => client!.listTools());
-      return serializePayload(toListed(tools));
+      client = await this.acquireClient(params, { mcpApps });
+      return await this.withClientLease(client, () => client!.listTools());
     } catch (error) {
       // Same as the manifest refresh: drop a broken pooled session.
       await this.evictClient(params, client);

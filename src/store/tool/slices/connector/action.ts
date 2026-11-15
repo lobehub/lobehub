@@ -1,5 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import { isLocalOrPrivateUrl } from '@lobechat/utils';
+import { connectorMcpEndpoint, isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
 import type { SWRResponse } from 'swr';
 
 import type { ConnectorToolPermission } from '@/database/schemas';
@@ -516,8 +516,8 @@ export class ConnectorActionImpl {
 
   /**
    * Desktop-only install/refresh path for connectors the cloud server cannot
-   * reach itself: stdio MCP (must spawn on this machine) and local/private
-   * network HTTP endpoints. The server-side `syncTools` would try to connect
+   * reach itself: stdio MCP (must spawn on this machine), local/private
+   * network HTTP endpoints, and HTTP set to connect through the device. The server-side `syncTools` would try to connect
    * FROM the cloud and fail with "Failed to start MCP service process" /
    * "fetch failed" (#16533), so the client lists the tools locally (via the
    * Electron main process, same path Test Connection uses) and reports them
@@ -538,7 +538,9 @@ export class ConnectorActionImpl {
     // server-unreachable anyway, so that combination stays on the server path.
     const detail = await lambdaClient.connector.getForEdit.query({ id });
     const isStdio = detail.mcpConnectionType === 'stdio';
-    const isLocalHttp = !!detail.mcpServerUrl && isLocalOrPrivateUrl(detail.mcpServerUrl);
+    // A localhost / LAN address, or one the user set to connect through the device
+    const isLocalHttp =
+      !!detail.mcpServerUrl && isDeviceOnlyMcpEndpoint(connectorMcpEndpoint(detail));
     if (!isStdio && !isLocalHttp) return false;
 
     // The full tool list, not a manifest: a manifest leaves out view-only

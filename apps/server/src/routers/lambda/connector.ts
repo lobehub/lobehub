@@ -1,6 +1,6 @@
 import { getComposioAppByIdentifier, hasCallableMcpEndpoint } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
-import { upsertPluginMode } from '@lobechat/types';
+import { GetStreamableMcpServerManifestInputSchema, upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -51,6 +51,7 @@ import {
   pruneMissingAutoConnectorTools,
   syncConnectorToolsById,
 } from '@/server/services/connector/sync';
+import { getDeviceMcpManifest } from '@/server/services/mcp/deviceManifest';
 import {
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,
@@ -301,6 +302,18 @@ export const connectorRouter = router({
       const tools = await ctx.connectorToolModel.queryByConnector(connector.id);
       return { ...rest, credentials: safeCredentials, oidcConfig: safeOidcConfig, tools };
     }),
+
+  /**
+   * Test an HTTP MCP server the user set to connect through their device: its
+   * manifest, read on their own desktop app. A mutation so the credentials
+   * travel in the body, not the URL.
+   */
+  getDeviceMcpManifest: wsCompatProcedure
+    .use(serverDatabase)
+    .input(GetStreamableMcpServerManifestInputSchema)
+    .mutation(({ ctx, input }) =>
+      getDeviceMcpManifest({ connection: input, serverDB: ctx.serverDB, userId: ctx.userId }),
+    ),
 
   /**
    * The exact redirect URI the server will send to the OAuth/DCR endpoints.

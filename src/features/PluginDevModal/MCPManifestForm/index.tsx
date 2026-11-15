@@ -1,4 +1,4 @@
-import { type LobeToolCustomPlugin } from '@lobechat/types';
+import { type LobeToolCustomPlugin, type McpConnectVia } from '@lobechat/types';
 import { Alert, Button, Divider, Flexbox, Input, InputPassword, RadioGroup } from '@lobehub/ui';
 import { type FieldPath, Form, type FormInstance, useWatch } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
@@ -36,6 +36,7 @@ interface MCPManifestFormProps {
 }
 
 const HTTP_URL_KEY = 'customParams.mcp.url';
+const CONNECT_VIA = 'customParams.mcp.connectVia';
 const STDIO_COMMAND = 'customParams.mcp.command';
 const STDIO_ARGS = 'customParams.mcp.args';
 const STDIO_ENV = 'customParams.mcp.env';
@@ -49,6 +50,24 @@ const AUTH_CLIENT_SECRET = 'customParams.mcp.auth.clientSecret';
 // Headers-related constants
 const HEADERS = 'customParams.mcp.headers';
 
+/** Unset reads as `auto`, the behavior a server without the choice always had. */
+const ConnectViaRadio = ({
+  onChange,
+  options,
+  value,
+}: {
+  onChange?: (value: McpConnectVia) => void;
+  options: { label: string; value: McpConnectVia }[];
+  value?: McpConnectVia;
+}) => (
+  <RadioGroup
+    options={options}
+    style={{ width: '100%' }}
+    value={value ?? 'auto'}
+    onChange={(next) => onChange?.(next as McpConnectVia)}
+  />
+);
+
 const MCPManifestForm = ({
   form,
   isEditMode,
@@ -58,6 +77,7 @@ const MCPManifestForm = ({
   const { t } = useTranslation('plugin');
   const mcpType = useWatch(form, MCP_TYPE);
   const authType = useWatch(form, AUTH_TYPE);
+  const connectVia = useWatch(form, CONNECT_VIA);
   // For OAuth servers there is no token to test with — "testing" the connection
   // means running the authorize flow instead.
   const isOAuth = enableOAuth && mcpType === 'http' && authType === 'oauth2';
@@ -217,6 +237,22 @@ const MCPManifestForm = ({
                 }}
               >
                 <Input placeholder="https://mcp.higress.ai/mcp-github/xxxxx" />
+              </Form.Field>
+              <Form.Field
+                label={t('dev.mcp.connectVia.label')}
+                name={CONNECT_VIA}
+                desc={
+                  connectVia === 'device'
+                    ? t('dev.mcp.connectVia.deviceDesc')
+                    : t('dev.mcp.connectVia.autoDesc')
+                }
+              >
+                <ConnectViaRadio
+                  options={[
+                    { label: t('dev.mcp.connectVia.auto'), value: 'auto' },
+                    { label: t('dev.mcp.connectVia.device'), value: 'device' },
+                  ]}
+                />
               </Form.Field>
               <Form.Field
                 desc={t('dev.mcp.auth.desc')}

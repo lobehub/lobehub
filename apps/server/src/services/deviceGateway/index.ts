@@ -467,6 +467,10 @@ export class DeviceGateway {
     return agents.executeMcpCall(this.clientGetter, ...args);
   }
 
+  listMcpTools(...args: DeviceRpcArgs<typeof agents.listMcpTools>) {
+    return agents.listMcpTools(this.clientGetter, ...args);
+  }
+
   executeMessageApi(...args: DeviceRpcArgs<typeof agents.executeMessageApi>) {
     return agents.executeMessageApi(this.clientGetter, ...args);
   }

@@ -15,7 +15,12 @@ import {
   type CheckMcpInstallResult,
   type CustomPluginMetadata,
 } from '@lobechat/types';
-import { isLocalOrPrivateUrl, safeParseJSON } from '@lobechat/utils';
+import { safeParseJSON } from '@lobechat/utils';
+import {
+  connectorMcpEndpoint,
+  isDeviceOnlyMcpEndpoint,
+  type McpConnectVia,
+} from '@lobechat/utils/mcpEndpoint';
 import { deserializeMcpIpcPayload, serializeMcpIpcPayload } from '@lobechat/utils/mcpIpcPayload';
 import { toRecord } from '@lobechat/utils/object';
 import { type PluginManifest } from '@lobehub/market-sdk';
@@ -295,6 +300,14 @@ class MCPService {
       : !!agentId && !plugin;
     if (isConnector) {
       const { lambdaClient } = await import('@/libs/trpc/client');
+      // An HTTP server only this machine reaches (localhost / LAN, or set to
+      // connect through the device) runs here over IPC, as its tool list was
+      // read here: the server would have to tunnel it back to this device. A
+      // view's call still runs where its result was produced.
+      const isDeviceHttp =
+        connector?.mcpConnectionType !== 'stdio' &&
+        !!connector?.mcpServerUrl &&
+        isDeviceOnlyMcpEndpoint(connectorMcpEndpoint(connector));
       const runsHere =
         connector &&
         isDesktop &&
@@ -304,10 +317,7 @@ class MCPService {
             // These stdio servers ran on this desktop as plugins, gateway or not
             keepsDesktopStdioExecution(connector) ||
             getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured === false)) ||
-          (mcpApps &&
-            !!connector.mcpServerUrl &&
-            isLocalOrPrivateUrl(connector.mcpServerUrl) &&
-            (fromEntrypoint || (fromMcpApp && onThisDevice))));
+          (isDeviceHttp && (fromMcpApp ? !!onThisDevice : true)));
       // A view's calls run where its result was produced
       if (fromMcpApp && !!runsHere !== !!onThisDevice) throw new Error(VIEW_SITE_MISMATCH);
       if (runsHere) {
@@ -322,7 +332,7 @@ class MCPService {
         if (!fromEntrypoint && !fromMcpApp && !isSyncedMcpToolVisibleTo(tool, 'model', mcpApps)) {
           throw new Error(`Tool '${apiName}' can only be called from its interactive view`);
         }
-        if (detail.mcpConnectionType !== 'stdio' && mcpApps) {
+        if (detail.mcpConnectionType !== 'stdio') {
           const http = localConnectorHttpParams(detail);
           if (fromMcpApp && !(await isViewServer(server, { ...http, type: 'http' })))
             throw new Error(VIEW_SERVER_MOVED);
@@ -445,13 +455,20 @@ class MCPService {
       params = await pickViewServerParams(server, plugin, configured.params);
       if (!params) throw new Error(VIEW_SERVER_MOVED);
     }
-    // A view's call to an http server runs where its result was produced: over
-    // IPC when this desktop's process produced it (a localhost / LAN endpoint
-    // only it reaches), else on the server, which may reach its own LAN
+    // An http server only this machine reaches (localhost / LAN, or set to
+    // connect through the device) runs here over IPC, the route its manifest
+    // was read on. A view's call runs where its result was produced: here when
+    // this desktop's process produced it, else on the server.
     const isLocalHttp =
       isDesktop &&
       plugin?.customParams?.mcp?.type === 'http' &&
-      ((!!fromMcpApp && !!onThisDevice) || (!!fromEntrypoint && isLocalOrPrivateUrl(params.url)));
+      (fromMcpApp
+        ? !!onThisDevice
+        : isDeviceOnlyMcpEndpoint({
+            connectVia: params.connectVia,
+            type: 'http',
+            url: params.url,
+          }));
     const isCustomPlugin = !!customPlugin;
 
     // Build meta for server-side reporting
@@ -757,6 +774,7 @@ class MCPService {
     if (params.type === 'http' && params.url) {
       return this.getStreamableMcpServerManifest({
         auth: params.auth,
+        connectVia: params.connectVia,
         headers: params.headers,
         identifier: plugin.identifier,
         url: params.url,
@@ -772,6 +790,8 @@ class MCPService {
         token?: string;
         type: 'none' | 'bearer' | 'oauth2';
       };
+      /** `device`: reach the server from the user's device, whatever its address. */
+      connectVia?: McpConnectVia;
       headers?: Record<string, string>;
       identifier: string;
       metadata?: CustomPluginMetadata;
@@ -779,20 +799,31 @@ class MCPService {
     },
     signal?: AbortSignal,
   ) {
-    // If in Desktop mode and URL is local address, use IPC (main process)
-    // This avoids accessing user local services through remote server in production
-    if (isDesktop && isLocalOrPrivateUrl(params.url)) {
+    const { connectVia, ...connection } = params;
+
+    // A server only this machine reaches (a localhost / LAN address, or one set
+    // to connect through the device) is read from the desktop over IPC (main
+    // process), never through the remote server.
+    if (isDesktop && isDeviceOnlyMcpEndpoint({ connectVia, type: 'http', url: params.url })) {
       // Note: IPC doesn't support AbortSignal yet
       // With MCP Apps on, the tools only views call are listed and kept too
-      const serialized = serializeMcpIpcPayload({ ...params, mcpApps: isMcpAppsOn() });
+      const serialized = serializeMcpIpcPayload({ ...connection, mcpApps: isMcpAppsOn() });
       const serializedResult = await ensureElectronIpc().mcp.getStreamableMcpServerManifest(
         serialized as any,
       );
       return deserializeMcpIpcPayload(serializedResult) as any;
     }
 
+    // On the web, a server set to connect through the device is read on the
+    // user's desktop app through the device gateway (the server connects itself
+    // when it has no gateway).
+    if (connectVia === 'device') {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      return lambdaClient.connector.getDeviceMcpManifest.mutate(connection, { signal }) as any;
+    }
+
     // Otherwise use toolsClient (via server relay)
-    return toolsClient.mcp.getStreamableMcpServerManifest.query(params, { signal });
+    return toolsClient.mcp.getStreamableMcpServerManifest.query(connection, { signal });
   }
 
   /**

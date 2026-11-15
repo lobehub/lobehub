@@ -882,6 +882,8 @@ export class PluginMCPStoreActionImpl {
         manifest = await mcpService.getStreamableMcpServerManifest(
           {
             auth: connection.auth,
+            // Tested from where its calls will run: the device, when chosen
+            connectVia: connection.connectVia,
             headers: connection.headers,
             identifier,
             metadata,

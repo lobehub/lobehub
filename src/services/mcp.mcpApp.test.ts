@@ -653,17 +653,16 @@ describe('mcpService.invokeMcpToolCall on desktop', () => {
     expect(result?.state).toEqual({ content: [] });
   });
 
-  it('keeps conversation calls to localhost / LAN http servers on their existing route', async () => {
+  // Its tool list was read here over IPC; the server relay connects from the
+  // server, which can't reach this machine's localhost / LAN
+  it('runs conversation calls to localhost / LAN http servers here, where their tools were listed', async () => {
     plugins.set('local', httpPlugin('http://127.0.0.1:3000/mcp'));
-    relayCall.mockResolvedValue({ content: 'ok', success: true });
+    ipcCall.mockResolvedValueOnce(serializeMcpIpcPayload({ content: 'ok', success: true }));
 
     await mcpService.invokeMcpToolCall(refresh, {});
 
-    expect(ipcCall).not.toHaveBeenCalled();
-    expect(relayCall).toHaveBeenCalledWith(
-      expect.objectContaining({ toolName: 'refresh' }),
-      expect.anything(),
-    );
+    expect(relayCall).not.toHaveBeenCalled();
+    expect(ipcCall).toHaveBeenCalledOnce();
   });
 });
 

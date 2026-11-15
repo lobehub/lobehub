@@ -1,7 +1,6 @@
-import { BRANDING_NAME } from '@lobechat/business-const';
 import { DEFAULT_TOOL_RESULT_MAX_LENGTH, truncateToolResult } from '@lobechat/prompts/toolResult';
 import { type ChatToolPayload } from '@lobechat/types';
-import { isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
+import { isDeviceOnlyMcpEndpoint, shouldConnectViaDevice } from '@lobechat/utils/mcpEndpoint';
 import debug from 'debug';
 
 import { ConnectorToolPermission } from '@/database/schemas';
@@ -13,11 +12,16 @@ import {
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { resolveDeviceClientKind } from '@/server/services/deviceGateway/deviceChannels';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
-import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { type MCPService } from '../mcp';
 import { callCloudMcpTool, runtimeCloudMcpCaller } from '../mcp/cloudTool';
+import {
+  findPersonalMcpDevice,
+  MCP_DEVICE_UNAVAILABLE,
+  mcpDeviceUnavailableMessage,
+  toGatewayMcpParams,
+} from '../mcp/deviceTunnel';
 import { type BuiltinToolsExecutor } from './builtin';
 import { classifyToolError, getToolAccessDeniedError } from './errorClassification';
 import { buildMcpAuthorizationErrorContent, isMcpAuthorizationError } from './mcpAuthError';
@@ -321,9 +325,12 @@ export class ToolExecutionService {
 
       // Stdio must run on a desktop device. Without a configured gateway or a
       // reachable device, fail instead of executing the command on the server.
-      // Private HTTP also uses the device when a gateway is configured, while
-      // self-hosted servers without one can still access their LAN over HTTP.
-      if (mcpParams.type === 'stdio' || (isDeviceOnlyMcp && deviceGateway.isConfigured)) {
+      // HTTP the user set to connect through their device, or a private one,
+      // also uses the device when a gateway is configured, while self-hosted
+      // servers without one keep connecting in-process.
+      if (
+        shouldConnectViaDevice(mcpParams, { deviceGatewayConfigured: deviceGateway.isConfigured })
+      ) {
         if (!deviceGateway.isConfigured) {
           const message = `MCP server '${identifier}' uses stdio and must run on a desktop device, but this server's device gateway is not configured. Configure a device gateway on the server and connect the desktop app on the machine that hosts this MCP server, then retry.`;
           return {
@@ -338,10 +345,10 @@ export class ToolExecutionService {
           : undefined;
         if (!tunnelTarget) {
           log('Device-only MCP %s:%s has no reachable device — failing fast', identifier, apiName);
-          const message = `MCP server '${identifier}' only your own machine can reach (stdio or local network). No online ${BRANDING_NAME} desktop app was found to run it (a device connected only through the \`lh connect\` CLI cannot run MCP servers) — open the ${BRANDING_NAME} desktop app on the machine that hosts this MCP server, then retry.`;
+          const message = mcpDeviceUnavailableMessage(identifier);
           return {
             content: message,
-            error: { code: 'MCP_DEVICE_UNAVAILABLE', message },
+            error: { code: MCP_DEVICE_UNAVAILABLE, message },
             success: false,
           };
         }
@@ -435,23 +442,12 @@ export class ToolExecutionService {
     if (workspaceId) return undefined;
     // The scoped helper (not the raw gateway pool) is mandatory here: it
     // applies device visibility and merges DB state. No serverDB → can't
-    // apply visibility → fail closed.
+    // apply visibility → fail closed. Only the desktop app handles `mcp` tool
+    // calls — the CLI's tool_call_request handler ignores
+    // `toolCall.type`/`params`, so a CLI-only device would fail the call.
     if (!context.userId || !context.serverDB) return undefined;
-    try {
-      const devices = await getScopedOnlineDevices(context.serverDB, context.userId, undefined);
-      // Already sorted online-first / most-recently-active; drop offline rows.
-      // Only the desktop app handles `mcp` tool calls — the CLI's
-      // tool_call_request handler ignores `toolCall.type`/`params`, so a
-      // device whose only live connection is `lh connect` would fail the call.
-      const newest = devices.find(
-        (d) =>
-          d.online &&
-          d.channels?.some((c) => c.channel === 'desktop' || c.channel === 'desktop-dev'),
-      );
-      return newest ? { deviceId: newest.deviceId, workspaceId: undefined } : undefined;
-    } catch {
-      return undefined;
-    }
+    const device = await findPersonalMcpDevice(context.serverDB, context.userId);
+    return device ? { deviceId: device.deviceId, workspaceId: undefined } : undefined;
   }
 
   /**
@@ -502,30 +498,8 @@ export class ToolExecutionService {
         arguments: args,
         deviceId: target.deviceId,
         identifier,
-        params:
-          mcpParams.type === 'stdio'
-            ? {
-                args: mcpParams.args ?? [],
-                command: mcpParams.command,
-                env: mcpParams.env,
-                name: mcpParams.name,
-                type: 'stdio',
-              }
-            : {
-                // AuthConfig also carries OAuth client secrets / refresh tokens —
-                // forward only what the device's MCP client needs to authenticate.
-                auth: mcpParams.auth
-                  ? {
-                      accessToken: mcpParams.auth.accessToken,
-                      token: mcpParams.auth.token,
-                      type: mcpParams.auth.type,
-                    }
-                  : undefined,
-                headers: mcpParams.headers,
-                name: mcpParams.name,
-                type: 'http',
-                url: mcpParams.url,
-              },
+        // Only the token fields of the auth travel to the device
+        params: toGatewayMcpParams(mcpParams),
         userId: context.userId!,
         // Address the workspace device pool when the run is workspace-scoped —
         // omitting this would route the call to the personal pool and miss an

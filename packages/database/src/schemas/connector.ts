@@ -143,6 +143,13 @@ export interface ConnectorMetadata {
   [key: string]: unknown;
   avatar?: string;
   composio?: ComposioConnectorMetadata;
+  /**
+   * HTTP only: `device` reaches the MCP server from the user's device through
+   * the device gateway, whatever its address looks like (Tailscale MagicDNS,
+   * `.local`, intranet DNS). Absent means `auto`: decided by the address
+   * (`shouldConnectViaDevice` in `@lobechat/utils/mcpEndpoint`).
+   */
+  connectVia?: 'device';
   customHeaders?: Record<string, string>;
   description?: string;
   /**
