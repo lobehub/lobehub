@@ -99,11 +99,23 @@ export class MeetingActionImpl {
 
   /** Only an idle or finished recorder can be dismissed; a live one minimizes instead. */
   closeRecorder = (): void => {
-    const { phase } = this.#get().recorder;
+    const { error, meetingId, phase } = this.#get().recorder;
     if (phase !== 'idle' && phase !== 'done') return;
 
+    /**
+     * A finished upload that failed keeps its retry context. The controller still holds the
+     * recorded audio, and `retryUpload` reads both the meeting and the error code, so dropping
+     * them here strands that audio until the next recording clears it — which is the only place
+     * the user explicitly discards it.
+     */
+    const uploadFailed = error === 'upload_failed' || error === 'upload_offline';
+    const recorder: MeetingRecorderState =
+      phase === 'done' && uploadFailed
+        ? { ...initialRecorderState, error, meetingId, phase: 'done' }
+        : initialRecorderState;
+
     this.#set(
-      { overlay: { ...this.#get().overlay, open: false }, recorder: initialRecorderState },
+      { overlay: { ...this.#get().overlay, open: false }, recorder },
       false,
       n('closeRecorder'),
     );

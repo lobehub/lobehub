@@ -32,6 +32,28 @@ describe('meetingActions recorder overlay', () => {
     expect(recorder.meetingId).toBeUndefined();
   });
 
+  it('keeps the failed upload retryable after the recorder is dismissed', () => {
+    meetingActions.openRecorder();
+    meetingActions.patchRecorder({
+      durationMs: 5000,
+      error: 'upload_failed',
+      meetingId: 'mtg_1',
+      phase: 'done',
+    });
+
+    meetingActions.closeRecorder();
+
+    const { overlay, recorder } = useMeetingStore.getState();
+    expect(overlay.open).toBe(false);
+    // The audio stays with the controller, and `retryUpload` needs both of these to send it again.
+    expect(recorder).toMatchObject({
+      durationMs: 0,
+      error: 'upload_failed',
+      meetingId: 'mtg_1',
+      phase: 'done',
+    });
+  });
+
   it('reopening keeps the dragged position', () => {
     meetingActions.setOverlay({ position: { x: 40, y: 60 } });
     meetingActions.openRecorder();
