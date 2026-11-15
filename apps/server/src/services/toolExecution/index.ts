@@ -10,6 +10,7 @@ import {
   buildBlockedToolResponse,
   getConnectorToolPermission,
 } from '@/libs/mcp/connectorPermissionCheck';
+import { isMCPSSRFBlockedError } from '@/libs/mcp/ssrf';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import {
   clientKindFromChannels,
@@ -385,6 +386,16 @@ export class ToolExecutionService {
         return {
           content,
           error: { code: 'UNAUTHORIZED', message: (error as Error).message },
+          success: false,
+        };
+      }
+      // The server's SSRF policy refused the MCP server address: a configuration
+      // error with its own code, so the reason stays visible to the user.
+      if (isMCPSSRFBlockedError(error)) {
+        const message = (error as Error).message;
+        return {
+          content: message,
+          error: { code: 'MCP_SSRF_BLOCKED', message },
           success: false,
         };
       }

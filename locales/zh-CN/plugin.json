@@ -958,6 +958,7 @@
   "mcpInstall.errorTypes.CONNECTION_FAILED": "连接失败",
   "mcpInstall.errorTypes.INITIALIZATION_TIMEOUT": "初始化超时",
   "mcpInstall.errorTypes.PROCESS_SPAWN_ERROR": "进程启动失败",
+  "mcpInstall.errorTypes.SSRF_BLOCKED": "地址被拦截",
   "mcpInstall.errorTypes.UNKNOWN_ERROR": "未知错误",
   "mcpInstall.errorTypes.VALIDATION_ERROR": "参数验证失败",
   "mcpInstall.installError": "MCP 安装失败，失败原因： {{detail}}",

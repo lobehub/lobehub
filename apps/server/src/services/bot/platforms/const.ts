@@ -112,6 +112,7 @@ const PLATFORM_REPLY_LOCALES: Record<string, BotReplyLocale> = {
   slack: 'en-US',
   telegram: 'en-US',
   wechat: 'zh-CN',
+  wecom: 'zh-CN',
 };
 
 export function getBotReplyLocale(platform: string | undefined): BotReplyLocale {

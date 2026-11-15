@@ -18,6 +18,7 @@ import {
   type MessageGatewayHost,
   resolveMessageGatewayHost,
 } from '../MessageGatewayClient';
+import { resolveReplyConnectionHost } from '../replyConnectionHost';
 import { BOT_RUNTIME_STATUSES, updateBotRuntimeStatus } from '../runtimeStatus';
 import type { ActualConnectionsSnapshot, DesiredGatewayConnection } from './types';
 
@@ -85,6 +86,15 @@ export async function buildDesiredConnections(
 
   for (const definition of platformRegistry.listPlatforms()) {
     const platform = definition.id;
+
+    // Replies for these ride the connection itself: only the Node gateway can hold one and still
+    // send the replies, so they are reconciled only when routed there.
+    if (
+      definition.repliesOverConnection &&
+      resolveReplyConnectionHost(platform) !== 'message-gateway'
+    ) {
+      continue;
+    }
 
     // Only platforms owned by one of `hosts`. Loading the rest would decrypt
     // credentials for connections this call is never going to look at — pure

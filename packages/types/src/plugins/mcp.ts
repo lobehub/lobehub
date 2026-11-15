@@ -14,7 +14,9 @@ export type MCPErrorType =
   | 'INITIALIZATION_TIMEOUT'
   | 'VALIDATION_ERROR'
   | 'UNKNOWN_ERROR'
-  | 'AUTHORIZATION_ERROR';
+  | 'AUTHORIZATION_ERROR'
+  /** The MCP server address resolves to a private/reserved IP refused by the SSRF policy */
+  | 'SSRF_BLOCKED';
 
 export enum MCPInstallStep {
   AUTHORIZATION_REQUIRED = 'AUTHORIZATION_REQUIRED',
