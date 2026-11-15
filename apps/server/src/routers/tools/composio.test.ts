@@ -66,7 +66,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.agentExistsById.mockResolvedValue(true);
   mocks.connectorResolveByIdentifiers.mockResolvedValue([]);
-  mocks.connectorToolQueryByConnector.mockResolvedValue([]);
+  // The resolved connector lists the tool the call names
+  mocks.connectorToolQueryByConnector.mockResolvedValue([
+    { permission: 'auto', toolName: 'GMAIL_SEND_EMAIL' },
+  ]);
   mocks.connectorPickLegacyMirrors.mockImplementation(async (mirrors: unknown[]) => mirrors);
   mocks.isComposioNotFound.mockImplementation(function (error: unknown) {
     return (
@@ -241,6 +244,27 @@ describe('composioToolsRouter.executeAction', () => {
     expect(mocks.agentExistsById).toHaveBeenCalledWith('agt-hidden');
     expect(mocks.connectorResolveByIdentifiers).not.toHaveBeenCalled();
     expect(mocks.pluginQueryMirrors).not.toHaveBeenCalled();
+    expect(mocks.toolsExecute).not.toHaveBeenCalled();
+  });
+
+  /**
+   * @example
+   * expect(executeAction({ toolSlug: 'GMAIL_DELETE_ALL' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+   */
+  it("refuses a slug the resolved connector's tool list does not hold", async () => {
+    // ROOT CAUSE:
+    //
+    // Only a `disabled` row was blocked: a slug with no tool row passed as allowed, so a member
+    // who could resolve a workspace agent's Composio account ran any provider action under its
+    // owner's account. The synced tool rows are the full list the runtime offers.
+    mocks.connectorResolveByIdentifiers.mockResolvedValue([
+      { id: 'conn-gmail', metadata: { composio: { connectedAccountId: 'ca-connector' } } },
+    ]);
+
+    await expect(
+      caller().executeAction({ ...input, toolSlug: 'GMAIL_DELETE_ALL' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(mocks.connectorToolQueryByConnector).toHaveBeenCalledWith('conn-gmail');
     expect(mocks.toolsExecute).not.toHaveBeenCalled();
   });
 

@@ -99,15 +99,25 @@ export const composioToolsRouter = router({
       if (!account) throw notFound();
       const { connectedAccountId, connector, ownerUserId } = account;
 
-      // The per-tool gate the runtime applies (`ToolExecutionService`): a tool
-      // disabled on the connector this call runs never reaches Composio, for
-      // the agent the call names as for any other. It reads that resolved row's
-      // tools, so the gate and the execution cannot pick different rows. A
-      // legacy plugin mirror has no connector row and no per-tool settings.
+      // The per-tool gate the runtime applies (`ToolExecutionService`): only a
+      // tool the connector this call runs lists, and has not disabled, reaches
+      // Composio, for the agent the call names as for any other. Its synced
+      // tool rows are the complete list the runtime offers the model
+      // (`getComposioManifests`), so a slug missing from them is not a tool of
+      // this connection: forwarding it would run any provider action under the
+      // owner's account. It reads that resolved row's tools, so the gate and
+      // the execution cannot pick different rows. A legacy plugin mirror has no
+      // connector row and no per-tool settings.
       if (connector) {
         const tools = await ctx.connectorToolModel.queryByConnector(connector.id);
         const tool = tools.find((t) => t.toolName === input.toolSlug);
-        if (tool?.permission === ConnectorToolPermission.disabled) {
+        if (!tool) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: `"${input.toolSlug}" is not a tool of the "${input.identifier}" Composio connection.`,
+          });
+        }
+        if (tool.permission === ConnectorToolPermission.disabled) {
           return buildBlockedToolResponse(input.toolSlug);
         }
       }

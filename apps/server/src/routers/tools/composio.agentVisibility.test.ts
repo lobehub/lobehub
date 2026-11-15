@@ -141,6 +141,29 @@ describe('composioToolsRouter.executeAction — agent visibility (real models)',
 
   /**
    * @example
+   * expect(executeAction({ agentId, toolSlug: unlistedTool })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+   * expect(composio.tools.execute).not.toHaveBeenCalled();
+   */
+  it("refuses a slug missing from the agent's Composio tool list, for a teammate and the owner", async () => {
+    // ROOT CAUSE:
+    //
+    // The per-tool gate blocked only a `disabled` row. A provider tool absent from the synced
+    // rows read as allowed, so a member who saw a workspace agent sent any Gmail action, with any
+    // arguments, under the owner's account.
+    for (const userId of [mate, owner]) {
+      await expect(
+        callerFor(userId).executeAction({ ...call, toolSlug: 'GMAIL_DELETE_MESSAGE' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    }
+    expect(mocks.toolsExecute).not.toHaveBeenCalled();
+
+    // A tool the connector lists still runs.
+    await callerFor(mate).executeAction(call);
+    expect(mocks.toolsExecute).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * @example
    * expect(executeAction({ agentId, toolSlug: disabledTool })).resolves.toMatchObject({ success: true });
    * expect(composio.tools.execute).not.toHaveBeenCalled();
    */
