@@ -35,6 +35,23 @@ describe('planImageRefSync', () => {
     expect(planImageRefSync(files, 'topic-a', state).payload.insert).toEqual(['blob:a', 'blob:b']);
   });
 
+  it('still removes and renumbers references when new ones are not inserted (mobile)', () => {
+    const mobile = { insertNew: false };
+    const { state } = planImageRefSync(
+      [upload('blob:a', 'success'), upload('blob:b', 'success')],
+      'topic-a',
+      null,
+      mobile,
+    );
+    const files = [upload('blob:b', 'success'), upload('blob:new', 'pending')];
+
+    const { payload } = planImageRefSync(files, 'topic-a', state, mobile);
+
+    expect(payload.insert).toEqual([]);
+    expect(payload.removed).toEqual(['blob:a']);
+    expect(payload.refs.get('blob:b')?.number).toBe(1);
+  });
+
   it('does not reference attachments restored from a message or seen before', () => {
     const { state } = planImageRefSync([upload('blob:seen', 'pending')], 'topic-a', null);
     const files = [

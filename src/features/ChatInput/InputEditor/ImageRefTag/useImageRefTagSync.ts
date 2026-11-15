@@ -13,6 +13,15 @@ import { SYNC_IMAGE_REF_TAGS_COMMAND } from './ImageRefTagPlugin';
 const isNewUpload = (item: UploadFileItem | undefined) =>
   item?.status === 'pending' || item?.status === 'uploading' || item?.status === 'processing';
 
+export interface ImageRefSyncOptions {
+  /**
+   * Whether newly attached images are referenced at the caret. Off on mobile, which has no
+   * numbered image cards; existing references (e.g. from a restored message) still follow
+   * removals and renumbering there.
+   */
+  insertNew?: boolean;
+}
+
 export interface ImageRefSyncState {
   /** Preview URLs of the images attached at the last sync. */
   attached: Set<string>;
@@ -33,6 +42,7 @@ export const planImageRefSync = (
   files: UploadFileItem[],
   key: string | undefined,
   previous: ImageRefSyncState | null,
+  { insertNew = true }: ImageRefSyncOptions = {},
 ): { payload: SyncImageRefTagsPayload; state: ImageRefSyncState } => {
   const refs = getImageUploadRefs(files);
   const attached = new Set(refs.keys());
@@ -43,7 +53,10 @@ export const planImageRefSync = (
 
   const removed = [...previous.attached].filter((src) => !attached.has(src));
   const insert = [...attached].filter(
-    (src) => !previous.seen.has(src) && isNewUpload(files.find((file) => file.previewUrl === src)),
+    (src) =>
+      insertNew &&
+      !previous.seen.has(src) &&
+      isNewUpload(files.find((file) => file.previewUrl === src)),
   );
 
   return {
@@ -57,7 +70,10 @@ export const planImageRefSync = (
  * newly attached image is referenced at the caret, a removed image takes its references
  * with it, and the remaining references follow the images' new numbers.
  */
-export const useImageRefTagSync = (editor: IEditor | undefined) => {
+export const useImageRefTagSync = (
+  editor: IEditor | undefined,
+  { insertNew = true }: ImageRefSyncOptions = {},
+) => {
   const key = useChatInputUploadKey();
   const files = useFileStore(fileChatSelectors.chatUploadFileList(key));
   const stateRef = useRef<ImageRefSyncState | null>(null);
@@ -65,8 +81,10 @@ export const useImageRefTagSync = (editor: IEditor | undefined) => {
   useEffect(() => {
     if (!editor) return;
 
-    const { payload, state } = planImageRefSync(files, key, stateRef.current);
+    const { payload, state } = planImageRefSync(files, key, stateRef.current, {
+      insertNew,
+    });
     stateRef.current = state;
     editor.dispatchCommand(SYNC_IMAGE_REF_TAGS_COMMAND, payload);
-  }, [editor, files, key]);
+  }, [editor, files, insertNew, key]);
 };

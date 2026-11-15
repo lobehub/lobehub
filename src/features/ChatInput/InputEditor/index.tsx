@@ -294,8 +294,9 @@ const InputEditor = memo<{
   // Listen to editor's paste event for file uploads
   usePasteFile(editor, handlePasteFiles);
   // Reference each attached image inline and keep the references numbered like the images.
-  // Desktop only: the numbered image cards the references point at are a desktop composer UI.
-  useImageRefTagSync(mobile ? undefined : editor);
+  // New references are desktop only, since the numbered image cards are a desktop composer UI;
+  // references restored from a message still follow removals and renumbering on mobile.
+  useImageRefTagSync(editor, { insertNew: !mobile });
 
   useEffect(() => {
     const fn = (e: BeforeUnloadEvent) => {
