@@ -87,8 +87,8 @@ function extractStorageKeyFromUrl(url: string): string | undefined {
 
 /**
  * Resolve file URLs (proxy `/f/{fileId}` form or pre-signed storage URLs) to
- * the fileIds of the caller's files, deduped, proxy matches first. Storage
- * URLs are looked up by key within the caller's user / workspace scope.
+ * the fileIds of the caller's files, deduped, in the order the URLs come.
+ * Storage URLs are looked up by key within the caller's user / workspace scope.
  */
 export async function resolveFileIdsFromUrls(
   urls: string[],
@@ -96,40 +96,35 @@ export async function resolveFileIdsFromUrls(
 ): Promise<string[]> {
   if (urls.length === 0) return [];
 
-  const seen = new Set<string>();
-  const unresolved: string[] = [];
-
-  // Pass 1: regex on the proxy-URL form.
-  for (const url of urls) {
-    const match = url.match(FILE_PROXY_RE);
-    if (match) {
-      seen.add(match[1]);
-    } else {
-      unresolved.push(url);
-    }
-  }
+  // Pass 1: regex on the proxy-URL form; the rest are storage URLs by key.
+  const proxyIds = urls.map((url) => url.match(FILE_PROXY_RE)?.[1]);
+  const keys = urls.map((url, index) =>
+    proxyIds[index] ? undefined : extractStorageKeyFromUrl(url),
+  );
 
   // Pass 2: look up the remaining URLs by storage key in `files`. Same bytes
   // re-uploaded by the same user produce multiple rows with identical
-  // `url` + `file_hash`; dedupe per key so the agent doesn't receive the
+  // `url` + `file_hash`; take one id per key so the agent doesn't receive the
   // same asset N times.
-  if (unresolved.length > 0) {
-    const keys = unresolved.map(extractStorageKeyFromUrl).filter((key): key is string => !!key);
+  const firstIdPerKey = new Map<string, string>();
+  const lookupKeys = [...new Set(keys.filter((key): key is string => !!key))];
+  if (lookupKeys.length > 0) {
+    const rows = await ctx.db
+      .select({ id: files.id, url: files.url })
+      .from(files)
+      .where(and(buildWorkspaceWhere(ctx, files), inArray(files.url, lookupKeys)));
 
-    if (keys.length > 0) {
-      const rows = await ctx.db
-        .select({ id: files.id, url: files.url })
-        .from(files)
-        .where(and(buildWorkspaceWhere(ctx, files), inArray(files.url, keys)));
-
-      const firstIdPerUrl = new Map<string, string>();
-      for (const row of rows) {
-        if (!firstIdPerUrl.has(row.url)) firstIdPerUrl.set(row.url, row.id);
-      }
-      for (const id of firstIdPerUrl.values()) seen.add(id);
+    for (const row of rows) {
+      if (!firstIdPerKey.has(row.url)) firstIdPerKey.set(row.url, row.id);
     }
   }
 
+  const seen = new Set<string>();
+  urls.forEach((_, index) => {
+    const key = keys[index];
+    const id = proxyIds[index] ?? (key ? firstIdPerKey.get(key) : undefined);
+    if (id) seen.add(id);
+  });
   return [...seen];
 }
 

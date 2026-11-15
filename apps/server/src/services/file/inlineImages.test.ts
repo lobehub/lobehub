@@ -31,6 +31,14 @@ describe('collectMarkdownImageUrls', () => {
     ]);
   });
 
+  it('ignores image syntax inside code or escaped', () => {
+    expect(
+      collectMarkdownImageUrls(
+        'inline `![a](/f/file_1)`, escaped \\![b](/f/file_2)\n\n```md\n![c](/f/file_3)\n```\n![d](/f/file_4)',
+      ),
+    ).toEqual(['/f/file_4']);
+  });
+
   it('ignores plain links and text without images', () => {
     expect(collectMarkdownImageUrls('see [the file](https://app.lobehub.com/f/file_1)')).toEqual(
       [],

@@ -3,7 +3,11 @@ import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import { MessageModel } from '@/database/models/message';
-import { type InlineImage, resolveInlineImages } from '@/server/services/file/inlineImages';
+import {
+  collectMarkdownImageUrls,
+  type InlineImage,
+  resolveInlineImages,
+} from '@/server/services/file/inlineImages';
 import { redisService } from '@/server/services/redis';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 
@@ -113,16 +117,22 @@ export const takeHeteroSteer = async (
     return;
   }
 
-  let imageList: InlineImage[];
-  try {
-    imageList = await resolveInlineImages(ctx, first.request.prompt);
-  } catch (error) {
-    await returnFollowUps(scope, drained, drained.entries, error);
-    return;
-  }
-  if (imageList.length > 0 && !acceptsImages) {
+  // A session that only takes text gets no image follow-up: decided from the
+  // markdown alone, since the run asks again on every poll.
+  const hasImages = collectMarkdownImageUrls(first.request.prompt).length > 0;
+  if (hasImages && !acceptsImages) {
     await returnFollowUps(scope, drained, drained.entries, 'its images need a turn of their own');
     return;
+  }
+
+  let imageList: InlineImage[] = [];
+  if (hasImages) {
+    try {
+      imageList = await resolveInlineImages(ctx, first.request.prompt);
+    } catch (error) {
+      await returnFollowUps(scope, drained, drained.entries, error);
+      return;
+    }
   }
   await returnFollowUps(scope, drained, rest, 'delivered one at a time');
 

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as InlineImagesModule from '@/server/services/file/inlineImages';
+
 import {
   canSteerHeteroRun,
   consumeHeteroSteer,
@@ -24,7 +26,8 @@ const mocks = vi.hoisted(() => ({
   settle: vi.fn(),
 }));
 
-vi.mock('@/server/services/file/inlineImages', () => ({
+vi.mock('@/server/services/file/inlineImages', async (importOriginal) => ({
+  ...(await importOriginal<typeof InlineImagesModule>()),
   resolveInlineImages: mocks.resolveInlineImages,
 }));
 
@@ -156,12 +159,24 @@ describe('takeHeteroSteer', () => {
 
       expect(mocks.settle.mock.calls[0][2]).toEqual(['a', 'b']);
       expect(mocks.deliveries.size).toBe(0);
+      // Asked again on every poll: decided without reading or signing files.
+      expect(mocks.resolveInlineImages).not.toHaveBeenCalled();
     });
 
     it('steers as text when the links name no image of the user', async () => {
       mocks.drain.mockResolvedValue([followUp('a', 1, { prompt: pasted })]);
 
-      await expect(take()).resolves.toEqual({ content: pasted, messageId: 'msg-a' });
+      await expect(
+        takeHeteroSteer(ctx, { acceptsImages: true, agentId: 'agt-1', operationId: 'op-1', scope }),
+      ).resolves.toEqual({ content: pasted, messageId: 'msg-a' });
+    });
+
+    it('reads no files for a follow-up that only quotes image syntax in code', async () => {
+      const quoted = 'use `![a](/f/file_1)` in the README';
+      mocks.drain.mockResolvedValue([followUp('a', 1, { prompt: quoted })]);
+
+      await expect(take()).resolves.toEqual({ content: quoted, messageId: 'msg-a' });
+      expect(mocks.resolveInlineImages).not.toHaveBeenCalled();
     });
   });
 

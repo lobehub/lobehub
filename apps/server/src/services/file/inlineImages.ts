@@ -1,20 +1,16 @@
 import type { LobeChatDatabase } from '@/database/type';
+import { extractFinalReplyImageUrls } from '@/server/services/agentRuntime/finalReplyImages';
 
 import { resolveFileIdsFromUrls } from './extractFileIdsFromEditorData';
 import { resolveAttachmentMetadata } from './resolveAttachments';
 
 /**
- * `![alt](url)` and `![alt](<url> "title")`. The URL group stops at the first
- * whitespace or `)`, which is all an uploaded image link ever holds.
- */
-const MARKDOWN_IMAGE_RE = /!\[[^\]\n]*\]\(\s*<?([^\s)>]+)>?[^)\n]*\)/g;
-
-/**
- * The URLs of every markdown image in `markdown`, in order. Pure string scan.
+ * The URLs of every rendered markdown image in `markdown`, in order. Parsed
+ * as markdown, so image syntax inside code or escaped stays text.
  */
 export const collectMarkdownImageUrls = (markdown?: string | null): string[] => {
   if (!markdown || !markdown.includes('![')) return [];
-  return Array.from(markdown.matchAll(MARKDOWN_IMAGE_RE), (match) => match[1]);
+  return extractFinalReplyImageUrls(markdown);
 };
 
 export interface InlineImage {
