@@ -3,9 +3,17 @@
  */
 import { moment } from '@lobehub/editor';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import RichTextMessage from './RichTextMessage';
+
+vi.mock('@/features/MemberProfileCard/MentionProfileTrigger', () => ({
+  default: ({ children, id, type }: { children: React.ReactNode; id?: string; type?: string }) => (
+    <span data-mention-profile={id} data-mention-type={type}>
+      {children}
+    </span>
+  ),
+}));
 
 const mentionEditorState = {
   root: {
@@ -110,6 +118,19 @@ describe('RichTextMessage', () => {
     });
 
     expect(container.querySelector('.editor_mention')?.textContent).toBe('@Agent A');
+  });
+
+  it('should open the profile card of the mentioned Agent on hover', async () => {
+    const { container } = render(<RichTextMessage editorState={mentionEditorState} />);
+
+    await act(async () => {
+      await moment();
+    });
+
+    const trigger = container.querySelector('[data-mention-profile]');
+    expect(trigger?.getAttribute('data-mention-profile')).toBe('agent-a');
+    expect(trigger?.getAttribute('data-mention-type')).toBe('agent');
+    expect(trigger?.querySelector('.editor_mention')?.textContent).toBe('@Agent A');
   });
 
   // Regression: a local file dragged from the working sidebar serializes to a
