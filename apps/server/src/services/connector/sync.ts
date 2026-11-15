@@ -268,7 +268,15 @@ export const syncConnectorToolsById = async (
     serverDB: LobeChatDatabase | undefined;
     userId?: string | null;
   },
-  options: ConnectorToolSyncOptions = {},
+  options: ConnectorToolSyncOptions & {
+    /**
+     * By tool name, the `humanIntervention` a marketplace manifest gives a tool
+     * the server lists, which an MCP listing cannot carry (an HTTP marketplace
+     * install). It applies as a listed tool's does in
+     * {@link syncConnectorToolsFromList}.
+     */
+    humanInterventions?: ReadonlyMap<string, unknown>;
+  } = {},
 ): Promise<{ toolCount: number }> => {
   let connector = await ctx.connectorModel.findById(connectorId);
   if (!connector) throw new Error('Connector not found');
@@ -306,24 +314,31 @@ export const syncConnectorToolsById = async (
     throw err;
   }
 
-  const syncInputs = rawTools.map((t) => ({
-    crudType: inferCrudType(t.name),
-    description: t.description,
-    inputSchema: t.inputSchema as Record<string, unknown>,
-    // Kept even for view-only tools: a view's call must find the tool synced,
-    // while the manifest build leaves it out of the model's tool list.
-    metadata: buildMcpToolMetadata(
-      resolveMcpUiToolMeta(t._meta, false).visibility,
-      mcpApps
-        ? {
-            ...resolveMcpUiToolMeta(t._meta),
-            entrypoints: resolveMcpUiToolMeta(t._meta).entrypoints ?? [],
-            threadEntry: getMcpAppEntrypoints([t], true)[0],
-          }
-        : undefined,
-    ),
-    toolName: t.name,
-  }));
+  const syncInputs = rawTools.map((t) => {
+    const humanIntervention = options.humanInterventions?.get(t.name);
+    return {
+      crudType: inferCrudType(t.name),
+      defaultPermission: resolveConnectorToolPermission(humanIntervention),
+      description: t.description,
+      inputSchema: t.inputSchema as Record<string, unknown>,
+      // Kept even for view-only tools: a view's call must find the tool synced,
+      // while the manifest build leaves it out of the model's tool list.
+      metadata: withMandatoryApprovalMark(
+        buildMcpToolMetadata(
+          resolveMcpUiToolMeta(t._meta, false).visibility,
+          mcpApps
+            ? {
+                ...resolveMcpUiToolMeta(t._meta),
+                entrypoints: resolveMcpUiToolMeta(t._meta).entrypoints ?? [],
+                threadEntry: getMcpAppEntrypoints([t], true)[0],
+              }
+            : undefined,
+        ),
+        humanIntervention,
+      ),
+      toolName: t.name,
+    };
+  });
 
   await ctx.connectorToolModel.upsertMany(connectorId, syncInputs);
   if (options.pruneMissingAutoTools) {

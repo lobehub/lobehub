@@ -236,6 +236,46 @@ describe('installMarketplaceMcpConnector', () => {
     expect(buildConnectorMcpParams(connector)).toMatchObject({ ssrfSafe: true, type: 'http' });
   });
 
+  it("keeps the approval the marketplace manifest asks for on an HTTP server's tools", async () => {
+    vi.mocked(mcpService.listRawTools).mockResolvedValue([
+      { name: 'search' },
+      { name: 'send' },
+      { name: 'delete' },
+    ] as never);
+
+    await installMarketplaceMcpConnector(scope, 'remote-mcp', {
+      ...httpManifest,
+      api: [
+        { name: 'search', parameters: {} },
+        { humanIntervention: 'required', name: 'send', parameters: {} },
+        { humanIntervention: 'always', name: 'delete', parameters: {} },
+      ],
+    });
+
+    const [row] = await connectorRows();
+    const tools = await db
+      .select()
+      .from(userConnectorTools)
+      .where(eq(userConnectorTools.userConnectorId, row.id));
+    expect(
+      tools
+        .map(({ metadata, permission, toolName }) => ({ metadata, permission, toolName }))
+        .sort((a, b) => a.toolName.localeCompare(b.toolName)),
+    ).toEqual([
+      // An `always` stays mandatory past auto-run
+      { metadata: { mandatoryApproval: true }, permission: 'needs_approval', toolName: 'delete' },
+      { metadata: null, permission: 'auto', toolName: 'search' },
+      { metadata: null, permission: 'needs_approval', toolName: 'send' },
+    ]);
+
+    // Runs build the connector's manifest from those rows
+    const connector = (await new ConnectorModel(db, userId).findById(row.id))!;
+    const [manifest] = buildConnectorManifests([connector], tools);
+    expect(
+      Object.fromEntries(manifest.api.map((api) => [api.name, api.humanIntervention])),
+    ).toEqual({ delete: 'always', search: undefined, send: 'required' });
+  });
+
   it('removes the connector it created when the server cannot be reached', async () => {
     vi.mocked(mcpService.listRawTools).mockRejectedValue(new Error('connect ECONNREFUSED'));
 
@@ -246,6 +286,46 @@ describe('installMarketplaceMcpConnector', () => {
     expect(await connectorRows()).toEqual([]);
     expect(await pluginRows()).toEqual([]);
   });
+
+  it.each([
+    ['fails', () => Promise.reject(new Error('connect ECONNREFUSED')), 'connect ECONNREFUSED'],
+    ['lists no tools', () => Promise.resolve([]), { blocker: 'no-tools', status: 'blocked' }],
+  ])(
+    'keeps a connector the web re-added and finished while its listing %s',
+    async (_, listing, reported) => {
+      vi.mocked(mcpService.listRawTools).mockImplementation(async () => {
+        // The web install re-adds the identifier over this install's row
+        // (`connector.create` updates it), syncs its tools and marks it
+        const [row] = await connectorRows();
+        await new ConnectorModel(db, userId).update(row.id, {
+          metadata: { marketplaceInstalled: true, version: '0.3.0' },
+          status: 'connected',
+        });
+        await db.insert(userConnectorTools).values({
+          crudType: 'read',
+          permission: 'auto',
+          toolName: 'search',
+          userConnectorId: row.id,
+          userId,
+        });
+        return listing() as never;
+      });
+
+      // This install still reports its own failure
+      expect(
+        await installMarketplaceMcpConnector(scope, 'remote-mcp', httpManifest).catch(
+          (error: Error) => error.message,
+        ),
+      ).toEqual(reported);
+
+      const [connector, ...others] = await connectorRows();
+      expect(others).toEqual([]);
+      expect(connector.metadata).toEqual({ marketplaceInstalled: true, version: '0.3.0' });
+      expect((await db.select().from(userConnectorTools)).map((tool) => tool.toolName)).toEqual([
+        'search',
+      ]);
+    },
+  );
 
   it('writes nothing for a server that lists no tools', async () => {
     vi.mocked(mcpService.listRawTools).mockResolvedValue([]);

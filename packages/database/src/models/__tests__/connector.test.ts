@@ -984,4 +984,46 @@ describe('ConnectorModel', () => {
       expect(await otherModel.findById(created.id)).not.toBeNull();
     });
   });
+
+  describe('deleteIfMetadataContains', () => {
+    const tag = { installAttempt: 'attempt-1' };
+
+    it('deletes the row while its metadata still has the tag', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const created = await model.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: { avatar: 'a.png', ...tag },
+      });
+
+      expect(await model.deleteIfMetadataContains(created.id, tag)).toBe(true);
+      expect(await model.findById(created.id)).toBeNull();
+    });
+
+    it('keeps a row whose metadata was rewritten since', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const created = await model.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: tag,
+      });
+      await model.update(created.id, { metadata: { avatar: 'readded.png' } });
+
+      expect(await model.deleteIfMetadataContains(created.id, tag)).toBe(false);
+      expect(await model.findById(created.id)).toMatchObject({
+        metadata: { avatar: 'readded.png' },
+      });
+    });
+
+    it("does not delete another user's row", async () => {
+      const otherModel = new ConnectorModel(serverDB, otherUserId);
+      const created = await otherModel.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: tag,
+      });
+
+      expect(
+        await new ConnectorModel(serverDB, userId).deleteIfMetadataContains(created.id, tag),
+      ).toBe(false);
+      expect(await otherModel.findById(created.id)).not.toBeNull();
+    });
+  });
 });

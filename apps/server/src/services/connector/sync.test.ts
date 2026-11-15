@@ -336,6 +336,44 @@ describe('syncConnectorToolsById', () => {
     ]);
   });
 
+  it('applies the approval a marketplace manifest gives a listed tool', async () => {
+    vi.mocked(mcpService.listRawTools).mockResolvedValue([
+      { inputSchema: { type: 'object' }, name: 'search' },
+      { inputSchema: { type: 'object' }, name: 'send' },
+      { inputSchema: { type: 'object' }, name: 'delete' },
+    ]);
+    const upsertMany = vi.fn();
+
+    await syncConnectorToolsById(
+      'c1',
+      {
+        connectorModel: { findById: async () => httpConnector(null), updateStatus: vi.fn() } as any,
+        connectorToolModel: { upsertMany } as any,
+      },
+      {
+        humanInterventions: new Map([
+          ['send', 'required'],
+          ['delete', 'always'],
+        ]),
+      },
+    );
+
+    expect(upsertMany).toHaveBeenCalledWith('c1', [
+      expect.objectContaining({ defaultPermission: 'auto', metadata: null, toolName: 'search' }),
+      expect.objectContaining({
+        defaultPermission: 'needs_approval',
+        metadata: null,
+        toolName: 'send',
+      }),
+      // An `always` stays mandatory past auto-run
+      expect.objectContaining({
+        defaultPermission: 'needs_approval',
+        metadata: { mandatoryApproval: true },
+        toolName: 'delete',
+      }),
+    ]);
+  });
+
   it('drops only the auto tools the server no longer lists when asked to', async () => {
     vi.mocked(mcpService.listRawTools).mockResolvedValue([
       { description: 'Kept', inputSchema: { type: 'object' }, name: 'kept' },

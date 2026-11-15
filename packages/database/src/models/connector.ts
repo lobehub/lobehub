@@ -517,6 +517,28 @@ export class ConnectorModel {
     await this.db.delete(userConnectors).where(and(eq(userConnectors.id, id), this.ownership()));
   };
 
+  /**
+   * Delete the row, with its tools, only while its metadata still contains
+   * `match`: a writer that tagged the row removes it only if no one has
+   * rewritten it since (a re-add replaces the metadata). Returns whether it did.
+   */
+  deleteIfMetadataContains = async (
+    id: string,
+    match: Record<string, unknown>,
+  ): Promise<boolean> => {
+    const deleted = await this.db
+      .delete(userConnectors)
+      .where(
+        and(
+          eq(userConnectors.id, id),
+          this.ownership(),
+          sql`${userConnectors.metadata} @> ${JSON.stringify(match)}::jsonb`,
+        ),
+      )
+      .returning({ id: userConnectors.id });
+    return deleted.length > 0;
+  };
+
   query = async (
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
   ): Promise<DecryptedConnector[]> => {

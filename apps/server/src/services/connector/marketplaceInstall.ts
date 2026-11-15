@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   hasCallableMcpEndpoint,
   isMarketplaceInstallCompleted,
@@ -6,11 +8,11 @@ import {
 } from '@lobechat/const';
 import debug from 'debug';
 
+import type { DecryptedConnector } from '@/database/models/connector';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
-import type { ConnectorMetadata } from '@/database/schemas';
 import {
   ConnectorMcpConnectionType,
   ConnectorSourceType,
@@ -193,8 +195,12 @@ const canAddConnector = async ({ serverDB, userId, workspaceId }: MarketplaceIns
   });
 };
 
-/** The install's tool list replaces the stored one (see `pruneMissingAutoTools`). */
-const REPLACE_TOOLS = { pruneMissingAutoTools: true };
+/**
+ * Tags the row an install creates until it marks it finished, so a rollback
+ * only deletes a row that is still this install's: a re-add of the identifier
+ * meanwhile (the web install) rewrites the metadata, and the row is its own.
+ */
+const INSTALL_ATTEMPT_KEY = 'marketplaceInstallAttempt';
 
 /**
  * Install a marketplace MCP from the server (Agent Builder / Agent Management)
@@ -206,7 +212,10 @@ const REPLACE_TOOLS = { pruneMissingAutoTools: true };
  * concurrent installs of one server create it once. The install never
  * overwrites a row someone may still use, only an interrupted install's (see
  * {@link judgeHolder}), so a failed tool sync only has to delete the row it
- * created.
+ * created, and only while no one has re-added the identifier over it.
+ *
+ * An HTTP server's tools are the ones it lists, each with the approval the
+ * marketplace manifest gives it: the listing cannot carry one.
  */
 export const installMarketplaceMcpConnector = async (
   scope: MarketplaceInstallScope,
@@ -232,17 +241,20 @@ export const installMarketplaceMcpConnector = async (
   if ('blocker' in picked) return { blocker: picked.blocker, status: 'blocked' };
   const { deployment } = picked;
 
-  // A cloud server's tools are the ones its manifest lists; check before writing.
-  const cloudTools =
-    deployment.type === 'cloud'
+  // The tools the market lists, each with the approval its manifest asks for: a
+  // cloud server's whole tool list, and what an HTTP server's own listing lacks.
+  const marketTools =
+    manifest.api || manifest.tools
       ? cloudManifestTools(
           buildCloudMcpManifest({
             data: manifest,
             plugin: { description: manifest.description, icon: manifest.icon, identifier },
           }),
         )
-      : undefined;
-  if (cloudTools?.length === 0) return { blocker: 'no-tools', status: 'blocked' };
+      : [];
+  // Checked before writing
+  if (deployment.type === 'cloud' && marketTools.length === 0)
+    return { blocker: 'no-tools', status: 'blocked' };
 
   const token =
     deployment.type === 'http' && deployment.auth?.type === 'bearer'
@@ -254,7 +266,7 @@ export const installMarketplaceMcpConnector = async (
   const connectorToolModel = new ConnectorToolModel(serverDB, userId, workspaceId);
 
   // The version goes with each call the market is told about.
-  const metadata: ConnectorMetadata = {
+  const metadata: NonNullable<DecryptedConnector['metadata']> = {
     avatar: manifest.icon,
     description: manifest.description,
     version: manifest.version,
@@ -269,6 +281,7 @@ export const installMarketplaceMcpConnector = async (
     metadata[SSRF_SAFE_TRANSPORT_KEY] = true;
   }
 
+  const attempt = { [INSTALL_ATTEMPT_KEY]: randomUUID() };
   const claim = await connectorModel.createUnlessIdentifierHeld(
     {
       credentials: token ? JSON.stringify({ token, type: 'bearer' }) : null,
@@ -279,7 +292,7 @@ export const installMarketplaceMcpConnector = async (
           ? ConnectorMcpConnectionType.cloud
           : ConnectorMcpConnectionType.http,
       mcpServerUrl: deployment.type === 'http' ? deployment.url : null,
-      metadata,
+      metadata: { ...metadata, ...attempt },
       name: manifest.name || identifier,
       sourceType: ConnectorSourceType.marketplace,
       status: ConnectorStatus.disconnected,
@@ -292,34 +305,42 @@ export const installMarketplaceMcpConnector = async (
     return holderOutcome(verdict === 'replace' ? 'in-progress' : verdict);
   }
   const { created } = claim;
+  // The identifier may be re-added over the row meanwhile (the web install):
+  // the row is new, so its sync only adds tools, never pruning the re-add's,
+  // and the rollback leaves a re-added row with its tools.
+  const rollback = () => connectorModel.deleteIfMetadataContains(created.id, attempt);
 
   try {
-    const { toolCount } = cloudTools
-      ? await syncConnectorToolsFromList(
-          created.id,
-          cloudTools,
-          { connectorModel, connectorToolModel },
-          REPLACE_TOOLS,
-        )
-      : // Over the SSRF-safe transport, as the row's mark asks
-        await syncConnectorToolsById(
-          created.id,
-          { connectorModel, connectorToolModel, userId },
-          REPLACE_TOOLS,
-        );
+    const { toolCount } =
+      deployment.type === 'cloud'
+        ? await syncConnectorToolsFromList(created.id, marketTools, {
+            connectorModel,
+            connectorToolModel,
+          })
+        : // Over the SSRF-safe transport, as the row's mark asks
+          await syncConnectorToolsById(
+            created.id,
+            { connectorModel, connectorToolModel, userId },
+            {
+              humanInterventions: new Map(
+                marketTools.map((tool) => [tool.toolName, tool.humanIntervention]),
+              ),
+            },
+          );
 
     if (toolCount === 0) {
-      await connectorModel.delete(created.id);
+      await rollback();
       return { blocker: 'no-tools', status: 'blocked' };
     }
 
-    // Written last: until its tools are synced the row must stay uncallable.
+    // Written last, without the attempt tag: until its tools are synced the row
+    // must stay uncallable.
     await connectorModel.update(created.id, {
       metadata: { ...metadata, [MARKETPLACE_INSTALL_COMPLETED_KEY]: true },
     });
   } catch (error) {
     // A failed rollback is only logged: an unmarked row stays uncallable.
-    await connectorModel.delete(created.id).catch((rollbackError) => {
+    await rollback().catch((rollbackError) => {
       log('rollback of connector %s (%s) failed: %O', created.id, identifier, rollbackError);
     });
     throw error;
