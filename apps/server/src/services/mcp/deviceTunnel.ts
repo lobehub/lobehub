@@ -93,7 +93,12 @@ export const findPersonalMcpDevice = async (
       if (!device.online) continue;
       const clientKind = clientKindFromChannels(device.channels);
       if (clientKind === 'unknown') continue;
-      const clientKinds = await resolveMcpClientKinds(userId, device.deviceId, undefined, clientKind);
+      const clientKinds = await resolveMcpClientKinds(
+        userId,
+        device.deviceId,
+        undefined,
+        clientKind,
+      );
       if (clientKinds) return { clientKinds, deviceId: device.deviceId };
     }
     return undefined;

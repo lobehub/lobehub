@@ -118,7 +118,12 @@ describe('listDeviceMcpTools', () => {
   it('fails with the reason when the server cannot start', async () => {
     await expect(
       listDeviceMcpTools({
-        params: { args: [], command: 'lobehub-missing-mcp-server-binary', name: 'x', type: 'stdio' },
+        params: {
+          args: [],
+          command: 'lobehub-missing-mcp-server-binary',
+          name: 'x',
+          type: 'stdio',
+        },
       }),
     ).rejects.toThrow();
   });
