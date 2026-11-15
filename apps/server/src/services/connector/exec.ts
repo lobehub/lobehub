@@ -25,7 +25,11 @@ import {
 } from '@/server/services/mcp/deviceTunnel';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
-import { buildLastSyncedAtMap, scheduleStaleConnectorToolsRefresh } from './refresh';
+import {
+  buildLastSyncedAtMap,
+  connectorSyncContextForRow,
+  scheduleStaleConnectorToolsRefresh,
+} from './refresh';
 import { buildConnectorMcpParams, type ConnectorToolSyncContext } from './sync';
 import { ensureFreshConnectorToken } from './tokens';
 
@@ -252,19 +256,24 @@ export const callConnectorToolById = async (
   // throttled, and deferred — reuses the `tools` rows already loaded above.
   // Wrapped defensively: this is a pure optimization and must never break the
   // tool call, even if the scheduler itself throws.
+  // A personal row a private agent's workspace run resolved refreshes through
+  // its own scope (`connectorSyncContextForRow`).
   try {
-    scheduleStaleConnectorToolsRefresh(
-      [
-        {
-          id: connector.id,
-          mcpConnectionType: connector.mcpConnectionType,
-          mcpServerUrl: connector.mcpServerUrl,
-          metadata: connector.metadata,
-        },
-      ],
-      buildLastSyncedAtMap(tools),
-      ctx,
-    );
+    const refreshContext = connectorSyncContextForRow(ctx, connector, ctx.serverDB);
+    if (refreshContext) {
+      scheduleStaleConnectorToolsRefresh(
+        [
+          {
+            id: connector.id,
+            mcpConnectionType: connector.mcpConnectionType,
+            mcpServerUrl: connector.mcpServerUrl,
+            metadata: connector.metadata,
+          },
+        ],
+        buildLastSyncedAtMap(tools),
+        { ...refreshContext, userId: ctx.userId },
+      );
+    }
   } catch {
     // Background tool-list refresh is best-effort — never fail the tool call.
   }

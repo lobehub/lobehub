@@ -7,7 +7,7 @@ import { mcpService } from '@/server/services/mcp';
 import type * as ContentProcessorModule from '@/server/services/mcp/contentProcessor';
 
 import { callConnectorToolById, readConnectorUiResourceById } from './exec';
-import { scheduleStaleConnectorToolsRefresh } from './refresh';
+import { connectorSyncContextForRow, scheduleStaleConnectorToolsRefresh } from './refresh';
 import { ensureFreshConnectorToken } from './tokens';
 
 vi.mock('@/server/services/mcp', () => ({
@@ -32,6 +32,8 @@ vi.mock('./tokens', () => ({ ensureFreshConnectorToken: vi.fn(async (c) => c) })
 // verify the call site wires it up and stays isolated from it.
 vi.mock('./refresh', () => ({
   buildLastSyncedAtMap: vi.fn(() => new Map()),
+  // The run's own context unless a test hands a personal row its own scope
+  connectorSyncContextForRow: vi.fn((ctx: unknown) => ctx),
   scheduleStaleConnectorToolsRefresh: vi.fn(),
 }));
 
@@ -453,6 +455,28 @@ describe('callConnectorToolById', () => {
       ).rejects.toMatchObject({ code: 'FORBIDDEN' });
       expect(callCloudMcpEndpoint).not.toHaveBeenCalled();
     });
+  });
+
+  it("refreshes a personal row a workspace run resolved through the row's own scope", async () => {
+    // A private agent's workspace run resolves its owner's personal connector;
+    // the run's workspace-scoped models cannot write its tool rows.
+    const personalContext = { connectorModel: {}, connectorToolModel: {} } as any;
+    vi.mocked(connectorSyncContextForRow).mockReturnValueOnce(personalContext);
+    vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
+    const ctx = { ...makeCtx([connector], [tool()]), serverDB: {} as any, userId: 'user-1' };
+
+    await callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx);
+
+    expect(connectorSyncContextForRow).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({ id: 'c1' }),
+      ctx.serverDB,
+    );
+    expect(scheduleStaleConnectorToolsRefresh).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: 'c1' })],
+      expect.anything(),
+      { ...personalContext, userId: 'user-1' },
+    );
   });
 
   it('still returns the tool result when the background refresh scheduler throws', async () => {

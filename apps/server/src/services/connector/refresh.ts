@@ -1,6 +1,8 @@
+import type { LobeChatDatabase } from '@lobechat/database';
 import { connectorMcpEndpoint, shouldConnectViaDevice } from '@lobechat/utils/mcpEndpoint';
 import debug from 'debug';
 
+import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { ConnectorMcpConnectionType } from '@/database/schemas';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { after } from '@/server/utils/scheduleAfterResponse';
@@ -40,6 +42,25 @@ const pruneAttempts = (now: number): void => {
   for (const [id, ts] of lastAttemptAt) {
     if (now - ts > CONNECTOR_TOOLS_REFRESH_TTL_MS) lastAttemptAt.delete(id);
   }
+};
+
+/**
+ * The sync context that can write a resolved connector's rows. A private
+ * agent's workspace run can resolve its owner's personal connector, whose
+ * connector and tool rows live in the personal scope the run's
+ * workspace-scoped models cannot write (`ConnectorModel.forRow`), so its tool
+ * list is refreshed through that scope. Every other row is in the run's own
+ * scope. `undefined` when the personal scope can't be reached (no database).
+ */
+export const connectorSyncContextForRow = (
+  ctx: ConnectorToolSyncContext,
+  row: { userId: string; workspaceId: string | null },
+  db: LobeChatDatabase | undefined,
+): ConnectorToolSyncContext | undefined => {
+  const connectorModel = ctx.connectorModel.forRow(row);
+  if (connectorModel === ctx.connectorModel) return ctx;
+  if (!db) return undefined;
+  return { connectorModel, connectorToolModel: new ConnectorToolModel(db, row.userId) };
 };
 
 export interface StaleRefreshConnector {
