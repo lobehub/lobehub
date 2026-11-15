@@ -10,6 +10,7 @@ import pMap from 'p-map';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
+import { TopicModel } from '@/database/models/topic';
 import type { ChannelClaim } from '@/database/repositories/channel';
 import { ChannelExecutionRepository } from '@/database/repositories/channel';
 import { agentOperations, channelJobs, channelMembers, channels } from '@/database/schemas';
@@ -21,11 +22,15 @@ import { detectNoReply } from '@/server/services/conversationWake/noReply';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
+import { SystemAgentService } from '@/server/services/systemAgent';
 
 import { resolveChannelAttachments } from './attachments';
 import { ChannelRoutingService } from './ChannelRoutingService';
 import { notifyChannel } from './notify';
 import { registerLocalChannelAdvance, wakeChannel } from './queue';
+import { deliverRelayReceipt } from './relayReceipt';
+import { openChannelReply } from './replyOpening';
+import { createChannelWorktree } from './worktree';
 
 const LEASE_MS = 60_000;
 // Limit startup IO, not the number of Agents that may execute concurrently.
@@ -85,15 +90,24 @@ export class ChannelCoordinator {
               await this.complete(channelId, job.id, job.operationId ?? undefined);
               continue;
             }
-            const claim = await this.executions.claim(channelId, job.id, {
-              leaseMs: LEASE_MS,
-              leaseOwner: crypto.randomUUID(),
-              onlineDeviceIds,
-              serverDefaultAgentConfig: getServerDefaultAgentConfig(),
-            });
+            // Before the claim: a reply that moves into a Thread runs there from the start.
+            await openChannelReply(this.db, channelId, job.id);
+            const claimNow = () =>
+              this.executions.claim(channelId, job.id, {
+                leaseMs: LEASE_MS,
+                leaseOwner: crypto.randomUUID(),
+                onlineDeviceIds,
+                serverDefaultAgentConfig: getServerDefaultAgentConfig(),
+              });
+            let claim = await claimNow();
+            if (
+              !claim &&
+              (await this.moveToWorktree(channelId, job.id, channel.workspaceId, onlineDeviceIds))
+            )
+              claim = await claimNow();
             await Promise.all([
               notifyChannel(this.db, channelId),
-              claim ? this.dispatch(claim, channel.workspaceId) : undefined,
+              claim ? this.dispatch(claim, channel.workspaceId, channel.projectId) : undefined,
             ]);
           }
         },
@@ -104,7 +118,39 @@ export class ChannelCoordinator {
     }
   };
 
-  private async dispatch({ job, member, topic }: ChannelClaim, workspaceId: string | null) {
+  /**
+   * A job held back only because another run uses its member's directory moves its branch into
+   * a worktree of that directory instead of waiting. Returns whether the branch got one; a
+   * directory that cannot host one (not a git repo, device too old) keeps the job waiting.
+   */
+  private async moveToWorktree(
+    channelId: string,
+    jobId: string,
+    workspaceId: string | null,
+    onlineDeviceIds: string[],
+  ) {
+    const candidate = await this.executions.worktreeCandidate(channelId, jobId);
+    if (!candidate || !onlineDeviceIds.includes(candidate.deviceId)) return false;
+    // A device call, so it runs outside the channel lock; assignment rechecks the member.
+    const created = await createChannelWorktree(candidate, workspaceId);
+    if (created.path === undefined) {
+      await this.executions.worktreeUnavailable(channelId, candidate, created.error);
+      return false;
+    }
+    return this.executions.assignWorktree(channelId, candidate, created.path);
+  }
+
+  /**
+   * `projectId` is the Channel's own project (`channels.projectId`), not one inferred
+   * from the Agent: a Channel that belongs to a project runs inside it. It travels as
+   * `appContext.projectId` so the run gets the project prompt, is recognised as the
+   * project coordinator, and files the tasks it creates under the project.
+   */
+  private async dispatch(
+    { job, member, topic }: ChannelClaim,
+    workspaceId: string | null,
+    projectId?: string | null,
+  ) {
     if (
       !job.operationId ||
       !job.leaseOwner ||
@@ -115,17 +161,19 @@ export class ChannelCoordinator {
     )
       throw new Error('Incomplete Channel execution claim');
     const config: ChannelExecutionConfig = structuredClone(job.executionConfig);
-    // The claimed Channel environment is authoritative for this run.
-    config.agencyConfig = {
-      ...config.agencyConfig,
-      executionTarget: config.deviceId ? 'device' : 'none',
-      executionTargetSelectionPolicy: 'fixed',
-      boundDeviceId: config.deviceId,
-      workingDirByDevice:
-        config.deviceId && config.workingDirectory
+    // A device a member picked for this Agent in the Channel is authoritative for the run.
+    // Without one the Channel binds nothing: the Agent runs where its own settings say, as the
+    // requester's ordinary conversation with it would.
+    if (config.deviceId)
+      config.agencyConfig = {
+        ...config.agencyConfig,
+        executionTarget: 'device',
+        executionTargetSelectionPolicy: 'fixed',
+        boundDeviceId: config.deviceId,
+        workingDirByDevice: config.workingDirectory
           ? { [config.deviceId]: config.workingDirectory }
           : {},
-    };
+      };
     const completion: AgentHook = {
       id: `channel:${job.id}`,
       type: 'onComplete',
@@ -170,9 +218,11 @@ export class ChannelCoordinator {
               'Device cannot track Native operation lifetime; update its client',
           );
       }
-      const [input, context] = await Promise.all([
+      const [input, context, primaryReply, opening] = await Promise.all([
         this.executions.input(job.channelId, job.id),
         this.executions.recentContext(job.channelId, job.id),
+        this.executions.primaryReply(job.channelId, job.id),
+        this.executions.openingReply(job.channelId, job.id),
       ]);
       const attachments = await resolveChannelAttachments(
         this.db,
@@ -188,14 +238,21 @@ export class ChannelCoordinator {
         additionalPluginIds: [ChannelIdentifier],
         agentId: member.agentId,
         agentConfigSnapshot: config,
-        appContext: { topicId: topic.id },
+        // No device picked in the Channel: the requester's own device for this Agent applies.
+        snapshotFollowsCallerDevice: !config.deviceId,
+        appContext: { ...(projectId ? { projectId } : {}), topicId: topic.id },
         deviceId: config.deviceId,
-        disableLocalSystem: !config.deviceId,
         ...attachments,
         hooks: [completion],
         instructions: CHANNEL_INSTRUCTIONS,
         maxSteps: 32,
-        prompt: buildChannelPrompt(job.manifest, input, { context, wake: job.wake }),
+        prompt: buildChannelPrompt(job.manifest, input, {
+          context: context.messages,
+          omitted: context.omitted,
+          opening,
+          primaryReply,
+          wake: job.wake,
+        }),
         reservedOperationId: job.operationId,
         trigger: 'channel',
         userInterventionConfig: { approvalMode: 'headless' },
@@ -258,6 +315,7 @@ export class ChannelCoordinator {
         await this.stopWriters([job]);
         return;
       }
+      let reply = job.draft;
       if (job.draft === null) {
         if (!operation.userId || !job.topicId) return;
         const final = await new MessageModel(
@@ -283,10 +341,21 @@ export class ChannelCoordinator {
         }
         await this.executions.accepted(channelId, jobId);
         await this.executions.saveDraft(channelId, jobId, content);
+        reply = content;
       }
-      await this.executions.publish(channelId, jobId);
+      const replyMessageId = await this.executions.publish(channelId, jobId);
       await this.stopWriters([job]);
       await notifyChannel(this.db, channelId);
+      // A reply to a relayed request also goes back to the Agent that relayed it.
+      await deliverRelayReceipt(this.db, { channelId, jobId, replyMessageId }).catch((error) =>
+        console.error('[channel:relay-receipt]', error),
+      );
+      this.summarizeTopicTitle(channelId, jobId, {
+        lastAssistantContent: reply,
+        topicId: job.topicId,
+        userId: operation.userId,
+        workspaceId: operation.workspaceId,
+      });
     } else if (['error', 'interrupted', 'abandoned'].includes(operation.status)) {
       await this.executions.fail(channelId, jobId, {
         message: 'Agent execution ended without a reply',
@@ -295,6 +364,54 @@ export class ChannelCoordinator {
       // Device cancellation/unknown outcomes keep the physical writer until confirmed by stop.
     }
   };
+
+  /**
+   * Names a responder's topic after its first published reply, as the bot callback does. The
+   * title comes from the request itself: the topic's user message is the wrapped Channel prompt.
+   * Best-effort, so it never affects delivery.
+   */
+  private summarizeTopicTitle(
+    channelId: string,
+    jobId: string,
+    {
+      lastAssistantContent,
+      topicId,
+      userId,
+      workspaceId,
+    }: {
+      lastAssistantContent: string | null;
+      topicId: string | null;
+      userId: string | null;
+      workspaceId: string | null;
+    },
+  ): void {
+    if (!lastAssistantContent || !topicId || !userId) return;
+
+    const topicModel = new TopicModel(this.db, userId, workspaceId ?? undefined);
+    topicModel
+      .findById(topicId)
+      .then(async (topic) => {
+        if (topic?.title) return;
+
+        const input = await this.executions.input(channelId, jobId);
+        const userPrompt = input.map((message) => message.content).join('\n');
+        if (!userPrompt) return;
+
+        const title = await new SystemAgentService(
+          this.db,
+          userId,
+          workspaceId ?? undefined,
+        ).generateTopicTitle({ lastAssistantContent, topicId, userPrompt });
+        if (!title) return;
+
+        await topicModel.update(topicId, { title });
+        // Viewers read the title from the Channel view, which was sent before it existed.
+        await notifyChannel(this.db, channelId);
+      })
+      .catch((error) => {
+        console.error('[channel:summarizeTopicTitle]', error);
+      });
+  }
 
   stopWriters = async (
     jobs: Array<{ channelId: string; id: string; operationId: string | null }>,
@@ -318,7 +435,10 @@ export class ChannelCoordinator {
         ? await this.executions.revokeExpiredLease(job.channelId, job.id)
         : 'settled';
       if (dispatch === 'live') continue;
-      if (row.config?.runtime === 'native') {
+      // A Native run, or any run with no device picked in the Channel, went through the
+      // ordinary pipeline, which knows where it routed the run; stop it there. Only a run on a
+      // device picked in the Channel needs that device to confirm the external process exited.
+      if (row.config?.runtime === 'native' || !row.config?.deviceId) {
         const result = await this.service(
           row.operation.userId,
           row.operation.workspaceId,
@@ -326,12 +446,16 @@ export class ChannelCoordinator {
           operationId: job.operationId,
           topicId: row.operation.topicId ?? undefined,
         });
+        // The ordinary pipeline may have run it on a device. A terminal status does not prove that
+        // process exited (a lost acknowledgement can fail the operation while it runs on), so an
+        // unconfirmed device cancellation keeps the writer, as for a device picked in the Channel.
+        if (result.deviceCancellationConfirmed === false) continue;
         if (
           !result.success &&
           !['done', 'error', 'interrupted', 'abandoned'].includes(row.operation.status)
         )
           continue;
-        if (row.config.deviceId) {
+        if (row.config?.runtime === 'native' && row.config.deviceId) {
           const stopped = await deviceGateway.executeToolCall(
             {
               deviceId: row.config.deviceId,
@@ -346,7 +470,7 @@ export class ChannelCoordinator {
             continue;
         }
         await this.executions.releaseWriter(job.channelId, job.id);
-      } else if (row.config?.deviceId) {
+      } else {
         // Use the frozen identity even if runtime cleanup already removed the topic marker.
         const result = await deviceGateway.executeToolCall(
           {

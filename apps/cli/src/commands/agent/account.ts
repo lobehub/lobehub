@@ -17,6 +17,7 @@ import { readFileSync } from 'node:fs';
 import { text } from 'node:stream/consumers';
 
 import type { Command } from 'commander';
+import { InvalidArgumentError } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../../api/client';
@@ -44,7 +45,9 @@ const parseCapabilities = (value: string) => {
   const known = ['login', 'receive', 'send', 'sign'];
   const unknown = [...granted].filter((item) => !known.includes(item));
   if (unknown.length > 0) {
-    throw new Error(`Unknown capability: ${unknown.join(', ')}. Valid values: ${known.join(', ')}.`);
+    throw new Error(
+      `Unknown capability: ${unknown.join(', ')}. Valid values: ${known.join(', ')}.`,
+    );
   }
 
   return {
@@ -65,6 +68,29 @@ const readJsonObject = async (source: string, label: string): Promise<Record<str
 };
 
 /** `key=value` pairs from a repeatable option. */
+const WAKE_MODES = ['on', 'off'] as const;
+type WakeMode = (typeof WAKE_MODES)[number];
+
+const parseWakeMode = (value: string): WakeMode => {
+  if ((WAKE_MODES as readonly string[]).includes(value)) return value as WakeMode;
+  throw new InvalidArgumentError(`Expected one of: ${WAKE_MODES.join(', ')}`);
+};
+
+const parseMinutes = (value: string): number => {
+  const minutes = Number(value);
+  if (!Number.isInteger(minutes) || minutes <= 0) {
+    throw new InvalidArgumentError('Expected a whole number of minutes');
+  }
+  return minutes;
+};
+
+/** Comma-separated addresses or `@domain`s; `""` clears the list. */
+const parseSenders = (value: string): string[] =>
+  value
+    .split(',')
+    .map((sender) => sender.trim())
+    .filter(Boolean);
+
 const collectPair = (value: string, previous: Record<string, string> = {}) => {
   const index = value.indexOf('=');
   if (index <= 0) throw new Error(`Expected key=value, got: ${value}`);
@@ -187,6 +213,12 @@ export function registerAgentAccountCommand(agent: Command) {
       if (item.credentialHint?.username) {
         console.log(`    Username:   ${item.credentialHint.username}`);
       }
+      const wake = item.settings?.wake;
+      console.log(`  Wake:         ${wake?.mode ?? 'on'}`);
+      if (wake?.wakeSenders?.length) {
+        console.log(`    Senders:    ${wake.wakeSenders.join(', ')}`);
+      }
+      if (wake?.digestMinutes) console.log(`    Digest:     every ${wake.digestMinutes} min`);
       if (item.createdAt) console.log(`  Created:      ${timeAgo(item.createdAt)}`);
     });
 
@@ -304,19 +336,38 @@ export function registerAgentAccountCommand(agent: Command) {
       parseCapabilities,
     )
     .option('--metadata-file <path>', 'JSON object of non-secret metadata ("-" for stdin)')
+    .option(
+      '--wake <mode>',
+      'on: listed senders and replies to the agent wake it at once, the rest waits for the digest; off: never wake',
+      parseWakeMode,
+    )
+    .option(
+      '--wake-senders <list>',
+      'Comma-separated senders that wake the agent at once: addresses or @domains ("" to clear)',
+      parseSenders,
+    )
+    .option(
+      '--digest-minutes <minutes>',
+      'How long the digest collects held messages',
+      parseMinutes,
+    )
     .action(
       async (
         accountId: string,
         options: {
           capabilities?: ReturnType<typeof parseCapabilities>;
+          digestMinutes?: number;
           displayName?: string;
           metadataFile?: string;
+          wake?: WakeMode;
+          wakeSenders?: string[];
         },
       ) => {
         const patch: {
           capabilities?: ReturnType<typeof parseCapabilities>;
           displayName?: string | null;
           metadata?: Record<string, unknown>;
+          settings?: Record<string, any>;
         } = {};
         if (options.displayName !== undefined) patch.displayName = options.displayName || null;
         if (options.capabilities) patch.capabilities = options.capabilities;
@@ -324,13 +375,28 @@ export function registerAgentAccountCommand(agent: Command) {
           patch.metadata = await readJsonObject(options.metadataFile, 'metadata');
         }
 
+        const client = await getTrpcClient();
+
+        const wakePatch = {
+          ...(options.wake ? { mode: options.wake } : {}),
+          ...(options.wakeSenders ? { wakeSenders: options.wakeSenders } : {}),
+          ...(options.digestMinutes ? { digestMinutes: options.digestMinutes } : {}),
+        };
+        if (Object.keys(wakePatch).length > 0) {
+          // Settings are written whole: start from what the account holds now.
+          const current: any = await client.agentAccount.get.query({ id: accountId });
+          const settings = current?.settings ?? {};
+          patch.settings = { ...settings, wake: { ...settings.wake, ...wakePatch } };
+        }
+
         if (Object.keys(patch).length === 0) {
-          log.error('Nothing to update. Pass --display-name, --capabilities or --metadata-file.');
+          log.error(
+            'Nothing to update. Pass --display-name, --capabilities, --metadata-file, --wake, --wake-senders or --digest-minutes.',
+          );
           process.exit(1);
           return;
         }
 
-        const client = await getTrpcClient();
         await client.agentAccount.update.mutate({ id: accountId, ...patch });
         console.log(`${pc.green('✓')} Updated account ${pc.bold(accountId)}`);
       },
@@ -558,7 +624,9 @@ export function registerAgentInboxCommand(agent: Command) {
       }
       if (message.threadKey) console.log(`  Thread:   ${message.threadKey}`);
       if (message.attachments?.length) {
-        const names = message.attachments.map((file: any) => file.filename || `#${file.index}`).join(', ');
+        const names = message.attachments
+          .map((file: any) => file.filename || `#${file.index}`)
+          .join(', ');
         console.log(`  Files:    ${names}`);
       }
       console.log(

@@ -1,6 +1,5 @@
-import { getComposioAppByIdentifier } from '@lobechat/const';
+import { getComposioAppByIdentifier, hasCallableMcpEndpoint } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
-import { buildMcpToolMetadata } from '@lobechat/const/mcpApp';
 import { upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -11,6 +10,10 @@ import {
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
+import {
+  EvalConnectorUpdateError,
+  withoutEvalConnectorMarker,
+} from '@/database/models/connectorEval';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
 import { WorkspaceModel } from '@/database/models/workspace';
@@ -37,13 +40,17 @@ import {
   discoverConnectorOAuth,
   getConnectorRedirectUri,
   resolveConnectorClient,
+  resolveConnectorOAuthScopes,
   toClientInformation,
 } from '@/server/services/connector/oauth';
 import {
   generateConnectorOAuthState,
   saveConnectorOAuthState,
 } from '@/server/services/connector/stateStore';
-import { syncConnectorToolsById } from '@/server/services/connector/sync';
+import {
+  pruneMissingAutoConnectorTools,
+  syncConnectorToolsById,
+} from '@/server/services/connector/sync';
 import {
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,
@@ -51,6 +58,8 @@ import {
 } from '@/server/utils/connectorAttribution';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import { toClientToolSyncInputs } from './_helpers/clientToolSyncInputs';
+import { withRequestConnectorCallers } from './_helpers/connectorCallContext';
 import {
   assertConnectorCredentialsManageable,
   assertConnectorMaintainable,
@@ -58,6 +67,7 @@ import {
   getConnectorMemberManage,
   isWorkspaceConnectorAdmin,
 } from './_helpers/connectorManagePolicy';
+import { resolveDefaultPermission } from './_helpers/connectorToolPermission';
 import { upsertConnectorEntry } from './_helpers/upsertConnectorEntry';
 
 const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -103,6 +113,18 @@ const connectorCredentialsInputSchema = z.discriminatedUnion('type', [
   z.object({ headers: z.record(z.string(), z.string()), type: z.literal('header') }),
 ]);
 
+const mcpConnectionTypeSchema = z.enum([
+  ConnectorMcpConnectionType.http,
+  ConnectorMcpConnectionType.stdio,
+  ConnectorMcpConnectionType.cloud,
+]);
+const mcpServerUrlSchema = z.string().url();
+const mcpStdioConfigSchema = z.object({
+  args: z.array(z.string()).optional(),
+  command: z.string(),
+  env: z.record(z.string(), z.string()).optional(),
+});
+
 const createConnectorSchema = z.object({
   /**
    * Bind this connector to a specific agent (Agent > Workspace/Personal). When
@@ -114,21 +136,9 @@ const createConnectorSchema = z.object({
   credentials: connectorCredentialsInputSchema.optional(),
   identifier: z.string().min(1).max(255),
   isEnabled: z.boolean().optional().default(true),
-  mcpConnectionType: z
-    .enum([
-      ConnectorMcpConnectionType.http,
-      ConnectorMcpConnectionType.stdio,
-      ConnectorMcpConnectionType.cloud,
-    ])
-    .optional(),
-  mcpServerUrl: z.string().url().optional(),
-  mcpStdioConfig: z
-    .object({
-      args: z.array(z.string()).optional(),
-      command: z.string(),
-      env: z.record(z.string(), z.string()).optional(),
-    })
-    .optional(),
+  mcpConnectionType: mcpConnectionTypeSchema.optional(),
+  mcpServerUrl: mcpServerUrlSchema.optional(),
+  mcpStdioConfig: mcpStdioConfigSchema.optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   name: z.string().min(1).max(255),
   oidcConfig: oidcConfigSchema.optional(),
@@ -373,7 +383,8 @@ export const connectorRouter = router({
       // (written by the OAuth connect path), and trusting it here would let a
       // member spoof connector attribution. No existing row on create → the
       // field is simply removed.
-      metadata: withTrustedLinkedByUserId(input.metadata, undefined) ?? null,
+      metadata:
+        withoutEvalConnectorMarker(withTrustedLinkedByUserId(input.metadata, undefined)) ?? null,
       name: input.name,
       oidcConfig: input.oidcConfig ?? null,
     };
@@ -618,21 +629,18 @@ export const connectorRouter = router({
       // Discovery and registration failures below are server-compatibility
       // problems the user must fix in their OAuth setup, not internal errors —
       // surface them as BAD_REQUEST with the reason so the form can show it.
-      const { authorizationServerUrl, metadata } = await discoverConnectorOAuth(
-        connector.mcpServerUrl,
-      ).catch((error: unknown) => {
-        throw new TRPCError({
-          cause: error,
-          code: 'BAD_REQUEST',
-          message: (error as Error)?.message ?? String(error),
-        });
-      });
+      const discovery = await discoverConnectorOAuth(connector.mcpServerUrl).catch(
+        (error: unknown) => {
+          throw new TRPCError({
+            cause: error,
+            code: 'BAD_REQUEST',
+            message: (error as Error)?.message ?? String(error),
+          });
+        },
+      );
 
-      // Default to the scopes advertised by the server when the user did not
-      // specify any — many MCP authorization servers reject (or issue a useless
-      // token for) a scope-less request.
-      const scopes =
-        existing.scopes && existing.scopes.length > 0 ? existing.scopes : metadata.scopes_supported;
+      const { authorizationServerUrl, metadata } = discovery;
+      const scopes = resolveConnectorOAuthScopes({ discovery, existingScopes: existing.scopes });
 
       // 2. Resolve the OAuth client: pre-registration, CIMD, then DCR.
       const { clientId, clientSecret, scheme, tokenEndpointAuthMethod } =
@@ -700,8 +708,23 @@ export const connectorRouter = router({
           // agent scope must go through bindAgent/unbindAgent (agent edit-rights
           // + uniqueness guards), not the generic update patch.
           .omit({ agentId: true, identifier: true, sourceType: true })
-          // Allow `null` here so an edit can clear credentials (switch to no-auth).
-          .extend({ credentials: connectorCredentialsInputSchema.nullish() }),
+          // Allow `null` here so an edit can clear credentials (switch to no-auth),
+          // drop an OAuth client (undoing a failed switch to OAuth), or put back
+          // an endpoint-less row (undoing a failed install over a legacy plugin's
+          // tool projection).
+          .extend({
+            credentials: connectorCredentialsInputSchema.nullish(),
+            mcpConnectionType: mcpConnectionTypeSchema.nullish(),
+            mcpServerUrl: mcpServerUrlSchema.nullish(),
+            mcpStdioConfig: mcpStdioConfigSchema.nullish(),
+            oidcConfig: oidcConfigSchema.nullish(),
+            // `create` re-sources the row it upserts, so undoing a failed custom
+            // install over a legacy marketplace projection puts its source back.
+            // Only between the two install sources `create` moves a row across.
+            sourceType: z
+              .enum([ConnectorSourceType.custom, ConnectorSourceType.marketplace])
+              .optional(),
+          }),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -717,19 +740,29 @@ export const connectorRouter = router({
       // silently clear) the connector's authorizer. Untouched when the patch
       // omits metadata.
       const metadata = withTrustedLinkedByUserId(patch.metadata, target.metadata);
-      await ctx.connectorModel.update(input.id, {
-        ...patch,
-        ...(patch.metadata === undefined ? {} : { metadata }),
-        // undefined → leave untouched; null → clear; object → encrypt the JSON string.
-        // When credentials are cleared, also drop the cached expiry timestamp so
-        // token-refresh logic doesn't act on a stale value for the new server.
-        ...(credentials === undefined
-          ? {}
-          : {
-              credentials: credentials ? JSON.stringify(credentials) : null,
-              ...(credentials === null ? { tokenExpiresAt: null } : {}),
-            }),
-      } as any);
+      try {
+        await ctx.connectorModel.update(input.id, {
+          ...patch,
+          ...(patch.metadata === undefined ? {} : { metadata }),
+          // A new OAuth client needs a new authorization: the row stays
+          // disconnected until the callback connects it, so a client can tell
+          // a successful callback from a canceled one
+          ...(patch.oidcConfig ? { status: ConnectorStatus.disconnected } : {}),
+          // undefined → leave untouched; null → clear; object → encrypt the JSON string.
+          // When credentials are cleared, also drop the cached expiry timestamp so
+          // token-refresh logic doesn't act on a stale value for the new server.
+          ...(credentials === undefined
+            ? {}
+            : {
+                credentials: credentials ? JSON.stringify(credentials) : null,
+                ...(credentials === null ? { tokenExpiresAt: null } : {}),
+              }),
+        } as any);
+      } catch (error) {
+        if (error instanceof EvalConnectorUpdateError)
+          throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
+        throw error;
+      }
     }),
 
   delete: connectorWriteProcedure
@@ -786,7 +819,13 @@ export const connectorRouter = router({
    * user permission settings are preserved.
    */
   syncTools: connectorWriteProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        /** An install: `auto` tools the server no longer lists are dropped. */
+        pruneMissingAutoTools: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
       const target = await ctx.connectorModel.findById(input.id);
       if (!target) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
@@ -794,7 +833,9 @@ export const connectorRouter = router({
       // a maintenance operation, gated like delete/reset.
       await assertConnectorMaintainable(ctx, target);
       try {
-        return await syncConnectorToolsById(input.id, ctx);
+        return await syncConnectorToolsById(input.id, ctx, {
+          pruneMissingAutoTools: input.pruneMissingAutoTools,
+        });
       } catch (err: any) {
         // Keep actionable rejections and their structured reason for the client.
         if (err instanceof TRPCError) throw err;
@@ -819,15 +860,18 @@ export const connectorRouter = router({
         args: z.string().optional(),
         /** An MCP App view's `tools/call`: only tools visible to the app run. */
         fromApp: z.boolean().optional(),
+        fromEntrypoint: z.boolean().optional(),
         identifier: z.string().min(1),
         /** With `fromApp`: the server the view came from (`getMcpServerFingerprint`). */
         server: z.string().optional(),
         toolName: z.string().min(1),
+        /** The conversation the call runs in, reported as the call's session. */
+        topicId: z.string().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        return await callConnectorToolById(input, ctx);
+        return await callConnectorToolById(input, withRequestConnectorCallers(ctx));
       } catch (err: any) {
         if (err instanceof ConnectorToolCallError) {
           throw new TRPCError({ cause: err, code: err.code, message: err.message });
@@ -971,12 +1015,23 @@ export const connectorRouter = router({
         tools: z.array(
           z.object({
             description: z.string().optional(),
+            /**
+             * A manifest tool's `humanIntervention` (cloud marketplace installs):
+             * `required` / `always`, or rules or a dynamic config that can ask
+             * for either, make a newly synced tool need approval. One that can
+             * ask for `always` keeps it on every sync, since no approval mode
+             * waives it.
+             */
+            humanIntervention: z.unknown().optional(),
             inputSchema: z.record(z.string(), z.unknown()).optional(),
             toolName: z.string(),
             /** The MCP tool's `_meta.ui.visibility`, when it declares one. */
             visibility: z.array(z.string()).optional(),
+            mcpAppMeta: z.record(z.string(), z.unknown()).optional(),
           }),
         ),
+        /** An install: `auto` tools the client no longer lists are dropped. */
+        pruneMissingAutoTools: z.boolean().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -985,15 +1040,16 @@ export const connectorRouter = router({
       // Same gate as `syncTools` — rewrites the connector's tool rows.
       await assertConnectorMaintainable(ctx, target);
 
-      const syncInputs = input.tools.map((t) => ({
-        crudType: inferCrudType(t.toolName),
-        description: t.description,
-        inputSchema: t.inputSchema,
-        metadata: buildMcpToolMetadata(t.visibility),
-        toolName: t.toolName,
-      }));
+      const syncInputs = await toClientToolSyncInputs(input.tools, ctx.userId);
 
       await ctx.connectorToolModel.upsertMany(input.id, syncInputs);
+      if (input.pruneMissingAutoTools) {
+        await pruneMissingAutoConnectorTools(
+          ctx.connectorToolModel,
+          input.id,
+          syncInputs.map((tool) => tool.toolName),
+        );
+      }
       await ctx.connectorModel.updateStatus(input.id, ConnectorStatus.connected);
       return { toolCount: syncInputs.length };
     }),
@@ -1076,6 +1132,15 @@ export const connectorRouter = router({
         return { connectorId: null, toolCount: 0 };
       }
 
+      // A connector installed for this identifier (an endpoint plus the tools
+      // it synced from its own server) supersedes the plugin row, whose
+      // manifest a reinstall leaves as it was. Projecting that manifest would
+      // put the old tools and display fields back over the synced ones.
+      const [installed] = await ctx.connectorModel.queryByIdentifiers([input.identifier]);
+      if (installed && hasCallableMcpEndpoint(installed)) {
+        return { connectorId: installed.id, toolCount: 0 };
+      }
+
       // Legacy plugin rows can outlive a provider's removal from the Composio catalog. Do not
       // project those rows back into user_connectors when the detail panel performs its sync.
       if (plugin.customParams?.composio && !getComposioAppByIdentifier(input.identifier)) {
@@ -1112,13 +1177,3 @@ export const connectorRouter = router({
       return { connectorId, toolCount: syncInputs.length };
     }),
 });
-
-// ── Private helpers ───────────────────────────────────────────────────────────
-
-/** Map builtin manifest humanIntervention → default ConnectorToolPermission */
-function resolveDefaultPermission(humanIntervention: unknown): ConnectorToolPermission {
-  if (humanIntervention === 'required' || humanIntervention === 'always') {
-    return ConnectorToolPermission.needs_approval;
-  }
-  return ConnectorToolPermission.auto;
-}

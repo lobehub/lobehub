@@ -1,8 +1,12 @@
 import { createReplicaState, type ReplicaState } from '@/libs/replica';
-import { type KnowledgeBaseItem } from '@/types/knowledgeBase';
+import { type AgentKnowledgeSpaceItem, type KnowledgeBaseItem } from '@/types/knowledgeBase';
 
 export interface KnowledgeBaseState {
   activeKnowledgeBaseId: string | null;
+  /** Agents' dedicated libraries (`agentSpaceListMap.all`). */
+  agentSpaceListMap: Record<string, AgentKnowledgeSpaceItem[]>;
+  /** Local-first bookkeeping for `agentSpaceListMap`. */
+  agentSpaceListReplica: ReplicaState<AgentKnowledgeSpaceItem[]>;
   /** By-id KB projection (`knowledgeBaseDetailMap[id]`). */
   knowledgeBaseDetailMap: Record<string, KnowledgeBaseItem>;
   /** Local-first bookkeeping for `knowledgeBaseDetailMap`. */
@@ -19,6 +23,8 @@ export interface KnowledgeBaseState {
 
 export const initialKnowledgeBaseState: KnowledgeBaseState = {
   activeKnowledgeBaseId: null,
+  agentSpaceListMap: {},
+  agentSpaceListReplica: createReplicaState(),
   knowledgeBaseDetailMap: {},
   knowledgeBaseDetailReplica: createReplicaState(),
   knowledgeBaseListMap: {},

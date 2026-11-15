@@ -1,31 +1,30 @@
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 
-export const styles = createStaticStyles(({ css }) => ({
-  caption: css`
-    align-self: center;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  evidenceImage: css`
-    overflow: hidden;
-
-    width: fit-content;
-    max-width: 100%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  evidenceText: css`
-    overflow: auto;
-
-    max-height: 200px;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: ${cssVar.borderRadius};
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    white-space: pre-wrap;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+export const styles = stylex.create({
+  caption: {
+    alignSelf: 'center',
+    fontSize: '12px',
+    color: cssVar.colorTextTertiary,
+  },
+  evidenceImage: {
+    overflow: 'hidden',
+    width: 'fit-content',
+    maxWidth: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  evidenceText: {
+    overflow: 'auto',
+    maxHeight: '200px',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadius,
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    whiteSpace: 'pre-wrap',
+    backgroundColor: cssVar.colorFillQuaternary,
+  },
+});

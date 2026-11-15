@@ -33,7 +33,7 @@ const LockedAlert = memo(() => {
   );
   const holder = useAuthorInfo(lockHolderId ?? undefined);
 
-  if (!isWorkspacePage || inCollab) return null;
+  if (!isWorkspacePage || (inCollab && !isLockedByOther)) return null;
   if (!isLockedByOther && !isLockedBySelf && !saveBlockedByLock) return null;
 
   // Same user, different session (other tab / unreleased prior mount): show a

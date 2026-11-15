@@ -208,7 +208,7 @@ export {
   findClaudeCodeTranscriptPath,
   resolveClaudeCodeTranscriptPath,
 } from './ensureResumeTranscript';
-export { getHeterogeneousAgentPresetEnv } from './presetEnv';
+export { getHeterogeneousAgentSpawnEnv } from './presetEnv';
 export {
   AMP_BASE_ARGS,
   buildQoderArgs,

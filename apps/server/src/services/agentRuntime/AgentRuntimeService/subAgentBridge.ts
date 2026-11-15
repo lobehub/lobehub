@@ -328,6 +328,16 @@ async function recordBackgroundSubAgentResult(
     );
   }
 
+  // A `cancelSubAgent` that raced this run claims the placeholder before it
+  // interrupts, so the stop does not wake the parent. A run that still finished
+  // with an answer hands that claim back here, once the answer is stored, so
+  // the answer is delivered. A run the cancel did stop ends as an error and
+  // stays suppressed. The release is conditional, so a redelivered callback or
+  // the cancel's own check cannot hand back a real delivery's claim.
+  if (status === 'completed') {
+    await deps.messageModel.releaseCancelSuppressedDelivery([toolMessageId]);
+  }
+
   const placeholder = await deps.messageModel.findById(toolMessageId);
   if (!placeholder?.topicId || !deps.delegate.deliverBackgroundSubAgentResults) return;
 

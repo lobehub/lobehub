@@ -68,6 +68,14 @@ export class ServerCallLlmStreamSink {
   private readonly stepIndex: number;
   private textBuffer = '';
   private textBufferTimer: NodeJS.Timeout | null = null;
+  /**
+   * Stream entry id of the last stored `tools_calling` snapshot. Each snapshot
+   * is the WHOLE call list, so once a newer one is stored the older entry is
+   * dead weight: replay applies snapshots as full replaces and only the newest
+   * matters. Without removing it the stream keeps one ever-growing copy per
+   * throttle window (quadratic in the argument length) until the stream's TTL.
+   */
+  private storedToolsCallingEventId: string | undefined;
   /** In-flight `tools_calling` publish; settles rather than rejects. */
   private toolsCallingFlush: Promise<void> | null = null;
   /** Latest un-published `tools_calling` snapshot; `undefined` once flushed. */
@@ -197,7 +205,8 @@ export class ServerCallLlmStreamSink {
     this.toolsCallingFlush = joinable;
 
     try {
-      await publish;
+      const eventId = await publish;
+      await this.removeSupersededToolsCalling(eventId);
       timing(
         '[%s] flushToolsCallingBuffer published at %d, took %dms, calls: %d',
         this.operationLogId,
@@ -214,6 +223,20 @@ export class ServerCallLlmStreamSink {
       throw error;
     } finally {
       if (this.toolsCallingFlush === joinable) this.toolsCallingFlush = null;
+    }
+  }
+
+  private async removeSupersededToolsCalling(eventId: string | undefined) {
+    const superseded = this.storedToolsCallingEventId;
+    this.storedToolsCallingEventId = eventId;
+    if (!superseded || !eventId) return;
+
+    try {
+      await this.streamManager.deleteStreamEvents(this.operationId, [superseded]);
+    } catch (error) {
+      // Storage hygiene only: the newer snapshot is already stored and pushed,
+      // and the stream's TTL still bounds the leftover entry.
+      log(`[${this.operationLogId}] failed to remove superseded tools_calling:`, error);
     }
   }
 

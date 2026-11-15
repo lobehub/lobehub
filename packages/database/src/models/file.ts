@@ -1,5 +1,6 @@
-import type { FileAccessScope, FileSource, QueryFileListParams } from '@lobechat/types';
+import type { FileAccessScope, QueryFileListParams } from '@lobechat/types';
 import {
+  FileSource,
   FilesTabs,
   getAgentShareFileProvenance,
   ordinaryFileAccessScope,
@@ -39,6 +40,7 @@ import {
   globalFiles,
   knowledgeBaseFiles,
   knowledgeBases,
+  meetings,
   messages,
   messagesFiles,
   messageTTS,
@@ -358,6 +360,12 @@ export class FileModel {
             .from(verifyEvidence)
             .where(eq(verifyEvidence.fileId, id)),
         )
+        .unionAll(
+          trx
+            .select({ id: meetings.audioFileId })
+            .from(meetings)
+            .where(eq(meetings.audioFileId, id)),
+        )
         .limit(1);
       if (contentReference) return;
 
@@ -652,6 +660,24 @@ export class FileModel {
     return rows.map((row) => row.id);
   };
 
+  /**
+   * Audio owned by a meeting, reached through the meeting rather than the
+   * resource library. A member who can read a public meeting may play its
+   * recording even though the upload itself stays private to the creator.
+   * Only `meeting`-source uploads of that creator qualify, so arbitrary
+   * attachments keep their own visibility.
+   */
+  findMeetingAudio = async (id: string, ownerId: string) => {
+    return this.db.query.files.findFirst({
+      where: and(
+        eq(files.id, id),
+        eq(files.userId, ownerId),
+        eq(files.source, FileSource.Meeting),
+        notAgentShareFile(files.metadata),
+      ),
+    });
+  };
+
   findById = async (
     id: string,
     options: { accessScope?: FileAccessScope; transaction?: Transaction } = {},
@@ -741,8 +767,9 @@ export class FileModel {
    * so a file still referenced elsewhere would silently disappear from there.
    * A candidate is therefore preserved (excluded) when it is still attached:
    * - to a message in another topic (or a message with no topic),
-   * - at the session level (`files_to_sessions`), which outlives a single topic, or
-   * - to a public Channel message (`channel_message_files`).
+   * - at the session level (`files_to_sessions`), which outlives a single topic,
+   * - to a public Channel message (`channel_message_files`), or
+   * - as a meeting recording (`meetings.audio_file_id`), which outlives the topic too.
    *
    * Session-level files are likewise never returned, matching the behaviour
    * documented on {@link findFilesToInitInSandbox}.
@@ -757,7 +784,7 @@ export class FileModel {
     const candidateIds = candidates.map((row) => row.id);
     if (candidateIds.length === 0) return [];
 
-    const [messageRefsOutsideTopic, sessionRefs, channelRefs] = await Promise.all([
+    const [messageRefsOutsideTopic, sessionRefs, channelRefs, meetingRefs] = await Promise.all([
       // same file attached to a message in a different topic (or no topic)
       this.db
         .selectDistinct({ id: messagesFiles.fileId })
@@ -783,12 +810,20 @@ export class FileModel {
         .selectDistinct({ id: channelMessageFiles.fileId })
         .from(channelMessageFiles)
         .where(inArray(channelMessageFiles.fileId, candidateIds)),
+      // same file is the recording of a meeting — the FK would null it out
+      this.db
+        .selectDistinct({ id: meetings.audioFileId })
+        .from(meetings)
+        .where(inArray(meetings.audioFileId, candidateIds)),
     ]);
 
     const referencedElsewhere = new Set<string>([
       ...messageRefsOutsideTopic.map((row) => row.id),
       ...sessionRefs.map((row) => row.id),
       ...channelRefs.map((row) => row.id),
+      // `audio_file_id` is nullable; `inArray` already excludes NULL rows, the
+      // filter only narrows the type for the set below.
+      ...meetingRefs.map((row) => row.id).filter((id): id is string => Boolean(id)),
     ]);
 
     return candidateIds.filter((id) => !referencedElsewhere.has(id));
@@ -851,9 +886,6 @@ export class FileModel {
 
   // Abstract common method for deleting chunks
   private deleteFileChunks = async (trx: PgTransaction<any>, fileIds: string[]) => {
-    /* v8 ignore next -- unreachable: both callers pass a non-empty list ([id] in deleteInTransaction; deleteMany returns early when no file matched) */
-    if (fileIds.length === 0) return;
-
     // Get all chunk IDs related to the files to be deleted (knowledge base protection logic removed)
     const relatedChunks = await trx
       .select({ chunkId: fileChunks.chunkId })
@@ -878,8 +910,6 @@ export class FileModel {
         if (startIdx >= chunkIds.length) break;
 
         const batchChunkIds = chunkIds.slice(startIdx, startIdx + BATCH_SIZE);
-        /* v8 ignore next -- unreachable: the break above guarantees startIdx < chunkIds.length, so the slice is never empty */
-        if (batchChunkIds.length === 0) continue;
 
         // Process each batch in the correct deletion order.
         const batchPromise = (async () => {

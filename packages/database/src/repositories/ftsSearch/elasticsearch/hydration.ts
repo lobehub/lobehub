@@ -30,6 +30,7 @@ import type { LobeChatDatabase } from '../../../type';
 import { notAgentShareDocument } from '../../../utils/documentVisibility';
 import { libraryVisibleFile, notAgentShareFileReference } from '../../../utils/fileVisibility';
 import { normalizeInboxAgentMeta, normalizeInboxAgentTitle } from '../../../utils/inboxAgent';
+import { isUserKnowledgeBase } from '../../../utils/knowledgeBaseType';
 import { visibleMemoryState } from '../../../utils/memoryVisibility';
 import { searchableMessage } from '../../../utils/searchableMessage';
 import { notShareVisitorMessage, notShareVisitorTopic } from '../../../utils/shareVisitor';
@@ -759,6 +760,7 @@ export const hydrateKnowledgeBases = async (
           hits.map(({ id }) => id),
         ),
         buildWorkspaceWhere(scope, knowledgeBases),
+        isUserKnowledgeBase(),
         excludeKnowledgeBaseIds.length > 0
           ? notInArray(knowledgeBases.id, excludeKnowledgeBaseIds)
           : undefined,

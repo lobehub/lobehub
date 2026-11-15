@@ -359,8 +359,6 @@
   "channel.qq.webhookMigrationTitle": "WebSocket モードへの移行をご検討ください",
   "channel.quickSetup.connect.desc": "上記で入力した内容を保存し、ボットをオンラインにします。他の設定は後で変更可能です。",
   "channel.quickSetup.connect.title": "保存して接続",
-  "channel.quickSetup.discord.bot.desc": "Botページで、トークンをリセットしてコピーし、メッセージコンテンツインテントをオンにします。",
-  "channel.quickSetup.discord.bot.title": "ボットトークンを取得し、メッセージコンテンツを許可する",
   "channel.quickSetup.discord.create.desc": "開発者ポータルで「新しいアプリケーション」をクリックし、名前を付けます。",
   "channel.quickSetup.discord.create.title": "アプリケーションを作成する",
   "channel.quickSetup.discord.credentials.desc": "どちらも「一般情報」にあります。",

@@ -329,6 +329,12 @@ describe('TaskModel.groupList guards', () => {
     );
   });
 
+  it('requires a label group when grouping tasks by label', async () => {
+    await expect(new TaskModel(serverDB, userId).groupList({ groupBy: 'label' })).rejects.toThrow(
+      'A label group is required to group tasks by label',
+    );
+  });
+
   it('adds an empty unassigned group to the hybrid assignee board', async () => {
     const model = new TaskModel(serverDB, userId);
     const task = await model.create({ assigneeUserId: userId2, instruction: 'member' });

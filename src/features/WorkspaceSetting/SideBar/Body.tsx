@@ -6,6 +6,7 @@ import { Link } from 'react-router';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useExpandedSettingsGroups } from '@/features/Settings/hooks/useExpandedSettingsGroups';
 import { SearchSection } from '@/features/SettingsSearch';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
@@ -34,6 +35,12 @@ const Body = memo(() => {
       : DEFAULT_WORKSPACE_SETTINGS_TAB;
   }, [location.pathname, slug]);
 
+  const { expandedGroups, onExpandedGroupsChange } = useExpandedSettingsGroups(
+    groups,
+    activeTab,
+    WorkspaceSettingsGroupKey.System,
+  );
+
   if (!slug) return null;
 
   return (
@@ -43,16 +50,7 @@ const Body = memo(() => {
           gap={8}
           indicatorPlacement="inline"
           styles={{ trigger: { paddingBlock: 4, paddingInline: '8px 4px' } }}
-          defaultValue={[
-            WorkspaceSettingsGroupKey.Account,
-            WorkspaceSettingsGroupKey.General,
-            WorkspaceSettingsGroupKey.Resource,
-            WorkspaceSettingsGroupKey.Subscription,
-            WorkspaceSettingsGroupKey.Agent,
-            WorkspaceSettingsGroupKey.Admin,
-            WorkspaceSettingsGroupKey.System,
-            WorkspaceSettingsGroupKey.Developer,
-          ]}
+          value={expandedGroups}
           items={groups.map((group) => ({
             key: group.key,
             title: (
@@ -85,6 +83,7 @@ const Body = memo(() => {
               </Flexbox>
             ),
           }))}
+          onValueChange={(keys) => onExpandedGroupsChange(keys as WorkspaceSettingsGroupKey[])}
         />
       </SearchSection>
     </Flexbox>

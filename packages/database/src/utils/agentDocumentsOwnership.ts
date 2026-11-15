@@ -60,6 +60,28 @@ const isDedicatedToAgents = (
 };
 
 /**
+ * SQL form of {@link isDedicatedToAgents} for one agent, over `documents` joined to `agent_documents`.
+ *
+ * Use when:
+ * - Candidates must be selected in the database instead of classified row by row.
+ *
+ * Returns:
+ * - A predicate that fails safe the same way: unknown provenance is not dedicated.
+ */
+export const isDedicatedToAgentWhere = (agentId: string) =>
+  and(
+    inArray(documents.sourceType, [...DEDICATED_AGENT_DOCUMENT_SOURCE_TYPES]),
+    or(
+      // `starts_with`, not LIKE: agent ids contain `_`, a LIKE wildcard.
+      sql`starts_with(${documents.source}, ${`${AGENT_DOCUMENT_SOURCE_PREFIX}${agentId}/`})`,
+      and(
+        eq(documents.source, SKILL_MANAGEMENT_SOURCE),
+        eq(agentDocuments.templateId, AGENT_SKILL_TEMPLATE_ID),
+      ),
+    ),
+  );
+
+/**
  * A document tree moves or stays as a WHOLE.
  *
  * `documents.parent_id` is never rewritten by a transfer, and agent-document

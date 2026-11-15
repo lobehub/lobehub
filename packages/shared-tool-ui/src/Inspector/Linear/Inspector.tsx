@@ -1,109 +1,92 @@
 'use client';
 
 import type { BuiltinInspector, BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { CornerLeftUp } from 'lucide-react';
 import { memo } from 'react';
 
 import { inspectorTextStyles, shinyTextStyles } from '../../styles';
 import { capitalize, type ParsedTool, parseToolName } from './labels';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 1;
-    align-items: stretch;
-
-    min-width: 0;
-    margin-inline-start: 6px;
-    border-radius: 999px;
-
-    font-size: 12px;
-    line-height: 18px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  chipAction: css`
-    flex-shrink: 0;
-    padding-block: 2px;
-    padding-inline: 10px;
-    color: ${cssVar.colorText};
-  `,
-  chipDivider: css`
-    flex-shrink: 0;
-    align-self: stretch;
-    width: 1px;
-    background: ${cssVar.colorBorderSecondary};
-  `,
-  chipIcon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextDescription};
-  `,
-  chipKey: css`
-    color: ${cssVar.colorTextDescription};
-  `,
-  chipValue: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 1;
-    gap: 4px;
-    align-items: center;
-
-    min-width: 0;
-    padding-block: 2px;
-    padding-inline: 10px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    color: ${cssVar.colorText};
-  `,
-  chipValueText: css`
-    overflow: hidden;
-    min-width: 0;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  icon: css`
-    flex-shrink: 0;
-    margin-inline-end: 6px;
-    color: ${cssVar.colorTextDescription};
-  `,
-  parentBadge: css`
-    display: inline-flex;
-    flex-shrink: 0;
-    gap: 4px;
-    align-items: center;
-
-    margin-inline-start: 6px;
-    padding-block: 2px;
-    padding-inline: 8px;
-    border-radius: 999px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12px;
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  parentBadgeIcon: css`
-    flex-shrink: 0;
-    color: ${cssVar.colorTextDescription};
-  `,
-  productPrefix: css`
-    flex-shrink: 0;
-
-    margin-inline-end: 2px;
-
-    font-size: 13px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  chip: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 1,
+    alignItems: 'stretch',
+    minWidth: '0',
+    marginInlineStart: '6px',
+    borderRadius: '999px',
+    fontSize: '12px',
+    lineHeight: '18px',
+    backgroundColor: cssVar.colorFillTertiary,
+    backgroundImage: 'none',
+  },
+  chipAction: {
+    flexShrink: 0,
+    paddingBlock: '2px',
+    paddingInline: '10px',
+    color: cssVar.colorText,
+  },
+  chipDivider: {
+    flexShrink: 0,
+    alignSelf: 'stretch',
+    width: '1px',
+    backgroundColor: cssVar.colorBorderSecondary,
+    backgroundImage: 'none',
+  },
+  chipIcon: { flexShrink: 0, color: cssVar.colorTextDescription },
+  chipKey: { color: cssVar.colorTextDescription },
+  chipValue: {
+    overflow: 'hidden',
+    display: 'inline-flex',
+    flexShrink: 1,
+    gap: '4px',
+    alignItems: 'center',
+    minWidth: '0',
+    paddingBlock: '2px',
+    paddingInline: '10px',
+    fontFamily: cssVar.fontFamilyCode,
+    color: cssVar.colorText,
+  },
+  chipValueText: {
+    overflow: 'hidden',
+    minWidth: '0',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  icon: { flexShrink: 0, marginInlineEnd: '6px', color: cssVar.colorTextDescription },
+  parentBadge: {
+    display: 'inline-flex',
+    flexShrink: 0,
+    gap: '4px',
+    alignItems: 'center',
+    marginInlineStart: '6px',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '999px',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '12px',
+    color: cssVar.colorText,
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+  parentBadgeIcon: { flexShrink: 0, color: cssVar.colorTextDescription },
+  productPrefix: {
+    flexShrink: 0,
+    marginInlineEnd: '2px',
+    fontSize: '13px',
+    fontWeight: 500,
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 const LinearLogomark = memo<{ size?: number }>(({ size = 14 }) => (
   <svg
     aria-hidden="true"
-    className={styles.icon}
+    {...stylex.props(styles.icon)}
     height={size}
     viewBox="0 0 100 100"
     width={size}
@@ -247,31 +230,31 @@ const LinearInspectorImpl = memo<BuiltinInspectorProps<Record<string, unknown>>>
         <LinearLogomark />
         <span
           className={cx(
-            styles.productPrefix,
+            stylex.props(styles.productPrefix).className,
             (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
           )}
         >
           Linear
         </span>
-        <span className={styles.chip}>
-          <span className={styles.chipAction}>{label}</span>
+        <span {...stylex.props(styles.chip)}>
+          <span {...stylex.props(styles.chipAction)}>{label}</span>
           {primary && (
             <>
-              <span className={styles.chipDivider} />
-              <span className={styles.chipValue}>
+              <span {...stylex.props(styles.chipDivider)} />
+              <span {...stylex.props(styles.chipValue)}>
                 {primary.iconType === 'parent' ? (
-                  <CornerLeftUp className={styles.chipIcon} size={12} />
+                  <CornerLeftUp className={stylex.props(styles.chipIcon).className} size={12} />
                 ) : (
-                  primary.key && <span className={styles.chipKey}>{primary.key}:</span>
+                  primary.key && <span {...stylex.props(styles.chipKey)}>{primary.key}:</span>
                 )}
-                <span className={styles.chipValueText}>{primary.value}</span>
+                <span {...stylex.props(styles.chipValueText)}>{primary.value}</span>
               </span>
             </>
           )}
         </span>
         {parentId && (
-          <span className={styles.parentBadge} title={`parent: ${parentId}`}>
-            <CornerLeftUp className={styles.parentBadgeIcon} size={12} />
+          <span {...stylex.props(styles.parentBadge)} title={`parent: ${parentId}`}>
+            <CornerLeftUp className={stylex.props(styles.parentBadgeIcon).className} size={12} />
             <span>{parentId}</span>
           </span>
         )}

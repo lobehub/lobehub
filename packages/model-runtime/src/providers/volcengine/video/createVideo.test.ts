@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { CreateVideoOptions } from '../../../core/openaiCompatibleFactory';
+import type { CreateVideoOptions } from '../../../core/openaiCompatible';
 import type { CreateVideoPayload } from '../../../types/video';
 import { createVolcengineVideo } from './createVideo';
 

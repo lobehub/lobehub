@@ -1,15 +1,8 @@
 'use client';
 
-import {
-  createStaticStyles,
-  cssVar,
-  Empty,
-  Flexbox,
-  Icon,
-  Image,
-  Text,
-  useResponsive,
-} from '@lobehub/ui';
+import { Empty, Flexbox, Icon, Image, Text, useResponsive } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { FileText, Film, Paperclip, SquareTerminal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -21,59 +14,31 @@ import { checksForTurn } from '../turnChecks';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { useAcceptanceTurn } from '../useAcceptanceTurn';
 
-const styles = createStaticStyles(({ css }) => ({
-  /**
-   * Masonry by explicit column assignment, not CSS `column-count`.
-   *
-   * The native version balances columns ONCE, during layout — and evidence
-   * images arrive after it, so every tile had already piled into the first
-   * column and stayed there. Reserving each tile's aspect ratio did not help:
-   * the balancing pass happens before the ratios matter. Dealing the tiles out
-   * ourselves is deterministic and independent of when the bytes land.
-   */
-  column: css`
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 12px;
-
-    min-inline-size: 0;
-  `,
-  grid: css`
-    display: flex;
-    gap: 12px;
-    align-items: flex-start;
-  `,
-  item: css`
-    cursor: pointer;
-
-    overflow: hidden;
-
-    inline-size: 100%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgContainer};
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-  `,
-  meta: css`
-    padding-block: 8px;
-    padding-inline: 10px;
-  `,
-  nonVisual: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 18px;
-    padding-inline: 12px;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-}));
+const styles = stylex.create({
+  column: { display: 'flex', flex: '1', flexDirection: 'column', gap: '12px', minInlineSize: '0' },
+  grid: { display: 'flex', gap: '12px', alignItems: 'flex-start' },
+  item: {
+    cursor: 'pointer',
+    overflow: 'hidden',
+    inlineSize: '100%',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorBgContainer,
+    backgroundImage: 'none',
+  },
+  meta: { paddingBlock: '8px', paddingInline: '10px' },
+  nonVisual: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '18px',
+    paddingInline: '12px',
+    backgroundColor: cssVar.colorFillQuaternary,
+    backgroundImage: 'none',
+  },
+});
 
 const isVisual = (type: string) => type === 'screenshot' || type === 'gif';
 
@@ -123,9 +88,9 @@ const AcceptanceResources = () => {
   items.forEach((entry, index) => columns[index % columnCount]!.push(entry));
 
   return (
-    <div className={styles.grid}>
+    <div {...stylex.props(styles.grid)}>
       {columns.map((column, columnIndex) => (
-        <div className={styles.column} key={columnIndex}>
+        <div {...stylex.props(styles.column)} key={columnIndex}>
           {column.map(({ check, evidence }) => {
             const href = evidence.fileUrl ?? undefined;
             const name = evidence.fileName ?? evidence.description ?? check;
@@ -137,7 +102,7 @@ const AcceptanceResources = () => {
 
             return (
               <div
-                className={styles.item}
+                {...stylex.props(styles.item)}
                 key={evidence.id}
                 onClick={href ? () => window.open(href, '_blank', 'noreferrer') : undefined}
               >
@@ -164,7 +129,7 @@ const AcceptanceResources = () => {
                     />
                   </div>
                 ) : (
-                  <div className={styles.nonVisual}>
+                  <div {...stylex.props(styles.nonVisual)}>
                     <Icon
                       size={16}
                       style={{ color: cssVar.colorTextTertiary }}
@@ -181,7 +146,7 @@ const AcceptanceResources = () => {
                     </Text>
                   </div>
                 )}
-                <Flexbox className={styles.meta} gap={2}>
+                <Flexbox className={stylex.props(styles.meta).className} gap={2}>
                   <Text ellipsis fontSize={12}>
                     {name}
                   </Text>

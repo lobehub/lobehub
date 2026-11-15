@@ -1,20 +1,12 @@
 'use client';
 
 import type { WorkSummaryItem } from '@lobechat/types';
-import {
-  Avatar,
-  Button,
-  Center,
-  createStaticStyles,
-  cssVar,
-  cx,
-  Empty,
-  Flexbox,
-} from '@lobehub/ui';
+import { Button, Center, createStaticStyles, cssVar, cx, Empty, Flexbox } from '@lobehub/ui';
 import { PackageOpenIcon, TriangleAlertIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AgentAvatar from '@/components/AgentAvatar';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import CanvasStorageSummary from '@/features/CanvasStorage/Summary';
 import {
@@ -35,11 +27,15 @@ const styles = createStaticStyles(({ css }) => ({
   agentFilter: css`
     flex: none;
 
-    padding-inline: 5px 10px;
+    padding-inline: 10px;
     border: 1px solid transparent;
     border-radius: 999px;
 
     color: ${cssVar.colorTextSecondary};
+  `,
+  // The avatar already carries visual weight on the leading side.
+  agentFilterWithAvatar: css`
+    padding-inline-start: 5px;
   `,
   agentFilterActive: css`
     border-color: ${cssVar.colorBorder};
@@ -157,15 +153,19 @@ const AgentFilter = memo<AgentFilterProps>(({ active, agentId, onSelect }) => {
 
   return (
     <Button
-      className={cx(styles.agentFilter, active && styles.agentFilterActive)}
       size={'small'}
       type={'text'}
+      className={cx(
+        styles.agentFilter,
+        styles.agentFilterWithAvatar,
+        active && styles.agentFilterActive,
+      )}
       icon={
-        <Avatar
-          emojiScaleWithBackground
+        <AgentAvatar
+          agentId={agentId}
           avatar={agent.avatar}
           background={agent.backgroundColor}
-          shape={'square'}
+          name={agent.title}
           size={20}
         />
       }

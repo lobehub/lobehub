@@ -181,6 +181,7 @@ export function bindGatewayClientHandlers(
             assistantMessageId: request.assistantMessageId,
             args: request.args,
             claudeAccountRouting: request.claudeAccountRouting,
+            claudeCodeEntrypoint: request.claudeCodeEntrypoint,
             cwd: request.cwd,
             imageList: request.imageList,
             jwt: request.jwt,

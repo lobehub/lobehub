@@ -35,77 +35,25 @@ const environment = (extra: Partial<ChannelAgentEnvironment> = {}): ChannelAgent
     heterogeneousProvider: { type: 'pi' },
     workingDirByDevice: { bound: '/agent-project', other: '/other-project' },
   },
-  currentDeviceId: 'current',
   devices: [device('bound'), device('current'), device('other')],
   devicesConfirmed: true,
-  isDesktop: true,
   ...extra,
 });
 
+// A Channel binds no device by default: an Agent without a picked device runs where its own
+// settings say, as in an ordinary conversation.
 describe('Channel Agent environment defaults', () => {
-  it('inherits the connected Agent device and its working directory', () => {
-    expect(createChannelAgentSelection('pi', environment())).toEqual({
-      agentId: 'pi',
-      deviceId: 'bound',
-      workingDirectory: '/agent-project',
-    });
-  });
-
-  it('resolves a desktop-local Agent without choosing an unrelated online device', () => {
-    const env = environment({ agencyConfig: { heterogeneousProvider: { type: 'codex' } } });
-    expect(createChannelAgentSelection('codex', env)).toEqual({
-      agentId: 'codex',
-      deviceId: 'current',
-      workingDirectory: undefined,
-    });
-    expect(
-      createChannelAgentSelection('codex', { ...env, isDesktop: false }).deviceId,
-    ).toBeUndefined();
-    expect(
-      createChannelAgentSelection('codex', { ...env, workspaceScoped: true }).deviceId,
-    ).toBeUndefined();
-  });
-
-  it('keeps an explicitly bound local device rather than switching to this machine', () => {
-    const env = environment();
-    env.agencyConfig!.executionTarget = 'local';
-    expect(createChannelAgentSelection('pi', env).deviceId).toBe('bound');
-  });
-
-  it.each(['none', 'sandbox', 'auto'] as const)(
-    'does not turn %s into an arbitrary device',
-    (executionTarget) => {
-      const env = environment();
-      env.agencyConfig!.executionTarget = executionTarget;
-      expect(createChannelAgentSelection('pi', env).deviceId).toBeUndefined();
-    },
-  );
-
-  it('keeps Native Agents without a device when none was configured', () => {
-    const env = environment({ agencyConfig: undefined, model: 'gpt-4o' });
-    const selection = createChannelAgentSelection('native', env);
-    expect(selection).toEqual({ agentId: 'native' });
+  it.each([
+    ['an Agent bound to a device', environment()],
+    [
+      'a desktop-local coding Agent',
+      environment({ agencyConfig: { heterogeneousProvider: { type: 'codex' } } }),
+    ],
+    ['a Native Agent', environment({ agencyConfig: undefined, model: 'gpt-4o' })],
+  ])('picks no device for %s', (_, env) => {
+    const selection = createChannelAgentSelection('agent');
+    expect(selection).toEqual({ agentId: 'agent' });
     expect(getChannelAgentIssue(selection, env)).toBeUndefined();
-  });
-
-  it('uses a same-device active worktree, then a same-device default directory', () => {
-    const env = environment();
-    env.agencyConfig!.workingDirByDevice = {
-      bound: { path: '/repo', git: { activeWorktree: '/worktrees/topic', isWorktree: true } },
-    };
-    expect(createChannelAgentSelection('pi', env).workingDirectory).toBe('/worktrees/topic');
-    env.agencyConfig!.workingDirByDevice = { other: '/wrong-device' };
-    env.devices = [device('bound', { defaultCwd: '/device-default' })];
-    expect(createChannelAgentSelection('pi', env).workingDirectory).toBe('/device-default');
-  });
-
-  it('preserves an offline or missing binding for an explicit recovery, without falling back', () => {
-    for (const devices of [
-      [device('bound', { online: false }), device('other')],
-      [device('other')],
-    ]) {
-      expect(createChannelAgentSelection('pi', environment({ devices })).deviceId).toBe('bound');
-    }
   });
 
   it('device changes use only the new device directory and never mutate the Agent defaults', () => {
@@ -120,28 +68,32 @@ describe('Channel Agent environment defaults', () => {
     expect(env.agencyConfig).toEqual(original);
     expect(selected.workingDirectory).toBe('/channel-override');
   });
+
+  it('uses a same-device active worktree, then a same-device default directory, on a pick', () => {
+    const env = environment();
+    env.agencyConfig!.workingDirByDevice = {
+      bound: { path: '/repo', git: { activeWorktree: '/worktrees/topic', isWorktree: true } },
+    };
+    expect(changeChannelAgentDevice({ agentId: 'pi' }, 'bound', env).workingDirectory).toBe(
+      '/worktrees/topic',
+    );
+    env.agencyConfig!.workingDirByDevice = { other: '/wrong-device' };
+    env.devices = [device('bound', { defaultCwd: '/device-default' })];
+    expect(changeChannelAgentDevice({ agentId: 'pi' }, 'bound', env).workingDirectory).toBe(
+      '/device-default',
+    );
+  });
 });
 
 describe('Channel form hydration', () => {
-  it('waits for settings and confirmed device data before snapshotting defaults', () => {
+  it('waits for the Agent settings, not the device list, before it is ready', () => {
     const draft = { agentId: 'pi', initialized: false };
     const pending = reconcileChannelAgentDraft(draft, environment(), 'configurationLoading');
     expect(pending.initialized).toBe(false);
     expect(pending.issue).toBe('configurationLoading');
-    const devicesPending = reconcileChannelAgentDraft(
-      draft,
-      environment({ devicesConfirmed: false }),
-    );
-    expect(devicesPending.initialized).toBe(false);
-    expect(devicesPending.issue).toBe('devicesLoading');
-    const ready = reconcileChannelAgentDraft(devicesPending, environment());
-    expect(ready).toEqual({
-      agentId: 'pi',
-      deviceId: 'bound',
-      workingDirectory: '/agent-project',
-      initialized: true,
-      issue: undefined,
-    });
+    const ready = reconcileChannelAgentDraft(draft, environment({ devicesConfirmed: false }));
+    expect(ready).toEqual({ agentId: 'pi', initialized: true, issue: undefined });
+    expect(canSubmitChannelAgents([ready])).toBe(true);
   });
 
   it('leaves a failed settings read retryable, not a usable blank selection', () => {
@@ -152,7 +104,6 @@ describe('Channel form hydration', () => {
     );
     expect(canSubmitChannelAgents([draft])).toBe(false);
     expect(draft.issue).toBe('configurationFailed');
-    expect(reconcileChannelAgentDraft(draft, environment()).deviceId).toBe('bound');
   });
 
   it('never overwrites channel edits or an explicit cleared device on refresh', () => {
@@ -165,17 +116,19 @@ describe('Channel form hydration', () => {
     };
     expect(reconcileChannelAgentDraft(edited, env)).toBe(edited);
     const cleared = { agentId: 'pi', initialized: true };
-    expect(reconcileChannelAgentDraft(cleared, env)).toEqual({
-      ...cleared,
-      issue: 'deviceRequired',
-    });
+    expect(reconcileChannelAgentDraft(cleared, env)).toEqual({ ...cleared, issue: undefined });
     expect(env.agencyConfig?.workingDirByDevice?.bound).toBe('/agent-project');
   });
 
-  it('reacts to a selected device going offline without losing its directory', () => {
-    const ready = reconcileChannelAgentDraft({ agentId: 'pi', initialized: false }, environment());
+  it('reacts to a picked device going offline without losing its directory', () => {
+    const picked = {
+      agentId: 'pi',
+      deviceId: 'bound',
+      initialized: true,
+      workingDirectory: '/agent-project',
+    };
     const offline = reconcileChannelAgentDraft(
-      ready,
+      picked,
       environment({ devices: [device('bound', { online: false })] }),
     );
     expect(offline.issue).toBe('deviceOffline');
@@ -184,32 +137,27 @@ describe('Channel form hydration', () => {
     expect(canSubmitChannelAgents([reconcileChannelAgentDraft(offline, environment())])).toBe(true);
   });
 
-  it('does not let a device-list outage prevent a device-free Native Agent', () => {
-    const native = reconcileChannelAgentDraft(
-      { agentId: 'native', initialized: false },
-      environment({
-        agencyConfig: undefined,
-        devices: undefined,
-        devicesConfirmed: false,
-        devicesError: new Error('offline'),
-      }),
+  it('does not let a device-list outage block an Agent without a picked device', () => {
+    const draft = reconcileChannelAgentDraft(
+      { agentId: 'pi', initialized: false },
+      environment({ devices: undefined, devicesConfirmed: false, devicesError: new Error('x') }),
     );
-    expect(canSubmitChannelAgents([native])).toBe(true);
+    expect(canSubmitChannelAgents([draft])).toBe(true);
   });
 });
 
 describe('Channel Agent submission guard', () => {
-  it('requires a device for Pi and legacy heterogeneous model IDs', () => {
-    expect(getChannelAgentIssue({ agentId: 'pi' }, environment())).toBe('deviceRequired');
+  it('needs no device, for coding and Native Agents alike', () => {
+    expect(getChannelAgentIssue({ agentId: 'pi' }, environment())).toBeUndefined();
     expect(
       getChannelAgentIssue(
         { agentId: 'codex' },
         environment({ agencyConfig: undefined, model: 'codex' }),
       ),
-    ).toBe('deviceRequired');
+    ).toBeUndefined();
   });
 
-  it('requires a nonblank directory, including for a Native Agent with a device', () => {
+  it('requires a nonblank directory on a picked device', () => {
     for (const workingDirectory of [undefined, '', '  ']) {
       expect(
         getChannelAgentIssue(
@@ -220,23 +168,11 @@ describe('Channel Agent submission guard', () => {
     }
   });
 
-  it('accepts an inherited device without a directory, but not a missing or offline device', () => {
+  it('accepts a picked device without a directory where it may be inherited', () => {
     const inherited = { directoryOptional: true };
-    const draft = reconcileChannelAgentDraft(
-      { agentId: 'native', initialized: false },
-      environment({ agencyConfig: { boundDeviceId: 'bound', executionTarget: 'device' } }),
-      undefined,
-      inherited,
-    );
-    expect(draft).toMatchObject({ deviceId: 'bound', initialized: true, issue: undefined });
-    expect(canSubmitChannelAgents([draft])).toBe(true);
     expect(
-      getChannelAgentIssue(
-        { agentId: 'codex' },
-        environment({ agencyConfig: undefined, model: 'codex' }),
-        inherited,
-      ),
-    ).toBe('deviceRequired');
+      getChannelAgentIssue({ agentId: 'pi', deviceId: 'bound' }, environment(), inherited),
+    ).toBeUndefined();
     expect(
       getChannelAgentIssue(
         { agentId: 'pi', deviceId: 'bound' },
@@ -256,7 +192,7 @@ describe('Channel Agent submission guard', () => {
       { devices: [device('bound', { scope: 'workspace', visibility: 'private' })] },
       'deviceUnavailable',
     ],
-  ] as const)('blocks unsafe device state %o', (patch, issue) => {
+  ] as const)('blocks unsafe state of a picked device %o', (patch, issue) => {
     const env = environment({
       ...patch,
       ...('devices' in patch ? { devices: [...patch.devices] } : {}),
@@ -266,18 +202,37 @@ describe('Channel Agent submission guard', () => {
     ).toBe(issue);
   });
 
-  it('allows a fully configured Agent and prevents pending/invalid/empty submissions', () => {
-    const selection = createChannelAgentSelection('pi', environment());
+  it('allows a ready Agent and prevents pending/invalid/empty submissions', () => {
+    const selection = { agentId: 'pi', deviceId: 'bound', workingDirectory: '/project' };
     expect(getChannelAgentIssue(selection, environment())).toBeUndefined();
     expect(canSubmitChannelAgents([])).toBe(false);
     expect(canSubmitChannelAgents([{ ...selection, initialized: false }])).toBe(false);
     expect(
-      canSubmitChannelAgents([{ ...selection, initialized: true, issue: 'deviceRequired' }]),
+      canSubmitChannelAgents([{ ...selection, initialized: true, issue: 'deviceOffline' }]),
     ).toBe(false);
     expect(canSubmitChannelAgents([{ ...selection, initialized: true }])).toBe(true);
     expect(toChannelAgentSelection({ ...selection, initialized: true, issue: undefined })).toEqual(
       selection,
     );
+  });
+});
+
+describe('Channel runtime support', () => {
+  const withRuntime = (type: string) =>
+    environment({
+      agencyConfig: { ...environment().agencyConfig, heterogeneousProvider: { type } as never },
+    });
+  const selection = { agentId: 'agent', deviceId: 'bound', workingDirectory: '/project' };
+
+  it.each(['kimi-code', 'codebuddy', 'cursor', 'opencode', 'deepseek-harness'])(
+    'accepts the local %s runtime',
+    (type) => {
+      expect(getChannelAgentIssue(selection, withRuntime(type))).toBeUndefined();
+    },
+  );
+
+  it.each(['openclaw', 'hermes'])('rejects the remote-task %s runtime', (type) => {
+    expect(getChannelAgentIssue(selection, withRuntime(type))).toBe('unsupportedRuntime');
   });
 });
 

@@ -17,6 +17,7 @@ export type RubricType =
   | 'python'
   // LLM scoring
   | 'llm-rubric'
+  | 'rule-checklist'
   | 'factuality'
   | 'answer-relevance'
   // Similarity

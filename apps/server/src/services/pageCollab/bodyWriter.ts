@@ -11,12 +11,13 @@ import {
   createDocumentHeadlessEditor,
   withHeadlessEditorLock,
 } from '@/server/services/agentDocuments/headlessEditor';
-import type { DocumentService } from '@/server/services/document';
+import { DocumentService } from '@/server/services/document';
 import type { UpdateDocumentParams, UpdateDocumentResult } from '@/server/services/document/types';
 
-import { isPageCollabEnabled } from './config';
+import { isLegacyPageCollabEnabled, isPageCollabEnabled } from './config';
 import type { SerializedEditor } from './editorData';
 import { runPageExclusive } from './queue';
+import { PageRoomStaleBaseError } from './roomClient';
 import { RoomPageSessions } from './roomSession';
 import type { PageWriter } from './session';
 
@@ -26,6 +27,24 @@ export interface PageBody {
   /** The room carries the title too; one written only to the row would be projected over. */
   title?: string;
 }
+
+// A stale base means another server instance wrote the room after this one
+// read it; writing anyway would merge both block replacements as duplicates.
+const MAX_STALE_BASE_RETRIES = 5;
+const STALE_BASE_BACKOFF_MS = 40;
+
+// Only workspace pages have rooms, unless older clients may still hold one open
+// on a personal page; a write around that room would be projected over.
+const mayHaveRoom = async (db: LobeChatDatabase, documentId: string, writer: PageWriter) => {
+  if (!isPageCollabEnabled()) return false;
+  if (isLegacyPageCollabEnabled()) return true;
+  const row = await new DocumentService(db, writer.userId, writer.workspaceId).getDocumentById(
+    documentId,
+  );
+  return !!row?.workspaceId;
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const toHeadlessOperation = (operation: ModifyOperation): HeadlessLiteXMLOperation => {
   if (operation.action === 'modify') return { action: 'replace', litexml: operation.litexml };
@@ -77,9 +96,9 @@ export const writePageBodyThroughRoom = async (
   body: PageBody,
   writer: PageWriter,
 ): Promise<boolean> => {
-  if (!isPageCollabEnabled()) return false;
+  if (!(await mayHaveRoom(db, documentId, writer))) return false;
 
-  return runPageExclusive(documentId, () =>
+  const writeOnce = () =>
     withHeadlessEditorLock(async () => {
       const session = await new RoomPageSessions(db, writer).openLiveSession(documentId);
       if (!session) return false;
@@ -95,8 +114,20 @@ export const writePageBodyThroughRoom = async (
       } finally {
         session.draft.destroy();
       }
-    }),
-  );
+    });
+
+  return runPageExclusive(documentId, async () => {
+    for (let retry = 0; ; retry++) {
+      try {
+        return await writeOnce();
+      } catch (error) {
+        if (!(error instanceof PageRoomStaleBaseError) || retry >= MAX_STALE_BASE_RETRIES) {
+          throw error;
+        }
+        await sleep(STALE_BASE_BACKOFF_MS * (retry + 1) * (0.5 + Math.random()));
+      }
+    }
+  });
 };
 
 /**
@@ -106,7 +137,7 @@ export const writePageBodyThroughRoom = async (
  */
 export const updateDocumentThroughRoom = async (
   db: LobeChatDatabase,
-  service: Pick<DocumentService, 'updateDocument'>,
+  service: Pick<DocumentService, 'assertCanWriteBody' | 'updateDocument'>,
   documentId: string,
   params: UpdateDocumentParams,
   writer: Omit<PageWriter, 'saveSource' | 'writeSource'>,
@@ -116,6 +147,10 @@ export const updateDocumentThroughRoom = async (
   if (!writesRoom || params.origin === 'room-projection') {
     return service.updateDocument(documentId, params);
   }
+
+  // An editor outside the room carries its lock session. The room's members share
+  // the page lock, so this save must not merge over their edits while they hold it.
+  if (params.lockOwnerId) await service.assertCanWriteBody(documentId, params.lockOwnerId);
 
   const routed = await writePageBodyThroughRoom(
     db,
@@ -151,7 +186,7 @@ export const snapshotPageThroughRoom = async (
   documentId: string,
   writer: PageWriter,
 ): Promise<boolean> => {
-  if (!isPageCollabEnabled()) return false;
+  if (!(await mayHaveRoom(db, documentId, writer))) return false;
 
   return runPageExclusive(documentId, () =>
     withHeadlessEditorLock(async () => {

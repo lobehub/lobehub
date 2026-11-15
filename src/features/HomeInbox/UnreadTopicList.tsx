@@ -24,7 +24,6 @@ import Time from '@/features/Home/components/Time';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
 
-import AuthorChip from './AuthorChip';
 import { sanitizeInboxPreview } from './sanitizeInboxPreview';
 import { type InboxTopic } from './useHomeInboxTopics';
 
@@ -99,8 +98,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface UnreadTopicItemProps {
   bare?: boolean;
   onFollowUpSent?: (topicId: string) => void;
-  /** Team view: show who triggered the run, right of the title. */
-  showAuthor?: boolean;
   topic: InboxTopic;
 }
 
@@ -111,162 +108,157 @@ interface UnreadTopicItemProps {
  * already said "I want to read this". The full thread lives one click deeper, in
  * the topic itself.
  */
-const UnreadTopicItem = memo<UnreadTopicItemProps>(
-  ({ bare, topic, onFollowUpSent, showAuthor }) => {
-    const { t } = useTranslation('home');
-    const agent = useAgentDisplayMeta(topic.agentId);
-    const navigate = useWorkspaceAwareNavigate();
-    const updateTopicStatus = useChatStore((s) => s.updateTopicStatus);
-    const sendMessage = useChatStore((s) => s.sendMessage);
-    const prefetchMessages = useChatStore((s) => s.prefetchMessages);
-    const markdownProps = useEntityMarkdown();
-    const assistantPreview = sanitizeInboxPreview(topic.lastAssistantMessage ?? '');
+const UnreadTopicItem = memo<UnreadTopicItemProps>(({ bare, topic, onFollowUpSent }) => {
+  const { t } = useTranslation('home');
+  const agent = useAgentDisplayMeta(topic.agentId);
+  const navigate = useWorkspaceAwareNavigate();
+  const updateTopicStatus = useChatStore((s) => s.updateTopicStatus);
+  const sendMessage = useChatStore((s) => s.sendMessage);
+  const prefetchMessages = useChatStore((s) => s.prefetchMessages);
+  const markdownProps = useEntityMarkdown();
+  const assistantPreview = sanitizeInboxPreview(topic.lastAssistantMessage ?? '');
 
-    const [expanded, setExpanded] = useState(false);
-    const [read, setRead] = useState(false);
-    const [replying, setReplying] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [read, setRead] = useState(false);
+  const [replying, setReplying] = useState(false);
 
-    const agentId = topic.agentId ?? undefined;
+  const agentId = topic.agentId ?? undefined;
 
-    // Engaging with the row IS the read: this is an inbox, not a topic list — a row
-    // the user has answered or opened has been triaged. The persisted status drops
-    // it from the next inbox fetch; locally the row stays put so it doesn't yank
-    // out from under the reader.
-    const markRead = useCallback(() => {
-      if (read) return;
-      setRead(true);
-      void updateTopicStatus({ agentId, status: 'active', topicId: topic.id });
-    }, [agentId, read, topic.id, updateTopicStatus]);
+  // Engaging with the row IS the read: this is an inbox, not a topic list — a row
+  // the user has answered or opened has been triaged. The persisted status drops
+  // it from the next inbox fetch; locally the row stays put so it doesn't yank
+  // out from under the reader.
+  const markRead = useCallback(() => {
+    if (read) return;
+    setRead(true);
+    void updateTopicStatus({ agentId, status: 'active', topicId: topic.id });
+  }, [agentId, read, topic.id, updateTopicStatus]);
 
-    const toggle = useCallback(() => {
-      setExpanded((prev) => {
-        if (!prev) markRead();
-        return !prev;
-      });
-    }, [markRead]);
+  const toggle = useCallback(() => {
+    setExpanded((prev) => {
+      if (!prev) markRead();
+      return !prev;
+    });
+  }, [markRead]);
 
-    // Open the run in place — navigate straight into the topic's chat, the same
-    // destination the running-topics rows go to, rather than surfacing it in a
-    // drawer stacked over the home page.
-    const viewChat = useCallback(() => {
+  // Open the run in place — navigate straight into the topic's chat, the same
+  // destination the running-topics rows go to, rather than surfacing it in a
+  // drawer stacked over the home page.
+  const viewChat = useCallback(() => {
+    if (!agentId) return;
+    markRead();
+    navigate(AGENT_CHAT_TOPIC_URL(agentId, topic.id));
+  }, [agentId, markRead, navigate, topic.id]);
+
+  // Reply in place, continuing the topic exactly like the chat drawer does:
+  // hydrate the topic's messages into the store first so the reply threads onto
+  // the last one (without it `sendMessage` reads an empty history and orphans
+  // the message — no parentId), then send over the gateway so the run keeps
+  // going server-side. No navigation.
+  const submitFollowUp = useCallback(
+    async (text: string) => {
       if (!agentId) return;
       markRead();
-      navigate(AGENT_CHAT_TOPIC_URL(agentId, topic.id));
-    }, [agentId, markRead, navigate, topic.id]);
+      const context: ConversationContext = {
+        agentId,
+        isolatedTopic: true,
+        scope: 'main',
+        topicId: topic.id,
+      };
+      await prefetchMessages(context);
+      await sendMessage({ context, forceRuntime: 'gateway', message: text });
+      setReplying(false);
+      // Move the row into the running card immediately so the send visibly does
+      // something; the hook reconciles with the server a beat later.
+      onFollowUpSent?.(topic.id);
+    },
+    [agentId, markRead, onFollowUpSent, prefetchMessages, sendMessage, topic.id],
+  );
 
-    // Reply in place, continuing the topic exactly like the chat drawer does:
-    // hydrate the topic's messages into the store first so the reply threads onto
-    // the last one (without it `sendMessage` reads an empty history and orphans
-    // the message — no parentId), then send over the gateway so the run keeps
-    // going server-side. No navigation.
-    const submitFollowUp = useCallback(
-      async (text: string) => {
-        if (!agentId) return;
-        markRead();
-        const context: ConversationContext = {
-          agentId,
-          isolatedTopic: true,
-          scope: 'main',
-          topicId: topic.id,
-        };
-        await prefetchMessages(context);
-        await sendMessage({ context, forceRuntime: 'gateway', message: text });
-        setReplying(false);
-        // Move the row into the running card immediately so the send visibly does
-        // something; the hook reconciles with the server a beat later.
-        onFollowUpSent?.(topic.id);
-      },
-      [agentId, markRead, onFollowUpSent, prefetchMessages, sendMessage, topic.id],
-    );
-
-    return (
-      <Flexbox className={bare ? undefined : styles.section}>
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={cx(styles.row, bare && styles.bareRow)}
-          gap={ROW_GAP}
-          onClick={toggle}
-        >
-          {read ? <span className={styles.dotPlaceholder} /> : <UnreadDot />}
-          {agent && (
-            <AgentAvatar
-              agentId={topic.agentId}
-              avatar={agent.avatar}
-              background={agent.backgroundColor}
-              shape={'circle'}
-              size={AVATAR_SIZE}
-              style={{ flex: 'none' }}
-              title={agentDisplayName(agent)}
-            />
-          )}
-          <Text
-            ellipsis
-            className={homeType.itemTitle}
-            style={{ flex: 1, fontWeight: read ? 400 : undefined, minWidth: 0 }}
-          >
-            {topic.title}
-          </Text>
-          {showAuthor && <AuthorChip trigger={topic.trigger} userId={topic.userId} />}
-          <Time date={topic.updatedAt ?? topic.createdAt} />
-          <Icon
-            color={cssVar.colorTextQuaternary}
-            icon={expanded ? ChevronDownIcon : ChevronRightIcon}
-            size={14}
+  return (
+    <Flexbox className={bare ? undefined : styles.section}>
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={cx(styles.row, bare && styles.bareRow)}
+        gap={ROW_GAP}
+        onClick={toggle}
+      >
+        {read ? <span className={styles.dotPlaceholder} /> : <UnreadDot />}
+        {agent && (
+          <AgentAvatar
+            agentId={topic.agentId}
+            avatar={agent.avatar}
+            background={agent.backgroundColor}
+            shape={'circle'}
+            size={AVATAR_SIZE}
+            style={{ flex: 'none' }}
+            title={agentDisplayName(agent)}
           />
-        </Flexbox>
-
-        {expanded && (
-          <Flexbox className={bare ? styles.bareBody : styles.body} gap={8}>
-            {assistantPreview && (
-              <Suspense fallback={null}>
-                <MarkdownMessage {...markdownProps} style={{ overflow: 'unset' }}>
-                  {assistantPreview}
-                </MarkdownMessage>
-              </Suspense>
-            )}
-
-            {replying ? (
-              <Flexbox onClick={stopPropagation}>
-                <Suspense fallback={<div aria-hidden className={styles.replyEditorFallback} />}>
-                  <RunReplyEditor
-                    placeholder={t('inbox.unread.followUpPlaceholder')}
-                    onCancel={() => setReplying(false)}
-                    onSubmit={submitFollowUp}
-                  />
-                </Suspense>
-              </Flexbox>
-            ) : (
-              <Flexbox horizontal align={'center'} justify={'space-between'}>
-                <Button size={'small'} type={'text'} onClick={viewChat}>
-                  {t('inbox.unread.viewChat')}
-                </Button>
-                <Button
-                  disabled={!agentId}
-                  icon={MessageSquarePlus}
-                  size={'small'}
-                  type={'fill'}
-                  onClick={() => setReplying(true)}
-                  onFocus={preloadRunReplyEditor}
-                  onPointerEnter={preloadRunReplyEditor}
-                >
-                  {t('inbox.unread.followUp')}
-                </Button>
-              </Flexbox>
-            )}
-          </Flexbox>
         )}
+        <Text
+          ellipsis
+          className={homeType.itemTitle}
+          style={{ flex: 1, fontWeight: read ? 400 : undefined, minWidth: 0 }}
+        >
+          {topic.title}
+        </Text>
+        <Time date={topic.updatedAt ?? topic.createdAt} />
+        <Icon
+          color={cssVar.colorTextQuaternary}
+          icon={expanded ? ChevronDownIcon : ChevronRightIcon}
+          size={14}
+        />
       </Flexbox>
-    );
-  },
-);
+
+      {expanded && (
+        <Flexbox className={bare ? styles.bareBody : styles.body} gap={8}>
+          {assistantPreview && (
+            <Suspense fallback={null}>
+              <MarkdownMessage {...markdownProps} style={{ overflow: 'unset' }}>
+                {assistantPreview}
+              </MarkdownMessage>
+            </Suspense>
+          )}
+
+          {replying ? (
+            <Flexbox onClick={stopPropagation}>
+              <Suspense fallback={<div aria-hidden className={styles.replyEditorFallback} />}>
+                <RunReplyEditor
+                  placeholder={t('inbox.unread.followUpPlaceholder')}
+                  onCancel={() => setReplying(false)}
+                  onSubmit={submitFollowUp}
+                />
+              </Suspense>
+            </Flexbox>
+          ) : (
+            <Flexbox horizontal align={'center'} justify={'space-between'}>
+              <Button size={'small'} type={'text'} onClick={viewChat}>
+                {t('inbox.unread.viewChat')}
+              </Button>
+              <Button
+                disabled={!agentId}
+                icon={MessageSquarePlus}
+                size={'small'}
+                type={'fill'}
+                onClick={() => setReplying(true)}
+                onFocus={preloadRunReplyEditor}
+                onPointerEnter={preloadRunReplyEditor}
+              >
+                {t('inbox.unread.followUp')}
+              </Button>
+            </Flexbox>
+          )}
+        </Flexbox>
+      )}
+    </Flexbox>
+  );
+});
 
 interface UnreadTopicListProps {
   /** Rendered inside a rail card, which already draws the shell. */
   bare?: boolean;
   onFollowUpSent?: (topicId: string) => void;
-  /** Team view: tag each row with who triggered it. */
-  showAuthor?: boolean;
   topics: InboxTopic[];
 }
 
@@ -274,20 +266,12 @@ interface UnreadTopicListProps {
  * Runs that finished while you were away. One line each, like the news list —
  * a week of finished runs still fits on screen, and the reply is one click deep.
  */
-const UnreadTopicList = memo<UnreadTopicListProps>(
-  ({ bare, topics, onFollowUpSent, showAuthor }) => (
-    <Flexbox className={bare ? styles.bareList : styles.list}>
-      {topics.map((topic) => (
-        <UnreadTopicItem
-          bare={bare}
-          key={topic.id}
-          showAuthor={showAuthor}
-          topic={topic}
-          onFollowUpSent={onFollowUpSent}
-        />
-      ))}
-    </Flexbox>
-  ),
-);
+const UnreadTopicList = memo<UnreadTopicListProps>(({ bare, topics, onFollowUpSent }) => (
+  <Flexbox className={bare ? styles.bareList : styles.list}>
+    {topics.map((topic) => (
+      <UnreadTopicItem bare={bare} key={topic.id} topic={topic} onFollowUpSent={onFollowUpSent} />
+    ))}
+  </Flexbox>
+));
 
 export default UnreadTopicList;

@@ -539,6 +539,7 @@ describe('driveTaskFromVerify', () => {
     runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'passed' });
     await driveTaskFromVerify(db, 'u1', 'op-1');
     expect(serviceUpdateStatus).toHaveBeenCalledWith({ id: 'task-1', status: 'completed' });
+    expect(briefCreate).not.toHaveBeenCalled();
     // Deferred creator callback fires here (not in onTopicComplete), reason 'done'.
     expect(deliverMock).toHaveBeenCalledTimes(1);
     expect(deliverMock.mock.calls[0][0]).toMatchObject({
@@ -850,15 +851,6 @@ describe('driveTaskFromVerify', () => {
     taskFindById.mockResolvedValue({ id: 'task-1', status: 'completed' });
     await driveTaskFromVerify(db, 'u1', 'op-1');
     expect(serviceUpdateStatus).not.toHaveBeenCalled();
-  });
-
-  it('completes the task on a passing verify', async () => {
-    runFindByOperation.mockResolvedValue({ id: 'run-1', metadata: null, status: 'passed' });
-
-    await driveTaskFromVerify(db, 'u1', 'op-1');
-
-    expect(serviceUpdateStatus).toHaveBeenCalledWith({ id: 'task-1', status: 'completed' });
-    expect(briefCreate).not.toHaveBeenCalled();
   });
 });
 

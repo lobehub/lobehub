@@ -29,7 +29,15 @@ const MAX_DIRECTORY_PAGE_SIZE = 1000;
 const SKILL_SOURCES = [
   '.agents/skills',
   '.claude/skills',
+  '.codex/skills',
 ] as const satisfies readonly ProjectSkillSource[];
+
+/**
+ * Upper bound on directories walked from the working directory to the
+ * repository root, so a pathological path cannot turn one scan into hundreds
+ * of filesystem probes.
+ */
+const MAX_ANCESTOR_DEPTH = 32;
 
 interface SkillScanRoot {
   previewRoot: string;
@@ -38,13 +46,58 @@ interface SkillScanRoot {
   sourceRoot: string;
 }
 
-const createProjectSkillRoots = (root: string): SkillScanRoot[] =>
-  SKILL_SOURCES.map((source) => ({
-    previewRoot: root,
-    scope: 'project',
-    source,
-    sourceRoot: path.join(root, source),
-  }));
+const pathExists = async (target: string): Promise<boolean> => {
+  try {
+    await stat(target);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Directories whose agent files apply to `root`, nearest first: `root` itself,
+ * then each parent up to and including the repository root (the nearest
+ * ancestor containing `.git`, a directory in a checkout and a file in a
+ * worktree or submodule). Without a repository root only `root` applies, so a
+ * directory outside any repository never picks up files from `~` or `/`.
+ *
+ * Mirrors the startup discovery of Codex, Claude Code, OpenCode and pi, so a
+ * run bound to `packages/web` of a monorepo still sees the root `AGENTS.md`
+ * and `.agents/skills`.
+ */
+const resolveAgentFileDirs = async (root: string): Promise<string[]> => {
+  const start = path.resolve(root);
+  const dirs: string[] = [];
+  let current = start;
+
+  for (let depth = 0; depth < MAX_ANCESTOR_DEPTH; depth += 1) {
+    dirs.push(current);
+    if (await pathExists(path.join(current, '.git'))) return dirs;
+
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+
+  return [start];
+};
+
+const createProjectSkillRoots = (root: string, dirs: string[]): SkillScanRoot[] =>
+  dirs.flatMap((dir, index) =>
+    SKILL_SOURCES.map((source) => {
+      const sourceRoot = path.join(dir, source);
+      return {
+        // Skills in the working directory preview against it, as before. A
+        // parent directory is not an approved root, so its skills preview
+        // against their own source directory, the way device skills do.
+        previewRoot: index === 0 ? root : sourceRoot,
+        scope: 'project' as const,
+        source,
+        sourceRoot,
+      };
+    }),
+  );
 
 const createDeviceSkillRoots = (): SkillScanRoot[] => {
   const home = os.homedir();
@@ -60,8 +113,12 @@ const createDeviceSkillRoots = (): SkillScanRoot[] => {
   });
 };
 
-const createSkillRoots = (root: string): SkillScanRoot[] => [
-  ...createProjectSkillRoots(root),
+/**
+ * Scan order decides name collisions (first wins): the working directory
+ * before its parents, project before device.
+ */
+const createSkillRoots = async (root: string): Promise<SkillScanRoot[]> => [
+  ...createProjectSkillRoots(root, await resolveAgentFileDirs(root)),
   ...createDeviceSkillRoots(),
 ];
 
@@ -193,34 +250,76 @@ const approvePreviewRoots = async (
   await Promise.all([...roots].map((root) => deps.approveProjectRoot!(root)));
 };
 
+/** Per-file cap, so one oversized file cannot crowd out the others. */
+const MAX_INSTRUCTIONS_FILE_BYTES = 64 * 1024;
+/** Cap across every directory, bounding the cached payload and the system role. */
+const MAX_INSTRUCTIONS_TOTAL_BYTES = 128 * 1024;
+const INSTRUCTION_FILENAMES = ['AGENTS.md', 'CLAUDE.md'] as const;
+
 /**
- * Read the project-root agent instructions files (`AGENTS.md`, then `CLAUDE.md`).
- * Collects every present candidate rather than first-match, since both can
- * coexist. Each body is capped so a pathologically large file can't bloat the
- * cached payload or the injected system role.
+ * Cut `raw` to at most `maxBytes` of UTF-8. Measuring `string.length` would
+ * count UTF-16 units, letting CJK text exceed the budget about threefold. A
+ * character split at the boundary decodes to U+FFFD and is dropped.
  */
-const readWorkspaceInstructions = async (root: string): Promise<WorkspaceInstructionsItem[]> => {
-  const MAX_INSTRUCTIONS_BYTES = 64 * 1024;
-  const candidates = ['AGENTS.md', 'CLAUDE.md'] as const;
+const truncateUtf8 = (raw: string, maxBytes: number): { bytes: number; content: string } => {
+  const buffer = Buffer.from(raw, 'utf8');
+  if (buffer.length <= maxBytes) return { bytes: buffer.length, content: raw };
 
-  const instructions: WorkspaceInstructionsItem[] = [];
-  for (const source of candidates) {
-    try {
-      const raw = await readFile(path.join(root, source), 'utf8');
-      const content =
-        raw.length > MAX_INSTRUCTIONS_BYTES ? raw.slice(0, MAX_INSTRUCTIONS_BYTES) : raw;
-      instructions.push({ content, source });
-    } catch {
-      // File absent or unreadable; skip it.
-    }
-  }
-
-  return instructions;
+  const content = buffer
+    .subarray(0, maxBytes)
+    .toString('utf8')
+    .replace(/\uFFFD+$/, '');
+  return { bytes: Buffer.byteLength(content, 'utf8'), content };
 };
 
 /**
- * Scan agent skill directories for the project and the execution device.
- * Project skills win over device skills on name collision. Approves each
+ * Read the agent instructions files (`AGENTS.md`, then `CLAUDE.md`) in `dirs`
+ * (nearest first), returned root first so the most specific file comes last
+ * in the prompt, as the other harnesses order them.
+ *
+ * Both names are read in each directory since they can coexist, except when
+ * one is a symlink to the other (a common way to share one file between
+ * harnesses): the same file is never injected twice. The total budget is
+ * spent nearest first, so when it runs out the farthest parents are dropped,
+ * not the working directory's own rules.
+ */
+const readWorkspaceInstructions = async (dirs: string[]): Promise<WorkspaceInstructionsItem[]> => {
+  const seen = new Set<string>();
+  const byDir: WorkspaceInstructionsItem[][] = [];
+  let remaining = MAX_INSTRUCTIONS_TOTAL_BYTES;
+
+  for (const dir of dirs) {
+    const found: WorkspaceInstructionsItem[] = [];
+    for (const source of INSTRUCTION_FILENAMES) {
+      if (remaining <= 0) break;
+      const filePath = path.join(dir, source);
+      try {
+        const real = await realpath(filePath);
+        if (seen.has(real)) continue;
+        seen.add(real);
+
+        const raw = await readFile(filePath, 'utf8');
+        const { bytes, content } = truncateUtf8(
+          raw,
+          Math.min(MAX_INSTRUCTIONS_FILE_BYTES, remaining),
+        );
+        remaining -= bytes;
+        found.push({ content, path: filePath, source });
+      } catch {
+        // File absent or unreadable; skip it.
+      }
+    }
+    byDir.push(found);
+  }
+
+  return byDir.reverse().flat();
+};
+
+/**
+ * Scan agent skill directories for the project (the working directory and its
+ * parents up to the repository root) and the execution device. Nearer project
+ * skills win over farther ones, and project skills over device skills, on name
+ * collision. Approves each
  * discovered skill's preview root for the host preview protocol.
  */
 export const listProjectSkills = async (
@@ -228,7 +327,7 @@ export const listProjectSkills = async (
   deps: WorkspaceScanDeps = {},
 ): Promise<ListProjectSkillsResult> => {
   const root = params.scope;
-  const skills = await collectSkills(createSkillRoots(root));
+  const skills = await collectSkills(await createSkillRoots(root));
 
   if (skills.length > 0) {
     await approvePreviewRoots(skills, deps);
@@ -239,8 +338,8 @@ export const listProjectSkills = async (
 
 /**
  * One-call "workspace init" scan: merge project and execution-device skills
- * (deduped by name, project winning) and read the project-root agent
- * instructions. Approves the project root regardless of what was found, since
+ * (deduped by name, project winning) and read the agent instructions from the
+ * working directory up to the repository root. Approves the project root regardless of what was found, since
  * the run is now bound to this root.
  */
 export const initWorkspace = async (
@@ -249,8 +348,12 @@ export const initWorkspace = async (
 ): Promise<InitWorkspaceResult> => {
   const root = params.scope;
 
-  const skills = await collectSkills(createSkillRoots(root));
-  const instructions = await readWorkspaceInstructions(root);
+  const dirs = await resolveAgentFileDirs(root);
+  const skills = await collectSkills([
+    ...createProjectSkillRoots(root, dirs),
+    ...createDeviceSkillRoots(),
+  ]);
+  const instructions = await readWorkspaceInstructions(dirs);
 
   await approvePreviewRoots(skills, deps, [root]);
 

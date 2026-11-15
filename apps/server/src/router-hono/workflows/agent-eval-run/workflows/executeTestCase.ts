@@ -30,7 +30,9 @@ export const executeTestCaseHandler = async (context: WorkflowContext<ExecuteTes
   // Get run to get K value from config
   const run = await runStep(context, 'agent-eval-run:get-run', async () => {
     const runModel = new AgentEvalRunModel(db, userId, wsId);
-    return runModel.findById(runId);
+    const run = await runModel.findSummaryById(runId);
+    // Keep the consumed shape compatible with older full-row checkpoints.
+    return run ? { config: { k: run.config?.k }, status: run.status } : undefined;
   });
 
   if (!run) {
@@ -58,10 +60,17 @@ export const executeTestCaseHandler = async (context: WorkflowContext<ExecuteTes
   return { k, success: true, testCaseId };
 };
 
+/**
+ * How many cases of all runs execute at once. The default suits a cloud deployment; a single
+ * provider route (one OpenRouter model, a dev machine) drops requests well below it, so
+ * AGENT_EVAL_CASE_PARALLELISM lowers it without a code change.
+ */
+const CASE_PARALLELISM = Number(process.env.AGENT_EVAL_CASE_PARALLELISM) || 200;
+
 export const executeTestCaseWorkflowOptions = {
   flowControl: {
     key: 'agent-eval-run.execute-test-case',
-    parallelism: 200,
+    parallelism: CASE_PARALLELISM,
     ratePerSecond: 5,
   },
 };

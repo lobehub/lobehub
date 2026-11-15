@@ -23,6 +23,7 @@ user mounts) and receive mail on them.
 - \`lh agent account provision [agentId] [--prefix <handle>]\` - Open a new Agent Mail inbox; the issued address may differ from the prefix
 - \`lh agent account mount [agentId] -i <identifier> -k <kind> [-c receive,send,login]\` - Attach an account the user already holds
 - \`lh agent account edit <accountId> [-n <name>] [-c <capabilities>]\` - Update non-secret fields
+- \`lh agent account edit <accountId> --wake <on|off> [--wake-senders <a@x.com,@y.com>] [--digest-minutes <n>]\` - Set how mail wakes the agent: \`on\` (default) wakes at once for listed senders and replies to the agent, and holds the rest for one digest run per window; \`off\` never wakes
 - \`lh agent account set-credential <accountId> --credential-file <path|->\` - Store a secret (write-only; reads a JSON object so it stays out of shell history)
 - \`lh agent account revoke <accountId> --yes\` - Release the address and purge its credential
 - \`lh agent inbox list [agentId] [-u] [-L <n>] [--before <cursor>]\` - List received mail, newest first

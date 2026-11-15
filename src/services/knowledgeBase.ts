@@ -12,6 +12,10 @@ class KnowledgeBaseService {
     );
   };
 
+  getAgentSpaces = async () => {
+    return lambdaClient.knowledgeBase.getAgentSpaces.query();
+  };
+
   getKnowledgeBaseById = async (id: string) => {
     return lambdaClient.knowledgeBase.getKnowledgeBaseById.query({ id });
   };
@@ -58,6 +62,18 @@ class KnowledgeBaseService {
 
   addFilesToKnowledgeBase = async (knowledgeBaseId: string, ids: string[]) => {
     return lambdaClient.knowledgeBase.addFilesToKnowledgeBase.mutate({ ids, knowledgeBaseId });
+  };
+
+  reorderKnowledgeItems = async (params: {
+    knowledgeBaseId: string;
+    dragIds: string[];
+    targetId: string;
+    position: 'before' | 'after';
+    parentId: string | null;
+    sorter?: 'custom' | 'name' | 'createdAt' | 'size' | 'updatedAt';
+    sortType?: 'asc' | 'desc';
+  }) => {
+    return lambdaClient.knowledgeBase.reorderKnowledgeItems.mutate(params);
   };
 
   removeFilesFromKnowledgeBase = async (knowledgeBaseId: string, ids: string[]) => {

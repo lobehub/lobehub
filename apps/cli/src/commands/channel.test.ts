@@ -14,14 +14,21 @@ const historyMessage = {
   truncated: false,
 };
 
-const { readMessages, readMessage, output } = vi.hoisted(() => ({
+const { listChannels, readMessages, readMessage, sendMessage, output } = vi.hoisted(() => ({
+  listChannels: vi.fn(),
   readMessages: vi.fn(),
   readMessage: vi.fn(),
+  sendMessage: vi.fn(),
   output: vi.fn(),
 }));
 vi.mock('../api/client', () => ({
   getTrpcClient: async () => ({
-    channel: { readMessages: { query: readMessages }, readMessage: { query: readMessage } },
+    channel: {
+      listChannels: { query: listChannels },
+      readMessages: { query: readMessages },
+      readMessage: { query: readMessage },
+      sendMessage: { mutate: sendMessage },
+    },
   }),
 }));
 vi.mock('../utils/format', () => ({ outputJson: output }));
@@ -69,5 +76,36 @@ describe('Channel CLI', () => {
     await expect(run(['channel', 'history'])).rejects.toThrow('Operation has already ended');
     expect(readMessages).toHaveBeenCalledTimes(1);
     expect(output).not.toHaveBeenCalled();
+  });
+  it('lists where Agents can be reached', async () => {
+    const page = { channels: [], hasMore: false };
+    listChannels.mockResolvedValue(page);
+    await run(['channel', 'list', '--agent', 'agent-1', '--query', 'general', '--limit', '3']);
+    expect(listChannels).toHaveBeenCalledWith({ agentId: 'agent-1', limit: 3, query: 'general' });
+    expect(output).toHaveBeenCalledWith(page);
+  });
+  it('sends to every --agent with a retry key', async () => {
+    sendMessage.mockResolvedValue({ messageId: 'message-sent' });
+    await run([
+      'channel',
+      'send',
+      'channel-1',
+      '--agent',
+      'agent-1',
+      '--agent',
+      'agent-2',
+      '-c',
+      'Please take a look',
+      '--request-key',
+      'retry-1',
+    ]);
+    expect(sendMessage).toHaveBeenCalledWith({
+      agentIds: ['agent-1', 'agent-2'],
+      channelId: 'channel-1',
+      content: 'Please take a look',
+      requestKey: 'retry-1',
+    });
+    await run(['channel', 'send', 'channel-1', '--agent', 'agent-1', '-c', 'Hi']);
+    expect(sendMessage.mock.calls[1][0].requestKey).toMatch(/^[\da-f-]{36}$/);
   });
 });

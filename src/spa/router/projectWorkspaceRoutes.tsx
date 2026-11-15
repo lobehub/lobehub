@@ -2,7 +2,7 @@ import { Navigate, type RouteObject, useLocation, useParams } from 'react-router
 
 import { goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
-import { channelRouteMeta } from '@/features/Channels/routeMeta';
+import { channelRouteMeta, channelSettingsRouteMeta } from '@/features/Channels/routeMeta';
 import { dashboardRouteMeta, dashboardsRouteMeta } from '@/features/Dashboard/routeMeta';
 import {
   projectConversationRouteMeta,
@@ -49,6 +49,9 @@ export const projectWorkspaceRoute: RouteObject = {
     },
     { element: <LegacyProjectConversationRedirect />, path: 'conversation/:topicId?' },
     {
+      // A thread opened as the page. The Channel page reads it from the path, so moving
+      // between the thread beside the Channel and the thread page keeps the page mounted.
+      children: [{ path: 'threads/:threadId' }],
       element: dynamicElement(
         () => import('@/routes/(main)/project/[projectId]/channels/[channelId]'),
         'Desktop > Project Channel',
@@ -56,6 +59,15 @@ export const projectWorkspaceRoute: RouteObject = {
       ),
       handle: { meta: channelRouteMeta },
       path: 'channels/:channelId',
+    },
+    {
+      element: dynamicElement(
+        () => import('@/routes/(main)/project/[projectId]/channels/[channelId]/settings'),
+        'Desktop > Project Channel Settings',
+        { preloadId: 'channels' },
+      ),
+      handle: { meta: channelSettingsRouteMeta },
+      path: 'channels/:channelId/settings',
     },
     {
       element: dynamicElement(

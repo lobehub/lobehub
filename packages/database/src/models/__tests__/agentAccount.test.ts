@@ -521,3 +521,22 @@ describe('AgentAccountModel.findForInboundVerification', () => {
     expect(inbound?.credential).toBeNull();
   });
 });
+
+describe('AgentAccountModel.findByIdUnscoped', () => {
+  it('resolves an account by id without a user scope, and nothing for an unknown id', async () => {
+    const created = await new AgentAccountModel(serverDB, userId).create(
+      mailAccount('unscoped@lobe.id'),
+    );
+
+    // The inbound edge learns the id from a verified routing key; it has no caller yet.
+    expect(await AgentAccountModel.findByIdUnscoped(serverDB, created.id)).toMatchObject({
+      agentId,
+      id: created.id,
+      identifier: 'unscoped@lobe.id',
+      userId,
+    });
+    expect(
+      await AgentAccountModel.findByIdUnscoped(serverDB, '00000000-0000-0000-0000-000000000000'),
+    ).toBeUndefined();
+  });
+});

@@ -34,6 +34,7 @@ import {
   userMemoriesPreferences,
   userPersonaDocuments,
 } from '../../../schemas';
+import { isUserKnowledgeBase } from '../../../utils/knowledgeBaseType';
 import { searchableMessage } from '../../../utils/searchableMessage';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
 import type { PostgresFtsSearchContext } from '../postgres/context';
@@ -357,6 +358,7 @@ const CANDIDATE_TARGETS: Record<FtsSearchBackendEntity, CandidateTarget | undefi
     table: knowledgeBases,
     where: (scope, filters) => [
       buildWorkspaceWhere(scope, knowledgeBases),
+      isUserKnowledgeBase(),
       filters.excludeKnowledgeBaseIds?.length
         ? notInArray(knowledgeBases.id, filters.excludeKnowledgeBaseIds)
         : undefined,

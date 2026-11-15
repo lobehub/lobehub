@@ -4,9 +4,17 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { listCodexModelsMock, listDroidAcpModelsMock, listTraeAcpModelsMock } = vi.hoisted(() => ({
+const {
+  detectDshCommandMock,
+  listCodexModelsMock,
+  listDroidAcpModelsMock,
+  listDshAcpModelsMock,
+  listTraeAcpModelsMock,
+} = vi.hoisted(() => ({
+  detectDshCommandMock: vi.fn(),
   listCodexModelsMock: vi.fn(),
   listDroidAcpModelsMock: vi.fn(),
+  listDshAcpModelsMock: vi.fn(),
   listTraeAcpModelsMock: vi.fn(),
 }));
 
@@ -26,6 +34,12 @@ vi.mock('../spawn/traeAcpSession', () => ({
 
 vi.mock('../spawn/droidAcpSession', () => ({
   listDroidAcpModels: listDroidAcpModelsMock,
+}));
+
+vi.mock('../spawn/dshAcpSession', () => ({
+  DSH_COMMAND: 'dsh',
+  detectDshCommand: detectDshCommandMock,
+  listDshAcpModels: listDshAcpModelsMock,
 }));
 
 vi.mock('./codex', () => ({ listCodexModels: listCodexModelsMock }));
@@ -56,13 +70,62 @@ const importModule = () => import('./listHeterogeneousAgentModels');
 describe('heterogeneous agent model discovery', () => {
   beforeEach(() => {
     execFileMock.mockReset();
+    detectDshCommandMock.mockReset();
     listCodexModelsMock.mockReset();
     listDroidAcpModelsMock.mockReset();
+    listDshAcpModelsMock.mockReset();
     listTraeAcpModelsMock.mockReset();
   });
 
   afterEach(() => {
     vi.resetModules();
+  });
+
+  it('queries DeepSeek Harness through ACP instead of --list-models', async () => {
+    const models = [{ id: '["gateway","model"]', modelId: 'model', providerId: 'gateway' }];
+    listDshAcpModelsMock.mockResolvedValue(models);
+    const { listHeterogeneousAgentModels } = await importModule();
+
+    await expect(
+      listHeterogeneousAgentModels({
+        args: ['--config', '/config'],
+        command: '/custom/dsh',
+        cwd: '/repo',
+        env: { DSH_TEST: 'value' },
+        type: 'deepseek-harness',
+      }),
+    ).resolves.toMatchObject({ models, status: 'success' });
+
+    expect(listDshAcpModelsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['--config', '/config'],
+        commandPath: '/custom/dsh',
+        cwd: '/repo',
+        env: expect.objectContaining({ DSH_TEST: 'value' }),
+      }),
+    );
+    expect(detectDshCommandMock).not.toHaveBeenCalled();
+    expect(execFileMock).not.toHaveBeenCalled();
+  });
+
+  it('resolves the default dsh executable before ACP discovery', async () => {
+    listDshAcpModelsMock.mockResolvedValue([]);
+    detectDshCommandMock.mockResolvedValue({
+      available: true,
+      path: '/opt/dsh/bin/dsh',
+      resolvedPathEnv: '/opt/dsh/bin',
+    });
+    const { listHeterogeneousAgentModels } = await importModule();
+
+    await listHeterogeneousAgentModels({
+      cwd: '/repo',
+      env: { PATH: '/usr/bin' },
+      type: 'deepseek-harness',
+    });
+
+    expect(listDshAcpModelsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ commandPath: '/opt/dsh/bin/dsh' }),
+    );
   });
 
   it('loads Pi provider extensions with the same discovery policy as the configured run', async () => {

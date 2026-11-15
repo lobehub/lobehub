@@ -355,6 +355,7 @@ const isQueueDrainedAtRunEnd =
     if (!context.agentId) return false;
     const hasQueuedMessages = getQueuedMessages(context)(s).length > 0;
     const isCliRun = (op: Operation) => {
+      if (op.metadata.liveSteer) return false;
       if (op.type === 'execHeterogeneousAgent') return true;
       if (op.type !== 'execServerAgentRuntime') return false;
 

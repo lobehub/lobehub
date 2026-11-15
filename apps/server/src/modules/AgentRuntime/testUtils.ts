@@ -15,6 +15,7 @@ export function createMockInner(): IStreamEventManager & { calls: Record<string,
   return {
     calls,
     cleanupOperation: track('cleanupOperation') as any,
+    deleteStreamEvents: track('deleteStreamEvents') as any,
     disconnect: track('disconnect') as any,
     getActiveOperationsCount: track('getActiveOperationsCount') as any,
     getStreamHistory: track('getStreamHistory') as any,

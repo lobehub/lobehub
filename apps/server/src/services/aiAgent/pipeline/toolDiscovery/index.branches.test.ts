@@ -15,6 +15,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as MechaModule from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
+import { AgentEvalConnectorService } from '@/server/services/agentEvalConnector';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import {
   buildConnectorOwnershipPrompt,
@@ -79,6 +80,9 @@ const { connectorToolState } = vi.hoisted(() => ({
 // Permission patching builds its own model rather than using `deps`.
 vi.mock('@/database/models/connectorTool', () => ({
   ConnectorToolModel: class {
+    static forEvaluation() {
+      return new this();
+    }
     queryByConnector = vi.fn(async () => connectorToolState.tools);
   },
 }));
@@ -552,4 +556,55 @@ describe('discoverTools — credential snapshot', () => {
     expect(result.credentialFactsPromise).toBeUndefined();
     expect(credsList).not.toHaveBeenCalled();
   });
+});
+
+describe('discoverTools — exact eval mock bindings', () => {
+  it.each(['notion', 'lobe-web-browsing'])(
+    'replaces ordinary manifests for bound alias %s and skips identifier resolution',
+    async (alias) => {
+      const snapshots = {
+        [alias]: {
+          connectorId: 'fixed-uuid',
+          datasetId: 'dataset',
+          fingerprint: 'fixed-contract',
+          transport: 'mcp' as const,
+        },
+      };
+      const resolve = vi
+        .spyOn(AgentEvalConnectorService.prototype, 'resolveBindings')
+        .mockResolvedValue({
+          manifests: [{ ...skillManifest(alias), type: 'mcp' } as never],
+          snapshots,
+        });
+      const requested: string[] = [];
+      try {
+        const result = await run({
+          agentConfig: { plugins: [alias] },
+          connectorResolve: (ids) => {
+            requested.push(...ids);
+            return [];
+          },
+          input: { evalConnectorSnapshots: snapshots },
+          installedPlugins: [
+            {
+              identifier: alias,
+              manifest: {
+                ...skillManifest(alias),
+                api: [{ name: 'realAccountWrite', parameters: {} }],
+              },
+            },
+          ],
+        }).promise;
+        expect(requested).not.toContain(alias);
+        expect(
+          result.toolManifestMap[alias].api.map((tool: { name: string }) => tool.name),
+        ).toEqual(['doThing']);
+        expect(JSON.stringify(result.toolManifestMap[alias])).not.toMatch(
+          /mcpParams|realAccountWrite/,
+        );
+      } finally {
+        resolve.mockRestore();
+      }
+    },
+  );
 });

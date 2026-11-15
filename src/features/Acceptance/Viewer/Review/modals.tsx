@@ -3,14 +3,14 @@
 import {
   Button,
   createModal,
-  createStaticStyles,
-  cssVar,
   Flexbox,
   type ModalInstance,
   Text,
   TextArea,
   useModalContext,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { t } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,14 +22,15 @@ import {
 } from '../Evidence/attachments';
 import RejectFeedbackPreview from './RejectFeedbackPreview';
 
-const styles = createStaticStyles(({ css }) => ({
-  warning: css`
-    padding-block: 10px;
-    padding-inline: 14px;
-    border-radius: ${cssVar.borderRadiusLG};
-    background: ${cssVar.colorWarningBg};
-  `,
-}));
+const styles = stylex.create({
+  warning: {
+    paddingBlock: '10px',
+    paddingInline: '14px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorWarningBg,
+    backgroundImage: 'none',
+  },
+});
 
 /**
  * A frosted scrim for the acceptance decision dialogs — the page behind reads
@@ -66,7 +67,7 @@ const AcceptContent = memo<AcceptContentProps>(({ exceptions, onConfirm, subject
     <Flexbox gap={16}>
       <Text>{translate('acceptance.accept.summary', { title: subjectTitle })}</Text>
       {exceptions.length > 0 && (
-        <Flexbox className={styles.warning} gap={4}>
+        <Flexbox className={stylex.props(styles.warning).className} gap={4}>
           <Text strong fontSize={13}>
             {translate('acceptance.accept.exceptionsTitle', { count: exceptions.length })}
           </Text>

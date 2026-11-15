@@ -9,6 +9,23 @@ import { createServerModelParamsProviders } from '@/server/modules/Mecha/ModelPa
 import type { RuntimeExecutorContext } from '../context';
 import { resolveServerCallLlmContextHints } from './serverCallLlmContextHints';
 
+const contextHintsInput = (
+  ctx: RuntimeExecutorContext,
+  llmPayload: CallLLMPayload,
+): Parameters<typeof resolveServerCallLlmContextHints>[0] => ({
+  ctx,
+  world: { agent: { chatConfig: {} } },
+  llmPayload,
+  model: 'gpt-4',
+  provider: 'openai',
+});
+
+const topicReasoningConfig = () => ({
+  metadata: { reasoningConfig: { reasoningEffort: 'high' } },
+  model: 'gpt-4',
+  provider: 'openai',
+});
+
 const loadModelsMock = vi.hoisted(() => vi.fn());
 const findByIdAndProviderMock = vi.hoisted(() => vi.fn());
 const getModelReasoningConfigMock = vi.hoisted(() => vi.fn());
@@ -276,19 +293,11 @@ describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
 
   it('should let the topic pin win over the model-instance config', async () => {
     getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'low' });
-    findTopicByIdMock.mockResolvedValue({
-      metadata: { reasoningConfig: { reasoningEffort: 'high' } },
-      model: 'gpt-4',
-      provider: 'openai',
-    });
+    findTopicByIdMock.mockResolvedValue(topicReasoningConfig());
 
-    const hints = await resolveServerCallLlmContextHints({
-      ctx: ctxWithTopic(),
-      world: { agent: { chatConfig: {} } },
-      llmPayload,
-      model: 'gpt-4',
-      provider: 'openai',
-    });
+    const hints = await resolveServerCallLlmContextHints(
+      contextHintsInput(ctxWithTopic(), llmPayload),
+    );
 
     expect(findTopicByIdMock).toHaveBeenCalledWith('topic-1');
     expect(getModelReasoningConfigMock).not.toHaveBeenCalled();
@@ -296,19 +305,9 @@ describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
   });
 
   it('should read share-visitor topics too (they carry a senderId)', async () => {
-    findTopicByIdMock.mockResolvedValue({
-      metadata: { reasoningConfig: { reasoningEffort: 'high' } },
-      model: 'gpt-4',
-      provider: 'openai',
-    });
+    findTopicByIdMock.mockResolvedValue(topicReasoningConfig());
 
-    await resolveServerCallLlmContextHints({
-      ctx: ctxWithTopic(),
-      world: { agent: { chatConfig: {} } },
-      llmPayload,
-      model: 'gpt-4',
-      provider: 'openai',
-    });
+    await resolveServerCallLlmContextHints(contextHintsInput(ctxWithTopic(), llmPayload));
 
     expect(topicModelCtorMock).toHaveBeenCalledWith(
       expect.anything(),
@@ -327,13 +326,9 @@ describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
       provider: 'openai',
     });
 
-    const hints = await resolveServerCallLlmContextHints({
-      ctx: ctxWithTopic(),
-      world: { agent: { chatConfig: {} } },
-      llmPayload,
-      model: 'gpt-4',
-      provider: 'openai',
-    });
+    const hints = await resolveServerCallLlmContextHints(
+      contextHintsInput(ctxWithTopic(), llmPayload),
+    );
 
     expect(getModelReasoningConfigMock).not.toHaveBeenCalled();
     expect(hints.resolvedExtendParams).toEqual({});
@@ -347,13 +342,9 @@ describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
       provider: 'openai',
     });
 
-    const hints = await resolveServerCallLlmContextHints({
-      ctx: ctxWithTopic(),
-      world: { agent: { chatConfig: {} } },
-      llmPayload,
-      model: 'gpt-4',
-      provider: 'openai',
-    });
+    const hints = await resolveServerCallLlmContextHints(
+      contextHintsInput(ctxWithTopic(), llmPayload),
+    );
 
     expect(getModelReasoningConfigMock).toHaveBeenCalledWith('gpt-4', 'openai');
     expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'low' });
@@ -363,23 +354,15 @@ describe('resolveServerCallLlmContextHints - topic reasoning pin', () => {
     getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'low' });
     findTopicByIdMock.mockResolvedValue({ metadata: {}, model: 'gpt-4', provider: 'openai' });
 
-    const hints = await resolveServerCallLlmContextHints({
-      ctx: ctxWithTopic(),
-      world: { agent: { chatConfig: {} } },
-      llmPayload,
-      model: 'gpt-4',
-      provider: 'openai',
-    });
+    const hints = await resolveServerCallLlmContextHints(
+      contextHintsInput(ctxWithTopic(), llmPayload),
+    );
 
     expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'low' });
   });
 
   it('should still let explicit sub-agent overrides win over the topic pin', async () => {
-    findTopicByIdMock.mockResolvedValue({
-      metadata: { reasoningConfig: { reasoningEffort: 'high' } },
-      model: 'gpt-4',
-      provider: 'openai',
-    });
+    findTopicByIdMock.mockResolvedValue(topicReasoningConfig());
 
     const hints = await resolveServerCallLlmContextHints({
       ctx: ctxWithTopic(),
@@ -467,13 +450,9 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
   it('should apply the user model-instance reasoning config', async () => {
     getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'high' });
 
-    const hints = await resolveServerCallLlmContextHints({
-      ctx: createCtx(),
-      world: { agent: { chatConfig: {} } },
-      llmPayload,
-      model: 'gpt-4',
-      provider: 'openai',
-    });
+    const hints = await resolveServerCallLlmContextHints(
+      contextHintsInput(createCtx(), llmPayload),
+    );
 
     expect(getModelReasoningConfigMock).toHaveBeenCalledWith('gpt-4', 'openai');
     expect(hints.resolvedExtendParams).toEqual({ reasoning_effort: 'high' });
@@ -525,13 +504,9 @@ describe('resolveServerCallLlmContextHints - model-instance reasoning config', (
     findByIdAndProviderMock.mockResolvedValue({ settings: { extendParams: [] } });
     getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'high' });
 
-    const hints = await resolveServerCallLlmContextHints({
-      ctx: createCtx(),
-      world: { agent: { chatConfig: {} } },
-      llmPayload,
-      model: 'gpt-4',
-      provider: 'openai',
-    });
+    const hints = await resolveServerCallLlmContextHints(
+      contextHintsInput(createCtx(), llmPayload),
+    );
 
     expect(getModelReasoningConfigMock).not.toHaveBeenCalled();
     expect(hints.resolvedExtendParams).toEqual({});
@@ -704,11 +679,7 @@ describe('resolveServerCallLlmContextHints - frozen operation facts', () => {
   it('reads no model source on a step and keeps the effort the run started with', async () => {
     // What the user changed after the run started — none of it may be read.
     getModelReasoningConfigMock.mockResolvedValue({ reasoningEffort: 'high' });
-    findTopicByIdMock.mockResolvedValue({
-      metadata: { reasoningConfig: { reasoningEffort: 'high' } },
-      model: 'gpt-4',
-      provider: 'openai',
-    });
+    findTopicByIdMock.mockResolvedValue(topicReasoningConfig());
 
     const hints = await resolveServerCallLlmContextHints({
       ctx: frozenCtx(),

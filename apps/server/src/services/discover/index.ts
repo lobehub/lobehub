@@ -26,9 +26,12 @@ export class DiscoverService {
   assistantStore = new AssistantStore();
   pluginStore = new PluginStore();
   market: MarketSDK;
+  /** The reading user; Market configs are adjusted to the models this user may run. */
+  userInfo?: TrustedClientUserInfo;
 
   constructor(options: DiscoverServiceOptions = {}) {
     const { accessToken, userInfo } = options;
+    this.userInfo = userInfo;
 
     // Use MarketService to initialize MarketSDK
     const marketService = new MarketService({ accessToken, userInfo });

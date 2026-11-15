@@ -14,6 +14,7 @@ vi.mock('@/libs/trusted-client', () => ({
 
 // Mock ThreadModel
 const mockThreadModel = {
+  attachRunOperation: vi.fn(),
   claimForRun: vi.fn(),
   create: vi.fn(),
   findById: vi.fn(),

@@ -7,8 +7,10 @@ import { updateDocumentThroughRoom, writePageBodyThroughRoom } from '../bodyWrit
 import { openPageFork, projectPageState } from '../fork';
 
 const room = vi.hoisted(() => ({ bootstrapped: true, doc: null as any, pushes: [] as any[] }));
-const env = vi.hoisted(() => ({ ENABLE_PAGE_COLLAB: true }));
+const env = vi.hoisted(() => ({ ENABLE_PAGE_COLLAB: true, ENABLE_WORKSPACE_PAGE_COLLAB: false }));
+const stored = vi.hoisted(() => ({ workspaceId: undefined as string | undefined }));
 const persisted = vi.hoisted(() => [] as any[]);
+const lock = vi.hoisted(() => ({ heldByOther: false }));
 
 vi.mock('@/envs/app', () => ({ appEnv: env }));
 
@@ -40,7 +42,7 @@ vi.mock('@/server/services/pageCollab/persist', () => ({
 
 vi.mock('@/server/services/document', () => ({
   DocumentService: class {
-    getDocumentById = async () => ({ title: 'Page' });
+    getDocumentById = async () => ({ title: 'Page', workspaceId: stored.workspaceId });
   },
 }));
 
@@ -67,6 +69,8 @@ const markdownOfRoom = async () =>
 describe('writePageBodyThroughRoom', () => {
   beforeEach(async () => {
     env.ENABLE_PAGE_COLLAB = true;
+    env.ENABLE_WORKSPACE_PAGE_COLLAB = false;
+    stored.workspaceId = undefined;
     room.bootstrapped = true;
     room.pushes = [];
     persisted.length = 0;
@@ -134,6 +138,27 @@ describe('writePageBodyThroughRoom', () => {
     ).toBe(false);
   });
 
+  it('writes a personal page to its row once only workspace pages have rooms', async () => {
+    env.ENABLE_PAGE_COLLAB = false;
+    env.ENABLE_WORKSPACE_PAGE_COLLAB = true;
+
+    expect(
+      await writePageBodyThroughRoom({} as any, 'doc_1', { markdown: 'replaced\n' }, writer),
+    ).toBe(false);
+    expect(room.pushes).toEqual([]);
+  });
+
+  it('writes a workspace page through its room once only workspace pages have rooms', async () => {
+    env.ENABLE_PAGE_COLLAB = false;
+    env.ENABLE_WORKSPACE_PAGE_COLLAB = true;
+    stored.workspaceId = 'ws_1';
+
+    expect(
+      await writePageBodyThroughRoom({} as any, 'doc_1', { markdown: 'replaced\n' }, writer),
+    ).toBe(true);
+    expect(room.pushes).toHaveLength(1);
+  });
+
   it('pushes nothing when the body already matches the room', async () => {
     await writePageBodyThroughRoom(
       {} as any,
@@ -166,12 +191,51 @@ describe('writePageBodyThroughRoom titles', () => {
 describe('updateDocumentThroughRoom', () => {
   beforeEach(async () => {
     env.ENABLE_PAGE_COLLAB = true;
+    lock.heldByOther = false;
     room.bootstrapped = true;
     room.pushes = [];
     await seedRoom('para one\n');
   });
 
-  const service = () => ({ updateDocument: vi.fn(async (id: string) => ({ id }) as any) });
+  it('refuses a save from outside the room while someone else holds the page lock', async () => {
+    lock.heldByOther = true;
+    const documents = service();
+
+    await expect(
+      updateDocumentThroughRoom(
+        {} as any,
+        documents,
+        'doc_1',
+        { content: 'para ONE\n', lockOwnerId: 'page:doc_1:b' },
+        { userId: 'u1' },
+      ),
+    ).rejects.toThrow('being edited by another user');
+
+    expect(room.pushes).toEqual([]);
+    expect(documents.updateDocument).not.toHaveBeenCalled();
+  });
+
+  it('lets a writer without a lock session, like the CLI, merge into the room', async () => {
+    lock.heldByOther = true;
+    const documents = service();
+
+    await updateDocumentThroughRoom(
+      {} as any,
+      documents,
+      'doc_1',
+      { content: 'para ONE\n' },
+      { userId: 'u1' },
+    );
+
+    expect(await markdownOfRoom()).toBe('para ONE\n');
+  });
+
+  const service = () => ({
+    assertCanWriteBody: vi.fn(async () => {
+      if (lock.heldByOther) throw new Error('Document is being edited by another user');
+    }),
+    updateDocument: vi.fn(async (id: string) => ({ id }) as any),
+  });
 
   it('keeps the body off the row when the room took it', async () => {
     const documents = service();

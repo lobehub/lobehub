@@ -1,7 +1,6 @@
 // LobeHub gateway raw-event-stream probe.
 //
-// Gateway-mode chats subscribe via WebSocket — NOT via the `/api/agent/stream`
-// SSE endpoint (that one belongs to the direct/client durable-agent runtime).
+// Gateway-mode chats subscribe via WebSocket.
 // `AgentStreamClient` (`packages/agent-gateway-client/src/client.ts`) opens
 // `new WebSocket('wss://.../ws?operationId=...')`, then parses JSON frames in
 // its `onmessage` handler and re-emits `agent_event.event` objects to the
@@ -11,10 +10,6 @@
 // `window.WebSocket` so that for any socket whose URL contains `operationId=`
 // we intercept the `onmessage` handler / `addEventListener('message')` and
 // log every `agent_event` frame.
-//
-// We *also* keep the `window.fetch` hook for `/api/agent/stream` so this
-// probe still works for direct-mode runs — but gateway-mode events come
-// through the WebSocket path.
 //
 // Buffers (read via `dump`):
 //   __PROBE_STREAM_EVENTS  — raw events parsed off the wire
@@ -125,7 +120,7 @@ function shortStack(): string {
 }
 
 function recordAgentEvent(args: {
-  transport: 'ws' | 'sse';
+  transport: 'ws';
   opId: string | null;
   agentEvent: any;
   eventId?: string | null;
@@ -250,117 +245,7 @@ for (const k of Object.keys(OrigWS) as Array<keyof typeof OrigWS>) {
 });
 w.WebSocket = PatchedWebSocket as unknown as typeof WebSocket;
 
-// ── 2. Patch window.fetch for `/api/agent/stream` (direct-mode SSE) ─
-
-if (!w.__PROBE_ORIG_FETCH) w.__PROBE_ORIG_FETCH = w.fetch.bind(w);
-const origFetch = w.__PROBE_ORIG_FETCH;
-
-function isAgentStreamUrl(input: RequestInfo | URL): boolean {
-  let url = '';
-  if (typeof input === 'string') url = input;
-  else if (input instanceof URL) url = input.toString();
-  else if (input && typeof (input as Request).url === 'string') url = (input as Request).url;
-  return url.includes('/api/agent/stream');
-}
-
-function extractOpIdFromHttpUrl(input: RequestInfo | URL): string | null {
-  const url = typeof input === 'string' ? input : (input as Request | URL).toString();
-  const m = url.match(/operationId=([^&]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
-
-function pushFromSSEFrame(rawFrame: string, opId: string | null): void {
-  const lines = rawFrame.split('\n');
-  let dataJson = '';
-  let evtName = 'message';
-  for (const line of lines) {
-    if (line.startsWith('event:')) evtName = line.slice(6).trim();
-    else if (line.startsWith('data:')) dataJson += line.slice(5).trim();
-  }
-  if (!dataJson) return;
-  let parsed: any;
-  try {
-    parsed = JSON.parse(dataJson);
-  } catch {
-    events.push({
-      t: now(),
-      transport: 'sse',
-      opIdTail: (opId ?? '').slice(-10),
-      type: '_PARSE_ERROR_',
-      sseEvent: evtName,
-      raw: dataJson.length > 400 ? dataJson.slice(0, 400) + '…' : dataJson,
-    });
-    return;
-  }
-  recordAgentEvent({
-    transport: 'sse',
-    opId,
-    agentEvent: parsed,
-    eventId: null,
-    rawLen: dataJson.length,
-  });
-}
-
-async function teeAndDrain(response: Response, opId: string | null): Promise<Response> {
-  if (!response.body) return response;
-  const [a, b] = response.body.tee();
-
-  void (async () => {
-    const reader = b.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-    try {
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        let idx: number;
-
-        while ((idx = buf.indexOf('\n\n')) !== -1) {
-          const frame = buf.slice(0, idx);
-          buf = buf.slice(idx + 2);
-          if (frame.trim()) pushFromSSEFrame(frame, opId);
-        }
-      }
-      if (buf.trim()) pushFromSSEFrame(buf, opId);
-    } catch (e: any) {
-      events.push({
-        t: now(),
-        transport: 'sse',
-        opIdTail: (opId ?? '').slice(-10),
-        type: '_TEE_ERROR_',
-        message: String(e?.message ?? e),
-      });
-    }
-  })();
-
-  return new Response(a, {
-    headers: response.headers,
-    status: response.status,
-    statusText: response.statusText,
-  });
-}
-
-w.fetch = async function patchedFetch(input: RequestInfo | URL, init?: RequestInit) {
-  const response = await origFetch(input as any, init);
-  if (!isAgentStreamUrl(input)) return response;
-  const opId = extractOpIdFromHttpUrl(input);
-  const url =
-    typeof input === 'string'
-      ? input.split('?')[0]
-      : (input as Request | URL).toString().split('?')[0];
-  events.push({
-    t: now(),
-    transport: 'sse',
-    opIdTail: (opId ?? '').slice(-10),
-    type: '_CONNECTED_',
-    url,
-    status: response.status,
-  });
-  return teeAndDrain(response, opId);
-} as typeof fetch;
-
-// ── 3. Wrap store actions (best-effort for "who called replace") ────
+// ── 2. Wrap store actions (best-effort for "who called replace") ────
 
 // Side-global stash for the original chat-store actions. Re-installs ALWAYS
 // rewrap from the originals so updates to the probe body take effect
@@ -444,7 +329,7 @@ try {
   calls.push({ t: now(), name: '_WRAP_ERROR_', error: String(e?.message ?? e) });
 }
 
-// ── 3.5. Mutation log — wrap the TWO ChatStore writers (replaceMessages,
+// ── 2.5. Mutation log — wrap the TWO ChatStore writers (replaceMessages,
 // internal_dispatchMessage) to record EVERY dbMessagesMap[key] reference
 // change with a one-line "before/after last assistant message" delta. This
 // reveals dispatchMessage-driven collapses that the replaceMessages wrap
@@ -560,7 +445,7 @@ try {
   calls.push({ t: now(), name: '_DISPATCH_WRAP_ERROR_', error: String(e?.message ?? e) });
 }
 
-// ── 4. Periodic per-key timeline snapshots ─────────────────────────
+// ── 3. Periodic per-key timeline snapshots ─────────────────────────
 
 function captureTimeline(): void {
   try {
@@ -602,7 +487,7 @@ captureTimeline();
 if (w.__PROBE_TIMELINE_TIMER) clearInterval(w.__PROBE_TIMELINE_TIMER);
 w.__PROBE_TIMELINE_TIMER = setInterval(captureTimeline, 200);
 
-// ── 5. Tab-switch helpers ──────────────────────────────────────────
+// ── 4. Tab-switch helpers ──────────────────────────────────────────
 
 function listTopBarTabs(): HTMLElement[] {
   return Array.from(

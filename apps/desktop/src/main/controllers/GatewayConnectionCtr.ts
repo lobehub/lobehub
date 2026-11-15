@@ -27,6 +27,7 @@ import { managedProcessEnvironment, spawnManaged } from '@lobechat/utils/managed
 import { app as electronApp } from 'electron';
 
 import { withEmbeddedCliEnv } from '@/modules/cliEmbedding';
+import { getRemoteTerminalDeps } from '@/modules/terminal/remote';
 import { updaterConfig } from '@/modules/updater/configs';
 import { createRemoteAppUpdateDeps } from '@/modules/updater/remoteUpdate';
 import AuvService, { type AuvRunCommandParams } from '@/services/auvSrv';
@@ -401,10 +402,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
     return this.localSystemRuntime;
   }
 
-  /**
-   * Desktop handlers for the shared `@lobechat/device-control` dispatcher: only
-   * file preview / index (and preview approval) route back to controllers here.
-   */
+  /** Desktop handlers for the shared `@lobechat/device-control` dispatcher. */
   private get deviceControlDeps(): DeviceControlDeps {
     return {
       approveProjectRoot: async (root) => {
@@ -438,6 +436,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
         enabled: updaterConfig.enableAppUpdate,
         getUpdater: () => this.app.getUpdaterManager(),
       }),
+      ...getRemoteTerminalDeps(),
     };
   }
 

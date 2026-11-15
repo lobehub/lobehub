@@ -15,6 +15,7 @@ import botSlack from './references/bot-slack';
 import botTelegram from './references/bot-telegram';
 import botWechat from './references/bot-wechat';
 import config from './references/config';
+import connector from './references/connector';
 import dashboard from './references/dashboard';
 import doc from './references/doc';
 import eval_ from './references/eval';
@@ -52,6 +53,7 @@ export const LobeHubSkill: BuiltinSkill = {
     'references/bot/telegram': botTelegram,
     'references/bot/wechat': botWechat,
     'references/config': config,
+    'references/connector': connector,
     'references/dashboard': dashboard,
     'references/doc': doc,
     'references/eval': eval_,

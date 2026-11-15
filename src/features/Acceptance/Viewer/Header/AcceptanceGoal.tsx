@@ -1,6 +1,8 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronsDownUp, ChevronsUpDown, GitBranch, GitCommitHorizontal } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,74 +11,32 @@ import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { acceptanceCodingScope } from '../History/codingScope';
+import { goalCardMarker } from '../markers.stylex';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 
 const GOAL_COLLAPSED_STORAGE_KEY = 'lobehub-acceptance-goal-collapsed';
 
-const styles = createStaticStyles(({ css }) => ({
-  /**
-   * No border, no card. The requirement is the page's own subject line, not a
-   * widget parked on it — boxing it added a frame around the one thing nobody
-   * needs help finding.
-   */
-  card: css`
-    &:hover [data-goal-toggle='true'] {
-      pointer-events: auto;
-      opacity: 1;
-    }
-  `,
-  goalToggle: css`
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity ${cssVar.motionDurationMid};
-
-    &:focus-visible {
-      pointer-events: auto;
-      opacity: 1;
-    }
-
-    @media (hover: none) {
-      pointer-events: auto;
-      opacity: 1;
-    }
-  `,
-  requirementLabel: css`
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-    letter-spacing: 0.04em;
-  `,
-  scopeChip: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  scopeLink: css`
-    cursor: pointer;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      text-decoration: underline;
-    }
-  `,
-  summaryClamp: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-
-    line-height: 1.6;
-  `,
-  viewReportLink: css`
-    cursor: pointer;
-    font-size: 12px;
-    color: ${cssVar.colorTextQuaternary};
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  goalToggle: {
+    pointerEvents: {
+      'default': 'none',
+      ':focus-visible': 'auto',
+      '@media (hover: none)': 'auto',
+      [stylex.when.ancestor(':hover', goalCardMarker)]: 'auto',
+    },
+    opacity: {
+      'default': 0,
+      ':focus-visible': 1,
+      '@media (hover: none)': 1,
+      [stylex.when.ancestor(':hover', goalCardMarker)]: 1,
+    },
+    transition: `opacity ${cssVar.motionDurationMid}`,
+  },
+  scopeChip: {
+    fontSize: '12px',
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 interface AcceptanceGoalProps {
   editSlot?: ReactNode;
@@ -96,7 +56,7 @@ const AcceptanceGoal = ({ editSlot }: AcceptanceGoalProps) => {
     : t('acceptance.requirementEmpty');
 
   return (
-    <Flexbox className={styles.card} gap={collapsed ? 0 : 6}>
+    <Flexbox gap={collapsed ? 0 : 6} {...stylex.props(goalCardMarker)}>
       {/* No "Acceptance goal" label: the sentence under the title IS the goal,
           and naming it added a caption to a paragraph that reads fine alone.
           Its controls therefore ride the sentence's own row — a header strip
@@ -117,7 +77,7 @@ const AcceptanceGoal = ({ editSlot }: AcceptanceGoalProps) => {
         {!collapsed && editSlot}
         <ActionIcon
           data-goal-toggle
-          className={styles.goalToggle}
+          {...stylex.props(styles.goalToggle)}
           icon={collapsed ? ChevronsUpDown : ChevronsDownUp}
           size={'small'}
           title={t(collapsed ? 'acceptance.goalExpand' : 'acceptance.goalCollapse')}
@@ -129,12 +89,12 @@ const AcceptanceGoal = ({ editSlot }: AcceptanceGoalProps) => {
           {scope && (
             <Flexbox horizontal align={'center'} gap={16} wrap={'wrap'}>
               {scope.branch && (
-                <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
+                <Flexbox horizontal align={'center'} gap={4} {...stylex.props(styles.scopeChip)}>
                   <Icon icon={GitBranch} size={13} /> {scope.branch}
                 </Flexbox>
               )}
               {scope.commit && (
-                <Flexbox horizontal align={'center'} className={styles.scopeChip} gap={4}>
+                <Flexbox horizontal align={'center'} gap={4} {...stylex.props(styles.scopeChip)}>
                   <Icon icon={GitCommitHorizontal} size={13} /> {scope.commit.slice(0, 10)}
                 </Flexbox>
               )}

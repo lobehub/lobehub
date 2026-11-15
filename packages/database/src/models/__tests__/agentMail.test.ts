@@ -132,7 +132,10 @@ describe('AgentMailModel', () => {
 
     // Plain words and short or single-kind runs are not secrets.
     expect(
-      await model.findSecretRepeatedFromOtherSender({ ...window, compactText: 'signincodeservice' }),
+      await model.findSecretRepeatedFromOtherSender({
+        ...window,
+        compactText: 'signincodeservice',
+      }),
     ).toBeUndefined();
     // Mail from the reply's own recipient is never another sender's secret.
     expect(
@@ -141,6 +144,18 @@ describe('AgentMailModel', () => {
         compactText: 'ab12cd',
         recipient: 'login@service.com',
       }),
+    ).toBeUndefined();
+  });
+
+  it('answers no secret when there is nothing to look for', async () => {
+    const model = new AgentMailModel(serverDB, userId);
+    const window = { agentId, recipient: 'friend@example.com', since: new Date(0) };
+
+    // An empty candidate list has no secret to find, and an empty outgoing text
+    // cannot repeat one — both short-circuit before touching the mail log.
+    expect(await model.findTextFromOtherSender({ ...window, candidates: [] })).toBeUndefined();
+    expect(
+      await model.findSecretRepeatedFromOtherSender({ ...window, compactText: '' }),
     ).toBeUndefined();
   });
 
@@ -168,6 +183,43 @@ describe('AgentMailModel', () => {
     });
 
     expect(thread.map((row) => row.direction)).toEqual(['inbound', 'outbound']);
+  });
+
+  it('knows whether the agent already wrote to an address in a thread', async () => {
+    await AgentMailModel.record(
+      serverDB,
+      mail({
+        cc: [{ address: 'Copy@Example.com' }],
+        deliveredAt: new Date('2026-10-03T00:00:00Z'),
+        direction: 'outbound',
+        fromAddress: AGENT_ADDRESS,
+        providerMessageId: 'msg_sent',
+        threadKey: 't-sent',
+        to: [{ address: 'Friend@Example.com' }],
+      }),
+      { userId },
+    );
+
+    const inThread = (address: string, threadKey = 't-sent') => ({
+      accountId,
+      address,
+      threadKey,
+    });
+
+    // A To recipient and a Cc one both count, however they were capitalised.
+    expect(await AgentMailModel.hasSentInThreadTo(serverDB, inThread('friend@example.com'))).toBe(
+      true,
+    );
+    expect(await AgentMailModel.hasSentInThreadTo(serverDB, inThread(' copy@example.com '))).toBe(
+      true,
+    );
+    // Other threads and other addresses were never written to.
+    expect(
+      await AgentMailModel.hasSentInThreadTo(serverDB, inThread('friend@example.com', 't-x')),
+    ).toBe(false);
+    expect(await AgentMailModel.hasSentInThreadTo(serverDB, inThread('stranger@example.com'))).toBe(
+      false,
+    );
   });
 });
 

@@ -60,6 +60,7 @@ export class ServerMessageTransport implements MessageTransport {
 
       return {
         agentId: existingMessage.agentId,
+        createdAt: existingMessage.createdAt,
         groupId: existingMessage.groupId,
         id: existingMessage.id,
         model: existingMessage.model,
@@ -111,6 +112,7 @@ export class ServerMessageTransport implements MessageTransport {
       ? {
           agentId: message.agentId,
           content: message.content,
+          createdAt: message.createdAt,
           groupId: message.groupId,
           id: message.id,
           metadata: message.metadata,

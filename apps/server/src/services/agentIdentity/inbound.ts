@@ -15,6 +15,10 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AgentInboxService } from './inbox';
 import { AgentAccountService } from './index';
 import { createDefaultAgentAccountRegistry } from './providers';
+import type { ResolvedWakeConfig } from './wake/config';
+import type { MailWakeAction, MailWakePlan } from './wake/decide';
+import { planMailWake, recordMailWakeDecision } from './wake/decide';
+import { holdForDigest, isDigestAvailable } from './wake/digest';
 import { createAgentInboundWaker } from './waker';
 
 /**
@@ -63,9 +67,21 @@ export type AgentInboundResult =
   | { accountId?: string; outcome: 'rejected'; status: 401 }
   | { outcome: 'unknown-account' | 'unroutable'; status: 404 };
 
+/** Where a delivery the wake rules hold back goes: the account's next digest. */
+export interface AgentInboundDigest {
+  /** Books the digest flush for the window this delivery arrived in. */
+  hold: (account: AgentAccountView, config: ResolvedWakeConfig) => Promise<void>;
+  /** Without a durable delay queue there is no digest; held deliveries wake at once instead. */
+  isAvailable: () => boolean;
+}
+
+const DEFAULT_DIGEST: AgentInboundDigest = { hold: holdForDigest, isAvailable: isDigestAvailable };
+
 export interface AgentInboundServiceOptions {
   /** The account service that owns signature verification. */
   accountService: AgentAccountService;
+  /** Defaults to the QStash-backed digest. */
+  digest?: AgentInboundDigest;
   /** Defaults to a no-op waker that reports `not-configured`. */
   waker?: AgentInboundWaker;
 }
@@ -115,11 +131,14 @@ const toSignalPayload = (payload: unknown): Record<string, unknown> =>
  *    is then recorded as an `agent_mails` row and put in the inbox. Each step
  *    is idempotent, so a provider retry returns the same item with
  *    `created: false` instead of duplicating it or waking the agent twice.
- * 3. **Wake** — a genuinely new delivery wakes the agent through the injected
- *    waker, within {@link INBOUND_WAKE_LIMITS}. A duplicate of a message that
- *    was already woken never reaches this step; a wake that failed transiently
- *    answers 503 and releases the replay claim, so the provider's retry wakes
- *    the still-unread message then.
+ * 3. **Decide** — the account's wake rules ({@link planMailWake}) say whether
+ *    the delivery wakes the agent now, waits for the digest, or neither; the
+ *    decision is recorded against the signal either way.
+ * 4. **Wake** — a delivery the rules let through wakes the agent through the
+ *    injected waker, within {@link INBOUND_WAKE_LIMITS}. A duplicate of a
+ *    message that was already woken never reaches this step; a wake that failed
+ *    transiently answers 503 and releases the replay claim, so the provider's
+ *    retry wakes the still-unread message then.
  */
 export class AgentInboundService {
   private readonly db: LobeChatDatabase;
@@ -249,44 +268,80 @@ export class AgentInboundService {
       };
     }
 
-    if (await this.overWakeBudget(accountId, row.from)) {
-      return {
+    const delivered = (wake: AgentInboundWakeResult, status: 200 | 503 = 200) =>
+      ({
         accountId,
         created,
         messageId: row.id,
         outcome: 'delivered',
-        status: 200,
-        wake: { reason: 'rate-limited', started: false },
-      };
+        status,
+        wake,
+      }) satisfies AgentInboundResult;
+
+    const plan = await this.planWake(account, row);
+    const record = (action: MailWakeAction, reason?: string, topicId?: string) =>
+      recordMailWakeDecision(this.db, { account, action, plan, reason, signalId, topicId });
+
+    if (plan.action === 'skip') {
+      await record('skip');
+      return delivered({ reason: plan.reason, started: false });
+    }
+
+    // The `defer` row is what puts the message in the digest, so it must be on
+    // record before the flush is booked; a failure throws, and the provider's
+    // retry holds the message again.
+    const hold = async (reason?: string) => {
+      if (!(await record('defer', reason))) throw new Error('the defer decision was not recorded');
+      await this.digest.hold(account, plan.config);
+      return delivered({ reason: 'held-for-digest', started: false });
+    };
+
+    if (plan.action === 'defer') return hold();
+
+    if (await this.overWakeBudget(accountId, row.from)) {
+      // A delivery past the budget waits for the digest instead of never
+      // running; only without a digest is it dropped.
+      if (this.digest.isAvailable()) return hold('rate-limited');
+      await record('skip', 'rate-limited');
+      return delivered({ reason: 'rate-limited', started: false });
     }
 
     // The unique insert only dedupes storage: two workers handling the same
     // delivery can both see the row unread. The wake itself is claimed
     // atomically on the row, so exactly one of them starts a run.
     if (!(await AgentInboxModel.claimWake(this.db, row.id))) {
-      return {
-        accountId,
-        created,
-        messageId: row.id,
-        outcome: 'delivered',
-        status: 200,
-        wake: { reason: 'duplicate-delivery', started: false },
-      };
+      return delivered({ reason: 'duplicate-delivery', started: false });
     }
 
     const wake = await this.wake(account, row);
     // A transient failure gives the claim back so the provider's retry wakes it.
-    if (RETRYABLE_WAKE_REASONS.has(wake.reason)) await AgentInboxModel.releaseWake(this.db, row.id);
+    if (RETRYABLE_WAKE_REASONS.has(wake.reason)) {
+      await AgentInboxModel.releaseWake(this.db, row.id);
+      return delivered(wake, 503);
+    }
 
-    return {
-      accountId,
-      created,
-      messageId: row.id,
-      outcome: 'delivered',
-      status: RETRYABLE_WAKE_REASONS.has(wake.reason) ? 503 : 200,
-      wake,
-    };
+    await (wake.started ? record('wake', undefined, wake.topicId) : record('skip', wake.reason));
+    return delivered(wake);
   };
+
+  /**
+   * The wake rules' plan for a delivery. Without a digest to hold it for, a
+   * delivery the rules would defer wakes the agent at once instead, so nothing
+   * is held where no flush will ever come.
+   */
+  private planWake = async (
+    account: AgentAccountView,
+    entry: AgentInboxEntry,
+  ): Promise<MailWakePlan> => {
+    const plan = await planMailWake(this.db, account, entry);
+    if (plan.action !== 'defer' || this.digest.isAvailable()) return plan;
+
+    return { ...plan, action: 'wake', reason: 'digest-unavailable' };
+  };
+
+  private get digest(): AgentInboundDigest {
+    return this.options.digest ?? DEFAULT_DIGEST;
+  }
 
   /** Record an authentic delivery as a signal, owned by the account's owner. */
   private recordSignal = (

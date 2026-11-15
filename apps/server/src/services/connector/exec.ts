@@ -1,11 +1,17 @@
+import { hasCallableMcpEndpoint, isMarketplaceInstallRunnable } from '@lobechat/const';
 import { getMcpServerFingerprint, isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import { getDisabledPluginIds } from '@lobechat/types';
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 
 import type { AgentModel } from '@/database/models/agent';
 import type { DecryptedConnector } from '@/database/models/connector';
+import type { PluginModel } from '@/database/models/plugin';
 import { ConnectorMcpConnectionType, ConnectorToolPermission } from '@/database/schemas';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import type { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
+import { callCloudMcpTool, type CloudMcpCaller } from '@/server/services/mcp/cloudTool';
+import { processContentBlocks } from '@/server/services/mcp/contentProcessor';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { buildLastSyncedAtMap, scheduleStaleConnectorToolsRefresh } from './refresh';
@@ -25,9 +31,49 @@ export class ConnectorToolCallError extends Error {
   }
 }
 
+/** A finished connector tool call, as the Market's call report reads it. */
+export interface ConnectorToolCallReport {
+  errorCode?: string;
+  errorMessage?: string;
+  identifier: string;
+  /** The connector's transport: `http` or `cloud`. */
+  mcpType: string;
+  meta: { sessionId?: string; version?: string };
+  requestPayload: unknown;
+  result?: unknown;
+  startTime: number;
+  success: boolean;
+  toolName: string;
+}
+
+export type ConnectorToolCallReporter = (report: ConnectorToolCallReport) => void;
+
 export interface ConnectorExecContext extends ConnectorToolSyncContext {
   /** Visibility-aware: decides whether the caller may act as the given agent. */
-  agentModel: Pick<AgentModel, 'existsById'>;
+  agentModel: Pick<AgentModel, 'existsById' | 'getAgentConfigById'>;
+  /**
+   * The caller's legacy plugin rows, which stand in for an unmarked marketplace
+   * install made before installs used connectors. None: no such row counts.
+   */
+  pluginModel?: Pick<PluginModel, 'findById'>;
+  /**
+   * Who a market-hosted (`cloud`) connector's tool runs as, resolved only for
+   * such a call. `undefined` (or no resolver): no Market credential to run as.
+   */
+  resolveCloudMcpCaller?: () => Promise<CloudMcpCaller | undefined>;
+  /**
+   * The caller's file storage, read only for an HTTP connector call: a result's
+   * image / audio blocks are stored as files the text result links to, as
+   * `tools.mcp.callTool` does. `undefined` (or no resolver): the blocks are
+   * formatted as returned (base64 data).
+   */
+  resolveFileService?: () => FileService | undefined;
+  /**
+   * Reports a marketplace MCP server's call to the Market, resolved only for
+   * such a call. `undefined` (or no resolver): nothing is reported, e.g. the
+   * user turned telemetry off.
+   */
+  resolveToolCallReporter?: () => Promise<ConnectorToolCallReporter | undefined>;
   /** `userId` decides the caller's `mcp_apps` flag. */
   userId?: string | null;
 }
@@ -50,6 +96,22 @@ const findConnector = async (
   if (!(await ctx.agentModel.existsById(params.agentId))) return [];
 
   return ctx.connectorModel.resolveByIdentifiers([params.identifier], params.agentId);
+};
+
+/**
+ * An unfinished marketplace install (an interrupted reinstall, an OAuth
+ * callback that connected after a cancel) must not run: its tool rows may not
+ * match its endpoint. The same rule as tool discovery's.
+ */
+const assertInstallFinished = async (connector: DecryptedConnector, ctx: ConnectorExecContext) => {
+  if (isMarketplaceInstallRunnable(connector, false)) return;
+  const pluginRow = await ctx.pluginModel?.findById(connector.identifier);
+  if (isMarketplaceInstallRunnable(connector, !!pluginRow)) return;
+
+  throw new ConnectorToolCallError(
+    'FORBIDDEN',
+    `Connector '${connector.name}' has not finished installing. Install it again to use its tools.`,
+  );
 };
 
 /**
@@ -86,20 +148,32 @@ export const callConnectorToolById = async (
     args?: string;
     /** An MCP App view's `tools/call`: only tools visible to the app run. */
     fromApp?: boolean;
+    fromEntrypoint?: boolean;
     identifier: string;
     /** With `fromApp`: the server the view came from; its calls reach no other. */
     server?: string;
     toolName: string;
+    /** The conversation the call runs in, reported as the call's session. */
+    topicId?: string;
   },
   ctx: ConnectorExecContext,
 ): Promise<unknown> => {
   const [connector] = await findConnector(params, ctx);
+  if (
+    params.fromEntrypoint &&
+    params.agentId &&
+    getDisabledPluginIds(
+      (await ctx.agentModel.getAgentConfigById(params.agentId))?.plugins ?? undefined,
+    ).includes(params.identifier)
+  )
+    throw new ConnectorToolCallError('FORBIDDEN', 'This app is disabled for the agent');
   if (!connector) {
     throw new ConnectorToolCallError('NOT_FOUND', 'Connector not found');
   }
   if (!connector.isEnabled) {
     throw new ConnectorToolCallError('FORBIDDEN', 'Connector is disabled');
   }
+  await assertInstallFinished(connector, ctx);
   // A view open since the connector was pointed elsewhere must not drive the new server
   if (params.fromApp && !(await reachesServer(connector, params.server))) {
     throw new ConnectorToolCallError(
@@ -111,6 +185,7 @@ export const callConnectorToolById = async (
   // The tool MUST be present in the synced list — this is the single source of
   // truth for what is callable. Unknown names (unsynced or hand-crafted) are
   // rejected before reaching the remote server.
+  const mcpApps = await isMcpAppsEnabled(ctx.userId);
   const tools = await ctx.connectorToolModel.queryByConnector(connector.id);
   const tool = tools.find((t) => t.toolName === params.toolName);
   if (!tool) {
@@ -127,7 +202,11 @@ export const callConnectorToolById = async (
   }
   // A view-only tool never enters the model's tool list; refuse a model call
   // that names it anyway.
-  if (!params.fromApp && !isSyncedMcpToolVisibleTo(tool, 'model')) {
+  if (
+    !params.fromEntrypoint &&
+    !params.fromApp &&
+    !isSyncedMcpToolVisibleTo(tool, 'model', mcpApps)
+  ) {
     throw new ConnectorToolCallError(
       'FORBIDDEN',
       `Tool '${params.toolName}' can only be called from its interactive view`,
@@ -172,13 +251,97 @@ export const callConnectorToolById = async (
     );
   }
 
+  const report = await resolveReporter(connector, ctx);
+  const run = { ...params, mcpApps };
+  if (!report) return runConnectorTool(connector, run, ctx);
+
+  const startTime = Date.now();
+  let failure: Error | undefined;
+  let result: unknown;
+  try {
+    result = await runConnectorTool(connector, run, ctx);
+    return result;
+  } catch (error) {
+    failure = error instanceof Error ? error : new Error(String(error));
+    throw error;
+  } finally {
+    report({
+      errorCode: failure ? 'CALL_FAILED' : undefined,
+      errorMessage: failure?.message,
+      identifier: connector.identifier,
+      mcpType: connector.mcpConnectionType ?? ConnectorMcpConnectionType.http,
+      meta: { sessionId: params.topicId, version: installedVersion(connector.metadata) },
+      requestPayload: params.args,
+      result,
+      startTime,
+      success: !failure,
+      toolName: params.toolName,
+    });
+  }
+};
+
+/**
+ * The Market reporter for a marketplace MCP server's call, the way its plugin's
+ * calls were reported (`tools.mcp.callTool`, `market.callCloudMcpEndpoint`).
+ * Rows without an endpoint (Composio, skill projections) run elsewhere. A
+ * reporter that can't be resolved never fails the call.
+ */
+const resolveReporter = async (connector: DecryptedConnector, ctx: ConnectorExecContext) => {
+  if (connector.sourceType !== 'marketplace' || !hasCallableMcpEndpoint(connector)) return;
+  try {
+    return await ctx.resolveToolCallReporter?.();
+  } catch {
+    return undefined;
+  }
+};
+
+/** The manifest version a marketplace install recorded. */
+const installedVersion = (metadata: unknown): string | undefined => {
+  const version = (metadata as { version?: unknown } | null)?.version;
+  return typeof version === 'string' ? version : undefined;
+};
+
+const runConnectorTool = async (
+  connector: DecryptedConnector,
+  params: {
+    args?: string;
+    fromApp?: boolean;
+    fromEntrypoint?: boolean;
+    /** The caller's `mcp_apps` flag, as the call's checks read it. */
+    mcpApps: boolean;
+    toolName: string;
+  },
+  ctx: ConnectorExecContext,
+): Promise<unknown> => {
+  // A market-hosted stdio server: no session to open, the market's cloud
+  // gateway runs the tool by identifier.
+  if (connector.mcpConnectionType === ConnectorMcpConnectionType.cloud) {
+    const caller = await ctx.resolveCloudMcpCaller?.();
+    if (!caller) {
+      throw new ConnectorToolCallError(
+        'FORBIDDEN',
+        'User access token not found. Please sign in to Market first.',
+      );
+    }
+    return callCloudMcpTool(
+      { args: params.args, identifier: connector.identifier, toolName: params.toolName },
+      caller,
+    );
+  }
+
   const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);
+  // A view's call gets its blocks back as they are (`mcpService.callTool`)
+  const fileService = params.fromApp ? undefined : ctx.resolveFileService?.();
 
   return mcpService.callTool({
     argsStr: params.args ?? '{}',
     clientParams: buildConnectorMcpParams(fresh),
     fromApp: params.fromApp,
-    mcpApps: await isMcpAppsEnabled(ctx.userId),
+    fromEntrypoint: params.fromEntrypoint,
+    mcpApps: params.mcpApps,
+    processContentBlocks: fileService
+      ? (blocks) => processContentBlocks(blocks, fileService)
+      : undefined,
     toolName: params.toolName,
   });
 };
@@ -205,10 +368,14 @@ export const readConnectorUiResourceById = async (
   if (!connector.isEnabled) {
     throw new ConnectorToolCallError('FORBIDDEN', 'Connector is disabled');
   }
-  if (connector.mcpConnectionType === ConnectorMcpConnectionType.stdio) {
+  await assertInstallFinished(connector, ctx);
+  if (
+    connector.mcpConnectionType === ConnectorMcpConnectionType.stdio ||
+    connector.mcpConnectionType === ConnectorMcpConnectionType.cloud
+  ) {
     throw new ConnectorToolCallError(
       'BAD_REQUEST',
-      'Interactive views are not supported for stdio connectors yet',
+      `Interactive views are not supported for ${connector.mcpConnectionType} connectors yet`,
     );
   }
   // A cloud server can't reach a localhost / LAN endpoint, and resource reads

@@ -12,6 +12,7 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AgentAccountService, isAgentAccountError } from '@/server/services/agentIdentity';
 import { createDefaultAgentAccountRegistry } from '@/server/services/agentIdentity/providers';
+import { agentAccountSettingsSchema } from '@/server/services/agentIdentity/wake/config';
 import { assertCanEditResource } from '@/server/services/resourcePermission';
 
 /**
@@ -266,6 +267,8 @@ export const agentAccountRouter = router({
         capabilities: capabilitiesSchema.optional(),
         displayName: z.string().nullable().optional(),
         metadata: z.record(z.string(), z.unknown()).optional(),
+        /** The owner's own settings (wake rules); patchable whoever provides the account. */
+        settings: agentAccountSettingsSchema.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -360,14 +363,16 @@ export const agentAccountRouter = router({
       }),
 
     unreadCount: agentAccountProcedure
-      .input(z.object({ agentId: z.string().min(1) }))
+      .input(z.object({ accountId: z.string().min(1).optional(), agentId: z.string().min(1) }))
       .query(async ({ ctx, input }) => {
         await assertAgentUsableBy(ctx.serverDB, input.agentId, {
           userId: ctx.userId,
           workspaceId: ctx.workspaceId ?? undefined,
         });
 
-        return { unreadCount: await ctx.agentInboxModel.unreadCount(input.agentId) };
+        return {
+          unreadCount: await ctx.agentInboxModel.unreadCount(input.agentId, input.accountId),
+        };
       }),
 
     get: agentAccountProcedure.input(idInput).query(async ({ ctx, input }) => {
@@ -385,14 +390,14 @@ export const agentAccountRouter = router({
       })),
 
     markAllRead: agentAccountProcedure
-      .input(z.object({ agentId: z.string().min(1) }))
+      .input(z.object({ accountId: z.string().min(1).optional(), agentId: z.string().min(1) }))
       .mutation(async ({ ctx, input }) => {
         await assertAgentUsableBy(ctx.serverDB, input.agentId, {
           userId: ctx.userId,
           workspaceId: ctx.workspaceId ?? undefined,
         });
 
-        return { count: await ctx.agentInboxModel.markAllRead(input.agentId) };
+        return { count: await ctx.agentInboxModel.markAllRead(input.agentId, input.accountId) };
       }),
   }),
 });

@@ -11,7 +11,9 @@ import { isCommandPressed } from '@lobechat/utils';
 import type { IEditor, ISlashMenuOption, ISlashSectionOption } from '@lobehub/editor';
 import { INSERT_MENTION_COMMAND, ReactAutoCompletePlugin } from '@lobehub/editor';
 import { Editor, useEditorState } from '@lobehub/editor/react';
-import { combineKeys, css, cx } from '@lobehub/ui';
+// oxlint-disable-next-line stylex-migration/no-emotion-styles -- Lexical editor paragraphs take no className
+import { combineKeys, createStaticStyles, cx } from '@lobehub/ui';
+import * as stylex from '@stylexjs/stylex';
 import Fuse from 'fuse.js';
 import { KEY_ESCAPE_COMMAND } from 'lexical';
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
@@ -72,23 +74,21 @@ import { INSERT_REFER_TOPIC_COMMAND } from './ReferTopic';
 import { useLocalFileTag } from './useLocalFileTag';
 import { useMentionCategories } from './useMentionCategories';
 
-const className = cx(
-  css`
+const fallback = createStaticStyles(({ css }) => ({
+  editor: css`
     p {
       margin-block-end: 0;
     }
   `,
-  mentionPlainClassName,
-);
+}));
+
+const className = cx(fallback.editor, mentionPlainClassName);
 
 // Single-line dimmed preview of the highlighted history entry, shown through the
 // editor's placeholder slot while the input is empty (history popup open).
-const ghostClassName = cx(css`
-  overflow: hidden;
-  display: block;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`);
+const ghostStyles = stylex.create({
+  root: { overflow: 'hidden', display: 'block', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+});
 
 type MentionOption = ISlashMenuOption | ISlashSectionOption;
 
@@ -633,7 +633,7 @@ const InputEditor = memo<{
               />
             ))
           ) : (
-            <span className={ghostClassName}>{getHistoryPreviewText(ghostMarkdown)}</span>
+            <span {...stylex.props(ghostStyles.root)}>{getHistoryPreviewText(ghostMarkdown)}</span>
           )
         }
         style={{

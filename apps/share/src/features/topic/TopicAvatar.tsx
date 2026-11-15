@@ -3,7 +3,7 @@ import { Avatar } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
 import AgentAvatar from '@/components/AgentAvatar';
-import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
+import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import GroupAvatar from '@/features/GroupAvatar';
 import { type SharedTopicData } from '@/types/topic';
 
@@ -19,7 +19,7 @@ const TopicAvatar = memo<TopicAvatarProps>(({ data, size = 28 }) => {
   const groupAvatars = useMemo(() => {
     if (!isGroup || !data.groupMeta?.members) return [];
     return data.groupMeta.members.map((member) => ({
-      avatar: member.avatar || DEFAULT_AVATAR,
+      avatar: member.avatar || undefined,
       backgroundColor: member.backgroundColor || undefined,
     }));
   }, [isGroup, data.groupMeta?.members]);

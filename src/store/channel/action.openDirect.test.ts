@@ -75,6 +75,37 @@ describe('channelActions.markRead', () => {
     expect(channelService.markRead).toHaveBeenCalledExactlyOnceWith('chn_000000000001', 5);
   });
 
+  // The mention badge reappeared after switching away, until the next list poll.
+  it('clears the listed mention count when the read reaches the known sequence', async () => {
+    useChannelStore.setState({
+      listMap: {
+        all: [direct({ mentionCount: 3, sequence: 5, unreadCount: 3 } as Partial<ChannelListItem>)],
+      },
+    });
+    vi.mocked(channelService.markRead).mockResolvedValue(5 as never);
+
+    await channelActions.markRead('chn_000000000001', 5);
+
+    expect(useChannelStore.getState().listMap.all?.[0].mentionCount).toBe(0);
+  });
+
+  // A partial read leaves later mentions unread; the cache cannot split the count.
+  it('keeps the mention count for a partial read', async () => {
+    useChannelStore.setState({
+      listMap: {
+        all: [direct({ mentionCount: 2, sequence: 9, unreadCount: 4 } as Partial<ChannelListItem>)],
+      },
+    });
+    vi.mocked(channelService.markRead).mockResolvedValue(5 as never);
+
+    await channelActions.markRead('chn_000000000001', 5);
+
+    expect(useChannelStore.getState().listMap.all?.[0]).toMatchObject({
+      mentionCount: 2,
+      unreadCount: 4,
+    });
+  });
+
   it('restores the count when the write fails', async () => {
     useChannelStore.setState({
       listMap: { all: [direct({ sequence: 5, unreadCount: 3 } as Partial<ChannelListItem>)] },

@@ -13,6 +13,7 @@ import {
   taskOriginInputSchema,
 } from '@/server/services/task/originValidation';
 import {
+  assertPreciseScheduleAllowed,
   assertResultingScheduleValid,
   schedulePatternSchema,
   scheduleTimezoneSchema,
@@ -137,6 +138,11 @@ export const lifecycleRouter = router({
       });
     }
     assertResultingScheduleValid(null, createInput);
+    await assertPreciseScheduleAllowed(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      null,
+      createInput.schedulePattern,
+    );
     const labelModel = new TaskLabelModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
     if (labelIds?.length) {
       // Reject unknown / group / conflicting labels before anything is written.

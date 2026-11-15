@@ -27,6 +27,7 @@ describe('classifyGoalFailure', () => {
     'The device connection service hit an error while starting this run. Nothing started on the device. This is usually temporary — try again in a moment.',
     'fetch failed: ECONNRESET',
     'RateLimitExceeded',
+    'ProviderStreamInterrupted',
   ])('reads %s as transient', (error) => {
     expect(classifyGoalFailure(error).class).toBe('transient');
   });

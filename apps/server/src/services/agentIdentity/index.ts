@@ -7,6 +7,7 @@ import type {
   AgentAccountKind,
   AgentAccountOutboundMessage,
   AgentAccountRef,
+  AgentAccountSettings,
 } from '@lobechat/types';
 
 import type {
@@ -26,8 +27,24 @@ import {
 import { AgentAccountError } from './errors';
 import type { AgentAccountProviderRegistry } from './registry';
 import { isReservedAgentAccountProvider } from './registry';
+import { agentAccountSettingsSchema } from './wake/config';
 
 const PG_UNIQUE_VIOLATION = '23505';
+
+/**
+ * The owner's settings as a write must carry them. Reads tolerate anything stored; a write is
+ * held to the shape this build understands.
+ */
+const parseSettings = (settings: unknown): AgentAccountSettings => {
+  const parsed = agentAccountSettingsSchema.safeParse(settings);
+  if (parsed.success) return parsed.data;
+
+  const issue = parsed.error.issues[0];
+  throw new AgentAccountError(
+    'invalid_settings',
+    `Invalid agent account settings${issue ? ` at ${issue.path.join('.') || '(root)'}: ${issue.message}` : ''}.`,
+  );
+};
 
 export type { AgentAccountErrorCode } from './errors';
 export { AgentAccountError, isAgentAccountError } from './errors';
@@ -317,7 +334,10 @@ export class AgentAccountService {
       );
     }
 
-    return this.model.update(id, patch);
+    return this.model.update(
+      id,
+      patch.settings === undefined ? patch : { ...patch, settings: parseSettings(patch.settings) },
+    );
   };
 
   /** Install or rotate a credential. Write-only: nothing reads it back out here. */

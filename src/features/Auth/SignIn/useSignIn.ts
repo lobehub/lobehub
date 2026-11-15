@@ -22,6 +22,13 @@ import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
 
 const LAST_AUTH_PROVIDER_KEY = 'lobehub:auth:last-provider:v1';
 
+// Better Auth returns FORBIDDEN for several sign-in rejections (banned user,
+// access denied). Only the dedicated EMAIL_NOT_VERIFIED code means the account
+// is valid but needs to verify its address, so only that one goes to
+// /verify-email; every other 403 stays on the password field as an error.
+const isEmailNotVerifiedError = (error?: unknown) =>
+  (error as { code?: string } | null | undefined)?.code === 'EMAIL_NOT_VERIFIED';
+
 type Step = 'email' | 'password' | 'emailSent';
 
 type SentEmailType = 'magicLink' | 'resetPassword';
@@ -238,7 +245,7 @@ export const useSignIn = () => {
         {
           onError: (ctx) => {
             console.error('Sign in error:', ctx.error);
-            if (ctx.error.status === 403) {
+            if (isEmailNotVerifiedError(ctx.error)) {
               navigate(
                 `/verify-email?email=${encodeURIComponent(email)}&callbackUrl=${encodeURIComponent(callbackUrl)}`,
               );
@@ -251,7 +258,7 @@ export const useSignIn = () => {
         },
       );
 
-      if (result.error && result.error.status !== 403) {
+      if (result.error && !isEmailNotVerifiedError(result.error)) {
         // Wrong password is the most common sign-in failure. Keep the error
         // pinned inline on the field (persistent, with retry context) rather
         // than a toast that vanishes in 3s (ux Read §1.1 / Same-Page Error).

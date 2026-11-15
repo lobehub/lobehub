@@ -1,7 +1,7 @@
 import { IMAGE_GENERATION_MODEL_WHITELIST, ModelProvider } from 'model-bank';
 
-import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatible';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatible';
 import { AgentRuntimeErrorType } from '../../types/error';
 
 // The Ace /models catalog also includes image and embedding endpoints that

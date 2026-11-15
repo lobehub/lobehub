@@ -101,3 +101,27 @@ describe('KnowledgeRepo.query — documents with children', () => {
     expect(fileChildren[0].hasChildren).toBe(false);
   });
 });
+
+describe('agent space listing', () => {
+  it('shows agent documents but not the tool-result archive', async () => {
+    await serverDB
+      .insert(documents)
+      .values([
+        page('agent-note', { sourceType: 'agent' }),
+        page('.tool-results', { fileType: 'custom/folder', sourceType: 'agent' }),
+      ]);
+
+    const ids = (await knowledgeRepo.query({ knowledgeBaseId: kbId })).map(({ id }) => id);
+
+    expect(ids).toContain('agent-note');
+    expect(ids).not.toContain('.tool-results');
+  });
+
+  it("keeps a user's own folder that happens to share the archive name", async () => {
+    await serverDB.insert(documents).values(page('.tool-results', { fileType: 'custom/folder' }));
+
+    const ids = (await knowledgeRepo.query({ knowledgeBaseId: kbId })).map(({ id }) => id);
+
+    expect(ids).toContain('.tool-results');
+  });
+});

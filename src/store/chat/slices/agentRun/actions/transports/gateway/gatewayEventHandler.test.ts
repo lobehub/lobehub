@@ -151,6 +151,7 @@ describe('createGatewayEventHandler', () => {
 
     expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
       {
+        createdAt: expect.any(Number),
         id: 'step2-msg',
         type: 'createMessage',
         value: expect.objectContaining({

@@ -25,6 +25,7 @@ import { registerKbCommand } from './commands/kb';
 import { registerLoginCommand } from './commands/login';
 import { registerLogoutCommand } from './commands/logout';
 import { registerManCommand } from './commands/man';
+import { registerMeetingCommand } from './commands/meeting';
 import { registerMemoryCommand } from './commands/memory';
 import { registerMessageCommand } from './commands/message';
 import { registerMigrateCommand } from './commands/migrate';
@@ -94,6 +95,7 @@ export function createProgram() {
   registerReadCommand(program);
   registerRecallCommand(program);
   registerKbCommand(program);
+  registerMeetingCommand(program);
   registerMemoryCommand(program);
   registerAgentCommand(program);
   registerAgentGroupCommand(program);

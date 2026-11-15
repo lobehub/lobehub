@@ -35,14 +35,25 @@ class SkillsExecutor extends BaseExecutor<typeof SkillsApiName> {
       // Server will resolve zipUrls for all activated skills
       const activatedSkills = ctx.stepContext?.activatedSkills;
 
-      const result = await this.runtime.execScript({
-        ...params,
-        activatedSkills: activatedSkills?.map((s) => ({
-          description: s.description,
-          id: s.id,
-          name: s.name,
-        })),
-      });
+      const result = await this.runtime.execScript(
+        {
+          ...params,
+          activatedSkills: activatedSkills?.map((s) => ({
+            description: s.description,
+            id: s.id,
+            name: s.name,
+          })),
+        },
+        // The fence is the run owner's decision, resolved into ctx by the
+        // caller exactly as for `local-system.runCommand` — never from params.
+        ctx.localSandbox === true
+          ? {
+              localSandbox: true,
+              localSandboxNetwork: ctx.localSandboxNetwork === true,
+              workingDirectory: ctx.workingDirectory,
+            }
+          : undefined,
+      );
 
       if (result.success) {
         return { content: result.content, state: result.state, success: true };

@@ -58,8 +58,11 @@ describe('Channel routing input and lease', () => {
     expect(input?.candidates.map((item) => item.memberId)).toContain(coder.id);
     expect(await routing.claim(channel.id, message.id)).toBeNull();
     const decision = { memberIds: [coder.id], status: 'assigned' as const, reason: 'Fits' };
-    expect(await execution.resolveRouting(channel.id, message.id, 1, decision)).toBe(true);
-    expect(await execution.resolveRouting(channel.id, message.id, 1, decision)).toBe(false);
+    expect(await execution.resolveRouting(channel.id, message.id, 1, decision)).toMatchObject({
+      recipients: [coder.id],
+      status: 'assigned',
+    });
+    expect(await execution.resolveRouting(channel.id, message.id, 1, decision)).toBeNull();
     expect(await jobsOf(db, message.id)).toHaveLength(1);
     expect(await routing.pending(channel.id)).toEqual([]);
   });
@@ -114,7 +117,7 @@ describe('Channel routing input and lease', () => {
         reason: 'Late',
         status: 'assigned',
       }),
-    ).toBe(false);
+    ).toBeNull();
     expect(await jobsOf(db, message.id)).toEqual([]);
   });
 
@@ -136,7 +139,7 @@ describe('Channel routing input and lease', () => {
         reason: 'Late',
         status: 'assigned',
       }),
-    ).toBe(false);
+    ).toBeNull();
   });
 
   it('does not read a message from another Channel', async () => {

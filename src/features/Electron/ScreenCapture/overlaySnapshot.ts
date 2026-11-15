@@ -1,6 +1,8 @@
-import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@lobechat/const';
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE } from '@lobechat/const';
 import type { ScreenCaptureAgentOption } from '@lobechat/electron-client-ipc';
 import { agentDisplayName } from '@lobechat/types';
+
+import { isDefaultAgentAvatar } from '@/components/AgentAvatar/resolve';
 
 const LOBE_AI_TITLE = DEFAULT_INBOX_TITLE;
 const UNTITLED_AGENT_TITLE = 'Untitled Agent';
@@ -40,7 +42,7 @@ const toOverlayAgentOption = ({
   name,
   title,
 }: OverlayAgentSource): ScreenCaptureAgentOption => ({
-  avatar: typeof avatar === 'string' ? avatar : DEFAULT_AVATAR,
+  avatar: typeof avatar === 'string' && !isDefaultAgentAvatar(avatar) ? avatar : undefined,
   backgroundColor: backgroundColor ?? undefined,
   heterogeneousType,
   id,

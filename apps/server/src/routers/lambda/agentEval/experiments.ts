@@ -7,6 +7,9 @@ import { router } from '@/libs/trpc/lambda';
 import { RUN_ENRICHMENT_CONCURRENCY } from './constants';
 import { agentEvalProcedure, agentEvalProcedureWrite } from './procedures';
 
+/** Run statuses that still have work in flight; such an experiment is stopped before it is deleted. */
+const ACTIVE_RUN_STATUSES = new Set(['pending', 'running']);
+
 export const experimentRouter = router({
   // ============================================
   // Experiment Operations
@@ -76,9 +79,23 @@ export const experimentRouter = router({
       return { data: result, success: true };
     }),
   deleteExperiment: agentEvalProcedureWrite
-    .input(z.object({ id: z.string() }))
+    .input(
+      z.object({
+        id: z.string(),
+        // Lobe Bench: an experiment owns its runs, so deleting it deletes them too (results,
+        // topics and case Agents go with each run) instead of detaching them like the Lab does.
+        withRuns: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
       try {
+        if (input.withRuns) {
+          const runs = await ctx.runModel.query({ experimentId: input.id });
+          if (runs.some((run) => ACTIVE_RUN_STATUSES.has(run.status))) {
+            return { success: false, error: 'Stop the experiment before deleting it' };
+          }
+          await pMap(runs, (run) => ctx.runService.deleteRun(run.id), { concurrency: 4 });
+        }
         const result = await ctx.experimentModel.delete(input.id);
         if (result.rowCount === 0) {
           return { success: false, error: 'Experiment not found' };

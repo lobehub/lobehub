@@ -204,6 +204,14 @@ export interface IStreamEventManager {
   closeLlmRelayChannel?: (channel: string) => Promise<void>;
 
   /**
+   * Remove entries from an operation's stream. Used to drop a snapshot chunk
+   * once a newer one supersedes it, so a stream retains one copy instead of
+   * every intermediate version. Live consumers are unaffected: they already
+   * received the removed entries.
+   */
+  deleteStreamEvents: (operationId: string, eventIds: string[]) => Promise<void>;
+
+  /**
    * Close connections
    */
   disconnect: () => Promise<void>;

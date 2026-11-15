@@ -290,7 +290,6 @@ export class DashboardModel {
       .limit(1);
     if (!widget) return undefined;
 
-    /* v8 ignore next -- unreachable: the board and widget reads both filter on the same `buildWorkspaceWhere(this.ctx)` scope, so their `workspace_id` always match */
     if (widget.workspaceId !== dashboard.workspaceId) {
       throw new ScopeLevelError(
         'SCOPE_MISMATCH',

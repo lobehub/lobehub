@@ -1,5 +1,5 @@
 import {
-  LobeAgentApiName,
+  LOBE_AGENT_SUB_AGENT_APIS,
   LobeAgentIdentifier,
   systemPromptWithoutSubAgent,
 } from '@lobechat/builtin-tool-lobe-agent';
@@ -12,7 +12,7 @@ import type { ShareGateToolSet } from './types';
  * Sub-agent dispatch is not available in shared visitor runs. This strip runs
  * unconditionally on `lobe-agent`, independent of whether the manifest was
  * resolved through the normal context-aware path, so a whitelisted entry can
- * never surface `callSubAgent` — nor a `systemRole` that instructs the model
+ * never surface `callSubAgent` / `cancelSubAgent` — nor a `systemRole` that instructs the model
  * to call it — to a share visitor's model or the activator. `lobe-agent`
  * already ships a precise systemRole variant without the dispatch section
  * (`systemPromptWithoutSubAgent`, also used by its own context-aware
@@ -24,16 +24,16 @@ import type { ShareGateToolSet } from './types';
  */
 export const SUB_AGENT_DISPATCH_APIS: Record<
   string,
-  { apiName: string; systemRoleWithoutDispatch: string }
+  { apiNames: ReadonlySet<string>; systemRoleWithoutDispatch: string }
 > = {
   [LobeAgentIdentifier]: {
-    apiName: LobeAgentApiName.callSubAgent,
+    apiNames: LOBE_AGENT_SUB_AGENT_APIS,
     systemRoleWithoutDispatch: systemPromptWithoutSubAgent,
   },
 };
 
 export const stripSubAgentDispatchApis = (toolSet: ShareGateToolSet): void => {
-  for (const [identifier, { apiName, systemRoleWithoutDispatch }] of Object.entries(
+  for (const [identifier, { apiNames, systemRoleWithoutDispatch }] of Object.entries(
     SUB_AGENT_DISPATCH_APIS,
   )) {
     const manifest = toolSet.manifestMap[identifier];
@@ -44,14 +44,16 @@ export const stripSubAgentDispatchApis = (toolSet: ShareGateToolSet): void => {
       // still instructs the model to call the removed tool.
       toolSet.manifestMap[identifier] = {
         ...manifest,
-        api: manifest.api.filter((api) => api.name !== apiName),
+        api: manifest.api.filter((api) => !apiNames.has(api.name)),
         systemRole: systemRoleWithoutDispatch,
       };
     }
 
     if (toolSet.tools) {
-      const dispatchToolName = `${identifier}${PLUGIN_SCHEMA_SEPARATOR}${apiName}`;
-      pruneArrayInPlace(toolSet.tools, (tool) => tool?.function?.name !== dispatchToolName);
+      const dispatchToolNames = new Set(
+        [...apiNames].map((apiName) => `${identifier}${PLUGIN_SCHEMA_SEPARATOR}${apiName}`),
+      );
+      pruneArrayInPlace(toolSet.tools, (tool) => !dispatchToolNames.has(tool?.function?.name));
     }
   }
 };

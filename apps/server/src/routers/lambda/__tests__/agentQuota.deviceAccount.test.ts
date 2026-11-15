@@ -29,7 +29,7 @@ vi.mock('@/database/models/agentQuota', () => ({
     return {};
   }),
   AgentProviderAccountModel: vi.fn(function () {
-    return {};
+    return { findById: vi.fn(async (id: string) => ({ id })) };
   }),
   AgentQuotaWindowModel: vi.fn(function () {
     return {};

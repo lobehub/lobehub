@@ -5,6 +5,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import Loading from '@/components/Loading/CircleLoading';
 
+import { DOCX_RENDER_OPTIONS, sanitizeRenderedDocx } from './docxSafety';
 import { collectDocxSections, type DocxSection } from './docxSections';
 import PaneFooter from './PaneFooter';
 
@@ -63,8 +64,10 @@ const DocxPane = memo<DocxPaneProps>(({ blob, onError }) => {
       try {
         const { renderAsync } = await import('docx-preview');
         if (disposed) return;
-        await renderAsync(blob, container);
+        // The file is untrusted: see DOCX_RENDER_OPTIONS for why altChunks are off.
+        await renderAsync(blob, container, undefined, DOCX_RENDER_OPTIONS);
         if (disposed) return;
+        sanitizeRenderedDocx(container);
         setSections(collectDocxSections(container));
         setActiveSection(0);
         setLoading(false);

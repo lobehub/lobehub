@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_AVATAR } from '@/const/meta';
 import { type MetaData } from '@/types/meta';
 
 import { sessionMetaSelectors } from './meta';
@@ -15,20 +14,6 @@ vi.mock('i18next', () => ({
  * See agentSelectors tests for those.
  */
 describe('sessionMetaSelectors', () => {
-  describe('getAvatar', () => {
-    it('should return the avatar from the meta data', () => {
-      const meta: MetaData = { avatar: 'custom-avatar.png' };
-      const avatar = sessionMetaSelectors.getAvatar(meta);
-      expect(avatar).toBe(meta.avatar);
-    });
-
-    it('should return the default avatar if none is defined in the meta data', () => {
-      const meta: MetaData = {};
-      const avatar = sessionMetaSelectors.getAvatar(meta);
-      expect(avatar).toBe(DEFAULT_AVATAR);
-    });
-  });
-
   describe('getTitle', () => {
     it('should return the title from the meta data', () => {
       const meta: MetaData = { title: 'Custom Title' };

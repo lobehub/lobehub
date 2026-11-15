@@ -40,8 +40,6 @@
   "generation.editing.hint": "변경할 내용을 설명하세요; 나머지는 그대로 유지됩니다",
   "generation.editing.modelLocked": "편집은 원본 비디오의 모델을 유지합니다",
   "generation.editing.title": "V{{version}} 편집 중",
-  "generation.freeQuota.exhausted": "🎁 무료 사용량이 모두 소진되었습니다. 이제 비디오는 잔액을 사용합니다.",
-  "generation.freeQuota.remaining": "🎁 오늘 남은 무료 비디오: {{remaining}}개",
   "generation.status.editing": "편집 생성 중...",
   "generation.status.failed": "생성 실패",
   "generation.status.generating": "생성 중...",

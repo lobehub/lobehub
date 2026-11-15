@@ -119,7 +119,9 @@ export function buildCreateInput(options: ConnectorAddOptions): {
     throw new Error('--token is only valid with --auth bearer.');
   }
   if (options.stdioCmd && authType !== 'none') {
-    throw new Error('stdio connectors do not support --auth; pass secrets via the command.');
+    throw new Error(
+      'stdio connectors do not support --auth. Their command, args and env are stored in plain text, so do not put secrets in them.',
+    );
   }
   if (options.stdioCmd && options.header?.length) {
     throw new Error('--header is only valid for HTTP connectors (--url).');
@@ -353,6 +355,7 @@ function fail(error: unknown, note?: string): never {
 export function registerConnectorCommand(program: Command) {
   const connector = program
     .command('connector')
+    .alias('mcp')
     .description('Manage MCP connectors (user connectors and their synced tools)');
 
   // ── list ──────────────────────────────────────────────
@@ -467,7 +470,7 @@ export function registerConnectorCommand(program: Command) {
         console.log(authorizationUrl);
         console.log(
           pc.dim(
-            `After authorizing, run: lh connector refresh ${input.identifier} to fetch tools.`,
+            `Tools sync automatically after authorization. Then check lh connector list: if ${input.identifier} is not connected or has 0 tools, run: lh connector refresh ${input.identifier}`,
           ),
         );
         return;

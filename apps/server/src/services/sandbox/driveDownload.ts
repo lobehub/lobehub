@@ -4,6 +4,7 @@ import debug from 'debug';
 
 import type { PreSignedUpload } from '@/server/modules/S3';
 
+import { type SandboxStorageExportResult, SandboxStorageFilesError } from './storageFiles';
 import type { SandboxService } from './types';
 
 const log = debug('lobe-server:sandbox:drive-download');
@@ -22,6 +23,13 @@ export const DRIVE_DOWNLOAD_MAX_FILES = 50_000;
 
 /** How long the sandbox may spend packing and uploading. */
 export const DRIVE_DOWNLOAD_TIMEOUT_MS = 180_000;
+
+/**
+ * How long the storage service may spend exporting. It answers well inside
+ * this or not at all; past it the request is abandoned rather than holding
+ * this one open, and not retried in a sandbox, which would stall the same way.
+ */
+export const DRIVE_EXPORT_TIMEOUT_MS = 90_000;
 
 /** How long the link the browser follows stays valid. */
 export const DRIVE_DOWNLOAD_URL_EXPIRES_IN = 15 * 60;
@@ -374,8 +382,118 @@ export interface PrepareDriveDownloadParams {
   path: string;
   /** Defaults to `download`. */
   purpose?: DriveCopyPurpose;
+  /** Packs the copy in a session, where the storage service cannot export it. */
   sandbox: Pick<SandboxService, 'callTool' | 'capabilities'>;
+  /**
+   * The drive's storage service, which copies off the volume without a
+   * sandbox session — tried first. Absent where there is none.
+   */
+  storage?: {
+    exportFile: (
+      params: {
+        fileOnly?: boolean;
+        hidden?: string[];
+        maxBytes?: number;
+        maxFiles?: number;
+        path: string;
+        uploadHeaders?: Record<string, string>;
+        uploadUrl: string;
+      },
+      options?: { signal?: AbortSignal },
+    ) => Promise<SandboxStorageExportResult>;
+  };
 }
+
+type CopyOutcome = Extract<DriveDownloadOutcome, { ok: true }>;
+
+/** The export refusals that mean something to the person, as the codes the client translates. */
+const EXPORT_REFUSALS: Record<string, DriveDownloadError['code']> = {
+  EXPORT_NOT_A_FILE: 'PREVIEW_NOT_A_FILE',
+  EXPORT_NOT_FOUND: 'PATH_NOT_FOUND',
+  EXPORT_TOO_LARGE: 'DOWNLOAD_TOO_LARGE',
+};
+
+/**
+ * Copies through the storage service, or answers `undefined` when this
+ * deployment's cannot: one without the file function says so (501), and one
+ * that predates the route does not know it (a 404 with no code of ours).
+ */
+const exportFromStorage = async (
+  storage: NonNullable<PrepareDriveDownloadParams['storage']>,
+  params: { fileOnly: boolean; hidden: string[]; path: string; upload: PreSignedUpload },
+): Promise<CopyOutcome | undefined> => {
+  try {
+    const result = await storage.exportFile(
+      {
+        fileOnly: params.fileOnly || undefined,
+        hidden: params.hidden,
+        maxBytes: DRIVE_DOWNLOAD_MAX_BYTES,
+        maxFiles: DRIVE_DOWNLOAD_MAX_FILES,
+        path: params.path,
+        uploadHeaders: params.upload.headers,
+        uploadUrl: params.upload.url,
+      },
+      { signal: AbortSignal.timeout(DRIVE_EXPORT_TIMEOUT_MS) },
+    );
+    return { ...result, ok: true };
+  } catch (error) {
+    if ((error as { name?: unknown } | null)?.name === 'TimeoutError') {
+      log('drive export timed out after %dms', DRIVE_EXPORT_TIMEOUT_MS);
+      throw new DriveDownloadError('DOWNLOAD_FAILED', 'EXPORT_TIMEOUT');
+    }
+    if (error instanceof SandboxStorageFilesError) {
+      const unsupported =
+        error.code === 'EXPORT_UNAVAILABLE' ||
+        ((error.status === 404 || error.status === 405) && !error.code?.startsWith('EXPORT_'));
+      if (unsupported) {
+        log('storage cannot export (%d %s), packing in a sandbox', error.status, error.code);
+        return;
+      }
+      const refusal = error.code && EXPORT_REFUSALS[error.code];
+      if (refusal) throw new DriveDownloadError(refusal);
+      log('drive export failed: %O', error);
+      throw new DriveDownloadError('DOWNLOAD_FAILED', error.code || error.message);
+    }
+    throw error;
+  }
+};
+
+/** Packs the copy inside a sandbox session the drive is mounted in. */
+const copyInSandbox = async (
+  sandbox: PrepareDriveDownloadParams['sandbox'],
+  params: { fileOnly: boolean; hidden: string[]; path: string; upload: PreSignedUpload },
+): Promise<CopyOutcome> => {
+  const result = await sandbox.callTool('runCommand', {
+    command: buildDriveDownloadCommand({
+      fileOnly: params.fileOnly,
+      hidden: params.hidden,
+      maxBytes: DRIVE_DOWNLOAD_MAX_BYTES,
+      maxFiles: DRIVE_DOWNLOAD_MAX_FILES,
+      path: params.path,
+      uploadHeaders: params.upload.headers,
+      uploadUrl: params.upload.url,
+    }),
+    timeout: DRIVE_DOWNLOAD_TIMEOUT_MS,
+  });
+
+  const stdout = (result.result as { stdout?: unknown } | null | undefined)?.stdout;
+  const outcome = typeof stdout === 'string' ? parseDriveDownloadOutput(stdout) : undefined;
+
+  if (!outcome) {
+    log('drive download produced no result: %O', result.error ?? result.result);
+    throw new DriveDownloadError('DOWNLOAD_FAILED', result.error?.message);
+  }
+
+  if (!outcome.ok) {
+    log('drive download refused: %O', outcome);
+    if (outcome.code === 'NOT_FOUND') throw new DriveDownloadError('PATH_NOT_FOUND');
+    if (outcome.code === 'TOO_LARGE') throw new DriveDownloadError('DOWNLOAD_TOO_LARGE');
+    if (outcome.code === 'NOT_A_FILE') throw new DriveDownloadError('PREVIEW_NOT_A_FILE');
+    throw new DriveDownloadError('DOWNLOAD_FAILED', outcome.code);
+  }
+
+  return outcome;
+};
 
 const dayOf = (date: Date) => date.toISOString().slice(0, 10);
 
@@ -423,9 +541,11 @@ const sweepExpiredDownloads = async (
  * Puts one file or folder of the drive where the browser can fetch it, and
  * answers with the link.
  *
- * The drive is only mounted inside a sandbox, so the bytes are read there and
- * uploaded from there straight to object storage; nothing passes through this
- * server. The object is a transient copy, not a library file: no file record
+ * The bytes never pass through this server: the drive's storage service
+ * reads them off the volume and uploads them straight to object storage. Only
+ * where it cannot (a deployment without that service) are they packed inside
+ * a sandbox session the drive is mounted in — which a shared storage, a
+ * workspace's public drive, refuses at its root. The object is a transient copy, not a library file: no file record
  * is made, so a download never shows up among the user's resources. A copy
  * that never gets a link is deleted at once; the rest are swept once expired.
  */
@@ -436,8 +556,11 @@ export const prepareDriveDownload = async ({
   path,
   purpose = 'download',
   sandbox,
+  storage,
 }: PrepareDriveDownloadParams) => {
-  if (!sandbox.capabilities.shell) throw new DriveDownloadError('DOWNLOAD_UNAVAILABLE');
+  if (!storage && !sandbox.capabilities.shell) {
+    throw new DriveDownloadError('DOWNLOAD_UNAVAILABLE');
+  }
 
   const key = `${DRIVE_DOWNLOAD_PREFIX}${dayOf(now)}/${randomUUID()}`;
   // Private whatever the bucket's default ACL: a copy of someone's drive is
@@ -447,33 +570,11 @@ export const prepareDriveDownload = async ({
   const sweep = sweepExpiredDownloads(fileService, now);
 
   try {
-    const result = await sandbox.callTool('runCommand', {
-      command: buildDriveDownloadCommand({
-        fileOnly: purpose === 'preview',
-        hidden,
-        maxBytes: DRIVE_DOWNLOAD_MAX_BYTES,
-        maxFiles: DRIVE_DOWNLOAD_MAX_FILES,
-        path,
-        uploadHeaders: upload.headers,
-        uploadUrl: upload.url,
-      }),
-      timeout: DRIVE_DOWNLOAD_TIMEOUT_MS,
-    });
-
-    const stdout = (result.result as { stdout?: unknown } | null | undefined)?.stdout;
-    const outcome = typeof stdout === 'string' ? parseDriveDownloadOutput(stdout) : undefined;
-
+    const copy = { fileOnly: purpose === 'preview', hidden, path, upload };
+    let outcome = storage ? await exportFromStorage(storage, copy) : undefined;
     if (!outcome) {
-      log('drive download produced no result: %O', result.error ?? result.result);
-      throw new DriveDownloadError('DOWNLOAD_FAILED', result.error?.message);
-    }
-
-    if (!outcome.ok) {
-      log('drive download refused: %O', outcome);
-      if (outcome.code === 'NOT_FOUND') throw new DriveDownloadError('PATH_NOT_FOUND');
-      if (outcome.code === 'TOO_LARGE') throw new DriveDownloadError('DOWNLOAD_TOO_LARGE');
-      if (outcome.code === 'NOT_A_FILE') throw new DriveDownloadError('PREVIEW_NOT_A_FILE');
-      throw new DriveDownloadError('DOWNLOAD_FAILED', outcome.code);
+      if (!sandbox.capabilities.shell) throw new DriveDownloadError('DOWNLOAD_UNAVAILABLE');
+      outcome = await copyInSandbox(sandbox, copy);
     }
 
     const fileName = driveDownloadFileName(path, outcome.kind);

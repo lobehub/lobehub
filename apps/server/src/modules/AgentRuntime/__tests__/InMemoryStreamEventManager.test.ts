@@ -45,6 +45,40 @@ describe('InMemoryStreamEventManager', () => {
     });
   });
 
+  describe('deleteStreamEvents', () => {
+    it('removes only the given events', async () => {
+      const first = await manager.publishStreamChunk('op-1', 0, {
+        chunkType: 'text',
+        content: 'a',
+      });
+      const second = await manager.publishStreamChunk('op-1', 0, {
+        chunkType: 'text',
+        content: 'b',
+      });
+
+      await manager.deleteStreamEvents('op-1', [first]);
+
+      expect(manager.getAllEvents('op-1').map((event) => event.id)).toEqual([second]);
+    });
+
+    it('keeps a removed event usable as a read cursor', async () => {
+      await manager.publishAgentRuntimeInit('op-1', {});
+      const removed = await manager.publishStreamChunk('op-1', 0, {
+        chunkType: 'text',
+        content: 'a',
+      });
+      const next = await manager.publishStreamChunk('op-1', 0, { chunkType: 'text', content: 'b' });
+      await manager.deleteStreamEvents('op-1', [removed]);
+
+      const page = await manager.getStreamHistoryPage('op-1', removed);
+      expect(page.available).toBe(true);
+      expect(page.events.map((event) => event.id)).toEqual([next]);
+
+      const read = await manager.readEventsOnce('op-1', removed);
+      expect(read.events.map((event) => event.id)).toEqual([next]);
+    });
+  });
+
   describe('readEventsOnce', () => {
     it("returns nothing but a tail cursor for '$' (from-now semantics)", async () => {
       await manager.publishStreamEvent('op-1', {

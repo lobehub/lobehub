@@ -4,7 +4,7 @@ import { type GroupAvatarProps } from '@lobehub/ui';
 import { cssVar, GroupAvatar, Skeleton } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
-import { DEFAULT_AVATAR } from '@/const/meta';
+import { toStackAvatar } from '@/components/AgentAvatar/stackAvatar';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -22,20 +22,16 @@ const GroupAvatarComponent = memo<GroupAvatarComponentProps>(
     ]);
 
     const groupAvatars = useMemo(() => {
-      let displayAvatars = avatars;
-      if (displayAvatars.length === 0) {
-        displayAvatars = [
-          {
-            avatar: DEFAULT_AVATAR,
-          },
-        ];
-      }
+      const displayAvatars = avatars.length > 0 ? avatars : [{}];
+
       return [
         {
           avatar: userAvatar || nickName || username,
           style: { color: cssVar.colorText },
         },
-        ...displayAvatars,
+        ...displayAvatars.map((agent, index) =>
+          typeof agent === 'string' ? agent : toStackAvatar(agent, index),
+        ),
       ];
     }, [avatars, userAvatar, nickName, username]);
 
@@ -47,7 +43,6 @@ const GroupAvatarComponent = memo<GroupAvatarComponentProps>(
         cornerShape={'square'}
         size={size}
         avatars={groupAvatars.map((agent: any) => ({
-          avatar: agent.avatar || DEFAULT_AVATAR,
           background: agent?.backgroundColor || undefined,
           ...agent,
         }))}

@@ -131,6 +131,9 @@ const chatStore = vi.hoisted(() => ({
   activeThreadId: undefined as string | undefined,
   activeTopicId: undefined as string | undefined,
   openTopicComments: vi.fn(),
+  // useSandboxPlacement reads an unlisted topic by id and reads it back after a pick
+  refreshTopicDetail: vi.fn(),
+  useFetchTopicDetail: vi.fn(),
   portalStack: [] as Array<{ startMessageId?: string; threadId?: string; type: string }>,
   showPortal: false,
   threadMaps: {} as Record<string, any[]>,
@@ -351,6 +354,19 @@ vi.mock('@/helpers/executionTarget', () => ({
   },
 }));
 vi.mock('@/helpers/gatewayMode', () => ({ useIsGatewayModeEnabled: () => false }));
+// Every suite renders the sidebar with MCP Apps off: the flag lives in the
+// server-config store, which needs its provider, and app discovery is covered
+// on its own (it would pull the whole tool store into the sidebar's import)
+vi.mock('@/store/serverConfig', () => ({
+  getServerConfigStoreState: () => undefined,
+  serverConfigSelectors: { enableMcpApps: () => false },
+  useServerConfigStore: () => false,
+}));
+vi.mock('@/features/MCPApp/useMcpAppEntrypoints', () => ({ useMcpAppEntrypoints: () => [] }));
+vi.mock('../McpEntryTabLabel', () => ({
+  McpEntryTabIcon: () => null,
+  McpEntryTabLabel: () => null,
+}));
 vi.mock('@/const/version', () => ({
   get isDesktop() {
     return platform.isDesktop;

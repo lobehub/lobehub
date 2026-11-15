@@ -419,6 +419,67 @@ describe('buildRunLifecycle.afterRunComplete — failed run notification', () =>
   });
 });
 
+describe('buildRunLifecycle.afterRunComplete — one notification per server operation', () => {
+  const RECONNECT_OP = 'op-reconnect';
+
+  // A hetero run's in-stream end reaches the primary handler before heteroFinish
+  // clears the marker, so a reconnect can attach under a new local operation and
+  // see the same server run end again.
+  const makeAttachedStore = (serverOperationId: string) => {
+    const { get, store } = makeStore();
+    const operations = store.operations as Record<string, any>;
+    operations[OP].metadata = { serverOperationId };
+    operations[RECONNECT_OP] = { ...operations[OP], id: RECONNECT_OP };
+    return get;
+  };
+
+  beforeEach(() => {
+    desktopNotificationMock.notifyDesktopAgentCompleted.mockClear();
+    desktopNotificationMock.notifyDesktopAgentFailed.mockClear();
+  });
+
+  it('announces a completion once when a reconnect handler ends the same server run', async () => {
+    const get = makeAttachedStore('server-op-completed');
+    const notification = { content: 'done' };
+
+    await lifecycle('gateway', get).afterRunComplete(
+      completeEvent('gateway', { notification, status: 'completed' }),
+    );
+    await lifecycle('gateway', get).afterRunComplete(
+      completeEvent('gateway', { notification, operationId: RECONNECT_OP, status: 'completed' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).toHaveBeenCalledTimes(1);
+  });
+
+  it('announces a failure once when a reconnect handler ends the same server run', async () => {
+    const get = makeAttachedStore('server-op-failed');
+    const notification = { error: { message: 'boom' } as any };
+
+    await lifecycle('gateway', get).afterRunComplete(
+      completeEvent('gateway', { notification, status: 'failed' }),
+    );
+    await lifecycle('gateway', get).afterRunComplete(
+      completeEvent('gateway', { notification, operationId: RECONNECT_OP, status: 'failed' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentFailed).toHaveBeenCalledTimes(1);
+  });
+
+  it('still announces each distinct server run', async () => {
+    const notification = { content: 'done' };
+
+    await lifecycle('gateway', makeAttachedStore('server-op-first')).afterRunComplete(
+      completeEvent('gateway', { notification, status: 'completed' }),
+    );
+    await lifecycle('gateway', makeAttachedStore('server-op-second')).afterRunComplete(
+      completeEvent('gateway', { notification, status: 'completed' }),
+    );
+
+    expect(desktopNotificationMock.notifyDesktopAgentCompleted).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('buildRunLifecycle.afterRunComplete — client desktop notification body', () => {
   const KEY = messageMapKey(CONTEXT);
   // parentMessageId for the run under test is 'u1' (see `lifecycle` helper), so

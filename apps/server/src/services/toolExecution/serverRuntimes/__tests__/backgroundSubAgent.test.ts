@@ -11,7 +11,7 @@ vi.mock('@/database/models/message', () => ({
       listBackgroundSubAgentCalls: async ({ topicId }: { topicId: string }) => {
         // Let concurrent checks interleave, as real database reads do.
         await new Promise((resolve) => setTimeout(resolve, 5));
-        return (placeholders.get(topicId) ?? []).map((id) => ({ id }));
+        return (placeholders.get(topicId) ?? []).map((id) => ({ id, state: { threadId: id } }));
       },
     };
   }),
@@ -49,6 +49,26 @@ describe('startBackgroundSubAgent', () => {
       { refusal: expect.objectContaining({ code: 'BACKGROUND_SUB_AGENT_LIMIT' }) },
     ]);
     expect(placeholders.get('topic-batch')).toHaveLength(MAX_RUNNING_BACKGROUND_SUB_AGENTS);
+  });
+
+  it('lets a call steer one of its running background sub-agents at the limit', async () => {
+    const ids = Array.from({ length: MAX_RUNNING_BACKGROUND_SUB_AGENTS }, (_, i) => `full-${i}`);
+    placeholders.set('topic-full', ids);
+    const continueOn = (continuesThreadId: string) =>
+      startBackgroundSubAgent({
+        continuesThreadId,
+        db: {} as any,
+        retryHint: 'Retry in the foreground.',
+        start: async () => 'steered',
+        topicId: 'topic-full',
+        userId: 'user-1',
+      });
+
+    // Steering adds no run; continuing a thread that is not running would.
+    await expect(continueOn('full-2')).resolves.toEqual({ result: 'steered' });
+    await expect(continueOn('thread-done')).resolves.toEqual({
+      refusal: expect.objectContaining({ code: 'BACKGROUND_SUB_AGENT_LIMIT' }),
+    });
   });
 
   it('keeps the queue moving after a start throws', async () => {

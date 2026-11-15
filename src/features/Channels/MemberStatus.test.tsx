@@ -71,7 +71,7 @@ describe('MemberStatus in a direct conversation', () => {
   it('keeps the Agent environment setup in the menu', () => {
     render(createElement(MemberStatus, { detail: detail() }));
 
-    expect(menuKeys()).toEqual(['openAgent', 'environment', 'copyId', 'archive', 'delete']);
+    expect(menuKeys()).toEqual(['openAgent', 'environment', 'copyId']);
     fireEvent.click(screen.getByText('environment'));
     expect(openEnvironment).toHaveBeenCalledWith('chn_cook', expect.objectContaining(cook));
   });
@@ -86,5 +86,37 @@ describe('MemberStatus in a direct conversation', () => {
     render(createElement(MemberStatus, { detail: detail({}, { status: 'removed' }) }));
 
     expect(menuKeys()).not.toContain('environment');
+  });
+});
+
+describe('MemberStatus profile toggle', () => {
+  const memberPanel = { id: 'panel', onToggle: () => {}, open: false };
+
+  it('opens the Agent profile from a direct conversation', () => {
+    render(createElement(MemberStatus, { detail: detail(), memberPanel }));
+
+    expect(screen.getByText('profile.show')).toBeTruthy();
+    expect(screen.queryByText('members.show')).toBeNull();
+  });
+
+  it('keeps the roster toggle in a group Channel', () => {
+    render(createElement(MemberStatus, { detail: detail({ agentId: null }), memberPanel }));
+
+    expect(screen.getByText('members.show')).toBeTruthy();
+    expect(screen.queryByText('profile.show')).toBeNull();
+  });
+});
+
+describe('MemberStatus in a group Channel', () => {
+  it('sends management to the settings page instead of offering delete', () => {
+    render(createElement(MemberStatus, { detail: detail({ agentId: null }) }));
+
+    expect(menuKeys()).toEqual(['copyId', 'settings']);
+  });
+
+  it('offers no settings to a member who cannot manage the Channel', () => {
+    render(createElement(MemberStatus, { detail: detail({ agentId: null, canDelete: false }) }));
+
+    expect(menuKeys()).toEqual(['copyId']);
   });
 });

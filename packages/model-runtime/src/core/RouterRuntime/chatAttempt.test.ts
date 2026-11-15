@@ -410,6 +410,17 @@ describe('observeChatAttempt', () => {
       error: { errorType: 'ContentModeration', message: 'blocked by moderation' },
       errorType: 'ContentModeration',
     },
+    // A provider closing the stream without a terminal event is upstream-owned, not a
+    // harness stream error, even after output was already shown.
+    {
+      error: {
+        body: { name: 'Stream parsing error', reason: 'unexpected_end' },
+        message: 'Stream ended unexpectedly',
+        name: 'Stream parsing error',
+        type: 'ProviderStreamInterrupted',
+      },
+      errorType: 'ProviderStreamInterrupted',
+    },
     // Fallback buckets carry no classification of their own, so they stay StreamChunkError.
     { error: { message: 'boom', type: 'ProviderBizError' }, errorType: 'StreamChunkError' },
     { error: { message: 'Internal error encountered.' }, errorType: 'StreamChunkError' },

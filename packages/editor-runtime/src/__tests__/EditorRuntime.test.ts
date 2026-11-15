@@ -36,9 +36,9 @@ describe('EditorRuntime', () => {
       expect(result.nodeCount).toBeGreaterThanOrEqual(0);
       expect(result.extractedTitle).toBeUndefined();
 
-      // Verify editor state - full text match (editor adds trailing space)
+      // Verify editor state - full text match
       const editorMarkdown = editor.getDocument('markdown') as unknown as string;
-      expect(editorMarkdown).toBe('Hello world\n\nThis is a paragraph. \n\n');
+      expect(editorMarkdown).toBe('Hello world\n\nThis is a paragraph.\n');
 
       // Verify XML structure
       const editorXml = editor.getDocument('litexml') as unknown as string;
@@ -55,9 +55,9 @@ describe('EditorRuntime', () => {
       expect(result.extractedTitle).toBe('My Document Title');
       expect(mockTitleSetter).toHaveBeenCalledWith('My Document Title');
 
-      // Verify editor state - only content without title (editor adds trailing space)
+      // Verify editor state - only content without title
       const editorMarkdown = editor.getDocument('markdown') as unknown as string;
-      expect(editorMarkdown).toBe('This is the content. \n\n');
+      expect(editorMarkdown).toBe('This is the content.\n');
     });
 
     it('should handle markdown with multiple headings', async () => {
@@ -69,10 +69,10 @@ describe('EditorRuntime', () => {
       // Verify title extraction (only first h1)
       expect(result.extractedTitle).toBe('Main Title');
 
-      // Verify editor state - content after title extraction (editor adds trailing space)
+      // Verify editor state - content after title extraction
       const editorMarkdown = editor.getDocument('markdown') as unknown as string;
       expect(editorMarkdown).toBe(
-        '## Section 1\n\nContent here. \n\n## Section 2\n\nMore content. \n\n',
+        '## Section 1\n\nContent here.\n\n## Section 2\n\nMore content.\n',
       );
     });
 
@@ -127,16 +127,11 @@ describe('EditorRuntime', () => {
       expect(result.markdown).toBeUndefined();
     });
 
-    it('should return both formats by default', async () => {
+    it('should return both formats and metadata', async () => {
       const result = await runtime.getPageContent({ format: 'both' });
 
       expect(result.markdown).toBeDefined();
       expect(result.xml).toBeDefined();
-    });
-
-    it('should include metadata', async () => {
-      const result = await runtime.getPageContent({ format: 'both' });
-
       expect(result.title).toBe('Test Title');
       expect(result.charCount).toBeGreaterThan(0);
       expect(result.lineCount).toBeGreaterThan(0);
@@ -265,8 +260,11 @@ describe('EditorRuntime', () => {
         expect(result.successCount).toBe(1);
         expect(result.results[0].action).toBe('remove');
 
-        const markdownAfter = editor.getDocument('litexml') as unknown as string;
-        expect(markdownAfter).toMatchSnapshot();
+        // Node ids are random per document, so check the id and snapshot the text.
+        expect(editor.getDocument('litexml') as unknown as string).not.toContain(
+          `id="${paragraphId}"`,
+        );
+        expect(editor.getDocument('markdown') as unknown as string).toMatchSnapshot();
       });
 
       it('should remove multiple nodes', async () => {

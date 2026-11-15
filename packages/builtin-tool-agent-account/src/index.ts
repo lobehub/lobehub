@@ -1,5 +1,9 @@
 export { AgentAccountManifest } from './manifest';
-export { AGENT_ACCOUNT_OUTBOUND_AUDIT, agentAccountOutboundAudit } from './outboundAudit';
+export {
+  AGENT_ACCOUNT_OUTBOUND_AUDIT,
+  agentAccountOutboundAudit,
+  createAgentAccountOutboundAudit,
+} from './outboundAudit';
 export { systemPrompt } from './systemRole';
 export {
   AgentAccountApiName,

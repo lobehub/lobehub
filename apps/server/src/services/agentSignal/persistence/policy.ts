@@ -23,6 +23,8 @@ export const AGENT_SIGNAL_SOURCE_PERSISTENCE: Readonly<
   [AGENT_SIGNAL_SOURCE_TYPES.agentUserMessage]: 'never',
   // Chat messages are mostly noise; only the ones a wake decision was made about are worth a row.
   [AGENT_SIGNAL_SOURCE_TYPES.botMessageMerged]: 'on_decision',
+  // Same for Channel: one row per Agent member the wake pipeline judged a message for.
+  [AGENT_SIGNAL_SOURCE_TYPES.channelMessageRouted]: 'on_decision',
   [AGENT_SIGNAL_SOURCE_TYPES.clientGatewayError]: 'never',
   [AGENT_SIGNAL_SOURCE_TYPES.clientGatewayRuntimeEnd]: 'never',
   [AGENT_SIGNAL_SOURCE_TYPES.clientGatewayStepComplete]: 'never',

@@ -9,7 +9,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { getMessengerSystemStrings } from '../systemReply';
 import type { AgentPickerEntry } from '../types';
 import type { AgentSummary, MessengerCommandContext, MessengerRouterDeps } from './types';
-import { isWorkspaceFeatureEnabledForUser, PERSONAL_SCOPE_ID } from './utils';
+import { isWorkspaceFeatureEnabled, PERSONAL_SCOPE_ID } from './utils';
 
 /**
  * `/agents` is the single command for both listing agents and switching the
@@ -237,7 +237,7 @@ export async function fetchUserScopes(
   platform: MessengerPlatform,
 ): Promise<{ id: string | null; name: string }[]> {
   const personalScope = { id: null, name: getMessengerSystemStrings(platform).personalScope };
-  if (!(await isWorkspaceFeatureEnabledForUser(userId))) return [personalScope];
+  if (!isWorkspaceFeatureEnabled()) return [personalScope];
 
   const workspaces = await new WorkspaceModel(serverDB, userId).listUserWorkspaces();
   return [personalScope, ...workspaces.map((w) => ({ id: w.id, name: w.name }))];

@@ -59,8 +59,9 @@ export const AddIdentityActionSchema = z
         relationship: RelationshipEnum,
         role: z
           .string()
+          .nullable()
           .describe(
-            'Role explicitly mentioned for this identity entry (e.g., "platform engineer", "caregiver"); keep neutral and only use when evidence exists',
+            'Role explicitly mentioned for this identity entry (e.g., "platform engineer", "caregiver"); keep neutral and only use when evidence exists, otherwise null',
           ),
         scoreConfidence: z.number(),
         sourceIds: z

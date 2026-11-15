@@ -29,7 +29,7 @@ export const usePersonName = () => {
 };
 
 const PersonAvatar = ({ name, person }: { name: string; person: ChannelPersonOption }) => (
-  <Avatar avatar={person.avatar || DEFAULT_USER_AVATAR} size={28} title={name} />
+  <Avatar avatar={person.avatar || DEFAULT_USER_AVATAR} shape={'circle'} size={28} title={name} />
 );
 
 /** Workspace members who are not in the Channel yet, searched on the server. */

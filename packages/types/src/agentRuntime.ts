@@ -51,6 +51,8 @@ export enum RequestTrigger {
   InputCompletion = 'input_completion',
   Memory = 'memory',
   MultimodalAnalysis = 'multimodal_analysis',
+  /** Text-to-music generation from a music generation topic. */
+  Music = 'music',
   Notify = 'notify',
   Onboarding = 'onboarding',
   Openapi = 'openapi',
@@ -321,6 +323,13 @@ export const AgentRuntimeErrorType = {
   InvalidBedrockCredentials: 'InvalidBedrockCredentials',
   InvalidVertexCredentials: 'InvalidVertexCredentials',
   StreamChunkError: 'StreamChunkError',
+  /**
+   * The provider closed the stream without a terminal event (no stop / usage /
+   * error), e.g. its connection dropped or its server gave up mid-response.
+   * Upstream-owned and transient, unlike `StreamChunkError`, which is a chunk
+   * the harness could not parse or process.
+   */
+  ProviderStreamInterrupted: 'ProviderStreamInterrupted',
   /**
    * The model returned an empty completion — no text content, no tool calls,
    * and ~0 output tokens — typically after a stalled tool loop where it

@@ -157,29 +157,6 @@ describe('useRememberedFilesLocation', { timeout: 15_000 }, () => {
     expect(storedRows()).toEqual([]);
   });
 
-  it('keeps its replica keys out of the SWR persistent cache', async () => {
-    const { replicaKeys } = await import('local-replica');
-    const { unstable_serialize } = await import('swr');
-    const { CACHE_TIERS } = await import('@/libs/swr/localStorageProvider');
-    const { filesLocationResource } = await import('@/store/projectFile/projection');
-    const { filesLocationContextKey } = await import('../useRememberedFilesLocation');
-    const patterns = [...CACHE_TIERS.idb, ...CACHE_TIERS.local];
-
-    for (const contextKey of [
-      filesLocationContextKey('tpc_1', 'agt_1')!,
-      filesLocationContextKey(undefined, 'agt_1')!,
-    ]) {
-      const { name, version } = filesLocationResource;
-      const storageKey = filesLocationResource.storageKey({ contextKey });
-      // The SWR provider persists any key containing a tier pattern, so the
-      // replica's hydrate read must not carry one.
-      const swrKey = unstable_serialize(
-        replicaKeys.hydrate(name, version, 'u1:personal', storageKey),
-      );
-      expect(patterns.filter((pattern) => swrKey.includes(pattern))).toEqual([]);
-    }
-  });
-
   it('passes the resolution through when there is no context to remember', async () => {
     const { result } = await boot({ resolved: { directory: '' }, settled: false });
 

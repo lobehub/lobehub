@@ -4,6 +4,14 @@ import type { UserMemoryQueryContext } from './context';
 import { scoreHybridCandidates } from './scoring';
 import { buildRetrievalQuery, combineEmbeddings } from './utils';
 
+/**
+ * Context too long for the lexical leg is too long to fuzzy-match as well: comparing a whole
+ * conversation with every field of every candidate says little and blocks the event loop for
+ * seconds.
+ */
+const fuzzyQueries = (params: { lexicalSearch: boolean; queries: string[] }) =>
+  params.lexicalSearch ? params.queries : [];
+
 export async function searchHybridActivities(
   ctx: UserMemoryQueryContext,
   params: {
@@ -38,7 +46,7 @@ export async function searchHybridActivities(
     baseSignals: await ctx.loadBaseSignals(items),
     items,
     lexicalLists,
-    queries: params.queries,
+    queries: fuzzyQueries(params),
     queryParams: params.params,
     semanticLists,
   });
@@ -78,7 +86,7 @@ export async function searchHybridContexts(
     baseSignals: await ctx.loadBaseSignals(items),
     items,
     lexicalLists,
-    queries: params.queries,
+    queries: fuzzyQueries(params),
     queryParams: params.params,
     semanticLists,
   });
@@ -118,7 +126,7 @@ export async function searchHybridExperiences(
     baseSignals: await ctx.loadBaseSignals(items),
     items,
     lexicalLists,
-    queries: params.queries,
+    queries: fuzzyQueries(params),
     queryParams: params.params,
     semanticLists,
   });
@@ -158,7 +166,7 @@ export async function searchHybridIdentities(
     baseSignals: await ctx.loadBaseSignals(items),
     items,
     lexicalLists,
-    queries: params.queries,
+    queries: fuzzyQueries(params),
     queryParams: params.params,
     semanticLists,
   });
@@ -198,7 +206,7 @@ export async function searchHybridPreferences(
     baseSignals: await ctx.loadBaseSignals(items),
     items,
     lexicalLists,
-    queries: params.queries,
+    queries: fuzzyQueries(params),
     queryParams: params.params,
     semanticLists,
   });

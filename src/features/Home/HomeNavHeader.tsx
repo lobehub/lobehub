@@ -1,5 +1,5 @@
 import { createStaticStyles, Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 
 import { useHomeUsageWidgetActive } from '@/business/client/features/HomeUsageWidget';
 import NavHeader from '@/features/NavHeader';
@@ -23,7 +23,13 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const HomeNavHeader = memo(() => {
+interface HomeNavHeaderProps {
+  /** The customize and rail controls only apply to the personal dashboard. */
+  showControls?: boolean;
+  tabs?: ReactNode;
+}
+
+const HomeNavHeader = memo<HomeNavHeaderProps>(({ showControls = true, tabs }) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const [showHomeRail, toggleHomeRail, isStatusInit] = useGlobalStore((s) => [
     systemStatusSelectors.showHomeRail(s),
@@ -36,8 +42,9 @@ const HomeNavHeader = memo(() => {
   return (
     <NavHeader
       className={styles.header}
+      left={tabs}
       right={
-        isLogin && isStatusInit ? (
+        showControls && isLogin && isStatusInit ? (
           <Flexbox horizontal align={'center'} gap={4}>
             <CustomizeButton />
             {canHostRail(hiddenWidgets, usageActive) && (

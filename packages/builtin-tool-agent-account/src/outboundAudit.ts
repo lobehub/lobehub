@@ -23,4 +23,24 @@ export const agentAccountOutboundAudit: DynamicInterventionResolver = async (too
   return !(typeof threadKey === 'string' && threadKey.trim().length > 0);
 };
 
+/**
+ * The outbound gate for a run that may be acting on mail from outside (the
+ * server runtime builds one per run). Nobody the owner trusts asked for such a
+ * run: whoever wrote the mail did, and the thread-reply exemption above would
+ * let them have the agent answer them with whatever it can read — the owner's
+ * memory, documents, earlier topics — without the owner seeing it. So there
+ * every send is held for the owner, thread reply or not.
+ *
+ * `holdEverySend` is asked only when the agent actually sends, so a lookup
+ * behind it costs nothing on the turns that do not.
+ */
+export const createAgentAccountOutboundAudit =
+  ({
+    holdEverySend,
+  }: {
+    holdEverySend: () => Promise<boolean> | boolean;
+  }): DynamicInterventionResolver =>
+  async (toolArgs, metadata) =>
+    (await holdEverySend()) || agentAccountOutboundAudit(toolArgs, metadata);
+
 export const AGENT_ACCOUNT_OUTBOUND_AUDIT = 'agentAccountOutboundAudit';

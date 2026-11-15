@@ -4,9 +4,7 @@ import type { GoalReleaseGateDossier, GoalReleaseGateUnit } from '@lobechat/type
 import {
   ActionIcon,
   Button,
-  createStaticStyles,
-  cssVar,
-  cx,
+  DraggablePanel,
   Flexbox,
   Icon,
   Markdown,
@@ -14,6 +12,8 @@ import {
   TextArea,
   toast,
 } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import {
   CircleCheck,
   CircleDashed,
@@ -28,125 +28,117 @@ import { useTranslation } from 'react-i18next';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { GoalDecisionAsker } from '@/features/AgentGoals/GoalDecision';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
-import { mutate as globalMutate } from '@/libs/swr';
-import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
+import { useVerifyStore } from '@/store/verify';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { useAcceptanceComments } from '../Comments/hooks';
 import { acceptanceOverviewPath } from '../routes';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { canReviewAcceptance, isReadOnlyAcceptanceDecider } from '../visibility';
-import { latestRound, unitArtifacts } from './dossier';
+import { latestRound } from './dossier';
 import SkillDirectory from './SkillDirectory';
+import UnitArtifacts from './UnitArtifacts';
 import { usePlanFiles } from './usePlanFiles';
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    font-size: ${cssVar.fontSize};
-    line-height: 1.7;
-  `,
+const styles = stylex.create({
+  body: {
+    fontSize: cssVar.fontSize,
+    lineHeight: 1.7,
+  },
   // The same action band as the approval island's cards: one tinted strip the
   // decision lives in, apart from the report it decides on.
-  footer: css`
-    padding-block: 12px;
-    padding-inline: 24px;
-    border-block-start: 1px solid ${cssVar.colorBorder};
-    background: color-mix(in srgb, ${cssVar.colorBgElevated} 92%, ${cssVar.colorFillSecondary});
-  `,
-  footerOnPage: css`
-    position: sticky;
-    z-index: 1;
-    inset-block-end: 0;
-
-    padding-inline: 0;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  frame: css`
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    max-height: 84vh;
-  `,
-  header: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 12px;
-    padding-inline: 24px;
-    border-block-end: 1px solid ${cssVar.colorBorder};
-  `,
-  link: css`
-    font-size: ${cssVar.fontSizeSM};
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-    }
-  `,
-  list: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  meta: css`
-    font-size: ${cssVar.fontSizeSM};
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  panel: css`
-    overflow: hidden auto;
-    flex: none;
-
-    width: 340px;
-    padding-block: 20px;
-    padding-inline: 20px;
-    border-inline-start: 1px solid ${cssVar.colorBorder};
-  `,
-  plan: css`
-    padding-block: 4px;
-    padding-inline: 20px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  row: css`
-    cursor: pointer;
-    padding-block: 12px;
-    padding-inline: 16px;
-
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorder};
-    }
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  rowActive: css`
-    background: ${cssVar.colorFillTertiary};
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  scroll: css`
-    overflow-y: auto;
-    flex: 1;
-    min-width: 0;
-  `,
-  section: css`
-    font-size: ${cssVar.fontSizeLG};
-    font-weight: 600;
-  `,
-  title: css`
-    margin: 0;
-    font-size: ${cssVar.fontSizeHeading4};
-    font-weight: 600;
-    line-height: 1.4;
-  `,
-}));
+  footer: {
+    paddingBlock: '12px',
+    paddingInline: '24px',
+    borderBlockStartWidth: '1px',
+    borderBlockStartStyle: 'solid',
+    borderBlockStartColor: cssVar.colorBorder,
+    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgElevated} 92%, ${cssVar.colorFillSecondary})`,
+  },
+  footerOnPage: {
+    position: 'sticky',
+    zIndex: 1,
+    insetBlockEnd: 0,
+    paddingInline: 0,
+    backgroundColor: cssVar.colorBgContainer,
+  },
+  frame: {
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    maxHeight: '84vh',
+  },
+  header: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center',
+    paddingBlock: '12px',
+    paddingInline: '24px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: 'solid',
+    borderBlockEndColor: cssVar.colorBorder,
+  },
+  link: {
+    fontSize: cssVar.fontSizeSM,
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+  },
+  list: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  meta: {
+    fontSize: cssVar.fontSizeSM,
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextTertiary,
+  },
+  panel: {
+    overflowX: 'hidden',
+    overflowY: 'auto',
+    height: '100%',
+    paddingBlock: '16px',
+    paddingInline: '16px',
+  },
+  plan: {
+    paddingBlock: '4px',
+    paddingInline: '20px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorder,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  row: {
+    cursor: 'pointer',
+    paddingBlock: '12px',
+    paddingInline: '16px',
+    // Rows only ever sit next to other rows in a list (the old `& + &`).
+    borderBlockStartWidth: { 'default': null, ':not(:first-child)': '1px' },
+    borderBlockStartStyle: { 'default': null, ':not(:first-child)': 'solid' },
+    borderBlockStartColor: { 'default': null, ':not(:first-child)': cssVar.colorBorder },
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+  },
+  rowActive: {
+    backgroundColor: { 'default': cssVar.colorFillTertiary, ':hover': cssVar.colorFillTertiary },
+  },
+  scroll: {
+    overflowY: 'auto',
+    flex: '1',
+    minWidth: 0,
+  },
+  section: {
+    fontSize: cssVar.fontSizeLG,
+    fontWeight: 600,
+  },
+  title: {
+    margin: 0,
+    fontSize: cssVar.fontSizeHeading4,
+    fontWeight: 600,
+    lineHeight: 1.4,
+  },
+});
 
 /** "A10 返工 #20851 首页 inbox …" → code "A10" and the rest of the title. */
 const splitUnitTitle = (title: string) => {
@@ -160,6 +152,9 @@ const formatTokens = (tokens: number) =>
 
 /** A unit the owner has to look at: it was reworked, or did not settle cleanly. */
 const isException = (unit: GoalReleaseGateUnit) => unit.runs > 1 || unit.status !== 'resolved';
+
+/** The detail panel opens at this width; its edge drags it between the bounds. */
+const PANEL_WIDTH = { default: 360, max: 720, min: 280 };
 
 /** What the side panel shows: a unit that ran, or one the next wave would start. */
 type Selection =
@@ -198,7 +193,7 @@ const Section = ({
   <Flexbox gap={12}>
     <Flexbox horizontal align={'center'} justify={'space-between'}>
       <Flexbox horizontal align={'center'} gap={4}>
-        <span className={styles.section}>{title}</span>
+        <span {...stylex.props(styles.section)}>{title}</span>
         {titleExtra}
       </Flexbox>
       {extra}
@@ -217,7 +212,7 @@ const ResultRow = memo<{
   const exception = isException(unit);
   const ratio = average > 0 ? unit.tokens / average : 0;
   return (
-    <Flexbox className={cx(styles.row, active && styles.rowActive)} gap={4} onClick={onSelect}>
+    <Flexbox gap={4} {...stylex.props(styles.row, active && styles.rowActive)} onClick={onSelect}>
       <Flexbox horizontal align={'center'} gap={12}>
         <Icon
           color={exception ? cssVar.colorWarning : cssVar.colorSuccess}
@@ -225,7 +220,7 @@ const ResultRow = memo<{
           size={16}
         />
         <UnitTitle title={unit.title} />
-        <span className={styles.meta}>
+        <span {...stylex.props(styles.meta)}>
           {[
             unit.acceptance?.checks &&
               t('acceptance.gate.unitAcceptance', {
@@ -264,13 +259,13 @@ const NextRow = memo<{ active: boolean; onSelect: () => void; title: string }>(
       <Flexbox
         horizontal
         align={'center'}
-        className={cx(styles.row, active && styles.rowActive)}
         gap={12}
+        {...stylex.props(styles.row, active && styles.rowActive)}
         onClick={onSelect}
       >
         <Icon color={cssVar.colorTextQuaternary} icon={CircleDashed} size={16} />
         <UnitTitle title={title} />
-        <span className={styles.meta}>{t('acceptance.gate.unitWaiting')}</span>
+        <span {...stylex.props(styles.meta)}>{t('acceptance.gate.unitWaiting')}</span>
       </Flexbox>
     );
   },
@@ -283,69 +278,63 @@ const DetailPanel = memo<{ onClose: () => void; selection: Selection }>(
     const title = selection.kind === 'result' ? selection.unit.title : selection.title;
     const brief = selection.kind === 'result' ? selection.unit.brief : selection.brief;
     return (
-      <Flexbox className={styles.panel} gap={16}>
-        <Flexbox horizontal align={'flex-start'} gap={8}>
-          <Text strong style={{ flex: 1, minWidth: 0 }}>
-            {title}
-          </Text>
-          <ActionIcon icon={X} size={'small'} onClick={onClose} />
-        </Flexbox>
-        {selection.kind === 'result' ? (
-          <Flexbox gap={8}>
-            <span className={styles.meta}>
-              {t('acceptance.gate.unitMeta', {
-                runs: selection.unit.runs,
-                tokens: formatTokens(selection.unit.tokens),
-              })}
-            </span>
-            {selection.unit.acceptance && (
-              <a
-                className={styles.link}
-                rel="noreferrer"
-                target="_blank"
-                href={buildWorkspaceAwarePath(
-                  acceptanceOverviewPath(selection.unit.acceptance.id),
-                  workspaceSlug,
-                )}
-              >
-                {selection.unit.acceptance.checks
-                  ? t('acceptance.gate.unitAcceptance', {
-                      passed: selection.unit.acceptance.checks.passed,
-                      total: selection.unit.acceptance.checks.total,
-                    })
-                  : t('acceptance.gate.unitAcceptanceOpen')}
-              </a>
-            )}
-            {unitArtifacts(selection.unit).map((artifact) =>
-              artifact.url ? (
+      <DraggablePanel
+        backgroundColor={'transparent'}
+        classNames={{ content: stylex.props(styles.panel).className }}
+        defaultSize={{ height: '100%', width: PANEL_WIDTH.default }}
+        expandable={false}
+        maxWidth={PANEL_WIDTH.max}
+        minWidth={PANEL_WIDTH.min}
+        placement={'right'}
+      >
+        <Flexbox gap={12}>
+          <Flexbox horizontal align={'flex-start'} gap={8}>
+            <Text strong style={{ flex: 1, minWidth: 0 }}>
+              {title}
+            </Text>
+            <ActionIcon icon={X} size={'small'} onClick={onClose} />
+          </Flexbox>
+          {selection.kind === 'result' ? (
+            <Flexbox gap={8}>
+              <span {...stylex.props(styles.meta)}>
+                {t('acceptance.gate.unitMeta', {
+                  runs: selection.unit.runs,
+                  tokens: formatTokens(selection.unit.tokens),
+                })}
+              </span>
+              {selection.unit.acceptance && (
                 <a
-                  className={styles.link}
-                  href={artifact.url}
-                  key={artifact.url}
+                  className={stylex.props(styles.link).className}
                   rel="noreferrer"
                   target="_blank"
+                  href={buildWorkspaceAwarePath(
+                    acceptanceOverviewPath(selection.unit.acceptance.id),
+                    workspaceSlug,
+                  )}
                 >
-                  {artifact.title}
+                  {selection.unit.acceptance.checks
+                    ? t('acceptance.gate.unitAcceptance', {
+                        passed: selection.unit.acceptance.checks.passed,
+                        total: selection.unit.acceptance.checks.total,
+                      })
+                    : t('acceptance.gate.unitAcceptanceOpen')}
                 </a>
-              ) : (
-                <span className={styles.meta} key={artifact.title}>
-                  {artifact.title}
-                </span>
-              ),
-            )}
-          </Flexbox>
-        ) : (
-          <span className={styles.meta}>{t('acceptance.gate.unitWaitingHint')}</span>
-        )}
-        {brief && (
-          <Flexbox gap={6}>
-            <span className={styles.meta}>{t('acceptance.gate.unitBrief')}</span>
-            <Text className={styles.body} type={'secondary'}>
-              {brief.replace(/^\[origin=\w+\]\s*/, '')}
-            </Text>
-          </Flexbox>
-        )}
-      </Flexbox>
+              )}
+            </Flexbox>
+          ) : (
+            <span {...stylex.props(styles.meta)}>{t('acceptance.gate.unitWaitingHint')}</span>
+          )}
+          {brief && (
+            <Flexbox gap={4}>
+              <span {...stylex.props(styles.meta)}>{t('acceptance.gate.unitBrief')}</span>
+              <Markdown fontSize={13} variant={'chat'}>
+                {brief.replace(/^\[origin=\w+\]\s*/, '')}
+              </Markdown>
+            </Flexbox>
+          )}
+          {selection.kind === 'result' && <UnitArtifacts unit={selection.unit} />}
+        </Flexbox>
+      </DraggablePanel>
     );
   },
 );
@@ -371,7 +360,7 @@ const GateDecision = memo<{
   const status = data.acceptance.status;
   if (status === 'accepted' || status === 'rejected')
     return (
-      <Flexbox className={cx(styles.footer, !inModal && styles.footerOnPage)}>
+      <Flexbox {...stylex.props(styles.footer, !inModal && styles.footerOnPage)}>
         <Text type={'secondary'}>
           {status === 'accepted'
             ? t('acceptance.gate.decidedRelease', { wave: dossier.wave })
@@ -385,7 +374,7 @@ const GateDecision = memo<{
     try {
       await action();
       await mutate();
-      void globalMutate(isAcceptanceListKey);
+      void useVerifyStore.getState().refreshAcceptanceLists();
       onDecided?.(decision);
     } catch (cause) {
       toast.error(cause instanceof Error ? cause.message : t('acceptance.actionError'));
@@ -406,7 +395,7 @@ const GateDecision = memo<{
   // A teammate who cannot sign the gate still sees what it asks and who signs it.
   if (readOnly)
     return (
-      <Flexbox className={cx(styles.footer, !inModal && styles.footerOnPage)}>
+      <Flexbox {...stylex.props(styles.footer, !inModal && styles.footerOnPage)}>
         <Flexbox horizontal align={'center'} gap={8}>
           <Text style={{ flex: 1, minWidth: 0 }} type={'secondary'}>
             {t('acceptance.bar.readOnlyReason')}
@@ -420,7 +409,7 @@ const GateDecision = memo<{
     );
 
   return (
-    <Flexbox className={cx(styles.footer, !inModal && styles.footerOnPage)} gap={12}>
+    <Flexbox gap={12} {...stylex.props(styles.footer, !inModal && styles.footerOnPage)}>
       {revising && (
         <TextArea
           autoFocus
@@ -494,7 +483,10 @@ interface GateReviewProps {
 const GateReview = memo<GateReviewProps>(({ dossier, inModal, onClose, onDecided }) => {
   const { t } = useTranslation('verify');
   const [selected, setSelected] = useState<Selection>();
-  const { extraFiles, filesOpen, toggleFiles } = usePlanFiles(dossier.plan.skillId);
+  const { extraFiles, filesOpen, toggleFiles } = usePlanFiles(
+    dossier.plan.skillId,
+    dossier.plan.revision,
+  );
   const average =
     dossier.units.reduce((sum, unit) => sum + unit.tokens, 0) / Math.max(1, dossier.units.length);
   const probes = dossier.kind === 'probes';
@@ -506,12 +498,12 @@ const GateReview = memo<GateReviewProps>(({ dossier, inModal, onClose, onDecided
   const report = (
     <Flexbox gap={32} style={{ padding: inModal ? 24 : 0 }}>
       <Flexbox gap={8}>
-        <h2 className={styles.title}>
+        <h2 {...stylex.props(styles.title)}>
           {probes
             ? t('acceptance.gate.titleProbes')
             : t('acceptance.gate.titleWave', { wave: dossier.wave })}
         </h2>
-        <Text className={styles.body} type={'secondary'}>
+        <Text type={'secondary'} {...stylex.props(styles.body)}>
           {probes
             ? t('acceptance.gate.leadProbes', {
                 count: dossier.units.length,
@@ -528,7 +520,7 @@ const GateReview = memo<GateReviewProps>(({ dossier, inModal, onClose, onDecided
             })}`}
         </Text>
         {dossier.diagnosis && (
-          <Text className={styles.body}>
+          <Text {...stylex.props(styles.body)}>
             {t('acceptance.gate.agentSays', { reason: dossier.diagnosis })}
           </Text>
         )}
@@ -538,7 +530,7 @@ const GateReview = memo<GateReviewProps>(({ dossier, inModal, onClose, onDecided
         title={t('acceptance.gate.planTitle')}
         extra={
           dossier.plan.skillName && (
-            <span className={styles.meta}>
+            <span {...stylex.props(styles.meta)}>
               {dossier.plan.skillName} · v{dossier.plan.revision}
               {extraFiles > 0 && ` · ${t('acceptance.gate.planFiles', { count: extraFiles + 1 })}`}
             </span>
@@ -563,7 +555,7 @@ const GateReview = memo<GateReviewProps>(({ dossier, inModal, onClose, onDecided
             skillId={dossier.plan.skillId}
           />
         ) : (
-          <div className={styles.plan}>
+          <div {...stylex.props(styles.plan)}>
             <Markdown fontSize={14} variant={'chat'}>
               {dossier.plan.content}
             </Markdown>
@@ -574,12 +566,12 @@ const GateReview = memo<GateReviewProps>(({ dossier, inModal, onClose, onDecided
       <Section
         title={probes ? t('acceptance.gate.resultsProbes') : t('acceptance.gate.resultsWave')}
         extra={
-          <span className={styles.meta}>
+          <span {...stylex.props(styles.meta)}>
             {t('acceptance.gate.unitCount', { count: dossier.units.length })}
           </span>
         }
       >
-        <div className={styles.list}>
+        <div {...stylex.props(styles.list)}>
           {units.map((unit) => (
             <ResultRow
               active={selectedKey === unit.nodeId}
@@ -595,12 +587,12 @@ const GateReview = memo<GateReviewProps>(({ dossier, inModal, onClose, onDecided
       <Section
         title={t('acceptance.gate.nextWaveTitle', { wave: dossier.wave })}
         extra={
-          <span className={styles.meta}>
+          <span {...stylex.props(styles.meta)}>
             {t('acceptance.gate.unitCount', { count: dossier.nextWave.length })}
           </span>
         }
       >
-        <div className={styles.list}>
+        <div {...stylex.props(styles.list)}>
           {dossier.nextWave.map((unit) => (
             <NextRow
               active={selectedKey === unit.title}
@@ -610,7 +602,7 @@ const GateReview = memo<GateReviewProps>(({ dossier, inModal, onClose, onDecided
             />
           ))}
         </div>
-        <span className={styles.meta}>
+        <span {...stylex.props(styles.meta)}>
           {t('acceptance.gate.remaining', {
             count: dossier.remainingAfter,
             estimate: formatTokens(estimate),
@@ -618,7 +610,7 @@ const GateReview = memo<GateReviewProps>(({ dossier, inModal, onClose, onDecided
         </span>
       </Section>
 
-      <span className={styles.meta}>
+      <span {...stylex.props(styles.meta)}>
         {t('acceptance.gate.checks', {
           passed: dossier.checks.filter((check) => check.passed).length,
           total: dossier.checks.length,
@@ -645,8 +637,8 @@ const GateReview = memo<GateReviewProps>(({ dossier, inModal, onClose, onDecided
     );
 
   return (
-    <div className={styles.frame}>
-      <div className={styles.header}>
+    <div {...stylex.props(styles.frame)}>
+      <div {...stylex.props(styles.header)}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <GoalDecisionAsker
             agentId={dossier.agentId}
@@ -657,7 +649,7 @@ const GateReview = memo<GateReviewProps>(({ dossier, inModal, onClose, onDecided
         {onClose && <ActionIcon icon={X} size={'small'} onClick={onClose} />}
       </div>
       <Flexbox horizontal style={{ flex: 1, minHeight: 0 }}>
-        <div className={styles.scroll}>{report}</div>
+        <div {...stylex.props(styles.scroll)}>{report}</div>
         {panel}
       </Flexbox>
       <GateDecision inModal dossier={dossier} onDecided={onDecided} />

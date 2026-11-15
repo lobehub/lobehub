@@ -40,6 +40,7 @@ const PREFETCH_ROWS = 20;
 const computeItemKey = (index: number, item: FileListItem | undefined) => item?.id ?? index;
 
 interface VirtualizedFileListProps {
+  allowReorder?: boolean;
   columnWidths: {
     date: number;
     name: number;
@@ -62,6 +63,7 @@ interface VirtualizedFileListProps {
 }
 
 const VirtualizedFileList = ({
+  allowReorder = true,
   columnWidths,
   data,
   hasMore,
@@ -183,6 +185,7 @@ const VirtualizedFileList = ({
 
           return (
             <FileListItemComponent
+              allowReorder={allowReorder}
               columnWidths={columnWidths}
               index={index}
               selectable={selectable}
@@ -201,6 +204,7 @@ const VirtualizedFileList = ({
           );
         },
         [
+          allowReorder,
           columnWidths,
           handleSelectionChange,
           isItemSelectable,

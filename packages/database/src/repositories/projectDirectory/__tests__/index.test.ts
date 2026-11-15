@@ -603,3 +603,201 @@ describe('ProjectDirectoryRepository.moveTopic', () => {
     );
   });
 });
+
+describe('ProjectDirectoryRepository.remove', () => {
+  const seedTopic = async (directoryId: string, patch: Partial<typeof topics.$inferInsert> = {}) =>
+    db.insert(topics).values({
+      id: 'remove-topic',
+      projectId: base.projectId,
+      projectWorkingDirectoryId: directoryId,
+      title: 'Topic',
+      userId,
+      ...patch,
+    });
+
+  it('drops only the project link, keeping its instance and conversations', async () => {
+    const directory = await repo.bind(base);
+    await seedTopic(directory.id);
+
+    await expect(repo.remove(base.projectId, directory.id)).resolves.toMatchObject({
+      id: directory.id,
+    });
+
+    expect(await directoryModel.list(base.projectId)).toEqual([]);
+    expect(await db.select().from(environmentInstances)).toHaveLength(1);
+    const [topic] = await db.select().from(topics).where(eq(topics.id, 'remove-topic'));
+    expect(topic).toMatchObject({ projectId: base.projectId, projectWorkingDirectoryId: null });
+  });
+
+  it('lets the same location be bound again after removal', async () => {
+    const directory = await repo.bind(base);
+    await repo.remove(base.projectId, directory.id);
+
+    const rebound = await repo.bind(base);
+
+    expect(rebound.id).not.toBe(directory.id);
+    expect(await directoryModel.list(base.projectId)).toHaveLength(1);
+  });
+
+  it('refuses while a conversation is running in the directory', async () => {
+    const directory = await repo.bind(base);
+    await seedTopic(directory.id, { status: 'running' });
+
+    await expect(repo.remove(base.projectId, directory.id)).rejects.toThrow(
+      'Wait for the running topics',
+    );
+
+    expect(await directoryModel.list(base.projectId)).toHaveLength(1);
+  });
+
+  it('refuses a caller who cannot manage the project', async () => {
+    const directory = await repo.bind(base);
+
+    await expect(otherRepo.remove(base.projectId, directory.id)).rejects.toThrow(
+      'Project not found or access denied',
+    );
+
+    expect(await directoryModel.list(base.projectId)).toHaveLength(1);
+  });
+
+  it('does not remove a directory through another project', async () => {
+    const directory = await repo.bind(base);
+    await db.insert(projects).values({
+      coordinatorAgentId: 'repo-coordinator',
+      id: 'remove-other-project',
+      identifier: 'OTH',
+      name: 'Other project',
+      userId,
+    });
+
+    await expect(repo.remove('remove-other-project', directory.id)).rejects.toThrow(
+      'Project directory not found',
+    );
+
+    expect(await directoryModel.list(base.projectId)).toHaveLength(1);
+  });
+});
+
+describe('ProjectDirectoryRepository.relocate', () => {
+  const otherDevice = 'repo-device-2';
+  const seedTopic = async (directoryId: string, patch: Partial<typeof topics.$inferInsert> = {}) =>
+    db.insert(topics).values({
+      agentId: 'repo-agent',
+      id: 'relocate-topic',
+      metadata: {
+        boundDeviceId: base.deviceId,
+        heteroSessionId: 'stale-session',
+        workingDirectory: base.path,
+      },
+      projectId: base.projectId,
+      projectWorkingDirectoryId: directoryId,
+      title: 'Topic',
+      userId,
+      ...patch,
+    });
+
+  beforeEach(async () => {
+    await db
+      .insert(devices)
+      .values({ deviceId: otherDevice, identitySource: 'fallback', platform: 'linux', userId });
+  });
+
+  it('moves the directory and its topics to the new location', async () => {
+    const directory = await repo.bind(base);
+    await seedTopic(directory.id);
+
+    const moved = await repo.relocate({
+      deviceId: otherDevice,
+      id: directory.id,
+      path: '/work/fixed/',
+      projectId: base.projectId,
+    });
+
+    const rows = await directoryModel.list(base.projectId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      deviceId: otherDevice,
+      environmentId: (await directoryModel.list())[0].environmentId,
+      id: moved.id,
+      path: '/work/fixed',
+    });
+    expect(moved.id).not.toBe(directory.id);
+    const [topic] = await db.select().from(topics).where(eq(topics.id, 'relocate-topic'));
+    expect(topic.projectWorkingDirectoryId).toBe(moved.id);
+    expect(topic.metadata).toEqual({
+      boundDeviceId: otherDevice,
+      workingDirectory: '/work/fixed',
+      workingDirectoryConfig: { path: '/work/fixed' },
+    });
+  });
+
+  it('keeps everything in place when a topic is running there', async () => {
+    const directory = await repo.bind(base);
+    await seedTopic(directory.id, { status: 'running' });
+
+    await expect(
+      repo.relocate({
+        deviceId: otherDevice,
+        id: directory.id,
+        path: '/work/fixed',
+        projectId: base.projectId,
+      }),
+    ).rejects.toThrow('Wait for the running topics');
+
+    expect(await directoryModel.list(base.projectId)).toMatchObject([
+      { id: directory.id, path: base.path },
+    ]);
+  });
+
+  it('refuses a topic bound after the caller was authorized', async () => {
+    const directory = await repo.bind(base);
+    await seedTopic(directory.id);
+
+    await expect(
+      repo.relocate({
+        authorizedTopicIds: [],
+        deviceId: otherDevice,
+        id: directory.id,
+        path: '/work/fixed',
+        projectId: base.projectId,
+      }),
+    ).rejects.toThrow('The topics in this directory changed');
+
+    expect(await directoryModel.list(base.projectId)).toMatchObject([{ id: directory.id }]);
+  });
+
+  it('refuses a move away from the device a topic agent is fixed to', async () => {
+    const directory = await repo.bind(base);
+    await db
+      .update(agents)
+      .set({
+        agencyConfig: { boundDeviceId: base.deviceId, executionTargetSelectionPolicy: 'fixed' },
+      })
+      .where(eq(agents.id, 'repo-agent'));
+    await seedTopic(directory.id);
+
+    await expect(
+      repo.relocate({
+        deviceId: otherDevice,
+        id: directory.id,
+        path: '/work/fixed',
+        projectId: base.projectId,
+      }),
+    ).rejects.toThrow('Agent cannot use this execution target');
+
+    expect(await directoryModel.list(base.projectId)).toMatchObject([{ id: directory.id }]);
+  });
+
+  it('refuses a caller who cannot manage the project', async () => {
+    const directory = await repo.bind(base);
+
+    await expect(
+      otherRepo.relocate({
+        deviceId: otherDevice,
+        id: directory.id,
+        path: '/work/fixed',
+        projectId: base.projectId,
+      }),
+    ).rejects.toThrow('Project not found or access denied');
+  });
+});

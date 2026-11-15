@@ -5,6 +5,7 @@ import {
   resolveClaudeAccountSpawnEnv,
 } from '@lobechat/device-control/claude-code-account-routing';
 import {
+  buildClaudeCodeEntrypointEnv,
   buildHeteroExecStdinPayload,
   HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV,
   type HeteroExecImageRef,
@@ -24,6 +25,8 @@ export interface SpawnHeteroAgentRunParams {
   assistantMessageId?: string;
   /** Claude Code account the server routed this run to. */
   claudeAccountRouting?: ClaudeCodeAccountRouting;
+  /** Entrypoint name the agent asked Claude Code to report. */
+  claudeCodeEntrypoint?: string;
   cwd?: string;
   /** Image attachments (signed URLs) appended as image content blocks. */
   imageList?: HeteroExecImageRef[];
@@ -172,6 +175,9 @@ function startHeteroAgentRun(
         LOBEHUB_TOPIC_ID: topicId,
         ...(workspaceId ? { LOBEHUB_WORKSPACE_ID: workspaceId } : {}),
         ...accountEnv,
+        ...(agentType === 'claude-code'
+          ? buildClaudeCodeEntrypointEnv(params.claudeCodeEntrypoint)
+          : {}),
       },
       stdio: ['pipe', 'inherit', 'inherit'],
       windowsHide: true,

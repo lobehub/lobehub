@@ -28,7 +28,7 @@ import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useEvalStore } from '@/store/eval';
+import { benchmarkSelectors, useEvalStore } from '@/store/eval';
 import { isModifierClick } from '@/utils/navigation';
 
 const SYSTEM_ICONS = [
@@ -58,7 +58,7 @@ interface BenchmarkListProps {
 const BenchmarkList = memo<BenchmarkListProps>(({ activeKey, itemKey }) => {
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
-  const benchmarkList = useEvalStore((s) => s.benchmarkList);
+  const benchmarkList = useEvalStore(benchmarkSelectors.agentBenchmarkList);
   const isInit = useEvalStore((s) => s.benchmarkListInit);
 
   return (

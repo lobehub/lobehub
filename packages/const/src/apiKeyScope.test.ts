@@ -118,6 +118,12 @@ describe('requiredApiKeyScopeForTrpc', () => {
     expect(requiredApiKeyScopeForTrpc('aiAgent.execAgent', 'mutation')).toEqual({
       scopes: ['agent:write', 'chat:write', 'model:invoke'],
     });
+    // a desktop-local run fee spends real balance, like the run entries
+    for (const path of ['aiAgent.beginLocalHeteroRunFee', 'aiAgent.finishLocalHeteroRunFee']) {
+      expect(requiredApiKeyScopeForTrpc(path, 'mutation')).toEqual({
+        scopes: ['agent:write', 'chat:write', 'model:invoke'],
+      });
+    }
     // listing the queue reads conversation content
     expect(requiredApiKeyScopeForTrpc('agentSteerQueue.list', 'query')).toEqual({
       scopes: ['agent:read', 'chat:read'],

@@ -84,6 +84,7 @@ export const createResponsibleTask = async (
     ).newTaskAssignment(graph.goal);
     task = await ctx.taskService.createTask({
       assigneeAgentId: assignment.assigneeAgentId,
+      assigneeUserId: assignment.assigneeUserId,
       config: {
         checkpoint: { topic: { after: false } },
         ...(planSkill ? { skills: [planSkillIdentifier(planSkill)] } : {}),

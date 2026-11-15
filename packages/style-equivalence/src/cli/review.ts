@@ -1,6 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { agentPassRecord, asksAgentNote } from '../review/state';
 import { writeReviews } from '../review/store';
 import type { StoredRun } from '../server/api';
 import { reviewPayload, reviewState } from '../server/review';
@@ -37,22 +38,20 @@ export const reworkList = async (stored: StoredRun, format: 'json' | 'text' = 't
 
 export const annotateList = async (stored: StoredRun) => {
   const payload = await reviewPayload(stored);
-  return payload.items
-    .filter((item) => item.needsAgent)
-    .map((item) => ({
-      ask: item.ask,
-      component: item.component,
-      file: item.file,
-      flags: item.flags,
-      hash: item.hash,
-      key: item.key,
-      source: {
-        base: `git show ${String(stored.run.base ?? '')}:${item.file}`,
-        head: `git show ${String(stored.run.head ?? '')}:${item.file}`,
-      },
-      state: item.state,
-      title: item.title,
-    }));
+  return payload.items.filter(asksAgentNote).map((item) => ({
+    ask: item.ask,
+    component: item.component,
+    file: item.file,
+    flags: item.flags,
+    hash: item.hash,
+    key: item.key,
+    source: {
+      base: `git show ${String(stored.run.base ?? '')}:${item.file}`,
+      head: `git show ${String(stored.run.head ?? '')}:${item.file}`,
+    },
+    state: item.state,
+    title: item.title,
+  }));
 };
 
 export interface NoteInput {
@@ -70,6 +69,7 @@ export const applyNotes = async (stored: StoredRun, notes: NoteInput[]) => {
     if (!note.finding?.trim()) throw new Error(`FINDING_REQUIRED:${note.key}`);
     if (note.suggestion !== 'pass' && note.suggestion !== 'rework')
       throw new Error(`INVALID_SUGGESTION:${note.key}`);
+    const pass = note.suggestion === 'pass' ? agentPassRecord(item, note.finding, now) : undefined;
     await writeReviews(stored.recordsDir, item.file, {
       notes: [
         {
@@ -80,6 +80,7 @@ export const applyNotes = async (stored: StoredRun, notes: NoteInput[]) => {
           suggestion: note.suggestion,
         },
       ],
+      ...(pass ? { passes: [pass] } : {}),
     });
   }
 };

@@ -171,6 +171,23 @@ export interface StreamChunkData {
   toolsCalling?: ChatToolPayload[];
 }
 
+const STREAM_ID = /^(\d+)(?:-(\d+))?$/;
+
+/**
+ * Order two Redis stream ids (`<ms>-<seq>`): negative when `a` is older,
+ * positive when newer, `NaN` when either is not a stream id (client-supplied
+ * cursors are untrusted), so every `< 0` / `> 0` check fails closed.
+ */
+export const compareStreamIds = (a: string, b: string): number => {
+  const ma = STREAM_ID.exec(a);
+  const mb = STREAM_ID.exec(b);
+  if (!ma || !mb) return Number.NaN;
+  const ms = BigInt(ma[1]) - BigInt(mb[1]);
+  if (ms !== 0n) return ms < 0n ? -1 : 1;
+  const seq = BigInt(ma[2] ?? '0') - BigInt(mb[2] ?? '0');
+  return seq === 0n ? 0 : seq < 0n ? -1 : 1;
+};
+
 /** Decode one Redis stream entry (`[id, [field, value, ...]]`) into a `StreamEvent`. */
 const parseStreamEntry = (id: string, fields: string[]): StreamEvent => {
   const eventData: any = {};
@@ -289,6 +306,11 @@ export class StreamEventManager {
       console.error('[StreamEventManager] Failed to publish stream event:', error);
       throw error;
     }
+  }
+
+  async deleteStreamEvents(operationId: string, eventIds: string[]): Promise<void> {
+    if (eventIds.length === 0) return;
+    await this.redis.xdel(`${this.STREAM_PREFIX}:${operationId}`, ...eventIds);
   }
 
   /**
@@ -496,9 +518,22 @@ export class StreamEventManager {
   ): Promise<StreamHistoryPage> {
     const key = `${this.STREAM_PREFIX}:${operationId}`;
     const unavailable = { available: false, events: [], hasMore: false, nextCursor: cursor };
+    let cursorRemoved = false;
     if (cursor !== '0') {
       const previous = await this.redis.xrange(key, cursor, cursor, 'COUNT', 1);
-      if (previous.length === 0) return unavailable;
+      if (previous.length === 0) {
+        // A missing cursor is either lost history (expired stream, legacy
+        // trimmed prefix) or a superseded snapshot removed by
+        // `deleteStreamEvents`. Removal only happens mid-stream: the stream
+        // still starts at its init and a newer entry follows the cursor.
+        const [first] = await this.redis.xrange(key, '-', '+', 'COUNT', 1);
+        const anchored =
+          !!first &&
+          parseStreamEntry(first[0], first[1]).type === 'agent_runtime_init' &&
+          compareStreamIds(first[0], cursor) < 0;
+        if (!anchored) return unavailable;
+        cursorRemoved = true;
+      }
     }
     const rows = await this.redis.xrange(
       key,
@@ -507,6 +542,7 @@ export class StreamEventManager {
       'COUNT',
       limit + 1,
     );
+    if (cursorRemoved && rows.length === 0) return unavailable;
     const events = rows.slice(0, limit).map(([id, fields]) => parseStreamEntry(id, fields));
     // Legacy streams may already have been trimmed before this deployment.
     if (cursor === '0' && events[0]?.type !== 'agent_runtime_init') return unavailable;

@@ -1,6 +1,8 @@
 import { type CategoryListQuery } from '@lobehub/market-sdk';
+import pMap from 'p-map';
 
 import type { DiscoverService } from './index';
+import { withoutUnavailableModel } from './marketModelAvailability';
 import { log } from './utils';
 
 // ============================== Group Agent Market Methods ==============================
@@ -32,7 +34,28 @@ export const getGroupAgentDetail = async (
       locale: params.locale,
       version: params.version ? Number(params.version) : undefined,
     });
-    return response;
+    // Forking the group builds each member from its config: drop retired models there. Members
+    // carry it flat or under `currentVersion`, and the fork reads both.
+    if (!response?.memberAgents) return response;
+    const email = service.userInfo?.email;
+    const memberAgents = await pMap(
+      response.memberAgents,
+      async (member) => {
+        const { currentVersion } = member as { currentVersion?: { config?: Record<string, any> } };
+        return {
+          ...member,
+          config: await withoutUnavailableModel(member.config, email),
+          ...(currentVersion && {
+            currentVersion: {
+              ...currentVersion,
+              config: await withoutUnavailableModel(currentVersion.config, email),
+            },
+          }),
+        };
+      },
+      { concurrency: 5 },
+    );
+    return { ...response, memberAgents };
   } catch (error) {
     log('getGroupAgentDetail: error: %O', error);
     throw error;

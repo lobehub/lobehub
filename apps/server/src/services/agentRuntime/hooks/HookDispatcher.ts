@@ -59,6 +59,28 @@ export class HookDispatcher {
    */
   private hooks: Map<string, AgentHook[]> = new Map();
 
+  /** Worker-created tool interceptors; never accepted from or persisted to wire hooks. */
+  private readonly runtimeToolHooks = new Map<string, AgentHook[]>();
+
+  registerRuntimeToolHooks(operationId: string, hooks: AgentHook[]): void {
+    for (const hook of hooks) {
+      if (hook.type !== 'beforeToolCall' || typeof hook.handler !== 'function' || hook.webhook) {
+        throw new Error('Runtime tool hooks must be local beforeToolCall handlers');
+      }
+      if (typeof hook.id !== 'string' || !hook.id) throw new Error('Hook id must be a string');
+      if (hook.matcher !== undefined) agentHookMatcherSchema.parse(hook.matcher);
+    }
+    const byId = new Map(
+      (this.runtimeToolHooks.get(operationId) ?? []).map((hook) => [hook.id, hook]),
+    );
+    for (const hook of hooks) byId.set(hook.id, hook);
+    this.runtimeToolHooks.set(operationId, [...byId.values()]);
+  }
+
+  unregisterRuntimeToolHooks(operationId: string): void {
+    this.runtimeToolHooks.delete(operationId);
+  }
+
   /** Shared by normal dispatch and tool control, including cold-worker recovery. */
   private resolveHooks(
     operationId: string,
@@ -264,6 +286,14 @@ export class HookDispatcher {
     ).catch((error: unknown) => {
       log('[%s][beforeToolCall] Observation delivery rejected: %O', operationId, error);
     });
+    // Trusted interceptors are reconstructed on each worker from server-owned run state.
+    // They remain synchronous in queue mode; errors propagate so the real tool cannot
+    // run when an interceptor fails. Ordinary caller handlers keep their existing rules.
+    for (const hook of this.runtimeToolHooks.get(operationId) ?? []) {
+      if (mockedResult) break;
+      if (matchesHook(hook.matcher, toolCallEvent))
+        await hook.handler!(toolCallEvent as AgentHookEvent);
+    }
     // Legacy local handlers can supply an asynchronous mock. Invoke them once;
     // the first mock stops only handlers, not the independent HTTP observation.
     await this.dispatchHooks(
@@ -300,11 +330,18 @@ export class HookDispatcher {
    * Check if any hooks are registered for an operation
    */
   hasHooks(operationId: string): boolean {
-    return (this.hooks.get(operationId)?.length ?? 0) > 0;
+    return (
+      (this.hooks.get(operationId)?.length ?? 0) +
+        (this.runtimeToolHooks.get(operationId)?.length ?? 0) >
+      0
+    );
   }
 
   hasHook(operationId: string, hookId: string): boolean {
-    return this.hooks.get(operationId)?.some((hook) => hook.id === hookId) ?? false;
+    return [
+      ...(this.hooks.get(operationId) ?? []),
+      ...(this.runtimeToolHooks.get(operationId) ?? []),
+    ].some((hook) => hook.id === hookId);
   }
 
   /**
@@ -381,6 +418,7 @@ export class HookDispatcher {
    */
   unregister(operationId: string): void {
     this.hooks.delete(operationId);
+    this.unregisterRuntimeToolHooks(operationId);
     log('[%s] Unregistered all hooks', operationId);
   }
 }

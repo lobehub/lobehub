@@ -64,6 +64,112 @@ export const resolveVerificationDeliverable = async (
     .join('\n\n');
 };
 
+type VerifiedOperation = NonNullable<Awaited<ReturnType<AgentOperationModel['findById']>>>;
+
+/**
+ * Judge a run whose `verifying` lease the caller already holds, then settle it.
+ * Shared by the completion-time gate and the stuck-run sweep's re-drive, so both
+ * spawn verifiers and drive the task the same way.
+ */
+const judgeClaimedRun = async (
+  db: LobeChatDatabase,
+  userId: string,
+  params: {
+    deliverable: string;
+    goal: string;
+    operation: VerifiedOperation;
+    verifierAgentId?: string;
+  },
+  workspaceId?: string,
+): Promise<void> => {
+  const { goal, operation: op, verifierAgentId } = params;
+
+  const modelConfig = await resolveVerifyModelConfig(
+    db,
+    userId,
+    {
+      parentModel: op.model,
+      parentProvider: op.provider,
+      verifierAgentId,
+    },
+    workspaceId,
+  );
+  const resolvedDeliverable = await resolveVerificationDeliverable(
+    db,
+    userId,
+    params.deliverable,
+    op.taskId,
+    workspaceId,
+  );
+
+  const executor = new VerifyExecutorService(db, userId, workspaceId);
+  await executor.execute({
+    deliverable: resolvedDeliverable,
+    goal,
+    modelConfig,
+    operationId: op.id,
+    // `agent`-type checks run as the task-pinned verify agent (or the builtin
+    // one), which writes its verdict back via the submitVerifyResult tool.
+    runVerifierAgent: createVerifierAgentRunner({
+      db,
+      deliverable: resolvedDeliverable,
+      model: modelConfig.model,
+      provider: modelConfig.provider,
+      taskId: op.taskId,
+      topicId: op.topicId,
+      userId,
+      verifierAgentId,
+      workspaceId,
+    }),
+  });
+
+  // Settle the run: repair-aware tail, then (on terminal settle) report + drive
+  // the bound task. For inline (LLM/program) checks everything is resolved now;
+  // runs with async agent checks no-op here and re-enter the same finalizer from
+  // the verifier's writeback path (verifyResult runtime) — so the task is driven
+  // from exactly one place regardless of which path finished last.
+  await finalizeVerifyRun(
+    db,
+    userId,
+    op.id,
+    { report: { deliverable: resolvedDeliverable, goal, modelConfig } },
+    workspaceId,
+  );
+};
+
+/**
+ * Judge again a round whose first attempt claimed `verifying` and then died
+ * before any verifier started. The caller must already hold the `verifying`
+ * lease (the sweep claims it), so this skips the completion gate's claim and
+ * evidence phase: the builder's evidence is already on the round.
+ */
+export const redriveClaimedVerification = async (
+  db: LobeChatDatabase,
+  userId: string,
+  params: { deliverable: string; operationId: string },
+  workspaceId?: string,
+): Promise<void> => {
+  const op = await new AgentOperationModel(db, userId, workspaceId).findById(params.operationId);
+  if (!op) throw new Error(`Operation "${params.operationId}" not found`);
+
+  const run = await new VerifyRunModel(db, userId, workspaceId).findByOperation(op.id);
+  const acceptance = op.taskId
+    ? await resolveTaskAcceptance(db, userId, op.taskId, workspaceId)
+    : undefined;
+
+  await judgeClaimedRun(
+    db,
+    userId,
+    {
+      deliverable: params.deliverable,
+      goal: run?.goal ?? '',
+      operation: op,
+      verifierAgentId: acceptance?.config.verifierAgentId ?? undefined,
+    },
+    workspaceId,
+  );
+};
+
 export interface RunVerifyOnCompletionParams {
   /** The run's final output / artifacts, judged against the plan. */
   deliverable: string;
@@ -241,63 +347,14 @@ const executeVerifyLifecycle = async (
       return;
     }
 
-    const verifierAgentId = resolvedAcceptance?.config.verifierAgentId ?? undefined;
-
-    const modelConfig = await resolveVerifyModelConfig(
+    await judgeClaimedRun(
       db,
       userId,
       {
-        parentModel: op.model,
-        parentProvider: op.provider,
-        verifierAgentId,
-      },
-      workspaceId,
-    );
-    const resolvedDeliverable = await resolveVerificationDeliverable(
-      db,
-      userId,
-      params.deliverable,
-      op.taskId,
-      workspaceId,
-    );
-    const verificationGoal = params.goal || run.goal || '';
-
-    const executor = new VerifyExecutorService(db, userId, workspaceId);
-    await executor.execute({
-      deliverable: resolvedDeliverable,
-      goal: verificationGoal,
-      modelConfig,
-      operationId: params.operationId,
-      // `agent`-type checks run as the task-pinned verify agent (or the builtin
-      // one), which writes its verdict back via the submitVerifyResult tool.
-      runVerifierAgent: createVerifierAgentRunner({
-        db,
-        deliverable: resolvedDeliverable,
-        model: modelConfig.model,
-        provider: modelConfig.provider,
-        taskId: op.taskId,
-        topicId: op.topicId,
-        userId,
-        verifierAgentId,
-        workspaceId,
-      }),
-    });
-
-    // Settle the run: repair-aware tail, then (on terminal settle) report + drive
-    // the bound task. For inline (LLM/program) checks everything is resolved now;
-    // runs with async agent checks no-op here and re-enter the same finalizer from
-    // the verifier's writeback path (verifyResult runtime) — so the task is driven
-    // from exactly one place regardless of which path finished last.
-    await finalizeVerifyRun(
-      db,
-      userId,
-      params.operationId,
-      {
-        report: {
-          deliverable: resolvedDeliverable,
-          goal: verificationGoal,
-          modelConfig,
-        },
+        deliverable: params.deliverable,
+        goal: params.goal || run.goal || '',
+        operation: op,
+        verifierAgentId: resolvedAcceptance?.config.verifierAgentId ?? undefined,
       },
       workspaceId,
     );
@@ -313,6 +370,19 @@ export const runVerifyOnCompletion = async (
   params: RunVerifyOnCompletionParams,
   workspaceId?: string,
 ): Promise<void> => executeVerifyLifecycle(db, userId, params, workspaceId, false);
+
+/**
+ * The completion gate as delivered by QStash (see `scheduleVerifyOnCompletion`).
+ * Unlike the in-band form it rethrows, so a gate that failed — or found its
+ * claim still held by an attempt that may have died — is redelivered instead of
+ * reported as done.
+ */
+export const runVerifyOnCompletionFromQueue = async (
+  db: LobeChatDatabase,
+  userId: string,
+  params: RunVerifyOnCompletionParams,
+  workspaceId?: string,
+): Promise<void> => executeVerifyLifecycle(db, userId, params, workspaceId, false, true);
 
 /** The only entry point allowed to advance a task run out of evidence collection. */
 export const runVerifyAfterEvidenceSubmission = async (

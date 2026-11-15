@@ -97,6 +97,18 @@ const authDb = (
     }),
   }) as unknown as LobeChatDatabase;
 
+const activeGmailConnection = () => ({
+  composio: {
+    appSlug: 'gmail',
+    connectedAccountId: 'gmail-account',
+    ownerUserId: 'gmail-owner',
+    status: 'ACTIVE',
+  },
+  id: 'gmail-a',
+  isEnabled: true,
+  status: 'connected',
+});
+
 describe('ConnectorDataService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -169,19 +181,7 @@ describe('ConnectorDataService', () => {
   });
 
   it('creates Gmail from the first active connector and validates account ownership', async () => {
-    mocks.queryComposioReferences.mockResolvedValue([
-      {
-        composio: {
-          appSlug: 'gmail',
-          connectedAccountId: 'gmail-account',
-          ownerUserId: 'gmail-owner',
-          status: 'ACTIVE',
-        },
-        id: 'gmail-a',
-        isEnabled: true,
-        status: 'connected',
-      },
-    ]);
+    mocks.queryComposioReferences.mockResolvedValue([activeGmailConnection()]);
 
     const client = await new ConnectorDataService(authDb([]), 'user-1').getGmailClient();
 
@@ -229,19 +229,7 @@ describe('ConnectorDataService', () => {
     // authorization unavailability. A transient 5xx could therefore remove Gmail from a new session.
     // We now continue only for confirmed, non-retryable account-unavailable errors.
     const transientError = Object.assign(new Error('temporarily unavailable'), { status: 503 });
-    mocks.queryComposioReferences.mockResolvedValue([
-      {
-        composio: {
-          appSlug: 'gmail',
-          connectedAccountId: 'gmail-account',
-          ownerUserId: 'gmail-owner',
-          status: 'ACTIVE',
-        },
-        id: 'gmail-a',
-        isEnabled: true,
-        status: 'connected',
-      },
-    ]);
+    mocks.queryComposioReferences.mockResolvedValue([activeGmailConnection()]);
     mocks.composioConnectedAccountGet.mockRejectedValue(transientError);
 
     await expect(new ConnectorDataService(authDb([]), 'user-1').getGmailClient()).rejects.toBe(
@@ -366,19 +354,7 @@ describe('ConnectorDataService', () => {
     // Connection availability only checked whether a Gmail client could be created.
     // Identity-only OAuth grants therefore entered Understanding and failed during collection.
     // We fixed this by checking the account's granted scopes as part of source availability.
-    mocks.queryComposioReferences.mockResolvedValue([
-      {
-        composio: {
-          appSlug: 'gmail',
-          connectedAccountId: 'gmail-account',
-          ownerUserId: 'gmail-owner',
-          status: 'ACTIVE',
-        },
-        id: 'gmail-a',
-        isEnabled: true,
-        status: 'connected',
-      },
-    ]);
+    mocks.queryComposioReferences.mockResolvedValue([activeGmailConnection()]);
     mocks.getAccount.mockResolvedValue({
       externalAccountId: 'gmail-account',
       scopes: ['openid', 'https://www.googleapis.com/auth/userinfo.email'],

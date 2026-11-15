@@ -136,7 +136,7 @@ describe('Channel soft deletion', () => {
         reason: 'Late result',
         status: 'assigned',
       }),
-    ).toBe(false);
+    ).toBeNull();
     await expect(executions.publish(channel.id, running.id)).rejects.toMatchObject({
       code: 'CONFLICT',
     });

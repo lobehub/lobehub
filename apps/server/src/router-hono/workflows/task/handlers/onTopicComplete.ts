@@ -5,6 +5,7 @@ import type { Context } from 'hono';
 
 import { tasks } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
+import { redisService } from '@/server/services/redis';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 import { isRunAlreadySettled } from '@/server/services/taskLifecycle/reconcile';
 
@@ -83,19 +84,47 @@ export async function onTopicComplete(c: Context) {
       return c.json({ skipped: 'already-settled', success: true });
     }
 
+    // Settling a successful run (handoff + brief LLM calls) outlasts the QStash
+    // delivery timeout, so the same run is redelivered while it is still being
+    // settled — and the lifecycle is not idempotent: each pass emits another
+    // brief. Failed runs are fenced above. A delivery that finds the settle in
+    // progress answers non-2xx: if the holder dies, a later retry takes over
+    // once its lease lapses. Without Redis, settle anyway: a duplicate brief
+    // beats a run that never reaches its Task.
+    const claim =
+      (reason || 'done') === 'done'
+        ? await redisService.taskRunDelivery.claim(operationId)
+        : undefined;
+
+    if (claim === 'settled') {
+      log('Skipped: run %s of task %s was already settled', operationId, taskId);
+      return c.json({ skipped: 'already-settled', success: true });
+    }
+    if (claim === 'in-progress') {
+      log('Deferred: run %s of task %s is still settling', operationId, taskId);
+      return c.json({ skipped: 'in-progress' }, 409);
+    }
+
     const taskLifecycle = new TaskLifecycleService(db, userId, wsId);
 
-    await taskLifecycle.onTopicComplete({
-      errorCode: errorType,
-      errorMessage,
-      lastAssistantContent,
-      operationId,
-      reason: reason || 'done',
-      runTrigger,
-      taskId,
-      taskIdentifier: taskRow?.identifier ?? taskIdentifier ?? taskId,
-      topicId,
-    });
+    try {
+      await taskLifecycle.onTopicComplete({
+        errorCode: errorType,
+        errorMessage,
+        lastAssistantContent,
+        operationId,
+        reason: reason || 'done',
+        runTrigger,
+        taskId,
+        taskIdentifier: taskRow?.identifier ?? taskIdentifier ?? taskId,
+        topicId,
+      });
+    } catch (error) {
+      if (claim === 'claimed') await redisService.taskRunDelivery.release(operationId);
+      throw error;
+    }
+
+    if (claim === 'claimed') await redisService.taskRunDelivery.markSettled(operationId);
 
     return c.json({ success: true });
   } catch (error) {

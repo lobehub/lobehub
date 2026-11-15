@@ -42,6 +42,39 @@ vi.mock('../AgentBridgeService', async () =>
 );
 vi.mock('../platforms', async () => (await import('./testUtils')).platformsModule());
 
+const statefulTelegramGroup = () => ({
+  channelId: 'channel-1',
+  id: 'telegram:channel-1',
+  isDM: false,
+  post: vi.fn().mockResolvedValue(undefined),
+  setState: vi.fn().mockResolvedValue(undefined),
+});
+
+const telegramGroup = () => ({
+  channelId: 'channel-1',
+  id: 'telegram:channel-1',
+  isDM: false,
+  post: vi.fn().mockResolvedValue(undefined),
+});
+
+const aliceOnlyOpenPolicies = () => ({
+  allowFrom: 'alice-id',
+  dmPolicy: 'open',
+  groupPolicy: 'open',
+});
+
+const linWhoamiMessage = () => ({
+  author: { isBot: false, userId: 'lin-id', userName: 'lin' },
+  isMention: false,
+  text: '/whoami',
+});
+
+const telegramDm = () => ({
+  id: 'telegram:chat-1',
+  isDM: true,
+  post: vi.fn().mockResolvedValue(undefined),
+});
+
 describe('BotMessageRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -76,17 +109,8 @@ describe('BotMessageRouter', () => {
     }
 
     it('blocks a non-allowlisted sender in a group and posts the generic notice in-thread', async () => {
-      const { mention } = await loadHandlers({
-        allowFrom: 'alice-id',
-        dmPolicy: 'open',
-        groupPolicy: 'open',
-      });
-      const thread = {
-        channelId: 'channel-1',
-        id: 'telegram:channel-1',
-        isDM: false,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const { mention } = await loadHandlers(aliceOnlyOpenPolicies());
+      const thread = telegramGroup();
       const message = {
         author: { isBot: false, userId: 'lin-id', userName: 'lin' },
         isMention: true,
@@ -111,11 +135,7 @@ describe('BotMessageRouter', () => {
     });
 
     it('blocks a non-allowlisted sender in a DM (with notification)', async () => {
-      const { mention } = await loadHandlers({
-        allowFrom: 'alice-id',
-        dmPolicy: 'open',
-        groupPolicy: 'open',
-      });
+      const { mention } = await loadHandlers(aliceOnlyOpenPolicies());
       const thread = {
         id: 'telegram:dm-1',
         isDM: true,
@@ -135,17 +155,8 @@ describe('BotMessageRouter', () => {
     });
 
     it('lets allowlisted senders through in a group', async () => {
-      const { mention } = await loadHandlers({
-        allowFrom: 'alice-id',
-        dmPolicy: 'open',
-        groupPolicy: 'open',
-      });
-      const thread = {
-        channelId: 'channel-1',
-        id: 'telegram:channel-1',
-        isDM: false,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const { mention } = await loadHandlers(aliceOnlyOpenPolicies());
+      const thread = telegramGroup();
       const message = {
         author: { isBot: false, userId: 'alice-id', userName: 'alice' },
         isMention: true,
@@ -158,18 +169,8 @@ describe('BotMessageRouter', () => {
     });
 
     it('blocks subscribed-thread non-allowlisted senders in groups with the generic notice', async () => {
-      const { subscribed } = await loadHandlers({
-        allowFrom: 'alice-id',
-        dmPolicy: 'open',
-        groupPolicy: 'open',
-      });
-      const thread = {
-        channelId: 'channel-1',
-        id: 'telegram:channel-1',
-        isDM: false,
-        post: vi.fn().mockResolvedValue(undefined),
-        setState: vi.fn().mockResolvedValue(undefined),
-      };
+      const { subscribed } = await loadHandlers(aliceOnlyOpenPolicies());
+      const thread = statefulTelegramGroup();
 
       await subscribed(thread, {
         author: { isBot: false, userId: 'lin-id', userName: 'lin' },
@@ -188,12 +189,7 @@ describe('BotMessageRouter', () => {
         dmPolicy: 'open',
         groupPolicy: 'open',
       });
-      const thread = {
-        channelId: 'channel-1',
-        id: 'telegram:channel-1',
-        isDM: false,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = telegramGroup();
 
       await mention(thread, {
         author: { isBot: false, userId: 'random-user', userName: 'random' },
@@ -215,12 +211,7 @@ describe('BotMessageRouter', () => {
         groupPolicy: 'open',
         userId: 'operator-id',
       });
-      const thread = {
-        channelId: 'channel-1',
-        id: 'telegram:channel-1',
-        isDM: false,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = telegramGroup();
 
       await mention(thread, {
         author: { isBot: false, userId: 'operator-id', userName: 'me' },
@@ -241,12 +232,7 @@ describe('BotMessageRouter', () => {
         groupPolicy: 'open',
         userId: 'operator-id',
       });
-      const thread = {
-        channelId: 'channel-1',
-        id: 'telegram:channel-1',
-        isDM: false,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = telegramGroup();
 
       await mention(thread, {
         author: { isBot: false, userId: 'random-user', userName: 'random' },
@@ -367,13 +353,7 @@ describe('BotMessageRouter', () => {
 
     it('blocks a text-based /new (Telegram regex path) from a non-allowlisted sender', async () => {
       const { cmdRegexHandler } = await loadAllHandlers({ allowFrom: 'alice-id' });
-      const thread = {
-        channelId: 'channel-1',
-        id: 'telegram:channel-1',
-        isDM: false,
-        post: vi.fn().mockResolvedValue(undefined),
-        setState: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = statefulTelegramGroup();
       const message = {
         author: { isBot: false, userId: 'lin-id', userName: 'lin' },
         isMention: false,
@@ -391,13 +371,7 @@ describe('BotMessageRouter', () => {
       // Older code dispatched commands BEFORE the allowFrom check; this
       // test catches a regression where /stop in an @-mention slips through.
       const { mention } = await loadAllHandlers({ allowFrom: 'alice-id' });
-      const thread = {
-        channelId: 'channel-1',
-        id: 'telegram:channel-1',
-        isDM: false,
-        post: vi.fn().mockResolvedValue(undefined),
-        setState: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = statefulTelegramGroup();
       const message = {
         author: { isBot: false, userId: 'lin-id', userName: 'lin' },
         isMention: true,
@@ -414,13 +388,7 @@ describe('BotMessageRouter', () => {
 
     it('blocks /new typed in onSubscribedMessage from a non-allowlisted sender', async () => {
       const { subscribed } = await loadAllHandlers({ allowFrom: 'alice-id' });
-      const thread = {
-        channelId: 'channel-1',
-        id: 'telegram:channel-1',
-        isDM: false,
-        post: vi.fn().mockResolvedValue(undefined),
-        setState: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = statefulTelegramGroup();
       const message = {
         author: { isBot: false, userId: 'lin-id', userName: 'lin' },
         isMention: false,
@@ -443,11 +411,7 @@ describe('BotMessageRouter', () => {
         post: vi.fn().mockResolvedValue(undefined),
         setState: vi.fn().mockResolvedValue(undefined),
       };
-      const message = {
-        author: { isBot: false, userId: 'lin-id', userName: 'lin' },
-        isMention: false,
-        text: '/whoami',
-      };
+      const message = linWhoamiMessage();
 
       await cmdRegexHandler(thread, message);
 
@@ -467,11 +431,7 @@ describe('BotMessageRouter', () => {
         setState: vi.fn().mockResolvedValue(undefined),
         state: Promise.resolve(null),
       };
-      const message = {
-        author: { isBot: false, userId: 'lin-id', userName: 'lin' },
-        isMention: false,
-        text: '/whoami',
-      };
+      const message = linWhoamiMessage();
 
       await subscribed(thread, message);
 
@@ -490,23 +450,13 @@ describe('BotMessageRouter', () => {
         post: vi.fn().mockResolvedValue(undefined),
         setState: vi.fn().mockResolvedValue(undefined),
       };
-      await cmdRegexHandler(thread, {
-        author: { isBot: false, userId: 'lin-id', userName: 'lin' },
-        isMention: false,
-        text: '/whoami',
-      });
+      await cmdRegexHandler(thread, linWhoamiMessage());
       expect(thread.post.mock.calls[0][0]).toContain('already set as the bot operator');
     });
 
     it('still allows /commands from an allowlisted sender (gate does not break the happy path)', async () => {
       const { cmdRegexHandler } = await loadAllHandlers({ allowFrom: 'alice-id' });
-      const thread = {
-        channelId: 'channel-1',
-        id: 'telegram:channel-1',
-        isDM: false,
-        post: vi.fn().mockResolvedValue(undefined),
-        setState: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = statefulTelegramGroup();
       const message = {
         author: { isBot: false, userId: 'alice-id', userName: 'alice' },
         isMention: false,
@@ -544,11 +494,7 @@ describe('BotMessageRouter', () => {
 
     it('passes the sender platform locale into the bridge call', async () => {
       const handler = await loadHandler({ dmPolicy: 'open' });
-      const thread = {
-        id: 'telegram:chat-1',
-        isDM: true,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = telegramDm();
       const message = {
         author: { isBot: false, userId: 'alice-id', userName: 'alice' },
         isMention: false,
@@ -565,11 +511,7 @@ describe('BotMessageRouter', () => {
 
     it('falls back to the platform default locale when the sender locale is missing', async () => {
       const handler = await loadHandler({ dmPolicy: 'open' });
-      const thread = {
-        id: 'telegram:chat-1',
-        isDM: true,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = telegramDm();
       const message = {
         author: { isBot: false, userId: 'alice-id', userName: 'alice' },
         isMention: false,
@@ -585,11 +527,7 @@ describe('BotMessageRouter', () => {
 
     it('uses the sender locale for the DM rejection notice copy', async () => {
       const handler = await loadHandler({ dmPolicy: 'disabled' });
-      const thread = {
-        id: 'telegram:chat-1',
-        isDM: true,
-        post: vi.fn().mockResolvedValue(undefined),
-      };
+      const thread = telegramDm();
       const message = {
         author: { isBot: false, userId: 'alice-id', userName: 'alice' },
         isMention: false,

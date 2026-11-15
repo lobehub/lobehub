@@ -39,9 +39,8 @@ interface TickPayload {
  * (deduplicated per lease) for that handler to resume; inline, the tick
  * claims, resumes and runs itself.
  *
- * Trigger a tick by hand against a local server (the script signs the
- * request when `QSTASH_CURRENT_SIGNING_KEY` is set, as `qstashAuth` then
- * requires):
+ * Trigger a tick by hand against a local server (the script signs with the
+ * configured QStash key or the existing vault secret for same-origin calls):
  *
  *   SERVER_URL=http://localhost:3010 bun run widget:tick [--dry-run]
  */

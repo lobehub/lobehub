@@ -120,6 +120,50 @@ export const listByRootOperations = async (
   return result;
 };
 
+/** Summary cards of these Works, newest first; Works the caller cannot see drop out. */
+const summariesOf = async (ctx: WorkContext, workIds: string[]): Promise<WorkSummaryItem[]> => {
+  const rows = await ctx.db
+    .select({
+      event: currentVersionEventSelection,
+      ...currentTaskSummaryFields,
+      resourceDeleted: resourceDeletedField,
+      version: {
+        createdAt: currentVersions.createdAt,
+        id: currentVersions.id,
+        version: currentVersions.version,
+      },
+      work: currentWorkListFields,
+    })
+    .from(works)
+    .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
+    .leftJoin(tasks, taskSummaryJoin(ctx))
+    // LEFT JOIN, like the tasks one: an orphaned document Work (backing row
+    // hard-deleted outside the tool path) must still surface, so the UI can
+    // render it as "document deleted" and offer removal instead of showing a
+    // live-looking card that 404s on click.
+    .leftJoin(documents, documentSummaryJoin)
+    .where(and(workOwnership(ctx), inArray(works.id, workIds)))
+    .orderBy(desc(works.updatedAt), desc(works.id));
+
+  const costByWorkId = await getTotalCostByWorkIds(
+    ctx,
+    rows.map((row) => row.work.id),
+  );
+
+  return rows.map((row) =>
+    WORK_TYPE_ADAPTERS[row.work.type].mapCurrentRow(row, costByWorkId.get(row.work.id) ?? null),
+  );
+};
+
+/** Summary cards of the given Works, as the conversation shows them; unknown or hidden ids drop out. */
+export const listSummariesByIds = async (
+  ctx: WorkContext,
+  workIds: string[],
+): Promise<WorkSummaryItem[]> => {
+  const ids = [...new Set(workIds.filter(Boolean))];
+  return ids.length ? summariesOf(ctx, ids) : [];
+};
+
 export const listSummariesByRootOperations = async (
   ctx: WorkContext,
   params: {
@@ -171,37 +215,7 @@ export const listSummariesByRootOperations = async (
   }
   if (anchorByWorkId.size === 0) return result;
 
-  const rows = await ctx.db
-    .select({
-      event: currentVersionEventSelection,
-      ...currentTaskSummaryFields,
-      resourceDeleted: resourceDeletedField,
-      version: {
-        createdAt: currentVersions.createdAt,
-        id: currentVersions.id,
-        version: currentVersions.version,
-      },
-      work: currentWorkListFields,
-    })
-    .from(works)
-    .innerJoin(currentVersions, eq(works.currentVersionId, currentVersions.id))
-    .leftJoin(tasks, taskSummaryJoin(ctx))
-    // LEFT JOIN, like the tasks one: an orphaned document Work (backing row
-    // hard-deleted outside the tool path) must still surface, so the UI can
-    // render it as "document deleted" and offer removal instead of showing a
-    // live-looking card that 404s on click.
-    .leftJoin(documents, documentSummaryJoin)
-    .where(and(workOwnership(ctx), inArray(works.id, Array.from(anchorByWorkId.keys()))))
-    .orderBy(desc(works.updatedAt), desc(works.id));
-
-  const costByWorkId = await getTotalCostByWorkIds(
-    ctx,
-    rows.map((row) => row.work.id),
-  );
-
-  const summaries = rows.map((row) =>
-    WORK_TYPE_ADAPTERS[row.work.type].mapCurrentRow(row, costByWorkId.get(row.work.id) ?? null),
-  );
+  const summaries = await summariesOf(ctx, Array.from(anchorByWorkId.keys()));
 
   for (const summary of summaries) {
     const rootOperationId = anchorByWorkId.get(summary.id);

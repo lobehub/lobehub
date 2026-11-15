@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { ModelProvider } from 'model-bank';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
 import { LobeSparkAI, params } from './index';
@@ -307,6 +307,40 @@ describe('LobeSparkAI - custom features', () => {
         headers: { 'X-Custom-Header': 'value' },
       });
       expect(instance).toBeDefined();
+    });
+  });
+
+  describe('model-specific baseURL', () => {
+    it('should retarget the handlePayload options to the model endpoint', () => {
+      const options: Record<string, any> = {};
+
+      params.chatCompletion.handlePayload({ messages: [], model: 'spark-x2' } as any, options);
+
+      expect(options.baseURL).toBe('https://spark-api-open.xf-yun.com/x2');
+    });
+
+    it('should point the client at the retargeted endpoint before sending the request', async () => {
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response('data: [DONE]\n\n', {
+          headers: { 'Content-Type': 'text/event-stream' },
+          status: 200,
+        }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+
+      const instance = new LobeSparkAI({ apiKey: 'test-api-key' });
+
+      await instance
+        .chat({ messages: [{ content: 'hi', role: 'user' }], model: 'spark-x2' } as any)
+        .catch(() => undefined);
+
+      expect(fetchMock).toHaveBeenCalled();
+      expect(String(fetchMock.mock.calls[0][0])).toBe(
+        'https://spark-api-open.xf-yun.com/x2/chat/completions',
+      );
+      expect(instance.baseURL).toBe('https://spark-api-open.xf-yun.com/x2');
+
+      vi.unstubAllGlobals();
     });
   });
 });

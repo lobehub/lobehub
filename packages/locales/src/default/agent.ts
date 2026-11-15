@@ -61,9 +61,11 @@ export default {
     'In the Developer Portal, click New Application and name it.',
   'channel.quickSetup.discord.credentials.title': 'Copy the Application ID and Public Key',
   'channel.quickSetup.discord.credentials.desc': 'Both are on General Information.',
-  'channel.quickSetup.discord.bot.title': 'Get the bot token and allow message content',
-  'channel.quickSetup.discord.bot.desc':
-    'On the Bot page, Reset Token and copy it, then turn on Message Content Intent.',
+  'channel.quickSetup.discord.bot.title': 'Get the bot token',
+  'channel.quickSetup.discord.bot.desc': 'On the Bot page, click Reset Token and copy it.',
+  'channel.quickSetup.discord.intent.title': 'Turn on Message Content Intent',
+  'channel.quickSetup.discord.intent.desc':
+    "On the Bot page, under Privileged Gateway Intents, turn on Message Content Intent and save. Without it, the bot can't read messages.",
   'channel.quickSetup.discord.invite.title': 'Invite the bot to your server',
   'channel.quickSetup.discord.invite.desc':
     "The invite link already carries the permissions the bot needs. For a private channel, also add the bot in that channel's Settings → Permissions.",
@@ -736,6 +738,7 @@ export default {
   'channel.records.column.score': 'Score',
   'channel.records.judge.addressed': 'Is it meant for the bot',
   'channel.records.judge.duty': 'Is it within its duties',
+  'channel.records.judge.routing': 'Should it be the one to answer',
   'channel.records.judge.allow': 'over the threshold',
   'channel.records.judge.deny': 'under the threshold',
   'channel.records.judge.hint': '{{judge}}: {{verdict}}',

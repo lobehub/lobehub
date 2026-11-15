@@ -66,6 +66,30 @@ afterEach(async () => {
 
 const rect = { height: 0.2, width: 0.3, x: 0.1, y: 0.1 };
 
+const ownerReplyInput = (root: {
+  id: string;
+}): Parameters<AcceptanceCommentModel['create']>[0] => ({
+  acceptanceId,
+  authorUserId: owner,
+  clientId: 'reply',
+  content: 'reply',
+  parentCommentId: root.id,
+});
+
+const reviewerRootInput = (): Parameters<AcceptanceCommentModel['create']>[0] => ({
+  acceptanceId,
+  authorUserId: reviewer,
+  clientId: 'root',
+  content: 'root',
+});
+
+const ownerRootInput = (): Parameters<AcceptanceCommentModel['create']>[0] => ({
+  acceptanceId,
+  authorUserId: owner,
+  clientId: 'root',
+  content: 'root',
+});
+
 describe('AcceptanceCommentModel', () => {
   describe('create', () => {
     it('stores independent video times in metadata and preserves retry identity and other facts', async () => {
@@ -149,19 +173,8 @@ describe('AcceptanceCommentModel', () => {
     });
 
     it('flattens a reply to a reply onto the thread root', async () => {
-      const { comment: root } = await model.create({
-        acceptanceId,
-        authorUserId: reviewer,
-        clientId: 'root',
-        content: 'root',
-      });
-      const { comment: reply } = await model.create({
-        acceptanceId,
-        authorUserId: owner,
-        clientId: 'reply',
-        content: 'reply',
-        parentCommentId: root.id,
-      });
+      const { comment: root } = await model.create(reviewerRootInput());
+      const { comment: reply } = await model.create(ownerReplyInput(root));
       const { comment: nested } = await model.create({
         acceptanceId,
         authorUserId: reviewer,
@@ -441,19 +454,8 @@ describe('AcceptanceCommentModel', () => {
     });
 
     it('tombstones a root with replies, then garbage-collects it with the last reply', async () => {
-      const { comment: root } = await model.create({
-        acceptanceId,
-        authorUserId: reviewer,
-        clientId: 'root',
-        content: 'root',
-      });
-      const { comment: reply } = await model.create({
-        acceptanceId,
-        authorUserId: owner,
-        clientId: 'reply',
-        content: 'reply',
-        parentCommentId: root.id,
-      });
+      const { comment: root } = await model.create(reviewerRootInput());
+      const { comment: reply } = await model.create(ownerReplyInput(root));
 
       expect(await model.delete(root.id, { authorUserId: reviewer })).toBe('soft');
       const tombstone = await model.findById(root.id);
@@ -545,12 +547,7 @@ describe('AcceptanceCommentModel', () => {
       });
 
     it('hangs on the exact comment, including a reply, instead of flattening', async () => {
-      const { comment: root } = await model.create({
-        acceptanceId,
-        authorUserId: owner,
-        clientId: 'root',
-        content: 'root',
-      });
+      const { comment: root } = await model.create(ownerRootInput());
       const { comment: reply } = await model.create({
         acceptanceId,
         authorUserId: reviewer,
@@ -565,12 +562,7 @@ describe('AcceptanceCommentModel', () => {
     });
 
     it('is idempotent per (comment, emoji, author) and removable', async () => {
-      const { comment: root } = await model.create({
-        acceptanceId,
-        authorUserId: owner,
-        clientId: 'root',
-        content: 'root',
-      });
+      const { comment: root } = await model.create(ownerRootInput());
 
       await react(root.id, '👍', owner);
       const second = await react(root.id, '👍', owner);
@@ -607,12 +599,7 @@ describe('AcceptanceCommentModel', () => {
     });
 
     it('does not turn a reacted-to comment into a tombstone on delete', async () => {
-      const { comment: root } = await model.create({
-        acceptanceId,
-        authorUserId: owner,
-        clientId: 'root',
-        content: 'root',
-      });
+      const { comment: root } = await model.create(ownerRootInput());
       await react(root.id, '👍', reviewer);
 
       expect(await model.delete(root.id, { authorUserId: owner })).toBe('hard');
@@ -622,19 +609,8 @@ describe('AcceptanceCommentModel', () => {
 
   describe('setResolved', () => {
     it('resolves and reopens a root, never a reply', async () => {
-      const { comment: root } = await model.create({
-        acceptanceId,
-        authorUserId: reviewer,
-        clientId: 'root',
-        content: 'root',
-      });
-      const { comment: reply } = await model.create({
-        acceptanceId,
-        authorUserId: owner,
-        clientId: 'reply',
-        content: 'reply',
-        parentCommentId: root.id,
-      });
+      const { comment: root } = await model.create(reviewerRootInput());
+      const { comment: reply } = await model.create(ownerReplyInput(root));
 
       const resolved = await model.setResolved(root.id, true, owner);
       expect(resolved?.resolvedAt).not.toBeNull();

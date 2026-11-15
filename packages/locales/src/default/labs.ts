@@ -4,6 +4,9 @@ export default {
   'features.agentGraphConfig.desc':
     'Show graph runtime configuration in an agent profile advanced settings.',
   'features.agentGraphConfig.title': 'Agent Graph Runtime Configuration',
+  'features.agentIdentity.desc':
+    'Give an agent its own email address, and read what arrives in its inbox from the agent settings.',
+  'features.agentIdentity.title': 'Agent Identity',
   'features.agentSelfIteration.desc':
     'Allow the agent to reflect, build self-awareness, and continuously iterate through ongoing attempts and interactions.',
   'features.agentSelfIteration.title': 'Agent Self-iteration',
@@ -48,6 +51,9 @@ export default {
   'features.oauthApps.desc':
     'Show OAuth app management in personal and workspace settings. This feature is hidden by default.',
   'features.oauthApps.title': 'OAuth Apps',
+  'features.pageCollab.desc':
+    "Edit workspace pages together in real time and see who else is on the page. When off, pages still save normally and show teammates' changes after a refresh.",
+  'features.pageCollab.title': 'Live Page Collaboration',
   'features.projects.desc':
     'Organize long-running goals into dedicated workspaces with their own agents, knowledge bases, and tasks.',
   'features.projects.title': 'Project Workspaces',

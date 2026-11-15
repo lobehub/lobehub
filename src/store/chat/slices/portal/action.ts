@@ -686,6 +686,14 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ acceptanceId, type: PortalViewType.Acceptance });
   };
 
+  openBrowser = (sessionId: string, url: string): void => {
+    this.#get().pushPortalView({
+      request: { nonce: Date.now(), url },
+      sessionId,
+      type: PortalViewType.Browser,
+    });
+  };
+
   openAcceptanceCheck = (acceptanceId: string, checkId: string): void => {
     this.#get().pushPortalView({ acceptanceId, checkId, type: PortalViewType.AcceptanceCheck });
   };

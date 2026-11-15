@@ -113,6 +113,12 @@ const createWebRoutePreloadTasks = (): RoutePreloadTask[] => [
     priority: 'low',
   }),
   createTask({
+    id: 'music',
+    idleDelay: Number.POSITIVE_INFINITY,
+    matches: matchesRoute('music'),
+    priority: 'low',
+  }),
+  createTask({
     id: 'eval',
     idleDelay: Number.POSITIVE_INFINITY,
     matches: matchesRoute('eval'),

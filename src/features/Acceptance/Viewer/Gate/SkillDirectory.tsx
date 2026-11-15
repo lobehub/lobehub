@@ -1,41 +1,43 @@
 'use client';
 
-import { createStaticStyles, cssVar, Flexbox, Highlighter, Markdown } from '@lobehub/ui';
+import { Flexbox, Highlighter, Markdown } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { memo, useMemo, useState } from 'react';
 
+import AsyncError from '@/components/AsyncError';
 import Loading from '@/components/Loading/CircleLoading';
-import { skillVersionContent } from '@/features/AgentGoals/ProcessControl/BatchPlan/skillVersions';
+import {
+  unreadableVersions,
+  usePlanSkill,
+  useSkillVersion,
+} from '@/features/AgentGoals/ProcessControl/BatchPlan/skillVersions';
 import { getLanguage } from '@/features/AgentSkillDetail/ContentViewer';
 import FileTree from '@/features/FileTree';
 import { skillFileTree } from '@/features/SkillViewer/skillFileTree';
-import { useClientDataSWR } from '@/libs/swr';
-import { userSkillService } from '@/services/userSkill';
 import { parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 
 const SKILL_INDEX = 'SKILL.md';
 const MARKDOWN_FILE = /\.mdx?$/i;
 
-const styles = createStaticStyles(({ css }) => ({
-  // Kept open, the tree stays beside the file being read while it scrolls.
-  tree: css`
-    position: sticky;
-    inset-block-start: 0;
-
-    overflow-y: auto;
-    flex: none;
-    align-self: flex-start;
-
-    width: 240px;
-    max-height: 480px;
-    padding-block: 4px;
-    padding-inline: 0 8px;
-    border-inline-end: 1px solid ${cssVar.colorBorder};
-  `,
-  viewer: css`
-    flex: 1;
-    min-width: 0;
-  `,
-}));
+const styles = stylex.create({
+  tree: {
+    position: 'sticky',
+    insetBlockStart: '0',
+    overflowY: 'auto',
+    flex: 'none',
+    alignSelf: 'flex-start',
+    width: '240px',
+    maxHeight: '480px',
+    paddingBlock: '4px',
+    paddingInlineStart: '0',
+    paddingInlineEnd: '8px',
+    borderInlineEndWidth: '1px',
+    borderInlineEndStyle: 'solid',
+    borderInlineEndColor: cssVar.colorBorder,
+  },
+  viewer: { flex: '1', minWidth: '0' },
+});
 
 interface SkillDirectoryProps {
   /** `SKILL.md` as the dossier froze it, read when the skill itself can't be. */
@@ -55,19 +57,34 @@ interface SkillDirectoryProps {
 const SkillDirectory = memo<SkillDirectoryProps>(
   ({ fallbackContent, filesOpen, revision, skillId }) => {
     const [selectedFile, setSelectedFile] = useState(SKILL_INDEX);
-    const { data: skill, isLoading } = useClientDataSWR(['goal-gate-plan-skill', skillId], () =>
-      userSkillService.get(skillId),
-    );
-    const files = useMemo(() => skill?.files ?? [], [skill]);
+    const { data: skill, isLoading } = usePlanSkill(skillId);
+    const {
+      data: shipped,
+      error,
+      isLoading: isVersionLoading,
+      mutate,
+    } = useSkillVersion(skillId, revision);
+    // The package as the reviewed version shipped it, when that version kept its files.
+    const files = useMemo(() => shipped?.files ?? skill?.files ?? [], [shipped, skill]);
     const resourceTree = useMemo(() => skillFileTree(files), [files]);
     const contentMap = useMemo(
       () => Object.fromEntries(files.map((file) => [file.path, file.content])),
       [files],
     );
 
-    if (isLoading) return <Loading />;
+    if (isLoading || isVersionLoading) return <Loading />;
+    // Unread, the fallback and the latest files would pass as this version.
+    if (unreadableVersions([{ body: shipped?.content, error }]).length > 0)
+      return (
+        <AsyncError
+          error={error}
+          onRetry={() => {
+            void mutate();
+          }}
+        />
+      );
 
-    const index = skillVersionContent(skill?.versions, revision) ?? fallbackContent;
+    const index = shipped?.content ?? fallbackContent;
     // Folded, the tree can't switch files: the viewer is back on `SKILL.md`.
     const shown = filesOpen ? selectedFile : SKILL_INDEX;
 
@@ -76,7 +93,7 @@ const SkillDirectory = memo<SkillDirectoryProps>(
     return (
       <Flexbox horizontal gap={20}>
         {filesOpen && (
-          <div className={styles.tree}>
+          <div {...stylex.props(styles.tree)}>
             <FileTree
               resourceTree={resourceTree}
               rootFile={{ label: SKILL_INDEX, path: SKILL_INDEX }}
@@ -85,7 +102,7 @@ const SkillDirectory = memo<SkillDirectoryProps>(
             />
           </div>
         )}
-        <div className={styles.viewer}>
+        <div {...stylex.props(styles.viewer)}>
           {/* Flush with the section, no frame of their own: documents as prose, the rest as code. */}
           {MARKDOWN_FILE.test(shown) ? (
             <Markdown fontSize={14} key={shown} variant={'chat'}>

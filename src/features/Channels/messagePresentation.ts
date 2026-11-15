@@ -49,11 +49,11 @@ const calendarDaysAgo = (date: Date, now: Date) =>
   );
 
 /**
- * A day divider's label, the way WeChat stamps a conversation: the time alone today, then
- * "Yesterday", the weekday within the past week, the month and day within this year, or the full
- * date before that, each followed by the time of the day's first message.
+ * A message's header time, the way Discord stamps it: the time alone today (the day divider above
+ * names the date), "Yesterday" with the time, and the numeric date with the time before that, so a
+ * message read away from its divider still says which day it was sent.
  */
-export const channelDayLabel = (
+export const channelMessageTime = (
   date: Date,
   {
     locale,
@@ -71,10 +71,10 @@ export const channelDayLabel = (
   const day =
     days === 1
       ? yesterday
-      : days > 1 && days < 7
-        ? new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date)
-        : date.getFullYear() === now.getFullYear()
-          ? new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }).format(date)
-          : new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(date);
+      : new Intl.DateTimeFormat(locale, {
+          day: 'numeric',
+          month: 'numeric',
+          year: 'numeric',
+        }).format(date);
   return `${day} ${time}`;
 };

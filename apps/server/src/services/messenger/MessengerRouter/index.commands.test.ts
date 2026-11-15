@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessengerRouter } from './index';
 import {
+  businessConstState,
   fakeChannelThread,
   fakeDmThread,
   fakeMessage,
@@ -15,7 +16,6 @@ import {
   mockChatBot,
   mockFindLink,
   mockGetList,
-  mockGetServerFeatureFlagsStateFromRuntimeConfig,
   mockHandleMention,
   mockHandleSubscribed,
   mockListMessengerBindableAgents,
@@ -38,7 +38,9 @@ vi.mock('@/business/server/bot/featureAccess', async () =>
 vi.mock('@/envs/gateway', async () => (await import('./testUtils')).gatewayEnvModule());
 vi.mock('../installations', async () => (await import('./testUtils')).installationsModule());
 vi.mock('../oauth/slackOAuth', async () => (await import('./testUtils')).slackOAuthModule());
-vi.mock('@/server/featureFlags', async () => (await import('./testUtils')).featureFlagsModule());
+vi.mock('@lobechat/business-const', async () =>
+  (await import('./testUtils')).businessConstModule(),
+);
 vi.mock('@/config/messenger', async () => (await import('./testUtils')).messengerConfigModule());
 vi.mock('chat', async () => (await import('./testUtils')).chatModule());
 vi.mock('@chat-adapter/state-ioredis', async () =>
@@ -306,7 +308,7 @@ describe('MessengerRouter /switch', () => {
   it('hides workspace scopes from /switch when workspace feature is disabled', async () => {
     await loadSlackBot();
     mockFindLink.mockResolvedValue(personalLink);
-    mockGetServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({ enableWorkspace: false });
+    businessConstState.enableBusinessFeatures = false;
     mockListUserWorkspaces.mockResolvedValue([
       { id: 'workspace-1', name: 'Workspace 1', role: 'owner' },
     ]);
@@ -326,7 +328,7 @@ describe('MessengerRouter /switch', () => {
 
   it('rejects workspace scope button callbacks when workspace feature is disabled', async () => {
     mockFindLink.mockResolvedValue(personalLink);
-    mockGetServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({ enableWorkspace: false });
+    businessConstState.enableBusinessFeatures = false;
     mockListUserWorkspaces.mockResolvedValue([
       { id: 'workspace-1', name: 'Workspace 1', role: 'owner' },
     ]);

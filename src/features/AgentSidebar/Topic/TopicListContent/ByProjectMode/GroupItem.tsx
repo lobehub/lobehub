@@ -350,6 +350,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
               {project ? (
                 <ProjectAvatar
                   avatar={project.projectAvatar}
+                  id={project.projectId}
                   name={project.projectName}
                   size={18}
                 />

@@ -1,5 +1,6 @@
 export * from './acceptanceComment';
 export * from './acceptanceFlow';
+export * from './acceptanceReview';
 export * from './agent';
 export * from './agentAccount';
 export * from './agentBotProvider';
@@ -44,6 +45,7 @@ export * from './goalSubscription';
 export * from './goalTrace';
 export * from './linear';
 export * from './llmGenerationTracing';
+export * from './meeting';
 export * from './message';
 export * from './messengerAccountLink';
 export * from './messengerInstallation';

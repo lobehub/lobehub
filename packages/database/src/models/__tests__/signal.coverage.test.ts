@@ -48,3 +48,21 @@ describe('SignalModel coverage', () => {
     });
   });
 });
+
+describe('SignalModel.record from the inbound edge', () => {
+  it('records a signal that names no agent and no account', async () => {
+    const { created, signal } = await SignalModel.record(
+      serverDB,
+      {
+        externalId: 'signal-coverage-unowned',
+        payload: { text: 'hello' },
+        source: 'bot:discord',
+        type: 'bot.message.merged',
+      },
+      { userId },
+    );
+
+    expect(created).toBe(true);
+    expect(signal).toMatchObject({ accountId: null, agentId: null, userId });
+  });
+});

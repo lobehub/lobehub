@@ -169,7 +169,7 @@ describe('Thread deletion', () => {
         reason: 'Late',
         status: 'assigned',
       }),
-    ).toBe(false);
+    ).toBeNull();
     await expect(asOwner.retryRouting(channel.id, pending.id)).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });

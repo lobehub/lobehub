@@ -9,11 +9,10 @@ import { randomUUID } from 'node:crypto';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
 import { createElement, useEffect } from 'react';
-import { SWRConfig, unstable_serialize, useSWRConfig } from 'swr';
+import { SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { cacheScope, replicaKeys } from '@/libs/replica';
-import { CACHE_TIERS } from '@/libs/swr/localStorageProvider';
+import { cacheScope } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { messageService } from '@/services/message';
 import {
@@ -168,14 +167,9 @@ describe('useToolResultPayload replica', () => {
     expect(await storage.get(rowKey('msg-lru-1'))).toBeDefined();
   });
 
-  it('is bounded, and its network read is not persisted again by the SWR cache', () => {
+  it('bounds its persisted entries', () => {
     expect(toolResultPayloadResource.maxPersistedEntries).toBe(
       TOOL_RESULT_PAYLOAD_MAX_PERSISTED_ENTRIES,
     );
-    const syncKey = unstable_serialize(
-      replicaKeys.sync(toolResultPayloadResource.name, 1, scope, 'msg_abc', 'msg_abc'),
-    );
-    const tiers: string[] = [...CACHE_TIERS.idb, ...CACHE_TIERS.local];
-    expect(tiers.filter((pattern) => syncKey.includes(pattern))).toEqual([]);
   });
 });

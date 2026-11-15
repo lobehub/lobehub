@@ -173,6 +173,65 @@ describe('signal turn that emits tools — spine promotion (tpc_aGIggi9N8DpK)', 
  * (STALE). The final answer was missing from the UI in the STALE shape, and the
  * closing reply was missing in both.
  */
+describe('user replies anchored on a text-only wake-up that ends the run', () => {
+  const step = (id: string, parentId: string, createdAt: number, extra: Partial<Message> = {}) =>
+    ({
+      agentId: 'a',
+      content: id,
+      createdAt,
+      id,
+      parentId,
+      role: 'assistant',
+      updatedAt: createdAt,
+      ...extra,
+    }) as Message;
+  const user = (id: string, parentId: string, createdAt: number) =>
+    ({ content: id, createdAt, id, parentId, role: 'user', updatedAt: createdAt }) as Message;
+
+  const run: Message[] = [
+    { content: 'go', createdAt: 0, id: 'u1', role: 'user', updatedAt: 0 },
+    step('RUN', 'u1', 100, { tools: toolArr('bash') }),
+    {
+      content: 'ok',
+      createdAt: 110,
+      id: 'tool',
+      parentId: 'RUN',
+      role: 'tool',
+      tool_call_id: 'bash',
+      updatedAt: 110,
+    } as Message,
+    step('REPLY', 'RUN', 120),
+    step('WAKE', 'tool', 130, {
+      metadata: {
+        signal: { sourceToolCallId: 'bash', sourceToolName: 'Bash', type: 'task-completion' },
+      } as any,
+    }),
+  ];
+
+  it('keeps the conversation that continues from the wake-up', () => {
+    const { contextTree, flatList } = parse([
+      ...run,
+      user('u2', 'WAKE', 200),
+      step('a2', 'u2', 210),
+    ]);
+
+    expect(flatList.map((m) => m.id)).toEqual(['u1', 'RUN', 'u2', 'a2']);
+    expect(contextTree.map((node) => node.id)).toEqual(['u1', 'RUN', 'u2', 'a2']);
+  });
+
+  it('renders both turns when a later send forks on the same wake-up', () => {
+    const { flatList } = parse([
+      ...run,
+      user('u2', 'WAKE', 200),
+      step('a2', 'u2', 210),
+      user('u3', 'WAKE', 300),
+      step('a3', 'u3', 310),
+    ]);
+
+    expect(flatList.map((m) => m.id)).toEqual(['u1', 'RUN', 'u2', 'a2', 'u3', 'a3']);
+  });
+});
+
 describe('wake-up turns that call tools after a toolless closing reply', () => {
   const wakeUpScenario = (parentOfWake2: 'toolRead1' | 'toolWait'): Message[] => [
     { content: 'go', createdAt: 0, id: 'u1', role: 'user', updatedAt: 0 },

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { AgentAccountManifest } from './manifest';
-import { AGENT_ACCOUNT_OUTBOUND_AUDIT, agentAccountOutboundAudit } from './outboundAudit';
+import {
+  AGENT_ACCOUNT_OUTBOUND_AUDIT,
+  agentAccountOutboundAudit,
+  createAgentAccountOutboundAudit,
+} from './outboundAudit';
 import { AgentAccountApiName } from './types';
 
 describe('agentAccountOutboundAudit', () => {
@@ -28,5 +32,23 @@ describe('agentAccountOutboundAudit', () => {
     expect(send?.humanIntervention).toEqual({
       dynamic: { default: 'never', policy: 'always', type: AGENT_ACCOUNT_OUTBOUND_AUDIT },
     });
+  });
+});
+
+describe('createAgentAccountOutboundAudit', () => {
+  const threadReply = { text: 'my owner said…', threadKey: 'thread_1', to: 'sender@example.com' };
+
+  it('holds even a thread reply in a run an inbound message started', async () => {
+    const audit = createAgentAccountOutboundAudit({ holdEverySend: async () => true });
+
+    await expect(audit(threadReply)).resolves.toBe(true);
+    await expect(audit({ text: 'hi', to: 'a@example.com' })).resolves.toBe(true);
+  });
+
+  it('keeps the thread-reply exemption in a run the owner started', async () => {
+    const audit = createAgentAccountOutboundAudit({ holdEverySend: () => false });
+
+    await expect(audit(threadReply)).resolves.toBe(false);
+    await expect(audit({ text: 'hi', to: 'a@example.com' })).resolves.toBe(true);
   });
 });

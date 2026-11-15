@@ -28,6 +28,20 @@ describe('pickWakeJudgeScore', () => {
     ).toEqual({ kind: 'duty', score: 0.81, verdict: 'allow' });
   });
 
+  it('uses the Channel routing model’s score for a decision routing made', () => {
+    const routing = v('channel:routing', 'allow', 0.83);
+    expect(pickWakeJudgeScore([routing], 'routing-selected')).toEqual({
+      kind: 'routing',
+      score: 0.83,
+      verdict: 'allow',
+    });
+    // A member its own rules woke shows the rule's model, with routing only as a fallback.
+    expect(
+      pickWakeJudgeScore([v(CLASSIFIER, 'allow', 0.9), routing], 'followup-window'),
+    ).toMatchObject({ kind: 'addressed' });
+    expect(pickWakeJudgeScore([routing], 'followup-window')).toMatchObject({ kind: 'routing' });
+  });
+
   it('uses the addressed classifier otherwise', () => {
     expect(
       pickWakeJudgeScore([v(DUTY, 'deny', 0.3), v(CLASSIFIER, 'allow', 0.74)], 'named-in-text'),

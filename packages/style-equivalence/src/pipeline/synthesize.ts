@@ -8,10 +8,12 @@ import { generateHost, HOST_HTML } from '../generate/host';
 import { generateModule } from '../generate/module';
 import { carriedClasses, globalRulesChanged } from '../plan/globalRules';
 import { type FilePlan, planFile, type Side } from '../plan/planFile';
+import type { ShapeBook } from '../plan/shapes';
 import { packageFile } from '../source/aliases';
 import { resolveSpecifier } from '../source/declarations';
 import type { ScopeFile } from '../source/scope';
 import { fileFlags } from '../verdict/fileItems';
+import { attachCounterparts } from './counterparts';
 import { fileReader, flagUncheckedCallers, gitGrepWord } from './forwardCallers';
 import { markUnchangedChains } from './unchanged';
 
@@ -53,17 +55,19 @@ export const synthesize = async (
   scope: ScopeFile[],
   roots: Record<Side, string>,
   config: ProjectConfig,
+  shapes?: ShapeBook,
 ): Promise<Synthesis> => {
   const extractions: Synthesis['extractions'] = {};
   const plans: FilePlan[] = [];
   const planned: Array<{ file: string; pair: Record<Side, FileExtraction>; plan: FilePlan }> = [];
   for (const entry of scope) {
     const file = entry.head ?? entry.base!;
+    const code: Partial<Record<Side, string>> = {};
     const read = async (side: Side) => {
       const source = entry[side];
       if (!source) return empty(file);
-      const code = await readFile(path.join(roots[side], source), 'utf8');
-      return extractFile(code, source, {
+      code[side] = await readFile(path.join(roots[side], source), 'utf8');
+      return extractFile(code[side], source, {
         adapters: config.adapters,
         layoutComponents: config.layoutComponents,
         readBaseModule: side === 'head' ? moduleReader(roots.base, config.aliases) : undefined,
@@ -73,7 +77,8 @@ export const synthesize = async (
       });
     };
     const pair = { base: await read('base'), head: await read('head') };
-    const plan = planFile(file, pair.base, pair.head, config);
+    const plan = planFile(file, pair.base, pair.head, { ...config, shapes });
+    attachCounterparts(plan, { code, extractions: pair, real: config.realComponents });
     markUnchangedChains(plan, pair, {
       aliases: config.aliases,
       roots,
@@ -115,7 +120,7 @@ export const writeHost = async (
   const written: string[] = [];
   for (const plan of synthesis.plans) {
     const source = scope.find((entry) => (entry.head ?? entry.base) === plan.file)?.[side];
-    if (!source || !plan.cases.length) continue;
+    if (!source || (!plan.cases.length && !plan.unpaired.length)) continue;
     const target = path.join(root, syntheticPath(source));
     await writeFile(
       target,

@@ -193,7 +193,14 @@ export const useMentionInvites = (
       ...persons.map((person) => {
         const name = person.fullName || person.username || t('person');
         return {
-          icon: <Avatar avatar={person.avatar || DEFAULT_USER_AVATAR} size={24} title={name} />,
+          icon: (
+            <Avatar
+              avatar={person.avatar || DEFAULT_USER_AVATAR}
+              shape={'circle'}
+              size={24}
+              title={name}
+            />
+          ),
           key: `invite:${inviteKey({ actorType: 'user', id: person.userId })}`,
           label: name,
           metadata: {

@@ -66,6 +66,13 @@ vi.mock('@/features/ChatInput/InputEditor/plugins', () => ({
   createChatInputRichPlugins: () => [],
 }));
 
+vi.mock('./richList/RichListPlugin', () => ({
+  LIST_HEADING_ATTRIBUTE: 'data-list-heading',
+  ReactRichListPlugin: vi.fn(),
+}));
+
+vi.mock('./richList/OrderedListNumberMenu', () => ({ default: () => null }));
+
 vi.mock('./rehostImage', () => ({ needsImageRehost: () => true, rehostImage: vi.fn() }));
 
 vi.mock('./InlineToolbar', () => ({

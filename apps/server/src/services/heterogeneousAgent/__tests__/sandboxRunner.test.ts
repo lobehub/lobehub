@@ -54,6 +54,7 @@ describe('spawnHeteroSandbox', () => {
       topicId: 'topic-1',
       userId: 'user-1',
     });
+    expect(mockCallTool.mock.calls[0][1].command).not.toContain('CLAUDE_CODE_ENTRYPOINT');
   });
 
   it('runs a persistent topic in its instance and leaves the cwd to the execution plane', async () => {
@@ -169,5 +170,39 @@ describe('spawnHeteroSandbox', () => {
 
     const command = mockCallTool.mock.calls[0][1].command;
     expect(command).toContain("LOBEHUB_WORKSPACE_ID='ws-lobehub'");
+  });
+
+  it('runs Claude Code under the entrypoint the agent asked for', async () => {
+    await spawnHeteroSandbox({
+      agentType: 'claude-code',
+      assistantMessageId: 'msg-1',
+      claudeCodeEntrypoint: 'lobehub',
+      jwt: 'jwt',
+      marketService: {} as any,
+      operationId: 'op-1',
+      prompt: 'hi',
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    const command = mockCallTool.mock.calls[0][1].command;
+    expect(command).toContain("CLAUDE_CODE_ENTRYPOINT='lobehub'");
+    expect(command).toContain("CLAUDE_CODE_DISABLE_TERMINAL_TITLE='1'");
+  });
+
+  it('clears the entrypoint when the agent turned the setting off', async () => {
+    await spawnHeteroSandbox({
+      agentType: 'claude-code',
+      assistantMessageId: 'msg-1',
+      claudeCodeEntrypoint: '',
+      jwt: 'jwt',
+      marketService: {} as any,
+      operationId: 'op-1',
+      prompt: 'hi',
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    expect(mockCallTool.mock.calls[0][1].command).toContain("CLAUDE_CODE_ENTRYPOINT=''");
   });
 });

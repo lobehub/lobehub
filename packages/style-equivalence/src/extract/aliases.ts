@@ -23,3 +23,16 @@ export const aliasOf = (node: ts.Identifier, symbols: Set<string>) => {
   }
   return undefined;
 };
+
+export const constInitializer = (node: ts.Identifier) => {
+  for (let scope: ts.Node = node.parent; scope; scope = scope.parent) {
+    if (!ts.isBlock(scope) && !ts.isSourceFile(scope)) continue;
+    for (const statement of scope.statements)
+      if (ts.isVariableStatement(statement) && statement.declarationList.flags & ts.NodeFlags.Const)
+        for (const declaration of statement.declarationList.declarations)
+          if (ts.isIdentifier(declaration.name) && declaration.name.text === node.text)
+            return declaration.initializer;
+    if (ts.isSourceFile(scope)) return undefined;
+  }
+  return undefined;
+};

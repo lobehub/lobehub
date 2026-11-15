@@ -14,6 +14,18 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       background: ${cssVar.colorPrimaryBg};
     }
   `,
+  dropBefore: css`
+    &,
+    &:hover {
+      box-shadow: inset 0 2px 0 0 ${cssVar.colorPrimary};
+    }
+  `,
+  dropAfter: css`
+    &,
+    &:hover {
+      box-shadow: inset 0 -2px 0 0 ${cssVar.colorPrimary};
+    }
+  `,
   treeItem: css`
     cursor: pointer;
 

@@ -2,7 +2,7 @@ import type {
   WorkspaceApiKeyMemberCreation,
   WorkspaceConnectorMemberManage,
 } from '@lobechat/types';
-import { and, count, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, count, desc, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
 
 import {
   type NewWorkspace,
@@ -223,25 +223,13 @@ export class WorkspaceModel {
   };
 
   listUserWorkspaces = async () => {
-    const memberships = await this.db.query.workspaceMembers.findMany({
-      where: and(eq(workspaceMembers.userId, this.userId), isNull(workspaceMembers.deletedAt)),
-    });
-
-    if (memberships.length === 0) return [];
-
-    const workspaceIds = memberships.map((m) => m.workspaceId);
-
-    const results = await this.db.query.workspaces.findMany({
-      orderBy: [desc(workspaces.updatedAt)],
-      where: (ws, { inArray }) => inArray(ws.id, workspaceIds),
-    });
-
-    return results.map((ws) => ({
-      ...ws,
-      /* v8 ignore start -- unreachable: each workspace was selected via a membership row */
-      role: memberships.find((m) => m.workspaceId === ws.id)?.role ?? 'viewer',
-      /* v8 ignore stop */
-    }));
+    // The inner join pairs each workspace with the caller's (unique) membership row.
+    return this.db
+      .select({ ...getTableColumns(workspaces), role: workspaceMembers.role })
+      .from(workspaceMembers)
+      .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+      .where(and(eq(workspaceMembers.userId, this.userId), isNull(workspaceMembers.deletedAt)))
+      .orderBy(desc(workspaces.updatedAt));
   };
 
   update = async (

@@ -7,6 +7,16 @@ import { TopicModel } from '@/database/models/topic';
 import { AbandonOperationService } from '../AbandonOperationService';
 import { CompletionLifecycle } from '../CompletionLifecycle';
 
+const abandonDeps = (
+  coordinator: NonNullable<ConstructorParameters<typeof AbandonOperationService>[1]>['coordinator'],
+  snapshotStore: NonNullable<
+    ConstructorParameters<typeof AbandonOperationService>[1]
+  >['snapshotStore'],
+) => ({
+  coordinator,
+  snapshotStore,
+});
+
 const buildStore = () => ({
   get: vi.fn(),
   getLatest: vi.fn(),
@@ -146,10 +156,7 @@ describe('AbandonOperationService', () => {
   it('returns found:false when coordinator has no state', async () => {
     const coord = buildCoordinator({ loadAgentState: vi.fn().mockResolvedValue(null) });
     const store = buildStore();
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_missing', 'inactivity_5m');
 
@@ -182,10 +189,7 @@ describe('AbandonOperationService', () => {
       status: 'settled',
     });
 
-    const svc = new AbandonOperationService(db, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService(db, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_x', 'inactivity_watchdog');
 
@@ -471,10 +475,7 @@ describe('AbandonOperationService', () => {
       },
     });
 
-    const svc = new AbandonOperationService(db, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService(db, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_done', 'inactivity_watchdog');
 
@@ -514,10 +515,7 @@ describe('AbandonOperationService', () => {
 
       const result = await new AbandonOperationService(
         buildDb({ operationRow: settledRow(status) }),
-        {
-          coordinator: coord as any,
-          snapshotStore: store as any,
-        },
+        abandonDeps(coord as any, store as any),
       ).finalizeAbandoned('op_x', 'inactivity_watchdog', options);
 
       return { coord, result, store };
@@ -716,10 +714,7 @@ describe('AbandonOperationService', () => {
             workspaceId: null,
           },
         }),
-        {
-          coordinator: coord as any,
-          snapshotStore: buildPartiallessStore() as any,
-        },
+        abandonDeps(coord as any, buildPartiallessStore() as any),
       );
 
       const result = await svc.finalizeAbandoned('op_child', 'inactivity_watchdog');
@@ -849,10 +844,7 @@ describe('AbandonOperationService', () => {
         userId: 'user_x',
       },
     });
-    const svc = new AbandonOperationService(db, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService(db, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_old', 'inactivity_watchdog');
 
@@ -878,10 +870,7 @@ describe('AbandonOperationService', () => {
         workspaceId: 'ws_x',
       },
     });
-    const svc = new AbandonOperationService(db, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService(db, abandonDeps(coord as any, store as any));
 
     await svc.finalizeAbandoned('op_x', 'inactivity_watchdog');
 
@@ -933,10 +922,7 @@ describe('AbandonOperationService', () => {
         { stepIndex: 1, stepType: 'call_tool' },
       ],
     });
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_x', 'inactivity_5m');
 
@@ -992,10 +978,10 @@ describe('AbandonOperationService', () => {
       loadAgentState: vi.fn().mockResolvedValue(stateWith()),
     });
 
-    await new AbandonOperationService(buildDb(), {
-      coordinator: coord as any,
-      snapshotStore: buildPartiallessStore() as any,
-    }).finalizeAbandoned('op_x', 'stale_lease_redrive_exhausted', { settledAsAbandoned: true });
+    await new AbandonOperationService(
+      buildDb(),
+      abandonDeps(coord as any, buildPartiallessStore() as any),
+    ).finalizeAbandoned('op_x', 'stale_lease_redrive_exhausted', { settledAsAbandoned: true });
 
     expect(dispatchHooksMock).toHaveBeenCalledWith(
       'op_x',
@@ -1013,10 +999,7 @@ describe('AbandonOperationService', () => {
       });
       const store = buildStore();
       store.loadPartial.mockResolvedValue(null);
-      const svc = new AbandonOperationService({} as any, {
-        coordinator: coord as any,
-        snapshotStore: store as any,
-      });
+      const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
       const result = await svc.finalizeAbandoned('op_x', 'inactivity_5m');
 
@@ -1033,10 +1016,7 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue(null);
 
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_x', 'inactivity_5m');
 
@@ -1054,10 +1034,7 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue({ steps: [], startedAt: 1 });
 
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     await svc.finalizeAbandoned('op_x', 'reason');
 
@@ -1075,10 +1052,7 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue({ steps: [{ stepIndex: 0 }], startedAt: 1 });
 
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_x', 'reason');
 
@@ -1097,10 +1071,7 @@ describe('AbandonOperationService', () => {
     store.loadPartial.mockResolvedValue({ steps: [{ stepIndex: 0 }], startedAt: 1 });
     messageUpdateMock.mockRejectedValueOnce(new Error('db down'));
 
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     // Should not throw — both failure paths are caught & logged
     const result = await svc.finalizeAbandoned('op_x', 'reason');
@@ -1135,10 +1106,7 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue(null);
 
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_child', 'inactivity_watchdog');
 
@@ -1188,10 +1156,7 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue(null);
 
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_child', 'inactivity_watchdog');
 
@@ -1224,10 +1189,7 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue(null);
 
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_member', 'inactivity_watchdog');
 
@@ -1269,10 +1231,10 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue(null);
 
-    await new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    }).finalizeAbandoned('op_visitor', 'inactivity_5m');
+    await new AbandonOperationService(
+      {} as any,
+      abandonDeps(coord as any, store as any),
+    ).finalizeAbandoned('op_visitor', 'inactivity_5m');
 
     expect(MessageModel).toHaveBeenCalledWith(expect.anything(), 'user_owner', 'ws_1', undefined, {
       includeShareVisitor: true,
@@ -1296,10 +1258,10 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue(null);
 
-    await new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    }).finalizeAbandoned('op_x', 'inactivity_5m');
+    await new AbandonOperationService(
+      {} as any,
+      abandonDeps(coord as any, store as any),
+    ).finalizeAbandoned('op_x', 'inactivity_5m');
 
     expect(MessageModel).toHaveBeenCalledWith(expect.anything(), 'user_x', undefined, undefined, {
       includeShareVisitor: false,
@@ -1339,10 +1301,10 @@ describe('AbandonOperationService', () => {
       status: 'settled',
     });
 
-    await new AbandonOperationService(db, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    }).finalizeAbandoned('op_ns', 'inactivity_watchdog');
+    await new AbandonOperationService(
+      db,
+      abandonDeps(coord as any, store as any),
+    ).finalizeAbandoned('op_ns', 'inactivity_watchdog');
 
     expect(TopicModel).toHaveBeenCalledWith(expect.anything(), 'user_x', 'ws_1', undefined, {
       includeShareVisitor: true,
@@ -1362,10 +1324,10 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue({ startedAt: 1, steps: [{ stepIndex: 0 }] });
 
-    await new AbandonOperationService(buildDb(), {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    }).finalizeAbandoned('op_x', 'inactivity_watchdog');
+    await new AbandonOperationService(
+      buildDb(),
+      abandonDeps(coord as any, store as any),
+    ).finalizeAbandoned('op_x', 'inactivity_watchdog');
 
     expect(settleLiveMock).toHaveBeenCalledWith('op_x', 'error');
   });
@@ -1378,10 +1340,10 @@ describe('AbandonOperationService', () => {
       loadAgentState: vi.fn().mockResolvedValue(stateWith({ status: 'idle' })),
     });
 
-    await new AbandonOperationService(buildDb(), {
-      coordinator: coord as any,
-      snapshotStore: buildPartiallessStore() as any,
-    }).finalizeAbandoned('op_idle', 'stale_lease');
+    await new AbandonOperationService(
+      buildDb(),
+      abandonDeps(coord as any, buildPartiallessStore() as any),
+    ).finalizeAbandoned('op_idle', 'stale_lease');
 
     expect(dispatchHooksMock).not.toHaveBeenCalled();
     expect(settleLiveMock).toHaveBeenCalledWith('op_idle', 'error');
@@ -1400,10 +1362,10 @@ describe('AbandonOperationService', () => {
       ),
     });
 
-    await new AbandonOperationService(buildDb(), {
-      coordinator: coord as any,
-      snapshotStore: buildPartiallessStore() as any,
-    }).finalizeAbandoned('op_parked_child', 'inactivity_watchdog');
+    await new AbandonOperationService(
+      buildDb(),
+      abandonDeps(coord as any, buildPartiallessStore() as any),
+    ).finalizeAbandoned('op_parked_child', 'inactivity_watchdog');
 
     expect(dispatchHooksMock).not.toHaveBeenCalled();
     expect(settleLiveMock).toHaveBeenCalledWith('op_parked_child', 'error');
@@ -1423,10 +1385,10 @@ describe('AbandonOperationService', () => {
       ),
     });
 
-    const result = await new AbandonOperationService(buildDb(), {
-      coordinator: coord as any,
-      snapshotStore: buildPartiallessStore() as any,
-    }).finalizeAbandoned('op_no_placeholder', 'stale_lease');
+    const result = await new AbandonOperationService(
+      buildDb(),
+      abandonDeps(coord as any, buildPartiallessStore() as any),
+    ).finalizeAbandoned('op_no_placeholder', 'stale_lease');
 
     // Anchored to the tail, but written as a NEW assistant row: the tail is
     // either the user's own turn — whose renderer never passes `error` to
@@ -1479,10 +1441,10 @@ describe('AbandonOperationService', () => {
       loadAgentState: vi.fn().mockResolvedValue(stateWith()),
     });
 
-    await new AbandonOperationService(buildDb(), {
-      coordinator: coord as any,
-      snapshotStore: buildPartiallessStore() as any,
-    }).finalizeAbandoned('op_x', 'stale_lease');
+    await new AbandonOperationService(
+      buildDb(),
+      abandonDeps(coord as any, buildPartiallessStore() as any),
+    ).finalizeAbandoned('op_x', 'stale_lease');
 
     expect(latestSpineMessageIdMock).not.toHaveBeenCalled();
     expect(messageCreateMock).not.toHaveBeenCalled();
@@ -1505,10 +1467,10 @@ describe('AbandonOperationService', () => {
       ),
     });
 
-    await new AbandonOperationService(buildDb(), {
-      coordinator: coord as any,
-      snapshotStore: buildPartiallessStore() as any,
-    }).finalizeAbandoned('op_thread', 'stale_lease');
+    await new AbandonOperationService(
+      buildDb(),
+      abandonDeps(coord as any, buildPartiallessStore() as any),
+    ).finalizeAbandoned('op_thread', 'stale_lease');
 
     expect(latestSpineMessageIdMock).toHaveBeenCalledWith({
       threadId: 'thr_x',
@@ -1523,10 +1485,7 @@ describe('AbandonOperationService', () => {
     const store = buildStore();
     store.loadPartial.mockResolvedValue(null);
 
-    const svc = new AbandonOperationService({} as any, {
-      coordinator: coord as any,
-      snapshotStore: store as any,
-    });
+    const svc = new AbandonOperationService({} as any, abandonDeps(coord as any, store as any));
 
     const result = await svc.finalizeAbandoned('op_x', 'reason');
 

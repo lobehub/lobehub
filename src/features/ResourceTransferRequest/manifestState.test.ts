@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { TransferManifest } from '@/services/resourceTransferRequest';
 
-import { isTransferManifestActionable } from './manifestState';
+import { isTransferManifestAcceptable, isTransferManifestActionable } from './manifestState';
 
 const manifest = {
   botBindings: 0,
@@ -33,6 +33,27 @@ describe('isTransferManifestActionable', () => {
   it('blocks a group transfer containing an inaccessible private member', () => {
     expect(
       isTransferManifestActionable({ ...manifest, hiddenReferencedMember: true }, undefined),
+    ).toBe(false);
+  });
+});
+
+describe('isTransferManifestAcceptable', () => {
+  it('waits for a server answer in this session before unlocking Accept', () => {
+    expect(isTransferManifestAcceptable({ confirmed: false, error: undefined, manifest })).toBe(
+      false,
+    );
+    expect(isTransferManifestAcceptable({ confirmed: true, error: undefined, manifest })).toBe(
+      true,
+    );
+  });
+
+  it('blocks Accept when a refresh fails after an earlier successful load', () => {
+    expect(
+      isTransferManifestAcceptable({
+        confirmed: true,
+        error: new Error('refresh failed'),
+        manifest,
+      }),
     ).toBe(false);
   });
 });

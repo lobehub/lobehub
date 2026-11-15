@@ -32,12 +32,13 @@ describe('createDefaultChannel', () => {
   });
 
   it.each([false, undefined])(
-    'creates nothing while `channel` is %s for the creator',
+    'still opens the project Channel while `channel` is %s for the creator',
     async (flag) => {
       getFlags.mockResolvedValue({ enableChannels: flag });
       await createDefaultChannel({ ...params, projectId: 'pro_1', workspaceId: 'ws_1' });
-      expect(getFlags).toHaveBeenCalledWith('owner');
-      expect(createDefault).not.toHaveBeenCalled();
+      expect(createDefault).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: 'pro_1', title: DEFAULT_CHANNEL_TITLE }),
+      );
     },
   );
 
@@ -63,9 +64,7 @@ describe('createDefaultChannel', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     createDefault.mockRejectedValue(new Error('connection reset'));
     await expect(createDefaultChannel(params)).resolves.toBeUndefined();
-    getFlags.mockRejectedValue(new Error('config unavailable'));
-    await expect(createDefaultChannel(params)).resolves.toBeUndefined();
-    expect(error).toHaveBeenCalledTimes(2);
+    expect(error).toHaveBeenCalledTimes(1);
     expect(error).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ agentId: 'agt_main', userId: 'owner' }),
@@ -95,9 +94,10 @@ describe('createAgentDirectChannel', () => {
   it.each([undefined, 'ws_1'])(
     "opens the creator's direct Channel to the new Agent in scope %s",
     async (workspaceId) => {
-      await createAgentDirectChannel({ ...params, localDeviceId: 'desktop', workspaceId });
+      await createAgentDirectChannel({ ...params, workspaceId });
       expect(ChannelServiceCtor).toHaveBeenCalledWith(db, 'owner', workspaceId);
-      expect(createDirect).toHaveBeenCalledWith('agt_main', { localDeviceId: 'desktop' });
+      // Bound to no device; the Agent runs where its own settings say.
+      expect(createDirect).toHaveBeenCalledWith('agt_main');
       expect(createDefault).not.toHaveBeenCalled();
     },
   );
@@ -106,6 +106,9 @@ describe('createAgentDirectChannel', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     createDirect.mockRejectedValue(new Error('connection reset'));
     await expect(createAgentDirectChannel(params)).resolves.toBeUndefined();
+    getFlags.mockRejectedValue(new Error('config unavailable'));
+    await expect(createAgentDirectChannel(params)).resolves.toBeUndefined();
+    expect(error).toHaveBeenCalledTimes(2);
     expect(error).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ agentId: 'agt_main', userId: 'owner' }),

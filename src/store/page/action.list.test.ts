@@ -1,13 +1,19 @@
 import { PAGE_DOCUMENT_FILE_TYPES, PAGE_DOCUMENT_SOURCE_TYPES } from '@lobechat/const';
 import type { DocumentItem } from '@lobechat/database/schemas';
 import { renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentSourceType, type LobeDocument } from '@/types/document';
 
 import { pageActions } from './action';
 import { PAGE_LIST_KEY } from './projection';
 import { usePageStore } from './store';
+
+const refreshDocsHome = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+
+vi.mock('@/store/home', () => ({
+  useHomeStore: { getState: () => ({ refreshDocsHome }) },
+}));
 
 vi.mock('@/libs/swr', () => ({
   mutate: vi.fn(),
@@ -85,6 +91,11 @@ const list = () => usePageStore.getState().pageListMap[PAGE_LIST_KEY];
 beforeEach(() => {
   vi.clearAllMocks();
   pageActions.reset();
+});
+
+afterEach(async () => {
+  // Refreshing the list also schedules a Docs home refresh through a dynamic import.
+  await vi.dynamicImportSettled();
 });
 
 describe('pageActions — useFetchDocuments', () => {
@@ -404,6 +415,8 @@ describe('pageActions — refresh', () => {
       true,
     );
     expect(matches(['replica:sync', 'pageList', 1, scope, 'another-entry', {}])).toBe(false);
+    await vi.dynamicImportSettled();
+    expect(refreshDocsHome).toHaveBeenCalledTimes(1);
   });
 
   it('refreshes the list after publishing a page to the workspace', async () => {
@@ -414,5 +427,7 @@ describe('pageActions — refresh', () => {
 
     expect(result).toEqual({ documentIds: [] });
     expect(mutate).toHaveBeenCalled();
+    await vi.dynamicImportSettled();
+    expect(refreshDocsHome).toHaveBeenCalledTimes(1);
   });
 });

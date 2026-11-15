@@ -77,6 +77,10 @@ export interface InjectCredsToSandboxParams {
 
 export interface InjectCredsToSandboxState {
   /**
+   * Environment variable names each injected key set (names only, never values)
+   */
+  envVarsByKey?: Record<string, string[]>;
+  /**
    * Injected credential keys
    */
   injected: string[];

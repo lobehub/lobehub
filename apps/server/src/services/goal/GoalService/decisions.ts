@@ -22,6 +22,7 @@ import { TaskArchiveModel } from '@/database/models/taskArchive';
 import { GoalRepository } from '@/database/repositories/goal';
 
 import { collectStrandedDependents, GOAL_ACCEPTANCE_TASK_TITLE } from '../decideNextMove';
+import { classifyGoalFailure } from '../failureClass';
 import { answeredProblem, GoalManagerService, problemKey } from '../manager';
 import { GoalSupervisorService } from '../supervisor';
 import type { GoalServiceContext } from './types';
@@ -39,7 +40,7 @@ const REOPENABLE_GOAL_STATUSES = new Set(['achieved', 'running']);
 const decisionOptionEffect = (
   option: GoalDecisionOption | undefined,
   sourceTitle?: string,
-): 'fail' | 'retire' | 'retry' | undefined => {
+): 'fail' | 'retire' | 'retry' | 'retry_after_reset' | undefined => {
   if (!option) return undefined;
   if (option.effect) return option.effect;
   if (option.id === 'retry' || option.id === 'retire') return option.id;
@@ -220,8 +221,16 @@ export const decide = async (
         true,
       );
     const effect = decisionOptionEffect(chosen, source.title);
-    if (effect === 'retry' && source.taskId) {
-      await ctx.taskModel.updateStatus(source.taskId, 'backlog', { error: null });
+    if ((effect === 'retry' || effect === 'retry_after_reset') && source.taskId) {
+      // Answered to wait: the Task stays paused on its limit, which is what the
+      // tick reads to hold it until the reset and then rerun it. With the limit
+      // already gone there is nothing to wait for, so it is an ordinary retry.
+      const sourceTask =
+        effect === 'retry_after_reset' ? await ctx.taskModel.findById(source.taskId) : undefined;
+      const heldForReset =
+        sourceTask?.status === 'paused' && classifyGoalFailure(sourceTask.error).class === 'quota';
+      if (!heldForReset)
+        await ctx.taskModel.updateStatus(source.taskId, 'backlog', { error: null });
       await ctx.graphModel.updateNodeStatus(goalId, source.id, 'active', resolution);
       // The note is guidance for the next attempt, so it goes where that
       // attempt reads: the Task's comments are part of every run prompt.

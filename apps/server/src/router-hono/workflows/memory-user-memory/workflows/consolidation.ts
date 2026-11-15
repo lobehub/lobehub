@@ -7,8 +7,11 @@ import {
 } from '@/database/models/userMemory/consolidation';
 import { getServerDB } from '@/database/server';
 import {
+  applyDomainRound,
   CLASSIFY_BATCH,
   MemoryConsolidationService,
+  mergeDomainRounds,
+  resolveDomain,
   SYNTH_CHUNK,
   toContextPlans,
 } from '@/server/services/memory/userMemory/consolidation/service';
@@ -135,11 +138,33 @@ export const consolidationHandler = async (context: WorkflowContext) => {
     // Counted from the database, so a resumed run merges its whole lineage's domains, not only
     // the ones it classified itself.
     const evidence = await queueEvidence();
+    // Domains an earlier attempt merged stay merged; only new keys need the model.
+    const saved: Record<string, string> = {};
     const domainCounts: Record<string, number> = {};
-    for (const e of evidence) domainCounts[e.key] = (domainCounts[e.key] ?? 0) + e.count;
-    const domainMap = await runStep(context, `${STEP}:normalize`, () =>
-      service().normalizeDomains(domainCounts),
-    );
+    for (const e of evidence) {
+      if (e.domain) saved[e.key] = e.domain;
+      domainCounts[e.key] = (domainCounts[e.key] ?? 0) + e.count;
+    }
+    const hasNewDomains = Object.keys(domainCounts).some((key) => !saved[key]);
+    // Small merge calls, then again over their results until one call has seen every name, so
+    // the same domain cannot keep two spellings from two batches.
+    const domainRounds: Record<string, string>[] = [saved];
+    if (hasNewDomains)
+      domainRounds.push(
+        ...(await mergeDomainRounds(applyDomainRound(domainCounts, saved), (round, batch, counts) =>
+          runStep(context, `${STEP}:normalize:${round}:${batch}`, () =>
+            service().normalizeDomains(counts),
+          ),
+        )),
+      );
+    // Keeps the `normalize` step name: the DC console reads the final mapping from it.
+    const domainMap = await runStep(context, `${STEP}:normalize`, async () => {
+      const map = Object.fromEntries(
+        Object.keys(domainCounts).map((key) => [key, resolveDomain(key, domainRounds)]),
+      );
+      if (hasNewDomains) await service().model.saveQueueDomains(origin, map);
+      return map;
+    });
 
     const groups = await runStep(context, `${STEP}:group`, async () => {
       const queued = await service().model.listQueued(runId);

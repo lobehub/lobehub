@@ -33,6 +33,7 @@ export function calculateTotalTokens(usage?: AgentState['usage']): number | unde
  */
 export type ThreadCarryOver = Pick<
   ThreadMetadata,
+  | 'runUsageBaseline'
   | 'sourceToolCallId'
   | 'totalCost'
   | 'totalLlmCalls'
@@ -42,6 +43,12 @@ export type ThreadCarryOver = Pick<
 >;
 
 export const pickThreadCarryOver = (metadata?: ThreadMetadata | null): ThreadCarryOver => ({
+  runUsageBaseline: {
+    totalCost: metadata?.totalCost,
+    totalLlmCalls: metadata?.totalLlmCalls,
+    totalTokens: metadata?.totalTokens,
+    totalToolCalls: metadata?.totalToolCalls,
+  },
   sourceToolCallId: metadata?.sourceToolCallId,
   totalCost: metadata?.totalCost,
   totalMessages: metadata?.totalMessages,
@@ -332,23 +339,20 @@ export function createThreadHooks(
 }
 
 /**
-   * Completion bridge for the server `callSubAgent` deferred-tool path.
-   *
-   * Fires on the sub-op's completion (success or failure) and delegates to
-   * `AgentRuntimeService.completeSubAgentBridge`: backfill the parent's
-   * placeholder tool message, then barrier-check + CAS-resume the parked
-   * parent op.
-   *
-   * Transport adapts to the runtime mode like every other lifecycle hook:
-   *   - local mode: the `handler` runs in-process with the child's finalState.
-   *   - queue mode: in-memory handlers don't survive cross-process steps, so
-   *     the serialized `webhook` config is delivered via QStash to
-   *     `/api/agent/webhooks/subagent-callback`, which re-enters the same
-   *     bridge method. `delivery: 'qstash'` is required — a plain fetch would
-
-
-   *     be rejected by the endpoint's QStash signature auth.
-   */
+ * Completion bridge for the server `callSubAgent` deferred-tool path.
+ *
+ * Fires on the sub-op's completion (success or failure) and delegates to
+ * `AgentRuntimeService.completeSubAgentBridge`: backfill the parent's
+ * placeholder tool message, then barrier-check + CAS-resume the parked
+ * parent op.
+ *
+ * Transport adapts to the runtime mode like every other lifecycle hook:
+ *   - local mode: the `handler` runs in-process with the child's finalState.
+ *   - queue mode: in-memory handlers don't survive cross-process steps, so
+ *     the serialized `webhook` config is delivered via QStash to
+ *     `/api/agent/webhooks/subagent-callback`, which re-enters the same
+ *     bridge method.
+ */
 export function createSubAgentBridgeHook(
   agentRuntimeService: AgentRuntimeService,
   parentOperationId: string,
@@ -385,9 +389,8 @@ export function createSubAgentBridgeHook(
       // answer (`lastAssistantContent`) — and any tool-produced attachments
       // the shared lifecycle event extractor inlines — through QStash.
       eventFields: ['operationId', 'reason', 'status'],
-      // The endpoint sits behind QStash signature auth, so the unsigned
-      // fetch fallback could never authenticate — it would only mask a
-      // publish failure as a silently-dropped 401, stranding the parent.
+      // A failed publish must surface instead of stranding the parent, so this
+      // critical bridge does not rely on the direct fetch fallback.
       fallback: 'none' as const,
       url: '/api/agent/webhooks/subagent-callback',
     },

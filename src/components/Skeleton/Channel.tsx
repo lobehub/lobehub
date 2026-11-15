@@ -67,7 +67,7 @@ export const ChannelConversationSkeleton = () => (
         <MessageRowSkeleton key={index} {...row} />
       ))}
     </Flexbox>
-    <Flexbox flex={'none'} gap={4} paddingBlock={'0 12px'} paddingInline={16}>
+    <Flexbox flex={'none'} gap={4} paddingBlock={'0 12px'} paddingInline={8}>
       <Flexbox height={24} />
       <Flexbox
         horizontal

@@ -13,6 +13,7 @@ import {
 } from '@lobehub/ui';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import {
+  Check,
   ChevronLeft,
   ChevronRight,
   CircleCheck,
@@ -51,6 +52,7 @@ import {
   type BatchUnitOrigin,
   countCells,
   reopenedRows,
+  unitsPhase,
 } from './batchModel';
 
 /**
@@ -299,8 +301,10 @@ const styles = createStaticStyles(({ css }) => ({
   square: css`
     cursor: default;
 
-    display: inline-block;
+    display: inline-flex;
     flex: none;
+    align-items: center;
+    justify-content: center;
 
     width: ${BATCH_SQUARE}px;
     height: ${BATCH_SQUARE}px;
@@ -461,15 +465,33 @@ const GroupShell = memo<{
 
 GroupShell.displayName = 'GoalBatchGroupShell';
 
+/**
+ * Drawn at the square's own size and scaled about its centre: the glyph's box
+ * is centred in its 24-unit frame, so the tick lands in the middle of the
+ * square. A smaller icon box rounded to whole pixels and rendered off-centre.
+ */
+const AcceptedTick = () => (
+  <Check
+    data-accepted-tick
+    color={cssVar.colorBgContainer}
+    size={BATCH_SQUARE}
+    strokeWidth={3.5}
+    style={{ display: 'block', flex: 'none', transform: 'scale(0.78)' }}
+  />
+);
+
 export const Square = memo<{
+  /** Done and signed off: the square carries a check. */
+  accepted?: boolean;
   onSelect?: (nodeId: string) => void;
   nodeId?: string;
   state: BatchCellState;
   tooltip: string;
-}>(({ nodeId, onSelect, state, tooltip }) => (
+}>(({ accepted, nodeId, onSelect, state, tooltip }) => (
   <Tooltip title={tooltip}>
     <button
       aria-label={tooltip}
+      data-accepted={accepted || undefined}
       data-state={state}
       style={squareStyle(state)}
       type="button"
@@ -483,7 +505,9 @@ export const Square = memo<{
         event.stopPropagation();
         if (nodeId) onSelect?.(nodeId);
       }}
-    />
+    >
+      {accepted && <AcceptedTick />}
+    </button>
   </Tooltip>
 ));
 
@@ -491,7 +515,7 @@ Square.displayName = 'GoalBatchSquare';
 
 const useCellLabel = () => {
   const { t } = useTranslation('chat');
-  return (state: BatchCellState) => t(`goalBatch.cell.${state}` as const);
+  return (state: BatchCellState | 'accepted') => t(`goalBatch.cell.${state}` as const);
 };
 
 /** One group status from its units: a person first, then progress. */
@@ -501,20 +525,33 @@ const useUnitsStatus = () => {
     cells: { state: BatchCellState }[],
     copy: { done: string; pending: string; running: string },
     started: boolean,
+    held?: boolean,
   ): GroupStatus => {
     const counts = countCells(cells);
-    if (counts.human)
-      return { ...CELL_VISUAL.human, text: t('goalBatch.status.human', { count: counts.human }) };
-    if (counts.stale && counts.stale + counts.done < cells.length)
-      return {
-        color: cssVar.colorWarning,
-        icon: CircleSlash,
-        text: t('goalBatch.status.stale', { count: counts.stale }),
-      };
-    if (cells.length > 0 && counts.done + counts.stale === cells.length)
-      return { ...CELL_VISUAL.done, text: copy.done };
-    if (!started && !counts.running) return { ...CELL_VISUAL.backlog, text: copy.pending };
-    return { ...CELL_VISUAL.running, running: true, text: copy.running };
+    switch (unitsPhase(cells, started, held)) {
+      case 'human': {
+        return { ...CELL_VISUAL.human, text: t('goalBatch.status.human', { count: counts.human }) };
+      }
+      case 'stale': {
+        return {
+          color: cssVar.colorWarning,
+          icon: CircleSlash,
+          text: t('goalBatch.status.stale', { count: counts.stale }),
+        };
+      }
+      case 'done': {
+        return { ...CELL_VISUAL.done, text: copy.done };
+      }
+      case 'held': {
+        return { ...CELL_VISUAL.human, text: t('goalBatch.status.held') };
+      }
+      case 'pending': {
+        return { ...CELL_VISUAL.backlog, text: copy.pending };
+      }
+      default: {
+        return { ...CELL_VISUAL.running, running: true, text: copy.running };
+      }
+    }
   };
 };
 
@@ -532,6 +569,12 @@ const SquareLegend = memo(() => {
           {label(state)}
         </Flexbox>
       ))}
+      <Flexbox horizontal align={'center'} gap={6}>
+        <span className={styles.square} style={squareStyle('done')}>
+          <AcceptedTick />
+        </span>
+        {label('accepted')}
+      </Flexbox>
     </Flexbox>
   );
 });
@@ -762,13 +805,14 @@ const WaveRows = memo<{
             <Flexbox horizontal gap={BATCH_SQUARE_GAP}>
               {cells.map((cell) => (
                 <Square
+                  accepted={cell.accepted}
                   key={cell.index}
                   nodeId={cell.nodeId}
                   state={cell.state}
                   tooltip={[
                     t('goalBatch.cell.tooltip', {
                       index: cell.index + 1,
-                      state: label(cell.state),
+                      state: label(cell.accepted ? 'accepted' : cell.state),
                       title: cell.title,
                       wave: wave + 1,
                     }),
@@ -819,6 +863,8 @@ const useOriginCopy = () => {
 };
 
 export interface BatchWavesData extends Record<string, unknown> {
+  /** The round's gate is holding the next wave for a person's release. */
+  held?: boolean;
   /** Open the batch on its own, the way a person reviews one batch at a time. */
   onEnter: () => void;
   onSelect: (nodeId: string) => void;
@@ -835,7 +881,7 @@ export interface BatchWavesData extends Record<string, unknown> {
 
 /** A round's waves: the units it re-opened, then the roster waves it owns. */
 export const BatchWavesGroup = memo<NodeProps>(({ data }) => {
-  const { onEnter, onSelect, probes, retros, revision, rows, started, waveSize } =
+  const { held, onEnter, onSelect, probes, retros, revision, rows, started, waveSize } =
     data as BatchWavesData;
   const { t } = useTranslation('chat');
   const label = useCellLabel();
@@ -858,6 +904,7 @@ export const BatchWavesGroup = memo<NodeProps>(({ data }) => {
       running: t('goalBatch.status.running'),
     },
     started,
+    held,
   );
   return (
     <GroupShell
@@ -884,10 +931,15 @@ export const BatchWavesGroup = memo<NodeProps>(({ data }) => {
             <Flexbox horizontal gap={BATCH_SQUARE_GAP}>
               {row.probes.map((probe) => (
                 <Square
+                  accepted={probe.accepted}
                   key={probe.nodeId}
                   nodeId={probe.nodeId}
                   state={probe.state}
-                  tooltip={[probe.title, originCopy(probe.from), label(probe.state)]
+                  tooltip={[
+                    probe.title,
+                    originCopy(probe.from),
+                    label(probe.accepted ? 'accepted' : probe.state),
+                  ]
                     .filter(Boolean)
                     .join(' · ')}
                   onSelect={onSelect}

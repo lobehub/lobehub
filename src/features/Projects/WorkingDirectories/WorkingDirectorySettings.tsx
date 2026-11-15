@@ -1,6 +1,16 @@
 import type { DeviceListItem } from '@lobechat/types';
-import { Block, Button, cssVar, Flexbox, Icon, Select, Text } from '@lobehub/ui';
-import { FolderIcon, MessageSquarePlusIcon, PlusIcon } from 'lucide-react';
+import {
+  ActionIcon,
+  Button,
+  confirmModal,
+  cssVar,
+  Flexbox,
+  Icon,
+  Select,
+  Text,
+  toast,
+} from '@lobehub/ui';
+import { FolderIcon, LinkIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 
@@ -9,6 +19,7 @@ import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
+import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
 import {
   useProjectDirectories,
   useProjectDirectoryStore,
@@ -17,7 +28,7 @@ import {
 
 import { openAddDirectoryModal } from './AddDirectoryModal';
 import { openBindDirectoryModal } from './BindDirectoryModal';
-import { useStartDirectoryConversation } from './useStartProjectTopic';
+import { openEditDirectoryModal } from './EditDirectoryModal';
 
 /**
  * A device row restored from the persisted list (`onlineUnknown`) has not been
@@ -40,10 +51,6 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
   const environmentId = params.get('environment') ?? '';
   useProjectStore((s) => s.useFetchProjectDetail)(projectId);
   const project = useCurrentProjectDetail(projectId);
-  const startConversation = useStartDirectoryConversation(
-    projectId,
-    project?.project.coordinatorAgentId,
-  );
   const environmentsRequest = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
   const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
   const environments = useProjectEnvironments(projectId);
@@ -53,13 +60,34 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
   const isDeviceListLoaded = useDeviceStore(deviceSelectors.isDeviceListLoaded);
   const items = directories.filter((d) => !environmentId || d.environmentId === environmentId);
   const error = environmentsRequest.error || directoriesRequest.error || deviceRequest.error;
+  const removeDirectory = useProjectDirectoryStore((s) => s.removeDirectory);
+  const canManage = project?.permissions?.canManage ?? false;
+  const remove = (directory: ProjectDirectory) =>
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('settings.removeDirectoryConfirmDescription', {
+        device: directory.deviceName || directory.deviceId,
+        path: directory.path,
+      }),
+      okButtonProps: { danger: true },
+      okText: t('settings.removeDirectory'),
+      onOk: async () => {
+        try {
+          await removeDirectory(projectId, directory.id);
+        } catch (error) {
+          console.error('Failed to remove project directory', error);
+          toast.error(t('settings.removeDirectoryFailed'));
+        }
+      },
+      title: t('settings.removeDirectoryConfirmTitle', { name: directory.name }),
+    });
   return (
     <Flexbox gap={20}>
       <Flexbox gap={6}>
         <Text fontSize={16} weight={600}>
           {t('settings.workLocations')}
         </Text>
-        <Text type="secondary">{t('settings.directoryDescription')}</Text>
+        <Text type="secondary">{t('settings.directoryListDescription')}</Text>
       </Flexbox>
       <Flexbox horizontal gap={12} justify="space-between">
         <Select
@@ -109,24 +137,21 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
           )}
         </Flexbox>
       ) : (
-        <Block padding={0} variant="outlined">
+        <Flexbox>
           {items.map((directory, index) => (
             <Flexbox
               key={directory.id}
-              padding={16}
+              paddingBlock={12}
               style={index ? { borderTop: `1px solid ${cssVar.colorBorderSecondary}` } : undefined}
             >
               <Flexbox horizontal align="center" gap={16} justify="space-between">
                 <Flexbox flex={1} gap={6} style={{ minWidth: 0 }}>
                   <Flexbox horizontal align="center" gap={8}>
                     <Icon icon={FolderIcon} size={18} />
-                    <Text weight={500}>
-                      {directory.path.split(/[\\/]/).findLast(Boolean) || directory.name}
+                    <Text style={{ overflowWrap: 'anywhere' }} weight={500}>
+                      {directory.path}
                     </Text>
                   </Flexbox>
-                  <Text fontSize={12} style={{ overflowWrap: 'anywhere' }} type="secondary">
-                    {directory.path}
-                  </Text>
                   <Flexbox horizontal align="center" gap={8} wrap="wrap">
                     {getDeviceIcon(
                       devices.find((d) => d.deviceId === directory.deviceId)?.platform,
@@ -136,35 +161,46 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
                     <DevicePresence
                       device={devices.find((d) => d.deviceId === directory.deviceId)}
                     />
-                    <Text fontSize={12} type="secondary">
-                      · {directory.environmentName || t('directories.noEnvironment')}
-                    </Text>
                   </Flexbox>
                 </Flexbox>
-                <Button
-                  disabled={Boolean(directory.instanceId) && !project?.project.coordinatorAgentId}
-                  icon={MessageSquarePlusIcon}
-                  size="small"
-                  onClick={() =>
-                    !directory.instanceId
-                      ? openBindDirectoryModal({
+                <Flexbox horizontal align="center" gap={8}>
+                  {/* A legacy row has no environment yet, so linking it is still its next step. */}
+                  {!directory.instanceId && (
+                    <Button
+                      icon={LinkIcon}
+                      size="small"
+                      onClick={() =>
+                        openBindDirectoryModal({
                           projectId,
                           deviceId: directory.deviceId,
                           path: directory.path,
                         })
-                      : startConversation(directory)
-                  }
-                >
-                  {t(
-                    directory.instanceId
-                      ? 'settings.startDirectoryConversation'
-                      : 'directories.bind',
+                      }
+                    >
+                      {t('directories.bind')}
+                    </Button>
                   )}
-                </Button>
+                  {canManage && (
+                    <ActionIcon
+                      icon={PencilIcon}
+                      size="small"
+                      title={t('settings.editDirectory')}
+                      onClick={() => openEditDirectoryModal(projectId, directory)}
+                    />
+                  )}
+                  {canManage && (
+                    <ActionIcon
+                      icon={Trash2Icon}
+                      size="small"
+                      title={t('settings.removeDirectory')}
+                      onClick={() => remove(directory)}
+                    />
+                  )}
+                </Flexbox>
               </Flexbox>
             </Flexbox>
           ))}
-        </Block>
+        </Flexbox>
       )}
     </Flexbox>
   );

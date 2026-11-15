@@ -1,3 +1,4 @@
+import { RequestTrigger } from '@lobechat/types';
 import type * as ModelBankModule from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,8 +20,12 @@ const {
   mockCreateOperation,
   mockFindShareById,
   mockQueryTree,
+  mockAppEnv,
+  mockFeatureFlags,
   mockTopicFindById,
 } = vi.hoisted(() => ({
+  mockAppEnv: {} as Record<string, unknown>,
+  mockFeatureFlags: vi.fn(),
   mockCreateOperation: vi.fn(),
   mockFindShareById: vi.fn(),
   mockQueryTree: vi.fn(),
@@ -28,6 +33,20 @@ const {
   mockMessageFindById: vi.fn(),
   mockMessageQuery: vi.fn(),
   mockTopicFindById: vi.fn(),
+}));
+
+vi.mock('@/envs/app', async (importOriginal) => {
+  const actual = await importOriginal<{ appEnv: Record<string, unknown> }>();
+  return {
+    ...actual,
+    appEnv: new Proxy(actual.appEnv, {
+      get: (target, key: string) => (key in mockAppEnv ? mockAppEnv[key] : target[key]),
+    }),
+  };
+});
+
+vi.mock('@/server/featureFlags', () => ({
+  getServerFeatureFlagsStateFromRuntimeConfig: mockFeatureFlags,
 }));
 
 vi.mock('@/database/models/agentShare', () => ({
@@ -231,6 +250,7 @@ describe('AiAgentService.runDeferredInit - parity with the send path', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     rows.clear();
+    mockFeatureFlags.mockResolvedValue({});
     let nextId = 0;
     mockMessageCreate.mockImplementation(async (params: any, id?: string) => {
       const row = { ...params, id: id ?? `msg-${++nextId}` };
@@ -340,6 +360,81 @@ describe('AiAgentService.runDeferredInit - parity with the send path', () => {
     expect(comparableContext(run.workerCtx)).toEqual(comparableContext(run.sendCtx));
     expect(run.deferred.state.messages?.map((m: any) => m.id)).toEqual(['u1']);
     expect(run.deferred.state.messages).toEqual(throughRedis(run.created.initialMessages));
+  });
+
+  describe('a send inside the rollout', () => {
+    beforeEach(() => {
+      mockFeatureFlags.mockResolvedValue({ enableDeferredInit: true });
+      mockAppEnv.enableQueueAgentRuntime = true;
+    });
+
+    afterEach(() => {
+      delete mockAppEnv.enableQueueAgentRuntime;
+    });
+
+    const plainSend = {
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Hello',
+      trigger: RequestTrigger.Chat,
+    };
+
+    it('creates the operation without running the init, and the worker can run it', async () => {
+      const result = await service.execAgent(plainSend);
+
+      expect(result.success).toBe(true);
+      expect(runOperationInit).not.toHaveBeenCalled();
+      const created = mockCreateOperation.mock.calls[0][0];
+      expect(created.pendingInitRequest.prompt).toBe('Hello');
+      expect(created.initialContext.phase).toBe('user_input');
+
+      const { pendingInitRequest: request, operationId } = created;
+      const deferred = await service.runDeferredInit({
+        operationId,
+        request: throughRedis(request),
+        state: throughRedis({ ...buildPreInitState(created, {}), request }) as any,
+      });
+
+      expect(runOperationInit).toHaveBeenCalledTimes(1);
+      expect(deferred.state.operationToolSet).toBeDefined();
+      expect(deferred.context.payload).toMatchObject({
+        assistantMessageId: created.appContext.assistantMessageId,
+      });
+    });
+
+    // A web client inside the `agent_llm_relay` rollout declares an executor on
+    // every send; the init never reads it (it rides on the pre-init state).
+    it('defers a send whose client declares an LLM executor', async () => {
+      const llmExecutor = {
+        capabilities: ['llm_execute'],
+        clientId: 'client-1',
+        providers: ['ollama'],
+      };
+
+      await service.execAgent({ ...plainSend, llmExecutor } as any);
+
+      expect(runOperationInit).not.toHaveBeenCalled();
+      const created = mockCreateOperation.mock.calls[0][0];
+      expect(created.pendingInitRequest).toBeDefined();
+      expect(created.llmExecutor).toEqual(llmExecutor);
+    });
+
+    it('keeps the init synchronous for a regenerate', async () => {
+      rows.set('msg-prev-1', {
+        content: 'earlier',
+        id: 'msg-prev-1',
+        role: 'user',
+        topicId: 'topic-1',
+      });
+      await service.execAgent({
+        ...plainSend,
+        parentMessageId: 'msg-prev-1',
+        resume: true,
+      });
+
+      expect(runOperationInit).toHaveBeenCalledTimes(1);
+      expect(mockCreateOperation.mock.calls[0][0].pendingInitRequest).toBeUndefined();
+    });
   });
 
   describe('a share visitor run', () => {

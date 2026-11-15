@@ -1,5 +1,7 @@
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { ChatInputActions } from '@lobehub/editor/react';
+import * as stylex from '@stylexjs/stylex';
+import { type StyleXStyles } from '@stylexjs/stylex';
 import { memo, useMemo } from 'react';
 
 import { useGlobalStore } from '@/store/global';
@@ -55,8 +57,12 @@ export interface ActionToolbarProps {
   extraActionItems?: ChatInputActionsProps['items'];
 }
 
-const ActionToolbar = memo<ActionToolbarProps>(
-  ({ borderRadius, disableCollapse = false, dropdownPlacement, extraActionItems = [] }) => {
+interface ActionToolbarComponentProps extends ActionToolbarProps {
+  xstyle?: StyleXStyles;
+}
+
+const ActionToolbar = memo<ActionToolbarComponentProps>(
+  ({ borderRadius, disableCollapse = false, dropdownPlacement, extraActionItems = [], xstyle }) => {
     const [expandInputActionbar, toggleExpandInputActionbar] = useGlobalStore((s) => [
       systemStatusSelectors.expandInputActionbar(s),
       s.toggleExpandInputActionbar,
@@ -88,6 +94,7 @@ const ActionToolbar = memo<ActionToolbarProps>(
       <ActionBarContext value={contextValue}>
         <ChatInputActions
           autoCollapse={!disableCollapse}
+          className={stylex.props(xstyle).className}
           collapseOffset={mobile ? 48 : 80}
           defaultGroupCollapse={!disableCollapse}
           groupCollapse={disableCollapse ? false : !expandInputActionbar}
