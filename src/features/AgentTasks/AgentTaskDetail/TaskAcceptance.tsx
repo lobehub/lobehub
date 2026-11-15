@@ -257,8 +257,9 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
     // Signed off is finished: the verdict moves up beside the title, and the
     // decision bar — which has nothing left to offer — stops covering the
     // evidence below it.
-    const accepted = bundle?.acceptance.status === 'accepted';
-    const acceptedAt = accepted ? bundle?.acceptance.completedAt : undefined;
+    const acceptance = bundle?.acceptance;
+    const accepted = acceptance?.status === 'accepted';
+    const acceptedAt = accepted ? acceptance?.completedAt : undefined;
     const acceptedBadge = accepted && (
       <Tooltip
         title={t('acceptance.banner.accepted', {

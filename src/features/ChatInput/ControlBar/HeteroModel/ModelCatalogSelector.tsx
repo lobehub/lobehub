@@ -173,10 +173,11 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
 
     // The persisted id can be an opaque tuple (DeepSeek Harness). Show the
     // catalog label when it is loaded, otherwise derive a readable name.
+    const catalogModels = data?.models ?? [];
     const triggerModelLabel =
       currentModel === HETEROGENEOUS_AGENT_DEFAULT_SELECTION
         ? t('heteroAgent.modelSelector.default')
-        : (data?.models.find((item) => item.id === currentModel)?.label ??
+        : (catalogModels.find((item) => item.id === currentModel)?.label ??
           getModelLabel(currentModel, t('heteroAgent.modelSelector.default')));
 
     const handleOpenChangeComplete = useCallback(
