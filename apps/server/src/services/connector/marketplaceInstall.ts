@@ -44,7 +44,7 @@ export interface MarketMcpManifest {
   /**
    * The market's hosted endpoint for a stdio server, when it runs one. The
    * market serves it on the MCP's detail (`market.getMcpDetail`), not in the
-   * manifest: the caller copies it in.
+   * manifest: see {@link MarketplaceInstallOptions.readHostedEndpoint}.
    */
   haveCloudEndpoint?: unknown;
   icon?: string;
@@ -106,18 +106,25 @@ const doesConfigSchemaRequireInput = (configSchema: unknown) => {
  * endpoint for a stdio server first, then an HTTP endpoint. A stdio-only server
  * needs a local process, which a server run cannot start.
  */
-export const pickMarketplaceDeployment = (
-  manifest: MarketMcpManifest,
-): { deployment: MarketplaceDeployment } | { blocker: MarketplaceInstallBlocker } => {
-  const options = Array.isArray(manifest.deploymentOptions) ? manifest.deploymentOptions : [];
-  const httpOption =
-    options.find((option) => option?.connection?.url && option.connection.type === 'http') ??
-    options.find((option) => option?.connection?.url && !option.connection.type);
-  const stdioOption = options.find(
+const deploymentOptionsOf = (manifest: MarketMcpManifest) =>
+  Array.isArray(manifest.deploymentOptions) ? manifest.deploymentOptions : [];
+
+/** A stdio option: typed so, or neither typed nor given a URL. */
+const findStdioOption = (manifest: MarketMcpManifest) =>
+  deploymentOptionsOf(manifest).find(
     (option) =>
       option?.connection?.type === 'stdio' ||
       (!option?.connection?.type && !option?.connection?.url),
   );
+
+export const pickMarketplaceDeployment = (
+  manifest: MarketMcpManifest,
+): { deployment: MarketplaceDeployment } | { blocker: MarketplaceInstallBlocker } => {
+  const options = deploymentOptionsOf(manifest);
+  const httpOption =
+    options.find((option) => option?.connection?.url && option.connection.type === 'http') ??
+    options.find((option) => option?.connection?.url && !option.connection.type);
+  const stdioOption = findStdioOption(manifest);
 
   if (stdioOption && manifest.haveCloudEndpoint) {
     const connection = stdioOption.connection ?? {};
@@ -236,10 +243,21 @@ const INSTALL_ATTEMPT_KEY = 'marketplaceInstallAttempt';
  * An HTTP server's tools are the ones it lists, each with the approval the
  * marketplace manifest gives it: the listing cannot carry one.
  */
+export interface MarketplaceInstallOptions {
+  /**
+   * Reads whether the market hosts the server (its detail's
+   * `haveCloudEndpoint`), which the manifest does not say. Called only when it
+   * decides the deployment: an install still to place, of a server with a
+   * stdio option. A rejection fails the install before anything is written.
+   */
+  readHostedEndpoint?: () => Promise<unknown>;
+}
+
 export const installMarketplaceMcpConnector = async (
   scope: MarketplaceInstallScope,
   identifier: string,
   manifest: MarketMcpManifest,
+  { readHostedEndpoint }: MarketplaceInstallOptions = {},
 ): Promise<MarketplaceInstallOutcome> => {
   const { serverDB, userId, workspaceId } = scope;
 
@@ -256,7 +274,11 @@ export const installMarketplaceMcpConnector = async (
 
   if (!(await canAddConnector(scope))) return { blocker: 'forbidden', status: 'blocked' };
 
-  const picked = pickMarketplaceDeployment(manifest);
+  const picked = pickMarketplaceDeployment(
+    readHostedEndpoint && manifest.haveCloudEndpoint === undefined && findStdioOption(manifest)
+      ? { ...manifest, haveCloudEndpoint: await readHostedEndpoint() }
+      : manifest,
+  );
   if ('blocker' in picked) return { blocker: picked.blocker, status: 'blocked' };
   const { deployment } = picked;
 

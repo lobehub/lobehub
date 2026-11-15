@@ -66,8 +66,8 @@ const installFromServer = (
             : vi.fn().mockResolvedValue(detail),
         getMcpManifest: vi.fn().mockResolvedValue(served),
       },
-      installMarketplaceConnector: (identifier, fetched) =>
-        installMarketplaceMcpConnector({ serverDB: db, userId }, identifier, fetched),
+      installMarketplaceConnector: (identifier, fetched, options) =>
+        installMarketplaceMcpConnector({ serverDB: db, userId }, identifier, fetched, options),
       pluginModel,
     },
     { agentId: AGENT_ID, source: 'market' },
@@ -181,6 +181,21 @@ describe('resolveOrInstallMarketPlugin — server-side marketplace install', () 
 
     expect(await db.select().from(userConnectors)).toEqual([]);
     expect(await db.select().from(userInstalledPlugins)).toEqual([]);
+  });
+
+  it("pins a finished install again even when the market's detail cannot be read", async () => {
+    await installFromServer();
+    const before = await db.select().from(userConnectors);
+
+    // Whether the market hosts it only matters for an install still to place
+    const { installedNow, resolution } = await installFromServer(
+      manifest,
+      new Error('market unavailable'),
+    );
+
+    expect(installedNow).toBe(false);
+    expect(resolution).toEqual({ source: 'connector', status: 'loadable' });
+    expect(await db.select().from(userConnectors)).toEqual(before);
   });
 
   it('pins a finished install again without writing anything', async () => {

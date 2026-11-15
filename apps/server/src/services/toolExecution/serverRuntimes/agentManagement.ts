@@ -28,6 +28,7 @@ import { AgentService } from '@/server/services/agent';
 import {
   installMarketplaceMcpConnector,
   type MarketMcpManifest,
+  type MarketplaceInstallOptions,
 } from '@/server/services/connector/marketplaceInstall';
 import { DiscoverService } from '@/server/services/discover';
 
@@ -76,8 +77,11 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
       userId: context.userId,
       workspaceId: context.workspaceId,
     };
-    const installMarketplaceConnector = (identifier: string, manifest: MarketMcpManifest) =>
-      installMarketplaceMcpConnector(installScope, identifier, manifest);
+    const installMarketplaceConnector = (
+      identifier: string,
+      manifest: MarketMcpManifest,
+      options?: MarketplaceInstallOptions,
+    ) => installMarketplaceMcpConnector(installScope, identifier, manifest, options);
 
     return {
       callAgent: async (

@@ -651,6 +651,7 @@ describe('agentManagementRuntime', () => {
         { serverDB: {}, userId: 'user-1', workspaceId: 'workspace-1' },
         'plugin-b',
         manifest,
+        { readHostedEndpoint: expect.any(Function) },
       );
       expect(mockCreatePlugin).not.toHaveBeenCalled();
       expect(mockUpdatePlugin).not.toHaveBeenCalled();

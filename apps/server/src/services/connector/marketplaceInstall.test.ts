@@ -310,6 +310,42 @@ describe('installMarketplaceMcpConnector', () => {
     ).toEqual({ delete: 'always', search: undefined });
   });
 
+  it('reads whether the market hosts the server only when a stdio option makes it decide', async () => {
+    vi.mocked(mcpService.listRawTools).mockResolvedValue([{ name: 'search' }] as never);
+    const readHostedEndpoint = vi.fn().mockResolvedValue(true);
+
+    // An HTTP-only server: nothing to decide
+    expect(
+      await installMarketplaceMcpConnector(scope, 'remote-mcp', httpManifest, {
+        readHostedEndpoint,
+      }),
+    ).toEqual({ status: 'installed' });
+    // A finished install of a stdio server: nothing to place
+    expect(
+      await installMarketplaceMcpConnector(
+        scope,
+        'remote-mcp',
+        { ...cloudManifest, haveCloudEndpoint: undefined },
+        { readHostedEndpoint },
+      ),
+    ).toEqual({ status: 'exists' });
+    expect(readHostedEndpoint).not.toHaveBeenCalled();
+
+    // A stdio server to place: hosted by the market, so a cloud connector
+    expect(
+      await installMarketplaceMcpConnector(
+        scope,
+        'fetch-mcp',
+        { ...cloudManifest, haveCloudEndpoint: undefined },
+        { readHostedEndpoint },
+      ),
+    ).toEqual({ status: 'installed' });
+    expect(readHostedEndpoint).toHaveBeenCalledTimes(1);
+    expect((await connectorRows()).find((row) => row.identifier === 'fetch-mcp')).toMatchObject({
+      mcpConnectionType: 'cloud',
+    });
+  });
+
   it('removes the connector it created when the server cannot be reached', async () => {
     vi.mocked(mcpService.listRawTools).mockRejectedValue(new Error('connect ECONNREFUSED'));
 

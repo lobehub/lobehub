@@ -532,6 +532,7 @@ describe('agentBuilderRuntime', () => {
         { serverDB: {}, userId: 'user-1', workspaceId: undefined },
         'ads-mcp',
         manifest,
+        { readHostedEndpoint: expect.any(Function) },
       );
       expect(mockCreatePlugin).not.toHaveBeenCalled();
       expect(mockUpdatePlugin).not.toHaveBeenCalled();
@@ -572,6 +573,7 @@ describe('agentBuilderRuntime', () => {
       expect(mockInstallMarketplaceConnector).toHaveBeenCalledWith(
         expect.objectContaining({ userId: 'user-1', workspaceId: 'workspace-1' }),
         'ads-mcp',
+        expect.anything(),
         expect.anything(),
       );
     });
