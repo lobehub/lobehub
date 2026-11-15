@@ -1,7 +1,13 @@
 import { isDesktop } from '@lobechat/const';
 import type { McpAppThreadEntry } from '@lobechat/const/mcpApp';
+import {
+  connectorMcpEndpoint,
+  type McpEndpointShape,
+  shouldConnectViaDevice,
+} from '@lobechat/utils/mcpEndpoint';
 
 import { isInstalledPluginAvailableInCurrentEnv } from '@/helpers/toolAvailability';
+import { getServerConfigStoreState } from '@/store/serverConfig/store';
 import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 import type { ToolStore } from '@/store/tool/store';
 
@@ -23,6 +29,18 @@ export const parseMcpEntryTab = (tab: string) => {
   }
 };
 
+/**
+ * Whether an app's MCP server opens only in the desktop app: elsewhere the
+ * server must run it on the user's device (stdio, a localhost / LAN address,
+ * or set to connect through the device — `shouldConnectViaDevice`), and an
+ * app view's calls are not tunneled there, so opening it always fails.
+ */
+const opensOnlyOnDesktop = (endpoint: McpEndpointShape) =>
+  !isDesktop &&
+  shouldConnectViaDevice(endpoint, {
+    deviceGatewayConfigured: !!getServerConfigStoreState()?.serverConfig.deviceGatewayConfigured,
+  });
+
 export const selectMcpAppEntrypoints = (
   state: ToolStore,
   enabled: boolean,
@@ -41,11 +59,13 @@ export const selectMcpAppEntrypoints = (
     if (connector && !connector.isEnabled) return [];
     const isMcp = connector && (connector.mcpServerUrl || connector.mcpConnectionType === 'stdio');
     const plugin = state.installedPlugins.find((item) => item.identifier === identifier);
-    // An app only a desktop can run (stdio) is offered there alone: elsewhere opening it always fails
+    // An app only a desktop can open is offered there alone: elsewhere opening it always fails
     if (
       isMcp
-        ? connector.mcpConnectionType === 'stdio' && !isDesktop
-        : plugin && !isInstalledPluginAvailableInCurrentEnv(plugin)
+        ? opensOnlyOnDesktop(connectorMcpEndpoint(connector))
+        : plugin &&
+          (!isInstalledPluginAvailableInCurrentEnv(plugin) ||
+            (!!plugin.customParams?.mcp && opensOnlyOnDesktop(plugin.customParams.mcp)))
     )
       return [];
     const entries = isMcp
