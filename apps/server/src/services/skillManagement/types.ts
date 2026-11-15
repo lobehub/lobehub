@@ -64,6 +64,11 @@ export interface SkillTargetSnapshot {
   contentHash?: string;
   /** Managed skill bundle backing document id. */
   documentId?: string;
+  /**
+   * Whether the target is a `hintIsSkill` agent document that is not yet a managed bundle.
+   * Its first managed write promotes it into a skill bundle while keeping its agent document id.
+   */
+  hintedDocument?: boolean;
   /** Whether the target is still managed by the skill-management service. */
   managed: boolean;
   /** Human-readable skill title. */
@@ -71,6 +76,40 @@ export interface SkillTargetSnapshot {
   /** Whether the target can currently be mutated. */
   writable: boolean;
 }
+
+/** Skill target snapshot as handed to proposal and compare-and-set write tools. */
+export type SkillTargetBaseSnapshot = SkillTargetSnapshot & { targetType: 'skill' };
+
+/**
+ * Managed skill read that carries the compare-and-set base snapshot for later writes.
+ */
+export interface ManagedSkillTargetDetail extends SkillDetail {
+  /** Snapshot to pass unchanged as `baseSnapshot` to refine/replace writes. */
+  baseSnapshot: SkillTargetBaseSnapshot;
+  /** Discriminator: the target is already a managed skill bundle. */
+  hintedDocument: false;
+}
+
+/**
+ * `hintIsSkill` agent document read that is not yet a managed skill bundle.
+ */
+export interface HintedSkillTargetDetail {
+  /** Agent document binding id from `agent_documents.id`. */
+  agentDocumentId: string;
+  /** Snapshot to pass unchanged as `baseSnapshot` to refine/replace writes. */
+  baseSnapshot: SkillTargetBaseSnapshot;
+  /** Current document content. */
+  content: string;
+  /** Backing document id from `documents.id`. */
+  documentId: string;
+  /** Discriminator: the first write promotes this document into a managed skill. */
+  hintedDocument: true;
+  /** Backing document title. */
+  title: string;
+}
+
+/** Skill write target read by agent-signal tools: a managed skill or a hinted skill document. */
+export type SkillTargetDetail = HintedSkillTargetDetail | ManagedSkillTargetDetail;
 
 /**
  * Input used to list managed skill bundles for an agent.

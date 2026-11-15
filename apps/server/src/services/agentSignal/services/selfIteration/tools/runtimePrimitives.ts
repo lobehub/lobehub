@@ -5,7 +5,10 @@ import { runMemoryActionAgent } from '@/server/services/agentSignal/policies/ana
 import type { SkillManagementDocumentService } from '@/server/services/skillManagement';
 
 import { createSelfReviewProposalPreflightService } from '../review/proposalPreflight';
-import { createSelfReviewProposalSnapshotService } from '../review/proposalSnapshot';
+import {
+  createSelfReviewProposalSnapshotService,
+  resolveReplaceSkillBaseSnapshot,
+} from '../review/proposalSnapshot';
 import { Risk } from '../types';
 import type {
   CreateSkillIfAbsentInput,
@@ -142,35 +145,26 @@ export const createResourceRuntimePrimitives = ({
         ...(result.historyId ? { historyId: result.historyId } : {}),
       };
     },
+    // Skill reads stay in the run agent's scope, the same scope writes and snapshot capture use.
     getManagedSkill: async (rawInput) => {
-      const { agentId: targetAgentId, skillDocumentId } = rawInput as {
-        agentId?: string;
-        skillDocumentId: string;
-      };
+      const { skillDocumentId } = rawInput as { skillDocumentId: string };
 
-      return skillDocumentService.getSkill({
-        agentDocumentId: skillDocumentId,
-        agentId: targetAgentId ?? agentId,
-        includeContent: true,
-      });
+      return skillDocumentService.getSkillTarget({ agentDocumentId: skillDocumentId, agentId });
     },
-    listManagedSkills: async (rawInput) => {
-      const { agentId: targetAgentId } = rawInput as { agentId?: string };
-
-      return skillDocumentService.listSkills({ agentId: targetAgentId ?? agentId });
-    },
+    listManagedSkills: async () => skillDocumentService.listSkills({ agentId }),
     replaceSkillContentCAS: async (rawInput) => {
       const input = rawInput as unknown as ReplaceSkillContentCASInput;
-      const baseSnapshot = await proposalSnapshot.captureActionSnapshot({
-        actionType: 'refine_skill',
-        agentId,
-        input: { skillDocumentId: input.skillDocumentId },
-        userId,
-      });
+      // A complete caller snapshot (the `baseSnapshot` getManagedSkill returned) is the
+      // compare-and-set base; otherwise the current target state is captured here.
       const enriched = {
         ...input,
-        baseSnapshot,
-        skillDocumentId: baseSnapshot.agentDocumentId ?? input.skillDocumentId,
+        ...(await resolveReplaceSkillBaseSnapshot({
+          agentId,
+          baseSnapshot: input.baseSnapshot,
+          skillDocumentId: input.skillDocumentId,
+          snapshotService: proposalSnapshot,
+          userId,
+        })),
       };
 
       const preflight = await proposalPreflight.checkAction({

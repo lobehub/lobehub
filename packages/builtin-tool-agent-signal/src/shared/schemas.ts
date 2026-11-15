@@ -123,7 +123,8 @@ export const RESOURCE_TOOL_APIS: ToolApiSpec[] = [
     parameters: obj({}),
   },
   {
-    description: 'Read one managed skill by skill document id in the reviewed agent scope.',
+    description:
+      'Read one managed skill, or a hinted skill document (hintIsSkill=true), by skill document id in the reviewed agent scope. Returns its content and a baseSnapshot to pass unchanged to replaceSkillContentCAS.',
     name: 'getManagedSkill',
     parameters: obj({ skillDocumentId: str }, ['skillDocumentId']),
   },
@@ -154,7 +155,7 @@ export const RESOURCE_TOOL_APIS: ToolApiSpec[] = [
   },
   {
     description:
-      'Replace one existing managed skill after compare-and-swap preflight. Provide baseSnapshot when available; the server completes it from skillDocumentId when omitted.',
+      'Replace one existing managed skill, or refine a hinted skill document into a managed skill, after compare-and-swap preflight. Pass the baseSnapshot getManagedSkill returned unchanged; the server captures it from skillDocumentId when omitted.',
     name: 'replaceSkillContentCAS',
     parameters: obj(
       {
