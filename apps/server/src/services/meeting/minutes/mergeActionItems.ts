@@ -14,32 +14,49 @@ export interface MergedActionItems {
   items: MeetingActionItem[];
 }
 
+/** Everything that is not a letter or a digit, so `Ship it!` and `ship  it` compare equal. */
+const ACTION_TEXT_NOISE = /[^\p{L}\p{N}]+/gu;
+
+/**
+ * The content of a to-do with case, punctuation and spacing taken out. A refine pass may
+ * re-word the same commitment in trivial ways; two different commitments never normalize
+ * to the same string.
+ */
+export const normalizeActionText = (text: string) =>
+  text.normalize('NFKC').toLowerCase().replace(ACTION_TEXT_NOISE, ' ').trim();
+
+/** Whether two items come from the same utterance, whether or not their ids line up. */
+const citesSamePassage = (kept: MeetingActionItem, item: MeetingActionItem) => {
+  if (item.segmentIds.some((id) => kept.segmentIds.includes(id))) return true;
+
+  if (typeof kept.startMs !== 'number' || typeof item.startMs !== 'number') return false;
+
+  return Math.abs(kept.startMs - item.startMs) <= SAME_PASSAGE_MS;
+};
+
 /**
  * Fold a freshly generated item list into the stored one, under the minutes write lock.
  *
  * Items already turned into tasks are kept untouched, so their task links never break.
- * A suggestion that cites the same passage as one of them is the same to-do and is
- * dropped: identity is the passage offset (`startMs`), because a refine pass replaces
- * the segments a kept item cites — the ids change, the audio behind them does not.
+ * A suggestion is dropped only when it is the same to-do as one of them: it cites the
+ * same passage *and* it says the same thing. The passage alone is not identity — an ASR
+ * model without timestamped output stores the whole chunk as a single segment, so several
+ * unrelated commitments share it, and regenerating the minutes must not delete the ones
+ * that never became a task.
  */
 export const mergeActionItems = (
   stored: MeetingActionItem[],
   generated: MeetingActionItem[],
 ): MergedActionItems => {
   const kept = stored.filter((item) => item.status === 'created');
-
-  const takenSegments = new Set(kept.flatMap((item) => item.segmentIds));
-  const takenOffsets = kept
-    .map((item) => item.startMs)
-    .filter((startMs): startMs is number => typeof startMs === 'number');
+  const keptTexts = kept.map((item) => normalizeActionText(item.text));
 
   const fresh = generated.filter((item) => {
-    if (item.segmentIds.some((id) => takenSegments.has(id))) return false;
+    const text = normalizeActionText(item.text);
 
-    const { startMs } = item;
-    if (typeof startMs !== 'number') return true;
-
-    return !takenOffsets.some((taken) => Math.abs(taken - startMs) <= SAME_PASSAGE_MS);
+    return !kept.some(
+      (keptItem, index) => keptTexts[index] === text && citesSamePassage(keptItem, item),
+    );
   });
 
   return { fresh, items: [...kept, ...fresh] };

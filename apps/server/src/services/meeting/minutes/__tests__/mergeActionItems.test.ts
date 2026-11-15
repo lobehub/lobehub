@@ -18,7 +18,9 @@ const suggested = (patch: Partial<MeetingActionItem> & { id: string }): MeetingA
 describe('mergeActionItems', () => {
   it('keeps created items and drops a suggestion citing the same segment', () => {
     const stored = [item({ id: 'a', segmentIds: ['seg_1'], startMs: 1000 })];
-    const generated = [suggested({ id: 'new', segmentIds: ['seg_1'], startMs: 1000 })];
+    const generated = [
+      suggested({ id: 'new', segmentIds: ['seg_1'], startMs: 1000, text: 'task a' }),
+    ];
 
     expect(mergeActionItems(stored, generated)).toEqual({ fresh: [], items: stored });
   });
@@ -27,7 +29,29 @@ describe('mergeActionItems', () => {
     // A refine pass rewrites the transcript: the kept item still points at the old segment
     // ids, the regenerated suggestion points at new ones for the same utterance.
     const stored = [item({ id: 'a', segmentIds: ['old_seg'], startMs: 61_000 })];
-    const generated = [suggested({ id: 'new', segmentIds: ['new_seg'], startMs: 62_100 })];
+    const generated = [
+      suggested({ id: 'new', segmentIds: ['new_seg'], startMs: 62_100, text: 'task a' }),
+    ];
+
+    expect(mergeActionItems(stored, generated).fresh).toEqual([]);
+  });
+
+  it('keeps a different action that cites the same segment', () => {
+    // An ASR model without timestamped output stores the whole chunk as one segment, so
+    // unrelated commitments share it: only the passage is not enough to call them equal.
+    const stored = [item({ id: 'a', segmentIds: ['chunk_1'], startMs: 0, text: 'Send the deck' })];
+    const generated = [
+      suggested({ id: 'new', segmentIds: ['chunk_1'], startMs: 0, text: 'Book the room' }),
+    ];
+
+    expect(mergeActionItems(stored, generated).fresh).toEqual(generated);
+  });
+
+  it('treats punctuation, case and spacing as the same to-do', () => {
+    const stored = [item({ id: 'a', segmentIds: ['seg_1'], startMs: 1000, text: 'Ship it!' })];
+    const generated = [
+      suggested({ id: 'new', segmentIds: ['seg_1'], startMs: 1000, text: '  ship   IT ' }),
+    ];
 
     expect(mergeActionItems(stored, generated).fresh).toEqual([]);
   });
@@ -41,11 +65,11 @@ describe('mergeActionItems', () => {
     expect(mergeActionItems(stored, generated).fresh).toEqual(generated);
   });
 
-  it('keeps suggestions without an offset unless a segment matches', () => {
+  it('keeps suggestions without an offset unless the same segment and action match', () => {
     const stored = [item({ id: 'a', segmentIds: ['old_seg'], startMs: 61_000 })];
     const generated = [
       suggested({ id: 'no_offset', segmentIds: ['new_seg'], startMs: undefined }),
-      suggested({ id: 'same_segment', segmentIds: ['old_seg'], startMs: 61_000 }),
+      suggested({ id: 'same_segment', segmentIds: ['old_seg'], startMs: 61_000, text: 'task a' }),
     ];
 
     expect(mergeActionItems(stored, generated).fresh).toEqual([generated[0]]);
