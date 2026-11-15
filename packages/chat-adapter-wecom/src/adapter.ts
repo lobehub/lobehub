@@ -17,7 +17,6 @@ import { Message, parseMarkdown } from 'chat';
 import { threadFromBody } from './connection';
 import { verifyForwardedFrame, WECOM_SIGNATURE_HEADER, WECOM_TIMESTAMP_HEADER } from './crypto';
 import { WeComFormatConverter } from './format-converter';
-import { collectWeComMedia, downloadWeComMedia } from './media';
 import { createInProcessWeComOutbound } from './registry';
 import type {
   WeComAdapterConfig,
@@ -29,6 +28,7 @@ import type {
   WeComThreadId,
 } from './types';
 import { WECOM_CMD } from './types';
+import { collectWeComMedia, downloadWeComMedia } from './wecomMedia';
 
 const quoteText = (quote?: WeComQuote): string | undefined => {
   if (!quote) return undefined;

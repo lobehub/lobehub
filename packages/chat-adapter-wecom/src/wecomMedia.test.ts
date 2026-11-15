@@ -2,8 +2,8 @@ import { createCipheriv, randomBytes } from 'node:crypto';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { collectWeComMedia, downloadWeComMedia } from './media';
 import type { WeComMessageBody } from './types';
+import { collectWeComMedia, downloadWeComMedia } from './wecomMedia';
 
 const encrypt = (plain: Buffer, key: Buffer) => {
   const pad = 32 - (plain.length % 32);

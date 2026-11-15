@@ -15,8 +15,6 @@ export {
   WECOM_TIMESTAMP_HEADER,
 } from './crypto';
 export { WeComFormatConverter } from './format-converter';
-export type { DownloadedWeComMedia, WeComMediaKind, WeComMediaRef } from './media';
-export { collectWeComMedia, downloadWeComMedia } from './media';
 export {
   createInProcessWeComOutbound,
   getWeComConnection,
@@ -37,3 +35,5 @@ export type {
   WeComThreadId,
 } from './types';
 export { WECOM_CMD, WECOM_DEFAULT_WS_URL, WECOM_MAX_CONTENT_BYTES } from './types';
+export type { DownloadedWeComMedia, WeComMediaKind, WeComMediaRef } from './wecomMedia';
+export { collectWeComMedia, downloadWeComMedia } from './wecomMedia';
