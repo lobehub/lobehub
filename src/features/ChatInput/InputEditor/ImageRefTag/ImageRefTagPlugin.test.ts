@@ -6,7 +6,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ImageUploadRef } from '../../utils/imageUploads';
 import { $isImageRefTagNode, type ImageRefTagNode } from './ImageRefTagNode';
-import { ImageRefTagPlugin, SYNC_IMAGE_REF_TAGS_COMMAND } from './ImageRefTagPlugin';
+import {
+  ImageRefTagPlugin,
+  PRUNE_UNATTACHED_IMAGE_REFS_COMMAND,
+  SYNC_IMAGE_REF_TAGS_COMMAND,
+} from './ImageRefTagPlugin';
 
 const createEditor = (decorator: (node: ImageRefTagNode) => unknown = () => null) => {
   const editor = new Kernel() as unknown as IEditor;
@@ -184,5 +188,22 @@ describe('ImageRefTagPlugin', () => {
 
     await sync(editor, refsOf('blob:a'));
     expect(markdown(editor)).toBe('old [Image #1]');
+  });
+
+  it('drops references to unattached images before sending', async () => {
+    const editor = createEditor();
+    await setText(editor, 'see ');
+    await sync(editor, refsOf('blob:a', 'blob:b'), { insert: ['blob:a', 'blob:b'] });
+    const restored = editor.getDocument('json');
+
+    // After a reload only image b came back; the draft still references both.
+    await sync(editor, refsOf('blob:b'));
+    editor.setDocument('json', restored);
+    await moment();
+
+    editor.dispatchCommand(PRUNE_UNATTACHED_IMAGE_REFS_COMMAND, undefined);
+
+    // Read synchronously, the way sending reads the editor data right after.
+    expect(referencesOf(editor)).toEqual([{ number: 1, src: 'blob:b' }]);
   });
 });

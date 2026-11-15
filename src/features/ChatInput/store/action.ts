@@ -11,6 +11,7 @@ import { systemAgentSelectors, userProfileSelectors } from '@/store/user/selecto
 import { removeDraft } from '../draftStorage';
 import { readDocument, writeDocument } from '../editorDocument';
 import { getInstalledSkillIdentifiers } from '../InputEditor/ActionTag/useInstalledSkillsAndTools';
+import { PRUNE_UNATTACHED_IMAGE_REFS_COMMAND } from '../InputEditor/ImageRefTag/ImageRefTagPlugin';
 import {
   applyInstalledMarketAgents,
   collectPendingMarketAgents,
@@ -87,6 +88,10 @@ export const store: CreateStore = (publicState) => (set, get) => ({
     if (autoCompleteEnabled) {
       editor.dispatchCommand(KEY_ESCAPE_COMMAND, new KeyboardEvent('keydown', { key: 'Escape' }));
     }
+
+    // A chip whose image is not attached (a draft restored after a reload) is not sent as
+    // [Image #N]; drop it so the sent bubble does not show it either.
+    editor.dispatchCommand(PRUNE_UNATTACHED_IMAGE_REFS_COMMAND, undefined);
 
     const commit = (installedAgentIds: ReadonlyMap<string, string> = new Map()) => {
       // Market chips picked from the @ menu were installed just before this

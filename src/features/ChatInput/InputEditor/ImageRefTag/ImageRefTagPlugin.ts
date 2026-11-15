@@ -47,6 +47,15 @@ export const SYNC_IMAGE_REF_TAGS_COMMAND = createCommand<SyncImageRefTagsPayload
   'SYNC_IMAGE_REF_TAGS_COMMAND',
 );
 
+/**
+ * Removes every reference whose image is not attached, so a message sent from a draft whose
+ * uploads never came back (e.g. after a reload) does not show a chip for an image it lacks.
+ * The update is flushed synchronously, so the editor data read right after includes it.
+ */
+export const PRUNE_UNATTACHED_IMAGE_REFS_COMMAND = createCommand<void>(
+  'PRUNE_UNATTACHED_IMAGE_REFS_COMMAND',
+);
+
 type IEditorKernel = ReturnType<typeof getKernelFromEditor>;
 
 export interface ImageRefTagPluginOptions {
@@ -65,6 +74,9 @@ const $removeImageRefTag = (node: ImageRefTagNode) => {
   node.remove();
 };
 
+/** Preview URLs whose references are removed when they match no attached image. */
+type RemovedSrcs = Pick<ReadonlySet<string>, 'has'>;
+
 type SyncAction = 'remove' | { ref: ImageUploadRef } | undefined;
 
 /**
@@ -76,7 +88,7 @@ type SyncAction = 'remove' | { ref: ImageUploadRef } | undefined;
 const planReference = (
   node: ImageRefTagNode,
   refs: Map<string, ImageUploadRef>,
-  removed: ReadonlySet<string>,
+  removed: RemovedSrcs,
 ): SyncAction => {
   const ref =
     refs.get(node.src) ??
@@ -90,9 +102,10 @@ const planReference = (
   return stale ? { ref } : undefined;
 };
 
-const NOTHING_REMOVED: ReadonlySet<string> = new Set();
+const NOTHING_REMOVED: RemovedSrcs = new Set();
+const EVERYTHING_REMOVED: RemovedSrcs = { has: () => true };
 
-const $syncImageRefTags = (refs: Map<string, ImageUploadRef>, removed: ReadonlySet<string>) => {
+const $syncImageRefTags = (refs: Map<string, ImageUploadRef>, removed: RemovedSrcs) => {
   for (const { node } of $dfs()) {
     if (!$isImageRefTagNode(node)) continue;
     const action = planReference(node, refs, removed);
@@ -198,6 +211,20 @@ export class ImageRefTagPlugin {
           // Renumbering after a removal belongs to that removal, not to its own undo step.
           inserted.length > 0 ? undefined : { tag: HISTORY_MERGE_TAG },
         );
+        return true;
+      },
+      COMMAND_PRIORITY_HIGH,
+    );
+
+    editor.registerCommand(
+      PRUNE_UNATTACHED_IMAGE_REFS_COMMAND,
+      () => {
+        const refs = this.refs;
+        if (!refs) return false;
+        editor.update(() => $syncImageRefTags(refs, EVERYTHING_REMOVED), {
+          discrete: true,
+          tag: HISTORY_MERGE_TAG,
+        });
         return true;
       },
       COMMAND_PRIORITY_HIGH,
