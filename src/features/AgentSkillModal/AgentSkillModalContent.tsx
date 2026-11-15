@@ -55,12 +55,9 @@ const AgentSkillModalContent = ({ agentDocumentId, agentId }: AgentSkillModalCon
 
   return (
     <Flexbox flex={1} style={{ minHeight: 0 }}>
-      <Alert
-        showIcon
-        message={t('agentSkillModal.frontmatterInvalid')}
-        style={{ flex: 'none', margin: 12 }}
-        type={'warning'}
-      />
+      <Flexbox flex={'none'} padding={12}>
+        <Alert showIcon message={t('agentSkillModal.frontmatterInvalid')} type={'warning'} />
+      </Flexbox>
       {viewer}
     </Flexbox>
   );
