@@ -86,8 +86,51 @@ vi.mock('@/server/services/gateway/runtimeStatus', () => ({
   updateBotRuntimeStatus,
 }));
 
+const gw = vi.hoisted(() => ({
+  findByPlatformAndAppId: vi.fn(),
+  findEnabledByPlatformAndAppId: vi.fn(),
+  getStatus: vi.fn(),
+  host: 'in-process' as 'in-process' | 'message-gateway' | undefined,
+  sendText: vi.fn(),
+  startTyping: vi.fn(),
+}));
+
+vi.mock('@/server/services/gateway/replyConnectionHost', () => ({
+  resolveReplyConnectionHost: () => gw.host,
+}));
+vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: async () => ({}) }));
+vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
+  KeyVaultsGateKeeper: { initWithEnvKey: async () => ({}) },
+}));
+vi.mock('@/database/models/agentBotProvider', () => ({
+  AgentBotProviderModel: {
+    findByPlatformAndAppId: gw.findByPlatformAndAppId,
+    findEnabledByPlatformAndAppId: gw.findEnabledByPlatformAndAppId,
+  },
+}));
+vi.mock('@/server/services/gateway/MessageGatewayClient', () => {
+  class MessageGatewaySendError extends Error {
+    constructor(
+      readonly status: number,
+      detail: string,
+    ) {
+      super(detail);
+    }
+  }
+  return {
+    getMessageGatewayClient: () => ({
+      getStatus: gw.getStatus,
+      sendText: gw.sendText,
+      startTyping: gw.startTyping,
+    }),
+    MessageGatewaySendError,
+  };
+});
+
 const { decodeWeComThreadId, WECOM_DISPLACED_MESSAGE, WeComClientFactory, wecomExtractFiles } =
   await import('./client');
+const { resetWeComGatewayConnectionIds } = await import('./outbound');
+const { MessageGatewaySendError } = await import('@/server/services/gateway/MessageGatewayClient');
 
 const flush = async () => {
   for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
@@ -327,6 +370,77 @@ describe('WeComClient messenger', () => {
     await expect(client.getMessenger('wecom:single:u1').createMessage('x')).rejects.toThrow(
       /no live long connection/,
     );
+  });
+});
+
+describe('WeComClient on the Node message gateway', () => {
+  beforeEach(() => {
+    gw.host = 'message-gateway';
+    resetWeComGatewayConnectionIds();
+    gw.findByPlatformAndAppId.mockReset().mockResolvedValue({ id: 'prov-1' });
+    gw.findEnabledByPlatformAndAppId.mockReset();
+    gw.getStatus.mockReset();
+    gw.sendText.mockReset().mockResolvedValue({ messageId: 'stream-1' });
+    gw.startTyping.mockReset().mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    gw.host = 'in-process';
+  });
+
+  it('sends replies and typing through the gateway, keyed by the provider row', async () => {
+    const messenger = factory.createClient(config, {}).getMessenger('wecom:group:g1');
+
+    await messenger.triggerTyping!();
+    await messenger.createMessage({ content: 'answer' });
+
+    expect(gw.startTyping).toHaveBeenCalledWith('prov-1', 'wecom:group:g1');
+    expect(gw.sendText).toHaveBeenCalledWith('prov-1', 'wecom:group:g1', 'answer');
+    // The row id is looked up once, not on every reply.
+    expect(gw.findByPlatformAndAppId).toHaveBeenCalledTimes(1);
+    expect(FakeSocket.instances).toHaveLength(0);
+  });
+
+  it('looks the connection up again when the gateway no longer knows it', async () => {
+    const messenger = factory.createClient(config, {}).getMessenger('wecom:single:u1');
+    await messenger.createMessage('first');
+
+    gw.findByPlatformAndAppId.mockResolvedValue({ id: 'prov-2' });
+    gw.sendText.mockRejectedValueOnce(new MessageGatewaySendError(404, 'Connection not found'));
+    await messenger.createMessage('second');
+
+    expect(gw.sendText.mock.calls.map(([id, , text]) => [id, text])).toEqual([
+      ['prov-1', 'first'],
+      ['prov-1', 'second'],
+      ['prov-2', 'second'],
+    ]);
+  });
+
+  it('accepts a bot the gateway holds with the same Secret, without a probe', async () => {
+    gw.findEnabledByPlatformAndAppId.mockResolvedValue({
+      credentials: { secret: 'sec' },
+      id: 'prov-1',
+    });
+    gw.getStatus.mockResolvedValue({ config: null, state: { status: 'connected' } });
+
+    await expect(factory.validateCredentials({ secret: 'sec' }, {}, 'bot-1')).resolves.toEqual({
+      valid: true,
+    });
+    expect(gw.getStatus).toHaveBeenCalledWith('prov-1');
+    expect(FakeSocket.instances).toHaveLength(0);
+  });
+
+  it('probes when the Secret differs from the one the gateway holds', async () => {
+    gw.findEnabledByPlatformAndAppId.mockResolvedValue({
+      credentials: { secret: 'old' },
+      id: 'prov-1',
+    });
+
+    await expect(factory.validateCredentials({ secret: 'new' }, {}, 'bot-1')).resolves.toEqual({
+      valid: true,
+    });
+    expect(gw.getStatus).not.toHaveBeenCalled();
+    expect(FakeSocket.instances).toHaveLength(1);
   });
 });
 

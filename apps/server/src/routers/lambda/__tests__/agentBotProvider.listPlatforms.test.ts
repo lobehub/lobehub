@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const gateway = vi.hoisted(() => ({ enabled: false }));
+const gateway = vi.hoisted(() => ({ enabled: false, nodePlatforms: [] as string[] }));
 
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(function () {
@@ -24,7 +24,7 @@ const WECOM = vi.hoisted(() => ({
   connectionMode: 'websocket',
   id: 'wecom',
   name: 'WeCom',
-  requiresInProcessConnection: true,
+  repliesOverConnection: true,
   schema: [],
 }));
 
@@ -37,7 +37,7 @@ vi.mock('@/server/services/bot/platforms', () => ({
         connectionMode: 'websocket',
         id: 'wecom',
         name: 'WeCom',
-        requiresInProcessConnection: true,
+        repliesOverConnection: true,
         schema: [],
       },
     ]),
@@ -47,6 +47,10 @@ vi.mock('@/server/services/bot/platforms', () => ({
 vi.mock('@/server/services/gateway', () => ({ GatewayService: vi.fn() }));
 vi.mock('@/server/services/gateway/MessageGatewayClient', () => ({
   isAnyMessageGatewayEnabled: () => gateway.enabled,
+  isMessageGatewayHostConfigured: (host: string) =>
+    host === 'default' || gateway.nodePlatforms.length > 0,
+  resolveMessageGatewayHost: (platform?: string) =>
+    platform && gateway.nodePlatforms.includes(platform) ? 'node' : 'default',
 }));
 vi.mock('@/server/services/bot/BotMessageRouter', () => ({ getBotMessageRouter: vi.fn() }));
 vi.mock('@/server/services/gateway/runtimeStatus', () => ({ getBotRuntimeStatus: vi.fn() }));
@@ -62,6 +66,7 @@ const ctx: any = { serverDB: {}, userId: 'user-1', workspaceId: null };
 describe('agentBotProviderRouter.listPlatforms', () => {
   beforeEach(() => {
     gateway.enabled = false;
+    gateway.nodePlatforms = [];
     vi.stubEnv('VERCEL_ENV', '');
   });
 
@@ -83,11 +88,18 @@ describe('agentBotProviderRouter.listPlatforms', () => {
     ]);
   });
 
+  it('offers it behind the gateway when it is routed to the Node gateway, which sends its replies', async () => {
+    gateway.enabled = true;
+    gateway.nodePlatforms = ['wecom'];
+    const platforms = await agentBotProviderRouter.createCaller(ctx).listPlatforms();
+    expect(platforms.every((p) => !(p as any).unavailableReason)).toBe(true);
+  });
+
   it('marks it unavailable on serverless, where the socket and the webhook live apart', async () => {
     vi.stubEnv('VERCEL_ENV', 'preview');
     const platforms = await agentBotProviderRouter.createCaller(ctx).listPlatforms();
     expect((platforms.find((p) => p.id === 'wecom') as any).unavailableReason).toMatch(
-      /cannot hold in the process that answers messages/,
+      /cannot hold where it answers messages/,
     );
   });
 

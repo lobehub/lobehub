@@ -10,7 +10,7 @@ import {
   hasPassiveListeningRule,
 } from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
-import { canHostInProcessConnections } from '@/server/services/gateway/inProcessConnections';
+import { resolveReplyConnectionHost } from '@/server/services/gateway/replyConnectionHost';
 
 import { getBotMessageRouter } from './BotMessageRouter';
 import {
@@ -254,22 +254,27 @@ export async function invalidateBotAfterUpdate(
 
   await getBotMessageRouter().invalidateBot(existing.platform, existing.applicationId);
 
-  // A platform whose live connection is held in-process signs what it forwards with its
-  // credentials, and the reloaded webhook adapter now verifies with the new ones: restart the
-  // connection on them, or every inbound message is refused from here on.
+  // A platform that replies over its own connection signs what it forwards with its credentials,
+  // and the reloaded webhook adapter now verifies with the new ones: restart the connection on
+  // them, or every inbound message is refused from here on.
+  const replyHost =
+    platformRegistry.getPlatform(existing.platform)?.repliesOverConnection &&
+    resolveReplyConnectionHost(existing.platform);
   if (
+    replyHost &&
     !shouldStopRuntime &&
     value.credentials !== undefined &&
-    haveCredentialsChanged(existing.credentials, value.credentials) &&
-    platformRegistry.getPlatform(existing.platform)?.requiresInProcessConnection &&
-    canHostInProcessConnections()
+    haveCredentialsChanged(existing.credentials, value.credentials)
   ) {
-    // Not awaited: the subscribe handshake can take up to its connect timeout, and the save has
-    // already succeeded. The client records the outcome in its runtime status.
-    void service
+    const restart = service
       .startClient(existing.platform, existing.applicationId, existing.userId)
       .catch((error) => {
         log('Restart after credential change failed for %s: %O', existing.platform, error);
       });
+    // In-process, the subscribe handshake can take up to its connect timeout and the save has
+    // already succeeded, so it is not awaited; the client records the outcome in its runtime
+    // status. A gateway connect returns at once, and on serverless a promise left running after
+    // the response may never finish.
+    if (replyHost === 'message-gateway') await restart;
   }
 }

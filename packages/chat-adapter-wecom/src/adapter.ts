@@ -18,11 +18,12 @@ import { threadFromBody } from './connection';
 import { verifyForwardedFrame, WECOM_SIGNATURE_HEADER, WECOM_TIMESTAMP_HEADER } from './crypto';
 import { WeComFormatConverter } from './format-converter';
 import { collectWeComMedia, downloadWeComMedia } from './media';
-import { getWeComConnection, requireWeComConnection } from './registry';
+import { createInProcessWeComOutbound } from './registry';
 import type {
   WeComAdapterConfig,
   WeComForwardedFrame,
   WeComMessageBody,
+  WeComOutbound,
   WeComQuote,
   WeComRawMessage,
   WeComThreadId,
@@ -75,6 +76,7 @@ export class WeComAdapter implements Adapter<WeComThreadId, WeComRawMessage> {
   readonly name = 'wecom';
 
   private readonly botId: string;
+  private readonly outbound: WeComOutbound;
   private readonly secret: string;
   private readonly formatConverter = new WeComFormatConverter();
   private _userName: string;
@@ -83,6 +85,7 @@ export class WeComAdapter implements Adapter<WeComThreadId, WeComRawMessage> {
 
   constructor(config: WeComAdapterConfig) {
     this.botId = config.botId;
+    this.outbound = config.outbound ?? createInProcessWeComOutbound(config.botId);
     this.secret = config.secret;
     this._userName = config.userName || 'wecom-bot';
   }
@@ -160,7 +163,7 @@ export class WeComAdapter implements Adapter<WeComThreadId, WeComRawMessage> {
   ): Promise<RawMessage<WeComRawMessage>> {
     const thread = this.decodeThreadId(threadId);
     const text = this.formatConverter.renderPostable(message);
-    const result = await requireWeComConnection(this.botId).deliver(thread, text);
+    const result = await this.outbound.deliver(thread, text);
 
     return {
       id: result.id,
@@ -212,10 +215,8 @@ export class WeComAdapter implements Adapter<WeComThreadId, WeComRawMessage> {
    * refused frame just means no bubble.
    */
   async startTyping(threadId: string): Promise<void> {
-    const connection = getWeComConnection(this.botId);
-    if (!connection?.isConnected) return;
     try {
-      await connection.openStream(this.decodeThreadId(threadId));
+      await this.outbound.openStream(this.decodeThreadId(threadId));
     } catch (error) {
       this.logger?.warn('WeCom startTyping failed: %O', error);
     }

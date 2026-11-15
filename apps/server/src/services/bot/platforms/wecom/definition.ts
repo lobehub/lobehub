@@ -16,7 +16,7 @@ export const wecom: PlatformDefinition = {
   },
   // Replies ride the bot's own long connection (see protocol-spec.md), so only a single
   // long-running server can serve it.
-  requiresInProcessConnection: true,
+  repliesOverConnection: true,
   schema,
   supportsMarkdown: true,
   // A sent message cannot be changed; the reply fills the stream bubble opened while the agent works.

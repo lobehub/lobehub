@@ -101,8 +101,22 @@ export interface WeComRawMessage {
   reqId: string;
 }
 
+/**
+ * How replies reach WeCom. They can only travel on the socket that holds the bot, so whoever
+ * holds it provides this: the in-process connection by default, or a message gateway that holds
+ * it on the server's behalf.
+ */
+export interface WeComOutbound {
+  /** Send `text` to the conversation: finish its open stream, answer its latest message, or push. */
+  deliver: (thread: WeComThreadId, text: string) => Promise<{ id: string }>;
+  /** Best-effort "replying" bubble on the conversation's latest message. */
+  openStream: (thread: WeComThreadId) => Promise<void>;
+}
+
 export interface WeComAdapterConfig {
   botId: string;
+  /** Where replies go out. Defaults to the live connection this process holds for `botId`. */
+  outbound?: WeComOutbound;
   secret: string;
   userName?: string;
 }

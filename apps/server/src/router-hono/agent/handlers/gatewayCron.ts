@@ -119,9 +119,9 @@ async function processConnectQueue(remainingMs: number): Promise<number> {
         continue;
       }
       // Replies for these ride the connection, which this cron invocation would take with it.
-      if (definition.requiresInProcessConnection) {
+      if (definition.repliesOverConnection) {
         log(
-          'Skipping queued in-process-only platform=%s appId=%s',
+          'Skipping queued platform that replies over its connection platform=%s appId=%s',
           item.platform,
           item.applicationId,
         );
@@ -219,7 +219,7 @@ export async function gatewayCron(c: Context): Promise<Response> {
 
   for (const platform of platforms) {
     // Replies for these ride the connection, which this cron invocation would take with it.
-    if (platform.requiresInProcessConnection) continue;
+    if (platform.repliesOverConnection) continue;
 
     const providers = await AgentBotProviderModel.findEnabledByPlatform(
       serverDB,

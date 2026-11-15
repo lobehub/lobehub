@@ -12,16 +12,13 @@ import { BOT_CONNECT_QUEUE_EXPIRE_MS, BotConnectQueue } from './botConnectQueue'
 import { createGatewayManager, getGatewayManager } from './GatewayManager';
 import { mapGatewayStatusToRuntimeStatus, resolveBotGatewayCapabilities } from './gatewayMapping';
 import {
-  canHostInProcessConnections,
-  inProcessConnectionUnavailableMessage,
-} from './inProcessConnections';
-import {
   getConfiguredMessageGatewayHosts,
   getMessageGatewayClient,
   getMessageGatewayClientForHost,
   isAnyMessageGatewayEnabled,
   type MessageGatewayHost,
 } from './MessageGatewayClient';
+import { getReplyConnectionUnavailableReason } from './replyConnectionHost';
 import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus, updateBotRuntimeStatus } from './runtimeStatus';
 import { syncGatewayConnections } from './sync';
 import * as desiredForHost from './sync/desiredForHost';
@@ -78,20 +75,19 @@ export class GatewayService {
 
   /**
    * A platform that replies only over its own connection would receive messages it can never
-   * answer here (see `canHostInProcessConnections`): record why, and refuse instead of connecting.
+   * answer here (see `resolveReplyConnectionHost`): record why, and refuse instead of connecting.
    */
   private async assertCanHostConnection(platform: string, applicationId: string): Promise<void> {
-    const definition = platformRegistry.getPlatform(platform);
-    if (!definition?.requiresInProcessConnection || canHostInProcessConnections()) return;
+    const message = getReplyConnectionUnavailableReason(platformRegistry.getPlatform(platform));
+    if (!message) return;
 
-    const message = inProcessConnectionUnavailableMessage(definition.name);
     await updateBotRuntimeStatus({
       applicationId,
       errorMessage: message,
       platform,
       status: BOT_RUNTIME_STATUSES.failed,
     });
-    log('Refused connect for in-process-only platform %s:%s', platform, applicationId);
+    log('Refused connect for unservable platform %s:%s', platform, applicationId);
     // A precondition of this deployment, not a server fault: callers surface it as-is.
     throw new TRPCError({ code: 'PRECONDITION_FAILED', message });
   }

@@ -10,10 +10,13 @@ import {
 const mockAssertBotFeatureAccess = vi.hoisted(() => vi.fn());
 const mockStopClient = vi.hoisted(() => vi.fn());
 const mockStartClient = vi.hoisted(() => vi.fn());
-const inProcess = vi.hoisted(() => ({ canHost: true }));
+const inProcess = vi.hoisted(() => ({
+  canHost: true,
+  host: 'in-process' as 'in-process' | 'message-gateway',
+}));
 
-vi.mock('@/server/services/gateway/inProcessConnections', () => ({
-  canHostInProcessConnections: () => inProcess.canHost,
+vi.mock('@/server/services/gateway/replyConnectionHost', () => ({
+  resolveReplyConnectionHost: () => (inProcess.canHost ? inProcess.host : undefined),
 }));
 const mockInvalidateBot = vi.hoisted(() => vi.fn());
 const gatewayState = vi.hoisted(() => ({ useMessageGateway: true }));
@@ -386,6 +389,7 @@ describe('invalidateBotAfterUpdate — credential changes on an in-process-only 
     vi.clearAllMocks();
     mockStartClient.mockResolvedValue('started');
     inProcess.canHost = true;
+    inProcess.host = 'in-process';
     gatewayState.useMessageGateway = false;
   });
 
@@ -434,6 +438,24 @@ describe('invalidateBotAfterUpdate — credential changes on an in-process-only 
     );
 
     expect(mockStartClient).toHaveBeenCalledWith('wecom', 'bot-1', 'user-1');
+  });
+
+  it('waits for the restart when the message gateway holds the connection', async () => {
+    inProcess.host = 'message-gateway';
+    let connected = false;
+    mockStartClient.mockImplementationOnce(async () => {
+      await Promise.resolve();
+      connected = true;
+      return 'started';
+    });
+
+    await invalidateBotAfterUpdate(
+      { ...existing, credentials: { secret: 'old' } },
+      { credentials: { secret: 'new' } },
+    );
+
+    // A serverless invocation may be frozen once it responds, so the gateway connect must land first.
+    expect(connected).toBe(true);
   });
 
   it('keeps the save successful when the restart fails', async () => {

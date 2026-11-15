@@ -49,7 +49,7 @@ import {
 } from '@/server/services/bot/platforms/wechat/contextWindow';
 import { flattenBotWakeSettings } from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
-import { getInProcessConnectionUnavailableReason } from '@/server/services/gateway/inProcessConnections';
+import { getReplyConnectionUnavailableReason } from '@/server/services/gateway/replyConnectionHost';
 import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 import { getMessengerRouter, messengerPlatformRegistry } from '@/server/services/messenger';
 import { TELEGRAM_INSTALLATION_KEY } from '@/server/services/messenger/installations/telegram';
@@ -452,7 +452,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
       },
       createBot: async (params) => {
         assertOwnerMayManageBots();
-        const unavailableReason = getInProcessConnectionUnavailableReason(
+        const unavailableReason = getReplyConnectionUnavailableReason(
           platformRegistry.getPlatform(params.platform),
         );
         if (unavailableReason) throw new Error(unavailableReason);
@@ -534,7 +534,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
         // show up in `listBots` so they can be disabled or removed.
         return platformRegistry
           .listSerializedPlatforms()
-          .filter((p) => !getInProcessConnectionUnavailableReason(p))
+          .filter((p) => !getReplyConnectionUnavailableReason(p))
           .map((p) => {
             const credSchema = (p.schema ?? []).find(
               (f: any) => f.key === 'credentials' && f.properties,

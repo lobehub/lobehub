@@ -1,4 +1,5 @@
 import type { WeComLongConnection } from './connection';
+import type { WeComOutbound } from './types';
 
 /**
  * Live WeCom connections held by this process, keyed by BotID.
@@ -37,6 +38,15 @@ export class WeComConnectionUnavailableError extends Error {
     this.name = 'WeComConnectionUnavailableError';
   }
 }
+
+/** Replies over the connection this process holds for `botId` (the default `WeComOutbound`). */
+export const createInProcessWeComOutbound = (botId: string): WeComOutbound => ({
+  deliver: (thread, text) => requireWeComConnection(botId).deliver(thread, text),
+  openStream: async (thread) => {
+    const connection = getWeComConnection(botId);
+    if (connection?.isConnected) await connection.openStream(thread);
+  },
+});
 
 /** The live connection for `botId`, or a descriptive error when this process does not hold it. */
 export const requireWeComConnection = (botId: string): WeComLongConnection => {

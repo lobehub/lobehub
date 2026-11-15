@@ -13,7 +13,7 @@ import {
 } from './crypto';
 import { registerWeComConnection, unregisterWeComConnection } from './registry';
 import { FakeWeComServerSocket, flush } from './testUtils';
-import type { WeComFrame, WeComMessageBody } from './types';
+import type { WeComFrame, WeComMessageBody, WeComOutbound } from './types';
 import { WECOM_CMD } from './types';
 
 const SECRET = 'bot-secret';
@@ -44,8 +44,8 @@ const signedRequest = (frame: unknown, secret = SECRET, timestamp = String(Date.
   });
 };
 
-const initAdapter = async () => {
-  const adapter = createWeComAdapter({ botId: 'bot-1', secret: SECRET });
+const initAdapter = async (outbound?: WeComOutbound) => {
+  const adapter = createWeComAdapter({ botId: 'bot-1', outbound, secret: SECRET });
   const processMessage = vi.fn();
   await adapter.initialize({
     getLogger: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
@@ -181,6 +181,37 @@ describe('WeComAdapter outbound', () => {
     expect(replies.map((f) => f.body.stream.finish)).toEqual([false, true]);
     expect(replies[1].body.stream.content).toContain('**答**');
     expect(sent.id).toBe(replies[0].body.stream.id);
+  });
+});
+
+describe('WeComAdapter with a supplied outbound', () => {
+  it('sends replies and typing through it instead of an in-process connection', async () => {
+    const outbound = {
+      deliver: vi.fn(async () => ({ id: 'gw-msg-1' })),
+      openStream: vi.fn(async () => {}),
+    };
+    const { adapter } = await initAdapter(outbound);
+
+    await adapter.startTyping('wecom:group:chat-9');
+    const sent = await adapter.postMessage('wecom:group:chat-9', { markdown: '**答**' });
+
+    expect(outbound.openStream).toHaveBeenCalledWith({ id: 'chat-9', type: 'group' });
+    expect(outbound.deliver).toHaveBeenCalledWith(
+      { id: 'chat-9', type: 'group' },
+      expect.stringContaining('**答**'),
+    );
+    expect(sent.id).toBe('gw-msg-1');
+  });
+
+  it('keeps a failed typing call best-effort', async () => {
+    const { adapter } = await initAdapter({
+      deliver: vi.fn(),
+      openStream: vi.fn(async () => {
+        throw new Error('gateway down');
+      }),
+    });
+
+    await expect(adapter.startTyping('wecom:single:zhangsan')).resolves.toBeUndefined();
   });
 });
 

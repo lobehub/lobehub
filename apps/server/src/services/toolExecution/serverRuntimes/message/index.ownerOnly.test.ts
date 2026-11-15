@@ -29,6 +29,8 @@ vi.mock('@/server/services/gateway', () => ({
 }));
 vi.mock('@/server/services/gateway/MessageGatewayClient', () => ({
   isAnyMessageGatewayEnabled: () => mocks.gatewayEnabled,
+  isMessageGatewayHostConfigured: () => true,
+  resolveMessageGatewayHost: () => 'default',
 }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: vi.fn().mockResolvedValue({}) },
@@ -191,6 +193,6 @@ describe('messageRuntime: platforms this deployment cannot run', () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.content).toContain('cannot hold in the process that answers messages');
+    expect(result.content).toContain('cannot hold where it answers messages');
   });
 });

@@ -39,11 +39,7 @@ import {
 } from '@/server/services/bot/platforms/feishu/registration';
 import { flattenBotWakeSettings } from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
-import {
-  canHostInProcessConnections,
-  getInProcessConnectionUnavailableReason,
-  inProcessConnectionUnavailableMessage,
-} from '@/server/services/gateway/inProcessConnections';
+import { getReplyConnectionUnavailableReason } from '@/server/services/gateway/replyConnectionHost';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
 import {
@@ -176,25 +172,20 @@ const withFormSettings = (platform: string, settings?: Record<string, unknown>) 
 
 export const agentBotProviderRouter = router({
   listPlatforms: authedProcedure.query(async ({ ctx }) => {
-    // A platform that replies over its own connection only runs where the process holding it also
-    // answers messages (see `canHostInProcessConnections`). Elsewhere it is marked, not dropped,
-    // so a bot configured before the deployment changed can still be opened and removed.
-    const hostsInProcess = canHostInProcessConnections();
+    // A platform that replies over its own connection only runs where something here can hold
+    // that connection (see `resolveReplyConnectionHost`). Elsewhere it is marked, not dropped, so
+    // a bot configured before the deployment changed can still be opened and removed.
     return Promise.all(
-      platformRegistry.listSerializedPlatforms().map((platform) =>
-        withBotPlatformAccessMeta(
-          !hostsInProcess && platform.requiresInProcessConnection
-            ? {
-                ...platform,
-                unavailableReason: inProcessConnectionUnavailableMessage(platform.name),
-              }
-            : platform,
+      platformRegistry.listSerializedPlatforms().map((platform) => {
+        const unavailableReason = getReplyConnectionUnavailableReason(platform);
+        return withBotPlatformAccessMeta(
+          unavailableReason ? { ...platform, unavailableReason } : platform,
           {
             userId: ctx.userId,
             workspaceId: ctx.workspaceId ?? undefined,
           },
-        ),
-      ),
+        );
+      }),
     );
   }),
 
@@ -220,7 +211,7 @@ export const agentBotProviderRouter = router({
       }
 
       // A bot this deployment can never connect would only fail later, on connect.
-      const unavailableReason = getInProcessConnectionUnavailableReason(
+      const unavailableReason = getReplyConnectionUnavailableReason(
         platformRegistry.getPlatform(input.platform),
       );
       if (unavailableReason) {

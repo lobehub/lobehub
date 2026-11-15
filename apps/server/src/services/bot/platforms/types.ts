@@ -689,11 +689,12 @@ export interface PlatformDefinition {
 
   /**
    * Outbound messages ride the live platform connection itself (WeCom AI bots have no REST send
-   * API), so only the process holding that connection can reply. Deployments where that process
-   * is not the one answering webhooks — external message gateway, serverless — do not offer the
-   * platform or start its connections (`canHostInProcessConnections`).
+   * API), so only whoever holds that connection can reply: this server in-process, or the Node
+   * message gateway on its behalf. Deployments where neither can — serverless without a gateway,
+   * a gateway that keeps the platform on its default host — do not offer the platform or start
+   * its connections (`resolveReplyConnectionHost`).
    */
-  requiresInProcessConnection?: boolean;
+  repliesOverConnection?: boolean;
 
   /** Field schema — top-level objects `credentials` and `settings` map to DB columns. */
   schema: FieldSchema[];
@@ -733,7 +734,7 @@ export interface PlatformDefinition {
 /** Serialized platform definition for frontend consumption (excludes runtime-only fields). */
 export type SerializedPlatformDefinition = Omit<PlatformDefinition, 'clientFactory'> & {
   /**
-   * Set when this deployment cannot run the platform (see `requiresInProcessConnection`). The
+   * Set when this deployment cannot run the platform (see `repliesOverConnection`). The
    * catalog still lists it so a bot configured earlier stays reachable to inspect, disable or
    * remove; the channel list hides it for agents that have no such bot.
    */

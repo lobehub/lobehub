@@ -18,16 +18,27 @@
 
 和飞书 / QQ 的关键差异：企微智能机器人**没有 REST 发送接口**，回复、流式、主动推送都必须走持有连接的那条 WebSocket。所以：
 
-- 回复只能由持有连接的进程发出。连接持有者把自己登记在进程内注册表（`registry.ts`，挂在 `globalThis`），adapter 和 messenger 从注册表取连接发送；本进程没有连接时抛 `WeComConnectionUnavailableError`。
+- 回复只能由持有连接的一方发出。定义上标 `repliesOverConnection: true`，由 `gateway/replyConnectionHost.ts` 的 `resolveReplyConnectionHost()` 判定当前部署由谁持有连接：
 
-- 定义上标 `requiresInProcessConnection: true`，由 `gateway/inProcessConnections.ts` 的 `canHostInProcessConnections()` 判定当前部署能否使用：只有**单个长期运行、自己维持渠道连接**的服务进程可以。两种部署不行：
+  | 持有方            | 条件                                                                                            | 出站路径                                                                                                                                                      |
+  | ----------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | `in-process`      | 没有外部 message gateway、也不是 Vercel：单个长驻服务进程自己维持连接                           | 连接把自己登记在进程内注册表（`registry.ts`，挂在 `globalThis`），adapter /messenger 从注册表取连接发送；本进程没有连接时抛 `WeComConnectionUnavailableError` |
+  | `message-gateway` | 开了外部 message gateway，且 `wecom` 在 `MESSAGE_GATEWAY_NODE_PLATFORMS` 里（路由到 Node 网关） | Node 网关持有连接和回复状态；服务端经 `MessageGatewayClient.sendText` / `startTyping` 让网关代发（`wecom/outbound.ts`）                                       |
 
-  - 外部 message gateway：gateway 持有连接、转发入站，但不中继出站帧；
-  - Vercel 等 serverless（无 gateway）：连接活在 gateway cron 那次调用里，webhook 和回调落在别的调用，摸不到 socket。
+  两种部署不行（返回 `undefined`）：
 
-  不能用时：平台目录把它标为 `unavailableReason`，渠道列表对没有企微 bot 的 agent 隐藏（已配置的仍可打开、停用、删除），reconcile 和 cron 不拉起连接、直接 connect 写 failed 状态并抛错说明原因。Cloud 上线需要 message gateway 增加出站中继后再放开。
+  - Vercel 等 serverless 且没有 gateway：连接活在 gateway cron 那次调用里，webhook 和回调落在别的调用，摸不到 socket；
+  - 开了 gateway 但企微留在默认（Cloudflare）网关上：它只转发入站，不中继出站帧。
 
-- **多副本长驻部署也不行**：每个副本的 GatewayManager 都会拉起同一个机器人，互相踢下线（见 2 节），最后只剩一个副本持有连接，而转发和回调可能被负载均衡到别的副本。只支持单实例。
+  不能用时：平台目录把它标为 `unavailableReason`，渠道列表对没有企微 bot 的 agent 隐藏（已配置的仍可打开、停用、删除），新建被拒绝，reconcile 和 cron 不拉起连接，直接 connect 写 failed 状态并抛错说明原因。
+
+- 走 Node 网关时，服务端与网关的约定：
+  - connect：`{ platform: 'wecom', connectionId: <agent_bot_providers.id>, applicationId: <BotID>, connectionMode: 'websocket', credentials: { secret }, webhookPath: '/api/agent/webhooks/wecom/<BotID>' }`；
+  - 入站：网关把每个消息帧按 3.3 节签名转发到 `webhookPath`，与进程内连接完全一致；
+  - 出站：`POST /api/connections/:id/send`（`deliver`：结束打开的 stream → 回复最新消息 → 主动推送）和 `POST /api/connections/:id/typing`（打开 stream，可重复调用）。网关回 404 说明连接 id 变了（同一 BotID 重建了 bot），服务端重新查一次再发；
+  - 被别处顶掉（`disconnected_event`）或续连鉴权彻底失败时，网关把连接置为 `error` 并带 `needsReauth`，reconcile 的 `ensure` 连接得到 409、保持停放，不会把机器人抢回来造成抖动；用户保存凭证或手动重连（非 `ensure`）才会重新订阅。
+
+- **多副本长驻部署不行**：每个副本的 GatewayManager 都会拉起同一个机器人，互相踢下线（见 2 节），最后只剩一个副本持有连接，而转发和回调可能被负载均衡到别的副本。只支持单实例。Node 网关本身也是单副本。
 
 ## 2. 帧格式
 
@@ -52,15 +63,15 @@
 
 ### 3.1 消息体（`aibot_msg_callback.body`）
 
-| 字段          | 说明                                                                                                  |
-| ------------- | ----------------------------------------------------------------------------------------------------- |
-| `msgid`       | 本次回调唯一标识，作为 chat SDK `Message.id`                                                          |
-| `aibotid`     | 机器人 ID；与本 adapter 的 BotID 不一致的帧被忽略                                                     |
-| `chattype`    | `single` 单聊 / `group` 群聊                                                                          |
-| `chatid`      | 仅群聊有                                                                                              |
-| `from.userid` | 发送者。机器人创建者是超级管理员时为明文 userid，否则为 open_userid（加密但对同一机器人稳定，未实测） |
-| `msgtype`     | `text` / `image` / `mixed` / `voice` / `file` / `video`                                               |
-| `quote`       | 引用的消息（可选）                                                                                    |
+| 字段          | 说明                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------ |
+| `msgid`       | 本次回调唯一标识，作为 chat SDK `Message.id`                                                           |
+| `aibotid`     | 机器人 ID；与本 adapter 的 BotID 不一致的帧被忽略                                                      |
+| `chattype`    | `single` 单聊 / `group` 群聊                                                                           |
+| `chatid`      | 仅群聊有                                                                                               |
+| `from.userid` | 发送者。机器人创建者是超级管理员时为明文 userid，否则为 open\_userid（加密但对同一机器人稳定，未实测） |
+| `msgtype`     | `text` / `image` / `mixed` / `voice` / `file` / `video`                                                |
+| `quote`       | 引用的消息（可选）                                                                                     |
 
 群聊里只收得到 text /mixed/quote（官方文档）。语音到达时已转成文字（`voice.content`）。
 

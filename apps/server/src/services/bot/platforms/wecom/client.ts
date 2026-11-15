@@ -5,15 +5,19 @@ import {
   downloadWeComMedia,
   getWeComConnection,
   registerWeComConnection,
-  requireWeComConnection,
   unregisterWeComConnection,
   WeComLongConnection,
 } from '@lobechat/chat-adapter-wecom';
 import type { Message } from 'chat';
 import debug from 'debug';
 
+import { getServerDB } from '@/database/core/db-adaptor';
+import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { appEnv } from '@/envs/app';
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import type { AttachmentSource } from '@/server/services/aiAgent/ingestAttachment';
+import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
+import { resolveReplyConnectionHost } from '@/server/services/gateway/replyConnectionHost';
 import {
   BOT_RUNTIME_STATUSES,
   getRuntimeStatusErrorMessage,
@@ -32,6 +36,7 @@ import {
   type ValidationResult,
 } from '../types';
 import { formatUsageStats } from '../utils';
+import { resolveWeComOutbound } from './outbound';
 
 const log = debug('bot-platform:wecom:bot');
 
@@ -271,6 +276,7 @@ class WeComClient implements PlatformClient {
     return {
       wecom: createWeComAdapter({
         botId: this.applicationId,
+        outbound: resolveWeComOutbound(this.applicationId),
         secret: this.config.credentials.secret,
       }),
     };
@@ -278,8 +284,9 @@ class WeComClient implements PlatformClient {
 
   getMessenger(platformThreadId: string): PlatformMessenger {
     const thread = decodeWeComThreadId(platformThreadId);
+    const outbound = resolveWeComOutbound(this.applicationId);
     const deliver = async (text: string) => {
-      await requireWeComConnection(this.applicationId).deliver(thread, text);
+      await outbound.deliver(thread, text);
     };
     return {
       // Outbound attachments are not sent yet (v1): the text still goes out.
@@ -287,10 +294,7 @@ class WeComClient implements PlatformClient {
       // A sent message cannot be edited; the edit goes out as a new message.
       editMessage: (_messageId, content) => deliver(messengerContentText(content)),
       removeReaction: () => Promise.resolve(),
-      triggerTyping: async () => {
-        const connection = getWeComConnection(this.applicationId);
-        if (connection?.isConnected) await connection.openStream(thread);
-      },
+      triggerTyping: () => outbound.openStream(thread),
     };
   }
 
@@ -312,6 +316,32 @@ class WeComClient implements PlatformClient {
   }
 }
 
+/**
+ * Whether the bot is already connected with `secret` wherever this deployment holds it. A probe
+ * subscribe would kick that live connection off (one connection per bot), and on the message
+ * gateway a displaced connection stays parked until someone reconnects it.
+ */
+const isLiveWithSecret = async (botId: string, secret: string): Promise<boolean> => {
+  if (resolveReplyConnectionHost('wecom') !== 'message-gateway') {
+    const live = getWeComConnection(botId);
+    return !!live?.isConnected && live.usesSecret(secret);
+  }
+  try {
+    const provider = await AgentBotProviderModel.findEnabledByPlatformAndAppId(
+      await getServerDB(),
+      'wecom',
+      botId,
+      await KeyVaultsGateKeeper.initWithEnvKey(),
+    );
+    if (!provider || provider.credentials.secret !== secret) return false;
+    const { state } = await getMessageGatewayClient('wecom').getStatus(provider.id);
+    return state.status === 'connected';
+  } catch (error) {
+    log('Live-connection check on the gateway failed for %s: %O', botId, error);
+    return false;
+  }
+};
+
 export class WeComClientFactory extends ClientFactory {
   createClient(config: BotProviderConfig, context: BotPlatformRuntimeContext): PlatformClient {
     return new WeComClient(config, context);
@@ -319,8 +349,9 @@ export class WeComClientFactory extends ClientFactory {
 
   /**
    * Check BotID + Secret by subscribing. WeCom keeps one connection per bot and a new subscribe
-   * kicks the old one, so a bot this process already runs with the same Secret counts as verified
-   * instead of being probed (the probe would knock the live bot offline).
+   * kicks the old one, so a bot already running with the same Secret — in this process or on the
+   * message gateway — counts as verified instead of being probed (the probe would knock the live
+   * bot offline).
    */
   async validateCredentials(
     credentials: Record<string, string>,
@@ -340,8 +371,7 @@ export class WeComClientFactory extends ClientFactory {
     }
     if (errors.length > 0) return { errors, valid: false };
 
-    const live = getWeComConnection(applicationId!);
-    if (live?.isConnected && live.usesSecret(credentials.secret)) return { valid: true };
+    if (await isLiveWithSecret(applicationId!, credentials.secret)) return { valid: true };
 
     const probe = new WeComLongConnection({
       botId: applicationId!,

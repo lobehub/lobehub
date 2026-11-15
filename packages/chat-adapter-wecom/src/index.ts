@@ -18,6 +18,7 @@ export { WeComFormatConverter } from './format-converter';
 export type { DownloadedWeComMedia, WeComMediaKind, WeComMediaRef } from './media';
 export { collectWeComMedia, downloadWeComMedia } from './media';
 export {
+  createInProcessWeComOutbound,
   getWeComConnection,
   registerWeComConnection,
   requireWeComConnection,
@@ -31,6 +32,7 @@ export type {
   WeComFrame,
   WeComMedia,
   WeComMessageBody,
+  WeComOutbound,
   WeComRawMessage,
   WeComThreadId,
 } from './types';

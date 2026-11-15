@@ -1,8 +1,9 @@
 // @vitest-environment node
 /**
- * Platforms flagged `requiresInProcessConnection` (WeCom: replies ride the bot's own long
- * connection) must never be handed to the external message gateway, which can forward inbound
- * events but not relay outbound frames.
+ * Platforms flagged `repliesOverConnection` (WeCom: replies ride the bot's own long
+ * connection) can only be handed to the Node message gateway, which holds the connection and
+ * sends on the server's behalf. The default (Cloudflare) gateway forwards inbound events but
+ * cannot relay outbound frames.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,6 +14,8 @@ import {
   mockGatewayClient,
   mockGatewayEnv,
   mockGatewayManager,
+  mockNodeGateway,
+  mockNodeGatewayClient,
   mockResolveConnectionMode,
   mockUpdateBotRuntimeStatus,
   resetGatewayServiceMocks,
@@ -47,7 +50,7 @@ vi.mock('../bot/platforms', () =>
   import('./testUtils').then((m) => {
     const definitions = [
       { id: 'discord' },
-      { id: 'wecom', name: 'WeCom', requiresInProcessConnection: true },
+      { id: 'wecom', name: 'WeCom', repliesOverConnection: true },
     ];
     const base = m.botPlatformsModule();
     return {
@@ -69,7 +72,7 @@ const providerFor = (platform: string) => ({
   workspaceId: null,
 });
 
-describe('GatewayService with an in-process-only platform', () => {
+describe('GatewayService with a reply-over-connection platform on the default gateway', () => {
   let service: GatewayService;
 
   beforeEach(() => {
@@ -106,7 +109,7 @@ describe('GatewayService with an in-process-only platform', () => {
 
     await expect(service.startClient('wecom', 'wecom-app', 'u1')).rejects.toMatchObject({
       code: 'PRECONDITION_FAILED',
-      message: expect.stringMatching(/cannot hold in the process that answers messages/),
+      message: expect.stringMatching(/cannot hold where it answers messages/),
     });
 
     expect(mockGatewayClient.connect).not.toHaveBeenCalled();
@@ -119,7 +122,60 @@ describe('GatewayService with an in-process-only platform', () => {
   });
 });
 
-describe('GatewayService with an in-process-only platform, without the message gateway', () => {
+describe('GatewayService with a reply-over-connection platform routed to the Node gateway', () => {
+  let service: GatewayService;
+
+  beforeEach(() => {
+    resetGatewayServiceMocks();
+    service = new GatewayService();
+    mockGatewayEnv.MESSAGE_GATEWAY_ENABLED = '1';
+    mockGatewayClient.isConfigured = true;
+    mockGatewayClient.isEnabled = true;
+    mockGatewayClient.getStats.mockResolvedValue({ byPlatform: {}, connections: [], total: 0 });
+    mockGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [] });
+    mockNodeGateway.configured = true;
+    mockNodeGateway.platforms = ['wecom'];
+    mockNodeGatewayClient.isConfigured = true;
+    mockNodeGatewayClient.isEnabled = true;
+    mockNodeGatewayClient.getStats.mockResolvedValue({ byPlatform: {}, connections: [], total: 0 });
+    mockNodeGatewayClient.getRegisteredIds.mockResolvedValue({ ids: [] });
+    mockNodeGatewayClient.connect.mockResolvedValue({ status: 'connecting' });
+    mockResolveConnectionMode.mockReturnValue('websocket');
+    mockGatewayClient.connect.mockResolvedValue({ status: 'connecting' });
+  });
+
+  it('connects it on the Node gateway, which sends its replies', async () => {
+    mockFindEnabledByPlatformAndAppId.mockResolvedValue(providerFor('wecom'));
+
+    await expect(service.startClient('wecom', 'wecom-app', 'u1')).resolves.toBe('started');
+
+    expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+    expect(mockNodeGatewayClient.connect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        applicationId: 'wecom-app',
+        connectionId: 'wecom-prov',
+        credentials: { secret: 'x' },
+        platform: 'wecom',
+        webhookPath: '/api/agent/webhooks/wecom/wecom-app',
+      }),
+    );
+  });
+
+  it('keeps its providers in the reconcile sync, on the Node gateway', async () => {
+    mockFindEnabledByPlatform.mockImplementation(async (_db: unknown, platform: string) => [
+      providerFor(platform),
+    ]);
+
+    await service.ensureRunning();
+
+    const onNode = mockNodeGatewayClient.connect.mock.calls.map(([config]) => config.platform);
+    expect(onNode).toEqual(['wecom']);
+    const onDefault = mockGatewayClient.connect.mock.calls.map(([config]) => config.platform);
+    expect(onDefault).toEqual(['discord']);
+  });
+});
+
+describe('GatewayService with a reply-over-connection platform, without the message gateway', () => {
   let service: GatewayService;
 
   beforeEach(() => {
@@ -143,7 +199,7 @@ describe('GatewayService with an in-process-only platform, without the message g
     vi.stubEnv('VERCEL_ENV', 'production');
 
     await expect(service.startClient('wecom', 'wecom-app', 'u1')).rejects.toThrow(
-      /cannot hold in the process that answers messages/,
+      /cannot hold where it answers messages/,
     );
     expect(mockGatewayManager.startClient).not.toHaveBeenCalled();
     expect(mockUpdateBotRuntimeStatus).toHaveBeenCalledWith(
