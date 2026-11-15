@@ -20,6 +20,7 @@ import {
   type ComfyUIKeyVault,
   type DoubaoSpeechKeyVault,
   type GithubCopilotKeyVault,
+  type LiveKitKeyVault,
   type OAuthDeviceFlowKeyVault,
   type OpenAICompatibleKeyVault,
   type ServerDefaultHeterogeneousModelDescriptor,
@@ -61,6 +62,7 @@ type ProviderKeyVaults = OpenAICompatibleKeyVault &
   ComfyUIKeyVault &
   DoubaoSpeechKeyVault &
   GithubCopilotKeyVault &
+  LiveKitKeyVault &
   OAuthDeviceFlowKeyVault &
   SuperGrokKeyVault &
   VertexAIKeyVault;
@@ -134,6 +136,15 @@ export const buildPayloadFromKeyVaults = (
       return {
         apiKey: keyVaults.apiKey,
         cloudflareBaseURLOrAccountID: keyVaults.baseURLOrAccountID,
+        runtimeProvider,
+      };
+    }
+
+    case ModelProvider.LiveKit: {
+      return {
+        apiKey: keyVaults.apiKey,
+        apiSecret: keyVaults.apiSecret,
+        baseURL: keyVaults.baseURL,
         runtimeProvider,
       };
     }
@@ -307,6 +318,16 @@ const getParamsFromPayload = (provider: string, payload: ClientSecretPayload) =>
         payload.cloudflareBaseURLOrAccountID || CLOUDFLARE_BASE_URL_OR_ACCOUNT_ID;
 
       return { apiKey, baseURLOrAccountID };
+    }
+
+    case ModelProvider.LiveKit: {
+      // A supplied partial pair must never borrow a deployment-owned secret.
+      const hasUserCredentials = !!(payload.apiKey || payload.apiSecret);
+      return {
+        apiKey: hasUserCredentials ? payload.apiKey : llmConfig.LIVEKIT_INFERENCE_API_KEY,
+        apiSecret: hasUserCredentials ? payload.apiSecret : llmConfig.LIVEKIT_INFERENCE_API_SECRET,
+        baseURL: payload.baseURL,
+      };
     }
 
     case ModelProvider.DoubaoSpeech: {

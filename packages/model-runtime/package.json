@@ -49,6 +49,7 @@
     "es-toolkit": "^1.50.0",
     "file-type": "^21.3.4",
     "immer": "^10.2.0",
+    "jose": "^6.2.8",
     "langfuse": "^3.38.20",
     "langfuse-core": "^3.38.20",
     "model-bank": "workspace:*",

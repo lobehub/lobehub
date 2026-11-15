@@ -59,6 +59,10 @@ export const getLLMConfig = () => {
       ENABLED_ELEVENLABS: z.boolean(),
       ELEVENLABS_API_KEY: z.string().optional(),
 
+      ENABLED_LIVEKIT: z.boolean(),
+      LIVEKIT_INFERENCE_API_KEY: z.string().optional(),
+      LIVEKIT_INFERENCE_API_SECRET: z.string().optional(),
+
       ENABLED_FISHAUDIO: z.boolean(),
       FISHAUDIO_API_KEY: z.string().optional(),
 
@@ -316,6 +320,12 @@ export const getLLMConfig = () => {
 
       ENABLED_ELEVENLABS: !!process.env.ELEVENLABS_API_KEY,
       ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY,
+
+      ENABLED_LIVEKIT: !!(
+        process.env.LIVEKIT_INFERENCE_API_KEY && process.env.LIVEKIT_INFERENCE_API_SECRET
+      ),
+      LIVEKIT_INFERENCE_API_KEY: process.env.LIVEKIT_INFERENCE_API_KEY,
+      LIVEKIT_INFERENCE_API_SECRET: process.env.LIVEKIT_INFERENCE_API_SECRET,
 
       ENABLED_FISHAUDIO: !!process.env.FISHAUDIO_API_KEY,
       FISHAUDIO_API_KEY: process.env.FISHAUDIO_API_KEY,

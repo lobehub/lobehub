@@ -37,6 +37,7 @@ export enum ModelProvider {
   InternLM = 'internlm',
   Jina = 'jina',
   KimiCodingPlan = 'kimicodingplan',
+  LiveKit = 'livekit',
   LMStudio = 'lmstudio',
   LobeHub = 'lobehub',
   LongCat = 'longcat',

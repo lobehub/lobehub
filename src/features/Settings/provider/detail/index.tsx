@@ -37,6 +37,10 @@ const DoubaoSpeech = dynamic(() => import('./doubaospeech'), {
   loading: () => <SurfaceSkeleton header={false} variant={'form'} />,
   ssr: false,
 });
+const LiveKit = dynamic(() => import('./livekit'), {
+  loading: () => <SurfaceSkeleton header={false} variant={'form'} />,
+  ssr: false,
+});
 const Bedrock = dynamic(() => import('./bedrock'), {
   loading: () => <SurfaceSkeleton header={false} variant={'form'} />,
   ssr: false,
@@ -87,6 +91,9 @@ const ProviderDetailPage = (props: ProviderDetailPageProps) => {
     }
     case 'doubaospeech': {
       return <DoubaoSpeech />;
+    }
+    case 'livekit': {
+      return <LiveKit />;
     }
     case 'github': {
       return <GitHub />;

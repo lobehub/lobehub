@@ -1009,4 +1009,12 @@ Connect to your own Unsloth Studio instance. See [Using Unsloth in LobeHub](/doc
 - Default: Unset; the browser sends the requests.
 - Example: `http://magpie.example.com:3425/v1`
 
+## LiveKit Inference
+
+### `LIVEKIT_INFERENCE_API_KEY` / `LIVEKIT_INFERENCE_API_SECRET`
+
+- Type: Optional matching pair.
+- Description: LiveKit Cloud project credentials for shared model inference. Set both values to enable the provider in server configuration. A user's own provider credentials take priority as a complete pair; a partially configured user pair produces an authentication error instead of borrowing a deployment secret. The built-in model catalog is used without remote model discovery.
+- Default: Unset; users configure the provider in App Settings.
+
 [model-list]: /docs/self-hosting/advanced/model-list
