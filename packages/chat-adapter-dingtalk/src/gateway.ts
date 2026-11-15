@@ -1,3 +1,5 @@
+import WebSocket from 'ws';
+
 import type { DingTalkApiClient } from './api';
 import { signCallback } from './crypto';
 import type { DingTalkStreamAck, DingTalkStreamFrame, DingTalkStreamSubscription } from './types';
@@ -12,12 +14,12 @@ const RECONNECT_MAX_DELAY_MS = 60_000;
 const MAX_RECONNECT_ATTEMPTS = 10;
 
 /**
- * The server sends `ping` system frames to keep the stream alive. A socket
- * that stays silent longer than this is treated as dead (half-open TCP) and
- * replaced with a fresh connection.
+ * An idle DingTalk stream carries no frames at all (measured: none in five
+ * minutes on a healthy connection), so silence says nothing about liveness.
+ * The client probes with protocol-level ping instead, as the official SDK
+ * does: a socket that misses a whole pong window is half-open and replaced.
  */
-const DEFAULT_IDLE_TIMEOUT_MS = 180_000;
-const IDLE_CHECK_MIN_INTERVAL_MS = 1000;
+const DEFAULT_PING_INTERVAL_MS = 30_000;
 
 const FORWARD_TIMEOUT_MS = 30_000;
 
@@ -32,10 +34,10 @@ export interface DingTalkGatewayOptions {
   clientSecret: string;
   /** Duration in ms before the connection auto-closes (caller restarts) */
   durationMs?: number;
-  /** Close and replace the socket after this long without any frame */
-  idleTimeoutMs?: number;
   /** Optional logger function (defaults to no-op) */
   log?: GatewayLogger;
+  /** Protocol-level ping interval; a socket that misses one pong window is replaced */
+  pingIntervalMs?: number;
   /** Topics to subscribe to; defaults to robot message callbacks */
   subscriptions?: DingTalkStreamSubscription[];
   /** URL to forward robot message callbacks to (POST) */
@@ -54,7 +56,7 @@ export class DingTalkStreamConnection {
   private readonly api: DingTalkApiClient;
   private readonly options: DingTalkGatewayOptions;
   private readonly log: GatewayLogger;
-  private readonly idleTimeoutMs: number;
+  private readonly pingIntervalMs: number;
 
   private ws: WebSocket | null = null;
   private closed = false;
@@ -62,17 +64,17 @@ export class DingTalkStreamConnection {
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private durationTimer: ReturnType<typeof setTimeout> | null = null;
-  private idleTimer: ReturnType<typeof setInterval> | null = null;
-  /** Sockets replaced by the idle watchdog; their late `close` must not schedule a reconnect. */
+  private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private awaitingPong = false;
+  /** Sockets replaced by the liveness probe; their late `close` must not schedule a reconnect. */
   private readonly retiredSockets = new WeakSet<WebSocket>();
-  private lastFrameAt = 0;
   private onAbort?: () => void;
 
   constructor(api: DingTalkApiClient, options: DingTalkGatewayOptions) {
     this.api = api;
     this.options = options;
     this.log = options.log ?? noop;
-    this.idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
+    this.pingIntervalMs = options.pingIntervalMs ?? DEFAULT_PING_INTERVAL_MS;
   }
 
   /**
@@ -106,7 +108,7 @@ export class DingTalkStreamConnection {
   /** Gracefully close the stream; no reconnect afterwards. */
   close(): void {
     this.closed = true;
-    this.stopIdleWatchdog();
+    this.stopPing();
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     if (this.durationTimer) clearTimeout(this.durationTimer);
     this.reconnectTimer = null;
@@ -152,14 +154,12 @@ export class DingTalkStreamConnection {
         this.log('Stream WebSocket connected');
         this.hasConnected = true;
         this.reconnectAttempts = 0;
-        this.lastFrameAt = Date.now();
-        this.startIdleWatchdog(ws);
+        this.startPing(ws);
         settle();
       });
 
       ws.addEventListener('message', (event) => {
         if (this.ws !== ws) return;
-        this.lastFrameAt = Date.now();
         const raw =
           typeof event.data === 'string'
             ? event.data
@@ -167,12 +167,16 @@ export class DingTalkStreamConnection {
         this.handleFrame(ws, raw);
       });
 
+      ws.on('pong', () => {
+        if (this.ws === ws) this.awaitingPong = false;
+      });
+
       ws.addEventListener('close', (event) => {
         this.log('Stream WebSocket closed: code=%d reason=%s', event.code, event.reason);
         if (this.retiredSockets.has(ws)) return;
         if (this.ws !== ws && this.ws !== null) return;
         this.ws = null;
-        this.stopIdleWatchdog();
+        this.stopPing();
 
         if (!settled) {
           settle(
@@ -230,30 +234,37 @@ export class DingTalkStreamConnection {
 
   // ---------- Liveness ----------
 
-  private startIdleWatchdog(ws: WebSocket): void {
-    this.stopIdleWatchdog();
-    const interval = Math.max(Math.floor(this.idleTimeoutMs / 4), IDLE_CHECK_MIN_INTERVAL_MS);
-    this.idleTimer = setInterval(() => {
+  private startPing(ws: WebSocket): void {
+    this.stopPing();
+    this.pingTimer = setInterval(() => {
       if (this.ws !== ws || this.stopped) {
-        this.stopIdleWatchdog();
+        this.stopPing();
         return;
       }
-      if (Date.now() - this.lastFrameAt > this.idleTimeoutMs) {
-        this.log('No frame for %dms, replacing the connection', this.idleTimeoutMs);
+      if (this.awaitingPong) {
+        this.log('No pong within %dms, replacing the connection', this.pingIntervalMs);
         // A half-open socket may never emit `close` (the peer cannot answer the close frame),
         // so detach it and reconnect now instead of waiting for the TCP timeout.
         this.retiredSockets.add(ws);
         this.ws = null;
-        this.stopIdleWatchdog();
-        ws.close(4000, 'Idle timeout');
+        this.stopPing();
+        ws.terminate();
         this.scheduleReconnect();
+        return;
       }
-    }, interval);
+      this.awaitingPong = true;
+      try {
+        ws.ping();
+      } catch (err) {
+        this.log('Ping failed: %O', err);
+      }
+    }, this.pingIntervalMs);
   }
 
-  private stopIdleWatchdog(): void {
-    if (this.idleTimer) clearInterval(this.idleTimer);
-    this.idleTimer = null;
+  private stopPing(): void {
+    if (this.pingTimer) clearInterval(this.pingTimer);
+    this.pingTimer = null;
+    this.awaitingPong = false;
   }
 
   // ---------- Frames ----------

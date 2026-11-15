@@ -1,5 +1,8 @@
+import type { AddressInfo } from 'node:net';
+
 import { RateLimitError } from 'chat';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type WebSocket as ServerSocket, WebSocketServer } from 'ws';
 
 import { createDingTalkAdapter, DingTalkAdapter } from './adapter';
 import { DingTalkApiError } from './api';
@@ -408,34 +411,13 @@ describe('DingTalkAdapter', () => {
 
   describe('gateway listener', () => {
     it('forwards callbacks that handleWebhook accepts (shared signature scheme)', async () => {
-      class WS {
-        static OPEN = 1;
-        static last: WS;
-        readyState = 1;
-        sent: string[] = [];
-        private l = new Map<string, Array<(e: any) => void>>();
-        constructor(public url: string) {
-          WS.last = this;
-          setTimeout(() => this.emit('open', {}), 0);
-        }
-        addEventListener(e: string, f: (e: any) => void) {
-          this.l.set(e, [...(this.l.get(e) || []), f]);
-        }
-        removeEventListener() {}
-        send(d: string) {
-          this.sent.push(d);
-        }
-        close() {
-          this.readyState = 3;
-          this.emit('close', { code: 1000, reason: '' });
-        }
-        emit(e: string, d: any) {
-          for (const f of this.l.get(e) || []) f(d);
-        }
-      }
-      vi.stubGlobal('WebSocket', WS);
+      // A real local stream endpoint, so the `ws` client is exercised end to end.
+      const server = new WebSocketServer({ port: 0 });
+      await new Promise<void>((resolve) => server.once('listening', () => resolve()));
+      const peer = new Promise<ServerSocket>((resolve) => server.once('connection', resolve));
+      const { port } = server.address() as AddressInfo;
       vi.spyOn(api, 'openStreamConnection').mockResolvedValue({
-        endpoint: 'wss://e/connect',
+        endpoint: `ws://127.0.0.1:${port}/connect`,
         ticket: 'tk',
       });
 
@@ -456,13 +438,18 @@ describe('DingTalkAdapter', () => {
         'http://localhost/hook',
       );
 
-      WS.last.emit('message', {
-        data: JSON.stringify({
+      const socket = await peer;
+      const ack = new Promise<any>((resolve) =>
+        socket.once('message', (raw) => resolve(JSON.parse(raw.toString()))),
+      );
+      socket.send(
+        JSON.stringify({
           data: JSON.stringify(groupAt()),
           headers: { messageId: 'm', topic: '/v1.0/im/bot/messages/get' },
           type: 'CALLBACK',
         }),
-      });
+      );
+      expect(await ack).toMatchObject({ code: 200, headers: { messageId: 'm' } });
       await vi.waitFor(() => expect(forwarded).toBeDefined());
 
       const res = await adapter.handleWebhook(forwarded!);
@@ -474,6 +461,7 @@ describe('DingTalkAdapter', () => {
         undefined,
       );
       controller.abort();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
     });
   });
 });
