@@ -672,6 +672,14 @@ export interface PlatformDefinition {
   /** Documentation links for the platform */
   documentation?: PlatformDocumentation;
 
+  /**
+   * In group chats the platform delivers only the messages that address the bot (WeCom AI bots
+   * receive @-mentions only), so the bot cannot see — or fetch — what members say to each other.
+   * Group threads must be encoded as `<platform>:group:<id>`. The agent is told, so it does not
+   * go looking for a group history it can never have.
+   */
+  groupMessagesAddressedOnly?: boolean;
+
   /** The unique identifier of the platform. */
   id: string;
 

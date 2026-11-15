@@ -107,11 +107,18 @@ export async function executeWithCallback(
   // required, and which most platforms have no `listChannels` to discover —
   // is unusable, and the model falls back to asking the user for a group ID.
   const currentChannel = resolveCurrentChannel(opts.botContext, opts.client);
+  // A group on a platform that delivers only the messages addressed to the bot (WeCom).
+  const seesOnlyAddressedMessages =
+    !!platformDef &&
+    'groupMessagesAddressedOnly' in platformDef &&
+    !!platformDef.groupMessagesAddressedOnly &&
+    opts.botContext?.platformThreadId?.split(':')[1] === 'group';
   const botPlatformContext: BotPlatformContext | undefined = platformDef
     ? {
         canReadHistory,
         ...(currentChannel && { currentChannel }),
         platformName: platformDef.name,
+        ...(seesOnlyAddressedMessages && { seesOnlyAddressedMessages }),
         supportsMarkdown: platformDef.supportsMarkdown !== false,
       }
     : undefined;
