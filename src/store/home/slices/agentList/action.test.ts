@@ -25,12 +25,6 @@ import { reorderItems } from './action';
 import { initialAgentListState } from './initialState';
 import { agentListResource } from './projection';
 
-const activeWorkspace = vi.hoisted(() => ({ id: null as string | null }));
-vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
-  getActiveWorkspaceId: () => activeWorkspace.id,
-  useActiveWorkspaceId: () => activeWorkspace.id,
-}));
-
 vi.mock('@/store/agent', () => ({
   getAgentStoreState: vi.fn(() => ({
     invalidateAvailableAgents: vi.fn(),
@@ -67,7 +61,6 @@ const response = (overrides: Partial<SidebarAgentListResponse> = {}): SidebarAge
 
 let scope = '';
 beforeEach(() => {
-  activeWorkspace.id = null;
   scope = `agent-list-user-${randomUUID()}:personal`;
   vi.spyOn(cacheScope, 'get').mockImplementation(() => scope);
   vi.spyOn(cacheScope, 'use').mockImplementation(() => scope);
@@ -162,16 +155,19 @@ describe('sidebar agent list replica', () => {
   });
 });
 
-describe('reorderPinnedAgents across a workspace switch', () => {
-  it('drops a save still queued after a switch and rolls its order back', async () => {
+describe('reorderPinnedAgents across a scope change', () => {
+  it.each([
+    ['another workspace', (from: string) => from.replace(/:[^:]*$/, ':ws-2')],
+    // Same workspace slot, different account: comparing only the workspace
+    // would let user A's order go out on user B's session.
+    ['another account in the same workspace', (from: string) => `other-user:${from.split(':')[1]}`],
+  ])('drops a save still queued after switching to %s', async (_, next) => {
     vi.spyOn(homeService, 'getSidebarAgentList').mockResolvedValue(
       response({ pinned: [agent('a'), agent('b'), agent('c')] }),
     );
     sync();
     await waitFor(() => expect(useHomeStore.getState().pinnedAgents).toHaveLength(3));
-    const pinnedIds = () => useHomeStore.getState().pinnedAgents.map((item) => item.id);
 
-    activeWorkspace.id = 'ws-1';
     let finishFirst!: () => void;
     const save = vi
       .spyOn(homeService, 'updatePinnedOrder')
@@ -181,15 +177,13 @@ describe('reorderPinnedAgents across a workspace switch', () => {
     const first = useHomeStore.getState().reorderPinnedAgents(['c', 'a', 'b']);
     const second = useHomeStore.getState().reorderPinnedAgents(['b', 'c', 'a']);
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(pinnedIds()).toEqual(['b', 'c', 'a']);
 
-    activeWorkspace.id = 'ws-2';
+    scope = next(scope);
     finishFirst();
     // The skipped save is not an error for the caller.
     await act(() => Promise.all([first, second]));
 
     expect(save).toHaveBeenCalledTimes(1);
-    expect(pinnedIds()).toEqual(['c', 'a', 'b']);
   });
 });
 

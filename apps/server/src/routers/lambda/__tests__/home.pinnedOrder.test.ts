@@ -56,4 +56,15 @@ describe('homeRouter.updatePinnedOrder', () => {
     expect(matches).not.toHaveBeenCalled();
     expect(updatePinnedOrder).toHaveBeenCalledWith(['a']);
   });
+
+  it('accepts a pin list longer than the personal pin cap', async () => {
+    // The `pinned` columns have no count limit, so a drag must be able to
+    // submit every rendered row.
+    const ids = Array.from({ length: 500 }, (_, index) => `agent-${index}`);
+    const caller = homeRouter.createCaller({ userId: 'user-1' } as never);
+
+    await caller.updatePinnedOrder({ ids });
+
+    expect(updatePinnedOrder).toHaveBeenCalledWith(ids);
+  });
 });

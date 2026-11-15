@@ -1,5 +1,10 @@
-/** Upper bound for a stored pinned-row order; mirrors the personal pin cap. */
-export const MAX_PINNED_ORDER_ITEMS = 200;
+/**
+ * Upper bound for a stored pinned-row order. The `pinned` columns behind it
+ * have no count limit and the sidebar renders every pinned row, so this only
+ * guards the payload size; it sits far above any real pin list so a drag
+ * always submits the whole list.
+ */
+export const MAX_PINNED_ORDER_ITEMS = 2000;
 
 /** Reads a stored order defensively: anything but a string array is no order. */
 export const parsePinnedOrder = (value: unknown): string[] =>

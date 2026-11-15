@@ -1,14 +1,11 @@
 import { act } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { cacheScope } from '@/libs/replica';
 import { useHomeStore } from '@/store/home';
 import { useUserStore } from '@/store/user';
 
-const activeWorkspace = vi.hoisted(() => ({ id: 'ws-1' as string | null }));
-vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
-  getActiveWorkspaceId: () => activeWorkspace.id,
-  useActiveWorkspaceId: () => activeWorkspace.id,
-}));
+let scope = 'user-a:ws-1';
 
 const updatePreference = vi.fn();
 
@@ -21,7 +18,8 @@ const setPinned = (ids: string[]) =>
 const reorder = (ids: string[]) => act(() => useHomeStore.getState().reorderMyPinned(ids));
 
 beforeEach(() => {
-  activeWorkspace.id = 'ws-1';
+  scope = 'user-a:ws-1';
+  vi.spyOn(cacheScope, 'get').mockImplementation(() => scope);
   updatePreference.mockReset().mockResolvedValue(undefined);
 });
 
@@ -92,7 +90,11 @@ describe('reorderMyPinned', () => {
     expect(updatePreference).toHaveBeenCalledTimes(2);
   });
 
-  it('drops a reorder still queued when the user switches workspace', async () => {
+  it.each([
+    ['another workspace', 'user-a:ws-2'],
+    // Same workspace, different account: A's order must not go out on B's session.
+    ['another account in the same workspace', 'user-b:ws-1'],
+  ])('drops a reorder still queued after switching to %s', async (_, nextScope) => {
     setPinned(['a', 'b']);
     let finishFirst!: () => void;
     updatePreference.mockImplementationOnce(
@@ -103,7 +105,7 @@ describe('reorderMyPinned', () => {
     const second = useHomeStore.getState().reorderMyPinned(['a', 'b']);
     await vi.waitFor(() => expect(updatePreference).toHaveBeenCalledTimes(1));
 
-    activeWorkspace.id = 'ws-2';
+    scope = nextScope;
     finishFirst();
     await act(() => Promise.all([first, second]));
 

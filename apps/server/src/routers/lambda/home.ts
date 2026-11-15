@@ -4,13 +4,14 @@ import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPer
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
 import { HomeRepository } from '@/database/repositories/home';
+import { MAX_PINNED_ORDER_ITEMS } from '@/database/repositories/home/pinnedOrder';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { type HomeBriefData, HomeService } from '@/server/services/home';
 import { hasWorkspaceScopedPermission } from '@/server/services/workspacePermission';
 
-import { assertCanWriteTeamPin, MAX_SIDEBAR_PINNED_ITEMS } from './_helpers/sidebarPin';
+import { assertCanWriteTeamPin } from './_helpers/sidebarPin';
 
 const homeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -90,7 +91,7 @@ export const homeRouter = router({
    * reorder them; in personal mode they are the user's own pins.
    */
   updatePinnedOrder: homeProcedure
-    .input(z.object({ ids: z.array(z.string().max(255)).max(MAX_SIDEBAR_PINNED_ITEMS) }))
+    .input(z.object({ ids: z.array(z.string().max(255)).max(MAX_PINNED_ORDER_ITEMS) }))
     .mutation(async ({ input, ctx }) => {
       await assertCanWriteTeamPin(ctx);
       await ctx.homeRepository.updatePinnedOrder(input.ids);

@@ -2,8 +2,8 @@ import type { SidebarAgentItem, SidebarAgentListResponse, SidebarGroup } from '@
 import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
-import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import {
+  cacheScope,
   createReplicaSlice,
   linkReplicaEntity,
   type ReplicaEntityAdapter,
@@ -101,8 +101,8 @@ export const reorderItems = (items: SidebarAgentItem[], ids: readonly string[]) 
   return [...listed, ...items.filter((item) => !listedIds.has(item.id))];
 };
 
-/** A pinned-order save dropped because the active workspace changed meanwhile. */
-class WorkspaceSwitchedError extends Error {}
+/** A pinned-order save dropped because the account or workspace changed meanwhile. */
+class ScopeChangedError extends Error {}
 
 export class AgentListActionImpl {
   readonly #set: Setter;
@@ -159,11 +159,12 @@ export class AgentListActionImpl {
    * in personal mode) by drag and drop: the sidebar moves now and rolls back
    * if the save fails. Saves run one after another, so quick successive drags
    * reach the server in the order they were made. A save still queued when the
-   * user switches workspace is dropped: the request would carry the new
-   * workspace and overwrite its order with the old one's rows.
+   * cache scope changes (another account, or another workspace) is dropped: the
+   * request would carry the new session and overwrite its order with rows from
+   * the old one.
    */
   reorderPinnedAgents = async (ids: string[]): Promise<void> => {
-    const workspaceId = getActiveWorkspaceId();
+    const scope = cacheScope.get();
     try {
       await this.#agentList.optimistic(
         AGENT_LIST_KEY,
@@ -173,7 +174,7 @@ export class AgentListActionImpl {
             .catch(() => undefined)
             .then(async () => {
               // Failing the save rolls the unsaved order back out of the list.
-              if (getActiveWorkspaceId() !== workspaceId) throw new WorkspaceSwitchedError();
+              if (cacheScope.get() !== scope) throw new ScopeChangedError();
               await homeService.updatePinnedOrder(ids);
             });
           this.#pinnedOrderQueue = operation;
@@ -181,8 +182,8 @@ export class AgentListActionImpl {
         },
       );
     } catch (error) {
-      // Nothing to report: the user left the workspace the drag was made in.
-      if (error instanceof WorkspaceSwitchedError) return;
+      // Nothing to report: the user left the account/workspace the drag was made in.
+      if (error instanceof ScopeChangedError) return;
       throw error;
     }
   };
