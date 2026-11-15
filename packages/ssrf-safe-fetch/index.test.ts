@@ -2,7 +2,7 @@
 import fetch from 'node-fetch';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ssrfSafeFetch } from './index';
+import { isSSRFBlockedError, SSRFBlockedError, ssrfSafeFetch } from './index';
 
 // Mock node-fetch to avoid actual network requests
 vi.mock('node-fetch', () => ({
@@ -144,6 +144,33 @@ describe('ssrfSafeFetch', () => {
 
         await expect(ssrfSafeFetch(url)).rejects.toThrow(/SSRF blocked/);
       });
+    });
+
+    it('throws a typed SSRFBlockedError that survives being wrapped', async () => {
+      mockFetch.mockImplementation(() => {
+        throw new Error('DNS lookup 10.0.0.1 is not allowed. Because, It is private IP address.');
+      });
+
+      const error = await ssrfSafeFetch('http://10.0.0.1.nip.io/').catch((e) => e);
+      expect(error).toBeInstanceOf(SSRFBlockedError);
+      expect(error.message).toMatch(/^SSRF blocked: /);
+      expect(isSSRFBlockedError(error)).toBe(true);
+      // An SDK or retry helper that wraps the fetch error keeps it as `cause`
+      const wrapped = new Error('Version negotiation probe failed', {
+        cause: new Error('send failed', { cause: error }),
+      });
+      expect(isSSRFBlockedError(wrapped)).toBe(true);
+    });
+
+    it('does not report ordinary network failures as SSRF blocks', async () => {
+      mockFetch.mockImplementation(() => {
+        throw new Error('connect ECONNREFUSED 93.184.215.14:443');
+      });
+
+      const error = await ssrfSafeFetch('https://example.com/').catch((e) => e);
+      expect(error).not.toBeInstanceOf(SSRFBlockedError);
+      expect(isSSRFBlockedError(error)).toBe(false);
+      expect(isSSRFBlockedError(new Error('wrapper', { cause: error }))).toBe(false);
     });
 
     const unsupportedSchemeUrls = [

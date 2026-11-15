@@ -5,6 +5,7 @@ import { SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MCP_SSRF_BLOCKED_MESSAGE } from '@/libs/mcp/ssrf';
 import { createMCPError } from '@/libs/mcp/types';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
@@ -1043,6 +1044,23 @@ describe('ToolExecutionService', () => {
       expect(result.error).toMatchObject({
         code: 'MCP_TOOL_ERROR',
         message: 'Additional input is unsupported',
+      });
+    });
+
+    it('reports an SSRF-refused MCP server address with its own stop code', async () => {
+      const blocked = createMCPError('SSRF_BLOCKED', MCP_SSRF_BLOCKED_MESSAGE);
+      const result = await run(
+        {},
+        new TRPCError({ cause: blocked, code: 'FORBIDDEN', message: blocked.message }),
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).toBe(MCP_SSRF_BLOCKED_MESSAGE);
+      expect(result.content).toContain('SSRF_ALLOW_PRIVATE_IP_ADDRESS');
+      expect(result.error).toMatchObject({
+        code: 'MCP_SSRF_BLOCKED',
+        kind: 'stop',
+        message: MCP_SSRF_BLOCKED_MESSAGE,
       });
     });
 

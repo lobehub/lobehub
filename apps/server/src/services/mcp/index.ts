@@ -74,6 +74,23 @@ export interface MCPToolCallProcessedResult {
 
 // Removed MCPConnection interface as it's no longer needed
 
+/** A structured MCP connection error (`MCPError.data.type`) as the TRPCError callers see. */
+const toMCPConnectionTRPCError = (error: unknown, message: string) => {
+  const type = getMCPConnectionErrorType(error);
+  return new TRPCError({
+    cause: error,
+    code:
+      // These credentials belong to the upstream MCP, not the signed-in
+      // LobeHub user. A 401 here would trigger the client's global logout.
+      type === 'AUTHORIZATION_ERROR' || type === 'SSRF_BLOCKED'
+        ? 'FORBIDDEN'
+        : type === 'INITIALIZATION_TIMEOUT'
+          ? 'TIMEOUT'
+          : 'SERVICE_UNAVAILABLE',
+    message,
+  });
+};
+
 const isMcpToolFailure = (error: unknown): error is ProtocolError | SdkError =>
   ProtocolError.isInstance(error) ||
   (SdkError.isInstance(error) &&
@@ -164,11 +181,15 @@ export class MCPService {
             bail(
               error instanceof TRPCError
                 ? error
-                : new TRPCError({
-                    cause: error,
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: `Error ${operationName} from MCP server: ${(error as Error).message}`,
-                  }),
+                : // A cached session can still be refused later (the host now
+                  // resolves elsewhere): keep its structured error, not a 500.
+                  getMCPConnectionErrorType(error) === 'SSRF_BLOCKED'
+                  ? toMCPConnectionTRPCError(error, (error as Error).message)
+                  : new TRPCError({
+                      cause: error,
+                      code: 'INTERNAL_SERVER_ERROR',
+                      message: `Error ${operationName} from MCP server: ${(error as Error).message}`,
+                    }),
             );
             // After bail() the promise is already rejected; return (do NOT throw)
             // so async-retry does not schedule another attempt.
@@ -437,19 +458,7 @@ export class MCPService {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       if (typeof error === 'object' && !!error && 'data' in error) {
-        const type = getMCPConnectionErrorType(error);
-        throw new TRPCError({
-          cause: error,
-          code:
-            type === 'AUTHORIZATION_ERROR'
-              ? // These credentials belong to the upstream MCP, not the signed-in
-                // LobeHub user. A 401 here would trigger the client's global logout.
-                'FORBIDDEN'
-              : type === 'INITIALIZATION_TIMEOUT'
-                ? 'TIMEOUT'
-                : 'SERVICE_UNAVAILABLE',
-          message: errorMessage,
-        });
+        throw toMCPConnectionTRPCError(error, errorMessage);
       }
 
       // Log detailed error information for debugging

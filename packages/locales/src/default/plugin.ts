@@ -986,6 +986,7 @@ export default {
   'mcpInstall.errorTypes.CONNECTION_FAILED': 'Connection failed',
   'mcpInstall.errorTypes.INITIALIZATION_TIMEOUT': 'Init timeout',
   'mcpInstall.errorTypes.PROCESS_SPAWN_ERROR': 'Process start failed',
+  'mcpInstall.errorTypes.SSRF_BLOCKED': 'Address blocked',
   'mcpInstall.errorTypes.UNKNOWN_ERROR': 'Unknown error',
   'mcpInstall.errorTypes.VALIDATION_ERROR': 'Validation failed',
   'mcpInstall.installError': 'MCP install failed: {{detail}}',
