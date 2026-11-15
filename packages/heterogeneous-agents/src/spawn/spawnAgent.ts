@@ -16,6 +16,7 @@ import {
   spawnTraeAcpAgent,
 } from './acpSpawnAgent';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
+import { buildAntigravityArgs } from './antigravity';
 import { ClaudeCodeLiveInput } from './claudeCodeLiveInput';
 import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
 import { resolveCliSpawnPlan } from './cliSpawn';
@@ -388,6 +389,9 @@ export const buildQoderArgs = ({
 
 const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
   switch (params.agentType) {
+    case 'antigravity': {
+      return buildAntigravityArgs(params);
+    }
     case 'amp': {
       return buildAmpArgs(params);
     }

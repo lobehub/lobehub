@@ -200,6 +200,17 @@ export const buildAgentInput = async (
   const blocks = toBlocks(prompt);
 
   switch (agentType) {
+    case 'antigravity': {
+      // agy's stream input currently accepts text only. Never silently discard
+      // attachments or send unsupported blocks that terminate its session.
+      if (blocks.some(isImageBlock)) {
+        throw new Error('Antigravity CLI stream input does not support image attachments.');
+      }
+      return {
+        args: [],
+        stdin: `${JSON.stringify({ event: 'user', message: { content: collectText(blocks) } })}\n`,
+      };
+    }
     case 'amp':
     case 'claude-code':
     case 'codebuddy': {

@@ -1,3 +1,4 @@
+import type { AntigravityQuotaParams } from '@lobechat/heterogeneous-agents/quota';
 import {
   copyLocalFiles,
   createLocalDirectory,
@@ -38,6 +39,7 @@ import type {
 } from '@lobechat/local-file-shell/types';
 import type { DeviceCliRestartParams } from '@lobechat/types';
 
+import { getAntigravityQuota } from './antigravityQuota';
 import { listClaudeCodeMemory } from './claudeCodeMemory';
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
@@ -83,6 +85,7 @@ export const DEVICE_RPC_METHODS = [
   'unenrollWorkspace',
   'initWorkspace',
   'listHeterogeneousAgentModels',
+  'getAntigravityQuota',
   'getClaudeCodeQuota',
   'getCodexQuota',
   'getKimiCodeQuota',
@@ -229,6 +232,10 @@ export const executeDeviceRpc = async (
 
     case 'getClaudeCodeQuota': {
       return getClaudeCodeQuota(params as GetClaudeCodeQuotaParams);
+    }
+
+    case 'getAntigravityQuota': {
+      return getAntigravityQuota(params as AntigravityQuotaParams);
     }
 
     case 'getCodexQuota': {

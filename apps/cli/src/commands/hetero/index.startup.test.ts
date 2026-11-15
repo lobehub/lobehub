@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-const cliEntry = fileURLToPath(new URL('../index.ts', import.meta.url));
+const cliEntry = fileURLToPath(new URL('../../index.ts', import.meta.url));
 
 describe.skipIf(process.platform === 'win32')(
   'Pi startup cancellation across real processes',

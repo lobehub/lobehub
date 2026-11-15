@@ -36,20 +36,21 @@ import {
   spawnAgent,
   spawnDshAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
-import { toCodexServiceTier } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import type { Command } from 'commander';
 
-import { getTrpcClient } from '../api/client';
-import { cliVersion } from '../pkg';
-import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
-import { withHeteroSteer } from '../utils/heteroSteer';
-import { HeteroTraceRecorder } from '../utils/HeteroTraceRecorder';
-import { log } from '../utils/logger';
-import { createOperationHeartbeat } from '../utils/OperationHeartbeat';
-import { createOperationTokenRenewal } from '../utils/OperationTokenRenewal';
-import { createLocalTraceStore } from '../utils/traceStore';
-import { TrpcIngestSink } from '../utils/TrpcIngestSink';
+import { getTrpcClient } from '../../api/client';
+import { cliVersion } from '../../pkg';
+import { CoalescingBatchIngester } from '../../utils/CoalescingBatchIngester';
+import { withHeteroSteer } from '../../utils/heteroSteer';
+import { HeteroTraceRecorder } from '../../utils/HeteroTraceRecorder';
+import { log } from '../../utils/logger';
+import { createOperationHeartbeat } from '../../utils/OperationHeartbeat';
+import { createOperationTokenRenewal } from '../../utils/OperationTokenRenewal';
+import { createLocalTraceStore } from '../../utils/traceStore';
+import { TrpcIngestSink } from '../../utils/TrpcIngestSink';
+import type { HeteroCliArgumentOptions } from './buildExtraArgs';
+import { buildExtraArgs } from './buildExtraArgs';
 
 const DSH_AGENT_TYPE = 'deepseek-harness';
 export const SUPPORTED_AGENT_TYPES = new Set<string>([
@@ -90,8 +91,6 @@ const SUPPORTED_AGENT_TITLES = [
 const SUPPORTED_AGENT_COMMANDS = HETEROGENEOUS_AGENT_CONFIGS.map(
   ({ defaultCommand }) => `\`${defaultCommand}\``,
 ).join(', ');
-const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
-const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 /**
  * Runtime factories for `lh hetero exec`. Pi uses RPC; other agents fall
  * through to the generic one-shot `spawnAgent`.
@@ -200,18 +199,13 @@ const isMissingGrokResumeSession = (data: Record<string, unknown> | undefined): 
   return details.method === 'session/load' && isRecord(rpcData) && rpcData.code === 'FS_NOT_FOUND';
 };
 
-interface ExecOptions {
-  agentArg?: string[];
+interface ExecOptions extends HeteroCliArgumentOptions {
   /** Explicit device protocol capability; unsupported native options fail closed. */
   codexAppServer?: boolean;
   command?: string;
   cwd?: string;
-  effort?: string;
   image?: string[];
   inputJson?: string;
-  /** Amp agent mode, forwarded as the native `--mode` flag. */
-  mode?: string;
-  model?: string;
   operationId?: string;
   prompt?: string;
   /**
@@ -230,61 +224,16 @@ interface ExecOptions {
   render?: 'jsonl' | 'none';
   resume?: string;
   /**
-   * Speed mode selection (Codex only). Translated into the native
-   * `service_tier` config; `fast` requests the Fast (priority) tier.
-   */
-  speed?: string;
-  /**
    * Server topic id.  When set, enables server-ingest mode: events are
    * batch-POSTed to `aiAgent.heteroIngest` in addition to (or instead of)
    * being written to stdout.  Requires `--operation-id` to be a valid
    * server-allocated operation id.
    */
   topic?: string;
-  type: string;
 }
 
 const collectImage = (value: string, previous: string[] = []): string[] => [...previous, value];
 const collectAgentArg = (value: string, previous: string[] = []): string[] => [...previous, value];
-
-const buildExtraArgs = (
-  options: Pick<ExecOptions, 'agentArg' | 'effort' | 'mode' | 'model' | 'speed' | 'type'>,
-): string[] | undefined => {
-  const modelArg = options.model ? ['--model', options.model] : [];
-  const selectorArgs =
-    options.type === 'amp'
-      ? options.mode
-        ? ['--mode', options.mode]
-        : []
-      : options.type === 'droid' || options.type === 'trae'
-        ? []
-        : options.type === 'codex'
-          ? [
-              ...modelArg,
-              ...(options.effort
-                ? ['-c', `${CODEX_REASONING_EFFORT_CONFIG_KEY}="${options.effort}"`]
-                : []),
-              ...(options.speed
-                ? ['-c', `${CODEX_SERVICE_TIER_CONFIG_KEY}="${toCodexServiceTier(options.speed)}"`]
-                : []),
-            ]
-          : options.type === 'claude-code' ||
-              options.type === 'codebuddy' ||
-              options.type === 'grok-build'
-            ? [...modelArg, ...(options.effort ? ['--effort', options.effort] : [])]
-            : options.type === 'cursor' ||
-                options.type === 'devin' ||
-                options.type === 'kimi-code' ||
-                options.type === 'opencode' ||
-                options.type === 'pi'
-              ? modelArg
-              : options.type === 'copilot' || options.type === 'qoder'
-                ? [...modelArg, ...(options.effort ? ['--reasoning-effort', options.effort] : [])]
-                : [];
-  const extraArgs = [...(options.agentArg ?? []), ...selectorArgs];
-
-  return extraArgs.length > 0 ? extraArgs : undefined;
-};
 
 const readStdin = async (): Promise<string> => {
   const chunks: Buffer[] = [];

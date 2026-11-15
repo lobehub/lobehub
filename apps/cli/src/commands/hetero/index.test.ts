@@ -11,8 +11,8 @@ import type * as HeteroSpawn from '@lobechat/heterogeneous-agents/spawn';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { HeteroTraceRecorder } from '../utils/HeteroTraceRecorder';
-import { registerHeteroCommand } from './hetero';
+import { HeteroTraceRecorder } from '../../utils/HeteroTraceRecorder';
+import { registerHeteroCommand } from './index';
 
 const {
   mockCreateCodexAgentHandle,
@@ -51,12 +51,12 @@ vi.mock('@lobechat/heterogeneous-agents/rpc', async (importOriginal) => ({
   createPiRpcAgentHandle: mockCreatePiRpcAgentHandle,
 }));
 
-vi.mock('../api/client', () => ({
+vi.mock('../../api/client', () => ({
   getTrpcClient: mockGetTrpcClient,
 }));
 
 const { mockRenewalStop } = vi.hoisted(() => ({ mockRenewalStop: vi.fn() }));
-vi.mock('../utils/OperationTokenRenewal', () => ({
+vi.mock('../../utils/OperationTokenRenewal', () => ({
   createOperationTokenRenewal: () => ({ active: true, stop: mockRenewalStop }),
 }));
 
@@ -897,49 +897,29 @@ describe('hetero exec command', () => {
     expect(mockSpawnAgent.mock.calls[0][0].includePartialMessages).toBe(false);
   });
 
-  it('passes Claude Code --model and --effort through as spawnAgent extraArgs', async () => {
+  it.each([
+    ['antigravity', 'agy'],
+    ['claude-code', 'claude'],
+    ['codebuddy', 'codebuddy'],
+  ])('passes %s model and effort through the CLI wrapper', async (type, command) => {
     mockSpawnAgent.mockReturnValue(createFakeHandle());
-
     await runCmd([
       'hetero',
       'exec',
       '--type',
-      'claude-code',
+      type,
       '--prompt',
       'hi',
       '--model',
-      'opus',
+      'custom-model',
       '--effort',
-      'high',
+      'max',
     ]);
-
-    expect(mockSpawnAgent).toHaveBeenCalledTimes(1);
+    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith(type, undefined);
     expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
-      extraArgs: ['--model', 'opus', '--effort', 'high'],
-    });
-  });
-
-  it('passes CodeBuddy --model and --effort through as spawnAgent extraArgs', async () => {
-    mockSpawnAgent.mockReturnValue(createFakeHandle());
-
-    await runCmd([
-      'hetero',
-      'exec',
-      '--type',
-      'codebuddy',
-      '--prompt',
-      'hi',
-      '--model',
-      'gpt-5.4',
-      '--effort',
-      'high',
-    ]);
-
-    expect(mockResolveHeteroSpawnCommand).toHaveBeenCalledWith('codebuddy', undefined);
-    expect(mockSpawnAgent.mock.calls[0][0]).toMatchObject({
-      agentType: 'codebuddy',
-      command: 'codebuddy',
-      extraArgs: ['--model', 'gpt-5.4', '--effort', 'high'],
+      agentType: type,
+      command,
+      extraArgs: ['--model', 'custom-model', '--effort', 'max'],
     });
   });
 
