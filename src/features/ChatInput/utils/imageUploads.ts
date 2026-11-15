@@ -23,6 +23,11 @@ export const getImageUploadNumbers = (files: UploadFileItem[]): (number | undefi
 };
 
 export interface ImageUploadRef {
+  /**
+   * The uploaded file's id, only once the upload finished: until then an upload's id is its
+   * file name, which pasted images often share.
+   */
+  fileId?: string;
   number: number;
   src: string;
 }
@@ -38,7 +43,12 @@ export const getImageUploadRefs = (files: UploadFileItem[]): Map<string, ImageUp
   const refs = new Map<string, ImageUploadRef>();
   files.forEach((item, index) => {
     const number = numbers[index];
-    if (number && item.previewUrl) refs.set(item.previewUrl, { number, src: item.previewUrl });
+    if (!number || !item.previewUrl) return;
+    refs.set(item.previewUrl, {
+      ...(item.status === 'success' && { fileId: item.id }),
+      number,
+      src: item.previewUrl,
+    });
   });
   return refs;
 };

@@ -10,6 +10,7 @@ import {
   $isTextNode,
   COMMAND_PRIORITY_HIGH,
   createCommand,
+  HISTORIC_TAG,
   HISTORY_MERGE_TAG,
   type LexicalEditor,
   type LexicalNode,
@@ -64,17 +65,51 @@ const $removeImageRefTag = (node: ImageRefTagNode) => {
   node.remove();
 };
 
+type SyncAction = 'remove' | { ref: ImageUploadRef } | undefined;
+
+/**
+ * What a reference needs to match the attachment list. A reference whose preview URL is
+ * not listed is matched by its file id, which is how a reference restored from a sent
+ * message finds its image again under the image's server URL. Only a reference matching
+ * no listed image is removed, since sending a message also clears its preview URLs.
+ */
+const planReference = (
+  node: ImageRefTagNode,
+  refs: Map<string, ImageUploadRef>,
+  removed: ReadonlySet<string>,
+): SyncAction => {
+  const ref =
+    refs.get(node.src) ??
+    (node.fileId ? [...refs.values()].find((item) => item.fileId === node.fileId) : undefined);
+  if (!ref) return removed.has(node.src) ? 'remove' : undefined;
+
+  const stale =
+    ref.src !== node.src ||
+    ref.number !== node.number ||
+    (ref.fileId !== undefined && ref.fileId !== node.fileId);
+  return stale ? { ref } : undefined;
+};
+
+const NOTHING_REMOVED: ReadonlySet<string> = new Set();
+
 const $syncImageRefTags = (refs: Map<string, ImageUploadRef>, removed: ReadonlySet<string>) => {
   for (const { node } of $dfs()) {
     if (!$isImageRefTagNode(node)) continue;
-    if (removed.has(node.src)) {
+    const action = planReference(node, refs, removed);
+    if (action === 'remove') {
       $removeImageRefTag(node);
-      continue;
+    } else if (action) {
+      const { ref } = action;
+      const writable = node.setNumber(ref.number);
+      if (ref.src !== node.src || ref.fileId !== node.fileId) {
+        writable.setUpload(ref.src, ref.fileId ?? node.fileId);
+      }
     }
-    const number = refs.get(node.src)?.number;
-    if (number !== undefined && number !== node.number) node.setNumber(number);
   }
 };
+
+/** Marks the follow-up update that re-syncs references, so it does not trigger itself. */
+const IMAGE_REF_RESYNC_TAG = 'image-ref-resync';
 
 const $insertImageRefTags = (refs: ImageUploadRef[]) => {
   const nodes: LexicalNode[] = refs.flatMap((ref) => [
@@ -111,6 +146,8 @@ export class ImageRefTagPlugin {
    * editing a sent message), where references keep their stored number.
    */
   private refs?: Map<string, ImageUploadRef>;
+  /** Preview URLs of images removed from the attachment list and not attached again. */
+  private removed = new Set<string>();
 
   constructor(kernel: IEditorKernel, config?: ImageRefTagPluginOptions) {
     this.kernel = kernel;
@@ -149,11 +186,13 @@ export class ImageRefTagPlugin {
       SYNC_IMAGE_REF_TAGS_COMMAND,
       ({ insert, refs, removed }) => {
         this.refs = refs;
+        for (const src of refs.keys()) this.removed.delete(src);
+        for (const src of removed ?? []) this.removed.add(src);
         const inserted = (insert ?? []).flatMap((src) => refs.get(src) ?? []);
 
         editor.update(
           () => {
-            $syncImageRefTags(refs, new Set(removed));
+            $syncImageRefTags(refs, this.removed);
             if (inserted.length > 0) $insertImageRefTags(inserted);
           },
           // Renumbering after a removal belongs to that removal, not to its own undo step.
@@ -163,6 +202,29 @@ export class ImageRefTagPlugin {
       },
       COMMAND_PRIORITY_HIGH,
     );
+
+    // Undo and restored editor data replace the editor state without a sync, bringing back
+    // references with old numbers or to removed images. The markdown writer already reads
+    // the snapshot, but the editor data sent with the message stores each node's number, so
+    // the nodes themselves are brought back in line. Only undo/redo removes references: a
+    // draft restored from a sent message lists its images after its text, under new URLs.
+    editor.registerUpdateListener(({ editorState, tags }) => {
+      const refs = this.refs;
+      if (!refs || tags.has(IMAGE_REF_RESYNC_TAG)) return;
+      const removed = tags.has(HISTORIC_TAG) ? this.removed : NOTHING_REMOVED;
+
+      const stale = editorState.read(() =>
+        $dfs().some(
+          ({ node }) =>
+            $isImageRefTagNode(node) && planReference(node, refs, removed) !== undefined,
+        ),
+      );
+      if (!stale) return;
+
+      editor.update(() => $syncImageRefTags(refs, removed), {
+        tag: [HISTORY_MERGE_TAG, IMAGE_REF_RESYNC_TAG],
+      });
+    });
   }
 
   destroy(): void {

@@ -1,7 +1,7 @@
 import { $dfs } from '@lexical/utils';
 import type { IEditor } from '@lobehub/editor';
 import { CommonPlugin, Kernel, MarkdownPlugin, moment } from '@lobehub/editor';
-import { $createParagraphNode, $createTextNode, $getRoot } from 'lexical';
+import { $createParagraphNode, $createTextNode, $getRoot, HISTORIC_TAG } from 'lexical';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ImageUploadRef } from '../../utils/imageUploads';
@@ -31,6 +31,27 @@ const sync = async (
 // The exported markdown escapes `[`, which still reads as the literal text `[Image #N]`.
 const markdown = (editor: IEditor) =>
   String(editor.getDocument('markdown')).trim().replaceAll('\\[', '[');
+
+/** Replaces the editor state the way undo does. */
+const undoTo = async (editor: IEditor, json: unknown) => {
+  const lexical = editor.getLexicalEditor()!;
+  lexical.setEditorState(lexical.parseEditorState(json as any), { tag: HISTORIC_TAG });
+  await moment();
+};
+
+/** The references as stored in the editor data a sent message keeps. */
+const referencesOf = (editor: IEditor) => {
+  const found: { fileId?: string; number: number; src: string }[] = [];
+  const walk = (node: any) => {
+    if (node?.type === 'image-ref-tag') {
+      const { fileId, number, src } = node;
+      found.push({ ...(fileId && { fileId }), number, src });
+    }
+    node?.children?.forEach(walk);
+  };
+  walk((editor.getDocument('json') as any)?.root);
+  return found;
+};
 
 const setText = async (editor: IEditor, text: string) => {
   editor.getLexicalEditor()!.update(() => {
@@ -101,6 +122,52 @@ describe('ImageRefTagPlugin', () => {
 
     // The removed image's reference writes nothing; only its trailing space remains.
     expect(markdown(editor).replaceAll(/\s+/g, ' ')).toBe('a [Image #1]');
+  });
+
+  it('stores the current numbers in the editor data after undo brings old ones back', async () => {
+    const editor = createEditor();
+    await setText(editor, 'a ');
+    await sync(editor, refsOf('blob:a', 'blob:b'), { insert: ['blob:a', 'blob:b'] });
+    const beforeRemoval = editor.getDocument('json');
+
+    await sync(editor, refsOf('blob:b'), { removed: ['blob:a'] });
+    await undoTo(editor, beforeRemoval);
+
+    // The sent message renders its chips from these numbers, so they must match the text.
+    expect(referencesOf(editor)).toEqual([{ number: 1, src: 'blob:b' }]);
+  });
+
+  it('binds a reference restored from a sent message to its image by file id', async () => {
+    const editor = createEditor();
+    await setText(editor, 'what is ');
+    await sync(editor, refsOf('blob:a', 'blob:b'), { insert: ['blob:a', 'blob:b'] });
+    // Both uploads finish, so the references record the uploaded files' ids.
+    await sync(
+      editor,
+      new Map([
+        ['blob:a', { fileId: 'file-a', number: 1, src: 'blob:a' }],
+        ['blob:b', { fileId: 'file-b', number: 2, src: 'blob:b' }],
+      ]),
+    );
+    const sentEditorData = editor.getDocument('json');
+
+    // Restoring the message brings back its editor data, and its images under server URLs.
+    await sync(editor, refsOf(), { removed: ['blob:a', 'blob:b'] });
+    editor.setDocument('json', sentEditorData);
+    await moment();
+    await sync(
+      editor,
+      new Map([
+        ['https://cdn/a.png', { fileId: 'file-a', number: 1, src: 'https://cdn/a.png' }],
+        ['https://cdn/b.png', { fileId: 'file-b', number: 2, src: 'https://cdn/b.png' }],
+      ]),
+    );
+
+    expect(markdown(editor).replaceAll(/\s+/g, ' ')).toBe('what is [Image #1] [Image #2]');
+    expect(referencesOf(editor)).toEqual([
+      { fileId: 'file-a', number: 1, src: 'https://cdn/a.png' },
+      { fileId: 'file-b', number: 2, src: 'https://cdn/b.png' },
+    ]);
   });
 
   it('keeps a restored reference whose image is not listed yet', async () => {

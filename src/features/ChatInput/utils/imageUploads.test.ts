@@ -52,14 +52,27 @@ describe('getImageUploadNumbers', () => {
 describe('getImageUploadRefs', () => {
   it('keys image uploads by preview URL with their current number', () => {
     const files = [
-      upload('a.png', 'image/png', 'blob:a'),
+      upload('a.png', 'image/png', 'blob:a', 'uploading'),
       upload('clip.mp4', 'video/mp4', 'blob:v'),
-      upload('b.png', 'image/png', 'blob:b'),
+      upload('b.png', 'image/png', 'blob:b', 'uploading'),
     ];
 
     expect([...getImageUploadRefs(files)]).toEqual([
       ['blob:a', { number: 1, src: 'blob:a' }],
       ['blob:b', { number: 2, src: 'blob:b' }],
+    ]);
+  });
+
+  it('records the file id only once an upload finished', () => {
+    // Until then the id is the file name, which two pasted images can share.
+    const files = [
+      upload('image.png', 'image/png', 'blob:a', 'uploading'),
+      { ...upload('image.png', 'image/png', 'blob:b'), id: 'file-b' },
+    ];
+
+    expect([...getImageUploadRefs(files)]).toEqual([
+      ['blob:a', { number: 1, src: 'blob:a' }],
+      ['blob:b', { fileId: 'file-b', number: 2, src: 'blob:b' }],
     ]);
   });
 });

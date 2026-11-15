@@ -17,7 +17,7 @@ import { createElement } from 'react';
 import { ImageRefLabel } from './ImageRefLabel';
 
 export type SerializedImageRefTagNode = Spread<
-  { number: number; src: string },
+  { fileId?: string; number: number; src: string },
   SerializedLexicalNode
 >;
 
@@ -32,33 +32,41 @@ export const formatImageRef = (number: number) => `[Image #${number}]`;
  * lifetime. `number` is the image's position among the draft's images; it is kept in sync
  * with the attachment list, so the chip, the thumbnail badge and the `[Image #N]` text the
  * model receives always agree.
+ *
+ * `fileId` is the uploaded file's id, recorded once the upload finishes. It survives in the
+ * sent message's editor data, so a reference restored into the composer, whose image now has
+ * a server URL instead of the old preview URL, can be bound to that image again.
  */
 export class ImageRefTagNode extends DecoratorNode<any> implements HeadlessRenderableNode {
   __src: string;
   __number: number;
+  __fileId?: string;
 
   static getType(): string {
     return 'image-ref-tag';
   }
 
   static clone(node: ImageRefTagNode): ImageRefTagNode {
-    return new ImageRefTagNode(node.__src, node.__number, node.__key);
+    return new ImageRefTagNode(node.__src, node.__number, node.__key, node.__fileId);
   }
 
   static importJSON(serializedNode: SerializedImageRefTagNode): ImageRefTagNode {
-    return $createImageRefTagNode(serializedNode.src, serializedNode.number).updateFromJSON(
-      serializedNode,
-    );
+    return $createImageRefTagNode(
+      serializedNode.src,
+      serializedNode.number,
+      serializedNode.fileId,
+    ).updateFromJSON(serializedNode);
   }
 
   static importDOM(): null {
     return null;
   }
 
-  constructor(src: string, number: number, key?: string) {
+  constructor(src: string, number: number, key?: string, fileId?: string) {
     super(key);
     this.__src = src;
     this.__number = number;
+    this.__fileId = fileId;
   }
 
   get src(): string {
@@ -69,9 +77,21 @@ export class ImageRefTagNode extends DecoratorNode<any> implements HeadlessRende
     return this.__number;
   }
 
+  get fileId(): string | undefined {
+    return this.__fileId;
+  }
+
   setNumber(number: number): this {
     const writable = this.getWritable();
     writable.__number = number;
+    return writable;
+  }
+
+  /** Points the reference at another upload of the same file, e.g. a restored attachment. */
+  setUpload(src: string, fileId: string | undefined): this {
+    const writable = this.getWritable();
+    writable.__src = src;
+    writable.__fileId = fileId;
     return writable;
   }
 
@@ -117,6 +137,7 @@ export class ImageRefTagNode extends DecoratorNode<any> implements HeadlessRende
   exportJSON(): SerializedImageRefTagNode {
     return {
       ...super.exportJSON(),
+      ...(this.__fileId && { fileId: this.__fileId }),
       number: this.__number,
       src: this.__src,
     };
@@ -127,8 +148,12 @@ export class ImageRefTagNode extends DecoratorNode<any> implements HeadlessRende
   }
 }
 
-export function $createImageRefTagNode(src: string, number: number): ImageRefTagNode {
-  return $applyNodeReplacement(new ImageRefTagNode(src, number));
+export function $createImageRefTagNode(
+  src: string,
+  number: number,
+  fileId?: string,
+): ImageRefTagNode {
+  return $applyNodeReplacement(new ImageRefTagNode(src, number, undefined, fileId));
 }
 
 export function $isImageRefTagNode(node: LexicalNode | null | undefined): node is ImageRefTagNode {
