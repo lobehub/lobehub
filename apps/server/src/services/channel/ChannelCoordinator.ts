@@ -30,7 +30,7 @@ import { notifyChannel } from './notify';
 import { registerLocalChannelAdvance, wakeChannel } from './queue';
 import { deliverRelayReceipt } from './relayReceipt';
 import { openChannelReply } from './replyOpening';
-import { resolveChannelRoutedDevice } from './routedDevice';
+import { createRoutedDevicePresence, resolveChannelRoutedDevice } from './routedDevice';
 import { createChannelWorktree } from './worktree';
 
 const LEASE_MS = 60_000;
@@ -67,7 +67,8 @@ export class ChannelCoordinator {
           .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.status, 'active')))
       : [];
     // A member with no device picked in the Channel runs where the Agent's own settings say, as
-    // its requester: their presence decides whether that device is online.
+    // its requester: their presence decides whether that device is online. Read it here, outside
+    // the channel lock; the claim only resolves which device it is.
     const unpicked = new Set(
       members.filter(({ config }) => !config?.deviceId).map((member) => member.id),
     );
@@ -84,11 +85,16 @@ export class ChannelCoordinator {
             and(eq(channelMembers.channelId, channelId), inArray(channelMembers.id, requesterIds)),
           )
       : [];
+    const routedPresence = createRoutedDevicePresence(this.db, channel.workspaceId);
+    await pMap(
+      requesters.flatMap(({ userId }) => (userId ? [userId] : [])),
+      (userId) => routedPresence.prefetch(userId),
+      { concurrency: 5 },
+    );
     const owners = [
-      ...new Set([
-        ...members.flatMap(({ config }) => (config?.deviceOwnerId ? [config.deviceOwnerId] : [])),
-        ...requesters.flatMap(({ userId }) => (userId ? [userId] : [])),
-      ]),
+      ...new Set(
+        members.flatMap(({ config }) => (config?.deviceOwnerId ? [config.deviceOwnerId] : [])),
+      ),
     ];
     const presence = await pMap(
       owners,
@@ -117,7 +123,7 @@ export class ChannelCoordinator {
                 leaseMs: LEASE_MS,
                 leaseOwner: crypto.randomUUID(),
                 onlineDeviceIds,
-                routedDeviceId: (run) => resolveChannelRoutedDevice(this.db, run),
+                routedDevice: (run) => resolveChannelRoutedDevice(this.db, run, routedPresence),
                 serverDefaultAgentConfig: getServerDefaultAgentConfig(),
               });
             let claim = await claimNow();

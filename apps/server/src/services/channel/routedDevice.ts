@@ -3,7 +3,10 @@ import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { resolveAgentAgencyConfig } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 
-import type { ChannelRoutedDeviceInput } from '@/database/repositories/channel';
+import type {
+  ChannelRoutedDevice,
+  ChannelRoutedDeviceInput,
+} from '@/database/repositories/channel';
 import { agents } from '@/database/schemas';
 import { resolveExecutionPlan } from '@/helpers/executionTarget';
 import { supportsCloudHeterogeneousSandbox } from '@/server/services/aiAgent/helpers/heteroErrors';
@@ -12,6 +15,49 @@ import {
   resolveCanManage,
 } from '@/server/services/aiAgent/pipeline/resolveRunAgentConfig';
 import { findWakeableManagedDevices } from '@/server/services/deviceGateway/managedDeviceWake';
+import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
+
+export interface RoutedDevicePresence {
+  /** Whether `userId` can reach `deviceId` online in this Channel's scope. */
+  isOnline: (userId: string, deviceId: string) => Promise<boolean>;
+  /** Reads the user's presence ahead of the claim, outside the channel lock. */
+  prefetch: (userId: string) => Promise<void>;
+}
+
+/**
+ * Presence of requesters' routed devices for one advance pass, read once per requester. A
+ * workspace run reaches the Channel workspace's devices and, as `readDevicePool` allows, the
+ * requester's own personal device when the run routes exactly there: the gateway routes it by
+ * `(userId, deviceId)`. Only that device is asked about, so no other personal device can stand
+ * in for a Channel-picked one.
+ */
+export const createRoutedDevicePresence = (
+  db: LobeChatDatabase,
+  workspaceId: string | null,
+): RoutedDevicePresence => {
+  const pools = new Map<string, Promise<Set<string>>>();
+  const pool = (userId: string, scope?: string) => {
+    const key = `${userId}\0${scope ?? ''}`;
+    let ids = pools.get(key);
+    if (!ids) {
+      ids = getScopedOnlineDevices(db, userId, scope)
+        .then((devices) => new Set(devices.filter((d) => d.online).map((d) => d.deviceId)))
+        .catch(() => new Set<string>());
+      pools.set(key, ids);
+    }
+    return ids;
+  };
+  const scopes = workspaceId ? [workspaceId, undefined] : [undefined];
+  return {
+    isOnline: async (userId, deviceId) => {
+      for (const scope of scopes) if ((await pool(userId, scope)).has(deviceId)) return true;
+      return false;
+    },
+    prefetch: async (userId) => {
+      await Promise.all(scopes.map((scope) => pool(userId, scope)));
+    },
+  };
+};
 
 /**
  * The device a Channel run with no device picked in the Channel routes to, resolved from the
@@ -26,7 +72,8 @@ import { findWakeableManagedDevices } from '@/server/services/deviceGateway/mana
 export const resolveChannelRoutedDevice = async (
   db: LobeChatDatabase,
   { agentId, executionConfig, userId, workspaceId }: ChannelRoutedDeviceInput,
-): Promise<string | undefined> => {
+  presence: RoutedDevicePresence,
+): Promise<ChannelRoutedDevice | undefined> => {
   const heteroType = executionConfig.agencyConfig?.heterogeneousProvider?.type;
   if (!heteroType || isRemoteHeterogeneousType(heteroType)) return;
 
@@ -65,5 +112,7 @@ export const resolveChannelRoutedDevice = async (
     sandboxExecutionAvailable: supportsCloudHeterogeneousSandbox(heteroType),
     wakeableDeviceIds: wakeable.map((target) => target.deviceId),
   });
-  return plan.kind === 'device' ? plan.deviceId : undefined;
+  // No presence here: the plan trusts the binding (personal or not), as hetero dispatch does.
+  if (plan.kind !== 'device') return;
+  return { deviceId: plan.deviceId, online: await presence.isOnline(userId, plan.deviceId) };
 };

@@ -49,7 +49,12 @@ export {
   CHANNEL_ROUTING_LEASE_MS,
   ChannelRoutingRepository,
 } from './ChannelRoutingRepository';
-export type { ChannelClaim, ChannelClaimOptions, ChannelRoutedDeviceInput } from './claim';
+export type {
+  ChannelClaim,
+  ChannelClaimOptions,
+  ChannelRoutedDevice,
+  ChannelRoutedDeviceInput,
+} from './claim';
 export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';

@@ -32,13 +32,20 @@ export interface ChannelClaimOptions {
   onlineDeviceIds?: string[];
   /**
    * The device a run with no device picked in the Channel will route to, from the Agent's own
-   * settings as the requester's ordinary conversation would resolve them; undefined when it
-   * needs none or would wake it. Lets an offline Agent-bound device wait like a Channel one.
-   * Only consulted with `onlineDeviceIds`.
+   * settings as the requester's ordinary conversation would resolve them, and whether it is
+   * online for that requester; undefined when it needs none or would wake it. Lets an offline
+   * Agent-bound device wait like a Channel one. Its presence is the requester's, which may
+   * include their personal device, so it stays out of `onlineDeviceIds`. Only consulted with
+   * `onlineDeviceIds`.
    */
-  routedDeviceId?: (run: ChannelRoutedDeviceInput) => Promise<string | undefined>;
+  routedDevice?: (run: ChannelRoutedDeviceInput) => Promise<ChannelRoutedDevice | undefined>;
   /** Trusted server defaults from getServerDefaultAgentConfig(); use {} when unconfigured. */
   serverDefaultAgentConfig: PartialDeep<LobeAgentConfig>;
+}
+
+export interface ChannelRoutedDevice {
+  deviceId: string;
+  online: boolean;
 }
 
 export interface ChannelRoutedDeviceInput {
@@ -365,22 +372,32 @@ export const claimJob = async (
   }
 
   // A device picked in the Channel, else the one the Agent's own settings route the run to.
-  const routedDeviceId = options.onlineDeviceIds
-    ? (member.config?.deviceId ??
-      (await options.routedDeviceId?.({
-        agentId: member.agentId!,
-        executionConfig,
-        userId: requester.userId!,
-        workspaceId: channel.workspaceId,
-      })))
-    : undefined;
-  if (routedDeviceId && !options.onlineDeviceIds!.includes(routedDeviceId)) {
+  const channelDeviceId = member.config?.deviceId;
+  const routed =
+    options.onlineDeviceIds && !channelDeviceId
+      ? await options.routedDevice?.({
+          agentId: member.agentId!,
+          executionConfig,
+          userId: requester.userId!,
+          workspaceId: channel.workspaceId,
+        })
+      : undefined;
+  const offlineDeviceId = !options.onlineDeviceIds
+    ? undefined
+    : channelDeviceId
+      ? options.onlineDeviceIds.includes(channelDeviceId)
+        ? undefined
+        : channelDeviceId
+      : routed && !routed.online
+        ? routed.deviceId
+        : undefined;
+  if (offlineDeviceId) {
     await block(
       tx,
       job,
       'device_offline',
       'Waiting for the configured device to connect',
-      routedDeviceId,
+      offlineDeviceId,
     );
     return null;
   }
