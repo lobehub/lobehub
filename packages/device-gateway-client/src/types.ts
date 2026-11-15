@@ -44,6 +44,12 @@ export interface DeviceSystemInfo {
    * `codex-app-server-v1` runs `lh hetero exec --codex-app-server` with native turn provenance.
    */
   supportedAgentRuntimes?: string[];
+  /**
+   * Tunneled tool-call kinds this client runs beyond plain `'tool'` calls
+   * (e.g. `'mcp'`); absent on older clients. The desktop app runs MCP calls
+   * without reporting it — the server routes those to it by channel.
+   */
+  supportedToolCallTypes?: GatewayToolCallType[];
   /** Opt-in tool identifiers supported by this client; absent on older clients. */
   supportedTools?: string[];
   userDataPath: string;

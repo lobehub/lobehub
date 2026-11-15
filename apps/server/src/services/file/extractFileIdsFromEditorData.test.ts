@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   collectAttachmentUrlsFromEditorData,
   extractFileIdsFromEditorData,
+  resolveFileIdsFromUrls,
 } from './extractFileIdsFromEditorData';
 
 const image = (src: string, status?: string) => ({
@@ -95,7 +96,7 @@ describe('extractFileIdsFromEditorData', () => {
   });
 
   it('falls back to DB lookup by storage key for pre-signed URLs', async () => {
-    const db = mockDb([{ id: 'file_resolved' }]);
+    const db = mockDb([{ id: 'file_resolved', url: 'ppp/494360/03378b6c.jpg' }]);
     const json = {
       root: {
         children: [
@@ -111,7 +112,7 @@ describe('extractFileIdsFromEditorData', () => {
   });
 
   it('mixes proxy + signed URLs and dedupes', async () => {
-    const db = mockDb([{ id: 'file_signed_one' }]);
+    const db = mockDb([{ id: 'file_signed_one', url: 'users/u/files/abc.jpg' }]);
     const json = {
       root: {
         children: [
@@ -166,4 +167,25 @@ describe('extractFileIdsFromEditorData', () => {
   });
 
   void ctx; // silence unused
+});
+
+describe('resolveFileIdsFromUrls', () => {
+  it('keeps the order of the URLs, whichever form each one has', async () => {
+    // Rows come back in database order, not URL order.
+    const db = mockDb([
+      { id: 'file_third', url: 'files/3.png' },
+      { id: 'file_first', url: 'files/1.png' },
+    ]);
+
+    await expect(
+      resolveFileIdsFromUrls(
+        [
+          'https://r2.example.com/files/1.png?X-Amz-Date=…',
+          'https://app.example.com/f/file_second',
+          'https://r2.example.com/files/3.png?X-Amz-Date=…',
+        ],
+        { db, userId: 'u' },
+      ),
+    ).resolves.toEqual(['file_first', 'file_second', 'file_third']);
+  });
 });

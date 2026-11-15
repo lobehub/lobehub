@@ -402,8 +402,8 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
   /**
    * List the tools of an MCP server only this machine reaches (stdio, or an
    * HTTP endpoint on its network), for a server that must not connect to it
-   * itself. Optional: only the desktop app has an MCP client, so `lh connect`
-   * omits it and the dispatcher fails the RPC with {@link MCP_UNSUPPORTED_MESSAGE}.
+   * itself. Optional: a client that runs no MCP servers omits it, and the
+   * dispatcher fails the RPC with {@link MCP_UNSUPPORTED_MESSAGE}.
    */
   listMcpTools?: (params: ListMcpToolsParams) => Promise<ListedMcpServerTool[]>;
   /** Read raw bytes after the user explicitly approved an external publish closure. */

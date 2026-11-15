@@ -1,0 +1,25 @@
+{
+  "name": "@lobechat/device-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Runs MCP servers only the user's machine can reach (stdio, localhost / LAN HTTP) for device hosts: the desktop app and lh connect.",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "bunx vitest run --silent='passed-only'",
+    "test:coverage": "bunx vitest run --coverage"
+  },
+  "dependencies": {
+    "@lobechat/const": "workspace:*",
+    "@lobechat/utils": "workspace:*",
+    "@modelcontextprotocol/client": "~2.4.0"
+  },
+  "devDependencies": {
+    "vitest": "5.0.0"
+  }
+}

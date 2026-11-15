@@ -19,6 +19,7 @@ packages:
   - '../../packages/device-control'
   - '../../packages/device-sandbox'
   - '../../packages/device-gateway-client'
+  - '../../packages/device-mcp'
   - '../../packages/device-identity'
   - '../../packages/local-file-shell'
   - '../../packages/tool-runtime'

@@ -18,8 +18,13 @@ vi.mock('@/server/services/deviceGateway', () => ({
     executeToolCall: vi.fn(),
     isConfigured: false,
     queryDeviceList: vi.fn().mockResolvedValue([]),
+    // An `lh connect` that predates MCP support reports no `mcp` call type.
+    readDeviceSystemInfo: vi.fn().mockResolvedValue({ ok: true, systemInfo: {} }),
   },
 }));
+
+/** System info from an `lh connect` that runs tunneled MCP calls. */
+const mcpCapableCli = { ok: true, systemInfo: { supportedToolCallTypes: ['tool', 'mcp'] } };
 const mcpAppsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
 vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mcpAppsEnabled }));
 vi.mock('@/server/services/deviceGateway/dispatchAuthorization', () => ({
@@ -584,8 +589,8 @@ describe('ToolExecutionService', () => {
       // order and includes offline DB rows — the fallback must skip those.
       vi.mocked(getScopedOnlineDevices).mockResolvedValue([
         { channels: [{ channel: 'desktop' }], deviceId: 'offline-row', online: false },
-        // A newer CLI-only connection must be skipped: the CLI's
-        // tool_call_request handler cannot execute `mcp` calls.
+        // A newer CLI-only connection must be skipped when that CLI predates
+        // MCP support: it would dispatch the call by apiName.
         { channels: [{ channel: 'cli' }], deviceId: 'cli-only', online: true },
         {
           channels: [{ channel: 'cli' }, { channel: 'desktop' }],
@@ -601,15 +606,70 @@ describe('ToolExecutionService', () => {
 
       expect(getScopedOnlineDevices).toHaveBeenCalledWith(context.serverDB, 'user-1', undefined);
       expect(deviceGateway.queryDeviceList).not.toHaveBeenCalled();
+      // The desktop app beside `lh connect` runs it, pinned so the gateway
+      // never hands the call to the CLI.
       expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
-        expect.objectContaining({ deviceId: 'newest' }),
+        expect.objectContaining({ clientKinds: ['desktop'], deviceId: 'newest' }),
         undefined,
       );
     });
 
-    // `lh connect` answers `mcp` tool calls with `Unknown tool API: <tool>` — an
-    // active device that is CLI-only must not receive the tunnel (Honcho-Memory
-    // vents: calls worked until the agent activated a CLI-only Mac mini).
+    it('falls back to the newest online lh connect device that runs MCP calls', async () => {
+      vi.mocked(deviceGateway.readDeviceSystemInfo).mockResolvedValueOnce(mcpCapableCli as any);
+      vi.mocked(getScopedOnlineDevices).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'devbox-cli', online: true },
+        { channels: [{ channel: 'desktop' }], deviceId: 'older-desktop', online: true },
+      ] as any);
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith({ args: [], command: 'npx', name: 'my-mcp', type: 'stdio' }),
+      );
+
+      expect(result.success).toBe(true);
+      expect(deviceGateway.readDeviceSystemInfo).toHaveBeenCalledWith(
+        'user-1',
+        'devbox-cli',
+        undefined,
+        { clientKinds: ['cli'] },
+      );
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+        expect.objectContaining({ clientKinds: ['cli'], deviceId: 'devbox-cli' }),
+        undefined,
+      );
+    });
+
+    it('tunnels to a CLI-only active device whose lh connect runs MCP calls', async () => {
+      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli' },
+      ] as any);
+      vi.mocked(deviceGateway.readDeviceSystemInfo).mockResolvedValueOnce(mcpCapableCli as any);
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+          { activeDeviceId: 'mac-mini-cli', workspaceId: 'ws-1' },
+        ),
+      );
+
+      expect(result.success).toBe(true);
+      expect(getScopedOnlineDevices).not.toHaveBeenCalled();
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clientKinds: ['cli'],
+          deviceId: 'mac-mini-cli',
+          workspaceId: 'ws-1',
+        }),
+        undefined,
+      );
+    });
+
+    // An older `lh connect` answers `mcp` tool calls by apiName — an active
+    // device whose only client is such a CLI must not receive the tunnel
+    // (Honcho-Memory vents: calls worked until the agent activated a CLI-only Mac mini).
     it('skips a CLI-only active device and tunnels to the newest desktop device', async () => {
       vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
         { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli' },
@@ -635,7 +695,7 @@ describe('ToolExecutionService', () => {
       );
     });
 
-    it('fails with an actionable error when only CLI devices are online', async () => {
+    it('fails with an actionable error when only older CLI devices are online', async () => {
       vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
         { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli' },
       ] as any);
@@ -658,7 +718,7 @@ describe('ToolExecutionService', () => {
       expect(result.content).toContain('lh connect');
     });
 
-    it('fails closed for a workspace run whose active device is CLI-only', async () => {
+    it('fails closed for a workspace run whose active device has only an older CLI', async () => {
       vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
         { channels: [{ channel: 'cli' }], deviceId: 'ws-cli' },
       ] as any);
@@ -924,7 +984,7 @@ describe('ToolExecutionService', () => {
       expect(callTool).not.toHaveBeenCalled();
       expect(result.success).toBe(false);
       expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
-      expect(result.content).toContain('Open the LobeHub desktop app');
+      expect(result.content).toContain('Open the LobeHub desktop app or run `lh connect`');
     });
 
     it('fails closed when no serverDB is available to apply device visibility', async () => {

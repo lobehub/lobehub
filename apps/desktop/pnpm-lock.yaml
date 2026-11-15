@@ -79,6 +79,9 @@ importers:
       '@lobechat/device-identity':
         specifier: workspace:*
         version: link:../../packages/device-identity
+      '@lobechat/device-mcp':
+        specifier: workspace:*
+        version: link:../../packages/device-mcp
       '@lobechat/device-sandbox':
         specifier: workspace:*
         version: link:../../packages/device-sandbox
@@ -392,6 +395,22 @@ importers:
       node-machine-id:
         specifier: ^1.1.12
         version: 1.1.12
+    devDependencies:
+      vitest:
+        specifier: 5.0.3
+        version: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@24.19.1)(happy-dom@20.14.5)(vite@8.3.2(@types/node@24.19.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
+  ../../packages/device-mcp:
+    dependencies:
+      '@lobechat/const':
+        specifier: workspace:*
+        version: link:../const
+      '@lobechat/utils':
+        specifier: workspace:*
+        version: link:../utils
+      '@modelcontextprotocol/client':
+        specifier: ~2.4.0
+        version: 2.4.0
     devDependencies:
       vitest:
         specifier: 5.0.3
@@ -834,6 +853,9 @@ importers:
       '@lobechat/device-identity':
         specifier: workspace:*
         version: link:../../packages/device-identity
+      '@lobechat/device-mcp':
+        specifier: workspace:*
+        version: link:../../packages/device-mcp
       '@lobechat/eval-rubric':
         specifier: workspace:*
         version: link:../../packages/eval-rubric

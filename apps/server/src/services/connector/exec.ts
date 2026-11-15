@@ -236,9 +236,9 @@ export const callConnectorToolById = async (
     // Background tool-list refresh is best-effort — never fail the tool call.
   }
 
-  // Stdio runs on a desktop device, never in the server process. HTTP set to
-  // connect through the device, or a private one, also requires a device when a
-  // gateway is configured; self-hosted servers without a gateway keep
+  // Stdio runs on the user's own device, never in the server process. HTTP set
+  // to connect through the device, or a private one, also requires a device
+  // when a gateway is configured; self-hosted servers without a gateway keep
   // connecting in-process. Same rule as agent runs (`ToolExecutionService`).
   if (
     shouldConnectViaDevice(connectorMcpEndpoint(connector), {
@@ -247,8 +247,8 @@ export const callConnectorToolById = async (
   ) {
     throw new ConnectorToolCallError(
       'BAD_REQUEST',
-      `Connector '${connector.name}' connects through your device (stdio, a local-network address, or set to "Connect via device"), so the server can't call it directly. ` +
-        'Run these tools from a chat, or in the desktop app on a computer that can reach this MCP server.',
+      `Connector '${connector.name}' connects through your own device (stdio, a local-network address, or set to "Connect via device"), so the server can't call it directly. ` +
+        'Run these tools from a chat, with the desktop app or `lh connect` running on a computer that can reach this MCP server.',
     );
   }
 

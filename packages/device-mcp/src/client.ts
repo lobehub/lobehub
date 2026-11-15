@@ -19,8 +19,6 @@ import {
 } from '@modelcontextprotocol/client';
 import { getDefaultEnvironment, StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 
-import { getDesktopEnv } from '@/env';
-
 import { reapOrphanedProcessGroup, terminatePrecheckProcess } from './process-tree';
 import type { MCPClientParams, McpPrompt, McpResource, McpTool, ToolCallResult } from './types';
 
@@ -348,10 +346,23 @@ export function describeStdioSpawnFailure(input: StdioSpawnFailureInput): string
   );
 }
 
+export interface MCPClientOptions {
+  /** `clientInfo.name` announced to the server. */
+  clientName?: string;
+  /**
+   * Announce MCP Apps (SEP-1865), so servers expose their interactive views.
+   * Only for users with the `mcp_apps` flag: a server may answer an
+   * announcing client with app-specific results instead of its text fallback.
+   */
+  mcpApps?: boolean;
+  /** Default per-call `tools/call` deadline; the SDK default applies when unset. */
+  toolTimeoutMs?: number;
+}
+
 export class MCPClient {
   /**
    * Upper bound on retained stderr lines. Pooled clients can live for the
-   * whole desktop session; without a cap a verbose long-lived MCP server
+   * whole host process session; without a cap a verbose long-lived MCP server
    * would grow `stderrLogs` (and every enhanced error built from it)
    * without limit. Only the most recent tail is kept for diagnostics.
    */
@@ -371,6 +382,7 @@ export class MCPClient {
   /** tool name → `ui://` resource URI, filled from the last `listTools` */
   private uiResourceUris?: Map<string, string>;
   private readonly mcpApps: boolean;
+  private readonly toolTimeoutMs?: number;
   private toolUiMeta?: Map<string, McpUiToolMeta>;
   /**
    * The tools a view may call (`_meta.ui.visibility` with "app", or unset), from
@@ -385,19 +397,15 @@ export class MCPClient {
   constructor(
     params: MCPClientParams,
     {
+      clientName = 'lobehub-device-mcp-client',
       mcpApps = false,
-    }: {
-      /**
-       * Announce MCP Apps (SEP-1865), so servers expose their interactive views.
-       * Only for users with the `mcp_apps` flag: a server may answer an
-       * announcing client with app-specific results instead of its text fallback.
-       */
-      mcpApps?: boolean;
-    } = {},
+      toolTimeoutMs,
+    }: MCPClientOptions = {},
   ) {
     this.mcpApps = mcpApps;
+    this.toolTimeoutMs = toolTimeoutMs;
     this.mcp = new Client(
-      { name: 'lobehub-desktop-mcp-client', version: '1.0.0' },
+      { name: clientName, version: '1.0.0' },
       {
         ...(mcpApps && {
           capabilities: {
@@ -483,7 +491,7 @@ export class MCPClient {
         const lines = text.split('\n').filter((line) => line.trim());
         this.stderrLogs.push(...lines);
         // Keep only the most recent tail: a pooled, long-lived stdio
-        // server must not grow desktop memory without bound.
+        // server must not grow host memory without bound.
         if (this.stderrLogs.length > MCPClient.STDERR_LOG_LIMIT) {
           this.stderrLogs.splice(0, this.stderrLogs.length - MCPClient.STDERR_LOG_LIMIT);
         }
@@ -903,13 +911,21 @@ export class MCPClient {
     };
   }
 
-  async callTool(toolName: string, args: any): Promise<ToolCallResult> {
+  /**
+   * `timeoutMs` overrides the client-wide `toolTimeoutMs` for one call: a
+   * tunneled call carries the caller's own deadline. Without either the SDK
+   * default applies.
+   */
+  async callTool(
+    toolName: string,
+    args: any,
+    { timeoutMs }: { timeoutMs?: number } = {},
+  ): Promise<ToolCallResult> {
+    const timeout = timeoutMs ?? this.toolTimeoutMs;
     try {
       const result = await this.mcp.callTool(
         { arguments: args, name: toolName },
-        {
-          timeout: getDesktopEnv().MCP_TOOL_TIMEOUT,
-        },
+        timeout === undefined ? undefined : { timeout },
       );
       return result as ToolCallResult;
     } catch (error) {

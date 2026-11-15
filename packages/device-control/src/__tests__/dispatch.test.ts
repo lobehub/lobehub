@@ -326,7 +326,7 @@ describe('executeDeviceRpc', () => {
     expect(deps.listMcpTools).toHaveBeenCalledWith(params);
   });
 
-  it('rejects MCP tool listing on a host without an MCP client', async () => {
+  it('rejects MCP tool listing on a client that runs no MCP servers', async () => {
     await expect(
       executeDeviceRpc(
         'listMcpTools',
@@ -768,7 +768,6 @@ describe('executeDeviceRpc', () => {
 
 describe('deviceRpcClients', () => {
   const desktopOnly = [
-    'listMcpTools',
     'trashLocalFiles',
     'getAppUpdateState',
     'checkAppUpdate',
@@ -782,6 +781,11 @@ describe('deviceRpcClients', () => {
 
   it.each(cliOnly)('routes %s, which the desktop rejects, to the CLI', (method) => {
     expect(deviceRpcClients(method)).toEqual(['cli']);
+  });
+
+  // Both clients run MCP servers; the server pins the one it picked per device
+  it('leaves MCP tool listing to the client the server pins', () => {
+    expect(deviceRpcClients('listMcpTools')).toBeUndefined();
   });
 
   it('lets any client serve the other methods', () => {

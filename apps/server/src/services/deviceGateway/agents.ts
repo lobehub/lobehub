@@ -261,6 +261,8 @@ export async function executeMcpCall(
   mcpCall: {
     apiName: string;
     arguments: string;
+    /** Which of the device's clients runs the call (see `resolveMcpClientKinds`). */
+    clientKinds?: DeviceClient[];
     deviceId: string;
     identifier: string;
     params: GatewayMcpParams;
@@ -302,12 +304,14 @@ export async function executeMcpCall(
  * connect to them to install or refresh the tool list. The tools come back as
  * the server's `tools/list` returned them.
  *
- * Throws with a reason the user can act on: no gateway, a device client
- * without an MCP client (older desktop builds), or the device's own error.
+ * Throws with a reason the user can act on: no gateway, a client too old to
+ * list MCP tools, or the device's own error.
  */
 export async function listMcpTools(
   getClient: DeviceClientGetter,
   params: {
+    /** Which of the device's clients lists them (see `resolveMcpClientKinds`). */
+    clientKinds?: DeviceClient[];
     deviceId: string;
     mcpApps?: boolean;
     params: GatewayMcpParams;
@@ -316,7 +320,15 @@ export async function listMcpTools(
     workspaceId?: string;
   },
 ): Promise<McpTool[]> {
-  const { deviceId, mcpApps, params: connection, timeout = 30_000, userId, workspaceId } = params;
+  const {
+    clientKinds,
+    deviceId,
+    mcpApps,
+    params: connection,
+    timeout = 30_000,
+    userId,
+    workspaceId,
+  } = params;
   const client = getClient();
   if (!client) throw new Error('Device gateway is not configured');
 
@@ -325,14 +337,14 @@ export async function listMcpTools(
   let result: Awaited<ReturnType<typeof client.invokeRpc<McpTool[]>>>;
   try {
     result = await client.invokeRpc<McpTool[]>(
-      { deviceId, timeout, userId, workspaceId },
+      { clientKinds, deviceId, timeout, userId, workspaceId },
       { method: 'listMcpTools', params: { mcpApps, params: connection } },
     );
   } catch (error) {
     log('listMcpTools: transport error for deviceId=%s — %O', deviceId, error);
     const reason = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `Couldn't reach your desktop app to list this MCP server's tools (${reason}). Make sure the desktop app is open and connected, then try again.`,
+      `Couldn't reach your device to list this MCP server's tools (${reason}). Make sure the desktop app or \`lh connect\` is running and connected, then try again.`,
       { cause: error },
     );
   }
@@ -342,7 +354,7 @@ export async function listMcpTools(
     log('listMcpTools: failed for deviceId=%s — %s', deviceId, message);
     if (message.includes('Unknown device RPC method')) {
       throw new Error(
-        'The desktop app on this device is too old to list MCP tools. Update the desktop app, then try again.',
+        'The app on this device is too old to list MCP tools. Update the desktop app or the `lh` CLI, then try again.',
       );
     }
     throw new Error(message);

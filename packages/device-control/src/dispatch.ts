@@ -157,7 +157,7 @@ export const APP_UPDATE_UNSUPPORTED_MESSAGE = 'This device client does not suppo
 export const CLI_UPDATE_UNSUPPORTED_MESSAGE =
   'This device client does not support remote CLI updates';
 
-/** Why a client without an MCP client (the CLI daemon) rejects `listMcpTools`. */
+/** Why a client that runs no MCP servers rejects `listMcpTools`. */
 export const MCP_UNSUPPORTED_MESSAGE = 'This device client does not support MCP servers';
 
 /** Why a client without a recoverable trash (the CLI daemon) rejects `trashLocalFiles`. */

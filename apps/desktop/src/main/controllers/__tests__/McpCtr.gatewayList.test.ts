@@ -5,15 +5,17 @@ import type { App } from '@/core/App';
 import McpCtr from '../McpCtr';
 
 // The device gateway's `listMcpTools`: the server asks this desktop for the
-// tools of an MCP server only this machine reaches.
+// tools of an MCP server only this machine reaches, listed on the runtime the
+// tunneled calls run on.
 
 const { clientParams, mcpClientMocks } = vi.hoisted(() => ({
   clientParams: [] as unknown[],
   mcpClientMocks: vi.fn(),
 }));
 
-// Mirrors the controller's own dynamic import, so no real server is contacted
-vi.mock('../../libs/mcp/client', () => ({
+// The shared device MCP runtime lazily imports its client module; mock it so
+// no real server is contacted
+vi.mock('@lobechat/device-mcp/client', () => ({
   MCPClient: class {
     constructor(params: unknown) {
       clientParams.push(params);

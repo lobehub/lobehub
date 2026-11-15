@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { startNegotiationServers } from '../../../../../../src/libs/mcp/__tests__/fixtures/negotiationServers';
+import { startNegotiationServers } from '../../../src/libs/mcp/__tests__/fixtures/negotiationServers';
 import { MCPClient } from './client';
 
 describe('desktop transport protocol policy', () => {
@@ -52,10 +52,7 @@ describe('desktop transport protocol policy', () => {
       command: process.execPath,
       args: [
         fileURLToPath(
-          new URL(
-            '../../../../../../src/libs/mcp/__tests__/fixtures/legacyStdio.mjs',
-            import.meta.url,
-          ),
+          new URL('../../../src/libs/mcp/__tests__/fixtures/legacyStdio.mjs', import.meta.url),
         ),
         trace,
       ],
