@@ -5,7 +5,7 @@ import type { PropsWithChildren } from 'react';
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { type Cache, SWRConfig } from 'swr';
 
-import { mutate } from '@/libs/swr';
+import { isActionSWRKey, mutate } from '@/libs/swr';
 import { cacheHydration } from '@/libs/swr/cacheHydration';
 import { swrCacheProvider } from '@/libs/swr/localStorageProvider';
 import { getCacheScope, useCacheScope } from '@/libs/swr/useCacheScope';
@@ -44,9 +44,11 @@ const QueryProvider = ({ children }: PropsWithChildren) => {
     // data until an incidental revalidation. Broadcast a global revalidation
     // once the swap resolves so every consumer re-reads under the new scope —
     // the CacheHydrationGate latch keeps the tree mounted, so this replaces the
-    // correctness role the old `key={scope}` remount used to play.
+    // correctness role the old `key={scope}` remount used to play. Action keys
+    // hold no data to re-read: revalidating one would run its action, such as
+    // opening a new topic over the one in the URL.
     void reloadScope()
-      .then(() => mutate(() => true, undefined, { revalidate: true }))
+      .then(() => mutate((key) => !isActionSWRKey(key), undefined, { revalidate: true }))
       .catch((error) => {
         console.error('[SWR Cache] failed to reload scope', error);
       });
