@@ -53,8 +53,9 @@ export const createRoutedDevicePresence = (
       for (const scope of scopes) if ((await pool(userId, scope)).has(deviceId)) return true;
       return false;
     },
+    // At most two reads: the Channel workspace's pool and, for a workspace Channel, the personal one.
     prefetch: async (userId) => {
-      await Promise.all(scopes.map((scope) => pool(userId, scope)));
+      await Promise.all([pool(userId, workspaceId ?? undefined), workspaceId && pool(userId)]);
     },
   };
 };
