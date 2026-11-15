@@ -16,6 +16,7 @@ import type { TaskAssignableMember, TaskCreatedItem } from '@lobechat/prompts';
 import {
   formatDependencyAdded,
   formatDependencyRemoved,
+  formatTaskComment,
   formatTaskCreated,
   formatTaskDeleted,
   formatTaskDetail,
@@ -1060,7 +1061,7 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       }
     },
 
-    viewTask: async (args: { identifier?: string }) => {
+    viewTask: async (args: { commentId?: string; identifier?: string }) => {
       const id = args.identifier || taskId;
       if (!id) {
         return {
@@ -1072,6 +1073,21 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
       const task = await resolveTaskOrThrow(taskModel(), id);
       const detail = await taskService().getTaskDetail(task.id);
       if (!detail) return { content: `Task not found: ${id}`, success: false };
+
+      if (args.commentId) {
+        const comment = formatTaskComment(detail, args.commentId);
+        if (!comment) {
+          return {
+            content: `Comment not found on ${detail.identifier}: ${args.commentId}`,
+            success: false,
+          };
+        }
+        return {
+          content: comment,
+          state: { identifier: detail.identifier, success: true, taskId: detail.id },
+          success: true,
+        };
+      }
 
       return {
         content: formatTaskDetail(detail),

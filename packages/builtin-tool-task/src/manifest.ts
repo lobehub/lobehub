@@ -212,10 +212,15 @@ export const TaskManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'View details of a specific task. If identifier is omitted, this only works when there is a current task context.',
+        'View details of a specific task, including its activity timeline with comment bodies (author and time). The newest comments are shown in full up to a length cap; pass commentId to read the complete body of one comment. If identifier is omitted, this only works when there is a current task context.',
       name: TaskApiName.viewTask,
       parameters: {
         properties: {
+          commentId: {
+            description:
+              'Optional comment id from the Activities list (e.g. "cmt_xxx"). When set, returns the complete body of that comment with its author and time instead of the task overview.',
+            type: 'string',
+          },
           identifier: {
             description:
               'The task identifier to view (e.g. "T-1"). If omitted, the current task is used only when a current task context exists. Accepts identifiers or ids returned by previous results; prefer stable ids.',
