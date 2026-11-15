@@ -4,6 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useHomeStore } from '@/store/home';
 import { useUserStore } from '@/store/user';
 
+const activeWorkspace = vi.hoisted(() => ({ id: 'ws-1' as string | null }));
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  getActiveWorkspaceId: () => activeWorkspace.id,
+  useActiveWorkspaceId: () => activeWorkspace.id,
+}));
+
 const updatePreference = vi.fn();
 
 const setPinned = (ids: string[]) =>
@@ -15,6 +21,7 @@ const setPinned = (ids: string[]) =>
 const reorder = (ids: string[]) => act(() => useHomeStore.getState().reorderMyPinned(ids));
 
 beforeEach(() => {
+  activeWorkspace.id = 'ws-1';
   updatePreference.mockReset().mockResolvedValue(undefined);
 });
 
@@ -83,5 +90,23 @@ describe('reorderMyPinned', () => {
     await reorder(['b', 'a']);
 
     expect(updatePreference).toHaveBeenCalledTimes(2);
+  });
+
+  it('drops a reorder still queued when the user switches workspace', async () => {
+    setPinned(['a', 'b']);
+    let finishFirst!: () => void;
+    updatePreference.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishFirst = resolve)),
+    );
+
+    const first = useHomeStore.getState().reorderMyPinned(['b', 'a']);
+    const second = useHomeStore.getState().reorderMyPinned(['a', 'b']);
+    await vi.waitFor(() => expect(updatePreference).toHaveBeenCalledTimes(1));
+
+    activeWorkspace.id = 'ws-2';
+    finishFirst();
+    await act(() => Promise.all([first, second]));
+
+    expect(updatePreference).toHaveBeenCalledTimes(1);
   });
 });

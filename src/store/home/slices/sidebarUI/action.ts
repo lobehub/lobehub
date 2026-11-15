@@ -1,6 +1,7 @@
 import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { agentService } from '@/services/agent';
 import { chatGroupService } from '@/services/chatGroup';
 import { homeService } from '@/services/home';
@@ -135,10 +136,14 @@ export class SidebarUIActionImpl {
   reorderMyPinned = async (ids: string[]): Promise<void> => {
     // The server merges each preference write into what it reads, so two quick
     // drags sent at once could land out of order and the older one would win.
-    // Each reorder waits for the previous one and builds on its result.
+    // Each reorder waits for the previous one and builds on its result. One
+    // still queued when the user switches workspace is dropped, since the write
+    // would land in the new workspace's preference.
+    const workspaceId = getActiveWorkspaceId();
     const operation = this.#myPinnedQueue
       .catch(() => undefined)
       .then(async () => {
+        if (getActiveWorkspaceId() !== workspaceId) return;
         const userStore = getUserStoreState();
         const current = userStore.workspaceUserPreference.sidebarPinnedItemIds ?? [];
         const shown = new Set(ids);

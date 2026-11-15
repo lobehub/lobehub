@@ -25,6 +25,12 @@ import { reorderItems } from './action';
 import { initialAgentListState } from './initialState';
 import { agentListResource } from './projection';
 
+const activeWorkspace = vi.hoisted(() => ({ id: null as string | null }));
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  getActiveWorkspaceId: () => activeWorkspace.id,
+  useActiveWorkspaceId: () => activeWorkspace.id,
+}));
+
 vi.mock('@/store/agent', () => ({
   getAgentStoreState: vi.fn(() => ({
     invalidateAvailableAgents: vi.fn(),
@@ -61,6 +67,7 @@ const response = (overrides: Partial<SidebarAgentListResponse> = {}): SidebarAge
 
 let scope = '';
 beforeEach(() => {
+  activeWorkspace.id = null;
   scope = `agent-list-user-${randomUUID()}:personal`;
   vi.spyOn(cacheScope, 'get').mockImplementation(() => scope);
   vi.spyOn(cacheScope, 'use').mockImplementation(() => scope);
@@ -152,6 +159,33 @@ describe('sidebar agent list replica', () => {
     reject(new Error('boom'));
     await expect(reorder).rejects.toThrow('boom');
     expect(pinnedIds()).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('reorderPinnedAgents across a workspace switch', () => {
+  it('drops a save still queued when the user switches workspace', async () => {
+    vi.spyOn(homeService, 'getSidebarAgentList').mockResolvedValue(
+      response({ pinned: [agent('a'), agent('b')] }),
+    );
+    sync();
+    await waitFor(() => expect(useHomeStore.getState().pinnedAgents).toHaveLength(2));
+
+    activeWorkspace.id = 'ws-1';
+    let finishFirst!: () => void;
+    const save = vi
+      .spyOn(homeService, 'updatePinnedOrder')
+      .mockImplementationOnce(() => new Promise<void>((resolve) => (finishFirst = resolve)))
+      .mockResolvedValue(undefined);
+
+    const first = useHomeStore.getState().reorderPinnedAgents(['b', 'a']);
+    const second = useHomeStore.getState().reorderPinnedAgents(['a', 'b']);
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+
+    activeWorkspace.id = 'ws-2';
+    finishFirst();
+    await act(() => Promise.all([first, second]));
+
+    expect(save).toHaveBeenCalledTimes(1);
   });
 });
 

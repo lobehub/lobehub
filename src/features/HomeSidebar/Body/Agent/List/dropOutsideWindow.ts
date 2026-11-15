@@ -66,3 +66,19 @@ export const resolveSortableDrop = (
   next.splice(to, 0, ...next.splice(from, 1));
   return { ids: next, type: 'reorder' };
 };
+
+/**
+ * Lay out rows by an order dropped but not yet saved. Rows the order does not
+ * name (added meanwhile) keep their place after the named ones; ids that no
+ * longer match a row are skipped.
+ */
+export const applyPendingOrder = <T extends { id: string }>(
+  rows: T[],
+  pendingIds: readonly string[] | undefined,
+): T[] => {
+  if (!pendingIds) return rows;
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const named = pendingIds.flatMap((id) => byId.get(id) ?? []);
+  const namedIds = new Set(named.map((row) => row.id));
+  return [...named, ...rows.filter((row) => !namedIds.has(row.id))];
+};

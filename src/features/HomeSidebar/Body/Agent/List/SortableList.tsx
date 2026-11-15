@@ -35,7 +35,7 @@ import {
 } from '../../sortableRow';
 import GroupItem from './AgentGroupItem';
 import AgentItem from './AgentItem';
-import { resolveSortableDrop } from './dropOutsideWindow';
+import { applyPendingOrder, resolveSortableDrop } from './dropOutsideWindow';
 
 const styles = stylex.create({
   overlay: {
@@ -99,7 +99,12 @@ const SortableList = memo<SortableListProps>(({ dataSource, onReorder }) => {
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
 
   const [activeId, setActiveId] = useState<string>();
-  const ids = useMemo(() => dataSource.map((item) => item.id), [dataSource]);
+  // The dropped order, shown until the save settles: a save can wait behind an
+  // earlier one, and the row must not snap back meanwhile. On failure the list
+  // falls back to the store's (rolled back) order.
+  const [pendingIds, setPendingIds] = useState<string[]>();
+  const rows = useMemo(() => applyPendingOrder(dataSource, pendingIds), [dataSource, pendingIds]);
+  const ids = useMemo(() => rows.map((item) => item.id), [rows]);
 
   const sensors = useSensors(
     useSensor(RowMouseSensor, { activationConstraint: { distance: 5 } }),
@@ -108,7 +113,7 @@ const SortableList = memo<SortableListProps>(({ dataSource, onReorder }) => {
     useSensor(RowKeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const activeItem = activeId ? dataSource.find((item) => item.id === activeId) : undefined;
+  const activeItem = activeId ? rows.find((item) => item.id === activeId) : undefined;
 
   const handleDragStart = ({ active }: DragStartEvent) => setActiveId(String(active.id));
 
@@ -123,11 +128,16 @@ const SortableList = memo<SortableListProps>(({ dataSource, onReorder }) => {
     }
     if (outcome.type !== 'reorder') return;
 
+    const nextIds = outcome.ids;
+    setPendingIds(nextIds);
     try {
-      await onReorder(outcome.ids);
+      await onReorder(nextIds);
     } catch (error) {
       console.error('[sidebar] failed to save the pinned order', error);
       toast.error(t('operationFailed'));
+    } finally {
+      // A later drop owns the pending order now; leave it in place.
+      setPendingIds((current) => (current === nextIds ? undefined : current));
     }
   };
 
@@ -141,7 +151,7 @@ const SortableList = memo<SortableListProps>(({ dataSource, onReorder }) => {
     >
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         <Flexbox gap={1}>
-          {dataSource.map((item) => (
+          {rows.map((item) => (
             <SortableRow item={item} key={item.id} />
           ))}
         </Flexbox>

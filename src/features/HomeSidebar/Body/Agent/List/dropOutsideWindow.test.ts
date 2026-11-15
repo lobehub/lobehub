@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { isDropOutsideWindow, resolveSortableDrop } from './dropOutsideWindow';
+import { applyPendingOrder, isDropOutsideWindow, resolveSortableDrop } from './dropOutsideWindow';
 
 const viewport = { height: 600, width: 800 };
 const mouse = (clientX: number, clientY: number) =>
@@ -61,5 +61,19 @@ describe('resolveSortableDrop', () => {
   it('does nothing when dropped back in place', () => {
     expect(resolveSortableDrop(drop('a'), ids, viewport)).toEqual({ type: 'none' });
     expect(resolveSortableDrop(drop(null), ids, viewport)).toEqual({ type: 'none' });
+  });
+});
+
+describe('applyPendingOrder', () => {
+  const rows = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+
+  it('keeps the rows without a pending order', () => {
+    expect(applyPendingOrder(rows, undefined)).toBe(rows);
+  });
+
+  it('shows the dropped order, keeping new rows after it and skipping gone ids', () => {
+    expect(
+      applyPendingOrder([...rows, { id: 'new' }], ['c', 'gone', 'a', 'b']).map((row) => row.id),
+    ).toEqual(['c', 'a', 'b', 'new']);
   });
 });

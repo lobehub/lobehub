@@ -2,6 +2,7 @@ import type { SidebarAgentItem, SidebarAgentListResponse, SidebarGroup } from '@
 import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import {
   createReplicaSlice,
   linkReplicaEntity,
@@ -154,16 +155,22 @@ export class AgentListActionImpl {
    * Reorder the `pinned` rows (team pins in a workspace, the user's own pins
    * in personal mode) by drag and drop: the sidebar moves now and rolls back
    * if the save fails. Saves run one after another, so quick successive drags
-   * reach the server in the order they were made.
+   * reach the server in the order they were made. A save still queued when the
+   * user switches workspace is dropped: the request would carry the new
+   * workspace and overwrite its order with the old one's rows.
    */
   reorderPinnedAgents = async (ids: string[]): Promise<void> => {
+    const workspaceId = getActiveWorkspaceId();
     await this.#agentList.optimistic(
       AGENT_LIST_KEY,
       (data) => (data ? { ...data, pinned: reorderItems(data.pinned, ids) } : data),
       () => {
         const operation = this.#pinnedOrderQueue
           .catch(() => undefined)
-          .then(() => homeService.updatePinnedOrder(ids));
+          .then(async () => {
+            if (getActiveWorkspaceId() !== workspaceId) return;
+            await homeService.updatePinnedOrder(ids);
+          });
         this.#pinnedOrderQueue = operation;
         return operation;
       },
