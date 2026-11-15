@@ -5292,8 +5292,13 @@ When I am ___, I need ___
   'subscriptionAccounts.purchase.community.wechat': 'Official WeChat group',
   'subscriptionAccounts.purchase.community.wechatRequest': 'Request the WeChat group QR code',
   'subscriptionAccounts.purchase.community.wechatScan': 'Scan with WeChat to join.',
+  'subscriptionAccounts.purchase.account.none': 'No account',
+  'subscriptionAccounts.purchase.account.noneDesc':
+    'Only the device. You sign in your own account on it.',
+  'subscriptionAccounts.purchase.account.title': 'Choose a CC account',
   'subscriptionAccounts.purchase.desc':
-    'A cloud Mac, optionally with an official Claude Code account. After payment, we create the device and a Claude Code agent bound to it.',
+    'A cloud device, optionally with an official Claude Code account. After payment, we create the device and a Claude Code agent bound to it.',
+  'subscriptionAccounts.purchase.device.title': 'Choose a device',
   'subscriptionAccounts.purchase.empty':
     'No bundles are on sale right now. New stock appears here once it is listed.',
   'subscriptionAccounts.purchase.errors.failed': "Couldn't open the payment page. Try again.",
@@ -5331,7 +5336,6 @@ When I am ___, I need ___
   'subscriptionAccounts.purchase.sku.currency': 'Priced in CNY',
   'subscriptionAccounts.purchase.sku.perMonth': '/ month',
   'subscriptionAccounts.purchase.sku.remaining': '{{count}} left',
-  'subscriptionAccounts.purchase.sku.title': 'Choose your plan',
   'subscriptionAccounts.purchase.status.active': 'Ready. The device and agent are set up.',
   'subscriptionAccounts.purchase.status.awaiting_account':
     'Device and agent created. We are signing the Claude account in on the device.',
@@ -5358,8 +5362,13 @@ When I am ___, I need ___
   'subscriptionAccounts.purchase.summary.listPrice': 'Monthly list price.',
   'subscriptionAccounts.purchase.summary.period': 'Billing period',
   'subscriptionAccounts.purchase.summary.periodValue': '{{period}} · {{count}} mo',
+  'subscriptionAccounts.purchase.summary.device': 'Device',
+  'subscriptionAccounts.purchase.summary.noAccount': 'Not included',
   'subscriptionAccounts.purchase.summary.sentence':
     '{{device}} + {{account}}, {{period}}, {{amount}} this period.',
+  'subscriptionAccounts.purchase.summary.sentenceDeviceOnly':
+    '{{device}}, {{period}}, {{amount}} this period.',
+  'subscriptionAccounts.purchase.summary.split': 'Device {{device}} + account {{account}}',
   'subscriptionAccounts.purchase.summary.support': 'Network, power and reconnection support',
   'subscriptionAccounts.purchase.summary.title': 'Summary',
   'subscriptionAccounts.purchase.summary.total': 'Total this period · CNY',
