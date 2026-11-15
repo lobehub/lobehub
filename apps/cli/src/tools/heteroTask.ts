@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { RemoteHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import { findOperationProcessGroups } from '@lobechat/heterogeneous-agents/heteroExecProcess';
 import type {
   HeterogeneousAgentCancellationResult,
   HeterogeneousAgentCancellationSignal,
@@ -97,6 +98,16 @@ export interface CancelHeteroTaskResult extends HeterogeneousAgentCancellationRe
 export interface CancelHeteroTaskNotFoundResult {
   message: string;
   success: false;
+}
+
+/** Outcome of cancelling an operation that no daemon registry remembers. */
+export interface CancelUntrackedHeteroTaskResult extends HeterogeneousAgentCancellationResult {
+  message?: string;
+  /** Process groups found in the process table for the operation. */
+  processGroups?: number[];
+  reason: 'lookup_failed' | 'not_found' | 'orphan_alive' | 'orphan_terminated';
+  success: boolean;
+  taskId: string;
 }
 
 const CANCEL_GRACE_MS = 2000;
@@ -454,14 +465,18 @@ function isUnixProcessGroupAlive(pid: number): boolean {
   }
 }
 
-async function waitForUnixProcessGroupExit(pid: number, timeoutMs: number): Promise<boolean> {
+async function waitForUnixProcessGroupsExit(pids: number[], timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
-  while (isUnixProcessGroupAlive(pid)) {
+  while (pids.some((pid) => isUnixProcessGroupAlive(pid))) {
     if (Date.now() >= deadline) return false;
     await sleep(PROCESS_GROUP_POLL_MS);
   }
 
   return true;
+}
+
+function waitForUnixProcessGroupExit(pid: number, timeoutMs: number): Promise<boolean> {
+  return waitForUnixProcessGroupsExit([pid], timeoutMs);
 }
 
 async function killWindowsProcessTree(pid: number): Promise<boolean> {
@@ -475,16 +490,99 @@ async function killWindowsProcessTree(pid: number): Promise<boolean> {
   });
 }
 
+/**
+ * Cancels an operation that neither the task registry nor the in-memory run
+ * registry knows about.
+ *
+ * Use when:
+ * - The connect daemon restarted after dispatching `lh hetero exec` (for
+ *   example after crashing on a full disk): both registries lost the run, but
+ *   the server keeps it active until the device confirms `exited: true`.
+ *
+ * Expects:
+ * - `taskId` is the operation id passed as `--operation-id` to the wrapper and
+ *   exported as `LOBEHUB_OPERATION_ID` to the native agent and its tools.
+ *
+ * Returns:
+ * - `exited: true` when no process of the operation is left, or after every
+ *   orphaned group has exited. A native agent or tool that outlived its wrapper
+ *   still counts as alive, so a retry never races a live writer.
+ * - `exited: false` when an orphan survives SIGKILL or the process table cannot
+ *   be read.
+ * - The previous not-found answer on Windows, where orphan lookup is unavailable.
+ */
+async function cancelUntrackedHeteroExec(
+  taskId: string,
+  signal: HeterogeneousAgentCancellationSignal,
+): Promise<CancelHeteroTaskNotFoundResult | CancelUntrackedHeteroTaskResult> {
+  if (process.platform === 'win32') {
+    return { message: `No task found with taskId: ${taskId}`, success: false };
+  }
+
+  let processGroups: number[];
+  try {
+    processGroups = await findOperationProcessGroups(taskId);
+  } catch (error) {
+    log.warn(
+      `cancelHeteroTask: process lookup failed for ${taskId}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return {
+      exited: false,
+      message: `Could not inspect running processes for taskId: ${taskId}`,
+      reason: 'lookup_failed',
+      signal,
+      success: false,
+      taskId,
+    };
+  }
+
+  if (processGroups.length === 0) {
+    return { exited: true, reason: 'not_found', signal, success: true, taskId };
+  }
+
+  log.warn(
+    `cancelHeteroTask: terminating orphaned process groups for ${taskId}: ${processGroups.join(', ')}`,
+  );
+
+  // The wrapper's detached group also holds its native agent and tools, so a
+  // group signal reaches the whole writer tree even after the wrapper died.
+  const signalGroups = (groupSignal: NodeJS.Signals) => {
+    for (const pgid of processGroups) {
+      try {
+        process.kill(-pgid, groupSignal);
+      } catch {
+        // ESRCH: already gone. Anything else surfaces through the liveness wait.
+      }
+    }
+  };
+
+  signalGroups(signal);
+  let exited = await waitForUnixProcessGroupsExit(
+    processGroups,
+    signal === 'SIGKILL' ? CANCEL_FORCE_MS : CANCEL_GRACE_MS,
+  );
+  if (!exited && signal !== 'SIGKILL') {
+    signalGroups('SIGKILL');
+    exited = await waitForUnixProcessGroupsExit(processGroups, CANCEL_FORCE_MS);
+  }
+
+  return exited
+    ? { exited, processGroups, reason: 'orphan_terminated', signal, success: true, taskId }
+    : { exited, processGroups, reason: 'orphan_alive', signal, success: false, taskId };
+}
+
 export async function cancelHeteroTask(
   params: CancelHeteroTaskParams,
-): Promise<CancelHeteroTaskNotFoundResult | CancelHeteroTaskResult> {
+): Promise<
+  CancelHeteroTaskNotFoundResult | CancelHeteroTaskResult | CancelUntrackedHeteroTaskResult
+> {
   const { signal = 'SIGINT', taskId } = params;
   const entry = getTask(taskId);
 
   if (!entry) {
     const local = await cancelAgentRun(taskId, signal);
     if (local) return { ...local, signal, taskId };
-    return { message: `No task found with taskId: ${taskId}`, success: false };
+    return cancelUntrackedHeteroExec(taskId, signal);
   }
 
   // Kill the whole process group so the CLI wrapper, its inherited-group agent,

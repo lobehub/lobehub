@@ -8,6 +8,7 @@
     "./askUser": "./src/askUser/index.ts",
     "./builtinMcp": "./src/builtinMcp/index.ts",
     "./errors": "./src/errors/index.ts",
+    "./heteroExecProcess": "./src/spawn/heteroExecProcess.ts",
     "./client": "./src/client/index.ts",
     "./codexAppServerParams": "./src/codex/appServerParams.ts",
     "./models": "./src/models/index.ts",

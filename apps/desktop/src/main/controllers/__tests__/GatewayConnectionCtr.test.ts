@@ -217,7 +217,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 
 const findHeteroExecProcessesMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@/utils/heteroExecProcess', () => ({
+vi.mock('@lobechat/heterogeneous-agents/heteroExecProcess', () => ({
   findHeteroExecProcesses: findHeteroExecProcessesMock,
 }));
 

@@ -7,15 +7,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { executeToolCall } from '../tools';
 import { spawnHeteroAgentRun } from './agentRun';
 
-const { getTaskMock, removeTaskMock, saveTaskMock, spawnMock } = vi.hoisted(() => ({
-  getTaskMock: vi.fn(),
-  removeTaskMock: vi.fn(),
-  saveTaskMock: vi.fn(),
-  spawnMock: vi.fn(),
-}));
+const { findOperationProcessGroupsMock, getTaskMock, removeTaskMock, saveTaskMock, spawnMock } =
+  vi.hoisted(() => ({
+    findOperationProcessGroupsMock: vi.fn(),
+    getTaskMock: vi.fn(),
+    removeTaskMock: vi.fn(),
+    saveTaskMock: vi.fn(),
+    spawnMock: vi.fn(),
+  }));
 vi.mock('node:child_process', async (original) => ({
   ...(await original<typeof ChildProcessModule>()),
   spawn: spawnMock,
+}));
+vi.mock('@lobechat/heterogeneous-agents/heteroExecProcess', () => ({
+  findOperationProcessGroups: findOperationProcessGroupsMock,
 }));
 vi.mock('../daemon/taskRegistry', () => ({
   getTask: getTaskMock,
@@ -32,6 +37,7 @@ afterEach(() => {
   removeTaskMock.mockReset();
   saveTaskMock.mockReset();
   spawnMock.mockReset();
+  findOperationProcessGroupsMock.mockReset();
 });
 
 async function dispatch(operationId: string) {
@@ -124,9 +130,21 @@ describe('gateway-dispatched CLI agent cancellation', () => {
     expect(child.kill.mock.calls).toEqual([['SIGINT'], ['SIGINT']]);
   });
 
-  it('does not wrap a missing operation in a successful gateway response', async () => {
+  it('confirms an unknown operation once the process table shows nothing left', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+    findOperationProcessGroupsMock.mockResolvedValue([]);
+
     await expect(
       executeToolCall('cancelHeteroTask', JSON.stringify({ taskId: 'not-dispatched' })),
-    ).resolves.toMatchObject({ success: false, state: { success: false } });
+    ).resolves.toMatchObject({ success: true, state: { exited: true, reason: 'not_found' } });
+  });
+
+  it('does not wrap an unverifiable unknown operation in a successful gateway response', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+    findOperationProcessGroupsMock.mockRejectedValue(new Error('procfs unavailable'));
+
+    await expect(
+      executeToolCall('cancelHeteroTask', JSON.stringify({ taskId: 'not-dispatched' })),
+    ).resolves.toMatchObject({ success: false, state: { exited: false, success: false } });
   });
 });
