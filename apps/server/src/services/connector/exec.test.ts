@@ -343,9 +343,10 @@ describe('callConnectorToolById', () => {
         };
         const ctx = makeCtx([stdioConnector], [tool()]);
 
-        await expect(
-          callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx),
-        ).rejects.toHaveProperty('code', 'BAD_REQUEST');
+        const call = callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx);
+        await expect(call).rejects.toHaveProperty('code', 'BAD_REQUEST');
+        // Either device client runs it: the desktop app or `lh connect`.
+        await expect(call).rejects.toThrow('the desktop app or `lh connect`');
         expect(mcpService.callTool).not.toHaveBeenCalled();
       },
     );

@@ -49,6 +49,7 @@ import {
   resolveCliDeviceGateway,
 } from '../../device/gatewayEndpoint';
 import { MANAGED_GATEWAY_ENV } from '../../device/managed';
+import { disposeDeviceMcp } from '../../device/mcp';
 import {
   mintWorkspaceConnectToken,
   registerDevice,
@@ -1024,6 +1025,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     managed?.session.stop();
     activity?.stop();
     cleanupAllProcesses();
+    void disposeDeviceMcp();
     // Kill every remote-terminal shell this daemon started, so a stopping
     // `lh connect` does not leave orphaned PTYs behind on the machine.
     terminals.dispose();
@@ -1045,6 +1047,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     await Promise.all([
       metricsSampler?.stop({ flushTimeoutMs: SHUTDOWN_METRICS_FLUSH_MS }),
       closeBrowserSessions(browser),
+      disposeDeviceMcp(),
     ]);
     cleanup();
     process.exit(exitCode);

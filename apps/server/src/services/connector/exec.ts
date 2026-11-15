@@ -235,7 +235,7 @@ export const callConnectorToolById = async (
     // Background tool-list refresh is best-effort — never fail the tool call.
   }
 
-  // Stdio runs on a desktop device, never in the server process. Private HTTP
+  // Stdio runs on the user's own device, never in the server process. Private HTTP
   // endpoints also require a device when a gateway is configured; self-hosted
   // servers without a gateway can still connect to their own LAN over HTTP.
   const requiresDevice =
@@ -247,7 +247,7 @@ export const callConnectorToolById = async (
     throw new ConnectorToolCallError(
       'BAD_REQUEST',
       `Connector '${connector.name}' points at an MCP endpoint that only your machine can reach (stdio or local network). ` +
-        'Run these tools in the desktop app through a configured device gateway.',
+        'It runs only on your own device — the desktop app or `lh connect` — through a configured device gateway.',
     );
   }
 

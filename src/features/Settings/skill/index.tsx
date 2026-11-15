@@ -30,8 +30,30 @@ export interface SelectedTool {
 
 const styles = stylex.create({
   detail: { overflowY: 'auto', flex: '1' },
-  page: { overflowY: 'auto', display: 'flex', flex: '1', justifyContent: 'center', height: '100%' },
-  pageBody: { display: 'flex', flexDirection: 'column', width: '100%', maxWidth: '960px' },
+  page: {
+    overflowY: 'auto',
+    display: 'flex',
+    flex: '1',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    height: '100%',
+    paddingInline: '12px',
+  },
+  /**
+   * The connector list insets its rows and intro 12px, so the body is 12px wider
+   * than the shared 1024px settings column on each side: text then lines up with
+   * every other settings tab, and the bottom space matches their 128px. The body
+   * grows with its content (the page aligns it to the top instead of stretching it
+   * to the scroll box), otherwise the list overflows it and the bottom padding is lost.
+   */
+  pageBody: {
+    display: 'flex',
+    flexDirection: 'column',
+    width: '100%',
+    maxWidth: '1048px',
+    minHeight: '100%',
+    paddingBlockEnd: '104px',
+  },
   root: { overflow: 'hidden', display: 'flex', flex: '1', height: '100%' },
 });
 
