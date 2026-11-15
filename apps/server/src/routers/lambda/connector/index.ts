@@ -55,6 +55,10 @@ import {
   getDeviceMcpManifest,
 } from '@/server/services/mcp/deviceManifest';
 import {
+  McpBoundDeviceUnavailableError,
+  McpDeviceUnavailableError,
+} from '@/server/services/mcp/deviceTunnel';
+import {
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,
   withTrustedLinkedByUserId,
@@ -701,6 +705,13 @@ const connectorCoreRouter = router({
       } catch (err: any) {
         // Keep actionable rejections and their structured reason for the client.
         if (err instanceof TRPCError) throw err;
+        // No device can list it now (the bound one offline or gone, none
+        // online): a precondition the user fixes, with the reason as written
+        if (
+          err instanceof McpBoundDeviceUnavailableError ||
+          err instanceof McpDeviceUnavailableError
+        )
+          throw new TRPCError({ cause: err, code: 'PRECONDITION_FAILED', message: err.message });
         throw new TRPCError({
           cause: err,
           code: 'INTERNAL_SERVER_ERROR',
