@@ -189,6 +189,10 @@ class QQGatewayClient implements PlatformClient {
         webhookUrl,
       );
 
+      // A stop during the awaits above already wrote `disconnected`: do not arm a refresh or
+      // overwrite that with `connected`.
+      if (this.stopped) return;
+
       if (!options) {
         this.refreshTimer = setTimeout(() => {
           if (this.abort.signal.aborted || this.stopped) return;

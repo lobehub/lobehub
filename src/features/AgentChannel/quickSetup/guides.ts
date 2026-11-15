@@ -11,6 +11,7 @@ import {
   QQ_BOT_CONSOLE_URL,
   SLACK_APPS_URL,
   TELEGRAM_BOTFATHER_URL,
+  WECOM_ADMIN_CONSOLE_URL,
 } from './links';
 
 export type SetupLinkLabel =
@@ -151,6 +152,15 @@ export const getSetupGuide = (
         steps: [
           { key: 'create', link: { href: QQ_BOT_CONSOLE_URL, label: 'openConsole' } },
           { key: 'credentials', fields: ['applicationId', 'appSecret'] },
+        ],
+      };
+    }
+    case 'wecom': {
+      return {
+        guide: 'wecom',
+        steps: [
+          { key: 'create', link: { href: WECOM_ADMIN_CONSOLE_URL, label: 'openConsole' } },
+          { key: 'credentials', fields: ['applicationId', 'secret'] },
         ],
       };
     }

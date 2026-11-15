@@ -672,6 +672,14 @@ export interface PlatformDefinition {
   /** Documentation links for the platform */
   documentation?: PlatformDocumentation;
 
+  /**
+   * In group chats the platform delivers only the messages that address the bot (WeCom AI bots
+   * receive @-mentions only), so the bot cannot see — or fetch — what members say to each other.
+   * Group threads must be encoded as `<platform>:group:<id>`. The agent is told, so it does not
+   * go looking for a group history it can never have.
+   */
+  groupMessagesAddressedOnly?: boolean;
+
   /** The unique identifier of the platform. */
   id: string;
 
@@ -686,6 +694,15 @@ export interface PlatformDefinition {
    * not. Everything unlisted is treated as secret.
    */
   publicCredentialKeys?: string[];
+
+  /**
+   * Outbound messages ride the live platform connection itself (WeCom AI bots have no REST send
+   * API), so only whoever holds that connection can reply: this server in-process, or the Node
+   * message gateway on its behalf. Deployments where neither can — serverless without a gateway,
+   * a gateway that keeps the platform on its default host — do not offer the platform or start
+   * its connections (`resolveReplyConnectionHost`).
+   */
+  repliesOverConnection?: boolean;
 
   /** Field schema — top-level objects `credentials` and `settings` map to DB columns. */
   schema: FieldSchema[];
@@ -723,4 +740,11 @@ export interface PlatformDefinition {
 }
 
 /** Serialized platform definition for frontend consumption (excludes runtime-only fields). */
-export type SerializedPlatformDefinition = Omit<PlatformDefinition, 'clientFactory'>;
+export type SerializedPlatformDefinition = Omit<PlatformDefinition, 'clientFactory'> & {
+  /**
+   * Set when this deployment cannot run the platform (see `repliesOverConnection`). The
+   * catalog still lists it so a bot configured earlier stays reachable to inspect, disable or
+   * remove; the channel list hides it for agents that have no such bot.
+   */
+  unavailableReason?: string;
+};

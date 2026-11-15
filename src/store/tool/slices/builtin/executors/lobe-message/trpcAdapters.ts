@@ -23,21 +23,26 @@ export const trpcBotProvider: BotProviderQuery = {
     // The server returns raw serialized platforms whose credential fields
     // are nested under `schema[].properties`. Flatten to the runtime's
     // `PlatformInfo.credentialFields` shape (same transform the server-side
-    // BotProviderQuery does — see `serverRuntimes/message/index.ts`).
-    return platforms.map((p) => {
-      const credSchema = (p.schema ?? []).find((f: any) => f.key === 'credentials' && f.properties);
-      const credFields = (credSchema?.properties ?? []) as any[];
-      return {
-        credentialFields: credFields.map((f: any) => ({
-          key: f.key,
-          label: f.label ?? f.key,
-          required: !!f.required,
-          type: f.type ?? 'string',
-        })),
-        id: p.id,
-        name: p.name,
-      };
-    });
+    // BotProviderQuery does — see `serverRuntimes/message/index.ts`). A platform this deployment
+    // cannot run (`unavailableReason`) is not offered for a new bot, as on the server.
+    return platforms
+      .filter((p) => !p.unavailableReason)
+      .map((p) => {
+        const credSchema = (p.schema ?? []).find(
+          (f: any) => f.key === 'credentials' && f.properties,
+        );
+        const credFields = (credSchema?.properties ?? []) as any[];
+        return {
+          credentialFields: credFields.map((f: any) => ({
+            key: f.key,
+            label: f.label ?? f.key,
+            required: !!f.required,
+            type: f.type ?? 'string',
+          })),
+          id: p.id,
+          name: p.name,
+        };
+      });
   },
 
   listBots: async () => {
