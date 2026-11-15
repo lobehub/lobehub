@@ -326,7 +326,7 @@ describe('syncConnectorToolsById', () => {
         findById: async () => httpConnector(null),
         updateStatus,
       } as any,
-      connectorToolModel: { upsertMany } as any,
+      connectorToolModel: { queryByConnector: async () => [], upsertMany } as any,
     });
 
     expect(result).toEqual({ toolCount: 2 });
@@ -374,6 +374,35 @@ describe('syncConnectorToolsById', () => {
     ]);
   });
 
+  it('keeps the mandatory mark a tool has when no marketplace policy is supplied', async () => {
+    // A refresh (background, manual, OAuth callback) only has the server's
+    // listing, which cannot say whether the manifest's `always` still applies
+    vi.mocked(mcpService.listRawTools).mockResolvedValue([
+      { inputSchema: { type: 'object' }, name: 'search' },
+      { _meta: { ui: { visibility: ['model'] } }, inputSchema: { type: 'object' }, name: 'delete' },
+    ]);
+    const upsertMany = vi.fn();
+
+    await syncConnectorToolsById('c1', {
+      connectorModel: { findById: async () => httpConnector(null), updateStatus: vi.fn() } as any,
+      connectorToolModel: {
+        queryByConnector: async () => [
+          { metadata: null, permission: 'auto', toolName: 'search' },
+          { metadata: { mandatoryApproval: true }, permission: 'auto', toolName: 'delete' },
+        ],
+        upsertMany,
+      } as any,
+    });
+
+    expect(upsertMany).toHaveBeenCalledWith('c1', [
+      expect.objectContaining({ metadata: null, toolName: 'search' }),
+      expect.objectContaining({
+        metadata: { mandatoryApproval: true, visibility: ['model'] },
+        toolName: 'delete',
+      }),
+    ]);
+  });
+
   it('drops only the auto tools the server no longer lists when asked to', async () => {
     vi.mocked(mcpService.listRawTools).mockResolvedValue([
       { description: 'Kept', inputSchema: { type: 'object' }, name: 'kept' },
@@ -412,7 +441,7 @@ describe('syncConnectorToolsById', () => {
           findById: async () => httpConnector(null),
           updateStatus: vi.fn(),
         } as any,
-        connectorToolModel: { upsertMany: vi.fn() } as any,
+        connectorToolModel: { queryByConnector: async () => [], upsertMany: vi.fn() } as any,
         userId: 'user-1',
       });
 
