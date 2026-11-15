@@ -20,7 +20,6 @@ const BackToAcceptances = () => {
   return (
     <Button
       icon={<Icon icon={ArrowLeft} />}
-      size={'small'}
       onClick={() =>
         navigate(buildWorkspaceAwarePath(acceptanceListPath(routeBase), workspaceSlug))
       }

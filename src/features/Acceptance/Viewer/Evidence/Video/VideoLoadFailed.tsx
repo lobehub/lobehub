@@ -81,7 +81,7 @@ export const VideoLoadFailed = ({ onRetry, player, src }: VideoLoadFailedProps) 
       <div {...stylex.props(styles.title)}>{t('acceptance.video.story.loadFailedTitle')}</div>
       <p {...stylex.props(styles.body)}>{t('acceptance.video.story.loadFailedBody')}</p>
       <div {...stylex.props(styles.actions)}>
-        <Button icon={RefreshCw} loading={retrying} size={'small'} onClick={() => void retry()}>
+        <Button icon={RefreshCw} loading={retrying} onClick={() => void retry()}>
           {t('acceptance.video.reload')}
         </Button>
         <a href={src} rel={'noreferrer'} target={'_blank'} {...stylex.props(styles.download)}>

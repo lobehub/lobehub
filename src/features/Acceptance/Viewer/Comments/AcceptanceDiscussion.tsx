@@ -328,7 +328,6 @@ const AcceptanceDiscussion = memo<{ onOpenChecks?: () => void }>(({ onOpenChecks
       action={
         <Button
           icon={<Icon icon={RefreshCw} />}
-          size={'small'}
           onClick={() =>
             void useVerifyStore
               .getState()

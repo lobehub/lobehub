@@ -81,7 +81,7 @@ const ReadDiscussion = () => {
         title={t('acceptance.comments.loadFailedTitle')}
         tone={'warning'}
         action={
-          <Button icon={<Icon icon={RefreshCw} />} size={'small'} onClick={() => void mutate()}>
+          <Button icon={<Icon icon={RefreshCw} />} onClick={() => void mutate()}>
             {t('report.actions.retry')}
           </Button>
         }

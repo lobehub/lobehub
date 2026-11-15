@@ -81,7 +81,7 @@ export const AcceptanceBundleGate = ({
           title={t('acceptance.error.title')}
           tone={'warning'}
           action={
-            <Button icon={<Icon icon={RefreshCw} />} size={'small'} onClick={() => void mutate()}>
+            <Button icon={<Icon icon={RefreshCw} />} onClick={() => void mutate()}>
               {t('report.actions.retry')}
             </Button>
           }

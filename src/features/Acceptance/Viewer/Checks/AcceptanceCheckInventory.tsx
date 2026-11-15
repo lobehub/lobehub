@@ -160,11 +160,12 @@ const AcceptanceCheckInventory = ({
   const [seededIds, setSeededIds] = useState<ReadonlySet<string>>(() => new Set());
   const [urlSeed, setUrlSeed] = useState<{ acceptanceId: string; filter: CheckFilter }>();
 
-  if (data && data.checks.length > 0 && !seededIds.has(acceptanceId)) {
+  const seedChecks = data?.checks ?? [];
+  if (data && seedChecks.length > 0 && !seededIds.has(acceptanceId)) {
     setSeededIds(new Set(seededIds).add(acceptanceId));
     setExpanded(
       new Set(
-        data.checks
+        seedChecks
           .filter(
             (check) =>
               window.matchMedia('(min-width: 768px)').matches &&
@@ -175,15 +176,15 @@ const AcceptanceCheckInventory = ({
       ),
     );
     setCollapsedGroups(
-      shouldGroupChecks(data.checks.length)
+      shouldGroupChecks(seedChecks.length)
         ? new Set(
-            groupChecks(data.checks, t('acceptance.group.uncategorized'))
+            groupChecks(seedChecks, t('acceptance.group.uncategorized'))
               .filter((group) => isGroupFullyAccepted(group.checks))
               .map((group) => group.key),
           )
         : new Set(),
     );
-    const defaultFilter: CheckFilter = data.rounds.length > 1 ? 'pending' : 'all';
+    const defaultFilter: CheckFilter = (data.rounds ?? []).length > 1 ? 'pending' : 'all';
     if (embedded) {
       setLocalFilter(defaultFilter);
     } else if (!urlFilterRaw && !roundFilter && defaultFilter !== 'all') {

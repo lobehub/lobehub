@@ -125,7 +125,7 @@ const CheckList = memo<CheckListProps>(
             </span>
           )}
           {filter !== 'all' && checks.length > 0 && onShowAll && (
-            <Button size={'small'} onClick={onShowAll}>
+            <Button onClick={onShowAll}>
               {t('acceptance.checks.showAll', { count: checks.length })}
             </Button>
           )}

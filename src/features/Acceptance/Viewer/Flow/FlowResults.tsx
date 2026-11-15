@@ -222,7 +222,7 @@ export function FlowResults({
     openCheckRejectModal({
       checkTitle: node.title,
       draftKey: attempt.id,
-      evidence: attempt.evidence
+      evidence: (attempt.evidence ?? [])
         .filter((e) => e.type === 'screenshot' && e.fileUrl)
         .map((e) => ({ id: e.id, fileUrl: e.fileUrl! })),
       initialAnnotations: attempt.reviewDetail?.annotations,

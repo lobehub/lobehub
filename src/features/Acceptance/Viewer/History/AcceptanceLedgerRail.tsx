@@ -129,7 +129,7 @@ const AcceptanceLedgerRail = () => {
           onClick={() => onExpandChange(true)}
         >
           <Icon icon={PanelRightOpen} size={14} />
-          <span {...stylex.props(styles.chipCount)}>{data.rounds.length}</span>
+          <span {...stylex.props(styles.chipCount)}>{(data.rounds ?? []).length}</span>
         </button>
       )}
       {isNarrowViewport ? (

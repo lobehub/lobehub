@@ -98,7 +98,8 @@ const AcceptanceResources = () => {
   const [kind, setKind] = useState<ResourceFilter>('all');
   if (!data) return null;
 
-  const all = collectResources(data.checks);
+  const rounds = data.rounds ?? [];
+  const all = collectResources(data.checks ?? []);
   if (all.length === 0)
     return (
       <QuietState
@@ -143,7 +144,7 @@ const AcceptanceResources = () => {
             </button>
           ))}
         </div>
-        {data.rounds.length > 1 && (
+        {rounds.length > 1 && (
           <Select
             aria-label={t('acceptance.resources.roundLabel')}
             className={stylex.props(styles.roundSelect).className}
@@ -151,7 +152,7 @@ const AcceptanceResources = () => {
             variant={'filled'}
             options={[
               { label: t('acceptance.filter.roundAll'), value: 'all' },
-              ...[...data.rounds].reverse().map((round) => ({
+              ...[...rounds].reverse().map((round) => ({
                 label: isDraftVerifyRun(round.run)
                   ? t('flow.pendingPlan')
                   : t('acceptance.round', { round: round.run.roundIndex }),
@@ -168,7 +169,6 @@ const AcceptanceResources = () => {
           title={t('acceptance.resources.noMatch')}
           action={
             <Button
-              size={'small'}
               onClick={() => {
                 setKind('all');
                 if (turn !== null) setTurn(null);
