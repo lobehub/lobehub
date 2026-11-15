@@ -1,6 +1,6 @@
 import {
   marketplaceToolIntervention,
-  marketplaceToolNamesOf,
+  marketplaceToolPoliciesOf,
   withMandatoryApprovalMark,
 } from '@lobechat/const';
 import { buildMcpToolMetadata } from '@lobechat/const/mcpApp';
@@ -27,10 +27,10 @@ export interface ClientListedTool {
  * kept only while the caller's `mcp_apps` flag is on; otherwise a row keeps
  * the visibility alone, as before MCP Apps.
  *
- * `connectorMetadata` is the target row's: when it stores market tool names
- * (an HTTP marketplace MCP an agent installed), a tool outside them is synced
- * as `always`, so a desktop's listing of that server is held to the market's
- * list as a server-side sync is.
+ * `connectorMetadata` is the target row's: when it stores market tool
+ * policies (an HTTP marketplace MCP an agent installed), each tool takes its
+ * approval from them, not from the listing, and a tool they do not declare is
+ * synced as `always`, as a server-side sync does.
  */
 export const toClientToolSyncInputs = async (
   tools: ClientListedTool[],
@@ -38,11 +38,11 @@ export const toClientToolSyncInputs = async (
   connectorMetadata?: unknown,
 ) => {
   const mcpApps = await isMcpAppsEnabled(userId);
-  const marketToolNames = marketplaceToolNamesOf(connectorMetadata);
+  const marketPolicies = marketplaceToolPoliciesOf(connectorMetadata);
 
   return tools.map((t) => {
     const humanIntervention = marketplaceToolIntervention(
-      marketToolNames,
+      marketPolicies,
       t.toolName,
       t.humanIntervention,
     );

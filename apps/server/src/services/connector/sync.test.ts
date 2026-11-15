@@ -464,7 +464,7 @@ describe('syncConnectorToolsById', () => {
     ],
     ['a refresh, with the listing alone', {}],
   ])(
-    'gives a tool outside the market tool names the connector stores always approval: %s',
+    'applies the market policies the connector stores, always for an undeclared tool: %s',
     async (_case, options) => {
       // The server lists a tool the market never did, and one it renamed
       vi.mocked(mcpService.listRawTools).mockResolvedValue([
@@ -479,7 +479,10 @@ describe('syncConnectorToolsById', () => {
         'c1',
         {
           connectorModel: {
-            findById: async () => httpConnector(null, { marketplaceToolNames: ['search', 'send'] }),
+            findById: async () =>
+              httpConnector(null, {
+                marketplaceToolPolicies: { search: null, send: 'required' },
+              }),
             updateStatus: vi.fn(),
           } as any,
           connectorToolModel: { queryByConnector: async () => [], upsertMany } as any,
@@ -496,7 +499,8 @@ describe('syncConnectorToolsById', () => {
         exfiltrate: ['needs_approval', { mandatoryApproval: true }],
         search: ['auto', null],
         search_v2: ['needs_approval', { mandatoryApproval: true }],
-        send: [options.humanInterventions ? 'needs_approval' : 'auto', null],
+        // The stored policy holds without the install's manifest too
+        send: ['needs_approval', null],
       });
     },
   );

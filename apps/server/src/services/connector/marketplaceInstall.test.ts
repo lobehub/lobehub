@@ -359,8 +359,8 @@ describe('installMarketplaceMcpConnector', () => {
       });
 
       const [row] = await connectorRows();
-      // The market's list is kept for the syncs that follow
-      expect(row.metadata).toMatchObject({ marketplaceToolNames: ['search'] });
+      // The market's per-tool policies are kept for the syncs that follow
+      expect(row.metadata).toMatchObject({ marketplaceToolPolicies: { search: null } });
       expect(await syncedTools()).toEqual([
         {
           metadata: { mandatoryApproval: true },
@@ -400,13 +400,53 @@ describe('installMarketplaceMcpConnector', () => {
       });
     });
 
+    it("keeps the manifest's approval for a declared tool the server only lists after the install", async () => {
+      // At the install the server lists just one of the tools the manifest declares
+      vi.mocked(mcpService.listRawTools).mockResolvedValue([{ name: 'search' }] as never);
+      await installMarketplaceMcpConnector(scope, 'remote-mcp', {
+        ...httpManifest,
+        api: [
+          { name: 'search', parameters: {} },
+          { humanIntervention: 'required', name: 'send', parameters: {} },
+          { humanIntervention: 'always', name: 'delete', parameters: {} },
+        ],
+      });
+      const [row] = await connectorRows();
+      expect(row.metadata).toMatchObject({
+        marketplaceToolPolicies: { delete: 'always', search: null, send: 'required' },
+      });
+
+      // The background refresh lists the rest, without the manifest
+      vi.mocked(mcpService.listRawTools).mockResolvedValue([
+        { name: 'search' },
+        { name: 'send' },
+        { name: 'delete' },
+      ] as never);
+      await syncConnectorToolsById(row.id, {
+        connectorModel: new ConnectorModel(db, userId),
+        connectorToolModel: new ConnectorToolModel(db, userId),
+        userId,
+      });
+
+      expect(await syncedTools()).toEqual([
+        { metadata: { mandatoryApproval: true }, permission: 'needs_approval', toolName: 'delete' },
+        { metadata: null, permission: 'auto', toolName: 'search' },
+        { metadata: null, permission: 'needs_approval', toolName: 'send' },
+      ]);
+      expect(await runApprovals()).toEqual({
+        delete: 'always',
+        search: undefined,
+        send: 'required',
+      });
+    });
+
     it('covers every tool of a manifest that lists none', async () => {
       vi.mocked(mcpService.listRawTools).mockResolvedValue([{ name: 'search' }] as never);
 
       await installMarketplaceMcpConnector(scope, 'remote-mcp', httpManifest);
 
       const [row] = await connectorRows();
-      expect(row.metadata).toMatchObject({ marketplaceToolNames: [] });
+      expect(row.metadata).toMatchObject({ marketplaceToolPolicies: {} });
       expect(await runApprovals()).toEqual({ search: 'always' });
     });
   });

@@ -7,7 +7,7 @@ import {
   isMarketplaceInstallRunnable,
   keepsDesktopStdioExecution,
   marketplaceToolIntervention,
-  marketplaceToolNamesOf,
+  marketplaceToolPoliciesOf,
   mayRequireMandatoryApproval,
   withMandatoryApprovalMark,
 } from './plugin';
@@ -205,27 +205,39 @@ describe('withMandatoryApprovalMark', () => {
   });
 });
 
-describe('marketplace tool names', () => {
-  it('reads the market tool names a connector stores', () => {
-    expect(marketplaceToolNamesOf({ marketplaceToolNames: ['search', 7, 'send'] })).toEqual(
-      new Set(['search', 'send']),
+describe('marketplace tool policies', () => {
+  it('reads the per-tool market policies a connector stores', () => {
+    expect(
+      marketplaceToolPoliciesOf({ marketplaceToolPolicies: { search: null, send: 'required' } }),
+    ).toEqual(
+      new Map<string, unknown>([
+        ['search', null],
+        ['send', 'required'],
+      ]),
     );
-    // An empty list is a list: the market vouched for no tool
-    expect(marketplaceToolNamesOf({ marketplaceToolNames: [] })).toEqual(new Set());
-    expect(marketplaceToolNamesOf({ marketplaceToolNames: 'search' })).toBeUndefined();
-    expect(marketplaceToolNamesOf({})).toBeUndefined();
-    expect(marketplaceToolNamesOf(null)).toBeUndefined();
+    // An empty record is a record: the market declared no tool
+    expect(marketplaceToolPoliciesOf({ marketplaceToolPolicies: {} })).toEqual(new Map());
+    expect(marketplaceToolPoliciesOf({ marketplaceToolPolicies: ['search'] })).toBeUndefined();
+    expect(marketplaceToolPoliciesOf({ marketplaceToolPolicies: 'search' })).toBeUndefined();
+    expect(marketplaceToolPoliciesOf({})).toBeUndefined();
+    expect(marketplaceToolPoliciesOf(null)).toBeUndefined();
   });
 
-  it('asks for always on a tool outside the stored names, and keeps the given one otherwise', () => {
-    const names = new Set(['search', 'send']);
+  it('takes a tool its stored policy, or always when the market does not declare it', () => {
+    const policies = new Map<string, unknown>([
+      ['search', null],
+      ['send', 'required'],
+      ['delete', 'always'],
+    ]);
 
-    expect(marketplaceToolIntervention(names, 'exfiltrate', undefined)).toBe('always');
-    expect(marketplaceToolIntervention(names, 'exfiltrate', 'never')).toBe('always');
-    expect(marketplaceToolIntervention(new Set(), 'search', undefined)).toBe('always');
-    expect(marketplaceToolIntervention(names, 'send', 'required')).toBe('required');
-    expect(marketplaceToolIntervention(names, 'search', undefined)).toBeUndefined();
-    // A connector without stored names (any install but an agent's HTTP one)
+    // The stored policy wins over whatever the listing (or a client) says
+    expect(marketplaceToolIntervention(policies, 'send', undefined)).toBe('required');
+    expect(marketplaceToolIntervention(policies, 'delete', 'never')).toBe('always');
+    expect(marketplaceToolIntervention(policies, 'search', 'always')).toBeUndefined();
+    expect(marketplaceToolIntervention(policies, 'exfiltrate', 'never')).toBe('always');
+    expect(marketplaceToolIntervention(new Map(), 'search', undefined)).toBe('always');
+    // A connector without stored policies (any install but an agent's HTTP one)
+    expect(marketplaceToolIntervention(undefined, 'anything', 'required')).toBe('required');
     expect(marketplaceToolIntervention(undefined, 'anything', undefined)).toBeUndefined();
   });
 });

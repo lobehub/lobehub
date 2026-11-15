@@ -2,7 +2,7 @@ import {
   hasMandatoryApproval,
   MANDATORY_APPROVAL_KEY,
   marketplaceToolIntervention,
-  marketplaceToolNamesOf,
+  marketplaceToolPoliciesOf,
   requiresSsrfSafeTransport,
   withMandatoryApprovalMark,
 } from '@lobechat/const';
@@ -232,8 +232,8 @@ export interface ConnectorToolListOptions {
    * the server lists, which an MCP listing cannot carry (an HTTP marketplace
    * install). It applies as a client-listed tool's does in
    * `toClientToolSyncInputs`. Without it (a refresh), a synced tool keeps the
-   * mandatory approval it has. Either way, a tool missing from the market tool
-   * names the connector stores is synced as `always`.
+   * mandatory approval it has. Either way, market policies the connector
+   * stores (`marketplaceToolPoliciesOf`) take precedence over it.
    */
   humanInterventions?: ReadonlyMap<string, unknown>;
   /** List with this account's credentials instead of the connector's primary one. */
@@ -322,13 +322,14 @@ export const listConnectorToolSyncInputs = async (
           .map((tool) => tool.toolName),
       );
 
-  // A tool the market never listed (added since, or renamed) gets no auto-run
-  // its server could slip in, at the install or at any refresh
-  const marketToolNames = marketplaceToolNamesOf(connector.metadata);
+  // The market's per-tool policies, stored at the install, decide every sync:
+  // a declared tool the server only lists later keeps its policy, and one the
+  // market never declared (added since, or renamed) gets no auto-run
+  const marketPolicies = marketplaceToolPoliciesOf(connector.metadata);
 
   const syncInputs = rawTools.map((t) => {
     const humanIntervention = marketplaceToolIntervention(
-      marketToolNames,
+      marketPolicies,
       t.name,
       options.humanInterventions?.get(t.name),
     );
