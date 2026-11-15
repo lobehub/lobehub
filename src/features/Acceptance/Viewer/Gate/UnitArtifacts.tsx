@@ -2,7 +2,7 @@
 
 import type { GoalReleaseGateUnit, WorkSummaryItem } from '@lobechat/types';
 import { Block, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
-import { ExternalLink, FileDown, FileText } from 'lucide-react';
+import { ArrowUpRight, ExternalLink, FileDown, FileText } from 'lucide-react';
 import { createElement, memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -26,14 +26,22 @@ type ExternalItem = Parameters<(typeof WORK_TYPE_DESCRIPTORS)['external']['getIc
 const externalItem = (artifact: Artifact) =>
   ({ resourceType: artifact.resourceType, status: artifact.status ?? null }) as ExternalItem;
 
-const iconOf = (artifact: Artifact): WorkIcon =>
-  artifact.type === 'external'
-    ? WORK_TYPE_DESCRIPTORS.external.getIcon(externalItem(artifact))
-    : artifact.type === 'document'
-      ? FileText
-      : artifact.type === 'file'
-        ? FileDown
-        : ExternalLink;
+const iconOf = (artifact: Artifact): WorkIcon => {
+  switch (artifact.type) {
+    case 'external': {
+      return WORK_TYPE_DESCRIPTORS.external.getIcon(externalItem(artifact));
+    }
+    case 'document': {
+      return FileText;
+    }
+    case 'file': {
+      return FileDown;
+    }
+    default: {
+      return ExternalLink;
+    }
+  }
+};
 
 /**
  * Opens a unit's output where it lives. Not the Work gallery's `useOpenWork`:
@@ -78,7 +86,8 @@ const ArtifactRow = memo<{ artifact: Artifact }>(({ artifact }) => {
       align={'center'}
       clickable={!!url}
       gap={8}
-      padding={8}
+      paddingBlock={8}
+      paddingInline={12}
       title={url}
       variant={'outlined'}
       onClick={url ? () => window.open(url, '_blank', 'noopener,noreferrer') : undefined}
@@ -95,7 +104,7 @@ const ArtifactRow = memo<{ artifact: Artifact }>(({ artifact }) => {
           </Text>
         )}
       </Flexbox>
-      {url && <Icon color={cssVar.colorTextQuaternary} icon={ExternalLink} size={14} />}
+      {url && <Icon color={cssVar.colorTextQuaternary} icon={ArrowUpRight} size={14} />}
     </Block>
   );
 });
@@ -112,7 +121,7 @@ const UnitArtifacts = memo<{ unit: GoalReleaseGateUnit }>(({ unit }) => {
   const openWork = useOpenUnitWork();
   const artifacts = unitArtifacts(unit);
   return (
-    <Flexbox gap={4}>
+    <Flexbox gap={8}>
       <Text fontSize={12} type={'secondary'}>
         {t('acceptance.gate.unitArtifacts')}
       </Text>
@@ -129,9 +138,7 @@ const UnitArtifacts = memo<{ unit: GoalReleaseGateUnit }>(({ unit }) => {
           <ArtifactRow artifact={artifact} key={artifact.url ?? `${artifact.title}-${index}`} />
         ))
       ) : (
-        <Text fontSize={13} type={'secondary'}>
-          {t('acceptance.gate.unitArtifactsEmpty')}
-        </Text>
+        <Text type={'secondary'}>{t('acceptance.gate.unitArtifactsEmpty')}</Text>
       )}
     </Flexbox>
   );

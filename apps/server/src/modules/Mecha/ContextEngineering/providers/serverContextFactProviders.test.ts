@@ -5,6 +5,7 @@ import { createServerContextFactProviders } from './index';
 
 const {
   agentDocumentsConstructor,
+  connectorQueryPublic,
   credsList,
   findById,
   getAgentContextDocuments,
@@ -14,6 +15,7 @@ const {
   pluginQuery,
 } = vi.hoisted(() => ({
   agentDocumentsConstructor: vi.fn(),
+  connectorQueryPublic: vi.fn(async () => [] as unknown[]),
   credsList: vi.fn(),
   findById: vi.fn(),
   getAgentContextDocuments: vi.fn(),
@@ -38,6 +40,11 @@ vi.mock('@/database/models/user', () => ({
     },
     { getInfoForAIGeneration },
   ),
+}));
+vi.mock('@/database/models/connector', () => ({
+  ConnectorModel: class {
+    queryPublic = connectorQueryPublic;
+  },
 }));
 vi.mock('@/database/models/plugin', () => ({
   PluginModel: class {
@@ -172,6 +179,33 @@ describe('createServerContextFactProviders', () => {
         .listCustomPlugins!(),
     ).resolves.toEqual([
       { description: 'Local files', identifier: 'my-mcp', name: 'My MCP', type: 'custom' },
+    ]);
+  });
+
+  // Installs now land only in user_connectors: a connector-only custom MCP
+  // must still reach the builder's inventory, once per identifier.
+  it('offers custom connectors beside legacy custom plugin rows', async () => {
+    connectorQueryPublic.mockResolvedValueOnce([
+      { description: 'Repo tools', identifier: 'repo-mcp', name: 'Repo', sourceType: 'custom' },
+      { description: null, identifier: 'my-mcp', name: '', sourceType: 'custom' },
+      { description: 'Docs', identifier: 'market-mcp', name: 'Docs', sourceType: 'marketplace' },
+    ]);
+    pluginQuery.mockResolvedValue([
+      {
+        identifier: 'my-mcp',
+        manifest: { meta: { description: 'Stale', title: 'Old title' } },
+        type: 'customPlugin',
+      },
+      { identifier: 'legacy-mcp', manifest: { meta: { title: 'Legacy' } }, type: 'customPlugin' },
+    ]);
+
+    await expect(
+      createServerContextFactProviders(source({ operationToolSet: { sourceMap: {} } }))
+        .listCustomPlugins!(),
+    ).resolves.toEqual([
+      { description: 'Repo tools', identifier: 'repo-mcp', name: 'Repo', type: 'custom' },
+      { description: undefined, identifier: 'my-mcp', name: 'my-mcp', type: 'custom' },
+      { description: undefined, identifier: 'legacy-mcp', name: 'Legacy', type: 'custom' },
     ]);
   });
 

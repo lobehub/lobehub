@@ -3,6 +3,11 @@ import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import { MessageModel } from '@/database/models/message';
+import {
+  collectMarkdownImageUrls,
+  type InlineImage,
+  resolveInlineImages,
+} from '@/server/services/file/inlineImages';
 import { redisService } from '@/server/services/redis';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 
@@ -39,6 +44,11 @@ export interface HeteroSteerDelivery {
 
 export interface HeteroSteerMessage {
   content: string;
+  /**
+   * Images pasted into the follow-up's body, which `content` only holds as
+   * markdown links: signed URLs for the session to take as image input.
+   */
+  imageList?: InlineImage[];
   messageId: string;
 }
 
@@ -78,13 +88,23 @@ export const renewHeteroSteers = async (operationId: string) => {
  * follow-up that cannot join (an attachment, a tool selection…) stops the
  * take, and it and everything behind it wait for the run to end.
  *
+ * Images pasted into the body go along as `imageList` when the session takes
+ * image input (`acceptsImages`). Otherwise the follow-up waits for a turn of
+ * its own, where the dispatch hands them over: typed in as text, the agent
+ * would only see links it cannot look at.
+ *
  * @returns the message to send, or `undefined` when nothing can go now
  */
 export const takeHeteroSteer = async (
   ctx: StoreContext,
-  params: { agentId: string | null; operationId: string; scope: SteerQueueScope },
+  params: {
+    acceptsImages?: boolean;
+    agentId: string | null;
+    operationId: string;
+    scope: SteerQueueScope;
+  },
 ): Promise<HeteroSteerMessage | undefined> => {
-  const { agentId, operationId, scope } = params;
+  const { acceptsImages, agentId, operationId, scope } = params;
 
   const drained = await drainOwnFollowUps(ctx, scope, operationId);
   if (drained.entries.length === 0) return;
@@ -95,6 +115,24 @@ export const takeHeteroSteer = async (
   if (!canSteerHeteroRun(first, agentId)) {
     await returnFollowUps(scope, drained, drained.entries, 'needs a turn of its own');
     return;
+  }
+
+  // A session that only takes text gets no image follow-up: decided from the
+  // markdown alone, since the run asks again on every poll.
+  const hasImages = collectMarkdownImageUrls(first.request.prompt).length > 0;
+  if (hasImages && !acceptsImages) {
+    await returnFollowUps(scope, drained, drained.entries, 'its images need a turn of their own');
+    return;
+  }
+
+  let imageList: InlineImage[] = [];
+  if (hasImages) {
+    try {
+      imageList = await resolveInlineImages(ctx, first.request.prompt);
+    } catch (error) {
+      await returnFollowUps(scope, drained, drained.entries, error);
+      return;
+    }
   }
   await returnFollowUps(scope, drained, rest, 'delivered one at a time');
 
@@ -141,7 +179,11 @@ export const takeHeteroSteer = async (
   }
 
   log('[%s] Delivering follow-up %s as %s', operationId, first.id, messageId);
-  return { content: request.prompt, messageId };
+  return {
+    content: request.prompt,
+    ...(imageList.length > 0 && { imageList }),
+    messageId,
+  };
 };
 
 /**

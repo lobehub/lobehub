@@ -1,7 +1,9 @@
 import { isDesktop } from '@lobechat/const';
-import { isLocalOrPrivateUrl } from '@lobechat/utils';
+import { connectorMcpEndpoint, isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
+import type { SWRResponse } from 'swr';
 
 import type { ConnectorToolPermission } from '@/database/schemas';
+import { resolveLocalConnectorHttpParams } from '@/libs/mcp/localConnector';
 import {
   cacheScope,
   createReplicaSlice,
@@ -9,11 +11,14 @@ import {
   type ReplicaLens,
 } from '@/libs/replica';
 import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
+import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
+import { discoverService } from '@/services/discover';
 import { type LocalMcpTool, mcpService } from '@/services/mcp';
 import type { StoreSetter } from '@/store/types';
 
 import type { ToolStore } from '../../store';
+import { buildCloudMcpManifest, cloudManifestTools } from '../mcpStore/cloudManifest';
 import {
   agentBoundConnectorsEntity,
   agentBoundConnectorsResource,
@@ -23,9 +28,12 @@ import {
   connectorsResource,
   withoutConnectorSecrets,
 } from './projection';
+import { connectorSelectors } from './selectors';
 import type { AgentBoundConnector, ConnectorWithTools } from './types';
 
 type Setter = StoreSetter<ToolStore>;
+
+const CONNECTOR_LIST_SWR_KEY = 'connectorList';
 
 /** The connector lists are one entry per scope, so every sync shares these params. */
 const LIST_PARAMS = {} as Record<string, never>;
@@ -229,6 +237,21 @@ export class ConnectorActionImpl {
   };
 
   /**
+   * Load the base connector list for a view that reads it, e.g. the install
+   * state of a marketplace MCP that only exists as a connector. Loads through
+   * {@link fetchConnectors}, so the list is confirmed for this cache scope like
+   * any other load; a view mounting after the first load reuses it. Keyed by
+   * the cache scope: a caller that re-renders when a scope switch drops the
+   * list (`isConnectorsInit`) loads the new identity's list.
+   */
+  useFetchConnectors = (enable: boolean): SWRResponse =>
+    useClientDataSWR(
+      enable ? [CONNECTOR_LIST_SWR_KEY, cacheScope.get()] : null,
+      () => this.fetchConnectors(),
+      { revalidateIfStale: false, revalidateOnFocus: false },
+    );
+
+  /**
    * Refresh the connector lists after a mutation. Always refreshes the base
    * list; also refreshes the agent-bound aggregate when it has been loaded (the
    * unified settings page), so a connector-detail action on an agent connector
@@ -375,7 +398,15 @@ export class ConnectorActionImpl {
     this.#set({ connectorCreating: true }, false, 'createConnector/start');
     try {
       const created = await lambdaClient.connector.create.mutate(params);
-      await this.fetchConnectors();
+      // The row is written: a list refresh that fails now must not fail the
+      // create, or the caller could not roll back the row it replaced
+      await this.fetchConnectors().catch((error) => {
+        console.error(
+          '[connector] refreshing the list after creating %s failed:',
+          created.id,
+          error,
+        );
+      });
       return { id: created.id, isNew: created.isNew };
     } finally {
       this.#set({ connectorCreating: false }, false, 'createConnector/end');
@@ -414,29 +445,44 @@ export class ConnectorActionImpl {
         | { headers: Record<string, string>; type: 'header' }
         | null;
       isEnabled?: boolean;
-      mcpServerUrl?: string;
+      /** `null` clears the field, as on an endpoint-less row being put back. */
+      mcpConnectionType?: 'cloud' | 'http' | 'stdio' | null;
+      mcpServerUrl?: string | null;
+      mcpStdioConfig?: { args?: string[]; command: string; env?: Record<string, string> } | null;
       metadata?: Record<string, unknown>;
       name?: string;
+      /** A new client leaves the row disconnected until it is authorized; `null` drops it. */
       oidcConfig?: {
         clientId?: string;
         clientSecret?: string;
         scheme?: 'pre_registration' | 'dcr' | 'client_id_metadata_document';
-      };
+      } | null;
+      /** Puts back the source a failed install's `createConnector` moved the row off. */
+      sourceType?: 'custom' | 'marketplace';
     },
   ): Promise<void> => {
     await lambdaClient.connector.update.mutate({ id, patch: patch as any });
     await this.#refreshConnectorLists();
   };
 
-  syncConnectorTools = async (id: string): Promise<void> => {
+  /**
+   * List the connector's tools and store them. `pruneMissingAutoTools` is for
+   * an install: the `auto` tools the server no longer lists are dropped.
+   */
+  syncConnectorTools = async (
+    id: string,
+    options: { pruneMissingAutoTools?: boolean } = {},
+  ): Promise<void> => {
     this.#set(
       (s) => ({ connectorSyncing: { ...s.connectorSyncing, [id]: true } }),
       false,
       'syncConnectorTools/start',
     );
     try {
-      const syncedLocally = await this.#syncLocalConnectorTools(id);
-      if (!syncedLocally) await lambdaClient.connector.syncTools.mutate({ id });
+      const synced =
+        (await this.#syncCloudConnectorTools(id, options)) ||
+        (await this.#syncLocalConnectorTools(id, options));
+      if (!synced) await lambdaClient.connector.syncTools.mutate({ id, ...options });
       await this.#refreshConnectorLists();
     } finally {
       this.#set(
@@ -448,9 +494,31 @@ export class ConnectorActionImpl {
   };
 
   /**
+   * A market-hosted (`cloud`) server has no endpoint to list tools from: the
+   * market serves them in the server's manifest. Returns false for any other
+   * connector.
+   */
+  #syncCloudConnectorTools = async (
+    id: string,
+    options: { pruneMissingAutoTools?: boolean },
+  ): Promise<boolean> => {
+    const connector = connectorSelectors.connectorById(id)(this.#get());
+    if (connector?.mcpConnectionType !== 'cloud') return false;
+
+    const { identifier } = connector;
+    const data = await discoverService.getMCPPluginManifest(identifier);
+    await lambdaClient.connector.syncToolsFromClientById.mutate({
+      id,
+      ...options,
+      tools: cloudManifestTools(buildCloudMcpManifest({ data, plugin: { identifier } })),
+    });
+    return true;
+  };
+
+  /**
    * Desktop-only install/refresh path for connectors the cloud server cannot
-   * reach itself: stdio MCP (must spawn on this machine) and local/private
-   * network HTTP endpoints. The server-side `syncTools` would try to connect
+   * reach itself: stdio MCP (must spawn on this machine), local/private
+   * network HTTP endpoints, and HTTP set to connect through the device. The server-side `syncTools` would try to connect
    * FROM the cloud and fail with "Failed to start MCP service process" /
    * "fetch failed" (#16533), so the client lists the tools locally (via the
    * Electron main process, same path Test Connection uses) and reports them
@@ -459,16 +527,20 @@ export class ConnectorActionImpl {
    * Returns false when the connector is server-reachable (public HTTP) or when
    * not running in desktop — the caller falls back to the server-side sync.
    */
-  #syncLocalConnectorTools = async (id: string): Promise<boolean> => {
+  #syncLocalConnectorTools = async (
+    id: string,
+    options: { pruneMissingAutoTools?: boolean },
+  ): Promise<boolean> => {
     if (!isDesktop) return false;
 
     // `getForEdit` returns the decrypted user-set credentials (bearer/apikey/
-    // header) needed to connect locally. OAuth2 tokens are machine-managed and
-    // never leave the server — but OAuth against a localhost endpoint would be
-    // server-unreachable anyway, so that combination stays on the server path.
+    // header) needed to connect locally; an OAuth connector's access token is
+    // fetched on its own (`resolveLocalConnectorHttpParams`).
     const detail = await lambdaClient.connector.getForEdit.query({ id });
     const isStdio = detail.mcpConnectionType === 'stdio';
-    const isLocalHttp = !!detail.mcpServerUrl && isLocalOrPrivateUrl(detail.mcpServerUrl);
+    // A localhost / LAN address, or one the user set to connect through the device
+    const isLocalHttp =
+      !!detail.mcpServerUrl && isDeviceOnlyMcpEndpoint(connectorMcpEndpoint(detail));
     if (!isStdio && !isLocalHttp) return false;
 
     // The full tool list, not a manifest: a manifest leaves out view-only
@@ -485,32 +557,22 @@ export class ConnectorActionImpl {
         },
       });
     } else {
-      const credentials = detail.credentials;
-      const auth =
-        credentials?.type === 'bearer'
-          ? { token: credentials.token, type: 'bearer' as const }
-          : credentials?.type === 'apikey'
-            ? { token: credentials.apiKey, type: 'bearer' as const }
-            : undefined;
-      // Custom headers live in metadata.customHeaders; legacy rows stored them
-      // as a 'header' credential — merge both, mirroring the server-side
-      // buildConnectorMcpParams.
-      const headerCreds = credentials?.type === 'header' ? credentials.headers : undefined;
-      const customHeaders = detail.metadata?.customHeaders as Record<string, string> | undefined;
-      const headers =
-        headerCreds || customHeaders ? { ...headerCreds, ...customHeaders } : undefined;
-      tools = await mcpService.listLocalMcpTools({
-        http: { auth, headers, name: detail.identifier, url: detail.mcpServerUrl! },
-      });
+      // The same credentials and headers its tool calls send
+      const http = await resolveLocalConnectorHttpParams(detail, (connectorId) =>
+        lambdaClient.connector.getLocalCallToken.mutate({ id: connectorId }),
+      );
+      tools = await mcpService.listLocalMcpTools({ http });
     }
 
     await lambdaClient.connector.syncToolsFromClientById.mutate({
       id,
+      ...options,
       tools: tools.map((tool) => ({
         description: tool.description,
         inputSchema: tool.inputSchema,
         toolName: tool.name,
         visibility: tool.visibility,
+        ...(tool.mcpAppMeta && { mcpAppMeta: tool.mcpAppMeta }),
       })),
     });
     return true;

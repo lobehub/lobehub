@@ -43,6 +43,21 @@ const axisShift = (start: number, length: number, extent: number) => {
   return overflow > 0 ? -overflow : 0;
 };
 
+export const revealNode = (flow: FlowViewportApi, size: CanvasSize, id: string | undefined) => {
+  if (!id) return;
+  const bounds = flow.getNodesBounds([id]);
+  if (!bounds.width || !bounds.height) return;
+  const viewport = flow.getViewport();
+  const x =
+    viewport.x +
+    axisShift(bounds.x * viewport.zoom + viewport.x, bounds.width * viewport.zoom, size.width);
+  const y =
+    viewport.y +
+    axisShift(bounds.y * viewport.zoom + viewport.y, bounds.height * viewport.zoom, size.height);
+  if (x === viewport.x && y === viewport.y) return;
+  flow.setViewport({ ...viewport, x, y });
+};
+
 /**
  * Rescue a node that the narrower canvas pushed off screen entirely, by panning
  * the least possible distance and never by zooming.
@@ -60,14 +75,6 @@ export const panNodeIntoView = (
   if (!id) return;
   const bounds = flow.getNodesBounds([id]);
   if (!bounds.width || !bounds.height) return;
-  const viewport = flow.getViewport();
-  if (isRectVisible(bounds, viewport, size)) return;
-  const x =
-    viewport.x +
-    axisShift(bounds.x * viewport.zoom + viewport.x, bounds.width * viewport.zoom, size.width);
-  const y =
-    viewport.y +
-    axisShift(bounds.y * viewport.zoom + viewport.y, bounds.height * viewport.zoom, size.height);
-  if (x === viewport.x && y === viewport.y) return;
-  flow.setViewport({ ...viewport, x, y });
+  if (isRectVisible(bounds, flow.getViewport(), size)) return;
+  revealNode(flow, size, id);
 };

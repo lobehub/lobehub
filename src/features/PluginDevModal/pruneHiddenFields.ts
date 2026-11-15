@@ -6,10 +6,11 @@ export const pruneHiddenFields = (values: LobeToolCustomPlugin): LobeToolCustomP
   const mcp = values.customParams?.mcp;
   if (!mcp || (mcp.type !== 'http' && mcp.type !== 'stdio')) return values;
 
-  const { args, auth, command, env, headers, url, ...rest } = mcp;
+  const { args, auth, command, connectVia, env, headers, url, ...rest } = mcp;
 
   let nextMcp: typeof mcp;
   if (mcp.type === 'stdio') {
+    // Stdio always runs on the device: there is no connection to choose
     nextMcp = { ...rest, args, command, env };
   } else {
     let nextAuth = auth;
@@ -21,7 +22,7 @@ export const pruneHiddenFields = (values: LobeToolCustomPlugin): LobeToolCustomP
         ...(auth.type === 'oauth2' && { accessToken, clientId, clientSecret }),
       };
     }
-    nextMcp = { ...rest, auth: nextAuth, headers, url };
+    nextMcp = { ...rest, auth: nextAuth, connectVia, headers, url };
   }
 
   return { ...values, customParams: { ...values.customParams, mcp: nextMcp } };

@@ -4,22 +4,15 @@ import { createStaticStyles } from '@lobehub/ui';
 import { memo, type PropsWithChildren } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({
-  column: css`
-    width: 100%;
-    max-width: 760px;
-    margin-inline: auto;
-  `,
   page: css`
     overflow-y: auto;
     flex: 1;
   `,
 }));
 
-/** A reading-width column: settings content wider than a paragraph reads as a dashboard. */
+/** Fills the shared settings column, so switching tabs keeps the same content width. */
 const IntegrationsLayout = memo<PropsWithChildren>(({ children }) => (
-  <div className={styles.page}>
-    <div className={styles.column}>{children}</div>
-  </div>
+  <div className={styles.page}>{children}</div>
 ));
 
 IntegrationsLayout.displayName = 'IntegrationsLayout';

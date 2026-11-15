@@ -135,6 +135,12 @@ export interface AuthConfig {
 
 export interface HttpMCPClientParams {
   auth?: AuthConfig;
+  /**
+   * `device`: the user chose to reach this server from their device; a server
+   * with a device gateway tunnels it there (`shouldConnectViaDevice`). Never
+   * read by the MCP client itself. Absent means `auto`.
+   */
+  connectVia?: 'device';
   headers?: Record<string, string>;
   name: string;
   type: 'http';

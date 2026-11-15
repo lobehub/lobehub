@@ -38,9 +38,9 @@ export const MAX_PERSISTED_ENTITY_PREVIEWS = 100;
 export const ENTITY_PREVIEW_DESCRIPTION_LIMIT = 280;
 
 /**
- * Entry key: `<type>/<id>`. The `/` keeps the SWR sync key clear of the legacy
- * CACHE_TIERS prefixes (`task:`, `agent:`, `document:`), which would persist
- * the response a second time.
+ * Entry key: `<type>/<id>`. The `/` keeps the replica sync key clear of the
+ * retired per-domain cache prefixes (`task:`, `agent:`, `document:`), which
+ * would persist the response a second time.
  */
 export const entityPreviewKey = ({ id, type }: EntityPreviewParams) => `${type}/${id}`;
 

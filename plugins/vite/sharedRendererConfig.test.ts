@@ -70,6 +70,7 @@ describe('sharedOptimizeDeps', () => {
     expect(sharedOptimizeDeps.exclude).toEqual([
       '@lobehub/ui/stylex/cssVar.stylex',
       '@lobehub/ui/stylex/media.stylex',
+      'mdast-util-to-markdown',
     ]);
   });
 });

@@ -1540,6 +1540,7 @@ table channels {
   workspace_id text
   project_id text
   agent_id text
+  peer_user_id text
   title text [not null]
   sequence integer [not null, default: 0]
   status text [not null, default: 'active']
@@ -1687,6 +1688,78 @@ table user_installed_plugins {
   indexes {
     (user_id, identifier) [pk]
     workspace_id [name: 'user_installed_plugins_workspace_id_idx']
+  }
+}
+
+table user_contact_requests {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  requester_id text [not null]
+  addressee_id text [not null]
+  message text
+  status text [not null, default: 'pending']
+  responded_at "timestamp with time zone"
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (requester_id, addressee_id) [name: 'user_contact_requests_pending_unique', unique]
+    (addressee_id, status) [name: 'user_contact_requests_addressee_status_idx']
+    (requester_id, status) [name: 'user_contact_requests_requester_status_idx']
+    
+  }
+}
+
+table user_contact_tag_assignments {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  tag_id uuid [not null]
+  contact_id uuid [not null]
+  user_id text [not null]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (tag_id, contact_id) [name: 'user_contact_tag_assignments_tag_id_contact_id_unique', unique]
+    contact_id [name: 'user_contact_tag_assignments_contact_id_idx']
+    user_id [name: 'user_contact_tag_assignments_user_id_idx']
+  }
+}
+
+table user_contact_tags {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  name text [not null]
+  color text
+  sort_order integer [not null, default: 0]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, name) [name: 'user_contact_tags_user_id_name_unique', unique]
+  }
+}
+
+table user_contacts {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  type text [not null]
+  contact_user_id text
+  agent_id text
+  remark text
+  description text
+  phones text[]
+  metadata jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, contact_user_id) [name: 'user_contacts_user_unique', unique]
+    (user_id, agent_id) [name: 'user_contacts_agent_unique', unique]
+    contact_user_id [name: 'user_contacts_contact_user_id_idx']
+    agent_id [name: 'user_contacts_agent_id_idx']
   }
 }
 

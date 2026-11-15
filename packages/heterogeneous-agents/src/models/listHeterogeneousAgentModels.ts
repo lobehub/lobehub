@@ -20,6 +20,7 @@ import type { ResolvedHeteroCommand } from '../spawn/resolveCliCommand';
 import { resolveHeteroSpawnCommand } from '../spawn/resolveCliCommand';
 import { listTraeAcpModels } from '../spawn/traeAcpSession';
 import { resolveHeteroSpawnCwd } from '../spawn/workingDirectory';
+import { parseAntigravityModelCatalog } from './antigravity';
 import { listCodexModels } from './codex';
 
 const execFilePromise = promisify(execFile);
@@ -437,7 +438,9 @@ export const listHeterogeneousAgentModels = async (
         ? ['--help']
         : params.type === 'devin'
           ? ['models', 'list', '--format', 'json']
-          : params.type === 'grok-build' || params.type === 'opencode'
+          : params.type === 'antigravity' ||
+              params.type === 'grok-build' ||
+              params.type === 'opencode'
             ? ['models']
             : params.type === 'kimi-code'
               ? ['provider', 'list', '--json']
@@ -474,19 +477,21 @@ export const listHeterogeneousAgentModels = async (
 
     return {
       models:
-        params.type === 'cursor'
-          ? parseCursorModelCatalog(String(stdout))
-          : params.type === 'devin'
-            ? parseDevinModelCatalog(String(stdout))
-            : params.type === 'grok-build'
-              ? parseGrokBuildModelCatalog(String(stdout))
-              : params.type === 'kimi-code'
-                ? parseKimiCodeModelCatalog(String(stdout))
-                : params.type === 'pi'
-                  ? parsePiModelCatalog(String(stdout))
-                  : params.type === 'qoder'
-                    ? parseQoderModelCatalog(String(stdout))
-                    : parseOpenCodeModelCatalog(String(stdout)),
+        params.type === 'antigravity'
+          ? parseAntigravityModelCatalog(String(stdout))
+          : params.type === 'cursor'
+            ? parseCursorModelCatalog(String(stdout))
+            : params.type === 'devin'
+              ? parseDevinModelCatalog(String(stdout))
+              : params.type === 'grok-build'
+                ? parseGrokBuildModelCatalog(String(stdout))
+                : params.type === 'kimi-code'
+                  ? parseKimiCodeModelCatalog(String(stdout))
+                  : params.type === 'pi'
+                    ? parsePiModelCatalog(String(stdout))
+                    : params.type === 'qoder'
+                      ? parseQoderModelCatalog(String(stdout))
+                      : parseOpenCodeModelCatalog(String(stdout)),
       status: 'success',
       updatedAt,
     };

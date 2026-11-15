@@ -266,7 +266,14 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
   }
 
   private getUpdateMenuItem(t: (key: string, opts?: any) => string): MenuItemConstructorOptions {
-    const { stage } = this.app.updaterManager.getUpdaterState();
+    const { stage: shellStage } = this.app.updaterManager.getUpdaterState();
+    // The shell updater only knows full releases; with a core OTA update already
+    // staged, offer the check again (it re-announces the staged update) instead
+    // of claiming the latest version.
+    const stage =
+      shellStage === 'latest' && this.app.coreUpdateManager.getStatus().staged
+        ? 'idle'
+        : shellStage;
 
     switch (stage) {
       case 'checking': {

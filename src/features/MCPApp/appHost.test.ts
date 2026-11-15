@@ -567,3 +567,58 @@ describe('connectAppView', () => {
     expect(signal.aborted).toBe(true);
   });
 });
+
+describe('a view that is leaving', () => {
+  it('drops model context updates once it retires, though its frame still runs', async () => {
+    const iframe = document.createElement('iframe');
+    document.body.append(iframe);
+    const target = iframe.contentWindow!;
+    const onUpdateModelContext = vi.fn();
+    const session = connectAppView({
+      getContext: () => ({
+        canSendMessage: true,
+        identifier: 'weather-demo',
+        isDark: false,
+        lifecycle: {
+          getDisplayContext: () => ({}),
+          onRequestDisplayMode: (mode) => mode,
+          onTeardown: vi.fn(),
+          onUpdateModelContext,
+        },
+        onThisDevice: false,
+        result: { content: 'sunny' },
+        sendMessage,
+        t: (key: string) => key,
+      }),
+      onHeight: vi.fn(),
+      onNavigated: vi.fn(),
+      onWaitingApprovalsChange: vi.fn(),
+      resourceUri: 'ui://weather/view',
+      target,
+      toolCallId: 'call_1',
+    });
+    disposers.push(session.dispose);
+    const update = async (id: number, text: string) => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            id,
+            jsonrpc: '2.0',
+            method: 'ui/update-model-context',
+            params: { content: [{ text, type: 'text' }] },
+          },
+          source: target,
+        }),
+      );
+      await flush();
+    };
+
+    await update(1, 'before');
+    expect(onUpdateModelContext).toHaveBeenCalledTimes(1);
+
+    session.retire();
+    await update(2, 'while saving');
+
+    expect(onUpdateModelContext).toHaveBeenCalledTimes(1);
+  });
+});

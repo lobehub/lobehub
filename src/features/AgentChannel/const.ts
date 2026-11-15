@@ -3,6 +3,8 @@ import type { FC } from 'react';
 
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 
+import { WeComIcon } from './WeComIcon';
+
 /** Known icon names from @lobehub/ui/icons that correspond to chat platforms. */
 const ICON_NAMES = [
   'Discord',
@@ -18,6 +20,11 @@ const ICON_NAMES = [
   'WhatsApp',
 ] as const;
 
+/** Platforms whose icon is not in `@lobehub/ui/icons` yet, keyed by lowercased id / name. */
+const LOCAL_ICONS: Record<string, FC<any>> = {
+  wecom: WeComIcon,
+};
+
 /** Alias map for platforms whose display name differs from the icon name. */
 const ICON_ALIASES: Record<string, string> = {
   feishu: 'Lark',
@@ -28,6 +35,9 @@ const ICON_ALIASES: Record<string, string> = {
  * Accepts either a platform display name (e.g. "Feishu / Lark") or id (e.g. "discord").
  */
 export function getPlatformIcon(nameOrId: string): FC<any> | undefined {
+  const local = LOCAL_ICONS[nameOrId.toLowerCase()];
+  if (local) return local;
+
   const alias = ICON_ALIASES[nameOrId.toLowerCase()];
   if (alias) return (Icons as Record<string, any>)[alias];
 

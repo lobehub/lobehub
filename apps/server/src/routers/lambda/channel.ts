@@ -224,11 +224,9 @@ export const channelRouter = router({
    * direct Channels. Null when the Agent cannot answer in a Channel (no reachable device).
    */
   openDirect: channelProcedure
-    .input(z.object({ agentId: z.string().min(1), localDeviceId: z.string().min(1).optional() }))
+    .input(z.object({ agentId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const access = await ctx.channelService.openDirect(input.agentId, {
-        localDeviceId: input.localDeviceId,
-      });
+      const access = await ctx.channelService.openDirect(input.agentId);
       return { data: access?.channel.id ?? null, success: true };
     }),
   list: channelProcedure.query(async ({ ctx }) => ({

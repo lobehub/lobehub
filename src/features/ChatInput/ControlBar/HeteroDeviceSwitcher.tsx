@@ -52,6 +52,7 @@ import DeviceOptionRow from './DeviceOptionRow';
 import { getDevicePoolStatus } from './devicePoolStatus';
 import OptionRow from './OptionRow';
 import { reconnectDevice } from './reconnectDevice';
+import { isThisComputerDevice, splitThisComputerDevices } from './thisComputerDevices';
 import { useSandboxNetworkToggle } from './useSandboxNetworkToggle';
 import { useTopicAwareTargetSelect } from './useTopicAwareTargetSelect';
 
@@ -242,9 +243,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     mutate: refreshDevices,
   } = useDeviceList();
 
-  // The current machine's own gateway deviceId (desktop only), used to badge the
-  // matching device row with a "This device" tag and show the local-process
-  // description instead of the generic online/offline status.
+  // The current machine's own gateway deviceId (desktop only): what a `local`
+  // pick resolves to, so the topic tag can tell whether this topic runs here.
   useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
@@ -474,7 +474,19 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   //
   // Naming — Personal is reserved for the account-tier concept; workspace
   // groupings say Private/Workspace (私人/工作区) instead.
-  const { personal, privateWorkspace, workspace } = groupExecutionTargetDevices(devices);
+  //
+  // On desktop this machine's own rows leave those lists for the "This
+  // computer" entry at the top: picking it should feel like running here, not
+  // choosing one remote among many.
+  const { otherDevices, thisComputerDevices } = splitThisComputerDevices(
+    devicePoolForAgent(devices, isWorkspaceAgent),
+    {
+      activeDeviceId: executionTarget === 'device' ? boundDeviceId : undefined,
+      localMachineIds: isDesktop ? localMachineDeviceIds : [],
+      ownWorkspaceDeviceId: ownWorkspaceDevice?.deviceId,
+    },
+  );
+  const { personal, privateWorkspace, workspace } = groupExecutionTargetDevices(otherDevices);
   const privateDevices = isWorkspaceAgent ? privateWorkspace : [];
   const workspaceDevices = isWorkspaceAgent ? workspace : [];
   const personalOnlyDevices = isWorkspaceAgent ? [] : personal;
@@ -504,6 +516,14 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // machine is enrolled into the workspace pool.
   const showWebDownloadCard = !isDesktop && !isWorkspaceAgent && isPoolEmpty;
   const showWorkspaceEnrollHint = isWorkspaceAgent && isPoolEmpty;
+  // This machine is never "another device", so a pool holding only its own rows
+  // still gets the hint to connect a second machine.
+  const showNoOtherDevicesHint =
+    isDesktop &&
+    !isWorkspaceAgent &&
+    (isPoolEmpty || (poolStatus === 'devices' && otherDevices.length === 0));
+  const isThisComputerBound =
+    isDesktop && !!boundDevice && isThisComputerDevice(boundDevice, localMachineDeviceIds);
 
   // Compute chip
   let chipIcon: ReactNode = <ExecutionTargetIcon target={'sandbox'} />;
@@ -535,6 +555,12 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         boundDevice?.hostname ??
         t('heteroAgent.executionTarget.unknownDevice'))
       : t('heteroAgent.executionTarget.workspaceGroup');
+    // On desktop, this machine reads as "This computer" — elsewhere (web,
+    // mobile) it really is remote, so it keeps its machine name.
+    if (canShowExecutionTargetSelector && isThisComputerBound) {
+      chipIcon = <ExecutionTargetIcon target={'local'} />;
+      chipLabel = t('heteroAgent.executionTarget.local');
+    }
   }
   // A cwd with no recorded machine: naming the agent default here would pair
   // it with a path that may live on another computer.
@@ -568,24 +594,20 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     return executionTarget === target;
   };
 
-  const renderDeviceRow = (d: NonNullable<typeof devices>[number]) => {
-    const isCurrentMachine = localMachineDeviceIds.includes(d.deviceId);
-    return (
-      <DeviceOptionRow
-        active={isActive('device', d.deviceId)}
-        device={d}
-        key={d.deviceId}
-        reconnecting={reconnectingDeviceId === d.deviceId}
-        tags={tagsFor(
-          isActive('device', d.deviceId),
-          // Users pick a machine, not a transport: tag this one as "This device".
-          isCurrentMachine ? [t('heteroAgent.executionTarget.thisDevice')] : [],
-        )}
-        onReconnect={() => void handleReconnectDevice(d)}
-        onSelect={() => void handleSelect('device', d.deviceId)}
-      />
-    );
-  };
+  const showLocalRow = isDesktop && (!ownWorkspaceDevice || isActive('local'));
+  const renderDeviceRow = (d: DeviceListItem, { thisComputer = false } = {}) => (
+    <DeviceOptionRow
+      active={isActive('device', d.deviceId)}
+      device={d}
+      key={d.deviceId}
+      // Users pick a machine, not a transport: this one is "This computer".
+      label={thisComputer ? t('heteroAgent.executionTarget.local') : undefined}
+      reconnecting={reconnectingDeviceId === d.deviceId}
+      tags={tagsFor(isActive('device', d.deviceId))}
+      onReconnect={() => void handleReconnectDevice(d)}
+      onSelect={() => void handleSelect('device', d.deviceId)}
+    />
+  );
 
   const content = (
     <Flexbox style={{ maxWidth: 320, minWidth: 280 }}>
@@ -624,6 +646,33 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           </a>
         )}
       </div>
+      {/* This computer, alone at the top: on desktop the default is to run
+          right here, so it is not one more machine in a remote list. `local`
+          pins this desktop's personal `deviceId`; a workspace-agent `local`
+          pick lands in `users.preference.agentDeviceOverrides` — my per-user
+          override — so it never binds the workspace-shared `agencyConfig` or
+          coerces any other member's dispatch. Once this machine has its own
+          workspace row, that row stands in for it (through the gateway) and the
+          plain row stays only while it is still the active pick. */}
+      {showLocalRow ? (
+        <OptionRow
+          active={isActive('local')}
+          desc={t('heteroAgent.executionTarget.localDesc')}
+          icon={<ExecutionTargetIcon target={'local'} />}
+          label={t('heteroAgent.executionTarget.local')}
+          tags={tagsFor(isActive('local'))}
+          onClick={() => void handleSelect('local', undefined, false)}
+        />
+      ) : null}
+      {/* Next to the plain row (a bound personal row, or a workspace row while
+          `local` is still the pick) it keeps its machine name, so two rows
+          never both read "This computer". */}
+      {thisComputerDevices.map((d) => renderDeviceRow(d, { thisComputer: !showLocalRow }))}
+      {isDesktop ? (
+        <div {...stylex.props(styles.groupLabel)}>
+          {t('heteroAgent.executionTarget.builtinGroup')}
+        </div>
+      ) : null}
       {isHetero ? null : (
         <OptionRow
           active={isActive('none')}
@@ -642,25 +691,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           onClick={() => void handleSelect('auto')}
         />
       )}
-      {/* `local` pins this desktop's personal `deviceId`. Available in both
-          personal and workspace modes now : a workspace-agent
-          `local` pick lands in `users.preference.agentDeviceOverrides` — my
-          per-user override — so it never binds the workspace-shared
-          `agencyConfig` or coerces any other member's dispatch. */}
-      {/* Hidden once this machine has its own workspace row (listed below,
-          tagged as this machine), unless it is still the active pick. */}
-      {isDesktop && (!ownWorkspaceDevice || isActive('local')) ? (
-        <OptionRow
-          active={isActive('local')}
-          desc={t('heteroAgent.executionTarget.localDesc')}
-          icon={<ExecutionTargetIcon target={'local'} />}
-          // 本机统一显示「本地设备」，不再带具体设备名称
-          label={t('heteroAgent.executionTarget.local')}
-          tags={tagsFor(isActive('local'))}
-          onClick={() => void handleSelect('local', undefined, false)}
-        />
-      ) : null}
-      {/* Same machine as the row above, fenced: writes confined to the working
+      {/* This machine, fenced: writes confined to the working
           directory, network denied unless the switch opens the registry
           allowlist. Shown even when the host can't provide a sandbox — disabled,
           carrying the real reason, because "unavailable" here usually means
@@ -749,11 +780,18 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
               </>
             ) : null}
           </>
-        ) : (
-          <div {...stylex.props(styles.deviceList)}>
-            {personalOnlyDevices.map((d) => renderDeviceRow(d))}
-          </div>
-        )
+        ) : personalOnlyDevices.length > 0 ? (
+          <>
+            {isDesktop ? (
+              <div {...stylex.props(styles.groupLabel)}>
+                {t('heteroAgent.executionTarget.otherDevicesGroup')}
+              </div>
+            ) : null}
+            <div {...stylex.props(styles.deviceList)}>
+              {personalOnlyDevices.map((d) => renderDeviceRow(d))}
+            </div>
+          </>
+        ) : null
       ) : null}
       {poolStatus === 'loading' ? (
         <div {...stylex.props(styles.empty)}>{t('heteroAgent.executionTarget.loading')}</div>
@@ -808,7 +846,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           />
         </a>
       ) : null}
-      {isPoolEmpty && isDesktop && !isWorkspaceAgent ? (
+      {showNoOtherDevicesHint ? (
         <div {...stylex.props(styles.empty)}>{t('heteroAgent.executionTarget.noDevices')}</div>
       ) : null}
     </Flexbox>

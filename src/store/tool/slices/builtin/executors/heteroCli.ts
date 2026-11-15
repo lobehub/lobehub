@@ -1,5 +1,6 @@
 import type { ToolAfterCallContext } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
 
 import {
   recordGitCommandEffects,
@@ -9,7 +10,7 @@ import {
 
 /**
  * Hook-only executor for a heterogeneous CLI agent's tool identifier
- * (`amp` / `claude-code` / `codebuddy` / `codex` / `cursor` / `droid` / `grok-build` /
+ * (`amp` / `antigravity` / `claude-code` / `codebuddy` / `codex` / `cursor` / `droid` / `grok-build` /
  * `kimi-code` / `opencode` / `pi` / `qoder` / `trae` — set by the adapters in
  * `packages/heterogeneous-agents/src/adapters/*`). These agents run their OWN
  * tools, so this executor is NEVER invoked: `apiEnum` is empty → `hasApi()` is
@@ -25,14 +26,14 @@ import {
 const EMPTY_API_ENUM = {} as Record<string, string>;
 
 /**
- * Pull the command out of a shell tool's parsed params. Only reads `command`/`cmd`
- * — never `content` — so a file-write tool can't be mistaken for a shell command.
+ * Pull the command out of a shell tool's parsed params. Only reads `command`, `cmd`,
+ * or Antigravity's `CommandLine` — never `content` — so file writes aren't commands.
  * Returns the raw value (string OR the argv-array form) so the detector can keep
  * argument boundaries.
  */
 const readShellCommand = (params: unknown): string | string[] | undefined => {
-  if (!params || typeof params !== 'object') return undefined;
-  const raw = (params as { cmd?: unknown; command?: unknown }).command ?? (params as any).cmd;
+  if (!isRecord(params)) return undefined;
+  const raw = params.command ?? params.cmd ?? params.CommandLine;
   if (typeof raw === 'string') return raw;
   if (Array.isArray(raw) && raw.every((t) => typeof t === 'string')) return raw as string[];
   return undefined;
@@ -100,6 +101,7 @@ class HeteroCliExecutor extends BaseExecutor<typeof EMPTY_API_ENUM> {
 // `command_execution`; Cursor's is `shellToolCall`; Grok Build uses ACP's stable `execute`
 // kind; Kimi Code uses `Shell`; OpenCode and Pi both use `bash`.
 export const ampExecutor = new HeteroCliExecutor('amp', new Set(['shell_command']));
+export const antigravityExecutor = new HeteroCliExecutor('antigravity', new Set(['run_command']));
 export const claudeCodeExecutor = new HeteroCliExecutor('claude-code', new Set(['Bash']), {
   enter: 'EnterWorktree',
   exit: 'ExitWorktree',
