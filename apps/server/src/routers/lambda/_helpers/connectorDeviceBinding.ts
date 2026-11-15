@@ -1,4 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
+import type { ConnectorVisibility } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 
 import type { WorkspaceRole } from '@/business/server/trpc-middlewares/workspaceAuth';
@@ -13,50 +14,86 @@ interface DeviceBindingCtx {
   workspaceRole?: WorkspaceRole;
 }
 
+/** A connector write, as far as its device binding is concerned. */
+export interface ConnectorBindingWrite {
+  /** The connector after the write: its creator and who it is shared with. */
+  connector: { userId: string; visibility: ConnectorVisibility };
+  /** The metadata the write stores; `undefined` keeps the stored metadata. */
+  metadata: Record<string, unknown> | null | undefined;
+  /** The stored row before the write; absent for a new connector. */
+  previous?: {
+    metadata?: Record<string, unknown> | null;
+    visibility: ConnectorVisibility;
+  };
+}
+
 /**
  * Whether a connector write may bind the connector to the device its metadata
  * names (`metadata.boundDeviceId`). A binding pins every call to that device,
- * so it must be one the connector's every runner can reach:
+ * so it must be one every run that loads the connector can reach. Who runs it
+ * follows the connector's visibility, the same split as connector loading:
  *
  * - personal connector (no `workspaceId`): one of the caller's personal
  *   devices — its runs only ever reach the owner's own pool;
- * - workspace connector: a PUBLIC device of that workspace. A private
- *   enrollment resolves only for the member who enrolled it, so other
- *   members' runs could never reach it.
+ * - shared workspace connector: a PUBLIC device of that workspace. Every
+ *   member's runs load it, and a private enrollment resolves only for the
+ *   member who enrolled it;
+ * - private workspace connector: a public device of the workspace, or a
+ *   private one its creator enrolled. Only the creator's private agents load
+ *   it, so the creator's own private device is always reachable.
  *
  * A binding the write keeps unchanged is not checked again: the device may
  * have been unshared since, and an unrelated edit must not fail on it (its
- * calls already fail with the reason).
+ * calls already fail with the reason). Sharing a private connector is the
+ * exception: it hands the kept binding to every member's runs, so the binding
+ * must then pass the shared rule.
  *
  * Throws `BAD_REQUEST` for a binding outside those devices.
  */
 export const assertConnectorDeviceBindingAllowed = async (
   ctx: DeviceBindingCtx,
-  metadata: Record<string, unknown> | null | undefined,
-  previousMetadata?: Record<string, unknown> | null,
+  { connector, metadata, previous }: ConnectorBindingWrite,
 ): Promise<void> => {
-  const deviceId = metadata?.boundDeviceId;
-  if (deviceId === undefined || deviceId === previousMetadata?.boundDeviceId) return;
+  const previousDeviceId = previous?.metadata?.boundDeviceId;
+  const deviceId = metadata === undefined ? previousDeviceId : metadata?.boundDeviceId;
+  if (deviceId === undefined) return;
+  const sharing = previous?.visibility === 'private' && connector.visibility !== 'private';
+  if (deviceId === previousDeviceId && !sharing) return;
   if (typeof deviceId !== 'string' || !deviceId) {
     throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid bound device' });
   }
 
-  const allowed = ctx.workspaceId
-    ? (
-        await new DeviceModel(ctx.serverDB, ctx.userId, ctx.workspaceId).findWorkspaceDeviceById(
-          deviceId,
-        )
-      )?.visibility === 'public'
-    : !!(await new DeviceModel(ctx.serverDB, ctx.userId).findPersonalByDeviceId(deviceId));
-
-  if (!allowed) {
+  if (!ctx.workspaceId) {
+    if (await new DeviceModel(ctx.serverDB, ctx.userId).findPersonalByDeviceId(deviceId)) return;
     throw new TRPCError({
       code: 'BAD_REQUEST',
-      message: ctx.workspaceId
-        ? 'A workspace MCP server can only be bound to a shared (public) device of this workspace.'
-        : 'An MCP server can only be bound to one of your own devices.',
+      message: 'An MCP server can only be bound to one of your own devices.',
     });
   }
+
+  // Scoped like every workspace device read: public devices plus the caller's
+  // own private ones
+  const device = await new DeviceModel(
+    ctx.serverDB,
+    ctx.userId,
+    ctx.workspaceId,
+  ).findWorkspaceDeviceById(deviceId);
+  const isPrivateConnector = connector.visibility === 'private';
+  if (
+    device?.visibility === 'public' ||
+    (isPrivateConnector && device?.visibility === 'private' && device.userId === connector.userId)
+  ) {
+    return;
+  }
+
+  throw new TRPCError({
+    code: 'BAD_REQUEST',
+    message: isPrivateConnector
+      ? 'A private MCP server can only be bound to a shared (public) device of this workspace or to a private device of the member who added it.'
+      : sharing && deviceId === previousDeviceId
+        ? 'This MCP server is bound to a private device, which other members cannot reach. Bind it to a shared (public) device of this workspace, or to Auto, before sharing it.'
+        : 'A workspace MCP server can only be bound to a shared (public) device of this workspace.',
+  });
 };
 
 /**

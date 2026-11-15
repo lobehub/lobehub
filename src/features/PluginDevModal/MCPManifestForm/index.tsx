@@ -41,6 +41,11 @@ interface MCPManifestFormProps {
    * without authorizing first only ever 401s).
    */
   onAuthorizeOAuth?: () => void;
+  /**
+   * The edited connector is private to its creator, so its device binding may
+   * also name their own private devices (see `bindableMcpDeviceGroups`).
+   */
+  privateConnector?: boolean;
 }
 
 const HTTP_URL_KEY = 'customParams.mcp.url';
@@ -83,6 +88,7 @@ const MCPManifestForm = ({
   enableDeviceBinding,
   enableOAuth,
   onAuthorizeOAuth,
+  privateConnector,
 }: MCPManifestFormProps) => {
   const { t } = useTranslation('plugin');
   const mcpType = useWatch(form, MCP_TYPE);
@@ -398,7 +404,7 @@ const MCPManifestForm = ({
               label={t('dev.mcp.boundDevice.label')}
               name={BOUND_DEVICE}
             >
-              <BoundDeviceSelect />
+              <BoundDeviceSelect privateConnector={privateConnector} />
             </Form.Field>
           )}
           <Form.Field label={t('dev.mcp.testConnectionTip')} layout={'horizontal'}>

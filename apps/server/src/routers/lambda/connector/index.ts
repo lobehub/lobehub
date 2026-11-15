@@ -448,7 +448,18 @@ const connectorCoreRouter = router({
     if (existing && existing.userId !== ctx.userId)
       await assertConnectorCredentialsManageable(ctx, existing);
     else await assertConnectorMaintainable(ctx, { agentId, userId: existing?.userId, visibility });
-    await assertConnectorDeviceBindingAllowed(ctx, input.metadata, existing?.metadata);
+    // An upsert keeps the row's creator and visibility (an agent's row may be
+    // a private copy)
+    await assertConnectorDeviceBindingAllowed(ctx, {
+      connector: {
+        userId: existing?.userId ?? ctx.userId,
+        visibility: existing?.visibility ?? visibility,
+      },
+      metadata: input.metadata,
+      previous: existing
+        ? { metadata: existing.metadata, visibility: existing.visibility }
+        : undefined,
+    });
     if (existing) {
       await ctx.connectorModel.update(existing.id, {
         ...fields,
@@ -606,10 +617,15 @@ const connectorCoreRouter = router({
       // A patch may keep the stored credentials while repointing the server
       // URL, which would send them elsewhere — creator/owner only.
       await assertConnectorCredentialsManageable(ctx, target);
-      await assertConnectorDeviceBindingAllowed(ctx, input.patch.metadata, target.metadata);
 
       const { credentials, visibility: requestedVisibility, ...patch } = input.patch;
       const visibility = await resolveVisibilityChange(ctx, target, requestedVisibility);
+      // Checked against who will run the connector after this write
+      await assertConnectorDeviceBindingAllowed(ctx, {
+        connector: { userId: target.userId, visibility: visibility ?? target.visibility },
+        metadata: patch.metadata,
+        previous: { metadata: target.metadata, visibility: target.visibility },
+      });
       // Keep the stored, server-owned `composio` block and mount and ignore
       // whatever the client sent, so an edit can never repoint the row at
       // another Composio account, spoof (or silently clear) the connector's

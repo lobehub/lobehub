@@ -18,6 +18,9 @@ const serverDB = {} as never;
 const personal = { serverDB, userId: 'u1' };
 const workspace = { serverDB, userId: 'u1', workspaceId: 'ws1' };
 
+const shared = { userId: 'u1', visibility: 'public' } as const;
+const mine = { userId: 'u1', visibility: 'private' } as const;
+
 describe('assertConnectorDeviceBindingAllowed', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -27,7 +30,10 @@ describe('assertConnectorDeviceBindingAllowed', () => {
     findPersonalByDeviceId.mockResolvedValue({ deviceId: 'laptop' });
 
     await expect(
-      assertConnectorDeviceBindingAllowed(personal, { boundDeviceId: 'laptop' }),
+      assertConnectorDeviceBindingAllowed(personal, {
+        connector: shared,
+        metadata: { boundDeviceId: 'laptop' },
+      }),
     ).resolves.toBeUndefined();
     expect(DeviceModel).toHaveBeenCalledWith(serverDB, 'u1');
     expect(findPersonalByDeviceId).toHaveBeenCalledWith('laptop');
@@ -37,7 +43,10 @@ describe('assertConnectorDeviceBindingAllowed', () => {
     findPersonalByDeviceId.mockResolvedValue(undefined);
 
     await expect(
-      assertConnectorDeviceBindingAllowed(personal, { boundDeviceId: 'someone-else' }),
+      assertConnectorDeviceBindingAllowed(personal, {
+        connector: shared,
+        metadata: { boundDeviceId: 'someone-else' },
+      }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
@@ -45,7 +54,10 @@ describe('assertConnectorDeviceBindingAllowed', () => {
     findWorkspaceDeviceById.mockResolvedValue({ deviceId: 'ws-nas', visibility: 'public' });
 
     await expect(
-      assertConnectorDeviceBindingAllowed(workspace, { boundDeviceId: 'ws-nas' }),
+      assertConnectorDeviceBindingAllowed(workspace, {
+        connector: shared,
+        metadata: { boundDeviceId: 'ws-nas' },
+      }),
     ).resolves.toBeUndefined();
     expect(DeviceModel).toHaveBeenCalledWith(serverDB, 'u1', 'ws1');
   });
@@ -53,10 +65,17 @@ describe('assertConnectorDeviceBindingAllowed', () => {
   // Only the member who enrolled a private device can reach it, while every
   // member's runs use a workspace connector
   it('refuses a workspace connector a private device, even the caller’s own', async () => {
-    findWorkspaceDeviceById.mockResolvedValue({ deviceId: 'my-private', visibility: 'private' });
+    findWorkspaceDeviceById.mockResolvedValue({
+      deviceId: 'my-private',
+      userId: 'u1',
+      visibility: 'private',
+    });
 
     await expect(
-      assertConnectorDeviceBindingAllowed(workspace, { boundDeviceId: 'my-private' }),
+      assertConnectorDeviceBindingAllowed(workspace, {
+        connector: shared,
+        metadata: { boundDeviceId: 'my-private' },
+      }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
@@ -64,25 +83,153 @@ describe('assertConnectorDeviceBindingAllowed', () => {
     findWorkspaceDeviceById.mockResolvedValue(undefined);
 
     await expect(
-      assertConnectorDeviceBindingAllowed(workspace, { boundDeviceId: 'personal-laptop' }),
+      assertConnectorDeviceBindingAllowed(workspace, {
+        connector: shared,
+        metadata: { boundDeviceId: 'personal-laptop' },
+      }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
+  describe('a private workspace connector', () => {
+    // Only its creator's private agents load it, so their own device is reachable
+    it('may bind its creator’s own private device', async () => {
+      findWorkspaceDeviceById.mockResolvedValue({
+        deviceId: 'my-private',
+        userId: 'u1',
+        visibility: 'private',
+      });
+
+      await expect(
+        assertConnectorDeviceBindingAllowed(workspace, {
+          connector: mine,
+          metadata: { boundDeviceId: 'my-private' },
+        }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('may bind a public device of the workspace', async () => {
+      findWorkspaceDeviceById.mockResolvedValue({
+        deviceId: 'ws-nas',
+        userId: 'enroller',
+        visibility: 'public',
+      });
+
+      await expect(
+        assertConnectorDeviceBindingAllowed(workspace, {
+          connector: mine,
+          metadata: { boundDeviceId: 'ws-nas' },
+        }),
+      ).resolves.toBeUndefined();
+    });
+
+    // The device read only returns the caller's own private rows; one written
+    // for another member's connector must still be that member's device
+    it('refuses a private device of someone other than its creator', async () => {
+      findWorkspaceDeviceById.mockResolvedValue({
+        deviceId: 'owner-private',
+        userId: 'u1',
+        visibility: 'private',
+      });
+
+      await expect(
+        assertConnectorDeviceBindingAllowed(workspace, {
+          connector: { userId: 'teammate', visibility: 'private' },
+          metadata: { boundDeviceId: 'owner-private' },
+          previous: { metadata: {}, visibility: 'private' },
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+
+    it('refuses a teammate’s private device, which the caller cannot read', async () => {
+      findWorkspaceDeviceById.mockResolvedValue(undefined);
+
+      await expect(
+        assertConnectorDeviceBindingAllowed(workspace, {
+          connector: mine,
+          metadata: { boundDeviceId: 'teammate-private' },
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+
+    // Sharing hands the kept binding to every member's runs
+    it('cannot be shared while it stays bound to a private device', async () => {
+      findWorkspaceDeviceById.mockResolvedValue({
+        deviceId: 'my-private',
+        userId: 'u1',
+        visibility: 'private',
+      });
+
+      await expect(
+        assertConnectorDeviceBindingAllowed(workspace, {
+          connector: shared,
+          metadata: undefined,
+          previous: { metadata: { boundDeviceId: 'my-private' }, visibility: 'private' },
+        }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining('before sharing it'),
+      });
+    });
+
+    it('can be shared when it is bound to a public device', async () => {
+      findWorkspaceDeviceById.mockResolvedValue({
+        deviceId: 'ws-nas',
+        userId: 'enroller',
+        visibility: 'public',
+      });
+
+      await expect(
+        assertConnectorDeviceBindingAllowed(workspace, {
+          connector: shared,
+          metadata: undefined,
+          previous: { metadata: { boundDeviceId: 'ws-nas' }, visibility: 'private' },
+        }),
+      ).resolves.toBeUndefined();
+      expect(findWorkspaceDeviceById).toHaveBeenCalledWith('ws-nas');
+    });
+
+    it('can be shared once the same write unbinds it', async () => {
+      await expect(
+        assertConnectorDeviceBindingAllowed(workspace, {
+          connector: shared,
+          metadata: {},
+          previous: { metadata: { boundDeviceId: 'my-private' }, visibility: 'private' },
+        }),
+      ).resolves.toBeUndefined();
+      expect(DeviceModel).not.toHaveBeenCalled();
+    });
+  });
+
   it('skips writes without a binding, and a binding the write keeps unchanged', async () => {
-    await assertConnectorDeviceBindingAllowed(workspace, { description: 'x' });
-    await assertConnectorDeviceBindingAllowed(workspace, undefined);
-    await assertConnectorDeviceBindingAllowed(
-      workspace,
-      { boundDeviceId: 'unshared-since' },
-      { boundDeviceId: 'unshared-since' },
-    );
+    await assertConnectorDeviceBindingAllowed(workspace, {
+      connector: shared,
+      metadata: { description: 'x' },
+    });
+    await assertConnectorDeviceBindingAllowed(workspace, {
+      connector: shared,
+      metadata: undefined,
+    });
+    await assertConnectorDeviceBindingAllowed(workspace, {
+      connector: shared,
+      metadata: { boundDeviceId: 'unshared-since' },
+      previous: { metadata: { boundDeviceId: 'unshared-since' }, visibility: 'public' },
+    });
+    // An edit that leaves metadata alone keeps the binding, as does making it private
+    await assertConnectorDeviceBindingAllowed(workspace, {
+      connector: mine,
+      metadata: undefined,
+      previous: { metadata: { boundDeviceId: 'unshared-since' }, visibility: 'public' },
+    });
 
     expect(DeviceModel).not.toHaveBeenCalled();
   });
 
   it('refuses a malformed binding', async () => {
     await expect(
-      assertConnectorDeviceBindingAllowed(personal, { boundDeviceId: 42 }),
+      assertConnectorDeviceBindingAllowed(personal, {
+        connector: shared,
+        metadata: { boundDeviceId: 42 },
+      }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 });

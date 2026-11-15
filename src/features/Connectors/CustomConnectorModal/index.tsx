@@ -468,6 +468,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         enableOAuth
         mode={isEditMode || isMigrationMode ? 'edit' : 'create'}
         open={open}
+        privateConnector={isEditMode && connector?.visibility === 'private'}
         value={editValue}
         onDelete={handleDelete}
         onSave={handleSave}
