@@ -5284,6 +5284,7 @@ When I am ___, I need ___
   'subscriptionAccounts.activeRuns.untitledTopic': 'Untitled topic',
   'subscriptionAccounts.activeRuns.waiting': 'Waiting',
   'subscriptionAccounts.filterEmpty': 'No account matches the filter.',
+  'subscriptionAccounts.purchase.adminOnly': 'Only workspace admins can buy this bundle.',
   'subscriptionAccounts.purchase.agree': 'I understand the notes above',
   'subscriptionAccounts.purchase.buy': 'Buy',
   'subscriptionAccounts.purchase.canceled': 'Payment canceled. You were not charged.',
@@ -5323,9 +5324,6 @@ When I am ___, I need ___
     'Ends in {{count}} days. Contact us to renew.',
   'subscriptionAccounts.purchase.purchases.endsAt': 'Ends {{date}}',
   'subscriptionAccounts.purchase.purchases.title': 'Your bundles',
-  'subscriptionAccounts.purchase.scope.personal': 'Me',
-  'subscriptionAccounts.purchase.scope.personalHint':
-    'The device and agent are created in your personal space.',
   'subscriptionAccounts.purchase.scope.title': 'Owner',
   'subscriptionAccounts.purchase.scope.workspace': 'This workspace',
   'subscriptionAccounts.purchase.scope.workspaceHint':
