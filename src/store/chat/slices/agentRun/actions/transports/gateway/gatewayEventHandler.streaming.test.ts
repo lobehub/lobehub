@@ -293,6 +293,7 @@ describe('createGatewayEventHandler — stream lifecycle events', () => {
         makeEvent('step_complete', {
           phase: 'user_message',
           steerMessage: {
+            agentId: 'agent-executing',
             content: 'summarize the refactor',
             id: 'steer-1',
             metadata: { steer: true },
@@ -309,7 +310,8 @@ describe('createGatewayEventHandler — stream lifecycle events', () => {
           id: 'steer-1',
           type: 'createMessage',
           value: expect.objectContaining({
-            agentId: 'agent-1',
+            // The persisted author, not the conversation owner (`agent-1`).
+            agentId: 'agent-executing',
             content: 'summarize the refactor',
             metadata: { steer: true },
             parentId: 'msg-step1',

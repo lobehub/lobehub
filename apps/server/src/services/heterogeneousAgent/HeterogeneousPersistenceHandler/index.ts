@@ -371,7 +371,7 @@ export class HeterogeneousPersistenceHandler {
     if (!steer) return;
 
     state.main = { ...state.main, lastSpineMessageId: steer.id };
-    state.steerMessages.set(steer.id, { ...steer, role: 'user' });
+    state.steerMessages.set(steer.id, { ...steer, agentId: state.agentId ?? null, role: 'user' });
   }
 
   // ─── Main-agent reducer interpreter ──────────────────────────────────────

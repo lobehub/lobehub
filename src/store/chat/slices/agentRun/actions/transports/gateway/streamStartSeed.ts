@@ -73,7 +73,9 @@ export const insertSteerMessage = (
     get,
     steer,
     {
-      agentId: context.agentId,
+      // The server persists it under the executing agent, which can differ
+      // from the conversation owner (an @-mentioned or sub-agent run).
+      agentId: steer.agentId ?? context.agentId,
       groupId: context.groupId ?? undefined,
       threadId: context.threadId ?? undefined,
       topicId: context.topicId ?? undefined,

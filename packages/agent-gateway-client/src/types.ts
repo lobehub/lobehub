@@ -199,6 +199,8 @@ export interface StreamStartAssistantMessage {
  * ends and the queued message vanishes from both the tray and the chat.
  */
 export interface StreamStartParentMessage {
+  /** Agent the row was persisted under (the executing agent). Absent from older servers. */
+  agentId?: string | null;
   content: string;
   /** Server creation time (epoch ms). Absent from older servers. */
   createdAt?: number;
