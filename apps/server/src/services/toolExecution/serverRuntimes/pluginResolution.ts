@@ -223,6 +223,14 @@ export const resolveOrInstallMarketPlugin = async (
     return { installedNow: false, resolution: { source: 'installed', status: 'loadable' } };
   if (existing?.manifest) return { installedNow: false, resolution: { status: 'no-tools' } };
 
+  // The agent's own row of the identifier comes first in its runs, so a base
+  // install would never serve it: answer as its runs will, installing nothing.
+  if (options.agentId) {
+    const connectors = await deps.connectorModel.resolveAll(options.agentId);
+    if (connectors.some((c) => c.identifier === identifier && c.agentId === options.agentId))
+      return resolveExisting();
+  }
+
   let manifest: unknown;
   try {
     manifest = await deps.discoverService.getMcpManifest({ identifier });
@@ -249,8 +257,7 @@ export const resolveOrInstallMarketPlugin = async (
   );
   switch (outcome.status) {
     case 'installed': {
-      // The install is the base connector, while the agent's own row of the
-      // identifier, if it has one, comes first in its runs: resolve as they will.
+      // Resolve as the agent's runs will (an agent row added meanwhile comes first)
       const { resolution } = await resolveExisting();
       return { installedNow: true, resolution };
     }

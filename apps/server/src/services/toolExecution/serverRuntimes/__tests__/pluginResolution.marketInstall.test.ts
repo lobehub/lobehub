@@ -210,24 +210,38 @@ describe('resolveOrInstallMarketPlugin — server-side marketplace install', () 
     expect(await db.select().from(userInstalledPlugins)).toEqual([]);
   });
 
-  it("reports the agent's own disconnected connector, which its runs pick over the install", async () => {
-    await db.insert(agents).values({ id: AGENT_ID, userId });
-    await db.insert(userConnectors).values({
-      agentId: AGENT_ID,
-      identifier: IDENTIFIER,
-      mcpConnectionType: 'http',
-      mcpServerUrl: 'https://mcp.example.com/mcp',
-      name: 'Agent copy',
-      sourceType: 'custom',
-      status: 'disconnected',
-      userId,
-    });
+  it.each([
+    { label: 'disconnected', resolved: { status: 'not-connected' }, status: 'disconnected' },
+    {
+      label: 'connected',
+      resolved: { source: 'connector', status: 'loadable' },
+      status: 'connected',
+    },
+  ] as const)(
+    "reports the agent's own $label connector, which its runs pick, and installs nothing",
+    async ({ resolved, status }) => {
+      await db.insert(agents).values({ id: AGENT_ID, userId });
+      await db.insert(userConnectors).values({
+        agentId: AGENT_ID,
+        identifier: IDENTIFIER,
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://mcp.example.com/mcp',
+        name: 'Agent copy',
+        sourceType: 'custom',
+        status,
+        userId,
+      });
 
-    const { installedNow, resolution } = await installFromServer();
+      const { installedNow, resolution } = await installFromServer();
 
-    expect(installedNow).toBe(true);
-    expect(resolution).toEqual({ status: 'not-connected' });
-  });
+      expect(installedNow).toBe(false);
+      expect(resolution).toEqual(resolved);
+      // No base connector its runs would never reach
+      expect(await db.select().from(userConnectors)).toEqual([
+        expect.objectContaining({ agentId: AGENT_ID, name: 'Agent copy' }),
+      ]);
+    },
+  );
 
   it('reports the install as installed in the next marketplace search', async () => {
     const search = () =>
