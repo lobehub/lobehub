@@ -84,7 +84,9 @@ export default {
   'creditsChip.balance': 'Balance {{amount}}',
   'creditsChip.viewDetails': 'View details',
   'creditsChip.viewUsage': 'View usage',
+  'creditsChip.balanceInUse': 'In use',
   'creditsChip.balanceNote.limit': 'Monthly limit reached. Requests now use your balance.',
+  'creditsChip.balanceNote.plan': 'Plan limit reached. Requests now use your balance.',
   'creditsChip.balanceNote.subscription':
     'Subscription usage has run out. Requests now use your balance.',
   'compareAllPlans': 'View all plans',
