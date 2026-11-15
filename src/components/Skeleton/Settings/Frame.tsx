@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 
 import NavHeader from '@/features/NavHeader';
 import SettingContainer from '@/features/Setting/SettingContainer';
-import { getSettingsContainerMaxWidth } from '@/features/Settings/features/ownFrameTabs';
+import { SETTINGS_CONTAINER_MAX_WIDTH } from '@/features/Settings/features/ownFrameTabs';
 import { SettingsPageActionsRow } from '@/features/Settings/features/SettingsPageActions';
 import { useSettingsTabTitle } from '@/features/Settings/features/tabTitles';
 
@@ -26,7 +26,7 @@ export const SettingsSkeletonHeader = ({ tab }: { tab: string }) => {
 };
 
 /**
- * Same header + padded container (1024px, or full width for `FULL_WIDTH_TABS`)
+ * Same header + padded 1024px container
  * `SettingsContent` draws around a tab body, with the page-action placeholders
  * in the same row at the top of the content column.
  */
@@ -42,7 +42,7 @@ export const SettingsSkeletonFrame = ({
   <Flexbox aria-busy flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
     <SettingsSkeletonHeader tab={tab} />
     <SettingContainer
-      maxWidth={getSettingsContainerMaxWidth(tab)}
+      maxWidth={SETTINGS_CONTAINER_MAX_WIDTH}
       paddingBlock={'24px 128px'}
       paddingInline={24}
     >
