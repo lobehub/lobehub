@@ -36,8 +36,6 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Set up QEMU for ARM64 builds
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
@@ -61,12 +59,12 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref_name == 'main' || inputs.publish_latest == true }}
             type=ref,event=branch
 
-      - name: Build and push multi-architecture image
+      - name: Build and push Linux x64 image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
