@@ -15,11 +15,14 @@ export const McpEntryPane = ({
   tab,
   scope,
   agentId,
+  topicId,
   onClose,
 }: {
   tab: string;
   scope: string;
   agentId?: string;
+  /** The conversation the app runs in: its calls and resources resolve there. */
+  topicId?: string;
   onClose: (tab: string) => void;
 }) => {
   const { t } = useTranslation('plugin');
@@ -38,7 +41,8 @@ export const McpEntryPane = ({
   const state = useMcpAppStore(mcpAppSelectors.entry(id));
   const open = () => {
     setUnsupported(false);
-    if (identifier && toolName) void openMcpAppEntrypoint({ agentId, id, identifier, toolName });
+    if (identifier && toolName)
+      void openMcpAppEntrypoint({ agentId, id, identifier, toolName, topicId });
   };
   // Context the view reported belongs to this instance only
   useEffect(() => () => mcpAppContext.clear(id), [id]);
@@ -77,6 +81,7 @@ export const McpEntryPane = ({
       toolCallId={id}
       host={{
         agentId,
+        topicId,
         canSendMessage: !!host,
         sendMessage: async (params) => {
           if (host) await host.sendMessage(params);

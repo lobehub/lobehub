@@ -22,6 +22,8 @@ interface OpenMenuOptions {
   scope?: string;
   terminalAvailable: boolean;
   toggleTerminalPanel: (open: boolean) => void;
+  /** The conversation an app opened from the menu runs in. */
+  topicId?: string;
 }
 export const useOpenMenuItems = ({
   availableTabs,
@@ -35,6 +37,7 @@ export const useOpenMenuItems = ({
   scope,
   terminalAvailable,
   toggleTerminalPanel,
+  topicId,
 }: OpenMenuOptions) => {
   const { t } = useTranslation(['chat', 'setting', 'plugin']);
   const entries = useMcpAppEntrypoints(agentId);
@@ -136,6 +139,7 @@ export const useOpenMenuItems = ({
                             id,
                             identifier: entry.identifier,
                             toolName: entry.toolName,
+                            topicId,
                           }),
                       );
                   }
@@ -165,5 +169,6 @@ export const useOpenMenuItems = ({
     t,
     terminalAvailable,
     toggleTerminalPanel,
+    topicId,
   ]);
 };
