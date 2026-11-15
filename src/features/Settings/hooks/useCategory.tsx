@@ -143,7 +143,7 @@ export const useCategory = () => {
         {
           icon: ChartPieIcon,
           key: SettingsTabs.Usage,
-          label: tSubscription('tab.usageAndBalance'),
+          label: tSubscription('tab.usage'),
         },
         { icon: CreditCard, key: SettingsTabs.Billing, label: tSubscription('tab.billing') },
         { icon: Gift, key: SettingsTabs.Referral, label: tSubscription('tab.referral') },

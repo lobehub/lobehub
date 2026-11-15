@@ -87,7 +87,7 @@ export const useCategory = (): CategoryGroup[] => {
           makeItem({
             icon: ChartPieIcon,
             key: SettingsTabs.Usage,
-            label: t('subscription:tab.usageAndBalance'),
+            label: t('subscription:tab.usage'),
           }),
           makeItem({
             icon: CreditCard,
