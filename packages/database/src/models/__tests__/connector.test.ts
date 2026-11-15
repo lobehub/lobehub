@@ -499,6 +499,24 @@ describe('ConnectorModel', () => {
       expect(await baseRows()).toEqual([expect.objectContaining({ id: agentRow.id })]);
     });
 
+    it('reports a connector another unbind already moved as moved, not as a holder', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const agentRow = await model.create(agentInput);
+
+      // Both calls read the row as the agent's before either moved it (a retry,
+      // or two unbinds at once): the second finds the row itself in the base scope
+      const results = await Promise.all([
+        model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp'),
+        model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp'),
+      ]);
+      expect(await model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp')).toEqual({
+        moved: true,
+      });
+
+      expect(results).toEqual([{ moved: true }, { moved: true }]);
+      expect(await baseRows()).toEqual([expect.objectContaining({ id: agentRow.id })]);
+    });
+
     it('returns the holding base row and leaves the agent connector bound', async () => {
       const model = new ConnectorModel(serverDB, userId);
       const holder = await model.create({ ...agentInput, agentId: null });

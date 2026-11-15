@@ -353,6 +353,8 @@ export class ConnectorModel {
    * Move an agent's connector into the base scope (`agent_id = NULL`) unless a
    * base row in this scope already holds its identifier: the lookup and the
    * move are one step, under the lock {@link createUnlessIdentifierHeld} takes.
+   * A connector already moved (by a retry, or an unbind running at the same
+   * time) is reported as moved, not as holding its own identifier.
    */
   moveToBaseUnlessIdentifierHeld = async (
     id: string,
@@ -362,7 +364,7 @@ export class ConnectorModel {
       await this.lockBaseIdentifier(tx, identifier);
 
       const holder = await this.findBaseHolder(tx, identifier);
-      if (holder) return { holder };
+      if (holder) return holder.id === id ? { moved: true as const } : { holder };
 
       await tx
         .update(userConnectors)
