@@ -31,4 +31,15 @@ describe('buildCloudMcpManifest', () => {
       parameters: { type: 'object' },
     });
   });
+
+  it('takes the tools list when the api list beside it is empty', () => {
+    const manifest = buildCloudMcpManifest({
+      data: { api: [], tools: [{ humanIntervention: 'always', name: 'delete' }] },
+      plugin: { identifier: 'remote-mcp' },
+    });
+
+    expect(manifest.api).toEqual([
+      { description: '', humanIntervention: 'always', name: 'delete', parameters: {} },
+    ]);
+  });
 });

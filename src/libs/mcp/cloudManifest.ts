@@ -23,7 +23,8 @@ export const buildCloudMcpManifest = (params: {
   // LobeChat: { name, description, parameters }
   let apiArray: any[] = [];
 
-  if (lobeChatApi) {
+  // An empty `api` next to a populated `tools` list is no tool list of its own
+  if (Array.isArray(lobeChatApi) && lobeChatApi.length > 0) {
     // Already in LobeChat format, use directly
     apiArray = lobeChatApi;
     log('[Cloud MCP] Using existing LobeChat API format');

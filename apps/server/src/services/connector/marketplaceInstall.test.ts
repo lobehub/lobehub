@@ -605,6 +605,15 @@ describe('installMarketplaceMcpConnector', () => {
     expect(await connectorRows()).toEqual([]);
   });
 
+  it('installs a hosted server from its tools list when the api list beside it is empty', async () => {
+    expect(
+      await installMarketplaceMcpConnector(scope, 'fetch-mcp', { ...cloudManifest, api: [] }),
+    ).toEqual({ status: 'installed' });
+    expect(
+      (await db.select().from(userConnectorTools)).map((tool) => tool.toolName).sort(),
+    ).toEqual(['fetch', 'purge']);
+  });
+
   it('writes nothing for a server only the user can install', async () => {
     expect(
       await installMarketplaceMcpConnector(scope, 'local-mcp', {
