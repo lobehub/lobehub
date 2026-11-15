@@ -1,13 +1,15 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const service = vi.hoisted(() => ({
+  createMailDraft: vi.fn(),
   deleteMailDrafts: vi.fn(),
   emptyMailTrash: vi.fn(),
   getMailAccountCounts: vi.fn(),
   getMailConversation: vi.fn(),
+  getMailDraft: vi.fn(),
   getMailHtml: vi.fn(),
   list: vi.fn(),
   listMail: vi.fn(),
@@ -36,6 +38,10 @@ vi.mock('@/store/serverConfig', () => ({
     }),
 }));
 vi.mock('@/features/NavHeader', () => ({ default: () => null }));
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', async () => {
+  const { useNavigate } = await import('react-router');
+  return { useWorkspaceAwareNavigate: () => useNavigate() };
+});
 vi.mock('@/features/AgentBreadcrumb', () => ({ default: () => null }));
 vi.mock('@/features/AgentProfileTabs', () => ({
   AGENT_PROFILE_TABS_CENTER_STYLE: {},
@@ -832,5 +838,115 @@ describe('AddMailboxForm', () => {
     expect(service.provision).toHaveBeenCalledWith(
       expect.objectContaining({ agentId: 'agt_1', prefix: 'growth', provider: 'agent-mail' }),
     );
+  });
+});
+
+describe('AgentMail composer', () => {
+  const Location = () => {
+    const location = useLocation();
+    return <div data-testid={'location'}>{`${location.pathname}${location.search}`}</div>;
+  };
+
+  const composePage = (path: string) =>
+    render(
+      <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route
+              path={'/agent/:aid/mail/:messageId?'}
+              element={
+                <>
+                  <AgentMail agentId={'agt_1'} />
+                  <Location />
+                </>
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </SWRConfig>,
+    );
+
+  const draft = (extra: Record<string, unknown> = {}) => ({
+    accountId: 'acc_a',
+    bcc: [],
+    cc: [],
+    id: 'draft_1',
+    mode: 'compose',
+    sourceMailId: null,
+    subject: 'Plan',
+    text: 'Half written',
+    to: [{ address: 'lin@partner.example' }],
+    updatedAt: new Date(),
+    ...extra,
+  });
+
+  it('writes a new mail in the reading pane, from the address on screen', async () => {
+    composePage('/agent/agt_1/mail?compose=new');
+
+    const composer = await screen.findByTestId('mail-composer');
+    expect(within(composer).getByText('a@lobe.id')).toBeInTheDocument();
+    expect(within(composer).getByText('identity.compose.fromNote')).toBeInTheDocument();
+  });
+
+  it('resumes a draft from the URL with everything it held', async () => {
+    service.getMailDraft.mockResolvedValue(draft());
+    composePage('/agent/agt_1/mail?folder=drafts&compose=draft_1');
+
+    expect(await screen.findByTestId('mail-composer')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText('identity.compose.body')).toHaveValue('Half written'),
+    );
+    expect(screen.getByLabelText('identity.compose.subject')).toHaveValue('Plan');
+    expect(screen.getByText('lin@partner.example')).toBeInTheDocument();
+  });
+
+  it('takes a reply draft back to the conversation it answers', async () => {
+    service.getMailDraft.mockResolvedValue(draft({ mode: 'reply', sourceMailId: 'msg_a' }));
+    composePage('/agent/agt_1/mail?folder=drafts&compose=draft_1');
+
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent(
+        '/agent/agt_1/mail/msg_a?folder=drafts&compose=draft_1',
+      ),
+    );
+  });
+
+  it('reads a just-created draft again after leaving its editor', async () => {
+    const saved = draft({ id: 'draft_new', subject: 'Plan', text: 'First words' });
+    service.createMailDraft.mockResolvedValue(saved);
+    service.getMailDraft.mockResolvedValue(saved);
+    service.listMailDrafts.mockResolvedValue([saved]);
+    composePage('/agent/agt_1/mail?compose=new');
+
+    fireEvent.change(await screen.findByLabelText('identity.compose.body'), {
+      target: { value: 'First words' },
+    });
+    await waitFor(
+      () => expect(screen.getByTestId('location')).toHaveTextContent('compose=draft_new'),
+      { timeout: 4000 },
+    );
+    expect(service.getMailDraft).not.toHaveBeenCalled();
+
+    // Leave for Drafts, then open the same draft from there: it is read, not a blank editor.
+    fireEvent.click(screen.getByRole('tab', { name: /identity.mailbox.folder.drafts/ }));
+    await waitFor(() => expect(screen.queryByTestId('mail-composer')).toBeNull());
+    fireEvent.click(await screen.findByRole('button', { name: 'lin@partner.example — Plan' }));
+
+    await waitFor(() => expect(service.getMailDraft).toHaveBeenCalledWith('draft_new'));
+    await waitFor(() =>
+      expect(screen.getByLabelText('identity.compose.body')).toHaveValue('First words'),
+    );
+  });
+
+  it('says up front that an address only receives, and keeps reading working', async () => {
+    service.list.mockResolvedValue([
+      { ...account('acc_a', 'a@lobe.id'), capabilities: { receive: true, send: false } },
+    ]);
+    composePage('/agent/agt_1/mail');
+
+    expect(await screen.findByTestId('mail-send-block')).toHaveTextContent(
+      'identity.compose.block.receiveOnly',
+    );
+    expect(await screen.findByText('preview of For A')).toBeInTheDocument();
   });
 });

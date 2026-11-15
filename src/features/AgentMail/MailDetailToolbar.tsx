@@ -1,22 +1,40 @@
 'use client';
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { ArchiveRestore, ChevronDown, ChevronUp, Mail, MailOpen, Star, Trash2 } from 'lucide-react';
+import {
+  ArchiveRestore,
+  ChevronDown,
+  ChevronUp,
+  Forward,
+  Mail,
+  MailOpen,
+  Reply,
+  ReplyAll,
+  Star,
+  Trash2,
+} from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { identityStyles } from './styles';
 
 export interface MailDetailToolbarProps {
+  /** Why forwarding is unavailable; the button stays, disabled, so the ability is visible. */
+  forwardDisabledReason?: string;
   hasNext: boolean;
   hasPrevious: boolean;
+  onForward?: () => void;
   onNext: () => void;
   onPrevious: () => void;
+  onReply?: () => void;
+  onReplyAll?: () => void;
   /** Only in the trash, where it takes the place of trashing. */
   onRestore?: () => void;
   onToggleRead?: () => void;
   onToggleStar?: () => void;
   onTrash?: () => void;
+  /** Why replying is unavailable (cannot send, or nothing received to answer). */
+  replyDisabledReason?: string;
   starred: boolean;
   unread: boolean;
 }
@@ -24,11 +42,16 @@ export interface MailDetailToolbarProps {
 /** What can be done to the open conversation, and the way to the ones around it. */
 const MailDetailToolbar = memo<MailDetailToolbarProps>(
   ({
+    forwardDisabledReason,
     hasNext,
     hasPrevious,
+    onForward,
     onNext,
     onPrevious,
+    onReply,
+    onReplyAll,
     onRestore,
+    replyDisabledReason,
     onToggleRead,
     onToggleStar,
     onTrash,
@@ -46,6 +69,36 @@ const MailDetailToolbar = memo<MailDetailToolbarProps>(
         justify={'space-between'}
       >
         <Flexbox horizontal gap={4}>
+          {onReply && (
+            <ActionIcon
+              aria-label={t('identity.compose.action.reply')}
+              data-testid={'mail-action-reply'}
+              disabled={Boolean(replyDisabledReason)}
+              icon={Reply}
+              title={replyDisabledReason ?? t('identity.compose.action.reply')}
+              onClick={onReply}
+            />
+          )}
+          {onReplyAll && (
+            <ActionIcon
+              aria-label={t('identity.compose.action.replyAll')}
+              data-testid={'mail-action-reply-all'}
+              disabled={Boolean(replyDisabledReason)}
+              icon={ReplyAll}
+              title={replyDisabledReason ?? t('identity.compose.action.replyAll')}
+              onClick={onReplyAll}
+            />
+          )}
+          {onForward && (
+            <ActionIcon
+              aria-label={t('identity.compose.action.forward')}
+              data-testid={'mail-action-forward'}
+              disabled={Boolean(forwardDisabledReason)}
+              icon={Forward}
+              title={forwardDisabledReason ?? t('identity.compose.action.forward')}
+              onClick={onForward}
+            />
+          )}
           {onRestore && (
             <ActionIcon
               aria-label={t('identity.mailbox.action.restore')}

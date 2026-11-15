@@ -2,6 +2,8 @@ import type {
   AgentAccountKind,
   AgentInboxMessage,
   AgentInboxMessageSummary,
+  AgentMailAddress,
+  AgentMailComposeMode,
   AgentMailFolder,
 } from '@lobechat/types';
 import type { inferRouterOutputs } from '@trpc/server';
@@ -21,6 +23,31 @@ export type AgentMailRow = MailRouterOutputs['conversation'][number];
 export type AgentMailDraftRow = MailRouterOutputs['drafts']['list'][number];
 /** A mail's HTML body, sanitized by the server, or why there is none to show. */
 export type AgentMailHtml = MailRouterOutputs['html'];
+
+/** What a draft holds; omitted fields keep what the draft already has. */
+export interface AgentMailDraftContent {
+  bcc?: AgentMailAddress[];
+  cc?: AgentMailAddress[];
+  subject?: string | null;
+  text?: string;
+  to?: AgentMailAddress[];
+}
+
+export interface CreateAgentMailDraftParams extends AgentMailDraftContent {
+  accountId: string;
+  mode: AgentMailComposeMode;
+  /** The mail answered or forwarded; one draft per mail and mode, so a repeat resumes it. */
+  sourceMailId?: string;
+}
+
+export interface SendAgentMailParams extends AgentMailDraftContent {
+  accountId: string;
+  /** With `forward`: which of the original's attachments to carry; omitted carries all. */
+  forwardAttachmentIndexes?: number[];
+  mode: AgentMailComposeMode;
+  sourceMailId?: string;
+  text: string;
+}
 
 /** Why an attachment download failed, as the attachment route answers it. */
 export type AttachmentFailure = 'expired' | 'too_large' | 'unavailable';
@@ -201,6 +228,20 @@ class AgentAccountService {
 
   deleteMailDrafts = (ids: string[]) =>
     lambdaClient.agentAccount.mail.drafts.delete.mutate({ ids });
+
+  getMailDraft = (id: string): Promise<AgentMailDraftRow> =>
+    lambdaClient.agentAccount.mail.drafts.get.query({ id });
+
+  createMailDraft = (params: CreateAgentMailDraftParams): Promise<AgentMailDraftRow> =>
+    lambdaClient.agentAccount.mail.drafts.create.mutate(params);
+
+  updateMailDraft = (id: string, content: AgentMailDraftContent): Promise<AgentMailDraftRow> =>
+    lambdaClient.agentAccount.mail.drafts.update.mutate({ ...content, id });
+
+  /** Sends a saved draft exactly once (the server holds a lease) and deletes it. */
+  sendMailDraft = (id: string) => lambdaClient.agentAccount.mail.drafts.send.mutate({ id });
+
+  sendMail = (params: SendAgentMailParams) => lambdaClient.agentAccount.mail.send.mutate(params);
 }
 
 export const agentAccountService = new AgentAccountService();

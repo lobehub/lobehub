@@ -1,16 +1,23 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { SWRConfig } from 'swr';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { useEffect } from 'react';
+import { SWRConfig, useSWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const service = vi.hoisted(() => ({
+  createMailDraft: vi.fn(),
+  deleteMailDrafts: vi.fn(),
   downloadMailAttachment: vi.fn(),
+  getMailDraft: vi.fn(),
   getMailConversation: vi.fn(),
   getMailHtml: vi.fn(),
   markMailRead: vi.fn(),
   markMailUnread: vi.fn(),
   restoreMail: vi.fn(),
+  sendMail: vi.fn(),
+  sendMailDraft: vi.fn(),
   setMailStarred: vi.fn(),
   trashMail: vi.fn(),
+  updateMailDraft: vi.fn(),
 }));
 const AttachmentDownloadError = vi.hoisted(
   () =>
@@ -30,6 +37,9 @@ const ui = vi.hoisted(() => ({
   toastError: vi.fn(),
   toastSuccess: vi.fn((_options: unknown) => ({ close: vi.fn() })),
 }));
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => vi.fn(),
+}));
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   confirmModal: ui.confirmModal,
@@ -44,16 +54,26 @@ const fresh = (node: React.ReactNode) =>
 
 const detailProps = {
   accountId: 'acc_1',
-  accounts: [{ id: 'acc_1', status: 'active' }] as never,
+  accounts: [
+    {
+      capabilities: { receive: true, send: true },
+      id: 'acc_1',
+      identifier: 'agent@lobe.id',
+      status: 'active',
+    },
+  ] as never,
+  agentId: 'agt_1',
   hasNext: true,
   hasPrevious: false,
   onBack: vi.fn(),
+  onComposeChange: vi.fn(),
   onEmptied: vi.fn(),
   onGoToTrash: vi.fn(),
   onNext: vi.fn(),
   onPrevious: vi.fn(),
   onReseated: vi.fn(),
   onRestored: vi.fn(),
+  onViewSent: vi.fn(),
   refresh: vi.fn(async () => undefined),
 };
 
@@ -68,6 +88,7 @@ const mailRow = (id: string, overrides: Record<string, unknown> = {}) => ({
   id,
   inboxMessageId: id,
   isUnread: false,
+  replyTo: [],
   starredAt: null,
   subject: 'Hello',
   text: `body of ${id}`,
@@ -368,6 +389,147 @@ describe('InboxMessageDetail', () => {
     expect(screen.queryByTestId('mail-action-trash')).toBeNull();
     expect(screen.queryByTestId('mail-action-star')).toBeNull();
     expect(screen.queryByTestId('mail-action-unread')).toBeNull();
+  });
+});
+
+describe('InboxMessageDetail replies', () => {
+  const draftRow = (extra: Record<string, unknown> = {}) => ({
+    accountId: 'acc_1',
+    bcc: [],
+    cc: [],
+    id: 'draft_1',
+    mode: 'reply',
+    sourceMailId: 'in',
+    subject: null,
+    text: '',
+    to: [],
+    updatedAt: new Date('2026-10-02T00:00:00Z'),
+    ...extra,
+  });
+
+  beforeEach(() => {
+    service.createMailDraft.mockImplementation(async (input) => draftRow(input));
+    service.deleteMailDrafts.mockResolvedValue({ count: 1 });
+  });
+
+  it('answers the newest received mail inline, below the conversation', async () => {
+    service.getMailConversation.mockResolvedValue([
+      mailRow('in', { fromAddress: 'lin@partner.example' }),
+      mailRow('out', { direction: 'outbound', fromAddress: 'agent@lobe.id' }),
+    ]);
+    const onComposeChange = vi.fn();
+    fresh(<InboxMessageDetail {...detailProps} id={'in'} onComposeChange={onComposeChange} />);
+
+    fireEvent.click(await screen.findByTestId('mail-action-reply'));
+
+    expect(await screen.findByTestId('mail-composer')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(service.createMailDraft).toHaveBeenCalledWith({
+        accountId: 'acc_1',
+        mode: 'reply',
+        sourceMailId: 'in',
+      }),
+    );
+    // The draft id goes to the URL, so a reload resumes the reply.
+    await waitFor(() => expect(onComposeChange).toHaveBeenCalledWith('draft_1'));
+    const chips = await screen.findAllByTestId('recipient-chip');
+    expect(chips.map((chip) => chip.textContent)).toEqual(['lin@partner.example']);
+  });
+
+  it('cannot reply to a conversation that only holds sent mail', async () => {
+    service.getMailConversation.mockResolvedValue([
+      mailRow('out', { direction: 'outbound', fromAddress: 'agent@lobe.id' }),
+    ]);
+    fresh(<InboxMessageDetail {...detailProps} id={'out'} />);
+
+    expect(await screen.findByTestId('mail-action-reply')).toBeDisabled();
+    expect(screen.getByTestId('mail-action-reply-all')).toBeDisabled();
+    expect(screen.getByTestId('mail-action-forward')).toBeEnabled();
+  });
+
+  it('keeps the answers visible but disabled for an address that only receives', async () => {
+    service.getMailConversation.mockResolvedValue([mailRow('in')]);
+    fresh(
+      <InboxMessageDetail
+        {...detailProps}
+        id={'in'}
+        accounts={
+          [
+            {
+              capabilities: { receive: true, send: false },
+              id: 'acc_1',
+              identifier: 'agent@lobe.id',
+              status: 'active',
+            },
+          ] as never
+        }
+      />,
+    );
+
+    const reply = await screen.findByTestId('mail-action-reply');
+    expect(reply).toBeDisabled();
+    expect(screen.getByTestId('mail-action-forward')).toBeDisabled();
+  });
+
+  it('resumes the reply draft the URL names', async () => {
+    service.getMailConversation.mockResolvedValue([mailRow('in')]);
+    service.getMailDraft.mockResolvedValue(draftRow({ text: 'Half written' }));
+    fresh(<InboxMessageDetail {...detailProps} composeId={'draft_1'} id={'in'} />);
+
+    expect(await screen.findByTestId('mail-composer')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByLabelText('identity.compose.body')).toHaveValue('Half written'),
+    );
+    expect(service.createMailDraft).not.toHaveBeenCalled();
+  });
+
+  it('does not resume a reply draft of another conversation', async () => {
+    service.getMailConversation.mockResolvedValue([mailRow('in')]);
+    service.getMailDraft.mockResolvedValue(draftRow({ sourceMailId: 'other', text: 'For A' }));
+    fresh(<InboxMessageDetail {...detailProps} composeId={'draft_1'} id={'in'} />);
+
+    await screen.findByTestId('mail-action-reply');
+    await waitFor(() => expect(service.getMailDraft).toHaveBeenCalled());
+    expect(screen.queryByTestId('mail-composer')).toBeNull();
+  });
+
+  it('keeps answering the same mail when a newer one arrives', async () => {
+    const onReady = vi.fn();
+    const Grab = () => {
+      const { mutate } = useSWRConfig();
+      useEffect(() => onReady(mutate), [mutate]);
+      return null;
+    };
+    service.getMailConversation.mockResolvedValue([mailRow('in')]);
+    fresh(
+      <>
+        <Grab />
+        <InboxMessageDetail {...detailProps} id={'in'} />
+      </>,
+    );
+    fireEvent.click(await screen.findByTestId('mail-action-reply'));
+    fireEvent.change(await screen.findByLabelText('identity.compose.body'), {
+      target: { value: 'Typing…' },
+    });
+
+    // The poll brings a newer received mail into the conversation.
+    service.getMailConversation.mockResolvedValue([mailRow('in'), mailRow('in2')]);
+    const revalidate = onReady.mock.calls[0][0] as ReturnType<typeof useSWRConfig>['mutate'];
+    await act(() => revalidate(['agent-mail-conversation', 'in', undefined]));
+    await screen.findByText('body of in2', { exact: false }).catch(() => undefined);
+
+    expect(screen.getByLabelText('identity.compose.body')).toHaveValue('Typing…');
+    expect(service.createMailDraft).toHaveBeenCalledTimes(1);
+    expect(service.createMailDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceMailId: 'in' }),
+    );
+  });
+
+  it('offers no answers in the trash', async () => {
+    service.getMailConversation.mockResolvedValue([mailRow('in')]);
+    fresh(<InboxMessageDetail {...detailProps} folder={'trash'} id={'in'} />);
+    await screen.findByTestId('mail-action-restore');
+    expect(screen.queryByTestId('mail-action-reply')).toBeNull();
   });
 });
 
