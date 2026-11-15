@@ -76,6 +76,40 @@ const definitions = stylex.create({
     zIndex: 1,
     backgroundColor: cssVar.colorBgContainer,
   },
+  mailBlock: {
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: cssVar.colorFillQuaternary,
+  },
+  mailSummary: {
+    cursor: 'pointer',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    borderRadius: cssVar.borderRadiusLG,
+    backgroundColor: {
+      'default': 'transparent',
+      ':hover': cssVar.colorFillTertiary,
+    },
+  },
+  mailFrame: {
+    display: 'block',
+    width: '100%',
+    borderWidth: 0,
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: '#fff',
+  },
+  mailToolbar: {
+    position: 'sticky',
+    insetBlockStart: 0,
+    zIndex: 1,
+    paddingBlock: '8px',
+    backgroundColor: cssVar.colorBgContainer,
+  },
+  attachmentRow: {
+    paddingBlock: '6px',
+    paddingInline: '10px',
+    borderRadius: cssVar.borderRadius,
+    backgroundColor: cssVar.colorFillTertiary,
+  },
   subject: {
     fontSize: '13px',
     color: cssVar.colorTextSecondary,
@@ -101,6 +135,11 @@ export const identityStyles = {
   listPane: stylex.props(definitions.listPane).className ?? '',
   mailboxTrigger: stylex.props(definitions.mailboxTrigger).className ?? '',
   mobileDetail: stylex.props(definitions.mobileDetail).className ?? '',
+  attachmentRow: stylex.props(definitions.attachmentRow).className ?? '',
+  mailBlock: stylex.props(definitions.mailBlock).className ?? '',
+  mailFrame: stylex.props(definitions.mailFrame).className ?? '',
+  mailSummary: stylex.props(definitions.mailSummary).className ?? '',
+  mailToolbar: stylex.props(definitions.mailToolbar).className ?? '',
   subject: stylex.props(definitions.subject).className ?? '',
   unreadDot: stylex.props(definitions.unreadDot).className ?? '',
 };

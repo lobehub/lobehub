@@ -6,8 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const service = vi.hoisted(() => ({
   deleteMailDrafts: vi.fn(),
   emptyMailTrash: vi.fn(),
-  getMailConversation: vi.fn(),
   getMailAccountCounts: vi.fn(),
+  getMailConversation: vi.fn(),
+  getMailHtml: vi.fn(),
   list: vi.fn(),
   listMail: vi.fn(),
   listMailDrafts: vi.fn(),
@@ -81,6 +82,7 @@ const toastApi = vi.hoisted(() => ({
 const { default: AgentMail } = await import('./index');
 const { default: AddMailboxForm } = await import('./AddMailboxForm');
 const { IDENTITY_CHANNELS } = await import('./const');
+const { useMailWritesStore } = await import('./mailWrites');
 
 const account = (id: string, identifier: string) => ({
   agentId: 'agt_1',
@@ -148,6 +150,7 @@ const page = (path = '/agent/agt_1/mail', disabled = false) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useMailWritesStore.setState({ writes: [] });
   surface.mobile = false;
   server.providers = ['agent-mail'];
   server.loaded = true;
@@ -166,6 +169,7 @@ beforeEach(() => {
   service.trashMail.mockResolvedValue({ count: 1, ids: ['msg_a'] });
   service.restoreMail.mockResolvedValue({ count: 1 });
   service.getMailConversation.mockImplementation(async ({ id }: { id: string }) => [mail(id)]);
+  service.getMailHtml.mockResolvedValue({ status: 'none' });
 });
 
 describe('AgentMail', () => {
@@ -189,15 +193,54 @@ describe('AgentMail', () => {
       'aria-current',
       'true',
     );
-    expect(service.markMailRead).toHaveBeenCalledWith({
-      conversationIn: 'inbox',
-      ids: ['msg_a'],
-    });
+    // The reading pane marks exactly the mails it opened, once; the row click does not.
+    await waitFor(() => expect(service.markMailRead).toHaveBeenCalledWith({ ids: ['msg_a'] }));
+    expect(service.markMailRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves mail unread for a read-only viewer who follows a link to it', async () => {
+    page('/agent/agt_1/mail/msg_a', true);
+
+    expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
+    await screen.findByText('preview of For A');
+    expect(service.markMailRead).not.toHaveBeenCalled();
+  });
+
+  it('clears the row dot at once when the unread mail is not the one the row carries', async () => {
+    service.listMail.mockResolvedValue([row('msg_head', 'Thread', { mailCount: 2 })]);
+    service.getMailConversation.mockResolvedValue([
+      mail('msg_older', { isUnread: true }),
+      mail('msg_head', { isUnread: false }),
+    ]);
+    service.markMailRead.mockReturnValue(new Promise(() => {}));
+    page();
+
+    fireEvent.click(await screen.findByRole('button', { name: /Thread/ }));
+
+    await waitFor(() => expect(service.markMailRead).toHaveBeenCalledWith({ ids: ['msg_older'] }));
+    // Still pending, yet the row already reads as read.
+    await waitFor(() =>
+      expect(useMailWritesStore.getState().writes).toEqual([
+        expect.objectContaining({ ids: ['msg_older', 'msg_head'], patch: { isUnread: false } }),
+      ]),
+    );
+  });
+
+  it('leaves mail unread for a read-only viewer who opens it', async () => {
+    page('/agent/agt_1/mail', true);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'msg_a@x.com — For A' }));
+
+    expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
+    expect(service.markMailRead).not.toHaveBeenCalled();
   });
 
   it('switches the list, the count and the open message to the chosen mailbox', async () => {
     page('/agent/agt_1/mail/msg_a');
     expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
+    // Opening reads msg_a, and that write refreshes the counts once it lands.
+    await waitFor(() => expect(useMailWritesStore.getState().writes).toEqual([]));
+    service.getMailAccountCounts.mockClear();
 
     fireEvent.click(await screen.findByText(/menu:b@lobe.id/));
 
@@ -205,8 +248,7 @@ describe('AgentMail', () => {
     expect(screen.queryByText('preview of For A')).not.toBeInTheDocument();
     expect(screen.queryByText('Full body of msg_a')).not.toBeInTheDocument();
     // One request answers every address, so switching asks for nothing new.
-    expect(service.getMailAccountCounts).toHaveBeenCalledTimes(1);
-    expect(service.getMailAccountCounts).toHaveBeenCalledWith(['acc_a', 'acc_b']);
+    expect(service.getMailAccountCounts).not.toHaveBeenCalled();
   });
 
   it('restores the mailbox of a message opened straight from its URL', async () => {
@@ -226,10 +268,41 @@ describe('AgentMail', () => {
     expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
     await waitFor(() => expect(service.markMailRead).toHaveBeenCalledWith({ ids: ['msg_a'] }));
     expect(service.markMailRead).toHaveBeenCalledTimes(1);
-    // The list and count load after the mark, so neither shows it as unread.
-    expect(service.markMailRead.mock.invocationCallOrder[0]).toBeLessThan(
-      service.listMail.mock.invocationCallOrder[0],
+  });
+
+  it('opens the older unread mails of a conversation reached by its link', async () => {
+    service.getMailConversation.mockResolvedValue([
+      mail('msg_old', { isUnread: true, text: 'Old unread body' }),
+      mail('msg_mid', { isUnread: false, text: 'Middle read body' }),
+      mail('msg_a', { isUnread: false }),
+    ]);
+    page('/agent/agt_1/mail/msg_a');
+
+    // Read by the pane, after it decided what opens, so the unread mail is open too.
+    expect(await screen.findByText('Old unread body')).toBeInTheDocument();
+    expect(screen.queryByText('Middle read body', { selector: 'iframe *' })).toBeNull();
+    await waitFor(() => expect(service.markMailRead).toHaveBeenCalledWith({ ids: ['msg_old'] }));
+    expect(service.markMailRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts the pane afresh when the same mail is opened in another view', async () => {
+    service.getMailConversation.mockImplementation(async ({ folder }: { folder?: string }) =>
+      folder === 'trash'
+        ? [mail('msg_t', { isUnread: false, text: 'Trashed body' })]
+        : [mail('msg_a', { isUnread: false })],
     );
+    page();
+    // Opened from its row, so the mailbox is pinned and the page does not reload it.
+    fireEvent.click(await screen.findByRole('button', { name: 'msg_a@x.com — For A' }));
+    expect(await screen.findByText('Full body of msg_a')).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole('tab', { name: /identity.mailbox.folder.trash/ }));
+
+    // The newest mail of the trash's set opens, instead of everything staying collapsed.
+    await waitFor(() =>
+      expect(screen.getByTestId('mail-item')).toHaveAttribute('data-mail-id', 'msg_t'),
+    );
+    expect(screen.getByTestId('mail-summary')).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('opens a link saved with the inbox item id and marks the mail itself read', async () => {
@@ -634,6 +707,93 @@ describe('AgentMail list', () => {
     await waitFor(() =>
       expect(screen.queryByText('identity.mailbox.bulk.selected')).not.toBeInTheDocument(),
     );
+  });
+});
+
+describe('AgentMail reading pane', () => {
+  const threeRows = () =>
+    service.listMail.mockResolvedValue([
+      row('msg_1', 'First', { isUnread: false }),
+      row('msg_2', 'Second'),
+      row('msg_3', 'Third'),
+    ]);
+
+  it('steps to the conversations either side of the open one', async () => {
+    threeRows();
+    page('/agent/agt_1/mail/msg_2');
+    expect(await screen.findByText('Full body of msg_2')).toBeInTheDocument();
+
+    await waitFor(() => expect(screen.getByTestId('mail-nav-next')).not.toBeDisabled());
+    fireEvent.click(screen.getByTestId('mail-nav-next'));
+    expect(await screen.findByText('Full body of msg_3')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('mail-nav-previous'));
+    expect(await screen.findByText('Full body of msg_2')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('mail-nav-previous'));
+    expect(await screen.findByText('Full body of msg_1')).toBeInTheDocument();
+    expect(screen.getByTestId('mail-nav-previous')).toBeDisabled();
+  });
+
+  it('lands on the older conversation after a trash, without reading it', async () => {
+    threeRows();
+    service.trashMail.mockResolvedValue({ count: 1, ids: ['msg_2'] });
+    page('/agent/agt_1/mail/msg_2');
+    expect(await screen.findByText('Full body of msg_2')).toBeInTheDocument();
+    await waitFor(() => expect(service.markMailRead).toHaveBeenCalled());
+    service.markMailRead.mockClear();
+
+    fireEvent.click(await screen.findByTestId('mail-action-trash'));
+
+    expect(await screen.findByText('Full body of msg_3')).toBeInTheDocument();
+    expect(service.trashMail).toHaveBeenCalledWith({ ids: ['msg_2'] });
+    // Landing is automatic, so the mail landed on waits for the reader.
+    expect(service.markMailRead).not.toHaveBeenCalled();
+  });
+
+  it('does not read the landed-on conversation when the reader steps past it', async () => {
+    threeRows();
+    service.trashMail.mockResolvedValue({ count: 1, ids: ['msg_2'] });
+    page('/agent/agt_1/mail/msg_2');
+    expect(await screen.findByText('Full body of msg_2')).toBeInTheDocument();
+    // The server no longer lists the trashed conversation.
+    service.listMail.mockResolvedValue([
+      row('msg_1', 'First', { isUnread: false }),
+      row('msg_3', 'Third'),
+    ]);
+    fireEvent.click(await screen.findByTestId('mail-action-trash'));
+    expect(await screen.findByText('Full body of msg_3')).toBeInTheDocument();
+    service.markMailRead.mockClear();
+
+    fireEvent.pointerDown(screen.getByTestId('mail-nav-previous'));
+    fireEvent.click(screen.getByTestId('mail-nav-previous'));
+
+    expect(await screen.findByText('Full body of msg_1')).toBeInTheDocument();
+    expect(service.markMailRead).not.toHaveBeenCalledWith({ ids: ['msg_3'] });
+  });
+
+  it('offers no step for a conversation outside the loaded list', async () => {
+    service.listMail.mockResolvedValue(
+      Array.from({ length: 50 }, (_, index) => row(`msg_${index}`, `Row ${index}`)),
+    );
+    page('/agent/agt_1/mail/msg_far');
+    expect(await screen.findByText('Full body of msg_far')).toBeInTheDocument();
+    await screen.findByText('preview of Row 0');
+
+    // A full page means more mail, but there is no row here to step from.
+    expect(screen.getByTestId('mail-nav-next')).toBeDisabled();
+    expect(screen.getByTestId('mail-nav-previous')).toBeDisabled();
+  });
+
+  it('highlights the row of the open conversation when the URL names another of its mails', async () => {
+    service.listMail.mockResolvedValue([row('msg_head', 'Thread', { mailCount: 2 })]);
+    service.getMailConversation.mockResolvedValue([
+      mail('msg_older', { isUnread: false }),
+      mail('msg_head', { isUnread: false }),
+    ]);
+    page('/agent/agt_1/mail/msg_older');
+
+    const thread = await screen.findByRole('button', { name: /Thread/ });
+    await waitFor(() => expect(thread).toHaveAttribute('aria-current', 'true'));
   });
 });
 

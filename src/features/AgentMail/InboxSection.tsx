@@ -349,10 +349,8 @@ const InboxSection = ({
             selecting={selectedItems.length > 0}
             view={view}
             onToggleSelect={(shiftKey) => toggleSelect(item, shiftKey)}
-            onOpen={() => {
-              onOpen(item);
-              if (item.isUnread && !disabled) void actions.setRead([item], true);
-            }}
+            // Reading marks it read: the reading pane owns that, for exactly the mails it shows.
+            onOpen={() => onOpen(item)}
           />
         ))}
         {searching && list.truncated && !list.hasMore && (

@@ -1,9 +1,4 @@
-import type {
-  AgentInboxMessage,
-  AgentMailAddress,
-  AgentMailDirection,
-  AgentMailFolder,
-} from '@lobechat/types';
+import type { AgentMailAddress, AgentMailDirection, AgentMailFolder } from '@lobechat/types';
 import { useMemo } from 'react';
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
@@ -12,7 +7,6 @@ import {
   agentAccountService,
   type AgentMailConversationRow,
   type AgentMailDraftRow,
-  type AgentMailRow,
 } from '@/services/agentAccount';
 
 import { applyMailWrites, useMailWritesStore } from './mailWrites';
@@ -194,6 +188,12 @@ export const useMailList = ({
     items,
     /** Fetch the next page without disturbing what is already on screen. */
     loadMore: () => void list.setSize((size) => size + 1),
+    /** Same, for a caller that needs the rows once they are in. */
+    loadNextPage: async () =>
+      applyMailWrites(
+        ((await list.setSize((size) => size + 1)) ?? []).flatMap((page) => page.items),
+        useMailWritesStore.getState().writes,
+      ),
     /** Without arguments this revalidates every loaded page, which a write needs. */
     mutate: list.mutate,
     /** The search stopped at its best matches; refining the words finds the rest. */
@@ -214,9 +214,12 @@ export interface MailCounts {
  * mail is waiting. Shared by the switcher and the views, which ask with the
  * same ids and so share one cache entry and one poll.
  */
+export const mailCountsKey = (accountIds: string[]) =>
+  accountIds.length > 0 ? ['agent-mail-account-counts', accountIds.join()] : null;
+
 export const useMailCounts = (accountIds: string[]) =>
   useSWR(
-    accountIds.length > 0 ? ['agent-mail-account-counts', accountIds.join()] : null,
+    mailCountsKey(accountIds),
     async ([, joined]) => {
       const ids = joined.split(',');
       const batches: string[][] = [];
@@ -250,43 +253,16 @@ export const useHasRetainedMail = (agentId: string, enabled: boolean) =>
     return views.some((rows) => rows.length > 0);
   });
 
-const formatAddress = (name: string | null | undefined, address: string) =>
-  name ? `${name} <${address}>` : address;
-
-const toMessage = (row: AgentMailRow): AgentInboxMessage => ({
-  accountId: row.accountId,
-  agentId: row.agentId,
-  attachments: row.attachments ?? [],
-  codes: row.codes ?? [],
-  createdAt: row.createdAt,
-  from: formatAddress(row.fromName, row.fromAddress),
-  id: row.id,
-  preview: row.text.slice(0, 200),
-  readAt: row.isUnread ? null : row.deliveredAt,
-  receivedAt: row.deliveredAt,
-  sourceType: 'mail',
-  subject: row.subject,
-  text: row.text,
-  threadKey: row.threadKey,
-  to: row.to.map((to) => formatAddress(to.name, to.address)).join(', '),
-});
-
 /**
- * One mail by id, or `null` when it is gone. Trash is its own view, so it needs
- * the folder. Links saved before the mail list carry the inbox item's id, which
- * the conversation read also resolves; the mail comes back under its own id.
+ * One conversation, oldest first, read by any of its mails' ids rather than
+ * taken from a possibly stale list row. Trash is its own view, so it needs the
+ * folder. Links saved before the mail list carry the inbox item's id, which
+ * the read also resolves.
  */
-export const readMailMessage = async (
-  id: string,
-  folder?: AgentMailFolder,
-): Promise<AgentInboxMessage | null> => {
-  const rows = await agentAccountService.getMailConversation({ folder, id });
-  const row = rows.find((mail) => mail.id === id || mail.inboxMessageId === id);
-  return row ? toMessage(row) : null;
-};
+export const mailConversationKey = (id: string, folder?: AgentMailFolder) =>
+  ['agent-mail-conversation', id, folder] as const;
 
-/** One stored mail, read by id rather than taken from a possibly stale list row. */
-export const useMailMessage = (id?: string, folder?: AgentMailFolder) =>
-  useSWR(id ? ['agent-mail-message', id, folder] : null, ([, messageId, view]) =>
-    readMailMessage(messageId, view),
+export const useMailConversation = (id?: string, folder?: AgentMailFolder) =>
+  useSWR(id ? mailConversationKey(id, folder) : null, ([, mailId, view]) =>
+    agentAccountService.getMailConversation({ folder: view, id: mailId }),
   );

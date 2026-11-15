@@ -1,6 +1,5 @@
 'use client';
 
-import type { AgentMailFolder } from '@lobechat/types';
 import { Center, Empty, Flexbox, Text } from '@lobehub/ui';
 import { Mail } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -8,11 +7,11 @@ import { useTranslation } from 'react-i18next';
 
 import NavHeader from '@/features/NavHeader';
 
-import InboxMessageDetail from './InboxMessageDetail';
 import { identityStyles } from './styles';
 
 interface MailSplitViewProps {
-  folder?: AgentMailFolder;
+  /** The open conversation, shown while `messageId` is set. */
+  detail: ReactNode;
   inbox: ReactNode;
   mailbox: ReactNode;
   /** The open message; nothing is opened on arrival, because opening clears its unread mark. */
@@ -36,7 +35,7 @@ export const MailNavHeader = () => {
 };
 
 /** The mail page on a wide screen: mailbox and list on the left, the open message on the right. */
-const MailSplitView = ({ folder, inbox, mailbox, messageId }: MailSplitViewProps) => {
+const MailSplitView = ({ detail, inbox, mailbox, messageId }: MailSplitViewProps) => {
   const { t } = useTranslation('setting');
 
   return (
@@ -58,14 +57,14 @@ const MailSplitView = ({ folder, inbox, mailbox, messageId }: MailSplitViewProps
       {/* Keyed so the next message starts at its top, not at the last scroll offset. */}
       <Flexbox className={identityStyles.detailPane} flex={1} key={messageId}>
         {messageId ? (
-          // The top keeps clear of what floats over the page header.
+          // The sticky toolbar sits at the top, so the pane needs no header clearance.
           <Flexbox
-            paddingBlock={'44px 16px'}
+            paddingBlock={'12px 16px'}
             paddingInline={16}
             style={{ marginInline: 'auto', maxWidth: 800 }}
             width={'100%'}
           >
-            <InboxMessageDetail folder={folder} id={messageId} />
+            {detail}
           </Flexbox>
         ) : (
           <Center height={'100%'}>

@@ -15,29 +15,22 @@ import { useTranslation } from 'react-i18next';
 
 import { agentAccountService, type AgentMailTarget } from '@/services/agentAccount';
 
-import { type MailPatch, mailWriteActions, queueRowWrite } from './mailWrites';
+import {
+  chunk,
+  countUnreadInbound,
+  type MailPatch,
+  mailWriteActions,
+  MAX_IDS_PER_WRITE,
+  queueRowWrite,
+  UNDO_WINDOW_MS,
+} from './mailWrites';
 import { mailFolderOf, type MailListItem, type MailView } from './useMailList';
-
-/** What the undo toast and the spec's undo window promise. */
-const UNDO_WINDOW_MS = 8000;
-/** The server's cap on ids per write. */
-const MAX_IDS_PER_WRITE = 200;
+import { useRestoreTrashed } from './useRestoreTrashed';
 
 interface WriteResult<R> {
   failed: MailListItem[];
   values: R[];
 }
-
-const chunk = <T,>(items: T[], size: number): T[][] => {
-  const chunks: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-  return chunks;
-};
-
-const unreadInbound = (items: MailListItem[]) =>
-  items.filter((item) => item.isUnread && item.direction === 'inbound').length;
 
 export interface UseMailActionsParams {
   accountId?: string;
@@ -241,23 +234,8 @@ export const useMailActions = ({
     });
   };
 
-  const undoTrash = async (ids: string[]) => {
-    try {
-      await Promise.all(
-        chunk(ids, MAX_IDS_PER_WRITE).map((batch) =>
-          agentAccountService.restoreMail({ ids: batch }),
-        ),
-      );
-      await refresh().catch(() => undefined);
-      toast.success({ title: t('identity.mailbox.undone') });
-    } catch (error) {
-      console.error('[AgentMail] undo failed', error);
-      toast.error({
-        actions: [{ label: t('identity.mailbox.goToTrash'), onClick: () => onViewChange('trash') }],
-        title: t('identity.mailbox.failed.undo'),
-      });
-    }
-  };
+  const restoreTrashed = useRestoreTrashed(() => onViewChange('trash'));
+  const undoTrash = (ids: string[]) => restoreTrashed(ids, refresh);
 
   /** Trashing is written at once; undo is a restore, so closing the page loses nothing. */
   const trash = async (items: MailListItem[]) => {
@@ -268,7 +246,7 @@ export const useMailActions = ({
       items,
       patch: { removed: true },
       retry: trash,
-      unreadDelta: -unreadInbound(items),
+      unreadDelta: -countUnreadInbound(items),
     });
     const undoToast = toast.success({
       actions: [
