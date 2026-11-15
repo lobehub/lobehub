@@ -2,7 +2,7 @@ import type { PluginQueryParams, SystemDependency } from '@lobehub/market-sdk';
 import { z } from 'zod';
 
 import type { McpConnectionType } from '../discover/mcp';
-import type { CustomPluginMetadata } from '../tool/plugin';
+import type { CustomPluginMetadata, McpConnectVia } from '../tool/plugin';
 
 /**
  * MCP client error categories. Owned here so shared packages don't reach into
@@ -220,6 +220,8 @@ export interface McpConnection {
   };
   // STDIO connection parameters
   command?: string;
+  /** HTTP only: `device` reaches the server from the user's device (`McpConnectVia`). */
+  connectVia?: McpConnectVia;
   env?: Record<string, string>;
   headers?: Record<string, string>;
   type: 'http' | 'stdio';

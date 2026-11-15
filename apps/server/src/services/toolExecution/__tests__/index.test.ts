@@ -819,6 +819,79 @@ describe('ToolExecutionService', () => {
       expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
     });
 
+    it.each([
+      'https://mcp.example.com/mcp',
+      'http://nas.tail1234.ts.net:8080/mcp',
+      'http://printer.local/mcp',
+    ])('tunnels an HTTP MCP set to connect via device to the device (URL: %s)', async (url) => {
+      const callTool = vi.fn();
+      const service = makeService({ callTool });
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { connectVia: 'device', headers: { 'X-Team': 'a' }, name: 'my-mcp', type: 'http', url },
+          { activeDeviceId: 'device-1' },
+        ),
+      );
+
+      expect(result.success).toBe(true);
+      expect(callTool).not.toHaveBeenCalled();
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deviceId: 'device-1',
+          // The routing choice stays on the server: the device just connects
+          params: {
+            auth: undefined,
+            headers: { 'X-Team': 'a' },
+            name: 'my-mcp',
+            type: 'http',
+            url,
+          },
+        }),
+        undefined,
+      );
+    });
+
+    it('fails a connect-via-device HTTP MCP with an actionable error when no desktop is online', async () => {
+      const callTool = vi.fn();
+      const service = makeService({ callTool });
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith({
+          connectVia: 'device',
+          name: 'my-mcp',
+          type: 'http',
+          url: 'https://nas.tail1234.ts.net/mcp',
+        }),
+      );
+
+      expect(callTool).not.toHaveBeenCalled();
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
+      expect(result.content).toContain('Connect via device');
+      expect(result.content).toContain('desktop app');
+    });
+
+    it('keeps a connect-via-device HTTP MCP in-process without a gateway (self-hosted)', async () => {
+      (deviceGateway as any).isConfigured = false;
+      const callTool = vi.fn().mockResolvedValue({ ok: true });
+      const service = makeService({ callTool });
+
+      await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { connectVia: 'device', name: 'my-mcp', type: 'http', url: 'https://nas.internal/mcp' },
+          { activeDeviceId: 'device-1' },
+        ),
+      );
+
+      expect(callTool).toHaveBeenCalledTimes(1);
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+    });
+
     it.each([true, false])(
       "passes the run owner's mcp_apps flag (%s) to the server MCP call",
       async (enabled) => {
@@ -940,6 +1013,10 @@ describe('ToolExecutionService', () => {
       it.each([
         ['stdio', { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' }],
         ['local-network HTTP', { name: 'my-mcp', type: 'http', url: 'http://10.0.0.5:8000/mcp' }],
+        [
+          'connect-via-device HTTP',
+          { connectVia: 'device', name: 'my-mcp', type: 'http', url: 'https://mcp.example.com' },
+        ],
       ])(
         'refuses a %s MCP call instead of tunneling to the creator device',
         async (_, mcpParams) => {

@@ -167,6 +167,8 @@ export class McpServerService extends BaseService {
     const { toolCount } = await syncConnectorToolsById(id, {
       connectorModel: model,
       connectorToolModel: this.connectorToolModel,
+      // A connector set to connect through the device lists on the user's device
+      serverDB: this.db,
       userId: this.userId,
     });
     return { id, status: ConnectorStatus.connected, toolCount };

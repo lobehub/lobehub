@@ -399,6 +399,13 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
   listHeterogeneousAgentModels?: (
     params: ListHeterogeneousAgentModelsParams,
   ) => Promise<HeterogeneousAgentModelCatalog>;
+  /**
+   * List the tools of an MCP server only this machine reaches (stdio, or an
+   * HTTP endpoint on its network), for a server that must not connect to it
+   * itself. Optional: a client that runs no MCP servers omits it, and the
+   * dispatcher fails the RPC with {@link MCP_UNSUPPORTED_MESSAGE}.
+   */
+  listMcpTools?: (params: ListMcpToolsParams) => Promise<ListedMcpServerTool[]>;
   /** Read raw bytes after the user explicitly approved an external publish closure. */
   readExternalAssetForPublish?: (
     params: ExternalAssetForPublishParams,
@@ -430,6 +437,44 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
  * Structural mirrors of the canonical `@lobechat/types` catalog contracts.
  * Kept local so device-control remains a leaf package with no app/type-layer dependency.
  */
+/**
+ * An MCP server's connection, as the server forwards it for `listMcpTools`
+ * (the shape tunneled MCP tool calls forward). Credentials travel decrypted and
+ * narrowed to the token fields; the device stores nothing.
+ */
+export type ListMcpToolsConnection =
+  | {
+      auth?: { accessToken?: string; token?: string; type: 'none' | 'bearer' | 'oauth2' };
+      headers?: Record<string, string>;
+      name: string;
+      type: 'http';
+      url: string;
+    }
+  | {
+      args: string[];
+      command: string;
+      env?: Record<string, string>;
+      name: string;
+      type: 'stdio';
+    };
+
+export interface ListMcpToolsParams {
+  /** List on a session that announces MCP Apps, so view-only tools are listed too. */
+  mcpApps?: boolean;
+  params: ListMcpToolsConnection;
+}
+
+/**
+ * A tool as the MCP server's `tools/list` returns it. Returned as listed, so
+ * the server maps it exactly as it maps a listing it ran itself.
+ */
+export interface ListedMcpServerTool {
+  _meta?: Record<string, unknown>;
+  description?: string;
+  inputSchema: object;
+  name: string;
+}
+
 export interface ListHeterogeneousAgentModelsParams {
   args?: string[];
   command?: string;

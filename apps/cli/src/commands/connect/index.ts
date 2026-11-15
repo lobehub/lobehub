@@ -49,7 +49,7 @@ import {
   resolveCliDeviceGateway,
 } from '../../device/gatewayEndpoint';
 import { MANAGED_GATEWAY_ENV } from '../../device/managed';
-import { disposeDeviceMcp } from '../../device/mcp';
+import { disposeDeviceMcp, listDeviceMcpTools } from '../../device/mcp';
 import {
   mintWorkspaceConnectToken,
   registerDevice,
@@ -606,6 +606,8 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
         ...params,
         env: { ...process.env, ...params.env },
       }),
+    // A server that can't reach an MCP server itself lists its tools here
+    listMcpTools: listDeviceMcpTools,
     restartCli: maintenance.restart,
     searchProjectFiles: defaultSearchProjectFiles,
   };

@@ -1,4 +1,5 @@
-import { type LobeToolCustomPlugin } from '@lobechat/types';
+import { type LobeToolCustomPlugin, type McpConnectVia } from '@lobechat/types';
+import { connectorConnectVia } from '@lobechat/utils/mcpEndpoint';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ConnectorCredentials, OIDCConfig } from '@/database/schemas';
@@ -189,6 +190,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
               type: authType === 'header' ? 'none' : authType,
             },
             command: mcpStdioConfig?.command,
+            connectVia: connectorConnectVia(metadata),
             env: mcpStdioConfig?.env,
             headers: customHeaders,
             type: (connector.mcpConnectionType ?? 'http') as 'http' | 'stdio',
@@ -249,12 +251,15 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         args?: string[];
         auth?: { clientId?: string; clientSecret?: string; token?: string; type?: string };
         command?: string;
+        connectVia?: McpConnectVia;
         env?: Record<string, string>;
         headers?: Record<string, string>;
         type?: 'http' | 'stdio';
         url?: string;
       };
       const identifier = value.identifier;
+      // Only `device` is stored; stdio always runs on the device anyway
+      const connectViaDevice = mcp.type !== 'stdio' && mcp.connectVia === 'device';
       const isHttp = mcp.type !== 'stdio';
       const authType = mcp.auth?.type;
 
@@ -292,6 +297,8 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
           const nextMetadata: Record<string, unknown> = { ...connector.metadata };
           if (headers) nextMetadata.customHeaders = headers;
           else delete nextMetadata.customHeaders;
+          if (connectViaDevice) nextMetadata.connectVia = 'device';
+          else delete nextMetadata.connectVia;
           patch.metadata = nextMetadata;
         }
 
@@ -345,6 +352,8 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
               command: (mcp.command ?? '').trim(),
               env: cleanRecord(mcp.env),
             },
+        // The OAuth create keeps the choice too; the other path rebuilds metadata below
+        ...(connectViaDevice && { metadata: { connectVia: 'device' as const } }),
         name: identifier,
         sourceType: ConnectorSourceType.custom,
       };
@@ -404,10 +413,14 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       // `fetchConnectors` completes it reports "absent" for a connector the
       // server already has, and the rollback below must never delete a
       // connector the user already had.
+      const metadata = {
+        ...(headers && { customHeaders: headers }),
+        ...(connectViaDevice && { connectVia: 'device' as const }),
+      };
       const { id: newConnectorId, isNew } = await createConnector({
         ...base,
         credentials,
-        metadata: headers ? { customHeaders: headers } : undefined,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       });
       try {
         await syncConnectorTools(newConnectorId);

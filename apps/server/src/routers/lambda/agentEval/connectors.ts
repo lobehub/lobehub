@@ -143,7 +143,12 @@ export const evalConnectorRouter = router({
       if (!(await models.connectorModel.findPublicById(input.id)))
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Dataset connection not found' });
       try {
-        return await syncConnectorToolsById(input.id, models, { pruneMissingAutoTools: true });
+        // Eval connections never tunnel to a user's device
+        return await syncConnectorToolsById(
+          input.id,
+          { ...models, serverDB: undefined },
+          { pruneMissingAutoTools: true },
+        );
       } catch {
         // Upstream MCP errors may echo credentials, request headers or private addresses.
         throw new TRPCError({

@@ -21,6 +21,16 @@ const stale = {
 };
 
 describe('pruneHiddenFields', () => {
+  it('keeps the HTTP connection choice and drops it after switching to stdio', () => {
+    const http = pruneHiddenFields(plugin({ ...stale, connectVia: 'device', type: 'http' }))
+      .customParams!.mcp!;
+    expect(http.connectVia).toBe('device');
+
+    const stdio = pruneHiddenFields(plugin({ ...stale, connectVia: 'device', type: 'stdio' }))
+      .customParams!.mcp!;
+    expect(stdio).not.toHaveProperty('connectVia');
+  });
+
   it('drops http fields after switching to stdio', () => {
     const mcp = pruneHiddenFields(plugin({ ...stale, type: 'stdio' })).customParams!.mcp!;
 

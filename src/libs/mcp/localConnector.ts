@@ -32,3 +32,25 @@ export const localConnectorHttpParams = (connector: {
     url: connector.mcpServerUrl,
   };
 };
+
+/**
+ * The HTTP params a call this desktop runs itself sends, with an OAuth
+ * connector's access token: the edit read leaves OAuth tokens out, so it is
+ * fetched (`connector.getLocalCallToken`, refreshed when due) when the
+ * connector has an OAuth flow configured and no user-set credential.
+ */
+export const resolveLocalConnectorHttpParams = async (
+  connector: Parameters<typeof localConnectorHttpParams>[0] & {
+    id: string;
+    oidcConfig?: unknown;
+  },
+  getLocalCallToken: (id: string) => Promise<{ accessToken: string; type: 'oauth2' } | null>,
+) => {
+  const http = localConnectorHttpParams(connector);
+  if (http.auth || !connector.oidcConfig) return http;
+
+  const oauth = await getLocalCallToken(connector.id);
+  return oauth
+    ? { ...http, auth: { accessToken: oauth.accessToken, type: 'oauth2' as const } }
+    : http;
+};

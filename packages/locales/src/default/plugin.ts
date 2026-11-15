@@ -800,6 +800,13 @@ export default {
   'dev.mcp.command.label': 'Command',
   'dev.mcp.command.placeholder': 'e.g. npx / uv / docker',
   'dev.mcp.command.required': 'Enter command',
+  'dev.mcp.connectVia.auto': 'Auto',
+  'dev.mcp.connectVia.autoDesc':
+    'Decided by the address: localhost and LAN IPs connect from your device, every other address connects from the server.',
+  'dev.mcp.connectVia.device': 'Connect via device',
+  'dev.mcp.connectVia.deviceDesc':
+    'Connects from your own device. Use it for addresses only your computer can reach, such as intranet, Tailscale, or LAN hostnames. Keep the LobeHub desktop app open and online on a computer that can reach this server.',
+  'dev.mcp.connectVia.label': 'Connection',
   'dev.mcp.desc.desc': 'Add Skill description',
   'dev.mcp.desc.label': 'Description',
   'dev.mcp.desc.placeholder': 'Usage instructions and scenarios',

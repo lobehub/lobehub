@@ -4,15 +4,19 @@ import type { ToolStore } from '@/store/tool/store';
 
 import { mcpEntryTabKey, parseMcpEntryTab, selectMcpAppEntrypoints } from './entrypoints';
 
-const env = vi.hoisted(() => ({ desktop: false }));
+const env = vi.hoisted(() => ({ desktop: false, gateway: true }));
 vi.mock('@lobechat/const', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   get isDesktop() {
     return env.desktop;
   },
 }));
+vi.mock('@/store/serverConfig/store', () => ({
+  getServerConfigStoreState: () => ({ serverConfig: { deviceGatewayConfigured: env.gateway } }),
+}));
 afterEach(() => {
   env.desktop = false;
+  env.gateway = true;
 });
 
 const entry = { title: 'Notes', toolName: 'open' };
@@ -88,5 +92,51 @@ describe('sidebar app entries', () => {
       'local-plugin',
       'local-connector',
     ]);
+  });
+
+  // The server tunnels their tool calls to the user's device, but not an app
+  // view's calls: opening one on the web would always fail
+  it('offers apps of servers that connect through the device on the desktop alone', () => {
+    const open = { title: 'NAS', toolName: 'open' };
+    const httpConnector = (identifier: string, mcpServerUrl: string, metadata?: object) => ({
+      id: identifier,
+      identifier,
+      isEnabled: true,
+      mcpConnectionType: 'http',
+      mcpServerUrl,
+      metadata,
+      tools: [{ metadata: { threadEntry: open }, permission: 'auto', toolName: 'open' }],
+    });
+    const deviceRouted = {
+      ...state,
+      agentConnectors: {},
+      connectors: [
+        httpConnector('tailnet', 'https://nas.tail1234.ts.net/mcp', { connectVia: 'device' }),
+        httpConnector('lan', 'http://192.168.1.5/mcp'),
+        httpConnector('public', 'https://mcp.example.com/mcp'),
+      ],
+      installedPlugins: [
+        ...(state.installedPlugins as object[]),
+        {
+          customParams: {
+            mcp: { connectVia: 'device', type: 'http', url: 'https://nas.tail1234.ts.net/mcp' },
+          },
+          identifier: 'tailnet-plugin',
+          manifest: { mcpAppEntrypoints: [open] },
+        },
+      ],
+    } as unknown as ToolStore;
+    const offered = () =>
+      selectMcpAppEntrypoints(deviceRouted, true).map((item) => item.identifier);
+
+    expect(offered()).toEqual(['notes', 'public']);
+
+    // Self-hosted without a gateway, the server connects to them itself
+    env.gateway = false;
+    expect(offered()).toEqual(['notes', 'tailnet-plugin', 'tailnet', 'lan', 'public']);
+
+    env.gateway = true;
+    env.desktop = true;
+    expect(offered()).toEqual(['notes', 'tailnet-plugin', 'tailnet', 'lan', 'public']);
   });
 });

@@ -3,6 +3,12 @@ import {
   getMcpAppEntrypoints,
   resolveMcpUiToolMeta,
 } from '@lobechat/const/mcpApp';
+import { type LobeChatDatabase } from '@lobechat/database';
+import {
+  connectorConnectVia,
+  connectorMcpEndpoint,
+  shouldConnectViaDevice,
+} from '@lobechat/utils/mcpEndpoint';
 
 import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorToolModel } from '@/database/models/connectorTool';
@@ -12,9 +18,11 @@ import {
   ConnectorStatus,
   ConnectorToolPermission,
 } from '@/database/schemas';
-import type { AuthConfig } from '@/libs/mcp';
+import type { AuthConfig, McpTool } from '@/libs/mcp';
 import { inferCrudType } from '@/libs/mcp/utils';
+import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
+import { listMcpToolsOnPersonalDevice } from '@/server/services/mcp/deviceTunnel';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { ensureFreshConnectorToken } from './tokens';
@@ -55,6 +63,8 @@ export const buildConnectorMcpParams = (
   const mergedHeaders = headers || customHeaders ? { ...headers, ...customHeaders } : undefined;
   return {
     auth,
+    // Only set when chosen, as `buildConnectorManifests` does
+    ...(connectorConnectVia(connector.metadata) === 'device' && { connectVia: 'device' as const }),
     headers: mergedHeaders,
     name: connector.identifier,
     type: 'http',
@@ -122,6 +132,45 @@ export const pruneMissingAutoConnectorTools = async (
 };
 
 /**
+ * A connector this server must not connect to itself (stdio, local network, or
+ * set to connect through the device) is listed on the user's desktop through
+ * the device gateway; `undefined` for any other, which the server lists itself.
+ * Without a gateway (self-hosted) every connector keeps the in-process listing,
+ * as agent runs keep the in-process call.
+ *
+ * Only the caller's own connector is tunneled to the caller's device: a
+ * workspace connector another member set up carries that member's credentials,
+ * which must not reach a machine they never approved.
+ */
+const listOnDevice = async (
+  connector: DecryptedConnector,
+  mcpParams: ReturnType<typeof buildConnectorMcpParams>,
+  ctx: { serverDB?: LobeChatDatabase; userId?: string | null },
+  mcpApps: boolean,
+): Promise<McpTool[] | undefined> => {
+  if (!deviceGateway.isConfigured) return undefined;
+  if (
+    !shouldConnectViaDevice(connectorMcpEndpoint(connector), {
+      deviceGatewayConfigured: true,
+    })
+  )
+    return undefined;
+
+  if (connector.userId !== ctx.userId) {
+    throw new Error(
+      `Connector '${connector.name}' connects through a device, and only the member who set it up can refresh its tools from their desktop app.`,
+    );
+  }
+
+  return listMcpToolsOnPersonalDevice({
+    mcpApps,
+    params: mcpParams,
+    serverDB: ctx.serverDB,
+    userId: ctx.userId,
+  });
+};
+
+/**
  * Connect to a connector's MCP server, fetch its tool list, and sync it into
  * `user_connector_tools`. Refreshes the OAuth token first when needed, and
  * updates the connector status (`connected` on success, `error` on failure).
@@ -131,8 +180,16 @@ export const pruneMissingAutoConnectorTools = async (
  */
 export const syncConnectorToolsById = async (
   connectorId: string,
-  /** `userId` decides the `mcp_apps` flag: with it on, view-only tools are listed too. */
-  ctx: ConnectorToolSyncContext & { userId?: string | null },
+  /**
+   * `userId` decides the `mcp_apps` flag: with it on, view-only tools are listed
+   * too. `serverDB` finds the user's device for a connector the server can't
+   * reach itself (`shouldConnectViaDevice`). Required, so each caller decides:
+   * `undefined` fails such a sync instead of tunneling it to a device.
+   */
+  ctx: ConnectorToolSyncContext & {
+    serverDB: LobeChatDatabase | undefined;
+    userId?: string | null;
+  },
   options: ConnectorToolSyncOptions = {},
 ): Promise<{ toolCount: number }> => {
   let connector = await ctx.connectorModel.findById(connectorId);
@@ -152,9 +209,11 @@ export const syncConnectorToolsById = async (
   try {
     // A server may list the tools only its views call just to a client
     // announcing MCP Apps; they are synced, and kept from the model, all the same
-    rawTools = await mcpService.listRawTools(mcpParams, {
-      mcpApps,
-    });
+    rawTools =
+      (await listOnDevice(connector, mcpParams, ctx, mcpApps)) ??
+      (await mcpService.listRawTools(mcpParams, {
+        mcpApps,
+      }));
   } catch (err) {
     await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.error);
     throw err;

@@ -1,7 +1,7 @@
 import { hasCallableMcpEndpoint, isMarketplaceInstallRunnable } from '@lobechat/const';
 import { getMcpServerFingerprint, isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
 import { getDisabledPluginIds } from '@lobechat/types';
-import { isLocalOrPrivateUrl } from '@lobechat/utils';
+import { connectorMcpEndpoint, shouldConnectViaDevice } from '@lobechat/utils/mcpEndpoint';
 
 import type { AgentModel } from '@/database/models/agent';
 import type { DecryptedConnector } from '@/database/models/connector';
@@ -226,6 +226,7 @@ export const callConnectorToolById = async (
           id: connector.id,
           mcpConnectionType: connector.mcpConnectionType,
           mcpServerUrl: connector.mcpServerUrl,
+          metadata: connector.metadata,
         },
       ],
       buildLastSyncedAtMap(tools),
@@ -235,19 +236,19 @@ export const callConnectorToolById = async (
     // Background tool-list refresh is best-effort — never fail the tool call.
   }
 
-  // Stdio runs on the user's own device, never in the server process. Private HTTP
-  // endpoints also require a device when a gateway is configured; self-hosted
-  // servers without a gateway can still connect to their own LAN over HTTP.
-  const requiresDevice =
-    connector.mcpConnectionType === ConnectorMcpConnectionType.stdio ||
-    (deviceGateway.isConfigured &&
-      !!connector.mcpServerUrl &&
-      isLocalOrPrivateUrl(connector.mcpServerUrl));
-  if (requiresDevice) {
+  // Stdio runs on the user's own device, never in the server process. HTTP set
+  // to connect through the device, or a private one, also requires a device
+  // when a gateway is configured; self-hosted servers without a gateway keep
+  // connecting in-process. Same rule as agent runs (`ToolExecutionService`).
+  if (
+    shouldConnectViaDevice(connectorMcpEndpoint(connector), {
+      deviceGatewayConfigured: deviceGateway.isConfigured,
+    })
+  ) {
     throw new ConnectorToolCallError(
       'BAD_REQUEST',
-      `Connector '${connector.name}' points at an MCP endpoint that only your machine can reach (stdio or local network). ` +
-        'It runs only on your own device — the desktop app or `lh connect` — through a configured device gateway.',
+      `Connector '${connector.name}' connects through your own device (stdio, a local-network address, or set to "Connect via device"), so the server can't call it directly. ` +
+        'Run these tools from a chat, with the desktop app or `lh connect` running on a computer that can reach this MCP server.',
     );
   }
 
@@ -378,12 +379,13 @@ export const readConnectorUiResourceById = async (
       `Interactive views are not supported for ${connector.mcpConnectionType} connectors yet`,
     );
   }
-  // A cloud server can't reach a localhost / LAN endpoint, and resource reads
-  // aren't tunneled to the device yet; the chat falls back to the plain result.
+  // A cloud server can't reach a device-routed endpoint (localhost / LAN, or
+  // set to connect through the device), and resource reads aren't tunneled to
+  // the device yet; the chat falls back to the plain result.
   if (
-    deviceGateway.isConfigured &&
-    !!connector.mcpServerUrl &&
-    isLocalOrPrivateUrl(connector.mcpServerUrl)
+    shouldConnectViaDevice(connectorMcpEndpoint(connector), {
+      deviceGatewayConfigured: deviceGateway.isConfigured,
+    })
   ) {
     throw new ConnectorToolCallError(
       'BAD_REQUEST',

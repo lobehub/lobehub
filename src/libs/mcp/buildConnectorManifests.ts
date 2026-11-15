@@ -1,5 +1,6 @@
 import { buildConnectorManifest } from '@lobechat/mecha';
 import type { ToolManifest } from '@lobechat/types';
+import { connectorConnectVia } from '@lobechat/utils/mcpEndpoint';
 
 import type { DecryptedConnector } from '@/database/models/connector';
 import type { UserConnectorToolItem } from '@/database/schemas';
@@ -85,6 +86,9 @@ function buildMcpParams(connector: DecryptedConnector) {
 
   return {
     auth,
+    // Only set when chosen, so `auto` keeps the params (and the MCP session
+    // cached by them) it always had. Must match `buildConnectorMcpParams`.
+    ...(connectorConnectVia(connector.metadata) === 'device' && { connectVia: 'device' as const }),
     headers: mergedHeaders,
     name: connector.identifier,
     type: 'http' as const,

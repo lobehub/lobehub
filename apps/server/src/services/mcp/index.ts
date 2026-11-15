@@ -24,6 +24,7 @@ import retry from 'async-retry';
 import debug from 'debug';
 
 import {
+  type HttpMCPClientParams,
   type McpAppToolState,
   type MCPClientParams,
   type McpPrompt,
@@ -523,6 +524,22 @@ export class MCPService {
     }
 
     const rawTools = await this.listRawTools(mcpParams, { mcpApps });
+
+    return this.buildStreamableMcpManifest(identifier, mcpParams, rawTools, metadata, { mcpApps });
+  }
+
+  /**
+   * An HTTP MCP server's manifest from a tool list read elsewhere: on the
+   * user's device, for a server this deployment can't reach itself. Built the
+   * way {@link getStreamableMcpServerManifest} builds the listing it ran.
+   */
+  buildStreamableMcpManifest(
+    identifier: string,
+    mcpParams: HttpMCPClientParams,
+    rawTools: McpTool[],
+    metadata?: CustomPluginMetadata,
+    { mcpApps = false }: { mcpApps?: boolean } = {},
+  ): ToolManifest {
     const tools = this.transformMCPToolToLobeAPI(rawTools, mcpApps);
 
     return {

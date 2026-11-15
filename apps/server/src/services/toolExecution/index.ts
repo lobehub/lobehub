@@ -1,7 +1,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { DEFAULT_TOOL_RESULT_MAX_LENGTH, truncateToolResult } from '@lobechat/prompts/toolResult';
 import { type ChatToolPayload, type DeviceClient } from '@lobechat/types';
-import { isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
+import { isDeviceOnlyMcpEndpoint, shouldConnectViaDevice } from '@lobechat/utils/mcpEndpoint';
 import debug from 'debug';
 
 import { ConnectorToolPermission } from '@/database/schemas';
@@ -12,16 +12,18 @@ import {
 } from '@/libs/mcp/connectorPermissionCheck';
 import { isMCPSSRFBlockedError } from '@/libs/mcp/ssrf';
 import { deviceGateway } from '@/server/services/deviceGateway';
-import {
-  clientKindFromChannels,
-  resolveMcpClientKinds,
-} from '@/server/services/deviceGateway/deviceChannels';
+import { resolveMcpClientKinds } from '@/server/services/deviceGateway/deviceChannels';
 import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
-import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { type MCPService } from '../mcp';
 import { callCloudMcpTool, runtimeCloudMcpCaller } from '../mcp/cloudTool';
+import {
+  findPersonalMcpDevice,
+  MCP_DEVICE_UNAVAILABLE,
+  mcpDeviceUnavailableMessage,
+  toGatewayMcpParams,
+} from '../mcp/deviceTunnel';
 import { type BuiltinToolsExecutor } from './builtin';
 import { classifyToolError, getToolAccessDeniedError } from './errorClassification';
 import { buildMcpAuthorizationErrorContent, isMcpAuthorizationError } from './mcpAuthError';
@@ -332,9 +334,12 @@ export class ToolExecutionService {
 
       // Stdio must run on the user's own device. Without a configured gateway or a
       // reachable device, fail instead of executing the command on the server.
-      // Private HTTP also uses the device when a gateway is configured, while
-      // self-hosted servers without one can still access their LAN over HTTP.
-      if (mcpParams.type === 'stdio' || (isDeviceOnlyMcp && deviceGateway.isConfigured)) {
+      // HTTP the user set to connect through their device, or a private one,
+      // also uses the device when a gateway is configured, while self-hosted
+      // servers without one keep connecting in-process.
+      if (
+        shouldConnectViaDevice(mcpParams, { deviceGatewayConfigured: deviceGateway.isConfigured })
+      ) {
         if (!deviceGateway.isConfigured) {
           const message = `MCP server '${identifier}' uses stdio and must run on your own device, not in the cloud, but this server's device gateway is not configured. Configure a device gateway on the server, then open the ${BRANDING_NAME} desktop app or run \`lh connect\` on the machine that hosts this MCP server, and retry.`;
           return {
@@ -349,10 +354,10 @@ export class ToolExecutionService {
           : undefined;
         if (!tunnelTarget) {
           log('Device-only MCP %s:%s has no reachable device — failing fast', identifier, apiName);
-          const message = `MCP server '${identifier}' only your own machine can reach (stdio or local network), and no online device can run it. Open the ${BRANDING_NAME} desktop app or run \`lh connect\` (update the CLI if it is older) on the machine that hosts this MCP server, then retry.`;
+          const message = mcpDeviceUnavailableMessage(identifier);
           return {
             content: message,
-            error: { code: 'MCP_DEVICE_UNAVAILABLE', message },
+            error: { code: MCP_DEVICE_UNAVAILABLE, message },
             success: false,
           };
         }
@@ -454,32 +459,14 @@ export class ToolExecutionService {
     // no plan-routed device and no connector→device ownership tie, fail closed
     // (caller surfaces MCP_DEVICE_UNAVAILABLE).
     if (workspaceId) return undefined;
-    // The scoped helper (not the raw gateway pool) is mandatory here: it
+    // The scoped device lookup (not the raw gateway pool) is mandatory here: it
     // applies device visibility and merges DB state. No serverDB → can't
     // apply visibility → fail closed.
     if (!context.userId || !context.serverDB) return undefined;
-    try {
-      const devices = await getScopedOnlineDevices(context.serverDB, context.userId, undefined);
-      // Already sorted online-first / most-recently-active: the newest online
-      // device that can run the call wins.
-      for (const device of devices) {
-        if (!device.online) continue;
-        // A device whose clients are unlabelled is not picked implicitly: it
-        // could be an older CLI that would mis-dispatch the call.
-        const clientKind = clientKindFromChannels(device.channels);
-        if (clientKind === 'unknown') continue;
-        const clientKinds = await resolveMcpClientKinds(
-          context.userId,
-          device.deviceId,
-          undefined,
-          clientKind,
-        );
-        if (clientKinds) return { clientKinds, deviceId: device.deviceId, workspaceId: undefined };
-      }
-      return undefined;
-    } catch {
-      return undefined;
-    }
+    const device = await findPersonalMcpDevice(context.serverDB, context.userId);
+    return device
+      ? { clientKinds: device.clientKinds, deviceId: device.deviceId, workspaceId: undefined }
+      : undefined;
   }
 
   /**
@@ -530,30 +517,8 @@ export class ToolExecutionService {
         arguments: args,
         deviceId: target.deviceId,
         identifier,
-        params:
-          mcpParams.type === 'stdio'
-            ? {
-                args: mcpParams.args ?? [],
-                command: mcpParams.command,
-                env: mcpParams.env,
-                name: mcpParams.name,
-                type: 'stdio',
-              }
-            : {
-                // AuthConfig also carries OAuth client secrets / refresh tokens —
-                // forward only what the device's MCP client needs to authenticate.
-                auth: mcpParams.auth
-                  ? {
-                      accessToken: mcpParams.auth.accessToken,
-                      token: mcpParams.auth.token,
-                      type: mcpParams.auth.type,
-                    }
-                  : undefined,
-                headers: mcpParams.headers,
-                name: mcpParams.name,
-                type: 'http',
-                url: mcpParams.url,
-              },
+        // Only the token fields of the auth travel to the device
+        params: toGatewayMcpParams(mcpParams),
         // Pin the client resolved for this device, so the call never lands on
         // one of its clients that cannot run it.
         clientKinds: target.clientKinds,
