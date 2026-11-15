@@ -1,14 +1,8 @@
 'use client';
 
-import {
-  createStaticStyles,
-  cssVar,
-  DraggablePanel,
-  Flexbox,
-  Icon,
-  Text,
-  useResponsive,
-} from '@lobehub/ui';
+import { DraggablePanel, Flexbox, Icon, Text, useResponsive } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { PanelRightOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useParams, useSearchParams } from 'react-router';
@@ -24,40 +18,24 @@ import { canViewAcceptanceHistory } from '../visibility';
 import LedgerPanel, { type AcceptanceRound } from './LedgerPanel';
 import { useAcceptanceRailState } from './useAcceptanceRailState';
 
-const styles = createStaticStyles(({ css }) => ({
-  chipCount: css`
-    font-size: 11px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
-  `,
-  /**
-   * Collapsed, the run ledger is a VERTICAL chip hugging the content's right
-   * edge: the rounds are the page's audit trail, not its reading material, so
-   * the affordance keeps the column it would otherwise occupy down to a
-   * thumb-width strip. The icon plus the round count carry it — spelling the
-   * label out sideways would cost the width the collapse just bought back.
-   */
-  toggle: css`
-    cursor: pointer;
-
-    position: absolute;
-    z-index: 10;
-    inset-block-start: 16px;
-    inset-inline-end: 12px;
-
-    padding-block: 8px;
-    padding-inline: 5px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 99px;
-
-    background: ${cssVar.colorBgContainer};
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-}));
+const styles = stylex.create({
+  chipCount: { fontSize: '11px', fontWeight: 500, color: cssVar.colorTextSecondary },
+  toggle: {
+    cursor: 'pointer',
+    position: 'absolute',
+    zIndex: 10,
+    insetBlockStart: '16px',
+    insetInlineEnd: '12px',
+    paddingBlock: '8px',
+    paddingInline: '5px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: { 'default': cssVar.colorBorderSecondary, ':hover': cssVar.colorBorder },
+    borderRadius: '99px',
+    backgroundColor: { 'default': cssVar.colorBgContainer, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+});
 
 const AcceptanceLedgerRail = () => {
   const { t } = useTranslation('verify');
@@ -140,13 +118,13 @@ const AcceptanceLedgerRail = () => {
       {!focused && !expand && (
         <Flexbox
           align={'center'}
-          className={styles.toggle}
+          className={stylex.props(styles.toggle).className}
           gap={5}
           title={t('acceptance.ledger.expand')}
           onClick={() => onExpandChange(true)}
         >
           <Icon icon={PanelRightOpen} size={14} />
-          <Text className={styles.chipCount}>{data.rounds.length}</Text>
+          <Text className={stylex.props(styles.chipCount).className}>{data.rounds.length}</Text>
         </Flexbox>
       )}
       {isNarrowViewport ? (

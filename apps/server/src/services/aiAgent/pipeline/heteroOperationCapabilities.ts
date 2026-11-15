@@ -17,6 +17,10 @@ import type { HeteroOperationCapability } from '@/libs/trpc/utils/internalJwt';
  * an explicit `/goal`. That keeps a goal from spawning goals of its own. A goal
  * a user-sent run creates binds to that user's topic, where its tray shows it.
  *
+ * `channel:read` and `channel:message` let a Channel dispatch read its own conversation
+ * (`lh channel history|message`) and message Agents in the requester's other Channels
+ * (`lh channel list|send`), as the requester, never as the device owner.
+ *
  * `acceptance:evidence` lets a Task run file evidence into its own verification
  * round (`lh acceptance run result submit|ingest --operation`). That round is
  * owned by the operation's creator, so on a device logged in as another member
@@ -35,7 +39,7 @@ export const heteroOperationCapabilities = (
   } = {},
 ): HeteroOperationCapability[] => [
   'hetero:ingest',
-  ...(options.channel ? (['channel:read'] as const) : []),
+  ...(options.channel ? (['channel:read', 'channel:message'] as const) : []),
   'hetero:finish',
   'hetero:intervention:read',
   ...(isGoalPrompt(prompt) || (options.userTurn && !options.channel && !options.taskId)

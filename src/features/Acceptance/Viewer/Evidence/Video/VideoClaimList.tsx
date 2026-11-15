@@ -1,7 +1,9 @@
 'use client';
 
 import type { VerifyEvidenceChapter } from '@lobechat/types';
-import { createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,80 +11,59 @@ import { useTranslation } from 'react-i18next';
 import { ClaimDot } from './ClaimLabel';
 import { claimsOf, formatVideoClock, formatVideoTime, stepsOf } from './videoTime';
 
-const styles = createStaticStyles(({ css }) => ({
-  step: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-
-    height: 24px;
-    padding-inline: 8px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    background: transparent;
-
-    &:hover {
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  toggle: css`
-    cursor: pointer;
-
-    display: inline-flex;
-    gap: 4px;
-    align-items: center;
-    align-self: flex-start;
-
-    padding: 0;
-    border: none;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-
-    background: none;
-
-    &:hover {
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  claim: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 8px;
-    align-items: baseline;
-
-    padding-block: 3px;
-    padding-inline: 6px;
-    border: none;
-    border-radius: ${cssVar.borderRadiusSM};
-
-    font-size: 13px;
-    color: ${cssVar.colorText};
-    text-align: start;
-
-    background: transparent;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  time: css`
-    flex: none;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  step: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '6px',
+    alignItems: 'center',
+    height: '24px',
+    paddingInline: '8px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextSecondary, ':hover': cssVar.colorText },
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  toggle: {
+    cursor: 'pointer',
+    display: 'inline-flex',
+    gap: '4px',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    padding: '0',
+    borderStyle: 'none',
+    fontSize: '12px',
+    color: { 'default': cssVar.colorTextTertiary, ':hover': cssVar.colorTextSecondary },
+    backgroundColor: 'transparent',
+    backgroundImage: 'none',
+  },
+  claim: {
+    cursor: 'pointer',
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'baseline',
+    paddingBlock: '3px',
+    paddingInline: '6px',
+    borderStyle: 'none',
+    borderRadius: cssVar.borderRadiusSM,
+    fontSize: '13px',
+    color: cssVar.colorText,
+    textAlign: 'start',
+    backgroundColor: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    backgroundImage: { 'default': 'none', ':hover': 'none' },
+  },
+  time: {
+    flex: 'none',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 interface VideoClaimListProps {
   chapters: VerifyEvidenceChapter[];
@@ -110,12 +91,12 @@ export const VideoClaimList = ({ chapters, onSeek }: VideoClaimListProps) => {
         <Flexbox horizontal gap={6} style={{ flexWrap: 'wrap' }}>
           {steps.map((step) => (
             <button
-              className={styles.step}
+              {...stylex.props(styles.step)}
               key={`${step.t}-${step.label}`}
               type={'button'}
               onClick={() => onSeek(step.t)}
             >
-              <span className={styles.time}>{formatVideoClock(step.t)}</span>
+              <span {...stylex.props(styles.time)}>{formatVideoClock(step.t)}</span>
               {step.label}
             </button>
           ))}
@@ -124,7 +105,7 @@ export const VideoClaimList = ({ chapters, onSeek }: VideoClaimListProps) => {
       {claims.length > 0 && (
         <button
           aria-expanded={open}
-          className={styles.toggle}
+          {...stylex.props(styles.toggle)}
           type={'button'}
           onClick={() => setOpen((value) => !value)}
         >
@@ -135,7 +116,7 @@ export const VideoClaimList = ({ chapters, onSeek }: VideoClaimListProps) => {
       {open &&
         claims.map((claim, index) => (
           <button
-            className={styles.claim}
+            {...stylex.props(styles.claim)}
             key={`${claim.kind}-${claim.t}-${index}`}
             type={'button'}
             onClick={() => onSeek(claim.t)}
@@ -143,7 +124,7 @@ export const VideoClaimList = ({ chapters, onSeek }: VideoClaimListProps) => {
             <span style={{ alignSelf: 'center', display: 'inline-flex' }}>
               <ClaimDot kind={claim.kind} />
             </span>
-            <span className={styles.time}>{formatVideoTime(claim.t)}</span>
+            <span {...stylex.props(styles.time)}>{formatVideoTime(claim.t)}</span>
             <span>{claim.note}</span>
           </button>
         ))}

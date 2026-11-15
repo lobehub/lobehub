@@ -272,7 +272,8 @@ derive(item))`) captures the value at first render. When a persisted cache hydra
   can leave the socket half-consumed, after which every later `screenshot` fails
   (`Resource temporarily unavailable` / `CDP response channel closed`) while
   `eval`/`get url` keep working — **not** a display-sleep or permission issue. Reset
-  with `agent-browser close --all`, or skip the daemon entirely (D6).
+  only the wedged session with `agent-browser --session <name> close` (`close --all`
+  also kills other agents' sessions), or skip the daemon entirely (D6).
 - **D6. WORKS — raw-CDP screenshot bypasses the daemon.** The bundled
   `bash "$SKILL_DIR/scripts/cdp-screenshot.sh" [--port <n>] [--out x.png] [--full] [--check]`
   opens its own WebSocket to the target, does

@@ -1,6 +1,8 @@
 import type {
   AnalyzeMediaParams,
   CallSubAgentParams,
+  CancelSubAgentParams,
+  CancelSubAgentState,
   MediaFileItem,
   MediaSourceMessage,
   VentParams,
@@ -9,6 +11,7 @@ import type {
 import {
   buildAnalyzeMediaContent,
   buildBackgroundSubAgentReceipt,
+  buildSteeredSubAgentReceipt,
   createMediaFileItemsFromMessage,
   createUrlMediaFileItems,
   formatMediaUrlValidationError,
@@ -336,6 +339,7 @@ class LobeAgentExecutionRuntime {
     let runResult: Awaited<ReturnType<typeof startRun>>;
     if (background) {
       const outcome = await startBackgroundSubAgent({
+        continuesThreadId: subAgentId,
         db: this.db,
         groupId: this.groupId,
         retryHint: 'Call callSubAgent again without runInBackground to wait for the result.',
@@ -350,7 +354,7 @@ class LobeAgentExecutionRuntime {
     } else {
       runResult = await startRun();
     }
-    const { started, error, threadId, subOperationId, toolMessageId } = runResult;
+    const { started, error, steered, threadId, subOperationId, toolMessageId } = runResult;
 
     // The child op failed to start — no completion bridge will ever fire to
     // backfill a placeholder, so we must NOT defer/park here. Return a normal
@@ -362,6 +366,17 @@ class LobeAgentExecutionRuntime {
         error ? `Sub-agent ${action}: ${error}` : `Sub-agent ${action}.`,
         'SUB_AGENT_START_FAILED',
       );
+    }
+
+    // Steered a sub-agent that is still running: the instruction joins its next
+    // step, and the running call reports the answer. Nothing to wait for here.
+    if (steered) {
+      return {
+        content: buildSteeredSubAgentReceipt(threadId),
+        state: { status: 'completed', steered: true, threadId },
+        success: true,
+        toolMessageId,
+      };
     }
 
     // Detached: the receipt is the whole tool result and the parent keeps going.
@@ -382,6 +397,62 @@ class LobeAgentExecutionRuntime {
       // `toolMessageId` rides along so the runtime's pause chunk can tell the
       // client which row to fetch; the client never sees it as tool state.
       state: { status: 'pending', subOperationId, threadId, toolMessageId },
+      success: true,
+    };
+  };
+
+  /**
+   * Stop a running sub-agent this agent dispatched earlier in the conversation.
+   * Cancelling it before it reports back keeps the stop from waking this agent
+   * again with a "did not complete" result (see `cancelSubAgentThreadRun`).
+   */
+  cancelSubAgent = async (
+    params: CancelSubAgentParams,
+    ctx: ToolExecutionContext,
+  ): Promise<BuiltinServerRuntimeOutput> => {
+    if (ctx.isSubAgent) {
+      return buildError(
+        'Sub-agents cannot be cancelled from within another sub-agent.',
+        'NESTED_SUB_AGENT_NOT_ALLOWED',
+      );
+    }
+    if (!ctx.subAgent?.cancel) {
+      return buildError(
+        'Cancelling a sub-agent is not available in this runtime.',
+        'SUB_AGENT_UNAVAILABLE',
+      );
+    }
+    const subAgentId = typeof params.subAgentId === 'string' ? params.subAgentId.trim() : '';
+    if (!subAgentId) {
+      return buildError(
+        'subAgentId is required: pass the id from the sub-agent\'s <sub_agent id="..." /> tag.',
+        'INVALID_ARGUMENTS',
+      );
+    }
+
+    const result = await ctx.subAgent.cancel({ subAgentId });
+
+    if (result.status === 'failed') {
+      return buildError(
+        `Sub-agent "${subAgentId}" could not be cancelled: ${result.error ?? 'unknown error'}`,
+        'SUB_AGENT_CANCEL_FAILED',
+      );
+    }
+
+    const state: CancelSubAgentState = { status: result.status, threadId: result.threadId };
+    if (result.status === 'not_running') {
+      return {
+        content: `Sub-agent "${subAgentId}" is not running, so there was nothing to cancel. If it already finished, its result is (or will be) delivered as usual.`,
+        state,
+        success: true,
+      };
+    }
+
+    return {
+      content: result.stopped
+        ? `Sub-agent "${subAgentId}" cancelled and stopped. No result will be delivered for it. Its history is kept: to steer it, call callSubAgent with subAgentId "${subAgentId}" and a corrected instruction.`
+        : `Sub-agent "${subAgentId}" cancelled. It is still finishing its current step and stops after it; no result will be delivered for it. Its history is kept: once it has stopped, call callSubAgent with subAgentId "${subAgentId}" and a corrected instruction to steer it.`,
+      state,
       success: true,
     };
   };

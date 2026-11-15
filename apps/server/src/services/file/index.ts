@@ -184,6 +184,9 @@ export class FileService {
    * Get full file URL
    */
   public async getFullFileUrl(url?: string | null, expiresIn?: number): Promise<string> {
+    // Native documents keep their content in the database, not object storage.
+    if (url?.startsWith('internal://')) return '';
+
     return this.impl.getFullFileUrl(url, expiresIn);
   }
 

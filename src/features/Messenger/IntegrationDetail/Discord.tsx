@@ -41,15 +41,10 @@ const DiscordDetail = memo<DiscordDetailProps>(({ appId, botUsername, name, onBa
 
   const data = useMessengerData('discord');
   const { handleSetActive, handleUnlink } = useLinkActions({
-    installationsMutate: data.installationsMutate,
-    linksMutate: data.linksMutate,
     name,
     platform: 'discord',
   });
-  const disconnectInstallation = useDisconnectInstallation({
-    installationsMutate: data.installationsMutate,
-    linksMutate: data.linksMutate,
-  });
+  const disconnectInstallation = useDisconnectInstallation();
 
   const handleDisconnectInstallation = (id: string) =>
     canEdit &&

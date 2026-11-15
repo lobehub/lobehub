@@ -10,6 +10,7 @@ import { ComposioServerStatus } from '@/store/tool/slices/composioStore/types';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
+import { buildInjectCredsResult } from '../injectResult';
 import { CredsIdentifier } from '../manifest';
 import { buildRequestCredsInputResult } from '../requestCredsInput';
 import type {
@@ -345,30 +346,17 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
         unsupportedInSandbox,
       });
 
-      // Build response content
-      const injectedKeys = params.keys.filter((k) => !notFound.includes(k));
-      let content = '';
-
-      if (injectedKeys.length > 0) {
-        content = `Credentials injected successfully: ${injectedKeys.join(', ')}.`;
-      }
-
-      if (notFound.length > 0) {
-        content += ` Not found: ${notFound.join(', ')}. Please configure them in Settings > Credentials.`;
-      }
-
-      if (unsupportedInSandbox.length > 0) {
-        content += ` Not supported in sandbox: ${unsupportedInSandbox.join(', ')}.`;
-      }
+      const summary = buildInjectCredsResult(params.keys, result as any);
 
       return {
-        content: content.trim(),
+        content: summary.content,
         state: {
-          credentials,
-          injected: injectedKeys,
-          notFound,
-          success: notFound.length === 0,
-          unsupportedInSandbox,
+          credentials: summary.credentials,
+          envVarsByKey: summary.envVarsByKey,
+          injected: summary.injected,
+          notFound: summary.notFound,
+          success: summary.notFound.length === 0,
+          unsupportedInSandbox: summary.unsupportedInSandbox,
         },
         success: true,
       };

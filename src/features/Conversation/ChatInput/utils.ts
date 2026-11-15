@@ -188,33 +188,45 @@ export const toDisplayableSendErrorMessage = (message?: string): string | undefi
  * "Send now" for one queued message: take it out of the queue, stop every run
  * it waits behind, then send it as a steered turn.
  *
- * Withdrawn first: interrupting a run that already took it from the server
- * would leave that copy unanswered. `withdraw` resolving `false` means it is
- * already on its way, so nothing is stopped or sent. Should the interrupt
- * fail, it goes back to the tray, held by this client only.
+ * Withdrawn first: interrupting a run that already wrote it into the
+ * conversation would leave that copy unanswered. One the run took but has not
+ * written yet (a CLI agent only reads it between its own turns) still
+ * interrupts: the stop returns it to this tab, and it is withdrawn again and
+ * sent. Should the interrupt fail, a withdrawn item goes back to the tray,
+ * held by this client only.
+ *
+ * @returns `'delivered'` when the run already has it, so nothing was sent
  */
 export const sendQueuedMessageNow = async ({
   chat,
   context,
   contextKey,
+  isQueued,
   msg,
   withdraw,
 }: {
   chat: ChatStore;
   context: ConversationContext;
   contextKey: string;
+  /** Reads the live queue: `chat` is a snapshot taken before any await. */
+  isQueued: (id: string) => boolean;
   msg: QueuedMessage;
+  /** Throws when the server cannot be asked; `false` means the run has it. */
   withdraw: (msg: QueuedMessage) => Promise<boolean>;
-}): Promise<void> => {
+}): Promise<'delivered' | 'sent'> => {
   const index = chat.queuedMessages[contextKey]?.findIndex((queued) => queued.id === msg.id) ?? -1;
-  if (!(await withdraw(msg))) return;
+  const withdrawn = await withdraw(msg);
+  // A `false` that leaves it in the tray means "taken, not yet written".
+  if (!withdrawn && !isQueued(msg.id)) return 'delivered';
   // Back where it was, so the order the user queued in holds.
-  const putBack = () =>
+  const putBack = () => {
+    if (!withdrawn) return;
     chat.restoreQueuedMessage(
       contextKey,
       { ...msg, serverDelivery: undefined, serverUnconfirmed: undefined },
       index < 0 ? Number.MAX_SAFE_INTEGER : index,
     );
+  };
 
   // Cancel EVERY running blocker the item could be queued behind, not just the
   // first: matching one op would miss an interim blocker or the second of the
@@ -234,6 +246,8 @@ export const sendQueuedMessageNow = async ({
     putBack();
     throw new Error('Running agent cancellation was not confirmed');
   }
+  // The stop handed it back unless the run wrote it first.
+  if (!withdrawn && !(await withdraw(msg))) return 'delivered';
 
   // Reconstruct UploadFileItem-shaped objects so the optimistic temp message
   // can rebuild imageList/videoList from the snapshotted preview metadata.
@@ -252,6 +266,7 @@ export const sendQueuedMessageNow = async ({
     message: msg.content,
     metadata: { ...msg.metadata, steer: true },
   });
+  return 'sent';
 };
 
 /**

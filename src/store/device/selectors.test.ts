@@ -1,4 +1,4 @@
-import type { DeviceListItem } from '@lobechat/types';
+import { DEVICE_TERMINAL_METADATA_KEY, type DeviceListItem } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import type { DeviceState } from './initialState';
@@ -26,11 +26,19 @@ describe('canHostTerminal', () => {
     expect(canHostTerminal(device({ channels: [channel('cli')], online: false }))).toBe(false);
   });
 
-  it('rejects a device whose live connections are all desktop ones', () => {
-    // The PTY lives in `lh connect`; terminal RPCs are sent with a `cli` hint,
-    // so a desktop-only machine answers them with a refusal.
+  it('rejects a device whose live connections are all from a desktop without terminal support', () => {
+    // An older desktop answers terminal RPCs with a refusal.
     expect(canHostTerminal(device({ channels: [channel('desktop')] }))).toBe(false);
     expect(canHostTerminal(device({ channels: [channel('desktop-dev')] }))).toBe(false);
+  });
+
+  it('accepts a desktop connection whose app reports terminal support', () => {
+    const metadata = { appVersion: '2.4.0', [DEVICE_TERMINAL_METADATA_KEY]: '1' };
+    expect(canHostTerminal(device({ channels: [channel('desktop')], metadata }))).toBe(true);
+    expect(canHostTerminal(device({ channels: [channel('desktop-dev')], metadata }))).toBe(true);
+    expect(
+      canHostTerminal(device({ channels: [channel('desktop')], metadata, online: false })),
+    ).toBe(false);
   });
 
   it('rejects connections of an unknown kind', () => {

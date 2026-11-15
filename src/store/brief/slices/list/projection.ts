@@ -36,3 +36,43 @@ export const briefListResource = defineReplica<
 export const briefEntity: ReplicaEntityAdapter<BriefItem[], BriefItem> = arrayEntity<BriefItem>(
   (brief) => brief.id,
 );
+
+export interface NewsDay {
+  /**
+   * The local day (`YYYY-MM-DD`) this payload belongs to. Carried in the data so
+   * a consumer still showing the previous day while the next one loads can
+   * label/gate from the day actually shown instead of the day being fetched.
+   */
+  day: string;
+  /** Any news brief older than this day exists — the day pager's "older" arrow. */
+  hasEarlier: boolean;
+  news: BriefItem[];
+}
+
+export interface NewsDayParams {
+  /** The viewer's local day, `YYYY-MM-DD`. */
+  day: string;
+}
+
+/**
+ * The day-scoped news digest (`insight` + `result`, resolved included), one
+ * entry per local day of the active identity scope. Persisted so a reload
+ * paints the last confirmed digest on the first frame; only the most recently
+ * viewed days are kept — paging further back is rare and refetches.
+ */
+export const briefNewsResource = defineReplica<NewsDayParams, NewsDay>({
+  key: ({ day }) => day,
+  name: 'briefNews',
+  persist: { maxEntries: 7 },
+  storage: 'indexedDB',
+  version: 1,
+});
+
+/** A news brief lives in `NewsDay.news`, addressed by `briefs.id`. */
+export const newsDayEntity: ReplicaEntityAdapter<NewsDay, BriefItem> = {
+  has: (data, id) => briefEntity.has(data.news, id),
+  map: (data, id, fn) => {
+    const news = briefEntity.map(data.news, id, fn);
+    return news === data.news || news === undefined ? data : { ...data, news };
+  },
+};

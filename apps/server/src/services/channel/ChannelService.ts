@@ -338,7 +338,7 @@ export class ChannelService {
       routing: config ? 'decision' : 'fallback',
     });
     notifyChannelMentions(this.db, { userId: this.userId, workspaceId: this.workspaceId }, message);
-    // Human quotes only update the public feed; they never schedule Agent work.
+    // A human quote without mentions only updates the public feed; it schedules no Agent work.
     if (message.replyToId && message.routingStatus === 'skipped') await this.changed(channelId);
     else await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
     return message;

@@ -43,6 +43,19 @@ const oneLine = (text: string | null | undefined) =>
 export const channelPreview = (channel: Pick<ChannelListItem, 'lastMessage'>) =>
   channel.lastMessage ? oneLine(markdownToTxt(channel.lastMessage.content)) : undefined;
 
+/**
+ * A row's preview line: its direct Channel's latest message once it has one, else its latest
+ * topic (assistant reply, else title), else its description.
+ */
+export const conversationPreview = (
+  description: string | null | undefined,
+  topic: RecentItem | undefined,
+  direct?: Pick<ChannelListItem, 'lastMessage'>,
+) =>
+  direct
+    ? (channelPreview(direct) ?? oneLine(description))
+    : oneLine(topic?.lastAssistantMessage || topic?.title || description);
+
 /** When a Channel last had a message, else when it was opened. */
 export const channelActivity = (channel: ChannelListItem): Date =>
   new Date(channel.lastMessage?.createdAt ?? channel.updatedAt ?? channel.createdAt);
@@ -92,13 +105,24 @@ export const inboxActivity = (
 /**
  * Turn the sidebar agent/group list into IM-style conversations: each row
  * carries a preview of its latest topic and is ordered by latest activity,
- * pinned rows first.
+ * pinned rows first. Only conversations that exist get a row — a direct Channel
+ * or a topic; the rest stay in Contacts. Pinned rows and the open one stay,
+ * and a search lists every agent so a new conversation can start from it.
  */
 export const buildConversationSections = (
   items: SidebarAgentItem[],
   recents: RecentItem[] | undefined,
   /** The person's direct Channel per agent id. A row that opens one shows that conversation. */
   directChannels?: Map<string, ChannelListItem>,
+  {
+    activeId,
+    includeIdle = false,
+  }: {
+    /** The routed conversation, kept so the open chat always has its row. */
+    activeId?: string;
+    /** Keep agents and groups without any conversation yet. */
+    includeIdle?: boolean;
+  } = {},
 ): ConversationSections => {
   const latestByOwner = topicsByOwner(recents);
 
@@ -116,22 +140,21 @@ export const buildConversationSections = (
         activeAt: new Date(Math.max(itemTime, channelActivity(direct).getTime())),
         channel: direct,
         item,
-        preview: channelPreview(direct) ?? oneLine(item.description),
+        preview: conversationPreview(item.description, undefined, direct),
         unread: direct.unreadCount ?? 0,
       });
       continue;
     }
 
     const latest = latestByOwner.get(item.id);
+    if (!latest && !includeIdle && !item.pinned && item.id !== activeId) continue;
+
     const latestTime = latest ? toTime(latest.updatedAt) : 0;
 
     conversations.push({
       activeAt: new Date(Math.max(itemTime, latestTime)),
       item,
-      preview:
-        (latest?.lastAssistantMessage || latest?.title || item.description || '')
-          .replaceAll(/\s+/g, ' ')
-          .trim() || undefined,
+      preview: conversationPreview(item.description, latest),
     });
   }
 
@@ -158,6 +181,8 @@ export const buildConversationEntries = (
   inbox: { activeAt?: Date; channel?: ChannelListItem; title: string } | undefined,
   query = '',
   channels: ChannelListItem[] = [],
+  /** The name of the project a Channel belongs to, which a search also matches. */
+  projectNameOf?: (channel: ChannelListItem) => string | undefined,
 ): ConversationEntry[] => {
   const keyword = query.trim().toLowerCase();
   const matches = (...names: (string | null | undefined)[]) =>
@@ -173,7 +198,7 @@ export const buildConversationEntries = (
   const rest = [
     ...items(recent),
     ...channels
-      .filter((channel) => matches(channel.title))
+      .filter((channel) => matches(channel.title, projectNameOf?.(channel)))
       .map((channel) => ({
         activeAt: channelActivity(channel),
         channel,
@@ -191,6 +216,29 @@ export const buildConversationEntries = (
   }
 
   return [...items(pinned), ...rest];
+};
+
+/**
+ * The Messages tab badge: the sum of what the list rows show. A row that opens a direct Channel
+ * counts that Channel's unread messages instead of its Agent's unread topics, and an archived
+ * group Channel has no row.
+ */
+export const messagesUnreadCount = (
+  items: Pick<SidebarAgentItem, 'id' | 'unreadCount'>[],
+  channels: ChannelListItem[] | undefined,
+): number => {
+  let sum = 0;
+  const directAgentIds = new Set<string>();
+  for (const channel of channels ?? []) {
+    const direct = !!channel.agentId && !channel.projectId;
+    if (direct) directAgentIds.add(channel.agentId!);
+    else if (channel.agentId || channel.status === 'archived') continue;
+    sum += channel.unreadCount ?? 0;
+  }
+  for (const item of items) {
+    if (!directAgentIds.has(item.id)) sum += item.unreadCount ?? 0;
+  }
+  return sum;
 };
 
 /** IM-style timestamp: time today, weekday this week, date otherwise. */

@@ -11,7 +11,7 @@ import type { TaskService } from '@/server/services/task';
 
 import { assertArchivedTaskStaysIdle } from './archiveGuard';
 import { assertTaskOriginPatchAllowed } from './originValidation';
-import { assertResultingScheduleValid } from './scheduleValidation';
+import { assertPreciseScheduleAllowed, assertResultingScheduleValid } from './scheduleValidation';
 import { findTaskOrThrow, resolveTaskOrThrow } from './utils';
 
 /**
@@ -187,6 +187,11 @@ export async function resolveTaskPatchInvariants<Data extends TaskPatchFields>(
 
   const resolved = await resolveTaskOrThrow(ctx.taskModel, id);
   assertResultingScheduleValid(resolved, data);
+  await assertPreciseScheduleAllowed(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    resolved.schedulePattern,
+    data.schedulePattern,
+  );
   assertArchivedTaskStaysIdle(resolved, data);
   // `context` replaces the whole column, origin included: a changed origin
   // must point at the caller's own conversation like it must at create time.

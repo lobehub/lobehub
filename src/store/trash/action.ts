@@ -29,26 +29,21 @@ const n = setNamespace('trash');
 
 type Setter = StoreSetter<TrashStore>;
 
-/** SWR key roots whose lists can regain rows after a restore. */
+/**
+ * SWR key roots whose lists can regain rows after a restore. Lists painted from
+ * a local copy are replicas and revalidate through their `replica:sync` keys;
+ * the rest are the in-memory SWR keys still registered in `@/libs/swr/keys`.
+ */
 const RESTORE_AFFECTED_KEY_PREFIXES = [
   'agent:',
-  // Agent sidebar sync keys (#18913) live outside `agent:` so they skip SWR persistence.
-  'agentSync:',
-  'document:',
-  'file:',
-  'group:',
-  'home:',
   'image:',
-  // Replicas (topic list, …) sync through `replica:sync` keys (`local-replica`).
+  // Replicas (agent sidebar, topic list, documents, tasks, recents, …) sync
+  // through `replica:sync` keys (`local-replica`).
   'replica:',
   // conversation transcripts — a restored message must reappear in its thread
   'message:',
   'page',
   'project',
-  'recent:',
-  'resource:',
-  'session:',
-  'task:',
   'topic:',
   'video:',
 ];

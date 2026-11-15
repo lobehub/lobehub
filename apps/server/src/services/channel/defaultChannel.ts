@@ -16,8 +16,8 @@ export interface DefaultChannelParams {
 }
 
 /**
- * Runs `open` only while Channels are on for the creator. Best-effort: what it follows already
- * exists, so a failure must not fail its creation.
+ * Runs `open` best-effort: what it follows already exists, so a failure must not fail its
+ * creation.
  */
 const openForCreator = async (
   what: string,
@@ -25,7 +25,6 @@ const openForCreator = async (
   open: () => Promise<unknown>,
 ) => {
   try {
-    if (!(await isChannelEnabled(context.userId))) return;
     await open();
   } catch (error) {
     console.error(`[channel] Failed to create ${what}`, { ...context, error });
@@ -34,7 +33,8 @@ const openForCreator = async (
 
 /**
  * Opens the Channel a new workspace or project starts with: its creator and its main Agent (the
- * scope's LobeAI when that Agent needs a device).
+ * scope's LobeAI when that Agent needs a device). Not gated by the `channel` flag: every project
+ * starts with its General Channel, so turning Channels on later finds it already there.
  */
 export const createDefaultChannel = async ({ db, ...context }: DefaultChannelParams) =>
   openForCreator('the default channel', context, () =>
@@ -65,8 +65,12 @@ export const createAgentDirectChannel = async ({
   localDeviceId,
   ...context
 }: AgentDirectChannelParams) =>
-  openForCreator('the direct channel of a new agent', context, () =>
-    new ChannelService(db, context.userId, context.workspaceId).createDirect(context.agentId, {
-      localDeviceId,
-    }),
-  );
+  openForCreator('the direct channel of a new agent', context, async () => {
+    if (!(await isChannelEnabled(context.userId))) return;
+    await new ChannelService(db, context.userId, context.workspaceId).createDirect(
+      context.agentId,
+      {
+        localDeviceId,
+      },
+    );
+  });

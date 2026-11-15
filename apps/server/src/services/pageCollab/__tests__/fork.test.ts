@@ -3,6 +3,8 @@ import { createHeadlessEditor } from '@lobehub/editor/headless';
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 
+import { createDocumentHeadlessEditor } from '@/server/services/agentDocuments/headlessEditor';
+
 import { openPageFork, projectPageState } from '../fork';
 
 const editorDataOf = (markdown: string) => {
@@ -12,6 +14,12 @@ const editorDataOf = (markdown: string) => {
   editor.destroy();
   return editorData;
 };
+
+// The list items of a page's first block, as the stored editor JSON holds them.
+const listItemStates = (editorData: unknown) =>
+  ((editorData as any).root.children[0].children as any[]).map(
+    ({ $: { listHeading, listNumber } = {} as any }) => ({ listHeading, listNumber }),
+  );
 
 const idOf = (litexml: string, text: string) =>
   litexml.match(new RegExp(`<p id="(\\w+)">\\s*<span[^>]*>${text}`))?.[1];
@@ -82,5 +90,27 @@ describe('openPageFork', () => {
 
     expect(projected.markdown).toContain('para two');
     expect(projected.markdown).toContain('https://example.com/icon.png');
+  });
+
+  it('seeds a room with heading list items and numbering restarts, and projects them back', async () => {
+    const source = createDocumentHeadlessEditor();
+    source.hydrateMarkdown('1. ## Overview\n2. Details\n3. More\n', { keepId: true });
+    const editorData = source.export().editorData as any;
+    source.destroy();
+    // The page editor stores a restart on the item it was set on.
+    editorData.root.children[0].children[2].$.listNumber = 7;
+
+    const seed = await openPageFork(undefined, editorData);
+    const state = seed.diff();
+    seed.destroy();
+
+    const projected = await projectPageState(state);
+
+    expect(listItemStates(projected.editorData)).toEqual([
+      { listHeading: 'h2', listNumber: undefined },
+      { listHeading: undefined, listNumber: undefined },
+      { listHeading: undefined, listNumber: 7 },
+    ]);
+    expect(projected.markdown).toContain('1. ## Overview\n');
   });
 });

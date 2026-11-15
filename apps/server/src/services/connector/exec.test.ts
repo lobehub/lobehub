@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConnectorToolPermission } from '@/database/schemas';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
+import type * as ContentProcessorModule from '@/server/services/mcp/contentProcessor';
 
 import { callConnectorToolById, readConnectorUiResourceById } from './exec';
 import { scheduleStaleConnectorToolsRefresh } from './refresh';
@@ -13,6 +14,17 @@ vi.mock('@/server/services/mcp', () => ({
   mcpService: { callTool: vi.fn(), readUiResource: vi.fn() },
 }));
 vi.mock('@/server/services/deviceGateway', () => ({ deviceGateway: { isConfigured: false } }));
+const callCloudMcpEndpoint = vi.hoisted(() => vi.fn());
+vi.mock('@/server/services/discover', () => ({
+  DiscoverService: vi.fn(function DiscoverService() {
+    return { callCloudMcpEndpoint };
+  }),
+}));
+const processContentBlocks = vi.hoisted(() => vi.fn());
+vi.mock('@/server/services/mcp/contentProcessor', async (importOriginal) => ({
+  ...(await importOriginal<typeof ContentProcessorModule>()),
+  processContentBlocks,
+}));
 const mcpAppsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
 vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mcpAppsEnabled }));
 vi.mock('./tokens', () => ({ ensureFreshConnectorToken: vi.fn(async (c) => c) }));
@@ -73,6 +85,50 @@ describe('callConnectorToolById', () => {
     expect(mcpService.callTool).not.toHaveBeenCalled();
   });
 
+  describe('an unfinished marketplace install', () => {
+    // A reinstall over a plugin row rewrites the endpoint and resets the row to
+    // disconnected until its tools sync: the old tool rows must not run on it
+    const pending = {
+      ...connector,
+      metadata: {},
+      sourceType: 'marketplace',
+      status: 'disconnected',
+    };
+    const call = (row: any, pluginRow?: unknown) =>
+      callConnectorToolById(
+        { identifier: 'my-conn', toolName: 'do_thing' },
+        {
+          ...makeCtx([row], [tool()]),
+          pluginModel: { findById: vi.fn().mockResolvedValue(pluginRow) },
+        },
+      );
+
+    it('refuses a pending reinstall over a plugin row', async () => {
+      await expect(call(pending, { identifier: 'my-conn' })).rejects.toHaveProperty(
+        'code',
+        'FORBIDDEN',
+      );
+      expect(mcpService.callTool).not.toHaveBeenCalled();
+    });
+
+    it('refuses a connected row with neither its install mark nor a plugin row', async () => {
+      await expect(call({ ...pending, status: 'connected' })).rejects.toHaveProperty(
+        'code',
+        'FORBIDDEN',
+      );
+      expect(mcpService.callTool).not.toHaveBeenCalled();
+    });
+
+    it('runs a connected row once a plugin row or its install mark finishes it', async () => {
+      vi.mocked(mcpService.callTool).mockResolvedValue({ ok: true } as any);
+
+      await call({ ...pending, status: 'connected' }, { identifier: 'my-conn' });
+      await call({ ...pending, metadata: { marketplaceInstalled: true }, status: 'connected' });
+
+      expect(mcpService.callTool).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('rejects an unknown tool name not in the synced list', async () => {
     const ctx = makeCtx([connector], [tool({ toolName: 'other' })]);
     await expect(
@@ -127,6 +183,56 @@ describe('callConnectorToolById', () => {
         toolName: 'do_thing',
       }),
     );
+  });
+
+  // Image / audio blocks become the caller's files, as `tools.mcp.callTool` stores them
+  it("stores a result's media blocks with the caller's file service", async () => {
+    vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
+    const fileService = { uploadMedia: vi.fn() };
+    const blocks = [{ data: 'aGk=', mimeType: 'image/png', type: 'image' }];
+    processContentBlocks.mockResolvedValue([{ text: 'stored', type: 'text' }]);
+
+    await callConnectorToolById(
+      { identifier: 'my-conn', toolName: 'do_thing' },
+      { ...makeCtx([connector], [tool()]), resolveFileService: () => fileService },
+    );
+
+    const { processContentBlocks: processor } = vi.mocked(mcpService.callTool).mock.calls[0][0];
+    expect(processor).toBeTypeOf('function');
+    await expect(processor!(blocks as any)).resolves.toEqual([{ text: 'stored', type: 'text' }]);
+    expect(processContentBlocks).toHaveBeenCalledWith(blocks, fileService);
+  });
+
+  it('formats media blocks as returned without file storage, or for a view', async () => {
+    vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
+    const resolveFileService = vi.fn(() => ({ uploadMedia: vi.fn() }) as any);
+
+    await callConnectorToolById(
+      { identifier: 'my-conn', toolName: 'do_thing' },
+      { ...makeCtx([connector], [tool()]), resolveFileService: () => undefined },
+    );
+    const server = await getMcpServerFingerprint({ type: 'http', url: connector.mcpServerUrl! });
+    await callConnectorToolById(
+      { fromApp: true, identifier: 'my-conn', server, toolName: 'do_thing' },
+      { ...makeCtx([connector], [tool()]), resolveFileService },
+    );
+
+    expect(mcpService.callTool).toHaveBeenCalledTimes(2);
+    for (const [call] of vi.mocked(mcpService.callTool).mock.calls) {
+      expect(call.processContentBlocks).toBeUndefined();
+    }
+    expect(resolveFileService).not.toHaveBeenCalled();
+  });
+
+  // Built only for an HTTP call: storage that cannot be built must not fail another kind
+  it('never reads file storage for a call that does not reach an HTTP server', async () => {
+    const resolveFileService = vi.fn();
+    const ctx = { ...makeCtx([connector], [tool()]), resolveFileService };
+
+    await expect(
+      callConnectorToolById({ identifier: 'my-conn', toolName: 'missing' }, ctx),
+    ).rejects.toHaveProperty('code', 'BAD_REQUEST');
+    expect(resolveFileService).not.toHaveBeenCalled();
   });
 
   it.each([true, false])('passes the caller mcp_apps flag (%s) through', async (enabled) => {
@@ -277,6 +383,77 @@ describe('callConnectorToolById', () => {
     });
   });
 
+  describe('cloud connectors', () => {
+    const cloud = {
+      ...connector,
+      credentials: null,
+      mcpConnectionType: 'cloud',
+      mcpServerUrl: null,
+    };
+    const fileService = { name: 'fileService' };
+    const cloudCtx = (caller: unknown) => ({
+      ...makeCtx([cloud], [tool()]),
+      resolveCloudMcpCaller: vi.fn().mockResolvedValue(caller),
+      userId: 'user-1',
+    });
+
+    it('runs the tool through the market cloud gateway with the Market token', async () => {
+      callCloudMcpEndpoint.mockResolvedValue({ content: [{ text: 'found', type: 'text' }] });
+      processContentBlocks.mockImplementation(async (blocks) => blocks);
+      const ctx = cloudCtx({
+        discoverService: { callCloudMcpEndpoint },
+        fileService,
+        userAccessToken: 'market-token',
+      });
+
+      const res = await callConnectorToolById(
+        { args: '{"q":"x"}', identifier: 'my-conn', toolName: 'do_thing' },
+        ctx,
+      );
+
+      expect(callCloudMcpEndpoint).toHaveBeenCalledWith({
+        apiParams: { q: 'x' },
+        identifier: 'my-conn',
+        toolName: 'do_thing',
+        userAccessToken: 'market-token',
+      });
+      expect(res).toMatchObject({ content: 'found', success: true });
+      expect(mcpService.callTool).not.toHaveBeenCalled();
+      expect(ensureFreshConnectorToken).not.toHaveBeenCalled();
+    });
+
+    it('stores media blocks before formatting the result', async () => {
+      const image = { data: 'iVBORw0KGgo', mimeType: 'image/png', type: 'image' };
+      const stored = {
+        data: 'https://files.example.com/a.png',
+        mimeType: 'image/png',
+        type: 'image',
+      };
+      callCloudMcpEndpoint.mockResolvedValue({ content: [image] });
+      processContentBlocks.mockResolvedValue([stored]);
+      const ctx = cloudCtx({ discoverService: { callCloudMcpEndpoint }, fileService });
+
+      const res = (await callConnectorToolById(
+        { identifier: 'my-conn', toolName: 'do_thing' },
+        ctx,
+      )) as { content: string; state: { content: unknown[] } };
+
+      expect(processContentBlocks).toHaveBeenCalledWith([image], fileService);
+      expect(res.content).toBe('![](https://files.example.com/a.png)');
+      expect(res.content).not.toContain('iVBOR');
+      expect(res.state.content).toEqual([stored]);
+    });
+
+    it('refuses the call when there is no Market credential to run it as', async () => {
+      const ctx = cloudCtx(undefined);
+
+      await expect(
+        callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(callCloudMcpEndpoint).not.toHaveBeenCalled();
+    });
+  });
+
   it('still returns the tool result when the background refresh scheduler throws', async () => {
     // The refresh is a pure optimization; a failure in it must never break the
     // tool call the user actually asked for.
@@ -344,7 +521,7 @@ describe('readConnectorUiResourceById', () => {
     );
   });
 
-  it('rejects missing, disabled and stdio connectors', async () => {
+  it('rejects missing, disabled, stdio and cloud connectors', async () => {
     await expect(
       readConnectorUiResourceById(
         { identifier: 'x', server: SERVER, uri: 'ui://app' },
@@ -361,6 +538,12 @@ describe('readConnectorUiResourceById', () => {
       readConnectorUiResourceById(
         { identifier: 'my-conn', server: SERVER, uri: 'ui://app' },
         makeCtx([{ ...connector, mcpConnectionType: 'stdio' }], []),
+      ),
+    ).rejects.toHaveProperty('code', 'BAD_REQUEST');
+    await expect(
+      readConnectorUiResourceById(
+        { identifier: 'my-conn', server: SERVER, uri: 'ui://app' },
+        makeCtx([{ ...connector, mcpConnectionType: 'cloud', mcpServerUrl: null }], []),
       ),
     ).rejects.toHaveProperty('code', 'BAD_REQUEST');
     expect(mcpService.readUiResource).not.toHaveBeenCalled();
@@ -440,5 +623,118 @@ describe('agent-scoped connectors of an agent the caller cannot see', () => {
 
     expect(ctx.connectorModel.resolveByIdentifiers).not.toHaveBeenCalled();
     expect(mcpService.readUiResource).not.toHaveBeenCalled();
+  });
+});
+
+// Marketplace installs used to run as plugins, whose calls the Market was told
+// about (`tools.mcp.callTool`, `market.callCloudMcpEndpoint`)
+describe('Market call reports', () => {
+  const marketplace = {
+    ...connector,
+    metadata: { marketplaceInstalled: true, version: '1.2.0' },
+    sourceType: 'marketplace',
+    status: 'connected',
+  };
+  const reportCtx = (row: any, report = vi.fn()) => ({
+    ...makeCtx([row], [tool()]),
+    resolveToolCallReporter: vi.fn().mockResolvedValue(report),
+  });
+
+  it("reports a marketplace server's call with its session and installed version", async () => {
+    vi.mocked(mcpService.callTool).mockResolvedValue({ content: 'done' } as any);
+    const report = vi.fn();
+
+    await callConnectorToolById(
+      { args: '{"q":1}', identifier: 'my-conn', toolName: 'do_thing', topicId: 'tpc_1' },
+      reportCtx(marketplace, report),
+    );
+
+    expect(report).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identifier: 'my-conn',
+        mcpType: 'http',
+        meta: { sessionId: 'tpc_1', version: '1.2.0' },
+        requestPayload: '{"q":1}',
+        result: { content: 'done' },
+        startTime: expect.any(Number),
+        success: true,
+        toolName: 'do_thing',
+      }),
+    );
+  });
+
+  it('reports a failed call as failed and still throws its error', async () => {
+    const failure = new Error('upstream 500');
+    vi.mocked(mcpService.callTool).mockRejectedValue(failure);
+    const report = vi.fn();
+
+    await expect(
+      callConnectorToolById(
+        { identifier: 'my-conn', toolName: 'do_thing' },
+        reportCtx(marketplace, report),
+      ),
+    ).rejects.toBe(failure);
+
+    expect(report).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorCode: 'CALL_FAILED',
+        errorMessage: 'upstream 500',
+        success: false,
+      }),
+    );
+  });
+
+  it('reports a market-hosted (cloud) server as cloud', async () => {
+    callCloudMcpEndpoint.mockResolvedValue({ content: [{ text: 'found', type: 'text' }] });
+    const report = vi.fn();
+    const ctx = {
+      ...reportCtx(
+        { ...marketplace, credentials: null, mcpConnectionType: 'cloud', mcpServerUrl: null },
+        report,
+      ),
+      resolveCloudMcpCaller: vi
+        .fn()
+        .mockResolvedValue({ discoverService: { callCloudMcpEndpoint } }),
+    };
+
+    await callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx);
+
+    expect(report).toHaveBeenCalledWith(
+      expect.objectContaining({ mcpType: 'cloud', success: true }),
+    );
+  });
+
+  it('does not report custom servers, or rows without an endpoint of their own', async () => {
+    vi.mocked(mcpService.callTool).mockResolvedValue({ content: 'done' } as any);
+    const custom = reportCtx({ ...connector, sourceType: 'custom' });
+    // A Composio connection is a marketplace row its own executor runs
+    const composio = reportCtx({
+      ...marketplace,
+      mcpConnectionType: null,
+      mcpServerUrl: null,
+      metadata: { composio: { toolkit: 'gmail' } },
+    });
+
+    await callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, custom);
+    // This route has no endpoint to call it on
+    await expect(
+      callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, composio),
+    ).rejects.toThrow();
+
+    expect(custom.resolveToolCallReporter).not.toHaveBeenCalled();
+    expect(composio.resolveToolCallReporter).not.toHaveBeenCalled();
+  });
+
+  it('still runs the call when no reporter can be resolved', async () => {
+    vi.mocked(mcpService.callTool).mockResolvedValue({ content: 'done' } as any);
+    const ctx = {
+      ...makeCtx([marketplace], [tool()]),
+      resolveToolCallReporter: vi.fn().mockRejectedValue(new Error('db down')),
+    };
+
+    await expect(
+      callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx),
+    ).resolves.toEqual({ content: 'done' });
   });
 });

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { GeneralChatAgent, GraphAgent } from '@lobechat/agent-runtime';
 import type { AgentGraph } from '@lobechat/types';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   type AgentInterventionContinuationProvenance,
@@ -10,6 +10,7 @@ import {
 import { createRuntimeExecutors } from '@/server/modules/AgentRuntime/RuntimeExecutors';
 
 import { AgentRuntimeService } from '../AgentRuntimeService';
+import { stubRunningDurableOperation } from '../AgentRuntimeService/__tests__/testUtils';
 import { CriticalAgentInterventionPersistenceError } from '../CompletionLifecycle';
 import { hookDispatcher } from '../hooks';
 
@@ -97,6 +98,10 @@ vi.mock('@/server/services/toolExecution/builtin', () => ({
 vi.mock('@lobechat/builtin-tools/dynamicInterventionAudits', () => ({
   dynamicInterventionAudits: [],
 }));
+
+beforeEach(() => {
+  stubRunningDurableOperation();
+});
 
 describe('AgentRuntimeService intervention continuation dispatch recovery', () => {
   const operationId = 'op-intervention-recovery';

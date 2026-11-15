@@ -64,7 +64,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   row: css`
     cursor: pointer;
-    padding-block: 10px;
+    padding-block: 8px;
     padding-inline: 12px;
 
     & + & {
@@ -522,7 +522,7 @@ const TaskVerifyConfig = memo(() => {
         gap={8}
         paddingBlock={4}
         paddingInline={8}
-        style={{ width: 'fit-content' }}
+        style={{ marginInlineStart: -8, width: 'fit-content' }}
         variant={'borderless'}
         onClick={handleCollapsedClick}
       >

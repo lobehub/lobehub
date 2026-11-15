@@ -101,6 +101,7 @@ export async function listHeterogeneousAgentModels(
       | 'copilot'
       | 'cursor'
       | 'devin'
+      | 'deepseek-harness'
       | 'droid'
       | 'grok-build'
       | 'kimi-code'

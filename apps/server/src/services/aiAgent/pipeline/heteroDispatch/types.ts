@@ -38,6 +38,8 @@ export interface HeteroDispatchDeps {
 export interface HeteroDispatchInput {
   canManageAgent: boolean;
   effectiveRequestedDeviceId?: string;
+  /** Not a plain composer send; see `shouldDeferHeteroDispatch`. */
+  hasOrchestration?: boolean;
   heterogeneousProvider?: LobeAgentAgencyConfig['heterogeneousProvider'];
   heteroType: HeterogeneousAgentType;
   hooks?: AgentHook[];

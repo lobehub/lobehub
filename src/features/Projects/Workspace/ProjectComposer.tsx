@@ -1,10 +1,10 @@
 'use client';
 
-import { ActionIcon, cssVar as lobeCssVar, Flexbox, toast } from '@lobehub/ui';
+import { cssVar as lobeCssVar, Flexbox, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { useSize } from 'ahooks';
-import { PlusIcon, SettingsIcon } from 'lucide-react';
+import { PlusIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,8 +19,6 @@ import {
 import FileUpload from '@/features/ChatInput/ActionBar/Upload';
 import InputDragUpload from '@/features/Home/InputArea/InputDragUpload';
 import ModeSelect from '@/features/Home/InputArea/ModeSelect';
-import { getProjectSettingsPath } from '@/features/Projects/Layout/navigation';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -29,15 +27,17 @@ import type { ProjectDetail } from '@/store/project';
 import { useCanManageProject } from '../useCanManageProject';
 import ProjectAgentSelect from './ProjectAgentSelect';
 import { projectComposerAgents } from './projectComposerAgents';
-import ProjectRepositoryChip from './ProjectRepositoryChip';
-import ProjectRunTargetChip from './ProjectRunTargetChip';
+import ProjectWorkLocationPicker from './ProjectWorkLocationPicker';
 import {
   AttachmentsNotReadyError,
+  DirectoryUnavailableError,
   getProjectComposerContextKey,
   type ProjectComposerMode,
   useProjectComposer,
 } from './useProjectComposer';
+import { useProjectDirectory } from './useProjectDirectory';
 import { useProjectRepository } from './useProjectRepository';
+import { useProjectWorkLocation } from './useProjectWorkLocation';
 
 const leftActions: ActionKeys[] = [];
 const rightActions: ActionKeys[] = [];
@@ -121,7 +121,6 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation('project');
   const { t: tHome } = useTranslation('home');
-  const navigate = useWorkspaceAwareNavigate();
   const trayRef = useRef<HTMLDivElement>(null);
   const traySize = useSize(trayRef);
   const compact = !!traySize && traySize.width < COMPACT_TRAY_WIDTH;
@@ -151,9 +150,16 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
   );
   const repositoryState = useProjectRepository(project.id, sharedAgent);
   const canManageProject = useCanManageProject();
-  // A task is not started in a conversation, so it has no repository to pick.
-  const environmentId = mode === 'chat' ? repositoryState.repository?.id : undefined;
-  const { send, sending } = useProjectComposer(project, mode, agentId, environmentId);
+  const location = useProjectWorkLocation(agentId);
+  const directoryState = useProjectDirectory(project.id, location.machineDeviceId);
+  // A task is not started in a conversation, so it has no repository or folder to pick.
+  const place =
+    mode !== 'chat'
+      ? {}
+      : location.target === 'sandbox'
+        ? { environmentId: repositoryState.repository?.id }
+        : { directoryId: directoryState.directory?.id };
+  const { send, sending } = useProjectComposer(project, mode, agentId, place);
 
   useInitAgentConfig(agentId);
   const isAgentConfigLoading = useAgentStore((s) =>
@@ -175,6 +181,10 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
     } catch (error) {
       if (error instanceof AttachmentsNotReadyError) {
         toast.error(tHome('dashboard.task.attachmentsNotReady'));
+        return;
+      }
+      if (error instanceof DirectoryUnavailableError) {
+        toast.error(t('overview.context.location.directoryUnavailable'));
         return;
       }
       console.error('Failed to send from the project home', error);
@@ -222,25 +232,16 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
             className={stylex.props(styles.trayTrailing).className}
             gap={2}
           >
-            {mode === 'chat' && (
-              <ProjectRepositoryChip
-                canManage={canManageProject}
-                compact={compact}
-                disabled={sending}
-                projectId={project.id}
-                publish={sharedAgent}
-                state={repositoryState}
-              />
-            )}
-            <ProjectRunTargetChip agentId={agentId} compact={compact} disabled={sending} />
-            <ActionIcon
-              aria-label={t('overview.context.settings')}
-              icon={SettingsIcon}
-              size={'small'}
-              title={t('overview.context.settings')}
-              onClick={() =>
-                navigate(getProjectSettingsPath(project.slug ?? project.id, 'environments'))
-              }
+            <ProjectWorkLocationPicker
+              canManage={canManageProject}
+              compact={compact}
+              directoryState={directoryState}
+              disabled={sending}
+              location={location}
+              projectId={project.id}
+              publish={sharedAgent}
+              showRepositories={mode === 'chat'}
+              state={repositoryState}
             />
           </Flexbox>
         </Flexbox>

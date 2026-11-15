@@ -93,6 +93,7 @@ export * from './workspaceMember';
 export * from './acceptanceComment';
 export * from './acceptanceFlow';
 export * from './acceptanceReview';
+export * from './acceptanceReviewRound';
 export * from './agentRuntime';
 export * from './oauthApp';
 export * from './openai/chat';

@@ -8,17 +8,19 @@ import {
   SANDBOX_SCOPE_ENTRY,
   type SandboxEntitlement,
   sandboxEntitlementResource,
+  type SandboxEnvironment,
+  sandboxEnvironmentEntity,
   sandboxEnvironmentsResource,
   type SandboxInstanceDirectory,
   sandboxInstanceDirectoryResource,
   sandboxInstancesResource,
-  type SandboxPickerEnvironment,
   type SandboxPickerInstance,
   type SandboxPickerInstanceList,
   toInstanceDirectory,
-  toPickerEnvironment,
+  toPersistedEnvironments,
   toPickerInstance,
   toSandboxEntitlement,
+  toSandboxEnvironment,
 } from './projection';
 
 type Setter = StoreSetter<SandboxState>;
@@ -56,14 +58,19 @@ export class SandboxPrivateAction {
     });
     this.environments = createReplicaSlice(sandboxEnvironmentsResource, {
       actionPrefix: 'sandboxEnvironments',
-      fetcher: async () => {
-        const { environments } = await environmentService.listEnvironments();
-        return environments.map(toPickerEnvironment);
+      entity: sandboxEnvironmentEntity,
+      fetcher: async (pool) => {
+        const { environments } = await environmentService.listEnvironments(
+          pool === 'all' ? undefined : { visibility: pool },
+        );
+        return environments.map(toSandboxEnvironment);
       },
       get,
       set,
       stateKey: 'sandboxEnvironmentsReplica',
-      view: recordLens<SandboxState, SandboxPickerEnvironment[]>('sandboxEnvironmentsMap'),
+      // Configuration (env, source URLs) stays in memory: see SandboxEnvironment.
+      toPersisted: toPersistedEnvironments,
+      view: recordLens<SandboxState, SandboxEnvironment[]>('sandboxEnvironmentsMap'),
     });
     // The conversation the instance list was last asked for. Every topic shares
     // one entry and one storage key, so the replica's own guard cannot tell a

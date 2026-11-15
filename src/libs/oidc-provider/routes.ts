@@ -13,7 +13,9 @@ export const OIDC_ROUTES = {
   code_verification: '/oidc/device',
   device_authorization: '/oidc/device/auth',
   end_session: '/oidc/session/end',
+  introspection: '/oidc/token/introspection',
   jwks: '/oidc/jwks',
+  revocation: '/oidc/token/revocation',
   token: '/oidc/token',
   userinfo: '/oidc/me',
 } as const;

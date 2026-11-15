@@ -1,5 +1,6 @@
 export * from './acceptanceComment';
 export * from './acceptanceFlow';
+export * from './acceptanceReview';
 export * from './agent';
 export * from './agentAccount';
 export * from './agentBotProvider';

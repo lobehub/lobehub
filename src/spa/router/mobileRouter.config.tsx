@@ -303,6 +303,15 @@ export const sharedMainAreaChildren: RouteObject[] = [
         handle: { meta: routeMeta({ icon: BotIcon, titleKey: 'navigation.agents' }) },
         index: true,
       },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/agents/[id]'),
+          'Mobile > Agents > Contact',
+          { preloadId: 'mobile-agents' },
+        ),
+        handle: { meta: routeMeta({ icon: BotIcon, titleKey: 'navigation.agents' }) },
+        path: ':id',
+      },
     ],
     errorElement: <ErrorBoundary resetPath=".." />,
     path: 'agents',

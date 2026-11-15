@@ -1,6 +1,7 @@
 import type {
   AgentBuilderContext,
   AgentContextDocument,
+  AgentDocumentChangesByMessage,
   AgentGroupConfig,
   AgentManagementContext,
   BotPlatformContext,
@@ -42,6 +43,8 @@ export type ContextVariables = Record<string, string | (() => string)>;
  * host (`resolveAgentConfig`) and frozen.
  */
 export interface ContextAgentSnapshot {
+  /** Change notes for the documents index, keyed by the user message each belongs to. */
+  documentChanges?: AgentDocumentChangesByMessage;
   /** Agent documents the agent may consult. */
   documents?: AgentContextDocument[];
   enableHistoryCount?: boolean;

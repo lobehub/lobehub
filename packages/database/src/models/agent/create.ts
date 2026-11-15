@@ -147,7 +147,9 @@ export const duplicate = async (
           openingMessage: sourceAgent.openingMessage,
           openingQuestions: sourceAgent.openingQuestions,
           params: sourceAgent.params,
-          pinned: sourceAgent.pinned,
+          // In a workspace a public row's `pinned` is the owner/admin team pin, so a
+          // copy never inherits it — copying is not a way to create team pins.
+          pinned: ctx.workspaceId ? false : sourceAgent.pinned,
           // Config
           plugins: sourceAgent.plugins,
           provider: sourceAgent.provider,

@@ -8,8 +8,6 @@ import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
 import { toAgentContextDocuments } from '@/utils/agentDocumentContextMapping';
 
-export { agentDocumentSWRKeys } from '@/services/document/swrKeys';
-
 const revalidateAgentDocuments = async (agentId: string) => {
   await invalidateDocumentMutation({ agentId, cause: 'agent-document' });
 };

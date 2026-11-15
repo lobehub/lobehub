@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, HomeIcon, Image, Settings, ShapesIcon, Video } from 'lucide-react';
+import { Download, HomeIcon, Image, Music, Settings, ShapesIcon, Video } from 'lucide-react';
 import { createElement, type ReactElement } from 'react';
 import type { RouteObject } from 'react-router';
 
@@ -42,6 +42,7 @@ import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces'
 import { agentChatTopicListLoader } from '@/spa/router/agentChatTopicListLoader';
 import { agentPageChildren } from '@/spa/router/agentPageRoutes';
 import { evalRoute } from '@/spa/router/evalRoutes';
+import { homeInboxLoader } from '@/spa/router/homeInboxLoader';
 import { memoryChildren } from '@/spa/router/memoryRoutes';
 import { onboardingRoute } from '@/spa/router/onboardingRoute';
 import { pageListLoader } from '@/spa/router/pageListLoader';
@@ -444,6 +445,29 @@ export const sharedMainAreaChildren: RouteObject[] = [
     path: 'video',
   },
 
+  // Music routes
+  {
+    children: [
+      {
+        element: dynamicElement(() => import('@/routes/(main)/(create)/music'), 'Desktop > Music', {
+          preloadId: 'music',
+        }),
+        handle: {
+          meta: routeMeta({ icon: Music, titleKey: 'navigation.music' }),
+        },
+        index: true,
+      },
+    ],
+    element: dynamicLayout(
+      () => import('@/routes/(main)/(create)/music/_layout'),
+      'Desktop > Music > Layout',
+      { preloadId: 'music' },
+    ),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: routeMeta({ Skeleton: GenerationSkeleton }) },
+    path: 'music',
+  },
+
   // Image routes
   {
     children: [
@@ -647,6 +671,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
         element: deferPlatformElement(options.createHomeElement),
         handle: { meta: workspaceHomeRouteMeta },
         index: true,
+        loader: homeInboxLoader,
       },
       ...sharedMainAreaChildren,
       // Workspace settings — `/:slug/settings/*`. Dedicated layout with its
@@ -755,6 +780,7 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
       }),
     },
     index: true,
+    loader: homeInboxLoader,
   },
   // Catch-all route
   {

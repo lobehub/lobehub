@@ -69,6 +69,24 @@ function openTags(text, re) {
   }
   return out;
 }
+/** 只找标签自己的属性（深度 0），不进嵌在 prop 里的子元素。返回 `name={…}` 在 tag 里的区间。 */
+function ownAttr(tag, name) {
+  let depth = 0;
+  for (let i = 0; i < tag.length; i++) {
+    const c = tag[i];
+    if (c === '{') depth++;
+    else if (c === '}') depth--;
+    else if (depth === 0 && /\s/.test(tag[i - 1] ?? '') && tag.startsWith(`${name}={`, i)) {
+      let d = 0, j = i + name.length + 1;
+      for (; j < tag.length; j++) {
+        if (tag[j] === '{') d++;
+        else if (tag[j] === '}' && --d === 0) break;
+      }
+      return { start: i, end: j + 1 };
+    }
+  }
+  return null;
+}
 const isPurpleish = (hex) => { const { hue, sat } = hexHue(hex); return hue >= 230 && hue <= 300 && sat > 0.35; };
 
 // ---- 75-copy（T-02 / T-03）：只看含中文的用户可见字符串 ----
@@ -162,6 +180,9 @@ export const RULES = [
   { id: 'LOBE-REIMPLEMENT-ATOM', platforms: WEB, level: 'WARN', ref: 'C-11', stage: '30-structure', kind: 'line', since: '3.0.0',
     msg: '在项目里重新实现了原子层组件（Button/Modal/Table/Input…）；原子层必须从 @lobehub/ui 取用，业务组合才自建',
     test: (l) => /^\s*(export\s+)?(const|function)\s+(Button|Modal|Drawer|Table|Input|Select|Checkbox|Radio|Switch|Tabs|Tooltip|Popover|Tag|Badge|Avatar|Skeleton|Pagination|Divider|Progress|Spin|Empty)\b/.test(l) },
+  { id: 'LOBE-HANDROLLED-TABLE', platforms: WEB, level: 'WARN', ref: 'C-08', stage: '30-structure', kind: 'line', since: '5.9.0',
+    msg: '用 role="columnheader" / "rowheader" 手拼了一张表；记录列表用 ProTable（@lobehub/ui/pro-table），已在手上的数据用 Table',
+    test: (l) => /\brole=["'{`]*(columnheader|rowheader)["'}`]/.test(l) },
 
   // ---- 50-visual (D-/K-/A-) ----
   { id: 'LOBE-RAW-COLOR', level: 'FAIL', ref: 'D-10', stage: '50-visual', kind: 'line',
@@ -226,6 +247,16 @@ export const RULES = [
     test: (t) => openTags(t, /<(ActionIcon|Button)\b/g).filter((o) => /\bicon=/.test(o.tag) && !/\b(title|aria-label|accessibilityLabel)=/.test(o.tag) && (o.selfClosing || /^\s*<\//.test(t.slice(o.end)))).map((o) => ({ index: o.index, match: o.tag.slice(0, 80) })) },
   { id: 'LOBE-VAGUE-ERROR', level: 'WARN', ref: 'W-05', stage: '70-detail', kind: 'line',
     msg: '模糊错误文案；说清发生了什么 / 为什么 / 怎么办', test: (l) => /['"`>]\s*(操作失败|出错了|发生错误|请求失败|something went wrong|error occurred)\s*[!！。.]?\s*['"`<]/i.test(l) },
+  { id: 'LOBE-REFETCH-OVERLAY', level: 'WARN', ref: 'K-05', stage: '70-detail', kind: 'text', since: '5.9.0',
+    msg: 'loading 跟着 isFetching 走（排除首屏后仍包含后台刷新），表格会周期性变暗；遮罩只给翻页 / 换筛选时的旧数据（isPlaceholderData），同步提示用刷新按钮的 loading',
+    test: (t) => openTags(t, /<[A-Z][\w.]*/g)
+      .filter((o) => !/^<[\w.]*(Button|ActionIcon)\b/.test(o.tag))
+      .flatMap((o) => {
+        const at = ownAttr(o.tag, 'loading');
+        if (!at) return [];
+        const v = o.tag.slice(at.start, at.end);
+        return /\bisFetching\b[\s\S]*&&\s*!/.test(v) && !/isPlaceholderData/.test(v) ? [{ index: o.index + at.start, match: v.slice(0, 80) }] : [];
+      }) },
   { id: 'LOBE-BARE-EMPTY', level: 'WARN', ref: 'W-04', stage: '70-detail', kind: 'line',
     msg: '孤零零的「暂无数据」；给出下一步或原因', test: (l) => /['"`>]\s*(暂无数据|no data)\s*['"`<]/i.test(l) },
   { id: 'LOBE-VAGUE-BUTTON', level: 'WARN', ref: 'W-01', stage: '40-flow', kind: 'line',

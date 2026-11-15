@@ -8,7 +8,7 @@ import {
   getActiveWorkspaceId,
   useActiveWorkspaceId,
 } from '@/business/client/hooks/useActiveWorkspaceId';
-import { createReplicaSlice, type ReplicaLens } from '@/libs/replica';
+import { createReplicaSlice, type ReplicaLens, revalidateReplica } from '@/libs/replica';
 import { workspaceUserSettingsService } from '@/services/workspaceUserSettings';
 import { refreshAgentDeviceBindings } from '@/store/device/agentDeviceBinding';
 import { type StoreSetter } from '@/store/types';
@@ -192,6 +192,19 @@ export class WorkspaceUserSettingsActionImpl {
       isLoading: !!workspaceId && data === undefined && (!sync.isHydrated || sync.isValidating),
       mutate: sync.revalidate,
     };
+  };
+
+  /**
+   * Re-read the active workspace's preference from the server. Call it after
+   * a server-side write to this member's preference that the client did not
+   * make itself (e.g. publishing a pinned private Agent moves its pin into
+   * `sidebarPinnedItemIds`), so the next local whole-array write is not based
+   * on a stale copy.
+   */
+  refreshWorkspaceUserPreference = async (): Promise<void> => {
+    const workspaceId = getActiveWorkspaceId();
+    if (!workspaceId) return;
+    await revalidateReplica(getWorkspaceUserPreferenceResource(), workspaceId);
   };
 
   updateWorkspaceUserPreference = async (

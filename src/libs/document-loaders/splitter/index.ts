@@ -115,22 +115,15 @@ function mergeSplits(splits: string[], separator: string, config: SplitterConfig
   return chunks;
 }
 
-/**
- * Calculate line location metadata for a chunk within the original text.
- */
-function getLineLocation(fullText: string, chunk: string): { from: number; to: number } {
-  const index = fullText.indexOf(chunk);
-  if (index === -1) {
-    return { from: 1, to: 1 };
+const NEWLINE = 10;
+
+const countNewlines = (text: string, from: number, to: number): number => {
+  let count = 0;
+  for (let i = from; i < to; i++) {
+    if (text.charCodeAt(i) === NEWLINE) count++;
   }
-
-  const beforeChunk = fullText.slice(0, index);
-  const from = beforeChunk.split('\n').length;
-  const chunkLines = chunk.split('\n').length;
-  const to = from + chunkLines - 1;
-
-  return { from, to };
-}
+  return count;
+};
 
 /**
  * Create document chunks from text using given separators.
@@ -145,16 +138,21 @@ function createDocuments(
 
   // Track search position to handle duplicate chunks correctly
   let searchFrom = 0;
+  // Chunks are located in document order, so the line number is carried forward from the
+  // previous match. Recounting from the start of the text for every chunk made a 2 MB source
+  // file hold the event loop for seconds.
+  let lineCursor = 0;
+  let lineAtCursor = 1;
 
   return chunks.map((chunk) => {
     const index = text.indexOf(chunk, searchFrom);
     let loc = { from: 1, to: 1 };
 
     if (index !== -1) {
-      const beforeChunk = text.slice(0, index);
-      const from = beforeChunk.split('\n').length;
-      const chunkLines = chunk.split('\n').length;
-      loc = { from, to: from + chunkLines - 1 };
+      lineAtCursor += countNewlines(text, lineCursor, index);
+      lineCursor = index;
+      const from = lineAtCursor;
+      loc = { from, to: from + countNewlines(chunk, 0, chunk.length) };
       // Advance search position past this match (but allow overlap)
       searchFrom = index + 1;
     }

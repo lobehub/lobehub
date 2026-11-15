@@ -32,6 +32,7 @@ import type {
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
 import type { ProviderResponseDiagnostics } from '../../types/providerDiagnostics';
+import type { TextToSpeechOptions, TextToSpeechPayload } from '../../types/tts';
 import type {
   CreateVideoPayload,
   CreateVideoResult,
@@ -50,6 +51,7 @@ import {
   getRuntimeSignatureScopeSource,
 } from '../../utils/signatureScope';
 import { createGoogleImage } from './createImage';
+import { createGeminiSpeech } from './createSpeech';
 import { createGoogleVideo, isGeminiOmniVideoModel, pollGoogleVideoOperation } from './createVideo';
 import { createGoogleGenerateObject, createGoogleGenerateObjectWithTools } from './generateObject';
 import { handleGoogleVideoWebhook } from './handleCreateVideoWebhook';
@@ -413,6 +415,19 @@ export class LobeGoogleAI implements LobeRuntimeAI {
 
       throw AgentRuntimeError.chat({ error, errorType, provider: this.provider });
     }
+  }
+
+  /**
+   * Text-to-speech with Gemini TTS models (`responseModalities: AUDIO`). Gemini returns
+   * 16-bit PCM, which is encoded to the requested `mp3` / `wav` / `pcm` output.
+   * @see https://ai.google.dev/gemini-api/docs/speech-generation
+   */
+  textToSpeech(payload: TextToSpeechPayload, options?: TextToSpeechOptions) {
+    return createGeminiSpeech(this.client, payload, {
+      ...options,
+      ...this.modelIdMappingOptions,
+      provider: this.provider,
+    });
   }
 
   async handlePollVideoStatus(inferenceId: string) {

@@ -61,6 +61,12 @@ export interface QueuedFollowUp extends SteerQueueEntry {
    */
   composer?: { editorData?: Record<string, unknown>; filesPreview?: Record<string, unknown>[] };
   request: QueuedFollowUpRequest;
+  /**
+   * Queued by a parent agent for its running `callSubAgent` child (see
+   * `queueSubAgentSteer`), so it is written for exactly that run: it joins the
+   * child's turn as it is, whatever device or executor settings the run has.
+   */
+  subAgentSteer?: boolean;
   /** Who queued it; only the run owner's own follow-ups are started for them. */
   userId: string;
 }

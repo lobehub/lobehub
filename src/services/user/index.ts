@@ -124,6 +124,11 @@ export class UserService {
     return lambdaClient.user.updateUsername.mutate(username);
   };
 
+  /** Wave goal asks off the approval island for every client of this account. */
+  addIslandDismissals = async (keys: string[]): Promise<string[]> => {
+    return lambdaClient.user.addIslandDismissals.mutate({ keys });
+  };
+
   updatePreference = async (preference: Partial<UserPreference>) => {
     return lambdaClient.user.updatePreference.mutate(preference);
   };

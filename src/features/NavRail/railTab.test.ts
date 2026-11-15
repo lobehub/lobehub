@@ -5,8 +5,10 @@ import { resolveRailTab } from './railTab';
 describe('resolveRailTab', () => {
   it.each([
     ['/', null, 'messages'],
-    ['/agent/agent-1', null, 'messages'],
-    ['/lobe-team/group/group-1/tpc_1', 'lobe-team', 'messages'],
+    // Everything inside an agent or group is its inner page, chats included.
+    ['/agent/agent-1', null, 'contacts'],
+    ['/agent/agent-1/tpc_1', null, 'contacts'],
+    ['/lobe-team/group/group-1/tpc_1', 'lobe-team', 'contacts'],
     ['/agents', null, 'contacts'],
     ['/agent/agent-1/profile', null, 'contacts'],
     ['/lobe-team/group/group-1/profile', 'lobe-team', 'contacts'],

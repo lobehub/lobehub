@@ -19,7 +19,8 @@ import type { SettingsTabSkeleton } from './types';
  */
 export const LabsFormSkeleton = () => {
   const { t, ready } = useTranslation('labs');
-  const enableWorkspace = useServerConfigStore(serverConfigSelectors.enableWorkspace);
+  // Workspaces exist wherever business features are enabled.
+  const enableWorkspace = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const text = (key: string, width: number, height = 14) =>
     ready ? (t(key as any) as string) : <SkeletonBar height={height} width={width} />;
 

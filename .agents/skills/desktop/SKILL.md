@@ -14,6 +14,11 @@ LobeHub desktop is built on Electron with main-renderer architecture:
 2. **Renderer Process**: Reuses web code from `src/`
 3. **Preload Scripts** (`apps/desktop/src/preload`): Securely expose main process to renderer
 
+Both processes log to `<userData>/logs/{main,renderer}.jsonl` in dev and packaged
+builds (`apps/desktop/src/main/utils/structuredLog/`); read them with
+`pnpm --dir apps/desktop logs list|query|follow` (filters: `--level`, `--since`,
+`--operation op_…`, `--topic tpc_…`) instead of `tail`ing files.
+
 ## Adding New Desktop Features
 
 ### 1. Create Controller

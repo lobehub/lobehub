@@ -34,11 +34,17 @@ const CODE_KEYS: Record<string, string> = {
   INSTANCE_REBUILD_REQUIRED: 'environments.instances.rebuildPersonalRequired',
   INSTANCE_STARTING: 'environments.instances.stopStarting',
   INSTANCE_STOP_FAILED: 'environments.instances.stopRefused',
+  // Deleting a folder that holds a private environment directory left on the public drive.
+  PATH_HOLDS_HIDDEN: 'drive.cleanup.holdsHidden',
   PATH_NOT_FOUND: 'environments.files.notFound',
   PATH_OUTSIDE_INSTANCE: 'environments.files.invalidPath',
   // Retryable on purpose: the run is still packing its snapshot, and the
   // execution plane would rather leave it running than cut the save off.
   SNAPSHOT_IN_PROGRESS: 'environments.instances.stopSnapshotPending',
+  // A storage service deployed before the drive could be analyzed.
+  storage_analysis_unavailable: 'drive.cleanup.unavailable',
+  // `regenerableOnly` asked for, and some path is not a dependency, cache or build output.
+  storage_paths_not_regenerable: 'drive.cleanup.notRegenerable',
 };
 
 /**

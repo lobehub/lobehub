@@ -43,10 +43,15 @@ describe('isRailContactsRoute', () => {
     ['/lobe-team/agent/agent-1/channel/discord', 'lobe-team', true],
     ['/agent/agent-1/self-evolving/domain-1', null, true],
     ['/group/group-1/profile', null, true],
-    ['/agent/agent-1', null, false],
-    ['/agent/agent-1/tpc_1', null, false],
-    ['/agent/agent-1/tasks', null, false],
-    ['/group/group-1', null, false],
+    // An agent's or group's chats are its inner pages too.
+    ['/agent/agent-1', null, true],
+    ['/agent/agent-1/tpc_1', null, true],
+    ['/agent/agent-1/tasks', null, true],
+    ['/group/group-1', null, true],
+    ['/lobe-team/group/group-1/tpc_1', 'lobe-team', true],
+    ['/', null, false],
+    ['/agent', null, false],
+    ['/tasks', null, false],
   ])('%s → %s', (pathname, activeWorkspaceSlug, expected) => {
     expect(isRailContactsRoute(pathname, activeWorkspaceSlug)).toBe(expected);
   });

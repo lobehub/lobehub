@@ -2,7 +2,7 @@
 
 import type { SandboxDrive } from '@lobechat/builtin-tool-cloud-sandbox';
 import { Button, Center, Flexbox, Icon, Spin, Tabs, Text } from '@lobehub/ui';
-import { LockIcon, UsersIcon } from 'lucide-react';
+import { ChartPieIcon, LockIcon, UsersIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,9 +11,11 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { MAX_WIDTH } from '@/const/layoutTokens';
 import { useSandboxDriveEntitlement } from '@/hooks/useSandboxDriveEntitlement';
 
+import StorageCleanup from './Cleanup';
 import DriveExplorer from './DriveExplorer';
 import DriveUsage from './DriveUsage';
-import { useDriveTab } from './useDriveTab';
+import OverQuotaBanner from './OverQuotaBanner';
+import { useDriveTab, useDriveView } from './useDriveTab';
 
 /**
  * The cloud sandbox's drives: what is on them, how much they hold, and — for
@@ -32,6 +34,7 @@ const DriveSettings = memo(() => {
   const { entitled, error, retry } = useSandboxDriveEntitlement();
   const drives: SandboxDrive[] = isWorkspace ? ['public', 'personal'] : ['personal'];
   const [active, setActive] = useDriveTab(drives);
+  const [view, setView] = useDriveView();
 
   // Whether the plan has a drive could not be read: say so and offer it
   // again, rather than a spinner that never resolves.
@@ -80,13 +83,33 @@ const DriveSettings = memo(() => {
           <DriveUsage />
         </Flexbox>
       )}
+      {view === 'files' && <OverQuotaBanner onCleanup={() => setView('cleanup')} />}
       {/* Keyed on the drive, so a path browsed on one never carries to the other. */}
-      <DriveExplorer
-        drive={active}
-        isWorkspace={isWorkspace}
-        key={active}
-        toolbarExtra={isWorkspace ? undefined : <DriveUsage />}
-      />
+      {view === 'cleanup' ? (
+        <StorageCleanup
+          drive={active}
+          key={`${workspaceId ?? 'personal'}:${active}`}
+          onBack={() => setView('files')}
+        />
+      ) : (
+        <DriveExplorer
+          drive={active}
+          isWorkspace={isWorkspace}
+          key={`${workspaceId ?? 'personal'}:${active}`}
+          toolbarExtra={
+            <>
+              {!isWorkspace && <DriveUsage />}
+              <Button
+                icon={<Icon icon={ChartPieIcon} />}
+                size={'small'}
+                onClick={() => setView('cleanup')}
+              >
+                {t('drive.cleanup.entry')}
+              </Button>
+            </>
+          }
+        />
+      )}
     </Flexbox>
   );
 });

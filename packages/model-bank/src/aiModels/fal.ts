@@ -1,5 +1,5 @@
 import type { ModelParamsSchema } from '../standard-parameters';
-import type { AIImageModelCard, AIVideoModelCard } from '../types/aiModel';
+import type { AIImageModelCard, AIText2MusicModelCard, AIVideoModelCard } from '../types/aiModel';
 
 export const fluxSchnellParamsSchema: ModelParamsSchema = {
   height: { default: 1024, max: 1536, min: 512, step: 1 },
@@ -325,6 +325,84 @@ const falVideoModels: AIVideoModelCard[] = [
   },
 ];
 
-export const allModels = [...falImageModels, ...falVideoModels];
+/**
+ * fal-hosted music models. Each card declares only the standard music params its fal endpoint
+ * accepts; the runtime maps them to the endpoint's input fields (see `providers/fal/createMusic`).
+ */
+const falMusicModels: AIText2MusicModelCard[] = [
+  {
+    description:
+      'MiniMax Music 2.6 on fal: full songs with vocals and arrangement from lyrics and a style description. Leave the lyrics empty to have them written from the description, or switch on instrumental.',
+    displayName: 'MiniMax Music 2.6',
+    enabled: true,
+    id: 'fal-ai/minimax-music/v2.6',
+    parameters: {
+      autoLyrics: { default: false },
+      bitrate: { default: 256_000, enum: [32_000, 64_000, 128_000, 256_000] },
+      format: { default: 'mp3', enum: ['mp3', 'wav'] },
+      instrumental: { default: false },
+      lyrics: { default: null, maxLength: 3500 },
+      prompt: { default: '', maxLength: 2000, minLength: 10, required: true },
+      sampleRate: { default: 44_100, enum: [16_000, 24_000, 32_000, 44_100] },
+    },
+    pricing: {
+      units: [{ name: 'musicGeneration', rate: 0.15, strategy: 'fixed', unit: 'song' }],
+    },
+    type: 'text2music',
+  },
+  {
+    description:
+      'MiniMax Music 3 on fal: complete songs up to five minutes from a structured style description and lyrics, billed by the generated length.',
+    displayName: 'MiniMax Music 3',
+    enabled: true,
+    id: 'minimax/music-3',
+    parameters: {
+      duration: { default: 60, max: 300, min: 1, step: 1 },
+      lyrics: { default: null, required: true },
+      prompt: { default: '', required: true },
+    },
+    pricing: {
+      units: [{ name: 'musicGeneration', rate: 0.002, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'text2music',
+  },
+  {
+    description:
+      'MiniMax Music 01 on fal: sings your lyrics (up to 600 characters) in the style of a reference song. The reference must be an MP3 or WAV with music and vocals, longer than 15 seconds.',
+    displayName: 'MiniMax Music 01 (Reference Audio)',
+    enabled: true,
+    id: 'fal-ai/minimax-music',
+    parameters: {
+      lyrics: { default: null, maxLength: 600, required: true },
+      prompt: { default: '' },
+      referenceAudioUrl: { default: null, minDuration: 15, required: true },
+    },
+    pricing: {
+      units: [{ name: 'musicGeneration', rate: 0.035, strategy: 'fixed', unit: 'song' }],
+    },
+    type: 'text2music',
+  },
+  {
+    description:
+      'ACE-Step 1.5 on fal: open-source song generation in 50+ languages with lyrics, style tags, instrumental mode and lengths up to 10 minutes, billed by the generated length.',
+    displayName: 'ACE-Step 1.5',
+    enabled: true,
+    id: 'fal-ai/ace-step-1.5',
+    parameters: {
+      duration: { default: 30, max: 600, min: 10, step: 1 },
+      instrumental: { default: false },
+      lyrics: { default: null, maxLength: 4096 },
+      prompt: { default: '', maxLength: 512 },
+      style: { default: null, maxLength: 256 },
+    },
+    pricing: {
+      // $0.0003 per output second, doubled because the runtime keeps fal's default `thinking: true`
+      units: [{ name: 'musicGeneration', rate: 0.0006, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'text2music',
+  },
+];
+
+export const allModels = [...falImageModels, ...falVideoModels, ...falMusicModels];
 
 export default allModels;

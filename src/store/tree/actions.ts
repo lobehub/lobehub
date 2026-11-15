@@ -1,12 +1,23 @@
+import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { createReplicaSlice, recordLens } from '@/libs/replica';
 import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { fileService } from '@/services/file';
+import { knowledgeBaseService } from '@/services/knowledgeBase';
 import { resourceService } from '@/services/resource';
+import { useFileStore } from '@/store/file';
 import type { StoreSetter } from '@/store/types';
 import { OptimisticEngine } from '@/store/utils/optimisticEngine';
+import { SortType } from '@/types/files';
+import type { ResourceSorter } from '@/types/resource';
 
-import { isExpandable, revalidateHierarchySearch, sortTreeItems, toTreeItem } from './items';
+import {
+  isExpandable,
+  revalidateHierarchySearch,
+  sortTreeItems,
+  toTreeItem,
+  toTreeItemFromResource,
+} from './items';
 import {
   buildLibraryTreeSnapshot,
   libraryTreeResource,
@@ -202,7 +213,12 @@ export class TreeActionImpl {
     if (seeded.length === 0) return;
 
     const nextChildren = { ...children };
-    for (const folderId of seeded) nextChildren[folderId] = snapshot.children[folderId];
+    for (const folderId of seeded)
+      nextChildren[folderId] = sortTreeItems(
+        snapshot.children[folderId],
+        this.#get().sorter,
+        this.#get().sortType,
+      );
     const nextExpanded = { ...expanded };
     for (const folderId of snapshot.expanded) {
       if (nextExpanded[folderId] === undefined) nextExpanded[folderId] = true;
@@ -228,6 +244,12 @@ export class TreeActionImpl {
   };
 
   init = (knowledgeBaseId: string) => {
+    const manager = useResourceManagerStore.getState();
+    if (manager.libraryId === knowledgeBaseId) {
+      this.#set({ sorter: manager.sorter, sortType: manager.sortType });
+    } else {
+      this.#set({ sorter: 'custom', sortType: SortType.Asc });
+    }
     const current = this.#get();
     // Remounting the library already in memory (leaving the page and coming
     // back): keep the tree on screen and confirm what is loaded in the
@@ -355,7 +377,7 @@ export class TreeActionImpl {
   };
 
   loadChildren = async (folderId: string) => {
-    const { epoch, knowledgeBaseId, status } = this.#get();
+    const { epoch, knowledgeBaseId, status, sorter, sortType } = this.#get();
     if (status[folderId] === 'loading') return;
 
     // Clear any prior error for this folder so a retry doesn't keep the failure marker.
@@ -373,6 +395,8 @@ export class TreeActionImpl {
         knowledgeBaseId: knowledgeBaseId ?? undefined,
         parentId: folderId || null,
         showFilesInKnowledgeBase: false,
+        sorter,
+        sortType,
       });
 
       if (this.#get().epoch !== epoch) return;
@@ -381,7 +405,11 @@ export class TreeActionImpl {
         {
           children: {
             ...this.#get().children,
-            [folderId]: sortTreeItems(response.items.map(toTreeItem)),
+            [folderId]: sortTreeItems(
+              response.items.map(toTreeItem),
+              this.#get().sorter,
+              this.#get().sortType,
+            ),
           },
           status: { ...this.#get().status, [folderId]: 'idle' },
         },
@@ -425,8 +453,7 @@ export class TreeActionImpl {
    */
   revalidateLoaded = async (fallbackKey = ''): Promise<void> => {
     void revalidateHierarchySearch();
-    const targets = new Set(this.#loadedVisibleFolders());
-    targets.add(this.#resolveFolderKey(fallbackKey));
+    const targets = new Set([...this.#loadedVisibleFolders(), this.#resolveFolderKey(fallbackKey)]);
 
     this.#pendingBatch += 1;
     try {
@@ -451,7 +478,7 @@ export class TreeActionImpl {
    * Resolves `true` only when the folder's rows now come from this refetch.
    */
   #revalidateFolder = async (folderId: string): Promise<boolean> => {
-    const { epoch, knowledgeBaseId, status } = this.#get();
+    const { epoch, knowledgeBaseId, status, sorter, sortType } = this.#get();
     if (status[folderId] === 'loading' || status[folderId] === 'revalidating') {
       this.#queuedRevalidate.add(folderId);
       return false;
@@ -469,6 +496,8 @@ export class TreeActionImpl {
         knowledgeBaseId: knowledgeBaseId ?? undefined,
         parentId: folderId || null,
         showFilesInKnowledgeBase: false,
+        sorter,
+        sortType,
       });
 
       if (this.#get().epoch !== epoch) return false;
@@ -477,7 +506,11 @@ export class TreeActionImpl {
         {
           children: {
             ...this.#get().children,
-            [folderId]: sortTreeItems(response.items.map(toTreeItem)),
+            [folderId]: sortTreeItems(
+              response.items.map(toTreeItem),
+              this.#get().sorter,
+              this.#get().sortType,
+            ),
           },
           status: { ...this.#get().status, [folderId]: 'idle' },
         },
@@ -516,7 +549,10 @@ export class TreeActionImpl {
     );
     this.#set(
       {
-        children: { ...this.#get().children, [folderId]: sortTreeItems(scoped) },
+        children: {
+          ...this.#get().children,
+          [folderId]: sortTreeItems(scoped, this.#get().sorter, this.#get().sortType),
+        },
         status: { ...this.#get().status, [folderId]: 'idle' },
       },
       false,
@@ -615,6 +651,137 @@ export class TreeActionImpl {
     await this.#revalidateSettled(targets.length > 0 ? targets : [fallbackParentKey]);
   };
 
+  setTreeSort = (sorter: ResourceSorter, sortType: SortType): void => {
+    const state = this.#get();
+    if (state.sorter === sorter && state.sortType === sortType) return;
+    this.#set(
+      {
+        sorter,
+        sortType,
+        children: Object.fromEntries(
+          Object.entries(state.children).map(([key, items]) => [
+            key,
+            sortTreeItems(items, sorter, sortType),
+          ]),
+        ),
+      },
+      false,
+      'tree/setSort',
+    );
+    // Each request must use the new order, including requests currently in flight.
+    if (state.knowledgeBaseId) {
+      for (const key of new Set([...Object.keys(state.children), ...Object.keys(state.status)])) {
+        void this.#revalidateFolder(key);
+      }
+    }
+  };
+
+  reorderItems = async (
+    parentKey: string,
+    dragIds: string[],
+    targetId: string,
+    position: 'before' | 'after',
+  ): Promise<void> => {
+    const { knowledgeBaseId } = this.#get();
+    if (!knowledgeBaseId) return;
+    const folderId = this.#resolveFolderKey(parentKey);
+    const explorer = useFileStore.getState();
+    const viewingFolder =
+      explorer.queryParams?.libraryId === knowledgeBaseId &&
+      this.#resolveFolderKey(explorer.queryParams?.parentId ?? '') === folderId &&
+      !explorer.queryParams?.q;
+    const loaded = this.#get().children[folderId];
+    const siblings = loaded?.length
+      ? loaded
+      : viewingFolder
+        ? explorer.resourceList.map(toTreeItemFromResource)
+        : [];
+    const target = siblings.find((item) => item.id === targetId);
+    if (!target || dragIds.includes(targetId)) return;
+    const ids = new Set(dragIds);
+    const dragged = siblings.filter((item) => ids.has(item.id));
+    if (!dragged.length) return;
+    // A mixed selection reorders only the target's group.
+    let moving = dragged.filter((item) => item.isFolder === target.isFolder);
+    let boundary = false;
+    if (!moving.length) {
+      const folders = siblings.filter((item) => item.isFolder);
+      const firstFile = siblings.find((item) => !item.isFolder);
+      boundary =
+        (target.isFolder && position === 'after' && folders.at(-1)?.id === targetId) ||
+        (!target.isFolder && position === 'before' && firstFile?.id === targetId);
+      if (!boundary) return;
+      moving = dragged.filter((item) => item.isFolder !== target.isFolder);
+    }
+    const movingIds = new Set(moving.map((item) => item.id));
+    const folderGroup = siblings.filter((item) => item.isFolder && !movingIds.has(item.id));
+    const fileGroup = siblings.filter((item) => !item.isFolder && !movingIds.has(item.id));
+    const group = moving[0].isFolder ? folderGroup : fileGroup;
+    const index = boundary
+      ? moving[0].isFolder
+        ? group.length
+        : 0
+      : group.findIndex((item) => item.id === targetId) + (position === 'after' ? 1 : 0);
+    group.splice(index, 0, ...moving);
+    const nextItems = [...folderGroup, ...fileGroup].map((item, index) => ({
+      ...item,
+      metadata: { ...item.metadata, sortOrder: (index + 1) * 1000 },
+    }));
+    const orderedIds = nextItems.map((item) => item.id);
+    const previousSorter = this.#get().sorter;
+    const previousSortType = this.#get().sortType;
+    // Avoid a sort-triggered background fetch racing the pending mutation.
+    this.#set(
+      {
+        sorter: 'custom',
+        sortType: SortType.Asc,
+        children: Object.fromEntries(
+          Object.entries(this.#get().children).map(([key, rows]) => [
+            key,
+            sortTreeItems(rows, 'custom', SortType.Asc),
+          ]),
+        ),
+      },
+      false,
+      'tree/reorderSort',
+    );
+    useResourceManagerStore.getState().setSort('custom', SortType.Asc);
+    const tx = this.#getEngine().createTransaction('reorderItems');
+    tx.set((draft) => {
+      draft.children[folderId] = nextItems;
+    });
+    tx.mutation = async () => {
+      await knowledgeBaseService.reorderKnowledgeItems({
+        knowledgeBaseId,
+        dragIds: moving.map((item) => item.id),
+        targetId,
+        position,
+        parentId: folderId || null,
+        sorter: previousSorter,
+        sortType: previousSortType,
+      });
+    };
+    const overlay = viewingFolder ? explorer.reorderCurrentResources(orderedIds) : undefined;
+    try {
+      const current = await this.#commitTracked(tx);
+      overlay?.commit();
+      if (current) {
+        await this.#revalidateSettled([
+          ...new Set([folderId, ...Object.keys(this.#get().children)]),
+        ]);
+        void useFileStore
+          .getState()
+          .refreshFileList()
+          .catch((error: unknown) => {
+            console.error('Failed to refresh Explorer after reorder:', error);
+          });
+      }
+    } catch (error) {
+      overlay?.rollback();
+      throw error;
+    }
+  };
+
   moveItem = async (itemId: string, fromParent: string, toParent: string): Promise<void> => {
     const { children } = this.#get();
     const item = children[fromParent]?.find((i) => i.id === itemId);
@@ -650,7 +817,11 @@ export class TreeActionImpl {
       // that lone row as the whole folder; the post-commit revalidate fills it.
       const target = draft.children[toParent];
       if (target) {
-        draft.children[toParent] = sortTreeItems([...target.filter((i) => i.id !== itemId), item]);
+        draft.children[toParent] = sortTreeItems(
+          [...target.filter((i) => i.id !== itemId), item],
+          this.#get().sorter,
+          this.#get().sortType,
+        );
       }
     });
 
@@ -691,10 +862,11 @@ export class TreeActionImpl {
       );
       const target = draft.children[toParent];
       if (target) {
-        draft.children[toParent] = sortTreeItems([
-          ...target.filter((i) => !idsSet.has(i.id)),
-          ...items,
-        ]);
+        draft.children[toParent] = sortTreeItems(
+          [...target.filter((i) => !idsSet.has(i.id)), ...items],
+          this.#get().sorter,
+          this.#get().sortType,
+        );
       }
     });
 

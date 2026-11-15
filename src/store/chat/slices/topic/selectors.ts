@@ -27,6 +27,7 @@ import { type ChatStoreState } from '../../initialState';
 import { topicMapKey } from '../../utils/topicMapKey';
 import { operationSelectors } from '../operation/selectors';
 import { type TopicData } from './initialState';
+import type { TopicShareEntry } from './projection';
 
 // Helper selector: get current topic data based on session context
 const currentTopicData = (s: ChatStoreState): TopicData | undefined => {
@@ -544,6 +545,12 @@ const agentTopicsViewIsLoadingMore = (s: ChatStoreState): boolean =>
 const agentTopicsViewLoadMoreError = (s: ChatStoreState): unknown =>
   agentTopicsViewData(s)?.loadMoreError;
 
+/** The topic's share entry (`share: null` = no record), or `undefined` before its first paint. */
+const getTopicShare =
+  (topicId?: string | null) =>
+  (s: ChatStoreState): TopicShareEntry | undefined =>
+    topicId ? s.topicShareMap[topicId] : undefined;
+
 export const topicSelectors = {
   activeTopicHeteroPin,
   activeTopicModel,
@@ -570,6 +577,7 @@ export const topicSelectors = {
   getTopicModelById,
   getTopicReasoningConfigForModel,
   getTopicReasoningPinById,
+  getTopicShare,
   getTopicWorkingDirectory,
   getTopicsByAgentId,
   groupedTopicsForSidebar,

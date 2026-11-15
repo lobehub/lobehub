@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cacheScope, REPLICA_INDEX_KEY } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { resourceService } from '@/services/resource';
+import { SortType } from '@/types/files';
 import type { ResourceItem } from '@/types/resource';
 
 import { MAX_RECENT_SEARCHES } from './action';
@@ -180,6 +181,17 @@ describe('ResourceManager search replicas', () => {
       const row = await explorerSearchResource.storage!.get({ queryKey: EXPLORER_KEY, scope });
       expect(ids(row?.data)).toEqual(['a', 'b']);
     });
+  });
+
+  it('requests and caches each search sort independently', async () => {
+    fetchSpy.mockResolvedValue(page([item('sorted')]));
+    const params = { ...EXPLORER_PARAMS, sorter: 'custom', sortType: SortType.Desc } as const;
+    renderHook(() => useResourceManagerStore((s) => s.useFetchExplorerSearch)(params), { wrapper });
+    await waitFor(() => expect(ids(explorerEntry(params))).toEqual(['sorted']));
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ sorter: 'custom', sortType: SortType.Desc }),
+    );
+    expect(explorerKeyOf(params)).not.toBe(explorerKeyOf({ ...params, sortType: SortType.Asc }));
   });
 
   it('repaints the explorer search from its own head page when the keyword changes', async () => {

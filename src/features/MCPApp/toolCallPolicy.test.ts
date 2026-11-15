@@ -358,6 +358,50 @@ describe('getAppToolCallPolicy', () => {
       plugins.set('weather', plugin('always'));
       expect(await getAppToolCallPolicy('weather', 'send')).toBe('confirm');
     });
+
+    // A cloud marketplace MCP the market marks `always`: the connector's
+    // three-state permission alone would let auto-run through
+    it('still asks for a connector tool its manifest made mandatory, whatever its permission', async () => {
+      for (const permission of ['needs_approval', 'auto']) {
+        connectors.set('mail', {
+          ...connector(permission),
+          tools: [{ metadata: { mandatoryApproval: true }, permission, toolName: 'send' }],
+        });
+        expect(await getAppToolCallPolicy('mail', 'send')).toBe('confirm');
+      }
+    });
+
+    it("keeps a plugin tool's own always when its connector marks it as needing approval", async () => {
+      plugins.set('weather', plugin('always'));
+      connectors.set('weather', {
+        isEnabled: true,
+        tools: [{ permission: 'needs_approval', toolName: 'send' }],
+      });
+      expect(await getAppToolCallPolicy('weather', 'send')).toBe('confirm');
+
+      plugins.set('weather', plugin('required'));
+      expect(await getAppToolCallPolicy('weather', 'send')).toBe('allow');
+    });
+
+    // An unfinished marketplace reinstall over a plugin row: the call runs the
+    // plugin (`invokeMcpToolCall`), so the plugin's own `always` decides
+    it('judges an unfinished marketplace reinstall by the plugin it falls back to', async () => {
+      plugins.set('weather', plugin('always'));
+      connectors.set('weather', {
+        ...connector('needs_approval'),
+        sourceType: 'marketplace',
+        status: 'disconnected',
+      });
+      expect(await getAppToolCallPolicy('weather', 'send')).toBe('confirm');
+
+      // Once the reinstall finishes, the connector it routes to decides
+      connectors.set('weather', {
+        ...connector('needs_approval'),
+        sourceType: 'marketplace',
+        status: 'connected',
+      });
+      expect(await getAppToolCallPolicy('weather', 'send')).toBe('allow');
+    });
   });
 
   it('asks for arguments the security blacklist matches, in every mode', async () => {

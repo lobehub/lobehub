@@ -170,7 +170,12 @@ const ProjectSelector = memo<ProjectSelectorProps>(
           }
           icon={
             option.kind === 'project' ? (
-              <ProjectAvatar avatar={option.project.avatar} name={option.project.name} size={18} />
+              <ProjectAvatar
+                avatar={option.project.avatar}
+                id={option.project.id}
+                name={option.project.name}
+                size={18}
+              />
             ) : (
               <Icon color={cssVar.colorTextDescription} icon={FolderXIcon} size={16} />
             )

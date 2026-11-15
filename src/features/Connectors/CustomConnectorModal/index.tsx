@@ -9,7 +9,9 @@ import { connectorSelectors } from '@/store/tool/slices/connector';
 import { waitForConnectorOAuth } from '@/utils/connectorOAuth';
 import { executeOAuthCreate } from '@/utils/connectorOAuthCreate';
 
+import { saveConnectorEdit } from './connectorEdit';
 import { executeLegacyMigrationSave } from './legacyPluginMigration';
+import { saveOAuthConnectorEdit } from './oauthEdit';
 
 interface CustomConnectorModalProps {
   connectorId?: string;
@@ -68,7 +70,6 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
   ({ open, onClose, connectorId, legacyPlugin, onEditSuccess }) => {
     const createConnector = useToolStore((s) => s.createConnector);
     const deleteConnector = useToolStore((s) => s.deleteConnector);
-    const updateConnector = useToolStore((s) => s.updateConnector);
     const getConnectorForEdit = useToolStore((s) => s.getConnectorForEdit);
     const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
     const syncConnectorTools = useToolStore((s) => s.syncConnectorTools);
@@ -266,6 +267,16 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
         if (newUrl !== undefined) patch.mcpServerUrl = newUrl;
 
+        // The transport and a stdio command are edited here too, not only the URL.
+        patch.mcpConnectionType = isHttp ? 'http' : 'stdio';
+        if (!isHttp) {
+          patch.mcpStdioConfig = {
+            args: mcp.args ?? [],
+            command: (mcp.command ?? '').trim(),
+            env: cleanRecord(mcp.env),
+          };
+        }
+
         // Custom headers live in metadata (independent of the auth credential and
         // of the server URL), so always re-sync them from the form. Merge into the
         // existing metadata — a jsonb update replaces the whole column, so other
@@ -304,17 +315,18 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
           };
         }
 
-        await updateConnector(connectorId, patch);
-
-        if (authType === 'oauth2' && isHttp) {
+        if (isHttp && authType === 'oauth2') {
+          // Synced by its callback; a failed authorization undoes the edit
           const popup = ctx?.oauthPopup;
           try {
-            const authorizationUrl = await startConnectorOAuth(connectorId);
-            await waitForConnectorOAuth(popup, connectorId, authorizationUrl);
+            await saveOAuthConnectorEdit(connectorId, patch, popup, useToolStore.getState);
           } finally {
             popup?.close();
             await fetchConnectors();
           }
+        } else {
+          // Re-lists the tools; an unreadable list undoes the edit
+          await saveConnectorEdit(connectorId, patch, useToolStore.getState);
         }
 
         onEditSuccess?.();

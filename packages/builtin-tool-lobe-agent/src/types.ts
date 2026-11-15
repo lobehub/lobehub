@@ -4,6 +4,7 @@ export const LobeAgentApiName = {
   analyzeMedia: 'analyzeMedia',
   askUserQuestion: 'askUserQuestion',
   callSubAgent: 'callSubAgent',
+  cancelSubAgent: 'cancelSubAgent',
   clearTodos: 'clearTodos',
   createPlan: 'createPlan',
   createTodos: 'createTodos',
@@ -158,6 +159,27 @@ export interface CallSubAgentParams {
   timeout?: number;
 }
 
+/**
+ * Parameters for cancelSubAgent API
+ * Stop a running sub-agent dispatched earlier by callSubAgent.
+ */
+export interface CancelSubAgentParams {
+  /** Why the sub-agent is no longer needed; kept on the tool call for the UI. */
+  reason?: string;
+  /** Id of the sub-agent to stop (from its `<sub_agent id>` trailer). */
+  subAgentId: string;
+}
+
+/** State persisted on the cancelSubAgent tool message. */
+export interface CancelSubAgentState {
+  /**
+   * - `cancelled`: the sub-agent was stopped.
+   * - `not_running`: it had already finished or stopped; nothing was cancelled.
+   */
+  status: 'cancelled' | 'not_running';
+  threadId: string;
+}
+
 /** Execution stats reported back by a finished sub-agent run. */
 export interface SubAgentRunStats {
   /** Model the sub-agent ran on */
@@ -217,6 +239,11 @@ export interface CallSubAgentState extends SubAgentRunStats {
    */
   sender?: { agentId: string; name: string };
   status?: 'pending' | 'completed' | 'error';
+  /**
+   * This call sent its instruction to a sub-agent that was still running: it
+   * was queued for that run's next step, and the row only holds the receipt.
+   */
+  steered?: boolean;
   threadId: string;
 }
 

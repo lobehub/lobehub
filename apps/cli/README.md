@@ -4,23 +4,42 @@ LobeHub command-line interface.
 
 ## Release to npm
 
-The `Release CLI` GitHub Actions workflow publishes stable versions to npm's
-`latest` tag from `canary`. To release, bump `apps/cli/package.json` in a PR:
+The `Release CLI` GitHub Actions workflow publishes to npm's `latest` tag when
+CLI production inputs change on `canary`. Merge the feature or fix PR after its
+checks and required product acceptance; no separate version-bump PR is needed.
 
-```bash
-cd apps/cli
-npm version patch --no-git-tag-version
-bun run man:generate
-```
+Automatic inputs are `apps/cli/src/**`, build scripts, `package.json`, the CLI
+workspace/TypeScript/tsdown configuration, and the release workflow/helper.
+Tests, fixtures, Markdown documentation, E2E-only changes and generated manuals
+are excluded. Changes only to shared workspace packages or the offline report
+can be released by manually dispatching `Release CLI` on `canary`.
 
-Commit the version and generated manual, complete the checks and any product
-acceptance required by the change, then merge the PR into `canary`. CI checks
-the registry, tests the CLI bundle, runs the complete `prepublishOnly` build
-(including the offline report), smoke-checks it, and publishes with provenance.
-The workflow can also be dispatched manually on `canary` to retry a failed run.
-Already published versions are skipped; prereleases and versions older than
-`latest` are rejected. Registry errors stop the run instead of assuming a
-version is unpublished. CI does not change versions or commit back to the repo.
+CI allocates the next patch above the highest stable npm version (for example,
+`0.0.78` → `0.0.79`). A higher stable version intentionally set in `package.json`
+is honored for a minor/major release. The generated version is used for the
+bundle and manual; CI does not commit version changes back to the branch. The
+checked-in version is therefore a development baseline, not necessarily npm's
+latest release. Use `npm view @lobehub/cli version` to check the published version.
+
+The workflow tests the bundle, runs the complete `prepublishOnly` build, checks
+the built CLI and packs it. Immediately before publication it creates a
+`cli-release/v<version>` Git tag pointing at the source commit. The tag reserves
+the version for retries; the published package also records `gitHead`.
+Publication is serialized and the workflow waits up to ten minutes for npm to
+expose the matching version/source under `latest`. A successful upload alone is
+not reported as a verified publication.
+
+Use **Re-run failed jobs** on the original run to recover a failed publication.
+A retry reuses its reserved version or skips it if already published. If npm is
+still processing an earlier reserved release, a different commit's release stops
+with a recovery message instead of allocating another version. Older reruns do
+not publish over newer source commits. Build/test failures before reservation
+can be fixed by the next PR normally. Do not delete reservation tags to retry a
+release. Registry errors stop the workflow.
+
+GitHub may coalesce queued runs while another release is running; the surviving
+newer commit includes the earlier merged changes. This publishes source snapshots,
+not necessarily one version per merged PR.
 
 Publishing uses the repository's `NPM_TOKEN` secret, as the SDK release does.
 It must have publish permission for `@lobehub/cli` and support unattended

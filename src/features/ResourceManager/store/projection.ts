@@ -1,6 +1,6 @@
 import { definePagedReplica, type ReplicaPagedData, stableQueryKey } from '@/libs/replica';
-import { type FilesTabs, type ResourceSourceFilter } from '@/types/files';
-import { type ResourceItem } from '@/types/resource';
+import { type FilesTabs, type ResourceSourceFilter, type SortType } from '@/types/files';
+import { type ResourceItem, type ResourceSorter } from '@/types/resource';
 
 /**
  * Query identity of the explorer's search overlay (`q` + the chips the user is
@@ -13,6 +13,8 @@ export interface ExplorerSearchParams {
   libraryId?: string;
   pageSize?: number;
   q: string;
+  sorter?: ResourceSorter;
+  sortType?: SortType;
   sourceFilter?: ResourceSourceFilter;
   visibility?: 'private' | 'public';
 }

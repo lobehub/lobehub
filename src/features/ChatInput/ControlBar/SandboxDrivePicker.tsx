@@ -20,7 +20,9 @@ import useSWR from 'swr';
 
 import { openSandboxStorageUpsell } from '@/business/client/features/SandboxStorageUpsell';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import RepositoryAvatar from '@/components/RepositoryAvatar';
 import { openCreateEnvironmentModal } from '@/features/EnvironmentManager/CreateEnvironmentModal';
+import { SANDBOX_STORAGE_PATH } from '@/features/ResourceHome/paths';
 import { openSandboxDirectoryModal } from '@/features/WorkingDirectory';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { environmentService } from '@/services/environment';
@@ -35,6 +37,7 @@ import {
   environmentChipState,
   pickableEnvironments,
   repositorySelection,
+  repositorySlug,
 } from './sandboxEnvironmentOptions';
 import SandboxRepositoryMenu, { type SandboxRepositoryOption } from './SandboxRepositoryMenu';
 import { isPersistentSelection, type SandboxSelection } from './useSandboxPlacement';
@@ -251,7 +254,7 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
     const chipIcon = fallback ? (
       <Icon icon={TriangleAlertIcon} size={14} />
     ) : onRepository ? (
-      <Github size={14} />
+      <RepositoryAvatar size={14} url={repository && repositorySlug(repository)} />
     ) : persistent ? (
       <Icon icon={currentIcon} size={14} />
     ) : (
@@ -312,6 +315,10 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
                   selectedPath={showFolder ? value.workingDirectory : undefined}
                   onBrowse={openBrowser}
                   onPick={(folder) => void select(folder)}
+                  onOpenStorage={() => {
+                    setOpen(false);
+                    navigate(SANDBOX_STORAGE_PATH);
+                  }}
                 />
               }
             >
@@ -374,8 +381,21 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
               arrow
               compact
               active={onRepository}
-              icon={<Github size={16} />}
-              label={t('sandboxEnvironment.title')}
+              hint={onRepository && repository ? repositorySlug(repository) : undefined}
+              icon={
+                onRepository && repository ? (
+                  <RepositoryAvatar size={16} url={repositorySlug(repository)} />
+                ) : (
+                  <Github size={16} />
+                )
+              }
+              label={
+                // The repository the conversation works in, by name; the
+                // generic title only while none is picked.
+                onRepository && repositoryState.kind === 'picked'
+                  ? repositoryState.name
+                  : t('sandboxEnvironment.title')
+              }
               onClick={() => {}}
             />
           </div>

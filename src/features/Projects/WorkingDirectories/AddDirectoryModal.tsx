@@ -17,10 +17,20 @@ import { deviceService } from '@/services/device';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projectWorkingDirectory';
 
+interface AddDirectoryOptions {
+  /** The machine to add it on, when the caller already knows it. */
+  deviceId?: string;
+  /** Called with the folder once it is part of the project. */
+  /** Called with the folder once it is part of the project, and the device it was saved on. */
+  onAdded?: (directory: { deviceId: string; id: string }) => void;
+}
+
 function AddDirectoryContent({
   projectId,
   environmentId: initialEnvironmentId,
-}: {
+  deviceId: initialDeviceId,
+  onAdded,
+}: AddDirectoryOptions & {
   projectId: string;
   environmentId?: string;
 }) {
@@ -30,7 +40,7 @@ function AddDirectoryContent({
   const environmentsRequest = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
   const environments = useProjectEnvironments(projectId);
   const [environmentId, setEnvironment] = useState(initialEnvironmentId ?? '');
-  const [deviceId, setDevice] = useState('');
+  const [deviceId, setDevice] = useState(initialDeviceId ?? '');
   const [path, setPath] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<unknown>();
@@ -42,7 +52,7 @@ function AddDirectoryContent({
     try {
       const stat = await deviceService.statPath(deviceId, path);
       if (!stat?.exists || !stat.isDirectory) throw new Error(t('settings.directoryUnavailable'));
-      await bind({
+      const added = await bind({
         projectId,
         environmentId,
         deviceId,
@@ -50,6 +60,8 @@ function AddDirectoryContent({
         name: path.split(/[\\/]/).findLast(Boolean) || path,
       });
       close();
+      // The device picked here, not the one the caller suggested: the person may have changed it.
+      onAdded?.({ deviceId, id: added.id });
     } catch (error) {
       console.error('Failed to add work location', error);
       setError(error);
@@ -127,10 +139,16 @@ function AddDirectoryContent({
     </Flexbox>
   );
 }
-export const openAddDirectoryModal = (projectId: string, environmentId?: string) =>
+export const openAddDirectoryModal = (
+  projectId: string,
+  environmentId?: string,
+  options: AddDirectoryOptions = {},
+) =>
   createModal({
     title: t('settings.addDirectory', { ns: 'project' }),
-    content: <AddDirectoryContent environmentId={environmentId} projectId={projectId} />,
+    content: (
+      <AddDirectoryContent {...options} environmentId={environmentId} projectId={projectId} />
+    ),
     footer: null,
     width: 520,
   });

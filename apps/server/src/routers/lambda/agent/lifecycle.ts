@@ -15,6 +15,7 @@ import { TrashService } from '@/server/services/trash';
 import { TransferErrorCode } from '@/types/transferError';
 
 import { isWorkspaceNonOwner } from '../_helpers/assertWorkspaceRowManageable';
+import { assertCanWriteTeamPin } from '../_helpers/sidebarPin';
 import { agentProcedure } from './procedures';
 
 export const lifecycleRouter = router({
@@ -44,6 +45,7 @@ export const lifecycleRouter = router({
           keyword: z.string().optional(),
           range: z.tuple([z.string(), z.string()]).optional(),
           startDate: z.string().optional(),
+          tag: z.string().optional(),
         })
         .optional(),
     )
@@ -184,7 +186,8 @@ export const lifecycleRouter = router({
   /**
    * Query the user's agents with optional keyword filter — other virtual rows
    * excluded, and the inbox (Lobe AI) included and flagged with `isInbox` only
-   * when the caller passes `includeInbox: true`.
+   * when the caller passes `includeInbox: true`; `tag` keeps only agents
+   * carrying that tag.
    * Returns agents with minimal info (id, name, title, description, avatar,
    * backgroundColor).
    * Used by AddGroupMemberModal and group-management tool to search/select agents.
@@ -197,6 +200,7 @@ export const lifecycleRouter = router({
           keyword: z.string().optional(),
           limit: z.number().max(100).optional(),
           offset: z.number().optional(),
+          tag: z.string().optional(),
         })
         .optional(),
     )
@@ -289,6 +293,14 @@ export const lifecycleRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // A public workspace row's pin is the team pin every member sees, so it
+      // is owner/admin-only. A private row is visible to its creator alone, so
+      // its pin stays personal and any role that can update it may write it.
+      if (ctx.workspaceId) {
+        const meta = await ctx.agentModel.getAgentVisibilityMeta(input.id);
+        if (!meta) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+        if (meta.visibility !== 'private') await assertCanWriteTeamPin(ctx);
+      }
       return ctx.agentModel.update(input.id, { pinned: input.pinned });
     }),
 });
