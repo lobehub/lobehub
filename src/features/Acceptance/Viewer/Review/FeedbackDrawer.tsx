@@ -1,53 +1,43 @@
 'use client';
 
 import type { AcceptanceAttachment } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx, Drawer, Flexbox, Text } from '@lobehub/ui';
+import { Drawer, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AttachmentThumbs } from '../Evidence/attachments';
 
-const styles = createStaticStyles(({ css }) => ({
-  clickable: css`
-    cursor: pointer;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
-  `,
-  meta: css`
-    flex: none;
-    font-size: 11px;
-    color: ${cssVar.colorTextQuaternary};
-    white-space: nowrap;
-  `,
-  /* One feedback event as a list row — hairline-separated, no card chrome.
-     The drawer is an audit trail; rows read as entries in a ledger. Roomy
-     vertical rhythm: cramped rows made the trail read as one dense block. */
-  row: css`
-    padding-block: 20px;
-    padding-inline: 8px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
-
-    &:last-child {
-      border-block-end: none;
-    }
-  `,
-  sectionTitle: css`
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-    letter-spacing: 0.04em;
-  `,
-  seq: css`
-    flex: none;
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 11px;
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+const styles = stylex.create({
+  clickable: {
+    cursor: 'pointer',
+    backgroundColor: { 'default': null, ':hover': cssVar.colorFillQuaternary },
+    backgroundImage: { 'default': null, ':hover': 'none' },
+  },
+  meta: { flex: 'none', fontSize: '11px', color: cssVar.colorTextQuaternary, whiteSpace: 'nowrap' },
+  row: {
+    paddingBlock: '20px',
+    paddingInline: '8px',
+    borderBlockEndWidth: '1px',
+    borderBlockEndStyle: { 'default': 'solid', ':last-child': 'none' },
+    borderBlockEndColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadius,
+  },
+  sectionTitle: {
+    fontSize: '12px',
+    fontWeight: 500,
+    color: cssVar.colorTextTertiary,
+    letterSpacing: '0.04em',
+  },
+  seq: {
+    flex: 'none',
+    fontFamily: cssVar.fontFamilyCode,
+    fontSize: '11px',
+    color: cssVar.colorTextSecondary,
+  },
+});
 
 /** One feedback event, flattened for the clearing list — check-scoped or group/global. */
 export interface FeedbackListEntry {
@@ -94,7 +84,7 @@ const EntryRow = memo<{
 
   return (
     <Flexbox
-      className={cx(styles.row, entry.checkId && styles.clickable)}
+      className={stylex.props(styles.row, entry.checkId ? styles.clickable : null).className}
       gap={8}
       role={entry.checkId ? 'button' : undefined}
       style={entry.stale ? { opacity: 0.55 } : undefined}
@@ -114,7 +104,7 @@ const EntryRow = memo<{
       <Flexbox horizontal align={'center'} gap={6} wrap={'wrap'}>
         {isCheck ? (
           <>
-            <span className={styles.seq}>C{entry.checkSeq}</span>
+            <span {...stylex.props(styles.seq)}>C{entry.checkSeq}</span>
             <Text ellipsis style={{ fontSize: 13, minWidth: 0 }}>
               {entry.title}
             </Text>
@@ -127,7 +117,7 @@ const EntryRow = memo<{
           </Text>
         )}
         <Flexbox flex={1} />
-        <span className={styles.meta}>{metaBits.join(' · ')}</span>
+        <span {...stylex.props(styles.meta)}>{metaBits.join(' · ')}</span>
       </Flexbox>
       {entry.comment && (
         <Text style={{ fontSize: 12 }} type={'secondary'}>
@@ -160,7 +150,7 @@ const FeedbackDrawer = memo<FeedbackDrawerProps>(({ entries, onClose, onJumpToCh
     >
       <Flexbox gap={20}>
         <Flexbox gap={4}>
-          <Text className={styles.sectionTitle}>
+          <Text className={stylex.props(styles.sectionTitle).className}>
             {t('acceptance.feedback.current', { count: active.length })}
           </Text>
           {active.length === 0 && (
@@ -176,7 +166,7 @@ const FeedbackDrawer = memo<FeedbackDrawerProps>(({ entries, onClose, onJumpToCh
         </Flexbox>
         {history.length > 0 && (
           <Flexbox gap={4}>
-            <Text className={styles.sectionTitle}>
+            <Text className={stylex.props(styles.sectionTitle).className}>
               {t('acceptance.feedback.history', { count: history.length })}
             </Text>
             <Flexbox>

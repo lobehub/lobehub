@@ -1,7 +1,9 @@
 'use client';
 
 import type { AcceptanceCommentItem } from '@lobechat/types';
-import { Button, createModal, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, createModal, Flexbox, Icon, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { Play } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,20 +35,15 @@ export const thumbnailCropOffset = (
   return Math.min(Math.max(center - THUMBNAIL_MAX_HEIGHT / 2, 0), height - THUMBNAIL_MAX_HEIGHT);
 };
 
-const styles = createStaticStyles(({ css }) => ({
-  crop: css`
-    overflow: hidden;
-    max-height: ${THUMBNAIL_MAX_HEIGHT}px;
-    border-radius: ${cssVar.borderRadius};
-  `,
-  caption: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  wrapper: css`
-    align-self: flex-start;
-  `,
-}));
+const styles = stylex.create({
+  crop: {
+    overflow: 'hidden',
+    maxHeight: `${THUMBNAIL_MAX_HEIGHT}px`,
+    borderRadius: cssVar.borderRadius,
+  },
+  caption: { fontSize: '12px', color: cssVar.colorTextTertiary },
+  wrapper: { alignSelf: 'flex-start' },
+});
 
 interface ThreadEvidenceProps {
   comment: AcceptanceCommentItem;
@@ -121,7 +118,7 @@ const ThreadEvidence = memo<ThreadEvidenceProps>(({ comment, evidence, roundInde
       : loaded;
 
   return (
-    <Flexbox className={styles.wrapper} gap={4}>
+    <Flexbox className={stylex.props(styles.wrapper).className} gap={4}>
       {evidence.type === 'video' && comment.time ? (
         <Button
           icon={<Icon icon={Play} />}
@@ -153,7 +150,7 @@ const ThreadEvidence = memo<ThreadEvidenceProps>(({ comment, evidence, roundInde
           {t('acceptance.comments.video.showFrame', { time: formatVideoTime(comment.time.start) })}
         </Button>
       ) : (
-        <div className={styles.crop}>
+        <div {...stylex.props(styles.crop)}>
           <div
             style={{
               marginBlockStart: -thumbnailCropOffset(size ?? {}, comment.rect),
@@ -173,7 +170,7 @@ const ThreadEvidence = memo<ThreadEvidenceProps>(({ comment, evidence, roundInde
           </div>
         </div>
       )}
-      <span className={styles.caption}>
+      <span {...stylex.props(styles.caption)}>
         {stale && roundIndex !== undefined
           ? t('acceptance.comments.evidenceFromRound', { round: roundIndex })
           : t('acceptance.comments.evidenceThisRound')}

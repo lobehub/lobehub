@@ -29,3 +29,7 @@ const chatActions = { openLocalFile: notExercised };
 export const useChatStore = <T>(selector: (state: typeof chatActions) => T): T =>
   selector(chatActions);
 export const useProjectFiles = () => ({ data: { entries: [] } });
+
+const fileActions = { uploadWithProgress: notExercised };
+export const useFileStore = <T>(selector: (state: typeof fileActions) => T): T =>
+  selector(fileActions);

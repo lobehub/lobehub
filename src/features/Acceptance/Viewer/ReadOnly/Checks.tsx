@@ -1,4 +1,6 @@
-import { createStaticStyles, cssVar, Empty, Flexbox, Icon, Select, Text } from '@lobehub/ui';
+import { Empty, Flexbox, Icon, Select, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { type Dispatch, type SetStateAction, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -25,32 +27,32 @@ import type { EvidenceOverlayMap } from '../Evidence/overlay';
 import { useAcceptanceBundle, useEvidenceUrlRefresh } from '../useAcceptanceBundle';
 import { ReadComment } from './Discussion';
 
-const styles = createStaticStyles(({ css }) => ({
-  check: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-  `,
-  history: css`
-    padding-block: 8px;
-
-    & > summary {
-      cursor: pointer;
-      color: ${cssVar.colorTextSecondary};
-    }
-  `,
-  summary: css`
-    cursor: pointer;
-    padding: 16px;
-    font-size: ${cssVar.fontSize};
-    overflow-wrap: anywhere;
-
-    &:focus-visible {
-      outline: 2px solid ${cssVar.colorPrimary};
-      outline-offset: -2px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  check: {
+    overflow: 'hidden',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: cssVar.borderRadiusLG,
+  },
+  history: {
+    paddingBlock: '8px',
+  },
+  historySummary: {
+    cursor: 'pointer',
+    color: cssVar.colorTextSecondary,
+  },
+  summary: {
+    cursor: 'pointer',
+    padding: '16px',
+    fontSize: cssVar.fontSize,
+    overflowWrap: 'anywhere',
+    outlineWidth: { 'default': null, ':focus-visible': '2px' },
+    outlineStyle: { 'default': null, ':focus-visible': 'solid' },
+    outlineColor: { 'default': null, ':focus-visible': cssVar.colorPrimary },
+    outlineOffset: { 'default': null, ':focus-visible': '-2px' },
+  },
+});
 
 const ReadCheck = ({
   check,
@@ -87,11 +89,11 @@ const ReadCheck = ({
 
   return (
     <details
-      className={styles.check}
+      {...stylex.props(styles.check)}
       open={open}
       onToggle={(event) => onToggle(event.currentTarget.open)}
     >
-      <summary className={styles.summary}>
+      <summary {...stylex.props(styles.summary)}>
         <Icon color={meta.color} icon={meta.icon} size={16} />{' '}
         {checkDisplayTitle(check.title, t('acceptance.checks.holisticTitle'))}
         <Text fontSize={12} style={{ marginInlineStart: 8 }} type={'secondary'}>
@@ -154,11 +156,13 @@ const ReadCheck = ({
 
         {hasHistory && (
           <details
-            className={styles.history}
+            {...stylex.props(styles.history)}
             open={historyOpen}
             onToggle={(event) => onHistoryToggle(event.currentTarget.open)}
           >
-            <summary>{t('acceptance.checks.iterationHistory', { count: check.revisions })}</summary>
+            <summary {...stylex.props(styles.historySummary)}>
+              {t('acceptance.checks.iterationHistory', { count: check.revisions })}
+            </summary>
             <Flexbox style={{ paddingBlockStart: 12 }}>
               <IterationTimeline
                 check={check}

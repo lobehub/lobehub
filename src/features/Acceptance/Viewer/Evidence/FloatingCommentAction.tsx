@@ -1,61 +1,53 @@
 'use client';
 
-import { ActionIcon, createStaticStyles, cssVar } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { MessageSquarePlus } from 'lucide-react';
 import { memo } from 'react';
 
-/** Marks the box the action floats over; hovering it reveals the action. */
-export const FLOATING_ACTION_HOST = 'data-floating-action-host';
+import { floatingActionHostMarker } from '../markers.stylex';
 
-const styles = createStaticStyles(({ css }) => ({
-  button: css`
-    pointer-events: auto;
+const compact = '@media (width <= 767px)';
 
-    position: sticky;
-    inset-block-start: 12px;
-
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 50%;
-
-    opacity: 0;
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowTertiary};
-
-    transition: opacity ${cssVar.motionDurationMid};
-
-    [${FLOATING_ACTION_HOST}]:hover &,
-    &:focus-visible {
-      opacity: 1;
-    }
-
-    /* No hover to reveal it with: a touch reader has to see it to use it. */
-    @media (hover: none) {
-      opacity: 1;
-    }
-  `,
-  /**
-   * Spans the whole picture so the button can stick to the top of the viewport
-   * while a long screenshot scrolls past, and never leave the picture it
-   * belongs to. It sits in the margin to the right of the picture, so it never
-   * covers what is being commented on, and outside the comment pins that
-   * straddle the right edge. Still a child of the host, so moving the pointer
-   * onto it keeps it revealed.
-   */
-  rail: css`
-    pointer-events: none;
-
-    position: absolute;
-    z-index: 5;
-    inset-block: 0;
-    inset-inline-end: -40px;
-
-    /* A phone column has no margin to spare: tuck it inside the picture. */
-    @media (width <= 767px) {
-      inset-block: 8px;
-      inset-inline-end: 8px;
-    }
-  `,
-}));
+const styles = stylex.create({
+  button: {
+    pointerEvents: 'auto',
+    position: 'sticky',
+    insetBlockStart: '12px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: cssVar.colorBorderSecondary,
+    borderRadius: '50%',
+    // Revealed by hovering the host box (a marker, see markers.stylex.ts), or
+    // on focus. With no hover to reveal it, a touch reader has to see it to use it.
+    opacity: {
+      'default': 0,
+      ':focus-visible': 1,
+      '@media (hover: none)': 1,
+      [stylex.when.ancestor(':hover', floatingActionHostMarker)]: 1,
+    },
+    backgroundColor: cssVar.colorBgElevated,
+    backgroundImage: 'none',
+    boxShadow: cssVar.boxShadowTertiary,
+    transition: `opacity ${cssVar.motionDurationMid}`,
+  },
+  // Spans the whole picture so the button can stick to the top of the viewport
+  // while a long screenshot scrolls past, and never leave the picture it
+  // belongs to. It sits in the margin to the right of the picture, so it never
+  // covers what is being commented on, and outside the comment pins that
+  // straddle the right edge. Still a child of the host, so moving the pointer
+  // onto it keeps it revealed.
+  rail: {
+    pointerEvents: 'none',
+    position: 'absolute',
+    zIndex: 5,
+    // A phone column has no margin to spare: tuck it inside the picture.
+    insetBlockStart: { default: 0, [compact]: '8px' },
+    insetBlockEnd: { default: 0, [compact]: '8px' },
+    insetInlineEnd: { default: '-40px', [compact]: '8px' },
+  },
+});
 
 /**
  * Comment on this picture without leaving it. The check's own comment and
@@ -63,17 +55,17 @@ const styles = createStaticStyles(({ css }) => ({
  * screenshots the reviewer scrolled past everything they were looking at to
  * reach them — and then had to pick the picture again in the modal.
  *
- * Render inside a positioned box carrying {@link FLOATING_ACTION_HOST}.
+ * Render inside a positioned box carrying {@link floatingActionHostMarker}.
  */
 const FloatingCommentAction = memo<{ onClick: () => void; title: string }>(({ onClick, title }) => {
   return (
-    <div className={styles.rail}>
+    <div {...stylex.props(styles.rail)}>
       <ActionIcon
         aria-label={title}
-        className={styles.button}
         icon={MessageSquarePlus}
         size={'small'}
         title={title}
+        {...stylex.props(styles.button)}
         onClick={(event) => {
           event.stopPropagation();
           onClick();
