@@ -33,6 +33,7 @@ export const createSidebarUISlice = (set: Setter, get: () => HomeStore, _api?: u
 export class SidebarUIActionImpl {
   readonly #get: () => HomeStore;
   readonly #set: Setter;
+  #myPinnedQueue: Promise<unknown> = Promise.resolve();
 
   constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
     void _api;
@@ -132,16 +133,26 @@ export class SidebarUIActionImpl {
    * after them, so a reorder never unpins anything.
    */
   reorderMyPinned = async (ids: string[]): Promise<void> => {
-    const userStore = getUserStoreState();
-    const current = userStore.workspaceUserPreference.sidebarPinnedItemIds ?? [];
-    const shown = new Set(ids);
-    const nextIds = [...ids, ...current.filter((id) => !shown.has(id))].slice(
-      0,
-      MAX_SIDEBAR_PINNED_ITEMS,
-    );
-    if (nextIds.length === current.length && nextIds.every((id, i) => id === current[i])) return;
+    // The server merges each preference write into what it reads, so two quick
+    // drags sent at once could land out of order and the older one would win.
+    // Each reorder waits for the previous one and builds on its result.
+    const operation = this.#myPinnedQueue
+      .catch(() => undefined)
+      .then(async () => {
+        const userStore = getUserStoreState();
+        const current = userStore.workspaceUserPreference.sidebarPinnedItemIds ?? [];
+        const shown = new Set(ids);
+        const nextIds = [...ids, ...current.filter((id) => !shown.has(id))].slice(
+          0,
+          MAX_SIDEBAR_PINNED_ITEMS,
+        );
+        if (nextIds.length === current.length && nextIds.every((id, i) => id === current[i]))
+          return;
 
-    await userStore.updateWorkspaceUserPreference({ sidebarPinnedItemIds: nextIds });
+        await userStore.updateWorkspaceUserPreference({ sidebarPinnedItemIds: nextIds });
+      });
+    this.#myPinnedQueue = operation;
+    await operation;
   };
 
   removeAgent = async (agentId: string): Promise<void> => {

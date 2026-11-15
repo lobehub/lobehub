@@ -52,4 +52,36 @@ describe('reorderMyPinned', () => {
 
     expect(updatePreference).not.toHaveBeenCalled();
   });
+
+  it('sends quick successive reorders one after another, each on the previous result', async () => {
+    setPinned(['a', 'b', 'c']);
+    let finishFirst!: () => void;
+    updatePreference.mockImplementationOnce(async ({ sidebarPinnedItemIds }) => {
+      await new Promise<void>((resolve) => (finishFirst = resolve));
+      useUserStore.setState({ workspaceUserPreference: { sidebarPinnedItemIds } } as any);
+    });
+
+    const first = useHomeStore.getState().reorderMyPinned(['c', 'a', 'b']);
+    const second = useHomeStore.getState().reorderMyPinned(['b', 'c']);
+    await vi.waitFor(() => expect(updatePreference).toHaveBeenCalledTimes(1));
+    // The second write waits for the first to settle.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(updatePreference).toHaveBeenCalledTimes(1);
+
+    finishFirst();
+    await act(() => Promise.all([first, second]));
+
+    expect(updatePreference).toHaveBeenNthCalledWith(1, { sidebarPinnedItemIds: ['c', 'a', 'b'] });
+    expect(updatePreference).toHaveBeenNthCalledWith(2, { sidebarPinnedItemIds: ['b', 'c', 'a'] });
+  });
+
+  it('still saves the next reorder after a failed one', async () => {
+    setPinned(['a', 'b']);
+    updatePreference.mockRejectedValueOnce(new Error('boom'));
+
+    await expect(useHomeStore.getState().reorderMyPinned(['b', 'a'])).rejects.toThrow('boom');
+    await reorder(['b', 'a']);
+
+    expect(updatePreference).toHaveBeenCalledTimes(2);
+  });
 });
