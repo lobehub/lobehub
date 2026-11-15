@@ -82,11 +82,15 @@ const toMCPConnectionTRPCError = (error: unknown, message: string) => {
     code:
       // These credentials belong to the upstream MCP, not the signed-in
       // LobeHub user. A 401 here would trigger the client's global logout.
-      type === 'AUTHORIZATION_ERROR' || type === 'SSRF_BLOCKED'
+      type === 'AUTHORIZATION_ERROR'
         ? 'FORBIDDEN'
-        : type === 'INITIALIZATION_TIMEOUT'
-          ? 'TIMEOUT'
-          : 'SERVICE_UNAVAILABLE',
+        : // The configured URL is refused by policy. Not a 403: clients read a
+          // 403 as "you may not modify this connector" and drop the reason.
+          type === 'SSRF_BLOCKED'
+          ? 'BAD_REQUEST'
+          : type === 'INITIALIZATION_TIMEOUT'
+            ? 'TIMEOUT'
+            : 'SERVICE_UNAVAILABLE',
     message,
   });
 };

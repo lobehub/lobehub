@@ -266,7 +266,7 @@ describe('MCPService log redaction', () => {
     ['AUTHORIZATION_ERROR', 'FORBIDDEN'],
     ['INITIALIZATION_TIMEOUT', 'TIMEOUT'],
     ['CONNECTION_FAILED', 'SERVICE_UNAVAILABLE'],
-    ['SSRF_BLOCKED', 'FORBIDDEN'],
+    ['SSRF_BLOCKED', 'BAD_REQUEST'],
   ] as const)('exposes %s without an HTTP 500 or retry', async (type, code) => {
     // The module is auto-mocked in this suite; retain the actual error contract.
     const actual = await vi.importActual<typeof McpModule>('@/libs/mcp');
@@ -715,7 +715,7 @@ describe('MCPService', () => {
       expect(result.state.mcpApp).toBeUndefined();
     });
 
-    it('exposes an SSRF block on a cached session as FORBIDDEN, not a 500', async () => {
+    it('exposes an SSRF block on a cached session as BAD_REQUEST, not a 500', async () => {
       // The host may resolve elsewhere after the session was initialized
       const actual = await vi.importActual<typeof McpModule>('@/libs/mcp');
       const blocked = actual.createMCPError('SSRF_BLOCKED', 'refused by the SSRF policy');
@@ -723,7 +723,7 @@ describe('MCPService', () => {
 
       await expect(mcpService.callTool(testToolInput(mockParams))).rejects.toMatchObject({
         cause: blocked,
-        code: 'FORBIDDEN',
+        code: 'BAD_REQUEST',
         message: 'refused by the SSRF policy',
       });
       expect(mockClient.callTool).toHaveBeenCalledOnce();
