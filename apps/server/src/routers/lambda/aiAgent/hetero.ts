@@ -139,6 +139,11 @@ const WaitInterventionResponseSchema = z.object({
  * its session instead of waiting for the run to end.
  */
 const WaitHeteroSteerSchema = z.object({
+  /**
+   * The producer types image blocks into the session (`imageList` on the
+   * message). Older producers omit it and only ever get text-only follow-ups.
+   */
+  acceptsImages: z.boolean().optional(),
   blockMs: z.number().int().positive().max(25_000).default(20_000),
   operationId: z.string().min(1),
 });
@@ -516,7 +521,7 @@ export const heteroRouter = router({
   waitHeteroSteer: heteroAgentProcedure
     .input(WaitHeteroSteerSchema)
     .mutation(async ({ input, ctx }) => {
-      const { operationId, blockMs } = input;
+      const { acceptsImages, operationId, blockMs } = input;
 
       await authorizeOperationCallback(ctx, operationId, 'hetero:ingest');
 
@@ -561,6 +566,7 @@ export const heteroRouter = router({
       const deadline = Date.now() + blockMs;
       for (;;) {
         const message = await takeHeteroSteer(storeCtx, {
+          acceptsImages,
           agentId: operation.agentId,
           operationId,
           scope,

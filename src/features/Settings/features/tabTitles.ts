@@ -39,7 +39,7 @@ export const SETTINGS_TAB_TITLE_KEYS: Partial<Record<SettingsTabs, TitleKey>> = 
   [SettingsTabs.SystemTools]: ['setting', 'tab.systemTools'],
   [SettingsTabs.Tools]: ['setting', 'tab.tools'],
   [SettingsTabs.Trash]: ['setting', 'tab.trash'],
-  [SettingsTabs.Usage]: ['subscription', 'tab.usageAndBalance'],
+  [SettingsTabs.Usage]: ['subscription', 'tab.usage'],
 };
 
 const TITLE_NAMESPACES = ['auth', 'labs', 'setting', 'subscription'] as const;

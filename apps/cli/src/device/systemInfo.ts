@@ -79,7 +79,8 @@ export async function probeNativeRuntimes(): Promise<string[]> {
 /**
  * The answer to a gateway `system_info_request`: host paths and live native capabilities.
  * `supportedTools` lists the opt-in tools this device can run; the server refuses those
- * tools on a device that does not list them.
+ * tools on a device that does not list them. `supportedToolCallTypes` tells it this
+ * client runs tunneled MCP calls, which older CLIs mis-dispatched by apiName.
  *
  * Use when: a gateway requests this connection's current system information.
  * Expects: local paths and binary resolution belong to this connect process.
@@ -113,6 +114,8 @@ export async function collectSystemInfo(
     musicPath: path.join(home, 'Music'),
     picturesPath: path.join(home, 'Pictures'),
     supportedAgentRuntimes: await nativeRuntimes.get(),
+    // Tunneled MCP calls (stdio / local-network servers) run on this machine.
+    supportedToolCallTypes: ['tool', 'mcp'],
     ...(supportedTools.length > 0 && { supportedTools }),
     userDataPath: path.join(home, CLI_CONFIG_DIR_NAME),
     videosPath: path.join(home, videosDir),

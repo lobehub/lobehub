@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { MCPClient } from '../client';
+import { MCPClient } from './client';
 
 /**
  * Focused test for the bounded stderr tail: only the stderr listener
