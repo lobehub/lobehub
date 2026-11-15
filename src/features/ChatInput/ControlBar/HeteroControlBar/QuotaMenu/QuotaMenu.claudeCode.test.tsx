@@ -323,6 +323,29 @@ describe('ClaudeCodeQuotaMenu', () => {
     }
   });
 
+  it('keeps a model-scoped window out of the compact values even when it is the only window', async () => {
+    selectedModel.current = 'opus';
+    mockService.getClaudeCodeQuota.mockResolvedValue(
+      claudeSnapshot({
+        scopedWeekly: {
+          modelName: 'Fable',
+          window: { resetsAt: null, usedPercent: 0, windowMinutes: 10_080 },
+        },
+      }),
+    );
+
+    try {
+      render(<ClaudeCodeQuotaMenu />);
+
+      expect(await screen.findByText('heteroAgent.claudeQuota.scopedWeekly:Fable')).toBeTruthy();
+      const trigger = screen.getByRole('button', { name: 'heteroAgent.claudeQuota.tooltip' });
+      expect(trigger.textContent).not.toContain('Fable');
+      expect(trigger.textContent).not.toContain('heteroAgent.quota.compactLeft');
+    } finally {
+      selectedModel.current = 'fable';
+    }
+  });
+
   it('warns below 15 percent and keeps compact zero quota numeric', async () => {
     mockService.getClaudeCodeQuota.mockResolvedValue(
       claudeSnapshot({

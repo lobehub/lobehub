@@ -512,14 +512,10 @@ const QuotaMenu = <S extends QuotaSnapshotBase>({
   );
 
   const windows = quota ? getWindows(quota) : [];
-  // A window hidden from the compact trigger still shows there when it is the only one,
-  // so the trigger never loses its value.
-  const compactWindows = windows.some((item) => item.window && !item.hideInCompact)
-    ? windows.filter((item) => !item.hideInCompact)
-    : windows;
   const compactItemsByGroup = new Map<string, CompactQuotaItem>();
-  for (const item of compactWindows) {
-    if (!item.window) continue;
+  for (const item of windows) {
+    // With nothing left to show, the trigger falls back to its icon; the panel lists every window.
+    if (!item.window || item.hideInCompact) continue;
 
     const leftPercent = clampPercent(100 - item.window.usedPercent);
     const compactGroup = item.compactGroup ?? 'default';
