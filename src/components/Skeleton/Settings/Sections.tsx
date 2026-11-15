@@ -67,6 +67,11 @@ export type SettingsSectionSkeleton =
       columns?: number;
       /** Table rows below the header row. */
       rows?: number;
+      /**
+       * A row of this many compact label + figure columns above the table,
+       * split from it by a divider.
+       */
+      stats?: number;
       /** A filter / search bar above the table. */
       toolbar?: boolean;
       /** A tab strip above the table. */
@@ -730,6 +735,14 @@ const Section = ({ section }: { section: SettingsSectionSkeleton }) => {
     case 'table': {
       return (
         <Group {...section} flush>
+          {section.stats && (
+            <>
+              <Flexbox padding={16}>
+                <InsetTiles columns={section.stats} tileHeight={50} tiles={section.stats} />
+              </Flexbox>
+              <div {...stylex.props(styles.divider)} />
+            </>
+          )}
           <TableBody
             columns={section.columns}
             rows={section.rows ?? 3}

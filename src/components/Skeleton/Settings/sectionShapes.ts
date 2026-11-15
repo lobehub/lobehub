@@ -77,14 +77,12 @@ export const SETTINGS_SECTION_SHAPES: Record<string, SettingsSectionsShape> = {
     sections: [
       { variant: 'banner' },
       {
-        columns: 4,
+        columns: 5,
         heading: ['subscription', 'referral.stats.title'],
-        inset: true,
-        tileHeight: 50,
-        tiles: 4,
-        variant: 'tiles',
+        rows: 1,
+        stats: 4,
+        variant: 'table',
       },
-      { columns: 5, heading: ['subscription', 'referral.table.title'], rows: 1, variant: 'table' },
       {
         descKey: ['subscription', 'referral.rules.description'],
         heading: ['subscription', 'referral.rules.title'],
