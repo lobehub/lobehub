@@ -239,6 +239,12 @@ export interface StepCompleteData {
   phase: string;
   reason?: string;
   reasonDetail?: string;
+  /**
+   * On `phase: 'user_message'`: the steer user message a heterogeneous run
+   * just read from its live session. Shown at once, ahead of the reply it
+   * opens. Absent from older servers and for replays that delivered nothing.
+   */
+  steerMessage?: StreamStartParentMessage;
 }
 
 /**

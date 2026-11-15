@@ -45,13 +45,14 @@ describe('HeterogeneousPersistenceHandler — steer messages', () => {
     const h = createHarness({ assistantMessageId: 'asst-1', operationId: OP, topicId: TOPIC });
     const tool = { apiName: 'Bash', arguments: '{}', id: 'tc-1', identifier: 'bash' };
     const reply = buildEvent('stream_start', 4, { messageId: 'cc-2', newStep: true });
+    const replay = steerReplay(3, 'msg-steer');
 
     await h.handler.ingest({
       events: [
         buildEvent('stream_start', 0, { model: 'claude-opus' }),
         buildEvent('stream_chunk', 1, { chunkType: 'tools_calling', toolsCalling: [tool] }),
         buildEvent('tool_result', 2, { content: 'ok', toolCallId: 'tc-1' }),
-        steerReplay(3, 'msg-steer'),
+        replay,
         reply,
         buildEvent('stream_chunk', 5, { chunkType: 'text', content: 'checking Codex' }),
       ],
@@ -65,6 +66,13 @@ describe('HeterogeneousPersistenceHandler — steer messages', () => {
     );
     const steer = h.messages.get('msg-steer');
     expect(steer).toMatchObject({ parentId: 'asst-1', role: 'user' });
+    // The replay itself names the message, so the client shows it before the reply starts.
+    expect(h.handler.publishData(OP, replay).steerMessage).toMatchObject({
+      content: 'look at Codex too',
+      id: 'msg-steer',
+      parentId: 'asst-1',
+      role: 'user',
+    });
 
     const replyId = h.handler.publishData(OP, reply).assistantMessage?.id;
     expect(h.messages.get(replyId!)).toMatchObject({ parentId: 'msg-steer', role: 'assistant' });
@@ -86,6 +94,8 @@ describe('HeterogeneousPersistenceHandler — steer messages', () => {
       topicId: TOPIC,
     });
 
+    const promptReplay = steerReplay(1, 'uuid-prompt');
+    expect(h.handler.publishData(OP, promptReplay)).toBe(promptReplay.data);
     const nextId = h.handler.publishData(OP, next).assistantMessage?.id;
     expect(h.messages.get(nextId!)).toMatchObject({ parentId: 'asst-1' });
     expect(h.handler.publishData(OP, next).parentMessage).toBeUndefined();

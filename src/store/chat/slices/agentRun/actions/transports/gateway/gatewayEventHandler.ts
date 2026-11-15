@@ -8,7 +8,6 @@ import type {
   StepCompleteData,
   StreamChunkData,
   StreamStartData,
-  SubAgentProgressData,
   ToolEndData,
   ToolExecuteData,
   ToolStartData,
@@ -44,6 +43,7 @@ import {
   resolveRuntimeEndStatus,
 } from './runtimeEndReason';
 import { applyStepMetrics } from './stepMetrics';
+import { resolveStepSideEvent } from './stepSideEvent';
 import { insertStreamStartSeeds, streamStartOperationMetadata } from './streamStartSeed';
 
 // Lazy-loaded to break the import cycle:
@@ -1172,41 +1172,10 @@ export const createGatewayEventHandler = (
       case 'step_complete': {
         const data = event.data as StepCompleteData | undefined;
 
-        // A parked `callSubAgent` child reporting its running totals. Patch them
-        // onto the placeholder tool message in memory only — the persisted values
-        // are written once, by `completeSubAgentBridge`, when the child finishes.
-        // Kept under a `progress` key so a DB refetch can never leave a stale live
-        // number sitting where the authoritative one belongs.
-        //
-        // ENQUEUED, not dispatched inline: the placeholder row only enters the
-        // store via the `toolMessageIds` refetch that the preceding `tools_calling`
-        // chunk queued. A fast child can emit its first progress event while that
-        // fetch is still in flight, and `updatePluginState` against a row the store
-        // doesn't have is a silent no-op — for a single-step sub-agent that lone
-        // sample is the whole live readout, so there is nothing later to self-heal
-        // it. Queueing puts this behind the fetch that creates its target.
-        if (data?.phase === 'subagent_progress') {
-          const progress = event.data as SubAgentProgressData;
-          if (progress.toolMessageId) {
-            enqueue(() => {
-              get().internal_dispatchMessage(
-                {
-                  id: progress.toolMessageId,
-                  key: 'progress',
-                  type: 'updatePluginState',
-                  value: {
-                    model: progress.model,
-                    totalCost: progress.totalCost,
-                    totalInputTokens: progress.totalInputTokens,
-                    totalOutputTokens: progress.totalOutputTokens,
-                    totalTokens: progress.totalTokens,
-                    totalToolCalls: progress.totalToolCalls,
-                  },
-                },
-                dispatchContext,
-              );
-            });
-          }
+        // Sub-agent progress and live steer reads, not step boundaries.
+        const sideEvent = resolveStepSideEvent(get, data, context, dispatchContext);
+        if (sideEvent) {
+          if (sideEvent.apply) enqueue(sideEvent.apply);
           break;
         }
 
