@@ -1,5 +1,6 @@
 import { hasCallableMcpEndpoint, isMarketplaceInstallRunnable } from '@lobechat/const';
 import { getMcpServerFingerprint, isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import { getDisabledPluginIds } from '@lobechat/types';
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 
 import type { AgentModel } from '@/database/models/agent';
@@ -49,7 +50,7 @@ export type ConnectorToolCallReporter = (report: ConnectorToolCallReport) => voi
 
 export interface ConnectorExecContext extends ConnectorToolSyncContext {
   /** Visibility-aware: decides whether the caller may act as the given agent. */
-  agentModel: Pick<AgentModel, 'existsById'>;
+  agentModel: Pick<AgentModel, 'existsById' | 'getAgentConfigById'>;
   /**
    * The caller's legacy plugin rows, which stand in for an unmarked marketplace
    * install made before installs used connectors. None: no such row counts.
@@ -147,6 +148,7 @@ export const callConnectorToolById = async (
     args?: string;
     /** An MCP App view's `tools/call`: only tools visible to the app run. */
     fromApp?: boolean;
+    fromEntrypoint?: boolean;
     identifier: string;
     /** With `fromApp`: the server the view came from; its calls reach no other. */
     server?: string;
@@ -157,6 +159,14 @@ export const callConnectorToolById = async (
   ctx: ConnectorExecContext,
 ): Promise<unknown> => {
   const [connector] = await findConnector(params, ctx);
+  if (
+    params.fromEntrypoint &&
+    params.agentId &&
+    getDisabledPluginIds(
+      (await ctx.agentModel.getAgentConfigById(params.agentId))?.plugins ?? undefined,
+    ).includes(params.identifier)
+  )
+    throw new ConnectorToolCallError('FORBIDDEN', 'This app is disabled for the agent');
   if (!connector) {
     throw new ConnectorToolCallError('NOT_FOUND', 'Connector not found');
   }
@@ -175,6 +185,7 @@ export const callConnectorToolById = async (
   // The tool MUST be present in the synced list — this is the single source of
   // truth for what is callable. Unknown names (unsynced or hand-crafted) are
   // rejected before reaching the remote server.
+  const mcpApps = await isMcpAppsEnabled(ctx.userId);
   const tools = await ctx.connectorToolModel.queryByConnector(connector.id);
   const tool = tools.find((t) => t.toolName === params.toolName);
   if (!tool) {
@@ -191,7 +202,11 @@ export const callConnectorToolById = async (
   }
   // A view-only tool never enters the model's tool list; refuse a model call
   // that names it anyway.
-  if (!params.fromApp && !isSyncedMcpToolVisibleTo(tool, 'model')) {
+  if (
+    !params.fromEntrypoint &&
+    !params.fromApp &&
+    !isSyncedMcpToolVisibleTo(tool, 'model', mcpApps)
+  ) {
     throw new ConnectorToolCallError(
       'FORBIDDEN',
       `Tool '${params.toolName}' can only be called from its interactive view`,
@@ -237,13 +252,14 @@ export const callConnectorToolById = async (
   }
 
   const report = await resolveReporter(connector, ctx);
-  if (!report) return runConnectorTool(connector, params, ctx);
+  const run = { ...params, mcpApps };
+  if (!report) return runConnectorTool(connector, run, ctx);
 
   const startTime = Date.now();
   let failure: Error | undefined;
   let result: unknown;
   try {
-    result = await runConnectorTool(connector, params, ctx);
+    result = await runConnectorTool(connector, run, ctx);
     return result;
   } catch (error) {
     failure = error instanceof Error ? error : new Error(String(error));
@@ -287,7 +303,14 @@ const installedVersion = (metadata: unknown): string | undefined => {
 
 const runConnectorTool = async (
   connector: DecryptedConnector,
-  params: { args?: string; fromApp?: boolean; toolName: string },
+  params: {
+    args?: string;
+    fromApp?: boolean;
+    fromEntrypoint?: boolean;
+    /** The caller's `mcp_apps` flag, as the call's checks read it. */
+    mcpApps: boolean;
+    toolName: string;
+  },
   ctx: ConnectorExecContext,
 ): Promise<unknown> => {
   // A market-hosted stdio server: no session to open, the market's cloud
@@ -314,7 +337,8 @@ const runConnectorTool = async (
     argsStr: params.args ?? '{}',
     clientParams: buildConnectorMcpParams(fresh),
     fromApp: params.fromApp,
-    mcpApps: await isMcpAppsEnabled(ctx.userId),
+    fromEntrypoint: params.fromEntrypoint,
+    mcpApps: params.mcpApps,
     processContentBlocks: fileService
       ? (blocks) => processContentBlocks(blocks, fileService)
       : undefined,

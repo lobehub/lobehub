@@ -1,10 +1,5 @@
-import {
-  getComposioAppByIdentifier,
-  hasCallableMcpEndpoint,
-  withMandatoryApprovalMark,
-} from '@lobechat/const';
+import { getComposioAppByIdentifier, hasCallableMcpEndpoint } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
-import { buildMcpToolMetadata } from '@lobechat/const/mcpApp';
 import { upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -63,6 +58,7 @@ import {
 } from '@/server/utils/connectorAttribution';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import { toClientToolSyncInputs } from './_helpers/clientToolSyncInputs';
 import { withRequestConnectorCallers } from './_helpers/connectorCallContext';
 import {
   assertConnectorCredentialsManageable,
@@ -71,10 +67,7 @@ import {
   getConnectorMemberManage,
   isWorkspaceConnectorAdmin,
 } from './_helpers/connectorManagePolicy';
-import {
-  resolveConnectorToolPermission,
-  resolveDefaultPermission,
-} from './_helpers/connectorToolPermission';
+import { resolveDefaultPermission } from './_helpers/connectorToolPermission';
 import { upsertConnectorEntry } from './_helpers/upsertConnectorEntry';
 
 const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -867,6 +860,7 @@ export const connectorRouter = router({
         args: z.string().optional(),
         /** An MCP App view's `tools/call`: only tools visible to the app run. */
         fromApp: z.boolean().optional(),
+        fromEntrypoint: z.boolean().optional(),
         identifier: z.string().min(1),
         /** With `fromApp`: the server the view came from (`getMcpServerFingerprint`). */
         server: z.string().optional(),
@@ -1033,6 +1027,7 @@ export const connectorRouter = router({
             toolName: z.string(),
             /** The MCP tool's `_meta.ui.visibility`, when it declares one. */
             visibility: z.array(z.string()).optional(),
+            mcpAppMeta: z.record(z.string(), z.unknown()).optional(),
           }),
         ),
         /** An install: `auto` tools the client no longer lists are dropped. */
@@ -1045,20 +1040,7 @@ export const connectorRouter = router({
       // Same gate as `syncTools` — rewrites the connector's tool rows.
       await assertConnectorMaintainable(ctx, target);
 
-      const syncInputs = input.tools.map((t) => ({
-        crudType: inferCrudType(t.toolName),
-        // Applies to new tools only: a synced tool keeps the permission it has
-        defaultPermission: resolveConnectorToolPermission(t.humanIntervention),
-        description: t.description,
-        inputSchema: t.inputSchema,
-        // Refreshed on every sync, unlike the permission: an `always` the
-        // manifest asks for stays mandatory whatever the permission is
-        metadata: withMandatoryApprovalMark(
-          buildMcpToolMetadata(t.visibility),
-          t.humanIntervention,
-        ),
-        toolName: t.toolName,
-      }));
+      const syncInputs = await toClientToolSyncInputs(input.tools, ctx.userId);
 
       await ctx.connectorToolModel.upsertMany(input.id, syncInputs);
       if (input.pruneMissingAutoTools) {

@@ -3,6 +3,7 @@ import { type ConversationContext, type SendMessageParams } from '@lobechat/type
 import { useChatStore } from '@/store/chat';
 import { isLocalOnlyMessage } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { mcpAppContext } from '@/store/mcpApp/context';
 
 import { type Store as ConversationStore } from '../../../action';
 
@@ -80,13 +81,34 @@ export const sendMessage = (
     // the backend reports a new topic id (only under isolatedTopic contexts),
     // not here after the full streaming lifecycle — otherwise the isolated
     // UI would not see the AI response while it is still streaming.
-    const result = await chatStore.sendMessage({
-      ...sendParams,
-      context: targetContext,
-      inputEditor: editor,
-      ...(messages ? { messages } : undefined),
-      onTopicCreated: hooks.onTopicCreated,
-    });
+    const appContext = mcpAppContext.take(messageMapKey(targetContext));
+    // The app context is spent only on a message the conversation accepts
+    let accepted = false;
+    const result = await chatStore
+      .sendMessage({
+        ...sendParams,
+        ...(appContext.selections.length > 0 && {
+          contextSelections: [...(sendParams.contextSelections ?? []), ...appContext.selections],
+          onMessageAccepted: () => {
+            accepted = true;
+            sendParams.onMessageAccepted?.();
+          },
+          onPreflightFailure: () => {
+            appContext.restore();
+            sendParams.onPreflightFailure?.();
+          },
+        }),
+        context: targetContext,
+        inputEditor: editor,
+        ...(messages ? { messages } : undefined),
+        onTopicCreated: hooks.onTopicCreated,
+      })
+      .catch((error) => {
+        appContext.restore();
+        throw error;
+      });
+    // A command that stores no message (`/compact`) leaves it for the next one
+    if (appContext.selections.length > 0 && !accepted) appContext.restore();
 
     // ===== Hook: onAfterMessageCreate =====
     // Called after messages are created but before AI response is complete
