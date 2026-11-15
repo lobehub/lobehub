@@ -313,6 +313,8 @@ export class GatewayHttpClient {
   }
 
   async dispatchAgentRun(params: {
+    agentCommand?: AgentRunRequestMessage['agentCommand'];
+    agentEnv?: AgentRunRequestMessage['agentEnv'];
     agentId?: string;
     agentType: string;
     assistantMessageId: string;

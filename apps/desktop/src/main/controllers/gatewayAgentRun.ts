@@ -91,6 +91,8 @@ export const executeGatewayAgentRun = async (
           ? buildClaudeCodeEntrypointEnv(request.claudeCodeEntrypoint)
           : {}),
       },
+      agentCommand: request.agentCommand,
+      agentEnv: request.agentEnv,
       agentId: request.agentId,
       agentType: request.agentType,
       assistantMessageId: request.assistantMessageId,

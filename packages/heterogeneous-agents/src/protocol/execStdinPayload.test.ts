@@ -24,6 +24,24 @@ describe('buildHeteroExecStdinPayload', () => {
     ]);
   });
 
+  it("carries the agent's env in the envelope, outside the prompt", () => {
+    const payload = buildHeteroExecStdinPayload({
+      agentEnv: { ANTHROPIC_BASE_URL: 'https://proxy.example.com' },
+      prompt: 'hello',
+    });
+
+    expect(JSON.parse(payload)).toEqual({
+      agentEnv: { ANTHROPIC_BASE_URL: 'https://proxy.example.com' },
+      content: [{ text: 'hello', type: 'text' }],
+    });
+  });
+
+  it('keeps the plain shape for an empty agent env', () => {
+    expect(buildHeteroExecStdinPayload({ agentEnv: {}, prompt: 'hello' })).toBe(
+      JSON.stringify('hello'),
+    );
+  });
+
   it('reserves recovery history for the resume fallback prompt', () => {
     const payload = buildHeteroExecStdinPayload({
       imageList: [{ id: 'file-1', url: 'https://x/a.png' }],

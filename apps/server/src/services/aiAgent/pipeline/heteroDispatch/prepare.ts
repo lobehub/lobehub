@@ -339,7 +339,8 @@ export const prepareHeteroRun = async (
     assistantMessageId,
     // The one setting that travels from the agent's env to wherever the run
     // lands: forwarding the whole env would let an agent's author set arbitrary
-    // variables on a member's device.
+    // variables on a member's device. The requester's own personal device gets
+    // the whole env at dispatch time (see `resolveOwnDeviceLaunch`).
     claudeCodeEntrypoint:
       heteroType === 'claude-code' && heterogeneousProvider?.type === heteroType
         ? resolveDispatchedClaudeCodeEntrypoint(heterogeneousProvider.env)

@@ -18,6 +18,10 @@ import { getTask, removeTask, saveTask } from '../daemon/taskRegistry';
 import { registerAgentRun } from './agentRunRegistry';
 
 export interface SpawnHeteroAgentRunParams {
+  /** The agent's own spawn command, passed as `--command`. */
+  agentCommand?: string;
+  /** The agent's own env, carried in the stdin envelope. */
+  agentEnv?: Record<string, string>;
   agentId?: string;
   agentType: string;
   /** Resolved `lh hetero exec` wrapper args. */
@@ -93,6 +97,8 @@ function startHeteroAgentRun(
   logger?: SpawnHeteroAgentRunLogger,
 ): Promise<AgentRunAckResult> {
   const {
+    agentCommand,
+    agentEnv,
     agentType,
     assistantMessageId,
     args: extraArgs,
@@ -133,6 +139,7 @@ function startHeteroAgentRun(
     '--cwd',
     workDir,
     ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
+    ...(agentCommand?.trim() ? ['--command', agentCommand.trim()] : []),
     ...(extraArgs ?? []),
   ];
 
@@ -141,6 +148,7 @@ function startHeteroAgentRun(
   // the desktop path. `lh hetero exec` coerces both shapes via
   // coerceJsonPrompt.
   const stdinPayload = buildHeteroExecStdinPayload({
+    agentEnv,
     imageList,
     isNewSession: !resumeSessionId,
     prompt,

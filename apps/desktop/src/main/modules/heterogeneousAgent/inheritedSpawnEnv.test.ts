@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildInheritedSpawnEnv } from '../HeterogeneousAgentImpl';
+import { buildInheritedSpawnEnv } from './inheritedSpawnEnv';
 
 describe('buildInheritedSpawnEnv', () => {
   it('drops host Anthropic creds and an ancestor agent run identity', () => {

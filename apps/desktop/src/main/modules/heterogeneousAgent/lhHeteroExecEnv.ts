@@ -1,9 +1,12 @@
 import {
+  buildHeteroExecStdinPayload,
   HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV,
-  stripInheritedRunIdentity,
+  type HeteroExecImageRef,
 } from '@lobechat/heterogeneous-agents/protocol';
 
 import { withEmbeddedCliEnv } from '@/modules/cliEmbedding';
+
+import { buildInheritedSpawnEnv } from './inheritedSpawnEnv';
 
 export interface LhHeteroExecEnvParams {
   /** Account-routing env (`CLAUDE_CONFIG_DIR` of the routed login), if any. */
@@ -22,8 +25,9 @@ export interface LhHeteroExecEnvParams {
 
 /** Env for the embedded `lh hetero exec` a gateway-dispatched run spawns. */
 export const buildLhHeteroExecEnv = (params: LhHeteroExecEnvParams) => ({
-  // Never inherit the launcher's run identity (or JWT file) for a dispatched run.
-  ...withEmbeddedCliEnv(stripInheritedRunIdentity(process.env)),
+  // Never inherit the launcher's run identity (or JWT file) for a dispatched
+  // run, nor a shell's Anthropic credentials that would hijack the CLI's login.
+  ...withEmbeddedCliEnv(buildInheritedSpawnEnv()),
   ...params.proxyEnv,
   ELECTRON_RUN_AS_NODE: '1',
   [HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV]: '1',
@@ -39,3 +43,58 @@ export const buildLhHeteroExecEnv = (params: LhHeteroExecEnvParams) => ({
   ...(params.workspaceId ? { LOBEHUB_WORKSPACE_ID: params.workspaceId } : {}),
   ...params.accountEnv,
 });
+
+export interface LhHeteroExecInvocationParams {
+  /** The agent's own spawn command, passed as `--command`. */
+  agentCommand?: string;
+  /** The agent's own env, carried in the stdin envelope rather than the wrapper's env. */
+  agentEnv?: Record<string, string>;
+  agentType: string;
+  /** Resolved `lh hetero exec` wrapper args. */
+  extraArgs?: string[];
+  imageList?: HeteroExecImageRef[];
+  operationId: string;
+  prompt: string;
+  rawDumpDir?: string;
+  resumeFallbackSystemContext?: string;
+  resumeSessionId?: string;
+  systemContext?: string;
+  topicId: string;
+  workDir: string;
+}
+
+/** Argv and `--input-json -` stdin payload for a gateway-dispatched `lh hetero exec`. */
+export const buildLhHeteroExecInvocation = (params: LhHeteroExecInvocationParams) => {
+  const agentCommand = params.agentCommand?.trim();
+  const args = [
+    'hetero',
+    'exec',
+    '--type',
+    params.agentType,
+    '--operation-id',
+    params.operationId,
+    '--topic',
+    params.topicId,
+    '--render',
+    'none',
+    '--input-json',
+    '-',
+    '--cwd',
+    params.workDir,
+    ...(params.resumeSessionId ? ['--resume', params.resumeSessionId] : []),
+    ...(params.rawDumpDir ? ['--raw-dump', params.rawDumpDir] : []),
+    ...(agentCommand ? ['--command', agentCommand] : []),
+    ...(params.extraArgs ?? []),
+  ];
+
+  const stdinPayload = buildHeteroExecStdinPayload({
+    agentEnv: params.agentEnv,
+    imageList: params.imageList,
+    isNewSession: !params.resumeSessionId,
+    prompt: params.prompt,
+    resumeFallbackSystemContext: params.resumeFallbackSystemContext,
+    systemContext: params.systemContext,
+  });
+
+  return { args, stdinPayload };
+};

@@ -394,6 +394,7 @@ export const dispatchHeteroAgent = async (
     const cliDispatchParams = {
       agentConfig,
       appContext,
+      canManageAgent: input.canManageAgent,
       cliDeviceWorkspaceId,
       heteroType,
       heterogeneousProvider,

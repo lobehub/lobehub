@@ -26,7 +26,9 @@ export interface HeteroExecImageRef {
  * the user prompt, then image blocks. Resume recovery adds a backwards-
  * compatible `{ content, resumeFallback }` envelope: old CLIs unwrap `content`
  * and run the primary prompt, while new CLIs reserve `resumeFallback` for a
- * retry after native resume fails.
+ * retry after native resume fails. The agent's own env (`agentEnv`) rides in
+ * the same envelope rather than the wrapper's process env, so it lands on top
+ * of the agent's preset env exactly like a local spawn and never in argv.
  *
  * `isNewSession` is the caller's own `!resumeSessionId`. The fallback prompt is
  * always a new session by definition — it exists precisely because native
@@ -34,6 +36,8 @@ export interface HeteroExecImageRef {
  * session-scoped context regardless of what the primary attempt got.
  */
 export const buildHeteroExecStdinPayload = (params: {
+  /** Env from the agent's own config, applied over the agent's preset env. */
+  agentEnv?: Record<string, string>;
   imageList?: HeteroExecImageRef[];
   isNewSession?: boolean;
   prompt: string;
@@ -41,6 +45,7 @@ export const buildHeteroExecStdinPayload = (params: {
   systemContext?: string;
 }): string => {
   const {
+    agentEnv,
     imageList = [],
     isNewSession,
     prompt,
@@ -49,15 +54,21 @@ export const buildHeteroExecStdinPayload = (params: {
   } = params;
   const blocks = buildHeterogeneousPrompt({ imageList, isNewSession, prompt, systemContext });
 
-  if (resumeFallbackSystemContext !== undefined) {
+  const hasAgentEnv = !!agentEnv && Object.keys(agentEnv).length > 0;
+  if (resumeFallbackSystemContext !== undefined || hasAgentEnv) {
     return JSON.stringify({
+      ...(hasAgentEnv ? { agentEnv } : {}),
       content: blocks,
-      resumeFallback: buildHeterogeneousPrompt({
-        imageList,
-        isNewSession: true,
-        prompt,
-        systemContext: resumeFallbackSystemContext,
-      }),
+      ...(resumeFallbackSystemContext !== undefined
+        ? {
+            resumeFallback: buildHeterogeneousPrompt({
+              imageList,
+              isNewSession: true,
+              prompt,
+              systemContext: resumeFallbackSystemContext,
+            }),
+          }
+        : {}),
     });
   }
 
