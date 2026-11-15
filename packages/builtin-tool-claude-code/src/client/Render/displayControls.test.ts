@@ -59,6 +59,8 @@ describe('resolveClaudeCodeRenderDisplayControl', () => {
   it('keeps the static map for every other api, regardless of pluginState', () => {
     expect(resolveClaudeCodeRenderDisplayControl(ClaudeCodeApiName.Edit)).toBe('collapsed');
     expect(resolveClaudeCodeRenderDisplayControl(ClaudeCodeApiName.TodoWrite)).toBe('expand');
+    // A message to a subagent stays a one-line row instead of spilling its prompt.
+    expect(resolveClaudeCodeRenderDisplayControl(ClaudeCodeApiName.SendMessage)).toBe('collapsed');
     // An unrelated api with images on its result must not be force-expanded.
     expect(resolveClaudeCodeRenderDisplayControl(ClaudeCodeApiName.Grep, uploaded)).toBeUndefined();
   });

@@ -1311,7 +1311,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       return [];
     }
     if (raw.subtype === 'task_notification' && raw.task_id) {
-      this.taskSignals.end(raw.task_id);
+      this.taskSignals.end(raw.task_id, { status: raw.status, summary: raw.summary });
       return [];
     }
     // `task_updated` is a status patch (status: 'completed' fires
