@@ -59,6 +59,31 @@ export const isSSRFBlockedError = (error: unknown): boolean => {
   return false;
 };
 
+/** A URL inside an error message (node-fetch puts the full request URL in its errors). */
+const URL_IN_TEXT = /\b[a-z][\d+.a-z-]*:\/\/[^\s"'<>]+/gi;
+
+/** Reduce every URL in `text` to its origin: paths, queries and userinfo can carry credentials. */
+const redactUrls = (text: string) =>
+  text.replaceAll(URL_IN_TEXT, (match) => {
+    try {
+      const { origin } = new URL(match);
+      return origin === 'null' ? '[url]' : origin;
+    } catch {
+      return '[url]';
+    }
+  });
+
+/** What a fetch failure is logged as: never the raw error, whose message and cause hold the URL. */
+const toErrorLog = (error: unknown) => {
+  if (!(error instanceof Error)) return { message: redactUrls(String(error)) };
+  const { code } = error as { code?: unknown };
+  return {
+    ...(typeof code === 'string' && { code }),
+    message: redactUrls(error.message),
+    name: error.name,
+  };
+};
+
 const toFetchError = (error: unknown): Error => {
   if (error instanceof SSRFBlockedError) return error;
 
@@ -67,7 +92,7 @@ const toFetchError = (error: unknown): Error => {
   const isSSRFBlock = errorMessage.includes('is not allowed');
 
   if (isSSRFBlock) {
-    console.error('SSRF protection blocked request:', error);
+    console.error('SSRF protection blocked request:', toErrorLog(error));
     return new SSRFBlockedError(
       `${SSRF_BLOCKED_PREFIX}: ${errorMessage}. ` +
         'See: https://lobehub.com/docs/self-hosting/environment-variables/basic#ssrf-allow-private-ip-address',
@@ -75,7 +100,7 @@ const toFetchError = (error: unknown): Error => {
     );
   }
 
-  console.error('Fetch error:', error);
+  console.error('Fetch error:', toErrorLog(error));
   return new Error(`Fetch failed: ${errorMessage}`, { cause: error });
 };
 
