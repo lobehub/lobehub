@@ -7,16 +7,11 @@ import {
   useTitleMarqueeAvailable,
 } from './useTitleMarquee';
 
-const mocks = vi.hoisted(() => ({ language: 'en-US', reduceMotion: false }));
+const mocks = vi.hoisted(() => ({ reduceMotion: false }));
 
 vi.mock('motion/react', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   useReducedMotion: () => mocks.reduceMotion,
-}));
-
-vi.mock('react-i18next', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  useTranslation: () => ({ i18n: { language: mocks.language }, t: (key: string) => key }),
 }));
 
 describe('getTitleMarqueeTimeline', () => {
@@ -147,8 +142,12 @@ describe('useTitleMarquee', () => {
 
 describe('useTitleMarqueeAvailable', () => {
   beforeEach(() => {
-    mocks.language = 'en-US';
+    document.documentElement.dir = 'ltr';
     mocks.reduceMotion = false;
+  });
+
+  afterEach(() => {
+    document.documentElement.dir = '';
   });
 
   it('replaces the tooltip in a left-to-right locale with motion allowed', () => {
@@ -161,8 +160,8 @@ describe('useTitleMarqueeAvailable', () => {
     expect(renderHook(() => useTitleMarqueeAvailable()).result.current).toBe(false);
   });
 
-  it('keeps the tooltip in a right-to-left locale', () => {
-    mocks.language = 'ar';
+  it('keeps the tooltip when the document is right-to-left', () => {
+    document.documentElement.dir = 'rtl';
 
     expect(renderHook(() => useTitleMarqueeAvailable()).result.current).toBe(false);
   });

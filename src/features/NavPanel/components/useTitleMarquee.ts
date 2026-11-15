@@ -1,7 +1,5 @@
 import { useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
-import { isRtlLang } from 'rtl-detect';
 
 /** Reading speed of the reveal, in pixels per second. */
 const SCROLL_SPEED = 35;
@@ -91,11 +89,14 @@ const getReadableRight = (viewport: HTMLElement, container: HTMLElement | null) 
  * Whether the marquee can replace the title tooltip here. The slide, the
  * readable-edge math and the edge fades are left-to-right, and under reduced
  * motion there is no slide to reveal the title; both keep the tooltip.
+ *
+ * Direction is read from the document, which the locale setup flips on a
+ * language change: it is the direction the layout actually uses.
  */
 export const useTitleMarqueeAvailable = () => {
-  const { i18n } = useTranslation();
   const reduceMotion = useReducedMotion();
-  return !reduceMotion && !isRtlLang(i18n.language);
+  const rtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
+  return !reduceMotion && !rtl;
 };
 
 /**
