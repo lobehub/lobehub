@@ -94,6 +94,8 @@ vi.mock('@/server/services/discover', () => ({
     return {
       getAssistantDetail: mockGetAssistantDetail,
       getAssistantList: mockGetAssistantList,
+      // The market's detail of an MCP it does not host
+      getMcpDetail: async () => ({}),
       getMcpList: mockGetMcpList,
       getMcpManifest: mockGetMcpManifest,
     };

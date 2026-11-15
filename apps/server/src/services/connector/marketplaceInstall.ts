@@ -41,7 +41,11 @@ export interface MarketMcpManifest {
   api?: unknown[];
   deploymentOptions?: { connection?: MarketConnection }[];
   description?: string;
-  /** The market's hosted endpoint for a stdio server, when it runs one. */
+  /**
+   * The market's hosted endpoint for a stdio server, when it runs one. The
+   * market serves it on the MCP's detail (`market.getMcpDetail`), not in the
+   * manifest: the caller copies it in.
+   */
   haveCloudEndpoint?: unknown;
   icon?: string;
   name?: string;

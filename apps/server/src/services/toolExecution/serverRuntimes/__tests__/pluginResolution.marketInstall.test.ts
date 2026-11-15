@@ -36,10 +36,12 @@ const userId = 'server-market-install-user';
 const AGENT_ID = 'agent-1';
 const IDENTIFIER = 'fetch-mcp';
 
-/** A market-hosted MCP, the way `market.getMcpManifest` serves it. */
+/**
+ * A stdio MCP, the way `market.getMcpManifest` serves it: whether the market
+ * hosts it is on its detail (`haveCloudEndpoint`), not in the manifest.
+ */
 const manifest: MarketMcpManifest = {
   deploymentOptions: [{ connection: { args: ['-y', IDENTIFIER], command: 'npx', type: 'stdio' } }],
-  haveCloudEndpoint: true,
   name: 'Fetch',
   tools: [{ description: 'Fetch a URL', inputSchema: { type: 'object' }, name: 'fetch' }],
   version: '1.2.0',
@@ -48,12 +50,18 @@ const manifest: MarketMcpManifest = {
 const pluginModel = new PluginModel(db, userId);
 const connectorModel = new ConnectorModel(db, userId);
 
-const installFromServer = (served: MarketMcpManifest = manifest) =>
+const installFromServer = (
+  served: MarketMcpManifest = manifest,
+  detail: { haveCloudEndpoint?: unknown } = { haveCloudEndpoint: true },
+) =>
   resolveOrInstallMarketPlugin(
     IDENTIFIER,
     {
       connectorModel,
-      discoverService: { getMcpManifest: vi.fn().mockResolvedValue(served) },
+      discoverService: {
+        getMcpDetail: vi.fn().mockResolvedValue(detail),
+        getMcpManifest: vi.fn().mockResolvedValue(served),
+      },
       installMarketplaceConnector: (identifier, fetched) =>
         installMarketplaceMcpConnector({ serverDB: db, userId }, identifier, fetched),
       pluginModel,
@@ -149,6 +157,17 @@ describe('resolveOrInstallMarketPlugin — server-side marketplace install', () 
       );
     },
   );
+
+  it('refuses a stdio MCP the market does not host, writing nothing', async () => {
+    const { installedNow, resolution } = await installFromServer(manifest, {
+      haveCloudEndpoint: false,
+    });
+
+    expect(installedNow).toBe(false);
+    expect(resolution).toEqual({ blocker: 'local-only', status: 'needs-user-install' });
+    expect(await db.select().from(userConnectors)).toEqual([]);
+    expect(await db.select().from(userInstalledPlugins)).toEqual([]);
+  });
 
   it('pins a finished install again without writing anything', async () => {
     await installFromServer();

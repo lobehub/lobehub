@@ -92,7 +92,8 @@ vi.mock('@/database/repositories/aiInfra', () => ({
 
 vi.mock('@/server/services/discover', () => ({
   DiscoverService: vi.fn(function () {
-    return { getMcpManifest: mockGetMcpManifest };
+    // The market's detail of an MCP it does not host
+    return { getMcpDetail: async () => ({}), getMcpManifest: mockGetMcpManifest };
   }),
 }));
 

@@ -180,7 +180,11 @@ export const unresolvablePluginResult = (
 };
 
 export interface MarketPluginDeps extends PluginResolverDeps {
-  discoverService: { getMcpManifest: (params: { identifier: string }) => Promise<unknown> };
+  discoverService: {
+    /** The MCP's market detail, which says whether the market hosts it (`haveCloudEndpoint`). */
+    getMcpDetail: (params: { identifier: string }) => Promise<unknown>;
+    getMcpManifest: (params: { identifier: string }) => Promise<unknown>;
+  };
   /** Stores a marketplace MCP as a connector (`installMarketplaceMcpConnector`). */
   installMarketplaceConnector: (
     identifier: string,
@@ -217,15 +221,21 @@ export const resolveOrInstallMarketPlugin = async (
     return { installedNow: false, resolution: { source: 'installed', status: 'loadable' } };
   if (existing?.manifest) return { installedNow: false, resolution: { status: 'no-tools' } };
 
-  let manifest: unknown;
-  try {
-    manifest = await deps.discoverService.getMcpManifest({ identifier });
-  } catch {
-    // Not a marketplace plugin (or the market is unreachable).
-  }
+  const [manifest, detail] = await Promise.all([
+    // Not a marketplace plugin (or the market is unreachable) when it fails.
+    deps.discoverService.getMcpManifest({ identifier }).catch(() => undefined),
+    deps.discoverService.getMcpDetail({ identifier }).catch(() => undefined),
+  ]);
   if (!manifest || typeof manifest !== 'object') return resolveExisting();
 
-  const outcome = await deps.installMarketplaceConnector(identifier, manifest as MarketMcpManifest);
+  // Whether the market hosts a stdio server is on its detail, not its manifest:
+  // the web install reads it there too, and without it a hosted server would
+  // be refused as one only the desktop app can run.
+  const hosted = (detail as { haveCloudEndpoint?: unknown } | undefined)?.haveCloudEndpoint;
+  const outcome = await deps.installMarketplaceConnector(identifier, {
+    ...(manifest as MarketMcpManifest),
+    ...(hosted === undefined ? {} : { haveCloudEndpoint: hosted }),
+  });
   switch (outcome.status) {
     case 'installed': {
       // The install is the base connector, while the agent's own row of the
