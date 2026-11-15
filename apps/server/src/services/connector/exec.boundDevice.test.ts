@@ -109,6 +109,33 @@ describe('callConnectorToolById — connector bound to a device', () => {
     expect(mcpService.callTool).not.toHaveBeenCalled();
   });
 
+  it("keeps a failure's error marker and details from the device", async () => {
+    vi.mocked(deviceGateway.executeMcpCall).mockResolvedValue({
+      content: 'Device call timed out',
+      error: 'TIMEOUT',
+      success: false,
+    } as never);
+
+    await expect(call(stdioConnector({ boundDeviceId: 'ws-nas' }))).resolves.toEqual({
+      content: 'Device call timed out',
+      error: { code: 'MCP_DEVICE_EXECUTION_ERROR', message: 'TIMEOUT' },
+      state: undefined,
+      success: false,
+    });
+
+    const errorData = { code: 'DEVICE_NOT_FOUND', deviceId: 'ws-nas', retryable: true };
+    vi.mocked(deviceGateway.executeMcpCall).mockResolvedValue({
+      content: 'gone',
+      errorData,
+      success: false,
+    } as never);
+
+    await expect(call(stdioConnector({ boundDeviceId: 'ws-nas' }))).resolves.toMatchObject({
+      error: errorData,
+      success: false,
+    });
+  });
+
   it('fails as a precondition with the reason when the bound device is offline', async () => {
     vi.mocked(resolveBoundMcpDevice).mockRejectedValue(
       new McpBoundDeviceUnavailableError('local-tool', 'offline', 'Office NAS'),

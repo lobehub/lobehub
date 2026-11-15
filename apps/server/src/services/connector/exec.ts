@@ -426,6 +426,13 @@ const runConnectorToolOnBoundDevice = async (
   const { mcpApp: _deviceView, ...state } = (result.state as Record<string, unknown>) ?? {};
   return {
     content: result.content,
+    // A failure keeps its marker and structured details, as agent runs do
+    ...(!result.success && {
+      error: result.errorData ?? {
+        code: 'MCP_DEVICE_EXECUTION_ERROR',
+        message: result.error || result.content,
+      },
+    }),
     state: result.state ? state : undefined,
     success: result.success,
   };
