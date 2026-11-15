@@ -430,6 +430,19 @@ describe('WeComClient on the Node message gateway', () => {
     expect(FakeSocket.instances).toHaveLength(0);
   });
 
+  it('does not probe while the gateway is reconnecting on the same Secret', async () => {
+    gw.findEnabledByPlatformAndAppId.mockResolvedValue({
+      credentials: { secret: 'sec' },
+      id: 'prov-1',
+    });
+    gw.getStatus.mockResolvedValue({ config: null, state: { status: 'connecting' } });
+
+    await expect(factory.validateCredentials({ secret: 'sec' }, {}, 'bot-1')).resolves.toEqual({
+      valid: true,
+    });
+    expect(FakeSocket.instances).toHaveLength(0);
+  });
+
   it('probes when the Secret differs from the one the gateway holds', async () => {
     gw.findEnabledByPlatformAndAppId.mockResolvedValue({
       credentials: { secret: 'old' },

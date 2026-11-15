@@ -335,7 +335,9 @@ const isLiveWithSecret = async (botId: string, secret: string): Promise<boolean>
     );
     if (!provider || provider.credentials.secret !== secret) return false;
     const { state } = await getMessageGatewayClient('wecom').getStatus(provider.id);
-    return state.status === 'connected';
+    // `connecting` too: the gateway is resubscribing on these same credentials, and a probe that
+    // landed in between would kick it and leave it parked.
+    return state.status === 'connected' || state.status === 'connecting';
   } catch (error) {
     log('Live-connection check on the gateway failed for %s: %O', botId, error);
     return false;
