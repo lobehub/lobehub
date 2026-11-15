@@ -104,6 +104,14 @@ type UpdateConnectorParams = Partial<
   Omit<NewUserConnector, 'userId' | 'id' | 'createdAt' | 'updatedAt'>
 >;
 
+/** {@link ConnectorModel.create} of a base connector whose identifier a base row of the scope holds. */
+export class ConnectorIdentifierHeldError extends Error {
+  constructor(identifier: string) {
+    super(`A connector with identifier "${identifier}" already exists`);
+    this.name = 'ConnectorIdentifierHeldError';
+  }
+}
+
 export class ConnectorModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -308,11 +316,24 @@ export class ConnectorModel {
     return this;
   };
 
+  /**
+   * Create a connector. An agent's own row is inserted as is. A base row
+   * (`agent_id IS NULL`) is claimed like {@link createUnlessIdentifierHeld}, under
+   * the identifier lock, and throws {@link ConnectorIdentifierHeldError} when a
+   * base row of the scope already holds the identifier: no caller can add a
+   * second base row for an identifier between another writer's lookup and insert.
+   */
   create = async (
     params: CreateConnectorParams,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
-  ): Promise<UserConnectorItem> =>
-    this.db.transaction((tx) => this.insertInTransaction(tx, params, gateKeeper));
+  ): Promise<UserConnectorItem> => {
+    if (params.agentId)
+      return this.db.transaction((tx) => this.insertInTransaction(tx, params, gateKeeper));
+
+    const claim = await this.createUnlessIdentifierHeld(params, { gateKeeper });
+    if ('holder' in claim) throw new ConnectorIdentifierHeldError(params.identifier);
+    return claim.created;
+  };
 
   /**
    * Create a base connector (`agent_id IS NULL`) unless a row in this scope

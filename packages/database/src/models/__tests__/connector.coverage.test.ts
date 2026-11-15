@@ -28,6 +28,18 @@ const cleanup = async () => {
 
 const base = { name: 'Connector', sourceType: 'builtin', status: 'connected' } as const;
 
+/** A base row written directly, as writers from before the identifier lock could duplicate one. */
+const insertBaseRow = async (fields: {
+  identifier: string;
+  metadata?: Record<string, unknown>;
+}) => {
+  const [row] = await serverDB
+    .insert(userConnectors)
+    .values({ ...base, ...fields, userId })
+    .returning();
+  return row;
+};
+
 describe('ConnectorModel coverage edges', () => {
   beforeEach(async () => {
     await cleanup();
@@ -43,8 +55,8 @@ describe('ConnectorModel coverage edges', () => {
     it('prefers the base row mounted by the agent over a free base row', async () => {
       const model = new ConnectorModel(serverDB, userId);
       const free = await model.create({ ...base, identifier: 'linear' });
-      const mounted = await model.create({
-        ...base,
+      // `create` refuses a held base identifier: seed the duplicate as an older writer left it
+      const mounted = await insertBaseRow({
         identifier: 'linear',
         metadata: { mountedByAgentId: agentId },
       });
@@ -61,7 +73,7 @@ describe('ConnectorModel coverage edges', () => {
     it('keeps one row per identifier when duplicates share the same priority', async () => {
       const model = new ConnectorModel(serverDB, userId);
       const first = await model.create({ ...base, identifier: 'notion' });
-      const second = await model.create({ ...base, identifier: 'notion' });
+      const second = await insertBaseRow({ identifier: 'notion' });
 
       const resolved = await model.resolveAll();
 

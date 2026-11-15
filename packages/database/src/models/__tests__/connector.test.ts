@@ -12,7 +12,7 @@ import {
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { ConnectorModel } from '../connector';
+import { ConnectorIdentifierHeldError, ConnectorModel } from '../connector';
 import { EvalConnectorUpdateError } from '../connectorEval';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -350,6 +350,29 @@ describe('ConnectorModel', () => {
       expect(callGateKeeper.encrypt).toHaveBeenCalledOnce();
       expect(result.credentials).toBe(`call:${JSON.stringify(apikeyCredentials)}`);
     });
+
+    it('creates a base row once while another writer claims its identifier', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const input = createBuiltinConnectorInput('fetch-mcp', 'Fetch');
+      const fetchRows = () =>
+        serverDB.select().from(userConnectors).where(eq(userConnectors.identifier, 'fetch-mcp'));
+
+      // An OpenAPI create racing an Agent Builder install's claim
+      const [created, claimed] = await Promise.allSettled([
+        model.create(input),
+        model.createUnlessIdentifierHeld(input),
+      ]);
+
+      expect(await fetchRows()).toHaveLength(1);
+      if (created.status === 'rejected')
+        expect(created.reason).toBeInstanceOf(ConnectorIdentifierHeldError);
+      else expect(claimed).toEqual({ status: 'fulfilled', value: { holder: created.value } });
+      await expect(model.create(input)).rejects.toThrow(ConnectorIdentifierHeldError);
+      // An agent's own row does not take the base identifier
+      await serverDB.insert(agents).values({ id: 'fetch-agent', userId });
+      await model.create({ ...input, agentId: 'fetch-agent' });
+      expect(await fetchRows()).toHaveLength(2);
+    });
   });
 
   describe('createUnlessIdentifierHeld', () => {
@@ -424,8 +447,12 @@ describe('ConnectorModel', () => {
     it('replaces nothing while any of duplicate base holders may not go', async () => {
       const model = new ConnectorModel(serverDB, userId);
       // Rows a writer from before the identifier lock could leave side by side
-      const stale = await model.create({ ...marketplaceInput, metadata: { stale: true } });
-      const live = await model.create({ ...marketplaceInput, metadata: { stale: false } });
+      const [stale, live] = await serverDB
+        .insert(userConnectors)
+        .values(
+          [true, false].map((stale) => ({ ...marketplaceInput, metadata: { stale }, userId })),
+        )
+        .returning();
 
       expect(
         await model.createUnlessIdentifierHeld(
