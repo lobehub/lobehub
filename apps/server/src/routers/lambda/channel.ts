@@ -269,6 +269,12 @@ export const channelRouter = router({
       await ctx.channelService.removeThread(input.channelId, input.threadId);
       return { success: true };
     }),
+  retryJob: channelProcedure
+    .input(z.object({ channelId, jobId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.retryJob(input.channelId, input.jobId);
+      return { success: true };
+    }),
   retryRouting: channelProcedure
     .input(z.object({ channelId, messageId: z.uuid() }))
     .mutation(async ({ ctx, input }) => ({

@@ -408,6 +408,12 @@ export class ChannelService {
     return message;
   };
 
+  retryJob = async (channelId: string, jobId: string) => {
+    const job = await this.repository.retryJob(channelId, jobId);
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    return job;
+  };
+
   stop = async (channelId: string, scope: ChannelStopScope) => {
     const writers = await this.repository.stop(channelId, scope);
     await new ChannelCoordinator(this.db).stopWriters(writers);
