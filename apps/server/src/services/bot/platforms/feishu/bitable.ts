@@ -90,7 +90,19 @@ const toFieldDefinition = (field: BitableFieldSpec) => {
   return definition;
 };
 
+/**
+ * Column types Feishu accepts for a table's first (primary / index) column.
+ * Of the types the tool exposes that is text, number, date and url.
+ */
+const PRIMARY_FIELD_TYPES = new Set<BitableFieldType>(['text', 'number', 'date', 'url']);
+
 const validateFields = (fields: BitableFieldSpec[]) => {
+  const primary = fields[0];
+  if (primary && !PRIMARY_FIELD_TYPES.has(primary.type)) {
+    throw new Error(
+      `The first column "${primary.name}" is the primary column and cannot be ${primary.type}; make it one of ${[...PRIMARY_FIELD_TYPES].join(', ')} (usually a text column such as the task title)`,
+    );
+  }
   if (fields.length > MAX_BITABLE_FIELDS) {
     throw new Error(`A table can have at most ${MAX_BITABLE_FIELDS} columns`);
   }

@@ -240,6 +240,26 @@ describe('createBitable', () => {
     expect(api.createBitableApp).not.toHaveBeenCalled();
   });
 
+  it('rejects a primary column type Feishu cannot index before creating anything', async () => {
+    const api = createApi();
+
+    await expect(
+      createBitable(
+        api,
+        {
+          fields: [
+            { name: '负责人', type: 'person' },
+            { name: '任务', type: 'text' },
+          ],
+          name: '待办',
+          platform: 'feishu',
+        },
+        'feishu',
+      ),
+    ).rejects.toThrow('primary column and cannot be person');
+    expect(api.createBitableApp).not.toHaveBeenCalled();
+  });
+
   it('turns a missing bitable scope into an actionable hint', async () => {
     const api = createApi();
     api.createBitableApp.mockRejectedValueOnce(

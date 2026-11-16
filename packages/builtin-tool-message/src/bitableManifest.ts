@@ -42,7 +42,7 @@ export const bitableApis: BuiltinToolManifest['api'] = [
         },
         fields: {
           description:
-            'Columns in display order; the first one is the primary column (use a text column such as the task title). Max 100.',
+            'Columns in display order; the first one is the primary column and must be `text`, `number`, `date` or `url` (use a text column such as the task title). Max 100.',
           items: {
             additionalProperties: false,
             properties: {
