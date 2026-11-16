@@ -35,6 +35,21 @@ describe('parseLenient', () => {
     expect(repairs).toEqual(['memories: missing list read as empty']);
   });
 
+  it('drops an entry whose missing list cannot be read as empty, keeping the others', () => {
+    const schema = z.object({
+      memories: z.array(z.object({ tags: z.array(z.string()), title: z.string() })),
+    });
+
+    const { data } = parseLenient(schema, {
+      memories: [
+        { tags: ['work'], title: 'kept' },
+        { title: 'malformed', unexpected: true },
+      ],
+    });
+
+    expect(data.memories).toEqual([{ tags: ['work'], title: 'kept' }]);
+  });
+
   it('still fails when a missing list comes with keys outside the schema', () => {
     expect(() => parseLenient(ContextMemorySchema, { contexts: [{ title: 'x' }] })).toThrow();
   });

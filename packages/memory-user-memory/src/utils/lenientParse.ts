@@ -178,6 +178,9 @@ export const parseLenient = <T>(
           isRecord(at(current, path.slice(0, -1)))
         ) {
           missingLists.push(path);
+          // Also queued for dropping: if the list cannot be read as empty below (the answer
+          // carries keys outside the schema), its entry is dropped as before.
+          drop(path);
           continue;
         }
         // Null for a field that does not take it: treat it as left out (a default may fill it).
