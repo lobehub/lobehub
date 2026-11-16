@@ -105,6 +105,17 @@ describe('projectWorkingDirectory store', () => {
     });
   });
 
+  describe('refreshEnvironments', () => {
+    it('refreshes every environment and directory projection', async () => {
+      vi.mocked(mutate).mockClear();
+
+      await useProjectDirectoryStore.getState().refreshEnvironments();
+
+      expect(invalidates('projectEnvironments', 'project-1')).toBe(true);
+      expect(invalidates('projectDirectories', 'all')).toBe(true);
+    });
+  });
+
   describe('useFetchProjectTopics polling', () => {
     afterEach(() => {
       vi.restoreAllMocks();

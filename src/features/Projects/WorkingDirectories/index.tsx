@@ -21,7 +21,7 @@ import {
   PlusIcon,
   UnlinkIcon,
 } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
@@ -36,10 +36,11 @@ import {
   useProjectDirectoryStore,
   useProjectEnvironments,
 } from '@/store/projectWorkingDirectory';
+import type { SandboxEnvironment } from '@/store/sandbox';
 
 import { openAddEnvironmentModal } from '../AddEnvironmentModal';
 import { environmentRepositoryUrl } from '../environmentSource';
-import { projectEnvironmentRows } from './projectEnvironmentRows';
+import { hasEditedEnvironment, projectEnvironmentRows } from './projectEnvironmentRows';
 
 /** The frames the environment settings use, so both lists read as one. */
 const styles = stylex.create({
@@ -124,6 +125,17 @@ export function ProjectWorkingDirectories({
   // Until the configured list has answered, "not in it" is not an answer yet.
   const unlisted = configured.settled ? unlistedRows : [];
   const selected = rows.find((environment) => environment.id === selectedId);
+
+  // The detail panel saves through the settings store; the project's own
+  // projections (directory rows carry the environment's name) follow when a
+  // linked environment's name or visibility changes there.
+  const refreshEnvironments = useProjectDirectoryStore((s) => s.refreshEnvironments);
+  const lastRows = useRef<SandboxEnvironment[]>(undefined);
+  useEffect(() => {
+    const previous = lastRows.current;
+    lastRows.current = rows;
+    if (previous && hasEditedEnvironment(previous, rows)) void refreshEnvironments();
+  }, [rows, refreshEnvironments]);
 
   const link = () =>
     openAddEnvironmentModal({

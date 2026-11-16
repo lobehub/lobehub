@@ -107,6 +107,12 @@ interface ProjectDirectoryStore extends ProjectDirectoryStoreState {
   detachEnvironment: (...args: ServiceParams<'detachEnvironment'>) => Promise<void>;
   /** Move a directory conversation to its project's directory on another device. */
   moveTopic: (...args: ServiceParams<'moveTopic'>) => Promise<ServiceData<'moveTopic'>>;
+  /**
+   * Refetch every environment and directory projection after an environment
+   * was edited elsewhere (the shared settings panel): directory rows carry its
+   * name denormalized.
+   */
+  refreshEnvironments: () => Promise<void>;
   /** Refetch a project's conversations after a change made elsewhere, e.g. a new main agent. */
   refreshProjectTopics: (projectId: string) => Promise<void>;
   /** Repoint a directory at another device location; its conversations follow it. */
@@ -232,6 +238,9 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
         environmentTopics.revalidate(),
       ]);
       return result.data;
+    },
+    refreshEnvironments: async () => {
+      await Promise.all([environments.revalidate(), directories.revalidate()]);
     },
     refreshProjectTopics: async (projectId) => {
       // Directory and environment rows carry the same topics with their agent

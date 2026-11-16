@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { SandboxEnvironment } from '@/store/sandbox';
 
-import { projectEnvironmentRows } from './projectEnvironmentRows';
+import { hasEditedEnvironment, projectEnvironmentRows } from './projectEnvironmentRows';
 
 const configured = (id: string, name = id): SandboxEnvironment => ({
   createdAt: '2026-10-01T00:00:00.000Z',
@@ -37,5 +37,22 @@ describe('projectEnvironmentRows', () => {
 
     expect(result.configured.map((row) => row.id)).toEqual(['a']);
     expect(result.unlisted).toEqual([{ id: 'gone', name: 'Theirs' }]);
+  });
+});
+
+describe('hasEditedEnvironment', () => {
+  it('reports a rename or a visibility change of a row listed both times', () => {
+    expect(
+      hasEditedEnvironment([configured('a', 'Old: name')], [configured('a', 'New: name')]),
+    ).toBe(true);
+    expect(
+      hasEditedEnvironment([configured('a')], [{ ...configured('a'), visibility: 'public' }]),
+    ).toBe(true);
+  });
+
+  it('ignores linking, unlinking and unchanged rows', () => {
+    expect(hasEditedEnvironment([configured('a')], [configured('a'), configured('b')])).toBe(false);
+    expect(hasEditedEnvironment([configured('a'), configured('b')], [configured('a')])).toBe(false);
+    expect(hasEditedEnvironment([configured('a')], [configured('a')])).toBe(false);
   });
 });
