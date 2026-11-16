@@ -463,4 +463,34 @@ describe('consumeHeteroSteer', () => {
     await expect(consume()).resolves.toMatchObject({ id: 'msg-a', parentId: 'asst-1' });
     expect(mocks.create).not.toHaveBeenCalled();
   });
+
+  it('recovers the linked images of a written message on a retried batch', async () => {
+    mocks.findById.mockResolvedValue({
+      content: 'look',
+      id: 'msg-a',
+      metadata: { steer: true },
+      parentId: 'asst-1',
+      role: 'user',
+      topicId: 'tpc-1',
+    });
+    const image = { alt: 'shot.png', id: 'img-1', url: 'https://b/signed' };
+    const queryByIds = vi.fn(async () => [{ id: 'msg-a', imageList: [image] }]);
+    const postProcessUrl = vi.fn(async () => 'https://b/signed');
+
+    const message = await consumeHeteroSteer(
+      { ...messageModel, queryByIds },
+      {
+        agentId: 'agt-1',
+        messageId: 'msg-a',
+        operationId: 'op-1',
+        parentId: 'asst-1',
+        postProcessUrl,
+        topicId: 'tpc-1',
+      },
+    );
+
+    expect(queryByIds).toHaveBeenCalledWith(['msg-a'], { postProcessUrl });
+    expect(message?.imageList).toEqual([image]);
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
 });

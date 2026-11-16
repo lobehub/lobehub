@@ -365,6 +365,7 @@ export class HeterogeneousPersistenceHandler {
       messageId,
       operationId: state.operationId,
       parentId: state.main.lastSpineMessageId,
+      postProcessUrl: this.deps.postProcessFileUrl,
       threadId: state.threadId,
       topicId: state.topicId,
     });

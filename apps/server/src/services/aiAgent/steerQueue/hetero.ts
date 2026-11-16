@@ -275,6 +275,14 @@ export const consumeHeteroSteer = async (
     threadId?: string | null;
     topicId: string;
     messageId: string;
+    /**
+     * Turns a stored file path into a URL the chat can load, as message queries
+     * do. Lets a retried batch recover the images of an already-written message.
+     */
+    postProcessUrl?: (
+      path: string | null,
+      file: { fileType: string; id?: string | null },
+    ) => Promise<string>;
   },
 ): Promise<
   | {
@@ -293,9 +301,17 @@ export const consumeHeteroSteer = async (
   if (!delivery) {
     const written = await messageModel.findById(messageId);
     if (written?.role !== 'user' || written.topicId !== params.topicId) return;
+    // A retry after the delivery was removed (the first ingest wrote the message
+    // but failed to publish it) still needs the linked images, or the chat would
+    // insert the follow-up text-only until its next refetch.
+    const imageList = params.postProcessUrl
+      ? (await messageModel.queryByIds([messageId], { postProcessUrl: params.postProcessUrl }))[0]
+          ?.imageList
+      : undefined;
     return {
       content: written.content ?? '',
       id: written.id,
+      ...(imageList?.length && { imageList }),
       metadata: (written.metadata ?? {}) as Record<string, unknown>,
       parentId: written.parentId ?? null,
     };

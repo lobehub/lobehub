@@ -79,6 +79,14 @@ export interface HeterogeneousPersistenceHandlerDeps {
    */
   isOperationLiveOnTopic?: (operationId: string, topicId: string) => Promise<boolean>;
   messageModel: MessageModel;
+  /**
+   * Turns a stored file path into a URL the chat can load. Optional so
+   * standalone/test callers skip recovering a retried steer's images.
+   */
+  postProcessFileUrl?: (
+    path: string | null,
+    file: { fileType: string; id?: string | null },
+  ) => Promise<string>;
   threadModel: ThreadModel;
   topicModel: TopicModel;
   userId?: string;
