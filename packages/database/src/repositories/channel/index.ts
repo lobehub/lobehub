@@ -33,6 +33,7 @@ import {
 import { channelAvatarMembers } from './avatars';
 import { findThread } from './delivery';
 import { ChannelError } from './error';
+import { setMemberMuted } from './mute';
 import { lockPeerPair, peerOf, requireMutualContacts } from './peer';
 import {
   addChannelUser,
@@ -95,10 +96,12 @@ const hasRole = (role: ChannelMemberRole | null, minRole: ChannelMemberRole) =>
 const LIST_PREVIEW_LENGTH = 200;
 
 /** A member config with its reply strategy set, or without one when `wake` is empty. */
+/** An environment plus the member's own settings that live beside it: reply strategy and mute. */
 const withMemberWake = (
   config: ChannelMemberConfig,
   wake: Record<string, unknown> | null | undefined,
-): ChannelMemberConfig => (wake ? { ...config, wake } : config);
+  muted: boolean | undefined,
+): ChannelMemberConfig => ({ ...config, ...(wake && { wake }), ...(muted && { muted }) });
 
 export class ChannelRepository {
   private readonly workspaceId: string | null;
@@ -261,7 +264,13 @@ export class ChannelRepository {
         const [member] = await tx
           .update(channelMembers)
           // The environment is replaced; the member's reply strategy is not part of it.
-          .set({ config: withMemberWake(memberEnvironment(config), current.config?.wake) })
+          .set({
+            config: withMemberWake(
+              memberEnvironment(config),
+              current.config?.wake,
+              current.config?.muted,
+            ),
+          })
           .where(eq(channelMembers.id, memberId))
           .returning();
         await audit(tx, channelId, 'member_environment_changed', memberId);
@@ -350,7 +359,9 @@ export class ChannelRepository {
         const current = await requireAgentMember(tx, channelId, memberId);
         const [member] = await tx
           .update(channelMembers)
-          .set({ config: withMemberWake(memberEnvironment(current.config), wake) })
+          .set({
+            config: withMemberWake(memberEnvironment(current.config), wake, current.config?.muted),
+          })
           .where(eq(channelMembers.id, memberId))
           .returning();
         await audit(tx, channelId, 'member_wake_config_changed', memberId, { reset: !wake });
@@ -1092,6 +1103,12 @@ export class ChannelRepository {
       },
       { minRole: 'admin' },
     );
+
+  /** Mutes or unmutes an Agent member; see `setMemberMuted`. Returns writers to stop. */
+  setMemberMuted = async (channelId: string, memberId: string, muted: boolean) =>
+    this.write(channelId, (tx, { channel }) => setMemberMuted(tx, channel, memberId, muted), {
+      minRole: 'admin',
+    });
 
   /** Sends an unassigned message back to the decision model. Its author or an admin may retry. */
   retryRouting = async (channelId: string, messageId: string): Promise<ChannelMessageItem> =>

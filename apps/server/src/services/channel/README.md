@@ -53,6 +53,10 @@ groups merge field by field), parsed by the shared bot-wake schema.
   in the main channel (it still follows up there, and is chosen normally in a Thread it follows):
   the decision model never chooses the member either. An unnamed member's generic `Agent` label
   is not a name the text can call.
+- **Muted** (`channel_members.config.muted`, `channel.setMemberMuted`, admins only): the member is
+  not a candidate at all. Only an @mention reaches it: not routing, the paired-Agent shortcut, the
+  all-candidate fallback or a reply to its message; it cannot post on its own either. Muting stops
+  its open jobs. The Agent of a direct conversation cannot be muted.
 - **Quiet**: the member stayed silent `maxSilentWakes` times since it last answered; routing may still
   choose it, but not wake it on a hunch.
 

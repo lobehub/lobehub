@@ -21,6 +21,10 @@ import { ChannelError } from './error';
 /** Why a deferred `followup` has not started; see {@link deliver} and `claimJob`. */
 export const AWAITING_PRIMARY_REASON = 'Waiting for the first responder to finish';
 
+/** An Agent member that is not muted; a muted one is reached only by an @mention. */
+export const memberNotMuted = () =>
+  sql`coalesce((${channelMembers.config}->>'muted')::boolean, false) = false`;
+
 /** The Thread a message belongs to, or null for the main channel. */
 export const findThread = async (
   tx: Transaction,
@@ -92,6 +96,7 @@ export const candidateAgents = async (
         eq(channelMembers.channelId, channelId),
         eq(channelMembers.actorType, 'agent'),
         eq(channelMembers.status, 'active'),
+        memberNotMuted(),
       ),
     );
 
@@ -112,7 +117,10 @@ export const pairedAgent = async (
     .where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.status, 'active')));
   const agents = members.filter((member) => member.actorType === 'agent');
 
-  return agents.length === 1 && members.length === 2 ? agents[0] : undefined;
+  // A muted one waits for an @mention like any other.
+  return agents.length === 1 && members.length === 2 && !agents[0].config?.muted
+    ? agents[0]
+    : undefined;
 };
 
 /**

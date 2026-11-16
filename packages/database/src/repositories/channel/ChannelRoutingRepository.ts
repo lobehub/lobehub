@@ -17,7 +17,7 @@ import {
 import type { LobeChatDatabase } from '../../type';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import { fileIdsByMessage } from './attachments';
-import { findThread } from './delivery';
+import { findThread, memberNotMuted } from './delivery';
 import { resolveRouting } from './routing';
 import { audit, withChannelLock } from './transaction';
 
@@ -156,6 +156,7 @@ export class ChannelRoutingRepository {
             eq(channelMembers.channelId, channelId),
             eq(channelMembers.actorType, 'agent'),
             eq(channelMembers.status, 'active'),
+            memberNotMuted(),
             thread ? inArray(channelMembers.id, thread.followerMemberIds) : undefined,
             buildWorkspaceWhere(
               { userId: message.userId, workspaceId: channel.workspaceId ?? undefined },
