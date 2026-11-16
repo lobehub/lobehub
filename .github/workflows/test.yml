@@ -86,7 +86,7 @@ jobs:
         run: node --test .github/scripts/hotfixWorkflow.test.mjs
 
       - name: Verify desktop release workflows
-        run: node --test .github/scripts/desktop-publish-s3.test.mjs .github/scripts/release-desktop-canary.test.mjs
+        run: node --test .github/scripts/desktop-publish-s3.test.mjs .github/scripts/release-desktop-canary.test.mjs .github/scripts/desktop-overlay-type-check.test.mjs .github/scripts/overlayTypeErrors.test.mjs
 
       - name: Test CLI build configuration, bundle and model-facing docs
         run: bunx vitest run --config vitest.config.mts --silent='passed-only' tsdown.config.test.ts bundle.test.ts src/modelFacingDocs.test.ts
