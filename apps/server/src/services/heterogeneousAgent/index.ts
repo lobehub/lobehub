@@ -28,6 +28,7 @@ import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLi
 import type { SerializedHook } from '@/server/services/agentRuntime/hooks/types';
 import { createDefaultSnapshotStore } from '@/server/services/agentRuntime/snapshotStore';
 import { releaseHeteroSteers } from '@/server/services/aiAgent/steerQueue/hetero';
+import { FileService } from '@/server/services/file';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 import { instantiateVerifyPlanOnStart } from '@/server/services/verify';
 
@@ -249,6 +250,8 @@ export class HeterogeneousAgentService {
         isOperationLiveOnTopic: (operationId, topicId) =>
           this.agentOperationModel.isRunningOnTopic(operationId, topicId),
         messageModel: this.messageModel,
+        postProcessFileUrl: (path, file) =>
+          new FileService(db, userId, workspaceId).getFileAccessUrl({ id: file.id, url: path }),
         threadModel: new ThreadModel(db, userId, workspaceId),
         topicModel: this.topicModel,
         userId,

@@ -25,6 +25,10 @@ import {
   returnHeteroSteer,
   takeHeteroSteer,
 } from '@/server/services/aiAgent/steerQueue/hetero';
+import {
+  HeteroSteerPollTracker,
+  markHeteroSteerClosed,
+} from '@/server/services/aiAgent/steerQueue/heteroListener';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import {
   HeteroOperationPrincipalError,
@@ -144,7 +148,16 @@ const WaitHeteroSteerSchema = z.object({
    * message). Older producers omit it and only ever get text-only follow-ups.
    */
   acceptsImages: z.boolean().optional(),
+  /**
+   * The producer also takes attached images, and returns a follow-up whose
+   * attachment it cannot hand over instead of typing in the text alone (the
+   * text does not name an attachment). Older producers get such follow-ups
+   * only as a turn of their own.
+   */
+  acceptsAttachedImages: z.boolean().optional(),
   blockMs: z.number().int().positive().max(25_000).default(20_000),
+  /** The producer's `lh` version, recorded so a queue that never moves can be explained. */
+  cliVersion: z.string().max(64).optional(),
   operationId: z.string().min(1),
 });
 
@@ -521,7 +534,7 @@ export const heteroRouter = router({
   waitHeteroSteer: heteroAgentProcedure
     .input(WaitHeteroSteerSchema)
     .mutation(async ({ input, ctx }) => {
-      const { acceptsImages, operationId, blockMs } = input;
+      const { acceptsAttachedImages, acceptsImages, cliVersion, operationId, blockMs } = input;
 
       await authorizeOperationCallback(ctx, operationId, 'hetero:ingest');
 
@@ -562,15 +575,26 @@ export const heteroRouter = router({
       };
 
       await renewHeteroSteers(operationId);
+      const tracker = await HeteroSteerPollTracker.start(
+        { operationId, topicId: operation.topicId },
+        { acceptsAttachedImages, acceptsImages, agentId: operation.agentId, cliVersion },
+      );
 
       const deadline = Date.now() + blockMs;
       for (;;) {
+        let hold: Parameters<HeteroSteerPollTracker['hold']>[0] | undefined;
         const message = await takeHeteroSteer(storeCtx, {
+          acceptsAttachedImages,
           acceptsImages,
           agentId: operation.agentId,
+          onHold: (held) => {
+            hold = held;
+          },
           operationId,
           scope,
         });
+        if (hold) await tracker.hold(hold);
+        else await tracker.release();
         if (message) return { message };
         if (Date.now() + HETERO_STEER_CHECK_MS > deadline) return { message: null };
         await new Promise((resolve) => setTimeout(resolve, HETERO_STEER_CHECK_MS));
@@ -588,7 +612,7 @@ export const heteroRouter = router({
         allowTerminalOperation: true,
       });
       const [operation] = await ctx.serverDB
-        .select({ userId: agentOperations.userId })
+        .select({ topicId: agentOperations.topicId, userId: agentOperations.userId })
         .from(agentOperations)
         .where(eq(agentOperations.id, input.operationId))
         .limit(1);
@@ -600,6 +624,10 @@ export const heteroRouter = router({
       }
 
       await returnHeteroSteer(input.operationId, input.messageId);
+      await markHeteroSteerClosed({
+        operationId: input.operationId,
+        topicId: operation.topicId ?? 'unknown',
+      });
       return { success: true as const };
     }),
   /**

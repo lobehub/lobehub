@@ -1,5 +1,6 @@
 import type { AgentContentBlock, AgentPromptInput } from '@lobechat/heterogeneous-agents/spawn';
 
+import { cliVersion } from '../pkg';
 import { log } from './logger';
 
 /** The part of the lambda client the steer loop calls. */
@@ -10,7 +11,13 @@ export interface HeteroSteerClient {
     };
     waitHeteroSteer: {
       mutate: (
-        input: { acceptsImages?: boolean; blockMs?: number; operationId: string },
+        input: {
+          acceptsAttachedImages?: boolean;
+          acceptsImages?: boolean;
+          blockMs?: number;
+          cliVersion?: string;
+          operationId: string;
+        },
         options?: { signal?: AbortSignal },
       ) => Promise<{
         message: HeteroSteerMessage | null;
@@ -21,10 +28,14 @@ export interface HeteroSteerClient {
   };
 }
 
-/** A follow-up to type into the session; `imageList` holds images pasted into its body. */
+/** A follow-up to type into the session, with its attached and pasted images. */
 export interface HeteroSteerMessage {
   content: string;
-  imageList?: { id: string; url: string }[];
+  /**
+   * `attached` marks an attachment: unlike a pasted image, the text does not
+   * name it, so the text alone is no fallback when it cannot be sent.
+   */
+  imageList?: { attached?: boolean; id: string; url: string }[];
   messageId: string;
 }
 
@@ -41,10 +52,50 @@ export const buildSteerPrompt = (message: HeteroSteerMessage): AgentPromptInput 
   ];
 };
 
+/**
+ * What the steer loop did, for the run's local trace: whether follow-ups
+ * reached the session, and why the loop stopped asking. Without it a queue
+ * that never moves cannot be told apart from one the server holds back.
+ */
+export type HeteroSteerTraceEvent =
+  | { cliVersion?: string; type: 'steer_listening' }
+  /** `images`: how many went in as image blocks (0 when they fell back to text). */
+  | { images: number; messageId: string; type: 'steer_delivered' }
+  | { messageId: string; type: 'steer_returned' }
+  | {
+      error?: string;
+      reason: 'child_run' | 'images_failed' | 'input_closed' | 'refused';
+      type: 'steer_stopped';
+    };
+
 export interface HeteroSteerContext {
+  /** Reported with every poll, so the server can say which `lh` a stuck queue sits behind. */
+  cliVersion?: string;
   getTrpcClient: () => Promise<HeteroSteerClient>;
+  /** Best-effort trace sink; never throws into the loop. */
+  onTrace?: (event: HeteroSteerTraceEvent) => void;
   operationId: string;
 }
+
+/**
+ * The steer context of a server-ingested run: reports this `lh` version with
+ * every poll and notes what the loop did on the run's local trace, since steer
+ * delivery happens outside the agent stream the trace otherwise records.
+ */
+export const heteroSteerContext = ({
+  getTrpcClient,
+  operationId,
+  traceRecorder,
+}: {
+  getTrpcClient: () => Promise<HeteroSteerClient>;
+  operationId: string;
+  traceRecorder: { note: (type: string, data: Record<string, unknown>) => void };
+}): HeteroSteerContext => ({
+  cliVersion,
+  getTrpcClient,
+  onTrace: ({ type, ...data }) => traceRecorder.note(type, data),
+  operationId,
+});
 
 interface SteerableHandle {
   events: AsyncIterable<any>;
@@ -58,6 +109,8 @@ const isPermanentRefusal = (error: unknown) => {
   const code = (error as { data?: { code?: string } } | undefined)?.data?.code;
   return code === 'NOT_FOUND' || code === 'FORBIDDEN' || code === 'BAD_REQUEST';
 };
+
+const IMAGE_CAPABILITIES = { acceptsAttachedImages: true, acceptsImages: true } as const;
 
 const isUserMessageReplay = (event: { data?: any; type: string }) =>
   event.type === 'step_complete' &&
@@ -92,7 +145,14 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
     return;
   }
 
-  const { operationId } = context;
+  const { cliVersion, operationId } = context;
+  const trace = (event: HeteroSteerTraceEvent) => {
+    try {
+      context.onTrace?.(event);
+    } catch {
+      // A trace failure must never stop delivery.
+    }
+  };
   const delivered = new Set<string>();
   const abort = new AbortController();
   // Set once the server answered a poll; the next main `stream_start` tells
@@ -107,19 +167,25 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
       try {
         const res = await client.aiAgent.waitHeteroSteer.mutate(
           // The first poll answers at once, so the run is marked steerable early.
-          // The session takes image blocks, so pasted images come along.
+          // The session takes image blocks, so pasted and attached images come
+          // along; a failed attachment goes back rather than as text alone.
           supported
-            ? { acceptsImages: true, operationId }
-            : { acceptsImages: true, blockMs: 1, operationId },
+            ? { ...IMAGE_CAPABILITIES, cliVersion, operationId }
+            : { ...IMAGE_CAPABILITIES, blockMs: 1, cliVersion, operationId },
           { signal: abort.signal },
         );
-        if (res.steerable === false) return;
+        if (res.steerable === false) {
+          trace({ reason: 'child_run', type: 'steer_stopped' });
+          return;
+        }
         message = res.message;
+        if (!supported) trace({ cliVersion, type: 'steer_listening' });
         supported = true;
       } catch (error) {
         if (abort.signal.aborted) return;
         if (isPermanentRefusal(error)) {
           log.debug('Steer delivery unavailable for this run: %s', String(error));
+          trace({ error: String(error), reason: 'refused', type: 'steer_stopped' });
           return;
         }
         await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
@@ -129,22 +195,41 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
 
       const steer = message;
       const options = { uuid: steer.messageId };
+      let images = steer.imageList?.length ?? 0;
+      let imagesFailed = false;
       const accepted = await send(buildSteerPrompt(steer), options).catch(async (error) => {
         if (!steer.imageList?.length) return false;
+        if (steer.imageList.some((image) => image.attached)) {
+          // The text does not name an attachment: sent alone, the agent would
+          // miss it while the chat shows it. Images are fetched before
+          // anything is typed, so the message can still wait for its own turn.
+          log.debug('Steer attachments failed, returning the message: %s', String(error));
+          imagesFailed = true;
+          return false;
+        }
         // An image that cannot be fetched must not cost the message: its
         // markdown still names the image.
         log.debug('Steer images failed, sending the text: %s', String(error));
+        images = 0;
         return send(steer.content, options).catch(() => false);
       });
       if (accepted) {
         delivered.add(message.messageId);
+        trace({
+          images,
+          messageId: steer.messageId,
+          type: 'steer_delivered',
+        });
         continue;
       }
-      // The session stopped taking input; whatever is queued now waits for
-      // the run to end, as before.
+      // The session stopped taking input, or could not take the attachments:
+      // whatever is queued now waits for the run to end, as before. Polling
+      // on after a failed attachment would take the same message again.
+      trace({ messageId: steer.messageId, type: 'steer_returned' });
       await client.aiAgent.returnHeteroSteer
         .mutate({ messageId: message.messageId, operationId })
         .catch((error) => log.debug('Returning steer message failed: %s', String(error)));
+      trace({ reason: imagesFailed ? 'images_failed' : 'input_closed', type: 'steer_stopped' });
       return;
     }
   };

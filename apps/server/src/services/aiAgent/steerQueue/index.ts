@@ -179,13 +179,22 @@ export const returnFollowUps = async (
   drained: Pick<DrainedFollowUps, 'drainId'>,
   entries: QueuedFollowUp[],
   reason: unknown,
+  options: {
+    /**
+     * Skip the log line: the caller puts the same follow-ups back on every
+     * poll and reports the reason itself, once.
+     */
+    quiet?: boolean;
+  } = {},
 ) => {
   if (entries.length === 0) return;
-  console.error(
-    '[steerQueue] %d queued follow-ups go back to the queue: %O',
-    entries.length,
-    reason,
-  );
+  if (!options.quiet)
+    console.error(
+      '[steerQueue] %d queued follow-ups go back to the queue (topic %s): %O',
+      entries.length,
+      scope.topicId,
+      reason,
+    );
   await redisService.steerQueue
     .settle(
       scope,

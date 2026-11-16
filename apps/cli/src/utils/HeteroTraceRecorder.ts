@@ -96,6 +96,8 @@ export class HeteroTraceRecorder {
   // that lands while another is running is folded into a single follow-up.
   private dirty = false;
   private writing: Promise<void> = Promise.resolve();
+  /** CLI-side notes recorded while no turn was open; see {@link note}. */
+  private pendingNotes: Array<{ [key: string]: unknown; type: string }> = [];
 
   constructor(private readonly options: HeteroTraceRecorderOptions) {
     this.partial = {
@@ -121,6 +123,24 @@ export class HeteroTraceRecorder {
   }
 
   /**
+   * Record something the CLI itself did around the agent (e.g. delivering a
+   * queued follow-up into the live session), which never appears in the
+   * agent's own stream. Attached to the open turn like a notable event; one
+   * that lands between turns waits for the next turn instead of opening a
+   * turn of its own, which would read as a model call that never happened.
+   * Never throws.
+   */
+  note(type: string, data: Record<string, unknown> = {}): void {
+    try {
+      const entry = { ...data, timestamp: Date.now(), type };
+      if (this.llmStep) this.llmStep.events.push(entry);
+      else this.pendingNotes.push(entry);
+    } catch (error) {
+      this.warn(`failed to record note ${type}: ${String(error)}`);
+    }
+  }
+
+  /**
    * Close any open step and write the completed snapshot. Removes the partial,
    * so a partial left on disk always means "this run never finished".
    */
@@ -130,6 +150,7 @@ export class HeteroTraceRecorder {
   }): Promise<void> {
     try {
       this.closeLlmStep();
+      this.flushPendingNotes();
       for (const toolCallId of this.toolSteps.keys()) this.closeToolStep(toolCallId);
 
       // A run that produced no step and no error has nothing worth a snapshot —
@@ -190,7 +211,7 @@ export class HeteroTraceRecorder {
         this.closeLlmStep();
         this.llmStep = {
           content: '',
-          events: [],
+          events: this.takePendingNotes(),
           model: typeof data.model === 'string' ? data.model : undefined,
           provider: typeof data.provider === 'string' ? data.provider : undefined,
           reasoning: '',
@@ -287,11 +308,29 @@ export class HeteroTraceRecorder {
 
   // ─── Step lifecycle ───────────────────────────────────────────────────────
 
+  /** Notes that arrived between turns belong to the turn that follows. */
+  private takePendingNotes() {
+    return this.pendingNotes.splice(0);
+  }
+
+  /**
+   * Notes left after the last turn go on that turn. A run that never started
+   * a turn keeps none: a step made only for them would read as a model call,
+   * and no follow-up can have reached a session that never ran.
+   */
+  private flushPendingNotes(): void {
+    const notes = this.takePendingNotes();
+    const last = this.partial.steps?.at(-1);
+    if (notes.length === 0 || !last) return;
+    last.events = [...(last.events ?? []), ...notes];
+    this.scheduleWrite();
+  }
+
   private ensureLlmStep(startedAt: number): OpenLlmStep {
     if (!this.llmStep) {
       this.llmStep = {
         content: '',
-        events: [],
+        events: this.takePendingNotes(),
         reasoning: '',
         startedAt,
         toolsCalling: [],

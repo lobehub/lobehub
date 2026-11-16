@@ -9,6 +9,7 @@ import {
   getConversationChatInputUiState,
   getConversationSendButtonProps,
   getQueuedHintKey,
+  getQueuedRowHint,
   putQueuedMessageInEditor,
   sendQueuedMessageNow,
   toChatInputMessages,
@@ -84,6 +85,46 @@ describe('getQueuedHintKey', () => {
     expect(getQueuedHintKey({ count: 3, waitsForRunEnd: true })).toBe(
       'inputQueue.queuedRunEndMergeHint',
     );
+  });
+});
+
+describe('getQueuedRowHint', () => {
+  /**
+   * @example A follow-up with an attachment sits behind a Claude Code run that
+   * takes plain text into its live session.
+   */
+  it('names why a row waits for the run to end', () => {
+    // ROOT CAUSE:
+    //
+    // Every queued row behind a CLI run showed one caption, so a message the
+    // run held back (attachment, tool selection, an lh that never polled)
+    // looked the same as one about to go in.
+    //
+    // Before: one queue-wide caption.
+    // After: each row shows the server's reason with the run-end timing.
+    expect(
+      getQueuedRowHint({
+        count: 2,
+        message: { serverWaitReason: 'attachments' },
+        waitsForRunEnd: false,
+      }),
+    ).toEqual({
+      key: 'inputQueue.waitReasonHint',
+      reasonKey: 'inputQueue.waitReason.attachments',
+      timingKey: 'inputQueue.queuedRunEndMergeHint',
+    });
+  });
+
+  it('promises the next read for a row the live run takes', () => {
+    expect(
+      getQueuedRowHint({ count: 1, message: { serverJoinsLiveRun: true }, waitsForRunEnd: true }),
+    ).toEqual({ key: 'inputQueue.queuedHint' });
+  });
+
+  it('falls back to the queue-wide timing without a server report', () => {
+    expect(getQueuedRowHint({ count: 1, message: {}, waitsForRunEnd: true })).toEqual({
+      key: 'inputQueue.queuedRunEndHint',
+    });
   });
 });
 

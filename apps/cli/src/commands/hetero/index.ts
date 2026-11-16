@@ -36,13 +36,12 @@ import {
   spawnAgent,
   spawnDshAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
-import { isRecord } from '@lobechat/utils/object';
 import type { Command } from 'commander';
 
 import { getTrpcClient } from '../../api/client';
 import { cliVersion } from '../../pkg';
 import { CoalescingBatchIngester } from '../../utils/CoalescingBatchIngester';
-import { withHeteroSteer } from '../../utils/heteroSteer';
+import { heteroSteerContext, withHeteroSteer } from '../../utils/heteroSteer';
 import { HeteroTraceRecorder } from '../../utils/HeteroTraceRecorder';
 import { log } from '../../utils/logger';
 import { createOperationHeartbeat } from '../../utils/OperationHeartbeat';
@@ -51,6 +50,7 @@ import { createLocalTraceStore } from '../../utils/traceStore';
 import { TrpcIngestSink } from '../../utils/TrpcIngestSink';
 import type { HeteroCliArgumentOptions } from './buildExtraArgs';
 import { buildExtraArgs } from './buildExtraArgs';
+import { isMissingGrokResumeSession, looksLikeNeedsRetryWithoutResume } from './resumeRetry';
 
 const DSH_AGENT_TYPE = 'deepseek-harness';
 export const SUPPORTED_AGENT_TYPES = new Set<string>([
@@ -153,50 +153,6 @@ const spawnAgentOrRuntime = (
   const runtimeFactory = spawnRuntimeRegistry[spawnOpts.agentType as LocalHeterogeneousAgentType];
   if (runtimeFactory) return runtimeFactory(spawnOpts, { onRawStdout, onStartupControl });
   return spawnAgent({ ...spawnOpts, onRawStdout });
-};
-
-/**
- * Patterns that indicate a `--resume <sessionId>` run should be retried
- * without `--resume`.  Two classes of failure:
- *
- *   1. Session file missing (sandbox recycled): the container is ephemeral
- *      (~1 h idle TTL), so a new sandbox has an empty `~/.claude/projects/`
- *      and the stored session id is stale.
- *
- *   2. Context overflow (long conversation): the resumed session carries all
- *      accumulated history; when the combined token count exceeds the model's
- *      context window the API rejects the request immediately after CC
- *      initialises.  Starting fresh (no `--resume`) drops the old history and
- *      lets CC respond to the new prompt alone.
- *
- * Checked against:
- *   - `error` stream events emitted by the CC adapter from CC's result event
- *   - Accumulated stderr output (fallback when CC exits without a result event)
- */
-const RESUME_RETRY_PATTERNS = [
-  // Session file missing — sandbox was recycled
-  /no conversation found/i,
-  /session.*not found/i,
-  /conversation.*not found/i,
-  /resume.*not found/i,
-  // Codex reports a missing saved thread (exec and app-server alike) as
-  // "thread/resume failed: no rollout found for thread id <id>".
-  /no rollout found/i,
-  // Context overflow — API rejected the resumed session's accumulated history
-  /prompt.*too long/i,
-  /context.*too long/i,
-  /context window.*exceed/i,
-  /maximum.*context.*length/i,
-] as const;
-
-const looksLikeNeedsRetryWithoutResume = (text: string): boolean =>
-  RESUME_RETRY_PATTERNS.some((p) => p.test(text));
-
-const isMissingGrokResumeSession = (data: Record<string, unknown> | undefined): boolean => {
-  if (data?.agentType !== 'grok-build' || !isRecord(data.details)) return false;
-  const { details } = data;
-  const rpcData = details.data;
-  return details.method === 'session/load' && isRecord(rpcData) && rpcData.code === 'FS_NOT_FOUND';
 };
 
 interface ExecOptions extends HeteroCliArgumentOptions {
@@ -1064,7 +1020,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
     let terminalErrorMessage: string | undefined;
     let terminalErrorData: Record<string, unknown> | undefined;
     try {
-      for await (const event of withHeteroSteer(handle, !!sink && { getTrpcClient, operationId })) {
+      const steer = !!sink && heteroSteerContext({ getTrpcClient, operationId, traceRecorder });
+      for await (const event of withHeteroSteer(handle, steer)) {
         if (interceptResumeErrors && event.type === 'error') {
           const data = event.data as Record<string, unknown> | undefined;
           const msg = String(data?.message ?? data?.error ?? '');

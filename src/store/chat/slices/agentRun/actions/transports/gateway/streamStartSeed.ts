@@ -48,6 +48,7 @@ const insertSteerRow = (
         ...shared,
         agentId: shared.agentId ?? undefined,
         content: steer.content,
+        ...(steer.imageList?.length && { imageList: steer.imageList }),
         metadata: steer.metadata ?? undefined,
         parentId: steer.parentId ?? undefined,
         role: 'user',

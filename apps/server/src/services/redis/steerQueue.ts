@@ -518,6 +518,34 @@ export const steerQueue = {
     );
   },
 
+  /**
+   * Records what a heterogeneous run's producer last reported about taking
+   * follow-ups (see {@link RedisKeys.agentSteer.heteroListener}); it lapses
+   * after `ttlMs` unless refreshed.
+   */
+  async putHeteroListener(operationId: string, listener: unknown, ttlMs: number): Promise<void> {
+    const redis = await getClient();
+    if (!redis) throw new Error('Redis is unavailable to record a steer listener');
+
+    await redis.set(RedisKeys.agentSteer.heteroListener(operationId), JSON.stringify(listener), {
+      px: ttlMs,
+    });
+  },
+
+  /** The producer state recorded by {@link steerQueue.putHeteroListener}, if still fresh. */
+  async getHeteroListener<T>(operationId: string): Promise<T | undefined> {
+    const redis = await getClient();
+    if (!redis) throw new Error('Redis is unavailable to read a steer listener');
+
+    const raw = await redis.get(RedisKeys.agentSteer.heteroListener(operationId));
+    if (raw === null || raw === undefined) return;
+    try {
+      return JSON.parse(String(raw)) as T;
+    } catch {
+      return;
+    }
+  },
+
   /** Drops a delivery record once it is settled. */
   async removeHeteroDelivery(operationId: string, messageId: string): Promise<void> {
     const redis = await getClient();

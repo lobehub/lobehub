@@ -324,6 +324,29 @@ describe('createGatewayEventHandler — stream lifecycle events', () => {
       expect(messageService.getMessages).not.toHaveBeenCalled();
     });
 
+    it('shows the images attached to the steer message', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+      const image = { alt: 'shot.png', id: 'img-1', url: 'https://bucket.example.com/img-1' };
+
+      handler(
+        makeEvent('step_complete', {
+          phase: 'user_message',
+          steerMessage: { content: 'look', id: 'steer-1', imageList: [image], role: 'user' },
+          uuid: 'steer-1',
+        }),
+      );
+      await flush();
+
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'steer-1',
+          value: expect.objectContaining({ imageList: [image] }),
+        }),
+        { operationId: 'op-1' },
+      );
+    });
+
     it('does not insert it twice, and ignores a replay that delivered nothing', async () => {
       const store = createMockStore();
       store.dbMessagesMap = { 'session_agent-1_topic-1': [{ id: 'steer-1', role: 'user' }] };

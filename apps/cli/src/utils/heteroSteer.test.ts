@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildSteerPrompt,
   type HeteroSteerClient,
+  heteroSteerContext,
   type HeteroSteerMessage,
   withHeteroSteer,
 } from './heteroSteer';
@@ -74,12 +75,13 @@ describe('withHeteroSteer', () => {
   it('types a queued follow-up into the session and forwards only its replay', async () => {
     const { client, wait } = createClient([null, { content: 'use pnpm', messageId: 'msg-1' }]);
     const sendUserMessage = vi.fn(async () => true);
+    const onTrace = vi.fn();
     const stream = createStream();
 
     const out = collect(
       withHeteroSteer(
         { events: stream.events, sendUserMessage },
-        { getTrpcClient: async () => client, operationId: 'op-1' },
+        { cliVersion: '0.0.80', getTrpcClient: async () => client, onTrace, operationId: 'op-1' },
       ),
     );
     await vi.waitFor(() => expect(sendUserMessage).toHaveBeenCalled());
@@ -89,8 +91,23 @@ describe('withHeteroSteer', () => {
     stream.end();
 
     expect(sendUserMessage).toHaveBeenCalledWith('use pnpm', { uuid: 'msg-1' });
-    expect(wait.mock.calls[0][0]).toEqual({ acceptsImages: true, blockMs: 1, operationId: 'op-1' });
-    expect(wait.mock.calls[1][0]).toEqual({ acceptsImages: true, operationId: 'op-1' });
+    expect(wait.mock.calls[0][0]).toEqual({
+      acceptsAttachedImages: true,
+      acceptsImages: true,
+      blockMs: 1,
+      cliVersion: '0.0.80',
+      operationId: 'op-1',
+    });
+    expect(wait.mock.calls[1][0]).toEqual({
+      acceptsAttachedImages: true,
+      acceptsImages: true,
+      cliVersion: '0.0.80',
+      operationId: 'op-1',
+    });
+    expect(onTrace.mock.calls.map(([event]) => event)).toEqual([
+      { cliVersion: '0.0.80', type: 'steer_listening' },
+      { images: 0, messageId: 'msg-1', type: 'steer_delivered' },
+    ]);
     expect(await out).toEqual([
       { data: { liveSteer: true, newStep: true }, type: 'stream_start' },
       replay('msg-1'),
@@ -140,12 +157,13 @@ describe('withHeteroSteer', () => {
       if (typeof prompt !== 'string') throw new Error('image fetch failed: 403');
       return true;
     });
+    const onTrace = vi.fn();
     const stream = createStream();
 
     const out = collect(
       withHeteroSteer(
         { events: stream.events, sendUserMessage },
-        { getTrpcClient: async () => client, operationId: 'op-1' },
+        { getTrpcClient: async () => client, onTrace, operationId: 'op-1' },
       ),
     );
     await vi.waitFor(() => expect(sendUserMessage).toHaveBeenCalledTimes(2));
@@ -154,16 +172,54 @@ describe('withHeteroSteer', () => {
 
     expect(sendUserMessage).toHaveBeenLastCalledWith('see this', { uuid: 'msg-1' });
     expect(giveBack).not.toHaveBeenCalled();
+    expect(onTrace).toHaveBeenCalledWith({
+      images: 0,
+      messageId: 'msg-1',
+      type: 'steer_delivered',
+    });
+  });
+
+  it('gives a message back when its attached images cannot be loaded, never the text alone', async () => {
+    const { client, giveBack, wait } = createClient([
+      {
+        content: 'see this',
+        imageList: [{ attached: true, id: 'f', url: 'https://x/expired' }],
+        messageId: 'msg-1',
+      },
+    ]);
+    const sendUserMessage = vi.fn(async () => {
+      throw new Error('image fetch failed: 403');
+    });
+    const onTrace = vi.fn();
+    const stream = createStream();
+
+    const out = collect(
+      withHeteroSteer(
+        { events: stream.events, sendUserMessage },
+        { getTrpcClient: async () => client, onTrace, operationId: 'op-1' },
+      ),
+    );
+    await vi.waitFor(() =>
+      expect(giveBack).toHaveBeenCalledWith({ messageId: 'msg-1', operationId: 'op-1' }),
+    );
+    stream.end();
+    await out;
+
+    expect(sendUserMessage).toHaveBeenCalledTimes(1);
+    // Polling on would take the same message again.
+    expect(wait).toHaveBeenCalledTimes(1);
+    expect(onTrace).toHaveBeenCalledWith({ reason: 'images_failed', type: 'steer_stopped' });
   });
 
   it('gives a refused message back and stops polling', async () => {
     const { client, giveBack, wait } = createClient([{ content: 'hi', messageId: 'msg-1' }]);
+    const onTrace = vi.fn();
     const stream = createStream();
 
     const out = collect(
       withHeteroSteer(
         { events: stream.events, sendUserMessage: async () => false },
-        { getTrpcClient: async () => client, operationId: 'op-1' },
+        { getTrpcClient: async () => client, onTrace, operationId: 'op-1' },
       ),
     );
     await vi.waitFor(() => expect(giveBack).toHaveBeenCalled());
@@ -173,6 +229,12 @@ describe('withHeteroSteer', () => {
 
     expect(giveBack).toHaveBeenCalledWith({ messageId: 'msg-1', operationId: 'op-1' });
     expect(wait).toHaveBeenCalledTimes(1);
+    expect(onTrace.mock.calls.map(([event]) => event.type)).toEqual([
+      'steer_listening',
+      'steer_returned',
+      'steer_stopped',
+    ]);
+    expect(onTrace).toHaveBeenLastCalledWith({ reason: 'input_closed', type: 'steer_stopped' });
   });
 
   it('stops asking a server that does not know the procedure, and never marks the run', async () => {
@@ -182,12 +244,13 @@ describe('withHeteroSteer', () => {
     const client = {
       aiAgent: { returnHeteroSteer: { mutate: vi.fn() }, waitHeteroSteer: { mutate: wait } },
     } as unknown as HeteroSteerClient;
+    const onTrace = vi.fn();
     const stream = createStream();
 
     const out = collect(
       withHeteroSteer(
         { events: stream.events, sendUserMessage: async () => true },
-        { getTrpcClient: async () => client, operationId: 'op-1' },
+        { getTrpcClient: async () => client, onTrace, operationId: 'op-1' },
       ),
     );
     await vi.waitFor(() => expect(wait).toHaveBeenCalled());
@@ -196,6 +259,9 @@ describe('withHeteroSteer', () => {
 
     expect(await out).toEqual([{ data: {}, type: 'stream_start' }]);
     expect(wait).toHaveBeenCalledTimes(1);
+    expect(onTrace).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'refused', type: 'steer_stopped' }),
+    );
   });
 
   it('stops polling, and never marks the run, when the server says it is not steerable', async () => {
@@ -203,12 +269,13 @@ describe('withHeteroSteer', () => {
     const client = {
       aiAgent: { returnHeteroSteer: { mutate: vi.fn() }, waitHeteroSteer: { mutate: wait } },
     } as unknown as HeteroSteerClient;
+    const onTrace = vi.fn();
     const stream = createStream();
 
     const out = collect(
       withHeteroSteer(
         { events: stream.events, sendUserMessage: async () => true },
-        { getTrpcClient: async () => client, operationId: 'op-child' },
+        { getTrpcClient: async () => client, onTrace, operationId: 'op-child' },
       ),
     );
     await vi.waitFor(() => expect(wait).toHaveBeenCalled());
@@ -218,6 +285,31 @@ describe('withHeteroSteer', () => {
 
     expect(await out).toEqual([{ data: {}, type: 'stream_start' }]);
     expect(wait).toHaveBeenCalledTimes(1);
+    expect(onTrace.mock.calls).toEqual([[{ reason: 'child_run', type: 'steer_stopped' }]]);
+  });
+
+  it('keeps delivering when the trace sink throws', async () => {
+    const { client } = createClient([{ content: 'hi', messageId: 'msg-1' }]);
+    const sendUserMessage = vi.fn(async () => true);
+    const stream = createStream();
+
+    const out = collect(
+      withHeteroSteer(
+        { events: stream.events, sendUserMessage },
+        {
+          getTrpcClient: async () => client,
+          onTrace: () => {
+            throw new Error('disk full');
+          },
+          operationId: 'op-1',
+        },
+      ),
+    );
+    await vi.waitFor(() => expect(sendUserMessage).toHaveBeenCalled());
+    stream.push(replay('msg-1'));
+    stream.end();
+
+    expect(await out).toEqual([replay('msg-1')]);
   });
 
   it('passes events through without a server or a live session', async () => {
@@ -235,5 +327,21 @@ describe('buildSteerPrompt', () => {
   it('keeps a text-only follow-up a plain string', () => {
     expect(buildSteerPrompt({ content: 'hi', messageId: 'm' })).toBe('hi');
     expect(buildSteerPrompt({ content: 'hi', imageList: [], messageId: 'm' })).toBe('hi');
+  });
+});
+
+describe('heteroSteerContext', () => {
+  it('reports this lh version and notes loop events on the trace', () => {
+    const note = vi.fn();
+    const context = heteroSteerContext({
+      getTrpcClient: async () => ({}) as HeteroSteerClient,
+      operationId: 'op-1',
+      traceRecorder: { note },
+    });
+
+    context.onTrace?.({ images: 1, messageId: 'msg-1', type: 'steer_delivered' });
+
+    expect(context.cliVersion).toEqual(expect.any(String));
+    expect(note).toHaveBeenCalledWith('steer_delivered', { images: 1, messageId: 'msg-1' });
   });
 });

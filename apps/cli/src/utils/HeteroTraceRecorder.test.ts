@@ -211,6 +211,43 @@ describe('HeteroTraceRecorder', () => {
     expect(events[0]).toMatchObject({ attempt: 2, type: 'stream_retry' });
   });
 
+  it('records CLI-side notes, such as steer delivery, on the open turn', async () => {
+    recorder.observe(event('stream_start', {}));
+    recorder.note('steer_delivered', { images: 1, messageId: 'msg-1' });
+    await recorder.finalize({ result: 'success' });
+
+    const events = store.saved[0].steps[0].events ?? [];
+    expect(events).toEqual([
+      expect.objectContaining({ images: 1, messageId: 'msg-1', type: 'steer_delivered' }),
+    ]);
+  });
+
+  it('puts a note that lands between turns on the next turn, never on a turn of its own', async () => {
+    // The steer loop's first poll can answer before the agent's first turn starts.
+    recorder.note('steer_listening', { cliVersion: '0.0.80' });
+    recorder.observe(event('stream_start', {}));
+    recorder.observe(event('stream_chunk', { chunkType: 'text', content: 'one' }));
+    recorder.observe(event('stream_start', {}));
+    recorder.observe(event('stream_chunk', { chunkType: 'text', content: 'two' }));
+    recorder.observe(event('stream_end', {}));
+    recorder.note('steer_stopped', { reason: 'input_closed' });
+    await recorder.finalize({ result: 'success' });
+
+    const [snapshot] = store.saved;
+    expect(snapshot.totalSteps).toBe(2);
+    expect(snapshot.steps.map((step) => step.events?.map((e) => e.type))).toEqual([
+      ['steer_listening'],
+      ['steer_stopped'],
+    ]);
+  });
+
+  it('records no model call for a run that ended before its first turn', async () => {
+    recorder.note('steer_listening', { cliVersion: '0.0.80' });
+    await recorder.finalize({ result: 'cancelled' });
+
+    expect(store.saved).toHaveLength(0);
+  });
+
   it('never throws when the store fails', async () => {
     const failing = new MemoryStore();
     failing.savePartial = async () => {
