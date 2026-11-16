@@ -21,6 +21,7 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { ChunkService } from '@/server/services/chunk';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
+import { isSharedLimitFailure, toAsyncTaskErrorType } from '@/server/services/fileParse/failure';
 import { type IAsyncTaskError } from '@/types/asyncTask';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 import { safeParseJSON } from '@/utils/safeParseJSON';
@@ -49,10 +50,10 @@ const fileProcedure = asyncAuthedProcedure.use(async (opts) => {
 });
 
 /**
- * Parsing and splitting a file is synchronous CPU work on this process' event loop, and every
- * running task keeps a whole file (up to MAX_FILE_PARSE_SIZE) in memory. A folder upload fires
- * one task per file at once, so they queue here instead of all running together and starving
- * every other request served by this process.
+ * Parsing and splitting run on the file-parse worker thread (one at a time per process), but every
+ * running task still keeps a whole file (up to MAX_FILE_PARSE_SIZE) in memory here. A folder
+ * upload fires one task per file at once, so they queue here instead of all running together and
+ * starving every other request served by this process.
  */
 const PARSE_CONCURRENCY = 2;
 let activeParses = 0;
@@ -372,8 +373,13 @@ export const fileRouter = router({
         try {
           const startAt = Date.now();
 
+          // Once the wait has given up the task is recorded as failed: the work behind it must not
+          // write chunks or a success status over that afterwards.
+          let expired = false;
+          let timeoutTimer: NodeJS.Timeout | undefined;
           const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => {
+            timeoutTimer = setTimeout(() => {
+              expired = true;
               reject(
                 new AsyncTaskError(
                   AsyncTaskErrorType.Timeout,
@@ -382,6 +388,14 @@ export const fileRouter = router({
               );
             }, ASYNC_TASK_TIMEOUT);
           });
+          const assertNotExpired = () => {
+            if (expired) {
+              throw new AsyncTaskError(
+                AsyncTaskErrorType.Timeout,
+                'chunking task is timeout, please try again',
+              );
+            }
+          };
 
           const chunkingPromise = async () => {
             // The task was created before it queued for a slot, and the stale-task watchdog
@@ -397,6 +411,11 @@ export const fileRouter = router({
             try {
               await documentService.parseFile(input.fileId);
             } catch (e) {
+              // A limit the chunking applies to the same bytes (input size, xlsx ZIP structure)
+              // would refuse it again: stop here. Any other failure is this parser's own (the
+              // document view reads with other libraries than the chunk loader), so chunking
+              // still gets its chance and a failure there is what the task records.
+              if (isSharedLimitFailure(e)) throw e;
               // document parsing failure should not block chunking
               console.warn(
                 '[parseFileToChunks] document parsing failed, continuing with chunking:',
@@ -410,6 +429,8 @@ export const fileRouter = router({
               fileType: file.fileType,
               filename: file.name,
             });
+
+            assertNotExpired();
 
             // after finish partition, we need to filter out some elements
             const chunks = chunkResult.chunks.map(({ text, ...item }): NewChunkItem => ({
@@ -430,6 +451,7 @@ export const fileRouter = router({
               };
             }
 
+            assertNotExpired();
             await chunkModel.bulkCreate(chunks, input.fileId);
 
             if (chunkResult.unstructuredChunks) {
@@ -445,6 +467,7 @@ export const fileRouter = router({
             }
 
             // update the task status to success
+            assertNotExpired();
             await asyncTaskModel.update(input.taskId, {
               duration,
               status: AsyncTaskStatus.Success,
@@ -465,7 +488,11 @@ export const fileRouter = router({
           // so the slot stays taken until it is really done.
           const chunking = chunkingPromise();
           slot.holdUntil(chunking);
-          return await Promise.race([chunking, timeoutPromise]);
+          try {
+            return await Promise.race([chunking, timeoutPromise]);
+          } finally {
+            clearTimeout(timeoutTimer);
+          }
         } catch (e) {
           const error = e as any;
 
@@ -474,7 +501,7 @@ export const fileRouter = router({
                 body: safeParseJSON(error.body) ?? error.body,
                 name: error.name,
               } as IAsyncTaskError)
-            : new AsyncTaskError((error as Error).name, error.message);
+            : new AsyncTaskError(toAsyncTaskErrorType(e) ?? (error as Error).name, error.message);
 
           console.error('[Chunking Error]', asyncTaskError);
           await asyncTaskModel.update(input.taskId, {

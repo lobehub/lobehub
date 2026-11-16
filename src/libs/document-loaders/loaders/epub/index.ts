@@ -47,6 +47,6 @@ export const EPubLoader = async (content: Uint8Array): Promise<DocumentChunk[]> 
   } catch (e) {
     throw new Error(`EPubLoader error: ${(e as Error).message}`, { cause: e });
   } finally {
-    tempManager.cleanup();
+    await tempManager.cleanup();
   }
 };

@@ -22,6 +22,12 @@ vi.mock('@/server/services/inboundWebhook/lifecycle', () => ({
   refreshByConnector: mocks.refreshSubscriptions,
   removeByConnector: mocks.removeSubscriptions,
 }));
+vi.mock('@/database/models/connectorLink', () => ({
+  ConnectorLinkModel: vi.fn(function () {
+    return { listByConnectorIds: async () => [] };
+  }),
+}));
+
 vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
 vi.mock('@/database/models/connector', () => ({ ConnectorModel: vi.fn() }));
 vi.mock('@/database/models/connectorTool', () => ({ ConnectorToolModel: vi.fn() }));

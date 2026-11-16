@@ -10,6 +10,7 @@ import {
   isSyncedMcpToolVisibleTo,
   type McpServerAddress,
 } from '@lobechat/const/mcpApp';
+import { resolveConnectorLinkParam } from '@lobechat/mecha';
 import {
   type ChatToolPayload,
   type CheckMcpInstallResult,
@@ -31,7 +32,10 @@ import { omit } from 'es-toolkit/compat';
 
 import { runsOnAnotherDevice } from '@/helpers/mcpDeviceBinding';
 import { type MCPToolCallResult } from '@/libs/mcp';
-import { resolveLocalConnectorHttpParams } from '@/libs/mcp/localConnector';
+import {
+  resolveLocalConnectorHttpParams,
+  takeLocalConnectorAccount,
+} from '@/libs/mcp/localConnector';
 import { renderMcpArgs, renderMcpUrlTemplate } from '@/libs/mcp/urlTemplate';
 import { getMCPConnectionErrorType } from '@/libs/mcp/utils';
 import { toolsClient } from '@/libs/trpc/client';
@@ -233,6 +237,7 @@ class MCPService {
       agentId,
       fromMcpApp,
       fromEntrypoint,
+      linkId,
       onThisDevice,
       server,
       signal,
@@ -251,6 +256,7 @@ class MCPService {
        */
       fromMcpApp?: boolean;
       fromEntrypoint?: boolean;
+      linkId?: string;
       /**
        * With `fromMcpApp`: the view's result came from this desktop's own MCP
        * process (it carries this device's id), so its calls run there too;
@@ -344,15 +350,16 @@ class MCPService {
           throw new Error(`Tool '${apiName}' can only be called from its interactive view`);
         }
         if (detail.mcpConnectionType !== 'stdio') {
+          const account = takeLocalConnectorAccount(connector, detail.tools, args, linkId);
           const http = await resolveLocalConnectorHttpParams(detail, (id) =>
-            lambdaClient.connector.getLocalCallToken.mutate({ id }),
+            lambdaClient.connector.getLocalCallToken.mutate({ id, linkId: account.linkId }),
           );
           if (fromMcpApp && !(await isViewServer(server, { ...http, type: 'http' })))
             throw new Error(VIEW_SERVER_MOVED);
           throwIfAborted(signal);
           const result = await ensureElectronIpc().mcp.callTool(
             serializeMcpIpcPayload({
-              args: safeParseJSON(args) ?? {},
+              args: safeParseJSON(account.args) ?? {},
               http,
               mcpApps,
               ...(fromMcpApp && { fromApp: true }),
@@ -427,6 +434,7 @@ class MCPService {
         return (await lambdaClient.connector.callTool.mutate(
           {
             agentId,
+            linkId,
             args,
             // The server checks the view's server against the connector it resolves
             ...(fromMcpApp && { fromApp: true, server }),
@@ -609,10 +617,14 @@ class MCPService {
     uri: string,
     {
       agentId,
+      linkId,
+      toolArguments,
       onThisDevice = false,
       server,
     }: {
       agentId?: string;
+      linkId?: string;
+      toolArguments?: string;
       /**
        * The result came from this desktop's own MCP process (it carries this
        * device's id): read the view there, over IPC. Otherwise it came from the
@@ -643,6 +655,16 @@ class MCPService {
 
     const { connectorSelectors } = await import('@/store/tool/slices/connector/selectors');
     const resolved = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
+    // Resolve only after the agent's confirmed list loads: a cold view may
+    // otherwise mistake a tool's business link_id for the account selector.
+    if (!linkId && toolArguments && resolved) {
+      const param = resolveConnectorLinkParam(
+        resolved.tools?.map((tool) => tool.inputSchema) ?? [],
+      );
+      const value = toRecord(safeParseJSON(toolArguments))?.[param];
+      if (typeof value === 'string') linkId = value;
+    }
+
     // Same test as `invokeMcpToolCall`: only an enabled connector with its own
     // endpoint and a finished install serves the view. Any other (e.g. the
     // endpoint-less row a plugin's tools are synced to) leaves it to the plugin.
@@ -712,7 +734,7 @@ class MCPService {
         const detail = await lambdaClient.connector.getForEdit.query({ id: connector.id });
         if (!detail.isEnabled) return;
         const http = await resolveLocalConnectorHttpParams(detail, (id) =>
-          lambdaClient.connector.getLocalCallToken.mutate({ id }),
+          lambdaClient.connector.getLocalCallToken.mutate({ id, linkId }),
         );
         if (!(await reaches({ ...http, type: 'http' }))) return;
         return deserializeMcpIpcPayload(
@@ -724,6 +746,7 @@ class MCPService {
       return (await lambdaClient.connector.readUiResource.query({
         agentId,
         identifier,
+        linkId,
         server,
         uri,
       })) as ReadResourceResult;

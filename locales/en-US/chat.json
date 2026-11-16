@@ -67,6 +67,7 @@
   "agentSignal.receipts.revert.unsupported": "Unsupported",
   "agentSignal.receipts.skill.detail": "Self-refined how this agent handles similar requests",
   "agentSignal.receipts.skill.title": "Auto-learned a new skill",
+  "agentSkillModal.frontmatterInvalid": "This skill's SKILL.md has malformed frontmatter, so its name and description come from the last saved version. Open the document to fix it.",
   "agentSkillModal.loadFailed": "Couldn't load this skill",
   "agentSkillModal.notFound": "This skill no longer exists. It may have been deleted.",
   "agentSkillModal.openDocument": "Open in documents",

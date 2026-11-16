@@ -218,22 +218,44 @@ export class PluginActionImpl {
   /**
    * The `ui://` resource (HTML view) an MCP App tool result renders with, read
    * from `server`, the one the tool ran on, as `agentId`'s runs resolve it, and
-   * where it ran (`onThisDevice`). The HTML is only the view's: it stays in this
-   * request's cache, not in the store.
+   * where it ran (`onThisDevice`). `toolArguments` carry the account the tool
+   * ran as when its connector holds several. The HTML is only the view's: it
+   * stays in this request's cache, not in the store.
    */
   useFetchMcpAppResource = (
     identifier: string,
     resourceUri: string,
     {
       agentId,
+      linkId,
       onThisDevice = false,
       server,
-    }: { agentId?: string; onThisDevice?: boolean; server?: string },
+      toolArguments,
+    }: {
+      agentId?: string;
+      /** The account the view acts as, when its arguments cannot name one. */
+      linkId?: string;
+      onThisDevice?: boolean;
+      server?: string;
+      toolArguments?: string;
+    },
   ): SWRResponse<ReadResourceResult | undefined> =>
     useClientDataSWR(
-      mcpAppKeys.resource(identifier, resourceUri, { agentId, onThisDevice, server }),
+      mcpAppKeys.resource(identifier, resourceUri, {
+        agentId,
+        linkId,
+        onThisDevice,
+        server,
+        toolArguments,
+      }),
       () =>
-        mcpService.readMcpAppResource(identifier, resourceUri, { agentId, onThisDevice, server }),
+        mcpService.readMcpAppResource(identifier, resourceUri, {
+          agentId,
+          linkId,
+          onThisDevice,
+          server,
+          toolArguments,
+        }),
       { revalidateOnFocus: false, revalidateOnReconnect: false },
     );
 

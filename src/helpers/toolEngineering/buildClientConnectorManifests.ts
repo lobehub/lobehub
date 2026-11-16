@@ -19,6 +19,7 @@ export const buildClientConnectorManifests = (connectors: ConnectorWithTools[]):
           identifier: connector.identifier,
           isEnabled: connector.isEnabled,
           name: connector.name,
+          links: connector.links,
           tools: connector.tools ?? [],
         },
         !!getServerConfigStoreState() &&

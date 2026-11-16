@@ -10,6 +10,8 @@ export interface McpAppEntrypointCall {
   /** The tab instance: one per topic and entrypoint. */
   id: string;
   identifier: string;
+  /** The account to open as, on a connector holding several. */
+  linkId?: string;
   toolName: string;
 }
 
@@ -18,6 +20,7 @@ export const callMcpAppEntrypoint = async ({
   agentId,
   id,
   identifier,
+  linkId,
   toolName,
 }: McpAppEntrypointCall): Promise<MCPToolCallResult> => {
   // Entrypoints ignore `_meta.ui.visibility`; the agent's tool rules still apply
@@ -29,7 +32,7 @@ export const callMcpAppEntrypoint = async ({
 
   const response = await mcpService.invokeMcpToolCall(
     { apiName: toolName, arguments: '{}', id, identifier, type: 'mcp' },
-    { agentId, fromEntrypoint: true },
+    { agentId, fromEntrypoint: true, linkId },
   );
   if (!response?.success || !getMcpAppFromState(response.state)) {
     throw new Error('The entrypoint returned no app view');
