@@ -21,6 +21,7 @@ export type SetupLinkLabel =
   | 'inviteBot'
   | 'openBotFather'
   | 'openBotSettings'
+  | 'openAdminConsole'
   | 'openLineAccountManager'
   | 'openConsole'
   | 'openSlackApp';
@@ -159,11 +160,18 @@ export const getSetupGuide = (
       };
     }
     case 'wecom': {
+      // Long-connection bots can only be created by an admin until the admin grants members
+      // the right, the bot reaches only the people in its visible range, and BotID / Secret
+      // appear once its API settings are saved. Using it (direct chat, internal groups) needs
+      // the bot connected, so that step follows the save.
       return {
         guide: 'wecom',
         steps: [
-          { key: 'create', link: { href: WECOM_ADMIN_CONSOLE_URL, label: 'openConsole' } },
+          { key: 'access', link: { href: WECOM_ADMIN_CONSOLE_URL, label: 'openAdminConsole' } },
+          { key: 'create' },
+          { key: 'connection' },
           { key: 'credentials', fields: ['applicationId', 'secret'] },
+          { key: 'usage' },
         ],
       };
     }
