@@ -165,6 +165,29 @@ describe('connector command', () => {
       expect(input).not.toHaveProperty('credentials');
     });
 
+    it('registers a pre-registered OAuth client from --client-id, implying oauth2', () => {
+      expect(buildCreateInput({ clientId: 'cid', url: 'https://a.example.com' })).toMatchObject({
+        authType: 'oauth2',
+        input: { oidcConfig: { clientId: 'cid', scheme: 'pre_registration' } },
+      });
+      const { input } = buildCreateInput({
+        auth: 'oauth2',
+        clientId: 'cid',
+        clientSecret: 'secret',
+        url: 'https://a.example.com',
+      });
+      expect(input.oidcConfig).toEqual({
+        clientId: 'cid',
+        clientSecret: 'secret',
+        scheme: 'pre_registration',
+      });
+      expect(input).not.toHaveProperty('credentials');
+      // Without a Client ID the server keeps registering dynamically.
+      expect(
+        buildCreateInput({ auth: 'oauth2', url: 'https://a.example.com' }).input,
+      ).not.toHaveProperty('oidcConfig');
+    });
+
     it('builds a stdio connector from --stdio-cmd and --stdio-arg', () => {
       const { input } = buildCreateInput({
         stdioArg: ['-y', '@modelcontextprotocol/server-everything'],
@@ -187,6 +210,12 @@ describe('connector command', () => {
         'only valid with --auth bearer',
       ],
       [{ auth: 'oauth2', stdioCmd: 'x' }, 'stdio connectors do not support --auth'],
+      [
+        { auth: 'bearer', clientId: 'cid', token: 't', url: 'https://a.example.com' },
+        'only valid with --auth oauth2',
+      ],
+      [{ clientId: 'cid', stdioCmd: 'x' }, 'stdio connectors do not support --auth'],
+      [{ auth: 'oauth2', clientSecret: 's', url: 'https://a.example.com' }, 'requires --client-id'],
       [{ header: ['a:b'], stdioCmd: 'x' }, 'only valid for HTTP'],
       [{ url: 'not a url' }, 'Invalid --url'],
       [{ identifier: 'has space', url: 'https://a.example.com' }, 'Invalid --identifier'],
@@ -612,6 +641,26 @@ describe('connector command', () => {
 
       expect(mockTrpcClient.connector.delete.mutate).toHaveBeenCalledWith({ id: ID });
       expect(errorSpy).toHaveBeenCalledWith('no dynamic registration');
+    });
+
+    it('points a rejected dynamic registration at --client-id', async () => {
+      mockTrpcClient.connector.create.mutate.mockResolvedValue({ id: ID, isNew: true });
+      mockTrpcClient.connector.startOAuth.mutate.mockRejectedValue(
+        new Error(
+          "Dynamic client registration failed: mcp.example.com rejected the redirect URI https://app.test/oauth/connector/callback (HTTP 400 invalid_redirect_uri). Ask its provider to allow this redirect URI, or register an OAuth app with them using it and enter that app's Client ID.",
+        ),
+      );
+      mockTrpcClient.connector.delete.mutate.mockResolvedValue(undefined);
+
+      await expect(
+        run('add', '--url', 'https://a.example.com/mcp', '--auth', 'oauth2'),
+      ).rejects.toThrow('exit:1');
+
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('invalid_redirect_uri'));
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Re-run with --client-id <id> (and --client-secret <secret> if it has one) to use an OAuth app you registered with this server.',
+      );
+      expect(mockTrpcClient.connector.delete.mutate).toHaveBeenCalledWith({ id: ID });
     });
 
     it('rejects invalid flags before calling the server', async () => {
