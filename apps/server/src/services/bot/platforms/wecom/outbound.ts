@@ -120,13 +120,13 @@ export const createGatewayWeComOutbound = (
       } catch (error) {
         if (!isConnectionNotHeldError(error)) throw error;
         // The bot may have been recreated under the same BotID: its connection then has a new id,
-        // worth trying right away.
+        // worth trying right away — even once the backoff budget is spent, but only once past it.
         const fresh = await resolveConnectionId(botId, true);
-        if (attempt >= retryDelaysMs.length) throw error;
-        if (fresh !== connectionId) {
+        if (fresh !== connectionId && attempt <= retryDelaysMs.length) {
           connectionId = fresh;
           continue;
         }
+        if (attempt >= retryDelaysMs.length) throw error;
         log(
           'deliver: the gateway does not hold %s (attempt %d), retrying in %dms: %O',
           botId,

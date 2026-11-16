@@ -480,6 +480,39 @@ describe('WeComClient on the Node message gateway', () => {
       expect(sleep).not.toHaveBeenCalled();
     });
 
+    it("still tries a recreated bot's new connection id after the last backoff", async () => {
+      const sleep = vi.fn(async () => {});
+      const notFound = new MessageGatewaySendError(404, 'Connection not found');
+      gw.sendText.mockImplementation(async (id: string) => {
+        if (id === 'prov-2') return { messageId: 'push-1' };
+        throw notFound;
+      });
+      // The row is recreated during the last backoff window: only the final lookup sees it.
+      let lookups = 0;
+      gw.findByPlatformAndAppId.mockImplementation(async () => {
+        lookups++;
+        return { id: lookups > delays.length + 1 ? 'prov-2' : 'prov-1' };
+      });
+
+      const outbound = createGatewayWeComOutbound('bot-1', { retryDelaysMs: delays, sleep });
+
+      await expect(outbound.deliver(thread, 'answer')).resolves.toEqual({ id: 'push-1' });
+      expect(sleep).toHaveBeenCalledTimes(delays.length);
+      expect(gw.sendText.mock.calls.at(-1)?.[0]).toBe('prov-2');
+    });
+
+    it('stops after one extra try even when the connection id keeps changing', async () => {
+      const sleep = vi.fn(async () => {});
+      gw.sendText.mockRejectedValue(new MessageGatewaySendError(404, 'Connection not found'));
+      let lookups = 0;
+      gw.findByPlatformAndAppId.mockImplementation(async () => ({ id: `prov-${++lookups}` }));
+
+      const outbound = createGatewayWeComOutbound('bot-1', { retryDelaysMs: delays, sleep });
+
+      await expect(outbound.deliver(thread, 'answer')).rejects.toThrow('Connection not found');
+      expect(gw.sendText).toHaveBeenCalledTimes(delays.length + 2);
+    });
+
     it('does not resend what WeCom itself refused', async () => {
       const sleep = vi.fn(async () => {});
       gw.sendText.mockRejectedValue(
