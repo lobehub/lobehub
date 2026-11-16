@@ -467,4 +467,159 @@ describe('TopicSummaryModel', () => {
     });
     expect(forced.map(({ id }) => id)).toEqual(['cursor-b', 'cursor-c']);
   });
+
+  describe('markSummaryFailed', () => {
+    const at = new Date('2026-07-31T10:00:00Z');
+    const window = {
+      idleBefore: new Date('2026-07-31T11:00:00Z'),
+      limit: 20,
+      topicCreatedAfter: new Date('2026-07-30T12:00:00Z'),
+    };
+
+    beforeEach(async () => {
+      await db
+        .insert(topics)
+        .values({ createdAt: new Date('2026-07-31T00:00:00Z'), id: 'rejected', userId });
+      await db.insert(messages).values({
+        content: 'a',
+        id: 'm-1',
+        role: 'user',
+        topicId: 'rejected',
+        updatedAt: at,
+        userId,
+      });
+    });
+
+    it('keeps the topic out of dispatch until a new message arrives', async () => {
+      expect(
+        await model.markSummaryFailed({
+          lastMessageId: 'm-1',
+          lastMessageUpdatedAt: at,
+          reason: 'InvalidProviderAPIKey',
+          topicId: 'rejected',
+        }),
+      ).toBe(true);
+
+      expect((await model.listCandidates(window)).map((c) => c.id)).not.toContain('rejected');
+
+      await db.insert(messages).values({
+        content: 'b',
+        id: 'm-2',
+        role: 'user',
+        topicId: 'rejected',
+        updatedAt: new Date('2026-07-31T10:30:00Z'),
+        userId,
+      });
+      expect((await model.listCandidates(window)).map((c) => c.id)).toContain('rejected');
+    });
+
+    it('records the failure without dropping an earlier summary marker', async () => {
+      expect(
+        await model.updateSummaryIfCurrent({
+          description: 'd',
+          lastMessageId: 'm-1',
+          lastMessageUpdatedAt: at,
+          summary: 's',
+          topicId: 'rejected',
+        }),
+      ).toBe(true);
+      const [before] = await db
+        .select({ metadata: topics.metadata, summary: topics.historySummary })
+        .from(topics)
+        .where(eq(topics.id, 'rejected'));
+      await db.insert(messages).values({
+        content: 'b',
+        id: 'm-2',
+        role: 'user',
+        topicId: 'rejected',
+        updatedAt: new Date('2026-07-31T10:30:00Z'),
+        userId,
+      });
+
+      await model.markSummaryFailed({
+        lastMessageId: 'm-2',
+        lastMessageUpdatedAt: new Date('2026-07-31T10:30:00Z'),
+        reason: 'InsufficientQuota',
+        topicId: 'rejected',
+      });
+
+      const [after] = await db
+        .select({ metadata: topics.metadata, summary: topics.historySummary })
+        .from(topics)
+        .where(eq(topics.id, 'rejected'));
+      expect(after.summary).toBe('s');
+      expect(after.metadata?.autoSummary).toMatchObject({
+        failureReason: 'InsufficientQuota',
+        lastMessageId: 'm-2',
+        lastMessageUpdatedAt: '2026-07-31T10:30:00.000Z',
+        summarizedAt: before.metadata?.autoSummary?.summarizedAt,
+      });
+      expect(after.metadata?.autoSummary?.failedAt).toEqual(expect.any(String));
+    });
+
+    it('clears the failure once a summary is written', async () => {
+      await model.markSummaryFailed({
+        lastMessageId: 'm-1',
+        lastMessageUpdatedAt: at,
+        reason: 'ModelNotFound',
+        topicId: 'rejected',
+      });
+      await model.updateSummaryIfCurrent({
+        description: 'd',
+        lastMessageId: 'm-1',
+        lastMessageUpdatedAt: at,
+        summary: 's',
+        topicId: 'rejected',
+      });
+
+      const [row] = await db
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(eq(topics.id, 'rejected'));
+      expect(row.metadata?.autoSummary?.failedAt).toBeUndefined();
+      expect(row.metadata?.autoSummary?.summarizedAt).toEqual(expect.any(String));
+    });
+
+    it('never rewinds the watermark when a newer message already exists', async () => {
+      await db.insert(messages).values({
+        content: 'b',
+        id: 'm-2',
+        role: 'user',
+        topicId: 'rejected',
+        updatedAt: new Date('2026-07-31T10:30:00Z'),
+        userId,
+      });
+
+      expect(
+        await model.markSummaryFailed({
+          lastMessageId: 'm-1',
+          lastMessageUpdatedAt: at,
+          reason: 'InvalidProviderAPIKey',
+          topicId: 'rejected',
+        }),
+      ).toBe(false);
+
+      const [row] = await db
+        .select({ metadata: topics.metadata })
+        .from(topics)
+        .where(eq(topics.id, 'rejected'));
+      expect(row.metadata?.autoSummary).toBeUndefined();
+    });
+
+    it('leaves trashed topics alone', async () => {
+      await db
+        .update(topics)
+        .set({ isDeleted: true, deletedAt: new Date() })
+        .where(eq(topics.id, 'rejected'));
+
+      expect(
+        await model.markSummaryFailed({
+          lastMessageId: 'm-1',
+          lastMessageUpdatedAt: at,
+          reason: 'InvalidProviderAPIKey',
+          topicId: 'rejected',
+        }),
+      ).toBe(false);
+    });
+  });
 });

@@ -186,7 +186,11 @@ const threadSummaries = async (tx: Transaction, channelId: string, threadIds: st
   );
 };
 
-/** A job as the public view shows it; `requesterMemberId` is dropped by the repository. */
+/**
+ * A job as the public view shows it. The repository drops `requesterMemberId`, and keeps
+ * `topicId` only for the viewer who owns that topic (`topicOwnerId`), as replies keep
+ * `sourceTopicId`: the topic belongs to the requester, so other members never learn its id.
+ */
 const publicJobColumns = {
   id: channelJobs.id,
   memberId: channelJobs.memberId,
@@ -209,6 +213,10 @@ const publicJobColumns = {
       ${channelJobs.executionConfig}->'agencyConfig'->>'boundDeviceId'
     )`,
   writerHeld: channelJobs.writerHeld,
+  topicId: channelJobs.topicId,
+  // A trashed topic has no owner here, so its link goes with it.
+  topicOwnerId: sql<string | null>`CASE WHEN ${notTrashed(topics.isDeleted)}
+      THEN ${topics.userId} ELSE NULL END`,
   worktreeBranch: sql<string | null>`${channelJobs.executionConfig}->>'worktreeBranch'`,
   operationStatus: agentOperations.status,
   createdAt: channelJobs.createdAt,
@@ -223,6 +231,7 @@ const readJobs = (tx: Transaction, where: SQL | undefined, limit: number) =>
     .select(publicJobColumns)
     .from(channelJobs)
     .leftJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
+    .leftJoin(topics, eq(topics.id, channelJobs.topicId))
     .where(where)
     .orderBy(desc(channelJobs.createdAt))
     .limit(limit);

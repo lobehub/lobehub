@@ -712,13 +712,6 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
   },
   // Plans
   {
-    anchor: 'plans-model-pricing',
-    keywords: ['model pricing', 'price'],
-    labelKey: 'modelPricing.title',
-    ns: 'subscription',
-    tab: SettingsTabs.Plans,
-  },
-  {
     anchor: 'plans-qa',
     keywords: ['faq', 'question'],
     labelKey: 'qa.title',

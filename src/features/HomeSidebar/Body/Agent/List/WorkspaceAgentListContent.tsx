@@ -59,8 +59,10 @@ SubHeader.displayName = 'WorkspaceAgentSubHeader';
 
 /**
  * The merged workspace "Agents" section body (replacing the former separate
- * "Workspace" and "Private" accordions): Inbox → team pins (fixed, set by
- * owners/admins for everyone) → my pins → folders → the rest. Private rows
+ * "Workspace" and "Private" accordions): Inbox → my pins → team pins (fixed,
+ * set by owners/admins for everyone) → folders → the rest. Personal pins come
+ * first so the agents a member chose stay at the top instead of being pushed
+ * down by the (possibly long) team list. Private rows
  * carry a lock icon wherever they appear. Personal mode keeps rendering
  * `AgentListContent`.
  */
@@ -126,6 +128,16 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
   return (
     <>
       {!hideInbox && <InboxItem style={{ minHeight: 36 }} />}
+      {myPinned.length > 0 && (
+        <Flexbox data-testid={'sidebar-my-pinned'} gap={1}>
+          <SubHeader
+            icon={PinIcon}
+            testId={'sidebar-my-pinned-header'}
+            title={t('navPanel.myPinned')}
+          />
+          <SortableList dataSource={myPinned} onReorder={reorderMyPinned} />
+        </Flexbox>
+      )}
       {teamPinned.length > 0 && (
         <Flexbox data-testid={'sidebar-team-pinned'} gap={1}>
           <SubHeader
@@ -159,16 +171,6 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
               onClick={() => setTeamExpanded((expanded) => !expanded)}
             />
           )}
-        </Flexbox>
-      )}
-      {myPinned.length > 0 && (
-        <Flexbox data-testid={'sidebar-my-pinned'} gap={1}>
-          <SubHeader
-            icon={PinIcon}
-            testId={'sidebar-my-pinned-header'}
-            title={t('navPanel.myPinned')}
-          />
-          <SortableList dataSource={myPinned} onReorder={reorderMyPinned} />
         </Flexbox>
       )}
       {folders.length > 0 && <Group dataSource={folders} />}

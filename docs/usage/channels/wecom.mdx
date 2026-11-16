@@ -21,7 +21,7 @@ LobeHub uses the AI bot's **API mode with a long connection**: LobeHub connects 
 
 ## Prerequisites
 
-- A WeCom organization and an admin account for its admin console
+- A WeCom organization, and either an admin account or an admin who can grant you permission to create long-connection bots
 - An unverified organization can have at most 100 members; WeCom's docs do not say whether an unverified organization can create AI bots
 
 ## Step 1: Create an AI bot
@@ -31,13 +31,21 @@ LobeHub uses the AI bot's **API mode with a long connection**: LobeHub connects 
 
   Go to the [WeCom admin console](https://work.weixin.qq.com/wework_admin/frame) and sign in.
 
+  ### Get permission to create long-connection bots
+
+  Admins can skip this. By default only admins can create AI bots that use a long connection; other members need an admin to grant them access under **Smart Zone → AI Bots → Permissions → API Mode Management**, and to add them to **Bot Creation Permission** on the same page if the organization restricts it (it is open to all members by default).
+
   ### Create a bot in API mode
 
-  Go to **Smart Zone → AI Bots**, click **Create**, choose **API mode**, and receive messages over a **long connection**.
+  Go to **Smart Zone → AI Bots** and click **Create** (members can also use **Workbench → AI Bots** in the WeCom app), then choose to create it in **API mode**.
+
+  ### Choose long connection and set the visible range
+
+  On the API settings page, set the connection method to **Use long connection**, then set the bot's **visible range**: only members in it can find and use the bot. Leave the rest as is.
 
   ### Copy the BotID and Secret
 
-  Copy the **BotID** and the long-connection **Secret** from the bot's API settings.
+  The page generates the **BotID** and **Secret**. Copy both and keep the Secret somewhere safe before you save the bot settings.
 
   > **Important:** a bot can have only one long connection at a time. Connecting the same bot anywhere else (another deployment, a local dev environment, another tool) disconnects it from LobeHub.
 </Steps>
@@ -61,8 +69,8 @@ LobeHub uses the AI bot's **API mode with a long connection**: LobeHub connects 
 
 ## Step 3: Test it
 
-- **Direct chat:** find the bot in WeCom and send it a message. The bot shows a reply-in-progress bubble first, then fills in the answer.
-- **Group chat:** add the bot to an internal group chat and @-mention it. External and interconnected groups do not support bots.
+- **Direct chat:** members in the visible range find the bot under **AI Bots** in WeCom Contacts and send it a message. The bot shows a reply-in-progress bubble first, then fills in the answer.
+- **Group chat:** in an internal group chat, open the top-right corner → **Add members** → **AI Bots** to add the bot, then @-mention it. External, interconnected, and upstream/downstream groups do not support bots.
 
 ## Access policies
 

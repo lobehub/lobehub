@@ -90,6 +90,23 @@ export interface RuntimeExecutorContext {
     >,
   ) => Promise<boolean>;
   operationId: string;
+  /**
+   * Register the one-shot deadline for a parked shell command.
+   *
+   * The wait itself costs nothing — the device reports completion as a late
+   * tool result — so something has to fail the run when the device never comes
+   * back (closed app, killed process, lost session). One delayed message per
+   * command, fired once; never a polling loop.
+   *
+   * Absent on hosts without a queue: the caller then relies on the gateway's
+   * own watchdog deadline.
+   */
+  scheduleShellExpiry?: (params: {
+    delayMs: number;
+    operationId: string;
+    toolCallId: string;
+    toolMessageId: string;
+  }) => Promise<void>;
   serverDB: LobeChatDatabase;
   stepIndex: number;
   stream?: boolean;

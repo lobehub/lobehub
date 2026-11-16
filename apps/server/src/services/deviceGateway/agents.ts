@@ -7,6 +7,7 @@ import {
   type DeviceMessageApiResult,
   type DeviceToolCallResult,
   type GatewayMcpParams,
+  type GatewayToolCallCompletion,
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type {
@@ -211,6 +212,8 @@ export async function executeToolCall(
   getClient: DeviceClientGetter,
   params: {
     clientKinds?: DeviceClient[];
+    /** Lets the device report this call's final result later; see `buildShellCompletion`. */
+    completion?: GatewayToolCallCompletion;
     deviceId: string;
     operationId?: string;
     userId: string;

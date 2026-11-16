@@ -11,11 +11,11 @@ const isSendableImageUpload = (item: Pick<UploadFileItem, 'file' | 'status'>): b
  * 1-based position of each upload among the draft's image uploads, aligned with `files`
  * (`undefined` for non-image uploads and for images that failed to upload).
  *
- * The number shown on the thumbnail badge and on inline `[Image #N]` references is the
- * image's position in the message's image list, so the model can match a reference with
- * the N-th image it receives. Removing an image renumbers the rest, and the badges and
- * references follow together. Positions are used instead of ids because an upload's id is
- * its file name until the upload finishes, and pasted images often share one.
+ * The number on inline `[Image #N]` references (only in editor data saved before new
+ * references stopped being inserted) is the image's position in the message's image list,
+ * so the model can match a reference with the N-th image it receives. Removing an image
+ * renumbers the rest, and the references follow. Positions are used instead of ids because
+ * an upload's id is its file name until the upload finishes, and pasted images often share one.
  */
 export const getImageUploadNumbers = (files: UploadFileItem[]): (number | undefined)[] => {
   let count = 0;

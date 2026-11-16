@@ -28,4 +28,16 @@ describe('openai chat model cards', () => {
       },
     ]);
   });
+
+  /**
+   * Consumers size per-request output budgets from `maxOutput`, so every
+   * official card must declare it.
+   */
+  it('declares maxOutput on every official chat card', () => {
+    const missing = openaiChatModels
+      .filter((model) => model.isOfficial && model.maxOutput == null)
+      .map((model) => model.id);
+
+    expect(missing).toEqual([]);
+  });
 });

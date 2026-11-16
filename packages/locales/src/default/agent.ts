@@ -8,6 +8,7 @@ export default {
   'channel.quickSetup.link.openBotFather': 'Open BotFather',
   'channel.quickSetup.link.openBotSettings': 'Open bot settings',
   'channel.quickSetup.link.openConsole': 'Open developer console',
+  'channel.quickSetup.link.openAdminConsole': 'Open admin console',
   'channel.quickSetup.link.createLineAccount': 'Create Official Account',
   'channel.quickSetup.link.openLineAccountManager': 'Open Official Account Manager',
   'channel.quickSetup.link.openSlackApp': 'Open app settings',
@@ -82,12 +83,21 @@ export default {
     'On the QQ Open Platform, create a bot and finish its basic setup.',
   'channel.quickSetup.qq.credentials.title': 'Copy the App ID and App Secret',
   'channel.quickSetup.qq.credentials.desc': "Find them in the bot's Development settings.",
+  'channel.quickSetup.wecom.access.title': 'Get permission to create long-connection bots',
+  'channel.quickSetup.wecom.access.desc':
+    'Admins can skip this. Other members need an admin to grant them access under Smart Zone → AI Bots → Permissions → API Mode Management in the admin console, and to add them to Bot Creation Permission too if the organization restricts it.',
   'channel.quickSetup.wecom.create.title': 'Create an AI bot in API mode',
   'channel.quickSetup.wecom.create.desc':
-    'In the WeCom admin console, go to Smart Zone → AI Bots, create a bot, and choose API mode with a long connection.',
+    'In the admin console, go to Smart Zone → AI Bots and click Create, or open Workbench → AI Bots in the WeCom app. Choose to create it in API mode.',
+  'channel.quickSetup.wecom.connection.title': 'Choose long connection and set the visible range',
+  'channel.quickSetup.wecom.connection.desc':
+    'On the API settings page, set the connection method to Use long connection, then set the visible range: only members in it can find and use the bot. Leave the rest as is.',
   'channel.quickSetup.wecom.credentials.title': 'Copy the BotID and Secret',
   'channel.quickSetup.wecom.credentials.desc':
-    "Find them in the bot's API settings. A bot can be connected to only one place at a time.",
+    'The page generates the BotID and Secret. Copy them into the fields below and keep the Secret somewhere safe before you save the bot settings.',
+  'channel.quickSetup.wecom.usage.title': 'Use it in direct and group chats',
+  'channel.quickSetup.wecom.usage.desc':
+    "Members in the visible range find the bot under AI Bots in WeCom Contacts and can chat with it directly. To use it in a group, add it to an internal group from the top-right corner → Add members → AI Bots; there it replies only when @-mentioned. External, interconnected, and upstream/downstream groups aren't supported.",
   'channel.quickSetup.dingtalk.create.title': 'Create an internal app',
   'channel.quickSetup.dingtalk.create.desc':
     'In the DingTalk developer console, create an internal app, then copy the Client ID and Client Secret from Credentials & Basic Info.',
@@ -353,7 +363,7 @@ export default {
   'channel.wecom.botIdHint': 'The BotID of your WeCom AI bot (API mode).',
   'channel.wecom.secret': 'Secret',
   'channel.wecom.secretHint':
-    "The bot's long-connection Secret. Connecting the same bot anywhere else disconnects it here.",
+    "The bot's long-connection Secret. A bot can be connected in only one place at a time: saving here takes over a connection it has elsewhere, and connecting it elsewhere later disconnects it here.",
   'channel.wechat.description':
     'Connect this agent to WeChat via iLink Bot for private and group chats.',
   'channel.wechatQrExpired': 'QR code expired. Please refresh to get a new one.',

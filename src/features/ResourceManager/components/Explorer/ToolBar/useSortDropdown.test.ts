@@ -1,5 +1,4 @@
 import { act, renderHook } from '@testing-library/react';
-import { ArrowDownAZ, CalendarIcon, GripVertical, HardDriveIcon } from 'lucide-react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SortType } from '@/types/files';
@@ -27,8 +26,10 @@ const setStore = (sorter: SorterKey, sortType: SortType, libraryId?: string) => 
 };
 
 const clickItem = (dropdown: ReturnType<typeof useSortDropdown>, key: string) => {
-  const item = dropdown.menuItems.find((item) => item.key === key);
-  if (!item || item.type === 'divider') throw new Error(`Missing sort item: ${key}`);
+  const item = dropdown.menuItems
+    .flatMap((group) => (group.type === 'group' ? group.children : []))
+    .find((item) => item.key === key);
+  if (!item) throw new Error(`Missing sort item: ${key}`);
   act(() => item.onClick());
 };
 
@@ -43,34 +44,36 @@ describe('useSortDropdown', () => {
     setStore('custom', SortType.Asc, 'kb-1');
     const { result } = renderHook(useSortDropdown);
 
-    expect(result.current.menuItems.map((item) => item.key)).toEqual([
-      'custom',
-      'name',
-      'createdAt',
-      'size',
-      'sort-direction-divider',
-      'asc',
-      'desc',
-    ]);
-    expect(result.current.menuItems.slice(0, 4)).toMatchObject([
-      { checked: true, icon: GripVertical, label: 'FileManager.sort.custom' },
-      { checked: false, icon: ArrowDownAZ, label: 'FileManager.sort.name' },
-      { checked: false, icon: CalendarIcon, label: 'FileManager.sort.dateAdded' },
-      { checked: false, icon: HardDriveIcon, label: 'FileManager.sort.size' },
+    expect(result.current.menuItems).toMatchObject([
+      {
+        children: [
+          { checked: true, key: 'custom', label: 'FileManager.sort.custom' },
+          { checked: false, key: 'name', label: 'FileManager.sort.name' },
+          { checked: false, key: 'createdAt', label: 'FileManager.sort.dateAdded' },
+          { checked: false, key: 'size', label: 'FileManager.sort.size' },
+        ],
+        label: 'FileManager.sort.by',
+        type: 'group',
+      },
+      { type: 'divider' },
+      {
+        children: [
+          { checked: true, key: 'asc', label: 'FileManager.sort.asc' },
+          { checked: false, key: 'desc', label: 'FileManager.sort.desc' },
+        ],
+        label: 'FileManager.sort.direction',
+        type: 'group',
+      },
     ]);
   });
 
-  it('hides Custom Order outside a library', () => {
+  it('offers name, date and size outside a library', () => {
     const { result } = renderHook(useSortDropdown);
+    const fields = result.current.menuItems[0];
 
-    expect(result.current.menuItems.map((item) => item.key)).toEqual([
-      'name',
-      'createdAt',
-      'size',
-      'sort-direction-divider',
-      'asc',
-      'desc',
-    ]);
+    expect(fields.type).toBe('group');
+    if (fields.type !== 'group') throw new Error('Missing sort fields');
+    expect(fields.children.map((item) => item.key)).toEqual(['name', 'createdAt', 'size']);
   });
 
   it('defaults Name to ascending when it is not the active field', () => {
@@ -81,17 +84,22 @@ describe('useSortDropdown', () => {
     expect(store.setSortType).toHaveBeenCalledWith(SortType.Asc);
   });
 
-  it.each([
-    [SortType.Desc, SortType.Asc],
-    [SortType.Asc, SortType.Desc],
-  ])('toggles the active field from %s to %s', (initial, expected) => {
-    setStore('name', initial);
-    const { result } = renderHook(useSortDropdown);
-    clickItem(result.current, 'name');
+  it.each(['name', 'createdAt', 'size', 'custom'] as const)(
+    'preserves direction when reselecting %s',
+    (key) => {
+      for (const direction of [SortType.Asc, SortType.Desc]) {
+        setStore(key, direction, 'kb-1');
+        store.setSorter.mockClear();
+        store.setSortType.mockClear();
+        const { result, unmount } = renderHook(useSortDropdown);
+        clickItem(result.current, key);
 
-    expect(store.setSorter).not.toHaveBeenCalled();
-    expect(store.setSortType).toHaveBeenCalledWith(expected);
-  });
+        expect(store.setSorter).not.toHaveBeenCalled();
+        expect(store.setSortType).not.toHaveBeenCalled();
+        unmount();
+      }
+    },
+  );
 
   it.each(['createdAt', 'size'] as const)('defaults %s to descending on first click', (key) => {
     setStore('name', SortType.Asc);
@@ -102,8 +110,8 @@ describe('useSortDropdown', () => {
     expect(store.setSortType).toHaveBeenCalledWith(SortType.Desc);
   });
 
-  it.each(['name', 'custom'] as const)('resets Custom Order to ascending from %s', (key) => {
-    setStore(key, SortType.Desc, 'kb-1');
+  it('defaults Custom Order to ascending when switching fields', () => {
+    setStore('name', SortType.Desc, 'kb-1');
     const { result } = renderHook(useSortDropdown);
     clickItem(result.current, 'custom');
 
@@ -114,11 +122,6 @@ describe('useSortDropdown', () => {
   it.each([SortType.Asc, SortType.Desc])('exposes the %s direction callback', (direction) => {
     const { result } = renderHook(useSortDropdown);
 
-    expect(result.current.menuItems.slice(-3)).toMatchObject([
-      { key: 'sort-direction-divider', type: 'divider' },
-      { checked: false, key: 'asc', label: 'FileManager.sort.asc' },
-      { checked: true, key: 'desc', label: 'FileManager.sort.desc' },
-    ]);
     clickItem(result.current, direction);
 
     expect(store.setSorter).not.toHaveBeenCalled();
@@ -126,13 +129,12 @@ describe('useSortDropdown', () => {
   });
 
   it.each([
-    ['size', HardDriveIcon, 'FileManager.sort.size'],
-    ['custom', GripVertical, 'FileManager.sort.custom'],
-  ] as const)('reflects the active %s field and direction in the trigger', (key, icon, label) => {
+    ['size', 'FileManager.sort.size'],
+    ['custom', 'FileManager.sort.custom'],
+  ] as const)('reflects the active %s field and direction in the trigger', (key, label) => {
     setStore(key, SortType.Asc, 'kb-1');
     const { result, rerender } = renderHook(useSortDropdown);
 
-    expect(result.current.currentSortIcon).toBe(icon);
     expect(result.current.currentSortLabel).toBe(`${label} · FileManager.sort.asc`);
 
     store.sortType = SortType.Desc;
@@ -141,11 +143,10 @@ describe('useSortDropdown', () => {
     expect(result.current.currentSortLabel).toBe(`${label} · FileManager.sort.desc`);
   });
 
-  it('preserves the fallback label and icon when Custom Order is unavailable', () => {
+  it('preserves the fallback label when Custom Order is unavailable', () => {
     setStore('custom', SortType.Asc);
     const { result } = renderHook(useSortDropdown);
 
-    expect(result.current.currentSortIcon).toBe(ArrowDownAZ);
     expect(result.current.currentSortLabel).toBe(
       'FileManager.sort.dateAdded · FileManager.sort.asc',
     );

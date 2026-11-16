@@ -26,6 +26,7 @@ const channel: ChannelListItem = {
   sequence: 1,
   status: 'active',
   title: 'Launch',
+  visibility: 'private',
   workspaceId: null,
 };
 const thread: ChannelPublicThread = {
