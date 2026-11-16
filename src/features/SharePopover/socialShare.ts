@@ -99,17 +99,22 @@ export const buildTwitterText = (input: SocialShareInput) => {
   return `${truncateToWeight(head, budget - twitterTextWeight(suffix))}${suffix}`;
 };
 
-export const buildTwitterShareUrl = (input: SocialShareInput) => {
-  const params = new URLSearchParams({ text: buildTwitterText(input), url: input.url });
+/**
+ * Percent-encodes every value with `encodeURIComponent`. `URLSearchParams`
+ * would write spaces as `+`, which Weibo's share page shows literally.
+ */
+const toQuery = (params: Record<string, string>) =>
+  Object.entries(params)
+    .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    .join('&');
 
-  return `${TWITTER_INTENT_URL}?${params.toString()}`;
-};
+export const buildTwitterShareUrl = (input: SocialShareInput) =>
+  `${TWITTER_INTENT_URL}?${toQuery({ text: buildTwitterText(input), url: input.url })}`;
 
 export const buildWeiboShareUrl = (input: SocialShareInput) => {
   const { text } = composeShareCopy(input);
-  const params = new URLSearchParams({ title: text, url: input.url });
 
-  return `${WEIBO_SHARE_URL}?${params.toString()}`;
+  return `${WEIBO_SHARE_URL}?${toQuery({ title: text, url: input.url })}`;
 };
 
 export interface IntentShareAction<P extends 'x' | 'weibo'> {

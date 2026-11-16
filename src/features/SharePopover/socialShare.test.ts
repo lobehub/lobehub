@@ -47,6 +47,7 @@ describe('platform share URLs', () => {
     expect(href).toContain('%26');
     expect(href).toContain('%3F');
     expect(href).not.toContain(' ');
+    expect(href).not.toContain('+');
   });
 
   it('builds a Weibo share page URL with the encoded link and copy', () => {
@@ -58,6 +59,9 @@ describe('platform share URLs', () => {
     expect(parsed.searchParams.get('title')).toBe(composeShareCopy(input).text);
     expect(href).toContain(`url=${encodeURIComponent(url)}`);
     expect(href).toContain('%2Fshare%2Ft%2Fabc123');
+    // Weibo shows `+` literally, so spaces must be %20.
+    expect(href).not.toContain('+');
+    expect(href).toContain('React%20%26%20Vue');
   });
 
   it('keeps the same link and copy across all four platforms', () => {
