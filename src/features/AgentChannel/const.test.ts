@@ -4,18 +4,15 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import { getPlatformIcon } from './const';
-import { WeComIcon } from './WeComIcon';
 
 describe('getPlatformIcon', () => {
-  it('resolves WeCom to the local icon with the multi-color petals, by id and by display name', () => {
-    expect(getPlatformIcon('wecom')).toBe(WeComIcon);
-    expect(getPlatformIcon('WeCom')).toBe(WeComIcon);
-    expect(WeComIcon.Color).not.toBe(Icons.WeCom.Color);
-    expect(WeComIcon.colorPrimary).toBe(Icons.WeCom.colorPrimary);
+  it('resolves WeCom from @lobehub/ui/icons by id and by display name', () => {
+    expect(getPlatformIcon('wecom')).toBe(Icons.WeCom);
+    expect(getPlatformIcon('WeCom')).toBe(Icons.WeCom);
   });
 
   it('colors the WeCom petals green, blue, orange and yellow next to the blue bubble', () => {
-    const svg = renderToStaticMarkup(createElement(WeComIcon.Color, { size: 24 }));
+    const svg = renderToStaticMarkup(createElement(Icons.WeCom.Color, { size: 24 }));
     const fills = [...svg.matchAll(/<path[^>]*fill="([^"]+)"/g)].map((match) => match[1]);
 
     expect(fills).toEqual(['#0082EF', '#2DBC00', '#0082EF', '#FB6500', '#FFCC00']);
