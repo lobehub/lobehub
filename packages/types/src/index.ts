@@ -107,4 +107,5 @@ export * from './trace';
 export * from './understanding';
 export * from './userMemory';
 export * from './util';
+export * from './worktreeMode';
 export * from './zustand';

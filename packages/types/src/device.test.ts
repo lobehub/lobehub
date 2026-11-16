@@ -2,7 +2,12 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { z } from 'zod';
 
 import type { DeviceActivityOrder, WorkingDirConfig } from './device';
-import { deriveWorktreePath, sortDevicesByActivity, workingDirConfigSchema } from './device';
+import {
+  deriveWorktreePath,
+  getWorkingDirSessionPath,
+  sortDevicesByActivity,
+  workingDirConfigSchema,
+} from './device';
 
 describe('sortDevicesByActivity', () => {
   const device = (
@@ -264,5 +269,44 @@ describe('deriveWorktreePath', () => {
         `${root()}/lobehub-x`,
       );
     });
+  });
+});
+
+describe('getWorkingDirSessionPath', () => {
+  const worktree = '/Users/me/.lobehub/worktrees/lobehub-0000beef/quiet-hill';
+
+  it('starts in the source repo for a worktree picked mid-conversation', () => {
+    expect(
+      getWorkingDirSessionPath({ git: { activeWorktree: worktree }, path: '/code/lobehub' }),
+    ).toBe('/code/lobehub');
+  });
+
+  it('starts in a worktree the app created on the first send', () => {
+    expect(
+      getWorkingDirSessionPath({
+        git: { activeWorktree: worktree, autoCreated: true },
+        path: '/code/lobehub',
+      }),
+    ).toBe(worktree);
+  });
+
+  it('keeps bare and empty entries as they are', () => {
+    expect(getWorkingDirSessionPath('/code/lobehub')).toBe('/code/lobehub');
+    expect(getWorkingDirSessionPath(undefined)).toBeUndefined();
+    expect(getWorkingDirSessionPath({ git: { autoCreated: true }, path: '/code/a' })).toBe(
+      '/code/a',
+    );
+  });
+
+  it('keeps the auto-created marker through the config schema', () => {
+    const value = {
+      git: {
+        activeWorktree: worktree,
+        autoCreated: true,
+        autoCreatedAt: '2026-11-17T00:00:00.000Z',
+      },
+      path: '/code/lobehub',
+    };
+    expect(workingDirConfigSchema.parse(value)).toEqual(value);
   });
 });

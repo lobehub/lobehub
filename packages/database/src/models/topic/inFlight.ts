@@ -1,0 +1,78 @@
+import type { ChatTopicMetadata } from '@lobechat/types';
+import { normalizeDirectoryPath } from '@lobechat/types';
+import { and, eq, isNull, or, sql } from 'drizzle-orm';
+
+import { topics } from '../../schemas';
+import type { TopicModelContext } from './context';
+import { getTopicDeviceId } from './runningOperation';
+import { hasLiveTaskCallbackReservation } from './taskCallback';
+
+/**
+ * The directory a topic actually runs in: its selected worktree, else its
+ * working-directory source, else the legacy bare `workingDirectory`.
+ */
+export const getTopicRunDirectory = (
+  metadata: ChatTopicMetadata | null | undefined,
+): string | undefined =>
+  metadata?.workingDirectoryConfig?.git?.activeWorktree ||
+  metadata?.workingDirectoryConfig?.path ||
+  metadata?.workingDirectory ||
+  undefined;
+
+/**
+ * Same test as the project-directory guards (`isTopicInFlight`): a running
+ * status, a live run marker, or a turn start that holds the short reservation.
+ */
+const isInFlight = (topic: { metadata: ChatTopicMetadata | null; status: string | null }) =>
+  topic.status === 'running' ||
+  !!topic.metadata?.runningOperation ||
+  hasLiveTaskCallbackReservation(topic.metadata);
+
+/**
+ * How many conversations are running in `path` on `deviceId` right now, so the
+ * composer can warn before a send switches that directory's branch under them.
+ *
+ * Spans every member's conversations in a workspace (they share its devices)
+ * and the caller's own in personal mode; private and trashed rows count too,
+ * since they run on the same checkout. Only a number leaves this function.
+ *
+ * The SQL narrows to the device and to rows that may be in flight (`status`
+ * uses `topics_status_idx`); the exact in-flight rule and the path comparison,
+ * which must normalize both sides, run on the few rows that remain. A soft
+ * signal: the caller confirms, never blocks, because a stale marker can
+ * over-count.
+ */
+export const countInFlightInDirectory = async (
+  ctx: TopicModelContext,
+  { deviceId, path }: { deviceId: string; path: string },
+): Promise<number> => {
+  const target = normalizeDirectoryPath(path);
+  if (!target) return 0;
+
+  const scope = ctx.workspaceId
+    ? eq(topics.workspaceId, ctx.workspaceId)
+    : and(eq(topics.userId, ctx.userId), isNull(topics.workspaceId));
+
+  const rows = await ctx.db
+    .select({ metadata: topics.metadata, status: topics.status })
+    .from(topics)
+    .where(
+      and(
+        scope,
+        sql`COALESCE(${topics.metadata} -> 'runningOperation' ->> 'deviceId', ${topics.metadata} ->> 'boundDeviceId') = ${deviceId}`,
+        or(
+          eq(topics.status, 'running'),
+          sql`${topics.metadata} -> 'runningOperation' IS NOT NULL`,
+          sql`${topics.metadata} -> 'taskCallbackReservation' IS NOT NULL`,
+        ),
+      ),
+    );
+
+  return rows.filter((row) => {
+    const metadata = row.metadata ?? null;
+    if (!isInFlight({ metadata, status: row.status })) return false;
+    if (getTopicDeviceId(metadata) !== deviceId) return false;
+    const dir = getTopicRunDirectory(metadata);
+    return !!dir && normalizeDirectoryPath(dir) === target;
+  }).length;
+};

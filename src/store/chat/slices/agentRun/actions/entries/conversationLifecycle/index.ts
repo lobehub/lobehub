@@ -20,7 +20,7 @@ import type {
 import {
   applyTopicModelToHeterogeneousProvider,
   getWorkingDirEffectivePath,
-  getWorkingDirSourcePath,
+  getWorkingDirSessionPath,
   resolveAgentAgencyConfig,
   toComposerUserMessage,
 } from '@lobechat/types';
@@ -1182,7 +1182,7 @@ export class ConversationLifecycleActionImpl {
     const isLocalCliHetero =
       !!heterogeneousProvider && !isRemoteHeterogeneousType(heterogeneousProvider.type);
     const resolveWorkingDirPath = isLocalCliHetero
-      ? getWorkingDirSourcePath
+      ? getWorkingDirSessionPath
       : getWorkingDirEffectivePath;
     const { workingDirectory, workingDirectoryConfig } = await resolveRunCwd({
       agentWorkingDirectory,

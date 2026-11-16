@@ -5,6 +5,7 @@ import debug from 'debug';
 import { z } from 'zod';
 
 import { requireWorkspaceRoleWhenScoped } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { TopicModel } from '@/database/models/topic';
 import { router } from '@/libs/trpc/lambda';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
@@ -148,6 +149,19 @@ export const gitRouter = router({
         workspaceId: ctx.workspaceId,
       });
       return result ?? null;
+    }),
+  /**
+   * How many conversations are running in a directory on a device, so the
+   * composer can confirm before a send switches that checkout's branch. Spans
+   * every member's conversations in a workspace and returns only a count —
+   * never which topics, or whose. Reads the database, not the device, so it
+   * answers for an offline device too.
+   */
+  countRunningTopicsInDirectory: deviceProcedure
+    .input(z.object({ deviceId: z.string(), path: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const topicModel = new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+      return topicModel.countInFlightInDirectory({ deviceId: input.deviceId, path: input.path });
     }),
   /**
    * List the git worktrees attached to the same repository as a directory on a
