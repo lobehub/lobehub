@@ -278,10 +278,18 @@ export const composioRouter = router({
         appSlug: z.string(),
         identifier: z.string(),
         label: z.string(),
+        /**
+         * Re-authorize the connection running this account, in place: the row
+         * holding it keeps its identity and visibility, and the stale account
+         * goes before the new one is linked. Removing the row first instead
+         * would recreate it as a shared connector, publishing a private
+         * connection to the workspace (or landing on a shared sibling).
+         */
+        replacesConnectedAccountId: z.string().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const { appSlug, identifier, label, agentId } = input;
+      const { appSlug, identifier, label, agentId, replacesConnectedAccountId } = input;
       const { userId } = ctx;
 
       assertSupportedComposioApp(identifier, appSlug);
@@ -289,8 +297,13 @@ export const composioRouter = router({
       if (agentId)
         await assertCanEditAgent(ctx.serverDB, userId, agentId, ctx.workspaceId ?? undefined);
       // Block overwriting another member's workspace connection before creating
-      // the remote Composio account.
-      const existing = await resolveComposioWriteTarget(ctx, { agentId, identifier });
+      // the remote Composio account. A re-authorization resolves the row holding
+      // the replaced account, bound to it like a removal of that account.
+      const existing = await resolveComposioWriteTarget(ctx, {
+        agentId,
+        connectedAccountId: replacesConnectedAccountId,
+        identifier,
+      });
 
       const callbackUrl = `${process.env.APP_URL || process.env.NEXTAUTH_URL || ''}/api/composio/oauth/callback`;
 
@@ -328,7 +341,16 @@ export const composioRouter = router({
       // agent connector is intentionally a *separate* account from the user's
       // (and from other agents'), all under the same Composio user entity but
       // distinguished by connectedAccountId — so agent links must allow multiple.
-      // Personal connections keep the default (one account per auth config).
+      // Personal connections keep the default (one account per auth config), so
+      // the account being replaced is removed first. Best-effort: the prior link
+      // has likely expired already.
+      if (replacesConnectedAccountId) {
+        try {
+          await (ctx.composioClient.connectedAccounts as any).delete(replacesConnectedAccountId);
+        } catch (error) {
+          console.warn('[Composio] Failed to delete the replaced connection:', error);
+        }
+      }
       const connReq = await (ctx.composioClient.connectedAccounts as any).link(
         userId,
         authConfigId,
@@ -370,6 +392,14 @@ export const composioRouter = router({
       // skip it for agent connections — the runtime resolves those off the
       // agent-scoped connector row's metadata instead.
       if (!agentId) {
+        // The replaced account's projection goes as a removal would drop it: a
+        // shared connection's is the app's, a private one's only its own rows.
+        if (replacesConnectedAccountId)
+          await removeComposioProjection(ctx.pluginModel, {
+            connectedAccountId: replacesConnectedAccountId,
+            identifier,
+            visibility: existing?.visibility,
+          });
         await ctx.pluginModel.create({
           customParams: {
             composio: {

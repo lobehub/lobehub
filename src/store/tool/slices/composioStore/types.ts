@@ -38,6 +38,8 @@ export interface CreateComposioServerParams {
   appSlug: string;
   identifier: string;
   label: string;
+  /** Re-authorize the connection running this account in place (see `reauthorizeComposioConnection`). */
+  replacesConnectedAccountId?: string;
 }
 
 export interface CallComposioToolParams {

@@ -518,6 +518,75 @@ describe('composioRouter — workspace scoping (workspace-agent connector bug)',
     });
   });
 
+  describe('re-authorizing a connection', () => {
+    // A pending/failed connection is re-authorized in one write: removing its
+    // row first made the reconnect create a new, shared row (or land on a
+    // shared sibling), publishing a private account to the workspace's agents.
+    const privateRow = {
+      agentId: null,
+      id: 'conn-private',
+      metadata: { composio: { connectedAccountId: 'acc-stale' } },
+      userId: 'user_test',
+      visibility: 'private' as const,
+    };
+    const reauthorize = () =>
+      memberCaller().createConnection({
+        appSlug: 'gmail',
+        identifier: 'gmail',
+        label: 'Gmail',
+        replacesConnectedAccountId: 'acc-stale',
+      });
+
+    it('relinks the private row in place, keeping it private beside a shared sibling', async () => {
+      connectorModelMock.findManageableByIdentifier.mockResolvedValue(privateRow);
+
+      await reauthorize();
+
+      // The row is the one holding the replaced account, not the shared sibling.
+      expect(connectorModelMock.findManageableByIdentifier).toHaveBeenCalledWith(
+        'gmail',
+        undefined,
+        'acc-stale',
+      );
+      expect(composioClientMocks.deleteAccount).toHaveBeenCalledWith('acc-stale');
+      expect(connectorModelMock.delete).not.toHaveBeenCalled();
+      expect(connectorModelMock.create).not.toHaveBeenCalled();
+      expect(connectorModelMock.update).toHaveBeenCalledWith(
+        'conn-private',
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            composio: expect.objectContaining({ connectedAccountId: 'acc-1' }),
+          }),
+        }),
+      );
+      // The update never rewrites the scope.
+      const [, patch] = connectorModelMock.update.mock.calls[0];
+      expect(patch).not.toHaveProperty('visibility');
+      expect(patch).not.toHaveProperty('agentId');
+      // Only the private connection's own projection rows are replaced.
+      expect(pluginModelMock.delete).not.toHaveBeenCalled();
+      expect(pluginModelMock.deleteComposioMirrors).toHaveBeenCalledWith('gmail', 'acc-stale');
+    });
+
+    it('refuses to replace an account a teammate’s private connector holds', async () => {
+      connectorModelMock.findManageableByIdentifier.mockResolvedValue({
+        ...privateRow,
+        id: 'conn-shared',
+        userId: 'another-user',
+        visibility: 'public',
+      });
+      connectorModelMock.queryComposioAccountHolders.mockResolvedValue([
+        { ...privateRow, id: 'conn-mate', userId: 'another-user' },
+      ]);
+
+      await expect(reauthorize()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      expect(composioClientMocks.deleteAccount).not.toHaveBeenCalled();
+      expect(connectorModelMock.update).not.toHaveBeenCalled();
+      expect(connectorModelMock.create).not.toHaveBeenCalled();
+    });
+  });
+
   it('blocks a member from connecting when admins restricted connector management', async () => {
     // Checked before any remote Composio account is created — even for the
     // member's own row and for a brand-new connection.

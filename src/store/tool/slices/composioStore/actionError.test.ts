@@ -173,15 +173,35 @@ describe('composio connection errors', () => {
     expect(errorOf('gmail')).toBeUndefined();
   });
 
-  it('stops re-authorizing when the cleanup is rejected for permission', async () => {
+  it('re-authorizes the connection in place instead of removing and recreating it', async () => {
+    // Removing the row first would lose its visibility: a private connection
+    // would come back as a shared connector the workspace's agents run.
     await loadGmail();
-    mocks.deleteConnection.mockRejectedValue(forbidden());
+    mocks.createConnection.mockResolvedValue({
+      authConfigId: 'ac_gmail',
+      connectedAccountId: 'ca_gmail_new',
+      identifier: 'gmail',
+      redirectUrl: 'https://composio.dev/redirect',
+    });
 
     await act(async () => {
       await useToolStore.getState().reauthorizeComposioConnection('gmail');
     });
 
-    expect(mocks.createConnection).not.toHaveBeenCalled();
+    expect(mocks.deleteConnection).not.toHaveBeenCalled();
+    expect(mocks.createConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ identifier: 'gmail', replacesConnectedAccountId: 'ca_gmail' }),
+    );
+  });
+
+  it('settles a re-authorization rejected for permission without a red reason', async () => {
+    await loadGmail();
+    mocks.createConnection.mockRejectedValue(forbidden());
+
+    await act(async () => {
+      await useToolStore.getState().reauthorizeComposioConnection('gmail');
+    });
+
     expect(errorOf('gmail')).toBeUndefined();
     expect(mocks.refreshConnectorManagePolicy).toHaveBeenCalledTimes(1);
   });
