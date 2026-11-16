@@ -606,8 +606,7 @@ export default {
   'plans.limits.embeddingVectors': '{{value}} vector entries',
   'plans.limits.fileStorage': '{{value}} file storage',
   'plans.limits.monthlyCreditGrant': '{{value}} monthly credit',
-  'plans.limits.monthlyCreditGrant.runs': '{{value}} monthly credit, about {{runs}} agent tasks',
-  'plans.limits.monthlyCreditGrant.runsOnly': 'About {{runs}} agent tasks a month',
+  'plans.limits.monthlyCreditGrant.runs': 'About {{runs}} agent tasks a month',
   'plans.limits.monthlySpend.tooltip':
     'Usage across your billing month has a limit too. It resets when the next billing month starts.',
   'plans.limits.rolling5hSpend': '5-hour limit',
