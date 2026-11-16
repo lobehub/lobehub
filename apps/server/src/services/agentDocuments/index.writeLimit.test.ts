@@ -34,6 +34,7 @@ vi.mock('@lobehub/editor/headless', () => ({
     let markdown = '';
     return {
       destroy: vi.fn(),
+      kernel: { off: vi.fn(), on: vi.fn() },
       export: vi.fn(() => ({ editorData: { root: { children: [] } }, markdown })),
       hydrateEditorData: vi.fn(),
       hydrateMarkdown: vi.fn((content: string) => {

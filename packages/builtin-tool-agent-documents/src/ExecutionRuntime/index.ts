@@ -67,6 +67,10 @@ interface AgentDocumentRecord {
   updatedAt?: Date | string;
 }
 
+/** Length of the body a write stored; absent when the service did not return it. */
+const storedCharCount = (doc: AgentDocumentRecord): number | undefined =>
+  typeof doc.content === 'string' ? doc.content.length : undefined;
+
 const FOLDER_FILE_TYPE = 'custom/folder';
 
 interface AgentDocumentOperationContext {
@@ -582,7 +586,12 @@ export class AgentDocumentsExecutionRuntime {
     const url = await this.buildDocumentUrl(agentId, created.documentId);
 
     return {
-      content: formatCreateDocumentResult({ id: created.id, title, url }),
+      content: formatCreateDocumentResult({
+        charCount: storedCharCount(created),
+        id: created.id,
+        title,
+        url,
+      }),
       state: {
         agentDocumentId: created.id,
         agentId,
@@ -727,6 +736,7 @@ export class AgentDocumentsExecutionRuntime {
 
     return {
       content: formatReplaceDocumentResult({
+        charCount: storedCharCount(doc),
         id: args.id,
         title: doc.title ?? existing.title,
         url,

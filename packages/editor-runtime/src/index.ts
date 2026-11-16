@@ -4,6 +4,7 @@ export { formatModifyNodesResult } from './formatModifyNodesResult';
 export * from './liteXMLBlockDiff';
 export * from './liteXMLEditPlan';
 export * from './liteXMLWellFormed';
+export * from './markdownRoot';
 export * from './richList';
 export * from './selectionLiteXML';
 export * from './types';

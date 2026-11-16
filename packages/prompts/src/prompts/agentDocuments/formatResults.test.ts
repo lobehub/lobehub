@@ -62,6 +62,15 @@ describe('agentDocuments formatResults', () => {
       );
     });
 
+    it('reports how many characters a body write saved', () => {
+      expect(formatCreateDocumentResult({ charCount: 10_532, id: 'a', title: 'Plan' })).toBe(
+        'Created document "Plan", 10532 characters saved (internal id: a).',
+      );
+      expect(formatReplaceDocumentResult({ charCount: 0, id: 'a', title: 'Plan' })).toBe(
+        'Updated document "Plan", 0 characters saved (internal id: a).',
+      );
+    });
+
     it('uses a generic label when no title is provided', () => {
       expect(formatReplaceDocumentResult({ id: 'assoc-id' })).toBe(
         'Updated document the document (internal id: assoc-id).',

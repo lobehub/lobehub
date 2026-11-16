@@ -39,13 +39,9 @@ vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(),
 }));
 
-vi.mock('@/database/models/agentSkill', () => ({
-  AgentSkillModel: vi.fn(),
-}));
+vi.mock('@/database/models/agentSkill', () => ({ AgentSkillModel: vi.fn() }));
 
-vi.mock('@/database/models/topicDocument', () => ({
-  TopicDocumentModel: vi.fn(),
-}));
+vi.mock('@/database/models/topicDocument', () => ({ TopicDocumentModel: vi.fn() }));
 
 vi.mock('@/database/models/file', () => ({
   FileModel: vi.fn(),
@@ -81,6 +77,7 @@ vi.mock('@lobehub/editor/headless', () => ({
         litexml = '<p id="node-1">xml updated</p>';
       }),
       destroy: vi.fn(),
+      kernel: { off: vi.fn(), on: vi.fn() },
       export: vi.fn((options?: { litexml?: boolean }) => ({
         editorData: { root: { children: [] } },
         litexml: options?.litexml ? litexml : undefined,

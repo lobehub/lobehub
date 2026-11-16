@@ -312,6 +312,29 @@ describe('AgentDocumentsExecutionRuntime', () => {
     });
   });
 
+  // A write cut short by the editor used to read exactly like a complete one,
+  // so the agent only noticed after reading the document back.
+  it('reports how many characters create and replace stored', async () => {
+    const stored = { content: 'x'.repeat(4049), documentId: 'docs_1', id: 'agent-doc-1' };
+    const runtime = createRuntime({
+      createDocument: vi.fn().mockResolvedValue({ ...stored, title: 'Plan' }),
+      readDocument: vi.fn().mockResolvedValue(stored),
+      replaceDocumentContent: vi.fn().mockResolvedValue({ ...stored, content: 'y'.repeat(11) }),
+    });
+
+    const created = await runtime.createDocument(
+      { content: 'body', title: 'Plan' },
+      { agentId: 'agent-1' },
+    );
+    const replaced = await runtime.replaceDocumentContent(
+      { content: 'body', id: 'agent-doc-1' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(created.content).toContain('Created document "Plan", 4049 characters saved');
+    expect(replaced.content).toContain('11 characters saved');
+  });
+
   describe('tool arguments the model gets wrong', () => {
     it('reads by the `documentId` alias when `id` is missing', async () => {
       // Production: readDocument({ documentId: "905d1809-…" }) returned

@@ -30,19 +30,32 @@ const formatWriteResult = (lead: string, { id, url }: { id: string; url?: string
       `(Internal id ${id} — for your own further edit/read/remove calls only; never show it to the user.)`
     : `${lead} (internal id: ${id}).`;
 
+export interface FormatDocumentBodyWriteResultParams extends AgentDocumentWriteResultParams {
+  /**
+   * Characters of Markdown the document holds after the write, so the agent can
+   * tell at once whether the stored body is as long as what it sent.
+   */
+  charCount?: number;
+}
+
+const savedLabel = (charCount?: number): string =>
+  charCount === undefined ? '' : `, ${charCount} characters saved`;
+
 export const formatCreateDocumentResult = ({
+  charCount,
   id,
   title,
   url,
-}: AgentDocumentWriteResultParams): string =>
-  formatWriteResult(`Created document ${titleLabel(title)}`, { id, url });
+}: FormatDocumentBodyWriteResultParams): string =>
+  formatWriteResult(`Created document ${titleLabel(title)}${savedLabel(charCount)}`, { id, url });
 
 export const formatReplaceDocumentResult = ({
+  charCount,
   id,
   title,
   url,
-}: AgentDocumentWriteResultParams): string =>
-  formatWriteResult(`Updated document ${titleLabel(title)}`, { id, url });
+}: FormatDocumentBodyWriteResultParams): string =>
+  formatWriteResult(`Updated document ${titleLabel(title)}${savedLabel(charCount)}`, { id, url });
 
 export interface FormatModifyDocumentResultParams extends AgentDocumentWriteResultParams {
   operationCount: number;
