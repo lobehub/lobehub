@@ -331,13 +331,13 @@ describe('search-result projectors', () => {
     expect(projected.payloadOmitted).toBe('render');
   });
 
-  it('drops all three knowledge-base hit lists and counts the one the chip shows', () => {
+  it('drops all three knowledge-base hit lists and counts each file once', () => {
     const [projected] = projectToolViewModels(
       [
         searchMessage('lobe-knowledge-base', 'searchKnowledgeBase', {
           chunks: [{ text: 'x'.repeat(2000) }, { text: 'y' }],
-          documents: [{ id: 'd1' }],
-          fileResults: [{ id: 'f1' }, { id: 'f2' }, { id: 'f3' }],
+          documents: [{ fileId: 'f1' }],
+          fileResults: [{ fileId: 'f1' }, { fileId: 'f2' }, { fileId: 'f3' }],
           totalResults: 3,
         }),
       ],
@@ -345,6 +345,22 @@ describe('search-result projectors', () => {
     );
 
     expect(projected.pluginState).toEqual({ resultCount: 3, totalResults: 3 });
+  });
+
+  it('counts full-text hits when the vector path returned nothing', () => {
+    const [projected] = projectToolViewModels(
+      [
+        searchMessage('lobe-knowledge-base', 'searchKnowledgeBase', {
+          chunks: [],
+          documents: [{ documentId: 'd1', fileId: 'f1' }, { documentId: 'd2' }],
+          fileResults: [],
+          totalResults: 2,
+        }),
+      ],
+      getToolProjector,
+    );
+
+    expect(projected.pluginState).toEqual({ resultCount: 2, totalResults: 2 });
   });
 
   // An empty search still has to read as settled, or the chip cannot tell

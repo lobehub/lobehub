@@ -5,6 +5,7 @@ import { DOCUMENT_FOLDER_TYPE, documents, knowledgeBaseFiles } from '../../../sc
 import { notAgentShareDocument } from '../../../utils/documentVisibility';
 import { notAgentShareFileReference } from '../../../utils/fileVisibility';
 import { buildWorkspaceWhere } from '../../../utils/workspace';
+import { buildMatchSnippet } from '../snippet';
 import type {
   FtsSearchBackendResponse,
   FtsSearchFolderResult,
@@ -14,7 +15,7 @@ import type {
 } from '../types';
 import type { PostgresFtsSearchContext } from './context';
 import type { PostgresFtsSearchField } from './dialect';
-import { buildResponse, truncate } from './results';
+import { buildResponse } from './results';
 import { timeRangeWhere } from './timeRange';
 
 const FOLDER_FIELDS: PostgresFtsSearchField[] = [
@@ -30,6 +31,7 @@ const PAGE_FIELDS: PostgresFtsSearchField[] = [
 ];
 
 const KNOWLEDGE_BASE_DOCUMENT_FIELDS = PAGE_FIELDS;
+const KNOWLEDGE_BASE_DOCUMENT_SNIPPET_MAX_LENGTH = 300;
 
 /** Search folders (documents with `file_type=DOCUMENT_FOLDER_TYPE`). */
 export async function searchFolders(
@@ -335,7 +337,8 @@ export async function searchKnowledgeBaseDocuments(
     fileId: row.fileId ?? undefined,
     knowledgeBaseId: row.knowledgeBaseId ?? '',
     relevance: row.relevance,
-    snippet: truncate(row.content, 300) ?? '',
+    snippet:
+      buildMatchSnippet(row.content, query, KNOWLEDGE_BASE_DOCUMENT_SNIPPET_MAX_LENGTH) ?? '',
     title: row.title || row.filename || 'Untitled',
     updatedAt: row.updatedAt,
   }));

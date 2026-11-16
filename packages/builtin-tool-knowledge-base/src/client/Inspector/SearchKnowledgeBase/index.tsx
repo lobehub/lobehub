@@ -1,14 +1,14 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { Text } from '@lobehub/ui';
-import { cssVar, cx } from '@lobehub/ui';
+import { Text, cssVar, cx } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { SearchKnowledgeBaseArgs, SearchKnowledgeBaseState } from '../../..';
+import { getDocumentOnlyHits } from '../../Render/SearchKnowledgeBase/getDocumentOnlyHits';
 
 export const SearchKnowledgeBaseInspector = memo<
   BuiltinInspectorProps<SearchKnowledgeBaseArgs, SearchKnowledgeBaseState>
@@ -16,10 +16,12 @@ export const SearchKnowledgeBaseInspector = memo<
   const { t } = useTranslation('plugin');
 
   const query = args?.query || partialArgs?.query || '';
-  // Use fileResults length for display (aggregated by file)
+  // Count what the card lists: files plus full-text hits no file already covers.
   // The read path drops the hit lists and pins the size as `resultCount`; the
   // array is only here for a payload stored before that.
-  const resultCount = pluginState?.resultCount ?? pluginState?.fileResults?.length ?? 0;
+  const resultCount =
+    pluginState?.resultCount ??
+    (pluginState?.fileResults?.length ?? 0) + getDocumentOnlyHits(pluginState).length;
   const hasSettled = !!pluginState?.fileResults || typeof pluginState?.resultCount === 'number';
   const hasResults = resultCount > 0;
   // No library was in scope, so nothing was searched — not the same as 0 hits.

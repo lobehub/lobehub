@@ -5,6 +5,8 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
+import { FileVisibilityRepository } from '@/database/repositories/fileVisibility';
+import { lockFileForWrite } from '@/database/utils/fileWriteLock';
 import { router } from '@/libs/trpc/lambda';
 import { stripAgentShareFileProvenance } from '@/types/files';
 
@@ -53,6 +55,14 @@ export const updateRouter = router({
         const wsId = ctx.workspaceId ?? undefined;
         await ctx.serverDB.transaction(async (tx) => {
           const trx = tx as unknown as LobeChatDatabase;
+
+          // Publishing and parsing write the same two aggregates in the opposite
+          // order (`files` first, then the parsed `documents`), so ordering alone
+          // cannot keep a rename from deadlocking against them. Take the shared
+          // per-file lock before either write: whichever transaction gets it runs
+          // to completion, and the other waits instead of crossing row locks.
+          await lockFileForWrite(trx, id);
+
           // The knowledge-base tree reads `documents.parent_id`, so the file's
           // backing document row(s) must move (and rename) together with it.
           // Documents are written before the file, matching updateDocument's
@@ -94,7 +104,11 @@ export const updateRouter = router({
 
       if (file.visibility === 'public') return { success: true };
 
-      await ctx.fileModel.publishToWorkspace(input.id);
+      await new FileVisibilityRepository(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId,
+      ).publishToWorkspace(input.id);
       return { success: true };
     }),
   /**
@@ -129,7 +143,10 @@ export const updateRouter = router({
 
       if (file.visibility === input.visibility) return { success: true };
 
-      await ctx.fileModel.setVisibility(input.id, input.visibility);
+      await new FileVisibilityRepository(ctx.serverDB, ctx.userId, ctx.workspaceId).setVisibility(
+        input.id,
+        input.visibility,
+      );
       return { success: true };
     }),
 });

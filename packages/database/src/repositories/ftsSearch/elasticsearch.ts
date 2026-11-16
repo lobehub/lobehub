@@ -254,6 +254,7 @@ export class ElasticsearchFtsSearchBackend implements FtsSearchBackend {
             request.scope,
             limit,
             request.filters.knowledgeBaseIds ?? [],
+            request.query.text,
           ),
         ),
       };

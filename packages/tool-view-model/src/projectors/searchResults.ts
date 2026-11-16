@@ -20,7 +20,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * is exactly what got dropped — and it must survive an empty result, which is
  * why the chip distinguishes "0 hits" from "not settled yet".
  */
-const createSearchResultProjector = (...listKeys: string[]): ToolProjector => {
+const createSearchResultProjector = (
+  listKeys: string[],
+  countHits?: (pluginState: Record<string, unknown>) => number,
+): ToolProjector => {
   const dropped = new Set(listKeys);
 
   return ({ pluginState }) => {
@@ -33,22 +36,37 @@ const createSearchResultProjector = (...listKeys: string[]): ToolProjector => {
 
     return {
       content: null,
-      pluginState: { ...rest, ...(hits && { resultCount: hits.length }) },
+      pluginState: {
+        ...rest,
+        ...(hits && { resultCount: countHits?.(pluginState) ?? hits.length }),
+      },
       storedPayloadNeededBy: 'render',
     };
   };
 };
 
 /** `lobe-web-browsing/search` — `{ costTime, query, resultNumbers, results }`. */
-export const webSearchProjector = createSearchResultProjector('results');
+export const webSearchProjector = createSearchResultProjector(['results']);
+
+const asRecords = (value: unknown) => (Array.isArray(value) ? value.filter(isRecord) : []);
+
+/** Files from the vector path, plus full-text hits no listed file already covers. */
+const countKnowledgeBaseHits = (pluginState: Record<string, unknown>) => {
+  const files = asRecords(pluginState.fileResults);
+  const fileIds = new Set(files.map(({ fileId }) => fileId));
+  const documentOnlyHits = asRecords(pluginState.documents).filter(
+    ({ fileId }) => !fileId || !fileIds.has(fileId),
+  );
+
+  return files.length + documentOnlyHits.length;
+};
 
 /**
- * `lobe-knowledge-base/searchKnowledgeBase`. Three parallel hit lists, one of
- * which (`fileResults`) is what the chip counts; `chunks` and `documents` are
- * the same matches in other shapes and are equally card-only.
+ * `lobe-knowledge-base/searchKnowledgeBase`. Three parallel hit lists, all
+ * card-only. `fileResults` and `documents` come from independent retrieval
+ * paths, so the chip counts both; `chunks` is `fileResults` in another shape.
  */
 export const searchKnowledgeBaseProjector = createSearchResultProjector(
-  'fileResults',
-  'chunks',
-  'documents',
+  ['fileResults', 'chunks', 'documents'],
+  countKnowledgeBaseHits,
 );
