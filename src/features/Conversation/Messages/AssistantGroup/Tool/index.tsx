@@ -1,7 +1,6 @@
 import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
 import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
 import { Accordion, Divider, Flexbox, Skeleton } from '@lobehub/ui';
-import isEqual from 'fast-deep-equal';
 import { memo, useState } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
@@ -37,7 +36,13 @@ export interface GroupToolProps {
 const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) => {
   // Subscribe directly to this tool's data so a streaming chunk that only
   // updates a sibling tool does not push new props through this subtree.
-  const tool = useConversationStore(dataSelectors.getToolInBlock(assistantMessageId, id), isEqual);
+  // `stabilizeReferences` keeps an unchanged tool's object across snapshots, so
+  // identity is enough here — a deep compare of every tool's result on every
+  // chunk is what made long workflows freeze.
+  const tool = useConversationStore(
+    dataSelectors.getToolInBlock(assistantMessageId, id),
+    Object.is,
+  );
 
   // Stable defaults so downstream hook ordering is preserved even on the brief
   // window where the tool is not yet present in the store snapshot.
