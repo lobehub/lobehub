@@ -7,6 +7,20 @@ import { agents, channelMembers, channels } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
 
+/** PostgreSQL `deadlock_detected`: the victim's transaction was rolled back. */
+const DEADLOCK_DETECTED = '40P01';
+const RENAME_ATTEMPTS = 3;
+
+/** The SQLSTATE of a driver error, which Drizzle may wrap in `cause`. */
+const postgresErrorCode = (error: unknown): string | undefined => {
+  let current = error;
+  for (let depth = 0; depth < 5 && current && typeof current === 'object'; depth++) {
+    const code = (current as Record<string, unknown>).code;
+    if (typeof code === 'string') return code;
+    current = (current as { cause?: unknown }).cause;
+  }
+};
+
 interface AgentLabelFields {
   name?: string | null;
   slug?: string | null;
@@ -61,7 +75,9 @@ const followAgentRename = async (
  *
  * Channel writes lock the Channel before the Agent (adding a member holds the Agent `for share`
  * under the Channel lock), so a rename takes the Channels it touches first, in id order, and the
- * Agent last; the opposite order would deadlock against them.
+ * Agent last. Deleting the Agent locks it first and reaches its Channels through the cascade, so
+ * no single order suits both; a rename that loses a deadlock reruns whole, re-reading the label,
+ * and finds nothing to rename once the Agent is gone.
  */
 export const writeAgent = async (
   db: LobeChatDatabase,
@@ -72,7 +88,23 @@ export const writeAgent = async (
   if (data.name === undefined && data.title === undefined)
     return db.update(agents).set(data).where(where);
 
-  return db.transaction(async (tx) => {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await renameAgent(db, where, agentId, data);
+    } catch (error) {
+      if (postgresErrorCode(error) !== DEADLOCK_DETECTED || attempt === RENAME_ATTEMPTS)
+        throw error;
+    }
+  }
+};
+
+const renameAgent = (
+  db: LobeChatDatabase,
+  where: SQL | undefined,
+  agentId: string,
+  data: AgentLabelFields & PgUpdateSetSource<typeof agents>,
+) =>
+  db.transaction(async (tx) => {
     const memberOf = tx
       .select({ id: channelMembers.channelId })
       .from(channelMembers)
@@ -92,4 +124,3 @@ export const writeAgent = async (
     if (before) await followAgentRename(tx, agentId, before, { ...before, ...data });
     return result;
   });
-};

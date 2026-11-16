@@ -1,11 +1,12 @@
 // @vitest-environment node
 import { and, eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { AgentModel } from '../../../models/agent';
 import { agents, channelMembers, channels } from '../../../schemas';
 import { ChannelRepository } from '..';
+import { writeAgent } from '../agentRename';
 import { createChannelFixture } from './testUtils';
 
 const db = await getTestDB();
@@ -89,4 +90,22 @@ describe('renaming an Agent', () => {
       expect(await memberNameOf(channel.id)).toBe(renamed.title);
     },
   );
+
+  it('reruns a rename that PostgreSQL picked as a deadlock victim', async () => {
+    const { agent, channel } = await createDirect('Writer');
+    const deadlock = Object.assign(new Error('deadlock detected'), {
+      cause: { code: '40P01' },
+    });
+    const transaction = vi
+      .fn()
+      .mockRejectedValueOnce(deadlock)
+      .mockImplementation((fn) => db.transaction(fn));
+    const flaky = Object.assign(Object.create(db), { transaction }) as typeof db;
+
+    await writeAgent(flaky, eq(agents.id, agent.id), agent.id, { title: 'Editor' });
+
+    expect(transaction).toHaveBeenCalledTimes(2);
+    expect(await titleOf(channel.id)).toBe('Editor');
+    expect(await memberNameOf(channel.id)).toBe('Editor');
+  });
 });
