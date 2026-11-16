@@ -6,7 +6,7 @@ import { foldLegacyUserMessageFields } from '@/server/routers/lambda/aiAgent/exe
 import { redisService } from '@/server/services/redis';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
 
-import { type HeteroSteerHold, heteroSteerHoldReason } from './holdReason';
+import { type HeteroSteerHold, heteroSteerHoldReason, loadAttachmentTypes } from './holdReason';
 import type { QueuedFollowUp } from './index';
 
 /**
@@ -16,6 +16,7 @@ import type { QueuedFollowUp } from './index';
  * holds a message back, and one whose session closed all look the same.
  */
 export interface HeteroSteerListener {
+  acceptsAttachedImages?: boolean;
   acceptsImages?: boolean;
   /** The agent the run belongs to; a follow-up for another agent waits. */
   agentId: string | null;
@@ -68,7 +69,12 @@ export class HeteroSteerPollTracker {
   /** Refresh the listener for a poll that just arrived. */
   static async start(
     log: ListenerLogContext,
-    params: { acceptsImages?: boolean; agentId: string | null; cliVersion?: string },
+    params: {
+      acceptsAttachedImages?: boolean;
+      acceptsImages?: boolean;
+      agentId: string | null;
+      cliVersion?: string;
+    },
   ): Promise<HeteroSteerPollTracker> {
     const tracker = new HeteroSteerPollTracker(log);
     const previous = await read(log.operationId).catch(() => undefined);
@@ -157,8 +163,9 @@ export interface HeteroWaitReasons {
  * heterogeneous run to end. Behind a built-in run (or on a thread) nothing is
  * given, since that run hands the turn back at its next step.
  *
- * Costs one topic read and a Redis read per hetero run on the spine; the
- * client asks only while it shows queued follow-ups.
+ * Costs one topic read, a Redis read per hetero run on the spine and, when a
+ * follow-up has attachments, one file read; the client asks only while it
+ * shows queued follow-ups.
  */
 export const resolveHeteroWaitReasons = async (
   ctx: { db: LobeChatDatabase; userId: string; workspaceId?: string | null },
@@ -189,13 +196,15 @@ export const resolveHeteroWaitReasons = async (
     return none;
   }
 
+  const attachmentTypes = await loadAttachmentTypes(ctx, waiting);
+
   // The run takes the queue in order and stops at the first follow-up it
   // cannot take: everything behind that one waits too.
   let blocked = false;
   for (const entry of waiting) {
     // Read entries queued in the legacy selection shape the way delivery does.
     const request = foldLegacyUserMessageFields(entry.request);
-    const reason = heteroSteerHoldReason({ request }, listener);
+    const reason = heteroSteerHoldReason({ request }, { ...listener, attachmentTypes });
     if (reason) {
       reasons.set(entry.id, reason);
       blocked = true;

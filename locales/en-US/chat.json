@@ -1737,7 +1737,7 @@
   "inputQueue.queuedRunEndMergeHint": "Merged and sent when the current run finishes",
   "inputQueue.sendNow": "Send now (interrupts current run)",
   "inputQueue.sendNowFailed": "Couldn’t interrupt the current run. Try again.",
-  "inputQueue.waitReason.attachments": "Has attachments",
+  "inputQueue.waitReason.attachments": "Has a non-image attachment",
   "inputQueue.waitReason.behindHeld": "Behind a message that waits",
   "inputQueue.waitReason.empty": "Has no text",
   "inputQueue.waitReason.imagesNeedNewerCli": "Has images the run’s CLI can’t take (update lh)",

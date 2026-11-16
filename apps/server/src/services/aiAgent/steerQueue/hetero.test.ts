@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   deliveries: new Map<string, string>(),
   drain: vi.fn(),
+  files: [] as { fileType: string; id: string; name?: string }[],
   findById: vi.fn(),
   isRunAlive: vi.fn(),
   renew: vi.fn(),
@@ -30,6 +31,27 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/server/services/file/inlineImages', async (importOriginal) => ({
   ...(await importOriginal<typeof InlineImagesModule>()),
   resolveInlineImages: mocks.resolveInlineImages,
+}));
+
+vi.mock('@/database/models/file', () => ({
+  FileModel: vi.fn().mockImplementation(function () {
+    return {
+      findByIds: vi.fn(async (ids: string[]) =>
+        mocks.files.filter((file) => ids.includes(file.id)),
+      ),
+    };
+  }),
+}));
+vi.mock('@/server/services/file/resolveAttachments', () => ({
+  resolveAttachmentMetadata: vi.fn(async ({ fileIds }: { fileIds: string[] }) =>
+    mocks.files
+      .filter((file) => fileIds.includes(file.id))
+      .map((file) => ({
+        ...file,
+        name: file.name ?? file.id,
+        url: `https://bucket.example.com/${file.id}?sig=s`,
+      })),
+  ),
 }));
 
 vi.mock('@/server/services/redis', () => ({
@@ -90,6 +112,7 @@ const messageModel = { create: mocks.create, findById: mocks.findById } as any;
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.deliveries.clear();
+  mocks.files = [];
   mocks.boundOperations.mockResolvedValue({ operationIds: ['op-1'], total: 1 });
   mocks.drain.mockResolvedValue([]);
   mocks.findById.mockResolvedValue(undefined);
@@ -131,6 +154,41 @@ describe('heteroSteerHoldReason', () => {
     ['imagesNeedNewerCli', { prompt: '![i](https://app.lobehub.com/f/file_1)' }],
   ])('names %s', (reason, request) => {
     expect(heteroSteerHoldReason(followUp('a', 1, request as any), run)).toBe(reason);
+  });
+
+  describe('attachments', () => {
+    const types = new Map([
+      ['img-1', 'image/png'],
+      ['doc-1', 'application/pdf'],
+    ]);
+
+    const takesAll = { ...run, acceptsAttachedImages: true, acceptsImages: true };
+
+    it('takes attached images from a CLI that accepts them', () => {
+      const entry = followUp('a', 1, { fileIds: ['img-1'] });
+      expect(heteroSteerHoldReason(entry, { ...takesAll, attachmentTypes: types })).toBeUndefined();
+    });
+
+    it.each([
+      ['takes no images', run],
+      // Released before attachments: on a failed image it would type in the text alone.
+      ['takes only pasted images', { ...run, acceptsImages: true }],
+    ])('asks for a newer CLI when it %s', (_label, cli) => {
+      const entry = followUp('a', 1, { fileIds: ['img-1'] });
+      expect(heteroSteerHoldReason(entry, { ...cli, attachmentTypes: types })).toBe(
+        'imagesNeedNewerCli',
+      );
+    });
+
+    it.each([
+      ['a document', ['img-1', 'doc-1']],
+      ['a file it cannot read', ['img-1', 'gone']],
+    ])('holds %s for a turn of its own', (_label, fileIds) => {
+      const entry = followUp('a', 1, { fileIds });
+      expect(heteroSteerHoldReason(entry, { ...takesAll, attachmentTypes: types })).toBe(
+        'attachments',
+      );
+    });
   });
 
   it('takes pasted images from a CLI that accepts them', () => {
@@ -181,7 +239,7 @@ describe('takeHeteroSteer', () => {
         takeHeteroSteer(ctx, { acceptsImages: true, agentId: 'agt-1', operationId: 'op-1', scope }),
       ).resolves.toEqual({ content: pasted, imageList: [image], messageId: 'msg-a' });
 
-      expect(mocks.resolveInlineImages).toHaveBeenCalledWith(ctx, pasted);
+      expect(mocks.resolveInlineImages).toHaveBeenCalledWith(ctx, pasted, []);
       expect(mocks.settle.mock.calls[0][2]).toEqual(['b']);
       expect(mocks.deliveries.has('msg-a')).toBe(true);
     });
@@ -212,6 +270,68 @@ describe('takeHeteroSteer', () => {
 
       await expect(take()).resolves.toEqual({ content: quoted, messageId: 'msg-a' });
       expect(mocks.resolveInlineImages).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('attached images', () => {
+    const takeWithImages = () =>
+      takeHeteroSteer(ctx, {
+        acceptsAttachedImages: true,
+        acceptsImages: true,
+        agentId: 'agt-1',
+        operationId: 'op-1',
+        scope,
+      });
+
+    it('hands them over ahead of pasted ones and keeps them for the written message', async () => {
+      mocks.files = [{ fileType: 'image/png', id: 'img-1', name: 'shot.png' }];
+      const pasted = '![p.png](https://app.lobehub.com/f/file_2)\n\nlook';
+      mocks.drain.mockResolvedValue([followUp('a', 1, { fileIds: ['img-1'], prompt: pasted })]);
+      mocks.resolveInlineImages.mockResolvedValue([{ id: 'file_2', url: 'https://b/2' }]);
+
+      await expect(takeWithImages()).resolves.toEqual({
+        content: pasted,
+        imageList: [
+          { attached: true, id: 'img-1', url: 'https://bucket.example.com/img-1?sig=s' },
+          { id: 'file_2', url: 'https://b/2' },
+        ],
+        messageId: 'msg-a',
+      });
+
+      // An image both attached and pasted goes in once.
+      expect(mocks.resolveInlineImages).toHaveBeenCalledWith(ctx, pasted, ['img-1']);
+      expect(JSON.parse(mocks.deliveries.get('msg-a')!)).toMatchObject({
+        fileIds: ['img-1'],
+        imageList: [
+          {
+            alt: 'shot.png',
+            id: 'img-1',
+            mimeType: 'image/png',
+            url: 'https://bucket.example.com/img-1?sig=s',
+          },
+        ],
+      });
+    });
+
+    it('leaves a follow-up with a document to the run end', async () => {
+      mocks.files = [
+        { fileType: 'image/png', id: 'img-1' },
+        { fileType: 'application/pdf', id: 'doc-1' },
+      ];
+      mocks.drain.mockResolvedValue([followUp('a', 1, { fileIds: ['img-1', 'doc-1'] })]);
+      const onHold = vi.fn();
+
+      await takeHeteroSteer(ctx, {
+        acceptsAttachedImages: true,
+        acceptsImages: true,
+        agentId: 'agt-1',
+        onHold,
+        operationId: 'op-1',
+        scope,
+      });
+
+      expect(onHold).toHaveBeenCalledWith({ entryId: 'a', reason: 'attachments' });
+      expect(mocks.deliveries.size).toBe(0);
     });
   });
 
@@ -300,6 +420,29 @@ describe('consumeHeteroSteer', () => {
     expect(mocks.settle).toHaveBeenCalledWith(scope, 'd1');
     expect(message).toMatchObject({ content: 'use pnpm', id: 'msg-a', parentId: 'asst-1' });
     expect(mocks.deliveries.size).toBe(0);
+  });
+
+  it('links the attached images to the written message and sends them to the chat', async () => {
+    const image = { alt: 'shot.png', id: 'img-1', url: 'https://b/1' };
+    mocks.deliveries.set(
+      'msg-a',
+      JSON.stringify({
+        content: 'look',
+        drainId: 'd1',
+        entryId: 'a',
+        fileIds: ['img-1'],
+        imageList: [image],
+        scope,
+      }),
+    );
+
+    const message = await consume();
+
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({ files: ['img-1'] }),
+      'msg-a',
+    );
+    expect(message?.imageList).toEqual([image]);
   });
 
   it('ignores a replay that is not a delivery (the run prompt)', async () => {

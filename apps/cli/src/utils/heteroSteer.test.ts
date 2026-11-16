@@ -92,12 +92,14 @@ describe('withHeteroSteer', () => {
 
     expect(sendUserMessage).toHaveBeenCalledWith('use pnpm', { uuid: 'msg-1' });
     expect(wait.mock.calls[0][0]).toEqual({
+      acceptsAttachedImages: true,
       acceptsImages: true,
       blockMs: 1,
       cliVersion: '0.0.80',
       operationId: 'op-1',
     });
     expect(wait.mock.calls[1][0]).toEqual({
+      acceptsAttachedImages: true,
       acceptsImages: true,
       cliVersion: '0.0.80',
       operationId: 'op-1',
@@ -175,6 +177,38 @@ describe('withHeteroSteer', () => {
       messageId: 'msg-1',
       type: 'steer_delivered',
     });
+  });
+
+  it('gives a message back when its attached images cannot be loaded, never the text alone', async () => {
+    const { client, giveBack, wait } = createClient([
+      {
+        content: 'see this',
+        imageList: [{ attached: true, id: 'f', url: 'https://x/expired' }],
+        messageId: 'msg-1',
+      },
+    ]);
+    const sendUserMessage = vi.fn(async () => {
+      throw new Error('image fetch failed: 403');
+    });
+    const onTrace = vi.fn();
+    const stream = createStream();
+
+    const out = collect(
+      withHeteroSteer(
+        { events: stream.events, sendUserMessage },
+        { getTrpcClient: async () => client, onTrace, operationId: 'op-1' },
+      ),
+    );
+    await vi.waitFor(() =>
+      expect(giveBack).toHaveBeenCalledWith({ messageId: 'msg-1', operationId: 'op-1' }),
+    );
+    stream.end();
+    await out;
+
+    expect(sendUserMessage).toHaveBeenCalledTimes(1);
+    // Polling on would take the same message again.
+    expect(wait).toHaveBeenCalledTimes(1);
+    expect(onTrace).toHaveBeenCalledWith({ reason: 'images_failed', type: 'steer_stopped' });
   });
 
   it('gives a refused message back and stops polling', async () => {

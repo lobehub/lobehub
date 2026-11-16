@@ -8,6 +8,7 @@ import {
 import type { QueuedFollowUp } from './index';
 
 const mocks = vi.hoisted(() => ({
+  files: [] as { fileType: string; id: string }[],
   findTopic: vi.fn(),
   listeners: new Map<string, { ttlMs: number; value: string }>(),
 }));
@@ -24,6 +25,15 @@ vi.mock('@/server/services/redis', () => ({
       }),
     },
   },
+}));
+vi.mock('@/database/models/file', () => ({
+  FileModel: vi.fn().mockImplementation(function () {
+    return {
+      findByIds: vi.fn(async (ids: string[]) =>
+        mocks.files.filter((file) => ids.includes(file.id)),
+      ),
+    };
+  }),
 }));
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(function () {
@@ -48,6 +58,7 @@ const heteroMarker = (operationId = 'op-1') => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.listeners.clear();
+  mocks.files = [];
   vi.spyOn(console, 'info').mockImplementation(() => {});
   vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
@@ -134,6 +145,26 @@ describe('resolveHeteroWaitReasons', () => {
       ['b', 'attachments'],
       ['c', 'behindHeld'],
     ]);
+  });
+
+  it('lets image attachments through and holds documents', async () => {
+    mocks.findTopic.mockResolvedValue(heteroMarker());
+    mocks.files = [
+      { fileType: 'image/png', id: 'img-1' },
+      { fileType: 'application/pdf', id: 'doc-1' },
+    ];
+    await HeteroSteerPollTracker.start(log, {
+      acceptsAttachedImages: true,
+      acceptsImages: true,
+      agentId: 'agt-1',
+    });
+
+    const result = await resolveHeteroWaitReasons(ctx, scope, [
+      entry('a', { fileIds: ['img-1'] }),
+      entry('b', { fileIds: ['img-1', 'doc-1'] }),
+    ]);
+
+    expect([...result.reasons]).toEqual([['b', 'attachments']]);
   });
 
   it('holds a follow-up queued with selections in the legacy shape, as delivery does', async () => {

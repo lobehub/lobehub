@@ -1737,7 +1737,7 @@
   "inputQueue.queuedRunEndMergeHint": "当前运行完成后合并发送",
   "inputQueue.sendNow": "立即发送（中断当前运行）",
   "inputQueue.sendNowFailed": "没能中断当前运行，请重试",
-  "inputQueue.waitReason.attachments": "带附件",
+  "inputQueue.waitReason.attachments": "带非图片附件",
   "inputQueue.waitReason.behindHeld": "排在等待中的消息后面",
   "inputQueue.waitReason.empty": "没有文字",
   "inputQueue.waitReason.imagesNeedNewerCli": "带图片，运行端 lh 需要升级",

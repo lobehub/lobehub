@@ -1,4 +1,4 @@
-import type { UIChatMessage } from '@lobechat/types';
+import type { ChatImageItem, UIChatMessage } from '@lobechat/types';
 
 // ─── Agent Stream Event (mirrors server StreamEvent) ───
 
@@ -205,6 +205,8 @@ export interface StreamStartParentMessage {
   /** Server creation time (epoch ms). Absent from older servers. */
   createdAt?: number;
   id: string;
+  /** Images attached to the message, so the chat shows them before a refetch. */
+  imageList?: ChatImageItem[];
   metadata?: Record<string, unknown> | null;
   parentId?: string | null;
   role: 'user';

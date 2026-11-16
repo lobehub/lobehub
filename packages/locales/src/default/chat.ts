@@ -1077,7 +1077,7 @@ export default {
   'inputQueue.alreadyDelivering':
     'The agent already has this message. It shows in the chat once the agent reads it.',
   'inputQueue.withdrawFailed': 'Couldn’t take the message back. Try again.',
-  'inputQueue.waitReason.attachments': 'Has attachments',
+  'inputQueue.waitReason.attachments': 'Has a non-image attachment',
   'inputQueue.waitReason.behindHeld': 'Behind a message that waits',
   'inputQueue.waitReason.empty': 'Has no text',
   'inputQueue.waitReason.imagesNeedNewerCli': 'Has images the run’s CLI can’t take (update lh)',
