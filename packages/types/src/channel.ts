@@ -576,6 +576,11 @@ export interface ChannelPublicJob {
   publicationRevoked: boolean;
   status: ChannelJobStatus;
   threadId: string | null;
+  /**
+   * The Agent topic the reply runs in, present only for the viewer who owns it (as
+   * `sourceTopicId` on replies), so they can follow a reply still at work.
+   */
+  topicId?: string;
   /** Git branch of the worktree the run works in, instead of the member's own directory. */
   worktreeBranch?: string | null;
   writerHeld: boolean;
