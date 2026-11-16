@@ -14058,6 +14058,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "visibility": {
+          "name": "visibility",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'public'"
+        },
         "accessed_at": {
           "name": "accessed_at",
           "type": "timestamp with time zone",
