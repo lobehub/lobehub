@@ -140,8 +140,18 @@ async function wakeOnce(
   blocked: ReadonlySet<string>,
 ): Promise<BatchResult> {
   const claim = await claimWebhookSignals(db, row, {
+    // A group another wake holds is skipped too: its first run may still be creating the
+    // thread's Topic, and a second run beside it would start another one.
     group: kind.groupSignals
-      ? (candidates) => kind.groupSignals!(row, candidates, blocked)
+      ? (candidates, leased) =>
+          kind.groupSignals!(
+            row,
+            candidates,
+            new Set([
+              ...blocked,
+              ...leased.flatMap((signal) => (kind.groupKey ? [kind.groupKey(row, signal)] : [])),
+            ]),
+          )
       : undefined,
     source: kind.signalSource,
   });

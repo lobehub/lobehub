@@ -223,6 +223,26 @@ describe('generic webhook wakes', () => {
     expect((await signalRows()).every((s) => s.status === 'pending')).toBe(true);
   });
 
+  it('leaves a thread alone while another wake holds one of its calls', async () => {
+    await seedWebhook();
+    // Another wake has claimed ticket-1's first call and may still be creating its Topic.
+    const held = { inboundWebhookWake: { leaseUntil: Date.now() + 60_000, token: 'other' } };
+    await seedSignal('ticket-1', {
+      metadata: { address: { threadKey: 'ticket-1', webhookId: id }, extra: held },
+    });
+    const later = await seedSignal('ticket-1');
+    const other = await seedSignal('ticket-2');
+
+    await wakeInboundWebhook(db, id, deps);
+
+    expect(execute.mock.calls.map(([params]) => params.webhookThread?.threadKey)).toEqual([
+      'ticket-2',
+    ]);
+    const rows = await signalRows();
+    expect(rows.find((s) => s.id === later.id)?.status).toBe('pending');
+    expect(rows.find((s) => s.id === other.id)?.status).toBe('processed');
+  });
+
   it('puts every call of a reuse webhook in one shared Topic', async () => {
     await seedWebhook({ topicMode: 'reuse' });
     await seedSignal();

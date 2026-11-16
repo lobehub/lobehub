@@ -29,8 +29,12 @@ const claimMetadata = (claim: { leaseUntil: number; token: string; truncated: bo
   sql`jsonb_set(${signals.metadata}, '{extra}', coalesce(${signals.metadata}->'extra', '{}'::jsonb) || jsonb_build_object('inboundWebhookWake', ${JSON.stringify(claim)}::jsonb))`;
 
 export interface ClaimWebhookSignalsOptions {
-  /** Narrow the claimable signals (oldest first) to the batch this wake runs; the rest stay free. */
-  group?: (candidates: SignalItem[]) => SignalItem[];
+  /**
+   * Narrow the claimable signals (oldest first) to the batch this wake runs; the rest stay free.
+   * `leased` are the waiting signals another wake holds right now, so a kind can keep a group
+   * (a thread) to one wake at a time.
+   */
+  group?: (candidates: SignalItem[], leased: SignalItem[]) => SignalItem[];
   /** `signals.source` of the row's kind; defaults to the registered kind's. */
   source?: string;
 }
@@ -46,29 +50,8 @@ export async function claimWebhookSignals(
   const source = options.source ?? getInboundWebhookKind(row.kind)?.signalSource;
   if (!source) return undefined;
   return db.transaction(async (tx) => {
-    const candidates = await tx
-      .select()
-      .from(signals)
-      .where(
-        and(
-          eq(signals.source, source),
-          eq(signals.scopeKey, `inbound-webhook:${row.id}`),
-          eq(signals.userId, row.userId),
-          or(
-            eq(signals.status, 'pending'),
-            and(eq(signals.status, 'failed'), lt(signals.attempts, 3)),
-          ),
-          sql`${leaseUntil} <= ${now}`,
-        ),
-      )
-      .orderBy(asc(signals.occurredAt), asc(signals.createdAt))
-      .limit(10_000)
-      .for('update', { skipLocked: true });
-    // Rows left out of the group stay locked only until this short transaction ends.
-    const batch = options.group ? options.group(candidates) : candidates;
-    if (!batch.length) return undefined;
-    // Consume the gap flag under a short lock. New gaps after commit set it again;
-    // settlement never clears a newer receipt's flag. The claim retains it across crashes.
+    // One claim per webhook at a time: a second wake waits here until this one's leases are
+    // committed and visible, instead of claiming beside it from the same snapshot.
     const [target] = await tx
       .select({ id: inboundWebhooks.id })
       .from(inboundWebhooks)
@@ -81,6 +64,31 @@ export async function claimWebhookSignals(
       )
       .for('update');
     if (!target) return undefined;
+    const waiting = and(
+      eq(signals.source, source),
+      eq(signals.scopeKey, `inbound-webhook:${row.id}`),
+      eq(signals.userId, row.userId),
+      or(eq(signals.status, 'pending'), and(eq(signals.status, 'failed'), lt(signals.attempts, 3))),
+    );
+    const candidates = await tx
+      .select()
+      .from(signals)
+      .where(and(waiting, sql`${leaseUntil} <= ${now}`))
+      .orderBy(asc(signals.occurredAt), asc(signals.createdAt))
+      .limit(10_000)
+      .for('update', { skipLocked: true });
+    const leased = options.group
+      ? await tx
+          .select()
+          .from(signals)
+          .where(and(waiting, sql`${leaseUntil} > ${now}`))
+          .limit(10_000)
+      : [];
+    // Rows left out of the group stay locked only until this short transaction ends.
+    const batch = options.group ? options.group(candidates, leased) : candidates;
+    if (!batch.length) return undefined;
+    // Consume the gap flag under the row lock taken above. New gaps after commit set it again;
+    // settlement never clears a newer receipt's flag. The claim retains it across crashes.
     const model = new InboundWebhookModel(
       tx as unknown as LobeChatDatabase,
       row.userId,
