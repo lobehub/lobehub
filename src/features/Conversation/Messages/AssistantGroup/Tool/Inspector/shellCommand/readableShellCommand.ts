@@ -90,7 +90,7 @@ const unquoteShellWord = (word: string): string =>
  * commit message reads as `git commit -m 'fix: …'`. An unterminated one is left
  * for {@link withoutHeredocBodies} to cut.
  */
-const inlineHeredocSubstitutions = (command: string): string => {
+export const inlineHeredocSubstitutions = (command: string): string => {
   let rest = command;
   let result = '';
   for (
@@ -225,4 +225,15 @@ export const readableShellCommand = (rawCommand: string): string => {
   }
   // A multi-line quoted argument still reads as one line.
   return restore(joinLines(readable)).replaceAll(/\s*\n\s*/gu, ' ') || command.trim();
+};
+
+/**
+ * The command after the setup statements that open it, heredoc bodies kept,
+ * for a reader that classifies what the first real statement does
+ * (`python3 - <<'EOF'` after `cd /work/repo &&`).
+ */
+export const withoutShellSetup = (rawCommand: string): string => {
+  const command = inlineHeredocSubstitutions(getRunCommandDisplayCommand(rawCommand));
+  const { masked, restore } = maskQuotedText(command);
+  return restore(stripShellSetup(masked, restore).rest);
 };
