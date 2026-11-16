@@ -58,6 +58,7 @@ class LocalSystemExecutorWithGitEffects {
     apiName,
     params,
     result,
+    toolCallId,
     topicId,
   }: ToolAfterCallContext): Promise<void> => {
     // Constrain to a `runCommand` bound to a run topic whose command is KNOWN to
@@ -71,7 +72,12 @@ class LocalSystemExecutorWithGitEffects {
     const command = readShellCommand(params);
     if (command === undefined) return;
 
-    await recordGitCommandEffects({ command, resultContent: result.content, topicId });
+    await recordGitCommandEffects({
+      command,
+      resultContent: result.content,
+      toolCallId,
+      topicId,
+    });
   };
 }
 

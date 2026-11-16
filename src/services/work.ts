@@ -5,6 +5,7 @@ import type {
   RegisterDocumentWorkParams,
   RegisterSkillToolResultWorkParams,
   RegisterTaskWorkParams,
+  TopicPullRequestItem,
   WorkItem,
   WorkListItem,
   WorkSkillProvider,
@@ -128,6 +129,34 @@ class WorkService {
   }): Promise<{ failed: number; registered: number; rootOperationId: string | null }> =>
     lambdaClient.work.registerShellWorksForRun.mutate(params);
 
+  /** Better Coding Experience: the pull requests a topic's Work rows link, with App state. */
+  listTopicPullRequests = async (topicId: string): Promise<TopicPullRequestItem[]> =>
+    lambdaClient.work.listTopicPullRequests.query({ topicId });
+
+  /**
+   * Better Coding Experience: link the pull requests a `git push` tool call
+   * updated. `pullRequests` is the execution device's `gh pr list --head`
+   * answer; the server re-reads the push itself and prefers the GitHub App.
+   */
+  linkPushedPullRequests = async (params: {
+    pullRequests: {
+      headRefName: string;
+      isDraft?: boolean;
+      number: number;
+      state?: string;
+      title?: string;
+      url: string;
+    }[];
+    toolCallId: string;
+    topicId: string;
+  }) => lambdaClient.work.linkPushedPullRequests.mutate(params);
+
+  /** Revalidate a topic's linked pull requests (mounted reads only). */
+  refreshTopicPullRequests = async (topicId?: string | null) => {
+    if (!topicId) return;
+    await mutate(workKeys.topicPullRequests(topicId));
+  };
+
   /**
    * Invalidate everything a Work mutation can change for a conversation:
    * - the topic's transcript syncs, since Work summaries (in-message chips
@@ -197,6 +226,8 @@ class WorkService {
     await Promise.all([
       mutate(workKeys.conversation(topicId, threadId ?? null)),
       mutate((key) => Array.isArray(key) && key[0] === workKeys.versions.root),
+      // A run's gh / push commands link pull requests through the same scan.
+      mutate(workKeys.topicPullRequests(topicId)),
     ]);
   };
 

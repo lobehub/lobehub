@@ -77,6 +77,13 @@ vi.mock('../../../../topic/selectors', () => ({
   },
 }));
 
+const labMocks = vi.hoisted(() => ({ betterCoding: false }));
+
+vi.mock('@/store/user', () => ({ getUserStoreState: () => ({}) }));
+vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: { enableBetterCodingExperience: () => labMocks.betterCoding },
+}));
+
 const PR = {
   ciStatus: 'pending' as const,
   number: 123,
@@ -104,6 +111,7 @@ const makeGet = () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  labMocks.betterCoding = false;
   mockConstEnv.isDesktop = true;
   env.currentDeviceId = undefined;
   env.targetDeviceId = undefined;
@@ -238,5 +246,61 @@ describe('snapshotTopicWorkingDirGit', () => {
 
     expect(gitMocks.getGitBranch).not.toHaveBeenCalled();
     expect(updateTopicMetadata).not.toHaveBeenCalled();
+  });
+});
+
+describe('snapshotTopicWorkingDirGit — Better Coding Experience', () => {
+  beforeEach(() => {
+    labMocks.betterCoding = true;
+  });
+
+  it('records the branch and its remote ref without asking gh for a PR', async () => {
+    topicMocks.getTopicById.mockReturnValue(githubTopic);
+    gitMocks.getGitBranch.mockResolvedValue({
+      branch: 'fix/remote-review',
+      detached: false,
+      upstream: { branch: 'fix/remote-review', remote: 'origin' },
+    });
+    const { get, updateTopicMetadata } = makeGet();
+
+    await snapshotTopicWorkingDirGit(get, { agentId: 'agent-1', topicId: 'topic-1' });
+
+    expect(gitMocks.getLinkedPullRequest).not.toHaveBeenCalled();
+    expect(updateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+      workingDirectoryConfig: {
+        git: {
+          branch: 'fix/remote-review',
+          isWorktree: false,
+          upstream: { branch: 'fix/remote-review', remote: 'origin' },
+        },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
+  });
+
+  it('drops a recorded PR once the branch moved, keeps it while it stays', async () => {
+    const recorded = {
+      metadata: {
+        workingDirectoryConfig: {
+          git: { branch: 'fix/remote-review', github: { pullRequest: PR } },
+          path: '/repo',
+          repoType: 'github',
+        },
+      },
+    };
+    topicMocks.getTopicById.mockReturnValue(recorded);
+    const same = makeGet();
+    await snapshotTopicWorkingDirGit(same.get, { agentId: 'agent-1', topicId: 'topic-1' });
+    expect(same.updateTopicMetadata.mock.calls[0]?.[1].workingDirectoryConfig.git.github).toEqual({
+      pullRequest: PR,
+    });
+
+    gitMocks.getGitBranch.mockResolvedValue({ branch: 'feat/next', detached: false });
+    const moved = makeGet();
+    await snapshotTopicWorkingDirGit(moved.get, { agentId: 'agent-1', topicId: 'topic-1' });
+    expect(
+      moved.updateTopicMetadata.mock.calls[0][1].workingDirectoryConfig.git,
+    ).not.toHaveProperty('github');
   });
 });

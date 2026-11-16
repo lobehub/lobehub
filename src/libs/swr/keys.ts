@@ -241,6 +241,11 @@ export const workKeys = {
     topicId,
     threadId ?? null,
   ]),
+  // Better Coding Experience: the GitHub pull requests a topic's Work rows link.
+  topicPullRequests: def('work:topicPullRequests', (topicId: string) => [
+    'work:topicPullRequests',
+    topicId,
+  ]),
   versions: def('work:versions', (workId: string) => ['work:versions', workId]),
   // Cross-topic Work gallery on the resource page: keyed by owner scope + the
   // gallery filter key (type OR provider tab, e.g. `all` / `task` / `linear`) +

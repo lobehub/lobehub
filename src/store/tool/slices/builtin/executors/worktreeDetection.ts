@@ -1,6 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import type { DeviceGitUpstreamRef } from '@lobechat/types';
-import { getWorkingDirSourcePath } from '@lobechat/types';
+import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 
 import { gitService } from '@/services/git';
@@ -8,7 +8,10 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { getChatStoreState } from '@/store/chat/store';
 import { getGitStatusStoreState } from '@/store/device/gitStatus/store';
 import { getElectronStoreState } from '@/store/electron';
+import { getUserStoreState } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
+import { linkPushedPullRequests } from './pushedPullRequests';
 import {
   applyBranchToConfig,
   applyDetachedToConfig,
@@ -919,10 +922,14 @@ export const recordWorktreeAdd = async (params: {
 export const recordGitCommandEffects = async (params: {
   command: string | string[];
   resultContent?: string;
+  /** The shell call's id; lets the server re-read a push to link its PR. */
+  toolCallId?: string;
   topicId: string;
 }): Promise<void> => {
-  const { command, resultContent, topicId } = params;
+  const { command, resultContent, toolCallId, topicId } = params;
   const state = getChatStoreState();
+  // Better Coding Experience: PRs reach the topic only as server Work rows.
+  const betterCoding = labPreferSelectors.enableBetterCodingExperience(getUserStoreState());
 
   const topic = topicSelectors.getTopicById(topicId)(state);
   const currentConfig = topic?.metadata?.workingDirectoryConfig;
@@ -966,7 +973,7 @@ export const recordGitCommandEffects = async (params: {
     nextConfig = applyPushToConfig(nextConfig, source, pushUpstream);
   }
 
-  const prCreate = parseGhPrCreate(command, resultContent);
+  const prCreate = betterCoding ? undefined : parseGhPrCreate(command, resultContent);
   if (prCreate) {
     nextConfig = applyPullRequestToConfig(nextConfig, source, prCreate);
   }
@@ -987,6 +994,18 @@ export const recordGitCommandEffects = async (params: {
       currentDeviceId && boundDeviceId === currentDeviceId ? 'local' : boundDeviceId;
     const revalidateDeviceId = cacheDeviceId === 'local' ? undefined : cacheDeviceId;
     await getGitStatusStoreState().revalidateGitStatus(revalidateDeviceId, source, ['branch']);
+
+    const branch = nextConfig?.git?.branch;
+    if (betterCoding && pushUpstream && toolCallId && branch) {
+      // Not awaited: the device lookup and the server's re-read may retry.
+      void linkPushedPullRequests({
+        branch,
+        deviceId: revalidateDeviceId,
+        path: getWorkingDirEffectivePath(nextConfig) ?? source,
+        toolCallId,
+        topicId,
+      });
+    }
   }
 };
 

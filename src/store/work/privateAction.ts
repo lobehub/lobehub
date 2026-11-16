@@ -1,4 +1,9 @@
-import type { WorkListItem, WorkSummaryItem, WorkVersionItem } from '@lobechat/types';
+import type {
+  TopicPullRequestItem,
+  WorkListItem,
+  WorkSummaryItem,
+  WorkVersionItem,
+} from '@lobechat/types';
 
 import {
   arrayEntity,
@@ -18,6 +23,7 @@ import {
   agentWorksResource,
   conversationWorksResource,
   toPersistedVersions,
+  topicPullRequestsResource,
   WORKSPACE_WORKS_PAGE_SIZE,
   type WorkspaceWorksParams,
   workspaceWorksResource,
@@ -33,6 +39,7 @@ const workId = (item: { id: string }) => item.id;
 export class WorkPrivateAction {
   readonly agentWorks;
   readonly conversationWorks;
+  readonly topicPullRequests;
   readonly versions;
   readonly workspaceWorks;
   /** One Work card everywhere it is listed: gallery, project dashboard, sidebar history. */
@@ -70,6 +77,14 @@ export class WorkPrivateAction {
       set,
       stateKey: 'conversationWorksReplica',
       view: recordLens<WorkState, WorkListItem[]>('conversationWorksMap'),
+    });
+    this.topicPullRequests = createReplicaSlice(topicPullRequestsResource, {
+      actionPrefix: n('topicPullRequests'),
+      fetcher: ({ topicId }) => workService.listTopicPullRequests(topicId),
+      get,
+      set,
+      stateKey: 'topicPullRequestsReplica',
+      view: recordLens<WorkState, TopicPullRequestItem[]>('topicPullRequestsMap'),
     });
     this.versions = createReplicaSlice(workVersionsResource, {
       actionPrefix: n('versions'),

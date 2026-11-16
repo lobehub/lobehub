@@ -72,6 +72,7 @@ class HeteroCliExecutor extends BaseExecutor<typeof EMPTY_API_ENUM> {
     apiName,
     params,
     result,
+    toolCallId,
     topicId,
   }: ToolAfterCallContext): Promise<void> => {
     // Constrain to a SUCCESSFUL call bound to a run topic. A refused `ExitWorktree`
@@ -93,7 +94,12 @@ class HeteroCliExecutor extends BaseExecutor<typeof EMPTY_API_ENUM> {
     const command = readShellCommand(params);
     if (command === undefined) return;
 
-    await recordGitCommandEffects({ command, resultContent: result.content, topicId });
+    await recordGitCommandEffects({
+      command,
+      resultContent: result.content,
+      toolCallId,
+      topicId,
+    });
   };
 }
 

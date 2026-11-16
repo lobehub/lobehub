@@ -20,6 +20,7 @@ import { setScopedMutate } from '@/libs/swr/mutate';
 import { deviceService } from '@/services/device';
 import { gitService } from '@/services/git';
 import { useChatStore } from '@/store/chat';
+import { useUserStore } from '@/store/user';
 
 import { useFetchGitLinkedPR, useGitRemoteBranches } from './gitHooks';
 import { useFetchDeviceListeningPorts, useFetchDeviceTunnels } from './tunnelHooks';
@@ -261,5 +262,36 @@ describe('device replicas paint from storage first', () => {
     await waitFor(() => expect(update).toHaveBeenCalled());
     expect(update.mock.calls[0][1]).toMatchObject({ pullRequest: { number: 7 } });
     expect(gitService.getLinkedPullRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('neither refreshes nor writes back the branch-guessed PR under Better Coding Experience', async () => {
+    const preference = useUserStore.getState().preference;
+    useUserStore.setState({
+      preference: { ...preference, lab: { ...preference.lab, enableBetterCodingExperience: true } },
+    });
+    const metadata = {
+      workingDirectory: CWD,
+      workingDirectoryConfig: { git: { branch: 'feat/x' }, path: CWD, repoType: 'github' },
+    } as any;
+    const update = vi.fn().mockResolvedValue(undefined);
+    useChatStore.setState({
+      activeAgentId: 'agent-1',
+      internal_updateTopicLinkedPullRequest: update,
+    } as any);
+
+    try {
+      renderHook(
+        () => useChatStore.getState().useFetchTopicLinkedPullRequest('topic-1', metadata),
+        {
+          wrapper,
+        },
+      );
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(gitService.getLinkedPullRequest).not.toHaveBeenCalled();
+      expect(update).not.toHaveBeenCalled();
+    } finally {
+      useUserStore.setState({ preference });
+    }
   });
 });

@@ -1,0 +1,122 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { recordGitCommandEffects } from '../worktreeDetection';
+
+const chatMocks = vi.hoisted(() => ({
+  topics: {} as Record<string, { metadata?: Record<string, any> }>,
+  updateTopicMetadata: vi.fn(),
+}));
+const labMocks = vi.hoisted(() => ({ betterCoding: true }));
+const linkMocks = vi.hoisted(() => ({ linkPushedPullRequests: vi.fn(async () => []) }));
+const gsMocks = vi.hoisted(() => ({ revalidateGitStatus: vi.fn() }));
+
+vi.mock('@/store/device/gitStatus/store', () => ({ getGitStatusStoreState: () => gsMocks }));
+vi.mock('@/store/chat/store', () => ({ getChatStoreState: () => chatMocks }));
+vi.mock('@/store/chat/selectors', () => ({
+  topicSelectors: {
+    getTopicById: (id: string) => (state: typeof chatMocks) => state.topics[id],
+  },
+}));
+vi.mock('@/services/git', () => ({ gitService: { listGitWorktrees: vi.fn() } }));
+vi.mock('@/store/electron', () => ({
+  getElectronStoreState: () => ({ gatewayDeviceInfo: { deviceId: 'device-1' } }),
+}));
+vi.mock('@/store/user', () => ({ getUserStoreState: () => ({}) }));
+vi.mock('@/store/user/selectors', () => ({
+  labPreferSelectors: { enableBetterCodingExperience: () => labMocks.betterCoding },
+}));
+vi.mock('../pushedPullRequests', () => linkMocks);
+
+const topic = (git: Record<string, unknown> = { branch: 'feat/x' }) => ({
+  metadata: { workingDirectoryConfig: { git, path: '/repo', repoType: 'github' } },
+});
+
+const PUSH = {
+  command: 'git push',
+  resultContent: [
+    'To github.com:lobehub/lobehub.git',
+    '   031bf96..f6b1c2a  feat/x -> feat/x',
+  ].join('\n'),
+};
+
+describe('recordGitCommandEffects — Better Coding Experience', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    labMocks.betterCoding = true;
+    chatMocks.topics = { t1: topic() };
+  });
+
+  it('no longer binds the PR a gh pr create printed', async () => {
+    await recordGitCommandEffects({
+      command: 'gh pr create --title "Fix"',
+      resultContent: 'https://github.com/lobehub/lobehub/pull/456',
+      toolCallId: 'call-1',
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
+  });
+
+  it('still records the upstream of a push, then links its PR through the server', async () => {
+    await recordGitCommandEffects({ ...PUSH, toolCallId: 'call-push', topicId: 't1' });
+
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectoryConfig: {
+        git: { branch: 'feat/x', upstream: { branch: 'feat/x', remote: 'origin' } },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
+    expect(linkMocks.linkPushedPullRequests).toHaveBeenCalledWith({
+      branch: 'feat/x',
+      deviceId: undefined,
+      path: '/repo',
+      toolCallId: 'call-push',
+      topicId: 't1',
+    });
+  });
+
+  it('looks up on the bound remote device, in the topic worktree', async () => {
+    chatMocks.topics = {
+      t1: {
+        metadata: {
+          boundDeviceId: 'device-remote',
+          workingDirectoryConfig: {
+            git: { activeWorktree: '/repo-wt', branch: 'feat/x', isWorktree: true },
+            path: '/repo',
+            repoType: 'github',
+          },
+        },
+      },
+    };
+
+    await recordGitCommandEffects({ ...PUSH, toolCallId: 'call-push', topicId: 't1' });
+
+    expect(linkMocks.linkPushedPullRequests).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceId: 'device-remote', path: '/repo-wt' }),
+    );
+  });
+
+  it('does not link without the call id, or with the lab off', async () => {
+    await recordGitCommandEffects({ ...PUSH, topicId: 't1' });
+    labMocks.betterCoding = false;
+    await recordGitCommandEffects({ ...PUSH, toolCallId: 'call-push', topicId: 't1' });
+
+    expect(linkMocks.linkPushedPullRequests).not.toHaveBeenCalled();
+  });
+
+  it('keeps binding gh pr create while the lab is off', async () => {
+    labMocks.betterCoding = false;
+
+    await recordGitCommandEffects({
+      command: 'gh pr create --title "Fix"',
+      resultContent: 'https://github.com/lobehub/lobehub/pull/456',
+      topicId: 't1',
+    });
+
+    expect(
+      chatMocks.updateTopicMetadata.mock.calls[0][1].workingDirectoryConfig.git.github.pullRequest
+        .number,
+    ).toBe(456);
+  });
+});
