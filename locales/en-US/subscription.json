@@ -151,7 +151,7 @@
   "credits.budgetPage.allocate.title": "Shared allowances",
   "credits.budgetPage.limit.desc": "Cap what each member and externally shared agents can use.",
   "credits.budgetPage.limit.title": "Spending limits",
-  "credits.costEstimateHint.desc": "Show a lightweight warning before sending when the estimated model cost reaches your threshold",
+  "credits.costEstimateHint.desc": "Before you send a message, warn above the chat input if its estimated model cost reaches this amount",
   "credits.costEstimateHint.saveError": "Failed to save cost estimate alert settings",
   "credits.costEstimateHint.saveSuccess": "Cost estimate alert settings saved",
   "credits.costEstimateHint.threshold": "Warning threshold",

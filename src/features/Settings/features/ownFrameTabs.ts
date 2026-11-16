@@ -12,8 +12,9 @@ export const OWN_FRAME_TABS = new Set<string>([
   SettingsTabs.Skill,
 ]);
 
-/** In-frame tabs whose container spans the pane, e.g. a card grid that adds columns as it widens. */
-export const FULL_WIDTH_TABS = new Set<string>([SettingsTabs.Devices]);
-
-export const getSettingsContainerMaxWidth = (tab: string | undefined) =>
-  tab && FULL_WIDTH_TABS.has(tab) ? '100%' : 1024;
+/**
+ * Width of the content column every in-frame tab shares, so switching tabs
+ * keeps the content edges in place. Card grids such as Devices fit their
+ * columns to this width instead of spanning the pane.
+ */
+export const SETTINGS_CONTAINER_MAX_WIDTH = 1024;
