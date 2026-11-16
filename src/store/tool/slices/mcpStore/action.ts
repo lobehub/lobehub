@@ -7,6 +7,7 @@ import { omit } from 'es-toolkit/compat';
 import { produce } from 'immer';
 import { gt, valid } from 'semver';
 
+import { buildCloudMcpManifest } from '@/libs/mcp/cloudManifest';
 import { type MCPErrorData } from '@/libs/mcp/types';
 import { parseStdioErrorMessage } from '@/libs/mcp/types';
 import { renderMcpArgs, renderMcpUrlTemplate } from '@/libs/mcp/urlTemplate';
@@ -40,7 +41,6 @@ import {
   restoreConnector,
   snapshotReplacedConnector,
 } from '../connector/replaceConnector';
-import { buildCloudMcpManifest } from './cloudManifest';
 import { type MCPPluginListData, type MCPStoreState } from './initialState';
 import { installMarketplaceConnector } from './installMarketplaceConnector';
 import { installOAuthPlugin } from './installOAuthPlugin';

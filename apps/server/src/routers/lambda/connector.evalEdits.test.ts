@@ -6,7 +6,7 @@ import { EvalConnectorUpdateError } from '@/database/models/connectorEval';
 import { connectorRouter } from './connector';
 
 const mocks = vi.hoisted(() => ({
-  create: vi.fn(),
+  createUnlessIdentifierHeld: vi.fn(),
   findById: vi.fn(),
   findScopedByIdentifier: vi.fn(),
   update: vi.fn(),
@@ -45,7 +45,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.findById.mockResolvedValue({ id, userId: 'creator' });
   mocks.findScopedByIdentifier.mockResolvedValue(null);
-  mocks.create.mockResolvedValue({ id });
+  mocks.createUnlessIdentifierHeld.mockResolvedValue({ created: { id } });
 });
 
 describe('imported evaluation connector edit boundary', () => {
@@ -56,7 +56,7 @@ describe('imported evaluation connector edit boundary', () => {
       sourceType: 'custom',
       metadata: { agentEval: { datasetId: 'spoofed' }, description: 'Keep this' },
     });
-    expect(mocks.create).toHaveBeenCalledWith(
+    expect(mocks.createUnlessIdentifierHeld).toHaveBeenCalledWith(
       expect.objectContaining({ metadata: { description: 'Keep this' } }),
     );
   });
