@@ -1512,6 +1512,8 @@
   "heteroAgent.codexQuota.totalEarned_other": "合計で{{count}}獲得",
   "heteroAgent.executionTarget.auto": "自動",
   "heteroAgent.executionTarget.autoDesc": "複数のオンラインデバイスが利用可能な場合、自動的に選択して使用",
+  "heteroAgent.executionTarget.deviceGroupSummary": "{{online}} 台オンライン · 全 {{total}} 台",
+  "heteroAgent.executionTarget.devicesGroup": "デバイス",
   "heteroAgent.executionTarget.downloadDesktop": "デスクトップアプリを取得",
   "heteroAgent.executionTarget.downloadDesktopDesc": "コンピュータにアクセスできるエージェントを実行",
   "heteroAgent.executionTarget.downloadDesktopTitle": "デスクトップアプリを取得",

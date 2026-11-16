@@ -50,6 +50,7 @@ import { useElectronStore } from '@/store/electron';
 
 import { useTopicId } from '../hooks/useTopicId';
 import { formatLockedControlTooltip } from '../utils/lockedControlTooltip';
+import DeviceGroupSubmenu from './DeviceGroupSubmenu';
 import DeviceOptionRow from './DeviceOptionRow';
 import { getDevicePoolStatus } from './devicePoolStatus';
 import OptionRow from './OptionRow';
@@ -101,12 +102,6 @@ const styles = stylex.create({
     alignItems: 'center',
     color: { 'default': cssVar.colorTextQuaternary, ':hover': cssVar.colorTextSecondary },
     transition: 'color 0.2s',
-  },
-  deviceList: {
-    overflowY: 'auto',
-    maxHeight: '240px',
-    marginInlineEnd: '-4px',
-    paddingInlineEnd: '4px',
   },
   empty: {
     paddingBlock: '8px',
@@ -631,6 +626,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   };
 
   const showLocalRow = isDesktop && (!ownWorkspaceDevice || isActive('local'));
+  const activeDeviceId = executionTarget === 'device' ? boundDeviceId : undefined;
   const renderDeviceRow = (d: DeviceListItem, { thisComputer = false } = {}) => (
     <DeviceOptionRow
       active={isActive('device', d.deviceId)}
@@ -825,42 +821,45 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         )}
         onClick={() => void selectSandbox(false)}
       />
-      {deviceRows.length > 0 ? (
-        showDeviceGroups ? (
-          <>
-            {privateDevices.length > 0 ? (
-              <>
-                <div {...stylex.props(styles.groupLabel)}>
-                  {t('heteroAgent.executionTarget.personalGroup')}
-                </div>
-                <div {...stylex.props(styles.deviceList)}>
-                  {privateDevices.map((d) => renderDeviceRow(d))}
-                </div>
-              </>
-            ) : null}
-            {workspaceDevices.length > 0 ? (
-              <>
-                <div {...stylex.props(styles.groupLabel)}>
-                  {t('heteroAgent.executionTarget.workspaceGroup')}
-                </div>
-                <div {...stylex.props(styles.deviceList)}>
-                  {workspaceDevices.map((d) => renderDeviceRow(d))}
-                </div>
-              </>
-            ) : null}
-          </>
-        ) : personalOnlyDevices.length > 0 ? (
-          <>
-            {isDesktop ? (
-              <div {...stylex.props(styles.groupLabel)}>
-                {t('heteroAgent.executionTarget.otherDevicesGroup')}
-              </div>
-            ) : null}
-            <div {...stylex.props(styles.deviceList)}>
-              {personalOnlyDevices.map((d) => renderDeviceRow(d))}
-            </div>
-          </>
-        ) : null
+      {/* Devices sit one level down, a row per group: the list keeps growing,
+          and the built-in environments above should not scroll away with it.
+          On desktop the section gets its own label, as Built-in has, so the
+          group rows don't read as more built-in environments. */}
+      {isDesktop && otherDevices.length > 0 ? (
+        <div {...stylex.props(styles.groupLabel)}>
+          {t('heteroAgent.executionTarget.devicesGroup')}
+        </div>
+      ) : null}
+      {showDeviceGroups && privateDevices.length > 0 ? (
+        <DeviceGroupSubmenu
+          activeDeviceId={activeDeviceId}
+          devices={privateDevices}
+          kind={'private'}
+          label={t('heteroAgent.executionTarget.personalGroup')}
+          renderDevice={renderDeviceRow}
+        />
+      ) : null}
+      {showDeviceGroups && workspaceDevices.length > 0 ? (
+        <DeviceGroupSubmenu
+          activeDeviceId={activeDeviceId}
+          devices={workspaceDevices}
+          kind={'workspace'}
+          label={t('heteroAgent.executionTarget.workspaceGroup')}
+          renderDevice={renderDeviceRow}
+        />
+      ) : null}
+      {!showDeviceGroups && personalOnlyDevices.length > 0 ? (
+        <DeviceGroupSubmenu
+          activeDeviceId={activeDeviceId}
+          devices={personalOnlyDevices}
+          kind={'devices'}
+          renderDevice={renderDeviceRow}
+          label={t(
+            isDesktop
+              ? 'heteroAgent.executionTarget.otherDevicesGroup'
+              : 'heteroAgent.executionTarget.devicesGroup',
+          )}
+        />
       ) : null}
       {poolStatus === 'loading' ? (
         <div {...stylex.props(styles.empty)}>{t('heteroAgent.executionTarget.loading')}</div>

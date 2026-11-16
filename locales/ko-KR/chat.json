@@ -1512,6 +1512,8 @@
   "heteroAgent.codexQuota.totalEarned_other": "총 {{count}} 획득",
   "heteroAgent.executionTarget.auto": "자동",
   "heteroAgent.executionTarget.autoDesc": "온라인 장치를 자동으로 사용하며, 여러 장치가 있을 경우 하나를 선택합니다",
+  "heteroAgent.executionTarget.deviceGroupSummary": "{{online}}대 온라인 · 총 {{total}}대",
+  "heteroAgent.executionTarget.devicesGroup": "기기",
   "heteroAgent.executionTarget.downloadDesktop": "데스크톱 앱 받기",
   "heteroAgent.executionTarget.downloadDesktopDesc": "컴퓨터에 액세스할 수 있는 에이전트를 실행하세요",
   "heteroAgent.executionTarget.downloadDesktopTitle": "데스크톱 앱 받기",
