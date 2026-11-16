@@ -52,6 +52,9 @@ import { useBranchList } from './useBranchList';
 import { useSwitchWorktree } from './useSwitchWorktree';
 import { findWorktreeForBranch, getPathName } from './worktreeHelpers';
 
+/** Rows the pick-only list shows before it scrolls (fits the 360px popup). */
+const PICK_LIST_MAX_ROWS = 8;
+
 const spin = stylex.keyframes({ to: { transform: 'rotate(360deg)' } });
 
 const styles = stylex.create({
@@ -73,13 +76,6 @@ const styles = stylex.create({
     borderBlockStartWidth: '1px',
     borderBlockStartStyle: 'solid',
     borderBlockStartColor: cssVar.colorSplit,
-  },
-  footerHint: {
-    paddingBlock: '8px',
-    paddingInline: '12px',
-    fontSize: '12px',
-    lineHeight: '16px',
-    color: cssVar.colorTextTertiary,
   },
   header: { padding: '0' },
   item: {
@@ -115,6 +111,9 @@ const styles = stylex.create({
     width: '300px',
     height: '360px',
   },
+  // Pick-only mode has no footer: the popup hugs a short list instead of
+  // leaving the fixed height blank under it.
+  popupFit: { height: 'auto', maxHeight: '360px' },
   refreshButton: {
     cursor: 'pointer',
     display: 'flex',
@@ -198,14 +197,13 @@ interface BranchSwitcherProps {
   /**
    * Pick-only mode (Better Coding Experience, before a topic's first send): a
    * click records `onSelect` instead of checking out — the send switches, or
-   * forks a worktree — and the create / rename / delete actions are gone. A
-   * branch another worktree holds is pickable too; the send handles it.
+   * forks a worktree — and the create / rename / delete actions and the
+   * footer are gone. A branch another worktree holds is pickable too; the send
+   * handles it.
    */
   selection?: {
     /** The picked branch, which carries the checkmark. */
     branch?: string;
-    /** Footer line saying what happens on send. */
-    hint: string;
     onSelect: (branch: string) => void;
   };
   /** The repo the conversation is anchored to (worktrees hang off it). */
@@ -468,7 +466,9 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
           <DropdownMenuPositioner placement={placement} sideOffset={8}>
-            <DropdownMenuPopup className={stylex.props(styles.popup).className}>
+            <DropdownMenuPopup
+              className={stylex.props(styles.popup, selection && styles.popupFit).className}
+            >
               <DropdownMenuHeader className={stylex.props(styles.header).className}>
                 <div {...stylex.props(styles.searchBar)}>
                   <Input
@@ -527,6 +527,11 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                   // branch, last) undrawn. Remount when the count changes.
                   key={filtered.length}
                   listItemHeight={32}
+                  style={
+                    selection
+                      ? { height: Math.min(filtered.length, PICK_LIST_MAX_ROWS) * 32 + 8 }
+                      : undefined
+                  }
                 >
                   {filtered.map((branch) => {
                     const isCurrent = branch.name === currentBranch;
@@ -619,10 +624,8 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                 </DropdownMenuScrollViewport>
               )}
 
-              <DropdownMenuFooter className={stylex.props(styles.footer).className}>
-                {selection ? (
-                  <div {...stylex.props(styles.footerHint)}>{selection.hint}</div>
-                ) : (
+              {!selection && (
+                <DropdownMenuFooter className={stylex.props(styles.footer).className}>
                   <DropdownMenuItem
                     className={stylex.props(styles.item).className}
                     onClick={openCreateBranch}
@@ -636,8 +639,8 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                       {t('workingDirectory.createBranchAction')}
                     </div>
                   </DropdownMenuItem>
-                )}
-              </DropdownMenuFooter>
+                </DropdownMenuFooter>
+              )}
             </DropdownMenuPopup>
           </DropdownMenuPositioner>
         </DropdownMenuPortal>

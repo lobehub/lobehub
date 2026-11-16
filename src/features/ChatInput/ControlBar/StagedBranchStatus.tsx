@@ -14,7 +14,6 @@ import { labPreferSelectors } from '@/store/user/selectors';
 
 import BranchSwitcher from './BranchSwitcher';
 import { useDraftBranch } from './DraftGit/useDraftBranch';
-import { useWorktreeMode } from './DraftGit/useWorktreeMode';
 import { WorktreeToggle } from './DraftGit/WorktreeToggle';
 import { gitChipStyles } from './gitChipStyles';
 import { getStagedBranchState } from './stagedBranchState';
@@ -70,7 +69,6 @@ const StagedBranchStatus = memo<StagedBranchStatusProps>(({ agentId }) => {
     path: target?.path ?? '',
     sourcePath: target?.path ?? '',
   });
-  const worktreeMode = useWorktreeMode(draft.keyDeviceId, target?.path ?? '');
 
   const handleOptimisticCheckout = useCallback(
     (branch: string) => {
@@ -113,15 +111,7 @@ const StagedBranchStatus = memo<StagedBranchStatusProps>(({ agentId }) => {
             topicId={null}
             worktrees={NO_WORKTREES}
             selection={
-              betterCoding
-                ? {
-                    branch: draft.selectedBranch,
-                    hint: worktreeMode.enabled
-                      ? t('workingDirectory.branchPickWorktreeHint')
-                      : t('workingDirectory.branchPickHint'),
-                    onSelect: draft.select,
-                  }
-                : undefined
+              betterCoding ? { branch: draft.selectedBranch, onSelect: draft.select } : undefined
             }
             onAfterCheckout={() => void mutate()}
             onOpenChange={setOpen}

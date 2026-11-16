@@ -3,7 +3,7 @@
 import { Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { GitForkIcon } from 'lucide-react';
+import { FolderGit2Icon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorktreeMode } from './useWorktreeMode';
@@ -42,7 +42,8 @@ interface WorktreeToggleProps {
 }
 
 /**
- * The new-topic composer's "New worktree" switch. On, the first send cuts a
+ * The new-topic composer's "New worktree" switch. A git-folder icon, not a
+ * fork: the fork reads as a branch, and this creates a working directory. On, the first send cuts a
  * new `lobehub/…` branch from the picked branch into its own worktree and runs
  * the topic there, leaving this directory untouched. Remembered per directory.
  */
@@ -78,7 +79,7 @@ export const WorktreeToggle = ({ baseBranch, keyDeviceId, path }: WorktreeToggle
           void setEnabled(!enabled);
         }}
       >
-        <Icon icon={GitForkIcon} size={13} />
+        <Icon icon={FolderGit2Icon} size={13} />
       </div>
     </Tooltip>
   );

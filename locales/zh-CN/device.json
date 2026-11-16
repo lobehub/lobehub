@@ -9,8 +9,6 @@
   "workingDirectory.branchCheckedOutHere": "当前已签出",
   "workingDirectory.branchConfirming": "正在确认当前分支…",
   "workingDirectory.branchInWorktree": "位于工作树 {{name}}",
-  "workingDirectory.branchPickHint": "发送时切换到所选分支",
-  "workingDirectory.branchPickWorktreeHint": "发送时基于所选分支新建分支和工作树",
   "workingDirectory.branchSearchPlaceholder": "搜索分支",
   "workingDirectory.branchesEmpty": "暂无本地分支",
   "workingDirectory.branchesHeading": "分支",

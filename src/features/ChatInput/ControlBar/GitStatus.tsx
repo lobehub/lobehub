@@ -27,7 +27,6 @@ import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 import BranchSwitcher from './BranchSwitcher';
 import { describeGitFailure } from './DraftGit/gitErrors';
 import { useDraftBranch } from './DraftGit/useDraftBranch';
-import { useWorktreeMode } from './DraftGit/useWorktreeMode';
 import { WorktreeToggle } from './DraftGit/WorktreeToggle';
 import { gitChipStyles } from './gitChipStyles';
 import StaleGitSnapshot from './StaleGitSnapshot';
@@ -188,7 +187,6 @@ const GitStatus = memo<GitStatusProps>(
       path,
       sourcePath: sourcePath ?? path,
     });
-    const worktreeMode = useWorktreeMode(draft.keyDeviceId, path);
     // The picked branch when it is not HEAD's: counts, pull and push follow it.
     // When it is HEAD's they read HEAD, exactly as without the lab.
     const syncBranch =
@@ -476,10 +474,6 @@ const GitStatus = memo<GitStatusProps>(
       />
     ) : null;
 
-    const draftHint = worktreeMode.enabled
-      ? t('workingDirectory.branchPickWorktreeHint')
-      : t('workingDirectory.branchPickHint');
-
     const branchNode =
       betterCoding && !isDraft ? (
         // An existing topic stays on its branch; start a new topic to move.
@@ -501,14 +495,10 @@ const GitStatus = memo<GitStatusProps>(
           isGithub={isGithub}
           open={switcherOpen}
           path={path}
+          selection={isDraft ? { branch: draft.selectedBranch, onSelect: draft.select } : undefined}
           sourcePath={sourcePath ?? path}
           topicId={topicId}
           worktrees={worktrees}
-          selection={
-            isDraft
-              ? { branch: draft.selectedBranch, hint: draftHint, onSelect: draft.select }
-              : undefined
-          }
           onExternalRefresh={refreshAfterSync}
           onOpenChange={setSwitcherOpen}
           onOptimisticCheckout={handleOptimisticCheckout}

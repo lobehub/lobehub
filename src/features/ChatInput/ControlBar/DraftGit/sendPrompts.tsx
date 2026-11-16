@@ -109,9 +109,7 @@ const SwitchRiskContent = ({ onDone, running, uncommitted }: SwitchRiskContentPr
     <Flexbox gap={16}>
       <Flexbox gap={8}>
         {uncommitted > 0 && (
-          <Text type={'warning'}>
-            {tDevice('workingDirectory.switchRiskUncommitted', { count: uncommitted })}
-          </Text>
+          <Text>{tDevice('workingDirectory.switchRiskUncommitted', { count: uncommitted })}</Text>
         )}
         {running > 0 && (
           <Text>{tDevice('workingDirectory.switchRiskRunning', { count: running })}</Text>

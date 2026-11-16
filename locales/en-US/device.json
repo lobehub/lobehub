@@ -9,8 +9,6 @@
   "workingDirectory.branchCheckedOutHere": "Checked out here",
   "workingDirectory.branchConfirming": "Confirming the current branch…",
   "workingDirectory.branchInWorktree": "In worktree {{name}}",
-  "workingDirectory.branchPickHint": "Switches to the picked branch when you send",
-  "workingDirectory.branchPickWorktreeHint": "Sending creates a new branch and worktree from the picked branch",
   "workingDirectory.branchSearchPlaceholder": "Search branches",
   "workingDirectory.branchesEmpty": "No local branches",
   "workingDirectory.branchesHeading": "Branches",

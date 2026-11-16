@@ -184,9 +184,6 @@ export default {
     'Private environment folders ({{names}}) are hidden here. Their owners can rebuild them on their personal drives.',
   // Better Coding Experience: branch picked for a new topic, switched or forked on send.
   'workingDirectory.branchCheckedOutHere': 'Checked out here',
-  'workingDirectory.branchPickHint': 'Switches to the picked branch when you send',
-  'workingDirectory.branchPickWorktreeHint':
-    'Sending creates a new branch and worktree from the picked branch',
   'workingDirectory.deviceOutdated':
     'The LobeHub app or lh CLI on this device is too old for this. Update it and try again.',
   'workingDirectory.occupiedBranchConfirm': 'Create branch and send',
