@@ -1519,6 +1519,13 @@
       "when": 1794814012290,
       "tag": "0216_inbound_webhooks",
       "breakpoints": true
+    },
+    {
+      "idx": 217,
+      "version": "7",
+      "when": 1794845877743,
+      "tag": "0217_user_contacts_add_workspace",
+      "breakpoints": true
     }
   ],
   "version": "6"
