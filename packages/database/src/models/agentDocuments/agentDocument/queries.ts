@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, like, ne, or, sql } fro
 import {
   AGENT_SKILL_TEMPLATE_ID,
   agentDocuments,
+  DOCUMENT_FOLDER_TYPE,
   documents,
   knowledgeBaseFiles,
 } from '../../../schemas';
@@ -11,6 +12,7 @@ import { deriveAgentDocumentFields } from '../deriveFields';
 import { canReadDocument, parseLoadRules } from '../policy';
 import {
   type AgentDocument,
+  type AgentDocumentContextQueryOptions,
   type AgentDocumentContextRow,
   type AgentDocumentListItem,
   type AgentDocumentListSourceType,
@@ -148,6 +150,7 @@ export async function findSkillDocsByAgent(
 export async function findContextByAgent(
   ctx: AgentDocumentContext,
   agentId: string,
+  options?: AgentDocumentContextQueryOptions,
 ): Promise<AgentDocumentContextRow[]> {
   const results = await ctx.db
     .select({
@@ -194,6 +197,14 @@ export async function findContextByAgent(
         agentDocOwnership(ctx),
         eq(agentDocuments.agentId, agentId),
         isNull(agentDocuments.deletedAt),
+        ...(options?.excludeProgressive
+          ? [
+              or(
+                ne(agentDocuments.policyLoad, PolicyLoad.PROGRESSIVE),
+                eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
+              ),
+            ]
+          : []),
       ),
     )
     .orderBy(desc(agentDocuments.updatedAt));
