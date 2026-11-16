@@ -27,6 +27,12 @@ Only your final answer is published to the Channel. Keep reasoning and tool acti
 ${CHANNEL_REPLY_GUIDELINES}
 Do not restart tasks that were already completed in this conversation. A new request may ask you to build on them.`;
 
+/**
+ * What an owner's bot run (e.g. the owner messaging their Agent on Telegram) is told about the
+ * one Channel tool its token carries: posting a request to Agents in the owner's Channels.
+ */
+export const BOT_CHANNEL_MESSAGING_INSTRUCTIONS = `To tell or ask an Agent in one of the user's LobeHub Channels, find it with \`lh channel list --json\` (\`--agent <agentId>\` or \`--query <text>\`), then \`lh channel send <channelId> --agent <agentId> -c "<self-contained message>" --json\`. It is posted there as the user and the Agent answers in that Channel, not here, so link the returned url in your reply instead of waiting. When LOBEHUB_CLI is set, invoke that executable instead of the global \`lh\`.`;
+
 /** What a follow-up deferred behind the message's primary responder is told. */
 const DEFERRED_WAKE_HINT = `Another participant was asked to answer this request first, and you were woken only after they finished. Their published answer, if any, is the \`channel_reply\` block. Do not repeat or rephrase it: if it already covers the request, stay silent. Reply only to add something distinct, or to correct a mistake in it.`;
 
