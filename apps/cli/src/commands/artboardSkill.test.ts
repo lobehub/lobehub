@@ -135,6 +135,23 @@ describe('lh artboard skill init', () => {
     expect(skill).toMatch(/do not publish it/i);
   });
 
+  it('states what the journey needs before it can be finalized', async () => {
+    await run('--dir', directory);
+
+    const skill = await readFile(skillPath('SKILL.md'), 'utf8');
+    expect(skill).toMatch(/exactly one starting screen/i);
+    expect(skill).toMatch(/no edge may point back to it/i);
+  });
+
+  it('carries a finalized artboard through to its acceptance', async () => {
+    await run('--dir', directory);
+
+    const skill = await readFile(skillPath('SKILL.md'), 'utf8');
+    expect(skill).toMatch(/## 6\. After the user finalizes/);
+    expect(skill).toContain('lh acceptance flow plan <acceptanceId>');
+    expect(skill).toMatch(/do not publish another flow or create another acceptance/i);
+  });
+
   it('says what to do when no screen can be made, instead of a decision board', async () => {
     await run('--dir', directory);
 

@@ -34,7 +34,7 @@ If no screen can be made (the save or the upload is refused or times out), tell 
 
 - An artboard has pages; each page has its own coordinates. Use a second page when the choices would crowd the flow.
 - Group the boards: one journey group for the flow the user will accept, and separate groups for options and references.
-- In the journey group one board is one page state. Edges connect boards. Label an edge, in at most four words, only when the two screens do not already show what the user does to get there.
+- In the journey group one board is one page state. Edges connect boards. The journey has exactly one starting screen, the only journey board no edge points to, and every other journey board is reached from it. No edge may point back to it: a way back to the start belongs in that screen's acceptance check. A journey that breaks this cannot be finalized. Label an edge, in at most four words, only when the two screens do not already show what the user does to get there.
 - Where the flow branches, add a decision board, give each edge leaving it a condition, and mark the fallback branch as the default.
 - Give every journey board an acceptance check: what the user must see on that page. A decision board takes none; one that carries a check is refused.
 - You place every board; the user cannot move them. Boards are 640×400 unless you set a size. Leave 80 between boards in a row and lay a journey out left to right.
@@ -57,6 +57,14 @@ The picks arrive as a message in this conversation. Then:
 1. \`lh artboard read <id>\` to see each round's chosen board; a round the user left unpicked takes your recommendation.
 2. Apply the picks to the journey in one \`lh artboard update\`.
 3. Open the next rounds if something is still undecided; otherwise say the requirement is settled and what was decided.
+
+## 6. After the user finalizes
+
+Finalizing turns the journey into an acceptance. The message that arrives carries its link, and \`lh artboard read <id> --json\` gives its \`acceptanceId\`. Its flow is already published: one check per journey board, whose expected result is that board's acceptance check. Then:
+
+1. Build the journey in this repository.
+2. Verify it with the acceptance skill (\`lh acceptance install\` adds it to \`.agents/skills\` when it is missing), on that acceptance and its published flow: \`lh acceptance flow plan <acceptanceId>\` opens a round, \`lh acceptance flow record\` records each check's verdict, \`lh acceptance run evidence upload\` attaches a screenshot of the page to it, and \`lh acceptance flow complete\` closes the round. Do not publish another flow or create another acceptance: the artboard shows only this one.
+3. Reply with the acceptance link and which checks passed or failed. Each journey board on the artboard then shows its check's result and screenshot.
 
 ## Editing rules
 
