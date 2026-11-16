@@ -1,7 +1,7 @@
 import type { ToolManifest } from '@lobechat/types';
 import debug from 'debug';
 
-const log = debug('lobe-mcp:store:cloudManifest');
+const log = debug('lobe-mcp:cloudManifest');
 
 /**
  * Build manifest for cloud MCP connection from market data
@@ -23,14 +23,19 @@ export const buildCloudMcpManifest = (params: {
   // LobeChat: { name, description, parameters }
   let apiArray: any[] = [];
 
-  if (lobeChatApi) {
+  // An empty `api` next to a populated `tools` list is no tool list of its own
+  if (Array.isArray(lobeChatApi) && lobeChatApi.length > 0) {
     // Already in LobeChat format, use directly
     apiArray = lobeChatApi;
     log('[Cloud MCP] Using existing LobeChat API format');
   } else if (mcpTools && Array.isArray(mcpTools)) {
-    // Convert MCP tools format to LobeChat api format
+    // Convert MCP tools format to LobeChat api format. The approval a tool
+    // asks for carries over, as it does from the LobeChat format.
     apiArray = mcpTools.map((tool: any) => ({
       description: tool.description || '',
+      ...(tool.humanIntervention === undefined
+        ? {}
+        : { humanIntervention: tool.humanIntervention }),
       name: tool.name,
       parameters: tool.inputSchema || {},
     }));

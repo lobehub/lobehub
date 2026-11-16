@@ -15,7 +15,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { CHANNEL_TOPIC_TRIGGER } from '../../utils/topicVisibility';
-import { ConnectorModel } from '../connector';
+import { ConnectorIdentifierHeldError, ConnectorModel } from '../connector';
 import { ConnectorToolModel } from '../connectorTool';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -305,7 +305,7 @@ describe('connector visibility — agent configuration', () => {
     const model = new ConnectorModel(serverDB, owner, workspaceId);
 
     expect(await model.queryAvailableForAgent(privateAgent)).toEqual([
-      { identifier: 'notion', isEnabled: false, status: 'connected' },
+      { id: privateRow.id, identifier: 'notion', isEnabled: false, status: 'connected' },
     ]);
   });
 });
@@ -387,6 +387,60 @@ describe('connector visibility — write paths', () => {
     // A teammate's private row of the same identifier is never "mine".
     await insertConnector({ identifier: 'slack', userId: mate, visibility: 'private' });
     expect(await model.findScopedByIdentifier('slack', undefined, undefined, 'private')).toBeNull();
+  });
+
+  it('claims a base identifier within one visibility', async () => {
+    const model = new ConnectorModel(serverDB, owner, workspaceId);
+    const input = {
+      identifier: 'notion',
+      mcpConnectionType: 'http' as const,
+      mcpServerUrl: 'https://notion.example.com/mcp',
+      name: 'Notion',
+      sourceType: 'custom' as const,
+      status: 'connected' as const,
+    };
+    const mine = await insertConnector({ identifier: 'notion', visibility: 'private' });
+
+    // The caller's private row does not hold the shared identifier.
+    const shared = await model.create(input);
+    expect(shared.visibility).toBe('public');
+    expect((await model.queryBaseHolders('notion')).map((row) => row.id)).toEqual([shared.id]);
+    expect((await model.queryBaseHolders('notion', 'private')).map((row) => row.id)).toEqual([
+      mine.id,
+    ]);
+
+    // Within one visibility the identifier stays held.
+    await expect(model.create(input)).rejects.toThrow(ConnectorIdentifierHeldError);
+    await expect(model.create({ ...input, visibility: 'private' })).rejects.toThrow(
+      ConnectorIdentifierHeldError,
+    );
+
+    // A teammate's private row holds nothing for the caller.
+    await insertConnector({ identifier: 'slack', userId: mate, visibility: 'private' });
+    const myPrivateSlack = await model.create({
+      ...input,
+      identifier: 'slack',
+      visibility: 'private',
+    });
+    expect(myPrivateSlack.visibility).toBe('private');
+  });
+
+  it('moves an agent connector into the base scope within its own visibility', async () => {
+    const model = new ConnectorModel(serverDB, owner, workspaceId);
+    const myPrivate = await insertConnector({ identifier: 'notion', visibility: 'private' });
+
+    const sharedAgentRow = await insertConnector({ agentId: workspaceAgent, identifier: 'notion' });
+    expect(await model.moveToBaseUnlessIdentifierHeld(sharedAgentRow.id, 'notion')).toEqual({
+      moved: true,
+    });
+
+    const privateAgentRow = await insertConnector({
+      agentId: privateAgent,
+      identifier: 'notion',
+      visibility: 'private',
+    });
+    const blocked = await model.moveToBaseUnlessIdentifierHeld(privateAgentRow.id, 'notion');
+    expect('holder' in blocked && blocked.holder.id).toBe(myPrivate.id);
   });
 
   it('targets the row holding the Composio account a write names', async () => {

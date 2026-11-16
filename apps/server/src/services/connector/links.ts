@@ -73,7 +73,13 @@ export const resolveConnectorAccount = async (
   connector: DecryptedConnector,
   ctx: ConnectorLinksContext,
   linkId?: string,
-): Promise<{ accountCount: number; connector: DecryptedConnector; linkId?: string }> => {
+): Promise<{
+  accountCount: number;
+  connector: DecryptedConnector;
+  /** The account used, as stored; none for a connector without accounts. */
+  link?: DecryptedConnectorLink;
+  linkId?: string;
+}> => {
   const links = (await loadConnectorLinksMap([connector], ctx)).get(connector.id) ?? [];
   const link = linkId ? links.find((l) => l.id === linkId) : pickPrimaryLink(links);
   if (linkId && !link) throw new ConnectorAccountGoneError();
@@ -91,6 +97,7 @@ export const resolveConnectorAccount = async (
   return {
     accountCount: links.length,
     connector: withLinkCredentials(connector, fresh),
+    link,
     linkId: link.id,
   };
 };
