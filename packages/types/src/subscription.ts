@@ -1,6 +1,6 @@
 export enum Plans {
+  Basic = 'basic',
   Free = 'free',
-  Go = 'go',
   Hobby = 'hobby',
   Max = 'max',
   Plus = 'plus',
