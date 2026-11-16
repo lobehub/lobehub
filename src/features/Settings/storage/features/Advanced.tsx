@@ -12,7 +12,7 @@ import { useTransferAgentsFormItem } from '@/business/client/hooks/useTransferAg
 import { FORM_STYLE } from '@/const/layoutTokens';
 import DataImporter from '@/features/DataImporter';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
-import { configService } from '@/services/config';
+import { useExportAllData } from '@/hooks/useExportAllData';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { featureFlagsSelectors, serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
@@ -28,6 +28,7 @@ const AdvancedActions = () => {
   const resetSettings = useUserStore((s) => s.resetSettings);
   const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
   const form = useForm();
+  const { exportAll, exporting } = useExportAllData();
 
   const handleReset = useCallback(() => {
     confirmModal({
@@ -46,15 +47,11 @@ const AdvancedActions = () => {
   const renderExportButtonFormItem = () => {
     return {
       children: (
-        <Button
-          icon={<Icon icon={HardDriveUpload} />}
-          onClick={() => {
-            configService.exportAll();
-          }}
-        >
-          {t('storage.actions.export.button')}
+        <Button icon={<Icon icon={HardDriveUpload} />} loading={exporting} onClick={exportAll}>
+          {t(exporting ? 'storage.actions.export.exporting' : 'storage.actions.export.button')}
         </Button>
       ),
+      desc: exporting ? t('storage.actions.export.exportingDesc') : undefined,
       label: (
         <SettingsSearchAnchor id={'storage-export'}>
           {t('storage.actions.export.title')}

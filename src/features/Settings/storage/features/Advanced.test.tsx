@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { type ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { mapFeatureFlagsEnvToState } from '@/config/featureFlags';
+import { configService } from '@/services/config';
 import { initServerConfigStore, Provider } from '@/store/serverConfig/store';
 import { useUserStore } from '@/store/user';
 
@@ -33,7 +34,7 @@ vi.mock('@/services/config', () => ({
   },
 }));
 
-const createWrapper = (hideDocs: boolean) => {
+const createWrapper = (hideDocs: boolean, enableBusinessFeatures = false) => {
   const Wrapper = ({ children }: { children: ReactNode }) => (
     <Provider
       createStore={() =>
@@ -44,6 +45,7 @@ const createWrapper = (hideDocs: boolean) => {
             }),
             hideDocs,
           },
+          serverConfig: { aiProvider: {}, enableBusinessFeatures, telemetry: {} },
         })
       }
     >
@@ -84,5 +86,28 @@ describe('AdvancedActions', () => {
     fireEvent.click(screen.getByRole('switch'));
 
     expect(updateGeneralConfig).toHaveBeenCalledWith({ telemetry: false });
+  });
+
+  it('shows export progress on the button while the export runs', async () => {
+    let finishExport!: () => void;
+    vi.mocked(configService.exportAll).mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishExport = resolve;
+      }),
+    );
+
+    render(<AdvancedActions />, { wrapper: createWrapper(false, true) });
+
+    fireEvent.click(screen.getByText('storage.actions.export.button'));
+
+    expect(await screen.findByText('storage.actions.export.exporting')).toBeDefined();
+    expect(screen.getByText('storage.actions.export.exportingDesc')).toBeDefined();
+
+    await act(async () => {
+      finishExport();
+    });
+
+    expect(await screen.findByText('storage.actions.export.button')).toBeDefined();
+    expect(screen.queryByText('storage.actions.export.exportingDesc')).toBeNull();
   });
 });
