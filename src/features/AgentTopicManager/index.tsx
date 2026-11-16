@@ -31,6 +31,7 @@ import type { StatusFilter } from './types';
 import {
   agentGroupChannels,
   buildBotChannelOptions,
+  channelListState,
   getProjectFilterLabel,
   matchesBotChannel,
   matchesChannelSearch,
@@ -108,9 +109,16 @@ const AgentTopicManager = memo(() => {
   // Channel conversations are listed as Channels: the Agent's run topics there stay hidden.
   const channelsEnabled = useChannelsEnabled();
   const showChannels = channelsEnabled && triggers.includes('channel');
-  channelActions.useFetchList(showChannels);
+  const channelSync = channelActions.useFetchList(showChannels);
   const allChannels = useChannelStore(channelSelectors.list);
-  const channelsLoading = showChannels && !allChannels;
+  const { error: channelsError, loading: channelsLoading } = channelListState(
+    showChannels,
+    allChannels,
+    channelSync.error,
+  );
+  const retryChannels = () => {
+    void channelActions.refreshList().catch(() => {});
+  };
 
   const trimmedSearch = search.trim();
   const { data: searchResults } = useSearchTopics(
@@ -293,6 +301,8 @@ const AgentTopicManager = memo(() => {
           ) : (isLoading && baseTopics.length === 0) ||
             (channelsLoading && totalAfterFilter === 0) ? (
             <TopicsSkeleton chrome={'body'} />
+          ) : channelsError && totalAfterFilter === 0 ? (
+            <AsyncError error={channelsError} variant={'block'} onRetry={retryChannels} />
           ) : totalAfterFilter === 0 && visibleChannels.length === 0 ? (
             <EmptyState
               agentId={activeAgentId}
@@ -301,7 +311,11 @@ const AgentTopicManager = memo(() => {
             />
           ) : (
             <>
-              <ChannelSection channels={visibleChannels} />
+              {channelsError ? (
+                <AsyncError error={channelsError} variant={'inline'} onRetry={retryChannels} />
+              ) : (
+                <ChannelSection channels={visibleChannels} />
+              )}
               {totalAfterFilter === 0 ? null : viewMode === 'card' ? (
                 <TopicGrid
                   agentId={activeAgentId}

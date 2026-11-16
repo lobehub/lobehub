@@ -6,6 +6,7 @@ import {
   agentGroupChannels,
   areAllTopicsArchived,
   buildBotChannelOptions,
+  channelListState,
   getBotPlatformName,
   getProjectFilterLabel,
   getProjectInfo,
@@ -45,6 +46,34 @@ const createTopic = (
 });
 
 describe('AgentTopicManager utils', () => {
+  describe('channelListState', () => {
+    it('stays idle while the Channel source is not selected', () => {
+      expect(channelListState(false, undefined, new Error('x'))).toEqual({
+        error: undefined,
+        loading: false,
+      });
+    });
+
+    it('loads until the first list arrives', () => {
+      expect(channelListState(true, undefined, undefined)).toEqual({
+        error: undefined,
+        loading: true,
+      });
+    });
+
+    it('reports a failed first fetch instead of loading forever', () => {
+      const error = new Error('network');
+      expect(channelListState(true, undefined, error)).toEqual({ error, loading: false });
+    });
+
+    it('keeps showing a loaded list when a refresh fails', () => {
+      expect(channelListState(true, [], new Error('network'))).toEqual({
+        error: undefined,
+        loading: false,
+      });
+    });
+  });
+
   it('offers unarchive only when every selected topic is archived', () => {
     const topics = [
       createTopic(undefined, { id: 'a', status: 'completed' }),

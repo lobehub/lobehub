@@ -282,3 +282,17 @@ export const getProjectGroupTitle = (group: GroupedTopic, t: LooseT): string => 
   if (label) return label;
   return group.id.replace(/^(project-id|project-directory|project):/, '');
 };
+
+/**
+ * Whether the Channel list is still loading or failed. A failed first fetch leaves no list
+ * behind, so it must surface as an error instead of loading forever; a failed refresh keeps
+ * showing the list already loaded.
+ */
+export const channelListState = (
+  enabled: boolean,
+  channels: readonly unknown[] | undefined,
+  error: unknown,
+): { error: unknown; loading: boolean } => {
+  if (!enabled || channels) return { error: undefined, loading: false };
+  return error ? { error, loading: false } : { error: undefined, loading: true };
+};
