@@ -24,7 +24,12 @@ import {
   toGatewayMcpParams,
 } from '@/server/services/mcp/deviceTunnel';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
+import {
+  buildMcpAuthorizationErrorContent,
+  isMcpAuthorizationError,
+} from '@/server/services/toolExecution/mcpAuthError';
 
+import { ConnectorLinkSelectionError, resolveLinkedCall } from './links';
 import { buildLastSyncedAtMap, scheduleStaleConnectorToolsRefresh } from './refresh';
 import { buildConnectorMcpParams, type ConnectorToolSyncContext } from './sync';
 import { ensureFreshConnectorToken } from './tokens';
@@ -163,6 +168,18 @@ const reachesServer = async (
   );
 };
 
+/**
+ * A failed call in the shape the chat stores as a tool error. The model reads
+ * `content`; the tool card shows a failure only when `error` is set, so a bare
+ * `success: false` would render as a successful call.
+ */
+const failedToolResult = (message: string, type: string) => ({
+  content: message,
+  error: { message, type },
+  state: { content: [{ text: message, type: 'text' as const }], isError: true },
+  success: false,
+});
+
 export const callConnectorToolById = async (
   params: {
     agentId?: string;
@@ -170,6 +187,7 @@ export const callConnectorToolById = async (
     /** An MCP App view's `tools/call`: only tools visible to the app run. */
     fromApp?: boolean;
     fromEntrypoint?: boolean;
+    linkId?: string;
     identifier: string;
     /** With `fromApp`: the server the view came from; its calls reach no other. */
     server?: string;
@@ -271,7 +289,12 @@ export const callConnectorToolById = async (
     // call is refused: a device's result offers no view to call back into.
     const binding = connectorDeviceBinding(connector);
     if (binding && deviceGateway.isConfigured && !params.fromApp && !params.fromEntrypoint) {
-      return runConnectorToolOnBoundDevice(connector, binding, { ...params, mcpApps }, ctx);
+      return runConnectorToolOnBoundDevice(
+        connector,
+        binding,
+        { ...params, mcpApps, schemas: tools.map((t) => t.inputSchema) },
+        ctx,
+      );
     }
     throw new ConnectorToolCallError(
       'BAD_REQUEST',
@@ -281,7 +304,7 @@ export const callConnectorToolById = async (
   }
 
   const report = await resolveReporter(connector, ctx);
-  const run = { ...params, mcpApps };
+  const run = { ...params, mcpApps, schemas: tools.map((t) => t.inputSchema) };
   if (!report) return runConnectorTool(connector, run, ctx);
 
   const startTime = Date.now();
@@ -330,11 +353,52 @@ const installedVersion = (metadata: unknown): string | undefined => {
   return typeof version === 'string' ? version : undefined;
 };
 
+interface ConnectorCallAccount {
+  args?: string;
+  fromApp?: boolean;
+  linkId?: string;
+  /** Input schemas of the connector's synced tools: they decide the selector's name. */
+  schemas: readonly unknown[];
+}
+
+/**
+ * The credentials and arguments a call runs with: the selected account's, the
+ * selector stripped from the arguments, or the connector's own credentials. A
+ * selection the model got wrong comes back as a failed tool result it can fix.
+ */
+const resolveCallAccount = async (
+  connector: DecryptedConnector,
+  params: ConnectorCallAccount,
+  ctx: ConnectorExecContext,
+): Promise<
+  | { argsStr: string; failure?: undefined; fresh: DecryptedConnector; linkName?: string }
+  | { failure: ReturnType<typeof failedToolResult> }
+> => {
+  try {
+    const resolved = await resolveLinkedCall(
+      {
+        connector,
+        argsStr: params.args,
+        linkId: params.linkId,
+        fromApp: params.fromApp,
+        schemas: params.schemas,
+      },
+      ctx,
+    );
+    const fresh = resolved.linkId
+      ? resolved.connector
+      : await ensureFreshConnectorToken(connector, ctx.connectorModel);
+    return { argsStr: resolved.argsStr, fresh, linkName: resolved.linkName };
+  } catch (error) {
+    if (error instanceof ConnectorLinkSelectionError)
+      return { failure: failedToolResult(error.message, 'CONNECTOR_ACCOUNT_SELECTION') };
+    throw error;
+  }
+};
+
 const runConnectorTool = async (
   connector: DecryptedConnector,
-  params: {
-    args?: string;
-    fromApp?: boolean;
+  params: ConnectorCallAccount & {
     fromEntrypoint?: boolean;
     /** The caller's `mcp_apps` flag, as the call's checks read it. */
     mcpApps: boolean;
@@ -358,21 +422,34 @@ const runConnectorTool = async (
     );
   }
 
-  const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);
+  const account = await resolveCallAccount(connector, params, ctx);
+  if (account.failure) return account.failure;
   // A view's call gets its blocks back as they are (`mcpService.callTool`)
   const fileService = params.fromApp ? undefined : ctx.resolveFileService?.();
 
-  return mcpService.callTool({
-    argsStr: params.args ?? '{}',
-    clientParams: buildConnectorMcpParams(fresh),
-    fromApp: params.fromApp,
-    fromEntrypoint: params.fromEntrypoint,
-    mcpApps: params.mcpApps,
-    processContentBlocks: fileService
-      ? (blocks) => processContentBlocks(blocks, fileService)
-      : undefined,
-    toolName: params.toolName,
-  });
+  try {
+    return await mcpService.callTool({
+      argsStr: account.argsStr,
+      clientParams: buildConnectorMcpParams(account.fresh),
+      fromApp: params.fromApp,
+      fromEntrypoint: params.fromEntrypoint,
+      mcpApps: params.mcpApps,
+      processContentBlocks: fileService
+        ? (blocks) => processContentBlocks(blocks, fileService)
+        : undefined,
+      toolName: params.toolName,
+    });
+  } catch (error) {
+    if (isMcpAuthorizationError(error))
+      return failedToolResult(
+        buildMcpAuthorizationErrorContent(connector.identifier, {
+          isShareVisitor: false,
+          linkName: account.linkName,
+        }),
+        'AUTHORIZATION_ERROR',
+      );
+    throw error;
+  }
 };
 
 /**
@@ -384,7 +461,7 @@ const runConnectorTool = async (
 const runConnectorToolOnBoundDevice = async (
   connector: DecryptedConnector,
   binding: McpDeviceBinding,
-  params: { args?: string; mcpApps: boolean; toolName: string },
+  params: ConnectorCallAccount & { mcpApps: boolean; toolName: string },
   ctx: ConnectorExecContext,
 ): Promise<unknown> => {
   if (!ctx.serverDB || !ctx.userId) {
@@ -409,14 +486,15 @@ const runConnectorToolOnBoundDevice = async (
     throw error;
   }
 
-  const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);
+  const account = await resolveCallAccount(connector, params, ctx);
+  if (account.failure) return account.failure;
   const result = await deviceGateway.executeMcpCall({
     apiName: params.toolName,
-    arguments: params.args ?? '{}',
+    arguments: account.argsStr,
     clientKinds: target.clientKinds,
     deviceId: target.deviceId,
     identifier: connector.identifier,
-    params: toGatewayMcpParams(buildConnectorMcpParams(fresh)),
+    params: toGatewayMcpParams(buildConnectorMcpParams(account.fresh)),
     userId: ctx.userId,
     workspaceId: target.workspaceId,
   });
@@ -446,7 +524,7 @@ const runConnectorToolOnBoundDevice = async (
  */
 export const readConnectorUiResourceById = async (
   /** `server`: the server the result came from; the view is read from no other. */
-  params: { agentId?: string; identifier: string; server: string; uri: string },
+  params: { agentId?: string; identifier: string; server: string; uri: string; linkId?: string },
   ctx: ConnectorExecContext,
 ) => {
   if (!(await isMcpAppsEnabled(ctx.userId))) {
@@ -493,7 +571,13 @@ export const readConnectorUiResourceById = async (
     );
   }
 
-  const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);
+  const resolved = await resolveLinkedCall(
+    { connector, linkId: params.linkId, fromApp: true },
+    ctx,
+  );
+  const fresh = resolved.linkId
+    ? resolved.connector
+    : await ensureFreshConnectorToken(connector, ctx.connectorModel);
 
   return mcpService.readUiResource(buildConnectorMcpParams(fresh), params.uri);
 };

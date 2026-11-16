@@ -19,6 +19,7 @@ export interface ConnectorOAuthStatePayload {
   codeVerifier: string;
   /** The connector being connected. */
   connectorId: string;
+  linkTarget?: { kind: 'new' } | { kind: 'existing'; linkId: string };
   /** LobeHub user who initiated the connect. */
   lobeUserId: string;
   /** Where to send the user after the callback finishes (relative path). */
@@ -79,4 +80,29 @@ export const consumeConnectorOAuthState = async (
   } catch {
     return null;
   }
+};
+
+export interface ConnectorOAuthCompletion {
+  connectorId: string;
+  linkId: string;
+  lobeUserId: string;
+  outcome: 'created' | 'reauthorized' | 'matchedExisting';
+  workspaceId?: string;
+}
+/** The native IPC only reports success; retrieve the exact outcome server-side. */
+export const saveConnectorOAuthCompletion = async (
+  state: string,
+  result: ConnectorOAuthCompletion,
+) => {
+  const redis = getAgentRuntimeRedisClient();
+  if (!redis) throw new Error('Redis is required for connector OAuth completion');
+  await redis.set(`${stateKey(state)}:result`, JSON.stringify(result), 'EX', STATE_TTL_SECONDS);
+};
+export const readConnectorOAuthCompletion = async (
+  state: string,
+): Promise<ConnectorOAuthCompletion | null> => {
+  const redis = getAgentRuntimeRedisClient();
+  if (!redis) return null;
+  const raw = await redis.get(`${stateKey(state)}:result`);
+  return raw ? (JSON.parse(raw) as ConnectorOAuthCompletion) : null;
 };

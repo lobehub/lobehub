@@ -8,17 +8,34 @@ import { ConnectorToolModel } from '@/database/models/connectorTool';
 
 import { GET } from './route';
 
-const { mockConsume, mockDiscover, mockExchange, mockFindById, mockSync, mockUpdate } = vi.hoisted(
-  () => ({
-    mockConsume: vi.fn(),
-    mockDiscover: vi.fn().mockResolvedValue({ token_endpoint: 'https://as/token' }),
-    mockExchange: vi.fn(),
-    mockFindById: vi.fn(),
-    mockSync: vi.fn(),
-    mockUpdate: vi.fn(),
-  }),
-);
+const {
+  mockConsume,
+  mockDiscover,
+  mockExchange,
+  mockFindById,
+  mockSync,
+  mockUpdate,
+  mockListLinks,
+  mockApplyAuthorization,
+} = vi.hoisted(() => ({
+  mockConsume: vi.fn(),
+  mockListLinks: vi.fn(),
+  mockApplyAuthorization: vi.fn(),
+  mockDiscover: vi.fn().mockResolvedValue({ token_endpoint: 'https://as/token' }),
+  mockExchange: vi.fn(),
+  mockFindById: vi.fn(),
+  mockSync: vi.fn(),
+  mockUpdate: vi.fn(),
+}));
 
+vi.mock('@/database/models/connectorLink', () => ({
+  ConnectorLinkModel: vi.fn(function () {
+    return { applyAuthorization: mockApplyAuthorization, listByConnectorIds: mockListLinks };
+  }),
+}));
+vi.mock('@/server/services/connector/identity', () => ({
+  resolveLinkIdentity: async () => undefined,
+}));
 vi.mock('@/database/server', () => ({ serverDB: {} }));
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://app.example.com' } }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
@@ -39,6 +56,7 @@ vi.mock('@/server/services/connector/tokens', () => ({
 }));
 vi.mock('@/server/services/connector/stateStore', () => ({
   consumeConnectorOAuthState: mockConsume,
+  saveConnectorOAuthCompletion: vi.fn(),
 }));
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn(function () {
@@ -55,6 +73,14 @@ const makeReq = (query = 'code=abc&state=xyz') =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockListLinks.mockResolvedValue([]);
+  mockApplyAuthorization
+    .mockReset()
+    .mockImplementation(async (_id, { target }) =>
+      target.kind === 'existing'
+        ? { linkId: target.linkId, outcome: 'reauthorized' }
+        : { linkId: 'lnk_1', outcome: 'created' },
+    );
   mockConsume.mockResolvedValue({
     authorizationServerUrl: 'https://as',
     codeVerifier: 'v',
@@ -96,6 +122,8 @@ describe('connector OAuth callback', () => {
 
       const expected = {
         connectorId: 'c1',
+        linkId: 'lnk_1',
+        outcome: 'created',
         success: true,
         synced: true,
         type: 'lobe-connector-oauth',
@@ -106,6 +134,36 @@ describe('connector OAuth callback', () => {
       );
     },
   );
+
+  it('reauthorizes the earliest link for a legacy OAuth state without linkTarget', async () => {
+    mockListLinks.mockResolvedValue([
+      { id: 'lnk_early', status: 'error' },
+      { id: 'lnk_late', status: 'connected' },
+    ]);
+    const body = await (await GET(makeReq())).text();
+    expect(body).toContain('"success":true');
+    expect(body).toContain('"linkId":"lnk_early"');
+    expect(body).toContain('"outcome":"reauthorized"');
+  });
+
+  it('creates the first account for a legacy OAuth state when no links exist', async () => {
+    const body = await (await GET(makeReq())).text();
+    expect(body).toContain('"linkId":"lnk_1"');
+    expect(body).toContain('"outcome":"created"');
+  });
+
+  it('keeps an explicit new-account target even when older links exist', async () => {
+    mockConsume.mockResolvedValue({
+      authorizationServerUrl: 'https://as',
+      codeVerifier: 'v',
+      connectorId: 'c1',
+      lobeUserId: 'u1',
+      linkTarget: { kind: 'new' },
+    });
+    mockListLinks.mockResolvedValue([{ id: 'lnk_early' }]);
+    const body = await (await GET(makeReq())).text();
+    expect(body).toContain('"outcome":"created"');
+  });
 
   it('reports synced:false when auth succeeds but tool sync fails', async () => {
     mockSync.mockRejectedValue(new Error('mcp down'));
@@ -136,6 +194,7 @@ describe('connector OAuth callback', () => {
     expect(mockSync).toHaveBeenCalledWith(
       'c1',
       expect.objectContaining({ serverDB, userId: 'u1' }),
+      { linkId: 'lnk_1' },
     );
   });
 
@@ -202,7 +261,7 @@ describe('connector OAuth callback', () => {
 
     await GET(makeReq());
 
-    expect(mockUpdate.mock.calls[0][1]).not.toHaveProperty('oidcConfig');
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 });
 
