@@ -68,11 +68,7 @@ const ContextList = memo(() => {
 
             return (
               <ContextMotionItem key={`file:${key}`}>
-                {isImageUpload(item) ? (
-                  <ImageCard {...item} />
-                ) : (
-                  <ContextItem {...item} />
-                )}
+                {isImageUpload(item) ? <ImageCard {...item} /> : <ContextItem {...item} />}
               </ContextMotionItem>
             );
           })}
