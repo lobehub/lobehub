@@ -1,0 +1,67 @@
+---
+title: Webhooks
+description: Give an agent a URL that any system can call. Each call wakes the agent with what was sent, in a new topic or in the topic of its thread.
+tags:
+  - LobeHub
+  - Webhooks
+  - Automations
+  - Agent
+---
+
+# Webhooks
+
+A webhook gives an agent a URL. When another system sends a request to it, such as a CI failure, a monitoring alert, a form submission or a script, the agent runs with what was sent. There is no signing step and no required format: paste the URL into the other system and you are done.
+
+## Create a webhook
+
+1. Open the agent, then **Agent Profile → Webhook**.
+2. Click **Create webhook**. Every field is optional:
+   - **Name**: how the webhook appears in its calls and in the conversation.
+   - **What should the agent do?**: a task sent with every call, for example "Summarize the failure and open an issue if it is new". The agent treats the request itself as data, never as instructions.
+   - **Topic**: **New topic per call** gives each call its own topic. **One shared topic** keeps every call in one topic, so the agent sees the earlier ones.
+   - **Auto-approve tool calls**: see [Approvals](#approvals).
+3. Copy the URL from the confirmation and give it to the system that should call the agent.
+
+Anyone with the URL can wake the agent, so keep it private. If it leaks, use **Generate new URL**: the old one stops working at once.
+
+## Call it
+
+The simplest call:
+
+```bash
+curl -X POST 'https://your-lobehub/api/webhooks/inbound/<id>/<token>' -d 'Disk almost full on web-1'
+```
+
+- **Any body**: JSON, a form or plain text, up to 256 KB. Query parameters are passed to the agent too.
+- **Header instead of URL**: call `/api/webhooks/inbound/<id>` and send the token as `Authorization: Bearer <token>`.
+- **Threads**: add `?thread=<key>` (or the `X-Thread-Key` header). Calls with the same key continue the same topic, which is useful for one ticket or one pull request.
+- **Retries**: send an `Idempotency-Key` header. A retry with the same key is acknowledged without running the agent again.
+
+A successful call returns `202 {"id": "...", "status": "accepted"}` right away; the agent runs in the background. Other answers:
+
+| Status | Meaning                                                     |
+| ------ | ----------------------------------------------------------- |
+| `401`  | The token is wrong, or was replaced by a new URL.           |
+| `409`  | The webhook is paused.                                      |
+| `410`  | The webhook was deleted.                                    |
+| `413`  | The body is larger than 256 KB.                             |
+| `415`  | File uploads (`multipart/form-data`) are not supported.     |
+| `429`  | More than 120 calls in a minute; retry after `Retry-After`. |
+
+## Follow what happened
+
+Topics started by a webhook stay out of the main topic list. A running one shows in your Inbox, and a finished one is marked unread. In the topic manager, filter by **Webhook** to see all of them.
+
+On the webhook, **Recent calls** lists each call: when it arrived, whether the agent ran, what was sent, and the topic it ran in. **Send test** makes a sample call through the same path a real caller uses.
+
+Each run uses credits. A webhook runs the agent at most 60 times an hour; calls beyond that are recorded and skipped.
+
+## Approvals
+
+By default, a webhook run follows your tool approval settings, exactly like a message you send: a tool that needs approval waits in the topic until you answer.
+
+Turn on **Auto-approve tool calls** to let a webhook's runs use tools without waiting. Only do this for a webhook whose URL you trust: anyone holding it can then make the agent act. Tools marked to always ask for confirmation still wait.
+
+## Pause or delete
+
+Use the switch on a webhook to pause it: calls are refused with `409` until you resume it. **Delete** removes it and its URL for good. Webhooks also appear in **Settings → Automations** next to connector event subscriptions.

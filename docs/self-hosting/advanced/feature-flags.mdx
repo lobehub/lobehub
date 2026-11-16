@@ -48,6 +48,7 @@ You can achieve various feature combinations using the above configuration synta
 | `dashboard`                      | Dashboards: the home and project dashboard pages, the widget Portal, in-chat widget previews and the `builtin-dashboard` agent tool that builds monitoring widgets. When off, these are hidden and the widget / dashboard APIs return FORBIDDEN; widgets already published keep refreshing on their schedule. | Disabled      |
 | `mcp_apps`                       | MCP Apps: a tool result whose MCP server declares an interactive `ui://` view renders that view (the server's HTML, in a sandboxed iframe) in the conversation. When off, such results render as plain tool results and the server does not announce MCP Apps support to MCP servers.                         | Disabled      |
 | `mcp_events`                     | MCP Events: lets an Agent subscribe to remote connector events and run in the original Topic. Each subscription requires approval; each event run uses credits. Requires a public HTTPS callback, secret encryption, and an authenticated MCP server offering webhook events.                                 | Disabled      |
+| `agent_webhooks`                 | Agent webhooks: each Agent can have URLs that any outside system calls to run it, managed under Agent Profile → Webhook. Each call uses credits. Requires a public `APP_URL` and secret encryption. When off, the tab is hidden and calls are still recorded but run nothing.                                 | Disabled      |
 | `edit_agent`                     | Allows users to edit assistants.                                                                                                                                                                                                                                                                              | Enabled       |
 | `ai_image`                       | Controls AI image generation feature and page (/image).                                                                                                                                                                                                                                                       | Enabled       |
 | `speech_to_text`                 | Enables speech-to-text functionality.                                                                                                                                                                                                                                                                         | Enabled       |
@@ -85,6 +86,19 @@ On a supported deployment, removal from the creator rollout does not itself revo
 The [share router](https://github.com/lobehub/lobehub/blob/659db0780b263f023019337a48f23e17e77e260d/apps/server/src/routers/lambda/agentShare.ts) checks the creator gate for `enableShare` and `updateVisibility` to `link`. A change to `private` does not require the rollout flag and blocks visitor access. Thus, disabling `agent_share` is not a substitute for disabling an individual share.
 
 You can always check the [featureFlags](https://github.com/lobehub/lobehub/blob/main/packages/app-config/src/featureFlags/schema.ts) to get the latest list of feature flags.
+
+## Agent Webhooks: Deployment Requirements
+
+`agent_webhooks` is off by default. Before enabling it:
+
+1. Set `APP_URL` to the public address callers will use; webhook URLs are built from it.
+2. Configure `KEY_VAULTS_SECRET` to encrypt webhook tokens, and preserve it across deployment updates.
+3. Optionally configure QStash so wake-ups and recovery of pending calls run on a schedule. Without it, wake-ups run in the application process and recovery depends on application requests.
+4. Set `FEATURE_FLAGS="+agent_webhooks"` and restart.
+
+Open an Agent, go to Agent Profile → Webhook, create a webhook and use **Send test**: the call should show as run under **Recent calls**, with a link to the topic the Agent replied in.
+
+Turning the flag off hides the Webhook tab and stops webhook-triggered runs. Calls are still authenticated, stored and acknowledged, but skipped without using credits; webhooks and their URLs are kept and resume working when the flag is turned back on.
 
 ## MCP Events: Deployment Requirements
 
