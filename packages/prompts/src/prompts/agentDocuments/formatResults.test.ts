@@ -62,9 +62,11 @@ describe('agentDocuments formatResults', () => {
       );
     });
 
-    it('reports how many characters a body write saved', () => {
-      expect(formatCreateDocumentResult({ charCount: 10_532, id: 'a', title: 'Plan' })).toBe(
-        'Created document "Plan", 10532 characters saved (internal id: a).',
+    it('reports how many characters a body write saved and whether it was truncated', () => {
+      expect(
+        formatCreateDocumentResult({ charCount: 10_532, id: 'a', title: 'Plan', truncated: false }),
+      ).toBe(
+        'Created document "Plan", 10532 characters saved (truncated: false) (internal id: a).',
       );
       expect(formatReplaceDocumentResult({ charCount: 0, id: 'a', title: 'Plan' })).toBe(
         'Updated document "Plan", 0 characters saved (internal id: a).',

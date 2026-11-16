@@ -36,26 +36,21 @@ export interface FormatDocumentBodyWriteResultParams extends AgentDocumentWriteR
    * tell at once whether the stored body is as long as what it sent.
    */
   charCount?: number;
+  /** Whether the stored body was cut short; stated explicitly, including `false`. */
+  truncated?: boolean;
 }
 
-const savedLabel = (charCount?: number): string =>
-  charCount === undefined ? '' : `, ${charCount} characters saved`;
+const savedLabel = ({ charCount, truncated }: FormatDocumentBodyWriteResultParams): string => {
+  const saved = charCount === undefined ? '' : `, ${charCount} characters saved`;
+  const flag = truncated === undefined ? '' : ` (truncated: ${truncated})`;
+  return `${saved}${flag}`;
+};
 
-export const formatCreateDocumentResult = ({
-  charCount,
-  id,
-  title,
-  url,
-}: FormatDocumentBodyWriteResultParams): string =>
-  formatWriteResult(`Created document ${titleLabel(title)}${savedLabel(charCount)}`, { id, url });
+export const formatCreateDocumentResult = (params: FormatDocumentBodyWriteResultParams): string =>
+  formatWriteResult(`Created document ${titleLabel(params.title)}${savedLabel(params)}`, params);
 
-export const formatReplaceDocumentResult = ({
-  charCount,
-  id,
-  title,
-  url,
-}: FormatDocumentBodyWriteResultParams): string =>
-  formatWriteResult(`Updated document ${titleLabel(title)}${savedLabel(charCount)}`, { id, url });
+export const formatReplaceDocumentResult = (params: FormatDocumentBodyWriteResultParams): string =>
+  formatWriteResult(`Updated document ${titleLabel(params.title)}${savedLabel(params)}`, params);
 
 export interface FormatModifyDocumentResultParams extends AgentDocumentWriteResultParams {
   operationCount: number;

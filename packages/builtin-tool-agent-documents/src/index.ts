@@ -12,6 +12,7 @@ export {
   type CreateDocumentState,
   type CreateFolderArgs,
   type CreateFolderState,
+  type DocumentBodyWriteReceipt,
   type ListDocumentsArgs,
   type ListDocumentsState,
   type ListedAgentDocument,

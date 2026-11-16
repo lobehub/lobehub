@@ -334,7 +334,7 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
     );
 
     expect(result.content).toBe(
-      'Created document "Daily Brief" (internal id: agent-doc-assoc-id).',
+      'Created document "Daily Brief" (truncated: false) (internal id: agent-doc-assoc-id).',
     );
   });
 
@@ -487,6 +487,7 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
       agentDocumentId: 'agent-doc-assoc-id',
       agentId: 'agent-1',
       documentId: 'documents-row-id',
+      truncated: false,
     });
   });
 
@@ -560,6 +561,7 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
       agentDocumentId: 'agent-doc-assoc-id',
       agentId: 'agent-1',
       documentId: 'documents-row-id',
+      truncated: false,
     });
     expect(stub.createTopicDocument).toHaveBeenCalledWith({
       agentId: 'agent-1',

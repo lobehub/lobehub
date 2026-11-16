@@ -314,7 +314,7 @@ describe('AgentDocumentsExecutionRuntime', () => {
 
   // A write cut short by the editor used to read exactly like a complete one,
   // so the agent only noticed after reading the document back.
-  it('reports how many characters create and replace stored', async () => {
+  it('reports how many characters create and replace stored, and that nothing was truncated', async () => {
     const stored = { content: 'x'.repeat(4049), documentId: 'docs_1', id: 'agent-doc-1' };
     const runtime = createRuntime({
       createDocument: vi.fn().mockResolvedValue({ ...stored, title: 'Plan' }),
@@ -331,8 +331,12 @@ describe('AgentDocumentsExecutionRuntime', () => {
       { agentId: 'agent-1' },
     );
 
-    expect(created.content).toContain('Created document "Plan", 4049 characters saved');
-    expect(replaced.content).toContain('11 characters saved');
+    expect(created.content).toContain(
+      'Created document "Plan", 4049 characters saved (truncated: false)',
+    );
+    expect(created.state).toMatchObject({ charCount: 4049, truncated: false });
+    expect(replaced.content).toContain('11 characters saved (truncated: false)');
+    expect(replaced.state).toMatchObject({ charCount: 11, truncated: false });
   });
 
   describe('tool arguments the model gets wrong', () => {

@@ -16,6 +16,7 @@ import type {
   CopyDocumentArgs,
   CreateDocumentArgs,
   CreateFolderArgs,
+  DocumentBodyWriteReceipt,
   ListDocumentsArgs,
   ListedAgentDocument,
   ModifyDocumentNodesArgs,
@@ -67,9 +68,16 @@ interface AgentDocumentRecord {
   updatedAt?: Date | string;
 }
 
-/** Length of the body a write stored; absent when the service did not return it. */
-const storedCharCount = (doc: AgentDocumentRecord): number | undefined =>
-  typeof doc.content === 'string' ? doc.content.length : undefined;
+/**
+ * Receipt for a whole-body write: the stored length (absent when the service did
+ * not return the body) and an explicit `truncated: false`. The server rejects a
+ * body the editor cannot parse to the end rather than saving the part before it,
+ * so a write that reached this point was not cut short.
+ */
+const bodyWriteReceipt = (doc: AgentDocumentRecord): DocumentBodyWriteReceipt => ({
+  ...(typeof doc.content === 'string' && { charCount: doc.content.length }),
+  truncated: false,
+});
 
 const FOLDER_FILE_TYPE = 'custom/folder';
 
@@ -584,15 +592,12 @@ export class AgentDocumentsExecutionRuntime {
     // hand the user a clickable link. `created.id` (the agentDocuments row id)
     // is kept separately because subsequent edit/read/remove calls key off it.
     const url = await this.buildDocumentUrl(agentId, created.documentId);
+    const receipt = bodyWriteReceipt(created);
 
     return {
-      content: formatCreateDocumentResult({
-        charCount: storedCharCount(created),
-        id: created.id,
-        title,
-        url,
-      }),
+      content: formatCreateDocumentResult({ ...receipt, id: created.id, title, url }),
       state: {
+        ...receipt,
         agentDocumentId: created.id,
         agentId,
         documentId: created.documentId,
@@ -733,15 +738,17 @@ export class AgentDocumentsExecutionRuntime {
     if (!doc) return { content: `Failed to update document ${args.id}.`, success: false };
 
     const url = await this.buildDocumentUrl(agentId, doc.documentId ?? existing.documentId);
+    const receipt = bodyWriteReceipt(doc);
 
     return {
       content: formatReplaceDocumentResult({
-        charCount: storedCharCount(doc),
+        ...receipt,
         id: args.id,
         title: doc.title ?? existing.title,
         url,
       }),
       state: {
+        ...receipt,
         agentDocumentId: args.id,
         agentId,
         documentId: doc.documentId ?? existing.documentId,
