@@ -50,7 +50,8 @@ export function useMemberEntries(detail: ChannelDetail) {
     (member) => {
       const job = member.actorType === 'agent' ? memberCurrentJob(jobs, member.id) : undefined;
       return {
-        label: member.actorType === 'agent' ? t(job ? memberJobStatus(job) : 'status.idle') : '',
+        // Idle is the default and goes unlabelled; only a reply in progress or needing attention says so.
+        label: member.actorType === 'agent' && job ? t(memberJobStatus(job)) : '',
         member,
         name: memberName(member, t('deletedMember')),
         tone: job ? channelJobTone(job) : 'quiet',
@@ -62,7 +63,7 @@ export function useMemberEntries(detail: ChannelDetail) {
 
 /** A working member spins amber, like a running Agent in the sidebar. */
 const MemberState = ({ entry }: { entry: MemberEntry }) =>
-  entry.tone === 'working' ? (
+  !entry.label ? null : entry.tone === 'working' ? (
     <span {...stylex.props(statusStyles.state, statusStyles.memberWorking)}>
       <Spin size={12} style={{ color: 'inherit' }} />
       {entry.label}
