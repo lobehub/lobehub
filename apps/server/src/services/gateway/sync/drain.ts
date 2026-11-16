@@ -15,6 +15,7 @@ import {
   type MessageGatewayHost,
   resolveMessageGatewayHost,
 } from '../MessageGatewayClient';
+import { isMessageGatewayHostingUnavailable } from '../nodeGatewayOnly';
 import { BOT_RUNTIME_STATUSES, updateBotRuntimeStatus } from '../runtimeStatus';
 import { GATEWAY_SYNC_CONCURRENCY, GATEWAY_SYNC_STALE_DISCONNECT_LIMIT } from './constants';
 import { hostDesiredSlice, hostGatedSlice, hostRefusesPlatform } from './state';
@@ -164,10 +165,12 @@ export async function disconnectStaleConnections(
 
         // An enabled persistent-mode row that shows up in `actual` but not
         // in `desired` is one of two things, and only one of them is stale.
+        const definition = row && platformRegistry.getPlatform(row.platform);
         const livePersistentRow =
           row?.enabled &&
-          resolveConnectionMode(platformRegistry.getPlatform(row.platform), row.settings) !==
-            'webhook';
+          // Never desired, so "enabled during sync" can't explain it: it is stale.
+          !isMessageGatewayHostingUnavailable(definition) &&
+          resolveConnectionMode(definition, row.settings) !== 'webhook';
 
         if (livePersistentRow) {
           const owner = resolveMessageGatewayHost(row.platform);

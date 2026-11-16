@@ -10,6 +10,8 @@ export const FEISHU_CONSOLE_URL = {
   feishu: 'https://open.feishu.cn/app',
   lark: 'https://open.larksuite.com/app',
 } as const;
+// Internal apps list; the robot is a capability added to an internal app.
+export const DINGTALK_CONSOLE_URL = 'https://open-dev.dingtalk.com/fe/app#/corp/app';
 export const QQ_BOT_CONSOLE_URL = 'https://q.qq.com/qqbot/';
 /** WeCom admin console; AI bots live under 智能专区 → 智能机器人. */
 export const WECOM_ADMIN_CONSOLE_URL = 'https://work.weixin.qq.com/wework_admin/frame';
