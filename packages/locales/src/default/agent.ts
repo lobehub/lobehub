@@ -91,10 +91,10 @@ export default {
     'In the admin console, go to Smart Zone → AI Bots and click Create, or open Workbench → AI Bots in the WeCom app. Choose to create it in API mode.',
   'channel.quickSetup.wecom.connection.title': 'Choose long connection and set the visible range',
   'channel.quickSetup.wecom.connection.desc':
-    'On the API settings page, set the connection method to Use long connection, then set the visible range: only members in it can find and use the bot. Leave the rest as is and save.',
+    'On the API settings page, set the connection method to Use long connection, then set the visible range: only members in it can find and use the bot. Leave the rest as is.',
   'channel.quickSetup.wecom.credentials.title': 'Copy the BotID and Secret',
   'channel.quickSetup.wecom.credentials.desc':
-    'Once the settings are saved, the page shows the BotID and Secret. Paste them below.',
+    'The page generates the BotID and Secret. Copy them into the fields below and keep the Secret somewhere safe before you save the bot settings.',
   'channel.quickSetup.wecom.usage.title': 'Use it in direct and group chats',
   'channel.quickSetup.wecom.usage.desc':
     "Members in the visible range find the bot under AI Bots in WeCom Contacts and can chat with it directly. To use it in a group, add it to an internal group from the top-right corner → Add members → AI Bots; there it replies only when @-mentioned. External and cross-company groups aren't supported.",
