@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { canReadLocalFileReferences } from './useLocalPathReference';
+import { canReadLocalFileReferences, canRuntimeReachLocalMachine } from './useLocalPathReference';
 
 const base = {
   isHeterogeneous: false,
@@ -39,5 +39,23 @@ describe('canReadLocalFileReferences', () => {
         toolMode: 'chat',
       }),
     ).toBe(true);
+  });
+});
+
+describe('canRuntimeReachLocalMachine', () => {
+  it('uploads instead of referencing a path when a server-run agent has no device gateway', () => {
+    expect(canRuntimeReachLocalMachine({ gatewayConnected: false, runtime: 'gateway' })).toBe(
+      false,
+    );
+    expect(canRuntimeReachLocalMachine({ gatewayConnected: true, runtime: 'gateway' })).toBe(true);
+  });
+
+  it('lets in-process runs read the path whether or not the gateway is connected', () => {
+    expect(canRuntimeReachLocalMachine({ gatewayConnected: false, runtime: 'hetero' })).toBe(true);
+    expect(canRuntimeReachLocalMachine({ gatewayConnected: false, runtime: 'client' })).toBe(true);
+  });
+
+  it('uploads when the runtime cannot be resolved', () => {
+    expect(canRuntimeReachLocalMachine({ gatewayConnected: true, runtime: undefined })).toBe(false);
   });
 });
