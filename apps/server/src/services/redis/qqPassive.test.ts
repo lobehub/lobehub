@@ -49,14 +49,32 @@ describe('qqPassive pending replies', () => {
     await expect(qqPassive.takePending(KEY)).resolves.toBeUndefined();
   });
 
-  it('prefers the Redis copy and drops the stale local one', async () => {
+  it('sends the newer local reply first and keeps the older Redis one', async () => {
     mockedGetClient.mockResolvedValue(null as any);
-    await qqPassive.savePending(KEY, 'stale local copy');
+    await qqPassive.savePending(KEY, 'reply parked during the outage');
 
-    mockedGetClient.mockResolvedValue(createRedis('newer reply from another instance') as any);
+    const redis = createRedis('reply parked before the outage');
+    mockedGetClient.mockResolvedValue(redis as any);
 
-    await expect(qqPassive.takePending(KEY)).resolves.toBe('newer reply from another instance');
+    // The local copy was written later, so it goes out first and the older one is handed back.
+    await expect(qqPassive.takePending(KEY)).resolves.toBe('reply parked during the outage');
+    expect(redis.store.get('pending')).toBe('reply parked before the outage');
+    await expect(qqPassive.takePending(KEY)).resolves.toBe('reply parked before the outage');
     await expect(qqPassive.takePending(KEY)).resolves.toBeUndefined();
+  });
+
+  it('keeps a newer local reply when an older claimed one is restored', async () => {
+    mockedGetClient.mockResolvedValue(null as any);
+    await qqPassive.savePending(KEY, 'reply parked during the outage');
+
+    const redis = createRedis();
+    mockedGetClient.mockResolvedValue(redis as any);
+    await qqPassive.restorePending(KEY, 'claimed before the outage');
+
+    // Redis holds the restored copy, but the newer local reply must still go out first.
+    expect(redis.store.get('pending')).toBe('claimed before the outage');
+    await expect(qqPassive.takePending(KEY)).resolves.toBe('reply parked during the outage');
+    await expect(qqPassive.takePending(KEY)).resolves.toBe('claimed before the outage');
   });
 
   it('drops the local copy once Redis accepts the same reply', async () => {

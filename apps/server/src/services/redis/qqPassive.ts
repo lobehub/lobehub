@@ -222,15 +222,28 @@ export const qqPassive: QQPassiveStore = {
     try {
       const text = await redis.eval(PENDING_TAKE_SCRIPT, 1, RedisKeys.qqPassive.pending(key));
 
-      if (typeof text === 'string' && text) {
-        local.dropPending(key);
+      // `savePending()` parks here only while this instance cannot reach Redis, so a copy found
+      // here is a reply Redis never took — written after whatever Redis still holds, since a
+      // write that reaches Redis always clears this slot. It has to be sent, and the older Redis
+      // one kept for the next flush rather than dropped with it.
+      const localText = await local.takePending(key);
+      const redisText = typeof text === 'string' && text ? text : undefined;
 
-        return text;
+      if (!localText) return redisText;
+      if (!redisText || redisText === localText) return localText;
+
+      // The take script already removed the older reply, so put it back: newest first, and
+      // neither answer is lost.
+      try {
+        await redis.set(RedisKeys.qqPassive.pending(key), redisText, {
+          ex: PENDING_TTL_SECONDS,
+          nx: true,
+        });
+      } catch {
+        await local.restorePending(key, redisText);
       }
 
-      // An empty read can also mean Redis just recovered: drain the reply this instance parked
-      // while it was down instead of leaving it stranded for the key's whole TTL.
-      return local.takePending(key);
+      return localText;
     } catch {
       return local.takePending(key);
     }
@@ -249,7 +262,8 @@ export const qqPassive: QQPassiveStore = {
         ex: PENDING_TTL_SECONDS,
         nx: true,
       });
-      local.dropPending(key);
+      // The local slot is deliberately left alone: it only ever holds a reply Redis never took,
+      // written after this one was claimed, so dropping it here would delete the newest answer.
     } catch {
       await local.restorePending(key, text);
     }
