@@ -2081,7 +2081,7 @@
   "storage.actions.export.exportType.allAgentWithMessage": "导出所有助理和消息",
   "storage.actions.export.exportType.globalSetting": "导出全局设置",
   "storage.actions.export.exporting": "导出中…",
-  "storage.actions.export.exportingDesc": "正在准备数据，数据较多时可能需要几分钟，开始下载前请保持页面打开。",
+  "storage.actions.export.exportingDesc": "正在准备数据，数据较多时可能需要几分钟。",
   "storage.actions.export.success": "导出完成",
   "storage.actions.export.title": "导出数据",
   "storage.actions.import.button": "导入",

@@ -1974,7 +1974,7 @@ When I am ___, I need ___
   'storage.actions.export.error': 'Export failed. Please try again later.',
   'storage.actions.export.exporting': 'Exporting…',
   'storage.actions.export.exportingDesc':
-    'Preparing your data. This can take a few minutes for large accounts; keep this page open until the download starts.',
+    'Preparing your data. This may take a few minutes for large accounts.',
   'storage.actions.export.exportType.agent': 'Export Agent Settings',
   'storage.actions.export.exportType.agentWithMessage': 'Export Agent and Messages',
   'storage.actions.export.exportType.all': 'Export Global Settings and All Agent Data',
