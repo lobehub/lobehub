@@ -45,7 +45,7 @@ tags:
 | `agent_deferred_hetero_dispatch` | 普通聊天发给在线设备上的异构助理（Claude Code、Codex 等）时，不等设备接收任务就立即返回；派发在响应后执行，失败会显示在助理消息上。                                              | 关闭  |
 | `dashboard`                      | 看板：首页与项目看板页面、监控组件侧边栏、对话内的组件预览，以及用于搭建监控组件的 `builtin-dashboard` 助理工具。关闭时以上入口均隐藏，组件与看板相关接口返回 FORBIDDEN；已发布的组件仍按计划刷新。       | 关闭  |
 | `mcp_apps`                       | MCP Apps：MCP 服务器为工具结果声明了交互页面（`ui://`）时，在对话中渲染该页面（服务器提供的 HTML，运行在沙箱 iframe 中）。关闭时按普通工具结果显示，服务端也不再向 MCP 服务器声明支持 MCP Apps。 | 关闭  |
-| `mcp_events`                     | MCP Events：让 Agent 订阅远程连接器事件，并在原 Topic 中运行。创建订阅需每次审批；每次事件触发会消耗额度。需公网 HTTPS 回调地址、密钥加密配置与支持 webhook 事件的已认证 MCP 服务器。       | 关闭  |
+| `webhook`                        | MCP Events：让 Agent 订阅远程连接器事件，并在原 Topic 中运行。创建订阅遵循用户的工具审批设置；每次事件触发会消耗额度。需公网 HTTPS 回调地址、密钥加密配置与支持 webhook 事件的已认证 MCP 服务器。 | 关闭  |
 | `edit_agent`                     | 允许用户编辑助手。                                                                                                               | 开启  |
 | `ai_image`                       | 控制 AI 图像生成功能和页面 (/image)。                                                                                               | 开启  |
 | `speech_to_text`                 | 启用语音转文本功能。                                                                                                              | 开启  |
@@ -86,12 +86,12 @@ tags:
 
 ## MCP Events：部署前提
 
-`mcp_events` 默认关闭。启用前：
+`webhook` 默认关闭。启用前：
 
 1. 将 `APP_URL` 设置为 MCP 服务器能访问的公网 HTTPS 地址。localhost、私有域名和 IP 字面量不支持。
 2. 配置 `KEY_VAULTS_SECRET`，用于加密 webhook 签名密钥。按[环境变量说明](/docs/self-hosting/platform/docker)生成密钥，并在部署更新时保留它。
 3. 配置 QStash，确保续订、退订重试和积压事件恢复有定时触发。Docker 启动器每五分钟注册一次 sweep；其他部署需自行配置定时任务。没有 QStash 时，这些维护依赖应用请求触发，执行时机没有保证。
-4. 设置 `FEATURE_FLAGS="+mcp_events"` 并重启应用。连接已认证、支持 SEP-3415 webhook 事件的远程 HTTP MCP 服务器，然后刷新连接器工具。
+4. 设置 `FEATURE_FLAGS="+webhook"` 并重启应用。连接已认证、支持 SEP-3415 webhook 事件的远程 HTTP MCP 服务器，然后刷新连接器工具。
 
 在对话里请求订阅事件并批准后，打开设置 → 自动化，确认状态为生效中，再从上游触发一次事件，确认原 Topic 收到事件与 Agent 回复。永不过期订阅不做定时健康检查；投递中断时，在自动化列表点击「检查」恢复投递。
 

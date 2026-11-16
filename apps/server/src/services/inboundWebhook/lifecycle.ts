@@ -4,7 +4,7 @@ import type { InboundWebhookQuery, InboundWebhookView } from '@/database/models/
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
+import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 
 import { getInboundWebhookKind } from './kinds';
 import { maintenanceBackoff } from './kinds/mcpEvents/subscription';
@@ -70,7 +70,7 @@ export async function refreshByConnector(
   scope: { userId: string; workspaceId?: string },
   connectorId: string,
 ) {
-  const eventsEnabledFor = memoize(isMcpEventsEnabled);
+  const eventsEnabledFor = memoize(isWebhookEnabled);
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
   const rows = await new InboundWebhookModel(db, scope.userId, scope.workspaceId).query({
     connectorId,

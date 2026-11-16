@@ -31,7 +31,9 @@ const boundary = vi.hoisted(() => ({
     decrypt: async (s: string) => ({ plaintext: s.slice(7) }),
   },
 }));
-vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpEventsEnabled: boundary.enabled }));
+vi.mock('@/server/services/inboundWebhook/featureGate', () => ({
+  isWebhookEnabled: boundary.enabled,
+}));
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: async () => db }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => boundary.gate },

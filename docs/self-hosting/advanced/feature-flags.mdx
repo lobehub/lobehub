@@ -47,7 +47,7 @@ You can achieve various feature combinations using the above configuration synta
 | `agent_deferred_hetero_dispatch` | Returns a plain chat send to a heterogeneous agent (Claude Code, Codex, …) on an online device before the device accepts the run; the dispatch runs after the response, and a failure is shown on the assistant message.                                                                                      | Disabled      |
 | `dashboard`                      | Dashboards: the home and project dashboard pages, the widget Portal, in-chat widget previews and the `builtin-dashboard` agent tool that builds monitoring widgets. When off, these are hidden and the widget / dashboard APIs return FORBIDDEN; widgets already published keep refreshing on their schedule. | Disabled      |
 | `mcp_apps`                       | MCP Apps: a tool result whose MCP server declares an interactive `ui://` view renders that view (the server's HTML, in a sandboxed iframe) in the conversation. When off, such results render as plain tool results and the server does not announce MCP Apps support to MCP servers.                         | Disabled      |
-| `mcp_events`                     | MCP Events: lets an Agent subscribe to remote connector events and run in the original Topic. Each subscription requires approval; each event run uses credits. Requires a public HTTPS callback, secret encryption, and an authenticated MCP server offering webhook events.                                 | Disabled      |
+| `webhook`                        | MCP Events: lets an Agent subscribe to remote connector events and run in the original Topic. Subscribing follows the user's tool approval settings; each event run uses credits. Requires a public HTTPS callback, secret encryption, and an authenticated MCP server offering webhook events.               | Disabled      |
 | `edit_agent`                     | Allows users to edit assistants.                                                                                                                                                                                                                                                                              | Enabled       |
 | `ai_image`                       | Controls AI image generation feature and page (/image).                                                                                                                                                                                                                                                       | Enabled       |
 | `speech_to_text`                 | Enables speech-to-text functionality.                                                                                                                                                                                                                                                                         | Enabled       |
@@ -88,12 +88,12 @@ You can always check the [featureFlags](https://github.com/lobehub/lobehub/blob/
 
 ## MCP Events: Deployment Requirements
 
-`mcp_events` is off by default. Before enabling it:
+`webhook` is off by default. Before enabling it:
 
 1. Set `APP_URL` to a public HTTPS address the MCP server can reach. Localhost, private hostnames and IP-literal addresses are unsupported.
 2. Configure `KEY_VAULTS_SECRET` to encrypt webhook signing secrets. Generate it using the [server environment variable guide](/docs/self-hosting/platform/docker), and preserve it across deployment updates.
 3. Configure QStash for scheduled renewal, unsubscribe retries and pending-event recovery. The Docker launcher registers a sweep every five minutes; other deployments need their own schedule. Without QStash, maintenance depends on application requests and has no guaranteed timing.
-4. Set `FEATURE_FLAGS="+mcp_events"` and restart. Connect an authenticated remote HTTP MCP server offering SEP-3415 webhook events, then refresh its connector tools.
+4. Set `FEATURE_FLAGS="+webhook"` and restart. Connect an authenticated remote HTTP MCP server offering SEP-3415 webhook events, then refresh its connector tools.
 
 Ask the Agent to subscribe in a conversation and approve it. Open Settings → Automations and confirm the subscription is active. Trigger an upstream event and confirm an event message and Agent reply appear in the original Topic. No-expiry subscriptions have no scheduled health check; use **Check** in Automations to restore interrupted delivery.
 

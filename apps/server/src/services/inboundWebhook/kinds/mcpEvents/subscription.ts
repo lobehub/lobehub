@@ -9,8 +9,8 @@ import type { McpSubscribeEventParams, McpSubscribeEventResult } from '@/libs/mc
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { buildConnectorMcpParams } from '@/server/services/connector/sync';
 import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
+import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 import { mcpService } from '@/server/services/mcp';
-import { isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
 
 import type { InboundWebhookContext } from '../types';
 import { isMcpAuthError } from './errors';
@@ -90,7 +90,7 @@ export async function applySubscriptionResult(
 }
 
 export async function refreshSubscription(ctx: InboundWebhookContext): Promise<void> {
-  if (!(ctx.featureEnabled ?? (await isMcpEventsEnabled(ctx.row.userId)))) return;
+  if (!(ctx.featureEnabled ?? (await isWebhookEnabled(ctx.row.userId)))) return;
   const { connector, connectorModel } = await connectorForWebhook(ctx);
   if (!connector.isEnabled) {
     // Preserve the remote subscription while disabled; finite subscriptions resume via the sweep.

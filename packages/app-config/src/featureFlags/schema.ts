@@ -90,7 +90,13 @@ export const FeatureFlagsSchema = z.object({
    * tool results. Array values are user ids.
    */
   mcp_apps: FeatureFlagValue.optional(),
-  mcp_events: FeatureFlagValue.optional(),
+
+  /**
+   * Inbound webhooks wake Agents: MCP Events subscriptions and the Settings → Automations list.
+   * Off: deliveries are still verified, stored and acknowledged, but run nothing, and the
+   * subscription tools and Automations entry are hidden. Array values are user ids.
+   */
+  webhook: FeatureFlagValue.optional(),
 
   /**
    * Rollout gate for moving an agent's documents into its dedicated knowledge
@@ -219,7 +225,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
 
   // Off until an admin publishes a user allowlist or flips it to true.
   mcp_apps: false,
-  mcp_events: false,
+  webhook: false,
   agent_knowledge_space: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
@@ -285,7 +291,7 @@ export const mapFeatureFlagsEnvToState = (
     ),
     enableDashboard: evaluateFeatureFlag(config.dashboard, userId, 'dashboard'),
     enableMcpApps: evaluateFeatureFlag(config.mcp_apps, userId, 'mcp_apps'),
-    enableMcpEvents: evaluateFeatureFlag(config.mcp_events, userId, 'mcp_events'),
+    enableWebhook: evaluateFeatureFlag(config.webhook, userId, 'webhook'),
     enableAgentKnowledgeSpace: evaluateFeatureFlag(
       config.agent_knowledge_space,
       userId,

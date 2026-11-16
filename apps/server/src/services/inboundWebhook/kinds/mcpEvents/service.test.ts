@@ -106,7 +106,9 @@ vi.mock('@/server/services/connector/sync', () => ({
   }),
 }));
 vi.mock('@/server/services/connector/tokens', () => ({ ensureFreshConnectorToken: mocks.fresh }));
-vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpEventsEnabled: mocks.enabled }));
+vi.mock('@/server/services/inboundWebhook/featureGate', () => ({
+  isWebhookEnabled: mocks.enabled,
+}));
 vi.mock('@/server/services/mcp', () => ({
   mcpService: {
     getEventsCapability: mocks.capability,

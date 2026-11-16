@@ -6,7 +6,7 @@ import { InboundWebhookModel } from '@/database/models/inboundWebhook';
 import { signals } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
+import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 import { redisService } from '@/server/services/redis';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
@@ -25,7 +25,7 @@ const MAINTENANCE_SCAN_LIMIT = 1000;
  * same skipped rows would fill every batch and starve the ones behind them.
  */
 async function dueForMaintenance(db: LobeChatDatabase) {
-  const eventsEnabledFor = memoize(isMcpEventsEnabled);
+  const eventsEnabledFor = memoize(isWebhookEnabled);
   const actionable: Awaited<ReturnType<typeof InboundWebhookModel.queryMaintenance>> = [];
   let after: { id: string; nextMaintenanceAt: Date } | undefined;
   for (let scanned = 0; scanned < MAINTENANCE_SCAN_LIMIT;) {

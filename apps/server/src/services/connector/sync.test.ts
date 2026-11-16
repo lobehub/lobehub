@@ -19,10 +19,10 @@ const gateway = vi.hoisted(() => ({ isConfigured: false }));
 vi.mock('@/server/services/deviceGateway', () => ({ deviceGateway: gateway }));
 vi.mock('@/server/services/mcp/deviceTunnel', () => ({ listMcpToolsOnDevice: vi.fn() }));
 const mcpAppsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
-const mcpEventsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
-vi.mock('@/server/services/mcp/featureGate', () => ({
-  isMcpAppsEnabled: mcpAppsEnabled,
-  isMcpEventsEnabled: mcpEventsEnabled,
+const webhookEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
+vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mcpAppsEnabled }));
+vi.mock('@/server/services/inboundWebhook/featureGate', () => ({
+  isWebhookEnabled: webhookEnabled,
 }));
 vi.mock('./tokens', () => ({ ensureFreshConnectorToken: async (connector: unknown) => connector }));
 
@@ -373,7 +373,7 @@ describe('syncConnectorToolsById', () => {
 
 describe('events capability synchronization', () => {
   it('persists server support without losing connector metadata', async () => {
-    mcpEventsEnabled.mockResolvedValueOnce(true);
+    webhookEnabled.mockResolvedValueOnce(true);
     vi.mocked(mcpService.listRawTools).mockResolvedValue([]);
     vi.mocked(mcpService.getEventsCapability).mockResolvedValue({ supported: true });
     const update = vi.fn();
@@ -393,7 +393,7 @@ describe('events capability synchronization', () => {
 
   it('marks a connector that runs through a device as without events, without asking it', async () => {
     gateway.isConfigured = true;
-    mcpEventsEnabled.mockResolvedValueOnce(true);
+    webhookEnabled.mockResolvedValueOnce(true);
     vi.mocked(listMcpToolsOnDevice).mockResolvedValue([]);
     vi.mocked(mcpService.getEventsCapability).mockClear();
     vi.mocked(mcpService.listRawTools).mockClear();

@@ -162,12 +162,12 @@ describe('settings useCategory', () => {
 });
 
 describe('settings useCategory automations', () => {
-  const connectionKeys = (enableMcpEvents: boolean) => {
+  const connectionKeys = (enableWebhook: boolean) => {
     const Wrapper = ({ children }: { children: ReactNode }) => (
       <Provider
         createStore={() =>
           initServerConfigStore({
-            featureFlags: { ...mapFeatureFlagsEnvToState({}), enableMcpEvents },
+            featureFlags: { ...mapFeatureFlagsEnvToState({}), enableWebhook },
             serverConfig: { aiProvider: {}, telemetry: {} },
           })
         }
@@ -182,7 +182,7 @@ describe('settings useCategory automations', () => {
       ?.items.map((item) => item.key);
   };
 
-  // Unreleased: the tab follows the `mcp_events` flag (LOBE-UX-015).
+  // Unreleased: the tab follows the `webhook` flag (LOBE-UX-015).
   it('hides Automations while MCP Events is off', () => {
     expect(connectionKeys(false)).not.toContain(SettingsTabs.Automations);
   });

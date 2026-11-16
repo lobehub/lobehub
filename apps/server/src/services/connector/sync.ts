@@ -22,9 +22,10 @@ import {
 import type { AuthConfig, McpTool } from '@/libs/mcp';
 import { inferCrudType } from '@/libs/mcp/utils';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 import { mcpService } from '@/server/services/mcp';
 import { listMcpToolsOnDevice } from '@/server/services/mcp/deviceTunnel';
-import { isMcpAppsEnabled, isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { ensureFreshConnectorToken } from './tokens';
 
@@ -213,7 +214,7 @@ export const syncConnectorToolsById = async (
 
   const mcpOptions = {
     mcpApps: await isMcpAppsEnabled(ctx.userId),
-    mcpEvents: await isMcpEventsEnabled(ctx.userId),
+    mcpEvents: await isWebhookEnabled(ctx.userId),
   };
   let rawTools: Awaited<ReturnType<typeof mcpService.listRawTools>>;
   try {

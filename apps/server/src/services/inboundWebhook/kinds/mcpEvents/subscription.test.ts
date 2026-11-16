@@ -29,7 +29,9 @@ vi.mock('@/database/models/connector', () => ({
   },
 }));
 vi.mock('@/envs/app', () => ({ appEnv: { APP_URL: 'https://lobehub.example.com' } }));
-vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpEventsEnabled: mocks.enabled }));
+vi.mock('@/server/services/inboundWebhook/featureGate', () => ({
+  isWebhookEnabled: mocks.enabled,
+}));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => ({}) },
 }));

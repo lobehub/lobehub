@@ -14,8 +14,8 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { resolveForegroundInterventionConfig } from '@/server/services/aiAgent/foregroundIntervention';
 import { buildConnectorMcpParams } from '@/server/services/connector/sync';
 import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
+import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 import { mcpService } from '@/server/services/mcp';
-import { isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
 
 import { getInboundWebhookKind } from './kinds';
 import { connectorForWebhook, refreshSubscription } from './kinds/mcpEvents/subscription';
@@ -133,7 +133,7 @@ export async function wakeInboundWebhook(
     operationId?: string,
   ) => settleWebhookSignals(db, claim, batch, status, reason, operationId);
   try {
-    if (row.kind === 'mcp_events' && !(await isMcpEventsEnabled(row.userId))) {
+    if (row.kind === 'mcp_events' && !(await isWebhookEnabled(row.userId))) {
       await settle('ignored', 'feature_disabled');
       return { outcome: 'ignored' };
     }

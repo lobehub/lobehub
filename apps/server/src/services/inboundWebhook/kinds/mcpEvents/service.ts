@@ -25,8 +25,8 @@ import { appEnv } from '@/envs/app';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { buildConnectorMcpParams } from '@/server/services/connector/sync';
 import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
+import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 import { mcpService } from '@/server/services/mcp';
-import { isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
 import { isPublicHttpsUrl } from '@/server/utils/publicHttpsUrl';
 
 import { removeInboundWebhook } from '../../lifecycle';
@@ -43,7 +43,7 @@ export class McpEventsService {
   ) {}
 
   private async context(agentId: string, topicId?: string) {
-    if (!(await isMcpEventsEnabled(this.userId)))
+    if (!(await isWebhookEnabled(this.userId)))
       throw new McpEventsServiceError('feature_disabled', 'MCP Events is disabled.');
     if (!(await new AgentModel(this.db, this.userId, this.workspaceId).existsById(agentId)))
       throw new McpEventsServiceError('forbidden', 'This agent is not available.');

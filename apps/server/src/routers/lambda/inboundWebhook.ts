@@ -11,11 +11,11 @@ import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 import { inboundWebhookItems } from '@/server/services/inboundWebhook/items';
 import { getInboundWebhookKind } from '@/server/services/inboundWebhook/kinds';
 import { removeInboundWebhook } from '@/server/services/inboundWebhook/lifecycle';
 import { scheduleInboundWebhookSweep } from '@/server/services/inboundWebhook/sweep';
-import { isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
 import { redisService } from '@/server/services/redis';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
@@ -39,7 +39,7 @@ export const inboundWebhookRouter = router({
       if (!row || row.status === 'pending' || row.status === 'deleting')
         throw new TRPCError({ code: 'NOT_FOUND' });
       assertWorkspaceRowManageable(ctx, row.userId, 'webhook', { allowAdmin: true });
-      if (row.kind === 'mcp_events' && !(await isMcpEventsEnabled(row.userId)))
+      if (row.kind === 'mcp_events' && !(await isWebhookEnabled(row.userId)))
         throw new TRPCError({
           code: 'FORBIDDEN',
           message: 'MCP Events is disabled for this subscription owner.',
@@ -87,7 +87,13 @@ export const inboundWebhookRouter = router({
         });
       return { success: true };
     }),
-  list: procedure.query(async ({ ctx }): Promise<InboundWebhookItem[]> =>
-    inboundWebhookItems(ctx.serverDB, await ctx.webhookModel.query(), ctx),
-  ),
+  list: procedure
+    .input(z.object({ agentId: z.string().min(1).optional() }).optional())
+    .query(async ({ ctx, input }): Promise<InboundWebhookItem[]> =>
+      inboundWebhookItems(
+        ctx.serverDB,
+        await ctx.webhookModel.query({ agentId: input?.agentId }),
+        ctx,
+      ),
+    ),
 });
