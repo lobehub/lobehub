@@ -4,11 +4,11 @@ import { McpEventsManifest } from './manifest';
 import { McpEventsApiName } from './types';
 
 describe('MCP Events approval policy', () => {
-  it('always requires approval before creating a recurring agent trigger', () => {
+  it('asks for approval before subscribing, unless the user lets tools run without asking', () => {
     expect(
       McpEventsManifest.api.find((api) => api.name === McpEventsApiName.subscribeEvent)
         ?.humanIntervention,
-    ).toBe('always');
+    ).toBe('required');
     expect(
       McpEventsManifest.api
         .filter((api) => api.name !== McpEventsApiName.subscribeEvent)
