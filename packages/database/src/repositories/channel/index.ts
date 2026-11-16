@@ -36,7 +36,7 @@ import { findThread } from './delivery';
 import { editMessage } from './edit';
 import { ChannelError } from './error';
 import { setMemberMuted } from './mute';
-import { lockPeerPair, peerOf, requireMutualContacts } from './peer';
+import { lockPeerPair, peerOf, requirePeerRelation } from './peer';
 import {
   addChannelUser,
   channelUserCandidates,
@@ -769,25 +769,30 @@ export class ChannelRepository {
   };
 
   /**
-   * The caller's personal conversation with a contact, opened by either of them. Requires the
-   * mutual contact relation; an existing conversation opens as it is, trashed or not.
+   * The caller's one-on-one conversation with another person in this scope, opened by either of
+   * them: with a mutual contact in the personal space, with a fellow member in a workspace. An
+   * existing conversation opens as it is, trashed or not.
    */
   openPeer = (peerUserId: string, title: string): Promise<ChannelAccess> =>
     this.db.transaction(async (tx) => {
-      if (this.workspaceId)
-        throw new ChannelError('BAD_REQUEST', 'A conversation between people is personal');
       if (peerUserId === this.userId)
         throw new ChannelError('BAD_REQUEST', 'You cannot message yourself');
-      await requireMutualContacts(tx, this.userId, peerUserId);
+      await requirePeerRelation(tx, this.workspaceId, this.userId, peerUserId);
       // No unique index keeps one conversation per pair: serialize opening it, so two people
       // opening it at once (or one twice) find the first one instead of creating a second.
-      await lockPeerPair(tx, this.userId, peerUserId);
+      await lockPeerPair(tx, this.workspaceId, this.userId, peerUserId);
       const existing = await this.findPeer(tx, peerUserId);
       if (existing) return existing;
 
       const [channel] = await tx
         .insert(channels)
-        .values({ peerUserId, title, userId: this.userId, visibility: 'private' })
+        .values({
+          peerUserId,
+          title,
+          userId: this.userId,
+          visibility: 'private',
+          workspaceId: this.workspaceId,
+        })
         .returning();
       const member = await this.addOwner(tx, channel.id);
       await tx.insert(channelMembers).values({
@@ -809,9 +814,15 @@ export class ChannelRepository {
         and(eq(channelMembers.channelId, channels.id), eq(channelMembers.userId, this.userId)),
       )
       .where(
-        or(
-          and(eq(channels.userId, this.userId), eq(channels.peerUserId, peerUserId)),
-          and(eq(channels.userId, peerUserId), eq(channels.peerUserId, this.userId)),
+        and(
+          or(
+            and(eq(channels.userId, this.userId), eq(channels.peerUserId, peerUserId)),
+            and(eq(channels.userId, peerUserId), eq(channels.peerUserId, this.userId)),
+          ),
+          // One conversation per pair in each scope.
+          this.workspaceId
+            ? eq(channels.workspaceId, this.workspaceId)
+            : isNull(channels.workspaceId),
         ),
       )
       .limit(1);

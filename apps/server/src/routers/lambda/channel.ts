@@ -236,7 +236,10 @@ export const channelRouter = router({
       const access = await ctx.channelService.openShared(input.share);
       return { data: access?.channel.id ?? null, success: true };
     }),
-  /** The personal conversation with a contact; both people must still be contacts. */
+  /**
+   * The one-on-one conversation with another person: a mutual contact in the personal space, a
+   * fellow member in a workspace.
+   */
   openPeer: channelProcedure
     .input(z.object({ userId: z.string().min(1).max(64) }))
     .mutation(async ({ ctx, input }) => {

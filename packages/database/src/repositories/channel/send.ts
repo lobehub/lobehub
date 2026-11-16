@@ -18,7 +18,7 @@ import {
   pairedAgent,
 } from './delivery';
 import { ChannelError } from './error';
-import { peerOf, requireMutualContacts } from './peer';
+import { peerOf, requirePeerRelation } from './peer';
 import { audit } from './transaction';
 import type { ChannelAccess } from './types';
 import { createChannelThread } from './view';
@@ -158,9 +158,15 @@ export const sendMessage = async (
     return existing;
   }
 
-  // Removing a contact silences the conversation for both people; its history stays.
+  // Removing a contact, or either person leaving the workspace, silences the conversation for
+  // both people; its history stays.
   if (channel.peerUserId && member.userId)
-    await requireMutualContacts(tx, member.userId, peerOf(channel, member.userId)!);
+    await requirePeerRelation(
+      tx,
+      channel.workspaceId,
+      member.userId,
+      peerOf(channel, member.userId)!,
+    );
 
   if (fileIds.length && channel.agentId) {
     // Another person's shared Agent runs as its owner, who cannot read the sender's files.

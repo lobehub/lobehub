@@ -1,5 +1,5 @@
 /**
- * A person sent a message in a personal conversation between two contacts. Fired once per sent
+ * A person sent a message in a one-on-one conversation between two people. Fired once per sent
  * message; the caller has already resolved the recipient as the conversation's other person.
  */
 export interface NotifyChannelDirectMessageParams {
@@ -8,6 +8,8 @@ export interface NotifyChannelDirectMessageParams {
   messageId: string;
   /** The other person of the conversation. */
   recipientUserId: string;
+  /** The workspace the conversation is in; absent for the personal space. */
+  workspaceId?: string;
 }
 
 export const notifyChannelDirectMessage = (

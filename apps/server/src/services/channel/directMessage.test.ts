@@ -50,13 +50,17 @@ describe('notifyChannelDirectMessages', () => {
     );
   });
 
-  it('skips workspace Channels without reading the Channel', () => {
+  it('pings a fellow member in a workspace, naming the workspace', async () => {
     notifyChannelDirectMessages(
       dbReturning([conversation]),
       { userId: 'opener', workspaceId: 'workspace' },
       message,
     );
-    expect(after).not.toHaveBeenCalled();
+    await runScheduled();
+
+    expect(notifyChannelDirectMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ recipientUserId: 'peer', workspaceId: 'workspace' }),
+    );
   });
 
   it('skips personal Channels that are not between two people', async () => {

@@ -4,6 +4,7 @@ import type { ChannelItem } from '../../schemas';
 import { userContacts } from '../../schemas';
 import type { Transaction } from '../../type';
 import { ChannelError } from './error';
+import { requireWorkspaceMember } from './people';
 
 /**
  * A personal conversation between two people exists only between contacts. Opening one and
@@ -27,6 +28,22 @@ export const requireMutualContacts = async (
   if (rows.length < 2) throw new ChannelError('FORBIDDEN', 'You are not contacts');
 };
 
+/**
+ * What lets two people talk one-on-one in a scope: in the personal space they must be mutual
+ * contacts; in a workspace, both must still be its members. Checked on opening and on every send,
+ * so removing a contact or leaving the workspace silences the conversation and keeps its history.
+ */
+export const requirePeerRelation = async (
+  tx: Transaction,
+  workspaceId: string | null,
+  userId: string,
+  peerUserId: string,
+) => {
+  if (!workspaceId) return requireMutualContacts(tx, userId, peerUserId);
+  await requireWorkspaceMember(tx, workspaceId, userId);
+  await requireWorkspaceMember(tx, workspaceId, peerUserId);
+};
+
 /** The other person of a conversation between two people, relative to `viewerId`. */
 export const peerOf = (
   channel: Pick<ChannelItem, 'peerUserId' | 'userId'>,
@@ -36,8 +53,14 @@ export const peerOf = (
   return channel.userId === viewerId ? channel.peerUserId : channel.userId;
 };
 
-/** Transaction-scoped lock on the unordered pair, the same either way round. */
-export const lockPeerPair = async (tx: Transaction, userId: string, peerUserId: string) => {
+/** Transaction-scoped lock on the unordered pair in one scope, the same either way round. */
+export const lockPeerPair = async (
+  tx: Transaction,
+  workspaceId: string | null,
+  userId: string,
+  peerUserId: string,
+) => {
   const [a, b] = [userId, peerUserId].sort();
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`channel-peer:${a}:${b}`}))`);
+  const key = `channel-peer:${workspaceId ?? 'personal'}:${a}:${b}`;
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${key}))`);
 };

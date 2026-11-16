@@ -268,7 +268,8 @@ export class ChannelService {
   };
 
   /**
-   * The personal conversation with a contact. The stored title is the other person's name for
+   * The one-on-one conversation with a contact (personal space) or a fellow member (workspace).
+   * The stored title is the other person's name for
    * whoever opened it; clients title it with whoever the viewer is talking to.
    */
   openPeer = async (peerUserId: string) => {
