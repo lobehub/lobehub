@@ -14,18 +14,43 @@ import { getInboundWebhookKind } from './kinds';
 import { removeInboundWebhook } from './lifecycle';
 import { scheduleInboundWebhookWake } from './scheduler';
 
-export async function sweepInboundWebhooks(db: LobeChatDatabase) {
+/** Rows one sweep maintains at most. */
+const MAINTENANCE_BATCH = 100;
+/** Due rows one sweep may look at, skipped ones included, so a sweep stays bounded. */
+const MAINTENANCE_SCAN_LIMIT = 1000;
+
+/**
+ * Due rows this sweep can act on, earliest first. Rows whose owner switched the feature off are
+ * left untouched (the kill switch keeps their schedule), so the scan pages past them: otherwise the
+ * same skipped rows would fill every batch and starve the ones behind them.
+ */
+async function dueForMaintenance(db: LobeChatDatabase) {
   const eventsEnabledFor = memoize(isMcpEventsEnabled);
-  const rows = await InboundWebhookModel.queryMaintenance(db);
+  const actionable: Awaited<ReturnType<typeof InboundWebhookModel.queryMaintenance>> = [];
+  let after: { id: string; nextMaintenanceAt: Date } | undefined;
+  for (let scanned = 0; scanned < MAINTENANCE_SCAN_LIMIT;) {
+    const page = await InboundWebhookModel.queryMaintenance(db, MAINTENANCE_BATCH, after);
+    for (const row of page) {
+      const skipped =
+        row.status !== 'deleting' &&
+        row.kind === 'mcp_events' &&
+        !(await eventsEnabledFor(row.userId));
+      if (!skipped) actionable.push(row);
+      if (actionable.length === MAINTENANCE_BATCH) return actionable;
+    }
+    scanned += page.length;
+    const last = page.at(-1);
+    if (page.length < MAINTENANCE_BATCH || !last?.nextMaintenanceAt) break;
+    after = { id: last.id, nextMaintenanceAt: last.nextMaintenanceAt };
+  }
+  return actionable;
+}
+
+export async function sweepInboundWebhooks(db: LobeChatDatabase) {
+  const rows = await dueForMaintenance(db);
   const gateKeeper = rows.length ? await KeyVaultsGateKeeper.initWithEnvKey() : undefined;
   let maintained = 0;
   for (const row of rows) {
-    if (
-      row.status !== 'deleting' &&
-      row.kind === 'mcp_events' &&
-      !(await eventsEnabledFor(row.userId))
-    )
-      continue;
     if (!(await redisService.inboundWebhook.claimMaintenance(row.id))) continue;
     try {
       if (row.status === 'deleting') await removeInboundWebhook(db, row);

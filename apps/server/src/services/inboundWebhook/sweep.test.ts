@@ -161,6 +161,42 @@ describe('connector status after webhook maintenance authentication', () => {
     expect(await model.findById(a.id)).toMatchObject({ status: 'active', maintenanceFailures: 0 });
   });
 
+  it('reaches enabled owners behind a full batch of disabled-owner rows', async () => {
+    const otherUser = 'sweep-disabled-owner';
+    await db.insert(users).values({ id: otherUser });
+    await db.insert(agents).values({ id: `${agentId}-2`, userId: otherUser });
+    await db
+      .insert(topics)
+      .values({ agentId: `${agentId}-2`, id: `${topicId}-2`, userId: otherUser });
+    const otherModel = new InboundWebhookModel(db, otherUser, undefined, boundary.gateKeeper);
+    const early = new Date(Date.now() - 60_000);
+    const disabled = await Promise.all(
+      Array.from({ length: 120 }, () =>
+        otherModel.create({
+          agentId: `${agentId}-2`,
+          config: { arguments: {}, eventName: 'issue.created' },
+          kind: 'mcp_events',
+          nextMaintenanceAt: early,
+          secret: 'whsec_sweep',
+          status: 'active',
+          topicId: `${topicId}-2`,
+          verification: { scheme: 'standard_webhooks' },
+        }),
+      ),
+    );
+    const enabled = await seed({ nextMaintenanceAt: new Date(Date.now() - 1000) });
+    boundary.enabled.mockImplementation(async (owner: string) => owner === userId);
+    try {
+      await sweepInboundWebhooks(db);
+      expect(boundary.subscribe).toHaveBeenCalledTimes(1);
+      expect(await model.findById(enabled.id)).toMatchObject({ status: 'active' });
+      // The skipped rows keep their schedule untouched (the kill switch).
+      expect((await otherModel.findById(disabled[0].id))?.nextMaintenanceAt).toEqual(early);
+    } finally {
+      await db.delete(users).where(eq(users.id, otherUser));
+    }
+  });
+
   it('still retries remote teardown while the owner flag is disabled', async () => {
     const row = await seed({ status: 'deleting', nextMaintenanceAt: new Date(Date.now() - 1000) });
     boundary.enabled.mockResolvedValue(false);

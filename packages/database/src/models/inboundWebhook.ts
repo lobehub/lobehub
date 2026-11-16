@@ -11,7 +11,20 @@ import {
   InboundWebhookDataSchema,
   McpEventsWebhookStateSchema,
 } from '@lobechat/types';
-import { and, count, desc, eq, getTableColumns, inArray, lt, lte, ne, sql } from 'drizzle-orm';
+import {
+  and,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  gt,
+  inArray,
+  lt,
+  lte,
+  ne,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { z } from 'zod';
 
 import { inboundWebhooks, topics, users } from '../schemas';
@@ -353,9 +366,14 @@ export class InboundWebhookModel {
     return { row: toView(row), secret: (await resolvedGateKeeper.decrypt(row.secret)).plaintext };
   };
 
+  /**
+   * Rows due for maintenance, earliest first. `after` continues from the last row of a previous
+   * page, so a caller that skips rows can still reach the ones behind them.
+   */
   static queryMaintenance = async (
     db: LobeChatDatabase,
     limit = 100,
+    after?: { id: string; nextMaintenanceAt: Date },
   ): Promise<InboundWebhookView[]> => {
     const rows = await db
       .select(viewColumns)
@@ -364,9 +382,18 @@ export class InboundWebhookModel {
         and(
           lte(inboundWebhooks.nextMaintenanceAt, new Date()),
           inArray(inboundWebhooks.status, ['active', 'error', 'deleting']),
+          after
+            ? or(
+                gt(inboundWebhooks.nextMaintenanceAt, after.nextMaintenanceAt),
+                and(
+                  eq(inboundWebhooks.nextMaintenanceAt, after.nextMaintenanceAt),
+                  gt(inboundWebhooks.id, after.id),
+                ),
+              )
+            : undefined,
         ),
       )
-      .orderBy(inboundWebhooks.nextMaintenanceAt)
+      .orderBy(inboundWebhooks.nextMaintenanceAt, inboundWebhooks.id)
       .limit(limit);
     return rows.map(validateView);
   };
