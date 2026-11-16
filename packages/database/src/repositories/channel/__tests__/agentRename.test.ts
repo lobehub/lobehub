@@ -72,4 +72,21 @@ describe('renaming an Agent', () => {
     expect(await titleOf(channel.id)).toBe('My writer');
     expect(await memberNameOf(channel.id)).toBe('Scribe');
   });
+
+  it.each(['updateConfig', 'update'] as const)(
+    'ends on the name the Agent keeps when two renames through %s overlap',
+    async (method) => {
+      const { agent, channel } = await createDirect('Writer');
+      const model = new AgentModel(db, fixture.ownerId);
+
+      await Promise.all([
+        model[method](agent.id, { title: 'Editor' }),
+        model[method](agent.id, { title: 'Reviewer' }),
+      ]);
+
+      const [renamed] = await db.select().from(agents).where(eq(agents.id, agent.id));
+      expect(await titleOf(channel.id)).toBe(renamed.title);
+      expect(await memberNameOf(channel.id)).toBe(renamed.title);
+    },
+  );
 });

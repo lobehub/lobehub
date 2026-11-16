@@ -133,20 +133,29 @@ export const update = async (ctx: AgentModelContext, agentId: string, data: Part
   const sanitizedData = stripImmutableFields(apiSafeData);
   await assertNotAgentBuilderProtectedWrite(ctx, agentId, sanitizedData);
 
-  const renamed = sanitizedData.name !== undefined || sanitizedData.title !== undefined;
-  const before = renamed
-    ? await ctx.db.query.agents.findFirst({
-        columns: { name: true, slug: true, title: true },
-        where: and(eq(agents.id, agentId), ctx.ownership()),
-      })
-    : undefined;
+  return writeAgent(ctx, agentId, { ...sanitizedData, updatedAt: new Date() });
+};
 
-  const result = await ctx.db
-    .update(agents)
-    .set({ ...sanitizedData, updatedAt: new Date() })
-    .where(and(eq(agents.id, agentId), ctx.ownership()));
-  if (before) await followAgentRename(ctx.db, agentId, before, { ...before, ...sanitizedData });
-  return result;
+/**
+ * Write an Agent's columns. A rename also carries the new label into its Channels, under a row
+ * lock: overlapping renames would otherwise each read the same previous label, and the later
+ * one would match no copy, leaving them at the earlier name for good.
+ */
+const writeAgent = async (ctx: AgentModelContext, agentId: string, data: Partial<AgentItem>) => {
+  const where = and(eq(agents.id, agentId), ctx.ownership());
+  if (data.name === undefined && data.title === undefined)
+    return ctx.db.update(agents).set(data).where(where);
+
+  return ctx.db.transaction(async (tx) => {
+    const [before] = await tx
+      .select({ name: agents.name, slug: agents.slug, title: agents.title })
+      .from(agents)
+      .where(where)
+      .for('update');
+    const result = await tx.update(agents).set(data).where(where);
+    if (before) await followAgentRename(tx, agentId, before, { ...before, ...data });
+    return result;
+  });
 };
 
 /**
@@ -384,13 +393,7 @@ export const updateConfig = async (
   ) as Partial<typeof mergedValue>;
   if (!Object.values(updateData).some((value) => value !== undefined)) return;
 
-  const result = await ctx.db
-    .update(agents)
-    .set(updateData)
-    .where(and(eq(agents.id, agentId), ctx.ownership()));
-  if (touchedColumns.has('name') || touchedColumns.has('title'))
-    await followAgentRename(ctx.db, agentId, agent, mergedValue);
-  return result;
+  return writeAgent(ctx, agentId, updateData);
 };
 
 /**
