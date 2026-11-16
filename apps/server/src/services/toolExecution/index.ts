@@ -320,7 +320,7 @@ export class ToolExecutionService {
       mcpParams.type,
     );
 
-    let isDeviceOnlyMcp = isDeviceOnlyMcpEndpoint(mcpParams);
+    const isDeviceOnlyMcp = isDeviceOnlyMcpEndpoint(mcpParams);
 
     // Agent Share visitor runs execute with the CREATOR's identity, so a
     // device-only MCP would access the creator's device or private network
@@ -397,7 +397,6 @@ export class ToolExecutionService {
         payload = { ...payload, arguments: args };
         linkName = resolved.linkName;
         mcpParams = buildConnectorMcpParams(resolved.connector);
-        isDeviceOnlyMcp = isDeviceOnlyMcpEndpoint(mcpParams);
       }
       // Check if this is a cloud MCP endpoint
       if (mcpParams.type === 'cloud') {
