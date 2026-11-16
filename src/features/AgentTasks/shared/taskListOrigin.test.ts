@@ -43,4 +43,22 @@ describe('resolveTaskListCrumbTarget', () => {
   it('does not treat a longer path as the list', () => {
     expect(resolveTaskListCrumbTarget('/tasks/archive?x=1', '/tasks', null)).toBe('/tasks');
   });
+
+  it('never leads off the app, whatever the history state holds', () => {
+    for (const origin of [
+      '//evil.example/tasks?collection=mine',
+      '/\\evil.example/tasks',
+      'https://evil.example/tasks',
+      'javascript:alert(1)//tasks',
+      '/tasks/../\\evil.example/tasks',
+    ]) {
+      expect(resolveTaskListCrumbTarget(origin, '/tasks', null)).toBe('/tasks');
+    }
+  });
+
+  it('keeps the hash along with the filters', () => {
+    expect(resolveTaskListCrumbTarget('/tasks?collection=mine#top', '/tasks', null)).toBe(
+      '/tasks?collection=mine#top',
+    );
+  });
 });

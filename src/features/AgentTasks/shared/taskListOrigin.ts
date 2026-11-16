@@ -22,7 +22,7 @@ export const TaskListOriginContext = createContext<string | undefined>(undefined
 const readOriginFromState = (state: unknown): string | undefined => {
   if (!state || typeof state !== 'object') return undefined;
   const origin = (state as Partial<TaskListOriginState>).taskListOrigin;
-  return typeof origin === 'string' && origin.startsWith('/') ? origin : undefined;
+  return typeof origin === 'string' ? origin : undefined;
 };
 
 /** The source list URL: the list page's own URL inside a list, else the one carried in history. */
@@ -41,22 +41,35 @@ export const useTaskListOriginState = (): TaskListOriginState | undefined => {
   return useMemo(() => (origin ? { taskListOrigin: origin } : undefined), [origin]);
 };
 
-const originPathname = (origin: string): string => {
-  const end = origin.search(/[?#]/);
-  return end === -1 ? origin : origin.slice(0, end);
-};
+// A fixed base only for parsing: the origin is an in-app path, never a full URL.
+const PARSE_BASE = 'https://task-list-origin.invalid';
 
 /**
  * Where a crumb for `listPath` should lead: the carried origin when it is that
  * very list (so its filters survive), otherwise the bare `listPath`.
+ *
+ * History state is page-writable, so the origin is parsed rather than prefix
+ * matched: anything that resolves off the parse base (`//host/…`, `/\host/…`,
+ * `https://…`) or to another path falls back, and the returned target is
+ * rebuilt from the parsed path, query and hash only.
  */
 export const resolveTaskListCrumbTarget = (
   origin: string | undefined,
   listPath: string,
   slug: string | null | undefined,
 ): string => {
-  if (!origin) return listPath;
-  return originPathname(origin) === buildWorkspaceAwarePath(listPath, slug) ? origin : listPath;
+  if (!origin?.startsWith('/')) return listPath;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(origin, PARSE_BASE);
+  } catch {
+    return listPath;
+  }
+  if (parsed.origin !== PARSE_BASE) return listPath;
+  if (parsed.pathname !== buildWorkspaceAwarePath(listPath, slug)) return listPath;
+
+  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 };
 
 export interface TaskListCrumbTarget {
