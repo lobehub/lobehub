@@ -1,4 +1,4 @@
-import type { CustomPluginParams, ToolManifest } from '@lobechat/types';
+import type { ConnectorVisibility, CustomPluginParams, ToolManifest } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -239,6 +239,18 @@ export const userConnectors = pgTable(
 
     /** Safe non-sensitive metadata for display and future extensibility */
     metadata: jsonb('metadata').$type<ConnectorMetadata>(),
+
+    /**
+     * Visibility WITHIN a workspace (same contract as devices / agents, filtered
+     * by `buildWorkspaceWhere`):
+     * - 'public'  → shared with the workspace; every member sees it and every
+     *   agent in the workspace may load it.
+     * - 'private' → the creator's own; only `user_id` sees it, and only that
+     *   member's private agents load it.
+     * Defaults to 'public' so rows that predate the column keep their shared
+     * behaviour. Ignored for personal rows (`workspace_id IS NULL`).
+     */
+    visibility: text('visibility').$type<ConnectorVisibility>().default('public').notNull(),
 
     ...timestamps,
   },
