@@ -11,6 +11,7 @@ export enum WorkspaceSettingsTabs {
   APIKey = 'apikey',
   Appearance = 'appearance',
   AuditLog = 'audit-log',
+  Automations = 'automations',
   Billing = 'billing',
   Budget = 'budget',
   ChatPreference = 'chat-preference',

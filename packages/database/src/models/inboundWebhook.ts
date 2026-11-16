@@ -7,11 +7,25 @@ import type {
 import {
   INBOUND_WEBHOOK_DELIVERY_ERRORS,
   INBOUND_WEBHOOK_ERRORS,
+  INBOUND_WEBHOOK_RUN_ERRORS,
   INBOUND_WEBHOOK_STATUSES,
   InboundWebhookDataSchema,
   McpEventsWebhookStateSchema,
 } from '@lobechat/types';
-import { and, count, desc, eq, getTableColumns, inArray, lt, lte, ne, sql } from 'drizzle-orm';
+import {
+  and,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  gt,
+  inArray,
+  lt,
+  lte,
+  ne,
+  or,
+  sql,
+} from 'drizzle-orm';
 import { z } from 'zod';
 
 import { inboundWebhooks, topics, users } from '../schemas';
@@ -222,14 +236,19 @@ export class InboundWebhookModel {
     return row ? validateView(row) : undefined;
   };
 
-  /** Clear only delivery failures, using current database values so concurrent auth/runtime errors survive. */
+  /**
+   * Record a real event delivery. Control envelopes (gap, terminated) are not events: they
+   * neither move "last event" nor prove that event delivery works.
+   *
+   * Clears only delivery failures, using current database values so concurrent auth/runtime
+   * errors survive.
+   */
   recordDelivery = async (id: string, isEvent: boolean): Promise<void> => {
-    const recovered = isEvent
-      ? and(
-          eq(inboundWebhooks.status, 'error'),
-          inArray(inboundWebhooks.lastError, [...INBOUND_WEBHOOK_DELIVERY_ERRORS]),
-        )
-      : sql`false`;
+    if (!isEvent) return;
+    const recovered = and(
+      eq(inboundWebhooks.status, 'error'),
+      inArray(inboundWebhooks.lastError, [...INBOUND_WEBHOOK_DELIVERY_ERRORS]),
+    );
     await this.db
       .update(inboundWebhooks)
       .set({
@@ -238,6 +257,23 @@ export class InboundWebhookModel {
         lastError: sql`CASE WHEN ${recovered} THEN NULL ELSE ${inboundWebhooks.lastError} END`,
       })
       .where(and(this.ownership(), eq(inboundWebhooks.id, id)));
+  };
+
+  /**
+   * Record that a wake started a run: the wake cap and credit errors no longer hold. Any other
+   * error, including one written concurrently, stays.
+   */
+  recordRunStarted = async (id: string): Promise<void> => {
+    await this.db
+      .update(inboundWebhooks)
+      .set({ lastError: null })
+      .where(
+        and(
+          this.ownership(),
+          eq(inboundWebhooks.id, id),
+          inArray(inboundWebhooks.lastError, [...INBOUND_WEBHOOK_RUN_ERRORS]),
+        ),
+      );
   };
 
   /** Each caller patches only its owned keys, never overwrites a concurrently advanced cursor. */
@@ -348,9 +384,14 @@ export class InboundWebhookModel {
     return { row: toView(row), secret: (await resolvedGateKeeper.decrypt(row.secret)).plaintext };
   };
 
+  /**
+   * Rows due for maintenance, earliest first. `after` continues from the last row of a previous
+   * page, so a caller that skips rows can still reach the ones behind them.
+   */
   static queryMaintenance = async (
     db: LobeChatDatabase,
     limit = 100,
+    after?: { id: string; nextMaintenanceAt: Date },
   ): Promise<InboundWebhookView[]> => {
     const rows = await db
       .select(viewColumns)
@@ -359,11 +400,43 @@ export class InboundWebhookModel {
         and(
           lte(inboundWebhooks.nextMaintenanceAt, new Date()),
           inArray(inboundWebhooks.status, ['active', 'error', 'deleting']),
+          after
+            ? or(
+                gt(inboundWebhooks.nextMaintenanceAt, after.nextMaintenanceAt),
+                and(
+                  eq(inboundWebhooks.nextMaintenanceAt, after.nextMaintenanceAt),
+                  gt(inboundWebhooks.id, after.id),
+                ),
+              )
+            : undefined,
         ),
       )
-      .orderBy(inboundWebhooks.nextMaintenanceAt)
+      .orderBy(inboundWebhooks.nextMaintenanceAt, inboundWebhooks.id)
       .limit(limit);
     return rows.map(validateView);
+  };
+
+  /**
+   * Push still-due rows to `until`, for rows a sweep cannot act on yet (their owner switched the
+   * feature off), so they stop filling the front of every scan. A row someone rescheduled since,
+   * or one being deleted, is left alone.
+   */
+  static deferMaintenance = async (
+    db: LobeChatDatabase,
+    ids: string[],
+    until: Date,
+  ): Promise<void> => {
+    if (!ids.length) return;
+    await db
+      .update(inboundWebhooks)
+      .set({ nextMaintenanceAt: until })
+      .where(
+        and(
+          inArray(inboundWebhooks.id, ids),
+          inArray(inboundWebhooks.status, ['active', 'error']),
+          lte(inboundWebhooks.nextMaintenanceAt, new Date()),
+        ),
+      );
   };
 
   static queryStalePending = async (db: LobeChatDatabase): Promise<InboundWebhookView[]> => {

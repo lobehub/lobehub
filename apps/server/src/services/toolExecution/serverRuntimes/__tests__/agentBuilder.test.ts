@@ -8,6 +8,7 @@ const {
   mockCreatePlugin,
   mockFindById,
   mockGetMcpManifest,
+  mockInstallMarketplaceConnector,
   mockQueryPlugins,
   mockResolveConnectors,
   mockUpdatePlugin,
@@ -23,6 +24,7 @@ const {
   mockCreatePlugin: vi.fn(),
   mockFindById: vi.fn(),
   mockGetMcpManifest: vi.fn(),
+  mockInstallMarketplaceConnector: vi.fn(),
   mockQueryPlugins: vi.fn(),
   mockResolveConnectors: vi.fn(),
   mockUpdatePlugin: vi.fn(),
@@ -71,8 +73,12 @@ vi.mock('@/database/models/plugin', () => ({
 
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn(function () {
-    return { resolveAll: mockResolveConnectors };
+    return { queryAvailableForAgent: mockResolveConnectors, resolveAll: mockResolveConnectors };
   }),
+}));
+
+vi.mock('@/server/services/connector/marketplaceInstall', () => ({
+  installMarketplaceMcpConnector: mockInstallMarketplaceConnector,
 }));
 
 vi.mock('@/database/repositories/aiInfra', () => ({
@@ -86,7 +92,8 @@ vi.mock('@/database/repositories/aiInfra', () => ({
 
 vi.mock('@/server/services/discover', () => ({
   DiscoverService: vi.fn(function () {
-    return { getMcpManifest: mockGetMcpManifest };
+    // The market's detail of an MCP it does not host
+    return { getMcpDetail: async () => ({}), getMcpManifest: mockGetMcpManifest };
   }),
 }));
 
@@ -117,6 +124,7 @@ describe('agentBuilderRuntime', () => {
     mockQueryPlugins.mockResolvedValue([]);
     mockFindById.mockResolvedValue(undefined);
     mockGetMcpManifest.mockRejectedValue(new Error('not in marketplace'));
+    mockInstallMarketplaceConnector.mockResolvedValue({ status: 'installed' });
   });
 
   it('does not persist a model change rejected by the shared-agent policy', async () => {
@@ -499,35 +507,19 @@ describe('agentBuilderRuntime', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toMatchObject({ type: 'PluginNotFound' });
+      expect(mockInstallMarketplaceConnector).not.toHaveBeenCalled();
       expect(mockCreatePlugin).not.toHaveBeenCalled();
       expect(mockUpdateConfig).not.toHaveBeenCalled();
     });
 
-    it('installs the marketplace plugin even when a same-named connector exists', async () => {
-      const manifest = { api: [{ name: 'send' }], identifier: 'gmail' };
+    it('installs a marketplace MCP as a connector, not a plugin row, and says it loads next run', async () => {
+      const manifest = { deploymentOptions: [], identifier: 'ads-mcp', tools: [{ name: 'list' }] };
       mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
+      mockGetMcpManifest.mockResolvedValue(manifest);
+      // The connector the install wrote, as the agent's runs resolve it
       mockResolveConnectors.mockResolvedValue([
-        { identifier: 'gmail', isEnabled: false, status: 'disconnected' },
+        { identifier: 'ads-mcp', isEnabled: true, status: 'connected' },
       ]);
-      mockGetMcpManifest.mockResolvedValue(manifest);
-
-      const result = await createRuntime().installPlugin(
-        { identifier: 'gmail', source: 'market' },
-        { editingAgentId: 'agent-1', toolManifestMap: {} },
-      );
-
-      expect(result.success).toBe(true);
-      expect(mockCreatePlugin).toHaveBeenCalledWith({
-        identifier: 'gmail',
-        manifest,
-        type: 'plugin',
-      });
-    });
-
-    it('installs a marketplace plugin with its manifest and says it loads next run', async () => {
-      const manifest = { api: [{ name: 'listCampaigns' }], identifier: 'ads-mcp' };
-      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
-      mockGetMcpManifest.mockResolvedValue(manifest);
 
       const result = await createRuntime().installPlugin(
         { identifier: 'ads-mcp', source: 'market' },
@@ -536,14 +528,118 @@ describe('agentBuilderRuntime', () => {
 
       expect(result.success).toBe(true);
       expect(result.content).toContain('next run');
-      expect(mockCreatePlugin).toHaveBeenCalledWith({
-        identifier: 'ads-mcp',
+      expect(mockInstallMarketplaceConnector).toHaveBeenCalledWith(
+        { serverDB: {}, userId: 'user-1', workspaceId: undefined },
+        'ads-mcp',
         manifest,
-        type: 'plugin',
-      });
+        { readHostedEndpoint: expect.any(Function) },
+      );
+      expect(mockCreatePlugin).not.toHaveBeenCalled();
+      expect(mockUpdatePlugin).not.toHaveBeenCalled();
       expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
         plugins: [{ identifier: 'ads-mcp', mode: 'pinned' }],
       });
+    });
+
+    it("refuses, installing nothing, an install the agent's own disconnected connector would shadow", async () => {
+      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
+      mockGetMcpManifest.mockResolvedValue({ identifier: 'ads-mcp' });
+      // The agent owns a row of the identifier, which its runs pick over the base install
+      mockResolveConnectors.mockResolvedValue([
+        { agentId: 'agent-1', identifier: 'ads-mcp', isEnabled: true, status: 'disconnected' },
+      ]);
+
+      const result = await createRuntime().installPlugin(
+        { identifier: 'ads-mcp', source: 'market' },
+        { editingAgentId: 'agent-1', toolManifestMap: {} },
+      );
+
+      expect(mockInstallMarketplaceConnector).not.toHaveBeenCalled();
+      expect(mockResolveConnectors).toHaveBeenCalledWith('agent-1');
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('not connected');
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
+    });
+
+    it('installs into the run workspace', async () => {
+      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
+      mockGetMcpManifest.mockResolvedValue({ identifier: 'ads-mcp' });
+
+      await createWorkspaceRuntime().installPlugin(
+        { identifier: 'ads-mcp', source: 'market' },
+        { editingAgentId: 'agent-1', toolManifestMap: {} },
+      );
+
+      expect(mockInstallMarketplaceConnector).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-1', workspaceId: 'workspace-1' }),
+        'ads-mcp',
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it('pins a finished connector install without installing it again', async () => {
+      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
+      mockGetMcpManifest.mockResolvedValue({ identifier: 'ads-mcp' });
+      mockInstallMarketplaceConnector.mockResolvedValue({ status: 'exists' });
+      mockResolveConnectors.mockResolvedValue([
+        { identifier: 'ads-mcp', isEnabled: true, status: 'connected' },
+      ]);
+
+      const result = await createRuntime().installPlugin(
+        { identifier: 'ads-mcp', source: 'market' },
+        { editingAgentId: 'agent-1', toolManifestMap: {} },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.content).not.toContain('next run');
+      expect(mockUpdateConfig).toHaveBeenCalledWith('agent-1', {
+        plugins: [{ identifier: 'ads-mcp', mode: 'pinned' }],
+      });
+    });
+
+    it.each([
+      ['oauth', 'PluginNeedsAuthorization', 'OAuth'],
+      ['config', 'PluginNeedsConfig', 'settings'],
+      ['local-only', 'PluginNeedsDesktop', 'desktop app'],
+      ['private-network', 'PluginNeedsDesktop', 'private-network address'],
+      ['conflict', 'PluginIdentifierConflict', 'already exists'],
+      ['forbidden', 'PluginInstallForbidden', 'admins'],
+      ['in-progress', 'PluginInstallInProgress', 'already being installed'],
+      ['no-tools', 'PluginHasNoTools', 'lists no tools'],
+    ])(
+      'refuses a marketplace MCP it cannot install (%s) and pins nothing',
+      async (blocker, type, hint) => {
+        mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
+        mockGetMcpManifest.mockResolvedValue({ identifier: 'gmail' });
+        mockInstallMarketplaceConnector.mockResolvedValue({ blocker, status: 'blocked' });
+
+        const result = await createRuntime().installPlugin(
+          { identifier: 'gmail', source: 'market' },
+          { editingAgentId: 'agent-1', toolManifestMap: {} },
+        );
+
+        expect(result.success).toBe(false);
+        expect(result.error).toMatchObject({ type });
+        expect(result.content).toContain(hint);
+        expect(result.content).toContain('Nothing was changed');
+        expect(mockUpdateConfig).not.toHaveBeenCalled();
+      },
+    );
+
+    it('reports a failed install and pins nothing', async () => {
+      mockGetAgentConfigById.mockResolvedValue({ id: 'agent-1', plugins: [] });
+      mockGetMcpManifest.mockResolvedValue({ identifier: 'ads-mcp' });
+      mockInstallMarketplaceConnector.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+      const result = await createRuntime().installPlugin(
+        { identifier: 'ads-mcp', source: 'market' },
+        { editingAgentId: 'agent-1', toolManifestMap: {} },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('ECONNREFUSED');
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
     });
   });
 

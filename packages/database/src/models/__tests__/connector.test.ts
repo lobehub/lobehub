@@ -3,9 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { ConnectorCredentials } from '../../schemas';
-import { agentEvalDatasets, agents, userConnectors, users, workspaces } from '../../schemas';
+import {
+  agentEvalDatasets,
+  agents,
+  userConnectors,
+  userConnectorTools,
+  users,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import { ConnectorModel } from '../connector';
+import { ConnectorIdentifierHeldError, ConnectorModel } from '../connector';
 import { EvalConnectorUpdateError } from '../connectorEval';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -342,6 +349,238 @@ describe('ConnectorModel', () => {
 
       expect(callGateKeeper.encrypt).toHaveBeenCalledOnce();
       expect(result.credentials).toBe(`call:${JSON.stringify(apikeyCredentials)}`);
+    });
+
+    it('creates a base row once while another writer claims its identifier', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const input = createBuiltinConnectorInput('fetch-mcp', 'Fetch');
+      const fetchRows = () =>
+        serverDB.select().from(userConnectors).where(eq(userConnectors.identifier, 'fetch-mcp'));
+
+      // An OpenAPI create racing an Agent Builder install's claim
+      const [created, claimed] = await Promise.allSettled([
+        model.create(input),
+        model.createUnlessIdentifierHeld(input),
+      ]);
+
+      expect(await fetchRows()).toHaveLength(1);
+      if (created.status === 'rejected')
+        expect(created.reason).toBeInstanceOf(ConnectorIdentifierHeldError);
+      else expect(claimed).toEqual({ status: 'fulfilled', value: { holder: created.value } });
+      await expect(model.create(input)).rejects.toThrow(ConnectorIdentifierHeldError);
+      // An agent's own row does not take the base identifier
+      await serverDB.insert(agents).values({ id: 'fetch-agent', userId });
+      await model.create({ ...input, agentId: 'fetch-agent' });
+      expect(await fetchRows()).toHaveLength(2);
+    });
+  });
+
+  describe('createUnlessIdentifierHeld', () => {
+    const marketplaceInput = {
+      identifier: 'fetch-mcp',
+      name: 'Fetch',
+      sourceType: 'marketplace',
+      status: 'disconnected',
+    };
+    const fetchRows = () =>
+      serverDB.select().from(userConnectors).where(eq(userConnectors.identifier, 'fetch-mcp'));
+
+    it('creates a base connector when no base row of the scope holds the identifier', async () => {
+      // Another scope's row and an agent's own row do not hold the base identifier
+      await new ConnectorModel(serverDB, userId).create(marketplaceInput);
+      await serverDB.insert(agents).values({ id: 'held-agent', userId, workspaceId });
+      await new ConnectorModel(serverDB, userId, workspaceId).create({
+        ...marketplaceInput,
+        agentId: 'held-agent',
+      });
+
+      const result = await new ConnectorModel(
+        serverDB,
+        userId,
+        workspaceId,
+      ).createUnlessIdentifierHeld(marketplaceInput);
+
+      expect(result).toEqual({
+        created: expect.objectContaining({ agentId: null, identifier: 'fetch-mcp', workspaceId }),
+      });
+      expect(await fetchRows()).toHaveLength(3);
+    });
+
+    it('returns the holding row and writes nothing when it may not be replaced', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const holder = await model.create(marketplaceInput);
+      const canReplace = vi.fn(() => false);
+
+      expect(
+        await model.createUnlessIdentifierHeld(
+          { ...marketplaceInput, name: 'Other' },
+          { canReplace },
+        ),
+      ).toEqual({ holder: expect.objectContaining({ id: holder.id, name: 'Fetch' }) });
+      expect(canReplace).toHaveBeenCalledWith(expect.objectContaining({ id: holder.id }));
+      expect(await fetchRows()).toEqual([expect.objectContaining({ id: holder.id })]);
+    });
+
+    it('replaces a holding row it may replace, with its tools', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const holder = await model.create(marketplaceInput);
+      await serverDB.insert(userConnectorTools).values({
+        crudType: 'read',
+        permission: 'auto',
+        toolName: 'stale',
+        userConnectorId: holder.id,
+        userId,
+      });
+
+      const result = await model.createUnlessIdentifierHeld(
+        { ...marketplaceInput, name: 'Fetch again' },
+        { canReplace: () => true },
+      );
+
+      expect(result).toEqual({ created: expect.objectContaining({ name: 'Fetch again' }) });
+      expect(await fetchRows()).toEqual([
+        expect.objectContaining({ id: 'created' in result ? result.created.id : undefined }),
+      ]);
+      expect(await serverDB.select().from(userConnectorTools)).toEqual([]);
+    });
+
+    it('replaces nothing while any of duplicate base holders may not go', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      // Rows a writer from before the identifier lock could leave side by side
+      const [stale, live] = await serverDB
+        .insert(userConnectors)
+        .values(
+          [true, false].map((stale) => ({ ...marketplaceInput, metadata: { stale }, userId })),
+        )
+        .returning();
+
+      expect(
+        await model.createUnlessIdentifierHeld(
+          { ...marketplaceInput, name: 'Fetch again' },
+          { canReplace: (row) => row.metadata?.stale === true },
+        ),
+      ).toEqual({ holder: expect.objectContaining({ id: live.id }) });
+      expect((await fetchRows()).map((row) => row.id).sort()).toEqual([live.id, stale.id].sort());
+    });
+
+    it('judges a holder a re-add is rewriting only once the re-add has landed', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const holder = await model.create({ ...marketplaceInput, metadata: { stale: true } });
+
+      // A re-add (the web install's `update`) holds the row while it rewrites it
+      let land!: () => void;
+      const landing = new Promise<void>((resolve) => (land = resolve));
+      let locked!: () => void;
+      const rowLocked = new Promise<void>((resolve) => (locked = resolve));
+      const reAdd = serverDB.transaction(async (tx) => {
+        await tx
+          .select()
+          .from(userConnectors)
+          .where(eq(userConnectors.id, holder.id))
+          .for('update');
+        locked();
+        await landing;
+        await tx
+          .update(userConnectors)
+          .set({ metadata: { readded: true } })
+          .where(eq(userConnectors.id, holder.id));
+      });
+      await rowLocked;
+
+      // Only the stale row may be replaced, not the one the re-add rewrote
+      const claim = model.createUnlessIdentifierHeld(
+        { ...marketplaceInput, name: 'Fetch again' },
+        { canReplace: (row) => row.metadata?.stale === true },
+      );
+      // The claim reaches the row before the re-add lands
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      land();
+      await reAdd;
+
+      expect(await claim).toEqual({ holder: expect.objectContaining({ id: holder.id }) });
+      expect(await fetchRows()).toEqual([
+        expect.objectContaining({ id: holder.id, metadata: { readded: true } }),
+      ]);
+    });
+
+    it('creates the connector once for concurrent calls', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+
+      const results = await Promise.all([
+        model.createUnlessIdentifierHeld(marketplaceInput),
+        model.createUnlessIdentifierHeld(marketplaceInput),
+      ]);
+
+      expect(results.filter((result) => 'created' in result)).toHaveLength(1);
+      expect(await fetchRows()).toHaveLength(1);
+    });
+  });
+
+  describe('moveToBaseUnlessIdentifierHeld', () => {
+    const agentInput = {
+      agentId: 'move-agent',
+      identifier: 'fetch-mcp',
+      name: 'Fetch',
+      sourceType: 'marketplace',
+      status: 'connected',
+    } as const;
+    const baseRows = async () =>
+      (await serverDB.select().from(userConnectors)).filter((row) => row.agentId === null);
+
+    beforeEach(async () => {
+      await serverDB.insert(agents).values({ id: 'move-agent', userId });
+    });
+
+    it('moves an agent connector into the base scope when no base row holds the identifier', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const agentRow = await model.create(agentInput);
+
+      expect(await model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp')).toEqual({
+        moved: true,
+      });
+      expect(await baseRows()).toEqual([expect.objectContaining({ id: agentRow.id })]);
+    });
+
+    it('reports a connector another unbind already moved as moved, not as a holder', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const agentRow = await model.create(agentInput);
+
+      // Both calls read the row as the agent's before either moved it (a retry,
+      // or two unbinds at once): the second finds the row itself in the base scope
+      const results = await Promise.all([
+        model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp'),
+        model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp'),
+      ]);
+      expect(await model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp')).toEqual({
+        moved: true,
+      });
+
+      expect(results).toEqual([{ moved: true }, { moved: true }]);
+      expect(await baseRows()).toEqual([expect.objectContaining({ id: agentRow.id })]);
+    });
+
+    it('returns the holding base row and leaves the agent connector bound', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const holder = await model.create({ ...agentInput, agentId: null });
+      const agentRow = await model.create(agentInput);
+
+      expect(await model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp')).toEqual({
+        holder: expect.objectContaining({ id: holder.id }),
+      });
+      expect(await model.findById(agentRow.id)).toMatchObject({ agentId: 'move-agent' });
+    });
+
+    it('never leaves two base rows when a create of the identifier runs at the same time', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const agentRow = await model.create(agentInput);
+      const { agentId: _agentId, ...baseInput } = agentInput;
+
+      await Promise.all([
+        model.moveToBaseUnlessIdentifierHeld(agentRow.id, 'fetch-mcp'),
+        model.createUnlessIdentifierHeld(baseInput),
+      ]);
+
+      expect(await baseRows()).toHaveLength(1);
     });
   });
 
@@ -723,13 +962,26 @@ describe('ConnectorModel', () => {
       const created = await otherModel.create(createBuiltinConnectorInput('linear', 'Linear'));
 
       const model = new ConnectorModel(serverDB, userId);
-      await model.update(created.id, { name: 'Hacked' });
+      await expect(model.update(created.id, { name: 'Hacked' })).resolves.toBe(false);
 
       const [row] = await serverDB
         .select()
         .from(userConnectors)
         .where(eq(userConnectors.id, created.id));
       expect(row.name).toBe('Linear');
+    });
+
+    it('reports a row a claim replaced after it was read as not updated', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const read = await model.create(createBuiltinConnectorInput('linear', 'Linear'));
+      const claim = await model.createUnlessIdentifierHeld(
+        createBuiltinConnectorInput('linear', 'Linear'),
+        { canReplace: () => true },
+      );
+      if (!('created' in claim)) throw new Error('the claim should replace the row it read');
+
+      await expect(model.update(read.id, { name: 'Re-added' })).resolves.toBe(false);
+      await expect(model.update(claim.created.id, { name: 'Re-added' })).resolves.toBe(true);
     });
   });
 
@@ -842,6 +1094,92 @@ describe('ConnectorModel', () => {
       const model = new ConnectorModel(serverDB, userId);
       await model.delete(created.id);
 
+      expect(await otherModel.findById(created.id)).not.toBeNull();
+    });
+  });
+
+  describe('updateMetadataIfContains', () => {
+    const tag = { installAttempt: 'attempt-1' };
+
+    it('replaces the metadata while it still has the tag', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const created = await model.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: { avatar: 'a.png', ...tag },
+      });
+
+      expect(await model.updateMetadataIfContains(created.id, tag, { avatar: 'done.png' })).toBe(
+        true,
+      );
+      expect((await model.findById(created.id))?.metadata).toEqual({ avatar: 'done.png' });
+    });
+
+    it('keeps metadata rewritten since', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const created = await model.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: tag,
+      });
+      await model.update(created.id, { metadata: { avatar: 'readded.png' } });
+
+      expect(await model.updateMetadataIfContains(created.id, tag, { avatar: 'done.png' })).toBe(
+        false,
+      );
+      expect((await model.findById(created.id))?.metadata).toEqual({ avatar: 'readded.png' });
+    });
+
+    it("does not update another user's row", async () => {
+      const otherModel = new ConnectorModel(serverDB, otherUserId);
+      const created = await otherModel.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: tag,
+      });
+
+      expect(
+        await new ConnectorModel(serverDB, userId).updateMetadataIfContains(created.id, tag, {}),
+      ).toBe(false);
+      expect((await otherModel.findById(created.id))?.metadata).toEqual(tag);
+    });
+  });
+
+  describe('deleteIfMetadataContains', () => {
+    const tag = { installAttempt: 'attempt-1' };
+
+    it('deletes the row while its metadata still has the tag', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const created = await model.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: { avatar: 'a.png', ...tag },
+      });
+
+      expect(await model.deleteIfMetadataContains(created.id, tag)).toBe(true);
+      expect(await model.findById(created.id)).toBeNull();
+    });
+
+    it('keeps a row whose metadata was rewritten since', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const created = await model.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: tag,
+      });
+      await model.update(created.id, { metadata: { avatar: 'readded.png' } });
+
+      expect(await model.deleteIfMetadataContains(created.id, tag)).toBe(false);
+      expect(await model.findById(created.id)).toMatchObject({
+        metadata: { avatar: 'readded.png' },
+      });
+    });
+
+    it("does not delete another user's row", async () => {
+      const otherModel = new ConnectorModel(serverDB, otherUserId);
+      const created = await otherModel.create({
+        ...createBuiltinConnectorInput('linear', 'Linear'),
+        metadata: tag,
+      });
+
+      expect(
+        await new ConnectorModel(serverDB, userId).deleteIfMetadataContains(created.id, tag),
+      ).toBe(false);
       expect(await otherModel.findById(created.id)).not.toBeNull();
     });
   });

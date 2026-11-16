@@ -330,6 +330,12 @@ export class ChannelService {
     return channel;
   };
 
+  editMessage = async (channelId: string, messageId: string, content: string) => {
+    const message = await this.repository.editMessage(channelId, messageId, content);
+    await this.changed(channelId);
+    return message;
+  };
+
   addUser = async (channelId: string, userId: string) => {
     const member = await this.repository.addUser(channelId, userId);
     await this.changed(channelId);

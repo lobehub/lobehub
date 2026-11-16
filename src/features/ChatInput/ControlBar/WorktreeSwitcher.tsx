@@ -541,7 +541,7 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
       openCreateWorktreeModal({
         // The modal reads the repo's full local branch list itself and draws the
         // generated default from it, so a name is not handed out twice and does
-        // not collide with a ref on the `wt` namespace path (see
+        // not collide with a ref on the `lobehub` namespace path (see
         // `generateWorktreeBranchName`). It lives there rather than here so the
         // list can be awaited: snapshotting an in-flight (empty) list would hand
         // out a name git is guaranteed to refuse.
