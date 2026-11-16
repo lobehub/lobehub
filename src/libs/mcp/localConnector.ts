@@ -58,9 +58,11 @@ export const resolveLocalConnectorHttpParams = async (
 
 /**
  * The account a call this desktop runs itself goes out as, for a connector
- * holding several (`links`): the model's selector, or the one a view's call
- * carries, taken out of the arguments the MCP server receives. Without a
- * selection the call fails, as its server-run calls do.
+ * with accounts (`links`): the model's selector, or the one a view's call
+ * carries, taken out of the arguments the MCP server receives. As its
+ * server-run calls do, a connector holding several fails without a selection,
+ * and a selection is kept with one account left: a call made for an account
+ * removed since must fail rather than go out as the one that remains.
  */
 export const takeLocalConnectorAccount = (
   connector: { links?: readonly unknown[] | null },
@@ -68,13 +70,14 @@ export const takeLocalConnectorAccount = (
   args: string | undefined,
   selected?: string,
 ): { args: string; linkId?: string } => {
-  if ((connector.links?.length ?? 0) < 2) return { args: args || '{}', linkId: selected };
+  const accounts = connector.links?.length ?? 0;
+  if (!accounts) return { args: args || '{}', linkId: selected };
   const param = resolveConnectorLinkParam(tools.map((tool) => tool.inputSchema));
   const split = splitConnectorLinkArg(args || '{}', param);
   if (selected && split.linkId && selected !== split.linkId)
     throw new Error('Conflicting account selections');
   const linkId = selected ?? split.linkId;
-  if (!linkId)
+  if (!linkId && accounts > 1)
     throw new Error(`${param} is required: select one of the accounts listed for this tool`);
   return { args: split.argsStr, linkId };
 };

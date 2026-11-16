@@ -462,7 +462,7 @@ export class ConnectorActionImpl {
         { signal: options.signal },
       );
       flowId = started.flowId;
-      await waitForConnectorOAuth(
+      const reported = await waitForConnectorOAuth(
         options.popup,
         connectorId,
         started.authorizationUrl,
@@ -470,7 +470,14 @@ export class ConnectorActionImpl {
         link.mode === 'add',
       );
       await this.#refreshConnectorLists();
-      if (flowId) return await lambdaClient.connector.oauthResult.query({ flowId });
+      // The callback's own report, else the server's record of the flow (the
+      // native window reports success alone), else the lists' difference: the
+      // record is a fallback whose absence never fails a stored authorization
+      if (reported) return reported;
+      const recorded = flowId
+        ? await lambdaClient.connector.oauthResult.query({ flowId }).catch(() => undefined)
+        : undefined;
+      if (recorded) return recorded;
       const created = linksOf().find((item) => !before.some((old) => old.id === item.id));
       return created
         ? { outcome: 'created', linkId: created.id }

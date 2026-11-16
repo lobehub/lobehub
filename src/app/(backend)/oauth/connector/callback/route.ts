@@ -215,11 +215,15 @@ export const GET = async (req: NextRequest) => {
       log('post-OAuth tool sync failed for connector=%s: %O', payload.connectorId, err);
     }
 
+    // Only a fallback for a window that misses the result below: the account
+    // is stored, so failing to record how the flow ended must not fail it.
     await saveConnectorOAuthCompletion(state, {
       connectorId: payload.connectorId,
       lobeUserId: payload.lobeUserId,
       workspaceId: payload.workspaceId,
       ...authorization,
+    }).catch((err) => {
+      log('recording the OAuth completion of connector=%s failed: %O', payload.connectorId, err);
     });
     return renderResultPage({
       connectorId: payload.connectorId,

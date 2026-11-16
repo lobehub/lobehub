@@ -93,6 +93,38 @@ describe('connector account store actions', () => {
     ).rejects.toMatchObject({ reason: 'dismissed' });
     expect(popup.close).toHaveBeenCalled();
   });
+  it("takes the callback's own report without needing the server's record", async () => {
+    vi.mocked(lambdaClient.connector.startOAuth.mutate).mockResolvedValueOnce({
+      authorizationUrl: 'https://provider/authorize',
+      flowId: 'flow-1',
+    } as never);
+    mocks.wait.mockResolvedValueOnce({ linkId: 'old', outcome: 'matchedExisting' });
+
+    expect(await useToolStore.getState().connectConnectorAccount('c1')).toEqual({
+      linkId: 'old',
+      outcome: 'matchedExisting',
+    });
+    expect(lambdaClient.connector.oauthResult.query).not.toHaveBeenCalled();
+  });
+
+  // The native window reports success alone; its record may not have been written
+  it("falls back to the lists when a successful flow's record is missing", async () => {
+    await useToolStore.getState().fetchConnectors();
+    vi.mocked(lambdaClient.connector.startOAuth.mutate).mockResolvedValueOnce({
+      authorizationUrl: 'https://provider/authorize',
+      flowId: 'flow-1',
+    } as never);
+    vi.mocked(lambdaClient.connector.list.query).mockResolvedValue([connector(['old', 'new'])]);
+    vi.mocked(lambdaClient.connector.oauthResult.query).mockRejectedValueOnce({
+      data: { code: 'NOT_FOUND' },
+    });
+
+    expect(await useToolStore.getState().connectConnectorAccount('c1')).toEqual({
+      linkId: 'new',
+      outcome: 'created',
+    });
+  });
+
   // Providers whose COOP policy severs `window.opener` lose the callback's message
   describe('a window that never reports back', () => {
     const startWithFlow = () =>

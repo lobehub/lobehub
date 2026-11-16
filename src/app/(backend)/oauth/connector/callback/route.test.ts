@@ -54,9 +54,10 @@ vi.mock('@/server/services/connector/tokens', () => ({
     .fn()
     .mockReturnValue({ credentials: { accessToken: 'tok', type: 'oauth2' }, tokenExpiresAt: null }),
 }));
+const mockSaveCompletion = vi.hoisted(() => vi.fn());
 vi.mock('@/server/services/connector/stateStore', () => ({
   consumeConnectorOAuthState: mockConsume,
-  saveConnectorOAuthCompletion: vi.fn(),
+  saveConnectorOAuthCompletion: mockSaveCompletion,
 }));
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn(function () {
@@ -96,6 +97,7 @@ beforeEach(() => {
     },
   });
   mockUpdate.mockResolvedValue(undefined);
+  mockSaveCompletion.mockResolvedValue(undefined);
   mockExchange.mockResolvedValue({ tokens: { access_token: 'tok' } });
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
@@ -162,6 +164,16 @@ describe('connector OAuth callback', () => {
     });
     mockListLinks.mockResolvedValue([{ id: 'lnk_early' }]);
     const body = await (await GET(makeReq())).text();
+    expect(body).toContain('"outcome":"created"');
+  });
+
+  // The record only serves a window that misses the callback's message
+  it('reports a stored authorization as done though recording its outcome failed', async () => {
+    mockSaveCompletion.mockRejectedValueOnce(new Error('redis down'));
+
+    const body = await (await GET(makeReq())).text();
+
+    expect(body).toContain('"success":true');
     expect(body).toContain('"outcome":"created"');
   });
 
