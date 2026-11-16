@@ -201,6 +201,11 @@ export {
   sanitizeClaudeCodeDirectArgs,
   sanitizeClaudeCodeDirectEnv,
 } from './claudeCodeDirectEnv';
+export type {
+  ClaudeCodeControlRequest,
+  ClaudeCodeControlRequestHandle,
+  ClaudeCodeControlResponse,
+} from './claudeCodeLiveInput';
 export { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
 export {
   ensureClaudeCodeResumeTranscript,

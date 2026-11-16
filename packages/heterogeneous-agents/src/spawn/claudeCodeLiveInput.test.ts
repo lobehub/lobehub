@@ -211,6 +211,93 @@ describe('ClaudeCodeLiveInput', () => {
     expect(live.isOpen).toBe(true);
   });
 
+  it('writes a generic control request and resolves with its control_response', async () => {
+    const { live, written } = setup();
+
+    const sent = live.sendControlRequest({ subtype: 'stop_task', task_id: 't-1' });
+    await flush();
+
+    expect(written).toEqual([
+      {
+        request: { subtype: 'stop_task', task_id: 't-1' },
+        request_id: sent!.requestId,
+        type: 'control_request',
+      },
+    ]);
+
+    // Another request's answer and noise do not settle it.
+    live.observe(
+      line({ response: { request_id: 'other', subtype: 'success' }, type: 'control_response' }),
+    );
+    live.observe(
+      line({
+        response: { request_id: sent!.requestId, response: { stopped: true }, subtype: 'success' },
+        type: 'control_response',
+      }),
+    );
+    await expect(sent!.response).resolves.toEqual({
+      response: { stopped: true },
+      subtype: 'success',
+    });
+  });
+
+  it('resolves a refused control request with its error', async () => {
+    const { live } = setup();
+    const sent = live.sendControlRequest({ subtype: 'stop_task', task_id: 'gone' });
+
+    live.observe(
+      line({
+        response: { error: 'No task t-1', request_id: sent!.requestId, subtype: 'error' },
+        type: 'control_response',
+      }),
+    );
+    await expect(sent!.response).resolves.toEqual({ error: 'No task t-1', subtype: 'error' });
+  });
+
+  it('still takes an answer after input closed, and settles the rest when output ends', async () => {
+    const { live } = setup();
+    const answered = live.sendControlRequest({ subtype: 'a' })!;
+    const unanswered = live.sendControlRequest({ subtype: 'b' })!;
+
+    live.close();
+    expect(live.sendControlRequest({ subtype: 'c' })).toBeUndefined();
+    live.observe(
+      line({
+        response: { request_id: answered.requestId, subtype: 'success' },
+        type: 'control_response',
+      }),
+    );
+    live.finish();
+
+    await expect(answered.response).resolves.toEqual({ response: undefined, subtype: 'success' });
+    await expect(unanswered.response).resolves.toEqual({
+      error: 'The session ended before answering',
+      subtype: 'error',
+    });
+  });
+
+  it('does not count a control response as session activity', () => {
+    vi.useFakeTimers();
+    const { live } = setup({ idleCloseMs: 1000 });
+    live.send(userLine('first'), 'u-1');
+    live.observe(line({ isReplay: true, type: 'user', uuid: 'u-1' }));
+    live.observe(line({ subtype: 'task_started', task_id: 't-1', type: 'system' }));
+    live.observe(line({ subtype: 'success', type: 'result' }));
+    const sent = live.sendControlRequest({ subtype: 'stop_task', task_id: 't-1' })!;
+
+    vi.advanceTimersByTime(600);
+    live.observe(
+      line({
+        response: { request_id: sent.requestId, subtype: 'success' },
+        type: 'control_response',
+      }),
+    );
+    // Still between turns: the idle clock restarts on any output, as before.
+    expect(live.isOpen).toBe(true);
+    vi.advanceTimersByTime(1000);
+    expect(live.isOpen).toBe(false);
+  });
+
   it('closes stdin after a silent stretch between turns so a stuck task cannot hold it open', () => {
     vi.useFakeTimers();
     const { live } = setup({ idleCloseMs: 1000 });
