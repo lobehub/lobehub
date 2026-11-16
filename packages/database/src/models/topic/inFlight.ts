@@ -11,8 +11,8 @@ import { hasLiveTaskCallbackReservation } from './taskCallback';
  * Every checkout a topic may be running in. A worktree picked mid-conversation
  * is where a native agent works, but a local CLI agent's process still starts
  * in the source repository (`getWorkingDirSessionPath`), so both count. A
- * worktree the app created on the first send is the only one: nothing of that
- * topic runs in its source. Over-counting only adds a confirmation; missing a
+ * topic born in a worktree the app created runs its CLI there instead
+ * (`sessionPath`), and nothing of it runs in the source. Over-counting only adds a confirmation; missing a
  * directory would let a branch switch run under a live agent.
  */
 export const getTopicRunDirectories = (
@@ -20,7 +20,10 @@ export const getTopicRunDirectories = (
 ): string[] => {
   const config = metadata?.workingDirectoryConfig;
   const worktree = config?.git?.activeWorktree;
-  if (worktree && config?.git?.autoCreated) return [worktree];
+  // Born in the app's worktree: the CLI starts there (`sessionPath`), never in
+  // the source, and the agent works wherever the topic's worktree is now.
+  if (config?.sessionPath)
+    return [worktree, config.sessionPath].filter((dir): dir is string => !!dir);
   return [worktree, config?.path, metadata?.workingDirectory].filter((dir): dir is string => !!dir);
 };
 

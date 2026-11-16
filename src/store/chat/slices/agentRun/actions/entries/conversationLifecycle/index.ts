@@ -1103,7 +1103,10 @@ export class ConversationLifecycleActionImpl {
         agencyConfig,
         chatConfig: agentConfig?.chatConfig,
         currentDeviceId,
-        draftWorkingDirectory: willCreateNewTopic ? newTopicWorkingDirectory : undefined,
+        // Prepared on the composer agent's machine: a send routed to another
+        // agent (`@Agent` direct route) resolves its own device and directory.
+        draftWorkingDirectory:
+          willCreateNewTopic && agentId === ownerAgentId ? newTopicWorkingDirectory : undefined,
         existingTopic,
         heterogeneousProvider,
         inheritedTopic,

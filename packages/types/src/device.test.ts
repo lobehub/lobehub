@@ -281,24 +281,29 @@ describe('getWorkingDirSessionPath', () => {
     ).toBe('/code/lobehub');
   });
 
-  it('starts in a worktree the app created on the first send', () => {
-    expect(
-      getWorkingDirSessionPath({
-        git: { activeWorktree: worktree, autoCreated: true },
-        path: '/code/lobehub',
-      }),
-    ).toBe(worktree);
+  it('starts in the worktree a topic was born in, even after it moved on', () => {
+    const born: WorkingDirConfig = {
+      git: { activeWorktree: worktree, autoCreated: true },
+      path: '/code/lobehub',
+      sessionPath: worktree,
+    };
+    expect(getWorkingDirSessionPath(born)).toBe(worktree);
+    // An agent forked another worktree later: the marker went, the session stays.
+    expect(getWorkingDirSessionPath({ ...born, git: { activeWorktree: '/wt/other' } })).toBe(
+      worktree,
+    );
   });
 
   it('keeps bare and empty entries as they are', () => {
     expect(getWorkingDirSessionPath('/code/lobehub')).toBe('/code/lobehub');
     expect(getWorkingDirSessionPath(undefined)).toBeUndefined();
+    // The ownership marker alone does not move the session.
     expect(getWorkingDirSessionPath({ git: { autoCreated: true }, path: '/code/a' })).toBe(
       '/code/a',
     );
   });
 
-  it('keeps the auto-created marker through the config schema', () => {
+  it('keeps the auto-created marker and session path through the config schema', () => {
     const value = {
       git: {
         activeWorktree: worktree,
@@ -306,6 +311,7 @@ describe('getWorkingDirSessionPath', () => {
         autoCreatedAt: '2026-11-17T00:00:00.000Z',
       },
       path: '/code/lobehub',
+      sessionPath: worktree,
     };
     expect(workingDirConfigSchema.parse(value)).toEqual(value);
   });

@@ -714,6 +714,7 @@ describe('dispatchHeteroAgent — local CLI agents', () => {
       git: { activeWorktree: '/wt/quiet-hill', autoCreated: true, branch: 'lobehub/quiet-hill' },
       path: '/repo',
       repoType: 'github' as const,
+      sessionPath: '/wt/quiet-hill',
     };
     const { deps, topicModel } = createDeps();
     topicModel.findById.mockResolvedValue({

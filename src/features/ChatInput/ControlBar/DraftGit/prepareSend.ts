@@ -5,6 +5,7 @@ import type { TFunction } from 'i18next';
 
 import { deviceService } from '@/services/device';
 import { gitService, isDeviceGitOutdated } from '@/services/git';
+import { parseSingleAgentMentionDirectRoute } from '@/store/chat/slices/agentRun/actions/entries/commandBus/parseCommands';
 import { gitStatusKey } from '@/store/device/gitStatus/projection';
 import { getGitStatusStoreState } from '@/store/device/gitStatus/store';
 import { getElectronStoreState } from '@/store/electron';
@@ -63,9 +64,14 @@ const STOP: DraftGitSendResult = { ok: false };
  */
 export const resolveDraftGitTarget = (
   context: Pick<ConversationContext, 'agentId' | 'groupId' | 'threadId' | 'topicId'>,
+  editorData?: Record<string, any>,
 ): DraftGitTarget | undefined => {
   if (!labPreferSelectors.enableBetterCodingExperience(getUserStoreState())) return;
   if (context.topicId || context.groupId || context.threadId || !context.agentId) return;
+  // A message that starts with a single `@Agent` runs that agent, on its own
+  // device and directory: the composer's directory is not where it runs.
+  const route = parseSingleAgentMentionDirectRoute(editorData);
+  if (route && route.agent.id !== context.agentId) return;
   return getDraftGitTarget(context.agentId);
 };
 
@@ -162,6 +168,7 @@ const createWorktree = async (
         },
         path: target.sourcePath,
         repoType: target.isGithub ? 'github' : 'git',
+        sessionPath: result.worktreePath,
       },
       ok: true,
     };
@@ -242,9 +249,17 @@ const switchInPlace = async (
  */
 export const prepareDraftGitSend = async (
   context: Pick<ConversationContext, 'agentId' | 'groupId' | 'threadId' | 'topicId'>,
-  { prompts, t }: { prompts: DraftGitSendPrompts; t: TFunction<'device'> },
+  {
+    editorData,
+    prompts,
+    t,
+  }: {
+    editorData?: Record<string, any>;
+    prompts: DraftGitSendPrompts;
+    t: TFunction<'device'>;
+  },
 ): Promise<DraftGitSendResult> => {
-  const target = resolveDraftGitTarget(context);
+  const target = resolveDraftGitTarget(context, editorData);
   if (!target) return PASS;
 
   const key = draftBranchKey(target);

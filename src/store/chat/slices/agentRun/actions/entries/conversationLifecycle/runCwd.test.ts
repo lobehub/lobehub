@@ -17,6 +17,7 @@ const worktree: WorkingDirConfig = {
   },
   path: '/code/lobehub',
   repoType: 'github',
+  sessionPath: '/Users/me/.lobehub/worktrees/lobehub-0000beef/quiet-hill',
 };
 
 const base = {

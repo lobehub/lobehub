@@ -136,6 +136,37 @@ describe('prepareDraftGitSend — nothing to do', () => {
   });
 });
 
+describe('prepareDraftGitSend — direct @Agent route', () => {
+  const mentionOf = (id: string) => ({
+    root: {
+      children: [
+        {
+          children: [
+            { label: 'B', metadata: { id, type: 'agent' }, type: 'mention' },
+            { text: ' do it', type: 'text' },
+          ],
+          type: 'paragraph',
+        },
+      ],
+      type: 'root',
+    },
+  });
+
+  it('leaves git alone when the message runs another agent', async () => {
+    pick('feat');
+    setWorktreeMode(true);
+    const result = await prepareDraftGitSend(context, {
+      editorData: mentionOf('agent-2'),
+      prompts: prompts(),
+      t,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(gitService.addGitWorktree).not.toHaveBeenCalled();
+    expect(gitService.checkoutGitBranch).not.toHaveBeenCalled();
+  });
+});
+
 describe('prepareDraftGitSend — switch in place', () => {
   it('checks out the picked branch and clears the pick', async () => {
     pick('feat');
@@ -312,6 +343,7 @@ describe('prepareDraftGitSend — new worktree', () => {
         },
         path: '/code/lobehub',
         repoType: 'github',
+        sessionPath: expect.stringContaining('/.lobehub/worktrees/'),
       },
       ok: true,
     });

@@ -402,7 +402,7 @@ const ChatInput = memo<ChatInputProps>(
         // A new topic's first send acts on the branch picked in the composer
         // (switch, or fork a worktree) before any message exists. Cancelled or
         // failed, nothing is sent and the draft stays.
-        const gitPrep = await prepareComposerGitSend(sendContext);
+        const gitPrep = await prepareComposerGitSend(sendContext, editorData);
         if (!gitPrep.ok) return;
 
         // Clear content immediately for responsive UX — unless a git step ran

@@ -90,6 +90,7 @@ describe('TopicModel.countInFlightInDirectory', () => {
         workingDirectoryConfig: {
           git: { activeWorktree: '/home/.lobehub/worktrees/y', autoCreated: true },
           path: '/code/lobehub',
+          sessionPath: '/home/.lobehub/worktrees/y',
         },
       }),
     );

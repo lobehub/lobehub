@@ -69,9 +69,8 @@ export interface WorkingDirGitState {
    * True when {@link activeWorktree} was created by the app on the topic's
    * first send (Better Coding Experience "New worktree"), not picked by the
    * user. Such a worktree belongs to this one conversation — the record a
-   * later cleanup keys on — and, being fixed before the first turn, is also
-   * where local CLI agents start their session (see
-   * {@link getWorkingDirSessionPath}).
+   * later cleanup keys on. Ownership only: where a CLI session starts is
+   * {@link WorkingDirConfig.sessionPath}, which outlives a later move.
    */
   autoCreated?: boolean;
   /** ISO time the app created {@link activeWorktree}; set with {@link autoCreated}. */
@@ -107,6 +106,13 @@ export interface WorkingDirConfig {
   git?: WorkingDirGitState;
   path: string;
   repoType?: WorkingDirRepoType;
+  /**
+   * Where local CLI agents start their session, when that is not {@link path}:
+   * set once, to the worktree the app created before the topic's first turn.
+   * Never moved by a later worktree change — a CLI keys its sessions by cwd,
+   * so moving it would drop the conversation's session.
+   */
+  sessionPath?: string;
 }
 
 export type WorkingDirConfigValue = string | WorkingDirConfig;
@@ -115,8 +121,8 @@ export type WorkingDirConfigValue = string | WorkingDirConfig;
  * Keep the {@link WorkingDirGitState.autoCreated} marker only while the topic is
  * still on the worktree the app created. Once a writer moves `activeWorktree`
  * (an agent forking another worktree, or leaving it), the marker would point a
- * later cleanup — and the CLI session cwd — at the wrong checkout. Mutates and
- * returns `git`.
+ * later cleanup at the wrong checkout. The CLI session cwd is unaffected: it
+ * lives in `sessionPath`. Mutates and returns `git`.
  */
 export const dropStaleAutoCreated = <T extends WorkingDirGitState>(
   git: T,
@@ -148,16 +154,17 @@ export const getWorkingDirEffectivePath = (
  * Where a local CLI agent (Claude Code, Codex…) starts, which is also the key
  * of its per-cwd session store. Normally the SOURCE repo: a worktree picked
  * mid-conversation must not move the session, so it is only described to the
- * agent. A worktree the app created on the first send is different — the
- * session has not started yet and never sees another directory — so the agent
- * starts in it, and the conversation's work stays out of the source checkout.
+ * agent. A topic born in a worktree the app created records that worktree as
+ * {@link WorkingDirConfig.sessionPath}: the session starts there, keeps
+ * starting there whatever worktree the topic moves to later, and the
+ * conversation's work stays out of the source checkout.
  */
 export const getWorkingDirSessionPath = (
   entry?: WorkingDirConfigValue | null,
 ): string | undefined => {
   if (!entry) return undefined;
   if (typeof entry === 'string') return entry;
-  return entry.git?.autoCreated && entry.git.activeWorktree ? entry.git.activeWorktree : entry.path;
+  return entry.sessionPath || entry.path;
 };
 
 const gitLinkedPullRequestSchema = z.object({
@@ -202,4 +209,5 @@ export const workingDirConfigSchema = z.object({
     .optional(),
   path: z.string(),
   repoType: z.enum(['git', 'github']).optional(),
+  sessionPath: z.string().optional(),
 });

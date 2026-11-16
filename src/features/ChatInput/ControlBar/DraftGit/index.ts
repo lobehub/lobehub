@@ -13,11 +13,13 @@ let inFlight = false;
  */
 export const prepareComposerGitSend = async (
   context: Pick<ConversationContext, 'agentId' | 'groupId' | 'threadId' | 'topicId'>,
+  editorData?: Record<string, any>,
 ): Promise<DraftGitSendResult> => {
   if (inFlight) return { ok: false };
   inFlight = true;
   try {
     return await prepareDraftGitSend(context, {
+      editorData,
       prompts: draftGitSendPrompts,
       t: i18next.getFixedT(null, 'device'),
     });
