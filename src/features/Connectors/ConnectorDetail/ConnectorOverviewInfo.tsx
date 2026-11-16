@@ -89,8 +89,12 @@ const ConnectorOverviewInfo = memo<ConnectorOverviewInfoProps>(({ connector }) =
   // An OAuth connector is authorized per account, and each account names its
   // own authorizer under Accounts. A connector-wide "Authorized by" would name
   // only the creator — even before anyone has authorized an account.
+  // An uninstalled built-in is not in use, so nobody has authorized it.
   const showAuthorizer =
-    !!connector.authorizedByName && connector.authKind !== 'oauth2' && !connector.links?.length;
+    !!connector.authorizedByName &&
+    connector.authKind !== 'oauth2' &&
+    !connector.links?.length &&
+    !(isBuiltin && !isBuiltinInstalled);
 
   return (
     <div {...stylex.props(styles.list)}>

@@ -30,6 +30,21 @@ import SkillList, { type SkillViewMode } from './SkillList';
 import { SkillListVariantProvider } from './SkillListRow';
 
 const styles = stylex.create({
+  // @lobehub/ui paints every open dropdown trigger with `colorFillTertiary`
+  // (`.lobe-dropdown-menu-trigger[data-popup-open]`, `lobe-popup` layer), which
+  // wins over the primary Button's own open state and leaves its light text on
+  // a near-white fill. Restore the primary open state with the same tokens the
+  // Button uses, so the label stays readable in both themes.
+  addTrigger: {
+    backgroundColor: {
+      'default': null,
+      ':is([data-popup-open])': cssVar.colorPrimaryActive,
+    },
+    color: {
+      'default': null,
+      ':is([data-popup-open])': cssVar.colorBgLayout,
+    },
+  },
   body: { overflowY: 'auto', flex: '1', paddingBlock: '4px', paddingInline: '8px' },
   pageBody: { paddingBlockStart: '0', paddingBlockEnd: '24px', paddingInline: '0' },
   // Title and one line of what connectors do on the left; search and the page
@@ -160,7 +175,11 @@ const LeftPanel = memo<LeftPanelProps>(
                 onClick={handleOpenStore}
               />
               <DropdownMenu items={addItems} placement={'bottomRight'}>
-                <Button icon={Plus} type={'primary'}>
+                <Button
+                  className={stylex.props(styles.addTrigger).className}
+                  icon={Plus}
+                  type={'primary'}
+                >
                   {t('connectorMarket.add')}
                   <Icon icon={ChevronDown} size={14} />
                 </Button>

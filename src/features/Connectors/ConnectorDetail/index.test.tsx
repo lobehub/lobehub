@@ -337,6 +337,28 @@ describe('ConnectorDetail', () => {
     expect(mocks.toolState.installBuiltinTool).toHaveBeenCalledWith('lobe-web-browsing');
   });
 
+  it('does not name an authorizer for an uninstalled built-in', () => {
+    mocks.toolState.connectors[0] = {
+      authorizedByName: 'Avery',
+      id: 'connector-1',
+      identifier: 'lobe-web-browsing',
+      name: 'Web Browsing',
+      sourceType: ConnectorSourceType.builtin,
+    };
+    mocks.toolState.uninstalledBuiltinTools = ['lobe-web-browsing'];
+
+    const { unmount } = render(<ConnectorDetail connectorId="connector-1" />);
+    expect(screen.queryByText('connector.overview.authorizedBy')).not.toBeInTheDocument();
+    expect(screen.queryByText('Avery')).not.toBeInTheDocument();
+    unmount();
+
+    // Once installed, the built-in keeps its authorizer.
+    mocks.toolState.uninstalledBuiltinTools = [];
+    render(<ConnectorDetail connectorId="connector-1" />);
+    expect(screen.getByText('connector.overview.authorizedBy')).toBeInTheDocument();
+    expect(screen.getByText('Avery')).toBeInTheDocument();
+  });
+
   it('loads the built-in install state when the detail is opened without the list', () => {
     mocks.toolState.connectors[0] = {
       id: 'connector-1',
