@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import debug from 'debug';
 
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
+import { redisService } from '@/server/services/redis';
+import type { ConnectorOAuthCompletion } from '@/server/services/redis/connectorOAuth';
 
 const log = debug('lobe-server:connector:oauth-state');
 
@@ -82,27 +84,16 @@ export const consumeConnectorOAuthState = async (
   }
 };
 
-export interface ConnectorOAuthCompletion {
-  connectorId: string;
-  linkId: string;
-  lobeUserId: string;
-  outcome: 'created' | 'reauthorized' | 'matchedExisting';
-  workspaceId?: string;
-}
-/** The native IPC only reports success; retrieve the exact outcome server-side. */
+export type { ConnectorOAuthCompletion } from '@/server/services/redis/connectorOAuth';
+
+/** How a flow ended, for its window to read when the callback's message is lost. */
 export const saveConnectorOAuthCompletion = async (
   state: string,
   result: ConnectorOAuthCompletion,
-) => {
-  const redis = getAgentRuntimeRedisClient();
-  if (!redis) throw new Error('Redis is required for connector OAuth completion');
-  await redis.set(`${stateKey(state)}:result`, JSON.stringify(result), 'EX', STATE_TTL_SECONDS);
+): Promise<void> => {
+  await redisService.connectorOAuth.saveCompletion(state, result);
 };
-export const readConnectorOAuthCompletion = async (
+
+export const readConnectorOAuthCompletion = (
   state: string,
-): Promise<ConnectorOAuthCompletion | null> => {
-  const redis = getAgentRuntimeRedisClient();
-  if (!redis) return null;
-  const raw = await redis.get(`${stateKey(state)}:result`);
-  return raw ? (JSON.parse(raw) as ConnectorOAuthCompletion) : null;
-};
+): Promise<ConnectorOAuthCompletion | null> => redisService.connectorOAuth.readCompletion(state);

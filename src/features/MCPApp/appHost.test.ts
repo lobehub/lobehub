@@ -42,7 +42,8 @@ const disposers: (() => void)[] = [];
 const setup = ({
   canSendMessage = true,
   args = '{"city":"Paris"}',
-}: { canSendMessage?: boolean; args?: string } = {}) => {
+  linkId,
+}: { canSendMessage?: boolean; args?: string; linkId?: string } = {}) => {
   const iframe = document.createElement('iframe');
   document.body.append(iframe);
   const target = iframe.contentWindow!;
@@ -56,6 +57,7 @@ const setup = ({
     getContext: () => ({
       agentId: 'agt_1',
       args,
+      linkId,
       canSendMessage,
       identifier: 'weather-demo',
       isDark: false,
@@ -581,6 +583,20 @@ describe('connectAppView', () => {
     invokeMcpToolCall.mockResolvedValue({ content: 'ok', success: true });
     const { call } = setup({ args: '{"connector_link_id":"lnk_bob","link_id":"business"}' });
     await call(401);
+    expect(invokeMcpToolCall).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ fromMcpApp: true, linkId: 'lnk_bob' }),
+    );
+  });
+  // An entrypoint opens with `{}`: its account comes with the view instead
+  it("keeps an entrypoint view's tools/call on the account it opened as", async () => {
+    toolState.value = {
+      connectors: [{ identifier: 'weather-demo', tools: [{ inputSchema: { properties: {} } }] }],
+    };
+    getAppToolCallPolicy.mockResolvedValue('allow');
+    invokeMcpToolCall.mockResolvedValue({ content: 'ok', success: true });
+    const { call } = setup({ args: '{}', linkId: 'lnk_bob' });
+    await call(402);
     expect(invokeMcpToolCall).toHaveBeenLastCalledWith(
       expect.anything(),
       expect.objectContaining({ fromMcpApp: true, linkId: 'lnk_bob' }),

@@ -259,6 +259,11 @@ export const RedisKeys = {
    */
   integrations: {
     /**
+     * How one connector OAuth flow ended, read back by the window that started it.
+     * Full key: integrations:connector_oauth_completion:v1:{flowId}
+     */
+    connectorOAuthCompletion: (flowId: string): string => `connector_oauth_completion:v1:${flowId}`,
+    /**
      * Single-use state of one "Connect Linear" OAuth hand-off.
      * Full key: integrations:linear_oauth_state:v1:{state}
      */

@@ -221,6 +221,28 @@ describe('ConnectorLinkModel', () => {
     });
   });
 
+  // Reauthorized while signed in as someone else, with identity discovery failing
+  it('keeps no identity a fresh token was not shown to have', async () => {
+    const row = await create();
+    const a = await save(row.id, 'issuer/a', 'a-token');
+    await links.applyAuthorization(row.id, {
+      authorizerId: 'alice',
+      credentials: { type: 'oauth2', accessToken: 'b-token' },
+      target: { kind: 'existing', linkId: a.linkId },
+    });
+    expect(await links.findById(row.id, a.linkId)).toMatchObject({
+      credentials: { accessToken: 'b-token' },
+      externalAccountId: null,
+      profile: null,
+    });
+
+    // Connecting A again adds it instead of overwriting the token held now
+    expect(await save(row.id, 'issuer/a', 'a-token-2')).toMatchObject({ outcome: 'created' });
+    expect(await links.findById(row.id, a.linkId)).toMatchObject({
+      credentials: { accessToken: 'b-token' },
+    });
+  });
+
   it('refuses to reauthorize an account that no longer exists', async () => {
     const row = await create();
     await expect(

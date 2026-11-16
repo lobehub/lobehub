@@ -38,6 +38,8 @@ export interface AppViewContext {
   identifier: string;
   isDark: boolean;
   lifecycle?: McpAppBridgeHost['lifecycle'];
+  /** The account the view acts as, when its arguments cannot name one (an entrypoint's `{}`). */
+  linkId?: string;
   /** This desktop's own MCP process produced the result; the view's calls run there. */
   onThisDevice: boolean;
   /** Tool call result envelope (`{ content, state, success }`). */
@@ -154,8 +156,16 @@ export const connectAppView = ({
     // Views may only call tools on the server that rendered them, and
     // under the same approval rules as the conversation.
     callTool: async (name, toolArgs, request) => {
-      const { agentId, identifier, onThisDevice, server, t, args: initiatingArgs } = getContext();
-      const linkId = getMcpAppLinkId(identifier, agentId, initiatingArgs);
+      const {
+        agentId,
+        identifier,
+        onThisDevice,
+        server,
+        t,
+        args: initiatingArgs,
+        linkId: viewLinkId,
+      } = getContext();
+      const linkId = viewLinkId ?? getMcpAppLinkId(identifier, agentId, initiatingArgs);
       const policy = await getAppToolCallPolicy(identifier, name, { agentId, toolArgs });
       let allowed = policy === 'allow';
       if (policy === 'confirm') {

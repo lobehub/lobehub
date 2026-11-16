@@ -227,14 +227,23 @@ export class PluginActionImpl {
     resourceUri: string,
     {
       agentId,
+      linkId,
       onThisDevice = false,
       server,
       toolArguments,
-    }: { agentId?: string; onThisDevice?: boolean; server?: string; toolArguments?: string },
+    }: {
+      agentId?: string;
+      /** The account the view acts as, when its arguments cannot name one. */
+      linkId?: string;
+      onThisDevice?: boolean;
+      server?: string;
+      toolArguments?: string;
+    },
   ): SWRResponse<ReadResourceResult | undefined> =>
     useClientDataSWR(
       mcpAppKeys.resource(identifier, resourceUri, {
         agentId,
+        linkId,
         onThisDevice,
         server,
         toolArguments,
@@ -242,6 +251,7 @@ export class PluginActionImpl {
       () =>
         mcpService.readMcpAppResource(identifier, resourceUri, {
           agentId,
+          linkId,
           onThisDevice,
           server,
           toolArguments,

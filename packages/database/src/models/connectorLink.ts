@@ -308,8 +308,11 @@ export class ConnectorLinkModel {
       const current = matched ?? requested;
       const values = {
         credentials: toStoredCredentials(params.credentials),
-        externalAccountId: params.identity?.externalAccountId ?? current?.externalAccountId,
-        profile: params.identity?.profile ?? current?.profile,
+        // The identity of the token stored now, never an older token's: one
+        // kept from before would let a later authorization of that identity
+        // match this account and overwrite the token it holds now.
+        externalAccountId: params.identity?.externalAccountId ?? undefined,
+        profile: params.identity?.profile ?? undefined,
         status: 'connected' as const,
         userId: params.authorizerId,
       };
