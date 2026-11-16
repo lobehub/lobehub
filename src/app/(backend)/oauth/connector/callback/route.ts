@@ -21,6 +21,7 @@ import {
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 import { tokensToCredentials } from '@/server/services/connector/tokens';
 import { refreshByConnector } from '@/server/services/inboundWebhook/lifecycle';
+import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 const log = debug('lobe-server:connector:oauth-callback');
 
@@ -216,11 +217,6 @@ export const GET = async (req: NextRequest) => {
       log('post-OAuth tool sync failed for connector=%s: %O', payload.connectorId, err);
     }
 
-    await refreshByConnector(
-      serverDB,
-      { userId: payload.lobeUserId, workspaceId: payload.workspaceId },
-      payload.connectorId,
-    );
     // Only a fallback for a window that misses the result below: the account
     // is stored, so failing to record how the flow ended must not fail it.
     await saveConnectorOAuthCompletion(state, {
@@ -231,6 +227,15 @@ export const GET = async (req: NextRequest) => {
     }).catch((err) => {
       log('recording the OAuth completion of connector=%s failed: %O', payload.connectorId, err);
     });
+    // Renewing this connector's event subscriptions calls its server once per subscription; the
+    // popup must not wait on that, so it runs after the response with the stored credentials.
+    afterUnscoped(() =>
+      refreshByConnector(
+        serverDB,
+        { userId: payload.lobeUserId, workspaceId: payload.workspaceId },
+        payload.connectorId,
+      ),
+    );
     return renderResultPage({
       connectorId: payload.connectorId,
       success: true,

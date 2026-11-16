@@ -71,12 +71,21 @@ vi.mock('@/database/models/connectorTool', () => ({
 }));
 vi.mock('@/server/services/connector/sync', () => ({ syncConnectorToolsById: mockSync }));
 vi.mock('@/server/services/inboundWebhook/lifecycle', () => ({ refreshByConnector: mockRefresh }));
+// Work the route hands to after the response; tests run it when the response is out.
+const scheduled = vi.hoisted(() => [] as Array<() => unknown>);
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  afterUnscoped: (work: () => unknown) => scheduled.push(work),
+}));
+const runScheduled = async () => {
+  for (const work of scheduled.splice(0)) await work();
+};
 
 const makeReq = (query = 'code=abc&state=xyz') =>
   ({ nextUrl: { searchParams: new URLSearchParams(query) } }) as any;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  scheduled.length = 0;
   mockListLinks.mockResolvedValue([]);
   mockApplyAuthorization
     .mockReset()
@@ -188,6 +197,7 @@ describe('connector OAuth callback', () => {
 
     expect(body).toContain('"success":true');
     expect(body).toContain('"synced":false');
+    await runScheduled();
     expect(mockRefresh).toHaveBeenCalledWith({}, { userId: 'u1', workspaceId: undefined }, 'c1');
   });
 
@@ -215,10 +225,16 @@ describe('connector OAuth callback', () => {
     );
   });
 
-  it('refreshes subscriptions after persisting the newly authorized credentials', async () => {
+  it('refreshes subscriptions after the response, once the authorization is stored and recorded', async () => {
     mockSync.mockResolvedValue({ toolCount: 5 });
-    await GET(makeReq());
+    // A slow events server must not hold the popup's success page or its completion record.
+    mockRefresh.mockImplementation(() => new Promise(() => {}));
+    const body = await (await GET(makeReq())).text();
 
+    expect(body).toContain('"success":true');
+    expect(mockSaveCompletion).toHaveBeenCalledOnce();
+    expect(mockRefresh).not.toHaveBeenCalled();
+    void runScheduled();
     expect(mockRefresh).toHaveBeenCalledOnce();
     expect(mockRefresh).toHaveBeenCalledWith({}, { userId: 'u1', workspaceId: undefined }, 'c1');
     expect(mockApplyAuthorization.mock.invocationCallOrder[0]).toBeLessThan(
@@ -241,6 +257,7 @@ describe('connector OAuth callback', () => {
     expect(body).toContain('"success":true');
     expect(ConnectorModel).toHaveBeenCalledWith({}, 'u1', 'ws1', {});
     expect(ConnectorToolModel).toHaveBeenCalledWith({}, 'u1', 'ws1');
+    await runScheduled();
     expect(mockRefresh).toHaveBeenCalledWith({}, { userId: 'u1', workspaceId: 'ws1' }, 'c1');
   });
 

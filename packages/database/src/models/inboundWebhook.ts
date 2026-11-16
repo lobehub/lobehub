@@ -491,6 +491,29 @@ export class InboundWebhookModel {
     return rows.map(validateView);
   };
 
+  /**
+   * Push still-due rows to `until`, for rows a sweep cannot act on yet (their owner switched the
+   * feature off), so they stop filling the front of every scan. A row someone rescheduled since,
+   * or one being deleted, is left alone.
+   */
+  static deferMaintenance = async (
+    db: LobeChatDatabase,
+    ids: string[],
+    until: Date,
+  ): Promise<void> => {
+    if (!ids.length) return;
+    await db
+      .update(inboundWebhooks)
+      .set({ nextMaintenanceAt: until })
+      .where(
+        and(
+          inArray(inboundWebhooks.id, ids),
+          inArray(inboundWebhooks.status, ['active', 'error']),
+          lte(inboundWebhooks.nextMaintenanceAt, new Date()),
+        ),
+      );
+  };
+
   static queryStalePending = async (db: LobeChatDatabase): Promise<InboundWebhookView[]> => {
     const rows = await db
       .select(viewColumns)

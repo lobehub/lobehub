@@ -124,7 +124,8 @@ describe('durable webhook signal claims', () => {
     const claim = (await claimWebhookSignals(db, row))!;
     await settleWebhookSignals(db, claim, claim.batch, 'pending', 'topic_busy');
     await releaseWebhookSignalClaim(db, claim, true);
-    expect((await signal()).attempts).toBe(1);
+    // A busy deferral did not try a run, so it does not count against the retry budget.
+    expect((await signal()).attempts).toBe(0);
     expect((await model.findById(row.id))?.state.truncated).toBe(true);
     expect((await claimWebhookSignals(db, row))?.token).not.toBe(claim.token);
   });
