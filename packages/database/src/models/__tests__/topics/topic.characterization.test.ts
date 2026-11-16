@@ -61,6 +61,7 @@ const PUBLIC_METHODS = [
   'findByAgentAndDocumentTrigger',
   'findById',
   'findByIds',
+  'findByWebhookThread',
   'findOwnTopicById',
   'findOwnTopicsByIds',
   'findOwnersByIds',
