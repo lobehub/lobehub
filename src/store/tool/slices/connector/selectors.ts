@@ -41,20 +41,44 @@ export const isInConnectorTab = (
   visibility?: ConnectorVisibility,
 ): boolean => !visibility || (connector.visibility === 'private') === (visibility === 'private');
 
+/** The Composio account a connector row connects (`metadata.composio.connectedAccountId`). */
+const composioAccountId = (
+  metadata: Record<string, unknown> | null | undefined,
+): string | undefined => {
+  const composio = metadata?.composio;
+  if (!composio || typeof composio !== 'object') return;
+  const id = (composio as { connectedAccountId?: unknown }).connectedAccountId;
+  return typeof id === 'string' && id ? id : undefined;
+};
+
 /**
  * Whether an OAuth integration (a Composio or LobeHub catalog entry) lists under
  * a workspace connector page's tab. The entry carries no visibility; its
- * connector rows do. It lists under `private` when the caller has a private row
- * of it, and under `public` unless its only rows are private: an entry nobody
+ * connector rows do.
+ *
+ * An entry whose actions act on one account (`accountId`, the Composio
+ * connection the store holds for the identifier) lists under that account's
+ * row's tab alone: the store keeps one connection per identifier, so with a
+ * private and a shared row the entry in the other tab would disconnect,
+ * re-authorize or refresh the wrong account. An account no row names stays
+ * with the shared pool.
+ *
+ * Otherwise it lists under `private` when the caller has a private row of it,
+ * and under `public` unless its only rows are private: an entry nobody
  * connected stays with the shared pool, where it can be connected.
  */
 export const isIntegrationInConnectorTab = (
   identifier: string,
-  connectors: Pick<ConnectorWithTools, 'identifier' | 'visibility'>[],
+  connectors: Pick<ConnectorWithTools, 'identifier' | 'metadata' | 'visibility'>[],
   visibility?: ConnectorVisibility,
+  accountId?: string,
 ): boolean => {
   if (!visibility) return true;
   const rows = connectors.filter((c) => c.identifier === identifier);
+  if (accountId) {
+    const accountRow = rows.find((c) => composioAccountId(c.metadata) === accountId);
+    return accountRow ? isInConnectorTab(accountRow, visibility) : visibility !== 'private';
+  }
   if (rows.length === 0) return visibility !== 'private';
 
   return rows.some((c) => isInConnectorTab(c, visibility));

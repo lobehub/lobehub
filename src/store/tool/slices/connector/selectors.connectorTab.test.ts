@@ -118,6 +118,37 @@ describe('isIntegrationInConnectorTab', () => {
   });
 });
 
+describe('isIntegrationInConnectorTab: an entry bound to one account', () => {
+  const composioRow = (id: string, visibility: 'private' | 'public', accountId: string) =>
+    connector({
+      id,
+      identifier: 'gmail',
+      mcpServerUrl: null,
+      metadata: { composio: { connectedAccountId: accountId } },
+      visibility,
+    });
+  const rows = [
+    composioRow('ws-gmail', 'public', 'ca_team'),
+    composioRow('my-gmail', 'private', 'ca_mine'),
+  ];
+
+  it('lists under the tab of the row holding the account its actions act on, never both', () => {
+    // Regression: with a private and a shared row, the entry listed under both
+    // tabs, but the store holds one connection per identifier, so Disconnect in
+    // the Private tab could remove the shared workspace connection.
+    expect(isIntegrationInConnectorTab('gmail', rows, 'private', 'ca_mine')).toBe(true);
+    expect(isIntegrationInConnectorTab('gmail', rows, 'public', 'ca_mine')).toBe(false);
+
+    expect(isIntegrationInConnectorTab('gmail', rows, 'public', 'ca_team')).toBe(true);
+    expect(isIntegrationInConnectorTab('gmail', rows, 'private', 'ca_team')).toBe(false);
+  });
+
+  it('keeps an account no row names with the shared pool', () => {
+    expect(isIntegrationInConnectorTab('gmail', rows, 'public', 'ca_legacy')).toBe(true);
+    expect(isIntegrationInConnectorTab('gmail', rows, 'private', 'ca_legacy')).toBe(false);
+  });
+});
+
 describe('connectorSelectors.sharedConnectorByIdentifier', () => {
   const state = (connectors: ConnectorWithTools[]) => ({ connectors }) as unknown as ToolStore;
 

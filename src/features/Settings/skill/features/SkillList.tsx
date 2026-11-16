@@ -115,12 +115,15 @@ const SkillList = memo<SkillListProps>(
     // The Private tab reads only this list: keep its load's failure for Retry
     const connectorsSWR = useToolStore((s) => s.useFetchConnectors)(true);
     const allAgentBoundConnectors = useToolStore(connectorSelectors.agentBoundConnectors, isEqual);
-    // What an OAuth integration's tab is decided by: the visibility of its rows
+    // What an OAuth integration's tab is decided by: its rows' visibility, and
+    // which of them holds the account its actions act on
     const connectorTabRows = useToolStore(
       (s) =>
-        connectorSelectors
-          .connectorList(s)
-          .map(({ identifier, visibility }) => ({ identifier, visibility })),
+        connectorSelectors.connectorList(s).map(({ identifier, metadata, visibility }) => ({
+          identifier,
+          metadata: metadata?.composio ? { composio: metadata.composio } : null,
+          visibility,
+        })),
       isEqual,
     );
     const isAgentBoundInit = useToolStore((s) => s.isAgentBoundInit);
@@ -349,6 +352,7 @@ const SkillList = memo<SkillListProps>(
           item.serverType.identifier,
           connectorTabRows,
           tabVisibility,
+          getComposioServerByIdentifier(item.serverType.identifier)?.connectedAccountId,
         );
       if (item.type === 'lobehub')
         return isIntegrationInConnectorTab(item.provider.id, connectorTabRows, tabVisibility);
