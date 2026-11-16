@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   enabled: vi.fn(),
   connector: vi.fn(),
   fresh: vi.fn(),
+  links: vi.fn(),
   subscribe: vi.fn(),
   unsubscribe: vi.fn(),
   updateStatus: vi.fn(),
@@ -25,6 +26,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: class {
     findById = mocks.connector;
+    getLinkModel = () => ({ listByConnectorIds: mocks.links });
     updateStatus = mocks.updateStatus;
   },
 }));
@@ -36,13 +38,22 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => ({}) },
 }));
 vi.mock('@/server/services/connector/sync', () => ({
-  buildConnectorMcpParams: (connector: { identifier: string; mcpServerUrl: string }) => ({
+  buildConnectorMcpParams: (connector: {
+    credentials?: { accessToken?: string } | null;
+    identifier: string;
+    mcpServerUrl: string;
+  }) => ({
     name: connector.identifier,
     type: 'http',
     url: connector.mcpServerUrl,
+    // Which identity the call goes out as, for the account tests.
+    ...(connector.credentials?.accessToken && { token: connector.credentials.accessToken }),
   }),
 }));
-vi.mock('@/server/services/connector/tokens', () => ({ ensureFreshConnectorToken: mocks.fresh }));
+vi.mock('@/server/services/connector/tokens', () => ({
+  ensureFreshConnectorToken: mocks.fresh,
+  ensureFreshLinkToken: async (_connector: unknown, link: unknown) => link,
+}));
 vi.mock('@/server/services/mcp', () => ({
   mcpService: { subscribeEvent: mocks.subscribe, unsubscribeEvent: mocks.unsubscribe },
 }));
@@ -137,6 +148,7 @@ beforeEach(() => {
     mcpServerUrl: connection.url,
   });
   mocks.fresh.mockImplementation(async (connector) => connector);
+  mocks.links.mockResolvedValue([]);
   mocks.subscribe.mockResolvedValue({ id: 'remote', refreshBefore: null });
   mocks.unsubscribe.mockResolvedValue({});
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -367,5 +379,56 @@ describe('remote teardown', () => {
     await expect(teardownMcpSubscription(createContext().ctx)).rejects.toThrow(
       'Network unavailable',
     );
+  });
+});
+
+describe('connector accounts', () => {
+  const accounts = [
+    {
+      credentials: { accessToken: 'alice-token', type: 'oauth2' },
+      id: 'lnk_a',
+      status: 'connected',
+      userConnectorId: 'connector',
+    },
+    {
+      credentials: { accessToken: 'bob-token', type: 'oauth2' },
+      id: 'lnk_b',
+      status: 'error',
+      userConnectorId: 'connector',
+    },
+  ];
+  const oauthConnector = {
+    credentials: null,
+    id: 'connector',
+    identifier: 'linear',
+    isEnabled: true,
+    mcpServerUrl: connection.url,
+    oidcConfig: { clientId: 'client' },
+  };
+  beforeEach(() => {
+    mocks.connector.mockResolvedValue(oauthConnector);
+    mocks.links.mockResolvedValue(accounts);
+  });
+  const pinned = (linkId: string) =>
+    createContext({ config: { arguments: { team: 'web' }, eventName: 'issue.created', linkId } });
+
+  it('renews as the account the subscription was made with, not the primary one', async () => {
+    await refreshSubscription(pinned('lnk_b').ctx);
+    expect(mocks.subscribe.mock.calls[0][0]).toMatchObject({ token: 'bob-token' });
+  });
+
+  it('asks for a reconnect once that account is gone', async () => {
+    const { ctx, stored } = pinned('lnk_gone');
+    await maintainMcpSubscription(ctx);
+    expect(mocks.subscribe).not.toHaveBeenCalled();
+    expect(stored).toMatchObject({ lastError: 'auth', status: 'error' });
+  });
+
+  it('unsubscribes as that account, and skips the server once the account is gone', async () => {
+    await teardownMcpSubscription(pinned('lnk_b').ctx);
+    expect(mocks.unsubscribe.mock.calls[0][0]).toMatchObject({ token: 'bob-token' });
+    mocks.unsubscribe.mockClear();
+    await expect(teardownMcpSubscription(pinned('lnk_gone').ctx)).resolves.toBeUndefined();
+    expect(mocks.unsubscribe).not.toHaveBeenCalled();
   });
 });

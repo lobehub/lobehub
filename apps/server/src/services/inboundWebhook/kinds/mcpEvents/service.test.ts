@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   enabled: vi.fn(),
   fresh: vi.fn(),
+  links: vi.fn(),
   listEvents: vi.fn(),
   publicConnector: vi.fn(),
   remove: vi.fn(),
@@ -39,6 +40,7 @@ vi.mock('@/database/models/connector', () => ({
     resolveByIdentifiers = mocks.resolve;
     resolveAll = mocks.resolveAll;
     findPublicById = mocks.publicConnector;
+    getLinkModel = () => ({ listByConnectorIds: mocks.links });
   },
 }));
 vi.mock('@/database/models/workspaceAuditLog', () => ({
@@ -105,7 +107,10 @@ vi.mock('@/server/services/connector/sync', () => ({
     url: connector.mcpServerUrl,
   }),
 }));
-vi.mock('@/server/services/connector/tokens', () => ({ ensureFreshConnectorToken: mocks.fresh }));
+vi.mock('@/server/services/connector/tokens', () => ({
+  ensureFreshConnectorToken: mocks.fresh,
+  ensureFreshLinkToken: async (_connector: unknown, link: unknown) => link,
+}));
 vi.mock('@/server/services/inboundWebhook/featureGate', () => ({
   isWebhookEnabled: mocks.enabled,
 }));
@@ -177,6 +182,7 @@ beforeEach(() => {
   mocks.resolveAll.mockResolvedValue([connector()]);
   mocks.publicConnector.mockResolvedValue(connector());
   mocks.fresh.mockImplementation(async (value) => value);
+  mocks.links.mockResolvedValue([]);
   mocks.capability.mockResolvedValue({ supported: true });
   mocks.listEvents.mockResolvedValue([
     {
@@ -452,5 +458,46 @@ describe('event type discovery', () => {
     expect(result.errors).toEqual([
       { connector: 'linear', message: expect.stringMatching(/Reconnect/) },
     ]);
+  });
+});
+
+describe('OAuth connectors with accounts', () => {
+  // Since connector accounts, an OAuth connector row has no credentials of its own.
+  const oauth = connector({ credentials: null, oidcConfig: { clientId: 'client' } as never });
+  beforeEach(() => {
+    mocks.resolve.mockResolvedValue([oauth]);
+    mocks.resolveAll.mockResolvedValue([oauth]);
+    mocks.links.mockResolvedValue([
+      {
+        credentials: { accessToken: 'alice-token', type: 'oauth2' },
+        id: 'lnk_a',
+        status: 'connected',
+        userConnectorId: 'connector',
+      },
+    ]);
+  });
+
+  it('lists event types through the connected account', async () => {
+    const state = await service().listEventTypes({ agentId: 'agent' });
+    expect(state.errors).toBeUndefined();
+    expect(state.eventTypes.map((event) => event.name)).toEqual(['issue.created']);
+  });
+
+  it('subscribes through the connected account and remembers it', async () => {
+    await expect(service().subscribeEvent(args)).resolves.toMatchObject({
+      subscription: { status: 'active' },
+    });
+    expect(mocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: { arguments: { team: 'web' }, eventName: 'issue.created', linkId: 'lnk_a' },
+      }),
+    );
+  });
+
+  it('still asks for authentication when the connector has no account', async () => {
+    mocks.links.mockResolvedValue([]);
+    await expect(service().subscribeEvent(args)).rejects.toMatchObject({
+      message: 'Authenticate this connector before subscribing to events.',
+    });
   });
 });

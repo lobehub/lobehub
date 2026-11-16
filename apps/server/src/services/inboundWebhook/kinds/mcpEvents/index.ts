@@ -4,7 +4,6 @@ import { ConnectorModel } from '@/database/models/connector';
 import { TopicModel } from '@/database/models/topic';
 import { getMcpEventErrorName } from '@/libs/mcp/events/errors';
 import { buildConnectorMcpParams } from '@/server/services/connector/sync';
-import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
 import { mcpService } from '@/server/services/mcp';
 
 import { isWebhookEnabled } from '../../featureGate';
@@ -12,7 +11,7 @@ import { verifyInboundWebhook } from '../../verification';
 import type { InboundWebhookKindHandler } from '../types';
 import { handleMcpEventDelivery, isVerificationEnvelope } from './delivery';
 import {
-  connectorForWebhook,
+  connectorAsSubscriber,
   maintainMcpSubscription,
   refreshSubscription,
   teardownMcpSubscription,
@@ -67,8 +66,7 @@ export const mcpEventsKind: InboundWebhookKindHandler<'mcp_events'> = {
         if (!(await ctx.ownsClaim())) return { outcome: 'deferred' };
         try {
           const kindCtx = { db, featureEnabled: true, model, row };
-          const { connector: c, connectorModel } = await connectorForWebhook(kindCtx);
-          const fresh = await ensureFreshConnectorToken(c, connectorModel);
+          const { fresh } = await connectorAsSubscriber(kindCtx);
           const available = await mcpService.listEvents(buildConnectorMcpParams(fresh));
           if (
             available.some(
