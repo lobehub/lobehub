@@ -24,6 +24,8 @@ export type GoalEnvironmentProblem =
   | { kind: 'credentials' }
   | { kind: 'device' }
   | { kind: 'gateway' }
+  /** The verify model cannot run as configured; the delivery was never judged. */
+  | { kind: 'verifier' }
   | { kind: 'workingDirectory'; path: string };
 
 export interface GoalFailureClassification {
@@ -62,6 +64,14 @@ const ENVIRONMENT_RULES: Array<{
   {
     pattern: /\bwas not found\. Install it\b|\bcli_not_found\b/i,
     problem: () => ({ kind: 'cli' }),
+  },
+  {
+    // Before the credentials rule: the code in this text is the verifier's, so
+    // the fix is the verify model, not the agent that did the work.
+    // Matches `verificationModelUnusableError`; the credit refusal shares the
+    // prefix but stays a credentials problem.
+    pattern: /^Verification could not run: the verifier model(?: \S+)? is not usable \(/,
+    problem: () => ({ kind: 'verifier' }),
   },
   {
     pattern:

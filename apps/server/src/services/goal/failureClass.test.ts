@@ -1,4 +1,7 @@
-import { VERIFICATION_OUT_OF_CREDITS_ERROR } from '@lobechat/const/goal';
+import {
+  VERIFICATION_OUT_OF_CREDITS_ERROR,
+  verificationModelUnusableError,
+} from '@lobechat/const/goal';
 import { describe, expect, it } from 'vitest';
 
 import { classifyGoalFailure, parseQuotaResetAt } from './failureClass';
@@ -57,6 +60,9 @@ describe('classifyGoalFailure', () => {
     ['InvalidProviderAPIKey', 'credentials'],
     // The verifier's credit refusal has no retry branch; the setup gate owns it.
     [VERIFICATION_OUT_OF_CREDITS_ERROR, 'credentials'],
+    // The code belongs to the verifier, so the fix is the verify model, not the agent's.
+    [verificationModelUnusableError('ModelNotFound', 'chinese-360/glm-5.3-flash'), 'verifier'],
+    [verificationModelUnusableError('InvalidProviderAPIKey'), 'verifier'],
   ])('reads %s as a setup problem (%s)', (error, kind) => {
     expect(classifyGoalFailure(error)).toMatchObject({ class: 'environment', problem: { kind } });
   });

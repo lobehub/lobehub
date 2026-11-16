@@ -4,6 +4,7 @@ import {
   VERIFICATION_FAILED_ERROR,
   VERIFICATION_OUT_OF_CREDITS_ERROR,
   VERIFICATION_UNJUDGEABLE_ERROR,
+  verificationModelUnusableError,
 } from '@lobechat/const/goal';
 import { isCheckWaivedByDispute } from '@lobechat/const/verify';
 import debug from 'debug';
@@ -25,7 +26,7 @@ import { maybeAutoRepair, repairRejectedReview } from './repairService';
 import { VerifyReporterService } from './reporter';
 import { VerifyStatusService } from './statusService';
 import { attachTaskRunToAcceptance, resolveTaskAcceptance } from './taskAcceptance';
-import { isOutOfCreditsFailure } from './verifierError';
+import { isOutOfCreditsFailure, verifierSetupFailureCode } from './verifierError';
 
 const log = debug('lobe-server:verify-settle');
 
@@ -126,6 +127,45 @@ interface ReportContext {
   goal: string;
   modelConfig: { model: string; provider: string };
 }
+
+type VerifierSetupCause = { kind: 'credits' } | { code: string; kind: 'model'; model?: string };
+
+/**
+ * The setup problem behind an errored round's required checks, if any: a credit
+ * refusal, or a verifier model that cannot run as configured. Reads the model
+ * the verifier actually ran on, so the person asked to fix it knows which one.
+ */
+const readVerifierSetupCause = async (
+  db: LobeChatDatabase,
+  userId: string,
+  runId: string,
+  workspaceId?: string,
+): Promise<VerifierSetupCause | undefined> => {
+  try {
+    const errored = (
+      await new VerifyCheckResultModel(db, userId, workspaceId).listByRun(runId)
+    ).filter((r) => r.required && r.status === 'errored');
+    if (errored.some((r) => isOutOfCreditsFailure(r.toulmin?.limitation)))
+      return { kind: 'credits' };
+
+    for (const result of errored) {
+      const code = verifierSetupFailureCode(result.toulmin?.limitation);
+      if (!code) continue;
+      const operation = result.verifierOperationId
+        ? await new AgentOperationModel(db, userId, workspaceId)
+            .findById(result.verifierOperationId)
+            .catch(() => undefined)
+        : undefined;
+      const model =
+        operation?.provider && operation?.model
+          ? `${operation.provider}/${operation.model}`
+          : (operation?.model ?? undefined);
+      return { code, kind: 'model', model };
+    }
+  } catch (error) {
+    log('verify-settle errored causes unavailable for %s: %O', runId, error);
+  }
+};
 
 /**
  * Drive the bound task from a settled verify run. This is the single
@@ -241,24 +281,17 @@ export const driveTaskFromVerify = async (
             ? 'unjudgeable'
             : run.status;
 
-    // A verifier refused for want of credits stays refused however often the
-    // builder re-delivers. Name that cause, so the Goal coordinator asks for
-    // credits instead of starting builder attempt after builder attempt into
-    // the same refusal. An unreadable cause keeps the ordinary errored path.
-    const outOfCredits =
-      outcome === 'errored' &&
-      (await new VerifyCheckResultModel(db, userId, workspaceId)
-        .listByRun(run.id)
-        .then((results) =>
-          results.some(
-            (r) =>
-              r.required && r.status === 'errored' && isOutOfCreditsFailure(r.toulmin?.limitation),
-          ),
-        )
-        .catch((error) => {
-          log('verify-settle errored causes unavailable for %s: %O', run.id, error);
-          return false;
-        }));
+    // A verifier refused for want of credits, or whose model cannot run as
+    // configured (a model the provider does not serve, a rejected key), stays
+    // refused however often the builder re-delivers. Name that cause, so the
+    // Goal coordinator asks for the fix instead of starting builder attempt
+    // after builder attempt into the same refusal. An unreadable cause keeps
+    // the ordinary errored path.
+    const setupCause =
+      outcome === 'errored'
+        ? await readVerifierSetupCause(db, userId, run.id, workspaceId)
+        : undefined;
+    const outOfCredits = setupCause?.kind === 'credits';
 
     if (outcome === 'passed') {
       // Verify and, for Goal tasks, Acceptance review must pass before completing
@@ -308,9 +341,11 @@ export const driveTaskFromVerify = async (
             ? ACCEPTANCE_REVIEW_ERRORED_ERROR
             : outOfCredits
               ? VERIFICATION_OUT_OF_CREDITS_ERROR
-              : isErrored
-                ? VERIFICATION_ERRORED_ERROR
-                : VERIFICATION_FAILED_ERROR;
+              : setupCause?.kind === 'model'
+                ? verificationModelUnusableError(setupCause.code, setupCause.model)
+                : isErrored
+                  ? VERIFICATION_ERRORED_ERROR
+                  : VERIFICATION_FAILED_ERROR;
       if (task.automationMode) {
         // Mirror of the pass branch: verify judges THIS tick, not the lifetime
         // schedule. Pausing here would permanently disarm the cron (the
@@ -368,11 +403,13 @@ export const driveTaskFromVerify = async (
             )
           : outOfCredits
             ? 'Verification could not run because the account is out of balance for the verifier model; the delivery was not evaluated. Top up, then retry.'
-            : outcome === 'errored' || outcome === 'review_errored'
-              ? 'Verification could not be completed due to an internal error; the delivery was not evaluated. Please retry or review it manually.'
-              : outcome === 'unjudgeable'
-                ? 'Acceptance review could not judge this delivery from the captured evidence. Review it manually, or restate the check so evidence can settle it.'
-                : undefined;
+            : setupCause?.kind === 'model'
+              ? `${verificationModelUnusableError(setupCause.code, setupCause.model)} Choose a verify model that works, then retry.`
+              : outcome === 'errored' || outcome === 'review_errored'
+                ? 'Verification could not be completed due to an internal error; the delivery was not evaluated. Please retry or review it manually.'
+                : outcome === 'unjudgeable'
+                  ? 'Acceptance review could not judge this delivery from the captured evidence. Review it manually, or restate the check so evidence can settle it.'
+                  : undefined;
       await new TaskResultBridgeService(db, userId, workspaceId).deliver({
         operationId,
         reason: outcome === 'passed' ? 'done' : 'error',

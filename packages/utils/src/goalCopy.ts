@@ -60,6 +60,13 @@ const REASON_PATTERNS: Array<{
     pattern: /^Setup problem: (.+?)\. Update the provider credentials/,
   },
   {
+    // Without a model name the sentence stays verbatim rather than half-filled.
+    key: 'goalProcess.gate.reason.setupVerifier',
+    params: ['model', 'code'],
+    pattern:
+      /^Setup problem: Verification could not run: the verifier model (\S+) is not usable \((\w+)\)[^.]*\. Choose a verify model that works/,
+  },
+  {
     key: 'goalProcess.gate.reason.setupDevice',
     params: ['error'],
     pattern: /^Setup problem: (.+?)\. Reconnect the device/,
