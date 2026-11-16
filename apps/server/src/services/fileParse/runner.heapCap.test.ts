@@ -113,7 +113,7 @@ describe('parent V8 heap flags vs the worker memory budget', () => {
     ['CLI --max_old_space_size', { args: ['--max_old_space_size=4096'] }],
     ['NODE_OPTIONS --max-old-space-size', { nodeOptions: '--max-old-space-size=4096' }],
     ['NODE_OPTIONS --max_old_space_size', { nodeOptions: '--max_old_space_size=4096' }],
-    ['NODE_OPTIONS --max-heap-size', { nodeOptions: '--max-heap-size=4096' }],
+    ['CLI --max-heap-size', { args: ['--max-heap-size=4096'] }],
   ])(
     'refuses before loading any parser when the parent has %s above the budget',
     async (_, flags) => {
@@ -147,29 +147,43 @@ describe('parent V8 heap flags vs the worker memory budget', () => {
     60_000,
   );
 
-  // `--max-old-space-size 4096` (space) is a Node option, not a V8 one. Whatever this Node does
-  // with it, it must never end as a parse that starts with the larger heap: either it is accepted
-  // and the runner refuses (START_FAILED, parser never started), or Node refuses to start.
+  // Node versions differ in which heap option forms they accept. An accepted form must fail
+  // closed in the runner (START_FAILED, parser never started); otherwise Node must reject the
+  // specific option at startup, rather than crash or time out.
   it.each([
-    ['CLI', { args: ['--max-old-space-size', '4096'] }],
-    ['NODE_OPTIONS', { nodeOptions: '--max-old-space-size 4096' }],
+    [
+      'CLI --max-old-space-size (space-separated)',
+      { args: ['--max-old-space-size', '4096'] },
+      /bad option: --max-old-space-size(?:\s|$)/,
+    ],
+    [
+      'NODE_OPTIONS --max-old-space-size (space-separated)',
+      { nodeOptions: '--max-old-space-size 4096' },
+      /bad option: --max-old-space-size(?:\s|$)/,
+    ],
+    [
+      'NODE_OPTIONS --max-heap-size',
+      { nodeOptions: '--max-heap-size=4096' },
+      /--max-heap-size=? is not allowed in NODE_OPTIONS/,
+    ],
   ])(
-    'never starts a parser with a larger heap for the space-separated form (%s)',
-    async (_, flags) => {
+    'never starts a parser with a larger heap for version-dependent option forms (%s)',
+    async (_, flags, rejection) => {
       const outcome = await spawnDriver(flags).then(
         (value) => ({ value }),
-        (error: { code?: number; stderr?: string }) => ({ error }),
+        (error: { code?: number; signal?: string | null; stderr?: string }) => ({ error }),
       );
 
       if ('error' in outcome) {
         // Node rejected the flag itself: an actual option error, not a crash from something else.
-        expect(outcome.error.stderr).toMatch(
-          /--max-old-space-size|requires an argument|not allowed/,
-        );
+        expect(outcome.error.code).toBe(9);
+        expect(outcome.error.signal).toBeNull();
+        expect(outcome.error.stderr).toMatch(rejection);
         return;
       }
       for (const result of outcome.value.results.slice(0, 2)) {
         expect(result).toMatchObject({ code: 'START_FAILED' });
+        expect(result.message).toMatch(/--max-old-space-size/);
       }
       expect(existsSync(outcome.value.marker)).toBe(false);
     },
