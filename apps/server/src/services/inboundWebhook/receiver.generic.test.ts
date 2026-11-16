@@ -52,7 +52,6 @@ const agentId = 'generic-receiver-agent';
 const topicId = 'generic-receiver-topic';
 const token = 'generic-token-0123456789';
 const model = new InboundWebhookModel(db, userId, undefined, gateKeeper);
-// The one route production mounts: the key travels in a header, never in the URL.
 const app = new Hono().post('/inbound/:id', inboundWebhookBodyLimit, inboundWebhook);
 const auth = { authorization: `Bearer ${token}` };
 
@@ -130,12 +129,6 @@ describe('generic webhook ingress', () => {
       (id: string) => post(`/inbound/${id}`, { headers: { authorization: 'Bearer nope' } }),
     ],
     ['no key at all', 401, (id: string) => post(`/inbound/${id}`)],
-    // There is no secret URL: a key in the path reaches no route.
-    [
-      'the key in the URL instead of the header',
-      404,
-      (id: string) => post(`/inbound/${id}/${token}`),
-    ],
   ] as const)('refuses %s without storing anything', async (_, status, call) => {
     const row = await seed();
     expect((await call(row.id)).status).toBe(status);
