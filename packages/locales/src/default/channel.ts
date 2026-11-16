@@ -91,6 +91,7 @@ export default {
   'members.show': 'Show member list',
   'members.hide': 'Hide member list',
   'membersCount': 'Members · {{count}}',
+  'members.agents': 'Agents · {{count}}',
   'openAgent': 'Open Agent',
   'openAgentNamed': 'Open {{name}}',
   'profile.about': 'About',
