@@ -88,6 +88,12 @@ export const channels = pgTable(
      * is kept by the application, which serializes opening it.
      */
     peerUserId: text('peer_user_id').references(() => users.id, { onDelete: 'cascade' }),
+    /**
+     * The two Agents of a conversation between Agents (`agentA:agentB`, sorted), opened when one
+     * of `userId`'s Agents asks another. `userId` is its owner member and the execution identity
+     * of both Agents; it watches the exchange without being part of it.
+     */
+    agentPairKey: text('agent_pair_key'),
 
     title: text('title').notNull(),
     /** Last allocated message sequence; incremented under the row lock when a message lands. */
@@ -115,6 +121,10 @@ export const channels = pgTable(
     uniqueIndex('channels_direct_unique')
       .on(t.agentId, t.userId, sql`coalesce(${t.workspaceId}, '')`)
       .where(sql`${t.agentId} IS NOT NULL`),
+    // One conversation per Agent pair, person and scope, like the direct conversation.
+    uniqueIndex('channels_agent_pair_unique')
+      .on(t.agentPairKey, t.userId, sql`coalesce(${t.workspaceId}, '')`)
+      .where(sql`${t.agentPairKey} IS NOT NULL`),
     check(
       'channels_direct_visibility_check',
       sql`${t.agentId} IS NULL OR ${t.visibility} = 'private'`,
@@ -315,7 +325,10 @@ export const channelMessages = pgTable(
     content: text('content').notNull(),
     /** Actual human sender, not the owner/requester of an Agent reply. */
     userId: text('user_id').references(() => users.id, { onDelete: 'set null' }),
-    /** Actual Agent sender. Author deletion retains group history and clears its reference. */
+    /**
+     * Actual Agent sender: of a reply, or of a request one Agent sent another in their
+     * conversation. Author deletion retains group history and clears its reference.
+     */
     agentId: text('agent_id').references(() => agents.id, { onDelete: 'set null' }),
     /** Mentioned member ids. Mentioned Agents run; mentioned people are only notified. */
     mentions: jsonb('mentions').$type<string[]>().notNull().default([]),
@@ -362,10 +375,6 @@ export const channelMessages = pgTable(
     check(
       'channel_messages_user_sender_check',
       sql`${t.routingStatus} <> 'reply' OR ${t.userId} IS NULL`,
-    ),
-    check(
-      'channel_messages_agent_sender_check',
-      sql`${t.routingStatus} = 'reply' OR ${t.agentId} IS NULL`,
     ),
   ],
 );

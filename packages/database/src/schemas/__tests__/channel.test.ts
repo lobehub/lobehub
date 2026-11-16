@@ -336,7 +336,6 @@ describe('channel schema', () => {
         { userId: 'missing-user' },
         { userId: null, agentId: 'missing-agent', routingStatus: 'reply' as const },
         { userId: ownerId, agentId: first.agent.agentId },
-        { userId: null, agentId: first.agent.agentId },
         { userId: ownerId, routingStatus: 'reply' as const },
       ]) {
         await expect(
@@ -349,6 +348,25 @@ describe('channel schema', () => {
           }),
         ).rejects.toThrow();
       }
+    });
+
+    it('accepts a request an Agent wrote', async () => {
+      const first = await createChannel('First');
+      const message = await createMessage(first.channel.id, first.owner.id, 1);
+
+      const [request] = await serverDB
+        .insert(channelMessages)
+        .values({
+          ...message,
+          agentId: first.agent.agentId,
+          id: undefined,
+          requestKey: 'agent-request',
+          sequence: 2,
+          userId: null,
+        })
+        .returning();
+      expect(request).toMatchObject({ agentId: first.agent.agentId, userId: null });
+      expect(request.routingStatus).not.toBe('reply');
     });
 
     it('keeps Channel attachments unique and drops them with the file', async () => {
@@ -382,53 +400,15 @@ describe('channel schema', () => {
   });
 
   describe('writer locks', () => {
-    it('allows one writer per member until it is released or isolated', async () => {
-      const fixture = await createChannel();
-      const [job] = await createClaimedJob(fixture, 1, null);
-
-      await expect(createClaimedJob(fixture, 2, null)).rejects.toThrow();
-
-      await serverDB
-        .update(channelJobs)
-        .set({ isolatedAt: new Date() })
-        .where(eq(channelJobs.id, job.id));
-      await expect(createClaimedJob(fixture, 3, null)).resolves.toHaveLength(1);
-    });
-
-    it('serializes writers on one device directory across channels', async () => {
+    // One writer per member and branch, and per device directory, are application rules
+    // checked by `claimJob` (see the repository's execution tests), not database constraints.
+    it('leaves writer exclusivity to the application', async () => {
       const first = await createChannel('First');
       const second = await createChannel('Second');
-      const [job] = await createClaimedJob(first, 1);
+      await createClaimedJob(first, 1);
 
-      await expect(createClaimedJob(second, 1)).rejects.toThrow();
-      await expect(
-        createClaimedJob(second, 2, { deviceId: 'device-1', workingDirectory: '/other' }),
-      ).resolves.toHaveLength(1);
-
-      await serverDB
-        .update(channelJobs)
-        .set({ writerHeld: false })
-        .where(eq(channelJobs.id, job.id));
-      const third = await createChannel('Third');
-      await expect(createClaimedJob(third, 1)).resolves.toHaveLength(1);
-    });
-
-    it('keeps the directory locked while an isolated writer is still unconfirmed', async () => {
-      const first = await createChannel('First');
-      const second = await createChannel('Second');
-      const [job] = await createClaimedJob(first, 1);
-
-      await serverDB
-        .update(channelJobs)
-        .set({ isolatedAt: new Date() })
-        .where(eq(channelJobs.id, job.id));
-      await expect(createClaimedJob(second, 1)).rejects.toThrow();
-
-      await serverDB
-        .update(channelJobs)
-        .set({ writerHeld: false })
-        .where(eq(channelJobs.id, job.id));
-      await expect(createClaimedJob(second, 2)).resolves.toHaveLength(1);
+      await expect(createClaimedJob(first, 2)).resolves.toHaveLength(1);
+      await expect(createClaimedJob(second, 1)).resolves.toHaveLength(1);
     });
   });
 
