@@ -97,7 +97,7 @@ export default {
     'The page generates the BotID and Secret. Copy them into the fields below and keep the Secret somewhere safe before you save the bot settings.',
   'channel.quickSetup.wecom.usage.title': 'Use it in direct and group chats',
   'channel.quickSetup.wecom.usage.desc':
-    "Members in the visible range find the bot under AI Bots in WeCom Contacts and can chat with it directly. To use it in a group, add it to an internal group from the top-right corner → Add members → AI Bots; there it replies only when @-mentioned. External and cross-company groups aren't supported.",
+    "Members in the visible range find the bot under AI Bots in WeCom Contacts and can chat with it directly. To use it in a group, add it to an internal group from the top-right corner → Add members → AI Bots; there it replies only when @-mentioned. External, interconnected, and upstream/downstream groups aren't supported.",
   'channel.quickSetup.dingtalk.create.title': 'Create an internal app',
   'channel.quickSetup.dingtalk.create.desc':
     'In the DingTalk developer console, create an internal app, then copy the Client ID and Client Secret from Credentials & Basic Info.',

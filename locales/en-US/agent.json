@@ -462,7 +462,7 @@
   "channel.quickSetup.wecom.create.title": "Create an AI bot in API mode",
   "channel.quickSetup.wecom.credentials.desc": "The page generates the BotID and Secret. Copy them into the fields below and keep the Secret somewhere safe before you save the bot settings.",
   "channel.quickSetup.wecom.credentials.title": "Copy the BotID and Secret",
-  "channel.quickSetup.wecom.usage.desc": "Members in the visible range find the bot under AI Bots in WeCom Contacts and can chat with it directly. To use it in a group, add it to an internal group from the top-right corner → Add members → AI Bots; there it replies only when @-mentioned. External and cross-company groups aren't supported.",
+  "channel.quickSetup.wecom.usage.desc": "Members in the visible range find the bot under AI Bots in WeCom Contacts and can chat with it directly. To use it in a group, add it to an internal group from the top-right corner → Add members → AI Bots; there it replies only when @-mentioned. External, interconnected, and upstream/downstream groups aren't supported.",
   "channel.quickSetup.wecom.usage.title": "Use it in direct and group chats",
   "channel.quickView.answer": "Three things came up today: the release moved to Thursday, the sign-in page copy, and the priority of the bug list. Want me to turn them into to-dos?",
   "channel.quickView.ask": "Summarize today's discussion",

@@ -462,7 +462,7 @@
   "channel.quickSetup.wecom.create.title": "创建 API 模式的智能机器人",
   "channel.quickSetup.wecom.credentials.desc": "页面会生成 BotID 和 Secret。先复制并填到下面，妥善保存好 Secret，再保存机器人配置。",
   "channel.quickSetup.wecom.credentials.title": "复制 BotID 和 Secret",
-  "channel.quickSetup.wecom.usage.desc": "可见范围内的成员在企业微信通讯录的「智能机器人」分组找到它，就能单聊。在企业内部群点右上角添加成员，选「智能机器人」把它加进群，群里 @ 它才会回复。外部群和互联群不支持。",
+  "channel.quickSetup.wecom.usage.desc": "可见范围内的成员在企业微信通讯录的「智能机器人」分组找到它，就能单聊。在企业内部群点右上角添加成员，选「智能机器人」把它加进群，群里 @ 它才会回复。外部群、互联群和上下游群不支持。",
   "channel.quickSetup.wecom.usage.title": "在单聊和群聊中使用",
   "channel.quickView.answer": "今天主要讨论了三件事：发布时间调整到周四、登录页的文案，以及 bug 列表的优先级。需要我整理成待办吗？",
   "channel.quickView.ask": "帮我总结一下今天的讨论",
