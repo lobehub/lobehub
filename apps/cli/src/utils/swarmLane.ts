@@ -43,6 +43,48 @@ const copyEntries = async (from: string, into: string) => {
   }
 };
 
+/** Parts of a linked worktree's gitdir that live in the shared repository, not in the copy. */
+const BORROWED_FROM_COMMON = ['commondir', 'config', 'gitdir', 'objects', 'packed-refs', 'refs'];
+
+/**
+ * A repository's own `.git` directory travels with the copy: index and HEAD are
+ * inside it, so a lane stages and commits on its own.
+ *
+ * A linked worktree is the exception. There `.git` is a one-line pointer file, so
+ * copying the workspace verbatim makes every lane (and the original workspace)
+ * read and write the *same* gitdir — one index, one HEAD, one set of refs. Give
+ * the copy a self-contained gitdir instead: the borrowed parts of the shared
+ * repository (`objects`, `refs`, `config`) plus the worktree's own state
+ * (`HEAD`, index, logs).
+ */
+const materializeGitDir = async (from: string, into: string) => {
+  const pointer = await readFile(path.join(into, '.git'), 'utf8').catch(() => undefined);
+  if (!pointer?.startsWith('gitdir:')) return;
+
+  const source = path.resolve(from, pointer.slice('gitdir:'.length).trim());
+  const common = (
+    await readFile(path.join(source, 'commondir'), 'utf8').catch(() => undefined)
+  )?.trim();
+  // Not a linked worktree after all: keep the copied pointer rather than guess at its layout.
+  if (!common) return;
+  const shared = path.resolve(source, common);
+  const gitDir = path.join(into, '.git');
+
+  const copyFrom = async (dir: string, skip: string[]) => {
+    for (const entry of await readdir(dir)) {
+      if (skip.includes(entry)) continue;
+      await cp(path.join(dir, entry), path.join(gitDir, entry), COPY);
+    }
+  };
+
+  await rm(gitDir, { force: true });
+  await mkdir(gitDir, { recursive: true });
+  // The shared repository first — `index`, `logs` and `HEAD` belong to one worktree, so they
+  // come from the worktree itself, in the second pass.
+  await copyFrom(shared, ['index', 'logs', 'worktrees']);
+  await copyFrom(source, BORROWED_FROM_COMMON);
+};
+
 /**
  * Copy the workspace `from` into `to`, written into a sibling first and renamed,
  * so a lane directory is either complete or absent. `replace` allows landing on a
@@ -56,6 +98,7 @@ export const copyWorkspace = async (
   const staging = `${to}.partial-${process.pid}`;
   await rm(staging, { force: true, recursive: true });
   await copyEntries(from, staging);
+  await materializeGitDir(from, staging);
   if (!options.replace) {
     await rename(staging, to);
     return;

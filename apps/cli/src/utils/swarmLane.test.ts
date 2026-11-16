@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -159,5 +159,65 @@ describe('stakeSwarmLanes', () => {
   it('skips a workspace that is not on this machine', async () => {
     const root = await workspace();
     expect(await stakeSwarmLanes(path.join(root, 'missing'), 'goal-1')).toBeUndefined();
+  });
+});
+
+describe('prepareSwarmLane on a linked worktree', () => {
+  /** A workspace whose `.git` is a pointer file, next to the repository it borrows from. */
+  const linkedWorktree = async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'lh-swarm-wt-'));
+    const shared = path.join(root, 'repo', '.git');
+    const worktreeGit = path.join(shared, 'worktrees', 'wt');
+    await mkdir(path.join(shared, 'objects'), { recursive: true });
+    await writeFile(path.join(shared, 'objects', 'pack-1.pack'), 'objects');
+    await mkdir(path.join(shared, 'refs', 'heads'), { recursive: true });
+    await writeFile(path.join(shared, 'refs', 'heads', 'main'), 'sha-main\n');
+    await writeFile(path.join(shared, 'config'), '[core]\n');
+    await writeFile(path.join(shared, 'index'), 'original-index');
+    await mkdir(worktreeGit, { recursive: true });
+    await writeFile(path.join(worktreeGit, 'commondir'), '../..\n');
+    await writeFile(path.join(worktreeGit, 'gitdir'), path.join(root, 'worktree', '.git'));
+    await writeFile(path.join(worktreeGit, 'HEAD'), 'ref: refs/heads/main\n');
+    await writeFile(path.join(worktreeGit, 'index'), 'worktree-index');
+
+    const worktree = path.join(root, 'worktree');
+    await mkdir(worktree, { recursive: true });
+    await writeFile(path.join(worktree, '.git'), `gitdir: ${worktreeGit}\n`);
+    await writeFile(path.join(worktree, 'train.py'), 'v0');
+    return { shared, worktree, worktreeGit };
+  };
+
+  it('gives the copy its own gitdir instead of a pointer back to the shared one', async () => {
+    const { worktree, worktreeGit } = await linkedWorktree();
+    const lane = path.join(worktree, '.lanes', 'A');
+    await prepareSwarmLane(lane);
+
+    const gitDir = path.join(lane, '.git');
+    expect((await lstat(gitDir)).isDirectory()).toBe(true);
+    // The worktree's own state, not the main checkout's.
+    expect(await read(path.join(gitDir, 'HEAD'))).toBe('ref: refs/heads/main\n');
+    expect(await read(path.join(gitDir, 'index'))).toBe('worktree-index');
+    // The parts it borrows from the shared repository.
+    expect(await read(path.join(gitDir, 'objects', 'pack-1.pack'))).toBe('objects');
+    expect(await read(path.join(gitDir, 'refs', 'heads', 'main'))).toBe('sha-main\n');
+    expect(await read(path.join(gitDir, 'config'))).toBe('[core]\n');
+    // Nothing in the copy still resolves to the shared gitdir.
+    await expect(read(path.join(gitDir, 'commondir'))).rejects.toThrow();
+    await expect(read(path.join(gitDir, 'gitdir'))).rejects.toThrow();
+
+    // The original workspace keeps its pointer.
+    expect(await read(path.join(worktree, '.git'))).toBe(`gitdir: ${worktreeGit}\n`);
+  });
+
+  it('keeps a plain repository copy as its own .git directory', async () => {
+    const root = await workspace();
+    await mkdir(path.join(root, '.git'));
+    await writeFile(path.join(root, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+
+    const lane = path.join(root, '.lanes', 'A');
+    await prepareSwarmLane(lane);
+
+    expect((await lstat(path.join(lane, '.git'))).isDirectory()).toBe(true);
+    expect(await read(path.join(lane, '.git', 'HEAD'))).toBe('ref: refs/heads/main\n');
   });
 });
