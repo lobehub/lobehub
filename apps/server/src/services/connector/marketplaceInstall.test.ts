@@ -15,6 +15,7 @@ import {
 } from '@/database/schemas';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { mcpService } from '@/server/services/mcp';
+import { listMcpToolsOnDevice } from '@/server/services/mcp/deviceTunnel';
 
 import {
   installMarketplaceMcpConnector,
@@ -25,6 +26,9 @@ import {
 import { syncConnectorToolsById } from './sync';
 
 vi.mock('@/server/services/mcp', () => ({ mcpService: { listRawTools: vi.fn() } }));
+const gateway = vi.hoisted(() => ({ isConfigured: false }));
+vi.mock('@/server/services/deviceGateway', () => ({ deviceGateway: gateway }));
+vi.mock('@/server/services/mcp/deviceTunnel', () => ({ listMcpToolsOnDevice: vi.fn() }));
 vi.mock('@/server/services/mcp/featureGate', () => ({
   isMcpAppsEnabled: vi.fn().mockResolvedValue(false),
 }));
@@ -70,6 +74,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  gateway.isConfigured = false;
   await db.delete(users);
 });
 
@@ -99,9 +104,27 @@ describe('pickMarketplaceDeployment', () => {
     ).toMatchObject({ deployment: { type: 'http', url: 'https://a.dev' } });
   });
 
+  it('skips an HTTP endpoint on localhost or a private network for one the server reaches', () => {
+    expect(
+      pickMarketplaceDeployment({
+        deploymentOptions: [
+          httpOption({ url: 'http://192.168.1.10:8080/mcp' }),
+          { connection: { url: 'https://a.dev' } },
+        ],
+      }),
+    ).toMatchObject({ deployment: { type: 'http', url: 'https://a.dev' } });
+  });
+
   it.each([
     ['a stdio-only server', { deploymentOptions: [stdioOption] }, 'local-only'],
     ['no deployment options', {}, 'local-only'],
+    ...['http://localhost:3000/mcp', 'http://127.0.0.1:8080/mcp', 'http://10.0.0.2/mcp'].map(
+      (url) => [
+        `a server whose only HTTP endpoint is ${url}`,
+        { deploymentOptions: [stdioOption, httpOption({ url })] },
+        'local-only',
+      ],
+    ),
     [
       'an OAuth HTTP server',
       { deploymentOptions: [httpOption({ auth: { type: 'oauth2' } })] },
@@ -620,6 +643,22 @@ describe('installMarketplaceMcpConnector', () => {
         deploymentOptions: [stdioOption],
       }),
     ).toEqual({ blocker: 'local-only', status: 'blocked' });
+    expect(await connectorRows()).toEqual([]);
+  });
+
+  it("never has the user's device connect to a private address a market listing gives", async () => {
+    // A device gateway would tunnel a private-network listing to the user's device
+    gateway.isConfigured = true;
+    vi.mocked(listMcpToolsOnDevice).mockResolvedValue([{ name: 'probe' }] as never);
+
+    expect(
+      await installMarketplaceMcpConnector(scope, 'lan-mcp', {
+        deploymentOptions: [httpOption({ url: 'http://192.168.1.10:8080/mcp' })],
+        name: 'LAN MCP',
+      }),
+    ).toEqual({ blocker: 'local-only', status: 'blocked' });
+    expect(listMcpToolsOnDevice).not.toHaveBeenCalled();
+    expect(mcpService.listRawTools).not.toHaveBeenCalled();
     expect(await connectorRows()).toEqual([]);
   });
 

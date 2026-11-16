@@ -6,6 +6,7 @@ import {
   MARKETPLACE_INSTALL_COMPLETED_KEY,
   MARKETPLACE_TOOL_POLICIES_KEY,
 } from '@lobechat/const';
+import { isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
 import debug from 'debug';
 
 import type { DecryptedConnector } from '@/database/models/connector';
@@ -61,7 +62,9 @@ export type MarketplaceDeployment =
  * Why a marketplace MCP cannot be installed without the user:
  * - `config`: it needs settings (an API key…) only the user can fill in;
  * - `oauth`: it signs in with OAuth, which the user authorizes in a browser;
- * - `local-only`: it has no remote endpoint, only a local (stdio) process;
+ * - `local-only`: it has no endpoint the server reaches itself, only a local
+ *   (stdio) process or a URL on localhost / a private network, which only the
+ *   user's own machine reaches;
  * - `no-tools`: it lists no tools, so the install would load nothing;
  * - `conflict`: another connector already holds the identifier;
  * - `in-progress`: an install of it started under
@@ -105,6 +108,10 @@ const doesConfigSchemaRequireInput = (configSchema: unknown) => {
  * `installMCPPlugin` applies outside the desktop app: a market-hosted (`cloud`)
  * endpoint for a stdio server first, then an HTTP endpoint. A stdio-only server
  * needs a local process, which a server run cannot start.
+ *
+ * An HTTP endpoint on localhost or a private network is never picked: the
+ * server would list and call it on the user's device, so a market listing
+ * could have that device reach its loopback or LAN services unasked.
  */
 const deploymentOptionsOf = (manifest: MarketMcpManifest) =>
   Array.isArray(manifest.deploymentOptions) ? manifest.deploymentOptions : [];
@@ -121,9 +128,13 @@ export const pickMarketplaceDeployment = (
   manifest: MarketMcpManifest,
 ): { deployment: MarketplaceDeployment } | { blocker: MarketplaceInstallBlocker } => {
   const options = deploymentOptionsOf(manifest);
+  const isServerReachable = (url: string | undefined): url is string =>
+    !!url && !isDeviceOnlyMcpEndpoint({ type: 'http', url });
   const httpOption =
-    options.find((option) => option?.connection?.url && option.connection.type === 'http') ??
-    options.find((option) => option?.connection?.url && !option.connection.type);
+    options.find(
+      (option) => isServerReachable(option?.connection?.url) && option.connection.type === 'http',
+    ) ??
+    options.find((option) => isServerReachable(option?.connection?.url) && !option.connection.type);
   const stdioOption = findStdioOption(manifest);
 
   if (stdioOption && manifest.haveCloudEndpoint) {
@@ -352,14 +363,15 @@ export const installMarketplaceMcpConnector = async (
   try {
     // Listed before anything is written to the row (the server's MCP client
     // sends every HTTP request through the SSRF-safe fetch), held to the market
-    // tool policies it stores
+    // tool policies it stores. Never on a device (no `serverDB`): the server
+    // lists the endpoint itself, or the listing fails.
     const syncInputs =
       deployment.type === 'cloud'
         ? await toClientToolSyncInputs(marketTools, userId)
         : (
             await listConnectorToolSyncInputs(
               created.id,
-              { connectorModel, connectorToolModel, serverDB, userId },
+              { connectorModel, connectorToolModel, serverDB: undefined, userId },
               {
                 humanInterventions: new Map(
                   marketTools.map((tool) => [tool.toolName, tool.humanIntervention]),
