@@ -64,7 +64,7 @@ import { closeToolDetailPopovers } from '../components/useDetailPopoverState';
 import { MemoryEffortControl } from '../Memory/Controls';
 import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 import { SearchAdvancedControls } from '../Search/Controls';
-import { useAgentMenuConnectors } from './agentMenuConnectors';
+import { useAgentMenuConnectors, useUnpinDeletedConnector } from './agentMenuConnectors';
 import {
   isCapabilityTool,
   resolveCapabilityConfigPatch,
@@ -568,6 +568,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
   // MCP connectors the user added that this agent loads (custom and marketplace)
   const customConnectors = useAgentMenuConnectors(agentId);
+  const unpinDeleted = useUnpinDeletedConnector(agentId);
   const getConfigure = useConnectorConfigure();
   const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
   const fetchConnectors = useToolStore((s) => s.fetchConnectors);
@@ -1188,12 +1189,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             displayName: title,
             onDelete: async () => {
               await deleteConnector(connector.id);
-              // Like removeComposioServer: no orphaned pin survives the deletion
-              try {
-                await togglePlugin(connector.identifier, false);
-              } catch (error) {
-                console.error('[Connector] Failed to unpin plugin after delete:', error);
-              }
+              await unpinDeleted(connector);
             },
           },
           extraTag: connector.visibility === 'private' ? <PrivateConnectorTag /> : undefined,
@@ -1204,7 +1200,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           title,
         });
       }),
-    [customConnectors, t, createManagedSkillItem, deleteConnector, getConfigure, togglePlugin],
+    [customConnectors, t, createManagedSkillItem, deleteConnector, getConfigure, unpinDeleted],
   );
 
   // Skills list items (including LobeHub Skill and Composio)

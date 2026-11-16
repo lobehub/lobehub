@@ -1,7 +1,10 @@
 import isEqual from 'fast-deep-equal';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import {
+  getActiveWorkspaceId,
+  useActiveWorkspaceId,
+} from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAgentStore } from '@/store/agent';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors, pickRunConnectors } from '@/store/tool/slices/connector';
@@ -41,5 +44,49 @@ export const useAgentMenuConnectors = (agentId?: string): ConnectorWithTools[] =
   return useMemo(
     () => agentMenuConnectors(connectors, { inWorkspace, privateAgent }),
     [connectors, inWorkspace, privateAgent],
+  );
+};
+
+/**
+ * Whether `agentId` still loads a connector of `deleted`'s identifier once
+ * `deleted` is gone: a private connector that shadowed a shared one leaves the
+ * shared row serving the identifier.
+ */
+export const agentStillLoadsIdentifier = (
+  connectors: ConnectorWithTools[],
+  deleted: Pick<ConnectorWithTools, 'id' | 'identifier'>,
+  context: { inWorkspace: boolean; privateAgent: boolean },
+): boolean =>
+  agentMenuConnectors(
+    connectors.filter((c) => c.id !== deleted.id),
+    context,
+  ).some((c) => c.identifier === deleted.identifier);
+
+/**
+ * Unpin a deleted connector from the agent, as removing a Composio connection
+ * does, so no orphaned pin survives it; unless the agent still loads a row of
+ * its identifier ({@link agentStillLoadsIdentifier}), which keeps the pin. A
+ * failed unpin is logged: the delete has already happened.
+ */
+export const useUnpinDeletedConnector = (agentId?: string) => {
+  const togglePlugin = useAgentStore((s) => s.togglePlugin);
+
+  return useCallback(
+    async (deleted: ConnectorWithTools) => {
+      const context = {
+        inWorkspace: !!getActiveWorkspaceId(),
+        privateAgent:
+          !!agentId && useAgentStore.getState().agentMap[agentId]?.visibility === 'private',
+      };
+      const connectors = connectorSelectors.userMcpConnectors(useToolStore.getState());
+      if (agentStillLoadsIdentifier(connectors, deleted, context)) return;
+
+      try {
+        await togglePlugin(deleted.identifier, false);
+      } catch (error) {
+        console.error('[Connector] Failed to unpin plugin after delete:', error);
+      }
+    },
+    [agentId, togglePlugin],
   );
 };
