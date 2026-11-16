@@ -149,9 +149,10 @@ export class ChannelCoordinator {
 
     try {
       await pMap(
-        Object.values(groupBy(pending, (job) => job.memberId)),
+        Object.values(groupBy(pending, (job) => `${job.memberId}:${job.threadId ?? ''}`)),
         async (jobs) => {
-          // Recover earlier runs before claiming this member, without delaying other members.
+          // Recover a branch's earlier runs before claiming in it, without delaying other
+          // members or the member's other branches.
           for (const job of jobs) {
             if (job.status !== 'queued') {
               await this.complete(channelId, job.id, job.operationId ?? undefined);

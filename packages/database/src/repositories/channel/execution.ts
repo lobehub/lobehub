@@ -191,8 +191,9 @@ export class ChannelExecutionRepository {
 
   /**
    * What one advance pass works on: in-flight jobs to settle, oldest first and bounded, and
-   * the queue head of each member. Only a head can be claimed, so a member whose backlog is
-   * blocked (offline device, pending approval) cannot crowd out the other members.
+   * the queue head of each member in each branch (a Thread, or the main timeline). Only a head
+   * can be claimed, so a member whose backlog is blocked (offline device, pending approval)
+   * cannot crowd out the other members, and one busy branch never holds back another.
    */
   candidates = async (channelId: string, limit = 100) => {
     const [inFlight, heads] = await Promise.all([
@@ -211,12 +212,17 @@ export class ChannelExecutionRepository {
         .orderBy(asc(channelJobs.createdAt))
         .limit(limit),
       this.db
-        .selectDistinctOn([channelJobs.memberId], { job: channelJobs })
+        .selectDistinctOn([channelJobs.memberId, channelJobs.threadId], { job: channelJobs })
         .from(channelJobs)
         .innerJoin(channelMessages, eq(channelMessages.id, channelJobs.messageId))
         .where(and(eq(channelJobs.channelId, channelId), eq(channelJobs.status, 'queued')))
         // Same order as the head check in claimJob.
-        .orderBy(channelJobs.memberId, asc(channelMessages.sequence), asc(channelJobs.createdAt)),
+        .orderBy(
+          channelJobs.memberId,
+          channelJobs.threadId,
+          asc(channelMessages.sequence),
+          asc(channelJobs.createdAt),
+        ),
     ]);
     return {
       heads: heads

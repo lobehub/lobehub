@@ -212,7 +212,7 @@ describe('ChannelExecutionRepository', () => {
     expect(await contents(threadJob.id)).toEqual(['thread-request']);
   });
 
-  it('answers in message order and holds one writer per member', async () => {
+  it('answers a branch in message order and holds one writer per member in it', async () => {
     const { agent, asMember, channel, job } = await mentionAgent();
     const next = await asMember.send(channel.id, {
       content: 'Second',
@@ -232,6 +232,105 @@ describe('ChannelExecutionRepository', () => {
     expect(await jobById(job.id)).toMatchObject({ status: 'failed', writerHeld: false });
     expect(await execution.claim(channel.id, nextJob.id, lease)).not.toBeNull();
     expect(await jobById(nextJob.id)).toMatchObject({ blockedCode: null });
+  });
+
+  /** A team channel with one Agent and a Thread per root title, each under a person's message. */
+  const threadsFor = async (config: Parameters<typeof fixture.addAgent>[2], titles: string[]) => {
+    const team = await fixture.createTeamChannel();
+    const agent = await fixture.addAgent(team.channel.id, 'Coder', config);
+    const threads = [];
+    for (const title of titles) {
+      const root = await team.asMember.send(team.channel.id, {
+        content: title,
+        mentions: [team.member.id],
+        requestKey: `root-${title}`,
+        routing: 'decision',
+      });
+      threads.push(await team.asMember.createThread(team.channel.id, { rootMessageId: root.id }));
+    }
+    let sent = 0;
+    const ask = async (threadId: string | null) => {
+      sent += 1;
+      const message = await team.asMember.send(team.channel.id, {
+        content: `Request ${sent}`,
+        mentions: [agent.id],
+        requestKey: `ask-${sent}`,
+        routing: 'decision',
+        ...(threadId && { threadId }),
+      });
+      const [job] = await jobsOf(db, message.id);
+      return job;
+    };
+    return { ...team, agent, ask, threads };
+  };
+
+  it('runs one member in several branches at once, each in message order', async () => {
+    const { ask, channel, threads } = await threadsFor(nativeConfig, ['A', 'B']);
+    const [threadA, threadB] = threads;
+    const a1 = await ask(threadA.id);
+    const a2 = await ask(threadA.id);
+    const b1 = await ask(threadB.id);
+    const main = await ask(null);
+
+    // One queue head per branch, so a busy Thread never hides another branch's request.
+    const { heads } = await execution.candidates(channel.id);
+    expect(heads.map((job) => job.id).sort()).toEqual([a1.id, b1.id, main.id].sort());
+
+    expect(await execution.claim(channel.id, a1.id, lease)).not.toBeNull();
+    expect(await execution.claim(channel.id, a2.id, lease)).toBeNull();
+    expect(await jobById(a2.id)).toMatchObject({ blockedCode: 'member_busy' });
+    expect(await execution.claim(channel.id, b1.id, lease)).not.toBeNull();
+    expect(await execution.claim(channel.id, main.id, lease)).not.toBeNull();
+
+    // The database backs it: a second writer in the same branch is refused.
+    await expect(
+      db.update(channelJobs).set({ writerHeld: true }).where(eq(channelJobs.id, a2.id)),
+    ).rejects.toThrow();
+
+    expect(await execution.retireReservation(channel.id, a1.id)).toBe(true);
+    expect(await execution.claim(channel.id, a2.id, lease)).not.toBeNull();
+  });
+
+  it("keeps a device directory exclusive across a member's branches", async () => {
+    const { ask, channel, threads } = await threadsFor(deviceConfig(), ['A', 'B']);
+    const first = await ask(threads[0].id);
+    const second = await ask(threads[1].id);
+
+    expect(await execution.claim(channel.id, first.id, lease)).not.toBeNull();
+    expect(await execution.claim(channel.id, second.id, lease)).toBeNull();
+    expect(await jobById(second.id)).toMatchObject({ blockedCode: 'directory_locked' });
+    // Which lets the waiting Thread move into its own worktree instead.
+    expect(await execution.worktreeCandidate(channel.id, second.id)).toMatchObject({
+      sourceDirectory: '/repo',
+      threadId: threads[1].id,
+    });
+  });
+
+  it("starts a Thread only after the member's answer to its root", async () => {
+    const {
+      agent,
+      asMember,
+      channel,
+      job: rootJob,
+      message: root,
+    } = await mentionAgent(nativeConfig);
+    const thread = await asMember.createThread(channel.id, { rootMessageId: root.id });
+    const message = await asMember.send(channel.id, {
+      content: 'And this',
+      mentions: [agent.id],
+      requestKey: 'in-thread',
+      routing: 'decision',
+      threadId: thread.id,
+    });
+    const [threadJob] = await jobsOf(db, message.id);
+
+    expect(await execution.claim(channel.id, threadJob.id, lease)).toBeNull();
+    expect(await jobById(threadJob.id)).toMatchObject({ blockedCode: 'member_busy' });
+    expect(await execution.claim(channel.id, rootJob.id, lease)).not.toBeNull();
+    expect(await execution.claim(channel.id, threadJob.id, lease)).toBeNull();
+
+    expect(await execution.retireReservation(channel.id, rootJob.id)).toBe(true);
+    expect(await execution.claim(channel.id, threadJob.id, lease)).not.toBeNull();
   });
 
   it('claims independent Agents concurrently while keeping a shared directory exclusive', async () => {

@@ -454,7 +454,7 @@ export const channelJobs = pgTable(
     /**
      * Set when termination could not be confirmed in time (INC-049). Publication is revoked so
      * the member may run again, though not in the same device directory until the stop is
-     * confirmed: isolation frees the member lock but never `writerHeld`.
+     * confirmed: isolation frees the branch lock but never `writerHeld`.
      */
     isolatedAt: timestamptz('isolated_at'),
     /** Final answer saved by the run; immutable once set. */
@@ -481,12 +481,15 @@ export const channelJobs = pgTable(
     index('channel_jobs_lease_expires_idx')
       .on(t.leaseExpiresAt)
       .where(sql`${t.writerHeld} AND ${t.isolatedAt} IS NULL`),
-    /** At most one writer per member. */
-    uniqueIndex('channel_jobs_active_member_unique')
-      .on(t.memberId)
+    /**
+     * At most one writer per member and conversation branch (a Thread, or the main timeline as
+     * ''): a branch answers in order, while an Agent works in several Threads at once.
+     */
+    uniqueIndex('channel_jobs_active_branch_unique')
+      .on(t.memberId, sql`coalesce(${t.threadId}, '')`)
       .where(sql`${t.writerHeld} AND ${t.isolatedAt} IS NULL`),
     /**
-     * At most one writer per device directory, across all channels. Unlike the member lock,
+     * At most one writer per device directory, across all channels. Unlike the branch lock,
      * isolation does not release it: only physical stop confirmation proves the old process
      * has left the directory.
      */
