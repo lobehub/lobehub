@@ -12,12 +12,7 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 
 import { ManageMemoryButton } from '../memory/features/ManageMemoryButton';
 import { componentMap } from './componentMap';
-import {
-  OWN_FRAME_TABS,
-  SETTINGS_CONTAINER_MAX_WIDTH,
-  SETTINGS_PANE_CONTAINER,
-  WIDE_CONTENT_TABS,
-} from './ownFrameTabs';
+import { OWN_FRAME_TABS, SETTINGS_CONTAINER_MAX_WIDTH } from './ownFrameTabs';
 import { SettingsPageActionsContext, SettingsPageActionsRow } from './SettingsPageActions';
 import { useSettingsTabTitle } from './tabTitles';
 
@@ -105,11 +100,6 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
                 maxWidth={SETTINGS_CONTAINER_MAX_WIDTH}
                 paddingBlock={'24px 128px'}
                 paddingInline={24}
-                style={
-                  WIDE_CONTENT_TABS.has(tabKey)
-                    ? { containerName: SETTINGS_PANE_CONTAINER, containerType: 'inline-size' }
-                    : undefined
-                }
               >
                 {/* Page actions sit in the content column so they align with the body. */}
                 <SettingsPageActionsRow ref={setPageActions}>{headerExtra}</SettingsPageActionsRow>
