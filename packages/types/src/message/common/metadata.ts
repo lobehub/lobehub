@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import { RequestTrigger } from '../../agentRuntime';
 import type { WorkRegistrationIntent } from '../../work';
+import type { MessageContextAccounting } from './contextAccounting';
+import { MessageContextAccountingSchema } from './contextAccounting';
 import type { ContextSelection } from './contextSelection';
 import { ContextSelectionSchema } from './contextSelection';
 import type { PageSelection } from './pageSelection';
@@ -452,6 +454,9 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   agentDispatch: AgentDispatchMetadataSchema.optional(),
   agentSender: AgentSenderMetadataSchema.optional(),
   collapsed: z.boolean().optional(),
+  // Server-computed estimate of the request behind an assistant message. Listed
+  // so client-runtime writes through UpdateMessageParamsSchema keep it.
+  contextAccounting: MessageContextAccountingSchema.optional(),
   contextSelections: z.array(ContextSelectionSchema).optional(),
   // Hetero-agent (Claude Code) per-message provenance. Listed here so zod does
   // NOT strip them from writes going through UpdateMessageParamsSchema /
@@ -591,6 +596,13 @@ export interface MessageMetadata {
    */
   collapsed?: boolean;
   compare?: boolean;
+  /**
+   * Estimated token accounting of the request that produced this assistant
+   * message (system messages, `tools` array and every message part), written
+   * by the agent runtime. The chat input's context breakdown reads the latest
+   * one; see {@link MessageContextAccounting}.
+   */
+  contextAccounting?: MessageContextAccounting;
   /**
    * Generic context selections attached to user messages.
    * Page selections remain mirrored in `pageSelections` for compatibility.

@@ -779,6 +779,52 @@ describe('callLlmFinalizer', () => {
     );
   });
 
+  it('persists the request accounting on final and interrupted assistant messages', async () => {
+    const contextAccounting = {
+      bySource: {
+        content: 120,
+        fileContext: 40,
+        reasoning: 10,
+        thoughtSignature: 0,
+        toolCallId: 4,
+        toolCalls: 20,
+        toolDefinition: 300,
+      },
+      estimator: 'tokenx' as const,
+      messageCount: 4,
+      system: 500,
+      total: 994,
+    };
+    const messages = createMessageTransport();
+
+    await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-final',
+      contextAccounting,
+      events: [],
+      host: createHost(messages),
+      model: 'gpt-4',
+      output: createOutput(),
+      provider: 'openai',
+      shouldReplayAssistantReasoning: false,
+      state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
+    });
+    expect(messages.update).toHaveBeenLastCalledWith(
+      'assistant-final',
+      expect.objectContaining({ metadata: expect.objectContaining({ contextAccounting }) }),
+    );
+
+    await persistInterruptedCallLlmResult({
+      assistantMessageId: 'assistant-interrupted',
+      contextAccounting,
+      host: createHost(messages),
+      output: createOutput({ content: 'Partial' }),
+    });
+    expect(messages.update).toHaveBeenLastCalledWith(
+      'assistant-interrupted',
+      expect.objectContaining({ metadata: expect.objectContaining({ contextAccounting }) }),
+    );
+  });
+
   it('persists partial interrupted output and skips empty interruptions', async () => {
     const messages = createMessageTransport();
     const host = createHost(messages);
