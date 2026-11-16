@@ -223,7 +223,7 @@ describe('reasoning headline extraction', () => {
     // the plugin i18n namespace is not registered in the test harness, so the
     // label falls back to the apiName; the shape under test is label + keyword.
     expect(state.kind).toBe('tool');
-    expect((state as any).fallbackTool).toMatch(/ monthly\.ts$/);
+    expect((state as any).fallbackTool).toMatch(/ npx tsx scripts\/gross-margin\/monthly\.ts$/);
     expect((state as any).fallbackTool).not.toContain('set -a');
   });
 

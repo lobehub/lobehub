@@ -115,7 +115,7 @@ describe('ToolTitle', () => {
       );
 
       expect(screen.getByText('runCommand')).toBeInTheDocument();
-      expect(screen.getByText('docker')).toBeInTheDocument();
+      expect(screen.getByText('docker ps')).toBeInTheDocument();
     });
 
     it('keeps the label for a latin model description (reads as a spec, not a step)', () => {
