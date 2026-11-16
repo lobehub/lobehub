@@ -24,6 +24,7 @@ import {
   ConnectorIdentifierHeldError,
   moveToBaseUnlessIdentifierHeld,
   queryBaseHolders,
+  sameBaseVisibility,
 } from './connectorIdentifierClaim';
 import {
   connectorAccessScope,
@@ -337,8 +338,8 @@ export class ConnectorModel {
 
   /**
    * Create a base connector (`agent_id IS NULL`) unless a row in this scope
-   * already holds its identifier. The lookup and the insert are one step,
-   * serialized on the identifier lock every base-row writer takes
+   * already holds its identifier in its visibility. The lookup and the insert
+   * are one step, serialized on the identifier lock every base-row writer takes
    * ({@link claimBaseIdentifier}). `canReplace` may let the holding rows go:
    * they are deleted, with their tools, in that step; one that may not go
    * keeps the identifier and is returned.
@@ -353,12 +354,7 @@ export class ConnectorModel {
     const { canReplace, gateKeeper = this.gateKeeper } = options;
 
     return this.db.transaction(async (tx) => {
-      const holder = await claimBaseIdentifier(
-        tx,
-        this.baseIdentifierScope(),
-        params.identifier,
-        canReplace,
-      );
+      const holder = await claimBaseIdentifier(tx, this.baseIdentifierScope(), params, canReplace);
       if (holder) return { holder };
       return {
         created: await this.insertInTransaction(tx, { ...params, agentId: null }, gateKeeper),
@@ -371,8 +367,11 @@ export class ConnectorModel {
     moveToBaseUnlessIdentifierHeld(this.db, this.baseIdentifierScope(), id, identifier);
 
   /** See {@link queryBaseHolders}. */
-  queryBaseHolders = async (identifier: string): Promise<UserConnectorItem[]> =>
-    queryBaseHolders(this.db, this.baseIdentifierScope(), identifier);
+  queryBaseHolders = async (
+    identifier: string,
+    visibility?: ConnectorVisibility,
+  ): Promise<UserConnectorItem[]> =>
+    queryBaseHolders(this.db, this.baseIdentifierScope(), identifier, visibility);
 
   private baseIdentifierScope = (): BaseIdentifierScope => ({
     ownership: this.ownership,
@@ -737,12 +736,6 @@ export class ConnectorModel {
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
     visibility: ConnectorVisibility = 'public',
   ): Promise<DecryptedConnector | null> => {
-    const sameVisibility =
-      !agentId && normalizeWorkspaceId(this.workspaceId)
-        ? visibility === 'private'
-          ? and(eq(userConnectors.visibility, 'private'), eq(userConnectors.userId, this.userId))
-          : eq(userConnectors.visibility, 'public')
-        : undefined;
     const [row] = await this.db
       .select()
       .from(userConnectors)
@@ -751,7 +744,7 @@ export class ConnectorModel {
           this.ownership(),
           eq(userConnectors.identifier, identifier),
           agentId ? eq(userConnectors.agentId, agentId) : isNull(userConnectors.agentId),
-          sameVisibility,
+          agentId ? undefined : sameBaseVisibility(this.baseIdentifierScope(), visibility),
         ),
       )
       .limit(1);
