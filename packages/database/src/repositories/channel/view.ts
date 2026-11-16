@@ -1,4 +1,4 @@
-import { channelMessageReceipt, channelMessageVia } from '@lobechat/types';
+import { channelMessageEditedAt, channelMessageReceipt, channelMessageVia } from '@lobechat/types';
 import {
   and,
   asc,
@@ -72,6 +72,7 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
       name: isAgent ? senderAgentName || senderAgentTitle : senderUserName || senderUsername,
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
+    editedAt: channelMessageEditedAt(message.metadata),
     receipt: isAgent ? null : (channelMessageReceipt(message.metadata) ?? null),
     via: isAgent
       ? null
