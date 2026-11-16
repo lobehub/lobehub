@@ -2,6 +2,7 @@
 
 import HomeNavPanelPortal from '@/features/HomeSidebar';
 
+import BackOriginTracker from './backOrigin/Tracker';
 import NavPanel from './index';
 
 // The Home portal is owned by the shell, not by the Home route layout: routes
@@ -12,6 +13,7 @@ import NavPanel from './index';
 // no `home` entry at all, so the panel is stuck on the loading skeleton.
 const NavPanelShell = () => (
   <>
+    <BackOriginTracker />
     <HomeNavPanelPortal />
     <NavPanel />
   </>
