@@ -117,6 +117,44 @@ describe('Channel public view', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
+  it("carries a thread's replies at work on the main timeline, and only until they settle", async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    const agent = await fixture.addAgent(channel.id, 'Researcher');
+    const root = await asOwner.send(channel.id, {
+      content: 'Root',
+      requestKey: 'root',
+      routing: 'fallback',
+    });
+    const thread = await asOwner.createThread(channel.id, { rootMessageId: root.id });
+    const request = await asOwner.send(channel.id, {
+      content: 'Dig into it',
+      mentions: [agent.id],
+      requestKey: 'thread-work',
+      routing: 'fallback',
+      threadId: thread.id,
+    });
+    const [job] = await jobsOf(db, request.id);
+    const setJob = (patch: Partial<typeof channelJobs.$inferInsert>) =>
+      db.update(channelJobs).set(patch).where(eq(channelJobs.id, job.id));
+    const threadJobsOnMain = async () =>
+      (await asOwner.detail(channel.id)).jobs.filter((entry) => entry.threadId === thread.id);
+
+    await setJob({ status: 'running', writerHeld: true });
+    expect(await threadJobsOnMain()).toEqual([
+      expect.objectContaining({ id: job.id, status: 'running', threadId: thread.id }),
+    ]);
+
+    // Stopping: no longer running, but still holding the writer.
+    await setJob({ publicationRevoked: true, status: 'cancelled', writerHeld: true });
+    expect((await threadJobsOnMain()).map((entry) => entry.id)).toEqual([job.id]);
+
+    await setJob({ status: 'completed', writerHeld: false });
+    expect(await threadJobsOnMain()).toEqual([]);
+    expect(
+      (await asOwner.detail(channel.id, { threadId: thread.id })).jobs.map((entry) => entry.id),
+    ).toEqual([job.id]);
+  });
+
   it('summarizes each thread under its root on the main timeline only', async () => {
     const { asOwner, channel } = await fixture.createTeamChannel();
     const root = await asOwner.send(channel.id, {

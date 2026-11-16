@@ -1,5 +1,17 @@
 import { channelMessageReceipt, channelMessageVia } from '@lobechat/types';
-import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, lt, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import {
   agentOperations,
@@ -261,7 +273,13 @@ export const readChannelView = async (
           eq(channelJobs.channelId, channelId),
           options.threadId
             ? eq(channelJobs.threadId, options.threadId)
-            : isNull(channelJobs.threadId),
+            : // The main timeline also carries its threads' replies still at work, so a thread
+              // card and the header can show an Agent working without loading every thread.
+              or(
+                isNull(channelJobs.threadId),
+                inArray(channelJobs.status, ['queued', 'running']),
+                eq(channelJobs.writerHeld, true),
+              ),
         ),
       )
       .orderBy(desc(channelJobs.createdAt))
