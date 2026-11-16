@@ -69,17 +69,43 @@ export const recordBackOrigin = (owner: string, from: string | null, to: string)
 };
 
 /**
+ * Give `toOwner` the origin `fromOwner` holds for the scope of `location`. A tab
+ * duplicated into a split pane starts at the source tab's URL and should go back
+ * where the source would.
+ */
+const copyBackOrigin = (fromOwner: string, toOwner: string, location: string): void => {
+  const scope = resolveBackScope(location);
+  if (!scope) return;
+
+  const origin = origins[originKey(fromOwner, scope)];
+  const key = originKey(toOwner, scope);
+  if (!origin || origins[key] === origin) return;
+
+  origins = { ...origins, [key]: origin };
+  listeners.forEach((listener) => listener());
+};
+
+/**
  * Feeds locations to {@link recordBackOrigin}, keeping the previous location
  * per owner (an Electron tab), so switching tabs never reads as a navigation.
+ * An owner first seen at the location the previously active owner was on is a
+ * duplicate of it and inherits its origin.
  */
 export const createBackOriginRecorder = () => {
   const previous = new Map<string, string>();
+  let lastOwner: string | null = null;
 
   return (owner: string, location: string): void => {
     const from = previous.get(owner) ?? null;
+    const sourceOwner = lastOwner;
+    lastOwner = owner;
     if (from === location) return;
 
-    recordBackOrigin(owner, from, location);
+    if (from === null && sourceOwner && previous.get(sourceOwner) === location) {
+      copyBackOrigin(sourceOwner, owner, location);
+    } else {
+      recordBackOrigin(owner, from, location);
+    }
     previous.set(owner, location);
   };
 };

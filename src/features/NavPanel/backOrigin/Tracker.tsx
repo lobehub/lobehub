@@ -9,13 +9,14 @@ import { useLocationOwner } from './useLocationOwner';
 
 /** Feeds every in-app navigation to the back-origin store. Renders nothing. */
 const BackOriginTracker = () => {
-  const { pathname, search } = useActiveLocation();
+  const { hash, pathname, search } = useActiveLocation();
   const owner = useLocationOwner();
   const [record] = useState(createBackOriginRecorder);
 
   useEffect(() => {
-    record(owner, `${pathname}${search}`);
-  }, [owner, pathname, search, record]);
+    // Desktop tab urls carry no hash; on web it brings back a section anchor.
+    record(owner, `${pathname}${search}${hash}`);
+  }, [owner, pathname, search, hash, record]);
 
   return null;
 };

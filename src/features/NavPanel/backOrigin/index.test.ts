@@ -117,4 +117,19 @@ describe('createBackOriginRecorder', () => {
     record('tab-2', '/agent/agt_1');
     expect(getBackOrigin('tab-2', '/agent/agt_1')).toBeUndefined();
   });
+
+  it('gives a tab duplicated from another one the source origin', () => {
+    const record = createBackOriginRecorder();
+    record('tab-1', '/projects');
+    record('tab-1', '/agent/agt_1');
+    record('tab-2', '/agent/agt_1');
+    expect(getBackOrigin('tab-2', '/agent/agt_1')).toBe('/projects');
+  });
+
+  it('keeps the hash of the origin page', () => {
+    const record = createBackOriginRecorder();
+    record('main', '/page/docs_1#notes');
+    record('main', '/agent/agt_1');
+    expect(getBackOrigin('main', '/agent/agt_1')).toBe('/page/docs_1#notes');
+  });
 });
