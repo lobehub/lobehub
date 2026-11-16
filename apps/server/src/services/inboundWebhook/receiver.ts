@@ -34,7 +34,6 @@ export interface InboundDeliveryInput {
   headers: Headers;
   id: string;
   /** The `:token` segment of `/inbound/:id/:token`. */
-  pathToken?: string;
   query?: URLSearchParams;
   /** A test delivery from the management page; it skips the ingress rate limit. */
   test?: boolean;
@@ -57,7 +56,6 @@ export async function receiveInboundWebhook(
   const request = {
     body: input.body,
     headers: input.headers,
-    pathToken: input.pathToken,
     query: input.query ?? new URLSearchParams(),
     test: input.test,
   };

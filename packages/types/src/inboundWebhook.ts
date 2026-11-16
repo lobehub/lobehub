@@ -85,6 +85,12 @@ export const GENERIC_WEBHOOK_THREAD_KEY_MAX = 200;
 export interface GenericWebhookConfig {
   /** Runs this webhook starts approve tools as auto-run; tools marked `always` still wait. */
   autoApprove: boolean;
+  /**
+   * `reuse` only: an existing Topic of the agent, picked by the creator, that every call without a
+   * thread continues. Absent: a Topic of the webhook's own, made on the first call. Kept in the
+   * config, not in `topic_id`, whose cascade would delete the webhook with the Topic.
+   */
+  topicId?: string;
   topicMode: GenericWebhookTopicMode;
 }
 
@@ -92,8 +98,8 @@ export interface GenericWebhookConfig {
 export type GenericWebhookState = Record<string, never>;
 
 export type McpEventsWebhookVerification = { scheme: 'standard_webhooks' };
-/** The secret travels in the URL path or as `Authorization: Bearer`; there is no signature. */
-export type GenericWebhookVerification = { scheme: 'url_token' };
+/** The key travels as `Authorization: Bearer <key>`; there is no signature, and no key in the URL. */
+export type GenericWebhookVerification = { scheme: 'bearer_token' };
 export type InboundWebhookVerification = McpEventsWebhookVerification | GenericWebhookVerification;
 
 export interface McpEventsWebhookSource {
@@ -105,6 +111,15 @@ export interface GenericWebhookSource extends GenericWebhookConfig {
   kind: 'generic';
 }
 export type InboundWebhookSource = McpEventsWebhookSource | GenericWebhookSource;
+
+/**
+ * A generic webhook with its key, as `create` and `rotateToken` return it: the only time the key
+ * is shown. It is stored encrypted and no other call returns it.
+ */
+export interface InboundWebhookItemWithSecret {
+  item: InboundWebhookItem;
+  secret: string;
+}
 
 /** 设置页列表与 `check` 返回的行。不含 secret，不含 state 原文。时间一律是 ISO 字符串。 */
 export interface InboundWebhookItem {
@@ -133,7 +148,7 @@ export interface InboundWebhookItem {
   } | null;
   createdAt: string;
   creatorId: string;
-  /** generic 且当前用户可管理时的完整调用 URL（含 token）；其余为 null */
+  /** generic 的调用 URL（不含密钥，固定不变）；看不到 agent 时与其他 kind 一样为 null */
   endpoint: string | null;
   /** mcp_events：server 授予的到期时间；null = 永不过期 */
   expiresAt: string | null;
@@ -187,6 +202,7 @@ export const GenericWebhookConfigSchema = z
   .object({
     autoApprove: z.boolean(),
     topicMode: z.enum(GENERIC_WEBHOOK_TOPIC_MODES),
+    topicId: z.string().min(1).optional(),
   })
   .strict();
 
@@ -194,7 +210,7 @@ export const GenericWebhookStateSchema = z.object({}).strict();
 
 export const GenericWebhookVerificationSchema = z
   .object({
-    scheme: z.literal('url_token'),
+    scheme: z.literal('bearer_token'),
   })
   .strict();
 

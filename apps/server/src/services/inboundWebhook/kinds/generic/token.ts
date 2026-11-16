@@ -2,12 +2,11 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 
 import { appEnv } from '@/envs/app';
 
-/** 256 random bits, URL-safe, so the token can sit in a path segment as is. */
+/** 256 random bits, URL-safe, so the key fits a header as is. */
 export const generateWebhookToken = () => randomBytes(32).toString('base64url');
 
-/** The token the caller presented: the path segment, else `Authorization: Bearer`. */
-export const presentedToken = (request: { headers: Headers; pathToken?: string }) => {
-  if (request.pathToken) return request.pathToken;
+/** The key the caller presented as `Authorization: Bearer <key>`. */
+export const presentedToken = (request: { headers: Headers }) => {
   const match = /^Bearer\s+(\S+)\s*$/i.exec(request.headers.get('authorization') ?? '');
   return match?.[1];
 };
@@ -19,6 +18,9 @@ export const tokenMatches = (presented: string | undefined, secret: string | nul
   return a.length === b.length && timingSafeEqual(a, b);
 };
 
-/** The URL a caller posts to; anyone holding it can wake the Agent. */
-export const genericWebhookEndpoint = (id: string, token: string) =>
-  new URL(`/api/webhooks/inbound/${id}/${encodeURIComponent(token)}`, appEnv.APP_URL).toString();
+/**
+ * The URL a caller posts to. It never changes and holds no secret: the key goes in the
+ * `Authorization` header, and a new key leaves the URL as it was.
+ */
+export const genericWebhookEndpoint = (id: string) =>
+  new URL(`/api/webhooks/inbound/${id}`, appEnv.APP_URL).toString();

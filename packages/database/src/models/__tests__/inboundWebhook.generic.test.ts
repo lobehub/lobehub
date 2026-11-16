@@ -24,7 +24,7 @@ const generic = (patch: Partial<CreateInboundWebhook> = {}): CreateInboundWebhoo
   kind: 'generic',
   secret: 'token-1',
   status: 'active',
-  verification: { scheme: 'url_token' },
+  verification: { scheme: 'bearer_token' },
   ...patch,
 });
 const mcp = (): CreateInboundWebhook => ({
@@ -55,7 +55,7 @@ describe('InboundWebhookModel generic rows', () => {
     expect(row.topicId).toBeNull();
     if (row.kind !== 'generic') throw new Error('not narrowed');
     expect(row.config).toEqual({ autoApprove: false, topicMode: 'new' });
-    expect(row.verification).toEqual({ scheme: 'url_token' });
+    expect(row.verification).toEqual({ scheme: 'bearer_token' });
   });
 
   it('rejects a config or verification of the other kind', async () => {

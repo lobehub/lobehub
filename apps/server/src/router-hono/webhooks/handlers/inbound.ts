@@ -14,10 +14,7 @@ export const inboundWebhookBodyLimit = bodyLimit({
   onError: (c) => c.json({ error: 'Payload too large' }, 413),
 });
 
-/**
- * `POST /inbound/:id` (signed, or `Authorization: Bearer`) and `POST /inbound/:id/:token` (the
- * secret in the URL, for callers that can set neither a signature nor a header).
- */
+/** `POST /inbound/:id`: signed (MCP Events) or with `Authorization: Bearer <key>` (generic). */
 export async function inboundWebhook(c: Context) {
   const id = c.req.param('id');
   if (!z.uuid().safeParse(id).success) return c.json({ error: 'Webhook is gone' }, 410);
@@ -26,7 +23,6 @@ export async function inboundWebhook(c: Context) {
       body: await c.req.text(),
       headers: c.req.raw.headers,
       id: id!,
-      pathToken: c.req.param('token') || undefined,
       query: new URL(c.req.url).searchParams,
     });
     scheduleInboundWebhookSweep();

@@ -8,6 +8,7 @@ import { normalizeInboxAgentMeta } from '@/database/utils/inboxAgent';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 
 import { getInboundWebhookKind } from './kinds';
+import { genericWebhookEndpoint } from './kinds/generic/token';
 
 export interface InboundWebhookActor {
   userId: string;
@@ -27,13 +28,15 @@ export const canManageInboundWebhook = (actor: InboundWebhookActor, row: Inbound
     row.workspaceId === actor.workspaceId &&
     ['owner', 'admin'].includes(actor.workspaceRole ?? ''));
 
+/** The existing Topic a `reuse` generic webhook continues, when its creator picked one. */
+const pinnedTopicId = (row: InboundWebhookView) =>
+  row.kind === 'generic' && row.config.topicMode === 'reuse' ? row.config.topicId : undefined;
+
 /** Select public projections only; credentials and opaque runtime state never cross this boundary. */
 export async function inboundWebhookItems(
   db: LobeChatDatabase,
   rows: InboundWebhookView[],
   actor: InboundWebhookActor,
-  /** Full call URLs of the generic rows `actor` may manage, keyed by webhook id. */
-  endpoints: ReadonlyMap<string, string> = new Map(),
 ): Promise<InboundWebhookItem[]> {
   if (!rows.length) return [];
   const [connectorRows, agentRows, topicRows] = await Promise.all([
@@ -86,7 +89,7 @@ export async function inboundWebhookItems(
       .where(
         inArray(
           topics.id,
-          rows.flatMap((r) => (r.topicId ? [r.topicId] : [])),
+          rows.flatMap((r) => [r.topicId, pinnedTopicId(r)].filter((id): id is string => !!id)),
         ),
       ),
   ]);
@@ -126,7 +129,8 @@ export async function inboundWebhookItems(
           createdAt: row.createdAt.toISOString(),
           creatorId: row.userId,
           // The call URL and the task it runs act on the agent, so they go with its visibility.
-          endpoint: canConfigure ? (endpoints.get(row.id) ?? null) : null,
+          // Holds no secret: the key goes in a header. Shown wherever the agent is.
+          endpoint: row.kind === 'generic' && agentRow ? genericWebhookEndpoint(row.id) : null,
           expiresAt: kind.expiresAt?.(row) ?? null,
           id: row.id,
           instructions: agentRow ? row.instructions : null,
@@ -136,7 +140,9 @@ export async function inboundWebhookItems(
           name: row.name,
           source: kind.source(row),
           status: row.status as InboundWebhookItem['status'],
-          topic: (agentRow && topicRows.find((t) => t.id === row.topicId)) || null,
+          topic:
+            (agentRow && topicRows.find((t) => t.id === (row.topicId ?? pinnedTopicId(row)))) ||
+            null,
         },
       ];
     });

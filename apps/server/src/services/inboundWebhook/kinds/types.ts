@@ -29,7 +29,6 @@ export interface InboundDeliveryRequest {
   body: string;
   headers: Headers;
   /** The secret segment of `/inbound/:id/:token`, when the caller used that form. */
-  pathToken?: string;
   query: URLSearchParams;
   /** Sent by the management page's "Send test", not by a caller. */
   test?: boolean;

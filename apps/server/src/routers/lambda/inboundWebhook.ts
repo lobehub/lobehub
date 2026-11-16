@@ -1,4 +1,8 @@
-import type { InboundWebhookDeliveryPage, InboundWebhookItem } from '@lobechat/types';
+import type {
+  InboundWebhookDeliveryPage,
+  InboundWebhookItem,
+  InboundWebhookItemWithSecret,
+} from '@lobechat/types';
 import { GENERIC_WEBHOOK_TOPIC_MODES } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -27,7 +31,6 @@ import { getInboundWebhookKind } from '@/server/services/inboundWebhook/kinds';
 import {
   asGeneric,
   createGenericWebhook,
-  genericWebhookEndpoints,
   GenericWebhookError,
   rotateGenericWebhookToken,
   sendGenericWebhookTest,
@@ -55,6 +58,7 @@ const genericSettings = {
   autoApprove: z.boolean().optional(),
   instructions: z.string().max(4000).nullable().optional(),
   name: z.string().max(100).nullable().optional(),
+  topicId: z.string().min(1).nullable().optional(),
   topicMode: z.enum(GENERIC_WEBHOOK_TOPIC_MODES).optional(),
 };
 
@@ -67,17 +71,8 @@ interface RouterScope {
   workspaceRole?: string;
 }
 
-/** Items with each manageable generic row's full call URL filled in. */
-const itemsWithEndpoints = async (ctx: RouterScope, rows: InboundWebhookRowView[]) =>
-  inboundWebhookItems(
-    ctx.serverDB,
-    rows,
-    ctx,
-    await genericWebhookEndpoints(
-      ctx.serverDB,
-      rows.filter((row) => canConfigureInboundWebhook(ctx, row)),
-    ),
-  );
+const items = (ctx: RouterScope, rows: InboundWebhookRowView[]) =>
+  inboundWebhookItems(ctx.serverDB, rows, ctx);
 
 const audit = async (
   ctx: RouterScope,
@@ -191,13 +186,13 @@ export const inboundWebhookRouter = router({
       await kind.maintain({ db: ctx.serverDB, featureEnabled: true, model, row });
       const updated = await model.findById(row.id);
       if (!updated || updated.status === 'deleting') throw new TRPCError({ code: 'NOT_FOUND' });
-      return (await itemsWithEndpoints(ctx, [updated]))[0];
+      return (await items(ctx, [updated]))[0];
     }),
-  /** A generic webhook for an agent the caller may edit; returns it with its call URL. */
+  /** A generic webhook for an agent the caller may edit, with its key: the only time it is shown. */
   create: writeProcedure
     .use(withScopedPermission('agent:update'))
     .input(z.object({ agentId: z.string().min(1), ...genericSettings }))
-    .mutation(async ({ ctx, input }): Promise<InboundWebhookItem> => {
+    .mutation(async ({ ctx, input }): Promise<InboundWebhookItemWithSecret> => {
       if (!(await isWebhookEnabled(ctx.userId))) throw new TRPCError({ code: 'NOT_FOUND' });
       await assertAgentUsableBy(ctx.serverDB, input.agentId, {
         userId: ctx.userId,
@@ -211,15 +206,13 @@ export const inboundWebhookRouter = router({
         workspaceId: ctx.workspaceId ?? undefined,
       });
       try {
-        const { endpoint, row } = await createGenericWebhook(
+        const { row, secret } = await createGenericWebhook(
           ctx.serverDB,
           { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
           input,
         );
         await audit(ctx, 'webhook.created', row, { autoApprove: row.config.autoApprove });
-        return (
-          await inboundWebhookItems(ctx.serverDB, [row], ctx, new Map([[row.id, endpoint]]))
-        )[0];
+        return { item: (await items(ctx, [row]))[0], secret };
       } catch (error) {
         throw toTRPCError(error);
       }
@@ -251,26 +244,19 @@ export const inboundWebhookRouter = router({
   list: procedure
     .input(z.object({ agentId: z.string().min(1).optional() }).optional())
     .query(async ({ ctx, input }): Promise<InboundWebhookItem[]> =>
-      itemsWithEndpoints(ctx, await ctx.webhookModel.query({ agentId: input?.agentId })),
+      items(ctx, await ctx.webhookModel.query({ agentId: input?.agentId })),
     ),
-  /** Issue a new secret; the old URL and Bearer token stop working at once. */
+  /** Issue a new key, shown this once; the old key stops working at once and the URL stays. */
   rotateToken: writeProcedure
     .input(idInput)
-    .mutation(async ({ ctx, input }): Promise<InboundWebhookItem> => {
+    .mutation(async ({ ctx, input }): Promise<InboundWebhookItemWithSecret> => {
       const row = await manageableGeneric(ctx, input.id);
       await assertAgentAccess(ctx, row, 'edit');
       assertConfigures(ctx, row);
       try {
         const rotated = await rotateGenericWebhookToken(ctx.serverDB, row);
         await audit(ctx, 'webhook.updated', rotated.row, { rotatedToken: true });
-        return (
-          await inboundWebhookItems(
-            ctx.serverDB,
-            [rotated.row],
-            ctx,
-            new Map([[rotated.row.id, rotated.endpoint]]),
-          )
-        )[0];
+        return { item: (await items(ctx, [rotated.row]))[0], secret: rotated.secret };
       } catch (error) {
         throw toTRPCError(error);
       }
@@ -304,7 +290,7 @@ export const inboundWebhookRouter = router({
           ...(input.autoApprove !== undefined && { autoApprove: input.autoApprove }),
           ...(input.paused !== undefined && { paused: input.paused }),
         });
-        return (await itemsWithEndpoints(ctx, [updated]))[0];
+        return (await items(ctx, [updated]))[0];
       } catch (error) {
         throw toTRPCError(error);
       }

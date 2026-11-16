@@ -123,9 +123,8 @@ export const mcpEventsKind: InboundWebhookKindHandler<'mcp_events'> = {
   },
   teardown: teardownMcpSubscription,
   trigger: RequestTrigger.McpEvent,
+  // An MCP server always signs; a bearer key is the generic form and proves nothing here.
   verify: ({ request, row, secret }) =>
-    // A secret in the path is the generic form; an MCP server always signs.
-    !request.pathToken &&
     verifyInboundWebhook({
       body: request.body,
       headers: request.headers,

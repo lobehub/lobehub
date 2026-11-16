@@ -65,14 +65,23 @@ export const genericKind: InboundWebhookKindHandler<'generic'> = {
       return { outcome: 'ignored' };
     }
     const threadKey = threadKeyOf(row, batch[0]);
+    const topicModel = new TopicModel(db, row.userId, scope);
+    // The shared Topic of a `reuse` webhook is the one its creator picked, while it is still the
+    // agent's; otherwise (none picked, or it was deleted or moved) the webhook's own.
+    const picked =
+      threadKey === SHARED_THREAD && row.config.topicId
+        ? await topicModel.findById(row.config.topicId)
+        : undefined;
     const topic =
-      threadKey === undefined
-        ? undefined
-        : await new TopicModel(db, row.userId, scope).findByWebhookThread({
-            agentId: row.agentId,
-            threadKey,
-            webhookId: row.id,
-          });
+      picked && picked.agentId === row.agentId
+        ? picked
+        : threadKey === undefined
+          ? undefined
+          : await topicModel.findByWebhookThread({
+              agentId: row.agentId,
+              threadKey,
+              webhookId: row.id,
+            });
     const preferences = await ctx.intervention(db, row.userId);
     const name = row.name || 'Webhook';
     return {

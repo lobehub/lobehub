@@ -88,7 +88,13 @@ const caller = (userId = creator, scope: { workspaceId?: string; workspaceRole?:
   } as unknown as Parameters<typeof inboundWebhookRouter.createCaller>[0]);
 const inWorkspace = (userId: string, workspaceRole = 'member') =>
   caller(userId, { workspaceId, workspaceRole });
-const tokenOf = (endpoint: string | null) => endpoint!.split('/').at(-1)!;
+/** A call to the webhook as a caller makes it: the key as a Bearer header, or none. */
+const callWith = (id: string, key?: string) =>
+  receiveInboundWebhook(db, {
+    body: '{}',
+    headers: new Headers(key ? { authorization: `Bearer ${key}` } : {}),
+    id,
+  });
 
 beforeEach(async () => {
   vi.clearAllMocks();
@@ -110,8 +116,12 @@ afterEach(async () => {
 });
 
 describe('generic webhook management', () => {
-  it('creates an active webhook with a working call URL', async () => {
-    const item = await caller().create({ agentId, instructions: '  Triage it  ', name: 'CI' });
+  it('creates an active webhook, returning its fixed URL and, this once, its key', async () => {
+    const { item, secret } = await caller().create({
+      agentId,
+      instructions: '  Triage it  ',
+      name: 'CI',
+    });
     expect(item).toMatchObject({
       canCheck: false,
       canManage: true,
@@ -122,16 +132,17 @@ describe('generic webhook management', () => {
       status: 'active',
       topic: null,
     });
-    expect(item.endpoint).toMatch(
-      new RegExp(`^https://app\\.test/api/webhooks/inbound/${item.id}/[\\w-]{43}$`),
+    // The URL holds no key: it never changes, and the key travels in a header.
+    expect(item.endpoint).toBe(`https://app.test/api/webhooks/inbound/${item.id}`);
+    expect(secret).toMatch(/^[\w-]{43}$/);
+    expect((await callWith(item.id, secret)).status).toBe(202);
+    expect((await callWith(item.id)).status).toBe(401);
+    // Nothing returns the key again.
+    const listed = await caller().list({ agentId });
+    expect(JSON.stringify(listed)).not.toContain(secret);
+    expect(JSON.stringify(await caller().update({ id: item.id, name: 'CI 2' }))).not.toContain(
+      secret,
     );
-    const delivered = await receiveInboundWebhook(db, {
-      body: '{}',
-      headers: new Headers(),
-      id: item.id,
-      pathToken: tokenOf(item.endpoint),
-    });
-    expect(delivered.status).toBe(202);
   });
 
   it('refuses to create while the feature is off, or for an agent the caller cannot edit', async () => {
@@ -147,23 +158,31 @@ describe('generic webhook management', () => {
     );
   });
 
-  it("shows the call URL only to the webhook's creator", async () => {
+  it('shows the fixed URL to everyone who sees the agent, and the key to no one', async () => {
     const created = await inWorkspace(creator).create({ agentId: `${agentId}-ws` });
     const mine = await inWorkspace(creator).list({ agentId: `${agentId}-ws` });
-    expect(mine.map((item) => item.endpoint)).toEqual([created.endpoint]);
+    expect(mine.map((item) => item.endpoint)).toEqual([created.item.endpoint]);
     const theirs = await inWorkspace(colleague).list({ agentId: `${agentId}-ws` });
     expect(theirs).toMatchObject([
-      { canConfigure: false, canManage: false, endpoint: null, id: created.id },
+      {
+        canConfigure: false,
+        canManage: false,
+        endpoint: created.item.endpoint,
+        id: created.item.id,
+      },
     ]);
-    // Calls run as the creator, so an admin who manages the webhook still gets no URL to call.
+    // The URL alone runs nothing: only the creator ever saw the key, and only once.
     const admin = await inWorkspace(colleague, 'admin').list({ agentId: `${agentId}-ws` });
-    expect(admin).toMatchObject([{ canConfigure: false, canManage: true, endpoint: null }]);
+    expect(admin).toMatchObject([
+      { canConfigure: false, canManage: true, endpoint: created.item.endpoint },
+    ]);
+    expect(JSON.stringify([mine, theirs, admin])).not.toContain(created.secret);
     expect(await inWorkspace(creator).list({ agentId: 'another-agent' })).toEqual([]);
 
     const actions = await db
       .select({ action: workspaceAuditLogs.action })
       .from(workspaceAuditLogs)
-      .where(eq(workspaceAuditLogs.resourceId, created.id));
+      .where(eq(workspaceAuditLogs.resourceId, created.item.id));
     expect(actions).toEqual([{ action: 'webhook.created' }]);
   });
 
@@ -179,10 +198,15 @@ describe('generic webhook management', () => {
       instructions: 'Read the payroll sheet',
     });
     const [seen] = await inWorkspace(colleague, 'admin').list();
-    expect(seen).toMatchObject({ agent: null, endpoint: null, id: created.id, instructions: null });
+    expect(seen).toMatchObject({
+      agent: null,
+      endpoint: null,
+      id: created.item.id,
+      instructions: null,
+    });
     const [own] = await inWorkspace(creator).list();
     expect(own).toMatchObject({
-      endpoint: created.endpoint,
+      endpoint: created.item.endpoint,
       instructions: 'Read the payroll sheet',
     });
   });
@@ -198,20 +222,24 @@ describe('generic webhook management', () => {
     const admin = inWorkspace(colleague, 'admin');
 
     await expect(
-      admin.update({ autoApprove: true, id: created.id, instructions: 'Export everything' }),
+      admin.update({ autoApprove: true, id: created.item.id, instructions: 'Export everything' }),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
-    await expect(admin.sendTest({ id: created.id })).rejects.toMatchObject({ code: 'NOT_FOUND' });
-    await expect(admin.rotateToken({ id: created.id })).rejects.toMatchObject({
+    await expect(admin.sendTest({ id: created.item.id })).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
-    await expect(admin.listDeliveries({ id: created.id })).rejects.toMatchObject({
+    await expect(admin.rotateToken({ id: created.item.id })).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
-    expect((await admin.update({ id: created.id, paused: true })).status).toBe('paused');
+    await expect(admin.listDeliveries({ id: created.item.id })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect((await admin.update({ id: created.item.id, paused: true })).status).toBe('paused');
 
     const [own] = await inWorkspace(creator).list();
     expect(own).toMatchObject({ instructions: null, source: { autoApprove: false } });
-    expect(tokenOf(own.endpoint)).toBe(tokenOf(created.endpoint));
+    // The key was not replaced either: it still authenticates (409: the webhook is paused now).
+    expect((await callWith(created.item.id, created.secret)).status).toBe(409);
+    expect((await callWith(created.item.id, 'not-the-key')).status).toBe(401);
   });
 
   it("keeps what another member's webhook runs out of an admin's hands, even on a public agent", async () => {
@@ -222,70 +250,98 @@ describe('generic webhook management', () => {
     const admin = inWorkspace(colleague, 'admin');
 
     for (const attempt of [
-      () => admin.update({ autoApprove: true, id: created.id, instructions: 'Export everything' }),
-      () => admin.sendTest({ id: created.id }),
-      () => admin.rotateToken({ id: created.id }),
+      () =>
+        admin.update({ autoApprove: true, id: created.item.id, instructions: 'Export everything' }),
+      () => admin.sendTest({ id: created.item.id }),
+      () => admin.rotateToken({ id: created.item.id }),
     ])
       await expect(attempt()).rejects.toMatchObject({ code: 'FORBIDDEN' });
 
-    expect((await admin.update({ id: created.id, paused: true })).status).toBe('paused');
+    expect((await admin.update({ id: created.item.id, paused: true })).status).toBe('paused');
     const [own] = await inWorkspace(creator).list({ agentId: `${agentId}-ws` });
     expect(own).toMatchObject({
       canConfigure: true,
-      endpoint: created.endpoint,
+      endpoint: created.item.endpoint,
       instructions: 'Triage CI',
       source: { autoApprove: false },
     });
-    await admin.delete({ id: created.id });
+    await admin.delete({ id: created.item.id });
     expect(await inWorkspace(creator).list({ agentId: `${agentId}-ws` })).toEqual([]);
   });
 
   it('pauses, resumes and changes settings, leaving the URL as it was', async () => {
     const created = await caller().create({ agentId });
-    const paused = await caller().update({ id: created.id, paused: true });
+    const paused = await caller().update({ id: created.item.id, paused: true });
     expect(paused.status).toBe('paused');
     const changed = await caller().update({
       autoApprove: true,
-      id: created.id,
+      id: created.item.id,
       name: '',
       paused: false,
       topicMode: 'reuse',
     });
     expect(changed).toMatchObject({
-      endpoint: created.endpoint,
+      endpoint: created.item.endpoint,
       name: null,
       source: { autoApprove: true, kind: 'generic', topicMode: 'reuse' },
       status: 'active',
     });
   });
 
-  it('rotates the token so the previous URL stops working at once', async () => {
+  it('gives a new key, shown once, that replaces the old one at once while the URL stays', async () => {
     const created = await caller().create({ agentId });
-    const rotated = await caller().rotateToken({ id: created.id });
-    expect(rotated.endpoint).not.toBe(created.endpoint);
-    const call = (endpoint: string | null) =>
-      receiveInboundWebhook(db, {
-        body: '{}',
-        headers: new Headers(),
-        id: created.id,
-        pathToken: tokenOf(endpoint),
-      });
-    expect((await call(created.endpoint)).status).toBe(401);
-    expect((await call(rotated.endpoint)).status).toBe(202);
+    const rotated = await caller().rotateToken({ id: created.item.id });
+    expect(rotated.item.endpoint).toBe(created.item.endpoint);
+    expect(rotated.secret).not.toBe(created.secret);
+    expect((await callWith(created.item.id, created.secret)).status).toBe(401);
+    expect((await callWith(created.item.id, rotated.secret)).status).toBe(202);
   });
 
   it("lets only the webhook's managers change it", async () => {
     const created = await inWorkspace(creator).create({ agentId: `${agentId}-ws` });
     for (const run of [
-      () => inWorkspace(colleague).update({ id: created.id, paused: true }),
-      () => inWorkspace(colleague).rotateToken({ id: created.id }),
-      () => inWorkspace(colleague).sendTest({ id: created.id }),
-      () => inWorkspace(colleague).listDeliveries({ id: created.id }),
+      () => inWorkspace(colleague).update({ id: created.item.id, paused: true }),
+      () => inWorkspace(colleague).rotateToken({ id: created.item.id }),
+      () => inWorkspace(colleague).sendTest({ id: created.item.id }),
+      () => inWorkspace(colleague).listDeliveries({ id: created.item.id }),
     ])
       await expect(run()).rejects.toBeInstanceOf(TRPCError);
     await expect(
-      inWorkspace(colleague, 'admin').update({ id: created.id, paused: true }),
+      inWorkspace(colleague, 'admin').update({ id: created.item.id, paused: true }),
     ).resolves.toMatchObject({ status: 'paused' });
+  });
+
+  it("continues a picked topic in reuse mode, only one of the creator's own for this agent", async () => {
+    await db.insert(agents).values({ id: `${agentId}-other`, userId: creator });
+    await db.insert(topics).values([
+      { agentId, id: 'picked-topic', title: 'On-call log', userId: creator },
+      { agentId: `${agentId}-other`, id: 'foreign-topic', userId: creator },
+    ]);
+    const { item } = await caller().create({
+      agentId,
+      topicId: 'picked-topic',
+      topicMode: 'reuse',
+    });
+    expect(item).toMatchObject({
+      source: { topicId: 'picked-topic', topicMode: 'reuse' },
+      topic: { id: 'picked-topic', title: 'On-call log' },
+    });
+
+    await expect(
+      caller().create({ agentId, topicId: 'foreign-topic', topicMode: 'reuse' }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(caller().update({ id: item.id, topicId: 'foreign-topic' })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+
+    // A new topic per call keeps no picked topic; clearing drops it as well.
+    expect((await caller().update({ id: item.id, topicMode: 'new' })).source).not.toHaveProperty(
+      'topicId',
+    );
+    await caller().update({ id: item.id, topicId: 'picked-topic', topicMode: 'reuse' });
+    expect((await caller().update({ id: item.id, topicId: null })).source).not.toHaveProperty(
+      'topicId',
+    );
   });
 
   it('refuses to edit an MCP subscription as a generic webhook', async () => {
@@ -306,20 +362,20 @@ describe('generic webhook management', () => {
 
   it('sends a test through the real receiver and lists it as a delivery', async () => {
     const created = await caller().create({ agentId });
-    expect(await caller().sendTest({ id: created.id })).toEqual({
+    expect(await caller().sendTest({ id: created.item.id })).toEqual({
       accepted: true,
       error: undefined,
       status: 202,
     });
-    const page = await caller().listDeliveries({ id: created.id });
+    const page = await caller().listDeliveries({ id: created.item.id });
     expect(page.items).toMatchObject([
       { payloadPurged: false, status: 'pending', test: true, threadKey: null, topic: null },
     ]);
     expect(page.items[0].preview).toContain('test delivery');
     expect(await db.select().from(signals).where(eq(signals.userId, creator))).toHaveLength(1);
 
-    await caller().update({ id: created.id, paused: true });
-    expect(await caller().sendTest({ id: created.id })).toMatchObject({
+    await caller().update({ id: created.item.id, paused: true });
+    expect(await caller().sendTest({ id: created.item.id })).toMatchObject({
       accepted: false,
       error: 'Webhook is paused',
       status: 409,
@@ -332,17 +388,17 @@ describe('generic webhook management', () => {
       await db.insert(signals).values({
         agentId,
         createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, i)),
-        externalId: `${created.id}:e${i}`,
+        externalId: `${created.item.id}:e${i}`,
         payload: { body: { i } },
-        scopeKey: `inbound-webhook:${created.id}`,
+        scopeKey: `inbound-webhook:${created.item.id}`,
         source: 'webhook',
         type: 'webhook',
         userId: creator,
       });
-    const first = await caller().listDeliveries({ id: created.id });
+    const first = await caller().listDeliveries({ id: created.item.id });
     expect(first.items).toHaveLength(20);
     expect(first.items[0].preview).toBe('{"i":21}');
-    const second = await caller().listDeliveries({ cursor: first.nextCursor, id: created.id });
+    const second = await caller().listDeliveries({ cursor: first.nextCursor, id: created.item.id });
     expect(second.items.map((item) => item.preview)).toEqual(['{"i":1}', '{"i":0}']);
     expect(second.nextCursor).toBeUndefined();
   });
@@ -354,11 +410,11 @@ describe('generic webhook management', () => {
       await db.execute(
         sql`insert into signals (agent_id, created_at, external_id, payload, scope_key, source, type, user_id)
             values (${agentId}, ${`2026-01-01T00:00:00.123${String(100 + i * 10).padStart(3, '0')}Z`}::timestamptz,
-                    ${`${created.id}:u${i}`}, ${JSON.stringify({ body: { i } })}::jsonb,
-                    ${`inbound-webhook:${created.id}`}, 'webhook', 'webhook', ${creator})`,
+                    ${`${created.item.id}:u${i}`}, ${JSON.stringify({ body: { i } })}::jsonb,
+                    ${`inbound-webhook:${created.item.id}`}, 'webhook', 'webhook', ${creator})`,
       );
-    const first = await caller().listDeliveries({ id: created.id });
-    const second = await caller().listDeliveries({ cursor: first.nextCursor, id: created.id });
+    const first = await caller().listDeliveries({ id: created.item.id });
+    const second = await caller().listDeliveries({ cursor: first.nextCursor, id: created.item.id });
     expect(first.nextCursor?.createdAt).toMatch(/\.\d{6}Z$/);
     expect([...first.items, ...second.items].map((item) => item.preview)).toHaveLength(21);
   });

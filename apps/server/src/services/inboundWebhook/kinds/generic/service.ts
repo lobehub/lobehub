@@ -3,22 +3,25 @@ import { isInboundWebhookOfKind } from '@lobechat/types';
 
 import type { InboundWebhookView, InboundWebhookViewOf } from '@/database/models/inboundWebhook';
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
+import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 
 import { receiveInboundWebhook } from '../../receiver';
-import { generateWebhookToken, genericWebhookEndpoint } from './token';
+import { generateWebhookToken } from './token';
 
 export interface GenericWebhookSettings {
   autoApprove?: boolean;
   instructions?: string | null;
   name?: string | null;
+  /** `reuse` only: an existing Topic of the agent to continue; null clears it. */
+  topicId?: string | null;
   topicMode?: GenericWebhookTopicMode;
 }
 
 export class GenericWebhookError extends Error {
   constructor(
-    readonly code: 'not_generic' | 'not_found',
+    readonly code: 'invalid_topic' | 'not_generic' | 'not_found',
     message: string,
   ) {
     super(message);
@@ -27,6 +30,24 @@ export class GenericWebhookError extends Error {
 }
 
 const clean = (value: string | null | undefined) => value?.trim() || null;
+
+/**
+ * The Topic a `reuse` webhook continues, checked against the agent and the creator: runs go out
+ * as the creator, so only their own Topic of that agent can be picked. `new` keeps none.
+ */
+const pinnedTopic = async (
+  db: LobeChatDatabase,
+  scope: { userId: string; workspaceId?: string },
+  agentId: string,
+  topicMode: GenericWebhookTopicMode,
+  topicId: string | null | undefined,
+): Promise<string | undefined> => {
+  if (topicMode !== 'reuse' || !topicId) return undefined;
+  const topic = await new TopicModel(db, scope.userId, scope.workspaceId).findById(topicId);
+  if (!topic || topic.agentId !== agentId || topic.userId !== scope.userId)
+    throw new GenericWebhookError('invalid_topic', 'Pick one of your own topics of this agent.');
+  return topic.id;
+};
 
 /** Model scoped to the row's creator, with a gatekeeper: secrets are read and written as theirs. */
 const ownerModel = async (db: LobeChatDatabase, row: InboundWebhookView) =>
@@ -45,7 +66,11 @@ export const asGeneric = (row: InboundWebhookView | undefined): InboundWebhookVi
   return row;
 };
 
-/** Create a generic webhook for `agentId`, active at once, with a fresh secret. */
+/**
+ * Create a generic webhook for `agentId`, active at once, with a fresh key. The key comes back
+ * only here and from {@link rotateGenericWebhookToken}: it is stored encrypted and never shown
+ * again.
+ */
 export async function createGenericWebhook(
   db: LobeChatDatabase,
   scope: { userId: string; workspaceId?: string },
@@ -58,18 +83,20 @@ export async function createGenericWebhook(
     await KeyVaultsGateKeeper.initWithEnvKey(),
   );
   const token = generateWebhookToken();
+  const topicMode = input.topicMode ?? 'new';
+  const topicId = await pinnedTopic(db, scope, input.agentId, topicMode, input.topicId);
   const row = await model.createWithLimits({
     agentId: input.agentId,
-    config: { autoApprove: input.autoApprove ?? false, topicMode: input.topicMode ?? 'new' },
+    config: { autoApprove: input.autoApprove ?? false, topicMode, ...(topicId && { topicId }) },
     instructions: clean(input.instructions),
     kind: 'generic',
     name: clean(input.name),
     secret: token,
     // Generic webhooks have no handshake; `pending` would be refused and swept away.
     status: 'active',
-    verification: { scheme: 'url_token' },
+    verification: { scheme: 'bearer_token' },
   });
-  return { endpoint: genericWebhookEndpoint(row.id, token), row: asGeneric(row) };
+  return { row: asGeneric(row), secret: token };
 }
 
 /** Change a generic webhook's settings, or pause / resume it. */
@@ -82,13 +109,26 @@ export async function updateGenericWebhook(
   let status: InboundWebhookStatus | undefined;
   if (input.paused === true) status = 'paused';
   else if (input.paused === false && row.status === 'paused') status = 'active';
-  const config =
-    input.autoApprove !== undefined || input.topicMode !== undefined
-      ? {
-          autoApprove: input.autoApprove ?? row.config.autoApprove,
-          topicMode: input.topicMode ?? row.config.topicMode,
-        }
-      : undefined;
+  let config: typeof row.config | undefined;
+  if (
+    input.autoApprove !== undefined ||
+    input.topicMode !== undefined ||
+    input.topicId !== undefined
+  ) {
+    const topicMode = input.topicMode ?? row.config.topicMode;
+    const topicId = await pinnedTopic(
+      db,
+      { userId: row.userId, workspaceId: row.workspaceId ?? undefined },
+      row.agentId,
+      topicMode,
+      input.topicId === undefined ? row.config.topicId : input.topicId,
+    );
+    config = {
+      autoApprove: input.autoApprove ?? row.config.autoApprove,
+      topicMode,
+      ...(topicId && { topicId }),
+    };
+  }
   const updated = await model.update(row.id, {
     ...(config && { config }),
     ...(input.instructions !== undefined && { instructions: clean(input.instructions) }),
@@ -98,35 +138,14 @@ export async function updateGenericWebhook(
   return asGeneric(updated);
 }
 
-/** Replace the secret; the previous URL and Bearer token stop working immediately. */
+/** Replace the key; the previous one stops working at once, and the URL stays as it was. */
 export async function rotateGenericWebhookToken(
   db: LobeChatDatabase,
   row: InboundWebhookViewOf<'generic'>,
 ) {
   const token = generateWebhookToken();
   const updated = await (await ownerModel(db, row)).rotateSecret(row.id, token);
-  return { endpoint: genericWebhookEndpoint(row.id, token), row: asGeneric(updated) };
-}
-
-/** Full call URLs of `rows` that are generic, keyed by id; others are left out. */
-export async function genericWebhookEndpoints(
-  db: LobeChatDatabase,
-  rows: InboundWebhookView[],
-): Promise<Map<string, string>> {
-  const endpoints = new Map<string, string>();
-  const generic = rows.filter((row) => isInboundWebhookOfKind(row, 'generic'));
-  if (!generic.length) return endpoints;
-  const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-  for (const row of generic) {
-    const secret = await new InboundWebhookModel(
-      db,
-      row.userId,
-      row.workspaceId ?? undefined,
-      gateKeeper,
-    ).getSecret(row.id);
-    if (secret) endpoints.set(row.id, genericWebhookEndpoint(row.id, secret));
-  }
-  return endpoints;
+  return { row: asGeneric(updated), secret: token };
 }
 
 /**
@@ -144,9 +163,12 @@ export async function sendGenericWebhookTest(
       message: 'This is a test delivery sent from the webhook settings.',
       sentAt: new Date().toISOString(),
     }),
-    headers: new Headers({ 'content-type': 'application/json', 'user-agent': 'LobeHub-Test' }),
+    headers: new Headers({
+      'authorization': `Bearer ${secret}`,
+      'content-type': 'application/json',
+      'user-agent': 'LobeHub-Test',
+    }),
     id: row.id,
-    pathToken: secret,
     test: true,
   });
   return {

@@ -64,7 +64,7 @@ const seedWebhook = async (config: Partial<GenericWebhookConfig> = {}, name = 'C
       name,
       secret: 'token',
       status: 'active',
-      verification: { scheme: 'url_token' },
+      verification: { scheme: 'bearer_token' },
     })
   ).id;
 };
@@ -254,6 +254,20 @@ describe('generic webhook wakes', () => {
     expect(rows.find((s) => s.id === other.id)?.status).toBe('processed');
   });
 
+  it('continues the topic its creator picked, and its own once that one is gone', async () => {
+    await db.insert(topics).values({ agentId, id: 'picked', userId });
+    await seedWebhook({ topicId: 'picked', topicMode: 'reuse' });
+    await seedSignal();
+    await wakeInboundWebhook(db, id, deps);
+    expect(execute.mock.calls[0][0].appContext).toEqual({ topicId: 'picked' });
+    expect(execute.mock.calls[0][0].webhookThread).toBeUndefined();
+
+    await db.delete(topics).where(eq(topics.id, 'picked'));
+    await seedSignal();
+    await wakeInboundWebhook(db, id, deps);
+    expect(execute.mock.calls[1][0].webhookThread).toEqual({ threadKey: '', webhookId: id });
+  });
+
   it('puts every call of a reuse webhook in one shared Topic', async () => {
     await seedWebhook({ topicMode: 'reuse' });
     await seedSignal();
@@ -338,7 +352,7 @@ describe('generic webhook wakes', () => {
         name: 'Team hook',
         secret: 'token',
         status: 'active',
-        verification: { scheme: 'url_token' },
+        verification: { scheme: 'bearer_token' },
       })
     ).id;
     await seedSignal(undefined, { agentId: `${agentId}-ws` });

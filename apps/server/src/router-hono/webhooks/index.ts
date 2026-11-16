@@ -23,7 +23,6 @@ const app = new Hono().basePath('/api/webhooks');
 app.post('/casdoor', casdoorWebhook);
 app.post('/logto', logtoWebhook);
 app.post('/inbound/:id', inboundWebhookBodyLimit, inboundWebhook);
-app.post('/inbound/:id/:token', inboundWebhookBodyLimit, inboundWebhook);
 
 // Memory pipeline webhooks — share the configured static-header guard.
 app.post('/memory-extraction', memoryWebhookAuth(), memoryExtractionWebhook);
