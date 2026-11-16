@@ -44,6 +44,12 @@ export const PRUNE_UNATTACHED_IMAGE_REFS_COMMAND = createCommand<void>(
   'PRUNE_UNATTACHED_IMAGE_REFS_COMMAND',
 );
 
+/**
+ * Dispatched with the preview URLs of attached images whose last reference the user just
+ * deleted from the text, so the composer removes those images from the attachment list.
+ */
+export const IMAGE_REFS_DELETED_COMMAND = createCommand<string[]>('IMAGE_REFS_DELETED_COMMAND');
+
 type IEditorKernel = ReturnType<typeof getKernelFromEditor>;
 
 export interface ImageRefTagPluginOptions {
@@ -109,8 +115,34 @@ const $syncImageRefTags = (refs: Map<string, ImageUploadRef>, removed: RemovedSr
   }
 };
 
-/** Marks the follow-up update that re-syncs references, so it does not trigger itself. */
-const IMAGE_REF_RESYNC_TAG = 'image-ref-resync';
+/**
+ * Marks the plugin's own updates, so the follow-up re-sync does not trigger itself and
+ * references removed by a sync are not mistaken for ones the user deleted.
+ */
+const IMAGE_REF_SYNC_TAG = 'image-ref-sync';
+
+/** Preview URLs of the attached images the editor state references. */
+const $referencedImages = (refs: Map<string, ImageUploadRef>): Set<string> => {
+  const srcs = new Set<string>();
+  for (const { node } of $dfs()) {
+    if (!$isImageRefTagNode(node)) continue;
+    const ref =
+      refs.get(node.src) ??
+      (node.fileId ? [...refs.values()].find((item) => item.fileId === node.fileId) : undefined);
+    if (ref) srcs.add(ref.src);
+  }
+  return srcs;
+};
+
+/**
+ * Whether an update replaced the whole document (`setDocument`, clearing after send, a
+ * restored draft) rather than editing it: `setEditorState` marks only the root dirty, while
+ * any edit inside a paragraph also marks that paragraph. This holds only while
+ * `setEditorState` is not called inside `editor.update`, which would merge that update's
+ * dirty elements into the replacement.
+ */
+const isDocumentReplacement = (dirtyElements: Map<string, boolean>) =>
+  dirtyElements.size === 1 && dirtyElements.has('root');
 
 /**
  * Owns the `image-ref-tag` node: its decorator, its `[Image #N]` markdown writer, and
@@ -170,7 +202,9 @@ export class ImageRefTagPlugin {
         for (const src of removed ?? []) this.removed.add(src);
 
         // Renumbering after a removal belongs to that removal, not to its own undo step.
-        editor.update(() => $syncImageRefTags(refs, this.removed), { tag: HISTORY_MERGE_TAG });
+        editor.update(() => $syncImageRefTags(refs, this.removed), {
+          tag: [HISTORY_MERGE_TAG, IMAGE_REF_SYNC_TAG],
+        });
         return true;
       },
       COMMAND_PRIORITY_HIGH,
@@ -183,7 +217,7 @@ export class ImageRefTagPlugin {
         if (!refs) return false;
         editor.update(() => $syncImageRefTags(refs, EVERYTHING_REMOVED), {
           discrete: true,
-          tag: HISTORY_MERGE_TAG,
+          tag: [HISTORY_MERGE_TAG, IMAGE_REF_SYNC_TAG],
         });
         return true;
       },
@@ -197,7 +231,7 @@ export class ImageRefTagPlugin {
     // draft restored from a sent message lists its images after its text, under new URLs.
     editor.registerUpdateListener(({ editorState, tags }) => {
       const refs = this.refs;
-      if (!refs || tags.has(IMAGE_REF_RESYNC_TAG)) return;
+      if (!refs || tags.has(IMAGE_REF_SYNC_TAG)) return;
       const removed = tags.has(HISTORIC_TAG) ? this.removed : NOTHING_REMOVED;
 
       const stale = editorState.read(() =>
@@ -209,9 +243,30 @@ export class ImageRefTagPlugin {
       if (!stale) return;
 
       editor.update(() => $syncImageRefTags(refs, removed), {
-        tag: [HISTORY_MERGE_TAG, IMAGE_REF_RESYNC_TAG],
+        tag: [HISTORY_MERGE_TAG, IMAGE_REF_SYNC_TAG],
       });
     });
+
+    // Deleting an image's last reference from the text removes the image, as removing the
+    // image removes its references. Only the user's own edits count: the plugin's syncs,
+    // undo/redo and whole-document replacements (clearing after send, switching drafts)
+    // drop references without meaning to drop their images.
+    editor.registerUpdateListener(
+      ({ dirtyElements, dirtyLeaves, editorState, prevEditorState, tags }) => {
+        // Selection-only updates (caret moves, focus) cannot have deleted a reference.
+        if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
+        const refs = this.refs;
+        if (!refs || refs.size === 0) return;
+        if (tags.has(IMAGE_REF_SYNC_TAG) || tags.has(HISTORIC_TAG)) return;
+        if (isDocumentReplacement(dirtyElements)) return;
+
+        const before = prevEditorState.read(() => $referencedImages(refs));
+        if (before.size === 0) return;
+        const after = editorState.read(() => $referencedImages(refs));
+        const deleted = [...before].filter((src) => !after.has(src));
+        if (deleted.length > 0) editor.dispatchCommand(IMAGE_REFS_DELETED_COMMAND, deleted);
+      },
+    );
   }
 
   destroy(): void {

@@ -17,6 +17,7 @@ import {
   type ImageRefTagNode,
 } from './ImageRefTagNode';
 import {
+  IMAGE_REFS_DELETED_COMMAND,
   ImageRefTagPlugin,
   PRUNE_UNATTACHED_IMAGE_REFS_COMMAND,
   SYNC_IMAGE_REF_TAGS_COMMAND,
@@ -238,5 +239,79 @@ describe('ImageRefTagPlugin', () => {
 
     // Read synchronously, the way sending reads the editor data right after.
     expect(referencesOf(editor)).toEqual([{ number: 1, src: 'blob:b' }]);
+  });
+});
+
+describe('ImageRefTagPlugin reference deletion', () => {
+  /** Records the images whose last reference the user deleted. */
+  const listenDeleted = (editor: IEditor) => {
+    const deleted: string[][] = [];
+    editor
+      .getLexicalEditor()!
+      .registerCommand(IMAGE_REFS_DELETED_COMMAND, (srcs) => (deleted.push(srcs), true), 0);
+    return deleted;
+  };
+
+  /** Deletes references the way a user edit does: a plain update inside the paragraph. */
+  const deleteReferences = async (editor: IEditor, srcs: string[], count = Infinity) => {
+    editor.getLexicalEditor()!.update(() => {
+      let left = count;
+      for (const { node } of $dfs()) {
+        if (left > 0 && $isImageRefTagNode(node) && srcs.includes(node.src)) {
+          node.remove();
+          left--;
+        }
+      }
+    });
+    await moment();
+  };
+
+  it('removes the image when the user deletes its reference from the text', async () => {
+    const editor = createEditor();
+    const deleted = listenDeleted(editor);
+    await setText(editor, 'look ');
+    await addReferences(editor, refsOf('blob:a', 'blob:b'));
+
+    await deleteReferences(editor, ['blob:a']);
+
+    expect(deleted).toEqual([['blob:a']]);
+  });
+
+  it('keeps the image while another reference to it remains', async () => {
+    const editor = createEditor();
+    const deleted = listenDeleted(editor);
+    await setText(editor, 'look ');
+    await addReferences(editor, refsOf('blob:a'));
+    const json = editor.getDocument('json') as any;
+    // A second reference to the same image, as pasting a copied chip creates.
+    const paragraph = json.root.children[0];
+    paragraph.children.push(...paragraph.children.filter((n: any) => n.type === 'image-ref-tag'));
+    await undoTo(editor, json);
+
+    await deleteReferences(editor, ['blob:a'], 1);
+
+    expect(deleted).toEqual([]);
+  });
+
+  it('keeps images when references go away with the document, undo, or a sync', async () => {
+    const editor = createEditor();
+    const deleted = listenDeleted(editor);
+    await setText(editor, 'look ');
+    const textOnly = editor.getDocument('json');
+    await addReferences(editor, refsOf('blob:a', 'blob:b'));
+    const withReferences = editor.getDocument('json');
+
+    // Undo of adding the references, then redo.
+    await undoTo(editor, textOnly);
+    await undoTo(editor, withReferences);
+    // Clearing after send, then restoring the draft.
+    editor.cleanDocument();
+    await moment();
+    editor.setDocument('json', withReferences);
+    await moment();
+    // Removing an image from the attachment list removes its references.
+    await sync(editor, refsOf('blob:b'), { removed: ['blob:a'] });
+
+    expect(deleted).toEqual([]);
   });
 });

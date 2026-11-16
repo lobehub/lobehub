@@ -1,4 +1,5 @@
 import type { IEditor } from '@lobehub/editor';
+import { COMMAND_PRIORITY_EDITOR } from 'lexical';
 import { useEffect, useRef } from 'react';
 
 import { useChatInputUploadKey } from '@/features/ChatInput/hooks/useChatInputUpload';
@@ -7,7 +8,7 @@ import type { UploadFileItem } from '@/types/files/upload';
 
 import { getImageUploadRefs } from '../../utils/imageUploads';
 import type { SyncImageRefTagsPayload } from './ImageRefTagPlugin';
-import { SYNC_IMAGE_REF_TAGS_COMMAND } from './ImageRefTagPlugin';
+import { IMAGE_REFS_DELETED_COMMAND, SYNC_IMAGE_REF_TAGS_COMMAND } from './ImageRefTagPlugin';
 
 export interface ImageRefSyncState {
   /** Preview URLs of the images attached at the last sync. */
@@ -45,6 +46,7 @@ export const planImageRefSync = (
  * references stopped being inserted) in step with the draft's image uploads: a removed image
  * takes its references with it, and the remaining references follow the images' new numbers.
  * Attaching an image adds no reference.
+ * Deleting an image's last reference from the text removes the image.
  */
 export const useImageRefTagSync = (editor: IEditor | undefined) => {
   const key = useChatInputUploadKey();
@@ -58,4 +60,24 @@ export const useImageRefTagSync = (editor: IEditor | undefined) => {
     stateRef.current = state;
     editor.dispatchCommand(SYNC_IMAGE_REF_TAGS_COMMAND, payload);
   }, [editor, files, key]);
+
+  useEffect(() => {
+    const lexical = editor?.getLexicalEditor();
+    if (!lexical || !key) return;
+
+    return lexical.registerCommand(
+      IMAGE_REFS_DELETED_COMMAND,
+      (srcs) => {
+        const state = useFileStore.getState();
+        const list = fileChatSelectors.chatUploadFileList(key)(state);
+        for (const file of list) {
+          if (file.previewUrl && srcs.includes(file.previewUrl)) {
+            void state.removeChatUploadFile(key, file.id);
+          }
+        }
+        return true;
+      },
+      COMMAND_PRIORITY_EDITOR,
+    );
+  }, [editor, key]);
 };
