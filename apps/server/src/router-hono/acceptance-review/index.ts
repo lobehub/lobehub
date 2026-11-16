@@ -15,6 +15,7 @@ import {
   listComments,
   setResolved,
 } from './handlers';
+import { getExtensionInbox } from './inbox';
 import {
   addMark,
   addMarkReply,
@@ -57,6 +58,7 @@ app.use(
 app.get('/sites/:siteId', getSiteInfo);
 app.post('/sites/:siteId/beacon', recordSiteBeacon);
 app.get('/extension/targets', extensionAuth, getExtensionTargets);
+app.get('/extension/inbox', extensionAuth, getExtensionInbox);
 app.post('/extension/token', extensionAuth, mintExtensionToken);
 app.use('*', reviewAuth);
 app.onError(handleReviewError);
