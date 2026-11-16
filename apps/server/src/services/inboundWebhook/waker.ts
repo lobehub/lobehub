@@ -19,6 +19,7 @@ import {
   renewWebhookSignalClaim,
   settleWebhookSignals,
   WEBHOOK_WAKE_RENEW_MS,
+  type WebhookSignalClaim,
 } from './wakeClaim';
 
 /** Runs one wake starts at most for a kind that runs its deliveries in groups; the rest wait. */
@@ -35,6 +36,11 @@ export interface WebhookWakeDeps {
  */
 export interface WebhookWakeResult {
   outcome: string;
+}
+
+/** One claimed batch's result, with the group it ran, for kinds that run deliveries in groups. */
+interface BatchResult extends WebhookWakeResult {
+  groupKey?: string;
 }
 
 /** Classify both thrown errors and execAgent's returned {error} shape, including nested causes. */
@@ -98,15 +104,22 @@ export async function wakeInboundWebhook(
     return { outcome: 'gone' };
   }
   const runs = kind.groupSignals ? MAX_RUNS_PER_WAKE : 1;
-  let result: WebhookWakeResult = { outcome: 'empty' };
+  let outcome = 'empty';
+  // Groups this wake could not run (busy topic, failed start, lost claim). They wait for a later
+  // wake; skipping them keeps one stuck thread from holding back the others behind it.
+  const blocked = new Set<string>();
+  let deferred = false;
   for (let run = 0; run < runs; run++) {
-    const next = await wakeOnce(db, kind, row, model, deps);
-    if (next.outcome === 'empty') return result;
-    result = next;
-    // A failure or a busy Topic stops here; its deliveries are retried with backoff, not now.
-    if (next.outcome !== 'processed' && next.outcome !== 'ignored') return result;
+    const next = await wakeOnce(db, kind, row, model, deps, blocked);
+    if (next.outcome === 'empty') return { outcome: deferred ? 'deferred' : outcome };
+    outcome = next.outcome;
+    if (outcome === 'processed' || outcome === 'ignored') continue;
+    // The hourly cap is the webhook's, not one group's: nothing else may run either.
+    if (outcome === 'capped' || !next.groupKey) return { outcome };
+    blocked.add(next.groupKey);
+    if (outcome === 'deferred') deferred = true;
   }
-  return kind.groupSignals ? { outcome: 'more' } : result;
+  return { outcome: kind.groupSignals ? 'more' : outcome };
 }
 
 /** Claim one batch (a kind's group, or everything waiting) and start at most one run for it. */
@@ -116,13 +129,30 @@ async function wakeOnce(
   row: InboundWebhookView,
   model: InboundWebhookModel,
   deps: WebhookWakeDeps,
-): Promise<WebhookWakeResult> {
-  const { id } = row;
+  blocked: ReadonlySet<string>,
+): Promise<BatchResult> {
   const claim = await claimWebhookSignals(db, row, {
-    group: kind.groupSignals ? (candidates) => kind.groupSignals!(row, candidates) : undefined,
+    group: kind.groupSignals
+      ? (candidates) => kind.groupSignals!(row, candidates, blocked)
+      : undefined,
     source: kind.signalSource,
   });
   if (!claim) return { outcome: 'empty' };
+  const result = await runClaim(db, kind, row, model, deps, claim);
+  const groupKey = kind.groupKey?.(row, claim.batch[0]);
+  return groupKey ? { ...result, groupKey } : result;
+}
+
+/** Start the run for a claimed batch, settling every signal of it however that ends. */
+async function runClaim(
+  db: LobeChatDatabase,
+  kind: InboundWebhookKindHandler,
+  row: InboundWebhookView,
+  model: InboundWebhookModel,
+  deps: WebhookWakeDeps,
+  claim: WebhookSignalClaim,
+): Promise<WebhookWakeResult> {
+  const { id } = row;
   const { batch } = claim;
   let handled = false;
   let leaseLost = false;

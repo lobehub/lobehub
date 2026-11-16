@@ -166,6 +166,40 @@ describe('generic webhook wakes', () => {
     expect(execute.mock.calls[1][0].webhookThread).toBeUndefined();
   });
 
+  it('runs other threads while one thread waits for its busy Topic', async () => {
+    await seedWebhook();
+    await seedSignal('ticket-a');
+    await wakeInboundWebhook(db, id, deps);
+    // Thread A's Topic is now busy (e.g. waiting for an approval); a call for B arrives after A's.
+    execute.mockClear();
+    execute.mockImplementation(async (params) => {
+      if (params.appContext?.topicId === 'topic-1')
+        return { error: new Error('TopicStartReservationError: occupied') } as never;
+      runs++;
+      await db.insert(topics).values({
+        agentId,
+        id: `topic-${runs}`,
+        metadata: params.webhookThread ? { webhook: params.webhookThread } : undefined,
+        userId,
+      });
+      return started(`topic-${runs}`);
+    });
+    const waitingA = await seedSignal('ticket-a');
+    const callB = await seedSignal('ticket-b');
+
+    expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'deferred' });
+
+    expect(
+      execute.mock.calls.map(([params]) => params.webhookThread?.threadKey ?? 'continued'),
+    ).toEqual(['continued', 'ticket-b']);
+    const rows = await signalRows();
+    expect(rows.find((s) => s.id === waitingA.id)).toMatchObject({
+      error: 'topic_busy',
+      status: 'pending',
+    });
+    expect(rows.find((s) => s.id === callB.id)?.status).toBe('processed');
+  });
+
   it('puts every call of a reuse webhook in one shared Topic', async () => {
     await seedWebhook({ topicMode: 'reuse' });
     await seedSignal();

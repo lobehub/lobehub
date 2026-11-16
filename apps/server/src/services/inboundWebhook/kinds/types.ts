@@ -99,8 +99,17 @@ export interface InboundWebhookKindHandler<K extends InboundWebhookKind = Inboun
   readonly deliveriesPerMinute?: number;
   /** When the row stops being valid on its own (an MCP subscription's expiry); absent: never. */
   expiresAt?: (row: InboundWebhookViewOf<K>) => string | null;
-  /** From the signals a wake could claim, the ones this wake claims; absent: all of them. */
-  groupSignals?: (row: InboundWebhookViewOf<K>, signals: SignalItem[]) => SignalItem[];
+  /** The group a signal runs in (its thread, or the call alone); set together with `groupSignals`. */
+  groupKey?: (row: InboundWebhookViewOf<K>, signal: SignalItem) => string;
+  /**
+   * From the signals a wake could claim, the ones this wake claims, skipping the groups in
+   * `exclude` (ones this wake already could not run); absent: all of them.
+   */
+  groupSignals?: (
+    row: InboundWebhookViewOf<K>,
+    signals: SignalItem[],
+    exclude: ReadonlySet<string>,
+  ) => SignalItem[];
   isEnabled: (userId: string) => Promise<boolean>;
   maintain?: (ctx: InboundWebhookContext<K>) => Promise<void>;
   /** After a new delivery is stored, before it is acknowledged (e.g. advance a stream cursor). */

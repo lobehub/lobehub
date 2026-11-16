@@ -21,6 +21,12 @@ export const threadKeyOf = (
   signal.metadata.address?.threadKey ||
   (row.config.topicMode === 'reuse' ? SHARED_THREAD : undefined);
 
+/** A thread's calls run together; a call without a thread runs alone. */
+const groupKeyOf = (row: InboundWebhookViewOf<'generic'>, signal: SignalItem) => {
+  const key = threadKeyOf(row, signal);
+  return key === undefined ? `call:${signal.id}` : `thread:${key}`;
+};
+
 /**
  * A webhook any outside system can call with a secret URL (or `Authorization: Bearer`) to wake the
  * Agent. Each call starts a new Topic, or continues the Topic of its thread.
@@ -32,13 +38,15 @@ export const genericKind: InboundWebhookKindHandler<'generic'> = {
       : { body: { id, status: 'accepted' }, status: 202 },
   canCheck: false,
   deliveriesPerMinute: 120,
-  /** A call without a thread runs alone; calls of one thread run together, oldest first. */
-  groupSignals(row, signals) {
-    const [first] = signals;
+  groupKey: groupKeyOf,
+  /** The oldest group this wake has not given up on: one call, or every waiting call of a thread. */
+  groupSignals(row, signals, exclude) {
+    const first = signals.find((signal) => !exclude.has(groupKeyOf(row, signal)));
     if (!first) return [];
-    const key = threadKeyOf(row, first);
-    if (key === undefined) return [first];
-    return signals.filter((signal) => threadKeyOf(row, signal) === key);
+    const key = groupKeyOf(row, first);
+    return key.startsWith('call:')
+      ? [first]
+      : signals.filter((signal) => groupKeyOf(row, signal) === key);
   },
   isEnabled: isAgentWebhooksEnabled,
   async parseDelivery(ctx, request) {
