@@ -1,23 +1,21 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 
-import { recordBackOrigin } from './index';
+import { createBackOriginRecorder } from './index';
+import { useLocationOwner } from './useLocationOwner';
 
-/** Feeds every in-app navigation to {@link recordBackOrigin}. Renders nothing. */
+/** Feeds every in-app navigation to the back-origin store. Renders nothing. */
 const BackOriginTracker = () => {
   const { pathname, search } = useActiveLocation();
-  const previous = useRef<string | null>(null);
+  const owner = useLocationOwner();
+  const [record] = useState(createBackOriginRecorder);
 
   useEffect(() => {
-    const current = `${pathname}${search}`;
-    if (previous.current === current) return;
-
-    recordBackOrigin(previous.current, current);
-    previous.current = current;
-  }, [pathname, search]);
+    record(owner, `${pathname}${search}`);
+  }, [owner, pathname, search, record]);
 
   return null;
 };

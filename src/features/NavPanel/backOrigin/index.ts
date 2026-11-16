@@ -62,6 +62,22 @@ export const recordBackOrigin = (from: string | null, to: string): void => {
   listeners.forEach((listener) => listener());
 };
 
+/**
+ * Feeds locations to {@link recordBackOrigin}, keeping the previous location
+ * per owner (an Electron tab), so switching tabs never reads as a navigation.
+ */
+export const createBackOriginRecorder = () => {
+  const previous = new Map<string, string>();
+
+  return (owner: string, location: string): void => {
+    const from = previous.get(owner) ?? null;
+    if (from === location) return;
+
+    recordBackOrigin(from, location);
+    previous.set(owner, location);
+  };
+};
+
 export const getBackOrigin = (pathname: string): string | undefined => {
   const scope = resolveBackScope(pathname);
   return scope ? origins[scope] : undefined;

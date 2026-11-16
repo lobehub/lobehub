@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { getBackOrigin, recordBackOrigin, resetBackOrigins, resolveBackScope } from './index';
+import {
+  createBackOriginRecorder,
+  getBackOrigin,
+  recordBackOrigin,
+  resetBackOrigins,
+  resolveBackScope,
+} from './index';
 
 const walk = (...paths: string[]) => {
   let previous: string | null = null;
@@ -73,5 +79,32 @@ describe('recordBackOrigin', () => {
   it('returns nothing for unscoped pages', () => {
     walk('/tasks', '/agent/agt_1');
     expect(getBackOrigin('/tasks')).toBeUndefined();
+  });
+});
+
+describe('createBackOriginRecorder', () => {
+  it('records navigations within one owner', () => {
+    const record = createBackOriginRecorder();
+    record('tab-1', '/tasks');
+    record('tab-1', '/agent/agt_1');
+    expect(getBackOrigin('/agent/agt_1')).toBe('/tasks');
+  });
+
+  it('does not treat switching to another tab as a navigation', () => {
+    const record = createBackOriginRecorder();
+    record('tab-1', '/projects');
+    record('tab-1', '/agent/agt_1');
+    record('tab-2', '/tasks');
+    record('tab-1', '/agent/agt_1');
+    expect(getBackOrigin('/agent/agt_1')).toBe('/projects');
+  });
+
+  it('gives an agent first seen in a fresh tab no origin', () => {
+    const record = createBackOriginRecorder();
+    record('tab-1', '/tasks');
+    record('tab-2', '/agent/agt_1');
+    record('tab-1', '/tasks');
+    record('tab-2', '/agent/agt_1');
+    expect(getBackOrigin('/agent/agt_1')).toBeUndefined();
   });
 });
