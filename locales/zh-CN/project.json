@@ -136,7 +136,7 @@
   "environment.privateInShared": "仅自己可见",
   "environment.privateInSharedTooltip": "这是共享项目，对话只会使用已发布的环境，这个私有环境不会被检出。",
   "environment.unlink": "取消关联",
-  "environment.unlinkConfirm.desc": "环境本身会保留在「设置 → 环境」中，本项目里用到它的文件夹和对话不受影响。",
+  "environment.unlinkConfirm.desc": "环境本身会保留在「设置 → 环境」中。本项目里用到它的文件夹会保留，但在重新关联前不能运行对话。",
   "environment.unlinkConfirm.title": "从本项目取消关联「{{name}}」？",
   "environment.unlinkFailed": "无法从本项目取消关联该环境",
   "goals.create": "新建目标",

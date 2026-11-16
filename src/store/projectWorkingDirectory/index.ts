@@ -279,13 +279,21 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
       await projectWorkingDirectoryService.attachEnvironment(projectId, environmentId);
       await Promise.all([
         environments.revalidate(projectId),
+        // Relinking makes the project's folders made from it runnable again.
+        directories.revalidate(ALL_PROJECTS_KEY),
+        directories.revalidate(projectId),
         // The scope-wide list gained the environment instanced by the attach.
         environments.revalidate(ALL_PROJECTS_KEY),
       ]);
     },
     detachEnvironment: async (projectId, environmentId) => {
       await projectWorkingDirectoryService.detachEnvironment(projectId, environmentId);
-      await environments.revalidate(projectId);
+      await Promise.all([
+        environments.revalidate(projectId),
+        // The project's folders made from it lose their runnable environment.
+        directories.revalidate(ALL_PROJECTS_KEY),
+        directories.revalidate(projectId),
+      ]);
     },
     attachRepository: async (input) => {
       const result = await projectWorkingDirectoryService.attachRepository(input);

@@ -136,7 +136,7 @@
   "environment.privateInShared": "Private",
   "environment.privateInSharedTooltip": "This project is shared, so its conversations only use published environments. This private environment won't be checked out.",
   "environment.unlink": "Unlink from project",
-  "environment.unlinkConfirm.desc": "The environment stays in Settings → Environments. Folders and conversations in this project that use it are kept.",
+  "environment.unlinkConfirm.desc": "The environment stays in Settings → Environments. This project's folders that use it are kept, but can't run conversations until it is linked again.",
   "environment.unlinkConfirm.title": "Unlink \"{{name}}\" from this project?",
   "environment.unlinkFailed": "Couldn't unlink the environment from this project",
   "goals.create": "Create goal",

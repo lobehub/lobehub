@@ -232,7 +232,9 @@ const EnvironmentItem = memo<EnvironmentItemProps>((props) => {
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={(event) => {
-        // Mirror native button keyboard semantics for the div-as-button row.
+        // Mirror native button keyboard semantics for the div-as-button row —
+        // for the row itself only, so a control inside it keeps its own keys.
+        if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onSelect();

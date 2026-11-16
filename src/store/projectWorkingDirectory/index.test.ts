@@ -97,6 +97,9 @@ describe('projectWorkingDirectory store', () => {
 
       expect(detach).toHaveBeenCalledWith('project-1', 'env-1');
       expect(invalidates('projectEnvironments', 'project-1')).toBe(true);
+      // Its folders in the project are no longer runnable.
+      expect(invalidates('projectDirectories', 'project-1')).toBe(true);
+      expect(invalidates('projectDirectories', 'all')).toBe(true);
       // The environment itself is untouched, so the scope-wide list stays as it is.
       expect(invalidates('projectEnvironments', 'all')).toBe(false);
     });

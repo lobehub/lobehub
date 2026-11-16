@@ -319,7 +319,7 @@ export default {
   'environment.link': 'Link environment',
   'environment.unlink': 'Unlink from project',
   'environment.unlinkConfirm.desc':
-    'The environment stays in Settings → Environments. Folders and conversations in this project that use it are kept.',
+    "The environment stays in Settings → Environments. This project's folders that use it are kept, but can't run conversations until it is linked again.",
   'environment.unlinkConfirm.title': 'Unlink "{{name}}" from this project?',
   'environment.unlinkFailed': "Couldn't unlink the environment from this project",
   'environment.privateInShared': 'Private',
