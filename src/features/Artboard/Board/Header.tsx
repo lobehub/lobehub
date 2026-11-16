@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { electronStylish } from '@/styles/electron';
 import { sx } from '@/styles/sx';
 
 import { useBoard } from '../BoardContext';
@@ -51,8 +52,10 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
   const trafficLightPadding = useTitleBarInset();
   const bar = sx(
     styles.bar,
+    onExitFullscreen ? electronStylish.draggable : undefined,
     onExitFullscreen ? { paddingInlineStart: BAR_PADDING + trafficLightPadding } : {},
   );
+  const nodrag = onExitFullscreen ? electronStylish.nodrag : undefined;
   const pendingLeft = board.blockers.length;
   const hasTask = !!board.artboard.taskId;
   const { data: threads = [] } = useArtboardComments(board.artboard.id);
@@ -86,14 +89,18 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
       <Text ellipsis strong style={{ minWidth: 0 }}>
         {board.artboard.title}
       </Text>
-      {(narrow || !outlineOpen || mode === 'verify') && <PageMenu />}
+      {(narrow || !outlineOpen || mode === 'verify') && (
+        <div className={nodrag}>
+          <PageMenu />
+        </div>
+      )}
       <Tag size={'small'} style={{ flex: 'none' }}>
         {finalized ? t('artboard.header.phaseFinalized') : t('artboard.header.phaseDraft')}
       </Tag>
     </Flexbox>
   );
   const review = (
-    <Flexbox horizontal align={'center'} gap={8}>
+    <Flexbox horizontal align={'center'} className={nodrag} gap={8}>
       {waiting > 0 && (
         <Tag
           color={'warning'}
@@ -136,7 +143,7 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
     </Flexbox>
   );
   const stage = (
-    <Flexbox horizontal align={'center'} gap={8}>
+    <Flexbox horizontal align={'center'} className={nodrag} gap={8}>
       <Segmented
         size={'small'}
         value={mode}
@@ -175,7 +182,7 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
     </Flexbox>
   );
   const windowActions = (
-    <Flexbox horizontal align={'center'} gap={8}>
+    <Flexbox horizontal align={'center'} className={nodrag} gap={8}>
       {mode === 'verify' && (
         <ActionIcon
           active={verifyOpen}
