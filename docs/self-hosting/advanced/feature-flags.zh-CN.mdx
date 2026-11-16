@@ -89,7 +89,7 @@ tags:
 Agent Webhook 与 MCP Events 共用 `webhook` 开关，默认关闭。为 Agent Webhook 启用前：
 
 1. 将 `APP_URL` 设置为调用方使用的公网地址，Webhook URL 由它生成。
-2. 配置 `KEY_VAULTS_SECRET`，用于加密 Webhook token，并在部署更新时保留它。
+2. 配置 `KEY_VAULTS_SECRET`，用于加密 Webhook 密钥，并在部署更新时保留它。
 3. 可选：配置 QStash，让唤醒和积压调用的恢复按计划执行。未配置时，唤醒在应用进程内执行，恢复依赖应用请求触发。
 4. 设置 `FEATURE_FLAGS="+webhook"` 并重启应用。
 

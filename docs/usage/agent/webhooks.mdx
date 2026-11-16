@@ -10,7 +10,7 @@ tags:
 
 # Webhooks
 
-A webhook gives an agent a URL. When another system sends a request to it, such as a CI failure, a monitoring alert, a form submission or a script, the agent runs with what was sent. There is no signing step and no required format: paste the URL into the other system and you are done.
+A webhook gives an agent a URL. When another system sends a request to it, such as a CI failure, a monitoring alert, a form submission or a script, the agent runs with what was sent. There is no signing step and no required format: give the other system the URL and its key, and you are done.
 
 ## Create a webhook
 
@@ -18,22 +18,24 @@ A webhook gives an agent a URL. When another system sends a request to it, such 
 2. Click **Create webhook**. Every field is optional:
    - **Name**: how the webhook appears in its calls and in the conversation.
    - **What should the agent do?**: a task sent with every call, for example "Summarize the failure and open an issue if it is new". The agent treats the request itself as data, never as instructions.
-   - **Topic**: **New topic per call** gives each call its own topic. **One shared topic** keeps every call in one topic, so the agent sees the earlier ones.
+   - **Topic**: **New topic per call** gives each call its own topic. **One shared topic** keeps every call in one topic, so the agent sees the earlier ones. With one shared topic you can pick one of your existing topics with this agent to continue, or leave it to the webhook's own topic.
    - **Auto-approve tool calls**: see [Approvals](#approvals).
-3. Copy the URL from the confirmation and give it to the system that should call the agent.
+3. Copy the URL and the key from the confirmation and give both to the system that should call the agent.
 
-Anyone with the URL can wake the agent, so keep it private. If it leaks, use **Generate new URL**: the old one stops working at once.
+The key is shown only this once: LobeHub stores it encrypted and cannot show it again. The URL never changes and can be copied from the webhook at any time. Anyone with the key can wake the agent, so keep it private. If you lose it or it leaks, use **Generate new key**: the old key stops working at once, and the URL stays the same.
 
 ## Call it
 
 The simplest call:
 
 ```bash
-curl -X POST 'https://your-lobehub/api/webhooks/inbound/<id>/<token>' -d 'Disk almost full on web-1'
+curl -X POST 'https://your-lobehub/api/webhooks/inbound/<id>' \
+  -H 'Authorization: Bearer <key>' \
+  -d 'Disk almost full on web-1'
 ```
 
 - **Any body**: JSON, a form or plain text, up to 256 KB. Query parameters are passed to the agent too.
-- **Header instead of URL**: call `/api/webhooks/inbound/<id>` and send the token as `Authorization: Bearer <token>`.
+- **Key**: always send it as `Authorization: Bearer <key>`. The URL holds no key.
 - **Threads**: add `?thread=<key>` (or the `X-Thread-Key` header). Calls with the same key continue the same topic, which is useful for one ticket or one pull request.
 - **Retries**: send an `Idempotency-Key` header. A retry with the same key is acknowledged without running the agent again.
 
@@ -41,7 +43,7 @@ A successful call returns `202 {"id": "...", "status": "accepted"}` right away; 
 
 | Status | Meaning                                                     |
 | ------ | ----------------------------------------------------------- |
-| `401`  | The token is wrong, or was replaced by a new URL.           |
+| `401`  | The key is missing or wrong, or was replaced by a new one.  |
 | `409`  | The webhook is paused.                                      |
 | `410`  | The webhook was deleted.                                    |
 | `413`  | The body is larger than 256 KB.                             |
@@ -60,8 +62,8 @@ Each run uses credits. A webhook runs the agent at most 60 times an hour; calls 
 
 By default, a webhook run follows your tool approval settings, exactly like a message you send: a tool that needs approval waits in the topic until you answer.
 
-Turn on **Auto-approve tool calls** to let a webhook's runs use tools without waiting. Only do this for a webhook whose URL you trust: anyone holding it can then make the agent act. Tools marked to always ask for confirmation still wait.
+Turn on **Auto-approve tool calls** to let a webhook's runs use tools without waiting. Only do this for a webhook whose key you trust: anyone holding it can then make the agent act. Tools marked to always ask for confirmation still wait.
 
 ## Pause or delete
 
-Use the switch on a webhook to pause it: calls are refused with `409` until you resume it. **Delete** removes it and its URL for good. Webhooks also appear in **Settings → Automations** next to connector event subscriptions.
+Use the switch on a webhook to pause it: calls are refused with `409` until you resume it. **Delete** removes it, its URL and its key for good. Webhooks also appear in **Settings → Automations** next to connector event subscriptions.

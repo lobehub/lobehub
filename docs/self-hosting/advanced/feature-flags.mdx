@@ -91,7 +91,7 @@ You can always check the [featureFlags](https://github.com/lobehub/lobehub/blob/
 Agent webhooks and MCP Events share the `webhook` flag, off by default. Before enabling it for Agent webhooks:
 
 1. Set `APP_URL` to the public address callers will use; webhook URLs are built from it.
-2. Configure `KEY_VAULTS_SECRET` to encrypt webhook tokens, and preserve it across deployment updates.
+2. Configure `KEY_VAULTS_SECRET` to encrypt webhook keys, and preserve it across deployment updates.
 3. Optionally configure QStash so wake-ups and recovery of pending calls run on a schedule. Without it, wake-ups run in the application process and recovery depends on application requests.
 4. Set `FEATURE_FLAGS="+webhook"` and restart.
 
