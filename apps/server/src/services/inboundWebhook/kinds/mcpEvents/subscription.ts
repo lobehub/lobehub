@@ -7,8 +7,11 @@ import { appEnv } from '@/envs/app';
 import { getMcpEventErrorName } from '@/libs/mcp/events/errors';
 import type { McpSubscribeEventParams, McpSubscribeEventResult } from '@/libs/mcp/events/schema';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import {
+  ConnectorAccountGoneError,
+  resolveConnectorAccount,
+} from '@/server/services/connector/links';
 import { buildConnectorMcpParams } from '@/server/services/connector/sync';
-import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
 import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 import { mcpService } from '@/server/services/mcp';
 
@@ -31,6 +34,17 @@ export async function connectorForWebhook(ctx: InboundWebhookContext) {
   const connector = ctx.row.connectorId ? await connectorModel.findById(ctx.row.connectorId) : null;
   if (!connector) throw new Error('Connector not found');
   return { connector, connectorModel };
+}
+
+/** The connector as the account the subscription was made with; the server knows it by that. */
+export async function connectorAsSubscriber(ctx: InboundWebhookContext) {
+  const { connector, connectorModel } = await connectorForWebhook(ctx);
+  const { connector: fresh } = await resolveConnectorAccount(
+    connector,
+    { connectorModel },
+    ctx.row.config.linkId,
+  );
+  return { connector, fresh };
 }
 
 /** Old draft servers reject null TTL. Retry once without TTL, preserving all other identity fields. */
@@ -101,7 +115,11 @@ export async function refreshSubscription(ctx: InboundWebhookContext): Promise<v
     );
     return;
   }
-  const fresh = await ensureFreshConnectorToken(connector, connectorModel);
+  const { connector: fresh } = await resolveConnectorAccount(
+    connector,
+    { connectorModel },
+    ctx.row.config.linkId,
+  );
   const secret = await ctx.model.getSecret(ctx.row.id);
   if (!secret) throw new Error('Missing webhook signing secret');
   const result = await subscribeRemote(buildConnectorMcpParams(fresh), {
@@ -125,7 +143,8 @@ export async function maintainMcpSubscription(ctx: InboundWebhookContext): Promi
       ctx.row.id,
       getMcpEventErrorName(error) ?? 'transport',
     );
-    const authFailure = isMcpAuthError(error);
+    // The account it was made with is gone: only reconnecting it can bring the subscription back.
+    const authFailure = isMcpAuthError(error) || error instanceof ConnectorAccountGoneError;
     if (authFailure && ctx.row.connectorId) {
       const connectorModel = new ConnectorModel(
         ctx.db,
@@ -153,8 +172,15 @@ export async function maintainMcpSubscription(ctx: InboundWebhookContext): Promi
 }
 
 export async function teardownMcpSubscription(ctx: InboundWebhookContext): Promise<void> {
-  const { connector, connectorModel } = await connectorForWebhook(ctx);
-  const fresh = await ensureFreshConnectorToken(connector, connectorModel);
+  let fresh;
+  try {
+    ({ fresh } = await connectorAsSubscriber(ctx));
+  } catch (error) {
+    // Nothing can sign in as a removed account, so there is no one left to unsubscribe as; the
+    // server drops the subscription when that account's grant goes.
+    if (error instanceof ConnectorAccountGoneError) return;
+    throw error;
+  }
   try {
     await mcpService.unsubscribeEvent(buildConnectorMcpParams(fresh), {
       arguments: ctx.row.config.arguments,

@@ -14,13 +14,12 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { resolveForegroundInterventionConfig } from '@/server/services/aiAgent/foregroundIntervention';
 import { buildConnectorMcpParams } from '@/server/services/connector/sync';
-import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
 import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 import { mcpService } from '@/server/services/mcp';
 import { canPerformResourceAction, getResourceMeta } from '@/server/services/resourcePermission';
 
 import { getInboundWebhookKind } from './kinds';
-import { connectorForWebhook, refreshSubscription } from './kinds/mcpEvents/subscription';
+import { connectorAsSubscriber, refreshSubscription } from './kinds/mcpEvents/subscription';
 import { removeInboundWebhook } from './lifecycle';
 import {
   claimWebhookSignals,
@@ -188,8 +187,7 @@ export async function wakeInboundWebhook(
         if (!(await ownsClaim())) return { outcome: 'deferred' };
         try {
           const ctx = { db, featureEnabled: true, model, row: claim.row };
-          const { connector: c, connectorModel } = await connectorForWebhook(ctx);
-          const fresh = await ensureFreshConnectorToken(c, connectorModel);
+          const { fresh } = await connectorAsSubscriber(ctx);
           const available = await mcpService.listEvents(buildConnectorMcpParams(fresh));
           if (
             available.some(

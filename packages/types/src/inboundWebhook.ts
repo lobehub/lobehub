@@ -51,6 +51,12 @@ export const INBOUND_WEBHOOK_RUN_ERRORS = [
 export interface McpEventsWebhookConfig {
   arguments: Record<string, unknown>;
   eventName: string;
+  /**
+   * The connector account (`connector_links.id`) the subscription was made with. The server knows
+   * it by that identity, so renewal and unsubscribe must use the same account. Absent for a
+   * connector without accounts.
+   */
+  linkId?: string;
 }
 
 export interface McpEventsWebhookState {
@@ -110,6 +116,7 @@ export const McpEventsWebhookConfigSchema = z
   .object({
     arguments: z.record(z.string(), z.unknown()),
     eventName: z.string().min(1),
+    linkId: z.string().min(1).optional(),
   })
   .strict();
 

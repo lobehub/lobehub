@@ -23,8 +23,8 @@ import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
 import type { LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { resolveConnectorAccount } from '@/server/services/connector/links';
 import { buildConnectorMcpParams } from '@/server/services/connector/sync';
-import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
 import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 import { mcpService } from '@/server/services/mcp';
 import { isPublicHttpsUrl } from '@/server/utils/publicHttpsUrl';
@@ -71,6 +71,10 @@ export class McpEventsService {
         'events_unsupported',
         'Event subscriptions require a remote HTTP connector.',
       );
+  }
+
+  /** Credentials come from the connector's account, so this checks the resolved connector. */
+  private assertAuthenticated(connector: DecryptedConnector) {
     const headers = connector.metadata?.customHeaders;
     if (!connector.credentials && !Object.keys(headers ?? {}).length)
       throw new McpEventsServiceError(
@@ -111,7 +115,8 @@ export class McpEventsService {
       if (!connector.isEnabled || !connector.metadata?.capabilities?.events?.supported) continue;
       try {
         this.assertRemote(connector);
-        const fresh = await ensureFreshConnectorToken(connector, connectorModel);
+        const { connector: fresh } = await resolveConnectorAccount(connector, { connectorModel });
+        this.assertAuthenticated(fresh);
         const events = await mcpService.listEvents(buildConnectorMcpParams(fresh));
         result.eventTypes.push(
           ...events.map((event) => ({
@@ -155,7 +160,10 @@ export class McpEventsService {
     const [connector] = await connectorModel.resolveByIdentifiers([input.connector], input.agentId);
     if (!connector) throw new McpEventsServiceError('connector_not_found', 'Connector not found.');
     this.assertRemote(connector);
-    const fresh = await ensureFreshConnectorToken(connector, connectorModel);
+    const { connector: fresh, linkId } = await resolveConnectorAccount(connector, {
+      connectorModel,
+    });
+    this.assertAuthenticated(fresh);
     const params = buildConnectorMcpParams(fresh);
     if (!(await mcpService.getEventsCapability(params)).supported)
       throw new McpEventsServiceError(
@@ -178,8 +186,9 @@ export class McpEventsService {
           'Arguments do not match the event input schema.',
         );
     }
+    // Another account of the same connector is another subscription on the server.
     const identity = JSON.stringify(
-      [connector.id, input.topicId, input.name, args],
+      [connector.id, input.topicId, input.name, args, ...(linkId ? [linkId] : [])],
       (_key, value: unknown) =>
         isPlainRecord(value)
           ? Object.fromEntries(
@@ -206,7 +215,7 @@ export class McpEventsService {
     try {
       row = await model.createWithLimits({
         agentId: input.agentId,
-        config: { arguments: args, eventName: input.name },
+        config: { arguments: args, eventName: input.name, ...(linkId && { linkId }) },
         connectorId: connector.id,
         dedupeKey,
         instructions: input.instructions,
