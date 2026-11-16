@@ -610,6 +610,12 @@ export interface DeviceGitWorktreeListItem {
 export interface DeviceGitAheadBehind {
   ahead: number;
   behind: number;
+  /**
+   * Echo of the named branch the counts describe. Absent when they describe
+   * HEAD — and from a device that predates the `branch` parameter, which
+   * silently counts HEAD instead.
+   */
+  branch?: string;
   hasUpstream: boolean;
   pushTarget?: string;
   pushTargetExists?: boolean;
@@ -630,18 +636,39 @@ export interface DeviceGitBranchListItem {
 /** Result of the `checkoutGitBranch` device RPC. Mirrors the desktop shape. */
 export interface DeviceGitCheckoutResult {
   error?: string;
+  reason?: typeof DEVICE_GIT_OUTDATED;
+  /**
+   * Echo of the start point the new branch was cut from. A device that predates
+   * `startPoint` forks from HEAD and echoes nothing, so a caller that asked for
+   * one must treat a missing or different echo as a device to upgrade.
+   */
+  startPoint?: string;
   success: boolean;
 }
+
+/**
+ * Set by the client on a git result it rejected because the device did not
+ * honour a newer parameter (`startPoint` / `branch`): device RPCs carry no
+ * version or capability negotiation, so an older `lh connect` or desktop build
+ * ignores the field and silently acts on HEAD instead.
+ */
+export const DEVICE_GIT_OUTDATED = 'deviceOutdated' as const;
 
 /**
  * Result of the `pullGitBranch` / `pushGitBranch` device RPCs. Mirrors the
  * desktop `GitPullResult` / `GitPushResult` (identical shapes).
  */
 export interface DeviceGitSyncResult {
+  /** Echo of the named branch that was synced; absent for a HEAD pull / push. */
+  branch?: string;
   error?: string;
   /** True when git reported the branch was already up-to-date. */
   noop?: boolean;
+  /** Why a named-branch pull was refused before git ran. */
+  reason?: 'checkedOutElsewhere' | 'noUpstream' | typeof DEVICE_GIT_OUTDATED;
   success: boolean;
+  /** The worktree holding the branch, for `reason: 'checkedOutElsewhere'`. */
+  worktreePath?: string;
 }
 
 /**
@@ -748,6 +775,9 @@ export interface DeviceGitRemoveWorktreeResult {
 /** Result of the `addGitWorktree` device RPC. Mirrors the desktop shape. */
 export interface DeviceGitAddWorktreeResult {
   error?: string;
+  reason?: typeof DEVICE_GIT_OUTDATED;
+  /** Echo of the start point; see {@link DeviceGitCheckoutResult.startPoint}. */
+  startPoint?: string;
   success: boolean;
   /** Absolute path of the created worktree, echoed back so the UI can switch to it. */
   worktreePath?: string;

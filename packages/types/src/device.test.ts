@@ -233,4 +233,36 @@ describe('deriveWorktreePath', () => {
     );
     expect(deriveWorktreePath('/code/lobehub', '')).toBe('/code/lobehub');
   });
+
+  // Better Coding Experience names the folder after the branch's own name: the
+  // app's `lobehub/` namespace is dropped, every other name folds as before.
+  describe('stripBranchPrefix', () => {
+    const root = () => `/Users/me/.lobehub/worktrees/${key('/code/lobehub')}`;
+    const opts = { homeDir: home, stripBranchPrefix: 'lobehub' };
+
+    it('drops a leading namespace segment from the folder name', () => {
+      expect(deriveWorktreePath('/code/lobehub', 'lobehub/202611170300-quiet-hill', opts)).toBe(
+        `${root()}/202611170300-quiet-hill`,
+      );
+    });
+
+    it('folds any other branch exactly as without the option', () => {
+      expect(deriveWorktreePath('/code/lobehub', 'feat/foo', opts)).toBe(`${root()}/feat-foo`);
+      expect(deriveWorktreePath('/code/lobehub', 'lobehubx/foo', opts)).toBe(
+        `${root()}/lobehubx-foo`,
+      );
+      // A branch called exactly the namespace keeps its name.
+      expect(deriveWorktreePath('/code/lobehub', 'lobehub', opts)).toBe(`${root()}/lobehub`);
+    });
+
+    it('keeps the repo key folder and the traversal guard', () => {
+      expect(deriveWorktreePath('/code/lobehub', 'lobehub/../..', opts)).toBe(`${root()}/worktree`);
+    });
+
+    it('leaves the result unchanged when not asked to strip', () => {
+      expect(deriveWorktreePath('/code/lobehub', 'lobehub/x', { homeDir: home })).toBe(
+        `${root()}/lobehub-x`,
+      );
+    });
+  });
 });

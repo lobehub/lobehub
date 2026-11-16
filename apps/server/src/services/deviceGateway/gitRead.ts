@@ -153,10 +153,18 @@ export function gitWorkingTreeStatus(
 /** Ahead/behind commit counts for a directory on a remote device. */
 export function gitAheadBehind(
   getClient: DeviceClientGetter,
-  params: { deviceId: string; path: string; userId: string; workspaceId?: string },
+  params: {
+    /** Count this branch instead of HEAD. */
+    branch?: string;
+    deviceId: string;
+    path: string;
+    userId: string;
+    workspaceId?: string;
+  },
 ) {
   return invokeDeviceRead<DeviceGitAheadBehind>(getClient, 'getGitAheadBehind', params, {
     path: params.path,
+    ...(params.branch ? { branch: params.branch } : {}),
   });
 }
 
