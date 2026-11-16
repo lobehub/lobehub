@@ -16,6 +16,7 @@ import {
 } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
 import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
+import { prepareComposerGitSend } from '@/features/ChatInput/ControlBar/DraftGit';
 import {
   type SendButtonHandler,
   type SendButtonProps,
@@ -401,6 +402,12 @@ const ChatInput = memo<ChatInputProps>(
           return;
         }
 
+        // A new topic's first send acts on the branch picked in the composer
+        // (switch, or fork a worktree) before any message exists. Cancelled or
+        // failed, nothing is sent and the draft stays.
+        const gitPrep = await prepareComposerGitSend(sendContext);
+        if (!gitPrep.ok) return;
+
         // Clear content immediately for responsive UX
         clearComposer();
 
@@ -413,6 +420,9 @@ const ChatInput = memo<ChatInputProps>(
           editorData,
           files: currentFileList,
           message,
+          ...(gitPrep.newTopicWorkingDirectory
+            ? { newTopicWorkingDirectory: gitPrep.newTopicWorkingDirectory }
+            : {}),
           onPreflightFailure: () => {
             const store = useFileStore.getState();
             // The composer was cleared up front; a send rejected before any
