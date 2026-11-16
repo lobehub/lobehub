@@ -77,7 +77,7 @@ describe('DataExportService', () => {
     const [key, buffer, contentType, options] = mocks.uploadBuffer.mock.calls[0];
     expect(key).toBe(`exports/${userId}/${taskId}.json`);
     expect(contentType).toBe('application/json');
-    expect(options).toEqual({ private: true });
+    expect(options).toMatchObject({ private: true });
     expect(JSON.parse(buffer.toString())).toEqual({
       data: { topics: [{ id: 't1' }] },
       mode: 'postgres',
@@ -192,6 +192,31 @@ describe('DataExportService', () => {
     expect(await other.getLatest()).toBeNull();
     await expect(other.getDownloadUrl(taskId)).rejects.toThrow('Data export not found');
     await db.delete(users).where(eq(users.id, 'data-export-other-user'));
+  });
+
+  it('does not store an export that finishes after its deadline', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      let finishExport!: (data: object) => void;
+      mocks.exportTables.mockReturnValue(
+        new Promise((resolve) => {
+          finishExport = resolve;
+        }),
+      );
+      const service = new DataExportService(db, userId);
+      const taskId = await service.createTask();
+
+      const run = service.run(taskId);
+      await vi.advanceTimersByTimeAsync(DATA_EXPORT_RUN_DEADLINE_MS + 1);
+      await run;
+      finishExport({ topics: [] });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mocks.uploadBuffer).not.toHaveBeenCalled();
+      expect((await getTask(taskId)).status).toBe(AsyncTaskStatus.Error);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reports a run that would outlive the host time limit as failed', async () => {

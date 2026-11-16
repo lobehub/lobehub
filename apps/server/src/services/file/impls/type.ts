@@ -88,7 +88,7 @@ export interface FileServiceImpl {
     key: string,
     buffer: Buffer,
     contentType: string,
-    options?: { private?: boolean },
+    options?: { abortSignal?: AbortSignal; private?: boolean },
   ) => Promise<{ key: string }>;
 
   /**

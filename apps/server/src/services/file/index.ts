@@ -226,7 +226,7 @@ export class FileService {
     key: string,
     buffer: Buffer,
     contentType: string,
-    options?: { private?: boolean },
+    options?: { abortSignal?: AbortSignal; private?: boolean },
   ): Promise<{ key: string }> {
     return this.impl.uploadBuffer(key, buffer, contentType, options);
   }

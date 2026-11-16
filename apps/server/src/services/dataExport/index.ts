@@ -33,13 +33,26 @@ export const DATA_EXPORT_STALE_AFTER_MS = 30 * 60 * 1000;
  */
 export const DATA_EXPORT_RUN_DEADLINE_MS = 12 * 60 * 1000;
 
-const withDeadline = async <T>(work: Promise<T>, ms: number): Promise<T> => {
+/**
+ * Run `work` until it settles or `ms` passes. On the deadline the signal
+ * aborts, so work still going stops instead of finishing after its task was
+ * already reported as failed.
+ */
+const withDeadline = async <T>(
+  work: (signal: AbortSignal) => Promise<T>,
+  ms: number,
+): Promise<T> => {
+  const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`Data export did not finish within ${ms}ms`)), ms);
+    timer = setTimeout(() => {
+      const error = new Error(`Data export did not finish within ${ms}ms`);
+      controller.abort(error);
+      reject(error);
+    }, ms);
   });
   try {
-    return await Promise.race([work, deadline]);
+    return await Promise.race([work(controller.signal), deadline]);
   } finally {
     clearTimeout(timer);
   }
@@ -137,7 +150,7 @@ export class DataExportService {
 
     try {
       const { fileKey, fileSize } = await withDeadline(
-        this.buildFile(taskId, fileService),
+        (signal) => this.buildFile(taskId, fileService, signal),
         DATA_EXPORT_RUN_DEADLINE_MS,
       );
 
@@ -187,17 +200,26 @@ export class DataExportService {
     return { fileName, url };
   };
 
-  private buildFile = async (taskId: string, fileService: FileService) => {
+  private buildFile = async (taskId: string, fileService: FileService, signal: AbortSignal) => {
     const data = await new DataExporterRepos(this.db, this.userId, this.workspaceId).export(
       EXPORT_PAGE_CONCURRENCY,
     );
     const schemaHash = await new DrizzleMigrationModel(this.db).getLatestMigrationHash();
+    signal.throwIfAborted();
     const content: ImportPgDataStructure = { data, mode: 'postgres', schemaHash };
     const buffer = Buffer.from(JSON.stringify(content));
 
     const fileKey = `exports/${this.workspaceId ?? this.userId}/${taskId}.json`;
     // A full account dump is only ever served through short-lived signed links.
-    await fileService.uploadBuffer(fileKey, buffer, 'application/json', { private: true });
+    await fileService.uploadBuffer(fileKey, buffer, 'application/json', {
+      abortSignal: signal,
+      private: true,
+    });
+    if (signal.aborted) {
+      // The upload landed after the task was failed; nothing references this file anymore.
+      await fileService.deleteFile(fileKey).catch(() => {});
+      signal.throwIfAborted();
+    }
 
     return { fileKey, fileSize: buffer.byteLength };
   };
