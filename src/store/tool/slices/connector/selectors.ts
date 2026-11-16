@@ -3,6 +3,7 @@ import {
   isMarketplaceInstallCompleted,
   isMarketplaceInstallRunnable,
 } from '@lobechat/const';
+import type { ConnectorVisibility } from '@lobechat/types';
 
 import type { ToolStoreState } from '../../initialState';
 import type { ToolStore } from '../../store';
@@ -30,10 +31,30 @@ const connectorById =
   (s: ToolStore): ConnectorWithTools | undefined =>
     allById(id)(s);
 
+/**
+ * Whether `connector` lists under a workspace connector page's tab: the
+ * caller's private rows under `private`, every other row under `public` (the
+ * shared pool). Without a tab (outside a workspace) every row lists.
+ */
+export const isInConnectorTab = (
+  connector: Pick<ConnectorWithTools, 'visibility'>,
+  visibility?: ConnectorVisibility,
+): boolean => !visibility || (connector.visibility === 'private') === (visibility === 'private');
+
 const connectorByIdentifier =
-  (identifier: string) =>
-  (s: ToolStore): ConnectorWithTools | undefined =>
-    (s.connectors ?? []).find((c) => c.identifier === identifier);
+  (
+    identifier: string,
+    /**
+     * The workspace connector page's tab. A private and a shared connector may
+     * share an identifier; the tab a row was opened from names the one meant.
+     */
+    visibility?: ConnectorVisibility,
+  ) =>
+  (s: ToolStore): ConnectorWithTools | undefined => {
+    const rows = (s.connectors ?? []).filter((c) => c.identifier === identifier);
+
+    return rows.find((c) => isInConnectorTab(c, visibility)) ?? rows[0];
+  };
 
 const enabledConnectors = (s: ToolStore): ConnectorWithTools[] =>
   (s.connectors ?? []).filter((c) => c.isEnabled);

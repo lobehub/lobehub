@@ -7,13 +7,13 @@ import {
   RecommendedSkillType,
   resolveConnectorCatalogItem,
 } from '@lobechat/const';
-import type { BuiltinSkillManifest, LobeBuiltinTool } from '@lobechat/types';
+import type { BuiltinSkillManifest, ConnectorVisibility, LobeBuiltinTool } from '@lobechat/types';
 import { Center, Empty } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
+import { ChevronDownIcon, ChevronRightIcon, LockIcon } from 'lucide-react';
 import type React from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,7 +30,8 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
-import { connectorSelectors } from '@/store/tool/slices/connector';
+import { connectorSelectors, isInConnectorTab } from '@/store/tool/slices/connector';
+import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 import { type LobeToolType } from '@/types/tool/tool';
 
@@ -76,10 +77,16 @@ interface SkillListProps {
   onSelect?: (identifier: string, type: ToolDetailType) => void;
   selectedIdentifier?: string;
   viewMode?: SkillViewMode;
+  /**
+   * Workspace connector tab: `public` lists the shared pool (every catalog
+   * section); `private` lists only the caller's private connectors. Unset
+   * outside a workspace.
+   */
+  visibility?: ConnectorVisibility;
 }
 
 const SkillList = memo<SkillListProps>(
-  ({ onSelect, onDeleteSelected, selectedIdentifier, viewMode = 'connector' }) => {
+  ({ onSelect, onDeleteSelected, selectedIdentifier, viewMode = 'connector', visibility }) => {
     const { t } = useTranslation('setting');
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
     const isPage = useSkillListVariant() === 'page';
@@ -92,14 +99,14 @@ const SkillList = memo<SkillListProps>(
     const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
     const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
     const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
-    const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
-    const marketplaceConnectors = useToolStore(
+    const allCustomConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+    const allMarketplaceConnectors = useToolStore(
       connectorSelectors.marketplaceMcpConnectors,
       isEqual,
     );
     const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
-    const agentBoundConnectors = useToolStore(connectorSelectors.agentBoundConnectors, isEqual);
+    const allAgentBoundConnectors = useToolStore(connectorSelectors.agentBoundConnectors, isEqual);
     const isAgentBoundInit = useToolStore((s) => s.isAgentBoundInit);
     const fetchAgentBoundConnectors = useToolStore((s) => s.fetchAgentBoundConnectors);
     const allBuiltinTools = useToolStore((s) => s.builtinTools, isEqual);
@@ -172,7 +179,11 @@ const SkillList = memo<SkillListProps>(
     // 1. Integrations (Builtin, LobeHub and Composio skills)
     // 2. Community MCP Tools (type === 'plugin')
     // 3. Custom MCP Tools (type === 'customPlugin')
-    const { integrations, communityMCPs, customMCPs } = useMemo(() => {
+    const {
+      integrations: allIntegrations,
+      communityMCPs: allCommunityMCPs,
+      customMCPs: allCustomMCPs,
+    } = useMemo(() => {
       type IntegrationItem =
         | { builtinAgentSkill: BuiltinSkillManifest; type: 'builtinAgent' }
         | { builtinTool: LobeBuiltinTool; type: 'builtin' }
@@ -306,6 +317,30 @@ const SkillList = memo<SkillListProps>(
       uninstalledBuiltinTools,
       builtinSkills,
     ]);
+
+    // Each workspace tab lists its own pool. Built-in tools, OAuth catalog
+    // entries, plugins and agent connectors carry no visibility and stay with
+    // the shared pool; a connector row lists under the tab of its visibility.
+    const isPrivateTab = isConnectorView && visibility === 'private';
+    const inTab = (c: ConnectorWithTools) => isInConnectorTab(c, visibility);
+    const customConnectors = allCustomConnectors.filter(inTab);
+    const marketplaceConnectors = allMarketplaceConnectors.filter(inTab);
+    const integrations = isPrivateTab ? [] : allIntegrations;
+    const communityMCPs = isPrivateTab ? [] : allCommunityMCPs;
+    const customMCPs = isPrivateTab ? [] : allCustomMCPs;
+    const agentBoundConnectors = isPrivateTab ? [] : allAgentBoundConnectors;
+
+    if (isPrivateTab && customConnectors.length + marketplaceConnectors.length === 0) {
+      return (
+        <Center className={stylex.props(styles.container).className} paddingBlock={48}>
+          <Empty
+            description={t('skillView.privateConnectorsEmpty.desc')}
+            icon={LockIcon}
+            title={t('skillView.privateConnectorsEmpty.title')}
+          />
+        </Center>
+      );
+    }
 
     const hasAnySkills =
       builtinSkills.length > 0 ||

@@ -1,4 +1,8 @@
-import { type LobeToolCustomPlugin, type McpConnectVia } from '@lobechat/types';
+import {
+  type ConnectorVisibility,
+  type LobeToolCustomPlugin,
+  type McpConnectVia,
+} from '@lobechat/types';
 import { connectorConnectVia, connectorDeviceBinding } from '@lobechat/utils/mcpEndpoint';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -30,6 +34,11 @@ interface CustomConnectorModalProps {
   onClose: () => void;
   onEditSuccess?: () => void;
   open: boolean;
+  /**
+   * Create mode in a workspace: `private` adds the connector as the caller's
+   * own, which only their private agents load (the Private tab's add).
+   */
+  visibility?: ConnectorVisibility;
 }
 
 /** Drop empty key/value pairs a user may have left behind in an editor. */
@@ -68,7 +77,7 @@ interface StdioConfig {
  * - Clears credentials when the server URL changes
  */
 const CustomConnectorModal = memo<CustomConnectorModalProps>(
-  ({ open, onClose, connectorId, legacyPlugin, onEditSuccess }) => {
+  ({ open, onClose, connectorId, legacyPlugin, onEditSuccess, visibility }) => {
     const createConnector = useToolStore((s) => s.createConnector);
     const deleteConnector = useToolStore((s) => s.deleteConnector);
     const getConnectorForEdit = useToolStore((s) => s.getConnectorForEdit);
@@ -371,6 +380,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         }),
         name: identifier,
         sourceType: ConnectorSourceType.custom,
+        ...(visibility === 'private' && { visibility }),
       };
 
       // OAuth: create with the OIDC config, then drive the authorize popup that
@@ -468,8 +478,10 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         enableOAuth
         mode={isEditMode || isMigrationMode ? 'edit' : 'create'}
         open={open}
-        privateConnector={isEditMode && connector?.visibility === 'private'}
         value={editValue}
+        privateConnector={
+          isEditMode ? connector?.visibility === 'private' : visibility === 'private'
+        }
         onDelete={handleDelete}
         onSave={handleSave}
         onOpenChange={(next) => {

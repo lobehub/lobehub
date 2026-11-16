@@ -1946,10 +1946,19 @@ When I am ___, I need ___
   'skillStore.wantMore.feedback.title':
     '[Skill Request] Summarize the skill you need in one sentence',
   'skillStore.wantMore.reachedEnd': "You've reached the end. Can't find what you need?",
+  'skillView.connectorTabs.private': 'Private',
+  'skillView.connectorTabs.workspace': 'Workspace',
   'skillView.connectors': 'Connectors',
   'skillView.connectorsDesc':
     'Connect the apps and tools your agents can use. Open one to see its account and tools.',
+  'skillView.privateConnectorsDesc':
+    'Only you can see these connectors, and only your private agents use them. Workspace agents never load them.',
+  'skillView.privateConnectorsEmpty.desc':
+    'Add a custom connector here to keep it to yourself and your private agents.',
+  'skillView.privateConnectorsEmpty.title': 'No private connectors yet',
   'skillView.skills': 'Skills',
+  'skillView.workspaceConnectorsDesc':
+    'Shared with every member, and every agent in this workspace can use them. Open one to see its account and tools.',
   'startConversation': 'Start Conversation',
   'storage.actions.transfer.button': 'Move to…',
   'storage.actions.transfer.desc':
@@ -4623,6 +4632,9 @@ When I am ___, I need ___
   'tools.plugins.management': 'Skill Management',
   'tools.plugins.noEnabled': 'No skills enabled',
   'tools.plugins.store': 'Add skill',
+  'tools.privateConnector.tag': 'Private',
+  'tools.privateConnector.tooltip':
+    'Your private connector: only you can see it, and only your private agents load it.',
   'tools.search': 'Search skills...',
   'tools.activation.action.auto': 'Auto',
   'tools.activation.action.disable': 'Disable',

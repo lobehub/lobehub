@@ -1,5 +1,6 @@
 'use client';
 
+import type { ConnectorVisibility } from '@lobechat/types';
 import { ActionIcon, Button, Flexbox, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
@@ -8,6 +9,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import NavHeader from '@/features/NavHeader';
 import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors, builtinToolSelectors } from '@/store/tool/selectors';
@@ -78,6 +80,27 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
   const stackedSelected = stacked
     ? parseMobileSelection(searchParams.get(MOBILE_SELECTION_PARAM))
     : undefined;
+  // Workspace connectors sit behind two tabs, as devices do: the shared pool
+  // every member and agent uses, and the caller's private connectors, which
+  // only their private agents load. The tab lives in `?visibility=`, so a
+  // detail opened from it returns to it and names that tab's row.
+  const workspaceId = useActiveWorkspaceId();
+  const visibility: ConnectorVisibility | undefined =
+    viewMode === 'connector' && workspaceId
+      ? searchParams.get('visibility') === 'private'
+        ? 'private'
+        : 'public'
+      : undefined;
+  const changeVisibility = (next: ConnectorVisibility) =>
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (next === 'private') params.set('visibility', next);
+        else params.delete('visibility');
+        return params;
+      },
+      { replace: true },
+    );
 
   // Stacked: opening a detail is a history entry, so back returns to the list.
   const openStackedDetail = useCallback(
@@ -187,6 +210,7 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
         <SkillDetail
           identifier={stackedSelected.identifier}
           type={stackedSelected.type}
+          visibility={visibility}
           onDelete={closeStackedDetail}
         />
       </Flexbox>
@@ -195,8 +219,10 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
         <LeftPanel
           fullWidth
           viewMode={viewMode}
+          visibility={visibility}
           onDeleteSelected={closeStackedDetail}
           onSelect={handleSelect}
+          onVisibilityChange={changeVisibility}
         />
       </div>
     );
@@ -221,6 +247,7 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
                 <SkillDetail
                   identifier={stackedSelected.identifier}
                   type={stackedSelected.type}
+                  visibility={visibility}
                   onDelete={closeStackedDetail}
                 />
               </>
@@ -229,8 +256,10 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
                 fullWidth
                 page
                 viewMode={viewMode}
+                visibility={visibility}
                 onDeleteSelected={closeStackedDetail}
                 onSelect={handleSelect}
+                onVisibilityChange={changeVisibility}
               />
             )}
           </div>

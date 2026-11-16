@@ -1,10 +1,11 @@
 'use client';
 
-import { Button, DropdownMenu, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import type { ConnectorVisibility } from '@lobechat/types';
+import { Button, DropdownMenu, Flexbox, Icon, Tabs, Text, Tooltip } from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';
+import { FileArchive, Grid2x2Plus, Link, LockIcon, Store, UsersIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,6 +24,7 @@ import { SkillListVariantProvider } from './SkillListRow';
 const styles = stylex.create({
   body: { overflowY: 'auto', flex: '1', paddingBlock: '4px', paddingInline: '8px' },
   pageBody: { paddingBlockStart: '0', paddingBlockEnd: '24px', paddingInline: '0' },
+  pageDesc: { paddingBlockStart: '8px', paddingInline: '12px' },
   pageHeader: {
     display: 'flex',
     flexShrink: 0,
@@ -45,6 +47,7 @@ const styles = stylex.create({
     borderBlockEndStyle: 'solid',
     borderBlockEndColor: cssVar.colorBorderSecondary,
   },
+  columnTabs: { paddingInline: '8px' },
   root: {
     overflowY: 'auto',
     display: 'flex',
@@ -63,14 +66,29 @@ interface LeftPanelProps {
   fullWidth?: boolean;
   onDeleteSelected: () => void;
   onSelect: (identifier: string, type: ToolDetailType) => void;
+  onVisibilityChange?: (visibility: ConnectorVisibility) => void;
   /** Render as the page-level list a row opens a second-level detail from. */
   page?: boolean;
   selectedIdentifier?: string;
   viewMode: SkillViewMode;
+  /**
+   * Workspace connectors only: the active tab — the shared pool (`public`) or
+   * the caller's private connectors. Unset outside a workspace (no tabs).
+   */
+  visibility?: ConnectorVisibility;
 }
 
 const LeftPanel = memo<LeftPanelProps>(
-  ({ fullWidth, onDeleteSelected, onSelect, page, selectedIdentifier, viewMode }) => {
+  ({
+    fullWidth,
+    onDeleteSelected,
+    onSelect,
+    onVisibilityChange,
+    page,
+    selectedIdentifier,
+    viewMode,
+    visibility,
+  }) => {
     const { t } = useTranslation(['setting', 'tool']);
     const [showAddConnector, setShowAddConnector] = useState(false);
 
@@ -79,8 +97,36 @@ const LeftPanel = memo<LeftPanelProps>(
     }, []);
 
     const isConnectorView = viewMode === 'connector';
-    // Adding a workspace connector follows the same member policy as editing one.
-    const { canManage: canAddConnector, isPending: isPolicyPending } = useConnectorManageable();
+    const isPrivateTab = isConnectorView && visibility === 'private';
+    // Adding a shared workspace connector follows the same member policy as
+    // editing one; a private connector is the caller's own and skips it.
+    const { canManage: canManageShared, isPending: isSharedPolicyPending } =
+      useConnectorManageable();
+    const canAddConnector = isPrivateTab || canManageShared;
+    const isPolicyPending = !isPrivateTab && isSharedPolicyPending;
+    const visibilityTabs = isConnectorView && visibility && (
+      <Tabs
+        activeKey={visibility}
+        items={[
+          {
+            icon: <Icon icon={UsersIcon} />,
+            key: 'public',
+            label: t('skillView.connectorTabs.workspace'),
+          },
+          {
+            icon: <Icon icon={LockIcon} />,
+            key: 'private',
+            label: t('skillView.connectorTabs.private'),
+          },
+        ]}
+        onChange={(key) => onVisibilityChange?.(key as ConnectorVisibility)}
+      />
+    );
+    const connectorsDesc = isPrivateTab
+      ? t('skillView.privateConnectorsDesc')
+      : visibility
+        ? t('skillView.workspaceConnectorsDesc')
+        : t('skillView.connectorsDesc');
     const addConnectorTitle = t('connector.add.title', {
       defaultValue: 'Add Custom Connector',
       ns: 'tool',
@@ -93,15 +139,18 @@ const LeftPanel = memo<LeftPanelProps>(
           {/* The shared navigation header carries the title; the page actions
               share the intro row so they line up with the list below. */}
           <div {...stylex.props(styles.pageHeader)}>
-            <Text type={'secondary'}>{t('skillView.connectorsDesc')}</Text>
+            {visibilityTabs || <Text type={'secondary'}>{connectorsDesc}</Text>}
             <Flexbox horizontal flex={'none'} gap={8}>
-              <Tooltip title={t('skillStore.title')}>
-                <Button
-                  aria-label={t('skillStore.title')}
-                  icon={<Icon icon={Store} />}
-                  onClick={handleOpenStore}
-                />
-              </Tooltip>
+              {/* A store install joins the shared pool, so the private tab omits it */}
+              {!isPrivateTab && (
+                <Tooltip title={t('skillStore.title')}>
+                  <Button
+                    aria-label={t('skillStore.title')}
+                    icon={<Icon icon={Store} />}
+                    onClick={handleOpenStore}
+                  />
+                </Tooltip>
+              )}
               <Tooltip
                 title={
                   canAddConnector || isPolicyPending
@@ -122,16 +171,24 @@ const LeftPanel = memo<LeftPanelProps>(
               </Tooltip>
             </Flexbox>
           </div>
-          <ConnectorManagePolicy variant={'page'} />
+          {visibilityTabs && (
+            <Text type={'secondary'} {...stylex.props(styles.pageDesc)}>
+              {connectorsDesc}
+            </Text>
+          )}
+          {/* The member policy governs the shared pool only */}
+          {!isPrivateTab && <ConnectorManagePolicy variant={'page'} />}
           <div {...stylex.props(styles.pageBody)}>
             <SkillList
               viewMode={viewMode}
+              visibility={visibility}
               onDeleteSelected={onDeleteSelected}
               onSelect={onSelect}
             />
           </div>
           <CustomConnectorModal
             open={showAddConnector}
+            visibility={visibility}
             onClose={() => setShowAddConnector(false)}
           />
         </SkillListVariantProvider>
@@ -220,22 +277,30 @@ const LeftPanel = memo<LeftPanelProps>(
                   <Button icon={Grid2x2Plus} size="small" />
                 </DropdownMenu>
               )}
-              <Button icon={<Icon icon={Store} />} size="small" onClick={handleOpenStore} />
+              {!isPrivateTab && (
+                <Button icon={<Icon icon={Store} />} size="small" onClick={handleOpenStore} />
+              )}
             </div>
           </div>
 
-          {isConnectorView && <ConnectorManagePolicy />}
+          {visibilityTabs && <div {...stylex.props(styles.columnTabs)}>{visibilityTabs}</div>}
+          {isConnectorView && !isPrivateTab && <ConnectorManagePolicy />}
 
           <div {...stylex.props(styles.body)}>
             <SkillList
               selectedIdentifier={selectedIdentifier}
               viewMode={viewMode}
+              visibility={visibility}
               onDeleteSelected={onDeleteSelected}
               onSelect={onSelect}
             />
           </div>
         </div>
-        <CustomConnectorModal open={showAddConnector} onClose={() => setShowAddConnector(false)} />
+        <CustomConnectorModal
+          open={showAddConnector}
+          visibility={visibility}
+          onClose={() => setShowAddConnector(false)}
+        />
       </>
     );
   },

@@ -324,3 +324,40 @@ describe('CustomConnectorModal edit save', () => {
     expect(popup.close).toHaveBeenCalled();
   });
 });
+
+describe('CustomConnectorModal create visibility', () => {
+  const save = () =>
+    mocks.onSave!({
+      customParams: { mcp: { auth: { type: 'none' }, type: 'http', url: 'https://mcp.example' } },
+      identifier: 'my-notion',
+    });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.state.connector = undefined;
+    mocks.state.createConnector.mockResolvedValue({ id: 'new-id', isNew: true });
+    mocks.state.syncConnectorTools.mockResolvedValue(undefined);
+  });
+
+  it("adds the connector as the caller's private one from the Private tab", async () => {
+    render(<CustomConnectorModal open visibility={'private'} onClose={() => {}} />);
+    await save();
+
+    expect(mocks.state.createConnector).toHaveBeenCalledWith(
+      expect.objectContaining({ identifier: 'my-notion', visibility: 'private' }),
+    );
+  });
+
+  it('leaves the visibility to the server everywhere else (the shared pool)', async () => {
+    for (const visibility of [undefined, 'public'] as const) {
+      mocks.state.createConnector.mockClear();
+      const { unmount } = render(
+        <CustomConnectorModal open visibility={visibility} onClose={() => {}} />,
+      );
+      await save();
+
+      expect(mocks.state.createConnector.mock.calls[0][0]).not.toHaveProperty('visibility');
+      unmount();
+    }
+  });
+});
