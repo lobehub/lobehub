@@ -975,6 +975,22 @@ export class OperationActionsImpl {
     return messages;
   };
 
+  /** Put messages taken from a queue back at its head, in their order (a failed hand-over). */
+  requeueQueuedMessages = (contextKey: string, messages: QueuedMessage[]): void => {
+    if (messages.length === 0) return;
+
+    this.#set(
+      produce((state: ChatStore) => {
+        state.queuedMessages[contextKey] = [
+          ...messages,
+          ...(state.queuedMessages[contextKey] ?? []),
+        ];
+      }),
+      false,
+      n(`requeueQueuedMessages/${contextKey}`),
+    );
+  };
+
   moveQueuedMessages = (fromContextKey: string, toContextKey: string): void => {
     if (fromContextKey === toContextKey) return;
 
