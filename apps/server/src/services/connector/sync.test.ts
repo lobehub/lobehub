@@ -18,7 +18,10 @@ vi.mock('@/server/services/deviceGateway', () => ({ deviceGateway: gateway }));
 vi.mock('@/server/services/mcp/deviceTunnel', () => ({ listMcpToolsOnDevice: vi.fn() }));
 const mcpAppsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
 vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mcpAppsEnabled }));
-vi.mock('./tokens', () => ({ ensureFreshConnectorToken: async (connector: unknown) => connector }));
+vi.mock('./tokens', () => ({
+  ensureFreshConnectorToken: async (connector: unknown) => connector,
+  ensureFreshLinkToken: async (_connector: unknown, link: unknown) => link,
+}));
 
 const httpConnector = (
   credentials: ConnectorCredentials | null,
@@ -539,4 +542,88 @@ describe('syncConnectorToolsById', () => {
       });
     },
   );
+
+  describe('an OAuth connector with accounts', () => {
+    const oauthConnector = () =>
+      ({ ...httpConnector(null), oidcConfig: { clientId: 'client-1' } }) as DecryptedConnector;
+    const account = (id: string, accessToken: string) => ({
+      credentials: { accessToken, type: 'oauth2' },
+      id,
+      name: id,
+      status: 'connected',
+      tokenExpiresAt: null,
+      userConnectorId: 'c1',
+    });
+    const setup = (links: ReturnType<typeof account>[]) => {
+      const connectorModel = { findById: async () => oauthConnector(), updateStatus: vi.fn() };
+      const connectorLinkModel = { listByConnectorIds: async () => links, updateStatus: vi.fn() };
+      const connectorToolModel = { queryByConnector: async () => [], upsertMany: vi.fn() };
+      const ctx = { connectorLinkModel, connectorModel, connectorToolModel } as any;
+      return { connectorLinkModel, connectorModel, connectorToolModel, ctx };
+    };
+
+    it('lists as the account asked for and marks it, and the connector, connected', async () => {
+      vi.mocked(mcpService.listRawTools).mockResolvedValue([
+        { inputSchema: { type: 'object' }, name: 'search' },
+      ]);
+      const { connectorLinkModel, connectorModel, connectorToolModel, ctx } = setup([
+        account('lnk_a', 'token-a'),
+        account('lnk_b', 'token-b'),
+      ]);
+
+      await expect(syncConnectorToolsById('c1', ctx, { linkId: 'lnk_b' })).resolves.toEqual({
+        toolCount: 1,
+      });
+
+      expect(mcpService.listRawTools).toHaveBeenLastCalledWith(
+        expect.objectContaining({ auth: { accessToken: 'token-b', type: 'oauth2' } }),
+        expect.anything(),
+      );
+      expect(connectorToolModel.upsertMany).toHaveBeenCalledWith('c1', [
+        expect.objectContaining({ toolName: 'search' }),
+      ]);
+      expect(connectorLinkModel.updateStatus).toHaveBeenCalledWith('c1', 'lnk_b', 'connected');
+      expect(connectorModel.updateStatus).toHaveBeenCalledWith('c1', 'connected');
+    });
+
+    it('marks only the failing account when the connector has others', async () => {
+      vi.mocked(mcpService.listRawTools).mockRejectedValue(new Error('unauthorized'));
+      const { connectorLinkModel, connectorModel, connectorToolModel, ctx } = setup([
+        account('lnk_a', 'token-a'),
+        account('lnk_b', 'token-b'),
+      ]);
+
+      await expect(syncConnectorToolsById('c1', ctx, { linkId: 'lnk_b' })).rejects.toThrow(
+        'unauthorized',
+      );
+
+      expect(connectorLinkModel.updateStatus).toHaveBeenCalledExactlyOnceWith(
+        'c1',
+        'lnk_b',
+        'error',
+      );
+      expect(connectorModel.updateStatus).not.toHaveBeenCalled();
+      expect(connectorToolModel.upsertMany).not.toHaveBeenCalled();
+    });
+
+    it('marks the connector failed too when the failing account is its only one', async () => {
+      vi.mocked(mcpService.listRawTools).mockRejectedValue(new Error('unauthorized'));
+      const { connectorLinkModel, connectorModel, ctx } = setup([account('lnk_a', 'token-a')]);
+
+      await expect(syncConnectorToolsById('c1', ctx)).rejects.toThrow('unauthorized');
+
+      expect(connectorLinkModel.updateStatus).toHaveBeenCalledWith('c1', 'lnk_a', 'error');
+      expect(connectorModel.updateStatus).toHaveBeenCalledWith('c1', 'error');
+    });
+
+    it('refuses an account the connector no longer has before listing', async () => {
+      vi.mocked(mcpService.listRawTools).mockClear();
+      const { ctx } = setup([account('lnk_a', 'token-a')]);
+
+      await expect(syncConnectorToolsById('c1', ctx, { linkId: 'lnk_gone' })).rejects.toThrow(
+        'Connector account no longer exists',
+      );
+      expect(mcpService.listRawTools).not.toHaveBeenCalled();
+    });
+  });
 });
