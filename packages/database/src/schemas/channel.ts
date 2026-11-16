@@ -157,6 +157,8 @@ export const channelMembers = pgTable(
     role: text('role').$type<ChannelMemberRole>(),
     /** Highest sequence this person has read in the main channel. */
     lastReadSequence: integer('last_read_sequence'),
+    /** When this person pinned the conversation atop their own list; NULL when not pinned. */
+    pinnedAt: timestamptz('pinned_at'),
 
     // Agent members
     /** NULL after Agent deletion; keep membership and authored history. */
