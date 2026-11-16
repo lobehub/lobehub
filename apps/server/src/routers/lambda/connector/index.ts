@@ -31,7 +31,6 @@ import { getComposioClient } from '@/libs/composio';
 import { inferCrudType } from '@/libs/mcp/utils';
 import { mergeRouters, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { getConnectorLocalCallToken } from '@/server/services/connector/localCallToken';
 import {
   buildAuthorizationUrl,
   discoverConnectorOAuth,
@@ -294,11 +293,6 @@ const connectorCoreRouter = router({
       const tools = await ctx.connectorToolModel.queryByConnector(connector.id);
       return toConnectorEditDetail(connector, tools);
     }),
-
-  /** The OAuth access token a device-routed connector's local desktop call sends. */
-  getLocalCallToken: connectorWriteProcedure
-    .input(z.object({ id: z.string().uuid() }))
-    .mutation(({ ctx, input }) => getConnectorLocalCallToken(ctx, input.id)),
 
   /**
    * Test an MCP server that runs on the user's device (an HTTP server set to

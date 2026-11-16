@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getConnectorLocalCallToken } from './localCallToken';
+import { getConnectorLocalCallToken, getResolvedConnectorLocalCallToken } from './localCallToken';
 import { ensureFreshConnectorToken } from './tokens';
 
 vi.mock('./tokens', () => ({ ensureFreshConnectorToken: vi.fn(async (connector) => connector) }));
@@ -68,5 +68,35 @@ describe('getConnectorLocalCallToken', () => {
 
   it('fails when the connector is gone', async () => {
     await expect(call(undefined)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+describe('getResolvedConnectorLocalCallToken', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("refreshes a row the caller resolved through the run's model, without reading it by id", async () => {
+    // A private agent's own topic runs its owner's personal connector, which
+    // the workspace scope's `findById` cannot read; the token refresh writes
+    // through the row's own scope (`ensureFreshConnectorToken`).
+    const connectorModel = { findById: vi.fn() };
+    const personal = { ...oauthConnector, workspaceId: null };
+
+    await expect(
+      getResolvedConnectorLocalCallToken(
+        { connectorModel: connectorModel as never, userId: 'u1' },
+        personal as never,
+      ),
+    ).resolves.toEqual({ accessToken: 'access', type: 'oauth2' });
+    expect(connectorModel.findById).not.toHaveBeenCalled();
+    expect(ensureFreshConnectorToken).toHaveBeenCalledWith(personal, connectorModel);
+  });
+
+  it('refuses a resolved row someone else connected', async () => {
+    await expect(
+      getResolvedConnectorLocalCallToken(
+        { connectorModel: {} as never, userId: 'workspace-owner' },
+        oauthConnector as never,
+      ),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });

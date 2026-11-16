@@ -268,3 +268,94 @@ describe('connectorRouter.resolveForRun', () => {
     await expect(caller('creator').resolveForRun(input)).resolves.toBeNull();
   });
 });
+
+describe('connectorRouter.getLocalCallToken', () => {
+  const resolveByIdentifiers = vi.fn();
+  const findById = vi.fn();
+  const existsById = vi.fn();
+  // A personal OAuth HTTP connector on a tailnet, set to connect through the device
+  const personal = {
+    credentials: { accessToken: 'personal-access', type: 'oauth2' },
+    id: '9f1f6f30-0000-4000-8000-00000000000a',
+    identifier: 'nas',
+    mcpConnectionType: 'http',
+    mcpServerUrl: 'https://nas.tail1234.ts.net/mcp',
+    metadata: { connectVia: 'device' },
+    userId: 'creator',
+    workspaceId: null,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(AgentModel).mockImplementation(function () {
+      return { existsById } as never;
+    });
+    vi.mocked(ConnectorModel).mockImplementation(function () {
+      return { findById, resolveByIdentifiers } as never;
+    });
+    existsById.mockResolvedValue(true);
+    resolveByIdentifiers.mockResolvedValue([personal]);
+    // The workspace scope cannot read a personal row by id
+    findById.mockResolvedValue(null);
+  });
+
+  const caller = (userId: string) =>
+    connectorRouter.createCaller({
+      serverDB: {},
+      userId,
+      workspaceId: 'workspace',
+      workspaceRole: 'member',
+    } as never);
+
+  const run = { agentId: 'agent-private', identifier: 'nas', topicId: 'topic-own' };
+
+  it("returns the token of the personal connector a private agent's conversation runs", async () => {
+    // Regression: `getForRun` returned the owner's personal row for a private
+    // agent's own topic, but the token was looked up by id in the workspace
+    // scope, which cannot find it, so the desktop call failed with NOT_FOUND.
+    await expect(caller('creator').getLocalCallToken({ id: personal.id, run })).resolves.toEqual({
+      accessToken: 'personal-access',
+      type: 'oauth2',
+    });
+    expect(resolveByIdentifiers).toHaveBeenCalledWith(['nas'], {
+      agentId: 'agent-private',
+      topicId: 'topic-own',
+    });
+    expect(findById).not.toHaveBeenCalled();
+  });
+
+  it('refuses a row the conversation does not run', async () => {
+    // A group topic resolves the shared row: a private connector's token is not its own
+    resolveByIdentifiers.mockResolvedValue([{ ...personal, id: 'shared-row' }]);
+
+    await expect(
+      caller('creator').getLocalCallToken({ id: personal.id, run }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('resolves nothing for an agent the caller cannot see', async () => {
+    existsById.mockResolvedValue(false);
+
+    await expect(
+      caller('creator').getLocalCallToken({ id: personal.id, run }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(resolveByIdentifiers).not.toHaveBeenCalled();
+  });
+
+  it('keeps the token behind the creator gate', async () => {
+    await expect(
+      caller('another-member').getLocalCallToken({ id: personal.id, run }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it("reads a row of the caller's scope by id outside a conversation", async () => {
+    findById.mockResolvedValue({ ...personal, workspaceId: 'workspace' });
+
+    await expect(caller('creator').getLocalCallToken({ id: personal.id })).resolves.toEqual({
+      accessToken: 'personal-access',
+      type: 'oauth2',
+    });
+    expect(findById).toHaveBeenCalledWith(personal.id);
+    expect(resolveByIdentifiers).not.toHaveBeenCalled();
+  });
+});

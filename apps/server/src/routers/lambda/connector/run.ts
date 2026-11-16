@@ -14,6 +14,10 @@ import {
   readConnectorUiResourceById,
   resolveConnectorForRun,
 } from '@/server/services/connector/exec';
+import {
+  getConnectorLocalCallToken,
+  getResolvedConnectorLocalCallToken,
+} from '@/server/services/connector/localCallToken';
 
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
 import { withRequestConnectorCallers } from '../_helpers/connectorCallContext';
@@ -78,6 +82,42 @@ export const connectorRunRouter = router({
       const wsId = ctx.workspaceId ?? undefined;
       const toolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId, { agentRun: true });
       return toConnectorEditDetail(connector, await toolModel.queryByConnector(connector.id));
+    }),
+
+  /**
+   * The OAuth access token a device-routed connector's local desktop call
+   * sends (`getConnectorLocalCallToken`).
+   *
+   * With `run`, the token of the row `getForRun` returned for that call: the
+   * row is resolved again for the conversation, so a private agent's own topic
+   * reaches its owner's personal connector (which the workspace scope alone
+   * cannot read), and a conversation that may not use a private connector never
+   * gets its token. Without it (a connector's own settings), a row of the
+   * caller's scope by id.
+   */
+  getLocalCallToken: connectorWriteProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        run: z
+          .object({
+            agentId: z.string().optional(),
+            identifier: z.string().min(1),
+            /** The conversation the call belongs to; see `callTool`. */
+            topicId: z.string().optional(),
+          })
+          .optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!input.run) return getConnectorLocalCallToken(ctx, input.id);
+
+      const [connector] = await resolveConnectorForRun(input.run, ctx);
+      // The call runs another row by now (or none): its token is not this one's
+      if (connector?.id !== input.id) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      }
+      return getResolvedConnectorLocalCallToken(ctx, connector);
     }),
 
   /**

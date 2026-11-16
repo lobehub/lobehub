@@ -283,6 +283,7 @@ describe('invokeMcpToolCall routing for HTTP servers', () => {
 
       expect(lambdaClient.connector.getLocalCallToken.mutate).toHaveBeenCalledWith({
         id: 'nas-id',
+        run: { agentId: undefined, identifier: 'nas', topicId: undefined },
       });
       const sent = superjson.deserialize(mockElectronIpc.mcp.callTool.mock.calls[0][0]);
       expect(sent).toMatchObject({

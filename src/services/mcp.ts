@@ -348,8 +348,13 @@ class MCPService {
           throw new Error(`Tool '${apiName}' can only be called from its interactive view`);
         }
         if (detail.mcpConnectionType !== 'stdio') {
+          // The token of the row this conversation runs, read in its scope: a
+          // private agent's own topic may run its owner's personal connector
           const http = await resolveLocalConnectorHttpParams(detail, (id) =>
-            lambdaClient.connector.getLocalCallToken.mutate({ id }),
+            lambdaClient.connector.getLocalCallToken.mutate({
+              id,
+              run: { agentId, identifier, topicId },
+            }),
           );
           if (fromMcpApp && !(await isViewServer(server, { ...http, type: 'http' })))
             throw new Error(VIEW_SERVER_MOVED);
@@ -731,7 +736,10 @@ class MCPService {
         });
         if (!detail.isEnabled) return;
         const http = await resolveLocalConnectorHttpParams(detail, (id) =>
-          lambdaClient.connector.getLocalCallToken.mutate({ id }),
+          lambdaClient.connector.getLocalCallToken.mutate({
+            id,
+            run: { agentId, identifier, topicId },
+          }),
         );
         if (!(await reaches({ ...http, type: 'http' }))) return;
         return deserializeMcpIpcPayload(
