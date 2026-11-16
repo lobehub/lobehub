@@ -34,12 +34,21 @@
 - 已有对话也会读取项目当前关联的 TFS 来源。未选中代码环境的旧对话只知道来源，并明确提示需要选中环境才能自动初始化；不会静默覆盖原有工作位置。设备端不会自动克隆，agent 在用户要求克隆时使用已知 URL / 分支与设备自身 Git 凭据。
 - 只有 TFS 来源、且未选择旧 GitHub 仓库列表的云端 CLI 使用独立 DevOps 提示词，不再要求 GitHub 预克隆、`gh repo fork` 或自动推送。GitHub-only 和混合来源仍保持原来的 GitHub 路径，同时模型可以获得允许读取的 TFS 来源。
 - 公开 TFS 来源的项目自动检出目录使用调用者个人盘。旧对话中仍记录 public、但路径等于 `projects/<projectId>/<environmentId>` 的自动项目目录，运行时改为同一调用者个人盘上的相对目录；不移动 / 复制已有公共盘数据。手动选择的公共文件夹和旧实例不自动改位置，保留禁止 TFS 公共检出的防护。
-- 运行时再次检查调用者个人 TFS 权限。上下文中的已绑定只表示存在当前 Collection 的绑定，不代表授权、网络或 Git 初始化已成功；agent 必须检查实际目录和 remote。初始化凭据仍在 bootstrap / CLI 启动前清除，后续 fetch/push 需要执行端自己的认证。
+- 运行时再次检查调用者个人 TFS 权限。上下文中的已绑定只表示存在当前 Collection 的绑定，不代表授权、网络或 Git 初始化已成功；agent 必须检查实际目录和 remote。初始化凭据仍在 bootstrap / CLI 启动前清除；后续云端 fetch/pull/push 使用独立受控入口，每次重新核对当前用户的个人身份及来源权限。
+
+### 权限与后续 Git 操作补全（2026-11-16）
+
+- 团队公开 agent 的上下文排除调用者自己的私有 TFS 环境，与初始化的可见性限制保持一致。普通 Topic、无 Topic 的任务、浏览器 RPC 和 CLI 共用该过滤；执行 agent 与 Topic agent 不同时，只要其中一个公开就应用限制。
+- `tfs.git` 按登录用户和 Topic USE 权限执行；`tfs.gitOperation` 重新验证活动 Operation Token、成员资格和操作状态，目标固定为该 operation 自己的 Topic。不能通过参数选择别的用户、Topic 或任意仓库。
+- `lh tfs git` 只操作当前选中环境的 Git 来源，`sourceIndex` 在仓库上下文中给出；无分支配置时要求明确分支。只支持 fetch、快进 pull 和非强制 push；本地 commit 仍用普通 Git，推送依用户授权执行。
+- 执行前校验工作目录真实路径、Git 元数据路径及 origin 与所选来源相符。临时凭据只用于明确 URL 的网络操作，禁止重定向、hooks、Git trace 和自动维护；pull 合并前清除凭据。错误输出脱敏，Git 进程退出码失败会传递到 RPC 和 CLI。
+- 普通云端工具的 `lh` 预处理器与 TFS 云端 CLI 启动路径下发不含个人 TFS 凭据的命令 shim，避免依赖公共 npm CLI 已发布新子命令；其他 `lh` 命令仍走原入口。桌面 / 自行安装的 CLI 同时增加原生子命令，但它明确操作云端目录，不代表给设备 Git 注入服务端密码。
+- 临时沙箱即使带有 workspace 默认的 public 盘标记也可以操作；实际公共盘仍禁止。旧环境实例构建协议仍不承接 NTLM，继续明确拒绝并引导到工作目录初始化，不把个人密码塞进共享构建协议。
 
 ### 本期能力边界
 
 - 保存来源时验证仓库读取权限，未对每次手填分支做存在性检查；分支不存在会在 Git 检出阶段报告失败。
-- 运行时临时 credential helper 只用于初始化克隆，随后清除，再加载环境变量和运行 bootstrap。它不自动为后续 `git fetch` / `push` 提供凭据。
+- 初始化和后续网络 Git 操作各自临时使用 credential helper，不把密码交给 agent 或写入 Git 配置。云端后续操作使用 `lh tfs git fetch|pull|push --topic <topicId> --source <sourceIndex> --branch <branch>`；原生 `git fetch/push` 不会自动继承服务端身份。本地设备继续使用自身凭据管理器。
 - 解绑会影响后续 TFS 读取 / 初始化，不删除已保存项目、环境或用户已经检出的本地代码；它不是远程擦除功能。
 - 本期不自动克隆到用户电脑上的已有本地工作目录；本地 Git 继续使用电脑自己的凭据管理器。云端初始化不代表电脑凭据已配置。
 - PR、构建、发布和 TFVC 是集成页里的只读浏览，没有接入 GitHub 现有事件自动化或验收 PR 自动完成流程。PR checks /policy 使用 Server 兼容的 preview API；无法读取和空检查分别显示，均不表示通过。
@@ -111,6 +120,9 @@ Docker 是 **LobeHub 服务怎么部署**；下表是 **Agent 运行时把代码
 | `apps/server/src/services/tfs/transport.ts`                                               | curl NTLM/PAT 只读传输、超时、大小限制和错误脱敏                         |
 | `apps/server/src/services/tfs/client.ts`                                                  | REST 映射：身份、项目、仓库、分支、PR、构建、发布、TFVC                  |
 | `apps/server/src/services/tfs/connection.ts`                                              | 加密个人连接、稳定身份唯一性、解绑                                       |
+| `apps/server/src/services/tfs/{git,gitCommand,cliShim}.ts`                                | 后续受控 Git 操作、临时认证命令和随服务端交付的 CLI shim                 |
+| `apps/server/src/routers/lambda/tfsGit.ts`                                                | 登录态 / 活动 operation 的 TFS Git RPC                                   |
+| `apps/cli/src/commands/tfs.ts`                                                            | 原生 lh tfs git 命令                                                     |
 | `apps/server/src/services/tfs/source.ts`                                                  | 保存来源前的当前用户访问验证                                             |
 | `apps/server/src/routers/lambda/tfs.ts`                                                   | 登录态 RPC，只使用 ctx.userId，不接受客户端指定用户                      |
 | `src/services/tfs.ts`                                                                     | 客户端 RPC 入口                                                          |
@@ -119,6 +131,8 @@ Docker 是 **LobeHub 服务怎么部署**；下表是 **Agent 运行时把代码
 | `src/features/Integrations/Tfs/`                                                          | 真实集成页中的个人绑定弹窗与资源浏览                                     |
 | `apps/server/src/services/tfs/{transport,client}.test.ts`、`__tests__/connection.test.ts` | 真实本机 HTTP 传输、REST 结果语义和真实测试数据库上的个人绑定 / 权限回归 |
 | `packages/utils/src/tfs.test.ts`                                                          | URL / Collection / 分支解析边界回归                                      |
+
+后续认证接点：`apps/cli/src/program.ts` 注册 TFS 命令；`services/toolExecution/preprocessLhCommand.ts` 仅在 TFS 命令时加入独立派发；`services/heterogeneousAgent/sandboxRunner.ts` 仅为已授权 TFS 初始化套不含个人 TFS 凭据的 CLI wrapper；GitHub 的 setup、token 和默认命令分支保持原行为。`services/sandbox/commandResult.ts` 从原 service 模块原样提取进程结果解析，原 service 导出路径保持兼容。
 
 ### 修改既有文件（逐个手工合并接点）
 
@@ -190,6 +204,10 @@ Docker 是 **LobeHub 服务怎么部署**；下表是 **Agent 运行时把代码
 - 已新增 URL 解析回归测试，覆盖凭据、query/fragment、错误 Collection 和编码路径穿越。
 
 ### 自动化回归
+
+本轮权限与后续 Git 操作补全：26 个改动文件的 `bun run check --lint` 通过；临时 Vitest 配置下 22 个文件、283 项针对性测试通过，包含真实 smart HTTP Basic/PAT Git push / 快进 pull、拒绝非快进推送、错误 origin、凭据不落 Git 配置、旧 CLI shim 的真实子进程 / HTTP 调用，以及原有非 TFS CLI 和沙箱初始化回归。共享 agent 私有元数据测试在修复前有 2 项预期失败；将受控 Git 的临时沙箱判断和退出码处理换回修复前版本后，新增测试同样出现 2 项预期失败，恢复后通过。沙箱命令结果解析原样提取并保持旧导出兼容，相应 5 项测试随模块迁移。
+
+标准 `bun run check --test` 仍因工作区缺少 `vite-tsconfig-paths` 无法加载；全仓 `--type` 因未安装的 workspace 包和依赖失败，不能记录为完整质量门禁通过。独立验收预检确认本机没有 Docker、完整应用依赖或正在运行的 Web / Postgres / Redis，也无已有报告可复用，因此未执行真实页面、两用户共享会话和云端 NTLM/PAT 复测，未生成产品验收报告。这些缺项必须在实际运行交付分支的环境补齐，不能由模拟 HTTP 与单元回归替代。
 
 仓库上下文补全这轮：25 个 TypeScript 文件与两份维护文档的 `bun run check --lint` 通过；12 个文件的 145 项针对性测试通过，包含实际临时本地 Git 仓库的初始化脚本测试。将四个关键实现临时换回修改前版本后，新增回归用例出现 5 个预期失败，恢复修改后全部通过。测试使用临时安装的 Vitest、指向仓库实际模块的独立配置，未改仓库依赖清单；普通 `bun run check --test` 因工作区未完整安装、缺少 `vite-tsconfig-paths` 无法启动，全仓 `--type` 同样因缺少工作区包和依赖未通过，不能将这轮结果记为完整质量门禁通过。本机无 Docker、运行中的完整应用或验收会话，真实页面、两用户运行隔离及云端 TFS 克隆仍待部署验收。
 

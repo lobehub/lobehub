@@ -88,7 +88,7 @@ export const buildRunProjectContextPrompt = async (
 ): Promise<string | undefined> => {
   const [project, tfs] = await Promise.all([
     buildBaseProjectContextPrompt(deps, projectId, agentId, options),
-    buildTfsAgentContext(deps, { projectId, topicId: options.topicId }),
+    buildTfsAgentContext(deps, { agentId, projectId, topicId: options.topicId }),
   ]);
   return [project, tfs].filter(Boolean).join('\n\n') || undefined;
 };

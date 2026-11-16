@@ -1,6 +1,7 @@
 import type { EnvironmentConfiguration, TfsCredentials } from '@lobechat/types';
 
 import type { ScmCloneCredential } from '@/server/services/scm/cloneCredential';
+import { tfsGitCredentialConfig } from '@/server/services/tfs/gitCommand';
 
 /** Long enough for a shallow clone and a dependency install. */
 export const SANDBOX_ENVIRONMENT_INIT_TIMEOUT_MS = 600_000;
@@ -177,13 +178,7 @@ export const buildSandboxEnvironmentInitCommand = (init: SandboxInitialization):
   const personalTfs = auth && 'tfs' in auth;
   if (auth && clones.length > 0) {
     if ('tfs' in auth) {
-      const username = auth.tfs.authType === 'pat' ? 'tfs' : auth.tfs.username;
-      const helper = `!f() { printf '%s\\n' ${shellQuote(`username=${username}`)} ${shellQuote(`password=${auth.tfs.secret}`)}; }; f`;
-      config.push(
-        ['credential.helper', ''],
-        [`credential.${auth.urlPrefix}.helper`, helper],
-        [`http.${auth.urlPrefix}.followRedirects`, 'false'],
-      );
+      config.push(...tfsGitCredentialConfig(auth));
     } else config.push([`http.${auth.urlPrefix}.extraHeader`, auth.header]);
   }
   const credential = {

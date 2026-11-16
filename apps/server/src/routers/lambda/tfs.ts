@@ -2,7 +2,7 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { authedProcedure, mergeRouters, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { buildTfsAgentContext } from '@/server/services/tfs/agentContext';
 import { TfsConnectionService } from '@/server/services/tfs/connection';
@@ -10,6 +10,7 @@ import { TfsRequestError } from '@/server/services/tfs/transport';
 
 import { assertCanViewTopicTargets } from './_helpers/conversationResourceGuard';
 import { assertCreatorTopicTargets } from './_helpers/shareVisitorTargetGuard';
+import { tfsGitRouter } from './tfsGit';
 
 const hasControlCharacter = (value: string) => [...value].some((char) => char.codePointAt(0)! < 32);
 
@@ -45,7 +46,7 @@ const tfsProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next 
   throw new TRPCError({ code: 'BAD_GATEWAY', message: 'TFS_REQUEST_FAILED' });
 });
 
-export const tfsRouter = router({
+const tfsReadRouter = router({
   agentContext: wsCompatProcedure
     .use(serverDatabase)
     .input(z.object({ topicId: z.string().min(1).max(255) }))
@@ -143,3 +144,5 @@ export const tfsRouter = router({
       (await ctx.tfs.client()).tfvcFile(input.project, input.path, input.version),
     ),
 });
+
+export const tfsRouter = mergeRouters(tfsReadRouter, tfsGitRouter);

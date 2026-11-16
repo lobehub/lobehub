@@ -118,6 +118,7 @@ describe('buildRunProjectContextPrompt', () => {
     expect(normal).toContain('repo and branch');
     expect(cli).toContain('repo and branch');
     expect(mocks.tfsContext).toHaveBeenCalledWith(deps, {
+      agentId: 'agt-coord',
       projectId: 'proj-1',
       topicId: 'old-topic',
     });

@@ -14,6 +14,7 @@ import { appEnv } from '@/envs/app';
 import type { MarketService } from '@/server/services/market';
 import { createSandboxService } from '@/server/services/sandbox';
 import type { SandboxSessionConfig } from '@/server/services/sandbox/session';
+import { withTfsCloudCli } from '@/server/services/tfs/cliShim';
 
 const log = debug('lobe-server:hetero-sandbox-runner');
 
@@ -267,7 +268,10 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
   });
   const result = await sandboxService.callTool('runCommand', {
     background: true,
-    command: shellCommand,
+    command:
+      sandbox?.initialization?.cloneCredential && 'tfs' in sandbox.initialization.cloneCredential
+        ? withTfsCloudCli(shellCommand)
+        : shellCommand,
     timeout: 600_000,
   });
 

@@ -3,6 +3,7 @@ import debug from 'debug';
 
 import { appEnv } from '@/envs/app';
 import { signUserJWT } from '@/libs/trpc/utils/internalJwt';
+import { buildTfsCliDispatch } from '@/server/services/tfs/cliShim';
 import { isDev } from '@/utils/env';
 
 const log = debug('lobe-server:lh-command');
@@ -274,6 +275,7 @@ export const preprocessLhCommand = async (
         // stop before any of the command runs.
         ` || { echo 'lh: could not set up LobeHub CLI credentials' >&2; exit 1; }`,
       '#!/bin/sh',
+      ...(/\btfs\b/.test(command) ? [buildTfsCliDispatch(envAssignments)] : []),
       `${envAssignments} exec npx -y @lobehub/cli "$@"`,
       LH_SHIM_EOF,
       // A subshell, so the command's own `trap … EXIT` or `exit` cannot skip the
