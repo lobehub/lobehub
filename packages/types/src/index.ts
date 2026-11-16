@@ -75,6 +75,7 @@ export * from './service';
 export * from './session';
 export * from './signal';
 export * from './skill';
+export * from './steerQueue';
 export * from './stepContext';
 export * from './task';
 export * from './tool';

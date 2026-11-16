@@ -22,7 +22,7 @@ import { useConversationResourceAccess } from '../hooks/useConversationResourceA
 import { useConversationStore } from '../store';
 import {
   createQueueSendNowGate,
-  getQueuedHintKey,
+  getQueuedRowHint,
   putQueuedMessageInEditor,
   sendQueuedMessageNow,
 } from './utils';
@@ -310,8 +310,14 @@ const QueueTray = memo(() => {
   // CLI run only drains once the whole run ends, not after the current step.
   // One a run already took is no longer part of that merge: it says where it
   // is instead and offers nothing to do with it.
+  // Behind a CLI run the server says per row whether it joins the live
+  // session or waits for the run end, and why.
   const waitingCount = queuedMessages.filter((msg) => !isServerDeliveringQueuedMessage(msg)).length;
-  const hintText = t(getQueuedHintKey({ count: waitingCount, waitsForRunEnd }));
+  const hintOf = (msg: QueuedMessage) => {
+    const hint = getQueuedRowHint({ count: waitingCount, message: msg, waitsForRunEnd });
+    if (!('reasonKey' in hint)) return t(hint.key);
+    return t(hint.key, { reason: t(hint.reasonKey), timing: t(hint.timingKey) });
+  };
 
   return (
     <Flexbox className={styles.container} gap={0}>
@@ -320,7 +326,7 @@ const QueueTray = memo(() => {
         // A "send now" in progress keeps its row as is: it is interrupting the
         // run to take this message back, and shows that with its spinner.
         const delivering = isServerDeliveringQueuedMessage(msg) && sendingId !== msg.id;
-        const rowHint = delivering ? t('inputQueue.deliveringHint') : hintText;
+        const rowHint = delivering ? t('inputQueue.deliveringHint') : hintOf(msg);
         return (
           <Flexbox
             horizontal

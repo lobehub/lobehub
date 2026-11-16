@@ -1,10 +1,11 @@
-import type {
-  ConversationContext,
-  MessageMapScope,
-  MessageMetadata,
-  UploadFileItem,
+import {
+  type ConversationContext,
+  mergeMcpAppSource,
+  type MessageMapScope,
+  type MessageMetadata,
+  type QueuedFollowUpWaitReason,
+  type UploadFileItem,
 } from '@lobechat/types';
-import { mergeMcpAppSource } from '@lobechat/types';
 
 import type { QueuedFollowUpRequest } from '@/services/aiAgent';
 
@@ -359,6 +360,11 @@ export interface QueuedMessage {
    */
   serverDelivery?: 'appending' | 'server';
   /**
+   * The server says the running CLI run takes this follow-up into its live
+   * session at its next read, rather than at the run end.
+   */
+  serverJoinsLiveRun?: boolean;
+  /**
    * The run request the server starts this follow-up with. Set when the send
    * could be queued on the server; such an item may be handed over later.
    */
@@ -369,6 +375,8 @@ export interface QueuedMessage {
    * again and the server says where it is.
    */
   serverUnconfirmed?: boolean;
+  /** Why the server says this follow-up waits for the running CLI run to end. */
+  serverWaitReason?: QueuedFollowUpWaitReason;
 }
 
 /** Whether only this client holds the queued message, so only it can send it. */

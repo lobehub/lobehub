@@ -13,7 +13,12 @@ const mocks = vi.hoisted(() => ({
   liveCandidates: vi.fn(),
   remove: vi.fn(),
   resolveAgentSender: vi.fn(),
+  resolveHeteroWaitReasons: vi.fn(),
   snapshot: vi.fn(),
+}));
+
+vi.mock('@/server/services/aiAgent/steerQueue/heteroListener', () => ({
+  resolveHeteroWaitReasons: mocks.resolveHeteroWaitReasons,
 }));
 
 vi.mock('@/server/services/aiAgent/agentSenderResolver', () => ({
@@ -366,6 +371,34 @@ describe('agentSteerQueueRouter.list / remove', () => {
         { createdAt: 2, id: 'theirs', request: { prompt: 'b' }, userId: 'user-2' },
       ],
     });
+    mocks.resolveHeteroWaitReasons.mockResolvedValue({ listening: false, reasons: new Map() });
+  });
+
+  it('says why each follow-up waits behind a CLI run, or that the live run takes it', async () => {
+    mocks.snapshot.mockResolvedValue({
+      delivering: [],
+      waiting: [
+        { createdAt: 1, id: 'text', request: { prompt: 'a' }, userId: 'user-1' },
+        { createdAt: 2, id: 'file', request: { prompt: 'b' }, userId: 'user-1' },
+      ],
+    });
+    mocks.resolveHeteroWaitReasons.mockResolvedValue({
+      listening: true,
+      reasons: new Map([['file', 'attachments']]),
+    });
+
+    await expect(caller().list({ topicId: 'tpc-1' })).resolves.toEqual([
+      expect.objectContaining({ id: 'text', joinsLiveRun: true, waitReason: undefined }),
+      expect.objectContaining({ id: 'file', joinsLiveRun: undefined, waitReason: 'attachments' }),
+    ]);
+  });
+
+  it('still lists the queue when the wait reasons cannot be read', async () => {
+    mocks.resolveHeteroWaitReasons.mockRejectedValue(new Error('db down'));
+
+    await expect(caller().list({ topicId: 'tpc-1' })).resolves.toEqual([
+      expect.objectContaining({ id: 'mine', waitReason: undefined }),
+    ]);
   });
 
   it('lists only the caller’s own follow-ups', async () => {

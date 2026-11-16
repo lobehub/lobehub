@@ -391,6 +391,26 @@ describe('server queue watch while a run delivers', () => {
     expect(queue()).toHaveLength(0);
   });
 
+  it('shows each row why it waits, and clears it once the run can take it', async () => {
+    startRun();
+    vi.spyOn(aiAgentService, 'appendQueuedFollowUp').mockResolvedValue({
+      id: 'q1',
+      length: 1,
+      queued: true,
+    });
+    vi.spyOn(aiAgentService, 'listQueuedFollowUps')
+      .mockResolvedValueOnce([pending('q1', { waitReason: 'notListening' })])
+      .mockResolvedValue([pending('q1', { joinsLiveRun: true })]);
+    get().enqueueMessage(key, queued('q1', { serverDelivery: 'appending' }));
+
+    await handOffQueuedMessage(get, key, context, 'q1', async () => request);
+    await vi.advanceTimersByTimeAsync(SERVER_QUEUE_POLL_MS);
+    expect(queue()[0]).toMatchObject({ serverWaitReason: 'notListening' });
+    await vi.advanceTimersByTimeAsync(SERVER_QUEUE_POLL_MS);
+    expect(queue()[0]).toMatchObject({ serverJoinsLiveRun: true });
+    expect(queue()[0].serverWaitReason).toBeUndefined();
+  });
+
   it('keeps every follow-up while the queue cannot be read, rather than taking them as delivered', async () => {
     startRun();
     vi.spyOn(aiAgentService, 'appendQueuedFollowUp').mockResolvedValue({
