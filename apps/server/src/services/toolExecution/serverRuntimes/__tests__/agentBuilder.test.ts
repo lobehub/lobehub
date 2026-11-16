@@ -73,7 +73,7 @@ vi.mock('@/database/models/plugin', () => ({
 
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn(function () {
-    return { resolveAll: mockResolveConnectors };
+    return { queryAvailableForAgent: mockResolveConnectors, resolveAll: mockResolveConnectors };
   }),
 }));
 

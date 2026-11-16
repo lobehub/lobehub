@@ -305,7 +305,7 @@ describe('connector visibility — agent configuration', () => {
     const model = new ConnectorModel(serverDB, owner, workspaceId);
 
     expect(await model.queryAvailableForAgent(privateAgent)).toEqual([
-      { identifier: 'notion', isEnabled: false, status: 'connected' },
+      { id: privateRow.id, identifier: 'notion', isEnabled: false, status: 'connected' },
     ]);
   });
 });

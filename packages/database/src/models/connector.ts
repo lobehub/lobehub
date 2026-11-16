@@ -654,7 +654,7 @@ export class ConnectorModel {
    */
   queryAvailableForAgent = async (
     agentId?: string,
-  ): Promise<Pick<UserConnectorItem, 'identifier' | 'isEnabled' | 'status'>[]> => {
+  ): Promise<Pick<UserConnectorItem, 'id' | 'identifier' | 'isEnabled' | 'status'>[]> => {
     const base = this.evaluationDatasetId
       ? this.ownership()
       : connectorAgentConfigScope(
@@ -668,7 +668,8 @@ export class ConnectorModel {
       .where(this.agentNarrowing(base, agentId))
       .orderBy(...this.resolutionOrder());
 
-    return this.pickByPriority(rows, agentId).map(({ identifier, isEnabled, status }) => ({
+    return this.pickByPriority(rows, agentId).map(({ id, identifier, isEnabled, status }) => ({
+      id,
       identifier,
       isEnabled,
       status,

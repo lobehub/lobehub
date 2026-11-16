@@ -5,7 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
-import { agents, userConnectors, userInstalledPlugins, users } from '@/database/schemas';
+import {
+  agents,
+  userConnectors,
+  userInstalledPlugins,
+  users,
+  workspaceMembers,
+  workspaces,
+} from '@/database/schemas';
 import { discoverTools } from '@/server/services/aiAgent/pipeline/toolDiscovery';
 import {
   installMarketplaceMcpConnector,
@@ -35,6 +42,7 @@ const db = await getTestDB();
 const userId = 'server-market-install-user';
 const AGENT_ID = 'agent-1';
 const IDENTIFIER = 'fetch-mcp';
+const WORKSPACE_ID = 'server-market-install-ws';
 
 /**
  * A stdio MCP, the way `market.getMcpManifest` serves it: whether the market
@@ -54,11 +62,12 @@ const installFromServer = (
   served: MarketMcpManifest = manifest,
   /** The market's detail of the MCP, or the error reading it fails with. */
   detail: { haveCloudEndpoint?: unknown } | Error = { haveCloudEndpoint: true },
+  workspaceId?: string,
 ) =>
   resolveOrInstallMarketPlugin(
     IDENTIFIER,
     {
-      connectorModel,
+      connectorModel: workspaceId ? new ConnectorModel(db, userId, workspaceId) : connectorModel,
       discoverService: {
         getMcpDetail:
           detail instanceof Error
@@ -67,7 +76,12 @@ const installFromServer = (
         getMcpManifest: vi.fn().mockResolvedValue(served),
       },
       installMarketplaceConnector: (identifier, fetched, options) =>
-        installMarketplaceMcpConnector({ serverDB: db, userId }, identifier, fetched, options),
+        installMarketplaceMcpConnector(
+          { serverDB: db, userId, workspaceId },
+          identifier,
+          fetched,
+          options,
+        ),
       pluginModel,
     },
     { agentId: AGENT_ID, source: 'market' },
@@ -118,6 +132,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await db.delete(workspaces);
   await db.delete(users);
 });
 
@@ -242,6 +257,80 @@ describe('resolveOrInstallMarketPlugin — server-side marketplace install', () 
       ]);
     },
   );
+
+  it.each([
+    {
+      label: 'private',
+      resolved: { status: 'not-connected' },
+      row: { status: 'disconnected', visibility: 'private', workspaceId: WORKSPACE_ID },
+    },
+    {
+      label: 'personal',
+      resolved: { source: 'connector', status: 'loadable' },
+      row: { status: 'connected', workspaceId: null },
+    },
+  ] as const)(
+    "reports the owner's $label connector its private agent's own conversation picks, and adds no shared one",
+    async ({ resolved, row }) => {
+      await db
+        .insert(workspaces)
+        .values({ id: WORKSPACE_ID, name: 'WS', primaryOwnerId: userId, slug: WORKSPACE_ID });
+      await db
+        .insert(workspaceMembers)
+        .values({ role: 'owner', userId, workspaceId: WORKSPACE_ID });
+      await db
+        .insert(agents)
+        .values({ id: AGENT_ID, userId, visibility: 'private', workspaceId: WORKSPACE_ID });
+      await db.insert(userConnectors).values({
+        identifier: IDENTIFIER,
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://mcp.example.com/mcp',
+        name: 'Owner copy',
+        sourceType: 'custom',
+        userId,
+        ...row,
+      });
+
+      const { installedNow, resolution } = await installFromServer(
+        manifest,
+        { haveCloudEndpoint: true },
+        WORKSPACE_ID,
+      );
+
+      expect(installedNow).toBe(false);
+      expect(resolution).toEqual(resolved);
+      // No shared connector that the agent's own runs rank below the owner's row
+      expect(await db.select().from(userConnectors)).toEqual([
+        expect.objectContaining({ name: 'Owner copy' }),
+      ]);
+    },
+  );
+
+  it('installs a shared connector for a private agent whose owner has none of it', async () => {
+    await db
+      .insert(workspaces)
+      .values({ id: WORKSPACE_ID, name: 'WS', primaryOwnerId: userId, slug: WORKSPACE_ID });
+    await db.insert(workspaceMembers).values({ role: 'owner', userId, workspaceId: WORKSPACE_ID });
+    await db
+      .insert(agents)
+      .values({ id: AGENT_ID, userId, visibility: 'private', workspaceId: WORKSPACE_ID });
+
+    const { installedNow, resolution } = await installFromServer(
+      manifest,
+      { haveCloudEndpoint: true },
+      WORKSPACE_ID,
+    );
+
+    expect(installedNow).toBe(true);
+    expect(resolution).toEqual({ source: 'connector', status: 'loadable' });
+    expect(await db.select().from(userConnectors)).toEqual([
+      expect.objectContaining({
+        identifier: IDENTIFIER,
+        visibility: 'public',
+        workspaceId: WORKSPACE_ID,
+      }),
+    ]);
+  });
 
   it('reports the install as installed in the next marketplace search', async () => {
     const search = () =>

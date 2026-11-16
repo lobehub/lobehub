@@ -51,6 +51,15 @@ export const hasLoadableApis = (manifest: unknown): boolean =>
 
 const normalize = (id: string) => id.toLowerCase().replaceAll(/[\s_.]+/g, '-');
 
+/** A connector contributes tools only once it is enabled and connected. */
+const connectorResolution = (connector: {
+  isEnabled: boolean;
+  status: string;
+}): PluginResolution =>
+  connector.isEnabled && connector.status === 'connected'
+    ? { source: 'connector', status: 'loadable' }
+    : { status: 'not-connected' };
+
 export const resolvePluginIdentifier = async (
   identifier: string,
   deps: PluginResolverDeps,
@@ -63,11 +72,7 @@ export const resolvePluginIdentifier = async (
   // enabled and connected — a disabled or disconnected row contributes no tools.
   const connectors = await deps.connectorModel.resolveAll(options.agentId);
   const connector = connectors.find((c) => c.identifier === identifier);
-  if (connector) {
-    return connector.isEnabled && connector.status === 'connected'
-      ? { source: 'connector', status: 'loadable' }
-      : { status: 'not-connected' };
-  }
+  if (connector) return connectorResolution(connector);
 
   const installed = await deps.pluginModel.findById(identifier);
   if (installed) {
@@ -187,6 +192,7 @@ export const unresolvablePluginResult = (
 };
 
 export interface MarketPluginDeps extends PluginResolverDeps {
+  connectorModel: Pick<ConnectorModel, 'queryAvailableForAgent' | 'resolveAll'>;
   discoverService: {
     /** The MCP's market detail, which says whether the market hosts it (`haveCloudEndpoint`). */
     getMcpDetail: (params: { identifier: string }) => Promise<unknown>;
@@ -231,10 +237,19 @@ export const resolveOrInstallMarketPlugin = async (
 
   // The agent's own row of the identifier comes first in its runs, so a base
   // install would never serve it: answer as its runs will, installing nothing.
+  // In its own conversation, so does its owner's private or personal row (a
+  // private agent's configuration scope), which a run without that topic does
+  // not resolve: answer as that row, rather than add a shared one it shadows.
   if (options.agentId) {
-    const connectors = await deps.connectorModel.resolveAll(options.agentId);
-    if (connectors.some((c) => c.identifier === identifier && c.agentId === options.agentId))
-      return resolveExisting();
+    const [runnable, configurable] = await Promise.all([
+      deps.connectorModel.resolveAll(options.agentId),
+      deps.connectorModel.queryAvailableForAgent(options.agentId),
+    ]);
+    const run = runnable.find((c) => c.identifier === identifier);
+    if (run?.agentId === options.agentId) return resolveExisting();
+    const own = configurable.find((c) => c.identifier === identifier);
+    if (own && own.id !== run?.id)
+      return { installedNow: false, resolution: connectorResolution(own) };
   }
 
   let manifest: unknown;
