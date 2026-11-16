@@ -44,3 +44,35 @@ describe('the auto-created worktree marker', () => {
     expect(next.git).not.toHaveProperty('activeWorktree');
   });
 });
+
+describe('leaving a worktree when the CLI session started in another one', () => {
+  const born: WorkingDirConfig = {
+    git: { activeWorktree: '/wt/a', isWorktree: true },
+    path: '/repo',
+    sessionPath: '/wt/a',
+  };
+  const movedOn: WorkingDirConfig = {
+    git: { activeWorktree: '/wt/b', branch: 'feat/b', isWorktree: true },
+    path: '/repo',
+    sessionPath: '/wt/a',
+  };
+
+  it('returns to the session worktree, where the CLI runs, after leaving another', () => {
+    const next = applyWorktreeExitToConfig(movedOn, '/repo', { removed: true });
+    expect(next.git?.activeWorktree).toBe('/wt/a');
+    expect(next.sessionPath).toBe('/wt/a');
+    expect(next.git?.branch).toBeUndefined();
+  });
+
+  it('falls back to the source when the session worktree itself is removed', () => {
+    const next = applyWorktreeExitToConfig(born, '/repo', { removed: true });
+    expect(next.git?.activeWorktree).toBeUndefined();
+    expect(next).not.toHaveProperty('sessionPath');
+    expect(next.path).toBe('/repo');
+  });
+
+  it('keeps the session worktree when it is left but kept on disk', () => {
+    const next = applyWorktreeExitToConfig(born, '/repo');
+    expect(next.sessionPath).toBe('/wt/a');
+  });
+});

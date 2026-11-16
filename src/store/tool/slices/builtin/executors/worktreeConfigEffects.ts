@@ -161,6 +161,7 @@ export const applyWorktreeAddToConfig = (
 export const applyWorktreeExitToConfig = (
   currentConfig: WorkingDirConfig | undefined,
   source: string,
+  { removed = false }: { removed?: boolean } = {},
 ): WorkingDirConfig => {
   const git: NonNullable<WorkingDirConfig['git']> = {
     ...currentConfig?.git,
@@ -180,10 +181,21 @@ export const applyWorktreeExitToConfig = (
     delete git.upstream;
   }
 
+  // A topic born in the app's worktree runs its CLI there (`sessionPath`), not
+  // in the source. Leaving ANOTHER worktree returns it there; removing that very
+  // worktree leaves nothing to start in, so the session falls back to the source.
+  const { sessionPath, ...rest } = currentConfig ?? ({} as Partial<WorkingDirConfig>);
+  const sessionGone = !!sessionPath && removed && sessionPath === activeWorktree;
+  if (sessionPath && !sessionGone && sessionPath !== activeWorktree) {
+    git.activeWorktree = sessionPath;
+    git.isWorktree = true;
+  }
+
   return {
-    ...currentConfig,
+    ...rest,
     git,
     path: source,
     ...(currentConfig?.repoType ? { repoType: currentConfig.repoType } : {}),
+    ...(sessionPath && !sessionGone ? { sessionPath } : {}),
   };
 };

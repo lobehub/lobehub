@@ -948,7 +948,7 @@ export const recordGitCommandEffects = async (params: {
   if (activeWorktree && removesWorktree(command, activeWorktree, source)) {
     const worktrees = await listDeviceWorktrees(source, topic?.metadata?.boundDeviceId);
     if (isWorktreeGone(worktrees, activeWorktree, nextConfig?.git?.branch))
-      nextConfig = applyWorktreeExitToConfig(nextConfig, source);
+      nextConfig = applyWorktreeExitToConfig(nextConfig, source, { removed: true });
   }
 
   const branchSwitch = parseGitBranchSwitch(command, resultContent);
