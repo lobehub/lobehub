@@ -35,6 +35,7 @@ import { lockPeerPair, peerOf, requireMutualContacts } from './peer';
 import { addChannelUser, channelUserCandidates, newChannelUserCandidates } from './people';
 import type { ChannelAgentPostInput } from './post';
 import { postAgentMessage } from './post';
+import { retryJob } from './retry';
 import { retryRouting } from './routing';
 import type { ChannelSendInput } from './send';
 import { sendMessage } from './send';
@@ -925,6 +926,23 @@ export class ChannelRepository {
           throw new ChannelError('FORBIDDEN', 'Only the author or an admin can retry routing');
       }
       return retryRouting(tx, channelId, messageId);
+    });
+
+  /**
+   * Queues a reply that could not reach its device again. Like a stop, only its requester or an
+   * admin may retry it.
+   */
+  retryJob = async (channelId: string, jobId: string): Promise<ChannelJobItem> =>
+    this.write(channelId, async (tx, { member }) => {
+      if (!hasRole(member.role, 'admin')) {
+        const [job] = await tx
+          .select({ requesterMemberId: channelJobs.requesterMemberId })
+          .from(channelJobs)
+          .where(and(eq(channelJobs.channelId, channelId), eq(channelJobs.id, jobId)));
+        if (job && job.requesterMemberId !== member.id)
+          throw new ChannelError('FORBIDDEN', 'Only the requester or an admin can retry this job');
+      }
+      return retryJob(tx, channelId, jobId);
     });
 
   private addOwner = async (tx: Transaction, channelId: string) => {
