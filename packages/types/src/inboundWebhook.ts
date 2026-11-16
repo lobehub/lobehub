@@ -136,3 +136,60 @@ export const InboundWebhookDataSchema = z.discriminatedUnion('kind', [
     verification: InboundWebhookVerificationSchema,
   }),
 ]);
+
+/** One `inbound_webhooks` row, secret included; checked against the table in the schema package. */
+export interface InboundWebhookRow {
+  accessedAt: Date;
+  agentId: string;
+  config: InboundWebhookConfig;
+  connectorId: string | null;
+  createdAt: Date;
+  dedupeKey: string | null;
+  id: string;
+  instructions: string | null;
+  kind: InboundWebhookKind;
+  lastDeliveryAt: Date | null;
+  lastError: InboundWebhookError | null;
+  maintenanceFailures: number;
+  name: string | null;
+  nextMaintenanceAt: Date | null;
+  /** KeyVaults ciphertext; models leave it out of every read shape. */
+  secret: string | null;
+  state: InboundWebhookState;
+  status: InboundWebhookStatus;
+  topicId: string | null;
+  updatedAt: Date;
+  userId: string;
+  verification: InboundWebhookVerification;
+  wakeCount: number;
+  wakeWindowStartedAt: Date;
+  workspaceId: string | null;
+}
+
+/** What inserting an `inbound_webhooks` row takes; columns with a default are optional. */
+export interface InboundWebhookInsert {
+  accessedAt?: Date;
+  agentId: string;
+  config: InboundWebhookConfig;
+  connectorId?: string | null;
+  createdAt?: Date;
+  dedupeKey?: string | null;
+  id?: string;
+  instructions?: string | null;
+  kind: InboundWebhookKind;
+  lastDeliveryAt?: Date | null;
+  lastError?: InboundWebhookError | null;
+  maintenanceFailures?: number;
+  name?: string | null;
+  nextMaintenanceAt?: Date | null;
+  secret?: string | null;
+  state?: InboundWebhookState;
+  status?: InboundWebhookStatus;
+  topicId?: string | null;
+  updatedAt?: Date;
+  userId: string;
+  verification: InboundWebhookVerification;
+  wakeCount?: number;
+  wakeWindowStartedAt?: Date;
+  workspaceId?: string | null;
+}

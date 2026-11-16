@@ -1,4 +1,9 @@
-import type { InboundWebhookState, InboundWebhookStatus } from '@lobechat/types';
+import type {
+  InboundWebhookInsert,
+  InboundWebhookRow,
+  InboundWebhookState,
+  InboundWebhookStatus,
+} from '@lobechat/types';
 import {
   INBOUND_WEBHOOK_DELIVERY_ERRORS,
   INBOUND_WEBHOOK_ERRORS,
@@ -9,7 +14,6 @@ import {
 import { and, count, desc, eq, getTableColumns, inArray, lt, lte, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
-import type { InboundWebhookRow, NewInboundWebhook } from '../schemas';
 import { inboundWebhooks, topics, users } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
@@ -20,7 +24,7 @@ export interface InboundWebhookGateKeeper {
 }
 
 export type InboundWebhookView = Omit<InboundWebhookRow, 'secret'>;
-export type CreateInboundWebhook = Omit<NewInboundWebhook, 'userId' | 'workspaceId'>;
+export type CreateInboundWebhook = Omit<InboundWebhookInsert, 'userId' | 'workspaceId'>;
 export type InboundWebhookPatch = Partial<
   Pick<
     InboundWebhookRow,

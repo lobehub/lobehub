@@ -62,6 +62,3 @@ export const inboundWebhooks = pgTable(
     index('inbound_webhooks_connector_idx').on(t.connectorId),
   ],
 );
-
-export type InboundWebhookRow = typeof inboundWebhooks.$inferSelect;
-export type NewInboundWebhook = typeof inboundWebhooks.$inferInsert;
