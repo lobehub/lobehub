@@ -13,6 +13,7 @@ import {
   removeByConnector,
   removeByTopics,
   removeInboundWebhook,
+  scheduleRefreshByConnector,
 } from './lifecycle';
 
 const boundary = vi.hoisted(() => ({
@@ -26,6 +27,10 @@ const boundary = vi.hoisted(() => ({
 }));
 vi.mock('@/server/services/inboundWebhook/featureGate', () => ({
   isWebhookEnabled: boundary.enabled,
+}));
+const scheduled = vi.hoisted(() => [] as Array<() => unknown>);
+vi.mock('@/server/utils/scheduleAfterResponse', () => ({
+  afterUnscoped: (work: () => unknown) => scheduled.push(work),
 }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => boundary.gateKeeper },
@@ -102,6 +107,17 @@ describe('inbound webhook lifecycle', () => {
     await removeByConnector(db, scope, connectorId);
     expect(boundary.unsubscribe).toHaveBeenCalledOnce();
     expect(await model.findById(row.id)).toBeUndefined();
+  });
+
+  it("renews a connector's subscriptions only after the response", async () => {
+    scheduled.length = 0;
+    await seed();
+    boundary.enabled.mockResolvedValue(true);
+    scheduleRefreshByConnector(db, scope, connectorId);
+    expect(boundary.subscribe).not.toHaveBeenCalled();
+    expect(scheduled).toHaveLength(1);
+    await scheduled[0]();
+    expect(boundary.subscribe).toHaveBeenCalledOnce();
   });
 
   it('removes a subscription only after attempting remote teardown', async () => {

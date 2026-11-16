@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
 // are still active when the router module is evaluated. They live below the
 // imports to satisfy `import-x/first` without disabling the rule.
 vi.mock('@/server/services/inboundWebhook/lifecycle', () => ({
-  refreshByConnector: mocks.refreshSubscriptions,
+  scheduleRefreshByConnector: mocks.refreshSubscriptions,
   removeByConnector: mocks.removeSubscriptions,
 }));
 vi.mock('@/database/models/connectorLink', () => ({
