@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useAgentStore } from '@/store/agent';
 import { useToolStore } from '@/store/tool';
-import { connectorSelectors } from '@/store/tool/slices/connector';
+import { connectorSelectors, pickRunConnectors } from '@/store/tool/slices/connector';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 
 /**
@@ -25,15 +25,8 @@ export const agentMenuConnectors = (
   { inWorkspace, privateAgent }: { inWorkspace: boolean; privateAgent: boolean },
 ): ConnectorWithTools[] => {
   if (!inWorkspace) return connectors;
-  if (!privateAgent) return connectors.filter((c) => c.visibility !== 'private');
 
-  const byIdentifier = new Map<string, ConnectorWithTools>();
-  for (const connector of connectors) {
-    const current = byIdentifier.get(connector.identifier);
-    if (!current || (connector.visibility === 'private' && current.visibility !== 'private'))
-      byIdentifier.set(connector.identifier, connector);
-  }
-  return [...byIdentifier.values()];
+  return pickRunConnectors(connectors, { includePrivate: privateAgent });
 };
 
 /** {@link agentMenuConnectors} for `agentId`, from the user's MCP connectors. */

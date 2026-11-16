@@ -33,7 +33,7 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
-import { connectorSelectors } from '@/store/tool/slices/connector';
+import { connectorSelectors, pickRunConnectors } from '@/store/tool/slices/connector';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
@@ -94,13 +94,24 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
 
   const toolStoreState = getToolStoreState();
 
+  // The row each identifier runs on, as the server picks it: a private and a
+  // shared row of one identifier resolve to the private one in a private
+  // agent's own conversation, and only the shared one elsewhere. Manifests and
+  // permissions are keyed by identifier, so both come from that row, or the
+  // model would see one row's schema and approval policy while the server
+  // executes the other.
+  const runConnectors = pickRunConnectors(connectorSelectors.connectorList(toolStoreState), {
+    includePrivate: includePrivateConnectors,
+  });
+  const runConnectorIds = new Set(runConnectors.map((c) => c.id));
+
   // Per-connector tool permissions, keyed by connector identifier: community-
   // MCP plugins execute outside the connector path, so the user's
   // needs_approval / disabled settings are patched onto their manifests.
   const connectorPermissions = new Map(
-    connectorSelectors
-      .connectorList(toolStoreState)
-      .map((c) => [c.identifier, new Map(c.tools.map((t) => [t.toolName, t.permission]))] as const),
+    runConnectors.map(
+      (c) => [c.identifier, new Map(c.tools.map((t) => [t.toolName, t.permission]))] as const,
+    ),
   );
 
   // The pool rules (connector precedence, permission patching, context-aware
@@ -116,7 +127,7 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
       connectors: buildClientConnectorManifests(
         connectorSelectors
           .executableMcpConnectors(toolStoreState)
-          .filter((connector) => includePrivateConnectors || connector.visibility !== 'private'),
+          .filter((connector) => runConnectorIds.has(connector.id)),
       ) as LobeToolManifest[],
       installedPlugins: pluginSelectors.installedPluginManifestList(
         toolStoreState,

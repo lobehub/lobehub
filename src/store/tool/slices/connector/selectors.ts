@@ -41,6 +41,37 @@ export const isInConnectorTab = (
   visibility?: ConnectorVisibility,
 ): boolean => !visibility || (connector.visibility === 'private') === (visibility === 'private');
 
+/**
+ * The connectors a run loads from the caller's list, one per identifier, ranked
+ * as the server's `ConnectorModel.pickByPriority` ranks base rows: the owner's
+ * private row shadows the shared one, and equal ranks keep the lowest id (the
+ * server's `resolutionOrder`), never the list order. Without `includePrivate`
+ * (any run but a private agent's own conversation) private rows take no part.
+ *
+ * Whatever is built per identifier (a tool manifest, its permissions, a menu
+ * row) must come from this row: the server executes it.
+ */
+export const pickRunConnectors = <
+  T extends Pick<ConnectorWithTools, 'id' | 'identifier' | 'visibility'>,
+>(
+  connectors: T[],
+  { includePrivate }: { includePrivate: boolean },
+): T[] => {
+  const rank = (c: T) => (c.visibility === 'private' ? 1 : 0);
+  const byIdentifier = new Map<string, T>();
+  for (const connector of connectors) {
+    if (!includePrivate && connector.visibility === 'private') continue;
+    const current = byIdentifier.get(connector.identifier);
+    if (
+      !current ||
+      rank(connector) > rank(current) ||
+      (rank(connector) === rank(current) && connector.id < current.id)
+    )
+      byIdentifier.set(connector.identifier, connector);
+  }
+  return [...byIdentifier.values()];
+};
+
 const connectorByIdentifier =
   (
     identifier: string,

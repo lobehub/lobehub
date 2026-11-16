@@ -903,6 +903,57 @@ describe('toolEngineering', () => {
 
       expect(enabledConnectorIds(manifestContext)).toEqual(['ws-linear']);
     });
+
+    describe('a private and a shared row of one identifier', () => {
+      // The owner's private connection and the workspace's shared one of the
+      // same identifier, each with its own tool list
+      const withTool = (visibility: 'private' | 'public', toolName: string) => {
+        const row = connector('team-docs', visibility);
+        return {
+          ...row,
+          id: `team-docs-${visibility}`,
+          tools: [{ ...row.tools[0], id: `${visibility}-tool`, toolName }],
+        };
+      };
+      const privateRow = withTool('private', 'search_mine');
+      const sharedRow = withTool('public', 'search_team');
+
+      const toolNames = (rows: unknown[], manifestContext?: { scope?: string }) => {
+        mockConnectors = rows;
+        mockCurrentAgentPlugins = ['team-docs'];
+        return createAgentToolsEngine(
+          { model: 'gpt-4', provider: 'openai' },
+          undefined,
+          manifestContext,
+        )
+          .generateToolsDetailed({ model: 'gpt-4', provider: 'openai', toolIds: ['team-docs'] })
+          .tools?.map((tool) => tool.function.name);
+      };
+
+      it("builds the private agent's manifest from the private row, in either list order", () => {
+        // Regression: both rows reached the identifier-keyed manifest map and
+        // the last one won, so the model could get the shared row's schema
+        // while the server ran the private connection.
+        mockCurrentAgentVisibility = 'private';
+
+        for (const rows of [
+          [privateRow, sharedRow],
+          [sharedRow, privateRow],
+        ]) {
+          const names = toolNames(rows, { scope: 'main' });
+          expect(names?.some((name) => name.includes('search_mine'))).toBe(true);
+          expect(names?.some((name) => name.includes('search_team'))).toBe(false);
+        }
+      });
+
+      it("builds a workspace agent's manifest from the shared row", () => {
+        mockCurrentAgentVisibility = 'public';
+
+        const names = toolNames([privateRow, sharedRow]);
+        expect(names?.some((name) => name.includes('search_team'))).toBe(true);
+        expect(names?.some((name) => name.includes('search_mine'))).toBe(false);
+      });
+    });
   });
 
   describe('Migration functions', () => {

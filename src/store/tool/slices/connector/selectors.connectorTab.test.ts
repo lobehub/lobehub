@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ToolStore } from '@/store/tool/store';
 
-import { connectorSelectors, isInConnectorTab } from './selectors';
+import { connectorSelectors, isInConnectorTab, pickRunConnectors } from './selectors';
 import type { ConnectorWithTools } from './types';
 
 const connector = (patch: Partial<ConnectorWithTools>): ConnectorWithTools => ({
@@ -66,5 +66,39 @@ describe('connectorSelectors.connectorByIdentifier', () => {
       connectorSelectors.connectorByIdentifier('linear', 'private')(state([sharedRow]))?.id,
     ).toBe('shared-row');
     expect(connectorSelectors.connectorByIdentifier('missing')(state([sharedRow]))).toBe(undefined);
+  });
+});
+
+describe('pickRunConnectors', () => {
+  const ids = (rows: ConnectorWithTools[]) => rows.map((c) => c.id);
+
+  it("runs the owner's private row of an identifier the workspace also shares, in either order", () => {
+    for (const rows of [
+      [sharedRow, privateRow],
+      [privateRow, sharedRow],
+    ]) {
+      expect(ids(pickRunConnectors(rows, { includePrivate: true }))).toEqual(['private-row']);
+      expect(ids(pickRunConnectors(rows, { includePrivate: false }))).toEqual(['shared-row']);
+    }
+  });
+
+  it('keeps the lowest id among rows of equal rank, as the server orders them', () => {
+    const a = connector({ id: 'a-row', visibility: 'public' });
+    const b = connector({ id: 'b-row', visibility: 'public' });
+
+    expect(ids(pickRunConnectors([b, a], { includePrivate: true }))).toEqual(['a-row']);
+    expect(ids(pickRunConnectors([a, b], { includePrivate: true }))).toEqual(['a-row']);
+  });
+
+  it('keeps one row per identifier in list order', () => {
+    const notion = connector({ id: 'notion-row', identifier: 'notion', visibility: 'private' });
+
+    expect(ids(pickRunConnectors([sharedRow, notion], { includePrivate: true }))).toEqual([
+      'shared-row',
+      'notion-row',
+    ]);
+    expect(ids(pickRunConnectors([sharedRow, notion], { includePrivate: false }))).toEqual([
+      'shared-row',
+    ]);
   });
 });
