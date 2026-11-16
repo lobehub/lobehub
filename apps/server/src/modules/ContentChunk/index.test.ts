@@ -1,14 +1,18 @@
 import { readFile } from 'node:fs/promises';
 
+import { FileParseBudgetError } from '@lobechat/file-loaders';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { knowledgeEnv } from '@/envs/knowledge';
-import { ChunkingLoader } from '@/libs/document-loaders';
+import type { ChunkingLoader } from '@/libs/document-loaders';
+import { chunkContentInWorker } from '@/server/services/fileParse';
+import { FileParseError } from '@/server/services/fileParse/errors';
 
 import { ContentChunk } from './index';
 
 // Mock the dependencies
-vi.mock('@/libs/document-loaders');
+// The splitter runs on the shared parse worker; its own tests cover the real thread.
+vi.mock('@/server/services/fileParse', () => ({ chunkContentInWorker: vi.fn() }));
 vi.mock('@/envs/knowledge', () => ({
   knowledgeEnv: {
     FILE_TYPE_CHUNKING_RULES: '',
@@ -24,20 +28,14 @@ describe('ContentChunk', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Setup LangChain mock
-    mockLangChainPartition = vi.fn();
-    (ChunkingLoader as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () {
-      return {
-        partitionContent: mockLangChainPartition,
-      };
-    });
+    mockLangChainPartition = vi.mocked(chunkContentInWorker) as unknown as ReturnType<typeof vi.fn>;
 
     contentChunk = new ContentChunk();
   });
 
   describe('constructor', () => {
-    it('should initialize with LangChain client', () => {
-      expect(ChunkingLoader).toHaveBeenCalledTimes(1);
+    it('should not create an in-process chunking client', () => {
+      expect(chunkContentInWorker).not.toHaveBeenCalled();
     });
   });
 
@@ -189,6 +187,53 @@ describe('ContentChunk', () => {
           filename: mockFilename,
         }),
       ).rejects.toThrow('LangChain error');
+    });
+
+    it.each([
+      ['the input size cap', new FileParseError('INPUT_TOO_LARGE', 'too big')],
+      ['the xlsx ZIP structure budget', new FileParseBudgetError('zip-expansion', 1, 2)],
+    ])('does not run the next chunking service after %s refused the file', async (_, refusal) => {
+      vi.mocked(knowledgeEnv).FILE_TYPE_CHUNKING_RULES = 'pdf=unstructured,default';
+      try {
+        const chunker = new ContentChunk();
+        mockLangChainPartition.mockRejectedValue(refusal);
+
+        await expect(
+          chunker.chunkContent({
+            content: mockFileContent,
+            fileType: 'application/pdf',
+            filename: mockFilename,
+          }),
+        ).rejects.toBe(refusal);
+
+        // the next service reads the same bytes under the same limit
+        expect(mockLangChainPartition).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.mocked(knowledgeEnv).FILE_TYPE_CHUNKING_RULES = '';
+      }
+    });
+
+    it('lets the next chunking service try after one service failed on its own', async () => {
+      vi.mocked(knowledgeEnv).FILE_TYPE_CHUNKING_RULES = 'pdf=unstructured,default';
+      try {
+        const chunker = new ContentChunk();
+        mockLangChainPartition
+          .mockRejectedValueOnce(new FileParseError('PARSE_FAILED', 'first service cannot read it'))
+          .mockResolvedValueOnce([
+            { id: 'c1', metadata: { loc: { lines: { from: 1, to: 1 } } }, pageContent: 'ok' },
+          ]);
+
+        const result = await chunker.chunkContent({
+          content: mockFileContent,
+          fileType: 'application/pdf',
+          filename: mockFilename,
+        });
+
+        expect(mockLangChainPartition).toHaveBeenCalledTimes(2);
+        expect(result.chunks).toEqual([expect.objectContaining({ text: 'ok' })]);
+      } finally {
+        vi.mocked(knowledgeEnv).FILE_TYPE_CHUNKING_RULES = '';
+      }
     });
 
     it('should handle empty langchain results', async () => {
