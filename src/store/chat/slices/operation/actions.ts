@@ -952,16 +952,20 @@ export class OperationActionsImpl {
    * Takes nothing while the server holds any of them: it delivers those
    * itself, and the ones queued after them must not overtake them.
    */
-  drainQueuedMessages = (contextKey: string): QueuedMessage[] => {
+  /**
+   * Take the queue to send it. `limit` takes only that many from its head (a
+   * queue sent one message per turn); the rest stays queued.
+   */
+  drainQueuedMessages = (contextKey: string, options?: { limit?: number }): QueuedMessage[] => {
     const queue = this.#get().queuedMessages[contextKey];
     if (!queue || queue.length === 0) return [];
     if (!queue.every(isClientHeldQueuedMessage)) return [];
 
-    const messages = [...queue];
+    const messages = options?.limit ? queue.slice(0, options.limit) : [...queue];
 
     this.#set(
       produce((state: ChatStore) => {
-        state.queuedMessages[contextKey] = [];
+        state.queuedMessages[contextKey] = queue.slice(messages.length);
       }),
       false,
       n(`drainQueuedMessages/${contextKey}`),
@@ -1018,7 +1022,11 @@ export class OperationActionsImpl {
     patch: Partial<
       Pick<
         QueuedMessage,
-        'heldBehindOperationId' | 'serverDelivering' | 'serverDelivery' | 'serverRequest' | 'serverUnconfirmed'
+        | 'heldBehindOperationId'
+        | 'serverDelivering'
+        | 'serverDelivery'
+        | 'serverRequest'
+        | 'serverUnconfirmed'
       >
     >,
   ): void => {

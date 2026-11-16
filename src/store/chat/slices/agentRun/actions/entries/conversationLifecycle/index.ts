@@ -69,8 +69,9 @@ import {
 import { resolveNewThreadIntent } from '@/store/chat/slices/agentRun/actions/dispatch/newThreadIntent';
 import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycle/buildRunLifecycle';
 import {
+  drainQueuedTurn,
   findOrphanedQueueKey,
-  sendQueuedMessages,
+  sendQueuedTurn,
 } from '@/store/chat/slices/agentRun/actions/lifecycle/queuedFollowUp';
 import type { RunScope } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
 import { buildQueuedFollowUpRequest } from '@/store/chat/slices/agentRun/actions/transports/gateway/execRequest';
@@ -274,6 +275,7 @@ export class ConversationLifecycleActionImpl {
     onMessagePersisted,
     onTopicCreated,
     preserveComposer,
+    queueHead,
     signal,
     sourceTopic,
   }: SendMessageWithContextParams): Promise<SendMessageResult | undefined> => {
@@ -299,8 +301,7 @@ export class ConversationLifecycleActionImpl {
       if (hasNotifiedMessageAccepted) return;
 
       hasNotifiedMessageAccepted = true;
-      // Queued messages are accepted before a send operation exists. For actual
-      // sends, acceptance ends the optimistic phase for every runtime.
+      // Queued messages are accepted before a send operation exists; a send's acceptance ends its optimistic phase.
       if (sendOperationId) {
         this.#get().updateOperationMetadata(sendOperationId, { inputEditorTempState: null });
       }
@@ -623,17 +624,14 @@ export class ConversationLifecycleActionImpl {
     const newTopicTitle = markdownToTxt(message).slice(0, 80) || t('defaultTitle', { ns: 'topic' });
 
     // ━━━ Message Queue: enqueue if this context is already busy ━━━
-    // Include the initial `sendMessage` persist/create-topic phase. Example:
-    // first send from a blank chat is still creating topic A (`topicId=null`);
-    // a fast second Enter must queue on `main_<agent>_new` instead of starting
-    // topic B.
+    // Include the initial `sendMessage` persist/create-topic phase: while a first
+    // send is still creating topic A, a fast second Enter queues on
+    // `main_<agent>_new` instead of starting topic B.
     const currentContextKey = messageMapKey(operationContext);
-    // A new-topic send must ALSO queue behind a send that is still creating its
-    // topic for this same conversation surface. That earlier send's operation is
-    // registered under ITS minted topic's bucket (the context adopted the id up
-    // front), so probing only this send's key would miss it — a fast second
-    // Enter would start a concurrent topic instead of queueing. `creatingTopicIds`
-    // names exactly those in-flight buckets.
+    // A new-topic send must ALSO queue behind a send still creating its topic for
+    // this surface. That send's operation is registered under ITS minted topic's
+    // bucket, so probing only this send's key would miss it and a fast second
+    // Enter would start a concurrent topic. `creatingTopicIds` names those buckets.
     const queueCandidateKeys = [
       currentContextKey,
       ...(willCreateNewTopic
@@ -656,9 +654,11 @@ export class ConversationLifecycleActionImpl {
         break;
       }
     }
+    // The head of a queue drained one per turn starts its turn; the rest waits behind it.
     const queueDrainPending =
       !runningQueueBlockingOp &&
       !onlyAddUserMessage &&
+      !queueHead &&
       operationSelectors.isQueueDrainPending(operationContext)(this.#get());
     const canQueue = (key: string) =>
       !onlyAddUserMessage &&
@@ -718,7 +718,7 @@ export class ConversationLifecycleActionImpl {
       queueCandidateKeys,
       willCreateNewTopic,
     );
-    if (orphanedQueueKey && !onlyAddUserMessage) {
+    if (orphanedQueueKey && !onlyAddUserMessage && !queueHead) {
       this.#get().enqueueMessage(orphanedQueueKey, {
         content: message,
         createdAt: Date.now(),
@@ -730,11 +730,11 @@ export class ConversationLifecycleActionImpl {
         interruptMode: 'soft',
         metadata: userMessageMetadata,
       });
-      const restarted = this.#get().drainQueuedMessages(orphanedQueueKey);
+      const restarted = drainQueuedTurn(this.#get, orphanedQueueKey);
       notifyMessageAccepted();
 
       setTimeout(() => {
-        sendQueuedMessages(this.#get, operationContext, restarted).catch((error: unknown) => {
+        sendQueuedTurn(this.#get, operationContext, restarted).catch((error: unknown) => {
           console.error('[sendMessage] restarting queued content after Stop failed:', error);
         });
       }, 0);

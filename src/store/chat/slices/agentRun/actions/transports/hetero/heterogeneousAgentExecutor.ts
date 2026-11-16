@@ -73,11 +73,7 @@ import { threadService } from '@/services/thread';
 import { workService } from '@/services/work';
 import { topicSelectors } from '@/store/chat/selectors';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
-import {
-  mergeQueuedMessages,
-  reconstructUploadFilesFromQueue,
-  type StreamRetryMetadata,
-} from '@/store/chat/slices/operation/types';
+import { type StreamRetryMetadata } from '@/store/chat/slices/operation/types';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -87,6 +83,7 @@ import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors
 
 import { dispatchInterventionState } from '../../entries/interventionProjection';
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
+import { drainQueuedTurn, sendQueuedTurn } from '../../lifecycle/queuedFollowUp';
 import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler } from '../gateway/gatewayEventHandler';
 import { isCompletedRuntimeEnd } from '../gateway/runtimeEndReason';
@@ -2548,8 +2545,8 @@ export const executeHeterogeneousAgent = async (
       isCompletedRuntimeEnd((terminalEvent?.data as { reason?: string } | undefined)?.reason);
     if (!isAborted() && drainableTerminal) {
       const contextKey = messageMapKey(context);
-      const remainingQueued = get().drainQueuedMessages?.(contextKey) ?? [];
-      if (remainingQueued.length > 0) {
+      const turn = drainQueuedTurn(get, contextKey);
+      if (turn.messages.length > 0) {
         // Force-complete this op + mark unread BEFORE the next sendMessage,
         // otherwise its queue check (covering all AI_RUNTIME_OPERATION_TYPES)
         // would still see this op as "running" and re-queue the merged content
@@ -2564,31 +2561,11 @@ export const executeHeterogeneousAgent = async (
           });
         }
 
-        const merged = mergeQueuedMessages(remainingQueued);
-        const mergedFiles =
-          merged.filesPreview.length > 0
-            ? reconstructUploadFilesFromQueue(merged.filesPreview)
-            : merged.files.length > 0
-              ? (merged.files.map((id) => ({ id })) as any)
-              : undefined;
-
+        // Queue mode sends the head alone; the rest waits behind the run it starts.
         setTimeout(() => {
-          useChatStore
-            .getState()
-            .sendMessage({
-              context: { ...context },
-              editorData: merged.editorData,
-              files: mergedFiles,
-              ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
-              message: merged.content,
-              metadata: merged.metadata,
-            })
-            .catch((e: unknown) => {
-              console.error(
-                '[heterogeneousAgentExecutor] sendMessage for queued content failed:',
-                e,
-              );
-            });
+          sendQueuedTurn(useChatStore.getState, { ...context }, turn).catch((e: unknown) => {
+            console.error('[heterogeneousAgentExecutor] sendMessage for queued content failed:', e);
+          });
         }, 100);
       }
     }

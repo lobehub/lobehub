@@ -9,6 +9,8 @@ import {
 import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
+import { getFollowUpMode } from './followUpMode';
+
 /**
  * The conversation key whose queue nothing will drain, so a new send must
  * take it along instead of overtaking it: behind a Stop, or — on an existing
@@ -28,6 +30,24 @@ export const findOrphanedQueueKey = (
     });
   });
 
+/** Queued messages taken to start one turn. */
+export interface QueuedTurn {
+  messages: QueuedMessage[];
+  /** Taken from the head of a queue sent one message per turn; the rest waits behind it. */
+  queueHead?: boolean;
+}
+
+/**
+ * Take what the next turn sends from a queue nothing runs behind any more. In
+ * Queue mode that is its head alone, one message per turn; otherwise all of it,
+ * merged into one message.
+ */
+export const drainQueuedTurn = (get: () => ChatStore, contextKey: string): QueuedTurn => {
+  if (getFollowUpMode() !== 'queue') return { messages: get().drainQueuedMessages(contextKey) };
+
+  return { messages: get().drainQueuedMessages(contextKey, { limit: 1 }), queueHead: true };
+};
+
 /**
  * Send drained queued messages as one turn of their own. The run they waited
  * behind already ended, so this is a fresh turn — not a steer of it — and the
@@ -37,6 +57,7 @@ export const sendQueuedMessages = (
   get: () => ChatStore,
   context: ConversationContext,
   messages: QueuedMessage[],
+  options?: { queueHead?: boolean },
 ): Promise<unknown> => {
   const merged = mergeQueuedMessages(messages);
   const mergedFiles =
@@ -53,8 +74,17 @@ export const sendQueuedMessages = (
     ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
     message: merged.content,
     metadata: merged.metadata,
+    ...(options?.queueHead && { queueHead: true }),
   });
 };
+
+/** Send a {@link QueuedTurn}. */
+export const sendQueuedTurn = (
+  get: () => ChatStore,
+  context: ConversationContext,
+  turn: QueuedTurn,
+): Promise<unknown> =>
+  sendQueuedMessages(get, context, turn.messages, { queueHead: turn.queueHead });
 
 /** Shared by streamed completion and recovery from a server terminal snapshot. */
 export const scheduleQueuedFollowUp = (
@@ -70,13 +100,13 @@ export const scheduleQueuedFollowUp = (
   // owner at that point: a user can start another turn during this hand-off.
   setTimeout(() => {
     if (operationSelectors.hasNewerConversationOperation(operationId, context)(get())) return;
-    const remainingQueued = get().drainQueuedMessages(contextKey);
-    if (remainingQueued.length === 0) {
+    const turn = drainQueuedTurn(get, contextKey);
+    if (turn.messages.length === 0) {
       onEmpty?.();
       return;
     }
 
-    sendQueuedMessages(get, execContext, remainingQueued).catch((error: unknown) => {
+    sendQueuedTurn(get, execContext, turn).catch((error: unknown) => {
       console.error('[executeClientAgent] sendMessage for queued content failed:', error);
     });
   }, 100);

@@ -200,6 +200,11 @@ export interface SendMessageParams {
    */
   preserveComposer?: boolean;
   /**
+   * The head of a queue sent one message per turn (Follow-up behavior: Queue).
+   * The rest of that queue waits behind this send instead of joining it.
+   */
+  queueHead?: boolean;
+  /**
    * Cancels the send before the conversation lifecycle accepts ownership of the turn.
    * Once `onMessageAccepted` fires, later aborts are ignored and the existing runtime Stop flow
    * owns any subsequent model execution.
