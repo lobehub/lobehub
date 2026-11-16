@@ -100,6 +100,7 @@ export type {
   MainResolveToolResultIntent,
   MainSetToolInterventionIntent,
   MainStreamContentIntent,
+  MainUpdateBackgroundTaskIntent,
   MainUpdateToolStateIntent,
   PersistAssistantIntent,
   SetErrorIntent,

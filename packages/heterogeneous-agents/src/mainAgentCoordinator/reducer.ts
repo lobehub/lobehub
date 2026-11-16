@@ -610,6 +610,27 @@ const reduceTerminal = (
 };
 
 /**
+ * A background task snapshot for a main-agent tool. Valid even after the run's
+ * terminal event: on the `on-result` runtime-end strategy CC keeps reporting a
+ * task after the result that ended the operation.
+ */
+const reduceBackgroundTask = (state: MainAgentRunState, data: any): ReduceResult => {
+  const task = data?.task;
+  if (
+    typeof data?.toolCallId !== 'string' ||
+    !data.toolCallId ||
+    typeof task?.taskId !== 'string' ||
+    typeof task.status !== 'string'
+  ) {
+    return { intents: [], state };
+  }
+  return {
+    intents: [{ backgroundTask: task, kind: 'updateBackgroundTask', toolCallId: data.toolCallId }],
+    state,
+  };
+};
+
+/**
  * Reduce a single stream event. Returns the next state and intents to apply.
  * Subagent-scoped events are routed entirely through the subagent coordinator;
  * `tool_result` / terminal events run the main path AND delegate.
@@ -664,6 +685,9 @@ export const reduce = (
     }
     case 'visible_output_end': {
       return reduceVisibleOutputEnd(state);
+    }
+    case 'background_task': {
+      return reduceBackgroundTask(state, data);
     }
     case 'agent_runtime_end':
     case 'error': {
