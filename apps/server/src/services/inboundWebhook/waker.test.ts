@@ -205,12 +205,28 @@ describe('durable inbound webhook wakes', () => {
       expect((await signalRows())[0]).toMatchObject({
         status: 'pending',
         error: 'topic_busy',
-        attempts: 1,
+        attempts: 0,
         processedAt: null,
       });
       expect((await model.findById(id))?.wakeCount).toBe(0);
     },
   );
+
+  it('keeps busy deferrals out of the failed-start retry budget', async () => {
+    await seedSignal();
+    execute
+      .mockResolvedValueOnce({ ...success, error: 'TopicStartReservationError: busy' })
+      .mockResolvedValueOnce({ ...success, error: 'TopicStartReservationError: busy' })
+      .mockResolvedValueOnce({ ...success, error: 'upstream unavailable' });
+    expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'deferred' });
+    expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'deferred' });
+    expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'failed' });
+    expect((await signalRows())[0]).toMatchObject({ attempts: 1, status: 'failed' });
+
+    // One failed start leaves two more tries, however long the Topic was busy before.
+    expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'processed' });
+    expect(execute).toHaveBeenCalledTimes(4);
+  });
 
   it.each(['thrown', 'returned'] as const)(
     'retries %s budget failures at most three times',

@@ -138,7 +138,11 @@ export async function settleWebhookSignals(
     const rows = await tx
       .update(signals)
       .set({
-        attempts: sql`${signals.attempts} + 1`,
+        // `attempts` counts runs actually tried, and bounds failed ones. A busy Topic only defers
+        // and an ignored delivery never tried, so neither spends that budget.
+        ...((status === 'failed' || status === 'processed') && {
+          attempts: sql`${signals.attempts} + 1`,
+        }),
         error: status === 'processed' ? null : reason,
         metadata: withoutClaim,
         processedAt: status === 'pending' || status === 'failed' ? null : new Date(),
