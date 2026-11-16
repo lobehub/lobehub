@@ -4,6 +4,7 @@ import {
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorLinkModel } from '@/database/models/connectorLink';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -17,6 +18,7 @@ export const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(asyn
   return opts.next({
     ctx: {
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
+      connectorLinkModel: new ConnectorLinkModel(ctx.serverDB, ctx.userId, wsId, gateKeeper),
       connectorModel: new ConnectorModel(ctx.serverDB, ctx.userId, wsId, gateKeeper),
       connectorToolModel: new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId),
       pluginModel: new PluginModel(ctx.serverDB, ctx.userId, wsId),

@@ -113,10 +113,10 @@ export const useOpenMenuItems = ({
             key: 'mcp-apps',
             label: groupLabel(t('mcpApp.entrypoints', { ns: 'plugin' })),
             children: entries.map((entry) => {
-              const key = mcpEntryTabKey(entry.identifier, entry.toolName);
+              const key = mcpEntryTabKey(entry.identifier, entry.toolName, entry.linkId);
               return {
                 key,
-                label: entry.title,
+                label: entry.accountName ? `${entry.title} · ${entry.accountName}` : entry.title,
                 icon: entry.icon ? (
                   <img alt={''} height={14} src={entry.icon} width={14} />
                 ) : (
@@ -135,6 +135,7 @@ export const useOpenMenuItems = ({
                             agentId,
                             id,
                             identifier: entry.identifier,
+                            linkId: entry.linkId,
                             toolName: entry.toolName,
                           }),
                       );

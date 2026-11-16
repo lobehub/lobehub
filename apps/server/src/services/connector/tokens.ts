@@ -3,6 +3,7 @@ import debug from 'debug';
 import pMap from 'p-map';
 
 import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
+import type { ConnectorLinkModel, DecryptedConnectorLink } from '@/database/models/connectorLink';
 import type { ConnectorCredentials } from '@/database/schemas';
 
 import {
@@ -216,6 +217,120 @@ export const refreshExpiredConnectorTokens = (
           }
           options.onTimeout?.();
           resolve(connector);
+        }, RUN_TOKEN_REFRESH_TIMEOUT_MS);
+      });
+      try {
+        return await Promise.race([refresh, timeout]);
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    { concurrency: RUN_TOKEN_REFRESH_CONCURRENCY },
+  );
+
+/**
+ * Account refreshes in flight on this instance. Keyed by connector and account:
+ * account ids are unique within their connector only.
+ */
+const inFlightLinkRefreshes = new Map<string, Promise<DecryptedConnectorLink>>();
+const linkRefreshKey = (connector: DecryptedConnector, link: DecryptedConnectorLink) =>
+  `${connector.id}:${link.id}`;
+export const ensureFreshLinkToken = (
+  connector: DecryptedConnector,
+  link: DecryptedConnectorLink,
+  linkModel: ConnectorLinkModel,
+  connectorModel: ConnectorModel,
+): Promise<DecryptedConnectorLink> => {
+  const creds = link.credentials;
+  const oidc = connector.oidcConfig;
+  if (
+    !creds.refreshToken ||
+    (creds.expiresAt && creds.expiresAt - EXPIRY_SKEW_MS > Date.now()) ||
+    !oidc?.issuer ||
+    !oidc.clientId
+  )
+    return Promise.resolve(link);
+  const key = linkRefreshKey(connector, link);
+  const pending = inFlightLinkRefreshes.get(key);
+  if (pending) return pending;
+  const refresh = (async () => {
+    try {
+      const metadata = await discoverConnectorAuthorizationServerMetadata(oidc.issuer!);
+      if (!metadata) return link;
+      const { authMethod, tokens } = await refreshConnectorToken({
+        authorizationServerUrl: oidc.issuer!,
+        clientInformation: toClientInformation(oidc),
+        metadata,
+        refreshToken: creds.refreshToken!,
+        resource: connector.mcpServerUrl ?? undefined,
+      });
+      const { credentials, tokenExpiresAt } = tokensToCredentials(tokens, {
+        clientSecret: oidc.clientSecret,
+        fallbackRefreshToken: creds.refreshToken,
+      });
+      if (credentials.type !== 'oauth2') return link;
+      await linkModel.updateCredentials(connector.id, link.id, credentials);
+      if (authMethod && authMethod !== oidc.tokenEndpointAuthMethod)
+        await connectorModel.update(connector.id, {
+          oidcConfig: { ...oidc, tokenEndpointAuthMethod: authMethod },
+        });
+      return { ...link, credentials, tokenExpiresAt, status: 'connected' as const };
+    } catch (error) {
+      // Another process may have rotated this refresh token. Re-read before
+      // marking the account unhealthy, including a short persistence grace.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (attempt) await new Promise((resolve) => setTimeout(resolve, ROTATION_PERSIST_GRACE_MS));
+        const latest = await linkModel.findById(connector.id, link.id);
+        if (
+          latest &&
+          latest.credentials.accessToken !== creds.accessToken &&
+          (!latest.credentials.expiresAt ||
+            latest.credentials.expiresAt - EXPIRY_SKEW_MS > Date.now())
+        )
+          return latest;
+      }
+      const code =
+        (error as { error?: string; code?: string }).error ?? (error as { code?: string }).code;
+      if (
+        code === 'invalid_grant' ||
+        (error instanceof Error && /invalid_grant/i.test(error.message))
+      ) {
+        await linkModel.updateStatus(connector.id, link.id, 'error');
+        return { ...link, status: 'error' as const };
+      }
+      log(
+        'token refresh failed for link=%s errorType=%s',
+        link.id,
+        error instanceof Error ? error.name : typeof error,
+      );
+      return link;
+    }
+  })().finally(() => {
+    if (inFlightLinkRefreshes.get(key) === refresh) inFlightLinkRefreshes.delete(key);
+  });
+  inFlightLinkRefreshes.set(key, refresh);
+  return refresh;
+};
+
+export const refreshExpiredLinkTokens = async (
+  connector: DecryptedConnector,
+  links: DecryptedConnectorLink[],
+  linkModel: ConnectorLinkModel,
+  connectorModel: ConnectorModel,
+  options: { onTimeout?: () => void } = {},
+) =>
+  pMap(
+    links,
+    async (link) => {
+      if (!connector.isEnabled || !link.credentials.expiresAt) return link;
+      const refresh = ensureFreshLinkToken(connector, link, linkModel, connectorModel);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<DecryptedConnectorLink>((resolve) => {
+        timer = setTimeout(() => {
+          const key = linkRefreshKey(connector, link);
+          if (inFlightLinkRefreshes.get(key) === refresh) inFlightLinkRefreshes.delete(key);
+          options.onTimeout?.();
+          resolve(link);
         }, RUN_TOKEN_REFRESH_TIMEOUT_MS);
       });
       try {

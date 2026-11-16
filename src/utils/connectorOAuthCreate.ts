@@ -6,11 +6,12 @@ export interface OAuthCreateDeps<TPayload> {
   /** Re-read the connector from the server and report whether it is connected. */
   isConnectorConnected: (id: string) => Promise<boolean>;
   startConnectorOAuth: (id: string) => Promise<string>;
+  /** Settles when the callback completes; what it reports is not needed here. */
   waitForConnectorOAuth: (
     popup: Window | null | undefined,
     connectorId: string,
     authorizationUrl: string,
-  ) => Promise<void>;
+  ) => Promise<unknown>;
 }
 
 /**

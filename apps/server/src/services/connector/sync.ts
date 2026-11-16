@@ -12,6 +12,7 @@ import {
 } from '@lobechat/utils/mcpEndpoint';
 
 import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
+import type { ConnectorLinkModel } from '@/database/models/connectorLink';
 import type { ConnectorToolModel } from '@/database/models/connectorTool';
 import type { ConnectorCredentials } from '@/database/schemas';
 import {
@@ -26,9 +27,16 @@ import { mcpService } from '@/server/services/mcp';
 import { listMcpToolsOnDevice } from '@/server/services/mcp/deviceTunnel';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
-import { ensureFreshConnectorToken } from './tokens';
+import {
+  getConnectorLinkModel,
+  loadConnectorLinksMap,
+  pickPrimaryLink,
+  withLinkCredentials,
+} from './links';
+import { ensureFreshConnectorToken, ensureFreshLinkToken } from './tokens';
 
 export interface ConnectorToolSyncContext {
+  connectorLinkModel?: ConnectorLinkModel;
   connectorModel: ConnectorModel;
   connectorToolModel: ConnectorToolModel;
 }
@@ -114,6 +122,8 @@ export const buildHttpAuthFromCredentials = (
 };
 
 export interface ConnectorToolSyncOptions {
+  /** List with this account's credentials instead of the connector's primary one. */
+  linkId?: string;
   /**
    * Drop the `auto` tools the server no longer lists, so they stop being
    * advertised: eval contracts, and an MCP install or reinstall, whose tool
@@ -207,7 +217,15 @@ export const syncConnectorToolsById = async (
   }
 
   // Refresh the OAuth access token if it has expired before connecting.
-  connector = await ensureFreshConnectorToken(connector, ctx.connectorModel);
+  const links = (await loadConnectorLinksMap([connector], ctx)).get(connector.id) ?? [];
+  const link = options.linkId ? links.find((l) => l.id === options.linkId) : pickPrimaryLink(links);
+  if (options.linkId && !link) throw new Error('Connector account no longer exists');
+  connector = link
+    ? withLinkCredentials(
+        connector,
+        await ensureFreshLinkToken(connector, link, getConnectorLinkModel(ctx), ctx.connectorModel),
+      )
+    : await ensureFreshConnectorToken(connector, ctx.connectorModel);
 
   const mcpParams = buildConnectorMcpParams(connector);
 
@@ -222,7 +240,8 @@ export const syncConnectorToolsById = async (
         mcpApps,
       }));
   } catch (err) {
-    await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.error);
+    if (link) await getConnectorLinkModel(ctx).updateStatus(connectorId, link.id, 'error');
+    if (links.length < 2) await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.error);
     throw err;
   }
 
@@ -253,6 +272,7 @@ export const syncConnectorToolsById = async (
       syncInputs.map((tool) => tool.toolName),
     );
   }
+  if (link) await getConnectorLinkModel(ctx).updateStatus(connectorId, link.id, 'connected');
   await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.connected);
 
   return { toolCount: syncInputs.length };

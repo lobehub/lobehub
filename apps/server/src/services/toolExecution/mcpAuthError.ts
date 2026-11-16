@@ -43,8 +43,11 @@ export const isMcpAuthorizationError = (error: unknown): boolean => {
  */
 export const buildMcpAuthorizationErrorContent = (
   identifier: string,
-  options: { isShareVisitor: boolean },
+  options: { isShareVisitor: boolean; linkName?: string },
 ): string =>
-  options.isShareVisitor
+  (options.linkName
+    ? `Account '${options.linkName}' could not authorize this call. Do not switch to another account without the user's consent. `
+    : '') +
+  (options.isShareVisitor
     ? `The '${identifier}' connection was set up on this agent creator's side (by the creator or a member of their workspace), and its authorization has expired or been revoked. The person in this shared conversation cannot reconnect it and has no sign-in or authorization option here. Tell them this tool is unavailable until the agent's creator (or whoever manages this connection for them) reconnects it. They cannot do it themselves, so do not ask them to sign in, authorize, or reconnect anything, and continue with what you can do without this tool.`
-    : `The '${identifier}' connection's authorization has expired, been revoked, or lacks the required permissions. Ask the user to reconnect '${identifier}' in their tool or connector settings, then retry.`;
+    : `The '${identifier}' connection's authorization has expired, been revoked, or lacks the required permissions. Ask the user to reconnect '${identifier}' in their tool or connector settings, then retry.`);
