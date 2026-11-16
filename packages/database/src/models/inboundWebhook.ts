@@ -7,6 +7,7 @@ import type {
 import {
   INBOUND_WEBHOOK_DELIVERY_ERRORS,
   INBOUND_WEBHOOK_ERRORS,
+  INBOUND_WEBHOOK_RUN_ERRORS,
   INBOUND_WEBHOOK_STATUSES,
   InboundWebhookDataSchema,
   McpEventsWebhookStateSchema,
@@ -256,6 +257,23 @@ export class InboundWebhookModel {
         lastError: sql`CASE WHEN ${recovered} THEN NULL ELSE ${inboundWebhooks.lastError} END`,
       })
       .where(and(this.ownership(), eq(inboundWebhooks.id, id)));
+  };
+
+  /**
+   * Record that a wake started a run: the wake cap and credit errors no longer hold. Any other
+   * error, including one written concurrently, stays.
+   */
+  recordRunStarted = async (id: string): Promise<void> => {
+    await this.db
+      .update(inboundWebhooks)
+      .set({ lastError: null })
+      .where(
+        and(
+          this.ownership(),
+          eq(inboundWebhooks.id, id),
+          inArray(inboundWebhooks.lastError, [...INBOUND_WEBHOOK_RUN_ERRORS]),
+        ),
+      );
   };
 
   /** Each caller patches only its owned keys, never overwrites a concurrently advanced cursor. */

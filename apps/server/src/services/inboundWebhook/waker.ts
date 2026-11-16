@@ -214,6 +214,7 @@ export async function wakeInboundWebhook(
       if (result.error) throw result.error;
       await settle('processed', 'event_delivery', result.operationId);
       handled = true;
+      await model.recordRunStarted(id);
       return { outcome: 'processed' };
     } catch (error) {
       const category = classifyWakeError(error);
