@@ -431,8 +431,13 @@ export const consumeCompletedTask = async (
       taskId,
     };
   }
+  // Only a finding counts: a mark the run left also hangs off the node by
+  // `produces`, and must not stand in for the outcome.
   const existingFinding = graph.edges.some(
-    (edge) => edge.sourceNodeId === nodeId && edge.kind === 'produces',
+    (edge) =>
+      edge.sourceNodeId === nodeId &&
+      edge.kind === 'produces' &&
+      graph.nodes.find((node) => node.id === edge.targetNodeId)?.kind === 'finding',
   );
   // The newest row by seq can be a retry that was canceled when verification
   // accepted an earlier delivery — the settle path cancels the in-flight

@@ -5,11 +5,13 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { McpServerService } from './mcp-server.service';
 
-const { connectorInstances, hasAnyPermissionMock, syncConnectorToolsByIdMock } = vi.hoisted(() => ({
-  connectorInstances: [] as any[],
-  hasAnyPermissionMock: vi.fn(),
-  syncConnectorToolsByIdMock: vi.fn(),
-}));
+const { claimMock, connectorInstances, hasAnyPermissionMock, syncConnectorToolsByIdMock } =
+  vi.hoisted(() => ({
+    claimMock: vi.fn(),
+    connectorInstances: [] as any[],
+    hasAnyPermissionMock: vi.fn(),
+    syncConnectorToolsByIdMock: vi.fn(),
+  }));
 
 vi.mock('@/const/rbac', () => ({ ALL_SCOPE: 'all' }));
 vi.mock('@lobechat/database', () => ({
@@ -48,6 +50,8 @@ vi.mock('@/database/models/connectorTool', () => ({
 }));
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: class {
+    create = vi.fn().mockResolvedValue({ id: 'mcp-1' });
+    createUnlessIdentifierHeld = claimMock;
     delete = vi.fn();
     findById = vi.fn().mockResolvedValue({ id: 'mcp-1', metadata: {} });
     findPublicById = vi.fn().mockResolvedValue({
@@ -59,6 +63,8 @@ vi.mock('@/database/models/connector', () => ({
       // The row was created by a different workspace member.
       userId: 'other-member',
     });
+    // A lookup made before a concurrent writer added the identifier
+    queryPublic = vi.fn().mockResolvedValue([]);
     update = vi.fn();
     constructor() {
       connectorInstances.push(this);
@@ -142,4 +148,34 @@ describe('McpServerService row-level manage checks', () => {
       expect(syncConnectorToolsByIdMock).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('McpServerService.createServer', () => {
+  const request = { identifier: 'fetch-mcp', name: 'Fetch', serverUrl: 'https://example.com/mcp' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    connectorInstances.length = 0;
+    claimMock.mockResolvedValue({ created: { id: 'mcp-1' } });
+  });
+
+  it('claims the identifier under the identifier lock and creates the server', async () => {
+    await expect(
+      new McpServerService({} as LobeChatDatabase, OWNER, WORKSPACE).createServer(request),
+    ).resolves.toMatchObject({ id: 'mcp-1', serverUrl: 'https://example.com/mcp' });
+
+    expect(claimMock.mock.calls).toEqual([[expect.objectContaining({ identifier: 'fetch-mcp' })]]);
+  });
+
+  it('reports an identifier another writer holds as a conflict instead of adding a row', async () => {
+    const service = new McpServerService({} as LobeChatDatabase, OWNER, WORKSPACE);
+    // An Agent Builder install claimed the identifier after any earlier lookup
+    claimMock.mockResolvedValue({ holder: { id: 'installed' } });
+
+    await expect(service.createServer(request)).rejects.toMatchObject({
+      message: 'MCP server identifier already exists',
+      name: 'ConflictError',
+    });
+    expect(connectorInstances.every((it) => it.create.mock.calls.length === 0)).toBe(true);
+  });
 });

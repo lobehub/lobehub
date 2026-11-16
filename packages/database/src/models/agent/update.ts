@@ -8,6 +8,7 @@ import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
 
+import { writeAgent } from '../../repositories/channel/agentRename';
 import type { AgentItem } from '../../schemas';
 import { agents, sessionGroups } from '../../schemas';
 import { sanitizeAgentApiConfig } from '../../utils/sanitizeAgentApiConfig';
@@ -132,10 +133,10 @@ export const update = async (ctx: AgentModelContext, agentId: string, data: Part
   const sanitizedData = stripImmutableFields(apiSafeData);
   await assertNotAgentBuilderProtectedWrite(ctx, agentId, sanitizedData);
 
-  return ctx.db
-    .update(agents)
-    .set({ ...sanitizedData, updatedAt: new Date() })
-    .where(and(eq(agents.id, agentId), ctx.ownership()));
+  return writeAgent(ctx.db, and(eq(agents.id, agentId), ctx.ownership()), agentId, {
+    ...sanitizedData,
+    updatedAt: new Date(),
+  });
 };
 
 /**
@@ -373,10 +374,7 @@ export const updateConfig = async (
   ) as Partial<typeof mergedValue>;
   if (!Object.values(updateData).some((value) => value !== undefined)) return;
 
-  return ctx.db
-    .update(agents)
-    .set(updateData)
-    .where(and(eq(agents.id, agentId), ctx.ownership()));
+  return writeAgent(ctx.db, and(eq(agents.id, agentId), ctx.ownership()), agentId, updateData);
 };
 
 /**

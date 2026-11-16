@@ -274,12 +274,37 @@ jobs:
       - name: Lint
         run: bun run lint
 
+  overlay-type-check:
+    name: Overlay type check
+    needs: [calculate-version]
+    if: ${{ !cancelled() && needs.calculate-version.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Create overlay token
+        id: overlay-token
+        uses: ./.github/actions/overlay-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+          repository: ${{ vars.OVERLAY_REPOSITORY }}
+
+      - name: Type check overlaid sources
+        if: steps.overlay-token.outputs.token != ''
+        uses: ./.github/actions/overlay-type-check
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          overlay-ref: ${{ needs.calculate-version.outputs.cloud_ref }}
+          overlay-repository: ${{ vars.OVERLAY_REPOSITORY }}
+          overlay-token: ${{ steps.overlay-token.outputs.token }}
+
   # ============================================
   # 多平台构建
   # ============================================
   build:
-    needs: [calculate-version, test]
-    if: ${{ !cancelled() && needs.calculate-version.result == 'success' && needs.test.result == 'success' }}
+    needs: [calculate-version, test, overlay-type-check]
+    if: ${{ !cancelled() && needs.calculate-version.result == 'success' && needs.test.result == 'success' && needs.overlay-type-check.result == 'success' }}
     name: Build Desktop App
     runs-on: ${{ matrix.os }}
     strategy:

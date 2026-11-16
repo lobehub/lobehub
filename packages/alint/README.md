@@ -31,6 +31,9 @@ This is Phase 0: the rule set is a private workspace package (`@lobechat/alint`)
 | `no-prototype-pollution`           | warn     | server, desktop main, shared utilities                        | untrusted keys/paths reaching prototype setters                         |
 | `no-privileged-untrusted-electron` | warn     | Electron main/preload                                         | remote content with Node privileges or unrestricted IPC bridges         |
 | `no-removal-only-tests`            | warn     | app/package/client test and spec files                        | tests should prove behavior, not merely that a retired option is absent |
+| `no-constant-stub-tests`           | warn     | app/package/client test and spec files                        | fixed responses from inert endpoints do not add behavior coverage       |
+| `no-self-proving-tests`            | warn     | app/package/client test and spec files                        | mock round-trips, copied implementations and private declaration replay |
+| `no-redundant-test-cases`          | warn     | app/package/client test and spec files                        | a stronger same-file check already proves the same outcome and state    |
 | `no-redundant-api-copy`            | warn     | usage guides, builtin skills, CLI commands, public schemas    | keep ordinary instructions focused on supported actions                 |
 | `static-app-image-namespace`       | warn     | web client, image URL helpers and asset packaging             | fixed product images use `/static/app-images`                           |
 
@@ -48,6 +51,11 @@ Package-level rules, kept next to the package they describe:
 **What belongs here, and what belongs in ESLint.** A check that an AST or a path list decides — an import path, a banned call, a naming pattern — goes into Oxlint, where it is exact, free and runs in the editor. alint takes only what needs judgement: whether a list is runtime-sized, whether a table is another aggregate, whether an effect reads the server. Leaving a deterministic check to a model buys false positives: `no-node-in-browser` once flagged 34 imports on canary and 33 were type-only or browser-safe, while the same boundary written as `no-restricted-imports` (the browser runtime block in `oxlint.config.mts`) found exactly the one real violation. The model also emits findings whose own message concludes "no violation"; a prompt does not reliably suppress that, so every rule states its carve-outs as "return no finding".
 
 Scopes are declared as `[[config.group]]` entries in the root `alint.config.toml`. Never scope a rule with `includeFiles` inside `rule.alint.toml`: it only filters reports, so every file still runs (double the jobs), and it marks the rule uncacheable.
+
+The test-value rules use only the supplied file: duplicate-proof findings must name a
+stronger retained check, and declaration-only findings must exclude independent
+protocol, registration and policy contracts. Local model calibration does not establish
+precision on CI's DeepSeek provider; both new rules stay at `warn`.
 
 ## Where a rule lives
 

@@ -8,6 +8,7 @@ import {
   isProtocolRevision,
   MAX_PROTOCOL_REVISIONS,
   protocolRevisionCount,
+  withoutMarks,
 } from '@lobechat/utils/goalGraph';
 import { and, eq } from 'drizzle-orm';
 
@@ -17,8 +18,13 @@ import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 import { GoalGraphModel } from './goalGraph';
 
-/** Ignore only coordinator bookkeeping; edits to policy, evidence or graph invalidate a plan. */
-export const goalExplorationSnapshot = (graph: GoalGraphSnapshot): string => {
+/**
+ * Ignore only coordinator bookkeeping and marks; edits to policy, evidence or
+ * graph invalidate a plan. Marks are left while sibling Tasks run, so hashing
+ * them would void the plan whenever any of them noted a pitfall.
+ */
+export const goalExplorationSnapshot = (input: GoalGraphSnapshot): string => {
+  const graph = withoutMarks(input);
   const { checkpoint: _checkpoint, ...policy } = graph.goal.config?.exploration ?? {};
   return createHash('sha256')
     .update(

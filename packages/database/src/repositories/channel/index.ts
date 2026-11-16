@@ -18,6 +18,7 @@ import {
   channelMessages,
   channels,
   channelThreads,
+  workspaceMembers,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { ilikeContains } from '../../utils/like';
@@ -32,6 +33,7 @@ import {
 } from './agent';
 import { channelAvatarMembers } from './avatars';
 import { findThread } from './delivery';
+import { editMessage } from './edit';
 import { ChannelError } from './error';
 import { lockPeerPair, peerOf, requireMutualContacts } from './peer';
 import {
@@ -83,6 +85,9 @@ const ROLE_RANK: Record<ChannelMemberRole, number> = { admin: 1, member: 0, owne
 
 const hasRole = (role: ChannelMemberRole | null, minRole: ChannelMemberRole) =>
   ROLE_RANK[role ?? 'member'] >= ROLE_RANK[minRole];
+
+/** Workspace roles that manage every group Channel they belong to in that workspace. */
+const WORKSPACE_MANAGER_ROLES = ['owner', 'admin'];
 
 /**
  * Membership-scoped access to channels.
@@ -589,7 +594,7 @@ export class ChannelRepository {
         channel: channels,
         lastReadSequence: channelMembers.lastReadSequence,
         memberId: channelMembers.id,
-        role: channelMembers.role,
+        role: this.callerRole(),
         shareId: agentShares.id,
         shareSlug: sql<string | null>`${agentShares.shareConfig} ->> 'slug'`,
       })
@@ -893,13 +898,17 @@ export class ChannelRepository {
 
       // Read membership only after the lock: a removal or demotion committed by the previous
       // lock holder must be visible here, not the snapshot from before the wait.
-      const [access] = await tx
-        .select({ channel: channels, member: channelMembers })
+      const [row] = await tx
+        .select({ channel: channels, member: channelMembers, role: this.callerRole() })
         .from(channels)
         .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
         .where(and(eq(channels.id, channelId), this.membershipWhere()))
         .limit(1);
-      if (!access) throw new ChannelError('NOT_FOUND', 'Channel not found');
+      if (!row) throw new ChannelError('NOT_FOUND', 'Channel not found');
+      const access: ChannelAccess = {
+        channel: row.channel,
+        member: { ...row.member, role: row.role },
+      };
 
       const minRole = options.minRole ?? 'member';
       if (!hasRole(access.member.role, minRole))
@@ -1093,6 +1102,10 @@ export class ChannelRepository {
       { minRole: 'admin' },
     );
 
+  /** Rewrites the text of the caller's own message; see `editMessage`. */
+  editMessage = async (channelId: string, messageId: string, content: string) =>
+    this.write(channelId, (tx) => editMessage(tx, channelId, this.userId, messageId, content));
+
   /** Sends an unassigned message back to the decision model. Its author or an admin may retry. */
   retryRouting = async (channelId: string, messageId: string): Promise<ChannelMessageItem> =>
     this.write(channelId, async (tx, { member }) => {
@@ -1156,6 +1169,26 @@ export class ChannelRepository {
       .limit(1);
     return row;
   };
+
+  /**
+   * The caller's role as permission checks see it. A workspace owner or admin counts at least as
+   * an admin of the group Channels they belong to in that workspace; direct and peer
+   * conversations stay with their participants. The stored member row keeps its own role.
+   */
+  private callerRole() {
+    if (!this.workspaceId) return sql<ChannelMemberRole | null>`${channelMembers.role}`;
+    return sql<ChannelMemberRole | null>`CASE
+      WHEN ${channelMembers.role} = 'owner' THEN ${channelMembers.role}
+      WHEN ${channels.agentId} IS NULL AND ${channels.peerUserId} IS NULL AND EXISTS (
+        SELECT 1 FROM ${workspaceMembers}
+        WHERE ${workspaceMembers.workspaceId} = ${channels.workspaceId}
+          AND ${workspaceMembers.userId} = ${this.userId}
+          AND ${workspaceMembers.deletedAt} IS NULL
+          AND ${inArray(workspaceMembers.role, WORKSPACE_MANAGER_ROLES)}
+      ) THEN 'admin'
+      ELSE ${channelMembers.role}
+    END`;
+  }
 
   private membershipWhere() {
     return and(

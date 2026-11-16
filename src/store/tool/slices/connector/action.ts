@@ -8,6 +8,7 @@ import type { SWRResponse } from 'swr';
 
 import type { ConnectorToolPermission } from '@/database/schemas';
 import { runsOnAnotherDevice } from '@/helpers/mcpDeviceBinding';
+import { buildCloudMcpManifest, cloudManifestTools } from '@/libs/mcp/cloudManifest';
 import { resolveLocalConnectorHttpParams } from '@/libs/mcp/localConnector';
 import {
   cacheScope,
@@ -24,7 +25,6 @@ import type { StoreSetter } from '@/store/types';
 import { ConnectorOAuthError, waitForConnectorOAuth } from '@/utils/connectorOAuth';
 
 import type { ToolStore } from '../../store';
-import { buildCloudMcpManifest, cloudManifestTools } from '../mcpStore/cloudManifest';
 import {
   agentBoundConnectorsEntity,
   agentBoundConnectorsResource,
