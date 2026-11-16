@@ -19,7 +19,7 @@ export const themes = {
       color: undefined,
     },
   },
-  [Plans.Go]: {
+  [Plans.Basic]: {
     theme: {
       background: 'linear-gradient(45deg, #F97316, #C2410C)',
       color: '#FFEDD5',
