@@ -180,15 +180,28 @@ describe('sendVoiceMessage', () => {
 
   it('sends nothing, and keeps the recording retryable, when the git step stops', async () => {
     const sendMessage = vi.fn();
-    const transcribe = vi.fn();
 
     await expect(
       sendVoiceMessage(sendMessage, voiceFile, {
         prepare: async () => ({ ok: false }),
-        transcribe,
+        transcribe: async () => 'hello',
       }),
     ).rejects.toThrow();
     expect(sendMessage).not.toHaveBeenCalled();
-    expect(transcribe).not.toHaveBeenCalled();
+  });
+
+  // A failed transcript is retried; the git step must not have run for it.
+  it('transcribes before the git step, so a failed transcript spends no branch pick', async () => {
+    const prepare = vi.fn(async () => ({ ok: true as const }));
+
+    await expect(
+      sendVoiceMessage(vi.fn(), voiceFile, {
+        prepare,
+        transcribe: async () => {
+          throw new Error('asr down');
+        },
+      }),
+    ).rejects.toThrow('asr down');
+    expect(prepare).not.toHaveBeenCalled();
   });
 });

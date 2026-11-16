@@ -45,12 +45,15 @@ export const sendVoiceMessage = async (
   const { context, optimisticUserMessageId, prepare, signal, transcribe } = options;
   if (signal?.aborted) throw getAbortError(signal);
 
+  const message = transcribe ? await transcribe(file, signal) : '';
+  if (signal?.aborted) throw getAbortError(signal);
+
+  // After transcription, the last step that can fail before dispatch: a retry
+  // after a failed transcript must still find the branch pick unspent and no
+  // worktree made for it.
   const prepared = prepare ? await prepare() : undefined;
   if (prepared && !prepared.ok)
     throw new Error('Voice message was not sent: git step did not complete');
-  if (signal?.aborted) throw getAbortError(signal);
-
-  const message = transcribe ? await transcribe(file, signal) : '';
   if (signal?.aborted) throw getAbortError(signal);
 
   return new Promise<void>((resolve, reject) => {
