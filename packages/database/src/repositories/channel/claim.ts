@@ -9,12 +9,10 @@ import {
   channelMemberGrants,
   channelMembers,
   channelMessages,
-  channelThreads,
   devices,
 } from '../../schemas';
 import type { Transaction } from '../../type';
 import { createNanoId } from '../../utils/idGenerator';
-import { notTrashed } from '../../utils/softDelete';
 import { uniqueViolationConstraint } from '../../utils/uniqueViolation';
 import { resolveExecutionConfig } from './agent';
 import { AWAITING_PRIMARY_REASON, findThread } from './delivery';
@@ -71,6 +69,10 @@ export interface ChannelClaim {
 }
 
 const DIRECTORY_LOCK = 'channel_jobs_active_directory_unique';
+
+/** Jobs in the same conversation branch: one Thread, or the main timeline. */
+export const sameBranch = (threadId: string | null) =>
+  threadId ? eq(channelJobs.threadId, threadId) : isNull(channelJobs.threadId);
 
 /**
  * Records why a queued job cannot start; clients read the code, never the text. A job waiting
@@ -272,24 +274,23 @@ export const claimJob = async (
     .select()
     .from(channelMessages)
     .where(eq(channelMessages.id, job.messageId));
-  // An earlier undecided message may still enqueue this member. Checking only jobs
-  // would let an explicit follow-up overtake it while another worker routes it.
+  // An earlier undecided message in this branch may still enqueue this member ahead of it, and
+  // so may the Thread's root while it is undecided. Checking only jobs would let a later
+  // request overtake it while another worker routes it. Other branches never hold this one.
   const [pendingRoute] = await tx
     .select({ id: channelMessages.id })
     .from(channelMessages)
-    .leftJoin(channelThreads, eq(channelThreads.id, channelMessages.threadId))
     .where(
       and(
         eq(channelMessages.channelId, channel.id),
         eq(channelMessages.routingStatus, 'pending'),
         lt(channelMessages.sequence, request.sequence),
-        or(
-          isNull(channelMessages.threadId),
-          and(
-            notTrashed(channelThreads.isDeleted),
-            sql`${channelThreads.followerMemberIds} @> ${JSON.stringify([job.memberId])}::jsonb`,
-          ),
-        ),
+        job.threadId
+          ? or(
+              eq(channelMessages.threadId, job.threadId),
+              thread ? eq(channelMessages.id, thread.rootMessageId) : undefined,
+            )
+          : isNull(channelMessages.threadId),
       ),
     )
     .limit(1);
@@ -298,15 +299,44 @@ export const claimJob = async (
     return null;
   }
 
-  // Each member answers in message order.
+  // Each member answers a branch in message order; its other branches run alongside.
   const [head] = await tx
     .select({ id: channelJobs.id })
     .from(channelJobs)
     .innerJoin(channelMessages, eq(channelMessages.id, channelJobs.messageId))
-    .where(and(eq(channelJobs.memberId, job.memberId), eq(channelJobs.status, 'queued')))
+    .where(
+      and(
+        eq(channelJobs.memberId, job.memberId),
+        eq(channelJobs.status, 'queued'),
+        sameBranch(job.threadId),
+      ),
+    )
     .orderBy(asc(channelMessages.sequence), asc(channelJobs.createdAt))
     .limit(1);
   if (head?.id !== job.id) {
+    await block(tx, job, 'member_busy', 'Waiting for an earlier reply from this Agent');
+    return null;
+  }
+
+  // A Thread follows its root: the member answers the root on the main timeline first.
+  const [rootReply] = thread
+    ? await tx
+        .select({ id: channelJobs.id })
+        .from(channelJobs)
+        .where(
+          and(
+            eq(channelJobs.memberId, job.memberId),
+            eq(channelJobs.messageId, thread.rootMessageId),
+            isNull(channelJobs.threadId),
+            or(
+              eq(channelJobs.status, 'queued'),
+              and(eq(channelJobs.writerHeld, true), isNull(channelJobs.isolatedAt)),
+            ),
+          ),
+        )
+        .limit(1)
+    : [];
+  if (rootReply) {
     await block(tx, job, 'member_busy', 'Waiting for an earlier reply from this Agent');
     return null;
   }
@@ -325,6 +355,7 @@ export const claimJob = async (
         eq(channelJobs.memberId, member.id),
         eq(channelJobs.writerHeld, true),
         isNull(channelJobs.isolatedAt),
+        sameBranch(job.threadId),
       ),
     )
     .limit(1);

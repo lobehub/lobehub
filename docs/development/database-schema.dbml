@@ -1406,7 +1406,7 @@ table channel_jobs {
     (topic_id, published_message_id) [name: 'channel_jobs_topic_idx']
     (member_id, status, created_at) [name: 'channel_jobs_member_queue_idx']
     lease_expires_at [name: 'channel_jobs_lease_expires_idx']
-    member_id [name: 'channel_jobs_active_member_unique', unique]
+    (member_id, thread_id) [name: 'channel_jobs_active_branch_unique', unique]
     (device_id, working_directory) [name: 'channel_jobs_active_directory_unique', unique]
     
     

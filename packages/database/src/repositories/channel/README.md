@@ -155,9 +155,25 @@ individual messages are read in 12000-character chunks. Names and attachments re
 External operation tokens receive `channel:read` only for a reserved Channel dispatch; ordinary
 runs and sub-agents do not inherit it.
 
-Pending routing is part of member FIFO even before a job exists. An earlier main-channel
-decision blocks later claims until its recipients are known; an earlier Thread decision blocks
-only that Thread's following members. Skipped, failed or stopped routing releases this barrier.
+## Branch concurrency
+
+A member runs one reply per conversation branch (a Thread, or the main timeline) and answers each
+branch in message order; its branches run alongside each other. The partial unique index
+`channel_jobs_active_branch_unique` on `(member_id, coalesce(thread_id, ''))` holds one live writer
+per member and branch, `candidates` returns one queue head per member and branch, and the
+coordinator settles and claims each branch without waiting on the member's others. A Thread
+starts only after the member's main-timeline answer to its root, so a follow-up never overtakes
+the reply it follows. A reply that opens a Thread before its claim runs in that Thread, which
+leaves the main timeline free for the next request.
+
+Branches still share what a run touches. The directory lock stays per device directory: a second
+branch of the same member in a Channel-picked directory moves into its own worktree, as for
+another member. A member without a Channel device runs where the Agent's own settings say, like
+two ordinary conversations with that Agent.
+
+Pending routing is part of branch FIFO even before a job exists. An earlier undecided message in
+the same branch, or the Thread's undecided root, blocks later claims there until its recipients
+are known; other branches are not held. Skipped, failed or stopped routing releases this barrier.
 A routed message's deferred follow-ups (`wake.afterMemberId`) are queued as `awaiting_primary`
 and claimed only after the same message's primary responder job settles; a deferred claim freezes
 the primary's published reply id in `manifest.primaryReplyMessageId`, read by
@@ -200,7 +216,7 @@ all-candidate fallback. Stopping a reply still fences it; root completion never 
 - Job status describes the Channel delivery; execution status/errors/usage live on its operation.
   Operation completion is not proof that a device process ended. Only `releaseWriter` after
   confirmed termination, or `retireReservation` for an untouched operation, releases the writer.
-  Isolation frees the member but keeps the device/directory lock. Never retry an unknown delivery.
+  Isolation frees the member's branch but keeps the device/directory lock. Never retry an unknown delivery.
   `retryJob` re-queues only a failed job whose device could not be reached
   (`DeviceGatewayNotConfigured`), with its writer released and nothing accepted or published;
   the next claim opens a fresh operation.
