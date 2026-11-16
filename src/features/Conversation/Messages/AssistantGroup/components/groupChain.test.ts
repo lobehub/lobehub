@@ -168,3 +168,59 @@ describe('buildChainView answer keys', () => {
     },
   );
 });
+
+describe('buildChainView image reads', () => {
+  const tool = (id: string, apiName: string, state?: unknown, identifier = 'claude-code') => ({
+    apiName,
+    arguments: '{}',
+    id,
+    identifier,
+    result: { content: 'ok', id: `r-${id}`, state },
+    type: 'default' as const,
+  });
+  const imageRead = tool('read', 'Read', { images: [{ url: 'https://x/a.png' }] });
+  const generated = tool(
+    'gen',
+    'generateImage',
+    { generations: [{ asset: { url: 'https://x/g.png' } }] },
+    'lobe-image-generation',
+  );
+  const mcpApp = tool('app', 'show', { mcpApp: { resourceUri: 'ui://dash/view' } }, 'dash');
+  const workflowRows = (
+    tools: unknown[],
+    state: { enableMcpApps?: boolean; showImageReads?: boolean },
+  ) =>
+    buildChainView(
+      { blocks: [{ content: '', id: 'step', tools }] as AssistantContentBlock[], id: 'group' },
+      { hasActiveOperation: false, isGenerating: false, ...state },
+    ).segments.filter((segment) => segment.kind === 'workflow');
+
+  it('breaks an image read out of its step by default', () => {
+    const rows = workflowRows([tool('a', 'Grep'), imageRead, tool('b', 'Bash')], {});
+
+    expect(rows).toHaveLength(3);
+  });
+
+  it('folds an image read into the run when the setting is off', () => {
+    const rows = workflowRows([tool('a', 'Grep'), imageRead, tool('b', 'Bash')], {
+      showImageReads: false,
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(
+      rows[0]!.kind === 'workflow' && rows[0]!.blocks.flatMap((b) => b.tools ?? []),
+    ).toHaveLength(3);
+  });
+
+  it('still breaks out produced images and MCP App views when the setting is off', () => {
+    expect(
+      workflowRows([tool('a', 'Grep'), generated, tool('b', 'Bash')], { showImageReads: false }),
+    ).toHaveLength(3);
+    expect(
+      workflowRows([tool('a', 'Grep'), mcpApp, tool('b', 'Bash')], {
+        enableMcpApps: true,
+        showImageReads: false,
+      }),
+    ).toHaveLength(3);
+  });
+});
