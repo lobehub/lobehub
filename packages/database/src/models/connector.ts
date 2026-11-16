@@ -19,12 +19,20 @@ import {
 } from './connectorEval';
 import { ConnectorLinkModel, isConnectorOAuthAccounts } from './connectorLink';
 import {
+  type BaseIdentifierScope,
+  claimBaseIdentifier,
+  ConnectorIdentifierHeldError,
+  moveToBaseUnlessIdentifierHeld,
+  queryBaseHolders,
+} from './connectorIdentifierClaim';
+import {
   connectorAccessScope,
   connectorAgentConfigScope,
   connectorRunScope,
   type ConnectorRunTarget,
 } from './connectorScope';
 
+export { ConnectorIdentifierHeldError } from './connectorIdentifierClaim';
 export type { ConnectorRunTarget } from './connectorScope';
 
 /**
@@ -103,14 +111,6 @@ type CreateConnectorParams = Omit<NewUserConnector, 'userId' | 'id' | 'createdAt
 type UpdateConnectorParams = Partial<
   Omit<NewUserConnector, 'userId' | 'id' | 'createdAt' | 'updatedAt'>
 >;
-
-/** {@link ConnectorModel.create} of a base connector whose identifier a base row of the scope holds. */
-export class ConnectorIdentifierHeldError extends Error {
-  constructor(identifier: string) {
-    super(`A connector with identifier "${identifier}" already exists`);
-    this.name = 'ConnectorIdentifierHeldError';
-  }
-}
 
 export class ConnectorModel {
   private userId: string;
@@ -339,11 +339,9 @@ export class ConnectorModel {
    * Create a base connector (`agent_id IS NULL`) unless a row in this scope
    * already holds its identifier. The lookup and the insert are one step,
    * serialized on the identifier lock every base-row writer takes
-   * ({@link lockBaseIdentifier}): the identifier indexes are not unique, so two
-   * concurrent callers would otherwise both find it free and both insert.
-   * `canReplace` may let the holding rows go: they are deleted, with their
-   * tools, in that step. Every holder is judged (rows written before the lock
-   * may duplicate the identifier), and one that may not go keeps it.
+   * ({@link claimBaseIdentifier}). `canReplace` may let the holding rows go:
+   * they are deleted, with their tools, in that step; one that may not go
+   * keeps the identifier and is returned.
    */
   createUnlessIdentifierHeld = async (
     params: Omit<CreateConnectorParams, 'agentId'>,
@@ -355,107 +353,32 @@ export class ConnectorModel {
     const { canReplace, gateKeeper = this.gateKeeper } = options;
 
     return this.db.transaction(async (tx) => {
-      await this.lockBaseIdentifier(tx, params.identifier);
-
-      const holders = await this.findBaseHolders(tx, params.identifier);
-      const kept = holders.find((holder) => !canReplace?.(holder));
-      if (kept) return { holder: kept };
-      if (holders.length > 0) {
-        await tx.delete(userConnectors).where(
-          and(
-            inArray(
-              userConnectors.id,
-              holders.map((holder) => holder.id),
-            ),
-            this.ownership(),
-          ),
-        );
-      }
-
+      const holder = await claimBaseIdentifier(
+        tx,
+        this.baseIdentifierScope(),
+        params.identifier,
+        canReplace,
+      );
+      if (holder) return { holder };
       return {
         created: await this.insertInTransaction(tx, { ...params, agentId: null }, gateKeeper),
       };
     });
   };
 
-  /**
-   * Move an agent's connector into the base scope (`agent_id = NULL`) unless a
-   * base row in this scope already holds its identifier: the lookup and the
-   * move are one step, under the lock {@link createUnlessIdentifierHeld} takes.
-   * A connector already moved (by a retry, or an unbind running at the same
-   * time) is reported as moved, not as holding its own identifier.
-   */
-  moveToBaseUnlessIdentifierHeld = async (
-    id: string,
-    identifier: string,
-  ): Promise<{ holder: UserConnectorItem } | { moved: true }> =>
-    this.db.transaction(async (tx) => {
-      await this.lockBaseIdentifier(tx, identifier);
+  /** See {@link moveToBaseUnlessIdentifierHeld}. */
+  moveToBaseUnlessIdentifierHeld = async (id: string, identifier: string) =>
+    moveToBaseUnlessIdentifierHeld(this.db, this.baseIdentifierScope(), id, identifier);
 
-      const holders = await this.findBaseHolders(tx, identifier);
-      if (holders.some((holder) => holder.id === id)) return { moved: true as const };
-      if (holders.length > 0) return { holder: holders[0] };
-
-      await tx
-        .update(userConnectors)
-        .set({ agentId: null, updatedAt: new Date() })
-        .where(
-          and(
-            eq(userConnectors.id, id),
-            eq(userConnectors.identifier, identifier),
-            this.ownership(),
-          ),
-        );
-      return { moved: true as const };
-    });
-
-  /**
-   * Hold this scope's base-row lock on `identifier` until `tx` ends. A writer
-   * that adds a base row (a create, a move out of an agent) takes it before
-   * looking for a holder, so no two of them both find the identifier free.
-   */
-  private lockBaseIdentifier = async (tx: Transaction, identifier: string) => {
-    const scopeKey = this.workspaceId ? `workspace:${this.workspaceId}` : `user:${this.userId}`;
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${`user_connectors:${scopeKey}:${identifier}`}))`,
-    );
-  };
-
-  /**
-   * The base rows of this scope holding `identifier`, oldest first, locked until
-   * `tx` ends: the caller judges and may delete them as read, so a rewrite of
-   * one ({@link update}, a re-add) either lands first, and is what gets judged,
-   * or waits for the caller.
-   */
-  private findBaseHolders = async (
-    tx: Transaction,
-    identifier: string,
-  ): Promise<UserConnectorItem[]> =>
-    tx
-      .select()
-      .from(userConnectors)
-      .where(this.baseHolderFilter(identifier))
-      .orderBy(asc(userConnectors.createdAt))
-      .for('update');
-
-  /**
-   * The base rows of this scope holding `identifier`, oldest first, read without
-   * the lock: rows written before it may duplicate the identifier, so a caller
-   * judging the holder before (or after) a claim judges every one of them.
-   */
+  /** See {@link queryBaseHolders}. */
   queryBaseHolders = async (identifier: string): Promise<UserConnectorItem[]> =>
-    this.db
-      .select()
-      .from(userConnectors)
-      .where(this.baseHolderFilter(identifier))
-      .orderBy(asc(userConnectors.createdAt));
+    queryBaseHolders(this.db, this.baseIdentifierScope(), identifier);
 
-  private baseHolderFilter = (identifier: string) =>
-    and(
-      this.ownership(),
-      eq(userConnectors.identifier, identifier),
-      isNull(userConnectors.agentId),
-    );
+  private baseIdentifierScope = (): BaseIdentifierScope => ({
+    ownership: this.ownership,
+    userId: this.userId,
+    workspaceId: this.workspaceId,
+  });
 
   private insertInTransaction = async (
     tx: Transaction,
