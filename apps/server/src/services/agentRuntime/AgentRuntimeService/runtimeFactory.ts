@@ -5,6 +5,7 @@ import {
   createAgentAccountOutboundAudit,
 } from '@lobechat/builtin-tool-agent-account';
 import { DASHBOARD_DRY_RUN_AUDIT } from '@lobechat/builtin-tool-dashboard';
+import { LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import { type UIChatMessage } from '@lobechat/types';
@@ -17,6 +18,7 @@ import {
   type RuntimeExecutorContext,
 } from '@/server/modules/AgentRuntime/RuntimeExecutors';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
+import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 import { createWidgetDryRunAudit } from '@/server/services/widget/dryRunAudit';
 import { stateHasEntityFileEdits } from '@/server/services/workRegistration';
 
@@ -128,6 +130,16 @@ async function expireLocalDeferredShell(
 
   const outcome = await completeDeferredShell(
     {
+      archiveResult: async ({ maxLength, ...input }) =>
+        (
+          await archiveToolResultIfNeeded({
+            ...input,
+            identifier: LocalSystemIdentifier,
+            limit: maxLength,
+            serverDB: deps.serverDB,
+            userId: deps.userId,
+          })
+        ).content,
       controlCompletedToolResult: (input) => deps.controlCompletedToolResult(input),
       messageModel: deps.messageModel,
       serverDB: deps.serverDB,

@@ -42,7 +42,12 @@ describe('parkAsyncShell', () => {
 
     const execution = await parkAsyncShell(
       ctx,
-      { parentMessageId: 'msg_parent', state, toolCall },
+      {
+        parentMessageId: 'msg_parent',
+        resultLimit: { canReadArchive: true, maxLength: 4000 },
+        state,
+        toolCall,
+      },
       runningResult({
         commandId: 'sh-1',
         completionWatch: true,
@@ -62,7 +67,16 @@ describe('parkAsyncShell', () => {
       expect.objectContaining({
         parentId: 'msg_parent',
         pluginState: expect.objectContaining({
-          asyncShell: expect.objectContaining({ commandId: 'sh-1' }),
+          asyncShell: expect.objectContaining({
+            // The late result has no step context: the limit travels with the row.
+            archive: expect.objectContaining({
+              agentId: 'agent_1',
+              canReadArchive: true,
+              maxLength: 4000,
+              topicId: 'topic_1',
+            }),
+            commandId: 'sh-1',
+          }),
           status: 'pending',
         }),
         role: 'tool',

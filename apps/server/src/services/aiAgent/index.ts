@@ -1,6 +1,7 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { SandboxStorageClaim } from '@lobechat/builtin-tool-cloud-sandbox';
+import { LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
   AgentRunInitRequest,
@@ -64,6 +65,7 @@ import { ComposioService } from '@/server/services/composio';
 import { DocumentService } from '@/server/services/document';
 import { MarketService } from '@/server/services/market';
 import type { SteerQueueScope } from '@/server/services/redis/steerQueue';
+import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 
 import {
   type BackgroundSubAgentResult,
@@ -421,6 +423,16 @@ export class AiAgentService {
   ): Promise<CompleteDeferredShellOutcome> {
     return completeDeferredShell(
       {
+        archiveResult: async ({ maxLength, ...input }) =>
+          (
+            await archiveToolResultIfNeeded({
+              ...input,
+              identifier: LocalSystemIdentifier,
+              limit: maxLength,
+              serverDB: this.db,
+              userId: this.userId,
+            })
+          ).content,
         // The parked step never returned through `ServerToolTransport`, so this
         // is the only place an `afterToolCall` policy can see its answer.
         controlCompletedToolResult: (input) =>

@@ -104,6 +104,65 @@ describe('completeDeferredShell', () => {
     );
   });
 
+  it('size-limits the answer the way the synchronous path does', async () => {
+    const archive = {
+      agentId: 'agent_1',
+      canReadArchive: true,
+      maxLength: 100,
+      topicId: 'topic_1',
+    };
+    const { deps, updateToolMessage } = buildDeps({
+      ...POLL_PLUGIN,
+      state: { ...POLL_PLUGIN.state, asyncShell: { ...POLL_PLUGIN.state.asyncShell, archive } },
+    });
+    const archiveResult = vi.fn(async () => 'first 100 chars… [archived]');
+    const noisy = 'x'.repeat(10_000);
+
+    await completeDeferredShell(
+      { ...deps, archiveResult },
+      {
+        operationId: 'op_1',
+        result: { content: noisy, state: { exitCode: 0 }, success: true, toolCallId: 'call_1' },
+      },
+    );
+
+    // The parked step recorded its limit; a noisy background command must not
+    // bypass it just because its answer arrived late.
+    expect(archiveResult).toHaveBeenCalledWith(
+      expect.objectContaining({ ...archive, content: noisy, toolCallId: 'call_1' }),
+    );
+    expect(updateToolMessage).toHaveBeenCalledWith(
+      'msg_placeholder',
+      expect.objectContaining({ content: 'first 100 chars… [archived]' }),
+    );
+  });
+
+  it('does not archive a result the policy withheld', async () => {
+    const { deps, controlCompletedToolResult } = buildDeps({
+      ...POLL_PLUGIN,
+      state: {
+        ...POLL_PLUGIN.state,
+        asyncShell: { ...POLL_PLUGIN.state.asyncShell, archive: { canReadArchive: true } },
+      },
+    });
+    controlCompletedToolResult.mockResolvedValueOnce({
+      blocked: true,
+      cancelled: false,
+      result: { content: 'Denied by policy.', success: false },
+    });
+    const archiveResult = vi.fn(async (input: { content: string }) => input.content);
+
+    await completeDeferredShell(
+      { ...deps, archiveResult },
+      {
+        operationId: 'op_1',
+        result: { content: 'secret output', success: true, toolCallId: 'call_1' },
+      },
+    );
+
+    expect(archiveResult).not.toHaveBeenCalled();
+  });
+
   it('runs the result policy before the answer reaches history', async () => {
     const { deps, controlCompletedToolResult, updateToolMessage } = buildDeps();
     // A configured `afterToolCall` policy denies the command's output. This

@@ -365,6 +365,10 @@ export class ServerToolTransport implements ToolTransport {
                 ? context.toolMessageId
                 : undefined,
               parentMessageId: context.parentMessageId,
+              resultLimit: {
+                canReadArchive: enabledToolIds.includes(AgentDocumentsIdentifier),
+                maxLength: context.toolResultMaxLength,
+              },
               state: context.state,
               toolCall: chatToolPayload,
             },

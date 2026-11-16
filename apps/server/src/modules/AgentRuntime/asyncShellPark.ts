@@ -53,6 +53,17 @@ const runningShellId = (state: unknown): string | undefined => {
   return undefined;
 };
 
+/**
+ * How the step would have size-limited this call's result. The late result
+ * arrives with no step context, so the park records it for the completion.
+ */
+export interface AsyncShellResultLimit {
+  /** Whether the run can page an archived result (`lobe-agent-documents`). */
+  canReadArchive: boolean;
+  /** The run's `toolResultMaxLength`; unset → the default limit. */
+  maxLength?: number;
+}
+
 export interface ParkAsyncShellParams {
   /**
    * The tool row this call already owns — set when the call resumes after an
@@ -62,6 +73,7 @@ export interface ParkAsyncShellParams {
   existingToolMessageId?: string;
   /** Which message owns this tool call — the placeholder hangs off it. */
   parentMessageId: string;
+  resultLimit?: AsyncShellResultLimit;
   state: AgentState;
   toolCall: ChatToolPayload;
 }
@@ -74,7 +86,7 @@ export interface ParkAsyncShellParams {
  */
 export const parkAsyncShell = async (
   ctx: RuntimeExecutorContext,
-  { existingToolMessageId, parentMessageId, state, toolCall }: ParkAsyncShellParams,
+  { existingToolMessageId, parentMessageId, resultLimit, state, toolCall }: ParkAsyncShellParams,
   /** Only the device's command state is read. */
   result: { state?: unknown },
 ): Promise<ToolRunExecution | null> => {
@@ -96,6 +108,15 @@ export const parkAsyncShell = async (
   const startedAt = new Date().toISOString();
   const pluginState = {
     asyncShell: {
+      // Everything the completion needs to size-limit the result the way this
+      // step would have (see `archiveRuntimeToolResult` in the transport).
+      archive: {
+        agentId,
+        canReadArchive: resultLimit?.canReadArchive ?? false,
+        maxLength: resultLimit?.maxLength,
+        topicId,
+        workspaceId: state.origin?.workspaceId ?? ctx.workspaceId,
+      },
       commandId,
       startedAt,
       timeoutMs: ASYNC_SHELL_TIMEOUT_MS,

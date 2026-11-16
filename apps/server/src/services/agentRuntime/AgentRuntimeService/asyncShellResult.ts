@@ -27,7 +27,24 @@ export type DeferredShellResultControl = (input: {
   toolMessageId: string;
 }) => Promise<{ blocked: boolean; cancelled: boolean; result: ToolRunResult }>;
 
+/**
+ * Size-limits a completed result the way the synchronous path does
+ * (`archiveToolResultIfNeeded`): over the limit, the full text is archived when
+ * the run can page it and the model gets a window plus a notice.
+ */
+export type DeferredShellResultArchive = (input: {
+  agentId?: string;
+  canReadArchive: boolean;
+  content: string;
+  maxLength?: number;
+  toolCallId: string;
+  topicId?: string;
+  workspaceId?: string;
+}) => Promise<string>;
+
 export interface AsyncShellResultDeps {
+  /** Unset in tests that do not exercise the size limit. */
+  archiveResult?: DeferredShellResultArchive;
   /**
    * A late device result never travels back through `ServerToolTransport`, so
    * this path has to run the same controls before the answer reaches history.
@@ -50,6 +67,13 @@ export interface AsyncShellResultDeps {
 /** The placeholder state written by `parkAsyncShell`. */
 interface AsyncShellPluginState {
   asyncShell?: {
+    archive?: {
+      agentId?: string;
+      canReadArchive?: boolean;
+      maxLength?: number;
+      topicId?: string;
+      workspaceId?: string;
+    };
     commandId?: string;
     startedAt?: string;
     timeoutMs?: number;
@@ -204,8 +228,24 @@ export async function completeDeferredShell(
     toolMessageId: plugin.id,
   });
 
+  // Same order as the synchronous path: controls first, then the size limit, so
+  // a policy sees the whole output and history never holds more than the limit.
+  const archive = pluginState.asyncShell.archive;
+  const persistedContent =
+    !controlled.blocked && deps.archiveResult && archive && controlled.result.content
+      ? await deps.archiveResult({
+          agentId: archive.agentId,
+          canReadArchive: archive.canReadArchive === true,
+          content: controlled.result.content,
+          maxLength: archive.maxLength,
+          toolCallId: result.toolCallId,
+          topicId: archive.topicId,
+          workspaceId: archive.workspaceId,
+        })
+      : controlled.result.content;
+
   const backfill = await deps.messageModel.updateToolMessage(plugin.id, {
-    content: controlled.result.content,
+    content: persistedContent,
     pluginError: controlled.result.error ?? null,
     pluginState: controlled.result.state,
     onlyIfEmpty: true,
