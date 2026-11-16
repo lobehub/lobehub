@@ -32,16 +32,20 @@ export class UserController extends BaseController {
    * - without `user:read` the response is narrowed to the id, keeping the
    *   caller's email, phone, preferences and role names out of a key that was
    *   only granted, say, `model:invoke`
-   * - `messageCount` is chat-usage metadata and additionally needs `chat:read`
+   * - `messageCount` is opt-in (`?includeCount=1`) and additionally needs
+   *   `chat:read`: counting a user's messages scans every row they own, which
+   *   takes tens of seconds for heavy users, while most callers (`lh login`,
+   *   the agent gateway verifying an API key) only need identity. Callers that
+   *   want the number can also use `GET /api/v1/messages/count`.
    *
-   * Narrowed rather than rejected throughout: `includeCount` defaults to true,
-   * so answering with 403 would make identity resolution depend on a query
-   * parameter — the exact trap this endpoint just came out of.
+   * Narrowed rather than rejected throughout: answering with 403 would make
+   * identity resolution depend on a query parameter — the exact trap this
+   * endpoint just came out of.
    */
   async getCurrentUser(c: Context): Promise<Response> {
     try {
       const includeCountQuery = c.req.query('includeCount');
-      const countRequested = includeCountQuery !== '0' && includeCountQuery !== 'false';
+      const countRequested = includeCountQuery === '1' || includeCountQuery === 'true';
       const includeCount = countRequested && this.callerHasScope(c, 'chat:read');
 
       // Get database connection and create service instance
