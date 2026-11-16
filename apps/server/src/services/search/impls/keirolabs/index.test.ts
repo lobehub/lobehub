@@ -26,6 +26,10 @@ describe('KeirolabsImpl', () => {
     delete process.env.KEIROLABS_API_KEY;
   });
 
+  it('selects its own search engines so an empty result is not retried', () => {
+    expect(impl.useAutoSearchEngineSelection).toBe(true);
+  });
+
   it('sends a Bearer-authenticated POST to the lite search endpoint', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(createMockResponse({ results: [] }));
 

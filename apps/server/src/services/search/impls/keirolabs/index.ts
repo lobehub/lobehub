@@ -17,6 +17,9 @@ const log = debug('lobe-search:Keirolabs');
  * The lite endpoint has no time-range or category filters, so those params are ignored.
  */
 export class KeirolabsImpl implements SearchServiceImpl {
+  // Keirolabs picks its own engines, so retrying without searchEngines would repeat the same billed request
+  readonly useAutoSearchEngineSelection = true;
+
   private get apiKey(): string | undefined {
     return process.env.KEIROLABS_API_KEY;
   }
