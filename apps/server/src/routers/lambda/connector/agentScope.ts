@@ -66,7 +66,14 @@ export const connectorAgentScopeRouter = router({
       await assertConnectorCredentialsManageable(ctx, connector);
       if (!connector.agentId) return { id: input.connectorId }; // already base — no-op
 
-      const existingBase = await ctx.connectorModel.findScopedByIdentifier(connector.identifier);
+      // The base slot it returns to is its own visibility's: a private row and a
+      // shared row of one identifier live side by side in the base scope
+      const existingBase = await ctx.connectorModel.findScopedByIdentifier(
+        connector.identifier,
+        undefined,
+        undefined,
+        connector.visibility,
+      );
       if (existingBase) {
         throw new TRPCError({
           code: 'CONFLICT',

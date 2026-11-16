@@ -210,6 +210,51 @@ describe('connectorRouter visibility', () => {
     });
   });
 
+  describe('unbindAgent', () => {
+    const agentRow = (visibility: 'private' | 'public') => ({
+      agentId: 'agt-mine',
+      id: CONNECTOR_ID,
+      identifier: 'my-mcp',
+      metadata: null,
+      userId: 'me',
+      visibility,
+    });
+
+    it('returns a private agent row to the private slot beside a shared sibling', async () => {
+      // Regression: the base-slot check looked among shared rows only, so the
+      // shared connector of the same identifier blocked the private row's
+      // return with CONFLICT although its private slot was empty.
+      connectorModelMock.findById.mockResolvedValue(agentRow('private'));
+
+      await expect(member().unbindAgent({ connectorId: CONNECTOR_ID })).resolves.toEqual({
+        id: CONNECTOR_ID,
+      });
+      expect(connectorModelMock.findScopedByIdentifier).toHaveBeenCalledWith(
+        'my-mcp',
+        undefined,
+        undefined,
+        'private',
+      );
+      expect(connectorModelMock.update).toHaveBeenCalledWith(CONNECTOR_ID, { agentId: null });
+    });
+
+    it('still refuses to return a row into an occupied slot of its visibility', async () => {
+      connectorModelMock.findById.mockResolvedValue(agentRow('public'));
+      connectorModelMock.findScopedByIdentifier.mockResolvedValue({ id: 'base-row' });
+
+      await expect(member().unbindAgent({ connectorId: CONNECTOR_ID })).rejects.toMatchObject({
+        code: 'CONFLICT',
+      });
+      expect(connectorModelMock.findScopedByIdentifier).toHaveBeenCalledWith(
+        'my-mcp',
+        undefined,
+        undefined,
+        'public',
+      );
+      expect(connectorModelMock.update).not.toHaveBeenCalled();
+    });
+  });
+
   describe('update visibility', () => {
     const row = (overrides: Record<string, unknown> = {}) => ({
       agentId: null,
