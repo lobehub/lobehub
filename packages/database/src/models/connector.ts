@@ -434,15 +434,28 @@ export class ConnectorModel {
     tx
       .select()
       .from(userConnectors)
-      .where(
-        and(
-          this.ownership(),
-          eq(userConnectors.identifier, identifier),
-          isNull(userConnectors.agentId),
-        ),
-      )
+      .where(this.baseHolderFilter(identifier))
       .orderBy(asc(userConnectors.createdAt))
       .for('update');
+
+  /**
+   * The base rows of this scope holding `identifier`, oldest first, read without
+   * the lock: rows written before it may duplicate the identifier, so a caller
+   * judging the holder before (or after) a claim judges every one of them.
+   */
+  queryBaseHolders = async (identifier: string): Promise<UserConnectorItem[]> =>
+    this.db
+      .select()
+      .from(userConnectors)
+      .where(this.baseHolderFilter(identifier))
+      .orderBy(asc(userConnectors.createdAt));
+
+  private baseHolderFilter = (identifier: string) =>
+    and(
+      this.ownership(),
+      eq(userConnectors.identifier, identifier),
+      isNull(userConnectors.agentId),
+    );
 
   private insertInTransaction = async (
     tx: Transaction,

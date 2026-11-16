@@ -219,16 +219,33 @@ const judgeHolder = (
 const holderOutcome = (verdict: Exclude<HolderVerdict, 'replace'>): MarketplaceInstallOutcome =>
   verdict === 'exists' ? { status: 'exists' } : { blocker: verdict, status: 'blocked' };
 
+const VERDICT_PRECEDENCE: HolderVerdict[] = ['conflict', 'in-progress', 'exists', 'replace'];
+
 /**
- * The outcome of an install that lost the row to its live holder (judged under
- * the claim's lock, or after a re-add): no holder left, or a lease that ran out
- * since, is the next try's to take.
+ * What an install does about every base row holding its identifier: rows
+ * written before the identifier lock may duplicate it, and a run resolves to
+ * one of them, so the install answers `exists` only when no duplicate is a
+ * conflict or an install in progress, and replaces only when every one may go
+ * (as the claim does). `undefined` without a holder.
+ */
+const judgeHolders = (
+  holders: Parameters<typeof judgeHolder>[0][],
+  context: Parameters<typeof judgeHolder>[1],
+): HolderVerdict | undefined => {
+  const verdicts = new Set(holders.map((holder) => judgeHolder(holder, context)));
+  return VERDICT_PRECEDENCE.find((verdict) => verdicts.has(verdict));
+};
+
+/**
+ * The outcome of an install that lost the row to a live holder (read after the
+ * claim, or after a re-add): no holder left, or a lease that ran out since, is
+ * the next try's to take.
  */
 const liveHolderOutcome = (
-  holder: Parameters<typeof judgeHolder>[0] | null,
+  holders: Parameters<typeof judgeHolder>[0][],
   context: Parameters<typeof judgeHolder>[1],
 ): MarketplaceInstallOutcome => {
-  const verdict = holder ? judgeHolder(holder, context) : 'in-progress';
+  const verdict = judgeHolders(holders, context) ?? 'in-progress';
   return holderOutcome(verdict === 'replace' ? 'in-progress' : verdict);
 };
 
@@ -288,16 +305,14 @@ export const installMarketplaceMcpConnector = async (
 ): Promise<MarketplaceInstallOutcome> => {
   const { serverDB, userId, workspaceId } = scope;
 
-  const [existing, pluginRow] = await Promise.all([
-    new ConnectorModel(serverDB, userId, workspaceId).findScopedByIdentifier(identifier),
+  const [holders, pluginRow] = await Promise.all([
+    new ConnectorModel(serverDB, userId, workspaceId).queryBaseHolders(identifier),
     new PluginModel(serverDB, userId, workspaceId).findById(identifier),
   ]);
   const holderContext = { hasPluginRow: !!pluginRow, userId };
-  // Answered before any write; the claim below judges the holder again under its lock.
-  if (existing) {
-    const verdict = judgeHolder(existing, holderContext);
-    if (verdict !== 'replace') return holderOutcome(verdict);
-  }
+  // Answered before any write; the claim below judges the holders again under its lock.
+  const verdict = judgeHolders(holders, holderContext);
+  if (verdict && verdict !== 'replace') return holderOutcome(verdict);
 
   if (!(await canAddConnector(scope))) return { blocker: 'forbidden', status: 'blocked' };
 
@@ -369,7 +384,8 @@ export const installMarketplaceMcpConnector = async (
     },
     { canReplace: (holder) => judgeHolder(holder, holderContext) === 'replace' },
   );
-  if ('holder' in claim) return liveHolderOutcome(claim.holder, holderContext);
+  if ('holder' in claim)
+    return liveHolderOutcome(await connectorModel.queryBaseHolders(identifier), holderContext);
   const { created } = claim;
   // The identifier may be re-added over the row meanwhile (the web install),
   // which then owns it: the rollback leaves a re-added row as it is.
@@ -421,10 +437,7 @@ export const installMarketplaceMcpConnector = async (
       return true;
     });
     if (!finished)
-      return liveHolderOutcome(
-        await connectorModel.findScopedByIdentifier(identifier),
-        holderContext,
-      );
+      return liveHolderOutcome(await connectorModel.queryBaseHolders(identifier), holderContext);
   } catch (error) {
     // A failed rollback is only logged: an unmarked row stays uncallable.
     await rollback().catch((rollbackError) => {

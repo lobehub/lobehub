@@ -82,6 +82,26 @@ describe('ConnectorModel coverage edges', () => {
     });
   });
 
+  describe('queryBaseHolders', () => {
+    it('reads every base row of the scope holding the identifier, oldest first', async () => {
+      const model = new ConnectorModel(serverDB, userId);
+      const first = await model.create({ ...base, identifier: 'linear' });
+      const mounted = await insertBaseRow({
+        identifier: 'linear',
+        metadata: { mountedByAgentId: agentId },
+      });
+      // Neither an agent's own row nor another identifier holds the base one
+      await model.create({ ...base, agentId, identifier: 'linear' });
+      await model.create({ ...base, identifier: 'notion' });
+
+      expect((await model.queryBaseHolders('linear')).map((row) => row.id)).toEqual([
+        first.id,
+        mounted.id,
+      ]);
+      expect(await model.queryBaseHolders('slack')).toEqual([]);
+    });
+  });
+
   describe('empty identifier lists', () => {
     it('returns [] without querying', async () => {
       const model = new ConnectorModel(serverDB, userId);

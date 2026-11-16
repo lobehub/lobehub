@@ -723,6 +723,70 @@ describe('installMarketplaceMcpConnector', () => {
     expect(await db.select().from(userConnectorTools)).toHaveLength(2);
   });
 
+  describe('over duplicate base rows a writer from before the identifier lock left', () => {
+    const finishedRow = {
+      identifier: 'fetch-mcp',
+      mcpConnectionType: 'cloud',
+      metadata: { cloudEndPoint: true, marketplaceInstalled: true },
+      name: 'Fetch',
+      sourceType: 'marketplace',
+      status: 'connected',
+      userId,
+    } as const;
+    const seed = async (...rows: (typeof userConnectors.$inferInsert)[]) => {
+      // One by one, so the finished install is the oldest row
+      for (const row of rows) await db.insert(userConnectors).values(row);
+      return connectorRows();
+    };
+
+    it('reports a conflict while a custom connector holds the identifier beside a finished install', async () => {
+      const before = await seed(finishedRow, {
+        ...finishedRow,
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://custom.example.com/mcp',
+        metadata: {},
+        sourceType: 'custom',
+      });
+
+      expect(await installMarketplaceMcpConnector(scope, 'fetch-mcp', cloudManifest)).toEqual({
+        blocker: 'conflict',
+        status: 'blocked',
+      });
+      expect(await connectorRows()).toEqual(before);
+    });
+
+    it('reports an install in progress beside a finished one as in progress', async () => {
+      const before = await seed(finishedRow, {
+        ...finishedRow,
+        metadata: { cloudEndPoint: true },
+        status: 'disconnected',
+      });
+
+      expect(await installMarketplaceMcpConnector(scope, 'fetch-mcp', cloudManifest)).toEqual({
+        blocker: 'in-progress',
+        status: 'blocked',
+      });
+      expect(await connectorRows()).toEqual(before);
+    });
+
+    it('leaves finished installs beside an interrupted one as they are', async () => {
+      const before = await seed(
+        {
+          ...finishedRow,
+          metadata: { cloudEndPoint: true },
+          status: 'disconnected',
+          updatedAt: new Date(Date.now() - MARKETPLACE_INSTALL_LEASE_MS - 60_000),
+        },
+        finishedRow,
+      );
+
+      expect(await installMarketplaceMcpConnector(scope, 'fetch-mcp', cloudManifest)).toEqual({
+        status: 'exists',
+      });
+      expect(await connectorRows()).toEqual(before);
+    });
+  });
+
   describe('over an unfinished marketplace install', () => {
     const staleAt = () => new Date(Date.now() - MARKETPLACE_INSTALL_LEASE_MS - 60_000);
     const seedUnfinished = async (row: Partial<typeof userConnectors.$inferInsert> = {}) => {
