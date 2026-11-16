@@ -194,6 +194,10 @@ describe('MessageModel background sub-agent calls', () => {
       expect(await readState('c')).toMatchObject({ deliveredAt: 'when-2' });
     });
 
+    it('releases nothing when given no ids', async () => {
+      expect(await messageModel.releaseCancelSuppressedDelivery([])).toEqual([]);
+    });
+
     it('leaves a delivery claim alone', async () => {
       await seedCall({ id: 'd', state: { background: true, status: 'completed' } });
       await messageModel.claimBackgroundSubAgentDelivery(['d'], 'when-1');

@@ -207,6 +207,7 @@ describe('InboundWebhookModel scope and lifecycle', () => {
     expect(await model.query({ topicId: 'missing-topic' })).toEqual([]);
     expect(await model.query({ agentId: 'missing-agent' })).toEqual([]);
     expect(await model.query({ connectorId: missing })).toEqual([]);
+    expect(await model.query({ kind: 'generic' })).toEqual([]);
     expect(await model.query({ includeHidden: true })).toHaveLength(4);
   });
 
@@ -411,6 +412,33 @@ describe('InboundWebhookModel maintenance and quotas', () => {
         remoteSubscriptionId: 'manual',
       }),
     ).toMatchObject({ status: 'active', state: { remoteSubscriptionId: 'manual' } });
+  });
+
+  it('applies a status-guarded patch that carries no state at all', async () => {
+    const row = await model.create(input({ status: 'active' }));
+
+    expect(
+      await model.updateIfStatus(row.id, { lastError: 'timeout', status: 'error' }, ['active']),
+    ).toMatchObject({ lastError: 'timeout', status: 'error', state: {} });
+  });
+
+  it('pushes still-due rows past the sweep without touching ones rescheduled since', async () => {
+    const due = new Date(Date.now() - 1000);
+    const rescheduled = new Date(Date.now() + 60_000);
+    const dueRow = await model.create(input({ nextMaintenanceAt: due, status: 'active' }));
+    const laterRow = await model.create(
+      input({ nextMaintenanceAt: rescheduled, status: 'active' }),
+    );
+    const doneRow = await model.create(input({ nextMaintenanceAt: due, status: 'terminated' }));
+    const until = new Date(Date.now() + 3_600_000);
+
+    await InboundWebhookModel.deferMaintenance(db, [], until);
+    expect((await model.findById(dueRow.id))?.nextMaintenanceAt).toEqual(due);
+
+    await InboundWebhookModel.deferMaintenance(db, [dueRow.id, laterRow.id, doneRow.id], until);
+    expect((await model.findById(dueRow.id))?.nextMaintenanceAt).toEqual(until);
+    expect((await model.findById(laterRow.id))?.nextMaintenanceAt).toEqual(rescheduled);
+    expect((await model.findById(doneRow.id))?.nextMaintenanceAt).toEqual(due);
   });
 
   it('applies topic and user limits, including subscriptions being created or deleted', async () => {

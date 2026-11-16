@@ -42,6 +42,20 @@ describe('UserModel island dismissals', () => {
     expect(await readPreference()).toMatchObject({ topicGroupMode: 'byTime' });
   });
 
+  it('writes nothing when every key is already dismissed', async () => {
+    await userModel.addIslandDismissals(['goal-decision:d1']);
+    const before = await readPreference();
+
+    expect(await userModel.addIslandDismissals(['goal-decision:d1'])).toEqual(['goal-decision:d1']);
+    expect(await readPreference()).toEqual(before);
+  });
+
+  it('returns an empty list for a user that no longer exists', async () => {
+    const gone = new UserModel(serverDB, 'user-island-dismissals-deleted');
+
+    expect(await gone.addIslandDismissals(['goal-decision:d1'])).toEqual([]);
+  });
+
   it('keeps only the newest keys once the cap is reached', async () => {
     const full = Array.from({ length: MAX_ISLAND_DISMISSALS }, (_, i) => `k${i}`);
     await userModel.addIslandDismissals(full);
