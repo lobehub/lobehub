@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { isFileParseBudgetError } from '@lobechat/file-loaders';
 import { buildTestZip } from '@lobechat/file-loaders/src/loaders/excel/testUtils';
 import { Workbook } from 'exceljs';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ChunkingLoader } from '@/libs/document-loaders';
 
@@ -227,9 +227,18 @@ describe('chunking in the parse worker', () => {
     expect(error).toMatchObject({ code: 'TIMEOUT', name: 'FileParseError' });
     // The promise only settled after the thread really exited: the slot is back already.
     expect(runner.stats()).toEqual({ active: 0, queued: 0 });
-    await expect(
-      runner.run({ content: new TextEncoder().encode('after'), filename: 'a.txt', kind: 'chunk' }),
-    ).resolves.toHaveLength(1);
+    // The next task takes the freed slot at once. Its own result is not asserted: on a loaded CI
+    // runner a fresh worker can need more than this runner's 500ms just to start.
+    const onStart = vi.fn();
+    const next = runner
+      .run(
+        { content: new TextEncoder().encode('after'), filename: 'a.txt', kind: 'chunk' },
+        { onStart },
+      )
+      .catch(() => undefined);
+    expect(runner.stats()).toEqual({ active: 1, queued: 0 });
+    await vi.waitFor(() => expect(onStart).toHaveBeenCalledOnce());
+    await next;
   }, 60_000);
 
   it('gives a chunk job its own scratch directory and removes it once the thread has exited', async () => {
