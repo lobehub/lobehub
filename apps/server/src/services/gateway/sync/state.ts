@@ -174,12 +174,13 @@ export async function buildDesiredConnections(
 
       // No handler on the gateway: a connect can only fail, every round.
       if (isMessageGatewayHostingUnavailable(definition)) {
-        await Promise.all(
-          persistent.map(({ provider }) =>
+        await pMap(
+          persistent,
+          ({ provider }) =>
             updateBotRuntimeStatus(
               buildMessageGatewayRefusalStatus(definition, provider.applicationId),
             ),
-          ),
+          { concurrency: FEATURE_GATE_CONCURRENCY },
         );
         continue;
       }
