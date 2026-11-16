@@ -207,6 +207,25 @@ export const toBitableRecords = (
     return fields;
   });
 
+/**
+ * A batch failed after earlier batches were committed. Carries the ids that
+ * did land so callers report partial progress instead of inviting a retry
+ * that would duplicate them.
+ */
+class PartialRecordWriteError extends Error {
+  constructor(
+    readonly recordIds: string[],
+    readonly total: number,
+    cause: unknown,
+  ) {
+    super(
+      recordIds.length > 0
+        ? `${withHint(cause, BITABLE_ERROR_HINTS).message} — ${recordIds.length} of ${total} rows were already written; retry only rows #${recordIds.length + 1}–#${total}, not the earlier ones`
+        : withHint(cause, BITABLE_ERROR_HINTS).message,
+    );
+  }
+}
+
 const insertRecords = async (
   api: LarkApiClient,
   appToken: string,
@@ -216,8 +235,14 @@ const insertRecords = async (
   const recordIds: string[] = [];
   for (let start = 0; start < rows.length; start += BITABLE_RECORD_BATCH_SIZE) {
     const batch = rows.slice(start, start + BITABLE_RECORD_BATCH_SIZE);
-    const result = await api.batchCreateBitableRecords(appToken, tableId, batch);
-    recordIds.push(...result.recordIds);
+    try {
+      const result = await api.batchCreateBitableRecords(appToken, tableId, batch);
+      recordIds.push(...result.recordIds);
+    } catch (error) {
+      // Batches are atomic on Feishu's side, so everything before `start`
+      // is committed and everything from it on is not.
+      throw new PartialRecordWriteError(recordIds, rows.length, error);
+    }
   }
   return recordIds;
 };
@@ -273,8 +298,9 @@ export const createBitable = async (
         toBitableRecords(params.records, columnTypes),
       );
     } catch (error) {
+      if (error instanceof PartialRecordWriteError) recordIds = error.recordIds;
       issues.push({
-        error: `${withHint(error, BITABLE_ERROR_HINTS).message} — the table exists; retry with addBitableRecords`,
+        error: `${error instanceof PartialRecordWriteError ? error.message : withHint(error, BITABLE_ERROR_HINTS).message} — the table exists; retry the unwritten rows with addBitableRecords`,
         target: 'records',
       });
     }
@@ -378,6 +404,7 @@ export const addBitableRecords = async (
 
     return { appToken: target.appToken, platform, recordIds, tableId };
   } catch (error) {
+    if (error instanceof PartialRecordWriteError) throw error;
     throw withHint(error, BITABLE_ERROR_HINTS);
   }
 };

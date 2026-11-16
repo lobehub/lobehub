@@ -88,7 +88,7 @@ export const bitableApis: BuiltinToolManifest['api'] = [
         },
         records: {
           description:
-            'Initial rows (max 500), each an object keyed by column name, e.g. {"任务": "整理需求", "负责人": ["ou_xxx"], "截止日期": "2026-11-20", "状态": "进行中"}.',
+            'Initial rows, each an object keyed by column name, e.g. {"任务": "整理需求", "负责人": ["ou_xxx"], "截止日期": "2026-11-20", "状态": "进行中"}.',
           items: { type: 'object' },
           type: 'array',
         },
@@ -118,7 +118,7 @@ export const bitableApis: BuiltinToolManifest['api'] = [
           type: 'string',
         },
         records: {
-          description: 'Rows to add (max 500), each an object keyed by column name.',
+          description: 'Rows to add, each an object keyed by column name.',
           items: { type: 'object' },
           minItems: 1,
           type: 'array',

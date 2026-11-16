@@ -196,6 +196,30 @@ describe('createBitable', () => {
     expect(result.recordIds).toHaveLength(BITABLE_RECORD_BATCH_SIZE + 1);
   });
 
+  it('keeps the ids of committed batches when a later batch fails', async () => {
+    const api = createApi();
+    api.batchCreateBitableRecords
+      .mockImplementationOnce(async (_a: string, _t: string, rows: unknown[]) => ({
+        recordIds: rows.map((_, i) => `rec${i}`),
+      }))
+      .mockRejectedValueOnce(new Error('rate limited'));
+    const records = Array.from({ length: BITABLE_RECORD_BATCH_SIZE + 1 }, (_, i) => ({
+      任务: `t${i}`,
+    }));
+
+    const result = await createBitable(
+      api,
+      { fields: [{ name: '任务', type: 'text' }], name: '待办', platform: 'feishu', records },
+      'feishu',
+    );
+
+    expect(result.recordIds).toHaveLength(BITABLE_RECORD_BATCH_SIZE);
+    expect(result.issues?.[0].error).toContain(
+      `${BITABLE_RECORD_BATCH_SIZE} of ${BITABLE_RECORD_BATCH_SIZE + 1} rows were already written`,
+    );
+    expect(result.issues?.[0].error).toContain(`retry only rows #${BITABLE_RECORD_BATCH_SIZE + 1}`);
+  });
+
   it('validates columns before creating anything', async () => {
     const api = createApi();
 
@@ -312,6 +336,22 @@ describe('addBitableRecords', () => {
         'feishu',
       ),
     ).rejects.toThrow('not a Bitable');
+  });
+
+  it('says which rows landed when a later batch fails', async () => {
+    const api = createApi();
+    api.batchCreateBitableRecords
+      .mockImplementationOnce(async (_a: string, _t: string, rows: unknown[]) => ({
+        recordIds: rows.map((_, i) => `rec${i}`),
+      }))
+      .mockRejectedValueOnce(new Error('rate limited'));
+    const records = Array.from({ length: BITABLE_RECORD_BATCH_SIZE + 2 }, () => ({ 任务: 'a' }));
+
+    await expect(
+      addBitableRecords(api, { appToken: 'bascnABC', platform: 'feishu', records }, 'feishu'),
+    ).rejects.toThrow(
+      `${BITABLE_RECORD_BATCH_SIZE} of ${BITABLE_RECORD_BATCH_SIZE + 2} rows were already written`,
+    );
   });
 
   it('lists the real columns when a row names an unknown one', async () => {
