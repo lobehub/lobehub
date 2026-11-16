@@ -1,17 +1,24 @@
 // @vitest-environment node
 import { getTestDB } from '@lobechat/database/test-utils';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import type { CreateInboundWebhook } from '@/database/models/inboundWebhook';
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
-import { agents, signals, topics, userConnectors, users } from '@/database/schemas';
+import {
+  agents,
+  inboundWebhooks,
+  signals,
+  topics,
+  userConnectors,
+  users,
+} from '@/database/schemas';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 
 import { maintainMcpSubscription } from './kinds/mcpEvents/subscription';
-import { sweepInboundWebhooks } from './sweep';
+import { FEATURE_OFF_RECHECK_MS, sweepInboundWebhooks } from './sweep';
 
 const boundary = vi.hoisted(() => ({
   enabled: vi.fn(),
@@ -133,13 +140,22 @@ describe('connector status after webhook maintenance authentication', () => {
       expect(boundary.enabled.mock.calls.map(([owner]) => owner).sort()).toEqual(
         [userId, other].sort(),
       );
-      expect(await otherModel.findById(suspended.id)).toEqual(suspended);
+      // Not maintained, only moved out of the next sweeps' way.
+      expect(await otherModel.findById(suspended.id)).toEqual({
+        ...suspended,
+        accessedAt: expect.any(Date),
+        nextMaintenanceAt: expect.any(Date),
+        updatedAt: expect.any(Date),
+      });
+      expect(
+        (await otherModel.findById(suspended.id))!.nextMaintenanceAt!.getTime(),
+      ).toBeGreaterThan(Date.now());
     } finally {
       await db.delete(users).where(eq(users.id, other));
     }
   });
 
-  it('skips renewal without changing disabled-owner rows, caches per sweep and resumes from cursor when enabled', async () => {
+  it('skips renewal for disabled owners, caches per sweep and resumes from cursor once enabled', async () => {
     const due = new Date(Date.now() - 1000);
     const a = await seed({
       nextMaintenanceAt: due,
@@ -151,8 +167,19 @@ describe('connector status after webhook maintenance authentication', () => {
     await sweepInboundWebhooks(db);
     expect(boundary.subscribe).not.toHaveBeenCalled();
     expect(boundary.enabled).toHaveBeenCalledExactlyOnceWith(userId);
-    expect(await model.findById(a.id)).toEqual(a);
-    expect(await model.findById(b.id)).toEqual(b);
+    // Nothing about them changes but when they are looked at next.
+    for (const row of [a, b])
+      expect(await model.findById(row.id)).toEqual({
+        ...row,
+        accessedAt: expect.any(Date),
+        nextMaintenanceAt: expect.any(Date),
+        updatedAt: expect.any(Date),
+      });
+    // The recheck delay later, with the feature back on.
+    await db
+      .update(inboundWebhooks)
+      .set({ nextMaintenanceAt: due })
+      .where(inArray(inboundWebhooks.id, [a.id, b.id]));
     boundary.enabled.mockClear().mockResolvedValue(true);
     await sweepInboundWebhooks(db);
     expect(boundary.enabled).toHaveBeenCalledExactlyOnceWith(userId);
@@ -191,8 +218,14 @@ describe('connector status after webhook maintenance authentication', () => {
       await sweepInboundWebhooks(db);
       expect(boundary.subscribe).toHaveBeenCalledTimes(1);
       expect(await model.findById(enabled.id)).toMatchObject({ status: 'active' });
-      // The skipped rows keep their schedule untouched (the kill switch).
-      expect((await otherModel.findById(disabled[0].id))?.nextMaintenanceAt).toEqual(early);
+      // The skipped rows are not maintained (the kill switch), but they are rescheduled out of
+      // the next sweep's way, so a long run of them cannot fill every bounded scan.
+      expect(boundary.enabled).toHaveBeenCalledWith(otherUser);
+      const next = (await otherModel.findById(disabled[0].id))?.nextMaintenanceAt;
+      expect(next!.getTime()).toBeGreaterThan(Date.now() + FEATURE_OFF_RECHECK_MS - 60_000);
+      expect(
+        (await InboundWebhookModel.queryMaintenance(db, 1000)).map((row) => row.id),
+      ).not.toContain(disabled[0].id);
     } finally {
       await db.delete(users).where(eq(users.id, otherUser));
     }

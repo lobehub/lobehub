@@ -18,15 +18,19 @@ import { scheduleInboundWebhookWake } from './scheduler';
 const MAINTENANCE_BATCH = 100;
 /** Due rows one sweep may look at, skipped ones included, so a sweep stays bounded. */
 const MAINTENANCE_SCAN_LIMIT = 1000;
+/** How soon a row whose owner switched the feature off is looked at again. */
+export const FEATURE_OFF_RECHECK_MS = 15 * 60_000;
 
 /**
  * Due rows this sweep can act on, earliest first. Rows whose owner switched the feature off are
- * left untouched (the kill switch keeps their schedule), so the scan pages past them: otherwise the
- * same skipped rows would fill every batch and starve the ones behind them.
+ * not maintained (the kill switch); the scan pages past them, and they are rescheduled a little
+ * later, so a long run of them cannot fill the front of every sweep's bounded scan and starve the
+ * rows behind it. They are maintained within that delay once the feature is back on.
  */
 async function dueForMaintenance(db: LobeChatDatabase) {
   const eventsEnabledFor = memoize(isWebhookEnabled);
   const actionable: Awaited<ReturnType<typeof InboundWebhookModel.queryMaintenance>> = [];
+  const skippedIds: string[] = [];
   let after: { id: string; nextMaintenanceAt: Date } | undefined;
   for (let scanned = 0; scanned < MAINTENANCE_SCAN_LIMIT;) {
     const page = await InboundWebhookModel.queryMaintenance(db, MAINTENANCE_BATCH, after);
@@ -35,14 +39,21 @@ async function dueForMaintenance(db: LobeChatDatabase) {
         row.status !== 'deleting' &&
         row.kind === 'mcp_events' &&
         !(await eventsEnabledFor(row.userId));
-      if (!skipped) actionable.push(row);
-      if (actionable.length === MAINTENANCE_BATCH) return actionable;
+      if (skipped) skippedIds.push(row.id);
+      else actionable.push(row);
+      if (actionable.length === MAINTENANCE_BATCH) break;
     }
+    if (actionable.length === MAINTENANCE_BATCH) break;
     scanned += page.length;
     const last = page.at(-1);
     if (page.length < MAINTENANCE_BATCH || !last?.nextMaintenanceAt) break;
     after = { id: last.id, nextMaintenanceAt: last.nextMaintenanceAt };
   }
+  await InboundWebhookModel.deferMaintenance(
+    db,
+    skippedIds,
+    new Date(Date.now() + FEATURE_OFF_RECHECK_MS),
+  );
   return actionable;
 }
 
