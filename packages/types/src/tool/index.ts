@@ -30,3 +30,4 @@ export * from './manifest';
 export * from './plugin';
 export * from './search';
 export * from './tool';
+export * from './toolCallDevice';

@@ -13,10 +13,11 @@ import type {
   WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
 import { LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
-import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
-import { BaseExecutor } from '@lobechat/types';
+import type { BuiltinToolContext, BuiltinToolResult, ToolExecutionDevice } from '@lobechat/types';
+import { BaseExecutor, TOOL_CALL_DEVICE_ARG } from '@lobechat/types';
 
 import { localFileService } from '@/services/electron/localFileService';
+import { getElectronStoreState } from '@/store/electron';
 
 import { LocalSystemIdentifier } from '../../types';
 
@@ -58,6 +59,29 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     params: Record<string, any>,
     ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
+    // This path runs the call in-process on this desktop and cannot reach any
+    // other device, so a call naming another one fails rather than running
+    // here. The argument never reaches the IPC layer.
+    const { [TOOL_CALL_DEVICE_ARG]: deviceArg, ...callParams } = params;
+    const electron = getElectronStoreState();
+    // The cached info may still hold the install's fallback id; the stable id
+    // (local IPC, no network) is what the server knows this desktop as.
+    const deviceId =
+      (await electron.resolveGatewayDeviceId()) ?? electron.gatewayDeviceInfo?.deviceId;
+    const hostname = electron.gatewayDeviceInfo?.hostname || undefined;
+    const requested = typeof deviceArg === 'string' ? deviceArg.trim() : deviceArg;
+    const namedDevice = requested !== undefined && requested !== null && requested !== '';
+    if (namedDevice) {
+      const isSelf =
+        typeof requested === 'string' &&
+        ((!!deviceId && requested === deviceId) ||
+          (!!hostname && requested.toLowerCase() === hostname.toLowerCase()));
+      if (!isSelf) return this.otherDeviceResult(String(requested), hostname);
+    }
+    const executionDevice: ToolExecutionDevice | undefined = deviceId
+      ? { deviceId, hostname, requested: namedDevice }
+      : undefined;
+
     try {
       // `trustArgsCwd` stays off: `params` came straight from the model, and
       // `ctx.workingDirectory` is undefined whenever the agent has none
@@ -66,8 +90,8 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
       const output = await this.runtime.executeToolCall(
         apiName,
         apiName === 'runCommand'
-          ? { ...params, topicId: ctx?.topicId ?? undefined, agentId: ctx?.agentId }
-          : params,
+          ? { ...callParams, topicId: ctx?.topicId ?? undefined, agentId: ctx?.agentId }
+          : callParams,
         {
           workingDirectory: ctx?.workingDirectory,
         },
@@ -75,7 +99,8 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
       // apiEnum and the runtime dispatch cover the same tool set, so a null
       // (unknown tool) here is a programming error, not a user-facing state.
       if (!output) return this.errorResult(new Error(`Unknown local-system API: ${apiName}`));
-      return this.toResult(output);
+      const result = this.toResult(output);
+      return executionDevice ? { ...result, state: { ...result.state, executionDevice } } : result;
     } catch (error) {
       return this.errorResult(error);
     }
@@ -176,6 +201,19 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     this.execute('globFiles', params, ctx);
 
   // ==================== Helpers ====================
+
+  private otherDeviceResult(requested: string, hostname: string | undefined): BuiltinToolResult {
+    const message = `Device "${requested}" cannot be reached from here: this conversation runs tools in-process on this desktop${hostname ? ` (${hostname})` : ''} only, so the call was not run on it or anywhere else. Omit "${TOOL_CALL_DEVICE_ARG}" to run it on this desktop, or tell the user to pick that device in the chat input and send again.`;
+    return {
+      content: message,
+      error: {
+        body: { code: 'DEVICE_NOT_ACCESSIBLE', requestedDevice: requested },
+        message,
+        type: 'PluginServerError',
+      },
+      success: false,
+    };
+  }
 
   private errorResult(error: unknown): BuiltinToolResult {
     return {

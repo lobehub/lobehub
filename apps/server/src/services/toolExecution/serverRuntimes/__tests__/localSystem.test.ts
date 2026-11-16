@@ -139,7 +139,13 @@ describe('localSystemRuntime', () => {
         },
         undefined,
       );
-      expect(result).toEqual(expectedResult);
+      // The result also reports the device that ran the call.
+      expect(result).toEqual({
+        ...expectedResult,
+        state: {
+          executionDevice: { deviceId: 'device-1', requested: false, scope: 'personal' },
+        },
+      });
     });
 
     it('should JSON.stringify the arguments passed to the proxy function', async () => {

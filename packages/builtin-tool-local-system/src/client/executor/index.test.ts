@@ -2,11 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { localSystemExecutor } from './index';
 
-const { globFilesMock, runCommandMock, searchFilesMock } = vi.hoisted(() => ({
+const { electronState, globFilesMock, runCommandMock, searchFilesMock } = vi.hoisted(() => ({
+  electronState: {
+    gatewayDeviceInfo: undefined as
+      { deviceId: string; hostname: string; platform: string } | undefined,
+    resolveGatewayDeviceId: async (): Promise<string | undefined> => undefined,
+  },
   globFilesMock: vi.fn(),
   runCommandMock: vi.fn(),
   searchFilesMock: vi.fn(),
 }));
+
+vi.mock('@/store/electron', () => ({ getElectronStoreState: () => electronState }));
 
 vi.mock('@/services/electron/localFileService', () => ({
   localFileService: {
@@ -299,5 +306,59 @@ describe('LocalSystemExecutor.runCommand', () => {
     );
 
     expect(runCommandMock).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/repo' }));
+  });
+});
+
+describe('LocalSystemExecutor — per-call device argument', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    runCommandMock.mockResolvedValue({ content: '', success: true });
+    electronState.gatewayDeviceInfo = {
+      deviceId: 'fallback-id',
+      hostname: 'My-MacBook',
+      platform: 'darwin',
+    };
+    electronState.resolveGatewayDeviceId = async () => 'this-desktop';
+  });
+
+  it('runs here and reports this desktop when no device is named', async () => {
+    const result = await localSystemExecutor.runCommand({ command: 'pwd' }, { messageId: 'm-1' });
+
+    expect(runCommandMock).toHaveBeenCalledTimes(1);
+    expect(result.state.executionDevice).toEqual({
+      deviceId: 'this-desktop',
+      hostname: 'My-MacBook',
+      requested: false,
+    });
+  });
+
+  it.each(['this-desktop', 'my-macbook'])(
+    'runs here when the device named is this desktop (%s)',
+    async (device) => {
+      const result = await localSystemExecutor.runCommand({ command: 'pwd', device } as never, {
+        messageId: 'm-1',
+      });
+
+      expect(runCommandMock.mock.calls[0][0]).not.toHaveProperty('device');
+      expect(result.state.executionDevice).toMatchObject({
+        deviceId: 'this-desktop',
+        requested: true,
+      });
+    },
+  );
+
+  it('fails instead of running here when another device is named', async () => {
+    const result = await localSystemExecutor.runCommand(
+      { command: 'pwd', device: 'other-device' } as never,
+      { messageId: 'm-1' },
+    );
+
+    expect(runCommandMock).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.error?.body).toMatchObject({
+      code: 'DEVICE_NOT_ACCESSIBLE',
+      requestedDevice: 'other-device',
+    });
+    expect(result.content).toContain('not run on it or anywhere else');
   });
 });

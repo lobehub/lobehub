@@ -257,6 +257,13 @@ export interface ToolExecutionContext {
    * gates then fall back to `activeDeviceId`).
    */
   deviceCapable?: boolean;
+  /**
+   * The agent's workspace fixed its execution device
+   * (`executionTargetSelectionPolicy: 'fixed'`). A device tool call's `device`
+   * argument then cannot move the call elsewhere, just as a request override
+   * cannot move the run (`resolveExecutionPlan`).
+   */
+  deviceSelectionFixed?: boolean;
   /** Current page document ID for page-scoped conversations */
   documentId?: string | null;
   /**

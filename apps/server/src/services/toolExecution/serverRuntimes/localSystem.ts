@@ -3,6 +3,7 @@ import {
   LocalSystemIdentifier,
   LocalSystemManifest,
 } from '@lobechat/builtin-tool-local-system';
+import { TOOL_CALL_DEVICE_ARG, type ToolExecutionDevice } from '@lobechat/types';
 
 import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
 import {
@@ -14,6 +15,14 @@ import { buildDeviceLhEnv } from '@/server/services/toolExecution/preprocessLhCo
 
 import { buildNoActiveDeviceResult, REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
+import {
+  buildToolCallDeviceFailure,
+  describeRunDevice,
+  resolveToolCallDevice,
+  takeToolCallDeviceArg,
+  TOOL_CALL_DEVICE_ERROR,
+  withExecutionDevice,
+} from './toolCallDevice';
 import { type ServerRuntimeRegistration } from './types';
 import { withoutDeviceReplay } from './withoutDeviceReplay';
 
@@ -59,20 +68,15 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
     // error string with no recovery path — the model kept stalling on it (see
     // agent vent reports). Return a structured, actionable result per API call
     // instead: the model is told exactly how to recover (activate a device, or
-    // ask the user to reconnect) rather than hitting an opaque failure.
-    if (!context.activeDeviceId) {
-      const noDevice = buildNoActiveDeviceResult('Local System', {
-        remoteDeviceToolAvailable: context.toolManifestMap
-          ? REMOTE_DEVICE_TOOL_IDENTIFIER in context.toolManifestMap
-          : true,
-      });
-
-      const proxy: Record<string, (args: any) => Promise<any>> = {};
-      for (const api of LocalSystemManifest.api) {
-        proxy[api.name] = async () => noDevice;
-      }
-      return proxy;
-    }
+    // ask the user to reconnect) rather than hitting an opaque failure. A call
+    // that names its own `device` still runs there.
+    const noDevice = context.activeDeviceId
+      ? undefined
+      : buildNoActiveDeviceResult('Local System', {
+          remoteDeviceToolAvailable: context.toolManifestMap
+            ? REMOTE_DEVICE_TOOL_IDENTIFIER in context.toolManifestMap
+            : true,
+        });
 
     // Resolve the workspace scope the same way `remote-device` does, recovering
     // it from the running agent when the run-scoped `context.workspaceId` was
@@ -91,11 +95,68 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
     const getContentWorkspaceId = () =>
       (contentWorkspaceIdPromise ??= resolveContentWorkspaceId(context));
 
+    // The run's device as each result reports it, looked up once per step.
+    let runDevicePromise: Promise<ToolExecutionDevice> | undefined;
+    const getRunDevice = (deviceId: string, workspaceId: string | undefined) =>
+      (runDevicePromise ??= describeRunDevice(context, deviceId, workspaceId));
+
+    /**
+     * Where one call runs. Without a `device` argument (or one naming the run's
+     * own device) that is the run's device, unchanged. Otherwise the named
+     * device, for this call only — the run's binding is left as it is, and a
+     * device the call cannot use fails it rather than running it elsewhere.
+     */
+    const resolveCallTarget = async (
+      requested: string | undefined,
+    ): Promise<
+      | { failure: object }
+      | {
+          deviceId: string;
+          executionDevice: Promise<ToolExecutionDevice>;
+          onRunDevice: boolean;
+          workspaceId: string | undefined;
+        }
+    > => {
+      if (requested && requested !== context.activeDeviceId) {
+        const resolved = await resolveToolCallDevice(context, requested);
+        if ('failure' in resolved) return { failure: withoutDeviceReplay(resolved.failure) };
+        const { route } = resolved;
+        return {
+          deviceId: route.deviceId,
+          executionDevice: Promise.resolve(route.device),
+          onRunDevice: route.deviceId === context.activeDeviceId,
+          workspaceId: route.workspaceId,
+        };
+      }
+      if (!context.activeDeviceId) return { failure: noDevice! };
+      const deviceId = context.activeDeviceId;
+      const workspaceId = await getDeviceWorkspaceId();
+      return {
+        deviceId,
+        executionDevice: getRunDevice(deviceId, workspaceId).then((device) =>
+          requested ? { ...device, requested: true } : device,
+        ),
+        onRunDevice: true,
+        workspaceId,
+      };
+    };
+
     const proxy: Record<string, (args: any) => Promise<any>> = {};
 
     for (const api of LocalSystemManifest.api) {
       const workingDirArg = WORKING_DIR_ARG[api.name];
-      proxy[api.name] = async (args: any) => {
+      proxy[api.name] = async (rawArgs: any) => {
+        const { args, invalid, requested } = takeToolCallDeviceArg(rawArgs);
+        if (invalid) {
+          return buildToolCallDeviceFailure(
+            TOOL_CALL_DEVICE_ERROR.notAccessible,
+            String(rawArgs?.[TOOL_CALL_DEVICE_ARG]),
+            `The "${TOOL_CALL_DEVICE_ARG}" argument must be a device ID or hostname string, so the call was not run.`,
+          );
+        }
+        const target = await resolveCallTarget(requested);
+        if ('failure' in target) return target.failure;
+
         // Inject the device-bound cwd/scope when the model didn't supply one
         // or explicitly passed `.` (a relative reference that resolves to
         // process.cwd() on the device side — the LobeHub install directory on
@@ -117,9 +178,11 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         // be approved by the audit as a workspace-relative `scope` and then
         // execute against `/etc`. Likewise `readFile({ path: 'passwd', cwd:
         // '/etc' })` — only `path` is audited, and it looks workspace-relative.
-        const { cwd: _offContractCwd, ...sanitized } = (args ?? {}) as Record<string, unknown>;
-        let finalArgs = sanitized as typeof args;
-        if (workingDirArg && context.workingDirectory) {
+        const { cwd: _offContractCwd, ...sanitized } = args;
+        let finalArgs = sanitized as typeof rawArgs;
+        // The working directory is a path on the run's device; another device
+        // gets none rather than a path that may not exist there.
+        if (workingDirArg && context.workingDirectory && target.onRunDevice) {
           const scopeValue: unknown = finalArgs?.[workingDirArg];
           // `cwd` was just stripped, so a `cwd`-arg api always needs it back.
           const needsInjection =
@@ -172,7 +235,7 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
           }
         }
 
-        const deviceWorkspaceId = await getDeviceWorkspaceId();
+        const deviceWorkspaceId = target.workspaceId;
         // Only a command can outlive its call. The device may keep watching it
         // and report the final result later, which lets the transport park the
         // run instead of the model polling.
@@ -185,7 +248,7 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
             context.serverDB,
             {
               completion,
-              deviceId: context.activeDeviceId!,
+              deviceId: target.deviceId,
               operationId: context.operationId,
               userId: context.userId!,
               // Workspace devices live under the `workspace:<id>` principal in
@@ -209,13 +272,15 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         if (isDeviceUnreachableResult(result) && context.serverDB) {
           const managed = await awaitManagedDeviceForToolCall(
             { db: context.serverDB, userId: context.userId!, workspaceId: deviceWorkspaceId },
-            context.activeDeviceId!,
+            target.deviceId,
           );
           if (managed === 'online') result = await execute();
           else if (managed) return withoutDeviceReplay(managed);
         }
 
-        return withoutDeviceReplay(result);
+        // Every dispatched call reports the device that ran it, so the user can
+        // check it against the device they picked.
+        return withoutDeviceReplay(withExecutionDevice(result, await target.executionDevice));
       };
     }
 

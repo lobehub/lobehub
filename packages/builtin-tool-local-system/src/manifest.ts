@@ -1,4 +1,4 @@
-import { type BuiltinToolManifest } from '@lobechat/types';
+import { type BuiltinToolManifest, TOOL_CALL_DEVICE_ARG } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
 import { LocalSystemApiName, LocalSystemIdentifier } from './types';
@@ -12,7 +12,7 @@ import { LocalSystemApiName, LocalSystemIdentifier } from './types';
 export const READ_FILE_DESCRIPTION =
   'Read text and document files (txt/md/json/source code/pdf/docx/etc.) or local image files (PNG/JPEG/GIF/WebP). For a local image path, call readFile directly so the image is uploaded as a visual tool result. Never use shell commands to convert images to base64/data URI text or copy encoded image data between tools. Other binary files (.bin/.exe/.zip/.b64/encoded blobs) are rejected with a structured error — use runCommand with file/hexdump/strings to inspect those instead. Text output is capped at 500K chars total and 8K chars per line; for larger files, use a narrower line range or grepContent.';
 
-export const LocalSystemManifest: BuiltinToolManifest = {
+const baseManifest: BuiltinToolManifest = {
   executors: ['client', 'server'],
   api: [
     {
@@ -432,4 +432,32 @@ export const LocalSystemManifest: BuiltinToolManifest = {
   },
   systemRole: systemPrompt,
   type: 'builtin',
+};
+
+/**
+ * Every api takes the optional per-call `device`: the server runtime resolves
+ * it to one of the run's reachable devices (or fails the call), and the desktop
+ * in-process executor only accepts its own machine. It is stripped before the
+ * call reaches the device. Usage guidance lives once in the system role.
+ */
+const withDeviceArg = (
+  api: BuiltinToolManifest['api'][number],
+): BuiltinToolManifest['api'][number] => ({
+  ...api,
+  parameters: {
+    ...api.parameters,
+    properties: {
+      ...api.parameters.properties,
+      [TOOL_CALL_DEVICE_ARG]: {
+        description:
+          "Optional. Run only this call on another of the user's devices (device ID or hostname). Omit to use the current device. Set it only when the user asks for a specific device.",
+        type: 'string',
+      },
+    },
+  },
+});
+
+export const LocalSystemManifest: BuiltinToolManifest = {
+  ...baseManifest,
+  api: baseManifest.api.map(withDeviceArg),
 };
