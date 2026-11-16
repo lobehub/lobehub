@@ -16,6 +16,7 @@ export * from './goalManager';
 export * from './inputCompletion';
 export * from './judgeBriefEmit';
 export * from './langDetect';
+export * from './meetingMinutes';
 export * from './onboardingTaskRecommendation';
 export * from './pickEmoji';
 export * from './rewriteGenerationPrompt';

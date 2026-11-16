@@ -63,6 +63,12 @@ export const DEFAULT_ASR_SYSTEM_AGENT_ITEM: SystemAgentItem = {
   provider: DEFAULT_ASR_PROVIDER,
 };
 
+// Meetings need timestamps and speakers, so the default is a diarizing model on the ASR provider.
+export const DEFAULT_MEETING_TRANSCRIPTION_SYSTEM_AGENT_ITEM: SystemAgentItem = {
+  model: 'gpt-4o-transcribe-diarize',
+  provider: DEFAULT_ASR_PROVIDER,
+};
+
 export const DEFAULT_USER_MEMORY_EMBEDDING_SYSTEM_AGENT_ITEM: SystemAgentItem = {
   model: DEFAULT_EMBEDDING_MODEL,
   provider: DEFAULT_EMBEDDING_PROVIDER,
@@ -97,6 +103,8 @@ export const DEFAULT_SYSTEM_AGENT_CONFIG: UserServiceModelConfig = {
   generationTopic: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   goal: DEFAULT_SYSTEM_AGENT_ITEM,
   inputCompletion: DEFAULT_INPUT_COMPLETION_SYSTEM_AGENT_ITEM,
+  meetingMinutes: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
+  meetingTranscription: DEFAULT_MEETING_TRANSCRIPTION_SYSTEM_AGENT_ITEM,
   memoryAnalysisAgentConfig: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   onboardingTaskRecommender: DEFAULT_MINI_SYSTEM_AGENT_ITEM,
   onboardingUnderstanding: DEFAULT_MINI_SYSTEM_AGENT_ITEM,

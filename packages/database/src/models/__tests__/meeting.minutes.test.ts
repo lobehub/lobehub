@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import { users } from '../../schemas';
@@ -71,6 +71,25 @@ describe('MeetingModel minutes', () => {
     });
 
     await expect(model.startMinutes(meeting.id)).rejects.toBeInstanceOf(MeetingStateError);
+  });
+
+  it('merges against the action items stored at write time', async () => {
+    const id = await refinedMeeting();
+    await model.completeMinutes(id, { actionItems: [item('confirmed', 'created')] });
+    const merge = vi.fn((stored: ReturnType<typeof item>[]) => [...stored, item('new')]);
+
+    const result = await model.completeMinutes(id, { summary: 'Again' }, merge as any);
+
+    expect(merge).toHaveBeenCalledWith([item('confirmed', 'created')]);
+    expect(result!.minutes.actionItems).toEqual([item('confirmed', 'created'), item('new')]);
+  });
+
+  it('merges from nothing when no minutes exist yet', async () => {
+    const id = await refinedMeeting();
+
+    const result = await model.completeMinutes(id, {}, () => [item('first')]);
+
+    expect(result!.minutes.actionItems).toEqual([item('first')]);
   });
 
   it('never moves a live meeting to ready', async () => {

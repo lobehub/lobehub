@@ -6,6 +6,10 @@ export enum AsyncTaskType {
   ImageGeneration = 'image_generation',
   /** One-way Linear issue → task sync run in the background (`linear_issue_sync`). */
   LinearIssueSync = 'linear_issue_sync',
+  /** Minutes generated from a meeting's final transcript (`meeting_minutes`). */
+  MeetingMinutes = 'meeting_minutes',
+  /** Post-recording transcription of a meeting, then its minutes (`meeting_refine`). */
+  MeetingRefine = 'meeting_refine',
   MusicGeneration = 'music_generation',
   UserMemoryExtractionHourly = 'user_memory_extraction:hourly',
   UserMemoryExtractionWithChatTopic = 'user_memory_extraction:chat_topic',

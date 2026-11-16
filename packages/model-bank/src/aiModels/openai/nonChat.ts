@@ -116,6 +116,23 @@ export const openaiASRModels: AIASRModelCard[] = [
   {
     contextWindowTokens: 16_000,
     description:
+      'GPT-4o Transcribe Diarize is a speech-to-text model that also labels who is speaking, returning timed speaker segments.',
+    displayName: 'GPT-4o Transcribe Diarize',
+    enabled: true,
+    id: 'gpt-4o-transcribe-diarize',
+    maxOutput: 2000,
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    type: 'asr',
+  },
+  {
+    contextWindowTokens: 16_000,
+    description:
       'GPT-4o Transcribe is a speech-to-text model that transcribes audio with GPT-4o, improving word error rate, language ID, and accuracy over the original Whisper model.',
     displayName: 'GPT-4o Transcribe',
     id: 'gpt-4o-transcribe',

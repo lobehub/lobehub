@@ -10,7 +10,7 @@ import {
   AsyncTaskStatus,
   AsyncTaskType,
 } from '@lobechat/types';
-import { and, eq, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, lt, or, sql } from 'drizzle-orm';
 
 import type { AsyncTaskSelectItem, NewAsyncTaskItem } from '../schemas';
 import { asyncTasks } from '../schemas';
@@ -129,6 +129,28 @@ export class AsyncTaskModel {
         inArray(asyncTasks.status, [AsyncTaskStatus.Pending, AsyncTaskStatus.Processing]),
       ),
     });
+  };
+
+  /** The earliest unfinished task of these types whose metadata contains `metadata`. */
+  findOldestActiveByMetadata = async (
+    types: AsyncTaskType[],
+    metadata: Record<string, unknown>,
+  ) => {
+    const [task] = await this.db
+      .select()
+      .from(asyncTasks)
+      .where(
+        and(
+          this.ownership(),
+          inArray(asyncTasks.type, types),
+          inArray(asyncTasks.status, [AsyncTaskStatus.Pending, AsyncTaskStatus.Processing]),
+          sql`${asyncTasks.metadata} @> ${JSON.stringify(metadata)}::jsonb`,
+        ),
+      )
+      .orderBy(asc(asyncTasks.createdAt), asc(asyncTasks.id))
+      .limit(1);
+
+    return task;
   };
 
   incrementUserMemoryExtractionProgress = async (taskId: string) => {

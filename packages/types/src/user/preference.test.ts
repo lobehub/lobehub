@@ -27,4 +27,13 @@ describe('UserPreferenceSchema', () => {
 
     expect(parsed).toMatchObject({ workspace: { order: ['ws-2', 'ws-1'] } });
   });
+
+  it('preserves the meeting auto-create switch', () => {
+    const parsed = UserPreferenceSchema.parse({
+      meeting: { autoCreateTasks: true },
+      telemetry: null,
+    });
+
+    expect(parsed.meeting).toEqual({ autoCreateTasks: true });
+  });
 });

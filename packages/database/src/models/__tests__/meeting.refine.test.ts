@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -72,6 +72,30 @@ describe('MeetingModel refine', () => {
     expect(detail?.speakers.map((speaker) => speaker.label).sort()).toEqual(['S1', 'S2']);
     const draft = await model.getDetail(id, { source: 'realtime' });
     expect(draft?.segments.map((segment) => segment.text)).toEqual(['draft']);
+  });
+
+  it('stores a transcript that is too large for a single INSERT', async () => {
+    const id = await finishedMeeting();
+    await model.startRefine(id);
+
+    // 10,000 rows bind ~70,000 parameters, past PostgreSQL's 65,535 cap, so the
+    // whole replace used to roll back and leave the meeting in `transcribing`.
+    const segments = Array.from({ length: 10_000 }, (_, seq) => ({
+      endMs: seq * 10 + 10,
+      seq,
+      speakerLabel: `S${seq % 2}`,
+      startMs: seq * 10,
+      text: `segment ${seq}`,
+    }));
+
+    const updated = await model.completeRefine(id, segments, { next: 'summarizing' });
+    expect(updated).toMatchObject({ error: null, status: 'summarizing' });
+
+    const [{ count }] = await serverDB
+      .select({ count: sql<number>`count(*)::int` })
+      .from(meetingSegments)
+      .where(and(eq(meetingSegments.meetingId, id), eq(meetingSegments.source, 'refine')));
+    expect(count).toBe(10_000);
   });
 
   it('records the failure code and clears it on retry', async () => {
