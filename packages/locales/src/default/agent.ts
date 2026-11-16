@@ -1371,6 +1371,7 @@ export default {
   'webhook.key.onceHint':
     'Copy this key now: it won\'t be shown again. Callers send it as "Authorization: Bearer <key>". Anyone with it can wake the agent; if it leaks, generate a new one.',
   'webhook.topic.continues': 'Continues "{{title}}"',
+  'webhook.topic.pickedGone': "The picked topic was deleted · calls use the webhook's own topic",
   'webhook.topic.empty': 'No matching topics',
   'webhook.topic.hint':
     'Pick one of your topics with this agent, or let the webhook keep a topic of its own.',

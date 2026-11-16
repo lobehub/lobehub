@@ -1065,6 +1065,7 @@
   "webhook.topic.loadFailed": "Couldn't load topics",
   "webhook.topic.own": "The webhook's own topic",
   "webhook.topic.ownHint": "Started on the first call",
+  "webhook.topic.pickedGone": "The picked topic was deleted · calls use the webhook's own topic",
   "webhook.topic.searchPlaceholder": "Search your topics with this agent",
   "webhook.topic.untitled": "Untitled topic",
   "webhook.topicMode.new": "New topic",

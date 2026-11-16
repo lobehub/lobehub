@@ -206,10 +206,13 @@ const WebhookItem = memo<WebhookItemProps>(
     ];
 
     const meta = [
-      source?.topicMode === 'reuse' && source.topicId && item.topic
-        ? t('webhook.topic.continues', {
-            title: item.topic.title?.trim() || t('webhook.topic.untitled'),
-          })
+      source?.topicMode === 'reuse' && source.topicId
+        ? item.topic
+          ? t('webhook.topic.continues', {
+              title: item.topic.title?.trim() || t('webhook.topic.untitled'),
+            })
+          : // The picked Topic was deleted or moved; calls now go to the webhook's own.
+            t('webhook.topic.pickedGone')
         : t(source?.topicMode === 'reuse' ? 'webhook.topicMode.reuse' : 'webhook.topicMode.new'),
       item.lastDeliveryAt
         ? t('webhook.lastCall', { time: dayjs(item.lastDeliveryAt).fromNow() })

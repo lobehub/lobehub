@@ -349,6 +349,31 @@ describe('generic webhook management', () => {
     );
   });
 
+  it('stops showing a picked topic once it is trashed or moved, keeping the choice', async () => {
+    await db.insert(agents).values({ id: `${agentId}-other`, userId: creator });
+    await db
+      .insert(topics)
+      .values({ agentId, id: 'picked-topic', title: 'On-call log', userId: creator });
+    const { item } = await caller().create({
+      agentId,
+      topicId: 'picked-topic',
+      topicMode: 'reuse',
+    });
+
+    await db.update(topics).set({ isDeleted: true }).where(eq(topics.id, 'picked-topic'));
+    expect((await caller().list({ agentId }))[0]).toMatchObject({
+      id: item.id,
+      source: { topicId: 'picked-topic' },
+      topic: null,
+    });
+
+    await db
+      .update(topics)
+      .set({ agentId: `${agentId}-other`, isDeleted: false })
+      .where(eq(topics.id, 'picked-topic'));
+    expect((await caller().list({ agentId }))[0].topic).toBeNull();
+  });
+
   it('refuses to edit an MCP subscription as a generic webhook', async () => {
     await db.insert(topics).values({ agentId, id: 'generic-router-topic', userId: creator });
     const mcp = await new InboundWebhookModel(db, creator, undefined, boundary.gateKeeper).create({

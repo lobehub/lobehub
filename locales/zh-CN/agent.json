@@ -1065,6 +1065,7 @@
   "webhook.topic.loadFailed": "话题加载失败",
   "webhook.topic.own": "Webhook 自己的话题",
   "webhook.topic.ownHint": "第一次调用时创建",
+  "webhook.topic.pickedGone": "所选话题已删除 · 调用改用这个 Webhook 自己的话题",
   "webhook.topic.searchPlaceholder": "搜索你与这个助理的话题",
   "webhook.topic.untitled": "未命名话题",
   "webhook.topicMode.new": "新话题",

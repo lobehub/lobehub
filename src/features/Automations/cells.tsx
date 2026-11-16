@@ -188,6 +188,18 @@ TargetCell.displayName = 'AutomationTargetCell';
 export const TopicCell = memo<{ item: InboundWebhookItem }>(({ item }) => {
   const { t } = useTranslation('setting');
   const { agent, topic } = item;
+  // A webhook starts its own topics (a new one per run, or by thread); its page lists every call
+  // and where it ran, as on the settings list.
+  if (agent && item.source.kind === 'generic')
+    return (
+      <WorkspaceLink
+        to={`/agent/${agent.id}/webhook`}
+        {...stylex.props(styles.topicLink)}
+        onClick={(event) => event.stopPropagation()}
+      >
+        {t('automations.target.webhookCalls')}
+      </WorkspaceLink>
+    );
   if (!agent || !topic) return <EmptyValue />;
 
   const topicTitle = topic.title?.trim() || t('automations.untitledTopic');

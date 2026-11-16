@@ -5,6 +5,7 @@ import type { InboundWebhookView } from '@/database/models/inboundWebhook';
 import { agents, topics, userConnectors } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { normalizeInboxAgentMeta } from '@/database/utils/inboxAgent';
+import { notTrashed } from '@/database/utils/softDelete';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 
 import { getInboundWebhookKind } from './kinds';
@@ -84,12 +85,16 @@ export async function inboundWebhookItems(
         ),
       ),
     db
-      .select({ id: topics.id, title: topics.title })
+      .select({ agentId: topics.agentId, id: topics.id, title: topics.title })
       .from(topics)
       .where(
-        inArray(
-          topics.id,
-          rows.flatMap((r) => [r.topicId, pinnedTopicId(r)].filter((id): id is string => !!id)),
+        and(
+          inArray(
+            topics.id,
+            rows.flatMap((r) => [r.topicId, pinnedTopicId(r)].filter((id): id is string => !!id)),
+          ),
+          // A trashed Topic is one calls no longer reach, so it is not shown as where they go.
+          notTrashed(topics.isDeleted),
         ),
       ),
   ]);
@@ -111,6 +116,13 @@ export async function inboundWebhookItems(
       );
       const canManage = canManageInboundWebhook(actor, row);
       const canConfigure = !!agentRow && canConfigureInboundWebhook(actor, row);
+      // The Topic calls go to, as the waker resolves it: one that still exists and is this agent's.
+      // A picked Topic that was deleted or moved is gone, and calls use the webhook's own.
+      const topicRow = agentRow
+        ? topicRows.find(
+            (t) => t.id === (row.topicId ?? pinnedTopicId(row)) && t.agentId === row.agentId,
+          )
+        : undefined;
       return [
         {
           agent: agentRow ? toAgentItem(agentRow) : null,
@@ -140,9 +152,7 @@ export async function inboundWebhookItems(
           name: row.name,
           source: kind.source(row),
           status: row.status as InboundWebhookItem['status'],
-          topic:
-            (agentRow && topicRows.find((t) => t.id === (row.topicId ?? pinnedTopicId(row)))) ||
-            null,
+          topic: topicRow ? { id: topicRow.id, title: topicRow.title } : null,
         },
       ];
     });
