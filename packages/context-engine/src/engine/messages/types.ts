@@ -226,6 +226,7 @@ export interface PlanTodoConfig {
  * MessagesEngine main parameters
  */
 export interface MessagesEngineParams {
+  enableMcpAppContext?: boolean;
   // ========== Required parameters ==========
   /** Original message list */
   messages: UIChatMessage[];

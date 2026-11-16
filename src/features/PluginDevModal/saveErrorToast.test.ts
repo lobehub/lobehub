@@ -44,6 +44,20 @@ describe('getSaveErrorToast', () => {
     });
   });
 
+  it.each([false, true])('shows why the MCP address was blocked (OAuth: %s)', (isOAuth) => {
+    // Regression: the refusal surfaced as "you are not allowed to modify this
+    // connector" with no reason, hiding the address policy and its switches.
+    const reason = 'The MCP server address resolves to a private IP address …';
+    const error = Object.assign(new Error(reason), {
+      data: { code: 'BAD_REQUEST', errorData: { type: 'SSRF_BLOCKED' }, httpStatus: 400 },
+    });
+
+    expect(getSaveErrorToast(error, isOAuth)).toEqual({
+      description: reason,
+      titleKey: 'mcpInstall.errorTypes.SSRF_BLOCKED',
+    });
+  });
+
   it('uses the plain install error outside the OAuth path', () => {
     expect(getSaveErrorToast(trpcError('BAD_REQUEST', 400, 'bad url'), false)).toEqual({
       titleKey: 'dev.saveError',

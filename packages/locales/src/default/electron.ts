@@ -42,6 +42,7 @@ export default {
   'navigation.document': 'Document',
   'navigation.memoryPreferences': 'Memory - Preferences',
   'navigation.memoryRules': 'Memory - Self-evolving',
+  'navigation.music': 'Music',
   'navigation.newChat': 'New Chat',
   'navigation.noPages': 'No pages yet',
   'navigation.onboarding': 'Onboarding',

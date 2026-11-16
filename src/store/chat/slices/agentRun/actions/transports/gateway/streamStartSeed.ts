@@ -1,4 +1,4 @@
-import type { StreamStartData } from '@lobechat/agent-gateway-client';
+import type { StreamStartData, StreamStartParentMessage } from '@lobechat/agent-gateway-client';
 import type { ConversationContext } from '@lobechat/types';
 
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
@@ -23,6 +23,65 @@ const seedCreatedAt = (
 
   return Number.isFinite(parentTime) && time <= parentTime ? parentTime + 1 : time;
 };
+
+interface SeedFields {
+  agentId?: string | null;
+  groupId?: string;
+  threadId?: string;
+  topicId?: string;
+}
+
+const insertSteerRow = (
+  get: () => ChatStore,
+  steer: StreamStartParentMessage,
+  shared: SeedFields,
+  dispatchContext: { operationId: string },
+): void => {
+  if (dbMessageSelectors.getDbMessageById(steer.id)(get())) return;
+
+  get().internal_dispatchMessage(
+    {
+      createdAt: seedCreatedAt(get, steer.createdAt, steer.parentId),
+      id: steer.id,
+      type: 'createMessage',
+      value: {
+        ...shared,
+        agentId: shared.agentId ?? undefined,
+        content: steer.content,
+        metadata: steer.metadata ?? undefined,
+        parentId: steer.parentId ?? undefined,
+        role: 'user',
+      },
+    },
+    dispatchContext,
+  );
+};
+
+/**
+ * Insert the steer user message a heterogeneous run just read from its live
+ * session (`step_complete` with `phase: 'user_message'`). The server already
+ * wrote it and the queue tray drops it now; without this it is missing from
+ * the chat until the reply it opens starts streaming.
+ */
+export const insertSteerMessage = (
+  get: () => ChatStore,
+  steer: StreamStartParentMessage,
+  context: ConversationContext,
+  dispatchContext: { operationId: string },
+): void =>
+  insertSteerRow(
+    get,
+    steer,
+    {
+      // The server persists it under the executing agent, which can differ
+      // from the conversation owner (an @-mentioned or sub-agent run).
+      agentId: steer.agentId ?? context.agentId,
+      groupId: context.groupId ?? undefined,
+      threadId: context.threadId ?? undefined,
+      topicId: context.topicId ?? undefined,
+    },
+    dispatchContext,
+  );
 
 /**
  * Insert the rows a seeded `stream_start` names into the local store, so the
@@ -50,27 +109,7 @@ export const insertStreamStartSeeds = (
   };
 
   // Ahead of the reply, so the list keeps the turn's order.
-  if (
-    parent &&
-    parent.id === seed.parentId &&
-    !dbMessageSelectors.getDbMessageById(parent.id)(get())
-  ) {
-    get().internal_dispatchMessage(
-      {
-        createdAt: seedCreatedAt(get, parent.createdAt, parent.parentId),
-        id: parent.id,
-        type: 'createMessage',
-        value: {
-          ...shared,
-          content: parent.content,
-          metadata: parent.metadata ?? undefined,
-          parentId: parent.parentId ?? undefined,
-          role: 'user',
-        },
-      },
-      dispatchContext,
-    );
-  }
+  if (parent && parent.id === seed.parentId) insertSteerRow(get, parent, shared, dispatchContext);
 
   get().internal_dispatchMessage(
     {

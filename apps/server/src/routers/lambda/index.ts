@@ -58,6 +58,7 @@ import { comfyuiRouter } from './comfyui';
 import { composioRouter } from './composio';
 import { configRouter } from './config';
 import { connectorRouter } from './connector';
+import { contactRouter } from './contact';
 import { dashboardRouter } from './dashboard';
 import { deviceRouter } from './device';
 import { deviceMetricRouter } from './deviceMetric';
@@ -88,6 +89,7 @@ import { meetingRouter } from './meeting';
 import { messageRouter } from './message';
 import { messengerRouter } from './messenger';
 import { metricRouter } from './metric';
+import { musicRouter } from './music';
 import { notebookRouter } from './notebook';
 import { notificationRouter } from './notification';
 import { oauthAppRouter } from './oauthApp';
@@ -153,6 +155,7 @@ export const lambdaRouter = router({
   canvas: canvasRouter,
   changelog: changelogRouter,
   channel: channelRouter,
+  contact: contactRouter,
   brief: briefRouter,
   aiAgent: aiAgentRouter,
   aiChat: aiChatRouter,
@@ -199,6 +202,7 @@ export const lambdaRouter = router({
   message: messageRouter,
   messenger: messengerRouter,
   metric: metricRouter,
+  music: musicRouter,
   notebook: notebookRouter,
   notification: notificationRouter,
   oauthApp: oauthAppRouter,

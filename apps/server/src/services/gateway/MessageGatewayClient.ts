@@ -59,6 +59,18 @@ export interface MessageGatewayStats {
   total: number;
 }
 
+// ─── Errors ───
+
+export class MessageGatewaySendError extends Error {
+  readonly status: number;
+
+  constructor(status: number, detail: string) {
+    super(`message-gateway send failed (${status}): ${detail}`);
+    this.name = 'MessageGatewaySendError';
+    this.status = status;
+  }
+}
+
 // ─── Client ───
 
 /**
@@ -67,7 +79,9 @@ export interface MessageGatewayStats {
  * A gateway is a pure connection proxy — it only manages persistent
  * connections (WebSocket/long-polling) and forwards inbound events to
  * LobeHub's webhook. Outbound messaging is NOT routed through the gateway;
- * LobeHub calls platform REST APIs directly.
+ * LobeHub calls platform REST APIs directly — except for platforms with no
+ * REST send API, whose replies the gateway sends on the connection it holds
+ * (`sendText`, WeCom on the Node gateway).
  *
  * Deliberately one class for every host: the deployments speak the same HTTP
  * protocol, and the reconcile sync diffs them uniformly. Per-host behaviour
@@ -170,6 +184,31 @@ export class MessageGatewayClient {
       headers: { 'Content-Type': 'application/json' },
       method: 'DELETE',
     });
+  }
+
+  // ─── Outbound ───
+
+  /**
+   * Send `text` on a connection the gateway holds. Only for platforms whose replies ride the
+   * connection itself (WeCom on the Node gateway; see `resolveReplyConnectionHost`) — every other
+   * platform sends through its REST API from LobeHub. Returns the platform message id when known.
+   */
+  async sendText(
+    connectionId: string,
+    platformThreadId: string,
+    text: string,
+  ): Promise<{ messageId?: string }> {
+    const res = await this.post(`/api/connections/${encodeURIComponent(connectionId)}/send`, {
+      platformThreadId,
+      text,
+    });
+
+    if (!res.ok) {
+      const error = await res.text();
+      throw new MessageGatewaySendError(res.status, error);
+    }
+
+    return res.json();
   }
 
   // ─── Status & Admin ───

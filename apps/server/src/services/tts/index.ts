@@ -7,6 +7,7 @@ import { LOBE_DEFAULT_MODEL_LIST, TTS_AUDIO_MIME_TYPES, validateTTSParams } from
 import { ModelProvider } from 'model-bank/modelProvider';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
+import { AiModelModel } from '@/database/models/aiModel';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
@@ -21,12 +22,17 @@ export const INLINE_TTS_AUDIO_FORMATS = ['mp3', 'opus', 'aac'] as const;
 /**
  * Input cap for providers whose models accept far more text than fits in one inline
  * response. Audio comes back in a single base64 body, so a long ElevenLabs Flash request
- * (up to 40,000 characters) would exceed the serverless response limit only after the
- * synthesis was billed. Matches the OpenAPI `/audio/speech` input limit.
+ * (up to 40,000 characters), or a Fish Audio / Doubao Speech request with no documented
+ * limit, would exceed the serverless response limit only after the synthesis was billed.
+ * Matches the OpenAPI `/audio/speech` input limit.
  */
 export const INLINE_TTS_MAX_INPUT_CHARACTERS = 4096;
 
-const INLINE_INPUT_CAPPED_PROVIDERS = new Set<string>([ModelProvider.ElevenLabs]);
+const INLINE_INPUT_CAPPED_PROVIDERS = new Set<string>([
+  ModelProvider.DoubaoSpeech,
+  ModelProvider.ElevenLabs,
+  ModelProvider.FishAudio,
+]);
 
 export interface TTSSynthesizeParams {
   emotion?: string;
@@ -133,21 +139,26 @@ const toProviderError = (error: unknown, provider: string): TTSProviderError => 
   return new TTSProviderError(message, errorType, error);
 };
 
+const KNOWN_PROVIDERS = new Set<string>(Object.values(ModelProvider));
+
 /**
- * Built-in card of a TTS model: the provider's own card first, then any provider
- * serving the same model id (aggregators reuse upstream cards).
+ * Built-in card of a TTS model: the provider's own card first, then, for a built-in provider
+ * only, any provider serving the same model id (aggregators reuse upstream cards).
  */
 export const findTTSModelCard = (
   provider: string,
   model: string,
 ): (AITTSModelCard & { providerId?: string }) | undefined => {
   const cards = LOBE_DEFAULT_MODEL_LIST.filter((card) => card.type === 'tts' && card.id === model);
+  const own = cards.find((card) => card.providerId === provider);
+  if (own) return own as AITTSModelCard & { providerId?: string };
 
-  return (cards.find((card) => card.providerId === provider) ?? cards[0]) as
+  // A built-in provider (e.g. the LobeHub provider) serves vendor models under their own ids,
+  // so it borrows the vendor card. A user-created custom provider's `s1` or `tts-1` is its
+  // own model and must not inherit another vendor's limits, params or default voice.
+  return (KNOWN_PROVIDERS.has(provider) ? cards[0] : undefined) as
     (AITTSModelCard & { providerId?: string }) | undefined;
 };
-
-const KNOWN_PROVIDERS = new Set<string>(Object.values(ModelProvider));
 
 /**
  * Splits a public-API model reference into provider and model. An explicit provider wins;
@@ -217,7 +228,9 @@ export class TTSService {
       }
     }
 
-    const voice = request.voice ?? card?.parameters?.voice?.default ?? 'alloy';
+    const savedVoice =
+      request.voice === undefined ? await this.findSavedVoice(provider, model, card) : undefined;
+    const voice = request.voice ?? savedVoice ?? card?.parameters?.voice?.default ?? 'alloy';
 
     let runtime: ModelRuntime;
     try {
@@ -235,7 +248,13 @@ export class TTSService {
     let result: Awaited<ReturnType<typeof runtime.textToSpeech>>;
     try {
       result = await runtime.textToSpeech(
-        { input, model, params, voice, voiceIsDefault: request.voice === undefined },
+        {
+          input,
+          model,
+          params,
+          voice,
+          voiceIsDefault: request.voice === undefined && savedVoice === undefined,
+        },
         { metadata: { trigger: RequestTrigger.Tts }, user: this.userId },
       );
     } catch (error) {
@@ -257,5 +276,33 @@ export class TTSService {
       mimeType: TTS_AUDIO_MIME_TYPES[result.format],
       usage: result.usage,
     };
+  }
+
+  /**
+   * The default voice the user saved for this model in Settings → AI Providers. A voice that
+   * is no longer in the card's catalog (renamed or retired upstream) is ignored, so a stale
+   * preference falls back to the card default instead of failing every request. Reading the
+   * preference never blocks synthesis.
+   */
+  private async findSavedVoice(
+    provider: string,
+    model: string,
+    card: AITTSModelCard | undefined,
+  ): Promise<string | undefined> {
+    try {
+      const row = await new AiModelModel(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      ).findByIdAndProvider(model, provider);
+      const saved = row?.settings?.ttsVoice?.trim();
+      if (!saved) return undefined;
+      if (card?.voices?.length && !card.voices.some((item) => item.id === saved)) return undefined;
+
+      return saved;
+    } catch (error) {
+      console.error('[TTSService] failed to read the saved default voice:', error);
+      return undefined;
+    }
   }
 }

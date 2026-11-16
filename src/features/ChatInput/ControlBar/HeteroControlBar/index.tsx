@@ -25,7 +25,12 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
-import { ClaudeCodeQuotaMenu, CodexQuotaMenu, KimiCodeQuotaMenu } from './QuotaMenu';
+import {
+  AntigravityQuotaMenu,
+  ClaudeCodeQuotaMenu,
+  CodexQuotaMenu,
+  KimiCodeQuotaMenu,
+} from './QuotaMenu';
 
 const styles = stylex.create({
   // Pinned to the same 28px row as the plain ControlBar so the composer footer
@@ -195,6 +200,11 @@ const HeteroControlBar = memo(() => {
     heteroProvider?.type === 'kimi-code' &&
     (isLocalHeteroExecution || !!quotaDeviceId);
 
+  const shouldShowAntigravityQuota =
+    isSubscriptionAuth &&
+    heteroProvider?.type === 'antigravity' &&
+    (isLocalHeteroExecution || !!quotaDeviceId);
+
   if (isAccessLoading) return <HeteroControlBarSkeleton />;
 
   // A can-use collaborator may choose only their execution device; working
@@ -239,7 +249,8 @@ const HeteroControlBar = memo(() => {
         {(shouldShowApiCredits ||
           (shouldShowClaudeQuota && quotaDeviceId) ||
           (shouldShowCodexQuota && quotaDeviceId) ||
-          (shouldShowKimiCodeQuota && quotaDeviceId)) && (
+          (shouldShowKimiCodeQuota && quotaDeviceId) ||
+          (shouldShowAntigravityQuota && quotaDeviceId)) && (
           <Flexbox
             horizontal
             align={'center'}
@@ -247,6 +258,13 @@ const HeteroControlBar = memo(() => {
             gap={4}
           >
             {shouldShowApiCredits && <ChatInputCredits />}
+            {shouldShowAntigravityQuota && quotaDeviceId && (
+              <AntigravityQuotaMenu
+                command={heteroProvider?.command}
+                deviceId={quotaDeviceId}
+                env={heteroProvider?.env}
+              />
+            )}
             {shouldShowClaudeQuota && quotaDeviceId && (
               <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
             )}
@@ -335,6 +353,13 @@ const HeteroControlBar = memo(() => {
         gap={4}
       >
         {shouldShowApiCredits && <ChatInputCredits />}
+        {shouldShowAntigravityQuota && (
+          <AntigravityQuotaMenu
+            command={heteroProvider?.command}
+            deviceId={quotaDeviceId}
+            env={heteroProvider?.env}
+          />
+        )}
         {shouldShowCodexQuota && (
           <CodexQuotaMenu
             command={heteroProvider?.command}

@@ -5,6 +5,25 @@ export default {
   'directMention.progress.usingTool': 'Using {{name}}…',
   'directMention.progress.viewFullRecord': 'View full record',
   'sharePage.app.linkCopied': 'Link copied',
+  'heteroAgent.antigravityQuota.title': 'Antigravity quota',
+  'heteroAgent.antigravityQuota.tooltip': 'View Antigravity model quotas',
+  'heteroAgent.antigravityQuota.fiveHour': '5 hours',
+  'heteroAgent.antigravityQuota.remainingAmount': '{{amount}} remaining',
+  'heteroAgent.antigravityQuota.unknown': 'Unknown',
+  'heteroAgent.antigravityQuota.disabled': 'Unavailable',
+  'heteroAgent.antigravityQuota.resetUnconfirmed':
+    'Reset time reached. Refresh to check the latest quota.',
+  'heteroAgent.antigravityQuota.stale': 'Showing the last query. Refresh to confirm current quota.',
+  'heteroAgent.antigravityQuota.authRequired': 'Run agy in a terminal to sign in, then refresh.',
+  'heteroAgent.antigravityQuota.cliNotFound':
+    'Antigravity CLI was not found on this device. Install agy, then refresh.',
+  'heteroAgent.antigravityQuota.unsupported':
+    'Update agy to a version that supports structured quota queries, then refresh.',
+  'heteroAgent.antigravityQuota.timeout':
+    'The quota query timed out. Check the device connection and try again.',
+  'heteroAgent.antigravityQuota.error':
+    'Could not query Antigravity quota. Check the device and try again.',
+
   'sharePage.app.open': 'Open app',
   'sharePage.app.help': 'Trouble opening the app?',
   'sharePage.app.helpDescription':
@@ -26,6 +45,7 @@ export default {
   'sharePage.app.fallback.download': 'Get the app',
   'sharePage.app.fallback.title': 'App didn’t open?',
 
+  'newAntigravityAgent': 'Add Antigravity',
   'backgroundActivity.alertDesc': '{{name}} is using {{memory}} of memory and {{cpu}} CPU.',
   'backgroundActivity.cpu': 'CPU',
   'backgroundActivity.details': 'View details',
@@ -317,6 +337,7 @@ export default {
   'inaccessibleFile.desc': 'No access — it may have been set to private or deleted by its owner',
   'inaccessibleFile.name': 'Unavailable file',
   'internalLink.agent.open': 'Open agent',
+  'agentProfile.creator': 'Creator',
   'agentProfile.files_one': '{{count}} file',
   'agentProfile.files_other': '{{count}} files',
   'agentProfile.knowledgeBases_one': '{{count}} library',
@@ -894,7 +915,7 @@ export default {
     'Turn it on in Settings → Labs, or switch this agent to Subscription authentication.',
   'heteroAgent.apiMode.labDisabled.title': 'Provider binding is a Labs experiment',
   'heteroAgent.apiMode.localOnly.desc':
-    'Switch the execution environment to Local device, or use Subscription authentication.',
+    'Switch the execution environment to This computer, or use Subscription authentication.',
   'heteroAgent.apiMode.localOnly.title': 'API mode requires Desktop local execution',
   'heteroAgent.apiMode.modelUnavailable':
     'The model "{{providerId}}/{{model}}" is disabled or no longer available.',
@@ -909,6 +930,7 @@ export default {
   'heteroAgent.executionTarget.sandboxUnsupported':
     '{{name}} currently runs only on a local or connected device',
   'heteroAgent.executionTarget.auto': 'Auto',
+  'heteroAgent.executionTarget.builtinGroup': 'Built-in',
   'heteroAgent.executionTarget.autoDesc':
     'Use an online device automatically, picking one when several are available',
   'heteroAgent.executionTarget.fixedTip':
@@ -917,8 +939,8 @@ export default {
     'Choose where this Agent runs. A device can read and write files or operate a computer; Cloud Sandbox runs in an isolated temporary environment.',
   'heteroAgent.executionTarget.loadFailed': 'Couldn’t load devices.',
   'heteroAgent.executionTarget.loading': 'Loading devices…',
-  'heteroAgent.executionTarget.local': 'Local device',
-  'heteroAgent.executionTarget.localDesc': 'Run as a local process on this desktop app',
+  'heteroAgent.executionTarget.local': 'This computer',
+  'heteroAgent.executionTarget.localDesc': 'Runs right here, with access to your files and tools',
   'heteroAgent.executionTarget.localSandbox': 'Local sandbox',
   'heteroAgent.executionTarget.localSandboxDesc':
     'Run on this computer, with commands limited to the working directory and no network',
@@ -930,7 +952,7 @@ export default {
   'heteroAgent.executionTarget.localSandboxUnavailable': 'Not available on this device: {{reason}}',
   'heteroAgent.executionTarget.manage': 'Manage',
   'heteroAgent.executionTarget.noDevices':
-    'No remote devices yet. Run `lh connect` on another machine to add one.',
+    'No other devices yet. Run `lh connect` on another computer to add one.',
   'heteroAgent.executionTarget.noWorkspaceDevices':
     'No workspace devices yet. Run `{{cmd}}` on a machine to enroll it for every member.',
   'heteroAgent.executionTarget.none': 'No device',
@@ -947,6 +969,7 @@ export default {
   'heteroAgent.executionTarget.reconnect': 'Reconnect',
   'heteroAgent.executionTarget.reconnectFailed':
     'Could not reconnect this device. Make sure the desktop app is running, then try again.',
+  'heteroAgent.executionTarget.otherDevicesGroup': 'Other devices',
   'heteroAgent.executionTarget.personalGroup': 'Private Devices',
   'heteroAgent.executionTarget.sandbox': 'Cloud Sandbox',
   'heteroAgent.executionTarget.sandboxDesc': 'Runs in the cloud, no machine needed',
@@ -960,7 +983,6 @@ export default {
     'This topic has been running on {{name}}, where its working directory and agent session are kept. After switching, its next turn starts a fresh session in the new environment. New topics will use this choice too.',
   'heteroAgent.executionTarget.switchTopic.ok': 'Switch',
   'heteroAgent.executionTarget.switchTopic.title': 'Move this topic to another environment?',
-  'heteroAgent.executionTarget.thisDevice': 'This device',
   'heteroAgent.executionTarget.unknownDevice': 'Unknown device',
   'heteroAgent.executionTarget.wake': 'Wake now',
   'heteroAgent.executionTarget.wakeFailed': 'Could not wake this cloud device. Try again.',
@@ -1074,6 +1096,9 @@ export default {
   'knowledgeBase.title': 'Library',
   'knowledgeBase.uploadGuide': "Uploaded files can be viewed in the 'Resources' section.",
   'knowledgeBase.viewMore': 'View More',
+  'memberProfile.email': 'Email',
+  'memberProfile.jobTitle': 'Job title',
+  'memberProfile.responsibilities': 'Responsibilities',
   'memberSelection.addMember': 'Add Member',
   'memberSelection.allMembers': 'All members',
   'memberSelection.createGroup': 'Create Group',
@@ -1256,6 +1281,16 @@ export default {
     "Skill wasn't added. Retry, or create an Agent anyway.",
   'createModal.skillSuggestion.title': 'A Skill may fit better',
   'createModal.title': 'What should this Agent do?',
+  'antigravityInstallGuide.actions.openDocs': 'Open Install Guide',
+  'antigravityInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'antigravityInstallGuide.afterInstall':
+    'After installing, run `agy` and sign in with your Google account, then retry your message or click Re-detect in System Tools.',
+  'antigravityInstallGuide.desc':
+    'Antigravity needs the native agy CLI with stream-json support. Follow the install guide for your operating system and make sure the `agy` command is available.',
+  'antigravityInstallGuide.menuNotification.title': 'Antigravity CLI not found',
+  'antigravityInstallGuide.reason': 'LobeHub could not start Antigravity: {{message}}',
+  'antigravityInstallGuide.title': 'Install Antigravity CLI',
+  'connectAgent.providerDesc.antigravity': 'Google coding agent CLI',
   'ampInstallGuide.actions.openDocs': 'Open Install Guide',
   'ampInstallGuide.actions.openSystemTools': 'Open System Tools',
   'ampInstallGuide.afterInstall':
@@ -1644,11 +1679,14 @@ export default {
   'pageCopilot.title': 'Page Agent',
   'pageSelection.lines': 'Lines {{start}}-{{end}}',
   'pageSelection.reference': 'Selected Text',
-  'textSelection.added': 'Added to conversation context',
-  'textSelection.addToConversation': 'Add to conversation',
-  'textSelection.title': 'Message selection',
+  'textSelection.copied': 'Copied',
+  'textSelection.copy': 'Copy',
+  'textSelection.quote': 'Quote',
   'pin': 'Pin',
   'pinOff': 'Unpin',
+  'pinForTeam': 'Pin for team',
+  'pinForTeamForbidden': 'Only workspace owners and admins can change team pins',
+  'unpinForTeam': 'Unpin for team',
   'rag.referenceChunks': 'Reference Source',
   'rag.userQuery.actions.delete': 'Delete Query Rewrite',
   'rag.userQuery.actions.regenerate': 'Regenerate Query',
@@ -3569,6 +3607,9 @@ export default {
     'File uploads are not supported in browser mode; only images are allowed.',
   'upload.clientMode.visionNotSupported':
     'The current model does not support visual recognition. Please switch to a different model to use this feature.',
+  'upload.image.label': 'Image {{number}}',
+  'upload.image.preview': 'Preview {{name}}',
+  'upload.image.remove': 'Remove {{name}}',
   'upload.localPathReference':
     'Large files are referenced by their local path instead of uploaded, so the agent reads the original file directly.',
   'upload.preview.prepareTasks': 'Preparing chunks...',
@@ -4434,5 +4475,8 @@ export default {
   'taskProject.searchPlaceholder': 'Search projects…',
   'taskProject.unavailable': 'Unavailable project',
   'taskList.filter.field.label': 'Label',
+  'taskList.find.clear': 'Clear search',
+  'taskList.find.open': 'Find in view',
+  'taskList.find.placeholder': 'Find in view…',
   'taskList.groupBy.labelGroup': 'Label: {{name}}',
 };

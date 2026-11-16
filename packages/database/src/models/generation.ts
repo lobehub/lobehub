@@ -4,6 +4,7 @@ import type {
   Generation,
   GenerationAsset,
   ImageGenerationAsset,
+  MusicGenerationAsset,
   VideoGenerationAsset,
   VideoGenerationTaskMetadata,
 } from '@lobechat/types';
@@ -137,7 +138,7 @@ export class GenerationModel {
 
   async createAssetAndFile(
     id: string,
-    asset: GenerationAsset,
+    asset: GenerationAsset | MusicGenerationAsset,
     file: Omit<NewFile, 'id' | 'userId'>,
     source: FileSource = FileSource.ImageGeneration,
   ): Promise<{ file: { id: string } } | undefined> {
@@ -164,7 +165,8 @@ export class GenerationModel {
       await this.update(
         id,
         {
-          asset,
+          // The column type predates music; the stored JSON shape is self-describing via `type`
+          asset: asset as GenerationAsset,
           fileId: newFile.id,
         },
         tx,
@@ -226,7 +228,19 @@ export class GenerationModel {
   async transformGeneration(generation: GenerationWithAsyncTask): Promise<Generation> {
     // Process asset URLs if they exist, following the same logic as in generationBatch.ts
     const asset = generation.asset as ImageGenerationAsset | VideoGenerationAsset | null;
-    if (asset && asset.url && asset.thumbnailUrl) {
+    const musicAsset = asset?.type === 'audio' ? (asset as unknown as MusicGenerationAsset) : null;
+    if (musicAsset?.url) {
+      // Songs have no thumbnail: resolve the audio and the optional cover art
+      const [url, coverUrl] = await Promise.all([
+        this.fileService.getFileAccessUrl({
+          fileId: generation.fileId ?? undefined,
+          url: musicAsset.url,
+        }),
+        musicAsset.coverUrl ? this.fileService.getFullFileUrl(musicAsset.coverUrl) : undefined,
+      ]);
+      musicAsset.url = url;
+      if (coverUrl) musicAsset.coverUrl = coverUrl;
+    } else if (asset && asset.url && asset.thumbnailUrl) {
       const urlPromises: Promise<string>[] = [
         this.fileService.getFileAccessUrl({
           fileId: generation.fileId ?? undefined,

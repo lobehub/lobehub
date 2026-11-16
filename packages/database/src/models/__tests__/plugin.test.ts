@@ -195,6 +195,63 @@ describe('PluginModel', () => {
     });
   });
 
+  describe('Composio projection in a workspace', () => {
+    const workspaceId = 'plugin-composio-ws';
+    const composio = (connectedAccountId: string) => ({
+      composio: { appSlug: 'GMAIL', authConfigId: 'cfg', connectedAccountId, status: 'ACTIVE' },
+    });
+
+    beforeEach(async () => {
+      await serverDB
+        .insert(workspaces)
+        .values({ id: workspaceId, name: 'WS', primaryOwnerId: userId, slug: workspaceId });
+      // One projection row per member for the same app, plus a non-Composio plugin.
+      await new PluginModel(serverDB, userId, workspaceId).create({
+        customParams: composio('acc-legacy'),
+        identifier: 'gmail',
+        type: 'plugin',
+      });
+      await new PluginModel(serverDB, '456', workspaceId).create({
+        customParams: composio('acc-private'),
+        identifier: 'gmail',
+        type: 'plugin',
+      });
+      await new PluginModel(serverDB, userId, workspaceId).create({
+        identifier: 'search',
+        type: 'plugin',
+      });
+    });
+
+    it('lists every member’s Composio rows with who wrote them', async () => {
+      const rows = await new PluginModel(serverDB, '456', workspaceId).queryComposioMirrors([
+        'gmail',
+        'search',
+      ]);
+
+      expect(
+        rows.map((row) => [row.userId, row.customParams?.composio?.connectedAccountId]).sort(),
+      ).toEqual([
+        ['456', 'acc-private'],
+        [userId, 'acc-legacy'],
+      ]);
+      expect(await new PluginModel(serverDB, '456', workspaceId).queryComposioMirrors([])).toEqual(
+        [],
+      );
+    });
+
+    it('removes only the rows mirroring one account', async () => {
+      await new PluginModel(serverDB, '456', workspaceId).deleteComposioMirrors(
+        'gmail',
+        'acc-private',
+      );
+
+      const rows = await new PluginModel(serverDB, userId, workspaceId).queryComposioMirrors();
+      expect(rows.map((row) => row.customParams?.composio?.connectedAccountId)).toEqual([
+        'acc-legacy',
+      ]);
+    });
+  });
+
   describe('update', () => {
     it('should update an installed plugin', async () => {
       await serverDB.insert(userInstalledPlugins).values({

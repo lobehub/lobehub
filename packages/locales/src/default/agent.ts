@@ -82,6 +82,27 @@ export default {
     'On the QQ Open Platform, create a bot and finish its basic setup.',
   'channel.quickSetup.qq.credentials.title': 'Copy the App ID and App Secret',
   'channel.quickSetup.qq.credentials.desc': "Find them in the bot's Development settings.",
+  'channel.quickSetup.wecom.create.title': 'Create an AI bot in API mode',
+  'channel.quickSetup.wecom.create.desc':
+    'In the WeCom admin console, go to Smart Zone → AI Bots, create a bot, and choose API mode with a long connection.',
+  'channel.quickSetup.wecom.credentials.title': 'Copy the BotID and Secret',
+  'channel.quickSetup.wecom.credentials.desc':
+    "Find them in the bot's API settings. A bot can be connected to only one place at a time.",
+  'channel.quickSetup.dingtalk.create.title': 'Create an internal app',
+  'channel.quickSetup.dingtalk.create.desc':
+    'In the DingTalk developer console, create an internal app, then copy the Client ID and Client Secret from Credentials & Basic Info.',
+  'channel.quickSetup.dingtalk.robot.title': 'Add the robot and choose Stream mode',
+  'channel.quickSetup.dingtalk.robot.desc':
+    'Under App Capabilities, add Robot, fill in its details and set the message receiving mode to Stream mode.',
+  'channel.quickSetup.dingtalk.robotWebhook.title': 'Add the robot and choose HTTP callback',
+  'channel.quickSetup.dingtalk.robotWebhook.desc':
+    'Under App Capabilities, add Robot, fill in its details, set the message receiving mode to HTTP callback, and paste the Webhook URL shown here after saving as the message receiving address.',
+  'channel.quickSetup.dingtalk.permissions.title': 'Grant the robot send permission',
+  'channel.quickSetup.dingtalk.permissions.desc':
+    'Under Permissions, request qyapi_robot_sendmsg so the bot can reply in single and group chats.',
+  'channel.quickSetup.dingtalk.publish.title': 'Publish a version',
+  'channel.quickSetup.dingtalk.publish.desc':
+    'Under Version Management, publish and choose who can see the robot. Internal apps go live without review.',
   'channel.quickSetup.line.account.title': 'Create a LINE Official Account',
   'channel.quickSetup.line.account.desc':
     'Sign in with your LINE Business ID and create the account the bot speaks as.',
@@ -151,6 +172,8 @@ export default {
   'channel.home.title': 'Chat with <avatar/>{{name}} on Your Favorite Chat App',
   'channel.platform.default.description':
     'Let people reach this agent from {{name}} without switching apps—ideal for anyone who wants help close at hand.',
+  'channel.platform.dingtalk.description':
+    'Answer questions and assist work in single chats and group @-mentions—ideal for teams that collaborate in DingTalk.',
   'channel.platform.discord.description':
     'Support communities in servers and DMs—ideal for moderators, member support, and always-on help.',
   'channel.platform.feishu.description':
@@ -163,6 +186,8 @@ export default {
     'Provide help in direct and group chats—ideal for customer service, communities, and official accounts.',
   'channel.platform.qq.description':
     'Serve users in private, group, and guild chats—ideal for Chinese communities, support, and fan groups.',
+  'channel.platform.wecom.description':
+    'Answer colleagues in WeCom direct chats and in internal group chats when they @-mention the bot—ideal for teams that already work in WeCom.',
   'channel.platform.slack.description':
     'Answer questions and run agent workflows in channels or DMs—ideal for teams that live in Slack.',
   'channel.platform.telegram.description':
@@ -215,9 +240,25 @@ export default {
     'The bot session has expired. Save the bot again to reconnect it.',
   'channel.connectionError.upstream_unavailable':
     'The platform service is temporarily unavailable. LobeHub will try again later.',
+  'channel.connectionError.webhook_mode_required':
+    'This deployment can only connect this platform in Webhook mode. Switch the connection mode to Webhook and update the callback address in the platform console.',
   'channel.endpointUrl': 'Webhook URL',
   'channel.endpointUrlHint':
     'Please copy this URL and paste it into the <bold>{{fieldName}}</bold> field in the {{name}} Developer Portal.',
+  'channel.dingtalk.clientId': 'Client ID (AppKey)',
+  'channel.dingtalk.clientIdHint':
+    'From the DingTalk developer console → your internal app → Credentials & Basic Info. Formerly called AppKey.',
+  'channel.dingtalk.clientIdPlaceholder': 'e.g. dingxxxxxxxxxxxxxxxx',
+  'channel.dingtalk.clientSecret': 'Client Secret (AppSecret)',
+  'channel.dingtalk.clientSecretHint':
+    'Shown next to the Client ID. Formerly called AppSecret. It will be encrypted and stored securely.',
+  'channel.dingtalk.description':
+    'Connect this agent to a DingTalk robot for single chats and group @-mentions.',
+  'channel.dingtalk.identifierInvalid':
+    'Use only letters, digits, hyphens and underscores. Copy the value from the DingTalk developer console without spaces.',
+  'channel.dingtalk.robotCode': 'RobotCode',
+  'channel.dingtalk.robotCodeHint':
+    "Optional. An internal-app robot's RobotCode is its Client ID, which is used when this is blank. Fill it in only if the robot page shows a different code.",
   'channel.feishu.description': 'Connect this agent to Feishu for private and group chats.',
   'channel.feishu.webhookMigrationTitle': 'Consider migrating to WebSocket mode',
   'channel.feishu.webhookMigrationDesc':
@@ -308,6 +349,11 @@ export default {
   'channel.qq.webhookMigrationTitle': 'Consider migrating to WebSocket mode',
   'channel.qq.webhookMigrationDesc':
     'WebSocket mode provides real-time event delivery and automatic reconnection without needing a callback URL. To migrate, create a new bot on QQ Open Platform without configuring a callback URL, then switch the Connection Mode to WebSocket under Connection options on the Connect tab.',
+  'channel.wecom.botId': 'BotID',
+  'channel.wecom.botIdHint': 'The BotID of your WeCom AI bot (API mode).',
+  'channel.wecom.secret': 'Secret',
+  'channel.wecom.secretHint':
+    "The bot's long-connection Secret. Connecting the same bot anywhere else disconnects it here.",
   'channel.wechat.description':
     'Connect this agent to WeChat via iLink Bot for private and group chats.',
   'channel.wechatQrExpired': 'QR code expired. Please refresh to get a new one.',
@@ -802,6 +848,8 @@ export default {
   'channel.userIdMissingDesc':
     "Without it, AI tools can't reach you with reminders, and pairing approvals will fail. Send /whoami to the bot to get your ID, then fill it in on the Access tab.",
   'channel.userIdMissingTitle': 'Add your platform User ID',
+  'channel.userIdHint.dingtalk':
+    'Your DingTalk user ID (staff ID). Find it in the DingTalk admin console \u2192 Contacts \u2192 member details, or send /whoami to the bot in a direct message.',
   'channel.userIdHint.discord':
     'Enable Developer Mode (Settings → Advanced), then right-click your avatar → Copy User ID.',
   'channel.userIdHint.feishu':
@@ -1018,6 +1066,11 @@ export default {
   'share.visitor.profile.ctaSignIn': 'Sign in to start',
   'share.visitor.profile.freeNote': 'Free · paid for by the creator',
   'share.visitor.profile.freeNoteWorkspace': 'Free · paid for by the Workspace',
+  'share.visitor.profile.lobotFallback.description':
+    'If Lobot is not installed yet, download it to chat with this Agent from your desktop, or keep chatting in the browser.',
+  'share.visitor.profile.lobotFallback.download': 'Download Lobot',
+  'share.visitor.profile.lobotFallback.title': 'Lobot didn’t open',
+  'share.visitor.profile.openInLobot': 'Open in Lobot',
   'share.visitor.profile.metrics.conversations': 'Topics',
   'share.visitor.profile.metrics.conversationsCaption': 'started so far',
   'share.visitor.profile.metrics.tools': 'Open tools',

@@ -47,12 +47,12 @@ const DisputeNote = memo<{ dispute: VerifyCheckDispute }>(({ dispute }) => {
     >
       <Flexbox horizontal align={'center'} gap={6} wrap={'wrap'}>
         <Icon color={cssVar.colorTextTertiary} icon={Scale} size={13} />
-        <Text fontSize={11} type={'secondary'}>
+        <Text fontSize={12} type={'secondary'}>
           {t('acceptance.dispute.title')} · {t(`acceptance.dispute.kind.${dispute.kind}`)}
         </Text>
         {dispute.kind === 'invalid_criterion' && (
           <Text
-            fontSize={11}
+            fontSize={12}
             style={{
               color: arbitration ? OUTCOME_COLOR[arbitration.outcome] : cssVar.colorTextTertiary,
             }}
@@ -90,7 +90,7 @@ const DisputeNote = memo<{ dispute: VerifyCheckDispute }>(({ dispute }) => {
               size={12}
               style={{ transform: votesOpen ? 'rotate(90deg)' : 'none', transition: '0.2s' }}
             />
-            <Text fontSize={11} type={'secondary'}>
+            <Text fontSize={12} type={'secondary'}>
               {t('acceptance.dispute.tally', { judged: tally.judged, upheld: tally.upheld })}
             </Text>
           </Flexbox>

@@ -16,9 +16,7 @@ import type {
  * viewer's own Market profile.
  *
  * All of them are per identity (`cacheScope`), so an account or workspace
- * switch never paints the previous one's rows. Resource names stay clear of
- * the `CACHE_TIERS` patterns so the SWR persistence layer never stores a second
- * copy of a sync response.
+ * switch never paints the previous one's rows.
  */
 
 /** Read addressed by one Market identifier (agent, group or skill). */

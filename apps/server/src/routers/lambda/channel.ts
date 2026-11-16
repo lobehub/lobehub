@@ -224,12 +224,24 @@ export const channelRouter = router({
    * direct Channels. Null when the Agent cannot answer in a Channel (no reachable device).
    */
   openDirect: channelProcedure
-    .input(z.object({ agentId: z.string().min(1), localDeviceId: z.string().min(1).optional() }))
+    .input(z.object({ agentId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const access = await ctx.channelService.openDirect(input.agentId, {
-        localDeviceId: input.localDeviceId,
-      });
+      const access = await ctx.channelService.openDirect(input.agentId);
       return { data: access?.channel.id ?? null, success: true };
+    }),
+  /** The direct conversation with another person's Agent, from its share id, handle or link. */
+  openShared: channelProcedure
+    .input(z.object({ share: z.string().trim().min(1).max(512) }))
+    .mutation(async ({ ctx, input }) => {
+      const access = await ctx.channelService.openShared(input.share);
+      return { data: access?.channel.id ?? null, success: true };
+    }),
+  /** The personal conversation with a contact; both people must still be contacts. */
+  openPeer: channelProcedure
+    .input(z.object({ userId: z.string().min(1).max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      const access = await ctx.channelService.openPeer(input.userId);
+      return { data: access.channel.id, success: true };
     }),
   list: channelProcedure.query(async ({ ctx }) => ({
     data: await ctx.channelService.repository.list(),
@@ -255,6 +267,12 @@ export const channelRouter = router({
     .input(z.object({ channelId, threadId }))
     .mutation(async ({ ctx, input }) => {
       await ctx.channelService.removeThread(input.channelId, input.threadId);
+      return { success: true };
+    }),
+  retryJob: channelProcedure
+    .input(z.object({ channelId, jobId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.retryJob(input.channelId, input.jobId);
       return { success: true };
     }),
   retryRouting: channelProcedure

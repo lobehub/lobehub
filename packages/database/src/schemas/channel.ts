@@ -82,6 +82,12 @@ export const channels = pgTable(
 
     /** Bound Agent for a direct conversation; NULL for a group. Deleted with the Agent. */
     agentId: text('agent_id').references(() => agents.id, { onDelete: 'cascade' }),
+    /**
+     * The other person of a personal conversation between two contacts; `userId` is the one who
+     * opened it. Both are owner members. Deleted with either account. One conversation per pair
+     * is kept by the application, which serializes opening it.
+     */
+    peerUserId: text('peer_user_id').references(() => users.id, { onDelete: 'cascade' }),
 
     title: text('title').notNull(),
     /** Last allocated message sequence; incremented under the row lock when a message lands. */

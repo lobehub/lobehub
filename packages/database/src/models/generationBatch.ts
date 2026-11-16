@@ -198,6 +198,13 @@ export class GenerationBatchModel {
               config.endImageUrl = await this.fileService.getFullFileUrl(config.endImageUrl);
             }
 
+            // Handle referenceAudioUrl (music cover reference track)
+            if (config.referenceAudioUrl) {
+              config.referenceAudioUrl = await this.fileService.getFullFileUrl(
+                config.referenceAudioUrl,
+              );
+            }
+
             // Handle imageUrls array
             if (Array.isArray(config.imageUrls)) {
               config.imageUrls = await Promise.all(

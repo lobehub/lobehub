@@ -2,7 +2,7 @@ import type { PluginQueryParams, SystemDependency } from '@lobehub/market-sdk';
 import { z } from 'zod';
 
 import type { McpConnectionType } from '../discover/mcp';
-import type { CustomPluginMetadata } from '../tool/plugin';
+import type { CustomPluginMetadata, McpConnectVia } from '../tool/plugin';
 
 /**
  * MCP client error categories. Owned here so shared packages don't reach into
@@ -14,7 +14,9 @@ export type MCPErrorType =
   | 'INITIALIZATION_TIMEOUT'
   | 'VALIDATION_ERROR'
   | 'UNKNOWN_ERROR'
-  | 'AUTHORIZATION_ERROR';
+  | 'AUTHORIZATION_ERROR'
+  /** The MCP server address resolves to a private/reserved IP refused by the SSRF policy */
+  | 'SSRF_BLOCKED';
 
 export enum MCPInstallStep {
   AUTHORIZATION_REQUIRED = 'AUTHORIZATION_REQUIRED',
@@ -216,8 +218,15 @@ export interface McpConnection {
     token?: string;
     type: 'none' | 'bearer' | 'oauth2';
   };
+  /**
+   * The device a server that runs on the user's device (stdio, or HTTP reached
+   * from the device) is pinned to. Absent: the device is picked automatically.
+   */
+  boundDeviceId?: string;
   // STDIO connection parameters
   command?: string;
+  /** HTTP only: `device` reaches the server from the user's device (`McpConnectVia`). */
+  connectVia?: McpConnectVia;
   env?: Record<string, string>;
   headers?: Record<string, string>;
   type: 'http' | 'stdio';

@@ -273,6 +273,41 @@ describe('mcpService tool discovery on desktop with MCP Apps on', () => {
   });
 });
 
+describe('mcpService.getPluginMcpManifest', () => {
+  it('reads a plugin manifest with the settings its tool calls send', async () => {
+    const http = vi.spyOn(mcpService, 'getStreamableMcpServerManifest').mockResolvedValue({});
+    const stdio = vi.spyOn(mcpService, 'getStdioMcpServerManifest').mockResolvedValue({});
+
+    await mcpService.getPluginMcpManifest({
+      customParams: { mcp: { type: 'http', url: 'https://example.com/mcp' } },
+      identifier: 'notes',
+      settings: { API_KEY: 'secret' },
+    });
+    await mcpService.getPluginMcpManifest({
+      customParams: { mcp: { command: 'dash-mcp', type: 'stdio' } },
+      identifier: 'dash',
+      settings: { TOKEN: 'stdio-secret' },
+    });
+
+    expect(http).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: { API_KEY: 'secret' },
+        identifier: 'notes',
+        url: 'https://example.com/mcp',
+      }),
+    );
+    expect(stdio).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'dash-mcp',
+        env: { TOKEN: 'stdio-secret' },
+        name: 'dash',
+      }),
+    );
+    http.mockRestore();
+    stdio.mockRestore();
+  });
+});
+
 describe('mcpService.readMcpAppResource for stdio connectors', () => {
   const stdioConnector = {
     id: 'conn_1',
@@ -618,17 +653,16 @@ describe('mcpService.invokeMcpToolCall on desktop', () => {
     expect(result?.state).toEqual({ content: [] });
   });
 
-  it('keeps conversation calls to localhost / LAN http servers on their existing route', async () => {
+  // Its tool list was read here over IPC; the server relay connects from the
+  // server, which can't reach this machine's localhost / LAN
+  it('runs conversation calls to localhost / LAN http servers here, where their tools were listed', async () => {
     plugins.set('local', httpPlugin('http://127.0.0.1:3000/mcp'));
-    relayCall.mockResolvedValue({ content: 'ok', success: true });
+    ipcCall.mockResolvedValueOnce(serializeMcpIpcPayload({ content: 'ok', success: true }));
 
     await mcpService.invokeMcpToolCall(refresh, {});
 
-    expect(ipcCall).not.toHaveBeenCalled();
-    expect(relayCall).toHaveBeenCalledWith(
-      expect.objectContaining({ toolName: 'refresh' }),
-      expect.anything(),
-    );
+    expect(relayCall).not.toHaveBeenCalled();
+    expect(ipcCall).toHaveBeenCalledOnce();
   });
 });
 
@@ -715,5 +749,56 @@ describe('mcpService.invokeMcpToolCall for stdio connectors behind a device gate
       { agentId: undefined, args: '{"dir":"/tmp"}', identifier: 'files', toolName: 'list' },
       expect.anything(),
     );
+  });
+});
+
+describe('local HTTP connector entrypoints', () => {
+  it('runs the entry on this desktop and reads its resource on the same device', async () => {
+    vi.clearAllMocks();
+    plugins.clear();
+    connectors.clear();
+    const connector = {
+      id: 'local-id',
+      identifier: 'local-entry',
+      isEnabled: true,
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'http://127.0.0.1:3000/mcp',
+      metadata: { customHeaders: { 'x-key': 'k' } },
+      tools: [{ toolName: 'open', permission: 'auto' }],
+    };
+    connectors.set('undefined:local-entry', connector);
+    connectorEdit.mockResolvedValue(connector);
+    ipcCall.mockResolvedValue(
+      serializeMcpIpcPayload({
+        success: true,
+        content: 'opened',
+        state: { mcpApp: { resourceUri: 'ui://app', server: LOCAL } },
+      }),
+    );
+    ipcRead.mockResolvedValue(serializeMcpIpcPayload(view));
+    await mcpService.invokeMcpToolCall(
+      { id: 'entry', identifier: 'local-entry', apiName: 'open', arguments: '{}', type: 'mcp' },
+      { fromEntrypoint: true },
+    );
+    expect(connectorCall).not.toHaveBeenCalled();
+    expect(deserializeMcpIpcPayload(ipcCall.mock.calls[0][0])).toMatchObject({
+      args: {},
+      fromEntrypoint: true,
+      http: { url: connector.mcpServerUrl },
+    });
+    await expect(
+      mcpService.readMcpAppResource('local-entry', 'ui://app', {
+        onThisDevice: true,
+        server: LOCAL,
+      }),
+    ).resolves.toEqual(view);
+    expect(connectorRead).not.toHaveBeenCalled();
+    environment.isDesktop = false;
+    await expect(
+      mcpService.readMcpAppResource('local-entry', 'ui://app', {
+        onThisDevice: true,
+        server: LOCAL,
+      }),
+    ).resolves.toBeUndefined();
   });
 });

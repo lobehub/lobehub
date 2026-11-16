@@ -1,11 +1,16 @@
 import { DEFAULT_SECURITY_BLACKLIST, InterventionChecker } from '@lobechat/agent-runtime';
 import { isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import { isMarketplaceInstallRunnable, mayRequireMandatoryApproval } from '@lobechat/const/plugin';
+import { connectorToolIntervention } from '@lobechat/mecha';
 import type {
   HumanInterventionConfig,
   HumanInterventionPolicy,
   ToolManifest,
 } from '@lobechat/types';
+import { getDisabledPluginIds } from '@lobechat/types';
 
+import { getAgentStoreState } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { getToolStoreState } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
 import { connectorSelectors } from '@/store/tool/slices/connector';
@@ -89,12 +94,20 @@ const findToolIntervention = (
   agentId: string | undefined,
   /** The lists were just loaded from the server; if not, nothing here can waive approval. */
   revalidated: boolean,
+  fromEntrypoint = false,
 ): ToolLookup => {
   const s = getToolStoreState();
   const confirmed = revalidated && s.isConnectorListConfirmed(agentId);
 
-  const connector = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
-  // Same routing as `mcpService.invokeMcpToolCall`
+  const resolved = connectorSelectors.connectorByIdentifierForAgent(identifier, agentId)(s);
+  const plugin =
+    pluginSelectors.getInstalledPluginById(identifier)(s) ||
+    pluginSelectors.getCustomPluginById(identifier)(s);
+  // Same routing as `mcpService.invokeMcpToolCall`: an unfinished marketplace
+  // install is not run, so the plugin row it falls back to decides
+  const connector =
+    resolved && isMarketplaceInstallRunnable(resolved, !!plugin) ? resolved : undefined;
+  if (fromEntrypoint && connector && !connector.isEnabled) return null;
   if (
     connector?.isEnabled &&
     (!!connector.mcpServerUrl || connector.mcpConnectionType === 'stdio')
@@ -108,14 +121,15 @@ const findToolIntervention = (
     // offers only to views
     if (!tool) return { missingFrom: connector.id };
     // A tool only the model may call is refused before anyone is asked about it
-    if (tool.permission === 'disabled' || !isSyncedMcpToolVisibleTo(tool, 'app')) return null;
-    // Same mapping as the connector manifest (`patchManifestWithPermissions`)
-    return { intervention: tool.permission === 'needs_approval' ? 'required' : undefined };
+    if (
+      tool.permission === 'disabled' ||
+      (!fromEntrypoint && !isSyncedMcpToolVisibleTo(tool, 'app', true))
+    )
+      return null;
+    // Same mapping as the connector manifest (`buildConnectorManifest`)
+    return { intervention: connectorToolIntervention(tool) };
   }
 
-  const plugin =
-    pluginSelectors.getInstalledPluginById(identifier)(s) ||
-    pluginSelectors.getCustomPluginById(identifier)(s);
   // An agent's own connector the client hasn't loaded: its permission is
   // unknown here, so treat it as needing approval.
   if (!plugin) return agentId ? { intervention: 'required' } : null;
@@ -128,7 +142,7 @@ const findToolIntervention = (
     | undefined;
   // MCP Apps visibility: a tool only the model may call is refused to views, and
   // one kept from the model is still the view's to call
-  if (manifest?.mcpModelOnlyTools?.includes(toolName)) return null;
+  if (!fromEntrypoint && manifest?.mcpModelOnlyTools?.includes(toolName)) return null;
   const api = [...(manifest?.api ?? []), ...(manifest?.mcpAppOnlyApi ?? [])].find(
     (item) => item.name === toolName,
   );
@@ -138,9 +152,17 @@ const findToolIntervention = (
   // (patchManifestWithPermissions). Until the server confirms the lists they
   // may be stale or missing, so ask.
   if (!confirmed) return { intervention: 'required' };
-  const permission = connector?.tools.find((t) => t.toolName === toolName)?.permission;
+  const permission = resolved?.tools.find((t) => t.toolName === toolName)?.permission;
   if (permission === 'disabled') return null;
-  if (permission === 'needs_approval') return { intervention: 'required' };
+  // Never looser than the tool's own `always` (`patchManifestWithPermissions`)
+  if (permission === 'needs_approval')
+    return {
+      intervention: mayRequireMandatoryApproval(
+        api?.humanIntervention ?? manifest?.humanIntervention,
+      )
+        ? 'always'
+        : 'required',
+    };
 
   // A manifest stored before MCP Apps was on lacks the tools its server offers
   // only to views. Ask rather than refuse: the session the call runs on still
@@ -201,16 +223,40 @@ const resyncConnectorTools = (connectorId: string): Promise<boolean> => {
 export const getAppToolCallPolicy = async (
   identifier: string,
   toolName: string,
-  { agentId, toolArgs = {} }: { agentId?: string; toolArgs?: Record<string, unknown> } = {},
+  {
+    agentId,
+    toolArgs = {},
+    fromEntrypoint = false,
+  }: { agentId?: string; toolArgs?: Record<string, unknown>; fromEntrypoint?: boolean } = {},
 ): Promise<AppToolCallPolicy> => {
+  if (
+    fromEntrypoint &&
+    agentId &&
+    getDisabledPluginIds(
+      agentSelectors.getAgentConfigById(agentId)(getAgentStoreState())?.plugins,
+    ).includes(identifier)
+  )
+    return 'deny';
+  if (fromEntrypoint) {
+    const state = getToolStoreState();
+    if (!pluginSelectors.isInstalledPluginsServerConfirmed(state)) {
+      try {
+        await state.refreshPlugins();
+      } catch {
+        return 'deny';
+      }
+    }
+  }
   const revalidated = await revalidateConnectors(agentId);
-  let tool = findToolIntervention(identifier, toolName, agentId, revalidated);
+  let tool = findToolIntervention(identifier, toolName, agentId, revalidated, fromEntrypoint);
   if (tool && 'missingFrom' in tool) {
     tool = (await resyncConnectorTools(tool.missingFrom))
-      ? findToolIntervention(identifier, toolName, agentId, revalidated)
+      ? findToolIntervention(identifier, toolName, agentId, revalidated, fromEntrypoint)
       : null;
   }
   if (!tool || 'missingFrom' in tool) return 'deny';
+
+  if (fromEntrypoint) return revalidated ? 'allow' : 'deny';
 
   const userState = getUserStoreState();
 

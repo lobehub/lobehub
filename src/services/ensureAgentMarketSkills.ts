@@ -61,7 +61,8 @@ const getResolvedIdentifiers = (): Set<string> => {
   for (const plugin of pluginSelectors.installedPluginMetaList(state)) {
     resolved.add(plugin.identifier);
   }
-  for (const connector of connectorSelectors.customConnectors(state)) {
+  // Custom MCP connectors and finished marketplace installs
+  for (const connector of connectorSelectors.userMcpConnectors(state)) {
     resolved.add(connector.identifier);
   }
   // Catalog membership does not depend on which providers this deployment enables.

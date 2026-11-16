@@ -139,7 +139,7 @@ describe('sandbox replicas', () => {
     await Promise.all(
       [...scopes].flatMap((value) =>
         resources.flatMap((resource) =>
-          [SANDBOX_SCOPE_ENTRY, 'inst-1', 'inst-gone'].map((queryKey) =>
+          [SANDBOX_SCOPE_ENTRY, 'all', 'inst-1', 'inst-gone'].map((queryKey) =>
             resource.storage!.remove({ queryKey, scope: value }),
           ),
         ),
@@ -155,10 +155,13 @@ describe('sandbox replicas', () => {
       { data: { entitled: true, quotaBytes: 1024 }, updatedAt: 1 },
     );
     await sandboxEnvironmentsResource.storage!.set(
-      { queryKey: SANDBOX_SCOPE_ENTRY, scope },
+      { queryKey: 'all', scope },
       {
         data: [
           {
+            createdAt: '2026-10-01T00:00:00.000Z',
+            creator: null,
+            description: null,
             id: 'env-1',
             kind: 'code',
             name: 'Lobehub Dev',
@@ -223,14 +226,19 @@ describe('sandbox replicas', () => {
       { wrapper },
     );
 
-    await waitFor(async () => expect(await stored(sandboxEnvironmentsResource)).toHaveLength(1));
+    await waitFor(async () =>
+      expect(await stored(sandboxEnvironmentsResource, 'all')).toHaveLength(1),
+    );
     await waitFor(async () => expect(await stored(sandboxInstancesResource)).toBeDefined());
     await waitFor(async () =>
       expect(await stored(sandboxInstanceDirectoryResource, 'inst-1')).toBeDefined(),
     );
 
-    expect(await stored(sandboxEnvironmentsResource)).toEqual([
+    expect(await stored(sandboxEnvironmentsResource, 'all')).toEqual([
       {
+        createdAt: '2026-10-01T00:00:00.000Z',
+        creator: null,
+        description: null,
         id: 'env-1',
         kind: 'code',
         name: 'Lobehub Dev',
@@ -244,7 +252,7 @@ describe('sandbox replicas', () => {
     });
 
     const payload = JSON.stringify([
-      await stored(sandboxEnvironmentsResource),
+      await stored(sandboxEnvironmentsResource, 'all'),
       await stored(sandboxInstancesResource),
       await stored(sandboxInstanceDirectoryResource, 'inst-1'),
     ]);

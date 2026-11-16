@@ -284,6 +284,66 @@ describe('createGatewayEventHandler — stream lifecycle events', () => {
     });
   });
 
+  describe('step_complete user_message (live steer read by a heterogeneous run)', () => {
+    it('shows the steer message as soon as the run reads it, before its reply starts', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('step_complete', {
+          phase: 'user_message',
+          steerMessage: {
+            agentId: 'agent-executing',
+            content: 'summarize the refactor',
+            id: 'steer-1',
+            metadata: { steer: true },
+            parentId: 'msg-step1',
+            role: 'user',
+          },
+          uuid: 'steer-1',
+        }),
+      );
+      await flush();
+
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'steer-1',
+          type: 'createMessage',
+          value: expect.objectContaining({
+            // The persisted author, not the conversation owner (`agent-1`).
+            agentId: 'agent-executing',
+            content: 'summarize the refactor',
+            metadata: { steer: true },
+            parentId: 'msg-step1',
+            role: 'user',
+            topicId: 'topic-1',
+          }),
+        }),
+        { operationId: 'op-1' },
+      );
+      expect(messageService.getMessages).not.toHaveBeenCalled();
+    });
+
+    it('does not insert it twice, and ignores a replay that delivered nothing', async () => {
+      const store = createMockStore();
+      store.dbMessagesMap = { 'session_agent-1_topic-1': [{ id: 'steer-1', role: 'user' }] };
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('step_complete', {
+          phase: 'user_message',
+          steerMessage: { content: 'x', id: 'steer-1', role: 'user' },
+          uuid: 'steer-1',
+        }),
+      );
+      handler(makeEvent('step_complete', { phase: 'user_message', uuid: 'run-prompt' }));
+      await flush();
+
+      expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
+      expect(messageService.getMessages).not.toHaveBeenCalled();
+    });
+  });
+
   describe('stream_chunk', () => {
     it('should accumulate text content and pass operationId context', async () => {
       const store = createMockStore();

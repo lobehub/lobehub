@@ -29,8 +29,7 @@ export interface RecentListParams {
 /**
  * Entry key of one recents query (`recentListMap[...]`). Sidebar queries keep
  * the original `limit:N` key so their persisted rows still hydrate. The others
- * use `/` separators: the key ends up in the SWR sync key, and a `topic:`
- * substring would match a legacy CACHE_TIERS pattern and be persisted twice.
+ * use `/` separators, which keeps their entry keys stable for persisted rows.
  */
 export const createRecentQueryKey = (
   limit: number,
@@ -47,21 +46,6 @@ export const createRecentQueryKey = (
 export const recentListResource = defineReplica<RecentListParams, RecentItem[]>({
   key: ({ limit, types, view }) => createRecentQueryKey(limit, { types, view }),
   name: 'recentList',
-  storage: 'localStorage',
-  version: 1,
-});
-
-/** Entry key of one conversation-recents query (`conversationRecentMap[limit:N]`). */
-export const createConversationRecentQueryKey = (limit: number): string => `limit:${limit}`;
-
-/**
- * Latest topics per owner, for the IM conversation list. Kept apart from
- * `recentListResource`: the sidebar and the drawer want documents and tasks,
- * while this list needs topics with their reply previews.
- */
-export const conversationRecentResource = defineReplica<RecentListParams, RecentItem[]>({
-  key: ({ limit }) => createConversationRecentQueryKey(limit),
-  name: 'conversationRecent',
   storage: 'localStorage',
   version: 1,
 });

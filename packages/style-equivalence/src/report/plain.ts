@@ -116,6 +116,10 @@ export const askSentence = (item: { category: string; flags: string[] }, context
     lines.push(
       '改之前和改之后只有一侧给这个元素传了 style={…}，另一侧把它去掉了。截图里看不出运行时样式，看一下代码里是不是漏传了。',
     );
+  if (names.has('INLINE_STYLE_MASKED'))
+    lines.push(
+      '两侧传了同一个 style={…}，有值时两侧一样；只有它为空值时露出来的类样式不一样。看一下这个值会不会是空的。',
+    );
   if (names.has('INLINE_STYLE_SPREAD_ORDER'))
     lines.push(
       '两侧的 style 一样，只是和 {...展开属性} 的先后顺序换了，或者只有一侧有展开属性。确认展开的对象里没有 style，就没有影响。',

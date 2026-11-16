@@ -37,9 +37,11 @@ import CreateTaskInlineEntry from './CreateTaskInlineEntry';
 import EmptyState from './EmptyState';
 import {
   pickOfferedTaskFilter,
+  setTaskFilterContent,
   TaskFilterBar,
   TaskFilterButton,
   taskListFilterScopeKey,
+  TaskListFind,
   useTaskFilterFields,
   useTaskListFilter,
 } from './filter';
@@ -470,6 +472,10 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
   }, [agentId, canCreateTask, navigate, projectId]);
 
   const handleClearFilter = useCallback(() => setFilter(() => undefined), [setFilter]);
+  const handleFindChange = useCallback(
+    (content: string) => setFilter((prev) => setTaskFilterContent(prev, content)),
+    [setFilter],
+  );
   const filterEmptyAction = hasFilter ? (
     <Button onClick={handleClearFilter}>{t('taskList.filter.clearAll')}</Button>
   ) : undefined;
@@ -520,6 +526,9 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
     mobileSurface: isMobileSurface(),
     projectId,
   });
+  // Find is a keyboard-first desktop entry; the narrow header keeps the filter menu's
+  // "Content contains" for the same condition.
+  const showFind = !isMobile && (headerVisibility.showViewOptions || hasFilter);
 
   const headerLeft = (
     <Flexbox horizontal align={'center'} gap={8}>
@@ -550,6 +559,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
         left={headerLeft}
         right={
           <Flexbox horizontal align={'center'} gap={4}>
+            {showFind && <TaskListFind content={filter?.content} onChange={handleFindChange} />}
             {(headerVisibility.showViewOptions || hasFilter) && (
               <TaskFilterButton fields={filterFields} filter={filter} setFilter={setFilter} />
             )}
@@ -597,7 +607,12 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, headerActions, proj
           },
         }}
       />
-      <TaskFilterBar fields={filterFields} filter={filter} setFilter={setFilter} />
+      <TaskFilterBar
+        fields={filterFields}
+        filter={filter}
+        hideContent={showFind}
+        setFilter={setFilter}
+      />
       {isMineBoard ? (
         <Flexbox flex={1} style={{ overflowX: 'auto', overflowY: 'hidden' }}>
           <KanbanBoard

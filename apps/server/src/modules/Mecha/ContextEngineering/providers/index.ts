@@ -2,6 +2,7 @@ import { type AgentState, selectToolSourceMap } from '@lobechat/agent-runtime';
 import { formatWebOnboardingStateMessage } from '@lobechat/builtin-tool-web-onboarding/utils';
 import { defaultUninstalledBuiltinTools } from '@lobechat/builtin-tools';
 import { AGENT_PLAN_FILE_TYPE } from '@lobechat/const';
+import type { AvailablePluginInfo } from '@lobechat/context-engine';
 import {
   type AgentContextDocument,
   agentDocumentChangesByMessage,
@@ -22,6 +23,7 @@ import { AgentModel } from '@/database/models/agent';
 import { AgentAccountModel } from '@/database/models/agentAccount';
 import { AiModelModel } from '@/database/models/aiModel';
 import { ChatGroupModel } from '@/database/models/chatGroup';
+import { ConnectorModel } from '@/database/models/connector';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
@@ -360,21 +362,37 @@ export const createServerContextFactProviders = ({
       }));
     },
 
-    // Custom MCP connectors the user installed, beyond the shared catalog.
-    // Read from the installed-plugins table: the run's tool source map only
-    // classifies skill / Composio / client tools, so it cannot tell a custom
-    // connector apart, and a connector the agent has not pinned yet must
+    // Custom MCP servers the user installed, beyond the shared catalog: custom
+    // connectors (every install now) and the custom plugin rows older installs
+    // left, one entry per identifier. Read from the tables: the run's tool
+    // source map only classifies skill / Composio / client tools, so it cannot
+    // tell a custom connector apart, and one the agent has not pinned yet must
     // still be offered to createAgent / updateAgent.
     listCustomPlugins: async () => {
-      const installed = await new PluginModel(db, userId, ctx.workspaceId).query();
-      return installed
-        .filter((plugin) => plugin.type === 'customPlugin')
-        .map((plugin) => ({
+      const [connectors, installed] = await Promise.all([
+        new ConnectorModel(db, userId, ctx.workspaceId).queryPublic(),
+        new PluginModel(db, userId, ctx.workspaceId).query(),
+      ]);
+      const plugins = new Map<string, AvailablePluginInfo>();
+      for (const connector of connectors) {
+        if (connector.sourceType !== 'custom') continue;
+        plugins.set(connector.identifier, {
+          description: connector.description ?? undefined,
+          identifier: connector.identifier,
+          name: connector.name || connector.identifier,
+          type: 'custom',
+        });
+      }
+      for (const plugin of installed) {
+        if (plugin.type !== 'customPlugin' || plugins.has(plugin.identifier)) continue;
+        plugins.set(plugin.identifier, {
           description: plugin.manifest?.meta?.description,
           identifier: plugin.identifier,
           name: plugin.manifest?.meta?.title || plugin.identifier,
-          type: 'custom' as const,
-        }));
+          type: 'custom',
+        });
+      }
+      return [...plugins.values()];
     },
 
     listEnabledProviders: async () => {

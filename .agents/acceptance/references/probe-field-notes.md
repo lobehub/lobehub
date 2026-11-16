@@ -279,7 +279,7 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
 - **Test for it**: assert the field is `null` (not `undefined`) after the consume action; a test that
   only checks "the request was acted on" passes in both the broken and fixed versions.
 
-### C11. Persisted SWR cache serves a STALE agent config after a direct DB write
+### C11. Persisted cache serves a STALE agent config after a direct DB write
 
 - **Situation**: seeding `agents.agency_config` or `agents.model` directly in Postgres, then using
   the app to drive an assertion.

@@ -18,6 +18,8 @@ const INITIAL_VALUES = {
 } as LobeToolCustomPlugin;
 
 interface DevModalProps {
+  /** Let a device-run server be bound to one device (connectors only, see MCPManifestForm). */
+  enableDeviceBinding?: boolean;
   /** Enable the connector-backed OAuth auth type in the MCP form (see MCPManifestForm). */
   enableOAuth?: boolean;
   mode?: 'edit' | 'create';
@@ -41,6 +43,7 @@ const DevModal = memo<DevModalProps>(
     onSave,
     onOpenChange,
     onDelete,
+    enableDeviceBinding,
     enableOAuth,
   }) => {
     const isEditMode = mode === 'edit';
@@ -208,6 +211,7 @@ const DevModal = memo<DevModalProps>(
         >
           <Flexbox flex={3} gap={16} padding={24} style={{ overflowY: 'auto' }}>
             <MCPManifestForm
+              enableDeviceBinding={enableDeviceBinding}
               enableOAuth={enableOAuth}
               form={form}
               isEditMode={isEditMode}

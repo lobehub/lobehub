@@ -1,4 +1,3 @@
-import { isDesktop } from '@lobechat/const';
 import type { ChannelPublicThread, ChannelStatus, ChannelThreadStatus } from '@lobechat/types';
 
 import { cacheScope } from '@/libs/replica';
@@ -10,7 +9,6 @@ import {
   type ChannelViewParams,
   type ChannelWakeConfig,
 } from '@/services/channel';
-import { getElectronStoreState } from '@/store/electron';
 
 import {
   addOutgoing,
@@ -49,11 +47,12 @@ class ChannelActionImpl {
     useClientDataSWR(channelKeys.userCandidates(channelId, search), () =>
       channelService.userCandidates(channelId, search),
     );
-  useFetchList = () => {
+  /** Pass `false` where the list is only needed behind a user choice, so nothing polls before. */
+  useFetchList = (enabled = true) => {
     const pending = useChannelStore(channelSelectors.listHasPendingWork);
     return this.#private.list.useSync(
       {},
-      { refreshInterval: pending ? CHANNEL_ACTIVE_REFRESH_MS : CHANNEL_IDLE_REFRESH_MS },
+      { enabled, refreshInterval: pending ? CHANNEL_ACTIVE_REFRESH_MS : CHANNEL_IDLE_REFRESH_MS },
     );
   };
   useFetchDetail = (params: ChannelViewParams | null) => {
@@ -117,11 +116,7 @@ class ChannelActionImpl {
   openDirect = async (agentId: string) => {
     const existing = channelSelectors.directByAgent(agentId)(useChannelStore.getState());
     if (existing) return existing.id;
-    // On desktop, name this machine so a direct Channel to a local Agent can run here.
-    const localDeviceId = isDesktop
-      ? await getElectronStoreState().resolveGatewayDeviceId()
-      : undefined;
-    const channelId = await channelService.openDirect({ agentId, localDeviceId });
+    const channelId = await channelService.openDirect({ agentId });
     if (channelId) await this.#refreshAfterWrite(this.refreshList);
     return channelId ?? undefined;
   };

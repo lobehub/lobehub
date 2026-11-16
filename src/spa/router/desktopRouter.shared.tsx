@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, HomeIcon, Image, Settings, ShapesIcon, Video } from 'lucide-react';
+import { Download, HomeIcon, Image, Music, Settings, ShapesIcon, Video } from 'lucide-react';
 import { createElement, type ReactElement } from 'react';
 import type { RouteObject } from 'react-router';
 
@@ -443,6 +443,29 @@ export const sharedMainAreaChildren: RouteObject[] = [
     errorElement: <ErrorBoundary />,
     handle: { meta: routeMeta({ Skeleton: GenerationSkeleton }) },
     path: 'video',
+  },
+
+  // Music routes
+  {
+    children: [
+      {
+        element: dynamicElement(() => import('@/routes/(main)/(create)/music'), 'Desktop > Music', {
+          preloadId: 'music',
+        }),
+        handle: {
+          meta: routeMeta({ icon: Music, titleKey: 'navigation.music' }),
+        },
+        index: true,
+      },
+    ],
+    element: dynamicLayout(
+      () => import('@/routes/(main)/(create)/music/_layout'),
+      'Desktop > Music > Layout',
+      { preloadId: 'music' },
+    ),
+    errorElement: <ErrorBoundary />,
+    handle: { meta: routeMeta({ Skeleton: GenerationSkeleton }) },
+    path: 'music',
   },
 
   // Image routes

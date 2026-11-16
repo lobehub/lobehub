@@ -46,7 +46,7 @@ export default {
   'features.groupChat.desc': 'Enable multi-agent group chat coordination.',
   'features.groupChat.title': 'Group Chat (Multi-Agent)',
   'features.messageTextSelectionActions.desc':
-    'Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.',
+    'Show Quote and Copy actions when selecting text in chat messages. Quote adds the selected text to your message as a quote.',
   'features.messageTextSelectionActions.title': 'Message Text Selection Actions',
   'features.oauthApps.desc':
     'Show OAuth app management in personal and workspace settings. This feature is hidden by default.',

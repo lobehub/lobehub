@@ -1,5 +1,6 @@
 export * from './acceptanceComment';
 export * from './acceptanceFlow';
+export * from './acceptanceReview';
 export * from './agent';
 export * from './agentAccount';
 export * from './agentBotProvider';
@@ -23,6 +24,7 @@ export * from './betterAuth';
 export * from './channel';
 export * from './chatGroup';
 export * from './connector';
+export * from './contact';
 export * from './dashboard';
 export * from './device';
 export * from './documentComment';

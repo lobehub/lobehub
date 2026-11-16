@@ -1,12 +1,29 @@
-import { buildMcpToolMetadata, getMcpToolVisibility } from '@lobechat/const/mcpApp';
+import {
+  buildMcpToolMetadata,
+  getMcpAppEntrypoints,
+  resolveMcpUiToolMeta,
+} from '@lobechat/const/mcpApp';
+import { type LobeChatDatabase } from '@lobechat/database';
+import {
+  connectorConnectVia,
+  connectorDeviceBinding,
+  connectorMcpEndpoint,
+  shouldConnectViaDevice,
+} from '@lobechat/utils/mcpEndpoint';
 
 import type { ConnectorModel, DecryptedConnector } from '@/database/models/connector';
 import type { ConnectorToolModel } from '@/database/models/connectorTool';
 import type { ConnectorCredentials } from '@/database/schemas';
-import { ConnectorMcpConnectionType, ConnectorStatus } from '@/database/schemas';
-import type { AuthConfig } from '@/libs/mcp';
+import {
+  ConnectorMcpConnectionType,
+  ConnectorStatus,
+  ConnectorToolPermission,
+} from '@/database/schemas';
+import type { AuthConfig, McpTool } from '@/libs/mcp';
 import { inferCrudType } from '@/libs/mcp/utils';
+import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
+import { listMcpToolsOnDevice } from '@/server/services/mcp/deviceTunnel';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { ensureFreshConnectorToken } from './tokens';
@@ -27,10 +44,13 @@ export interface ConnectorToolSyncContext {
 export const buildConnectorMcpParams = (
   connector: DecryptedConnector,
 ): Parameters<typeof mcpService.listRawTools>[0] => {
+  // Only set when bound, as `buildConnectorManifests` does
+  const boundDevice = connectorDeviceBinding(connector);
   if (connector.mcpConnectionType === ConnectorMcpConnectionType.stdio) {
     if (!connector.mcpStdioConfig) throw new Error('Missing stdio config');
     return {
       args: connector.mcpStdioConfig.args ?? [],
+      ...(boundDevice && { boundDevice }),
       command: connector.mcpStdioConfig.command,
       env: connector.mcpStdioConfig.env,
       name: connector.identifier,
@@ -47,6 +67,9 @@ export const buildConnectorMcpParams = (
   const mergedHeaders = headers || customHeaders ? { ...headers, ...customHeaders } : undefined;
   return {
     auth,
+    ...(boundDevice && { boundDevice }),
+    // Only set when chosen, as `buildConnectorManifests` does
+    ...(connectorConnectVia(connector.metadata) === 'device' && { connectVia: 'device' as const }),
     headers: mergedHeaders,
     name: connector.identifier,
     type: 'http',
@@ -90,6 +113,70 @@ export const buildHttpAuthFromCredentials = (
   }
 };
 
+export interface ConnectorToolSyncOptions {
+  /**
+   * Drop the `auto` tools the server no longer lists, so they stop being
+   * advertised: eval contracts, and an MCP install or reinstall, whose tool
+   * list replaces the stored one as a plugin install replaced its manifest.
+   * Approval and disabled rows stay as permission tombstones, so neither a later
+   * listing nor the rollback of a failed reinstall can bring them back as `auto`.
+   */
+  pruneMissingAutoTools?: boolean;
+}
+
+/** After a sync: delete the connector's `auto` tools that `listedToolNames` no longer has. */
+export const pruneMissingAutoConnectorTools = async (
+  connectorToolModel: Pick<ConnectorToolModel, 'deleteToolsNotIn' | 'queryByConnector'>,
+  connectorId: string,
+  listedToolNames: string[],
+): Promise<void> => {
+  const tombstones = (await connectorToolModel.queryByConnector(connectorId))
+    .filter((tool) => tool.permission !== ConnectorToolPermission.auto)
+    .map((tool) => tool.toolName);
+  await connectorToolModel.deleteToolsNotIn(connectorId, [...listedToolNames, ...tombstones]);
+};
+
+/**
+ * A connector this server must not connect to itself (stdio, local network, or
+ * set to connect through the device) is listed on a device through the device
+ * gateway: the device it is bound to, else the caller's newest capable one.
+ * `undefined` for any other, which the server lists itself. Without a gateway
+ * (self-hosted) every connector keeps the in-process listing, as agent runs
+ * keep the in-process call.
+ *
+ * An unbound connector is only tunneled to the caller's device when it is the
+ * caller's own: a workspace connector another member set up carries that
+ * member's credentials, which must not reach a machine they never approved. A
+ * bound one always reaches the device its tool calls run on, whoever refreshes.
+ */
+const listOnDevice = async (
+  connector: DecryptedConnector,
+  mcpParams: ReturnType<typeof buildConnectorMcpParams>,
+  ctx: { serverDB?: LobeChatDatabase; userId?: string | null },
+  mcpApps: boolean,
+): Promise<McpTool[] | undefined> => {
+  if (!deviceGateway.isConfigured) return undefined;
+  if (
+    !shouldConnectViaDevice(connectorMcpEndpoint(connector), {
+      deviceGatewayConfigured: true,
+    })
+  )
+    return undefined;
+
+  if (!mcpParams.boundDevice && connector.userId !== ctx.userId) {
+    throw new Error(
+      `Connector '${connector.name}' connects through a device, and only the member who set it up can refresh its tools from their desktop app.`,
+    );
+  }
+
+  return listMcpToolsOnDevice({
+    mcpApps,
+    params: mcpParams,
+    serverDB: ctx.serverDB,
+    userId: ctx.userId,
+  });
+};
+
 /**
  * Connect to a connector's MCP server, fetch its tool list, and sync it into
  * `user_connector_tools`. Refreshes the OAuth token first when needed, and
@@ -100,9 +187,17 @@ export const buildHttpAuthFromCredentials = (
  */
 export const syncConnectorToolsById = async (
   connectorId: string,
-  /** `userId` decides the `mcp_apps` flag: with it on, view-only tools are listed too. */
-  ctx: ConnectorToolSyncContext & { userId?: string | null },
-  options: { pruneMissingAutoTools?: boolean } = {},
+  /**
+   * `userId` decides the `mcp_apps` flag: with it on, view-only tools are listed
+   * too. `serverDB` finds the user's device for a connector the server can't
+   * reach itself (`shouldConnectViaDevice`). Required, so each caller decides:
+   * `undefined` fails such a sync instead of tunneling it to a device.
+   */
+  ctx: ConnectorToolSyncContext & {
+    serverDB: LobeChatDatabase | undefined;
+    userId?: string | null;
+  },
+  options: ConnectorToolSyncOptions = {},
 ): Promise<{ toolCount: number }> => {
   let connector = await ctx.connectorModel.findById(connectorId);
   if (!connector) throw new Error('Connector not found');
@@ -116,13 +211,16 @@ export const syncConnectorToolsById = async (
 
   const mcpParams = buildConnectorMcpParams(connector);
 
+  const mcpApps = await isMcpAppsEnabled(ctx.userId);
   let rawTools: Awaited<ReturnType<typeof mcpService.listRawTools>>;
   try {
     // A server may list the tools only its views call just to a client
     // announcing MCP Apps; they are synced, and kept from the model, all the same
-    rawTools = await mcpService.listRawTools(mcpParams, {
-      mcpApps: await isMcpAppsEnabled(ctx.userId),
-    });
+    rawTools =
+      (await listOnDevice(connector, mcpParams, ctx, mcpApps)) ??
+      (await mcpService.listRawTools(mcpParams, {
+        mcpApps,
+      }));
   } catch (err) {
     await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.error);
     throw err;
@@ -134,21 +232,26 @@ export const syncConnectorToolsById = async (
     inputSchema: t.inputSchema as Record<string, unknown>,
     // Kept even for view-only tools: a view's call must find the tool synced,
     // while the manifest build leaves it out of the model's tool list.
-    metadata: buildMcpToolMetadata(getMcpToolVisibility(t._meta)),
+    metadata: buildMcpToolMetadata(
+      resolveMcpUiToolMeta(t._meta, false).visibility,
+      mcpApps
+        ? {
+            ...resolveMcpUiToolMeta(t._meta),
+            entrypoints: resolveMcpUiToolMeta(t._meta).entrypoints ?? [],
+            threadEntry: getMcpAppEntrypoints([t], true)[0],
+          }
+        : undefined,
+    ),
     toolName: t.name,
   }));
 
   await ctx.connectorToolModel.upsertMany(connectorId, syncInputs);
   if (options.pruneMissingAutoTools) {
-    // Eval contracts exclude vanished auto tools. Retain denied/approval rows as
-    // permission tombstones so a later upstream listing cannot auto-approve them.
-    const restricted = (await ctx.connectorToolModel.queryByConnector(connectorId))
-      .filter((tool) => tool.permission !== 'auto')
-      .map((tool) => tool.toolName);
-    await ctx.connectorToolModel.deleteToolsNotIn(connectorId, [
-      ...syncInputs.map((tool) => tool.toolName),
-      ...restricted,
-    ]);
+    await pruneMissingAutoConnectorTools(
+      ctx.connectorToolModel,
+      connectorId,
+      syncInputs.map((tool) => tool.toolName),
+    );
   }
   await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.connected);
 

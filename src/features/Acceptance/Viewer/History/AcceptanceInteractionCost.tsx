@@ -1,6 +1,8 @@
 'use client';
 
-import { Button, createStaticStyles, cssVar, Icon } from '@lobehub/ui';
+import { Button, Icon } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
+import * as stylex from '@stylexjs/stylex';
 import { ChevronRight } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,24 +28,23 @@ import { buildCheckLabels, selectPricedRound } from './interactionCost';
  * seeing at a glance; the breakdown is one click away.
  */
 
-const styles = createStaticStyles(({ css }) => ({
-  body: css`
-    padding-block-end: 4px;
-    padding-inline-start: 24px;
-  `,
-  chevron: css`
-    transition: transform 0.15s ease;
-
-    &[data-open='true'] {
-      transform: rotate(90deg);
-    }
-  `,
-  total: css`
-    margin-inline-start: 6px;
-    font-variant-numeric: tabular-nums;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
+const styles = stylex.create({
+  body: {
+    paddingBlockEnd: '4px',
+    paddingInlineStart: '24px',
+  },
+  chevron: {
+    transition: 'transform 0.15s ease',
+  },
+  chevronOpen: {
+    transform: 'rotate(90deg)',
+  },
+  total: {
+    marginInlineStart: '6px',
+    fontVariantNumeric: 'tabular-nums',
+    color: cssVar.colorTextTertiary,
+  },
+});
 
 interface AcceptanceInteractionCostProps {
   data: AcceptanceBundle;
@@ -61,17 +62,23 @@ const AcceptanceInteractionCost = memo<AcceptanceInteractionCostProps>(({ data }
   return (
     <>
       <Button
-        icon={<Icon className={styles.chevron} data-open={open} icon={ChevronRight} />}
         size={'small'}
         style={{ alignSelf: 'flex-start' }}
         type={'text'}
+        icon={
+          <Icon
+            data-open={open}
+            icon={ChevronRight}
+            {...stylex.props(styles.chevron, open && styles.chevronOpen)}
+          />
+        }
         onClick={() => setOpen((prev) => !prev)}
       >
         {t('report.interaction.title')}
-        <span className={styles.total}>{formatSeconds(priced.cost.totalSeconds)}</span>
+        <span {...stylex.props(styles.total)}>{formatSeconds(priced.cost.totalSeconds)}</span>
       </Button>
       {open && (
-        <div className={styles.body}>
+        <div {...stylex.props(styles.body)}>
           <InteractionCostPanel
             checkLabels={checkLabels}
             cost={priced.cost}

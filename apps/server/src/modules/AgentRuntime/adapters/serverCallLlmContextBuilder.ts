@@ -21,6 +21,7 @@ import {
   createServerContextFactProviders,
   resolveServerConnectorFeatures,
 } from '@/server/modules/Mecha/ContextEngineering/providers';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 import { resolveBuilderGroupId } from '@/server/services/toolExecution/serverRuntimes/groupAgentBuilderTarget';
 
 import type { RuntimeExecutorContext } from '../context';
@@ -164,6 +165,7 @@ export const buildServerCallLlmContext = async ({
   );
 
   const contextEngineInput = {
+    enableMcpAppContext: await isMcpAppsEnabled(ctx.userId),
     additionalContexts: llmPayload.additionalContexts,
     attachmentPreviewFileIds: llmPayload.attachmentPreviewFileIds,
     agentDocumentChanges: facts.agentDocumentChanges,

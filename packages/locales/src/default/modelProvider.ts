@@ -62,6 +62,18 @@ export default {
   'cloudflare.baseURLOrAccountID.desc': 'Enter your Cloudflare account ID or custom API address',
   'cloudflare.baseURLOrAccountID.placeholder': 'Cloudflare Account ID / custom API URL',
   'cloudflare.baseURLOrAccountID.title': 'Cloudflare Account ID / API Address',
+  'doubaospeech.accessToken.desc':
+    'Legacy speech console only: the Access Token paired with the App ID. Leave empty when using an API Key',
+  'doubaospeech.accessToken.placeholder': 'Access Token',
+  'doubaospeech.accessToken.title': 'Access Token (legacy console)',
+  'doubaospeech.apiKey.desc':
+    'API Key from the new Volcengine speech console (API Key management). Recommended; it takes precedence over App ID + Access Token',
+  'doubaospeech.apiKey.placeholder': 'Doubao Speech API Key',
+  'doubaospeech.apiKey.title': 'API Key',
+  'doubaospeech.appId.desc':
+    'Legacy speech console only: the App ID of your application, used together with the Access Token',
+  'doubaospeech.appId.placeholder': 'App ID',
+  'doubaospeech.appId.title': 'App ID (legacy console)',
   'comfyui.apiKey.desc': 'API key for Bearer Token authentication',
   'comfyui.apiKey.placeholder': 'Enter API key',
   'comfyui.apiKey.required': 'Please enter the API key',
@@ -375,6 +387,11 @@ export default {
     'Set the maximum number of tokens supported by the model',
   'providerModels.item.modelConfig.tokens.title': 'Maximum Context Window',
   'providerModels.item.modelConfig.tokens.unlimited': 'Unlimited',
+  'providerModels.item.modelConfig.ttsVoice.extra':
+    'Used when a speech request does not name a voice. Leave empty to use the model default.',
+  'providerModels.item.modelConfig.ttsVoice.placeholder': 'Model default ({{voice}})',
+  'providerModels.item.modelConfig.ttsVoice.placeholderCustom': 'Enter a voice ID',
+  'providerModels.item.modelConfig.ttsVoice.title': 'Default Voice',
   'providerModels.item.modelConfig.type.extra':
     'Different model types have distinct use cases and capabilities',
   'providerModels.item.modelConfig.type.options.asr': 'Speech-to-Text',
@@ -400,6 +417,8 @@ export default {
   'providerModels.item.pricing.inputMinutes': '${{amount}}/Minutes',
   'providerModels.item.pricing.inputTokens': 'Input ${{amount}}/M',
   'providerModels.item.pricing.outputTokens': 'Output ${{amount}}/M',
+  'providerModels.item.pricing.second': '${{amount}}/Second',
+  'providerModels.item.pricing.song': '${{amount}}/Song',
   'providerModels.item.releasedAt': 'Released at {{releasedAt}}',
   'providerModels.list.addNew': 'Add Model',
   'providerModels.list.disabled': 'Disabled',
@@ -443,6 +462,7 @@ export default {
   'providerModels.tabs.decision': 'Decision',
   'providerModels.tabs.embedding': 'Embedding',
   'providerModels.tabs.image': 'Image',
+  'providerModels.tabs.text2music': 'Music',
   'providerModels.tabs.tts': 'TTS',
   'providerModels.tabs.video': 'Video',
   'sortModal.success': 'Sort update successful',

@@ -23,7 +23,6 @@ import ToolItem from '@/features/ChatInput/ActionBar/Tools/ToolItem';
 import ToolItemDetailPopover from '@/features/ChatInput/ActionBar/Tools/ToolItemDetailPopover';
 import { useResourceAccess } from '@/features/ResourcePermission/useResourceAccess';
 import { createSkillStoreModal } from '@/features/SkillStore';
-import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -197,7 +196,6 @@ const AgentTool = memo<AgentToolProps>(
     useFetchInstalledPlugins();
     useFetchUninstalledBuiltinTools(true);
     useFetchAgentSkills(true);
-    useCheckPluginsIsInstalled(plugins);
 
     // Load user's Composio integrations via SWR (from database)
     useFetchUserComposioConnections(isComposioEnabledInEnv);
@@ -205,8 +203,8 @@ const AgentTool = memo<AgentToolProps>(
     // Load user's LobeHub Skill connections via SWR
     useFetchLobehubSkillConnections(isLobehubSkillEnabled);
 
-    // Custom connectors (user-added OAuth MCP servers) from the connector store
-    const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+    // MCP connectors the user added: custom ones and marketplace installs
+    const customConnectors = useToolStore(connectorSelectors.userMcpConnectors, isEqual);
     // Agent-owned / linked connectors: when `excludeAgentConnectors` is set (the
     // two-section agent profile), these are rendered in the dedicated "Agent
     // Tools" section above, so they must be dropped from THIS base/user list —
@@ -679,7 +677,7 @@ const AgentTool = memo<AgentToolProps>(
       [marketAgentSkillItems, communityPluginItems],
     );
 
-    // Custom connector list items (user-added OAuth MCP servers)
+    // Connector MCP list items (custom ones and marketplace installs)
     const customConnectorItems = useMemo(
       () =>
         customConnectors.map((connector) => {
@@ -802,7 +800,7 @@ const AgentTool = memo<AgentToolProps>(
       // 7. User agent skills
       for (const skill of userAgentSkills) all.add(skill.identifier);
 
-      // 8. Custom connectors
+      // 8. Connector MCPs: custom ones and marketplace installs
       for (const connector of customConnectors) all.add(connector.identifier);
 
       return all;

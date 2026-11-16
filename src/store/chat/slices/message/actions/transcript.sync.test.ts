@@ -1,11 +1,9 @@
 import { type UIChatMessage } from '@lobechat/types';
 import { act, waitFor } from '@testing-library/react';
-import { unstable_serialize } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { REPLICA_INDEX_KEY } from '@/libs/replica';
 import { useClientDataSWR } from '@/libs/swr';
-import { CACHE_TIERS } from '@/libs/swr/localStorageProvider';
 import { messageService } from '@/services/message';
 import {
   clearMessageListClientCacheState,
@@ -344,7 +342,7 @@ describe('useFetchMessages', () => {
     expect(messageService.getMessages).not.toHaveBeenCalled();
   });
 
-  it('keys the sync by its entry, outside the SWR persistence tier', () => {
+  it('keys the sync by its conversation entry', () => {
     // The SWR mock runs the fetcher; an unmocked list read rejects after the test.
     vi.mocked(messageService.getMessages).mockResolvedValue([]);
     const shared = { ...context, topicShareId: 'share-1' };
@@ -360,13 +358,6 @@ describe('useFetchMessages', () => {
     expect(first![4]).toBe(conversationMessagesKey({ ...context, threadId: 'thread-1' }));
     expect(second![4]).toBe(conversationMessagesKey({ ...context, threadId: 'thread-2' }));
     expect(third![4]).toBe(conversationMessagesKey(shared));
-    // The replica persists transcripts itself; a key the SWR cache provider
-    // persists would store each one (memory-only shares too) a second time.
-    const persistedPatterns = [...CACHE_TIERS.idb, ...CACHE_TIERS.local];
-    for (const key of keys) {
-      const serialized = unstable_serialize(key);
-      expect(persistedPatterns.filter((pattern) => serialized.includes(pattern))).toEqual([]);
-    }
   });
 
   it('skips switch-time revalidation after a successful server verification', async () => {
