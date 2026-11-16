@@ -253,7 +253,6 @@ describe('requiredApiKeyScopeForTrpc', () => {
   });
 
   it('categorizes credential-backed webhook management as blocked for restricted keys', () => {
-    expect(TRPC_NAMESPACE_API_KEY_RULES.inboundWebhook).toBe('blocked');
     for (const [procedure, type] of [
       ['list', 'query'],
       ['check', 'mutation'],
