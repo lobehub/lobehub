@@ -77,7 +77,7 @@ export const SelectionBar = ({ view }: { view: ViewState }) => {
       horizontal
       gap={2}
 
-      {...sx([floatStyles.float, floatStyles.selectionBar], undefined, {
+      {...sx(floatStyles.float, floatStyles.selectionBar, {
         left: Math.max(SELECTION_BAR_MIN_LEFT, (rect.x + rect.w) * view.k + view.x),
         top: Math.max(SELECTION_BAR_MIN_TOP, rect.y * view.k + view.y),
       })}
@@ -142,7 +142,7 @@ export const ZoomBar = ({ k, onFit, onZoom }: ZoomBarProps) => {
       align="center"
       gap={2}
 
-      {...sx(floatStyles.float, undefined, {
+      {...sx(floatStyles.float, {
         insetBlockEnd: 'calc(12px + env(safe-area-inset-bottom, 0px))',
         insetInlineStart: 12,
       })}

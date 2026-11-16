@@ -49,7 +49,7 @@ const Half = ({
   return (
     <div {...stylex.props(styles.half)}>
       <div
-        {...sx(styles.scaled, undefined, {
+        {...sx(styles.scaled, {
           height: h,
           top: h / 4,
           transform: 'scale(0.5)',

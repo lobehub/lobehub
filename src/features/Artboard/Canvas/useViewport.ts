@@ -1,5 +1,7 @@
 import { type PointerEvent, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
 
+import { useSingleton } from '@/hooks/useSingleton';
+
 import { type BoardModel, type Rect, toBounds } from '../model';
 import { useArtboardStore } from '../store';
 import { createPageViews } from './pageViews';
@@ -107,7 +109,7 @@ export const useViewport = (
 
   const fitAll = useCallback(() => fit(boardRef.current.bounds), [fit]);
 
-  const pageViews = useRef(createPageViews<ViewState>());
+  const pageViews = useSingleton(() => createPageViews<ViewState>());
   const pageRef = useRef(board.pageId);
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -115,7 +117,7 @@ export const useViewport = (
     const previous = pageRef.current;
     if (previous === board.pageId) return;
     pageRef.current = board.pageId;
-    const saved = pageViews.current.swap(previous, board.pageId, viewRef.current);
+    const saved = pageViews.swap(previous, board.pageId, viewRef.current);
     if (!saved) return fit(boardRef.current.bounds, false);
     target.current = null;
     setFlying(false);

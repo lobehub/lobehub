@@ -92,7 +92,7 @@ const Canvas = () => {
         onClickCapture={onClickCapture}
       >
         <div
-          {...sx([canvasStyles.world, flying && canvasStyles.worldFlying], undefined, {
+          {...sx(canvasStyles.world, flying && canvasStyles.worldFlying, {
             transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`,
           })}
         >

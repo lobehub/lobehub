@@ -49,7 +49,7 @@ export const Thumb = ({ board: item, tone }: { board: ArtboardBoardView; tone?: 
   return (
     <div
       ref={ref}
-      {...sx(thumbStyles.box, undefined, tone ? { borderColor: tone, borderWidth: 2 } : undefined)}
+      {...sx(thumbStyles.box, tone ? { borderColor: tone, borderWidth: 2 } : undefined)}
     >
       <div
         style={{

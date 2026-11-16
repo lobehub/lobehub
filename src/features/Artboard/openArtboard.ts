@@ -1,8 +1,9 @@
+// The Share build stubs this specifier; a relative path would bypass the stub.
+import { openArtboardFullscreen } from '@/features/Artboard/Gallery/loader';
 import { artboardService } from '@/services/artboard';
 
 import { openBoardPanel } from './Conversation/openBoardPanel';
 import { mutateArtboard } from './data/useArtboard';
-import { openArtboardFullscreen } from './Gallery/loader';
 import { loadArtboardTool } from './loadArtboardTool';
 import { isArtboardEnabled } from './useArtboardFeature';
 

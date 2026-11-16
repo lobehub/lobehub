@@ -47,7 +47,7 @@ interface ScaledLabelProps {
 
 export const ScaledLabel = ({ children, gap = 8, k, scale = 1 / k, width }: ScaledLabelProps) => (
   <div
-    {...sx(canvasStyles.scaledLabel, undefined, {
+    {...sx(canvasStyles.scaledLabel, {
       paddingBottom: gap,
       transform: `scale(${scale})`,
       width: width / scale,

@@ -57,7 +57,7 @@ const BoardNode = ({ board: item, k, live }: BoardNodeProps) => {
     <div
       data-board-item
       data-item-id={item.id}
-      {...sx([canvasStyles.board, canvasStyles.appear, muted && canvasStyles.muted], undefined, {
+      {...sx(canvasStyles.board, canvasStyles.appear, muted && canvasStyles.muted, {
         height: rect.h,
         left: rect.x,
         top: rect.y,
@@ -88,14 +88,11 @@ const BoardNode = ({ board: item, k, live }: BoardNodeProps) => {
       />
       <div
         {...sx(
-          [
-            canvasStyles.boardCard,
-            picked && canvasStyles.boardPicked,
-            s.selected && canvasStyles.boardSelected,
-            !s.selected && s.related && canvasStyles.boardRelated,
-            s.flash && canvasStyles.flash,
-          ],
-          undefined,
+          canvasStyles.boardCard,
+          picked && canvasStyles.boardPicked,
+          s.selected && canvasStyles.boardSelected,
+          !s.selected && s.related && canvasStyles.boardRelated,
+          s.flash && canvasStyles.flash,
           border ? { borderColor: border, borderWidth: 3 } : undefined,
         )}
       >

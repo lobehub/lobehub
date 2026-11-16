@@ -131,13 +131,10 @@ const CommentLayer = ({ size, view }: CommentLayerProps) => {
           <div
             key={thread.id}
             {...sx(
-              [
-                styles.pin,
-                question && styles.pinQuestion,
-                resolved && styles.pinResolved,
-                current && styles.pinActive,
-              ],
-              undefined,
+              styles.pin,
+              question && styles.pinQuestion,
+              resolved && styles.pinResolved,
+              current && styles.pinActive,
               { left: at.x, top: at.y - PIN },
             )}
             onClick={() => artboardActions.openThread(current ? null : thread.id)}
@@ -149,7 +146,7 @@ const CommentLayer = ({ size, view }: CommentLayerProps) => {
       })}
       {draft && anchor && (
         <div
-          {...sx([styles.pin, styles.pinActive], undefined, {
+          {...sx(styles.pin, styles.pinActive, {
             left: anchor.x,
             top: anchor.y - PIN,
           })}
@@ -158,9 +155,7 @@ const CommentLayer = ({ size, view }: CommentLayerProps) => {
         </div>
       )}
       {anchor && size && (
-        <div
-          {...sx([floatStyles.float, styles.card], undefined, cardBox(anchor.x, anchor.y, size))}
-        >
+        <div {...sx(floatStyles.float, styles.card, cardBox(anchor.x, anchor.y, size))}>
           {open ? <ThreadCard thread={open.thread} /> : draft && <DraftCard draft={draft} />}
         </div>
       )}

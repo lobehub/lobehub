@@ -112,7 +112,7 @@ const Edges = ({ k }: { k: number }) => {
           return (
             <div
               key={edge.id}
-              {...sx(canvasStyles.edgeText, undefined, {
+              {...sx(canvasStyles.edgeText, {
                 fontSize: EDGE_LABEL_FONT,
                 left: edge.lx,
                 maxWidth: Math.min(edge.room, EDGE_LABEL_MAX_WIDTH),
@@ -125,7 +125,7 @@ const Edges = ({ k }: { k: number }) => {
         return (
           <div
             key={edge.id}
-            {...sx(canvasStyles.edgeLabel, undefined, {
+            {...sx(canvasStyles.edgeLabel, {
               borderColor: tone.strong ? tone.color : undefined,
               color: tone.strong ? tone.color : undefined,
               left: edge.lx,

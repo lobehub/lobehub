@@ -39,7 +39,7 @@ const Groups = ({ k }: { k: number }) => {
     return (
       <div
         key={group.id}
-        {...sx([canvasStyles.group, locked && canvasStyles.groupLocked], undefined, {
+        {...sx(canvasStyles.group, locked && canvasStyles.groupLocked, {
           height: rect.h,
           left: rect.x,
           opacity: verify && !journey ? 0.3 : 1,
