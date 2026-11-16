@@ -1273,7 +1273,7 @@ export default {
   'webhook.actions.more': 'More',
   'webhook.actions.pause': 'Pause webhook',
   'webhook.actions.resume': 'Resume webhook',
-  'webhook.actions.rotate': 'Generate new URL',
+  'webhook.actions.rotate': 'Generate new key',
   'webhook.actions.test': 'Send test',
   'webhook.actions.usage': 'How to call',
   'webhook.autoApproveTag': 'Auto-approve',
@@ -1282,8 +1282,6 @@ export default {
   'webhook.created.done': 'Done',
   'webhook.created.title': 'Webhook created',
   'webhook.created.tryIt': 'Try it now',
-  'webhook.created.urlHint':
-    'Anyone with this URL can wake the agent, so keep it private. You can copy it again from this page, or generate a new one if it leaks.',
   'webhook.defaultName': 'Webhook',
   'webhook.delete.content':
     'The URL of "{{name}}" stops working at once, and its calls no longer wake this agent. This cannot be undone.',
@@ -1319,12 +1317,10 @@ export default {
   'webhook.desc':
     'Give this agent a URL. When any system sends a request to it, the agent runs with what was sent: alerts, CI results, form submissions, anything.',
   'webhook.empty.desc':
-    'Create a webhook, paste its URL into the system that should notify this agent, and each call starts a run. No signing or special format needed.',
+    'Create a webhook, give its URL and key to the system that should notify this agent, and each call starts a run. No signing or special format needed.',
   'webhook.empty.title': 'Let other systems wake this agent',
   'webhook.endpoint.copy': 'Copy URL',
   'webhook.endpoint.label': 'Webhook URL',
-  'webhook.endpoint.noAccess':
-    'Only the member who created this webhook can see its URL, because calls run as them.',
   'webhook.form.autoApprove.label': 'Auto-approve tool calls',
   'webhook.form.autoApprove.offHint':
     'Runs follow your tool approval settings; a call that needs approval waits in the topic until you answer it.',
@@ -1355,10 +1351,9 @@ export default {
   'webhook.paused': 'Webhook paused. Calls are refused until you resume it',
   'webhook.resumed': 'Webhook resumed',
   'webhook.rotate.content':
-    'The current URL stops working right away. Update every system that calls it with the new one.',
-  'webhook.rotate.done': 'New URL ready. Copy it from the webhook',
-  'webhook.rotate.ok': 'Generate new URL',
-  'webhook.rotate.title': 'Generate a new URL?',
+    'The current key stops working right away. The URL stays the same: give every system that calls it the new key.',
+  'webhook.rotate.ok': 'Generate new key',
+  'webhook.rotate.title': 'Generate a new key?',
   'webhook.test.failed': "Couldn't send the test. Try again",
   'webhook.test.paused': 'Resume the webhook before sending a test',
   'webhook.test.sent': 'Test sent. The agent will run shortly',
@@ -1367,7 +1362,22 @@ export default {
   'webhook.updateFailed': "Couldn't update the webhook. Try again",
   'webhook.usage.json': 'Send JSON',
   'webhook.usage.notes':
-    'Any body works: JSON, a form or plain text, up to 256 KB. The URL can also be called without its last segment if that token is sent as "Authorization: Bearer <token>". Up to 120 calls a minute are accepted; retries with the same Idempotency-Key run once.',
+    'Send the key as "Authorization: Bearer <key>"; it is shown once, when the webhook is created or given a new key. Any body works: JSON, a form or plain text, up to 256 KB. Up to 120 calls a minute are accepted; retries with the same Idempotency-Key run once.',
   'webhook.usage.simple': 'The simplest call',
   'webhook.usage.thread': 'Keep a thread in one topic, safe to retry',
+  'webhook.endpoint.hint': 'Calls go to this URL. It never changes.',
+  'webhook.key.label': 'Key',
+  'webhook.key.newTitle': 'New key',
+  'webhook.key.onceHint':
+    'Copy this key now: it won\'t be shown again. Callers send it as "Authorization: Bearer <key>". Anyone with it can wake the agent; if it leaks, generate a new one.',
+  'webhook.topic.continues': 'Continues "{{title}}"',
+  'webhook.topic.empty': 'No matching topics',
+  'webhook.topic.hint':
+    'Pick one of your topics with this agent, or let the webhook keep a topic of its own.',
+  'webhook.topic.label': 'Continue in',
+  'webhook.topic.loadFailed': "Couldn't load topics",
+  'webhook.topic.own': "The webhook's own topic",
+  'webhook.topic.ownHint': 'Started on the first call',
+  'webhook.topic.searchPlaceholder': 'Search your topics with this agent',
+  'webhook.topic.untitled': 'Untitled topic',
 } as const;

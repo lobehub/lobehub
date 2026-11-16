@@ -6,6 +6,8 @@ export interface GenericWebhookSettings {
   autoApprove?: boolean;
   instructions?: string | null;
   name?: string | null;
+  /** `reuse` only: an existing topic of the agent to continue; null clears it. */
+  topicId?: string | null;
   topicMode?: GenericWebhookTopicMode;
 }
 
@@ -30,14 +32,14 @@ class InboundWebhookService {
 
   delete = async (id: string) => lambdaClient.inboundWebhook.delete.mutate({ id });
 
-  /** A generic webhook for the agent; the result carries its call URL. */
+  /** A generic webhook for the agent, with its key: the one time the key is returned. */
   create = async (agentId: string, settings: GenericWebhookSettings) =>
     lambdaClient.inboundWebhook.create.mutate({ agentId, ...settings });
 
   update = async (id: string, changes: GenericWebhookSettings & { paused?: boolean }) =>
     lambdaClient.inboundWebhook.update.mutate({ id, ...changes });
 
-  /** A new call URL; the previous one stops working at once. */
+  /** A new key, returned this once; the old one stops working at once, the URL stays. */
   rotateToken = async (id: string) => lambdaClient.inboundWebhook.rotateToken.mutate({ id });
 
   /** A sample call through the real receiver: it wakes the agent like any caller would. */

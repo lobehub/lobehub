@@ -38,7 +38,7 @@ import {
 import { inboundWebhookService } from '@/services/inboundWebhook';
 
 import DeliveryLog from './DeliveryLog';
-import { maskEndpoint } from './endpoint';
+import { openWebhookKeyModal } from './KeyReveal';
 import UsageGuide from './UsageGuide';
 import { openWebhookFormModal } from './WebhookFormModal';
 
@@ -148,8 +148,10 @@ const WebhookItem = memo<WebhookItemProps>(
         okText: t('webhook.rotate.ok'),
         onOk: async () => {
           try {
-            onChange(await inboundWebhookService.rotateToken(item.id));
-            toast.success(t('webhook.rotate.done'));
+            const rotated = await inboundWebhookService.rotateToken(item.id);
+            onChange(rotated.item);
+            if (rotated.item.endpoint)
+              openWebhookKeyModal({ endpoint: rotated.item.endpoint, secret: rotated.secret });
           } catch {
             toast.error(t('webhook.updateFailed'));
           }
@@ -204,7 +206,11 @@ const WebhookItem = memo<WebhookItemProps>(
     ];
 
     const meta = [
-      t(source?.topicMode === 'reuse' ? 'webhook.topicMode.reuse' : 'webhook.topicMode.new'),
+      source?.topicMode === 'reuse' && source.topicId && item.topic
+        ? t('webhook.topic.continues', {
+            title: item.topic.title?.trim() || t('webhook.topic.untitled'),
+          })
+        : t(source?.topicMode === 'reuse' ? 'webhook.topicMode.reuse' : 'webhook.topicMode.new'),
       item.lastDeliveryAt
         ? t('webhook.lastCall', { time: dayjs(item.lastDeliveryAt).fromNow() })
         : t('webhook.noCalls'),
@@ -243,15 +249,13 @@ const WebhookItem = memo<WebhookItemProps>(
 
         <AutomationStatusReason item={item} />
 
-        {item.endpoint ? (
+        {item.endpoint && (
           <Flexbox horizontal align={'center'} gap={8} {...stylex.props(styles.endpointRow)}>
-            <span title={t('webhook.endpoint.label')} {...stylex.props(styles.endpoint)}>
-              {maskEndpoint(item.endpoint)}
+            <span title={item.endpoint} {...stylex.props(styles.endpoint)}>
+              {item.endpoint}
             </span>
             <CopyButton content={item.endpoint} size={'small'} title={t('webhook.endpoint.copy')} />
           </Flexbox>
-        ) : (
-          <span {...stylex.props(styles.meta)}>{t('webhook.endpoint.noAccess')}</span>
         )}
 
         {item.instructions && (

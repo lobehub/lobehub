@@ -1,11 +1,14 @@
 'use client';
 
-import type { GenericWebhookTopicMode, InboundWebhookItem } from '@lobechat/types';
+import type {
+  GenericWebhookTopicMode,
+  InboundWebhookItem,
+  InboundWebhookItemWithSecret,
+} from '@lobechat/types';
 import {
   Button,
   createModal,
   Flexbox,
-  Highlighter,
   Icon,
   Input,
   type ModalInstance,
@@ -23,26 +26,15 @@ import { CheckCircle2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import CopyableLabel from '@/components/CopyableLabel';
 import { inboundWebhookService } from '@/services/inboundWebhook';
 
-import { curlExamples } from './endpoint';
+import { KeyReveal } from './KeyReveal';
+import TopicPicker from './TopicPicker';
+import type { WebhookTopicOption } from './useWebhookTopics';
 
 const styles = stylex.create({
   hint: { fontSize: '12px', lineHeight: 1.5, color: cssVar.colorTextSecondary },
   successIcon: { color: cssVar.colorSuccess },
-  urlBlock: {
-    paddingBlock: '8px',
-    paddingInline: '12px',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: cssVar.colorBorderSecondary,
-    borderRadius: cssVar.borderRadius,
-    fontFamily: cssVar.fontFamilyCode,
-    fontSize: '12px',
-    backgroundColor: cssVar.colorFillQuaternary,
-    backgroundImage: 'none',
-  },
   warning: { fontSize: '12px', lineHeight: 1.5, color: cssVar.colorWarning },
 });
 
@@ -77,21 +69,31 @@ const WebhookForm = ({ agentId, item, onSaved }: WebhookFormProps) => {
   const [instructions, setInstructions] = useState(item?.instructions ?? '');
   const [topicMode, setTopicMode] = useState<GenericWebhookTopicMode>(source?.topicMode ?? 'new');
   const [autoApprove, setAutoApprove] = useState(source?.autoApprove ?? false);
+  // The topic a `reuse` webhook continues; the row carries it as `topic` when one was picked.
+  const [topic, setTopic] = useState<WebhookTopicOption | undefined>(
+    source?.topicId && item?.topic ? item.topic : undefined,
+  );
   const [saving, setSaving] = useState(false);
-  // Set once a new webhook exists; the modal then shows its URL to copy.
-  const [created, setCreated] = useState<InboundWebhookItem>();
+  // Set once a new webhook exists; the modal then shows its URL and its key, this one time.
+  const [created, setCreated] = useState<InboundWebhookItemWithSecret>();
 
   const submit = async () => {
     setSaving(true);
     try {
-      const settings = { autoApprove, instructions, name, topicMode };
+      const settings = {
+        autoApprove,
+        instructions,
+        name,
+        topicId: topicMode === 'reuse' ? (topic?.id ?? null) : null,
+        topicMode,
+      };
       if (item) {
         onSaved(await inboundWebhookService.update(item.id, settings));
         toast.success(t('webhook.form.saved'));
         close();
       } else {
         const next = await inboundWebhookService.create(agentId, settings);
-        onSaved(next);
+        onSaved(next.item);
         setCreated(next);
       }
     } catch {
@@ -101,7 +103,7 @@ const WebhookForm = ({ agentId, item, onSaved }: WebhookFormProps) => {
     }
   };
 
-  if (created?.endpoint) {
+  if (created?.item.endpoint) {
     return (
       <Flexbox gap={16}>
         <Flexbox horizontal align={'center'} gap={8}>
@@ -112,18 +114,7 @@ const WebhookForm = ({ agentId, item, onSaved }: WebhookFormProps) => {
           />
           <Text weight={500}>{t('webhook.created.title')}</Text>
         </Flexbox>
-        <Field hint={t('webhook.created.urlHint')} label={t('webhook.endpoint.label')}>
-          <CopyableLabel
-            wrap
-            className={stylex.props(styles.urlBlock).className}
-            value={created.endpoint}
-          />
-        </Field>
-        <Field label={t('webhook.created.tryIt')}>
-          <Highlighter wrap language={'bash'}>
-            {curlExamples(created.endpoint).text}
-          </Highlighter>
-        </Field>
+        <KeyReveal endpoint={created.item.endpoint} secret={created.secret} />
         <Button block type={'primary'} onClick={() => close()}>
           {t('webhook.created.done')}
         </Button>
@@ -171,6 +162,11 @@ const WebhookForm = ({ agentId, item, onSaved }: WebhookFormProps) => {
           onChange={(value) => setTopicMode(value as GenericWebhookTopicMode)}
         />
       </Field>
+      {topicMode === 'reuse' && (
+        <Field hint={t('webhook.topic.hint')} label={t('webhook.topic.label')}>
+          <TopicPicker agentId={agentId} value={topic} onChange={setTopic} />
+        </Field>
+      )}
       <Flexbox gap={6}>
         <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
           <Text weight={500}>{t('webhook.form.autoApprove.label')}</Text>
@@ -192,7 +188,8 @@ export const openWebhookFormModal = (props: WebhookFormProps): ModalInstance =>
   createModal({
     content: <WebhookForm {...props} />,
     footer: null,
-    maskClosable: true,
+    // After creating, the modal holds the key, shown once: only its button closes it then.
+    maskClosable: !!props.item,
     styles: { content: { paddingBlock: 16, paddingInline: 24 } },
     title: translate(props.item ? 'webhook.form.editTitle' : 'webhook.form.createTitle', {
       ns: 'agent',
