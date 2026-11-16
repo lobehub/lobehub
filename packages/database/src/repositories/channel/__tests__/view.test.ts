@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { channelJobs, channelMembers } from '../../../schemas';
+import { channelJobs, channelMembers, channelMessages } from '../../../schemas';
 import { ChannelExecutionRepository, ChannelRepository } from '..';
 import { createChannelFixture, jobsOf, lease } from './testUtils';
 
@@ -153,6 +153,51 @@ describe('Channel public view', () => {
     expect(
       (await asOwner.detail(channel.id, { threadId: thread.id })).jobs.map((entry) => entry.id),
     ).toEqual([job.id]);
+  });
+
+  it("keeps the main conversation's own jobs however many thread jobs are at work", async () => {
+    const { asOwner, channel, owner } = await fixture.createTeamChannel();
+    const agent = await fixture.addAgent(channel.id, 'Researcher');
+    const main = await asOwner.send(channel.id, {
+      content: 'Main request',
+      mentions: [agent.id],
+      requestKey: 'main-work',
+      routing: 'fallback',
+    });
+    const [mainJob] = await jobsOf(db, main.id);
+    await db
+      .update(channelJobs)
+      .set({ createdAt: new Date(Date.now() - 60_000), status: 'running', writerHeld: true })
+      .where(eq(channelJobs.id, mainJob.id));
+    const thread = await asOwner.createThread(channel.id, { rootMessageId: main.id });
+    // More queued thread work than the main view's own job limit.
+    const messages = await db
+      .insert(channelMessages)
+      .values(
+        Array.from({ length: 210 }, (_, index) => ({
+          channelId: channel.id,
+          content: `Thread request ${index}`,
+          requestKey: `flood-${index}`,
+          routingStatus: 'routed' as const,
+          sequence: 10_000 + index,
+          threadId: thread.id,
+          userId: fixture.ownerId,
+        })),
+      )
+      .returning({ id: channelMessages.id });
+    await db.insert(channelJobs).values(
+      messages.map(({ id }) => ({
+        channelId: channel.id,
+        memberId: agent.id,
+        messageId: id,
+        requesterMemberId: owner.id,
+        threadId: thread.id,
+      })),
+    );
+
+    const { jobs } = await asOwner.detail(channel.id);
+    expect(jobs.filter((job) => !job.threadId).map((job) => job.id)).toEqual([mainJob.id]);
+    expect(jobs.filter((job) => job.threadId === thread.id).length).toBeLessThan(210);
   });
 
   it('summarizes each thread under its root on the main timeline only', async () => {
