@@ -5,6 +5,7 @@ import { ChatErrorType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
+import pMap from 'p-map';
 import { z } from 'zod';
 
 import { chargeAfterGenerate } from '@/business/server/image-generation/chargeAfterGenerate';
@@ -46,6 +47,9 @@ import {
 } from './utils';
 
 const log = debug('lobe-image:lambda');
+
+/** Bounds the task updates and refunds when failing a large batch at once. */
+const FAIL_UNSTARTED_CONCURRENCY = 5;
 
 const imageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -411,24 +415,26 @@ export const imageRouter = router({
         const message =
           'start async task error: ' + (error instanceof Error ? error.message : 'Unknown error');
 
-        await Promise.allSettled(
-          tasks.map(({ asyncTaskId }) =>
-            asyncTaskModel.update(asyncTaskId, {
-              error: new AsyncTaskError(AsyncTaskErrorType.ServerError, message),
-              status: AsyncTaskStatus.Error,
-            }),
-          ),
-        ).then((results) => {
-          for (const result of results) {
-            if (result.status === 'rejected')
-              console.error('Failed to update task status:', result.reason);
-          }
-        });
+        await pMap(
+          tasks,
+          async ({ asyncTaskId }) => {
+            try {
+              await asyncTaskModel.update(asyncTaskId, {
+                error: new AsyncTaskError(AsyncTaskErrorType.ServerError, message),
+                status: AsyncTaskStatus.Error,
+              });
+            } catch (updateError) {
+              console.error('Failed to update task status:', updateError);
+            }
+          },
+          { concurrency: FAIL_UNSTARTED_CONCURRENCY },
+        );
 
         if (!ENABLE_BUSINESS_FEATURES || !prechargeItems?.length) return;
 
-        await Promise.allSettled(
-          tasks.map(async ({ asyncTaskId, index }) => {
+        await pMap(
+          tasks,
+          async ({ asyncTaskId, index }) => {
             const prechargeItem = prechargeItems[index];
             if (prechargeItem === undefined) return;
             try {
@@ -449,7 +455,8 @@ export const imageRouter = router({
             } catch (chargeError) {
               console.error('Failed to reconcile billing for failed task:', chargeError);
             }
-          }),
+          },
+          { concurrency: FAIL_UNSTARTED_CONCURRENCY },
         );
       };
 
