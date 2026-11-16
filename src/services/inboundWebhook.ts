@@ -8,7 +8,9 @@ import { lambdaClient } from '@/libs/trpc/client';
  * the TRPC client already sends.
  */
 class InboundWebhookService {
-  list = async () => lambdaClient.inboundWebhook.list.query();
+  /** Everything in the active scope, or one agent's automations. */
+  list = async (agentId?: string) =>
+    lambdaClient.inboundWebhook.list.query(agentId ? { agentId } : undefined);
 
   /**
    * Asks the source server whether the subscription still delivers, resuming

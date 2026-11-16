@@ -13,7 +13,7 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import LiteTable, { type LiteTableColumn } from '@/components/LiteTable';
 
 import AutomationStatus from './AutomationStatus';
-import { LastDeliveryCell, SubscriptionCell, TargetCell } from './cells';
+import { LastDeliveryCell, SubscriptionCell, TargetCell, TopicCell } from './cells';
 import { COLUMN_WIDTH } from './columnWidth';
 import RowActions from './RowActions';
 import { useAutomationList } from './useAutomationList';
@@ -41,11 +41,11 @@ const styles = stylex.create({
  * the page has no create action; it answers "what is firing my agents, is it
  * healthy, where does it land" and lets the user check or stop one.
  */
-const AutomationList = memo(() => {
+const AutomationList = memo<{ agentId?: string }>(({ agentId }) => {
   const { t } = useTranslation('setting');
   const activeWorkspaceId = useActiveWorkspaceId();
 
-  const { data, error, isLoading, reload, removeRow, replaceRow } = useAutomationList();
+  const { data, error, isLoading, reload, removeRow, replaceRow } = useAutomationList(agentId);
 
   const columns: LiteTableColumn<InboundWebhookItem>[] = [
     {
@@ -60,12 +60,20 @@ const AutomationList = memo(() => {
       title: t('automations.columns.status'),
       width: COLUMN_WIDTH.status,
     },
-    {
-      key: 'target',
-      render: (item) => <TargetCell item={item} />,
-      title: t('automations.columns.target'),
-      width: COLUMN_WIDTH.target,
-    },
+    // On an agent's own page every row is that agent's; only the Topic tells rows apart.
+    agentId
+      ? {
+          key: 'topic',
+          render: (item) => <TopicCell item={item} />,
+          title: t('automations.columns.topic'),
+          width: COLUMN_WIDTH.target,
+        }
+      : {
+          key: 'target',
+          render: (item) => <TargetCell item={item} />,
+          title: t('automations.columns.target'),
+          width: COLUMN_WIDTH.target,
+        },
     {
       key: 'lastDelivery',
       render: (item) => <LastDeliveryCell at={item.lastDeliveryAt} />,
@@ -88,7 +96,13 @@ const AutomationList = memo(() => {
     <div {...stylex.props(styles.container)}>
       <div {...stylex.props(styles.header)}>
         <Text style={{ fontSize: 13 }} type={'secondary'}>
-          {t(activeWorkspaceId ? 'automations.descWorkspace' : 'automations.desc')}
+          {t(
+            agentId
+              ? 'automations.descAgent'
+              : activeWorkspaceId
+                ? 'automations.descWorkspace'
+                : 'automations.desc',
+          )}
         </Text>
       </div>
       <AsyncBoundary

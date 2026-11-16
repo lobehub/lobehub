@@ -148,6 +148,27 @@ export const TargetCell = memo<{ item: InboundWebhookItem }>(({ item }) => {
 
 TargetCell.displayName = 'AutomationTargetCell';
 
+/** The Topic a row runs in, on a page that already shows whose agent it is. */
+export const TopicCell = memo<{ item: InboundWebhookItem }>(({ item }) => {
+  const { t } = useTranslation('setting');
+  const { agent, topic } = item;
+  if (!agent || !topic) return <EmptyValue />;
+
+  const topicTitle = topic.title?.trim() || t('automations.untitledTopic');
+  return (
+    <WorkspaceLink
+      title={topicTitle}
+      to={AGENT_CHAT_TOPIC_URL(agent.id, topic.id)}
+      {...stylex.props(styles.topicLink)}
+      onClick={(event) => event.stopPropagation()}
+    >
+      {topicTitle}
+    </WorkspaceLink>
+  );
+});
+
+TopicCell.displayName = 'AutomationTopicCell';
+
 /**
  * When the last event arrived. Relative, because the question is "is this
  * still firing?"; the exact time is a hover away.

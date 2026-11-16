@@ -2402,6 +2402,7 @@
   "supervisor.label": "Orchestrator",
   "supervisor.todoList.allComplete": "All tasks completed",
   "supervisor.todoList.title": "Tasks Completed",
+  "tab.automations": "Automations",
   "tab.backToChat": "Back to chat",
   "tab.context": "Context",
   "tab.engine": "Engine",

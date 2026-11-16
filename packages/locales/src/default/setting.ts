@@ -5215,9 +5215,12 @@ When I am ___, I need ___
     'Connector events your agents subscribed to. Each event runs the agent in its topic and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
   'automations.descWorkspace':
     'Connector events the agents in this workspace subscribed to. Each event runs the agent in its topic and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery. Only the member who approved a subscription or a workspace admin can check or delete it.',
+  'automations.descAgent':
+    'Connector events this agent subscribed to. Each event runs the agent in its topic and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
   'automations.columns.subscription': 'Subscription',
   'automations.columns.status': 'Status',
   'automations.columns.target': 'Agent & topic',
+  'automations.columns.topic': 'Topic',
   'automations.columns.lastDelivery': 'Last event',
   'automations.source.moreArgs': '{{text}} +{{count}}',
   'automations.untitledTopic': 'Untitled topic',
