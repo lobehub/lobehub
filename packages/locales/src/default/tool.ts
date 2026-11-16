@@ -122,8 +122,6 @@ export default {
   'connector.edit': 'Edit',
   'connector.edit.success': 'Connector updated',
   'connector.enabled': 'Enabled',
-  'connector.overview.events': 'Events',
-  'connector.eventsSupported': 'Event subscriptions supported',
   'connector.kind.agent': 'Agent connector',
   'connector.kind.builtin': 'Built-in tool',
   'connector.kind.community': 'Community tool',
