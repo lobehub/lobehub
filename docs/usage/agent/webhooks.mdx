@@ -1,6 +1,6 @@
 ---
 title: Webhooks
-description: Give an agent a URL that any system can call. Each call wakes the agent with what was sent, in a new topic or in the topic of its thread.
+description: Give an agent a URL that any system can call. Calls wake the agent with what was sent, in a new topic or in the topic of their thread.
 tags:
   - LobeHub
   - Webhooks
@@ -18,7 +18,7 @@ A webhook gives an agent a URL. When another system sends a request to it, such 
 2. Click **Create webhook**. Every field is optional:
    - **Name**: how the webhook appears in its calls and in the conversation.
    - **What should the agent do?**: a task sent with every call, for example "Summarize the failure and open an issue if it is new". The agent treats the request itself as data, never as instructions.
-   - **Topic**: **New topic per call** gives each call its own topic. **One shared topic** keeps every call in one topic, so the agent sees the earlier ones. With one shared topic you can pick one of your existing topics with this agent to continue, or leave it to the webhook's own topic.
+   - **Topic**: **New topic** starts a topic for each run; calls that arrive while others are waiting are handled together in that one run. **One shared topic** keeps every call in one topic, so the agent sees the earlier ones. With one shared topic you can pick one of your existing topics with this agent to continue, or leave it to the webhook's own topic.
    - **Auto-approve tool calls**: see [Approvals](#approvals).
 3. Copy the URL and the key from the confirmation and give both to the system that should call the agent.
 
@@ -48,7 +48,7 @@ A successful call returns `202 {"id": "...", "status": "accepted"}` right away; 
 | `410`  | The webhook was deleted.                                    |
 | `413`  | The body is larger than 256 KB.                             |
 | `415`  | File uploads (`multipart/form-data`) are not supported.     |
-| `429`  | More than 120 calls in a minute; retry after `Retry-After`. |
+| `429`  | Too many calls this minute in the workspace; retry after `Retry-After`. |
 
 ## Follow what happened
 
@@ -56,7 +56,11 @@ Topics started by a webhook stay out of the main topic list. A running one shows
 
 On the webhook, **Recent calls** lists each call: when it arrived, whether the agent ran, what was sent, and the topic it ran in. **Send test** makes a sample call through the same path a real caller uses.
 
-Each run uses credits. A webhook runs the agent at most 60 times an hour; calls beyond that are recorded and skipped.
+Each run uses credits. Calls waiting together are handled in one run, up to 20 at a time (calls of different threads run separately); whatever is left runs right after. Limits:
+
+- **Calls**: 120 a minute for each member of the workspace (one, in a personal space), across all its webhooks and event subscriptions. Calls beyond that get `429` and are not recorded.
+- **Runs**: a webhook runs the agent at most 30 times in 10 minutes; calls beyond that are recorded and skipped.
+- **Webhooks**: each member can have up to 50 webhooks and event subscriptions in a workspace (or in a personal space), and a workspace up to 50 for each member.
 
 ## Approvals
 
