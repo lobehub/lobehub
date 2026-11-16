@@ -61,10 +61,11 @@ export async function subscribeRemote(
   }
 }
 
+/** Store a subscribe result; false when the row had moved on (ended, deleted) and kept nothing. */
 export async function applySubscriptionResult(
   ctx: InboundWebhookContext,
   result: McpSubscribeEventResult,
-) {
+): Promise<boolean> {
   const state: Partial<McpEventsWebhookState> = {
     refreshBefore: result.refreshBefore,
     remoteSubscriptionId: result.id,
@@ -101,6 +102,7 @@ export async function applySubscriptionResult(
       { cursor: result.cursor },
       { cursor: ctx.row.state.cursor },
     );
+  return !!updated;
 }
 
 export async function refreshSubscription(ctx: InboundWebhookContext): Promise<void> {
@@ -130,7 +132,21 @@ export async function refreshSubscription(ctx: InboundWebhookContext): Promise<v
     name: ctx.row.config.eventName,
     ttlMs: null,
   });
-  await applySubscriptionResult(ctx, result);
+  if (await applySubscriptionResult(ctx, result)) return;
+  // The row was deleted while this renewal was in flight. The server may have handled our
+  // unsubscribe first and this subscribe after it, re-creating a subscription nothing tracks any
+  // more, so take it down again as the same account.
+  const current = await ctx.model.findById(ctx.row.id);
+  if (!current || current.status === 'deleting') {
+    try {
+      await teardownMcpSubscription(ctx);
+    } catch {
+      console.error(
+        '[inboundWebhook:maintain] Undoing a renewal after deletion failed',
+        ctx.row.id,
+      );
+    }
+  }
 }
 
 /** Manual checks return a row even when the upstream is broken; sweep uses exactly this operation. */
