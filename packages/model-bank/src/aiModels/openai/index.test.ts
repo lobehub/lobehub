@@ -28,4 +28,16 @@ describe('openai chat model cards', () => {
       },
     ]);
   });
+
+  /**
+   * Gateways reserve quota from `maxOutput` before forwarding a request, so an
+   * official card without it cannot be listed (`max_output_missing`).
+   */
+  it('declares maxOutput on every official chat card', () => {
+    const missing = openaiChatModels
+      .filter((model) => model.isOfficial && model.maxOutput == null)
+      .map((model) => model.id);
+
+    expect(missing).toEqual([]);
+  });
 });
