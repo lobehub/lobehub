@@ -2391,7 +2391,7 @@
   "shareModal.social.platform.wechat": "朋友圈",
   "shareModal.social.platform.weibo": "微博",
   "shareModal.social.platform.x": "X",
-  "shareModal.social.shareTo": "分享到{{platform}}",
+  "shareModal.social.shareTo": "分享到 {{platform}}",
   "shareModal.social.title": "分享到社交媒体",
   "shareModal.social.untitled": "未命名话题",
   "shareModal.social.wechat.hint": "微信扫码打开后，点右上角「···」分享到朋友圈",
