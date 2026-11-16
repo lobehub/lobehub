@@ -243,7 +243,7 @@ describe('Channel reply opening', () => {
     });
   });
 
-  it('acknowledges in a direct conversation but never moves it into a Thread', async () => {
+  it('moves a long reply in a direct conversation into a Thread under the acknowledgement', async () => {
     const [agent] = await db
       .insert(agents)
       .values({ name: 'Assistant', userId: fixture.ownerId, workspaceId: fixture.workspaceId })
@@ -258,15 +258,20 @@ describe('Channel reply opening', () => {
     const [job] = await jobsOf(db, message.id);
 
     expect(await execution.openingCandidate(channel.id, job.id)).toMatchObject({
-      canOpenThread: false,
+      canOpenThread: true,
     });
     await execution.open(channel.id, job.id, { ack: 'On it.', threadTitle: 'This week' });
 
-    expect((await jobById(db, job.id)).threadId).toBeNull();
-    expect(
-      await db.select().from(channelThreads).where(eq(channelThreads.channelId, channel.id)),
-    ).toEqual([]);
-    expect(await execution.openingReply(channel.id, job.id)).toBe('On it.');
+    const threads = await db
+      .select()
+      .from(channelThreads)
+      .where(eq(channelThreads.channelId, channel.id));
+    expect(threads).toHaveLength(1);
+    const ack = (await messagesOf(channel.id)).find((row) => row.routingStatus === 'reply');
+    expect(threads[0]).toMatchObject({ rootMessageId: ack?.id });
+    expect(threads[0].metadata).toMatchObject({ title: 'This week' });
+    expect((await jobById(db, job.id)).threadId).toBe(threads[0].id);
+    expect(await execution.claim(channel.id, job.id, lease)).not.toBeNull();
   });
 
   it('never opens a wake that may stay silent', async () => {

@@ -12,7 +12,7 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 
 import { ManageMemoryButton } from '../memory/features/ManageMemoryButton';
 import { componentMap } from './componentMap';
-import { getSettingsContainerMaxWidth, OWN_FRAME_TABS } from './ownFrameTabs';
+import { OWN_FRAME_TABS, SETTINGS_CONTAINER_MAX_WIDTH } from './ownFrameTabs';
 import { SettingsPageActionsContext, SettingsPageActionsRow } from './SettingsPageActions';
 import { useSettingsTabTitle } from './tabTitles';
 
@@ -97,7 +97,7 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
             </NavHeader>
             <SettingsPageActionsContext value={pageActions}>
               <SettingContainer
-                maxWidth={getSettingsContainerMaxWidth(tabKey)}
+                maxWidth={SETTINGS_CONTAINER_MAX_WIDTH}
                 paddingBlock={'24px 128px'}
                 paddingInline={24}
               >

@@ -15,6 +15,7 @@ import { ChevronRight, MessageCircle, Pencil, Trash } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useFetchWorkspaceMembers } from '@/business/client/hooks/useFetchWorkspaceMembers';
 import { AttachmentMenu } from '@/features/AttachmentInput';
 import RichTextMessage from '@/features/Conversation/Messages/User/components/RichTextMessage';
 import { TypoBar } from '@/features/EditorCanvas';
@@ -23,6 +24,7 @@ import {
   insertExistingAttachmentsIntoEditor,
   insertFilesIntoEditor,
 } from '@/features/EditorCanvas/editorAttachments';
+import MemberProfilePopup from '@/features/MemberProfileCard/MemberProfilePopup';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
@@ -97,6 +99,9 @@ const CommentCard = memo<CommentCardProps>(
     variant = 'root',
   }) => {
     const { t } = useTranslation('file');
+    // Hovering the author shows their member card; the directory request is
+    // shared by every card in the thread.
+    useFetchWorkspaceMembers({ enabled: !!comment.authorUserId });
     const cardRef = useRef<HTMLDivElement>(null);
     const { text: time, title: timeTitle } = useActivityTime(comment.createdAt);
     const shouldSendOnEnter = useEnterToSend();
@@ -239,17 +244,21 @@ const CommentCard = memo<CommentCardProps>(
           className={cx(styles.header, compact && styles.headerCompact)}
           gap={compact ? 8 : 8}
         >
-          <Avatar
-            avatar={comment.author.avatar || authorName}
-            size={compact ? 28 : variant === 'reply' ? 28 : 32}
-          />
+          <MemberProfilePopup userId={comment.authorUserId}>
+            <Avatar
+              avatar={comment.author.avatar || authorName}
+              size={compact ? 28 : variant === 'reply' ? 28 : 32}
+            />
+          </MemberProfilePopup>
           {compact ? (
             // Name over time, the way a card in a narrow column reads best.
             <Flexbox gap={2} style={{ minWidth: 0 }}>
               <Flexbox horizontal align={'center'} gap={6} style={{ minWidth: 0 }}>
-                <Text ellipsis fontSize={13} weight={600}>
-                  {authorName}
-                </Text>
+                <MemberProfilePopup userId={comment.authorUserId}>
+                  <Text ellipsis fontSize={13} weight={600}>
+                    {authorName}
+                  </Text>
+                </MemberProfilePopup>
                 {replyToName && (
                   <>
                     <ChevronRight aria-hidden className={styles.replyTargetIcon} size={12} />
@@ -270,9 +279,11 @@ const CommentCard = memo<CommentCardProps>(
               )}
             </Flexbox>
           ) : (
-            <Text fontSize={14} weight={600}>
-              {authorName}
-            </Text>
+            <MemberProfilePopup userId={comment.authorUserId}>
+              <Text fontSize={14} weight={600}>
+                {authorName}
+              </Text>
+            </MemberProfilePopup>
           )}
           {!compact && replyToName && (
             <>

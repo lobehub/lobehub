@@ -16,9 +16,6 @@ import DesktopLayoutContainer from '@/features/DesktopLayoutContainer';
 import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
 import NavPanelShell from '@/features/NavPanel/Shell';
-import NavRail from '@/features/NavRail';
-import { useImLayout, useSyncImLayoutHint } from '@/features/NavRail/useImLayout';
-import { wrapStyles } from '@/features/NavRail/wrapStyle';
 import { DndContextWrapper } from '@/features/ResourceManager/DndContextWrapper';
 import { RouteMetaBridge } from '@/features/RouteMeta';
 import { usePlatform } from '@/hooks/usePlatform';
@@ -43,9 +40,6 @@ const GlobalApprovalNotification = dynamic(() => import('@/features/GlobalApprov
 const Layout: FC = () => {
   const { isPWA } = usePlatform();
   const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);
-  // `im_layout` trial: icon rail + wrapped list column; off keeps this layout.
-  const imLayout = useImLayout();
-  useSyncImLayoutHint(imLayout);
 
   return (
     <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
@@ -63,38 +57,15 @@ const Layout: FC = () => {
               stylex.props(isPWA ? styles.mainContainerPWA : styles.mainContainer).className
             }
           >
-            {imLayout ? (
-              <>
-                <NavRail />
-                <Flexbox
-                  horizontal
-                  {...stylex.props(wrapStyles.wrap, isDesktop && wrapStyles.wrapDesktop)}
-                >
-                  <NavPanelShell />
-                  <DesktopLayoutContainer flush>
-                    {/* `/` stays the home dashboard; the Messages tab returns here or to the active Channel. */}
-                    <DesktopHomeLayout>
-                      <DesktopHome />
-                    </DesktopHomeLayout>
-                    <Suspense fallback={<RouteSegmentSkeleton />}>
-                      <Outlet />
-                    </Suspense>
-                  </DesktopLayoutContainer>
-                </Flexbox>
-              </>
-            ) : (
-              <>
-                <NavPanelShell />
-                <DesktopLayoutContainer>
-                  <DesktopHomeLayout>
-                    <DesktopHome />
-                  </DesktopHomeLayout>
-                  <Suspense fallback={<RouteSegmentSkeleton />}>
-                    <Outlet />
-                  </Suspense>
-                </DesktopLayoutContainer>
-              </>
-            )}
+            <NavPanelShell />
+            <DesktopLayoutContainer>
+              <DesktopHomeLayout>
+                <DesktopHome />
+              </DesktopHomeLayout>
+              <Suspense fallback={<RouteSegmentSkeleton />}>
+                <Outlet />
+              </Suspense>
+            </DesktopLayoutContainer>
           </Flexbox>
         </DndContextWrapper>
         <Suspense fallback={null}>

@@ -1,5 +1,5 @@
 import { RequestTrigger } from '@lobechat/types';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import InputEditor from './index';
@@ -252,6 +252,7 @@ vi.mock('./ActionTag', () => ({
   INSERT_ACTION_TAG_COMMAND: 'insert-action-tag',
   useSlashActionItems: () => [],
 }));
+vi.mock('./ImageRefTag', () => ({ useImageRefTagSync: vi.fn() }));
 vi.mock('./MentionMenu', () => ({ createMentionMenu: vi.fn(() => vi.fn(() => null)) }));
 vi.mock('./Placeholder', () => ({
   default: () => <span>placeholder</span>,
@@ -361,6 +362,17 @@ describe('ChatInput InputEditor', () => {
     render(<InputEditor />);
 
     expect((await getEditorStyle())?.fontSize).toBe(16);
+  });
+
+  it('keeps restored image references in sync on mobile without inserting new ones', async () => {
+    const { useImageRefTagSync } = await import('./ImageRefTag');
+    platform.isMobile = true;
+
+    render(<InputEditor />);
+
+    await waitFor(() =>
+      expect(useImageRefTagSync).toHaveBeenLastCalledWith(expect.anything(), { insertNew: false }),
+    );
   });
 
   it('keeps the editor font size unchanged on desktop', async () => {

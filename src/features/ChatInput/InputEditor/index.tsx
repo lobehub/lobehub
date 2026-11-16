@@ -55,6 +55,7 @@ import {
   type InsertActionTagPayload,
   useSlashActionItems,
 } from './ActionTag';
+import { useImageRefTagSync } from './ImageRefTag';
 import { createInputCompletionError, isInputCompletionAbortError } from './inputCompletionError';
 import InputHistoryPopup, { getHistoryPreviewText } from './InputHistoryPopup';
 import { INSERT_LOCAL_FILE_TAG_COMMAND } from './LocalFileTag';
@@ -292,6 +293,10 @@ const InputEditor = memo<{
 
   // Listen to editor's paste event for file uploads
   usePasteFile(editor, handlePasteFiles);
+  // Reference each attached image inline and keep the references numbered like the images.
+  // New references are desktop only, since the numbered image cards are a desktop composer UI;
+  // references restored from a message still follow removals and renumbering on mobile.
+  useImageRefTagSync(editor, { insertNew: !mobile });
 
   useEffect(() => {
     const fn = (e: BeforeUnloadEvent) => {

@@ -151,7 +151,7 @@
   "credits.budgetPage.allocate.title": "共享额度",
   "credits.budgetPage.limit.desc": "限制每位成员和对外分享的智能体可使用的额度。",
   "credits.budgetPage.limit.title": "消费上限",
-  "credits.costEstimateHint.desc": "当估算的模型成本达到你的阈值时，发送前显示一个轻量级警告",
+  "credits.costEstimateHint.desc": "发送消息前，若预估模型成本达到该金额，会在对话输入框上方提醒你",
   "credits.costEstimateHint.saveError": "无法保存成本估算警报设置",
   "credits.costEstimateHint.saveSuccess": "成本估算警报设置已保存",
   "credits.costEstimateHint.threshold": "警告阈值",

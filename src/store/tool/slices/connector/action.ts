@@ -1,8 +1,13 @@
 import { isDesktop } from '@lobechat/const';
-import { connectorMcpEndpoint, isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
+import {
+  connectorDeviceBinding,
+  connectorMcpEndpoint,
+  isDeviceOnlyMcpEndpoint,
+} from '@lobechat/utils/mcpEndpoint';
 import type { SWRResponse } from 'swr';
 
 import type { ConnectorToolPermission } from '@/database/schemas';
+import { runsOnAnotherDevice } from '@/helpers/mcpDeviceBinding';
 import { resolveLocalConnectorHttpParams } from '@/libs/mcp/localConnector';
 import {
   cacheScope,
@@ -542,6 +547,8 @@ export class ConnectorActionImpl {
     const isLocalHttp =
       !!detail.mcpServerUrl && isDeviceOnlyMcpEndpoint(connectorMcpEndpoint(detail));
     if (!isStdio && !isLocalHttp) return false;
+    // Bound to another device: the server lists it there, where its calls run
+    if (runsOnAnotherDevice(connectorDeviceBinding(detail)?.deviceId)) return false;
 
     // The full tool list, not a manifest: a manifest leaves out view-only
     // tools, yet a view's call must find its tool synced.
