@@ -106,6 +106,18 @@ const connectorByIdentifier =
     return rows.find((c) => isInConnectorTab(c, visibility)) ?? rows[0];
   };
 
+/**
+ * The shared (workspace) row of `identifier`, never a private one. A
+ * marketplace or custom MCP install writes the shared row (`connector.create`
+ * upserts the row of the visibility it is given, shared by default), so what
+ * it replaces, rolls back or reads after authorizing is that row, whichever
+ * order the list holds a private row of the same identifier in.
+ */
+const sharedConnectorByIdentifier =
+  (identifier: string) =>
+  (s: ToolStore): ConnectorWithTools | undefined =>
+    (s.connectors ?? []).find((c) => c.identifier === identifier && c.visibility !== 'private');
+
 const enabledConnectors = (s: ToolStore): ConnectorWithTools[] =>
   (s.connectors ?? []).filter((c) => c.isEnabled);
 
@@ -317,6 +329,7 @@ export const connectorSelectors = {
   isMarketplaceConnectorInstalled,
   marketplaceMcpConnectorByIdentifier,
   marketplaceMcpConnectors,
+  sharedConnectorByIdentifier,
   connectorToolsGroupedByIdentifier:
     (identifier: string) =>
     (s: ToolStore): GroupedTools => {

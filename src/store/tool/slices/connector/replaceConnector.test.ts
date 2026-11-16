@@ -83,6 +83,49 @@ describe('snapshotReplacedConnector', () => {
       snapshot: true,
     });
   });
+
+  describe("beside the caller's private row of the same identifier", () => {
+    // An install writes the shared row (`connector.create` upserts the row of
+    // the visibility it is given, shared by default)
+    const shared = row({
+      id: 'shared-row',
+      mcpConnectionType: 'http',
+      mcpServerUrl: 'https://x',
+      sourceType: 'marketplace',
+      visibility: 'public',
+    });
+    const mine = row({
+      id: 'private-row',
+      mcpConnectionType: 'stdio',
+      sourceType: 'custom',
+      visibility: 'private',
+    });
+
+    it('snapshots the shared row the install overwrites, in either list order', async () => {
+      // Regression: the identifier lookup returned whichever row came first, so
+      // a reinstall could be refused over the private row, or snapshot it and
+      // roll back onto it while the shared row stayed half replaced.
+      for (const rows of [
+        [mine, shared],
+        [shared, mine],
+      ]) {
+        const { get, state } = makeStore(rows);
+
+        await expect(snapshotReplacedConnector('gmail', 'marketplace', get)).resolves.toEqual({
+          id: 'shared-row',
+          snapshot: true,
+        });
+        expect(state.getConnectorForEdit).toHaveBeenCalledWith('shared-row');
+      }
+    });
+
+    it('snapshots nothing when only the private row exists: the install creates the shared one', async () => {
+      const { get, state } = makeStore([mine]);
+
+      await expect(snapshotReplacedConnector('gmail', 'marketplace', get)).resolves.toBe(undefined);
+      expect(state.getConnectorForEdit).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('restoreConnector', () => {

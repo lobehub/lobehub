@@ -118,6 +118,27 @@ describe('isIntegrationInConnectorTab', () => {
   });
 });
 
+describe('connectorSelectors.sharedConnectorByIdentifier', () => {
+  const state = (connectors: ConnectorWithTools[]) => ({ connectors }) as unknown as ToolStore;
+
+  it('reads the shared row whichever order the list holds them in, and never a private one', () => {
+    for (const rows of [
+      [sharedRow, privateRow],
+      [privateRow, sharedRow],
+    ]) {
+      expect(connectorSelectors.sharedConnectorByIdentifier('linear')(state(rows))?.id).toBe(
+        'shared-row',
+      );
+    }
+    expect(connectorSelectors.sharedConnectorByIdentifier('linear')(state([privateRow]))).toBe(
+      undefined,
+    );
+    expect(connectorSelectors.sharedConnectorByIdentifier('linear')(state([legacyRow]))?.id).toBe(
+      'legacy-row',
+    );
+  });
+});
+
 describe('pickRunConnectors', () => {
   const ids = (rows: ConnectorWithTools[]) => rows.map((c) => c.id);
 
