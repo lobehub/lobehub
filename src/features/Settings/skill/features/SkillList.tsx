@@ -19,6 +19,7 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { SkeletonList } from '@/components/Skeleton/NavPanel/List';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
@@ -45,6 +46,7 @@ import BuiltinSkillItem from './BuiltinSkillItem';
 import ComposioSkillItem from './ComposioSkillItem';
 import LobehubSkillItem from './LobehubSkillItem';
 import McpSkillItem from './McpSkillItem';
+import { privateTabState } from './privateTabState';
 import type { ToolDetailType } from './SkillDetail';
 import { useSkillListVariant } from './SkillListRow';
 
@@ -110,6 +112,8 @@ const SkillList = memo<SkillListProps>(
     );
     const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
+    // The Private tab reads only this list: keep its load's failure for Retry
+    const connectorsSWR = useToolStore((s) => s.useFetchConnectors)(true);
     const allAgentBoundConnectors = useToolStore(connectorSelectors.agentBoundConnectors, isEqual);
     // What an OAuth integration's tab is decided by: the visibility of its rows
     const connectorTabRows = useToolStore(
@@ -354,10 +358,26 @@ const SkillList = memo<SkillListProps>(
     const customMCPs = isPrivateTab ? [] : allCustomMCPs;
     const agentBoundConnectors = isPrivateTab ? [] : allAgentBoundConnectors;
 
-    if (
-      isPrivateTab &&
-      customConnectors.length + marketplaceConnectors.length + integrations.length === 0
-    ) {
+    const privateState = isPrivateTab
+      ? privateTabState({
+          count: customConnectors.length + marketplaceConnectors.length + integrations.length,
+          error: connectorsSWR.error,
+          isConnectorsInit,
+        })
+      : undefined;
+    if (privateState === 'loading') return <SkeletonList aria-busy paddingBlock={12} rows={4} />;
+    if (privateState === 'error') {
+      return (
+        <Center className={stylex.props(styles.container).className} paddingBlock={48}>
+          <AsyncError
+            error={connectorsSWR.error}
+            variant={'block'}
+            onRetry={() => void connectorsSWR.mutate()}
+          />
+        </Center>
+      );
+    }
+    if (privateState === 'empty') {
       return (
         <Center className={stylex.props(styles.container).className} paddingBlock={48}>
           <Empty
