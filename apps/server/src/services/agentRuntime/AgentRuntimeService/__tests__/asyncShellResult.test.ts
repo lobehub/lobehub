@@ -73,6 +73,37 @@ describe('completeDeferredShell', () => {
     );
   });
 
+  it('keeps the device command state the tool card renders', async () => {
+    const { deps, updateToolMessage } = buildDeps();
+
+    // A device reports the late result in `getCommandOutput`'s shape: output
+    // and liveness, but no command id of its own.
+    await completeDeferredShell(deps, {
+      operationId: 'op_1',
+      result: {
+        content: 'Exit code: 0\n42 tests passed',
+        state: { exitCode: 0, running: false, status: 'done', stdout: '42 tests passed' },
+        success: true,
+        toolCallId: 'call_1',
+      },
+    });
+
+    expect(updateToolMessage).toHaveBeenCalledWith(
+      'msg_placeholder',
+      expect.objectContaining({
+        pluginState: expect.objectContaining({
+          asyncShell: expect.objectContaining({ commandId: 'sh-1' }),
+          commandId: 'sh-1',
+          exitCode: 0,
+          running: false,
+          // The park's outcome wins over a same-named device field.
+          status: 'completed',
+          stdout: '42 tests passed',
+        }),
+      }),
+    );
+  });
+
   it('runs the result policy before the answer reaches history', async () => {
     const { deps, controlCompletedToolResult, updateToolMessage } = buildDeps();
     // A configured `afterToolCall` policy denies the command's output. This

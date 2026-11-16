@@ -1,5 +1,4 @@
 import { type ToolExecuteData, type ToolResultMessage } from '@lobechat/agent-gateway-client';
-import { LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
 import { type BuiltinToolContext } from '@lobechat/types';
 import debug from 'debug';
 import { produce } from 'immer';
@@ -14,8 +13,6 @@ import { hasExecutor, invokeExecutor } from '@/store/tool/slices/builtin/executo
 import { type StoreSetter } from '@/store/types';
 import { takeWorkIntent } from '@/utils/clientWorkIntentStash';
 import { safeParseJSON } from '@/utils/safeParseJSON';
-
-import { deferredShellId, watchDeferredShell } from './deferredShellWatch';
 
 const log = debug('lobe-store:client-tool-execution');
 
@@ -134,31 +131,6 @@ export class ClientToolExecutionActionImpl {
       }
     };
 
-    /**
-     * Deliver a result that belongs to a tool whose dispatch already returned.
-     *
-     * Deliberately outside the `sent` guard: the first result was the "command
-     * is running" receipt the server parked on, and this one is the answer that
-     * resumes it. Both are addressed to the same `toolCallId`.
-     */
-    const sendDeferred = (payload: Omit<ToolResultMessage, 'type'>): void => {
-      const conn = this.#get().gatewayConnections[operationId];
-      if (!conn) {
-        log(
-          '[internal_executeClientTool] no gateway connection for deferred op=%s toolCallId=%s',
-          operationId,
-          toolCallId,
-        );
-        return;
-      }
-      const ok = conn.client.sendToolResult({ ...payload, deferred: true });
-      log(
-        '[internal_executeClientTool] deferred result sent toolCallId=%s ok=%s',
-        toolCallId,
-        String(ok),
-      );
-    };
-
     try {
       // ─── Parse arguments ───
       let params: any = {};
@@ -268,20 +240,6 @@ export class ClientToolExecutionActionImpl {
             success: !!result.success,
             toolCallId,
             workRegistration,
-          });
-        }
-
-        // The command outlived this dispatch: what was just sent is the
-        // "still running" receipt the server parks on, and this device now
-        // owns reporting the real answer when the process exits.
-        const shellId = deferredShellId(identifier, apiName, LocalSystemIdentifier, result.state);
-        if (shellId) {
-          void watchDeferredShell({
-            commandId: shellId,
-            identifier,
-            signal: operation?.abortController?.signal,
-            toolCallId,
-            onComplete: (final) => sendDeferred({ ...final, toolCallId }),
           });
         }
         return;

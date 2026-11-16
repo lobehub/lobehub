@@ -15,12 +15,13 @@ vi.mock('@lobechat/env/agent', () => ({ agentEnv: envMock }));
 
 const buildCtx = () => {
   const create = vi.fn(async () => ({ id: 'msg_placeholder' }));
+  const updatePluginState = vi.fn(async () => {});
   const markOperationParked = vi.fn(async () => true);
   const scheduleShellExpiry = vi.fn(async () => {});
 
   return {
     ctx: {
-      messageModel: { create },
+      messageModel: { create, updatePluginState },
       operationId: 'op_1',
       scheduleShellExpiry,
       streamManager: { markOperationParked },
@@ -29,6 +30,7 @@ const buildCtx = () => {
     create,
     markOperationParked,
     scheduleShellExpiry,
+    updatePluginState,
   };
 };
 
@@ -54,7 +56,12 @@ describe('parkAsyncShell', () => {
     const execution = await parkAsyncShell(
       ctx,
       { parentMessageId: 'msg_parent', state, toolCall },
-      runningResult({ commandId: 'sh-1', isBackground: true, success: true }),
+      runningResult({
+        commandId: 'sh-1',
+        completionWatch: true,
+        isBackground: true,
+        success: true,
+      }),
     );
 
     expect(execution?.result).toMatchObject({
@@ -95,16 +102,19 @@ describe('parkAsyncShell', () => {
     const execution = await parkAsyncShell(
       ctx,
       { parentMessageId: 'msg_parent', state, toolCall },
-      runningResult({ commandId: 'sh-2', running: true, success: true }),
+      runningResult({ commandId: 'sh-2', completionWatch: true, running: true, success: true }),
     );
 
     expect(execution?.result.deferred).toBe(true);
   });
 
   it.each([
-    ['the command already exited', { commandId: 'sh-3', exitCode: 0 }],
-    ['the command failed to spawn', { commandId: 'sh-3', error: 'ENOENT' }],
-    ['it is not a shell result', { exitCode: 1 }],
+    ['the command already exited', { commandId: 'sh-3', completionWatch: true, exitCode: 0 }],
+    ['the command failed to spawn', { commandId: 'sh-3', completionWatch: true, error: 'ENOENT' }],
+    ['it is not a shell result', { completionWatch: true, exitCode: 1 }],
+    // An older device (or a gateway that did not relay the registration) never
+    // reports back: parking would leave the run waiting for its timeout.
+    ['the device is not watching the command', { commandId: 'sh-3', running: true }],
   ])('does not park when %s', async (_label, resultState) => {
     const { ctx, create } = buildCtx();
 
@@ -118,6 +128,28 @@ describe('parkAsyncShell', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it('reuses the tool row a resumed (approved) call already owns', async () => {
+    const { ctx, create, scheduleShellExpiry, updatePluginState } = buildCtx();
+
+    const execution = await parkAsyncShell(
+      ctx,
+      { existingToolMessageId: 'msg_existing', parentMessageId: 'msg_parent', state, toolCall },
+      runningResult({ commandId: 'sh-6', completionWatch: true, running: true }),
+    );
+
+    // A second row with the same tool_call_id would leave the approved one
+    // empty forever and make the completion lookup ambiguous.
+    expect(create).not.toHaveBeenCalled();
+    expect(updatePluginState).toHaveBeenCalledWith(
+      'msg_existing',
+      expect.objectContaining({ asyncShell: expect.objectContaining({ commandId: 'sh-6' }) }),
+    );
+    expect(execution?.result.state).toMatchObject({ toolMessageId: 'msg_existing' });
+    expect(scheduleShellExpiry).toHaveBeenCalledWith(
+      expect.objectContaining({ toolMessageId: 'msg_existing' }),
+    );
+  });
+
   it('does not park a non-shell tool', async () => {
     const { ctx } = buildCtx();
 
@@ -128,7 +160,7 @@ describe('parkAsyncShell', () => {
         state,
         toolCall: { ...toolCall, apiName: 'getCommandOutput' },
       },
-      runningResult({ commandId: 'sh-4', isBackground: true }),
+      runningResult({ commandId: 'sh-4', completionWatch: true, isBackground: true }),
     );
 
     expect(execution).toBeNull();
@@ -141,7 +173,7 @@ describe('parkAsyncShell', () => {
     const execution = await parkAsyncShell(
       ctx,
       { parentMessageId: 'msg_parent', state, toolCall },
-      runningResult({ commandId: 'sh-5', isBackground: true }),
+      runningResult({ commandId: 'sh-5', completionWatch: true, isBackground: true }),
     );
 
     expect(execution).toBeNull();

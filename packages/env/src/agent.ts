@@ -20,15 +20,14 @@ export const getAgentConfig = () => {
 
     server: {
       /**
-       * Opt-in: a device `runCommand` that outlives its wait window parks the
-       * operation instead of handing the model a `shell_id` to poll.
        * On: a device `runCommand` that outlives its wait window parks the
-       * operation, and the device's completion report resumes it. Off (the
-       * default): the model gets `shell_id` back and keeps polling with
-       * `getCommandOutput`, as before.
+       * operation, and the device's completion report (relayed by the device
+       * gateway) resumes it. Off (the default): the model gets `shell_id` back
+       * and keeps polling with `getCommandOutput`, as before.
        *
-       * Default off because it changes what the model sees and depends on the
-       * gateway understanding a parked operation.
+       * Default off because it changes what the model sees and depends on both
+       * gateways and the device understanding late completions. A device or
+       * gateway that does not falls back to the old behaviour on its own.
        */
       AGENT_ASYNC_SHELL: z.enum(['true', 'false']).optional(),
       /**

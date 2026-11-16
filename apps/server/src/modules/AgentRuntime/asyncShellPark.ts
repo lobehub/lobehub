@@ -1,42 +1,29 @@
 import type { AgentState, ToolRunExecution } from '@lobechat/agent-runtime';
 import { LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
-import { agentEnv } from '@lobechat/env/agent';
 import type { ChatToolPayload } from '@lobechat/types';
 import debug from 'debug';
 
-import type { ToolExecutionResultResponse } from '@/server/services/toolExecution';
+import {
+  ASYNC_SHELL_PARK_WINDOW_MS,
+  ASYNC_SHELL_TIMEOUT_MS,
+  isAsyncShellEnabled,
+} from '@/server/services/deviceGateway/toolCallCompletion';
 
 import type { RuntimeExecutorContext } from './context';
 
 const log = debug('lobe-server:agent-runtime:async-shell');
 
 /**
- * A shell command may outlive the tool call that started it. Rather than
- * holding the step (800s function ceiling) or handing the model a `shell_id` to
- * poll, the runtime parks the operation and lets the device report completion
- * as a late `tool_result` — which the agent-runtime resume path turns into the
- * tool's real answer.
- *
- * Off by default: `AGENT_ASYNC_SHELL=true` opts in, because it changes what the
- * model sees and depends on the gateway understanding a parked operation.
+ * A device shell command may outlive the tool call that started it. Rather
+ * than holding the step (800s function ceiling) or handing the model a
+ * `shell_id` to poll, the runtime parks the operation; the device reports the
+ * command's final result through the device gateway when it exits
+ * (`/api/agent/device-tool-completion`), and that resumes the run.
  */
-export const isAsyncShellEnabled = (): boolean => agentEnv.AGENT_ASYNC_SHELL === 'true';
-
-/** Default server-side wait before the parked command is failed. */
-export const DEFAULT_ASYNC_SHELL_TIMEOUT_MS =
-  agentEnv.AGENT_ASYNC_SHELL_TIMEOUT_MS ?? 30 * 60 * 1000;
-
-/**
- * How long the gateway's inactivity watchdog is told to hold for. Deliberately
- * longer than {@link DEFAULT_ASYNC_SHELL_TIMEOUT_MS}: the server owns the real
- * timeout (and reports it as a clean tool error), while this only has to stop
- * the watchdog from killing a healthy wait.
- */
-export const ASYNC_SHELL_PARK_WINDOW_MS =
-  agentEnv.AGENT_ASYNC_SHELL_PARK_WINDOW_MS ?? 2 * 60 * 60 * 1000;
 
 interface CommandStateShape {
   commandId?: unknown;
+  completionWatch?: unknown;
   error?: unknown;
   exitCode?: unknown;
   isBackground?: unknown;
@@ -45,15 +32,20 @@ interface CommandStateShape {
 }
 
 /**
- * Whether this dispatch handed off a command that is still running.
+ * Whether this dispatch handed off a command that is still running AND that the
+ * device promised to report on.
  *
  * `run_in_background` returns before observing (no `running` flag), and a
  * foreground call that outlived its wait window reports `running: true`. A
  * command that failed to spawn is not a wait: it already has an answer.
+ * `completionWatch` is the device's promise that a late result will follow —
+ * without it (older device or gateway) nothing would ever resume the run, so
+ * the model keeps the `shell_id` and polls as before.
  */
 const runningShellId = (state: unknown): string | undefined => {
   if (!state || typeof state !== 'object') return undefined;
   const shell = state as CommandStateShape;
+  if (shell.completionWatch !== true) return undefined;
   if (typeof shell.commandId !== 'string' || shell.commandId.length === 0) return undefined;
   if (shell.error) return undefined;
   if (shell.exitCode !== undefined && shell.exitCode !== null) return undefined;
@@ -63,6 +55,12 @@ const runningShellId = (state: unknown): string | undefined => {
 };
 
 export interface ParkAsyncShellParams {
+  /**
+   * The tool row this call already owns — set when the call resumes after an
+   * approval. The completion is written into it instead of a second row with
+   * the same `tool_call_id`.
+   */
+  existingToolMessageId?: string;
   /** Which message owns this tool call — the placeholder hangs off it. */
   parentMessageId: string;
   state: AgentState;
@@ -77,8 +75,9 @@ export interface ParkAsyncShellParams {
  */
 export const parkAsyncShell = async (
   ctx: RuntimeExecutorContext,
-  { parentMessageId, state, toolCall }: ParkAsyncShellParams,
-  result: ToolExecutionResultResponse,
+  { existingToolMessageId, parentMessageId, state, toolCall }: ParkAsyncShellParams,
+  /** Only the device's command state is read. */
+  result: { state?: unknown },
 ): Promise<ToolRunExecution | null> => {
   if (!isAsyncShellEnabled()) return null;
   if (toolCall.identifier !== LocalSystemIdentifier) return null;
@@ -101,7 +100,7 @@ export const parkAsyncShell = async (
     asyncShell: {
       commandId,
       startedAt,
-      timeoutMs: DEFAULT_ASYNC_SHELL_TIMEOUT_MS,
+      timeoutMs: ASYNC_SHELL_TIMEOUT_MS,
     },
     status: 'pending',
   };
@@ -110,18 +109,25 @@ export const parkAsyncShell = async (
   // park — because the runtime's pause chunk has to advertise it (otherwise the
   // client never loads the row) and the completion barrier looks it up by
   // `tool_call_id`.
-  const placeholder = await ctx.messageModel.create({
-    agentId,
-    content: '',
-    groupId: state.origin?.groupId ?? undefined,
-    parentId: parentMessageId,
-    plugin: toolCall as any,
-    pluginState,
-    role: 'tool',
-    threadId: state.origin?.threadId,
-    tool_call_id: toolCall.id,
-    topicId,
-  });
+  let placeholderId: string;
+  if (existingToolMessageId) {
+    await ctx.messageModel.updatePluginState(existingToolMessageId, pluginState);
+    placeholderId = existingToolMessageId;
+  } else {
+    const placeholder = await ctx.messageModel.create({
+      agentId,
+      content: '',
+      groupId: state.origin?.groupId ?? undefined,
+      parentId: parentMessageId,
+      plugin: toolCall as any,
+      pluginState,
+      role: 'tool',
+      threadId: state.origin?.threadId,
+      tool_call_id: toolCall.id,
+      topicId,
+    });
+    placeholderId = placeholder.id;
+  }
 
   // Ask the gateway to stop treating this run's silence as a dead function
   // until the command comes back. Best-effort: an older gateway answers 404 and
@@ -136,10 +142,10 @@ export const parkAsyncShell = async (
   // an opaque inactivity error. This writes a real tool error instead, so the
   // model can adapt.
   await ctx.scheduleShellExpiry?.({
-    delayMs: DEFAULT_ASYNC_SHELL_TIMEOUT_MS,
+    delayMs: ASYNC_SHELL_TIMEOUT_MS,
     operationId: ctx.operationId,
     toolCallId: toolCall.id,
-    toolMessageId: placeholder.id,
+    toolMessageId: placeholderId,
   });
 
   log(
@@ -147,7 +153,7 @@ export const parkAsyncShell = async (
     ctx.operationId,
     commandId,
     toolCall.id,
-    placeholder.id,
+    placeholderId,
   );
 
   return {
@@ -162,7 +168,7 @@ export const parkAsyncShell = async (
         isBackground: true,
         startedAt,
         success: true,
-        toolMessageId: placeholder.id,
+        toolMessageId: placeholderId,
       },
       success: true,
     },

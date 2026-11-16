@@ -178,6 +178,10 @@ export async function completeDeferredShell(
         : undefined),
     executionTime: result.executionTimeMs,
     state: {
+      // The device's own command state (stdout/stderr/output files) is what the
+      // tool card renders; the park's bookkeeping and the outcome win over it.
+      ...result.state,
+      commandId: pluginState.asyncShell.commandId,
       ...pluginState,
       error: result.error,
       exitCode,

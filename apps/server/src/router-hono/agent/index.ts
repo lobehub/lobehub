@@ -7,6 +7,7 @@ import { botCallback } from './handlers/botCallback';
 import { botReplay } from './handlers/botReplay';
 import { botWakeFlush } from './handlers/botWakeFlush';
 import { channelAdvance, channelCallback } from './handlers/channel';
+import { deviceToolCompletion } from './handlers/deviceToolCompletion';
 import {
   documentAccess,
   documentProjection,
@@ -31,6 +32,7 @@ import { shellExpire } from './handlers/shellExpire';
 import { subAgentCallback } from './handlers/subAgentCallback';
 import { toolResult } from './handlers/toolResult';
 import { bearerSecretAuth } from './middlewares/bearerSecretAuth';
+import { deviceGatewayServiceAuth } from './middlewares/deviceGatewayServiceAuth';
 import { qstashAuth } from './middlewares/qstashAuth';
 import { qstashOrApiKeyAuth } from './middlewares/qstashOrApiKeyAuth';
 import { serviceTokenAuth } from './middlewares/serviceTokenAuth';
@@ -59,9 +61,12 @@ app.post('/webhooks/channel-callback', qstashAuth(), channelCallback);
 // owner's direct Channel (QStash)
 app.post('/webhooks/inbox-report', qstashAuth(), agentInboxReport);
 
-// POST /api/agent/tool-result — gateway-side tool result: LPUSH'd to Redis,
-// or written into a parked operation's placeholder when `deferred`.
+// POST /api/agent/tool-result — gateway-side tool result LPUSH'd to Redis
 app.post('/tool-result', serviceTokenAuth(), toolResult);
+
+// POST /api/agent/device-tool-completion — device gateway relays the final
+// result of a device command that a parked operation is waiting on
+app.post('/device-tool-completion', deviceGatewayServiceAuth(), deviceToolCompletion);
 
 // POST /api/agent/shell-expire — deadline for a parked shell command (QStash)
 app.post('/shell-expire', qstashAuth(), shellExpire);
