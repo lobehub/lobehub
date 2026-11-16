@@ -85,7 +85,7 @@ const DeliveryLog = memo<{ agentId: string; webhookId: string }>(({ agentId, web
     try {
       const page = await inboundWebhookService.listDeliveries(webhookId, nextCursor);
       setOlder((prev) => ({
-        items: [...(prev?.items ?? []), ...page.items],
+        items: [...(prev?.items ?? []), ...(page.items ?? [])],
         nextCursor: page.nextCursor,
       }));
     } finally {
