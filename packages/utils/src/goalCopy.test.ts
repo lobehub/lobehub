@@ -32,6 +32,17 @@ describe('machine gate reasons', () => {
     });
   });
 
+  it('still localizes the gate when the verifier operation names no model', () => {
+    expect(
+      reasonOf(
+        'Setup problem: Verification could not run: the verifier model is not usable (ModelNotFound); the delivery was not evaluated. Choose a verify model that works in Settings > Service Model > Task Acceptance, or fix the model of the pinned verifier agent, then retry. Fix it, then retry or retire this task node?',
+      ),
+    ).toEqual({
+      key: 'goalProcess.gate.reason.setupVerifierUnnamed',
+      params: { code: 'ModelNotFound' },
+    });
+  });
+
   it('carries every figure of a spent retry schedule', () => {
     expect(
       reasonOf(
