@@ -12,6 +12,7 @@ import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
 import { shouldShowMemberAssignee } from '../shared/memberAssigneeMode';
 import { taskDetailPath } from '../shared/taskDetailPath';
+import { useTaskListOriginState } from '../shared/taskListOrigin';
 import AssigneeAgentSelector from './AssigneeAgentSelector';
 import AssigneeAvatar from './AssigneeAvatar';
 import AssigneeMemberSelector from './AssigneeMemberSelector';
@@ -63,6 +64,7 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
     routeScope,
   );
   const navigate = useWorkspaceAwareNavigate();
+  const taskListOriginState = useTaskListOriginState();
   const activeWorkspaceId = useActiveWorkspaceId();
 
   const time = formatTaskItemDate(task.updatedAt || task.createdAt, {
@@ -80,8 +82,9 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
         routeScope === 'agent' ? (task.assigneeAgentId ?? undefined) : undefined,
         task.name,
       ),
+      { state: taskListOriginState },
     );
-  }, [navigate, routeScope, task.assigneeAgentId, task.identifier, task.name]);
+  }, [navigate, routeScope, task.assigneeAgentId, task.identifier, task.name, taskListOriginState]);
 
   const handleRequestSubtasks = useCallback(async () => {
     const detail = await fetchTaskDetail(task.id);
@@ -92,9 +95,10 @@ const AgentTaskItem = memo<TaskItemProps>((props) => {
     (identifier: string, assigneeAgentId?: string, name?: string) => {
       navigate(
         taskDetailPath(identifier, routeScope === 'agent' ? assigneeAgentId : undefined, name),
+        { state: taskListOriginState },
       );
     },
-    [navigate, routeScope],
+    [navigate, routeScope, taskListOriginState],
   );
 
   const scheduledBadge =

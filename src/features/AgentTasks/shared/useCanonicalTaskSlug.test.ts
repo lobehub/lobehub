@@ -9,7 +9,7 @@ import { useTaskStore } from '@/store/task';
 import { useCanonicalTaskSlug } from './useCanonicalTaskSlug';
 
 const mocks = vi.hoisted(() => ({
-  location: { hash: '', search: '' } as { hash: string; search: string },
+  location: { hash: '', search: '' } as { hash: string; search: string; state?: unknown },
   navigate: vi.fn(),
   params: {} as { aid?: string; slug?: string; workspaceSlug?: string },
 }));
@@ -74,6 +74,23 @@ describe('useCanonicalTaskSlug', () => {
         replace: true,
       },
     );
+  });
+
+  it('keeps the history state, so the task list origin survives a slug repair', () => {
+    mocks.params = { slug: 'old-title' };
+    mocks.location = {
+      hash: '',
+      search: '',
+      state: { taskListOrigin: '/tasks?collection=mine' },
+    };
+    setTaskName('Ship the Thing');
+
+    renderHook(() => useCanonicalTaskSlug('T-1'));
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-1/ship-the-thing', {
+      replace: true,
+      state: { taskListOrigin: '/tasks?collection=mine' },
+    });
   });
 
   it('preserves the query string and hash', () => {

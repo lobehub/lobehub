@@ -24,14 +24,15 @@ type CanonicalTaskSlugParams = {
  * pasted the link. Identifier and stable-id URLs both keep their reference.
  * A cached display alias must never redirect a stable-id URL to another task.
  * The slug is cosmetic, so this never gates rendering or re-fetches; `replace` keeps the
- * correction out of the back stack.
+ * correction out of the back stack, and the entry's history state (such as the
+ * task list it was opened from) rides along so the breadcrumb still leads back there.
  *
  * Only route components may call this: the same detail body also renders inside
  * the chat Portal, which must not rewrite the address bar.
  */
 export const useCanonicalTaskSlug = (taskId?: string) => {
   const { aid, slug, workspaceSlug } = useActiveRouteParams<CanonicalTaskSlugParams>();
-  const { hash, search } = useLocation();
+  const { hash, search, state } = useLocation();
   const navigate = useWorkspaceAwareNavigate();
   // Loaded-ness and the title are read separately: an empty title is a real,
   // resolved state (clearing the input persists `name: ''`), and folding it in
@@ -60,6 +61,7 @@ export const useCanonicalTaskSlug = (taskId?: string) => {
     navigate(canonicalTaskPath({ taskRef: taskId, aid, title, workspaceSlug, search, hash }), {
       escape: true,
       replace: true,
+      state,
     });
-  }, [aid, hash, isLoaded, navigate, search, slug, taskId, title, workspaceSlug]);
+  }, [aid, hash, isLoaded, navigate, search, slug, state, taskId, title, workspaceSlug]);
 };

@@ -25,7 +25,10 @@ const createState = (parent: any) => ({
   },
 });
 
+const locationMock = vi.hoisted(() => ({ state: undefined as unknown }));
+
 vi.mock('react-router', () => ({
+  useLocation: () => ({ state: locationMock.state }),
   useNavigate: () => mocks.navigate,
 }));
 
@@ -68,6 +71,7 @@ vi.mock('../features/TaskSubtaskProgressTag', () => ({
 
 describe('TaskParentBar', () => {
   beforeEach(() => {
+    locationMock.state = undefined;
     mocks.navigate.mockClear();
     mocks.getDetail.mockReset();
     mocks.taskState = createState({
@@ -97,7 +101,9 @@ describe('TaskParentBar', () => {
 
     fireEvent.click(screen.getByText('Parent task').closest('button')!);
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_parent/task/T-parent/parent-task');
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_parent/task/T-parent/parent-task', {
+      state: undefined,
+    });
     await waitFor(() => expect(mocks.getDetail).toHaveBeenCalledWith('T-parent'));
   });
 
@@ -123,7 +129,7 @@ describe('TaskParentBar', () => {
     await waitFor(() => expect(mocks.getDetail).toHaveBeenCalledWith('T-parent'));
     fireEvent.click(screen.getByText('Parent task').closest('button')!);
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-parent/parent-task');
+    expect(mocks.navigate).toHaveBeenCalledWith('/task/T-parent/parent-task', { state: undefined });
   });
 
   it("opens parent subtasks inside the clicked subtask's owning agent route", async () => {
@@ -149,6 +155,20 @@ describe('TaskParentBar', () => {
 
     fireEvent.click(await screen.findByTestId('parent-subtask'));
 
-    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_sibling/task/T-sibling');
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_sibling/task/T-sibling', {
+      state: undefined,
+    });
+  });
+
+  it('keeps carrying the source task list into the parent task', async () => {
+    locationMock.state = { taskListOrigin: '/tasks?collection=mine' };
+    render(<TaskParentBar />);
+
+    fireEvent.click(screen.getByText('Parent task').closest('button')!);
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_parent/task/T-parent/parent-task', {
+      state: { taskListOrigin: '/tasks?collection=mine' },
+    });
+    await waitFor(() => expect(mocks.getDetail).toHaveBeenCalledWith('T-parent'));
   });
 });
