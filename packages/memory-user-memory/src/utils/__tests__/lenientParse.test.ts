@@ -28,6 +28,17 @@ const identity = (withIdentity: Record<string, unknown>, extra: Record<string, u
 });
 
 describe('parseLenient', () => {
+  it('reads a list the model left out as empty instead of failing the topic', () => {
+    const { data, repairs } = parseLenient(ContextMemorySchema, {});
+
+    expect(data).toEqual({ memories: [] });
+    expect(repairs).toEqual(['memories: missing list read as empty']);
+  });
+
+  it('still fails when a missing list comes with keys outside the schema', () => {
+    expect(() => parseLenient(ContextMemorySchema, { contexts: [{ title: 'x' }] })).toThrow();
+  });
+
   it('returns valid output untouched, with no repairs', () => {
     const schema = z.object({ items: z.array(z.object({ a: z.string() })) });
 
