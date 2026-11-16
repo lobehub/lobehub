@@ -10,6 +10,10 @@ callers do not choose a provider, prefix, key, SET options or claim lifetime.
 - `steerQueue`: follow-ups a user queued behind a running agent turn, per topic/thread, held for
   a day. Atomic append (bounded), drain and restore; the runtime drains it into the next turn.
   Writes return `undefined` without Redis, and the caller tells the client to send directly.
+- `heteroControl`: control messages for a running heterogeneous agent session (Claude Code), per
+  operation, handed out through its `waitHeteroSteer` poll. At most once: a claim pops the message
+  and nothing re-queues it; unclaimed past its expiry it reads `expired`, and the run's reported
+  result stays readable for an hour. Writes throw without Redis; reads answer `undefined`.
 - `linear`: single-use OAuth state for "Connect Linear" (ten minutes, deleted on first read).
 - `connectorOAuth`: how each connector OAuth flow ended (account and outcome), for ten minutes,
   read back by the window that started the flow. `null` without Redis.

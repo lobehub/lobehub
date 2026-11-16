@@ -39,6 +39,36 @@ export interface ClaudeCodeTurnOutcome {
 const isAbortedResult = (message: any): boolean =>
   !!message.is_error && String(message.terminal_reason ?? '').startsWith('aborted');
 
+/**
+ * The `request` of a stream-json `control_request` line, e.g.
+ * `{ subtype: 'interrupt' }`. Claude Code answers each one with a
+ * `control_response` carrying the same `request_id`.
+ */
+export interface ClaudeCodeControlRequest {
+  [key: string]: unknown;
+  subtype: string;
+}
+
+/** Claude Code's answer to a control request. */
+export type ClaudeCodeControlResponse =
+  { response?: Record<string, unknown>; subtype: 'success' } | { error: string; subtype: 'error' };
+
+/** A control request written to the session, and its answer once it comes. */
+export interface ClaudeCodeControlRequestHandle {
+  requestId: string;
+  /**
+   * Claude Code's `control_response`. Never rejects: a session whose output
+   * ends first answers `{ subtype: 'error' }`. Claude Code may not answer a
+   * subtype it does not know, so a caller that needs an answer bounds the wait.
+   */
+  response: Promise<ClaudeCodeControlResponse>;
+}
+
+const SESSION_ENDED: ClaudeCodeControlResponse = {
+  error: 'The session ended before answering',
+  subtype: 'error',
+};
+
 export interface ClaudeCodeLiveInputOptions {
   idleCloseMs?: number;
   wakeUpGraceMs?: number;
@@ -71,6 +101,7 @@ export class ClaudeCodeLiveInput {
   private readonly idleCloseMs: number;
   private lastOutcome: ClaudeCodeTurnOutcome | undefined;
   private lineBuffer = '';
+  private readonly pendingControl = new Map<string, (answer: ClaudeCodeControlResponse) => void>();
   private turnOpen = true;
   private readonly unconsumed = new Set<string>();
   private readonly wakeUpGraceMs: number;
@@ -110,16 +141,29 @@ export class ClaudeCodeLiveInput {
 
   /** Stop the current turn without ending the process. Returns false once input has closed. */
   interrupt(): boolean {
-    if (this.closed) return false;
+    return !!this.sendControlRequest({ subtype: 'interrupt' });
+  }
 
+  /**
+   * Write a stream-json `control_request` into the session — the protocol
+   * Claude Code's SDK uses to steer a live process (interrupt, stop a task,
+   * change the model…).
+   *
+   * @returns the request and its answer, or `undefined` once input has closed
+   */
+  sendControlRequest(
+    request: ClaudeCodeControlRequest,
+  ): ClaudeCodeControlRequestHandle | undefined {
+    if (this.closed) return;
+
+    const requestId = randomUUID();
+    const response = new Promise<ClaudeCodeControlResponse>((resolve) => {
+      this.pendingControl.set(requestId, resolve);
+    });
     this.stdin.write(
-      `${JSON.stringify({
-        request: { subtype: 'interrupt' },
-        request_id: randomUUID(),
-        type: 'control_request',
-      })}\n`,
+      `${JSON.stringify({ request, request_id: requestId, type: 'control_request' })}\n`,
     );
-    return true;
+    return { requestId, response };
   }
 
   /** Feed raw stdout so the session state tracks what Claude Code reports. */
@@ -159,6 +203,9 @@ export class ClaudeCodeLiveInput {
   finish(): void {
     if (this.lineBuffer.trim()) this.observe('\n');
     this.close();
+    // Nothing can answer a control request any more.
+    for (const resolve of this.pendingControl.values()) resolve(SESSION_ENDED);
+    this.pendingControl.clear();
   }
 
   close(): void {
@@ -169,6 +216,10 @@ export class ClaudeCodeLiveInput {
   }
 
   private observeMessage(message: any): void {
+    if (message?.type === 'control_response') {
+      this.observeControlResponse(message.response);
+      return;
+    }
     // A background sub-agent's turn records are activity of its task, not a
     // main turn: they must not hold the session open once the task ends. Its
     // task lifecycle (`system`) still counts.
@@ -200,6 +251,20 @@ export class ClaudeCodeLiveInput {
         return;
       }
     }
+  }
+
+  /** Answers arrive even after input closed, for requests written before. */
+  private observeControlResponse(response: any): void {
+    const requestId = response?.request_id;
+    const resolve = typeof requestId === 'string' && this.pendingControl.get(requestId);
+    if (!resolve) return;
+
+    this.pendingControl.delete(requestId);
+    resolve(
+      response.subtype === 'success'
+        ? { response: response.response ?? undefined, subtype: 'success' }
+        : { error: String(response.error ?? 'Control request failed'), subtype: 'error' },
+    );
   }
 
   private observeSystem(message: any): void {
