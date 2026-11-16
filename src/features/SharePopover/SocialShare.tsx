@@ -99,8 +99,10 @@ const SocialShare = memo<SocialShareProps>(({ disabledHint, onLeave, shareUrl, t
       switch (action.kind) {
         case 'intent': {
           setPanel(undefined);
-          openShareWindow(action.href);
+          // Close the popover first, then leave; the click's user activation
+          // still lets `window.open` through.
           onLeave?.();
+          openShareWindow(action.href);
           return;
         }
         case 'clipboard': {
