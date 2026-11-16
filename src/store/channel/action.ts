@@ -47,11 +47,12 @@ class ChannelActionImpl {
     useClientDataSWR(channelKeys.userCandidates(channelId, search), () =>
       channelService.userCandidates(channelId, search),
     );
-  useFetchList = () => {
+  /** Pass `false` where the list is only needed behind a user choice, so nothing polls before. */
+  useFetchList = (enabled = true) => {
     const pending = useChannelStore(channelSelectors.listHasPendingWork);
     return this.#private.list.useSync(
       {},
-      { refreshInterval: pending ? CHANNEL_ACTIVE_REFRESH_MS : CHANNEL_IDLE_REFRESH_MS },
+      { enabled, refreshInterval: pending ? CHANNEL_ACTIVE_REFRESH_MS : CHANNEL_IDLE_REFRESH_MS },
     );
   };
   useFetchDetail = (params: ChannelViewParams | null) => {

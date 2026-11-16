@@ -6,7 +6,7 @@ import type {
   ChannelVisibility,
 } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
 import { TrashModel } from '../../models/trash';
 import type { ChannelItem, ChannelJobItem, ChannelMessageItem } from '../../schemas';
@@ -435,6 +435,7 @@ export class ChannelRepository {
   list = async (): Promise<
     Array<
       ChannelItem & {
+        agentIds: string[];
         canDelete: boolean;
         lastMessage: { content: string; createdAt: Date } | null;
         memberAvatars: ChannelAvatarMember[];
@@ -554,8 +555,35 @@ export class ChannelRepository {
       this.userId,
     );
 
+    // Every active Agent member, so a page about one Agent can list the Channels it takes part in;
+    // the avatars above are capped and leave later members out.
+    const agentMembers = rows.length
+      ? await this.db
+          .select({ agentId: channelMembers.agentId, channelId: channelMembers.channelId })
+          .from(channelMembers)
+          .where(
+            and(
+              inArray(
+                channelMembers.channelId,
+                rows.map(({ channel }) => channel.id),
+              ),
+              eq(channelMembers.actorType, 'agent'),
+              eq(channelMembers.status, 'active'),
+              isNotNull(channelMembers.agentId),
+            ),
+          )
+          .orderBy(channelMembers.createdAt)
+      : [];
+    const agentIdsOf = new Map<string, string[]>();
+    for (const { agentId, channelId } of agentMembers) {
+      const ids = agentIdsOf.get(channelId) ?? [];
+      ids.push(agentId!);
+      agentIdsOf.set(channelId, ids);
+    }
+
     return rows.map(({ agentOwnerId, channel, lastReadSequence, role }) => ({
       ...channel,
+      agentIds: agentIdsOf.get(channel.id) ?? [],
       sharedAgent: !!channel.agentId && !channel.workspaceId && agentOwnerId !== this.userId,
       canDelete: hasRole(role, 'admin'),
       lastMessage: lastMessageOf.get(channel.id) ?? null,

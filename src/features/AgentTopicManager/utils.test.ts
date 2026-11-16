@@ -1,16 +1,37 @@
+import type { ChannelListItem } from '@lobechat/types';
+
 import type { ChatTopic } from '@/types/topic';
 
 import {
+  agentGroupChannels,
   areAllTopicsArchived,
   buildBotChannelOptions,
+  channelListState,
   getBotPlatformName,
   getProjectFilterLabel,
   getProjectInfo,
   getProjectLabel,
   matchesBotChannel,
+  matchesChannelSearch,
+  matchesChannelStatus,
   matchesGroup,
   matchesTrigger,
+  sortChannelsBy,
 } from './utils';
+
+const createChannel = (overrides: Partial<ChannelListItem> = {}): ChannelListItem => ({
+  agentId: null,
+  agentIds: [],
+  canDelete: true,
+  createdAt: new Date('2026-01-01T00:00:00Z'),
+  id: 'chn_1',
+  projectId: null,
+  sequence: 1,
+  status: 'active',
+  title: 'Channel',
+  workspaceId: null,
+  ...overrides,
+});
 
 const createTopic = (
   metadata: ChatTopic['metadata'],
@@ -25,6 +46,34 @@ const createTopic = (
 });
 
 describe('AgentTopicManager utils', () => {
+  describe('channelListState', () => {
+    it('stays idle while the Channel source is not selected', () => {
+      expect(channelListState(false, undefined, new Error('x'))).toEqual({
+        error: undefined,
+        loading: false,
+      });
+    });
+
+    it('loads until the first list arrives', () => {
+      expect(channelListState(true, undefined, undefined)).toEqual({
+        error: undefined,
+        loading: true,
+      });
+    });
+
+    it('reports a failed first fetch instead of loading forever', () => {
+      const error = new Error('network');
+      expect(channelListState(true, undefined, error)).toEqual({ error, loading: false });
+    });
+
+    it('keeps showing a loaded list when a refresh fails', () => {
+      expect(channelListState(true, [], new Error('network'))).toEqual({
+        error: undefined,
+        loading: false,
+      });
+    });
+  });
+
   it('offers unarchive only when every selected topic is archived', () => {
     const topics = [
       createTopic(undefined, { id: 'a', status: 'completed' }),
@@ -131,5 +180,61 @@ describe('AgentTopicManager utils', () => {
     expect(getBotPlatformName('feishu')).toBe('Feishu');
     expect(getBotPlatformName('dingtalk')).toBe('DingTalk');
     expect(getBotPlatformName('unknown-platform')).toBe('unknown-platform');
+  });
+
+  // The `channel` trigger lists the Agent's group Channels; its run topics there stay hidden.
+  it('lists only group Channels the agent is a member of', () => {
+    const member = createChannel({ agentIds: ['agt_a', 'agt_b'], id: 'member' });
+    const other = createChannel({ agentIds: ['agt_b'], id: 'other' });
+    const direct = createChannel({ agentId: 'agt_a', agentIds: ['agt_a'], id: 'direct' });
+    const stale = createChannel({ agentIds: undefined, id: 'stale' });
+
+    expect(agentGroupChannels([member, other, direct, stale], 'agt_a')).toEqual([member]);
+    expect(agentGroupChannels(undefined, 'agt_a')).toEqual([]);
+  });
+
+  it('maps Channel status onto the topic status tabs', () => {
+    const active = createChannel();
+    const archived = createChannel({ status: 'archived' });
+    const running = createChannel({
+      replyJobs: [
+        {
+          blockedCode: null,
+          id: 'job',
+          memberId: 'm',
+          publicationRevoked: false,
+          status: 'running',
+          threadId: null,
+          writerHeld: true,
+        },
+      ],
+    });
+
+    expect(matchesChannelStatus(active, 'active')).toBe(true);
+    expect(matchesChannelStatus(archived, 'active')).toBe(false);
+    expect(matchesChannelStatus(archived, 'completed')).toBe(true);
+    expect(matchesChannelStatus(active, 'completed')).toBe(false);
+    expect(matchesChannelStatus(running, 'running')).toBe(true);
+    expect(matchesChannelStatus(active, 'running')).toBe(false);
+    expect(matchesChannelStatus(archived, 'all')).toBe(true);
+  });
+
+  it('searches Channels by title and sorts them like topics', () => {
+    const alpha = createChannel({
+      id: 'a',
+      title: 'Alpha Launch',
+      updatedAt: new Date('2026-01-02T00:00:00Z'),
+    });
+    const beta = createChannel({
+      createdAt: new Date('2026-01-03T00:00:00Z'),
+      id: 'b',
+      title: 'Beta',
+    });
+
+    expect(matchesChannelSearch(alpha, ' launch ')).toBe(true);
+    expect(matchesChannelSearch(beta, 'launch')).toBe(false);
+    expect(matchesChannelSearch(beta, '')).toBe(true);
+    expect(sortChannelsBy([alpha, beta], 'updatedAt').map((c) => c.id)).toEqual(['b', 'a']);
+    expect(sortChannelsBy([beta, alpha], 'title').map((c) => c.id)).toEqual(['a', 'b']);
   });
 });
