@@ -97,6 +97,24 @@ describe('withHeteroSteer', () => {
     ]);
   });
 
+  it('passes a Steer-mode priority through to the session', async () => {
+    const { client } = createClient([{ content: 'stop', messageId: 'msg-1', priority: 'now' }]);
+    const sendUserMessage = vi.fn(async () => true);
+    const stream = createStream();
+
+    const out = collect(
+      withHeteroSteer(
+        { events: stream.events, sendUserMessage },
+        { getTrpcClient: async () => client, operationId: 'op-1' },
+      ),
+    );
+    await vi.waitFor(() => expect(sendUserMessage).toHaveBeenCalled());
+    stream.end();
+    await out;
+
+    expect(sendUserMessage).toHaveBeenCalledWith('stop', { priority: 'now', uuid: 'msg-1' });
+  });
+
   it('types images pasted into a follow-up in as image blocks', async () => {
     const image = { id: 'file_1', url: 'https://bucket.example.com/1.png?sig=s' };
     const { client } = createClient([

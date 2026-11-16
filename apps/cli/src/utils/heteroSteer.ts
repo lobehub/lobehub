@@ -55,6 +55,8 @@ export interface HeteroSteerMessage {
   content: string;
   imageList?: { id: string; url: string }[];
   messageId: string;
+  /** `now` (Steer mode): the session reads it at once instead of at its next tool boundary. */
+  priority?: 'now';
 }
 
 /** The prompt a follow-up is typed in as: its text, then its images as image blocks. */
@@ -80,7 +82,10 @@ interface SteerableHandle {
   sendControlRequest?: (
     request: ClaudeCodeControlRequest,
   ) => ClaudeCodeControlRequestHandle | undefined;
-  sendUserMessage?: (prompt: AgentPromptInput, options?: { uuid?: string }) => Promise<boolean>;
+  sendUserMessage?: (
+    prompt: AgentPromptInput,
+    options?: { priority?: 'now'; uuid?: string },
+  ) => Promise<boolean>;
 }
 
 const RETRY_MS = 2000;
@@ -219,7 +224,10 @@ export async function* withHeteroSteer<E extends { data?: any; type: string }>(
       if (!message) continue;
 
       const steer = message;
-      const options = { uuid: steer.messageId };
+      const options = {
+        uuid: steer.messageId,
+        ...(steer.priority && { priority: steer.priority }),
+      };
       const accepted = await send(buildSteerPrompt(steer), options).catch(async (error) => {
         if (!steer.imageList?.length) return false;
         // An image that cannot be fetched must not cost the message: its

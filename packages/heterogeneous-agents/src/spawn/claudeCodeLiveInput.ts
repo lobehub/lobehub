@@ -25,9 +25,20 @@ const readIdleCloseMs = (): number => {
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_IDLE_CLOSE_MS;
 };
 
+/**
+ * When Claude Code reads a user message delivered into a running session.
+ * `now` stops the work in flight (a running tool is aborted) and answers the
+ * message at once; without one it is read at the next tool boundary.
+ */
+export type ClaudeCodeUserMessagePriority = 'now' | 'next' | 'later';
+
 /** Stamp a stream-json `user` line with the uuid Claude Code replays it under. */
-export const withUserMessageUuid = (stdinLine: string, uuid: string): string =>
-  `${JSON.stringify({ ...JSON.parse(stdinLine), uuid })}\n`;
+export const withUserMessageUuid = (
+  stdinLine: string,
+  uuid: string,
+  priority?: ClaudeCodeUserMessagePriority,
+): string =>
+  `${JSON.stringify({ ...JSON.parse(stdinLine), uuid, ...(priority && { priority }) })}\n`;
 
 /** How the session's most recent turn ended. */
 export interface ClaudeCodeTurnOutcome {
@@ -130,12 +141,16 @@ export class ClaudeCodeLiveInput {
    * Deliver a `user` line into the session; it stays pending until Claude Code
    * replays it. Returns false once input has closed.
    */
-  send(stdinLine: string, uuid: string = randomUUID()): boolean {
+  send(
+    stdinLine: string,
+    uuid: string = randomUUID(),
+    priority?: ClaudeCodeUserMessagePriority,
+  ): boolean {
     if (this.closed) return false;
 
     this.unconsumed.add(uuid);
     this.clearIdleTimer();
-    this.stdin.write(withUserMessageUuid(stdinLine, uuid));
+    this.stdin.write(withUserMessageUuid(stdinLine, uuid, priority));
     return true;
   }
 
