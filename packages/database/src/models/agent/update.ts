@@ -8,7 +8,7 @@ import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
 
-import { followAgentRename } from '../../repositories/channel/agentRename';
+import { writeAgent } from '../../repositories/channel/agentRename';
 import type { AgentItem } from '../../schemas';
 import { agents, sessionGroups } from '../../schemas';
 import { sanitizeAgentApiConfig } from '../../utils/sanitizeAgentApiConfig';
@@ -133,28 +133,9 @@ export const update = async (ctx: AgentModelContext, agentId: string, data: Part
   const sanitizedData = stripImmutableFields(apiSafeData);
   await assertNotAgentBuilderProtectedWrite(ctx, agentId, sanitizedData);
 
-  return writeAgent(ctx, agentId, { ...sanitizedData, updatedAt: new Date() });
-};
-
-/**
- * Write an Agent's columns. A rename also carries the new label into its Channels, under a row
- * lock: overlapping renames would otherwise each read the same previous label, and the later
- * one would match no copy, leaving them at the earlier name for good.
- */
-const writeAgent = async (ctx: AgentModelContext, agentId: string, data: Partial<AgentItem>) => {
-  const where = and(eq(agents.id, agentId), ctx.ownership());
-  if (data.name === undefined && data.title === undefined)
-    return ctx.db.update(agents).set(data).where(where);
-
-  return ctx.db.transaction(async (tx) => {
-    const [before] = await tx
-      .select({ name: agents.name, slug: agents.slug, title: agents.title })
-      .from(agents)
-      .where(where)
-      .for('update');
-    const result = await tx.update(agents).set(data).where(where);
-    if (before) await followAgentRename(tx, agentId, before, { ...before, ...data });
-    return result;
+  return writeAgent(ctx.db, and(eq(agents.id, agentId), ctx.ownership()), agentId, {
+    ...sanitizedData,
+    updatedAt: new Date(),
   });
 };
 
@@ -393,7 +374,7 @@ export const updateConfig = async (
   ) as Partial<typeof mergedValue>;
   if (!Object.values(updateData).some((value) => value !== undefined)) return;
 
-  return writeAgent(ctx, agentId, updateData);
+  return writeAgent(ctx.db, and(eq(agents.id, agentId), ctx.ownership()), agentId, updateData);
 };
 
 /**

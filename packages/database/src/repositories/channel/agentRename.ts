@@ -1,7 +1,9 @@
 import { agentDisplayName, CHANNEL_LIMITS } from '@lobechat/types';
+import type { SQL } from 'drizzle-orm';
 import { and, eq } from 'drizzle-orm';
 
-import { channelMembers, channels } from '../../schemas';
+import type { AgentItem } from '../../schemas';
+import { agents, channelMembers, channels } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
 
@@ -24,7 +26,7 @@ const channelAgentLabel = (agent: AgentLabelFields) =>
  * without this they keep the name it had then. Only copies that still equal the old name follow:
  * one a member renamed in the Channel stays as they set it.
  */
-export const followAgentRename = async (
+const followAgentRename = async (
   db: LobeChatDatabase | Transaction,
   agentId: string,
   before: AgentLabelFields,
@@ -49,4 +51,31 @@ export const followAgentRename = async (
         eq(channelMembers.name, previous),
       ),
     );
+};
+
+/**
+ * Write an Agent's columns, `where` selecting its row in the caller's scope. A rename also
+ * carries the new label into its Channels, under a row lock: overlapping renames would otherwise
+ * each read the same previous label, and the later one would match no copy, leaving them at the
+ * earlier name for good.
+ */
+export const writeAgent = async (
+  db: LobeChatDatabase,
+  where: SQL | undefined,
+  agentId: string,
+  data: Partial<AgentItem>,
+) => {
+  if (data.name === undefined && data.title === undefined)
+    return db.update(agents).set(data).where(where);
+
+  return db.transaction(async (tx) => {
+    const [before] = await tx
+      .select({ name: agents.name, slug: agents.slug, title: agents.title })
+      .from(agents)
+      .where(where)
+      .for('update');
+    const result = await tx.update(agents).set(data).where(where);
+    if (before) await followAgentRename(tx, agentId, before, { ...before, ...data });
+    return result;
+  });
 };
