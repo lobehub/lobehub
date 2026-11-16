@@ -9,6 +9,7 @@ import { objectiveRouter } from './objective';
 import { planningRouter } from './planning';
 import { readRouter } from './reads';
 import { subscriptionRouter } from './subscriptions';
+import { swarmRouter } from './swarm';
 import { transferRouter } from './transfer';
 
 export const goalRouter = mergeRouters(
@@ -20,6 +21,7 @@ export const goalRouter = mergeRouters(
   configurationRouter,
   readRouter,
   subscriptionRouter,
+  swarmRouter,
   transferRouter,
   router({
     ...goalGraphEditProcedures,

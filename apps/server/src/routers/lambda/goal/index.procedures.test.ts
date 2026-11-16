@@ -39,6 +39,7 @@ function expected(): Array<
     ['copyGoalToWorkspace', 'mutation', 13],
     ['create', 'mutation', 13],
     ['createConversationGoal', 'mutation', 8],
+    ['createSwarm', 'mutation', 13],
     ['decide', 'mutation', 13],
     ['delete', 'mutation', 13],
     ['disableSubscription', 'mutation', 13],

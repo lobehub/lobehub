@@ -1,6 +1,7 @@
 import type { GoalAdvanceEffect } from '@lobechat/agent-tracing';
 import type { GoalGraphNode, GoalGraphSnapshot, GoalTickResult, TaskItem } from '@lobechat/types';
 import { provenanceParentId } from '@lobechat/utils/goalGraph';
+import { swarmLaneDirectory } from '@lobechat/utils/goalSwarm';
 import { sql } from 'drizzle-orm';
 
 import { GoalModel } from '@/database/models/goal';
@@ -20,6 +21,12 @@ import {
 } from '../recoveryPolicy';
 import { GoalSupervisorService } from '../supervisor';
 import { claimGoalTask } from '../taskClaim';
+import {
+  buildLaneInstruction,
+  isSwarmPromoteNode,
+  laneContinuationNote,
+  swarmLaneOf,
+} from './swarm';
 import type { GoalServiceContext } from './types';
 
 const TASK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
@@ -82,16 +89,32 @@ export const createResponsibleTask = async (
       ctx.userId,
       ctx.workspaceId,
     ).newTaskAssignment(graph.goal);
+    // A swarm lane works in its own copy of the workspace, and the promotion
+    // in the workspace itself; neither carries a per-Task acceptance — the
+    // objective judges the lanes, and promotion is a file copy.
+    const swarm = graph.goal.config?.swarm;
+    const lane = swarmLaneOf(graph, frontier.id);
+    const promote = isSwarmPromoteNode(graph, frontier.id);
+    const swarmDirectory = lane
+      ? swarmLaneDirectory(swarm!.workspace, lane.key)
+      : promote
+        ? swarm!.workspace
+        : undefined;
     task = await ctx.taskService.createTask({
       assigneeAgentId: assignment.assigneeAgentId,
       assigneeUserId: assignment.assigneeUserId,
       config: {
         checkpoint: { topic: { after: false } },
         ...(planSkill ? { skills: [planSkillIdentifier(planSkill)] } : {}),
+        ...(swarmDirectory ? { execution: { workingDirectory: swarmDirectory } } : {}),
         ...assignment.model,
       },
       description: description?.slice(0, TASK_DESCRIPTION_MAX_LENGTH),
-      instruction: ctx.buildTaskInstruction(graph, frontier.title, description),
+      instruction: lane
+        ? buildLaneInstruction(graph, frontier.id)
+        : promote
+          ? (frontier.description ?? frontier.title)
+          : ctx.buildTaskInstruction(graph, frontier.title, description),
       name: frontier.title,
       projectId: graph.goal.projectId ?? undefined,
       // A private goal's Tasks stay with it: a public executor would otherwise
@@ -108,7 +131,7 @@ export const createResponsibleTask = async (
         : undefined;
     const acceptance = await ctx.acceptanceService.ensureForSubject('task', task.id, {
       config: {
-        enabled: true,
+        enabled: !swarmDirectory,
         ...(goalCriteriaIds?.length ? { verifyCriteriaIds: goalCriteriaIds } : {}),
       },
       // A batch unit is judged on its own delivery and, on top of it, on every
@@ -267,6 +290,7 @@ export const dispatchWork = async (
           graph,
           task.id,
         ) ??
+        (task.totalTopics ? laneContinuationNote(graph, nodeId) : undefined) ??
         (graph.goal.config?.managerState?.submitted?.taskId === task.id
           ? graph.goal.config.managerState.submitted.reason
           : undefined),

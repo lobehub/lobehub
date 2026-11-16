@@ -47,6 +47,7 @@ import { HeteroTraceRecorder } from '../../utils/HeteroTraceRecorder';
 import { log } from '../../utils/logger';
 import { createOperationHeartbeat } from '../../utils/OperationHeartbeat';
 import { createOperationTokenRenewal } from '../../utils/OperationTokenRenewal';
+import { prepareSwarmLane } from '../../utils/swarmLane';
 import { createLocalTraceStore } from '../../utils/traceStore';
 import { TrpcIngestSink } from '../../utils/TrpcIngestSink';
 import type { HeteroCliArgumentOptions } from './buildExtraArgs';
@@ -610,8 +611,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         clientVersion: 'lobehub-cli',
         command: options.command,
         cwd: options.cwd || process.cwd(),
-        // Same identity echo as the CLI agents, so `lh` commands the harness
-        // runs for this conversation can name its operation and topic.
+        // Same identity echo as the CLI agents, so the harness's `lh` can name this run.
         env: buildAgentProcessEnv({
           operationId: serverIngest ? operationId : undefined,
           topicId: options.topic,
@@ -1202,7 +1202,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     askUserBridge: askBridge,
     command: resolvedCommand.command,
     commandVersion: resolvedCommand.version,
-    cwd: options.cwd || process.cwd(),
+    cwd: await prepareSwarmLane(options.cwd || process.cwd()),
     detached: process.env[HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV] !== '1',
     env: commandEnv,
     extraArgs,

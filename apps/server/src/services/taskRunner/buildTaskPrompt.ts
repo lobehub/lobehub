@@ -157,6 +157,9 @@ const resolveGoalLoopContext = async (
   const { db, userId, workspaceId } = deps;
   const goal = await new GoalModel(db, userId, workspaceId).findByGraphTask(task.id);
   if (!goal || !task.totalTopics) return undefined;
+  // A swarm lane runs again by design until the deadline, not because a round
+  // failed acceptance; its continuation note and the leaderboard say where it is.
+  if (goal.config?.swarm) return undefined;
 
   const budget = resolveTaskAttemptBudget(goal);
   // Runs lost to a machine problem (offline device, usage limit, transport fault)

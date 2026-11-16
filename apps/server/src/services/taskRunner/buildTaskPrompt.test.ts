@@ -174,6 +174,29 @@ describe('buildTaskPrompt goal marks', () => {
   });
 });
 
+describe('buildTaskPrompt swarm lane', () => {
+  it('does not frame a continuing lane run as a failed acceptance round', async () => {
+    const taskModel = new TaskModel(db, userId);
+    const task = await taskModel.create({ instruction: 'Improve lane A.' });
+    await taskModel.update(task.id, { totalTopics: 3 });
+    const goal = await new GoalModel(db, userId).create({
+      config: { swarm: { lanes: [], workspace: '/work' } },
+      subjectType: 'standalone',
+      title: 'Swarm',
+    });
+    const graphModel = new GoalGraphModel(db, userId);
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Lane A' });
+    await graphModel.bindTask(goal.id, node!.id, task.id);
+
+    const { prompt } = await buildTaskPrompt(
+      (await taskModel.findById(task.id))!,
+      promptDeps(db, taskModel, userId),
+    );
+
+    expect(prompt).not.toContain('Goal loop');
+  });
+});
+
 describe('buildTaskPrompt questions earlier rounds asked', () => {
   /**
    * Regression: each Goal round is a fresh conversation, so a question an

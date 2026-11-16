@@ -23,6 +23,7 @@ import {
   toFrontierTaskState,
   toTraceGraphState,
 } from '../traceObservation';
+import { advanceSwarm } from './swarm';
 import type { GoalServiceContext } from './types';
 
 /**
@@ -88,6 +89,11 @@ export const tickOnce = async (
       message: `Goal is a draft; start it with lh goal start ${goalId}`,
       outcome: 'no_progress',
     };
+  // A swarm cycles its lanes and wraps itself up at the deadline before the
+  // ordinary coordinator looks at the frontier.
+  const swarmMove = await advanceSwarm(ctx, graph);
+  if (swarmMove) return swarmMove;
+  if (graph.goal.config?.swarm) graph = withoutGoalReport(await ctx.requireGraph(goalId));
   // An unmanaged Goal consumes its subscriptions' pending wakes here; a managed
   // one hands them to its planner's turn.
   if (!graph.goal.config?.manager)
