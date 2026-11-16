@@ -31,6 +31,7 @@ import {
 import { channelAvatarMembers } from './avatars';
 import { findThread } from './delivery';
 import { ChannelError } from './error';
+import { lockPeerPair, peerOf, requireMutualContacts } from './peer';
 import { addChannelUser, channelUserCandidates, newChannelUserCandidates } from './people';
 import type { ChannelAgentPostInput } from './post';
 import { postAgentMessage } from './post';
@@ -108,6 +109,8 @@ export class ChannelRepository {
     title: string;
     /** Workspace people a group starts with, checked the same way as adding them later. */
     userIds?: string[];
+    /** The direct conversation binds another person's Agent through its live link share. */
+    sharedAgent?: boolean;
     visibility?: ChannelVisibility;
   }) =>
     this.db.transaction(async (tx) => {
@@ -124,7 +127,11 @@ export class ChannelRepository {
           'A direct conversation requires an Agent and private visibility',
         );
       if (agentId) {
-        await requireChannelAgent(tx, this.workspaceId, this.userId, agentId);
+        // Only the service opens one with another person's shared Agent, after resolving the
+        // share the person reached; a plain Agent id never does.
+        await requireChannelAgent(tx, this.workspaceId, this.userId, agentId, {
+          allowShared: !!params.sharedAgent,
+        });
         const existing = await this.findDirect(tx, agentId);
         if (existing) return existing;
       }
@@ -433,6 +440,7 @@ export class ChannelRepository {
   > => {
     const rows = await this.db
       .select({
+        agentOwnerId: agents.userId,
         channel: channels,
         lastReadSequence: channelMembers.lastReadSequence,
         memberId: channelMembers.id,
@@ -440,6 +448,7 @@ export class ChannelRepository {
       })
       .from(channels)
       .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
+      .leftJoin(agents, eq(agents.id, channels.agentId))
       .where(and(this.membershipWhere(), notTrashed(channels.isDeleted)))
       .orderBy(desc(channels.createdAt));
 
@@ -531,22 +540,75 @@ export class ChannelRepository {
       : [];
     const mentionCountOf = new Map(mentioned.map(({ channelId, count }) => [channelId, count]));
 
-    // A group Channel's list avatar pictures its first members; a direct one shows its Agent.
+    // A group Channel's list avatar pictures its first members; a direct one, its Agent or the
+    // other person, which also pictures a shared Agent the caller has no sidebar row for.
     const avatarsOf = await channelAvatarMembers(
       this.db,
-      rows.filter(({ channel }) => !channel.agentId).map(({ channel }) => channel.id),
+      rows.map(({ channel }) => channel.id),
       this.userId,
     );
 
-    return rows.map(({ channel, lastReadSequence, role }) => ({
+    return rows.map(({ agentOwnerId, channel, lastReadSequence, role }) => ({
       ...channel,
+      sharedAgent: !!channel.agentId && !channel.workspaceId && agentOwnerId !== this.userId,
       canDelete: hasRole(role, 'admin'),
       lastMessage: lastMessageOf.get(channel.id) ?? null,
       memberAvatars: avatarsOf.get(channel.id) ?? [],
       mentionCount: mentionCountOf.get(channel.id) ?? 0,
+      peerUserId: peerOf(channel, this.userId),
       replyJobs: replyJobsOf.get(channel.id) ?? [],
       unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
     }));
+  };
+
+  /**
+   * The caller's personal conversation with a contact, opened by either of them. Requires the
+   * mutual contact relation; an existing conversation opens as it is, trashed or not.
+   */
+  openPeer = (peerUserId: string, title: string): Promise<ChannelAccess> =>
+    this.db.transaction(async (tx) => {
+      if (this.workspaceId)
+        throw new ChannelError('BAD_REQUEST', 'A conversation between people is personal');
+      if (peerUserId === this.userId)
+        throw new ChannelError('BAD_REQUEST', 'You cannot message yourself');
+      await requireMutualContacts(tx, this.userId, peerUserId);
+      // No unique index keeps one conversation per pair: serialize opening it, so two people
+      // opening it at once (or one twice) find the first one instead of creating a second.
+      await lockPeerPair(tx, this.userId, peerUserId);
+      const existing = await this.findPeer(tx, peerUserId);
+      if (existing) return existing;
+
+      const [channel] = await tx
+        .insert(channels)
+        .values({ peerUserId, title, userId: this.userId, visibility: 'private' })
+        .returning();
+      const member = await this.addOwner(tx, channel.id);
+      await tx.insert(channelMembers).values({
+        actorType: 'user',
+        channelId: channel.id,
+        lastReadSequence: 0,
+        role: 'owner',
+        userId: peerUserId,
+      });
+      return { channel, member };
+    });
+
+  private findPeer = async (tx: Transaction, peerUserId: string) => {
+    const [row] = await tx
+      .select({ channel: channels, member: channelMembers })
+      .from(channels)
+      .innerJoin(
+        channelMembers,
+        and(eq(channelMembers.channelId, channels.id), eq(channelMembers.userId, this.userId)),
+      )
+      .where(
+        or(
+          and(eq(channels.userId, this.userId), eq(channels.peerUserId, peerUserId)),
+          and(eq(channels.userId, peerUserId), eq(channels.peerUserId, this.userId)),
+        ),
+      )
+      .limit(1);
+    return row as ChannelAccess | undefined;
   };
 
   /**

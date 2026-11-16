@@ -72,6 +72,37 @@ Updating Agent settings affects the next claim, including already queued request
 rewrites an earlier job snapshot. A private, trashed, deleted or moved Agent fails the requester
 access check before any topic or operation is created.
 
+## Shared Agents
+
+A personal direct conversation can also bind another person's Agent through its live link share.
+A link share is open to anyone signed in, so neither friendship nor a contact entry is needed:
+`ChannelService.openShared` opens the conversation from the share id, handle or pasted link, and
+`createSharedDirect` from an Agent the person added to their contacts (which shows they reached the
+share). Only those paths pass `sharedAgent` to `create`; a bare Agent id never binds someone else's
+Agent. `requireChannelAgent` and `resolveExecutionConfig` then accept it for that conversation
+shape only, while the share is `link` and the Agent is not trashed; groups and workspace channels
+never take one. The claim freezes `executionConfig.share` (owner, share and the Agent's scope):
+
+- The run executes as the owner, like a visit to the share page. Its topic and operation belong
+  to the owner and the Agent's scope, with the requester as `topics.senderId`, so the owner's own
+  lists never show it. Owner defaults apply; the requester's never do.
+- It is always a Native cloud run: no device, no Channel project, no attachments (sending refuses
+  them because the owner's run cannot read the requester's files).
+- The coordinator rechecks the live share and its monthly spend limit before submission and runs
+  under the share's `shareGate`. Of the Channel tools it keeps only `readMessages` /
+  `readMessage`, and `ChannelHistoryRepository` authorizes those reads against the frozen share
+  (owner operation, the person's Channel) while every other use of the run (`currentRun`, so
+  `listChannels` / `sendMessage`) is refused: they would act in the owner's Channels.
+- A topic ends at the share's `maxTurnsPerTopic`; the next request starts a new one.
+
+## Conversations between contacts
+
+`channels.peerUserId` marks a personal conversation between two people who are mutual contacts
+(`openPeer`). One exists per pair, whoever opened it: no unique index backs this, so `openPeer` takes an advisory lock on the pair before looking for it. Both people are owner members. It takes no
+Agents and no third person, so messages never route. Sending rechecks the contact relation in
+both directions: removing a contact silences the conversation and keeps its history. The list
+reports `peerUserId` relative to the viewer. Either account's deletion removes it.
+
 ## Delivery-key retirement rollout
 
 Migration `0197_channel_jobs_message_member_unique` enforces one job per message and Agent
