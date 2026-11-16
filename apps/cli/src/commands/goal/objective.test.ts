@@ -280,3 +280,34 @@ describe('runEvaluator', () => {
     expect(Date.now() - started).toBeLessThan(5000);
   });
 });
+
+describe('runEvaluator when the evaluate command is stopped', () => {
+  // Regression: a swarm deadline cancels the lane run with a signal to its
+  // process group; the evaluator runs in its own group and kept running after
+  // `lh goal evaluate` was gone.
+  it('takes the evaluator down with it', async () => {
+    const marker = `${30 + Math.random()}`.slice(0, 8);
+    const script = path.join(await mkdtemp(path.join(tmpdir(), 'lh-eval-signal-')), 'run.ts');
+    await writeFile(
+      script,
+      `import { runEvaluator } from ${JSON.stringify(path.resolve(__dirname, 'objective.ts'))};\n` +
+        `await runEvaluator('sleep ${marker}', process.cwd(), 120);\n`,
+    );
+    const { spawn, execSync } = await import('node:child_process');
+    const running = () => {
+      try {
+        return execSync(`pgrep -f "sleep ${marker}"`).toString().trim().length > 0;
+      } catch {
+        return false;
+      }
+    };
+    const child = spawn(process.execPath.includes('bun') ? process.execPath : 'bun', [script], {
+      stdio: 'ignore',
+    });
+    await vi.waitFor(() => expect(running()).toBe(true), { interval: 100, timeout: 15_000 });
+
+    child.kill('SIGINT');
+
+    await vi.waitFor(() => expect(running()).toBe(false), { interval: 100, timeout: 5000 });
+  }, 30_000);
+});
