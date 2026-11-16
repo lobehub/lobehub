@@ -97,6 +97,41 @@ describe('buildTwitterText', () => {
     expect(text.endsWith(`… ${SHARE_SIGNATURE}`)).toBe(true);
   });
 
+  // The ellipsis (U+2026) itself weighs 2 on X; reserving only 1 for it used
+  // to push a long Latin title to 281.
+  it.each([
+    ['Latin', { title: 'a'.repeat(400), url }],
+    ['Latin words', { title: 'lorem ipsum dolor sit amet '.repeat(20), url }],
+    ['Chinese', { title: '超长标题'.repeat(80), url }],
+    [
+      'mixed',
+      {
+        description: '对比 React and Vue 的差异 🚀'.repeat(10),
+        title: 'AI 编程 Tips '.repeat(30),
+        url,
+      },
+    ],
+    ['odd boundary', { title: `${'a'.repeat(243)}中文`, url }],
+  ])('keeps a long %s title within 280 with the full link', (_, longInput) => {
+    const text = buildTwitterText(longInput);
+    const shareUrl = buildTwitterShareUrl(longInput);
+    const params = new URL(shareUrl).searchParams;
+
+    expect(text).toContain('…');
+    expect(text.endsWith(SHARE_SIGNATURE)).toBe(true);
+    // X joins text and link with a space and weighs any link at 23.
+    expect(twitterTextWeight(text) + 1 + TWITTER_URL_WEIGHT).toBeLessThanOrEqual(
+      TWITTER_MAX_WEIGHT,
+    );
+    expect(params.get('text')).toBe(text);
+    expect(params.get('url')).toBe(url);
+    expect(params.get('url')).toMatch(/\/share\/t\/abc123$/);
+  });
+
+  it('counts the ellipsis as two', () => {
+    expect(twitterTextWeight('…')).toBe(2);
+  });
+
   it('counts CJK as two and Latin as one', () => {
     expect(twitterTextWeight('ab')).toBe(2);
     expect(twitterTextWeight('中文')).toBe(4);

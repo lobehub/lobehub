@@ -68,10 +68,13 @@ const codePointWeight = (cp: number) =>
 export const twitterTextWeight = (text: string) =>
   [...text].reduce((sum, char) => sum + codePointWeight(char.codePointAt(0)!), 0);
 
+const ELLIPSIS = '…';
+
 const truncateToWeight = (text: string, maxWeight: number) => {
   if (twitterTextWeight(text) <= maxWeight) return text;
 
-  let weight = 1; // reserve the ellipsis
+  // Reserve the ellipsis at its real weight: X counts U+2026 as 2, not 1.
+  let weight = twitterTextWeight(ELLIPSIS);
   let result = '';
   for (const char of text) {
     const next = weight + codePointWeight(char.codePointAt(0)!);
@@ -80,7 +83,7 @@ const truncateToWeight = (text: string, maxWeight: number) => {
     result += char;
   }
 
-  return `${result.trimEnd()}…`;
+  return `${result.trimEnd()}${ELLIPSIS}`;
 };
 
 /**

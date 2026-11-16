@@ -279,6 +279,7 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ agentId, onOpenMod
         disabledHint={linkRestricted ? undefined : t('shareModal.social.disabledHint')}
         shareUrl={isLinkShared ? shareUrl : undefined}
         title={topicTitle}
+        onLeave={close}
       />
 
       <div className={styles.divider} />

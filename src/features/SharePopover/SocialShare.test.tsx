@@ -150,4 +150,75 @@ describe('SocialShare', () => {
     fireEvent.click(tile('wechat'));
     expect(screen.queryByTestId('qrcode')).not.toBeInTheDocument();
   });
+
+  describe('closing the popover before leaving the page', () => {
+    it.each(['x', 'weibo'])('calls onLeave after opening the %s intent', (platform) => {
+      const open = vi.spyOn(window, 'open').mockReturnValue(null);
+      const onLeave = vi.fn();
+      render(<SocialShare shareUrl={shareUrl} title={'My topic'} onLeave={onLeave} />);
+
+      fireEvent.click(tile(platform));
+
+      expect(open).toHaveBeenCalledTimes(1);
+      expect(onLeave).toHaveBeenCalledTimes(1);
+      expect(open.mock.invocationCallOrder[0]).toBeLessThan(onLeave.mock.invocationCallOrder[0]);
+    });
+
+    it('calls onLeave from "Open Instagram" but not when the panel opens', async () => {
+      const onLeave = vi.fn();
+      render(<SocialShare shareUrl={shareUrl} title={'My topic'} onLeave={onLeave} />);
+
+      fireEvent.click(tile('instagram'));
+      await waitFor(() => expect(mocks.copyToClipboard).toHaveBeenCalledTimes(1));
+      // The caption panel has to stay up so the user can read and copy it.
+      expect(onLeave).not.toHaveBeenCalled();
+
+      const openLink = screen.getByText('shareModal.social.instagram.open').closest('a')!;
+      fireEvent.click(openLink);
+      expect(onLeave).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not call onLeave for WeChat, which stays inside the popover', () => {
+      const onLeave = vi.fn();
+      render(<SocialShare shareUrl={shareUrl} title={'My topic'} onLeave={onLeave} />);
+
+      fireEvent.click(tile('wechat'));
+      expect(onLeave).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resetting the open panel when the link changes', () => {
+    it.each([
+      ['wechat', 'social-wechat-panel'],
+      ['instagram', 'social-instagram-panel'],
+    ])('drops the %s panel once the link is turned off and back on', async (platform, testId) => {
+      const { rerender } = render(<SocialShare shareUrl={shareUrl} title={'My topic'} />);
+
+      fireEvent.click(tile(platform));
+      await waitFor(() => expect(screen.getByTestId(testId)).toBeInTheDocument());
+
+      rerender(<SocialShare shareUrl={undefined} title={'My topic'} />);
+      expect(screen.queryByTestId(testId)).not.toBeInTheDocument();
+
+      rerender(<SocialShare shareUrl={shareUrl} title={'My topic'} />);
+      expect(screen.queryByTestId(testId)).not.toBeInTheDocument();
+      expect(tile(platform)).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it.each([
+      ['wechat', 'social-wechat-panel'],
+      ['instagram', 'social-instagram-panel'],
+    ])('drops the %s panel when another topic link takes over', async (platform, testId) => {
+      const { rerender } = render(<SocialShare shareUrl={shareUrl} title={'My topic'} />);
+
+      fireEvent.click(tile(platform));
+      await waitFor(() => expect(screen.getByTestId(testId)).toBeInTheDocument());
+
+      rerender(
+        <SocialShare shareUrl={'https://app.lobehub.com/share/t/other'} title={'Other topic'} />,
+      );
+      expect(screen.queryByTestId(testId)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('qrcode')).not.toBeInTheDocument();
+    });
+  });
 });

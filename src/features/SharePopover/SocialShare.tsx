@@ -35,20 +35,35 @@ const PLATFORM_ICONS: Record<SocialPlatform, ComponentType<{ size?: number }>> =
   x: SiX,
 };
 
+type SocialPanel = 'instagram' | 'wechat';
+
 interface SocialShareProps {
   /** Shown under the title while the buttons are disabled. */
   disabledHint?: string;
+  /**
+   * Called right before the user is sent to another site (X, Weibo, Instagram),
+   * so the host popover can close instead of lingering over the page.
+   */
+  onLeave?: () => void;
   /** Public share link; empty while the topic is not shared by link. */
   shareUrl?: string;
   title?: string;
 }
 
-const SocialShare = memo<SocialShareProps>(({ disabledHint, shareUrl, title }) => {
+const SocialShare = memo<SocialShareProps>(({ disabledHint, onLeave, shareUrl, title }) => {
   const { t } = useTranslation('chat');
   const isMobile = useIsMobile();
   const theme = useTheme();
   // Instagram and WeChat have no web intent; their fallback opens inline.
-  const [panel, setPanel] = useState<'instagram' | 'wechat'>();
+  const [panel, setPanel] = useState<SocialPanel>();
+  // The panel belongs to the link it was opened for. Turning the link off, back
+  // on, or switching to another topic's link folds it (reset during render, so
+  // the stale panel never paints).
+  const [panelUrl, setPanelUrl] = useState(shareUrl);
+  if (panelUrl !== shareUrl) {
+    setPanelUrl(shareUrl);
+    setPanel(undefined);
+  }
 
   const disabled = !shareUrl;
 
@@ -85,6 +100,7 @@ const SocialShare = memo<SocialShareProps>(({ disabledHint, shareUrl, title }) =
         case 'intent': {
           setPanel(undefined);
           openShareWindow(action.href);
+          onLeave?.();
           return;
         }
         case 'clipboard': {
@@ -102,7 +118,7 @@ const SocialShare = memo<SocialShareProps>(({ disabledHint, shareUrl, title }) =
         }
       }
     },
-    [actions, isMobile, t],
+    [actions, isMobile, onLeave, t],
   );
 
   return (
@@ -161,6 +177,7 @@ const SocialShare = memo<SocialShareProps>(({ disabledHint, shareUrl, title }) =
               rel={'noopener noreferrer'}
               size={'small'}
               target={'_blank'}
+              onClick={onLeave}
             >
               {t('shareModal.social.instagram.open')}
             </Button>
