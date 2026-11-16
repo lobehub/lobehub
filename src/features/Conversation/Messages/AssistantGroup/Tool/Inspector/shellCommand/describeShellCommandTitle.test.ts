@@ -62,6 +62,15 @@ describe('describeShellCommandTitle', () => {
       expect(title('find . -name "*.ts"')).toEqual({ action: 'listFiles' });
     });
 
+    it('keeps an in-place sed a plain command', () => {
+      // `-i.bak` and `--in-place` used to read as "读取 app.ts" while rewriting it.
+      expect(title("sed -n -i 's/a/b/p' app.ts")).toBeUndefined();
+      expect(title("sed -n -i.bak 's/a/b/p' app.ts")).toBeUndefined();
+      expect(title("sed -ni 's/a/b/p' app.ts")).toBeUndefined();
+      expect(title("sed -n --in-place 's/a/b/p' app.ts")).toBeUndefined();
+      expect(title("sed -n --in-place=.bak 's/a/b/p' app.ts")).toBeUndefined();
+    });
+
     it('keeps a find or fd that deletes or runs commands a plain command', () => {
       // `find -delete` used to read as "列出文件" while it removed files.
       expect(title('find . -name "*.tmp" -delete')).toBeUndefined();

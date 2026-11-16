@@ -334,6 +334,13 @@ const searchDialect = (name: string, arguments_: readonly string[]): SearchPatte
     : 'basic';
 };
 
+/**
+ * `sed -i`, `-i.bak`, `-ni`, `--in-place`, and `--in-place=.bak` all rewrite the
+ * file, so the command is not a read even with `-n`.
+ */
+const isSedInPlace = (word: string): boolean =>
+  word === '--in-place' || word.startsWith('--in-place=') || /^-[A-Za-z]*i/u.test(word);
+
 const describeStage = (words: readonly string[]): ExploreAction | null => {
   const [name = '', ...arguments_] = words;
   const { hasPatternFile, patterns, values } = positionals(name, arguments_);
@@ -341,7 +348,7 @@ const describeStage = (words: readonly string[]): ExploreAction | null => {
   if (READ_COMMANDS.has(name)) return values.length > 0 ? { kind: 'read', paths: values } : null;
   if (name === 'sed') {
     // Only `sed -n '1,40p' file` prints a file; any other script edits or transforms it.
-    if (!arguments_.includes('-n') || arguments_.includes('-i')) return null;
+    if (!arguments_.includes('-n') || arguments_.some(isSedInPlace)) return null;
     const paths = hasOptionScript ? values : values.slice(1);
     return paths.length > 0 ? { kind: 'read', paths } : null;
   }
