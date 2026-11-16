@@ -3,17 +3,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   createBackOriginRecorder,
   getBackOrigin,
-  recordBackOrigin,
+  recordBackLocation,
   resetBackOrigins,
   resolveBackScope,
 } from './index';
 
 const walk = (...paths: string[]) => {
-  let previous: string | null = null;
-  for (const path of paths) {
-    recordBackOrigin('main', previous, path);
-    previous = path;
-  }
+  for (const path of paths) recordBackLocation('main', path);
 };
 
 afterEach(() => {
@@ -41,7 +37,7 @@ describe('resolveBackScope', () => {
   });
 });
 
-describe('recordBackOrigin', () => {
+describe('recordBackLocation', () => {
   it('remembers the page an agent was opened from', () => {
     walk('/tasks', '/agent/agt_1');
     expect(getBackOrigin('main', '/agent/agt_1')).toBe('/tasks');
@@ -57,18 +53,32 @@ describe('recordBackOrigin', () => {
     expect(getBackOrigin('main', '/lobehub/group/grp_1')).toBe('/resource?mode=list');
   });
 
-  it('inherits the origin when hopping between agents instead of ping-ponging', () => {
-    walk('/project/p1', '/agent/agt_1', '/agent/agt_2', '/agent/agt_1');
-    expect(getBackOrigin('main', '/agent/agt_2')).toBe('/project/p1');
-    expect(getBackOrigin('main', '/agent/agt_1')).toBe('/project/p1');
+  it('steps back one level at a time through nested entries', () => {
+    walk('/tasks', '/agent/agt_1', '/agent/agt_1/tpc_1', '/group/grp_1');
+    // group → the agent (at the topic it was left on) → the page it was opened from
+    expect(getBackOrigin('main', '/group/grp_1')).toBe('/agent/agt_1/tpc_1');
+    walk('/agent/agt_1/tpc_1');
+    expect(getBackOrigin('main', '/agent/agt_1/tpc_1')).toBe('/tasks');
   });
 
-  it('has no origin when the agent is the first page or was reached from an unknown one', () => {
+  it('cuts the trail when re-entering an entry instead of ping-ponging', () => {
+    walk('/project/p1', '/agent/agt_1', '/agent/agt_2', '/agent/agt_1');
+    expect(getBackOrigin('main', '/agent/agt_1')).toBe('/project/p1');
+    expect(getBackOrigin('main', '/agent/agt_2')).toBeUndefined();
+  });
+
+  it('returns to the same origin after repeated enter / back rounds', () => {
+    for (let round = 0; round < 3; round++) {
+      walk('/tasks', '/agent/agt_1', '/group/grp_1');
+      expect(getBackOrigin('main', '/group/grp_1')).toBe('/agent/agt_1');
+      walk('/agent/agt_1');
+      expect(getBackOrigin('main', '/agent/agt_1')).toBe('/tasks');
+    }
+  });
+
+  it('has no origin when the agent is the first page', () => {
     walk('/agent/agt_1');
     expect(getBackOrigin('main', '/agent/agt_1')).toBeUndefined();
-
-    walk('/agent/agt_1', '/agent/agt_2');
-    expect(getBackOrigin('main', '/agent/agt_2')).toBeUndefined();
   });
 
   it('replaces a stale origin on the next entry', () => {
@@ -77,7 +87,7 @@ describe('recordBackOrigin', () => {
   });
 
   it('keeps the literal personal origin when an escaped link hops into a workspace', () => {
-    walk('/tasks', '/agent/agt_1', '/acme/agent/agt_2');
+    walk('/tasks', '/acme/agent/agt_2');
     // Not rebased onto `/acme/tasks`: the back button navigates to it as-is.
     expect(getBackOrigin('main', '/acme/agent/agt_2')).toBe('/tasks');
   });
@@ -85,6 +95,11 @@ describe('recordBackOrigin', () => {
   it('returns nothing for unscoped pages', () => {
     walk('/tasks', '/agent/agt_1');
     expect(getBackOrigin('main', '/tasks')).toBeUndefined();
+  });
+
+  it('caps the trail length', () => {
+    walk('/tasks', ...Array.from({ length: 80 }, (_, i) => `/agent/agt_${i}`));
+    expect(getBackOrigin('main', '/agent/agt_79')).toBe('/agent/agt_78');
   });
 });
 

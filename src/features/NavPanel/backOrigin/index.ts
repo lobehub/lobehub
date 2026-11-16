@@ -8,6 +8,7 @@ import { useLocationOwner } from './useLocationOwner';
 /**
  * Sidebars that own a back button for one entity (an agent or a group) send it
  * to the page the user opened that entity from, instead of always going home.
+ * Opened straight from a link (nothing before it), back falls back to home.
  */
 const SCOPED_ROOT_SEGMENTS: ReadonlySet<string> = new Set(['agent', 'group']);
 
@@ -27,7 +28,15 @@ export const resolveBackScope = (pathname: string): string | null => {
 
 type Listener = () => void;
 
-let origins: Readonly<Record<string, string>> = {};
+/** Stacks never grow past this many entries; the oldest are dropped first. */
+const MAX_STACK = 50;
+
+/**
+ * Per owner (an Electron tab, or `main` on web), the trail that led to the
+ * current page: the last unscoped page, then each agent / group entered from it
+ * in order, each holding the latest location seen inside it.
+ */
+let stacks: Readonly<Record<string, readonly string[]>> = {};
 const listeners = new Set<Listener>();
 
 const subscribe = (listener: Listener) => {
@@ -37,94 +46,80 @@ const subscribe = (listener: Listener) => {
   };
 };
 
-const getOrigins = () => origins;
+const getStacks = () => stacks;
 
-/** Origins are kept per owner (an Electron tab) and per agent / group scope. */
-const originKey = (owner: string, scope: string) => `${owner}\u0000${scope}`;
-
-/**
- * Remember where the user came from when a navigation in `owner` enters a scope.
- * Moving inside a scope (topics, sub pages) keeps its origin. Hopping from one
- * agent or group straight to another inherits the previous origin, so back
- * leaves the chat area in one click instead of bouncing between the two.
- */
-export const recordBackOrigin = (owner: string, from: string | null, to: string): void => {
-  if (!from) return;
-
-  const toScope = resolveBackScope(to);
-  if (!toScope) return;
-
-  const fromScope = resolveBackScope(from);
-  if (fromScope === toScope) return;
-
-  const key = originKey(owner, toScope);
-  const origin = fromScope ? origins[originKey(owner, fromScope)] : from;
-  if (origins[key] === origin) return;
-
-  const next = { ...origins };
-  if (origin) next[key] = origin;
-  else delete next[key];
-  origins = next;
+const setStack = (owner: string, stack: readonly string[]) => {
+  stacks = { ...stacks, [owner]: stack.slice(-MAX_STACK) };
   listeners.forEach((listener) => listener());
 };
 
+const findScope = (stack: readonly string[], scope: string): number =>
+  stack.findLastIndex((location) => resolveBackScope(location) === scope);
+
 /**
- * Give `toOwner` the origin `fromOwner` holds for the scope of `location`. A tab
- * duplicated into a split pane starts at the source tab's URL and should go back
- * where the source would.
+ * Record that `owner` is now at `location`.
+ *
+ * - An unscoped page starts a new trail.
+ * - Moving inside the current agent / group (topics, sub pages) only updates
+ *   where that entry points.
+ * - Entering an agent / group pushes it, so back steps out one level at a time
+ *   (page → agent → group goes back to the agent, then to the page).
+ * - Re-entering one already on the trail cuts the trail back to it, so hopping
+ *   A → B → A and pressing back leaves for the page A was opened from instead
+ *   of bouncing between A and B.
  */
-const copyBackOrigin = (fromOwner: string, toOwner: string, location: string): void => {
+export const recordBackLocation = (owner: string, location: string): void => {
+  const stack = stacks[owner] ?? [];
+  if (stack.at(-1) === location) return;
+
   const scope = resolveBackScope(location);
-  if (!scope) return;
+  if (!scope) return setStack(owner, [location]);
 
-  const origin = origins[originKey(fromOwner, scope)];
-  const key = originKey(toOwner, scope);
-  if (!origin || origins[key] === origin) return;
-
-  origins = { ...origins, [key]: origin };
-  listeners.forEach((listener) => listener());
+  const index = findScope(stack, scope);
+  setStack(owner, index === -1 ? [...stack, location] : [...stack.slice(0, index), location]);
 };
 
 /**
- * Feeds locations to {@link recordBackOrigin}, keeping the previous location
- * per owner (an Electron tab), so switching tabs never reads as a navigation.
- * An owner first seen at the location the previously active owner was on is a
- * duplicate of it and inherits its origin.
+ * Feeds locations to {@link recordBackLocation}. Switching to another owner is
+ * not a navigation: each owner keeps its own trail. An owner first seen at the
+ * location the previously active owner was on is a duplicate of it (a tab split
+ * into a new pane) and starts from a copy of its trail.
  */
 export const createBackOriginRecorder = () => {
-  const previous = new Map<string, string>();
   let lastOwner: string | null = null;
 
   return (owner: string, location: string): void => {
-    const from = previous.get(owner) ?? null;
     const sourceOwner = lastOwner;
     lastOwner = owner;
-    if (from === location) return;
 
-    if (from === null && sourceOwner && previous.get(sourceOwner) === location) {
-      copyBackOrigin(sourceOwner, owner, location);
-    } else {
-      recordBackOrigin(owner, from, location);
+    const source = sourceOwner ? stacks[sourceOwner] : undefined;
+    if (!stacks[owner] && source?.at(-1) === location) {
+      setStack(owner, source);
+      return;
     }
-    previous.set(owner, location);
+    recordBackLocation(owner, location);
   };
 };
 
 const selectOrigin = (
-  all: Readonly<Record<string, string>>,
+  all: Readonly<Record<string, readonly string[]>>,
   owner: string,
   pathname: string,
 ): string | undefined => {
   const scope = resolveBackScope(pathname);
-  return scope ? all[originKey(owner, scope)] : undefined;
+  const stack = all[owner];
+  if (!scope || !stack) return undefined;
+
+  const index = findScope(stack, scope);
+  return index > 0 ? stack[index - 1] : undefined;
 };
 
 export const getBackOrigin = (owner: string, pathname: string): string | undefined =>
-  selectOrigin(origins, owner, pathname);
+  selectOrigin(stacks, owner, pathname);
 
-/** Test-only: forget every recorded origin. */
+/** Test-only: forget every recorded trail. */
 export const resetBackOrigins = (): void => {
-  origins = {};
+  stacks = {};
   listeners.forEach((listener) => listener());
 };
 
@@ -138,7 +133,7 @@ export const resetBackOrigins = (): void => {
 export const useBackOrigin = (): string | undefined => {
   const { pathname } = useActiveLocation();
   const owner = useLocationOwner();
-  const all = useSyncExternalStore(subscribe, getOrigins, getOrigins);
+  const all = useSyncExternalStore(subscribe, getStacks, getStacks);
 
   return selectOrigin(all, owner, pathname);
 };
