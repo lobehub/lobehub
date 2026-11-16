@@ -28,6 +28,7 @@ import { sandboxActions } from '@/store/sandbox';
 import { useSessionStore } from '@/store/session';
 import { statsActions } from '@/store/stats';
 import { useTaskStore } from '@/store/task';
+import { tfsActions } from '@/store/tfs/action';
 import { useToolStore } from '@/store/tool';
 import { useUserStore } from '@/store/user';
 import { useUserMemoryStore } from '@/store/userMemory';
@@ -62,6 +63,7 @@ const resetableStores: ResetableStoreApi[] = [
 ];
 
 const resetableActions: ResetableStore[] = [
+  tfsActions,
   channelActions,
   mcpAppActions,
   agentDocumentActions,

@@ -1,5 +1,6 @@
 'use client';
 
+import { parseTfsRepository } from '@lobechat/utils/tfs';
 import {
   Button,
   createModal,
@@ -23,6 +24,7 @@ import AsyncError from '@/components/AsyncError';
 import RepositoryAvatar from '@/components/RepositoryAvatar';
 import { repositorySlug } from '@/features/ChatInput/ControlBar/sandboxEnvironmentOptions';
 import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
+import { TfsRepositoryPicker } from '@/features/Tfs/TfsRepositoryPicker';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projectWorkingDirectory';
 
@@ -66,7 +68,7 @@ const styles = stylex.create({
   },
 });
 
-type Source = 'existing' | 'github';
+type Source = 'existing' | 'github' | 'tfs';
 
 interface AddEnvironmentContentProps {
   /**
@@ -113,17 +115,17 @@ const AddEnvironmentContent = ({
   const [existingId, setExistingId] = useState<string>();
   const [adding, setAdding] = useState(false);
 
-  const repository = parseGithubRepository(url);
+  const repository = source === 'tfs' ? parseTfsRepository(url) : parseGithubRepository(url);
   const urlInvalid = Boolean(url.trim()) && !repository;
   const existing = reusable.find((environment) => environment.id === existingId);
-  const ready = source === 'github' ? !!repository : !!existing;
+  const ready = source !== 'existing' ? !!repository : !!existing;
 
   const add = async () => {
     if (!ready || adding) return;
     setAdding(true);
     try {
       let environmentId: string;
-      if (source === 'github') {
+      if (source !== 'existing') {
         const environment = await attachRepository({
           projectId,
           repository: { defaultBranch, name: repository!.fullName, url: repository!.url },
@@ -152,11 +154,28 @@ const AddEnvironmentContent = ({
           value={source}
           options={[
             { label: t('environment.add.github'), value: 'github' },
+            { label: 'TFS', value: 'tfs' },
             { label: t('environment.add.existing'), value: 'existing' },
           ]}
-          onChange={(value) => setSource(value as Source)}
+          onChange={(value) => {
+            setSource(value as Source);
+            setUrl('');
+            setDefaultBranch(undefined);
+          }}
         />
-        {source === 'github' ? (
+        {source === 'tfs' ? (
+          <TfsRepositoryPicker
+            onLeave={close}
+            onClear={() => {
+              setUrl('');
+              setDefaultBranch(undefined);
+            }}
+            onSelect={(repo) => {
+              setUrl(repo.remoteUrl);
+              setDefaultBranch(repo.defaultBranch);
+            }}
+          />
+        ) : source === 'github' ? (
           <>
             <RepositoryList
               selected={repository?.fullName}

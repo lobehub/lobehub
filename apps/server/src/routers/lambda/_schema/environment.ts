@@ -1,3 +1,4 @@
+import { parseTfsRepository } from '@lobechat/utils/tfs';
 import { z } from 'zod';
 
 import { relativePathSchema } from '../sandboxStorage/schemas';
@@ -42,9 +43,20 @@ const environmentSourceSchema = z.object({
           return false;
         }
 
-        return parsed.protocol === 'https:' && ALLOWED_SOURCE_HOSTS.has(parsed.hostname);
+        return (
+          (parsed.protocol === 'https:' &&
+            ALLOWED_SOURCE_HOSTS.has(parsed.hostname) &&
+            !parsed.username &&
+            !parsed.password &&
+            !parsed.search &&
+            !parsed.hash) ||
+          Boolean(
+            process.env.TFS_COLLECTION_URL &&
+            parseTfsRepository(value, process.env.TFS_COLLECTION_URL),
+          )
+        );
       },
-      { message: 'Only https:// github.com git URLs are supported' },
+      { message: 'Use a GitHub URL or a repository in the configured TFS collection' },
     ),
 });
 

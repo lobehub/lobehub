@@ -1,8 +1,6 @@
-import type { ScmProvider } from '@lobechat/types';
-
 export interface ParsedChangeRequestUrl {
   number: number;
-  provider: ScmProvider;
+  provider: 'github';
   repoFullName: string;
   /** Canonical form, without any trailing tab path, query or fragment. */
   url: string;
@@ -12,7 +10,7 @@ const GITHUB_PULL_PATH = /^\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)(?:\/.*)?$/;
 
 /**
  * The change request a web URL names, or `null` when it names none. Only
- * github.com pull requests today, matching `SCM_PROVIDERS`; a link to a
+ * github.com pull requests today; a link to a
  * PR's "Files changed" tab still names the PR.
  */
 export const parseChangeRequestUrl = (value: string): ParsedChangeRequestUrl | null => {

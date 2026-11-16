@@ -2,6 +2,7 @@
 
 import './Github/definition';
 import './Linear/definition';
+import './Tfs/definition';
 
 import { memo, useEffect } from 'react';
 import { useParams } from 'react-router';
@@ -13,6 +14,7 @@ import IntegrationsLayout from './Layout';
 import LinearIntegration from './Linear';
 import Overview from './Overview';
 import { type IntegrationId, isIntegrationId } from './registry';
+import { TfsIntegration } from './Tfs';
 
 const BASE_PATH = '/settings/integrations';
 
@@ -39,6 +41,8 @@ const IntegrationsSettings = memo(() => {
         <GithubIntegration onBack={back} />
       ) : selected === 'linear' ? (
         <LinearIntegration onBack={back} />
+      ) : selected === 'tfs' ? (
+        <TfsIntegration onBack={back} />
       ) : (
         <Overview onOpen={open} />
       )}

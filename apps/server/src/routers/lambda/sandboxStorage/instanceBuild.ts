@@ -1,4 +1,5 @@
 import { toExecutionConfiguration } from '@lobechat/types';
+import { parseTfsRepository } from '@lobechat/utils/tfs';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -36,6 +37,16 @@ export const instanceBuildRouter = router({
       // current one: a build has to produce what the instance says it is, and
       // the two differ exactly when the environment moved on.
       const specification = instance.configurationSnapshot;
+      if (
+        specification?.sources?.some(
+          (source) => source.kind === 'git' && source.url && parseTfsRepository(source.url),
+        )
+      ) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Use a working directory to initialize a TFS environment.',
+        });
+      }
       const buildable = isBuildable(specification);
 
       // An environment that clones nothing and installs nothing is already

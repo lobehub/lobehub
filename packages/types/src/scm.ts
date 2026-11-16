@@ -1,3 +1,5 @@
+import type { TfsCredentials } from './tfs';
+
 /**
  * SCM (source control management) integration domain: a LobeHub-owned app
  * installed on a provider account, the provider identities of LobeHub users,
@@ -10,8 +12,8 @@
  * today; adding a provider means adding a normalizer, not a migration.
  */
 
-/** Providers the SCM integration can talk to. Only `github` ships today. */
-export const SCM_PROVIDERS = ['github'] as const;
+/** Providers the SCM integration can talk to. */
+export const SCM_PROVIDERS = ['github', 'tfs'] as const;
 export type ScmProvider = (typeof SCM_PROVIDERS)[number];
 
 /** Provider account kind an installation lives on. */
@@ -323,6 +325,7 @@ export interface ScmIdentityCredentials {
   accessToken: string;
   refreshToken?: string;
   refreshTokenExpiresAt?: string;
+  tfs?: TfsCredentials;
 }
 
 export interface ScmUpsertIdentityParams {

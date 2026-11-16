@@ -40,7 +40,28 @@ DEPLOY_DIR=/root/lobehub TAG=canary bash deploy-custom-image.sh --non-interactiv
 通过普通局域网 HTTP 访问时，浏览器安全上下文 API 可能不可用，正式使用建议配置 HTTPS。
 
 安装目录必须为空（允许包含脚本本身）。已有 `.env` 或数据的目录禁止重新安装。
-若首次启动失败，保留配置用于排查；修复后重新运行脚本，选择“启动或恢复完整部署”。
+若首次启动失败，保留配置用于排查；修复后重新运行脚本，选择 “启动或恢复完整部署”。
+
+## TFS 默认配置与个人绑定
+
+本 Fork 部署流程预制公司 Collection：
+
+```dotenv
+TFS_COLLECTION_URL=http://dev.tellhowsoft.com/DefaultCollection
+TFS_API_VERSION=6.0
+```
+
+`http://dev.tellhowsoft.com/` 是站点根地址，接入需要上面的 Collection 路径。首次安装将配置写进 `.env`；更新已有部署时，仅在 Compose 有效环境缺少对应变量时补入脚本托管的 override。已有自定义地址、版本以及空字符串禁用值都保留，不会覆盖。
+
+如果原来缺省的地址已写入 override，后续改地址或禁用 TFS，要修改 override 中对应项（禁用时设 `TFS_COLLECTION_URL` 为 `""`）；也可删掉 override 的对应项后在 `.env` 配置。保留托管标记和其余配置；只改 `.env` 不能覆盖 override。
+
+每个用户进入「设置 → 集成 → TFS / Azure DevOps」绑定自己的 NTLM 用户名 / 密码或 PAT；每人一个身份，同一 TFS 身份不能绑到多个 LobeHub 用户。不在部署脚本或共享环境里保存个人 TFS 密码。
+
+加密使用 LobeHub 已有的 `KEY_VAULTS_SECRET`，不是 TFS 提供的密钥：首次安装时脚本自动生成并写入部署目录 `.env`，已有安装沿用原值，日常更新不重新生成。请连同数据库配套备份；缺失时先找旧配置或备份，不要直接用新值覆盖旧密钥。
+
+本 Fork 镜像发布工作流启用 `INSTALL_TFS_CURL=true`，镜像内置支持 NTLM 的 curl 及运行库，服务器无需进入容器安装。使用其他镜像或自行构建时需要自行保证；根 Dockerfile 可用同名 build arg 启用。Git 克隆发生在 Agent 执行环境，该环境还要能访问 TFS 并提供支持认证的 Git，应用容器内置 curl 不会替 Onlyboxes worker 安装 Git。
+
+脚本只拉镜像。必须先将功能发布到所选分支镜像，再下载新版部署脚本更新服务器；本地源码修改不会自动出现在已发布标签里。通用二开清单见 [CUSTOMIZATIONS.md](../CUSTOMIZATIONS.md)，TFS 功能及工作目录限制见 [TFS\_CUSTOMIZATION.md](../TFS_CUSTOMIZATION.md)。
 
 ## Onlyboxes
 
@@ -51,7 +72,7 @@ Onlyboxes 可以部署在同机或其他内网机器；不以本机是否存在�
 
 - Console 基础 URL（不含 `/api/v1`，不能使用指向 LobeHub 容器自身的 localhost）。
 - 与 Console `CONSOLE_JIT_SIGNING_KEY` 一致的签名密钥（隐藏输入）。
-- JIT issuer（默认沿用当前配置或 APP_URL）。
+- JIT issuer（默认沿用当前配置或 APP\_URL）。
 
 切换前在一次性 LobeHub 容器内，使用相同 Compose 网络和配置，签发 JIT token 并执行真实 terminal 命令。
 因此会检查容器网络、API、认证和 `terminalExec` worker；创建的检查会话请求 60 秒租期。
@@ -66,7 +87,7 @@ Onlyboxes 可以部署在同机或其他内网机器；不以本机是否存在�
 拉取失败不会更改配置；启动失败恢复原 override 文件，但容器可能已部分更新，需要人工检查。
 
 每次部署备份 Compose、`.env` 和原 override。**配置备份不是数据库备份，数据库迁移不能靠切换镜像自动撤销。**
-日常更新只重建应用服务；“启动或恢复完整部署”会启动依赖服务。
+日常更新只重建应用服务；“启动或恢复完整部署” 会启动依赖服务。
 
 ## Fork 的 Actions
 

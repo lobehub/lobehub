@@ -1,5 +1,6 @@
 import type { EnvironmentConfiguration, EnvironmentVisibility } from '@lobechat/types';
 import { DEFAULT_REGENERABLE_PATHS } from '@lobechat/types';
+import { parseTfsRepository } from '@lobechat/utils/tfs';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 
 import type { EnvironmentItem, NewEnvironment } from '../schemas';
@@ -28,8 +29,11 @@ export type EnvironmentWithCreator = Pick<
   | 'workspaceId'
 > & { creator: EnvironmentCreator | null };
 
-/** Canonical GitHub source only; credentials and arbitrary clone transports are never persisted. */
+/** Canonical GitHub or configured TFS source; credentials and arbitrary clone transports never persist. */
 export const normalizeProjectRepository = (value: string): string => {
+  const tfs =
+    process.env.TFS_COLLECTION_URL && parseTfsRepository(value, process.env.TFS_COLLECTION_URL);
+  if (tfs) return tfs.url;
   const ssh = /^git@github\.com:([^/]+\/[^/]+?)(?:\.git)?$/.exec(value.trim());
   const url = new URL(ssh ? `https://github.com/${ssh[1]}` : value.trim());
   if (

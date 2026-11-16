@@ -1,4 +1,7 @@
+'use client';
+
 import type { ScmRepositoryListItem } from '@lobechat/types';
+import { parseTfsRepository } from '@lobechat/utils/tfs';
 import {
   Button,
   cssVar,
@@ -13,6 +16,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { GITHUB_RETURN_TO } from '@/features/Integrations/Github/installHref';
+import { TfsRepositoryPicker } from '@/features/Tfs/TfsRepositoryPicker';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useHomeStore } from '@/store/home';
 import { useProjectStore } from '@/store/project';
@@ -47,7 +51,8 @@ interface FormState {
  * its own, and created with the repository attached as its environment —
  * no fields to fill unless the defaults are wrong.
  */
-const CreateFromGithubContent = () => {
+const CreateFromGithubContent = ({ provider = 'github' }: { provider?: 'github' | 'tfs' }) => {
+  const parseRepository = provider === 'tfs' ? parseTfsRepository : parseGithubRepository;
   const { t } = useTranslation(['project', 'common']);
   const { close } = useModalContext();
   const navigate = useWorkspaceAwareNavigate();
@@ -63,7 +68,7 @@ const CreateFromGithubContent = () => {
   // Taken once per open dialog: the dedicated agent's previewed character is seeded by it.
   const [reservedIds] = useState(reserveProjectIds);
 
-  const repository = parseGithubRepository(form.url);
+  const repository = parseRepository(form.url);
   const urlInvalid = Boolean(form.url.trim()) && !repository;
   const identifierInvalid =
     (Boolean(form.identifier.trim()) && !isProjectIdentifierValid(form.identifier)) ||
@@ -78,7 +83,7 @@ const CreateFromGithubContent = () => {
 
   /** A new repository renames the project unless the person already named it. */
   const applyUrl = (url: string, defaultBranch?: string) => {
-    const parsed = parseGithubRepository(url);
+    const parsed = parseRepository(url);
     setForm((current) => {
       const name = current.nameEdited ? current.name : (parsed?.name ?? '');
       return { ...current, defaultBranch, duplicate: undefined, name, url };
@@ -95,7 +100,7 @@ const CreateFromGithubContent = () => {
 
   const connectGithub = () => {
     close();
-    navigate(GITHUB_RETURN_TO);
+    navigate(provider === 'tfs' ? '/settings/integrations/tfs' : GITHUB_RETURN_TO);
   };
 
   const handleCreate = async () => {
@@ -135,30 +140,40 @@ const CreateFromGithubContent = () => {
     <>
       <Flexbox gap={16} padding={16}>
         {/* Picking a connected repository is the primary path; the URL field is the fallback. */}
-        <RepositoryList
-          selected={repository?.fullName}
-          onConnect={connectGithub}
-          onSelect={selectRepository}
-        />
-
-        <Flexbox gap={6}>
-          <Text fontSize={13} weight={500}>
-            {t('createFromGithub.urlLabel')}
-          </Text>
-          <Input
-            aria-invalid={urlInvalid}
-            placeholder={t('createFromGithub.urlPlaceholder')}
-            style={urlInvalid ? { borderColor: cssVar.colorError } : undefined}
-            value={form.url}
-            onChange={(event) => applyUrl(event.target.value)}
-            onPressEnter={handleCreate}
+        {provider === 'tfs' ? (
+          <TfsRepositoryPicker
+            onClear={() => applyUrl('')}
+            onLeave={close}
+            onSelect={(repo) => applyUrl(repo.remoteUrl, repo.defaultBranch)}
           />
-          {urlInvalid && (
-            <Text fontSize={12} type={'danger'}>
-              {t('createFromGithub.urlInvalid')}
+        ) : (
+          <RepositoryList
+            selected={repository?.fullName}
+            onConnect={connectGithub}
+            onSelect={selectRepository}
+          />
+        )}
+
+        {provider === 'github' && (
+          <Flexbox gap={6}>
+            <Text fontSize={13} weight={500}>
+              {t('createFromGithub.urlLabel')}
             </Text>
-          )}
-        </Flexbox>
+            <Input
+              aria-invalid={urlInvalid}
+              placeholder={t('createFromGithub.urlPlaceholder')}
+              style={urlInvalid ? { borderColor: cssVar.colorError } : undefined}
+              value={form.url}
+              onChange={(event) => applyUrl(event.target.value)}
+              onPressEnter={handleCreate}
+            />
+            {urlInvalid && (
+              <Text fontSize={12} type="danger">
+                {t('createFromGithub.urlInvalid')}
+              </Text>
+            )}
+          </Flexbox>
+        )}
 
         {repository && (
           <Flexbox horizontal gap={12}>

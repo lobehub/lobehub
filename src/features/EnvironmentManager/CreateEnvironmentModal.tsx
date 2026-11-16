@@ -15,10 +15,13 @@ import { t as translate } from 'i18next';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import {
+  RepositorySourcePicker,
+  type RepositorySourceSelection,
+} from '@/features/Tfs/RepositorySourcePicker';
 import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 
-import GithubRepositoryPicker, { type GithubRepositorySelection } from './GithubRepositoryPicker';
 import { type CreatedEnvironment, useEnvironmentActions } from './useEnvironmentData';
 
 /**
@@ -49,7 +52,7 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
     // the person typed is theirs, and picking a different repository must not
     // overwrite it; a suggested one is just a default and follows the pick.
     const [nameIsSuggested, setNameIsSuggested] = useState(true);
-    const [repository, setRepository] = useState<GithubRepositorySelection | undefined>();
+    const [repository, setRepository] = useState<RepositorySourceSelection | undefined>();
     const [creating, setCreating] = useState(false);
     // The Enter that confirms an IME candidate reaches `keydown` as an Enter,
     // so a Chinese name would submit the dialog on the keystroke that picked it.
@@ -58,13 +61,13 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
 
     const trimmed = name.trim();
 
-    const pickRepository = (selection: GithubRepositorySelection | undefined) => {
+    const pickRepository = (selection: RepositorySourceSelection | undefined) => {
       setRepository(selection);
       setError(undefined);
       // Naming a thing that does not exist yet is the harder half of this dialog,
       // so the repository answers it: an environment for a repository is almost
       // always called after it.
-      if (nameIsSuggested) setName(selection?.repository ?? '');
+      if (nameIsSuggested) setName(selection?.name ?? '');
     };
 
     const create = async () => {
@@ -83,7 +86,7 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
                   {
                     kind: 'git',
                     ref: repository.defaultBranch,
-                    url: `https://github.com/${repository.owner}/${repository.repository}`,
+                    url: repository.url,
                   },
                 ],
               }
@@ -135,7 +138,7 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
           {/* Repository first, name second. The name is the harder question and the
             repository usually answers it, so asking for the name first makes the
             person invent something they are about to be handed. */}
-          <GithubRepositoryPicker value={repository} onChange={pickRepository} onLeave={close} />
+          <RepositorySourcePicker value={repository} onChange={pickRepository} onLeave={close} />
 
           <Flexbox gap={6}>
             <Text fontSize={12} type={'secondary'} weight={500}>

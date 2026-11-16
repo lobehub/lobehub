@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { MarketService } from '@/server/services/market';
 
 import { buildDriveDownloadCommand } from '../driveDownload';
+import { buildSandboxEnvironmentInitCommand } from '../environmentInit';
 import { MarketSandboxProvider, redactSandboxParams } from './market';
 
 describe('MarketSandboxProvider', () => {
@@ -190,6 +191,21 @@ describe('MarketSandboxProvider', () => {
   });
 
   describe('redactSandboxParams', () => {
+    it('redacts the complete TFS initializer including shell-quoted credential helpers', () => {
+      const command = buildSandboxEnvironmentInitCommand({
+        cloneCredential: {
+          tfs: { authType: 'ntlm', username: 'DOMAIN\\user', secret: "test's private credential" },
+          urlPrefix: 'https://tfs.example.com/Collection/',
+        },
+        environmentId: 'env-1',
+        name: 'TFS',
+        sources: [{ url: 'https://tfs.example.com/Collection/P/_git/R' }],
+      });
+      expect(redactSandboxParams({ command, timeout: 1000 })).toEqual({
+        command: '[redacted]',
+        timeout: 1000,
+      });
+    });
     it('redacts auth env assignments from command logs without changing other params', () => {
       const params = {
         command:

@@ -1,4 +1,6 @@
-import type { EnvironmentConfiguration } from '@lobechat/types';
+import type { EnvironmentConfiguration, TfsCredentials } from '@lobechat/types';
+
+import type { ScmCloneCredential } from '@/server/services/scm/cloneCredential';
 
 /** Long enough for a shallow clone and a dependency install. */
 export const SANDBOX_ENVIRONMENT_INIT_TIMEOUT_MS = 600_000;
@@ -19,13 +21,15 @@ export const SANDBOX_ENVIRONMENT_RAN_LINE = '__lobe_environment_ran';
  * the database or in the folder.
  */
 export interface SandboxInitialization {
+  /** Failed personal authorization must stop checkout instead of using ambient credentials. */
+  authorizationError?: 'sharedDrive' | 'unavailable';
   bootstrapCommand?: string;
   /**
    * A header git sends for one URL prefix, so a private repository clones: a
    * short-lived, repository-scoped token from the GitHub App installation, as
    * a build used to get. Resolved per run and never stored.
    */
-  cloneCredential?: { header: string; urlPrefix: string };
+  cloneCredential?: ScmCloneCredential | { tfs: TfsCredentials; urlPrefix: string };
   env?: Record<string, string>;
   environmentId: string;
   name: string;
@@ -134,6 +138,14 @@ const safeDestination = (path: string | undefined): string | undefined => {
  * {@link withEnvironmentVariables}, not from this shell.
  */
 export const buildSandboxEnvironmentInitCommand = (init: SandboxInitialization): string => {
+  // Authorization can be repaired on the next turn; do not persist a failed-init marker for it.
+  if (init.authorizationError) {
+    const message =
+      init.authorizationError === 'sharedDrive'
+        ? 'Choose a personal working directory to check out this TFS repository.'
+        : 'TFS authorization unavailable. Connect your personal TFS account in Settings > Integrations.';
+    return `echo ${SANDBOX_ENVIRONMENT_RAN_LINE}\necho ${shellQuote(message)}`;
+  }
   const label = shellQuote(init.name);
 
   const exports = toExports(init.env);
@@ -160,17 +172,37 @@ export const buildSandboxEnvironmentInitCommand = (init: SandboxInitialization):
   // Given to git through its environment for the clones alone, and unset
   // before setup runs: nothing writes it to disk or into the checkout's
   // `.git/config`, and setup — or a command after it — cannot read it back.
-  const credential =
-    init.cloneCredential && clones.length > 0
-      ? {
-          set: [
-            `export GIT_CONFIG_COUNT=1`,
-            `export GIT_CONFIG_KEY_0=${shellQuote(`http.${init.cloneCredential.urlPrefix}.extraHeader`)}`,
-            `export GIT_CONFIG_VALUE_0=${shellQuote(init.cloneCredential.header)}`,
-          ],
-          unset: [`unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0`],
-        }
-      : { set: [], unset: [] };
+  const config: [string, string][] = [];
+  const auth = init.cloneCredential;
+  const personalTfs = auth && 'tfs' in auth;
+  if (auth && clones.length > 0) {
+    if ('tfs' in auth) {
+      const username = auth.tfs.authType === 'pat' ? 'tfs' : auth.tfs.username;
+      const helper = `!f() { printf '%s\\n' ${shellQuote(`username=${username}`)} ${shellQuote(`password=${auth.tfs.secret}`)}; }; f`;
+      config.push(
+        ['credential.helper', ''],
+        [`credential.${auth.urlPrefix}.helper`, helper],
+        [`http.${auth.urlPrefix}.followRedirects`, 'false'],
+      );
+    } else config.push([`http.${auth.urlPrefix}.extraHeader`, auth.header]);
+  }
+  const credential = {
+    set: config.length
+      ? [
+          `export GIT_TERMINAL_PROMPT=0`,
+          `export GIT_CONFIG_COUNT=${config.length}`,
+          ...config.flatMap(([key, value], index) => [
+            `export GIT_CONFIG_KEY_${index}=${shellQuote(key)}`,
+            `export GIT_CONFIG_VALUE_${index}=${shellQuote(value)}`,
+          ]),
+        ]
+      : [],
+    unset: config.length
+      ? [
+          `unset GIT_TERMINAL_PROMPT GIT_CONFIG_COUNT ${config.flatMap((_, index) => [`GIT_CONFIG_KEY_${index}`, `GIT_CONFIG_VALUE_${index}`]).join(' ')}`,
+        ]
+      : [],
+  };
 
   // Only when there is something to clone, and removed however the subshell
   // ends: a second copy of every repository would otherwise stay in the
@@ -179,11 +211,12 @@ export const buildSandboxEnvironmentInitCommand = (init: SandboxInitialization):
     clones.length > 0 ? [`__lobe_tmp="$(mktemp -d)"`, `trap 'rm -rf "$__lobe_tmp"' EXIT`] : [];
 
   const steps = [
-    ...exports,
+    ...(personalTfs ? ['set +x'] : exports),
     ...staging,
     ...credential.set,
     ...clones,
     ...credential.unset,
+    ...(personalTfs ? exports : []),
     ...(init.bootstrapCommand ? [init.bootstrapCommand] : []),
   ];
 

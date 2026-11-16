@@ -70,5 +70,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             SHA=${{ github.sha }}
+            INSTALL_TFS_CURL=true
           cache-from: type=gha
           cache-to: type=gha,mode=max

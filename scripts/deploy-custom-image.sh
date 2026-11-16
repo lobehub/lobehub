@@ -47,6 +47,8 @@ COMPOSE_NAMES = ('compose.yaml', 'compose.yml', 'docker-compose.yml', 'docker-co
 OVERRIDE_NAMES = ('compose.override.yaml', 'compose.override.yml',
                   'docker-compose.override.yaml', 'docker-compose.override.yml')
 DEFAULT_IMAGE = 'ghcr.io/lichao0223/lobehub'
+TFS_DEFAULTS = {'TFS_COLLECTION_URL': 'http://dev.tellhowsoft.com/DefaultCollection',
+                'TFS_API_VERSION': '6.0'}
 SANDBOX_KEYS = ('SANDBOX_PROVIDER', 'ONLYBOXES_BASE_URL', 'ONLYBOXES_JIT_SIGNING_KEY',
                 'ONLYBOXES_JIT_ISSUER', 'ONLYBOXES_JIT_TTL_SEC', 'ONLYBOXES_LEASE_TTL_SEC')
 
@@ -281,6 +283,12 @@ class Manager:
         self.probe(self.override if self.override.exists() else None)
 
     def deploy(self, managed, fresh=False):
+        # Explicit values, including an empty URL to disable TFS, win over presets.
+        environment = managed['services'][self.service].setdefault('environment', {})
+        current = self.sandbox_environment()
+        for key, value in TFS_DEFAULTS.items():
+            if key not in current:
+                environment.setdefault(key, value)
         with self.staged(managed) as staged:
             candidate = self.config(staged)
             service = candidate['services'][self.service]
@@ -418,6 +426,7 @@ def new_install(directory):
              'bucket.config.json', 'elasticsearch/Dockerfile')
     files = {name: download(root + name) for name in names}
     values = {
+        **TFS_DEFAULTS,
         'LOBE_PORT': port, 'APP_URL': app_url.rstrip('/'),
         'KEY_VAULTS_SECRET': base64.b64encode(secrets.token_bytes(32)).decode(),
         'AUTH_SECRET': secrets.token_urlsafe(32), 'GATEWAY_SERVICE_TOKEN': secrets.token_hex(32),

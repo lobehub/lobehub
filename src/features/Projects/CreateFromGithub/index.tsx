@@ -4,15 +4,20 @@ import { Trans } from 'react-i18next';
 
 const CreateFromGithubContent = lazy(() => import('./Content'));
 
-export const openCreateProjectFromGithubModal = () =>
+export const openCreateProjectFromGithubModal = (provider: 'github' | 'tfs' = 'github') =>
   createModal({
     content: (
       <Suspense fallback={null}>
-        <CreateFromGithubContent />
+        <CreateFromGithubContent provider={provider} />
       </Suspense>
     ),
     footer: null,
     styles: { content: { padding: 0 } },
-    title: <Trans i18nKey={'createFromGithub.title'} ns={'project'} />,
+    title: (
+      <Trans
+        i18nKey={provider === 'tfs' ? 'createFromTfs.title' : 'createFromGithub.title'}
+        ns={'project'}
+      />
+    ),
     width: 520,
   });

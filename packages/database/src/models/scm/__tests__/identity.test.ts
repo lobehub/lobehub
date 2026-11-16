@@ -148,4 +148,20 @@ describe('ScmIdentityModel', () => {
     const [stored] = await db.select().from(scmIdentities).where(eq(scmIdentities.id, created.id));
     expect(stored).toMatchObject({ externalLogin: 'octocat', userId });
   });
+  it('keeps TFS bindings one-to-one and scopes disconnect to the user and provider', async () => {
+    const tfs = { ...baseParams, provider: 'tfs' as const };
+    await ScmIdentityModel.upsert(db, baseParams);
+    await ScmIdentityModel.upsert(db, tfs);
+    await expect(ScmIdentityModel.upsert(db, { ...tfs, userId: otherUserId })).rejects.toThrow();
+    await expect(
+      ScmIdentityModel.upsert(db, { ...tfs, externalUserId: 'second' }),
+    ).rejects.toThrow();
+    await ScmIdentityModel.disconnect(db, 'tfs', otherUserId);
+    await expect(ScmIdentityModel.findByUser(db, 'tfs', userId)).resolves.toMatchObject({ userId });
+    await ScmIdentityModel.disconnect(db, 'tfs', userId);
+    await expect(ScmIdentityModel.findByUser(db, 'tfs', userId)).resolves.toBeNull();
+    await expect(ScmIdentityModel.findByUser(db, 'github', userId)).resolves.toMatchObject({
+      userId,
+    });
+  });
 });

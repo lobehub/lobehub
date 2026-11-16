@@ -1,3 +1,4 @@
+import { parseTfsRepository } from '@lobechat/utils/tfs';
 /**
  * Only what naming a repository needs. Typed structurally rather than against
  * either configuration type, because the stored shape and the service's own
@@ -18,7 +19,9 @@ interface SourcedConfiguration {
  */
 export const repositoryPath = (configuration?: SourcedConfiguration): string | undefined => {
   const url = configuration?.sources?.find((source) => source.kind === 'git')?.url;
-  const path = url?.replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, '');
+  const path =
+    parseTfsRepository(url ?? '')?.fullName ??
+    url?.replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, '');
 
   return path || undefined;
 };

@@ -21,6 +21,12 @@ interface GateKeeper {
  * (merger, reviewer) needs to resolve to a LobeHub user.
  */
 export class ScmIdentityModel {
+  static disconnect = async (db: LobeChatDatabase, provider: ScmProvider, userId: string) => {
+    await db
+      .delete(scmIdentities)
+      .where(and(eq(scmIdentities.provider, provider), eq(scmIdentities.userId, userId)));
+  };
+
   static findByExternalUser = async (
     db: LobeChatDatabase,
     provider: ScmProvider,

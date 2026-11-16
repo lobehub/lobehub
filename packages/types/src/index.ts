@@ -105,6 +105,7 @@ export * from './openai/chat';
 export * from './openai/plugin';
 export * from './ownedWorktree';
 export * from './subscription';
+export * from './tfs';
 export * from './trace';
 export * from './understanding';
 export * from './userMemory';

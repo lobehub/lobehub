@@ -226,12 +226,14 @@ export const redactSandboxParams = (params: Record<string, unknown>) => {
   if (params.zipUrl) redacted.zipUrl = REDACTED_SANDBOX_PARAM;
   if (params.skillZipUrls) redacted.skillZipUrls = REDACTED_SANDBOX_PARAM;
   if (typeof params.command === 'string') {
-    redacted.command = CREDS_ENV_WRITE_PATTERN.test(params.command)
-      ? REDACTED_SANDBOX_PARAM
-      : params.command.replaceAll(
-          SANDBOX_AUTH_ENV_PATTERN,
-          (_, name: string) => `${name}=${REDACTED_SANDBOX_PARAM}`,
-        );
+    redacted.command =
+      CREDS_ENV_WRITE_PATTERN.test(params.command) ||
+      /GIT_CONFIG_KEY_\d+='credential\./.test(params.command)
+        ? REDACTED_SANDBOX_PARAM
+        : params.command.replaceAll(
+            SANDBOX_AUTH_ENV_PATTERN,
+            (_, name: string) => `${name}=${REDACTED_SANDBOX_PARAM}`,
+          );
   }
 
   return redacted;

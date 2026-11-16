@@ -18,7 +18,10 @@ import { AgentModel } from '@/database/models/agent';
 import { EnvironmentModel } from '@/database/models/environment';
 import { EnvironmentInstanceModel } from '@/database/models/environmentInstance';
 import { TopicModel } from '@/database/models/topic';
-import { resolveScmCloneCredential } from '@/server/services/scm/cloneCredential';
+import {
+  resolveScmCloneCredential,
+  resolveTfsCloneCredential,
+} from '@/server/services/scm/cloneCredential';
 
 import { sandboxStorageBinding } from './binding';
 import { driveFolderExists, ensureDriveFolder } from './driveFolder';
@@ -399,7 +402,8 @@ const resolveInitialization = async ({
   topicId,
   userId,
   workspaceId,
-}: Required<Pick<SandboxSessionConfigInput, 'serverDB' | 'topicId'>> &
+  sharedDrive,
+}: { sharedDrive: boolean } & Required<Pick<SandboxSessionConfigInput, 'serverDB' | 'topicId'>> &
   Pick<SandboxSessionConfigInput, 'userId' | 'workspaceId'>): Promise<
   SandboxInitialization | undefined
 > => {
@@ -443,15 +447,19 @@ const resolveInitialization = async ({
     const initialization = toSandboxInitialization(environment);
     if (!initialization || initialization.sources.length === 0) return initialization;
 
-    // The same credential a build used to get, so a private repository the
-    // picker offered still clones. Never throws: without one, a public
-    // repository clones and a private one fails in the report, by name.
-    const cloneCredential = await resolveScmCloneCredential({
+    const params = {
       configuration: environment.configuration ?? undefined,
       db: serverDB,
       userId,
       workspaceId,
+    };
+    const personal = await resolveTfsCloneCredential(params).catch(() => {
+      log('Personal TFS authorization unavailable for this initialization');
+      return undefined;
     });
+    if (personal === undefined) return { ...initialization, authorizationError: 'unavailable' };
+    if (personal && sharedDrive) return { ...initialization, authorizationError: 'sharedDrive' };
+    const cloneCredential = personal ?? (await resolveScmCloneCredential(params));
 
     return cloneCredential ? { ...initialization, cloneCredential } : initialization;
   } catch (error) {
@@ -477,7 +485,12 @@ export const resolveSandboxSessionConfig = async (
   const { serverDB, topicId } = input;
   if (!serverDB || !topicId || config.mode === 'persistent') return config;
 
-  const initialization = await resolveInitialization({ ...input, serverDB, topicId });
+  const initialization = await resolveInitialization({
+    ...input,
+    serverDB,
+    topicId,
+    sharedDrive: config.mode === 'drive' && config.drive === 'public',
+  });
 
   return initialization ? { ...config, initialization } : config;
 };

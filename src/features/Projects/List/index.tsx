@@ -332,6 +332,12 @@ const ProjectListPage = memo(() => {
         label: t('create.fromGithub'),
         onClick: () => openCreateProjectFromGithubModal(),
       },
+      {
+        icon: PlusIcon,
+        key: 'tfs',
+        label: t('create.fromTfs'),
+        onClick: () => openCreateProjectFromGithubModal('tfs'),
+      },
     ],
     [t],
   );

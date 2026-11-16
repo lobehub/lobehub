@@ -26,6 +26,17 @@ RUN set -e && \
     cp /etc/ssl/certs/ca-certificates.crt /distroless/etc/ssl/certs/ca-certificates.crt && \
     rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/*
 
+# The TFS adapter needs a curl build with NTLM. Keep the upstream image lean unless enabled.
+ARG INSTALL_TFS_CURL=false
+RUN if [ "$INSTALL_TFS_CURL" = true ]; then \
+      apt-get update && apt-get install --no-install-recommends -y curl && \
+      curl --version | grep -qw NTLM && \
+      ldd /usr/bin/curl > /tmp/curl-dependencies && \
+      ! grep -q 'not found' /tmp/curl-dependencies && \
+      cp -L --parents /usr/bin/curl $(awk '$3 ~ /^\// { print $3 } $1 ~ /^\// { print $1 }' /tmp/curl-dependencies) /distroless && \
+      rm -rf /var/lib/apt/lists/* /tmp/curl-dependencies; \
+    fi
+
 ## Builder image, install all the dependencies and build the app
 FROM base AS builder
 

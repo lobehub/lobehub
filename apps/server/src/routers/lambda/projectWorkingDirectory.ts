@@ -20,6 +20,7 @@ import {
 } from '@/server/services/aiAgent/pipeline/precreatedTopic';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { resolveProjectTopicSandbox } from '@/server/services/sandbox/projectPlacement';
+import { validateTfsSources } from '@/server/services/tfs/source';
 
 import {
   assertCanUseConversationTargets,
@@ -217,6 +218,7 @@ export const projectWorkingDirectoryRouter = router({
       // Checked before the environment is made, so a refusal leaves nothing behind.
       if (!(await ctx.projectModel.findManageableById(projectId)))
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found or access denied' });
+      await validateTfsSources(ctx.serverDB, ctx.userId, [{ kind: 'git', url: repository.url }]);
       const environment = await ctx.environmentModel.ensureForRepository({
         defaultBranch: repository.defaultBranch,
         name: repository.name,

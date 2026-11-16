@@ -309,6 +309,38 @@ describe('buildSandboxEnvironmentInitCommand', () => {
     ).toBe('[]\n');
   });
 
+  it('removes personal TFS credential helpers before setup and keeps them out of the checkout', () => {
+    const secret = "test secret with ' and $()";
+    const result = run(
+      buildSandboxEnvironmentInitCommand(
+        init({
+          bootstrapCommand: 'env | grep ^GIT_CONFIG_ > seen.txt || true',
+          cloneCredential: {
+            tfs: { authType: 'ntlm', username: 'DOMAIN\\user', secret },
+            urlPrefix: 'https://tfs.example.com/Collection/',
+          },
+        }),
+      ),
+      work,
+    );
+    expect(environmentInitReport(result.stdout)).toContain('Initialized');
+    expect(readFileSync(join(work, 'seen.txt'), 'utf8')).toBe('');
+    expect(readFileSync(join(work, '.git', 'config'), 'utf8')).not.toContain(secret);
+    expect(result.stdout).not.toContain(secret);
+  });
+
+  it('does not clone or run setup after an authorization refusal and can retry after reconnecting', () => {
+    const blocked = run(
+      buildSandboxEnvironmentInitCommand(init({ authorizationError: 'unavailable' })),
+      work,
+    );
+    expect(blocked.stdout).toContain('Connect your personal TFS account');
+    expect(readdirSync(work)).toEqual([]);
+    const retry = run(buildSandboxEnvironmentInitCommand(init()), work);
+    expect(environmentInitReport(retry.stdout)).toContain('Initialized');
+    expect(existsSync(join(work, 'README.md'))).toBe(true);
+  });
+
   it('refuses a source path that leaves the working directory', () => {
     const result = run(
       buildSandboxEnvironmentInitCommand(

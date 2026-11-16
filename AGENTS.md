@@ -2,6 +2,8 @@
 
 Guidelines for using AI coding agents in this opensource LobeHub repository.
 
+Fork customizations are indexed in [CUSTOMIZATIONS.md](./CUSTOMIZATIONS.md). Read it before merging upstream or changing a listed feature; update its inventory and merge notes when a customization changes.
+
 ## Tech Stack
 
 - Next.js 16 + React 19 + TypeScript

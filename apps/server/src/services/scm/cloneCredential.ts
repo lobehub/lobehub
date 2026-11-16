@@ -1,8 +1,12 @@
+import type { TfsCredentials } from '@lobechat/types';
+import { parseTfsRepository } from '@lobechat/utils/tfs';
 import debug from 'debug';
 
 import { ScmInstallationModel } from '@/database/models/scm';
 import type { ScmInstallationItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { TfsConnectionService } from '@/server/services/tfs/connection';
+import { validateTfsSources } from '@/server/services/tfs/source';
 
 import { mintGitHubRepositoryToken } from './github/app';
 
@@ -88,10 +92,7 @@ export const findGitHubInstallationFor = (
  * survives the person who set it up revoking their own authorization, or
  * leaving.
  *
- * Never throws. A build with no credential still runs: public sources clone,
- * and a private one fails in the build log, naming the repository, which is
- * where someone can act on it. Refusing the build instead would take away the
- * only place that explains itself.
+ * A build with no credential can still clone a public GitHub source.
  */
 export const resolveScmCloneCredential = async (params: {
   configuration: SourcedConfiguration | undefined;
@@ -129,4 +130,21 @@ export const resolveScmCloneCredential = async (params: {
     log('could not resolve a clone credential for %s: %s', repository, (error as Error)?.message);
     return null;
   }
+};
+
+export const resolveTfsCloneCredential = async (params: {
+  configuration: SourcedConfiguration | undefined;
+  db: LobeChatDatabase;
+  userId: string;
+}): Promise<{ tfs: TfsCredentials; urlPrefix: string } | null> => {
+  const tfsSource = params.configuration?.sources?.find(
+    (source) => source.kind === 'git' && source.url && parseTfsRepository(source.url),
+  );
+  if (tfsSource?.url) {
+    await validateTfsSources(params.db, params.userId, params.configuration?.sources);
+    const tfs = await new TfsConnectionService(params.db, params.userId).credentials();
+    // One deployment collection; credentials apply only to its canonical URL prefix.
+    return { tfs, urlPrefix: parseTfsRepository(tfsSource.url)!.collectionUrl + '/' };
+  }
+  return null;
 };

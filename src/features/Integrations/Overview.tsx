@@ -4,6 +4,8 @@ import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useTfsConnection } from '@/features/Tfs/useTfsConnection';
+
 import IntegrationCard from './IntegrationCard';
 import { isDirectorySettling } from './loading';
 import { type IntegrationId, INTEGRATIONS, UPCOMING_INTEGRATIONS } from './registry';
@@ -56,16 +58,20 @@ const Overview = memo<OverviewProps>(({ onOpen }) => {
   const { t } = useTranslation('integration');
   const github = useGithubIntegration();
   const linear = useLinearIntegration();
+  const tfs = useTfsConnection();
 
   const enabledById: Record<IntegrationId, boolean> = {
     github: github.enabled,
     linear: linear.enabled,
+    tfs: Boolean(tfs.connection?.identity),
   };
   const enabled = INTEGRATIONS.filter((item) => enabledById[item.id]);
 
   // Statuses and the Enabled strip depend on both connection lookups; swap the
   // directory in once they settle instead of letting the strip pop in later.
-  if (isDirectorySettling([github, linear]))
+  if (
+    isDirectorySettling([github, linear, { error: tfs.error, isInitialLoading: !tfs.connection }])
+  )
     return (
       <IntegrationsOverviewSkeleton
         available={INTEGRATIONS.length}

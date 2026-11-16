@@ -1,5 +1,6 @@
 'use client';
 
+import { parseTfsRepository } from '@lobechat/utils/tfs';
 import { Github } from '@lobehub/icons';
 import { ActionIcon, Button, createStaticStyles, cssVar, Flexbox, Text, toast } from '@lobehub/ui';
 import { FolderGit2Icon, InfoIcon, PencilIcon, TerminalIcon } from 'lucide-react';
@@ -8,11 +9,12 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import type { RepositorySourceSelection } from '@/features/Tfs/RepositorySourcePicker';
+import { RepositorySourcePicker } from '@/features/Tfs/RepositorySourcePicker';
 import { environmentService, type SandboxEnvironmentSpecification } from '@/services/environment';
 
 import EnvironmentVariables from './EnvironmentVariables';
 import { describeError } from './errorMessage';
-import GithubRepositoryPicker, { type GithubRepositorySelection } from './GithubRepositoryPicker';
 import InlineField from './InlineField';
 import PanelSection from './PanelSection';
 import TabPane from './TabPane';
@@ -163,13 +165,16 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
     });
 
   // The picker speaks in owner/name; the specification stores a checkout URL.
-  const repositoryPath = source?.url.replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, '');
+  const tfsRepository = parseTfsRepository(source?.url ?? '');
+  const repositoryPath =
+    tfsRepository?.fullName ??
+    source?.url.replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, '');
   const selection = (() => {
     const [owner, repository] = repositoryPath?.split('/') ?? [];
     return owner && repository ? { defaultBranch: source?.ref, owner, repository } : undefined;
   })();
 
-  const pickRepository = (picked: GithubRepositorySelection | undefined) => {
+  const pickRepository = (picked: RepositorySourceSelection | undefined) => {
     if (!picked) return;
     setPickingRepository(false);
     // A repository just chosen keeps whatever folder was set, but takes the
@@ -181,7 +186,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
             kind: 'git' as const,
             ...(source?.path && { path: source.path }),
             ...(picked.defaultBranch && { ref: picked.defaultBranch }),
-            url: `https://github.com/${picked.owner}/${picked.repository}`,
+            url: picked.url,
           },
         ],
       }),
@@ -257,7 +262,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
             create dialog uses takes over while a different one is chosen. */}
         {selection && !pickingRepository ? (
           <div className={styles.box}>
-            <Github size={16} />
+            {tfsRepository ? <Text fontSize={12}>TFS</Text> : <Github size={16} />}
             <Text ellipsis style={{ flex: 1 }} weight={500}>
               {repositoryPath}
             </Text>
@@ -273,7 +278,14 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
           </div>
         ) : (
           <Flexbox gap={8}>
-            <GithubRepositoryPicker value={selection} onChange={pickRepository} />
+            <RepositorySourcePicker
+              value={
+                source
+                  ? { url: source.url, name: repositoryPath ?? '', defaultBranch: source.ref }
+                  : undefined
+              }
+              onChange={pickRepository}
+            />
             {selection && (
               <Flexbox horizontal>
                 <Button size={'small'} onClick={() => setPickingRepository(false)}>
@@ -287,7 +299,7 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
         {source && (
           <Flexbox horizontal align={'flex-start'} gap={12}>
             <div style={{ flex: 1 }}>
-              {selection ? (
+              {selection && !tfsRepository ? (
                 <BranchField
                   owner={selection.owner}
                   repository={selection.repository}

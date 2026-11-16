@@ -11,6 +11,7 @@ import {
   listScopeGitHubRepositoryBranches,
   ScmRepositoriesUnavailableError,
 } from '@/server/services/scm/repositories';
+import { validateTfsSources } from '@/server/services/tfs/source';
 
 import { configurationSchema, newConfigurationSchema } from './_schema/environment';
 import {
@@ -71,9 +72,10 @@ export const environmentProcedures = {
         visibility: visibilitySchema.optional(),
       }),
     )
-    .mutation(async ({ ctx, input }) =>
-      ctx.environmentModel.create(input).catch(rethrowDuplicateEnvironmentName),
-    ),
+    .mutation(async ({ ctx, input }) => {
+      await validateTfsSources(ctx.serverDB, ctx.userId, input.configuration?.sources);
+      return ctx.environmentModel.create(input).catch(rethrowDuplicateEnvironmentName);
+    }),
 
   /** Specifications only. Nothing here needs a sandbox session to answer. */
   listEnvironments: environmentProcedure
@@ -203,6 +205,7 @@ export const environmentProcedures = {
     )
     .mutation(async ({ ctx, input }) => {
       const { id, ...changes } = input;
+      await validateTfsSources(ctx.serverDB, ctx.userId, changes.configuration?.sources);
       const updated = await ctx.environmentModel
         .update(id, changes)
         .catch(rethrowDuplicateEnvironmentName);

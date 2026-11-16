@@ -63,7 +63,10 @@ class DeploymentTests(unittest.TestCase):
                     text = text.split('\n', 1)[1]
                 managed = json.loads(text.replace('$$', '$'))
                 for service, values in managed['services'].items():
-                    effective['services'].setdefault(service, {}).update(values)
+                    target = effective['services'].setdefault(service, {})
+                    environment = {**target.get('environment', {}), **values.get('environment', {})}
+                    target.update(values)
+                    target['environment'] = environment
             stdout = json.dumps(effective).replace('$', '$$')
         elif 'pull' in args:
             status = self.pull_status
@@ -108,6 +111,43 @@ class DeploymentTests(unittest.TestCase):
             manager.deploy(self.desired())
         self.assertFalse(manager.override.exists())
         self.assertFalse(any('up' in args for args, _ in self.calls))
+
+    def test_update_presets_tfs_without_replacing_existing_secrets(self):
+        self.base['services']['lobe']['environment']['KEY_VAULTS_SECRET'] = 'existing-key'
+        env_file = self.directory / '.env'
+        env_file.write_text('KEY_VAULTS_SECRET=existing-key\n')
+        manager = self.manager()
+        manager.menu()
+        environment = self.manager().current['services']['lobe']['environment']
+        self.assertEqual(environment['TFS_COLLECTION_URL'], 'http://dev.tellhowsoft.com/DefaultCollection')
+        self.assertEqual(environment['TFS_API_VERSION'], '6.0')
+        self.assertEqual(environment['KEY_VAULTS_SECRET'], 'existing-key')
+        self.assertEqual(env_file.read_text(), 'KEY_VAULTS_SECRET=existing-key\n')
+        self.assertNotIn('KEY_VAULTS_SECRET', manager.override.read_text())
+
+    def test_update_preserves_explicit_tfs_settings_including_disabled(self):
+        for collection in ['https://other.example/Collection', '']:
+            with self.subTest(collection=collection):
+                self.base['services']['lobe']['environment'].update({
+                    'TFS_COLLECTION_URL': collection, 'TFS_API_VERSION': '5.0',
+                })
+                manager = self.manager()
+                manager.deploy(self.desired())
+                environment = self.manager().current['services']['lobe']['environment']
+                self.assertEqual(environment['TFS_COLLECTION_URL'], collection)
+                self.assertEqual(environment['TFS_API_VERSION'], '5.0')
+                self.assertNotIn('TFS_COLLECTION_URL', manager.override.read_text())
+
+    def test_update_preserves_managed_tfs_settings(self):
+        desired = self.desired()
+        desired['services']['lobe']['environment'] = {
+            'TFS_COLLECTION_URL': 'https://managed.example/Collection', 'TFS_API_VERSION': '5.1',
+        }
+        self.manager().deploy(desired)
+        self.manager().menu()
+        environment = self.manager().current['services']['lobe']['environment']
+        self.assertEqual(environment['TFS_COLLECTION_URL'], 'https://managed.example/Collection')
+        self.assertEqual(environment['TFS_API_VERSION'], '5.1')
 
     def test_probe_failure_blocks_switch_before_restart(self):
         manager = self.manager()
@@ -178,6 +218,11 @@ class DeploymentTests(unittest.TestCase):
         env = (self.directory / '.env').read_text()
         self.assertNotIn('YOUR_', env)
         self.assertIn("APP_URL='http://10.10.10.118:3210'", env)
+        self.assertIn("TFS_COLLECTION_URL='http://dev.tellhowsoft.com/DefaultCollection'", env)
+        self.assertIn("TFS_API_VERSION='6.0'", env)
+        vault_key = next(line.split('=', 1)[1].strip("'") for line in env.splitlines()
+                         if line.startswith('KEY_VAULTS_SECRET='))
+        self.assertEqual(len(base64.b64decode(vault_key)), 32)
         self.assertEqual((self.directory / '.env').stat().st_mode & 0o777, 0o600)
         up = next(args for args, _ in self.calls if 'up' in args)
         self.assertNotIn('--no-deps', up)
@@ -260,6 +305,8 @@ def compose_check():
         service = config['services']['lobe']
         assert service['image'] == MODULE.DEFAULT_IMAGE + ':main'
         assert service['environment']['APP_URL'] == 'http://10.10.10.118:3210'
+        assert service['environment']['TFS_COLLECTION_URL'] == 'http://dev.tellhowsoft.com/DefaultCollection'
+        assert service['environment']['TFS_API_VERSION'] == '6.0'
         assert len(base64.b64decode(service['environment']['KEY_VAULTS_SECRET'])) == 32
         json.loads(service['environment']['JWKS_KEY'])
         assert all('YOUR_' not in str(value) for value in service['environment'].values())

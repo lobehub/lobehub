@@ -22,6 +22,7 @@ import { createDefaultChannel } from '@/server/services/channel/defaultChannel';
 import { leaveProjectChannels } from '@/server/services/channel/projectMembership';
 import { GoalService } from '@/server/services/goal';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
+import { validateTfsSources } from '@/server/services/tfs/source';
 
 import { rethrowDuplicateProjectField } from './_helpers/projectConstraintErrors';
 import { projectModelOptions } from './_helpers/projectRights';
@@ -205,6 +206,11 @@ export const projectRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
+        await validateTfsSources(
+          ctx.serverDB,
+          ctx.userId,
+          input.repository ? [{ kind: 'git', url: input.repository.url }] : undefined,
+        );
         if (input.coordinatorAgentId) {
           await assertResourceUsable(ctx, 'agent', input.coordinatorAgentId);
         }

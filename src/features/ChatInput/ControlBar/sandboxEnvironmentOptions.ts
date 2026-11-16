@@ -1,4 +1,5 @@
 import type { EnvironmentConfiguration } from '@lobechat/types';
+import { parseTfsRepository } from '@lobechat/utils/tfs';
 
 import type { SandboxSelection } from './useSandboxPlacement';
 
@@ -23,6 +24,8 @@ export const repositorySlug = (environment: {
   const source = environment.configuration?.sources?.[0];
   if (source?.kind !== 'git') return undefined;
   const { url } = source;
+  const tfs = parseTfsRepository(url);
+  if (tfs) return tfs.fullName;
   try {
     return new URL(url).pathname.replaceAll(/^\/+|\/+$/g, '').replace(/\.git$/, '') || undefined;
   } catch {

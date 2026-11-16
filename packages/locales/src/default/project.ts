@@ -1,4 +1,6 @@
 export default {
+  'create.fromTfs': 'Create from TFS',
+  'createFromTfs.title': 'Create project from TFS',
   'directories.currentFolder': 'Current folder',
   'settings.startDirectoryConversation': 'New topic here',
   'settings.editDirectory': 'Edit folder',

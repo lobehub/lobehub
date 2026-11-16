@@ -8,6 +8,7 @@ const pageReset = vi.hoisted(() => vi.fn());
 const resourcePermissionReset = vi.hoisted(() => vi.fn());
 const sandboxReset = vi.hoisted(() => vi.fn());
 const statsReset = vi.hoisted(() => vi.fn());
+const tfsReset = vi.hoisted(() => vi.fn());
 const workReset = vi.hoisted(() => vi.fn());
 const fakeStore = vi.hoisted(() => () => ({
   getState: () => {
@@ -22,26 +23,33 @@ vi.mock('@/store/chat/slices/agentRun/actions/transports/gateway/muxRegistry', (
   resetGatewayMuxRegistry,
 }));
 vi.mock('@/store/agent', () => ({ useAgentStore: fakeStore() }));
+vi.mock('@/store/agentDocument', () => ({ agentDocumentActions: { reset: vi.fn() } }));
 vi.mock('@/store/agentGroup', () => ({ useAgentGroupStore: fakeStore() }));
 vi.mock('@/store/agentQuota', () => ({ useAgentQuotaStore: fakeStore() }));
 vi.mock('@/store/chat', () => ({ useChatStore: fakeStore() }));
+vi.mock('@/store/channel', () => ({ channelActions: { reset: vi.fn() } }));
 vi.mock('@/store/discover', () => ({ useDiscoverStore: fakeStore() }));
 vi.mock('@/store/document', () => ({ useDocumentStore: fakeStore() }));
+vi.mock('@/store/documentComment', () => ({ documentCommentActions: { reset: vi.fn() } }));
 vi.mock('@/store/eval', () => ({ useEvalStore: fakeStore() }));
 vi.mock('@/store/expertise', () => ({ expertiseActions: { reset: expertiseReset } }));
 vi.mock('@/store/file', () => ({ useFileStore: fakeStore() }));
 vi.mock('@/store/home', () => ({ useHomeStore: fakeStore() }));
 vi.mock('@/store/image', () => ({ useImageStore: fakeStore() }));
+vi.mock('@/store/integration', () => ({ integrationActions: { reset: vi.fn() } }));
 vi.mock('@/store/library', () => ({ useKnowledgeBaseStore: fakeStore() }));
 vi.mock('@/store/mcpApp/action', () => ({ mcpAppActions: { reset: mcpAppReset } }));
 vi.mock('@/store/mention', () => ({ useMentionStore: fakeStore() }));
+vi.mock('@/store/messenger', () => ({ messengerActions: { reset: vi.fn() } }));
 vi.mock('@/store/notebook', () => ({ useNotebookStore: fakeStore() }));
 vi.mock('@/store/page', () => ({ pageActions: { reset: pageReset } }));
+vi.mock('@/store/projectFile', () => ({ projectFileActions: { reset: vi.fn() } }));
 vi.mock('@/store/resourcePermission', () => ({
   resourcePermissionActions: { reset: resourcePermissionReset },
 }));
 vi.mock('@/store/sandbox', () => ({ sandboxActions: { reset: sandboxReset } }));
 vi.mock('@/store/stats', () => ({ statsActions: { reset: statsReset } }));
+vi.mock('@/store/tfs/action', () => ({ tfsActions: { reset: tfsReset } }));
 vi.mock('@/store/session', () => ({ useSessionStore: fakeStore() }));
 vi.mock('@/store/task', () => ({ useTaskStore: fakeStore() }));
 vi.mock('@/store/tool', () => ({ useToolStore: fakeStore() }));
@@ -60,6 +68,7 @@ describe('stores.reset', () => {
     resourcePermissionReset.mockClear();
     sandboxReset.mockClear();
     statsReset.mockClear();
+    tfsReset.mockClear();
     workReset.mockClear();
   });
 
@@ -83,6 +92,7 @@ describe('stores.reset', () => {
     expect(sandboxReset).toHaveBeenCalledTimes(1);
     // Another identity must not paint the previous one's usage numbers.
     expect(statsReset).toHaveBeenCalledTimes(1);
+    expect(tfsReset).toHaveBeenCalledTimes(1);
     expect(workReset).toHaveBeenCalledTimes(1);
     for (const reset of storeResets) expect(reset).toHaveBeenCalledTimes(1);
     expect(order[0]).toBe('mux');
