@@ -248,6 +248,36 @@ describe('resolveConnectorClient', () => {
       'Dynamic client registration failed: Use a public client',
     );
   });
+
+  it('names the rejected redirect URI and the next step when the server does not allow it', async () => {
+    // Regression (T-14184): a server that allowlists redirect hosts answered
+    // `400 invalid_redirect_uri` and the user only saw the raw SDK message,
+    // with neither the URI it judged nor what to do about it.
+    vi.mocked(registerClient).mockRejectedValueOnce(
+      new RegistrationRejectedError({
+        body: '{"error":"invalid_redirect_uri","error_description":"redirect URI is not allowed"}',
+        status: 400,
+        submittedMetadata: { redirect_uris: ['https://app.example.com/oauth/connector/callback'] },
+      }),
+    );
+    await expect(resolve({ scheme: 'dcr' }, metadataWith(['none']))).rejects.toThrow(
+      "Dynamic client registration failed: auth.example.com rejected the redirect URI https://app.example.com/oauth/connector/callback (HTTP 400 invalid_redirect_uri: redirect URI is not allowed). This server only registers redirect URIs it allows. Ask its provider to allow this redirect URI, or register an OAuth app with them using it and enter that app's Client ID.",
+    );
+  });
+
+  it('quotes a bounded excerpt of a non-JSON rejection body', async () => {
+    vi.mocked(registerClient).mockRejectedValueOnce(
+      new RegistrationRejectedError({
+        body: `<html>\n  <body>${'x'.repeat(400)}</body></html>`,
+        status: 403,
+        submittedMetadata: { redirect_uris: [] },
+      }),
+    );
+    const error = await resolve({ scheme: 'dcr' }, metadataWith()).catch((e: Error) => e);
+    expect((error as Error).message).toBe(
+      `Dynamic client registration failed: auth.example.com rejected the registration (HTTP 403 <html> <body>${'x'.repeat(287)}…). Check this server's OAuth client requirements, or enter the OAuth Client ID you registered with it.`,
+    );
+  });
 });
 
 describe('token endpoint client authentication', () => {
