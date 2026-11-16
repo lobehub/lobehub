@@ -9,6 +9,10 @@ import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { resolveForegroundInterventionConfig } from '@/server/services/aiAgent/foregroundIntervention';
+import {
+  canPerformResourceAction,
+  getResourceMeta,
+} from '@/server/services/resourcePermission';
 
 import { getInboundWebhookKind } from './kinds';
 import type { InboundWebhookKindHandler } from './kinds/types';
@@ -76,6 +80,27 @@ const ignoreWaiting = (db: LobeChatDatabase, id: string, reason: string) =>
       ),
     );
 
+/**
+ * Whether the webhook's owner may still run its agent, checked at every wake rather than once at
+ * creation: a member removed from the workspace, or one whose access to the agent was taken away,
+ * keeps the rows they created, and a call must not run the agent as them. Personal agents have no
+ * one else to answer to.
+ */
+const ownerMayRun = async (db: LobeChatDatabase, row: InboundWebhookView) => {
+  if (!row.workspaceId) return true;
+  const meta = await getResourceMeta(db, 'agent', row.agentId);
+  if (!meta) return false;
+  return canPerformResourceAction({
+    action: 'use',
+    db,
+    meta,
+    resourceId: row.agentId,
+    resourceType: 'agent',
+    userId: row.userId,
+    workspaceId: row.workspaceId,
+  });
+};
+
 /** Durable, renewable claims serialize a batch without holding a database lock during network I/O. */
 export async function wakeInboundWebhook(
   db: LobeChatDatabase,
@@ -102,6 +127,11 @@ export async function wakeInboundWebhook(
     await removeInboundWebhook(db, row);
     await ignoreWaiting(db, id, 'target_removed');
     return { outcome: 'gone' };
+  }
+  // Kept, not deleted: access can come back, and the owner or an admin decides about the row.
+  if (!(await ownerMayRun(db, row))) {
+    await ignoreWaiting(db, id, 'owner_access_revoked');
+    return { outcome: 'ignored' };
   }
   const runs = kind.groupSignals ? MAX_RUNS_PER_WAKE : 1;
   let outcome = 'empty';
