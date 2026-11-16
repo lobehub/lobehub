@@ -1,12 +1,13 @@
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import { getErrorCodeSpec } from '@lobechat/model-runtime';
 import {
   chainTopicAutoSummary,
   TOPIC_AUTO_SUMMARY_JSON_SCHEMA,
   TOPIC_AUTO_SUMMARY_PROMPT_VERSION,
 } from '@lobechat/prompts';
 import type { SystemAgentItem, UserSystemAgentConfig } from '@lobechat/types';
-import { AgentRuntimeErrorType, RequestTrigger } from '@lobechat/types';
+import { AgentRuntimeErrorType, ChatErrorType, RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { and, desc, eq } from 'drizzle-orm';
 
@@ -30,13 +31,13 @@ const MAX_TRANSCRIPT_CHARS = 60_000;
 type SkipReason = 'disabled' | 'empty' | 'stale';
 
 export interface TopicAutoSummaryResult {
-  reason?: SkipReason | 'invalid-output' | 'no-executor';
+  reason?: SkipReason | 'invalid-output' | 'no-executor' | 'provider-rejected';
   summarized: boolean;
 }
 
 export interface TopicAnalysisOutcome {
   analyzed: boolean;
-  reason?: SkipReason | 'invalid-output' | 'no-executor';
+  reason?: SkipReason | 'invalid-output' | 'no-executor' | 'provider-rejected';
 }
 
 interface TopicContext {
@@ -46,9 +47,39 @@ interface TopicContext {
   transcript: string;
 }
 
+const errorTypeOf = (error: unknown) => (error as { errorType?: unknown })?.errorType;
+
 const isClientOnlyModelError = (error: unknown) =>
-  (error as { errorType?: unknown })?.errorType ===
-  AgentRuntimeErrorType.ClientLlmExecutorUnavailable;
+  errorTypeOf(error) === AgentRuntimeErrorType.ClientLlmExecutorUnavailable;
+
+/**
+ * Codes outside the auth / quota / config categories that a retry cannot fix
+ * either: the chosen model is gone, the local runtime is down, or the topic no
+ * longer fits the model's context.
+ */
+const SETTLED_REQUEST_ERRORS = new Set<string>([
+  AgentRuntimeErrorType.ExceededContextWindow,
+  AgentRuntimeErrorType.ModelNotFound,
+  AgentRuntimeErrorType.OllamaServiceUnavailable,
+  ChatErrorType.LobeHubModelDeprecated,
+]);
+const SETTLED_CATEGORIES = new Set(['auth', 'config', 'quota']);
+
+/**
+ * The user's own model setup rejected the call (invalid key, no balance or
+ * budget, unknown or retired model). Retrying cannot succeed until the user
+ * changes their settings. Request-shape errors stay out on purpose: they may
+ * come from our own prompt or schema and must keep failing visibly.
+ */
+const userSettingsRejected = (error: unknown): string | undefined => {
+  const errorType = errorTypeOf(error);
+  if (typeof errorType !== 'string') return;
+  const spec = getErrorCodeSpec(errorType);
+  if (!spec || spec.attribution !== 'user' || spec.retryable) return;
+  return SETTLED_CATEGORIES.has(spec.category) || SETTLED_REQUEST_ERRORS.has(errorType)
+    ? errorType
+    : undefined;
+};
 
 export class TopicAutoSummaryService {
   constructor(
@@ -102,6 +133,22 @@ export class TopicAutoSummaryService {
         log('skip topic %s: %s has no executor outside a browser tab', topicId, provider);
         return { reason: 'no-executor', summarized: false };
       }
+      // Without a summary the watermark never moves, so every dispatch run would
+      // call the user's misconfigured model again for the same topic. Record the
+      // failure instead; a new message makes the topic a candidate again.
+      const rejected = userSettingsRejected(error);
+      if (rejected) {
+        console.warn(
+          `[topic-auto-summary] summary rejected by user settings: topicId=${topicId} provider=${provider} model=${model} errorType=${rejected}`,
+        );
+        await new TopicSummaryModel(this.db).markSummaryFailed({
+          lastMessageId: latest.id,
+          lastMessageUpdatedAt: latest.updatedAt,
+          reason: rejected,
+          topicId,
+        });
+        return { reason: 'provider-rejected', summarized: false };
+      }
       throw error;
     }
 
@@ -153,6 +200,13 @@ export class TopicAutoSummaryService {
       });
     } catch (error) {
       if (isClientOnlyModelError(error)) return { analyzed: false, reason: 'no-executor' };
+      const rejected = userSettingsRejected(error);
+      if (rejected) {
+        console.warn(
+          `[topic-auto-summary] analysis rejected by user settings: topicId=${topicId} provider=${provider} model=${model} errorType=${rejected}`,
+        );
+        return { analyzed: false, reason: 'provider-rejected' };
+      }
       throw error;
     }
     if (!result) {
