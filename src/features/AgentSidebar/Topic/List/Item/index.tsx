@@ -443,7 +443,11 @@ const TopicItemRow = memo<TopicItemRowProps>(
     // Codex-style hover detail card: when the topic carries git context, hovering
     // the row reveals a card on the right with repo / branch / worktree / PR / CI —
     // keeping the row itself clean.
-    const metaCard = useMemo(() => getTopicMetaCard(metadata), [metadata]);
+    const betterCoding = useUserStore(labPreferSelectors.enableBetterCodingExperience);
+    const metaCard = useMemo(
+      () => getTopicMetaCard(metadata, { hideRecordedPullRequest: betterCoding }),
+      [betterCoding, metadata],
+    );
 
     // For default topic (no id)
     if (!id) {

@@ -68,20 +68,22 @@ export const resolvePullRequestView = (
     url: fallbackUrl(item),
   };
 
+  const sameRepo = !!device && isSameRepository(device.detail, item.repoFullName);
+
   if (item.scm) {
     return {
       ...base,
       ciStatus: item.scm.ciStatus ?? undefined,
       confirmed: true,
       isDraft: item.scm.isDraft,
-      localDetail: !!device,
+      localDetail: sameRepo,
       mergedAt: item.scm.mergedAt ? new Date(item.scm.mergedAt).toISOString() : null,
       state: item.scm.state,
       title: item.scm.title ?? item.title ?? `#${item.number}`,
     };
   }
 
-  if (device && isSameRepository(device.detail, item.repoFullName)) {
+  if (device && sameRepo) {
     const { detail } = device;
     return {
       ...base,

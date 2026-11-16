@@ -30,6 +30,7 @@ import { useDraftBranch } from './DraftGit/useDraftBranch';
 import { WorktreeToggle } from './DraftGit/WorktreeToggle';
 import { gitChipStyles } from './gitChipStyles';
 import StaleGitSnapshot from './StaleGitSnapshot';
+import TopicPullRequestChip from './TopicPullRequestChip';
 import WorktreeSwitcher from './WorktreeSwitcher';
 
 const styles = stylex.create({
@@ -193,11 +194,13 @@ const GitStatus = memo<GitStatusProps>(
       isDraft && draft.selectedBranch && draft.selectedBranch !== branch
         ? draft.selectedBranch
         : undefined;
+    // Under the lab a topic's PRs come from its Work rows (TopicPullRequestChip):
+    // the branch → PR guess is not asked at all.
     const { data: prData, mutate: mutatePR } = useFetchGitLinkedPR(
       deviceId,
       path,
       syncBranch ?? branch,
-      isGithub,
+      isGithub && !betterCoding,
     );
     // The remaining reads are all disabled once the directory is gone: nothing
     // below renders from them in that state, and the diff poll alone would keep
@@ -237,8 +240,9 @@ const GitStatus = memo<GitStatusProps>(
 
     // Until the linked-PR lookup answers for this branch, reuse the PR the topic
     // recorded for the same branch so the PR chip doesn't pop in late.
-    const pullRequest =
-      prData !== undefined
+    const pullRequest = betterCoding
+      ? undefined
+      : prData !== undefined
         ? prData.pullRequest
         : isGithub &&
             !syncBranch &&
@@ -375,7 +379,7 @@ const GitStatus = memo<GitStatusProps>(
       return (
         <StaleGitSnapshot
           agentId={agentId}
-          git={fallbackGit!}
+          git={betterCoding ? { ...fallbackGit!, github: undefined } : fallbackGit!}
           isGithub={isGithub}
           path={path}
           sourcePath={sourcePath}
@@ -622,6 +626,9 @@ const GitStatus = memo<GitStatusProps>(
         {outdatedNode}
         {worktreeToggleNode}
         {diffNode}
+        {betterCoding && topicId && (
+          <TopicPullRequestChip deviceId={deviceId} path={path} topicId={topicId} />
+        )}
         {pullRequest && (
           <>
             <div {...stylex.props(gitChipStyles.separator)} />

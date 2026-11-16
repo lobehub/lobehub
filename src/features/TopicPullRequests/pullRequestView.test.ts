@@ -85,3 +85,19 @@ describe('rollupChecks', () => {
     expect(rollupChecks([{ status: 'success' }, { status: 'skipped' }] as any)).toBe('success');
   });
 });
+
+describe('resolvePullRequestView · localDetail', () => {
+  it('marks a PR openable in the sidebar only when the device read its repository', () => {
+    const scm = { ciStatus: null, isDraft: false, mergedAt: null, state: 'open', title: 'App' };
+    expect(
+      resolvePullRequestView(item(1, { scm }), { confirmed: true, detail: detail() }).localDetail,
+    ).toBe(true);
+    expect(
+      resolvePullRequestView(item(1, { scm }), {
+        confirmed: true,
+        detail: detail({ repo: { name: 'other', owner: 'x' } }),
+      }).localDetail,
+    ).toBe(false);
+    expect(resolvePullRequestView(item(1, { scm })).localDetail).toBe(false);
+  });
+});

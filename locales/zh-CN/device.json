@@ -170,6 +170,7 @@
   "workingDirectory.topicDescription": "仅覆盖当前对话的工作目录",
   "workingDirectory.topicLevel": "对话覆盖",
   "workingDirectory.topicOverride": "为当前对话覆盖设置",
+  "workingDirectory.topicPullRequestsTooltip": "{{title}}（此话题还关联了 {{count}} 个 PR，点击查看全部）",
   "workingDirectory.uncommittedChanges_one": "未提交的更改：{{count}} 个文件",
   "workingDirectory.uncommittedChanges_other": "未提交的更改：{{count}} 个文件",
   "workingDirectory.undo": "撤销",
