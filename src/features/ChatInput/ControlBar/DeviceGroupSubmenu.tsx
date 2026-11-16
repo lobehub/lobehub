@@ -56,7 +56,10 @@ interface DeviceGroupSubmenuProps {
 const DeviceGroupSubmenu = memo<DeviceGroupSubmenuProps>(
   ({ activeDeviceId, devices, kind, label, renderDevice }) => {
     const { t } = useTranslation('chat');
-    const { activeDevice, online, total } = summarizeDeviceGroup(devices, activeDeviceId);
+    const { activeDevice, online, presenceUnknown, total } = summarizeDeviceGroup(
+      devices,
+      activeDeviceId,
+    );
 
     return (
       <Popover
@@ -76,10 +79,16 @@ const DeviceGroupSubmenu = memo<DeviceGroupSubmenuProps>(
           <OptionRow
             arrow
             active={!!activeDevice}
-            desc={t('heteroAgent.executionTarget.deviceGroupSummary', { online, total })}
             hint={activeDevice ? activeDevice.friendlyName || activeDevice.hostname : undefined}
             icon={<Icon icon={GROUP_ICONS[kind]} size={14} />}
             label={label}
+            desc={
+              // Until presence is confirmed the count would read "0 online";
+              // say it is still checking, as the device rows themselves do.
+              presenceUnknown
+                ? t('heteroAgent.executionTarget.presenceChecking')
+                : t('heteroAgent.executionTarget.deviceGroupSummary', { online, total })
+            }
             onClick={() => {}}
           />
         </div>

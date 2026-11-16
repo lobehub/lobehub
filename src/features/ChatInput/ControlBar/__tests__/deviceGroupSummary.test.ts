@@ -27,6 +27,18 @@ describe('summarizeDeviceGroup', () => {
   });
 
   it('handles an empty group', () => {
-    expect(summarizeDeviceGroup([])).toEqual({ activeDevice: undefined, online: 0, total: 0 });
+    expect(summarizeDeviceGroup([])).toEqual({
+      activeDevice: undefined,
+      online: 0,
+      presenceUnknown: false,
+      total: 0,
+    });
+  });
+
+  it('flags a group whose presence is not confirmed yet', () => {
+    const cached = { ...device('a', false), onlineUnknown: true } as DeviceListItem;
+
+    expect(summarizeDeviceGroup([cached, device('b', true)]).presenceUnknown).toBe(true);
+    expect(summarizeDeviceGroup([device('b', true)]).presenceUnknown).toBe(false);
   });
 });
