@@ -245,6 +245,21 @@ describe('durable inbound webhook wakes', () => {
     expect((await model.findById(id))?.lastError).toBe('wake_cap');
   });
 
+  it.each(['wake_cap', 'insufficient_budget'] as const)(
+    'clears %s once a later wake starts a run, keeping other errors',
+    async (error) => {
+      await model.update(id, { lastError: error });
+      await seedSignal();
+      expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'processed' });
+      expect((await model.findById(id))?.lastError).toBeNull();
+
+      await model.update(id, { lastError: 'http_5xx' });
+      await seedSignal();
+      expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'processed' });
+      expect((await model.findById(id))?.lastError).toBe('http_5xx');
+    },
+  );
+
   it('ignores events while a connector is disabled', async () => {
     await seedSignal();
     await db

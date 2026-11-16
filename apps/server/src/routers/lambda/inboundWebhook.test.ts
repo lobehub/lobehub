@@ -311,6 +311,22 @@ describe('inboundWebhook tRPC resource contract', () => {
     expect(item.canManage).toBe(canManage);
   });
 
+  it("hides a private agent's details from the other workspace members", async () => {
+    const row = await seed({ workspaceId });
+    await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, row.agentId));
+    await db.update(userConnectors).set({ agentId: row.agentId });
+
+    const [seen] = await scoped('admin', colleague).list();
+    expect(seen).toMatchObject({ id: row.id, agent: null, connector: null, topic: null });
+
+    const [own] = await scoped('member', creator).list();
+    expect(own).toMatchObject({
+      agent: { id: row.agentId, title: 'Test Agent' },
+      connector: { agentId: row.agentId, name: 'Linear' },
+      topic: { title: 'Event topic' },
+    });
+  });
+
   it('checks through kind maintenance and returns the fresh public row', async () => {
     const row = await seed({ status: 'error' });
     const result = await caller().check({ id: row.id });

@@ -234,6 +234,7 @@ async function runClaim(
         topicId: result.topicId ?? run.topicId,
       });
       handled = true;
+      await model.recordRunStarted(id);
       return { outcome: 'processed' };
     } catch (error) {
       const category = classifyWakeError(error);

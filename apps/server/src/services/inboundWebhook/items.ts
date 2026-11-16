@@ -1,10 +1,11 @@
 import type { InboundWebhookItem } from '@lobechat/types';
-import { inArray } from 'drizzle-orm';
+import { and, inArray } from 'drizzle-orm';
 
 import type { InboundWebhookView } from '@/database/models/inboundWebhook';
 import { agents, topics, userConnectors } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { normalizeInboxAgentMeta } from '@/database/utils/inboxAgent';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
 
 import { getInboundWebhookKind } from './kinds';
 
@@ -54,9 +55,22 @@ export async function inboundWebhookItems(
       })
       .from(agents)
       .where(
-        inArray(
-          agents.id,
-          rows.map((r) => r.agentId),
+        and(
+          inArray(
+            agents.id,
+            rows.map((r) => r.agentId),
+          ),
+          // The list is workspace-wide, but an agent is not: a private agent stays hidden from
+          // the other members, as it does on every agent read path.
+          buildWorkspaceWhere(
+            { userId: actor.userId, workspaceId: actor.workspaceId ?? undefined },
+            {
+              isDeleted: agents.isDeleted,
+              userId: agents.userId,
+              visibility: agents.visibility,
+              workspaceId: agents.workspaceId,
+            },
+          ),
         ),
       ),
     db
@@ -80,8 +94,11 @@ export async function inboundWebhookItems(
     .flatMap((row): InboundWebhookItem[] => {
       const kind = getInboundWebhookKind(row.kind);
       if (!kind) return [];
-      const connector = connectorRows.find((c) => c.id === row.connectorId);
       const agentRow = agentRows.find((a) => a.id === row.agentId);
+      // Without the agent, its Topic and the connector it owns are its details too.
+      const connector = connectorRows.find(
+        (c) => c.id === row.connectorId && (agentRow || !c.agentId),
+      );
       const canManage = canManageInboundWebhook(actor, row);
       return [
         {
@@ -109,7 +126,7 @@ export async function inboundWebhookItems(
           name: row.name,
           source: kind.source(row),
           status: row.status as InboundWebhookItem['status'],
-          topic: topicRows.find((t) => t.id === row.topicId) ?? null,
+          topic: (agentRow && topicRows.find((t) => t.id === row.topicId)) || null,
         },
       ];
     });

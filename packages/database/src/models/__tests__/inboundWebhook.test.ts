@@ -458,4 +458,18 @@ describe('InboundWebhookModel delivery recovery', () => {
       lastError: 'http_5xx',
     });
   });
+
+  it('clears only the run errors once a run starts, in scope', async () => {
+    const row = await model.create(input({ lastError: 'wake_cap' }));
+    await otherModel.recordRunStarted(row.id);
+    expect((await model.findById(row.id))?.lastError).toBe('wake_cap');
+    await model.recordRunStarted(row.id);
+    expect((await model.findById(row.id))?.lastError).toBeNull();
+    await model.update(row.id, { lastError: 'insufficient_budget' });
+    await model.recordRunStarted(row.id);
+    expect((await model.findById(row.id))?.lastError).toBeNull();
+    await model.update(row.id, { status: 'error', lastError: 'auth' });
+    await model.recordRunStarted(row.id);
+    expect(await model.findById(row.id)).toMatchObject({ status: 'error', lastError: 'auth' });
+  });
 });
