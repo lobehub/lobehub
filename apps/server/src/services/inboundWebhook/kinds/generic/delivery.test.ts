@@ -41,6 +41,18 @@ describe('parseBody', () => {
   });
 });
 
+describe('parseBody, many repeated form fields', () => {
+  it('keeps every value and stays linear', () => {
+    // About the most fields the 256 KB body limit lets through.
+    const body = 'a=&'.repeat(80_000);
+    const started = performance.now();
+    const parsed = parseBody(body, 'application/x-www-form-urlencoded');
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(parsed).toMatchObject({ ok: true });
+    expect((parsed as { value: { a: string[] } }).value.a).toHaveLength(80_000);
+  });
+});
+
 describe('pickHeaders', () => {
   it('keeps content shape, sender and event headers, never credentials or infrastructure', () => {
     expect(

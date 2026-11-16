@@ -35,12 +35,11 @@ const entriesToRecord = (entries: Iterable<[string, string]>, skip?: Set<string>
   for (const [key, value] of entries) {
     if (skip?.has(key)) continue;
     const previous = record[key];
-    record[key] =
-      previous === undefined
-        ? value
-        : Array.isArray(previous)
-          ? [...previous, value]
-          : [previous, value];
+    // Appended in place: copying the array on every repeat made a form of many repeated fields
+    // quadratic to parse.
+    if (previous === undefined) record[key] = value;
+    else if (Array.isArray(previous)) previous.push(value);
+    else record[key] = [previous, value];
   }
   return record;
 };
