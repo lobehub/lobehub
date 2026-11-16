@@ -7,27 +7,22 @@ import { getUploadChipSize, getUploadChipState } from './utils';
 const uploadState = (progress: number) => ({ progress, restTime: 0, speed: 0 });
 
 describe('getUploadChipState', () => {
-  it.each(['pending', 'processing'] as const)(
-    'shows an indeterminate indicator for %s',
-    (status) => {
-      expect(getUploadChipState({ status, uploadState: uploadState(100) })).toMatchObject({
-        busy: true,
-        canPreview: false,
-        canRetry: false,
-        indicator: 'busy',
-        ringProgress: undefined,
-      });
-    },
-  );
+  it.each(['pending', 'processing'] as const)('shows the busy indicator for %s', (status) => {
+    expect(getUploadChipState({ status, uploadState: uploadState(100) })).toMatchObject({
+      busy: true,
+      canPreview: false,
+      canRetry: false,
+      indicator: 'busy',
+    });
+  });
 
-  it('shows upload progress, then marks the upload complete', () => {
+  it('tracks upload progress, then marks the upload complete', () => {
     expect(getUploadChipState({ status: 'uploading', uploadState: uploadState(42) })).toMatchObject(
       {
         busy: true,
         canPreview: false,
         indicator: 'busy',
         progress: 42,
-        ringProgress: 42,
       },
     );
     expect(getUploadChipState({ status: 'success', uploadState: uploadState(100) })).toMatchObject({
@@ -51,19 +46,19 @@ describe('getUploadChipState', () => {
   );
 
   it.each([undefined, Number.NaN, Number.POSITIVE_INFINITY])(
-    'uses indeterminate feedback when progress is unavailable (%s)',
+    'drops unmeasurable progress (%s)',
     (progress) => {
       expect(
         getUploadChipState({
           status: 'uploading',
           uploadState: progress === undefined ? undefined : uploadState(progress),
         }),
-      ).toMatchObject({ indicator: 'busy', ringProgress: undefined });
+      ).toMatchObject({ indicator: 'busy', progress: undefined });
     },
   );
 
   it('keeps one busy indicator from pending through processing', () => {
-    // A separate spinner for pending/processing made the ring shrink and change shape mid-upload.
+    // A separate spinner for pending/processing made the indicator shrink and change shape mid-upload.
     const steps = [
       getUploadChipState({ status: 'pending', uploadState: uploadState(0) }),
       getUploadChipState({ status: 'uploading', uploadState: uploadState(42) }),
@@ -71,7 +66,6 @@ describe('getUploadChipState', () => {
     ];
 
     expect(steps.map((step) => step.indicator)).toEqual(['busy', 'busy', 'busy']);
-    expect(steps.map((step) => step.ringProgress)).toEqual([undefined, 42, undefined]);
   });
 
   it.each([

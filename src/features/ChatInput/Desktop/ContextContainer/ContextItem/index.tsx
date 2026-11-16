@@ -16,12 +16,7 @@ import { openFilePreviewModal } from './FilePreviewModal.loader';
 import UploadIndicator from './UploadIndicator';
 import UploadTooltipContent from './UploadTooltipContent';
 import { useUploadCompletion } from './useUploadCompletion';
-import {
-  getFileBasename,
-  getUploadBusyLabelKey,
-  getUploadChipSize,
-  getUploadChipState,
-} from './utils';
+import { getFileBasename, getUploadChipSize, getUploadChipState } from './utils';
 
 const styles = stylex.create({
   chip: { maxWidth: '100%', height: '28px' },
@@ -61,7 +56,7 @@ const ContextItem = memo<FileItemProps>((props) => {
   const contextKey = useChatInputUploadKey();
   const removeChatUploadFile = useFileStore((s) => s.removeChatUploadFile);
   const retryChatUploadFile = useFileStore((s) => s.retryChatUploadFile);
-  const { busy, canPreview, canRetry, indicator, ringProgress } = getUploadChipState(props);
+  const { busy, canPreview, canRetry, indicator } = getUploadChipState(props);
   const basename = getFileBasename(file.name);
   const sizeLabel = getUploadChipSize(props);
   const showCompletion = useUploadCompletion(status);
@@ -100,11 +95,7 @@ const ContextItem = memo<FileItemProps>((props) => {
                   style={{ color: cssVar.colorSuccess }}
                 />
               ) : indicator === 'busy' ? (
-                <UploadIndicator
-                  label={t(getUploadBusyLabelKey(status))}
-                  progress={ringProgress}
-                  size={12}
-                />
+                <UploadIndicator label={t('upload.preview.status.uploading')} size={12} />
               ) : (
                 <Icon icon={CircleAlertIcon} size={12} style={{ color: cssVar.colorError }} />
               )}

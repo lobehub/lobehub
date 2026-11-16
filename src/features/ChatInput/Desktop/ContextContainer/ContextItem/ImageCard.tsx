@@ -14,7 +14,7 @@ import { type UploadFileItem } from '@/types/files/upload';
 import { openFilePreviewModal } from './FilePreviewModal.loader';
 import UploadIndicator from './UploadIndicator';
 import UploadTooltipContent from './UploadTooltipContent';
-import { getUploadBusyLabelKey, getUploadChipState } from './utils';
+import { getUploadChipState } from './utils';
 
 const IMAGE_CARD_SIZE = 112;
 
@@ -113,12 +113,12 @@ interface ImageCardProps extends UploadFileItem {
 }
 
 const ImageCard = memo<ImageCardProps>(({ number, ...item }) => {
-  const { errorCode, file, id, previewUrl, status } = item;
+  const { errorCode, file, id, previewUrl } = item;
   const { t } = useTranslation(['chat', 'common']);
   const contextKey = useChatInputUploadKey();
   const removeChatUploadFile = useFileStore((s) => s.removeChatUploadFile);
   const retryChatUploadFile = useFileStore((s) => s.retryChatUploadFile);
-  const { busy, canRetry, indicator, ringProgress } = getUploadChipState(item);
+  const { busy, canRetry, indicator } = getUploadChipState(item);
   const src = previewUrl || item.fileUrl || item.base64Url;
 
   const handlePreview = useEventCallback(() => {
@@ -146,11 +146,7 @@ const ImageCard = memo<ImageCardProps>(({ number, ...item }) => {
       {(busy || canRetry) && (
         <div {...stylex.props(styles.overlay)}>
           {indicator === 'busy' ? (
-            <UploadIndicator
-              label={t(getUploadBusyLabelKey(status))}
-              progress={ringProgress}
-              size={24}
-            />
+            <UploadIndicator label={t('upload.preview.status.uploading')} size={24} />
           ) : (
             <>
               <Icon
