@@ -8,6 +8,7 @@ import type {
   SubscribeEventState,
   UnsubscribeEventState,
 } from '@lobechat/builtin-tool-mcp-events';
+import { isInboundWebhookOfKind } from '@lobechat/types';
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 import { isPlainRecord } from '@lobechat/utils/object';
 import Ajv from 'ajv';
@@ -16,7 +17,7 @@ import pMap from 'p-map';
 import { AgentModel } from '@/database/models/agent';
 import type { DecryptedConnector } from '@/database/models/connector';
 import { ConnectorModel } from '@/database/models/connector';
-import type { InboundWebhookView } from '@/database/models/inboundWebhook';
+import type { InboundWebhookViewOf } from '@/database/models/inboundWebhook';
 import { InboundWebhookLimitError, InboundWebhookModel } from '@/database/models/inboundWebhook';
 import { TopicModel } from '@/database/models/topic';
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
@@ -92,7 +93,7 @@ export class McpEventsService {
   }
 
   private async summary(
-    row: InboundWebhookView,
+    row: InboundWebhookViewOf<'mcp_events'>,
     connectorModel: ConnectorModel,
   ): Promise<McpEventSubscriptionSummary> {
     const connector = row.connectorId ? await connectorModel.findPublicById(row.connectorId) : null;
@@ -104,7 +105,10 @@ export class McpEventsService {
       id: row.id,
       instructions: row.instructions,
       lastError: row.lastError,
-      status: row.status === 'pending' || row.status === 'deleting' ? 'error' : row.status,
+      status:
+        row.status === 'pending' || row.status === 'deleting' || row.status === 'paused'
+          ? 'error'
+          : row.status,
     };
   }
 
@@ -208,9 +212,11 @@ export class McpEventsService {
           : value,
     );
     const dedupeKey = createHash('sha256').update(identity).digest('hex');
-    const existing = (await model.query({ includeHidden: true, topicId: input.topicId })).find(
-      (row) => row.userId === this.userId && row.dedupeKey === dedupeKey,
-    );
+    const existing = (
+      await model.query({ includeHidden: true, kind: 'mcp_events', topicId: input.topicId })
+    )
+      .filter((row) => isInboundWebhookOfKind(row, 'mcp_events'))
+      .find((row) => row.userId === this.userId && row.dedupeKey === dedupeKey);
     if (existing) {
       if (existing.status === 'pending' || existing.status === 'deleting')
         throw new McpEventsServiceError(
@@ -220,9 +226,9 @@ export class McpEventsService {
       return { subscription: await this.summary(existing, connectorModel) };
     }
     const secret = `whsec_${randomBytes(32).toString('base64')}`;
-    let row: InboundWebhookView;
+    let row: InboundWebhookViewOf<'mcp_events'>;
     try {
-      row = await model.createWithLimits({
+      row = (await model.createWithLimits({
         agentId: input.agentId,
         config: { arguments: args, eventName: input.name, ...(linkId && { linkId }) },
         connectorId: connector.id,
@@ -234,7 +240,7 @@ export class McpEventsService {
         status: 'pending',
         topicId: input.topicId,
         verification: { scheme: 'standard_webhooks' },
-      });
+      })) as InboundWebhookViewOf<'mcp_events'>;
     } catch (error) {
       if (error instanceof InboundWebhookLimitError)
         throw new McpEventsServiceError('limit_reached', error.message);
@@ -259,7 +265,7 @@ export class McpEventsService {
           workspaceId: this.workspaceId,
         });
       const updated = await model.findById(row.id);
-      if (!updated)
+      if (!updated || !isInboundWebhookOfKind(updated, 'mcp_events'))
         throw new McpEventsServiceError(
           'not_found',
           'This subscription was removed while it was being created.',
@@ -277,7 +283,9 @@ export class McpEventsService {
     topicId: string;
   }): Promise<ListSubscriptionsState> {
     const { connectorModel, model } = await this.context(input.agentId, input.topicId);
-    const rows = await model.query(input);
+    const rows = (await model.query({ ...input, kind: 'mcp_events' })).filter((row) =>
+      isInboundWebhookOfKind(row, 'mcp_events'),
+    );
     return {
       subscriptions: await pMap(rows, (row) => this.summary(row, connectorModel), {
         concurrency: 5,

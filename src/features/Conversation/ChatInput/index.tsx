@@ -51,11 +51,7 @@ import { sendVoiceMessage } from './sendVoiceMessage';
 import { transcribeVoiceMessage } from './transcribeVoiceMessage';
 import { useConversationChatInputUiState } from './useConversationChatInputUiState';
 import { useRestoreServerQueue } from './useRestoreServerQueue';
-import {
-  getContextWindowMessages,
-  getConversationSendButtonProps,
-  toChatInputMessages,
-} from './utils';
+import { getContextWindow, getConversationSendButtonProps, toChatInputMessages } from './utils';
 import {
   canSendVoiceMessage,
   isVoiceMessageTranscribed,
@@ -234,9 +230,9 @@ const ChatInput = memo<ChatInputProps>(
       chatConfigByIdSelectors.getHistoryCountById(agentId || '')(s),
     ]);
     const chatInputMessages = useMemo(() => toChatInputMessages(dbMessages), [dbMessages]);
-    const contextWindowMessages = useMemo(
+    const contextWindow = useMemo(
       () =>
-        getContextWindowMessages(dbMessages, {
+        getContextWindow(dbMessages, {
           enableHistoryCount,
           historyCount,
         }),
@@ -548,7 +544,7 @@ const ChatInput = memo<ChatInputProps>(
         allowExpand={allowExpand}
         canRecordVoiceMessage={canRecordVoiceMessage}
         contextSelectionKey={contextKey}
-        contextWindowMessages={contextWindowMessages}
+        contextWindow={contextWindow}
         draftKey={contextKey}
         feature={feature}
         getMessages={getMessages}

@@ -6,6 +6,7 @@ import { botReply } from './botReply';
 import { botWake } from './botWake';
 import { connectorOAuth } from './connectorOAuth';
 import { deviceSystemInfo } from './deviceSystemInfo';
+import { heteroControl } from './heteroControl';
 import { inboundWebhook } from './inboundWebhook';
 import { linear } from './linear';
 import { pageCollab } from './pageCollab';
@@ -26,6 +27,7 @@ export const redisService = {
   botWake,
   connectorOAuth,
   deviceSystemInfo,
+  heteroControl,
   inboundWebhook,
   linear,
   pageCollab,

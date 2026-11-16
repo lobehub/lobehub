@@ -33,7 +33,8 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
     !!isAgentEditable && isAccessResolved && canEditContent && canManageResource;
   const { visible: shareVisible } = useAgentShareSupported(agentId);
   const mailSupported = useShowAgentIdentity(agentId);
-  const automationsSupported = useServerConfigStore(serverConfigSelectors.enableWebhook);
+  // One flag switches on everything that wakes an agent from outside: its list and its webhooks.
+  const webhookSupported = useServerConfigStore(serverConfigSelectors.enableWebhook);
   const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
   const { enabled: enableSelfLearning } = useSelfLearningSurface();
   // The mobile Segmented has no room for another segment, so mobile keeps the
@@ -44,7 +45,7 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
     () =>
       buildAgentProfileTabOptions({
         active,
-        automationsSupported,
+        automationsSupported: webhookSupported,
         canConfigure,
         labels: {
           'automations': t('tab.automations'),
@@ -63,15 +64,16 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
           'skills': t('tab.skills'),
           'statistics': t('usageStats.title', { ns: 'spend' }),
           'tools': t('tab.tools'),
+          'webhook': t('tab.webhook'),
         },
         mailSupported,
         selfLearningSupported,
         shareSupported: shareVisible === true && canManageShare,
         heterogeneous: isHeterogeneous,
+        webhookSupported,
       }),
     [
       active,
-      automationsSupported,
       canConfigure,
       canManageShare,
       isHeterogeneous,
@@ -79,6 +81,7 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
       selfLearningSupported,
       shareVisible,
       t,
+      webhookSupported,
     ],
   );
 };

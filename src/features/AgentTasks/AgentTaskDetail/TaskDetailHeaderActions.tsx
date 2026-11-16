@@ -35,6 +35,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 
 import { getArchiveErrorKey } from '../features/archiveErrorKey';
 import { useTaskArchiveGate } from '../features/useTaskArchiveGate';
+import { useTaskListCrumbTarget } from '../shared/taskListOrigin';
 import { useTaskCopyActions } from './useTaskCopyActions';
 import { useTaskFavoriteTarget } from './useTaskFavoriteTarget';
 
@@ -42,6 +43,7 @@ const TaskDetailHeaderActions = memo(() => {
   const { t } = useTranslation(['chat', 'common']);
 
   const navigate = useWorkspaceAwareNavigate();
+  const allTasksTarget = useTaskListCrumbTarget('/tasks');
   const activeWorkspaceId = useActiveWorkspaceId();
   const { allowed: canEditTask } = usePermission('create_content');
   const { copyContent, copyId, copyLink, hasContent, taskId } = useTaskCopyActions();
@@ -70,11 +72,11 @@ const TaskDetailHeaderActions = memo(() => {
       okText: t('taskDetail.deleteConfirm.ok'),
       onOk: async () => {
         await deleteTask(taskId);
-        navigate('/tasks');
+        navigate(allTasksTarget.to, { escape: allTasksTarget.escape });
       },
       title: t('taskDetail.deleteConfirm.title'),
     });
-  }, [canEditTask, taskId, t, deleteTask, navigate]);
+  }, [canEditTask, taskId, t, deleteTask, navigate, allTasksTarget.to, allTasksTarget.escape]);
 
   const toggleArchive = useCallback(async () => {
     if (!taskId) return;

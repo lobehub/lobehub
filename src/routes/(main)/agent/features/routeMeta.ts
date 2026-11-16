@@ -13,6 +13,7 @@ import {
   Share2Icon,
   SparklesIcon,
   UsersIcon,
+  WebhookIcon,
   WrenchIcon,
   ZapIcon,
 } from 'lucide-react';
@@ -177,6 +178,12 @@ export const agentAutomationsRouteMeta = routeMeta({
   icon: ZapIcon,
   Skeleton: createSurfaceSkeleton('list'),
   titleKey: 'navigation.automations',
+});
+
+export const agentWebhookRouteMeta = routeMeta({
+  icon: WebhookIcon,
+  Skeleton: createSurfaceSkeleton('list'),
+  titleKey: 'navigation.webhook',
 });
 
 export const agentChannelRouteMeta = routeMeta({

@@ -18,7 +18,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
     canRecordVoiceMessage,
     children,
     contextSelectionKey,
-    contextWindowMessages,
+    contextWindow,
     draftKey,
     feature = DEFAULT_CHAT_INPUT_FEATURE,
     leftActions,
@@ -48,7 +48,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
             allowExpand,
             canRecordVoiceMessage,
             contextSelectionKey,
-            contextWindowMessages,
+            contextWindow,
             draftKey,
             editor,
             feature,
@@ -72,7 +72,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
           canRecordVoiceMessage={canRecordVoiceMessage}
           chatInputEditorRef={chatInputEditorRef}
           contextSelectionKey={contextSelectionKey}
-          contextWindowMessages={contextWindowMessages}
+          contextWindow={contextWindow}
           draftKey={draftKey}
           feature={feature}
           getMessages={getMessages}

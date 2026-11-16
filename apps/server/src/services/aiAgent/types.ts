@@ -4,6 +4,7 @@ import type {
   AgentSenderMetadata,
   BotSenderMetadata,
   ChatTopicBotContext,
+  ChatTopicWebhookContext,
   ExecAgentParams,
   ExternalOriginMetadata,
   LobeAgentChatConfig,
@@ -392,6 +393,12 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * Use { approvalMode: 'headless' } for async tasks that should never wait for human approval
    */
   userInterventionConfig?: UserInterventionConfig;
+  /**
+   * Server-only: the generic webhook thread a run starts for. Written to a
+   * Topic the run creates as `metadata.webhook`, which is how later deliveries
+   * of the same thread find that Topic. Ignored when the run continues one.
+   */
+  webhookThread?: ChatTopicWebhookContext;
 }
 
 /**

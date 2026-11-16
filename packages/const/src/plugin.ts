@@ -225,3 +225,6 @@ export const withMandatoryApprovalMark = (
     : metadata;
 
 export const MCP_EVENT_TAG = 'mcpEvent';
+
+/** Wraps the request a generic inbound webhook woke an Agent with. */
+export const WEBHOOK_EVENT_TAG = 'webhookEvent';

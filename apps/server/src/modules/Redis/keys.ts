@@ -91,6 +91,10 @@ export const RedisKeys = {
     check: (id: string) => `check:v1:${id}`,
     maintenance: (id: string) => `maintenance:v1:${id}`,
     sweep: () => 'sweep:v1:slot',
+    /** Ingress counter of a scope (workspace or personal space) for the current minute, all kinds. */
+    deliveries: (scope: string, minute: number) => `deliveries:v2:${scope}:${minute}`,
+    /** Active member count of a workspace, cached for the per-scope delivery limit. */
+    members: (workspaceId: string) => `members:v1:${workspaceId}`,
   },
   /**
    * Agent Signal spend bounds — see {@link RedisKeyNamespace.AGENT_SIGNAL}. Per-user
@@ -233,6 +237,18 @@ export const RedisKeys = {
      * Full key: agentSteer:hetero_deliveries:v1:{operationId}
      */
     heteroDeliveries: (operationId: string): string => `hetero_deliveries:v1:${operationId}`,
+    /**
+     * Control messages waiting for a heterogeneous run's poller, oldest first.
+     * Each one is popped exactly once, when a poller claims it.
+     * Full key: agentSteer:hetero_control:v1:{operationId}
+     */
+    heteroControl: (operationId: string): string => `hetero_control:v1:${operationId}`,
+    /**
+     * Where each control message of that run stands (field = control id):
+     * pending, claimed, expired, or the result the run reported.
+     * Full key: agentSteer:hetero_control_state:v1:{operationId}
+     */
+    heteroControlState: (operationId: string): string => `hetero_control_state:v1:${operationId}`,
     /**
      * Marks a sub-agent run whose final queue read came back empty: it ends
      * without reading again, so a steer appended behind it must be taken back.

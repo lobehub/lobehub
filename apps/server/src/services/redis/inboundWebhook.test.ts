@@ -78,3 +78,52 @@ describe('inbound webhook Redis claim policy', () => {
     expect(await domain.claimCheck('unavailable')).toBe(true);
   });
 });
+
+describe('inbound webhook delivery counter', () => {
+  it('counts per scope in fixed minute windows that always carry an expiry', async () => {
+    const counters = new Map<string, number>();
+    const fakeRedis = {
+      incr: vi.fn(async (key: string) => {
+        counters.set(key, (counters.get(key) ?? 0) + 1);
+        return counters.get(key)!;
+      }),
+      set: vi.fn(async () => 'OK'),
+    };
+    getRedisServiceClient.mockResolvedValue(fakeRedis);
+
+    expect(await domain.countDelivery('workspace:ws')).toBe(1);
+    expect(await domain.countDelivery('workspace:ws')).toBe(2);
+    expect(await domain.countDelivery('user:u1')).toBe(1);
+    const minute = Math.floor(Date.now() / 60_000);
+    expect(fakeRedis.set).toHaveBeenCalledWith(`deliveries:v2:workspace:ws:${minute}`, '0', {
+      ex: 120,
+      nx: true,
+    });
+
+    vi.setSystemTime(Date.now() + 60_000);
+    expect(await domain.countDelivery('workspace:ws')).toBe(1);
+  });
+
+  it('caches a workspace member count for five minutes', async () => {
+    const values = new Map<string, string>();
+    const fakeRedis = {
+      get: vi.fn(async (key: string) => values.get(key) ?? null),
+      set: vi.fn(async (key: string, value: string) => {
+        values.set(key, value);
+        return 'OK';
+      }),
+    };
+    getRedisServiceClient.mockResolvedValue(fakeRedis);
+    const read = vi.fn(async () => 3);
+    expect(await domain.workspaceMemberCount('ws', read)).toBe(3);
+    await vi.waitFor(() => expect(fakeRedis.set).toHaveBeenCalled());
+    expect(fakeRedis.set).toHaveBeenCalledWith('members:v1:ws', '3', { px: 300_000 });
+    expect(await domain.workspaceMemberCount('ws', read)).toBe(3);
+    expect(read).toHaveBeenCalledOnce();
+  });
+
+  it('does not count without Redis, leaving the limit unenforced', async () => {
+    getRedisServiceClient.mockResolvedValue(undefined);
+    expect(await domain.countDelivery('webhook')).toBeUndefined();
+  });
+});

@@ -15,6 +15,7 @@ export interface NewTopicMetadataInput {
   projectDirectory?: { path: string };
   taskId?: string;
   topicBoundDeviceId?: string;
+  webhookThread?: InternalExecAgentParams['webhookThread'];
 }
 
 /**
@@ -35,8 +36,8 @@ const preparedProjectWorktree = (
     : undefined;
 
 /**
- * Metadata a NEW topic is written with: cronJobId, taskId, botContext, bound
- * device, and any client-supplied initial metadata (e.g. repos selected before
+ * Metadata a NEW topic is written with: cronJobId, taskId, botContext, the
+ * generic webhook thread, bound device, and any client-supplied initial metadata (e.g. repos selected before
  * the first message). Returns undefined when there is nothing to record.
  *
  * Deliberately untyped: `taskId` is a durable key the topic schema type does
@@ -51,6 +52,7 @@ export const buildNewTopicMetadata = ({
   projectDirectory,
   taskId,
   topicBoundDeviceId,
+  webhookThread,
 }: NewTopicMetadataInput) => {
   const preparedWorktree = projectDirectory
     ? preparedProjectWorktree(
@@ -81,7 +83,8 @@ export const buildNewTopicMetadata = ({
     !topicBoundDeviceId &&
     !initialTopicMeta &&
     !editingGroupId &&
-    !editingAgentId
+    !editingAgentId &&
+    !webhookThread
   )
     return;
 
@@ -93,6 +96,7 @@ export const buildNewTopicMetadata = ({
     ...(editingAgentId && { editingAgentId }),
     ...(editingGroupId && { editingGroupId }),
     taskId,
+    ...(webhookThread && { webhook: webhookThread }),
     ...(initialTopicMeta?.repos && { repos: initialTopicMeta.repos }),
     ...pickSandboxPlacement(initialTopicMeta),
     ...(initialTopicMeta?.workingDirectory && {

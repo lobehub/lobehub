@@ -14,6 +14,7 @@ import type { ChatTopic } from '@/types/topic';
 
 import StatusDot from './StatusDot';
 import { useTopicsViewStore } from './store';
+import { topicPreviewText } from './topicPreview';
 import { getProjectInfo } from './utils';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -137,8 +138,11 @@ const TopicCard = memo<TopicCardProps>(({ topic, agentId }) => {
   const BotPlatformIcon = botPlatform ? getPlatformIcon(botPlatform) : undefined;
   // Preview priority: user-written description → AI history summary → first user
   // message (sliced server-side when neither richer field exists).
+  const firstMessage = topic.firstUserMessage?.trim();
   const preview =
-    topic.description?.trim() || topic.historySummary?.trim() || topic.firstUserMessage?.trim();
+    topic.description?.trim() ||
+    topic.historySummary?.trim() ||
+    (firstMessage && topicPreviewText(firstMessage));
   const updatedAt = useActivityTime(topic.updatedAt);
   // Postgres `numeric` / `int` round-trip through TRPC/JSON as strings in
   // some shapes, so coerce defensively before any `.toFixed` / format call.

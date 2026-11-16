@@ -3,11 +3,14 @@
  */
 import { cleanup, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Breadcrumb from './Breadcrumb';
 
 const mocks = vi.hoisted(() => ({
+  agentMeta: undefined as any,
+  params: {} as { aid?: string },
   taskState: {} as any,
 }));
 
@@ -15,9 +18,9 @@ const createState = (taskDetailMap: Record<string, any>) => ({
   taskDetailMap,
 });
 
-vi.mock('react-router', () => ({
-  Link: ({ children, to }: { children: ReactNode; to: string }) => <a href={to}>{children}</a>,
-  useParams: () => ({}),
+vi.mock('react-router', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  useParams: () => mocks.params,
 }));
 
 // Render the workspace-aware link as a plain anchor so the asserted hrefs stay
@@ -26,9 +29,8 @@ vi.mock('@/features/Workspace/WorkspaceLink', () => ({
   default: ({ children, to }: { children: ReactNode; to: string }) => <a href={to}>{children}</a>,
 }));
 
-// Agent crumb metadata isn't under test here; the agent store isn't mocked.
 vi.mock('./useAgentDisplayMeta', () => ({
-  useAgentDisplayMeta: () => undefined,
+  useAgentDisplayMeta: () => mocks.agentMeta,
 }));
 
 vi.mock('zustand/react/shallow', () => ({
@@ -43,8 +45,13 @@ vi.mock('./style', () => ({
   styles: { breadcrumb: 'breadcrumb' },
 }));
 
+const renderAt = (ui: ReactNode, state?: unknown) =>
+  render(<MemoryRouter initialEntries={[{ pathname: '/task/T-child', state }]}>{ui}</MemoryRouter>);
+
 describe('Breadcrumb', () => {
   beforeEach(() => {
+    mocks.agentMeta = undefined;
+    mocks.params = {};
     mocks.taskState = createState({
       'T-child': {
         id: 'T-child',
@@ -77,21 +84,21 @@ describe('Breadcrumb', () => {
   });
 
   it('keeps the all-tasks root crumb on desktop', () => {
-    render(<Breadcrumb taskId="T-child" />);
+    renderAt(<Breadcrumb taskId="T-child" />);
 
     expect(screen.getByRole('link', { name: 'taskList.all' })).toHaveAttribute('href', '/tasks');
   });
 
   it('drops the all-tasks root crumb on mobile, where the back button leads up', () => {
     vi.stubGlobal('__MOBILE__', true);
-    render(<Breadcrumb taskId="T-child" />);
+    renderAt(<Breadcrumb taskId="T-child" />);
 
     expect(screen.queryByText('taskList.all')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'T-parent' })).toBeInTheDocument();
   });
 
   it('uses the ancestor owner agent when building breadcrumb links', () => {
-    render(<Breadcrumb taskId="T-child" />);
+    renderAt(<Breadcrumb taskId="T-child" />);
 
     expect(screen.getByRole('link', { name: 'T-parent' })).toHaveAttribute(
       'href',
@@ -115,11 +122,42 @@ describe('Breadcrumb', () => {
       },
     });
 
-    render(<Breadcrumb taskId="T-child" />);
+    renderAt(<Breadcrumb taskId="T-child" />);
 
     expect(screen.getByRole('link', { name: 'T-parent' })).toHaveAttribute(
       'href',
       '/task/T-parent/parent-task',
     );
+  });
+
+  describe('returning to the source task list', () => {
+    it('leads the all-tasks crumb back to the filtered list the detail was opened from', () => {
+      renderAt(<Breadcrumb taskId="T-child" />, { taskListOrigin: '/tasks?collection=mine' });
+
+      expect(screen.getByRole('link', { name: 'taskList.all' })).toHaveAttribute(
+        'href',
+        '/tasks?collection=mine',
+      );
+    });
+
+    it('falls back to the bare list without a carried origin', () => {
+      renderAt(<Breadcrumb taskId="T-child" />);
+
+      expect(screen.getByRole('link', { name: 'taskList.all' })).toHaveAttribute('href', '/tasks');
+    });
+
+    it('keeps the agent list filters on the agent crumb only', () => {
+      mocks.params = { aid: 'a1' };
+      mocks.agentMeta = { backgroundColor: '', title: 'Agent One' };
+      renderAt(<Breadcrumb taskId="T-child" />, {
+        taskListOrigin: '/agent/a1/tasks?collection=mine&scope=created',
+      });
+
+      expect(screen.getByRole('link', { name: 'taskList.all' })).toHaveAttribute('href', '/tasks');
+      expect(screen.getByRole('link', { name: 'Agent One' })).toHaveAttribute(
+        'href',
+        '/agent/a1/tasks?collection=mine&scope=created',
+      );
+    });
   });
 });

@@ -43,7 +43,11 @@ vi.mock('@/server/services/inboundWebhook/featureGate', () => ({ isWebhookEnable
 vi.mock('@/libs/trpc/lambda', async () => {
   const { initTRPC } = await import('@trpc/server');
   const trpc = initTRPC.context<RouterTestContext>().create();
-  return { router: trpc.router, authedProcedure: trpc.procedure };
+  return {
+    authedProcedure: trpc.procedure,
+    mergeRouters: trpc.mergeRouters,
+    router: trpc.router,
+  };
 });
 vi.mock('@/libs/trpc/lambda/middleware', () => ({
   serverDatabase: async ({ next }: { next: () => Promise<unknown> }) => next(),
@@ -66,13 +70,23 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => gateKeeper },
 }));
 vi.mock('@/server/services/inboundWebhook/sweep', () => ({ scheduleInboundWebhookSweep: vi.fn() }));
+/** An `mcp_events` handler whose network operations are the test doubles above. */
+const fakeKind = () => ({
+  canCheck: true,
+  expiresAt: (row: InboundWebhookView) =>
+    row.kind === 'mcp_events' ? (row.state.refreshBefore ?? null) : null,
+  isEnabled: enabled,
+  maintain,
+  source: (row: InboundWebhookView) =>
+    row.kind === 'mcp_events'
+      ? { arguments: row.config.arguments, eventName: row.config.eventName, kind: row.kind }
+      : { ...row.config, kind: row.kind },
+  teardown,
+});
 vi.mock('@/server/services/inboundWebhook/kinds', () => ({
-  getInboundWebhookKind: vi.fn(() => ({
-    maintain,
-    teardown,
-    buildPrompt: () => '',
-    handleDelivery: async () => ({}),
-  })),
+  createKindGate: () => async () => true,
+  getInboundWebhookKind: vi.fn(() => fakeKind()),
+  INBOUND_WEBHOOK_SIGNAL_SOURCES: ['mcp-events', 'webhook'],
 }));
 vi.mock('@/server/services/inboundWebhook/kinds/mcpEvents/subscription', () => ({
   maintenanceBackoff: (n: number) => 60_000 * 2 ** n,
@@ -170,12 +184,7 @@ beforeEach(async () => {
     await model.update(row.id, { status: 'active', lastError: null });
   });
   teardown.mockReset().mockResolvedValue(undefined);
-  vi.mocked(getInboundWebhookKind).mockReturnValue({
-    maintain,
-    teardown,
-    buildPrompt: () => '',
-    handleDelivery: async () => ({}),
-  });
+  vi.mocked(getInboundWebhookKind).mockReturnValue(fakeKind() as never);
   await db.delete(users);
   await db.insert(users).values([{ id: creator }, { id: colleague }]);
   await db.insert(workspaces).values([

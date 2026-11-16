@@ -12,7 +12,7 @@ describe('resolveAutomationsGate', () => {
     );
   });
 
-  it('is a 404 while MCP Events is off, and the page once it is on', () => {
+  it('is a 404 while webhooks are off, and the page once it is on', () => {
     expect(resolveAutomationsGate({ enableWebhook: false, serverConfigInit: true })).toBe(
       'notFound',
     );

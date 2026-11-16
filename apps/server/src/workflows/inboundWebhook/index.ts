@@ -26,6 +26,7 @@ export class InboundWebhookWorkflow {
       try {
         const result = await wakeInboundWebhook(await getServerDB(), payload.id);
         if (result.outcome === 'deferred') await InboundWebhookWorkflow.triggerWake(payload, 30);
+        if (result.outcome === 'more') await InboundWebhookWorkflow.triggerWake(payload, 1);
       } catch (error) {
         console.error('[inboundWebhook:workflow] Local wake failed', error);
       }

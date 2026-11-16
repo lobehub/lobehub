@@ -14,6 +14,7 @@ import { shinyTextStyles } from '@/styles';
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import {
   TIME_MS_PER_SECOND,
+  WORKFLOW_ANIMATED_MAX_TOOLS,
   WORKFLOW_EXPANDED_SCROLL_THRESHOLD_PX,
   WORKFLOW_HEADLINE_DEBOUNCE_MS,
   WORKFLOW_PROSE_IDLE_COMMIT_MS,
@@ -38,6 +39,14 @@ const WORKFLOW_EXPAND_TOGGLE_TRANSITION = {
   duration: 0.18,
   ease: [0.4, 0, 0.2, 1],
 } as const;
+
+const DEFAULT_STYLES = { trigger: { paddingBlock: 4, paddingInline: 4 } };
+// Animating the panel height re-lays out every mounted row on each frame; a
+// long list opens and closes in one step instead.
+const LARGE_LIST_STYLES = {
+  ...DEFAULT_STYLES,
+  panel: { transitionDuration: '0s' },
+};
 
 export type WorkflowExpandLevel = 'collapsed' | 'semi' | 'full';
 
@@ -541,7 +550,7 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
     return (
       <Accordion
         indicatorPlacement="inline"
-        styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+        styles={allTools.length > WORKFLOW_ANIMATED_MAX_TOOLS ? LARGE_LIST_STYLES : DEFAULT_STYLES}
         value={expandedKeys}
         variant="borderless"
         items={[
