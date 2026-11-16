@@ -20,8 +20,19 @@ import { withRequestConnectorCallers } from '../_helpers/connectorCallContext';
 import { toConnectorEditDetail } from '../_helpers/connectorEditDetail';
 import { connectorProcedure, connectorWriteProcedure } from './procedures';
 
-/** The marks of a row's metadata the client routes a call by (`@lobechat/const/plugin`). */
-const ROUTING_METADATA_KEYS = [DESKTOP_STDIO_EXECUTION_KEY, MARKETPLACE_INSTALL_COMPLETED_KEY];
+/**
+ * The fields of a row's metadata the client routes a call by: the two install
+ * marks (`@lobechat/const/plugin`), and where an HTTP server is reached from —
+ * `connectVia` sends one that looks public through the device
+ * (`connectorMcpEndpoint`), `boundDeviceId` pins it to a device
+ * (`connectorDeviceBinding`).
+ */
+const ROUTING_METADATA_KEYS = [
+  DESKTOP_STDIO_EXECUTION_KEY,
+  MARKETPLACE_INSTALL_COMPLETED_KEY,
+  'boundDeviceId',
+  'connectVia',
+];
 
 const pickRoutingMetadata = (metadata: Record<string, unknown> | null | undefined) =>
   Object.fromEntries(
@@ -78,7 +89,7 @@ export const connectorRunRouter = router({
    *
    * Besides the id it returns what routing and approval read: the row's
    * transport, its tools and its install state (binding, source, status and the
-   * two routing marks of its metadata), the fields a member's connector list
+   * routing fields of its metadata), the fields a member's connector list
    * already carries, never credentials or a stdio command, so any member who
    * can call the tool may ask. A private agent's own topic may run its owner's personal
    * connector, which no workspace list on the client holds; the client routes
@@ -106,9 +117,10 @@ export const connectorRunRouter = router({
         isEnabled: connector.isEnabled,
         mcpConnectionType: connector.mcpConnectionType,
         mcpServerUrl: connector.mcpServerUrl,
-        // Whether an unfinished marketplace install may run, and whether a
-        // stdio install keeps running on the desktop under a device gateway
-        // (`isMarketplaceInstallRunnable`, `keepsDesktopStdioExecution`)
+        // Whether an unfinished marketplace install may run, whether a stdio
+        // install keeps running on the desktop under a device gateway
+        // (`isMarketplaceInstallRunnable`, `keepsDesktopStdioExecution`), and
+        // whether an HTTP server runs on a device, and which one
         metadata: pickRoutingMetadata(connector.metadata),
         sourceType: connector.sourceType,
         status: connector.status,

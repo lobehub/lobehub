@@ -240,6 +240,26 @@ describe('connectorRouter.resolveForRun', () => {
     expect(answer?.metadata).toEqual({ marketplaceInstalled: true });
   });
 
+  it('carries where an HTTP server is reached from, so a personal one runs on its device', async () => {
+    // Regression: a private agent's own topic may run its owner's personal HTTP
+    // connector, which no workspace list on the client holds. Without
+    // `connectVia`, a public-looking address set to connect through the device
+    // (Tailscale MagicDNS) routed to the server, which refuses it; without
+    // `boundDeviceId`, one bound to another device was run here.
+    resolveByIdentifiers.mockResolvedValue([
+      {
+        ...connector,
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://nas.tail1234.ts.net/mcp',
+        metadata: { boundDeviceId: 'laptop', connectVia: 'device', description: 'NAS' },
+      },
+    ]);
+
+    const answer = await caller('creator').resolveForRun(input);
+
+    expect(answer?.metadata).toEqual({ boundDeviceId: 'laptop', connectVia: 'device' });
+  });
+
   it('answers null when the conversation resolves no row', async () => {
     resolveByIdentifiers.mockResolvedValue([]);
     await expect(caller('creator').resolveForRun(input)).resolves.toBeNull();
