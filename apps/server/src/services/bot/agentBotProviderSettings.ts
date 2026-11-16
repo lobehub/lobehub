@@ -10,6 +10,7 @@ import {
   hasPassiveListeningRule,
 } from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
+import { isMessageGatewayHostingUnavailable } from '@/server/services/gateway/nodeGatewayOnly';
 import { resolveReplyConnectionHost } from '@/server/services/gateway/replyConnectionHost';
 
 import { getBotMessageRouter } from './BotMessageRouter';
@@ -75,7 +76,7 @@ function withGatewayConnectionMode(
   merged: Record<string, unknown> | undefined,
 ): Record<string, unknown> | undefined {
   if (!platform || requested?.[CONNECTION_MODE_KEY] !== undefined) return merged;
-  if (!platformRegistry.getPlatform(platform)?.messageGatewayUnsupported) return merged;
+  if (!isMessageGatewayHostingUnavailable(platformRegistry.getPlatform(platform))) return merged;
   if (!new GatewayService().useMessageGateway) return merged;
 
   return {

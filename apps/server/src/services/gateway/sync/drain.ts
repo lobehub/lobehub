@@ -15,6 +15,7 @@ import {
   type MessageGatewayHost,
   resolveMessageGatewayHost,
 } from '../MessageGatewayClient';
+import { isMessageGatewayHostingUnavailable } from '../nodeGatewayOnly';
 import { BOT_RUNTIME_STATUSES, updateBotRuntimeStatus } from '../runtimeStatus';
 import { GATEWAY_SYNC_CONCURRENCY, GATEWAY_SYNC_STALE_DISCONNECT_LIMIT } from './constants';
 import { hostDesiredSlice, hostGatedSlice, hostRefusesPlatform } from './state';
@@ -168,7 +169,7 @@ export async function disconnectStaleConnections(
         const livePersistentRow =
           row?.enabled &&
           // Never desired, so "enabled during sync" can't explain it: it is stale.
-          !definition?.messageGatewayUnsupported &&
+          !isMessageGatewayHostingUnavailable(definition) &&
           resolveConnectionMode(definition, row.settings) !== 'webhook';
 
         if (livePersistentRow) {

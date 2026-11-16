@@ -20,6 +20,7 @@ import {
   type MessageGatewayHost,
   resolveMessageGatewayHost,
 } from '../MessageGatewayClient';
+import { isMessageGatewayHostingUnavailable } from '../nodeGatewayOnly';
 import { resolveReplyConnectionHost } from '../replyConnectionHost';
 import {
   BOT_RUNTIME_STATUSES,
@@ -172,7 +173,7 @@ export async function buildDesiredConnections(
       });
 
       // No handler on the gateway: a connect can only fail, every round.
-      if (definition.messageGatewayUnsupported) {
+      if (isMessageGatewayHostingUnavailable(definition)) {
         await Promise.all(
           persistent.map(({ provider }) =>
             updateBotRuntimeStatus(

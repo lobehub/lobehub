@@ -173,11 +173,11 @@ export const botPlatformsModule = () => ({
   platformRegistry: {
     getPlatform: (platform: string) => ({
       id: platform,
-      messageGatewayUnsupported: platform === 'dingtalk',
+      nodeMessageGatewayOnly: platform === 'dingtalk',
       name: platform,
     }),
     listPlatforms: () => [
-      { id: 'dingtalk', messageGatewayUnsupported: true, name: 'DingTalk' },
+      { id: 'dingtalk', name: 'DingTalk', nodeMessageGatewayOnly: true },
       { id: 'discord' },
       { id: 'telegram' },
       { id: 'wechat' },

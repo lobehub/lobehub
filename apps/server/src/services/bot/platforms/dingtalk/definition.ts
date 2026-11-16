@@ -11,6 +11,8 @@ export const dingtalk: PlatformDefinition = {
   name: 'DingTalk',
   connectionMode: DEFAULT_DINGTALK_CONNECTION_MODE,
   description: 'Connect a DingTalk robot',
+  // Stream mode is hosted only by the Node message gateway (protocol-spec §11.4).
+  nodeMessageGatewayOnly: true,
   documentation: {
     portalUrl: 'https://open-dev.dingtalk.com/',
     setupGuideUrl: channelDocUrl('dingtalk'),

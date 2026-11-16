@@ -40,6 +40,7 @@ import {
 } from '@/server/services/bot/platforms/feishu/registration';
 import { flattenBotWakeSettings } from '@/server/services/conversationWake/config';
 import { GatewayService } from '@/server/services/gateway';
+import { isMessageGatewayHostingUnavailable } from '@/server/services/gateway/nodeGatewayOnly';
 import { getReplyConnectionUnavailableReason } from '@/server/services/gateway/replyConnectionHost';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
@@ -181,7 +182,7 @@ export const agentBotProviderRouter = router({
     return Promise.all(
       platformRegistry.listSerializedPlatforms().map((platform) => {
         const offered =
-          useMessageGateway && platform.messageGatewayUnsupported
+          useMessageGateway && isMessageGatewayHostingUnavailable(platform)
             ? restrictPlatformToWebhook(platform)
             : platform;
         const unavailableReason = getReplyConnectionUnavailableReason(offered);

@@ -683,17 +683,17 @@ export interface PlatformDefinition {
   /** The unique identifier of the platform. */
   id: string;
 
-  /**
-   * The external message gateway has no handler for this platform, so it cannot
-   * hold the platform's persistent connection. With the gateway enabled, only
-   * webhook mode works and persistent modes are refused with an actionable error.
-   * In-process connections (gateway disabled) are unaffected. Remove the flag once
-   * the gateway ships a handler.
-   */
-  messageGatewayUnsupported?: boolean;
-
   /** The name of the platform. */
   name: string;
+
+  /**
+   * Only the Node message gateway has a handler for this platform's persistent connection. With
+   * the gateway enabled, persistent modes work only while the platform is routed to the Node host
+   * (`MESSAGE_GATEWAY_NODE_PLATFORMS`); otherwise only webhook mode works and persistent modes are
+   * refused with an actionable error. See `isMessageGatewayHostingUnavailable`. In-process
+   * connections (gateway disabled) are unaffected.
+   */
+  nodeMessageGatewayOnly?: boolean;
 
   /**
    * Credential keys that are identifiers rather than secrets, for platforms

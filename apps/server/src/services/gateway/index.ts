@@ -22,6 +22,7 @@ import {
   isAnyMessageGatewayEnabled,
   type MessageGatewayHost,
 } from './MessageGatewayClient';
+import { isMessageGatewayHostingUnavailable } from './nodeGatewayOnly';
 import { getReplyConnectionUnavailableReason } from './replyConnectionHost';
 import { BOT_RUNTIME_STATUSES, getBotRuntimeStatus, updateBotRuntimeStatus } from './runtimeStatus';
 import { syncGatewayConnections } from './sync';
@@ -198,7 +199,7 @@ export class GatewayService {
 
         const definition = platformRegistry.getPlatform(provider.platform);
         const connectionMode = resolveConnectionMode(definition, provider.settings);
-        if (connectionMode === 'webhook' || definition?.messageGatewayUnsupported) return;
+        if (connectionMode === 'webhook' || isMessageGatewayHostingUnavailable(definition)) return;
 
         try {
           const client = getMessageGatewayClient(provider.platform);
@@ -253,7 +254,8 @@ export class GatewayService {
     // gateway only holds the webhook URL registration, so the local snapshot
     // is already the source of truth. The same goes for a platform the gateway
     // cannot host: it holds nothing, and asking would overwrite the refusal.
-    if (connectionMode === 'webhook' || definition?.messageGatewayUnsupported) return cached;
+    if (connectionMode === 'webhook' || isMessageGatewayHostingUnavailable(definition))
+      return cached;
 
     const client = getMessageGatewayClient(platform);
     try {
@@ -372,7 +374,7 @@ export class GatewayService {
       return 'started';
     }
 
-    if (definition?.messageGatewayUnsupported) {
+    if (definition && isMessageGatewayHostingUnavailable(definition)) {
       const status = buildMessageGatewayRefusalStatus(definition, applicationId);
       await updateBotRuntimeStatus(status);
       throw new TRPCError({ code: 'PRECONDITION_FAILED', message: status.errorMessage });

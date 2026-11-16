@@ -14,6 +14,8 @@ import {
   mockGatewayClient,
   mockGatewayManager,
   mockGetBotRuntimeStatus,
+  mockNodeGateway,
+  mockNodeGatewayClient,
   mockResolveConnectionMode,
   mockUpdateBotRuntimeStatus,
   resetGatewayServiceMocks,
@@ -95,6 +97,28 @@ describe('GatewayService client lifecycle', () => {
 
       expect(mockGatewayManager.startClient).toHaveBeenCalledWith('dingtalk', 'app-1');
       expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+    });
+
+    it('connects Stream through the Node gateway once DingTalk is routed there', async () => {
+      mockNodeGateway.configured = true;
+      mockNodeGateway.platforms = ['dingtalk'];
+      mockNodeGatewayClient.isConfigured = true;
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue(provider);
+      mockResolveConnectionMode.mockReturnValue('websocket');
+
+      await expect(service.startClient('dingtalk', 'app-1', 'user-1')).resolves.toBe('started');
+
+      expect(mockNodeGatewayClient.connect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          connectionMode: 'websocket',
+          platform: 'dingtalk',
+          webhookPath: '/api/agent/webhooks/dingtalk/app-1',
+        }),
+      );
+      expect(mockGatewayClient.connect).not.toHaveBeenCalled();
+      expect(mockUpdateBotRuntimeStatus).not.toHaveBeenCalledWith(
+        expect.objectContaining({ errorCode: 'webhook_mode_required' }),
+      );
     });
 
     it('keeps the refusal visible instead of overwriting it with gateway status', async () => {
