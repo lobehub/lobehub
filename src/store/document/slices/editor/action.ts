@@ -56,7 +56,7 @@ export type ReconcileResult = 'unchanged' | 'rebased' | 'adopted';
  * How a save may recover from a version CONFLICT once the store has reconciled
  * the latest row: `body` replays a content save over an unchanged body base;
  * `metadata` replays a title / emoji-only save when nobody else touched the
- * meta it was built from (`base`, the cached row; absent when none was cached).
+ * meta it was built from (`base`, the cached row; without one it never replays).
  */
 type ConflictRetry =
   | { kind: 'body' }
@@ -860,12 +860,14 @@ export class EditorActionImpl {
       // write — for a room page, its own projection) is not overwritten, and
       // the body lock does not gate it. Only a concurrent title / emoji change
       // would be: replay just when the meta still matches the base it was built
-      // from (`savedMetadata` replaces the whole object).
+      // from (`savedMetadata` replaces the whole object). Without a cached
+      // base there is nothing to compare, so a collaborator's change cannot be
+      // ruled out: keep the conflict.
       const { base } = retry;
       const metaUnchanged =
-        !base ||
-        ((latest.title ?? null) === (base.title ?? null) &&
-          isEqual(latest.metadata ?? null, base.metadata ?? null));
+        !!base &&
+        (latest.title ?? null) === (base.title ?? null) &&
+        isEqual(latest.metadata ?? null, base.metadata ?? null);
       if (!metaUnchanged) throw error;
       return await requestSave(latest.updatedAt);
     }

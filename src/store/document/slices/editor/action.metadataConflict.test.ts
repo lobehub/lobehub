@@ -149,4 +149,27 @@ describe('DocumentStore - title / emoji save after the version moved (T-14156)',
 
     expect(documentService.updateDocument).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps the conflict when no cached row can vouch for the meta', async () => {
+    seedRoomPage();
+    act(() => {
+      useDocumentStore.setState({ documentDetailMap: {} });
+    });
+    vi.mocked(documentService.getDocumentById).mockResolvedValue({
+      content: '# Body',
+      id: 'doc-1',
+      metadata: { emoji: '⭐' },
+      title: 'M11W1 本周事项',
+      updatedAt: projectedAt,
+    } as any);
+    const conflict = versionConflict();
+    vi.mocked(documentService.updateDocument).mockRejectedValueOnce(conflict);
+
+    await act(async () => {
+      await expect(saveTitle('待办事项')).rejects.toBe(conflict);
+    });
+
+    expect(documentService.updateDocument).toHaveBeenCalledTimes(1);
+    expect(useDocumentStore.getState().documents['doc-1'].saveStatus).toBe('failed');
+  });
 });
