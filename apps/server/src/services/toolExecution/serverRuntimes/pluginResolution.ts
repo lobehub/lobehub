@@ -118,8 +118,14 @@ const NEEDS_USER_INSTALL: Record<
   },
   'local-only': {
     content: (id) =>
-      `Marketplace MCP "${id}" has no endpoint this server can reach: it runs as a local (stdio) process, or at a localhost / private-network address, which only the user's own machine reaches. Ask the user to install it from the marketplace in the LobeHub desktop app. Nothing was changed.`,
-    message: 'Plugin runs only on the local machine',
+      `Marketplace MCP "${id}" has no remote endpoint: it runs as a local (stdio) process, which only the LobeHub desktop app can start. Ask the user to install it from the marketplace in the desktop app. Nothing was changed.`,
+    message: 'Plugin runs only as a local process',
+    type: 'PluginNeedsDesktop',
+  },
+  'private-network': {
+    content: (id) =>
+      `Marketplace MCP "${id}" is served only at a localhost or private-network address, which this server would have to reach through the user's own machine, so it cannot be installed from here. Ask the user to install it from the marketplace in the LobeHub desktop app. Nothing was changed.`,
+    message: 'Plugin endpoint is on a private network',
     type: 'PluginNeedsDesktop',
   },
   'no-tools': {

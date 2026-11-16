@@ -79,19 +79,27 @@ afterEach(async () => {
 });
 
 describe('pickMarketplaceDeployment', () => {
+  const noGateway = { deviceGatewayConfigured: false };
+  const withGateway = { deviceGatewayConfigured: true };
+
   it('uses the market-hosted endpoint of a stdio server first, as the web install does', () => {
     expect(
-      pickMarketplaceDeployment({
-        deploymentOptions: [httpOption(), stdioOption],
-        haveCloudEndpoint: 'https://cloud.example.com',
-      }),
+      pickMarketplaceDeployment(
+        {
+          deploymentOptions: [httpOption(), stdioOption],
+          haveCloudEndpoint: 'https://cloud.example.com',
+        },
+        noGateway,
+      ),
     ).toEqual({
       deployment: { cloudEndPoint: 'https://cloud.example.com', headers: undefined, type: 'cloud' },
     });
   });
 
   it('uses an HTTP endpoint, typed or untyped', () => {
-    expect(pickMarketplaceDeployment({ deploymentOptions: [stdioOption, httpOption()] })).toEqual({
+    expect(
+      pickMarketplaceDeployment({ deploymentOptions: [stdioOption, httpOption()] }, withGateway),
+    ).toEqual({
       deployment: {
         auth: undefined,
         headers: undefined,
@@ -100,31 +108,59 @@ describe('pickMarketplaceDeployment', () => {
       },
     });
     expect(
-      pickMarketplaceDeployment({ deploymentOptions: [{ connection: { url: 'https://a.dev' } }] }),
+      pickMarketplaceDeployment(
+        { deploymentOptions: [{ connection: { url: 'https://a.dev' } }] },
+        withGateway,
+      ),
     ).toMatchObject({ deployment: { type: 'http', url: 'https://a.dev' } });
   });
 
-  it('skips an HTTP endpoint on localhost or a private network for one the server reaches', () => {
-    expect(
-      pickMarketplaceDeployment({
-        deploymentOptions: [
-          httpOption({ url: 'http://192.168.1.10:8080/mcp' }),
-          { connection: { url: 'https://a.dev' } },
-        ],
-      }),
-    ).toMatchObject({ deployment: { type: 'http', url: 'https://a.dev' } });
+  describe('an HTTP endpoint on localhost or a private network', () => {
+    const privateUrls = [
+      'http://localhost:3000/mcp',
+      'http://127.0.0.1:8080/mcp',
+      'http://10.0.0.2/mcp',
+    ];
+
+    it.each(privateUrls)(
+      'is refused with a device gateway, which would reach %s from the user device',
+      (url) => {
+        expect(
+          pickMarketplaceDeployment(
+            { deploymentOptions: [stdioOption, httpOption({ url })] },
+            withGateway,
+          ),
+        ).toEqual({ blocker: 'private-network' });
+      },
+    );
+
+    it('gives way to one the server reaches', () => {
+      expect(
+        pickMarketplaceDeployment(
+          {
+            deploymentOptions: [
+              httpOption({ url: 'http://192.168.1.10:8080/mcp' }),
+              { connection: { url: 'https://a.dev' } },
+            ],
+          },
+          withGateway,
+        ),
+      ).toMatchObject({ deployment: { type: 'http', url: 'https://a.dev' } });
+    });
+
+    it('is used without a gateway: the server connects itself, through the SSRF-safe fetch', () => {
+      expect(
+        pickMarketplaceDeployment(
+          { deploymentOptions: [httpOption({ url: 'http://10.0.0.2/mcp' })] },
+          noGateway,
+        ),
+      ).toMatchObject({ deployment: { type: 'http', url: 'http://10.0.0.2/mcp' } });
+    });
   });
 
   it.each([
     ['a stdio-only server', { deploymentOptions: [stdioOption] }, 'local-only'],
     ['no deployment options', {}, 'local-only'],
-    ...['http://localhost:3000/mcp', 'http://127.0.0.1:8080/mcp', 'http://10.0.0.2/mcp'].map(
-      (url) => [
-        `a server whose only HTTP endpoint is ${url}`,
-        { deploymentOptions: [stdioOption, httpOption({ url })] },
-        'local-only',
-      ],
-    ),
     [
       'an OAuth HTTP server',
       { deploymentOptions: [httpOption({ auth: { type: 'oauth2' } })] },
@@ -155,7 +191,9 @@ describe('pickMarketplaceDeployment', () => {
       'config',
     ],
   ])('refuses %s', (_, manifest, blocker) => {
-    expect(pickMarketplaceDeployment(manifest as MarketMcpManifest)).toEqual({ blocker });
+    expect(pickMarketplaceDeployment(manifest as MarketMcpManifest, withGateway)).toEqual({
+      blocker,
+    });
   });
 });
 
@@ -656,7 +694,7 @@ describe('installMarketplaceMcpConnector', () => {
         deploymentOptions: [httpOption({ url: 'http://192.168.1.10:8080/mcp' })],
         name: 'LAN MCP',
       }),
-    ).toEqual({ blocker: 'local-only', status: 'blocked' });
+    ).toEqual({ blocker: 'private-network', status: 'blocked' });
     expect(listMcpToolsOnDevice).not.toHaveBeenCalled();
     expect(mcpService.listRawTools).not.toHaveBeenCalled();
     expect(await connectorRows()).toEqual([]);

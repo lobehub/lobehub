@@ -602,6 +602,7 @@ describe('agentBuilderRuntime', () => {
       ['oauth', 'PluginNeedsAuthorization', 'OAuth'],
       ['config', 'PluginNeedsConfig', 'settings'],
       ['local-only', 'PluginNeedsDesktop', 'desktop app'],
+      ['private-network', 'PluginNeedsDesktop', 'private-network address'],
       ['conflict', 'PluginIdentifierConflict', 'already exists'],
       ['forbidden', 'PluginInstallForbidden', 'admins'],
       ['in-progress', 'PluginInstallInProgress', 'already being installed'],

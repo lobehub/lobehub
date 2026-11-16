@@ -6,7 +6,7 @@ import {
   MARKETPLACE_INSTALL_COMPLETED_KEY,
   MARKETPLACE_TOOL_POLICIES_KEY,
 } from '@lobechat/const';
-import { isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
+import { shouldConnectViaDevice } from '@lobechat/utils/mcpEndpoint';
 import debug from 'debug';
 
 import type { DecryptedConnector } from '@/database/models/connector';
@@ -24,6 +24,7 @@ import { buildCloudMcpManifest, cloudManifestTools } from '@/libs/mcp/cloudManif
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { toClientToolSyncInputs } from '@/server/routers/lambda/_helpers/clientToolSyncInputs';
 import { canManageWorkspaceConnectors } from '@/server/routers/lambda/_helpers/connectorManagePolicy';
+import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { listConnectorToolSyncInputs, writeConnectorToolSyncInputs } from './sync';
 
@@ -62,9 +63,9 @@ export type MarketplaceDeployment =
  * Why a marketplace MCP cannot be installed without the user:
  * - `config`: it needs settings (an API key…) only the user can fill in;
  * - `oauth`: it signs in with OAuth, which the user authorizes in a browser;
- * - `local-only`: it has no endpoint the server reaches itself, only a local
- *   (stdio) process or a URL on localhost / a private network, which only the
- *   user's own machine reaches;
+ * - `local-only`: it has no remote endpoint, only a local (stdio) process;
+ * - `private-network`: its only HTTP endpoint is on localhost or a private
+ *   network, which the server would reach through the user's device;
  * - `no-tools`: it lists no tools, so the install would load nothing;
  * - `conflict`: another connector already holds the identifier;
  * - `in-progress`: an install of it started under
@@ -72,7 +73,14 @@ export type MarketplaceDeployment =
  * - `forbidden`: the workspace lets only owners and admins add connectors.
  */
 export type MarketplaceInstallBlocker =
-  'config' | 'conflict' | 'forbidden' | 'in-progress' | 'local-only' | 'no-tools' | 'oauth';
+  | 'config'
+  | 'conflict'
+  | 'forbidden'
+  | 'in-progress'
+  | 'local-only'
+  | 'no-tools'
+  | 'oauth'
+  | 'private-network';
 
 export type MarketplaceInstallOutcome =
   /** A connector was created, its tools synced, and the install marked finished. */
@@ -109,9 +117,11 @@ const doesConfigSchemaRequireInput = (configSchema: unknown) => {
  * endpoint for a stdio server first, then an HTTP endpoint. A stdio-only server
  * needs a local process, which a server run cannot start.
  *
- * An HTTP endpoint on localhost or a private network is never picked: the
- * server would list and call it on the user's device, so a market listing
- * could have that device reach its loopback or LAN services unasked.
+ * An HTTP endpoint the server would reach through the user's device (localhost
+ * or a private network, with a device gateway: `shouldConnectViaDevice`) is
+ * never taken: a listing could have that device reach its loopback or LAN
+ * services. Without a gateway the server connects to it itself, through the
+ * SSRF-safe fetch.
  */
 const deploymentOptionsOf = (manifest: MarketMcpManifest) =>
   Array.isArray(manifest.deploymentOptions) ? manifest.deploymentOptions : [];
@@ -126,15 +136,19 @@ const findStdioOption = (manifest: MarketMcpManifest) =>
 
 export const pickMarketplaceDeployment = (
   manifest: MarketMcpManifest,
+  { deviceGatewayConfigured }: { deviceGatewayConfigured: boolean },
 ): { deployment: MarketplaceDeployment } | { blocker: MarketplaceInstallBlocker } => {
   const options = deploymentOptionsOf(manifest);
-  const isServerReachable = (url: string | undefined): url is string =>
-    !!url && !isDeviceOnlyMcpEndpoint({ type: 'http', url });
+  const httpOptions = options.filter(
+    (option) =>
+      option?.connection?.url && (option.connection.type === 'http' || !option.connection.type),
+  );
+  const serverReached = httpOptions.filter(
+    ({ connection }) =>
+      !shouldConnectViaDevice({ type: 'http', url: connection?.url }, { deviceGatewayConfigured }),
+  );
   const httpOption =
-    options.find(
-      (option) => isServerReachable(option?.connection?.url) && option.connection.type === 'http',
-    ) ??
-    options.find((option) => isServerReachable(option?.connection?.url) && !option.connection.type);
+    serverReached.find((option) => option.connection?.type === 'http') ?? serverReached[0];
   const stdioOption = findStdioOption(manifest);
 
   if (stdioOption && manifest.haveCloudEndpoint) {
@@ -156,7 +170,7 @@ export const pickMarketplaceDeployment = (
     return { deployment: { auth, headers, type: 'http', url } };
   }
 
-  return { blocker: 'local-only' };
+  return { blocker: httpOptions.length > 0 ? 'private-network' : 'local-only' };
 };
 
 /**
@@ -291,6 +305,7 @@ export const installMarketplaceMcpConnector = async (
     readHostedEndpoint && manifest.haveCloudEndpoint === undefined && findStdioOption(manifest)
       ? { ...manifest, haveCloudEndpoint: await readHostedEndpoint() }
       : manifest,
+    { deviceGatewayConfigured: deviceGateway.isConfigured },
   );
   if ('blocker' in picked) return { blocker: picked.blocker, status: 'blocked' };
   const { deployment } = picked;
@@ -363,8 +378,8 @@ export const installMarketplaceMcpConnector = async (
   try {
     // Listed before anything is written to the row (the server's MCP client
     // sends every HTTP request through the SSRF-safe fetch), held to the market
-    // tool policies it stores. Never on a device (no `serverDB`): the server
-    // lists the endpoint itself, or the listing fails.
+    // tool policies it stores. Never on a device (no `serverDB`): the picked
+    // endpoint is one the server lists itself, or the listing fails.
     const syncInputs =
       deployment.type === 'cloud'
         ? await toClientToolSyncInputs(marketTools, userId)
