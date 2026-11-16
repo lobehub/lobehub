@@ -1,6 +1,7 @@
 import type { WidgetEnvRequirement } from '@lobechat/types';
 
 import { ConnectorModel, type DecryptedConnector } from '@/database/models/connector';
+import type { DecryptedConnectorLink } from '@/database/models/connectorLink';
 import type { ConnectorCredentials } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
@@ -205,6 +206,23 @@ const mayInject = async (
 };
 
 /**
+ * The OAuth account whose token a script may receive. A script can read and
+ * send its environment anywhere, so an account's token goes only to the member
+ * who authorized it, or to the workspace owner, who may use any workspace
+ * credential. Creating the connector does not make a teammate's account yours.
+ */
+const pickInjectableAccount = async (
+  connector: DecryptedConnector,
+  accounts: DecryptedConnectorLink[],
+  scope: WidgetCredentialScope,
+  isOwner: () => Promise<boolean>,
+): Promise<DecryptedConnectorLink | undefined> => {
+  const own = accounts.filter((account) => account.userId === scope.authorUserId);
+  if (own.length) return pickPrimaryLink(own);
+  return connector.workspaceId && (await isOwner()) ? pickPrimaryLink(accounts) : undefined;
+};
+
+/**
  * Resolve the environment a widget script declares in `manifest.env`.
  *
  * Credentials come from `user_connectors` through the same agent-aware chain
@@ -278,9 +296,22 @@ export const resolveWidgetEnv = async (
       : isWorkspacePrimaryOwner({ db, userId: scope.authorUserId, workspaceId: scope.workspaceId });
     return ownerCheck;
   };
+  const model = connectorModel as ConnectorModel;
+  const accountsByConnector = await loadConnectorLinksMap([...byIdentifier.values()], {
+    connectorModel: model,
+  });
   const forbidden: string[] = [];
+  const accountOf = new Map<string, DecryptedConnectorLink>();
   for (const connector of byIdentifier.values()) {
-    if (!(await mayInject(connector, scope, isOwner))) forbidden.push(connector.identifier);
+    if (!(await mayInject(connector, scope, isOwner))) {
+      forbidden.push(connector.identifier);
+      continue;
+    }
+    const accounts = accountsByConnector.get(connector.id) ?? [];
+    if (!accounts.length) continue;
+    const account = await pickInjectableAccount(connector, accounts, scope, isOwner);
+    if (account) accountOf.set(connector.id, account);
+    else forbidden.push(connector.identifier);
   }
   if (forbidden.length > 0) throw new ForbiddenWidgetCredentialsError(forbidden);
 
@@ -294,11 +325,7 @@ export const resolveWidgetEnv = async (
 
     let connector = byIdentifier.get(requirement.connector);
     if (connector) {
-      const model = connectorModel as ConnectorModel;
-      const link = pickPrimaryLink(
-        (await loadConnectorLinksMap([connector], { connectorModel: model })).get(connector.id) ??
-          [],
-      );
+      const link = accountOf.get(connector.id);
       connector = link
         ? withLinkCredentials(
             connector,
