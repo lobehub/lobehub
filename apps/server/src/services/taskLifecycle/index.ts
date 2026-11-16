@@ -44,6 +44,7 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
+import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 import { getLLMGenerationTracingService } from '@/server/services/llmGenerationTracing';
 import { SystemAgentService } from '@/server/services/systemAgent';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
@@ -553,12 +554,32 @@ export class TaskLifecycleService {
     // the unaccepted output would already have been consumed.
     if (!verifyBound) await this.bridgeResultToCreator(params);
 
+    // A swarm's lane and promotion runs carry no verification, so no verify
+    // settle wakes the coordinator: wake it here, or a finished lane waits for
+    // the next sweep to be started again (and wrap-up for its promotion).
+    if (reason === 'done' && !verifyBound && params.runTrigger === 'goal' && !currentTask?.parentTaskId)
+      await this.wakeSwarmGoal(taskId);
+
     // Heartbeat re-arm: re-read task state (status / context may have just
     // been mutated by the branches above) and decide whether to publish the
     // next tick.
     const finalTask = await this.taskModel.findById(taskId);
     if (finalTask) await this.maybeRearmHeartbeat(finalTask, reason);
   }
+
+  /** Queue an advance for the swarm goal a finished Task belongs to; other goals are left alone. */
+  private wakeSwarmGoal = async (taskId: string) => {
+    const goal = await new GoalModel(this.db, this.userId, this.workspaceId)
+      .findByGraphTask(taskId)
+      .catch(() => undefined);
+    if (!goal?.config?.swarm) return;
+    await scheduleGoalAdvance({
+      goalId: goal.id,
+      trigger: 'settle',
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
+  };
 
   /**
    * Write the run row's terminal status for this report, unless a newer
