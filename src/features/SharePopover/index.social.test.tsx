@@ -2,13 +2,14 @@
  * @vitest-environment happy-dom
  */
 import type * as BaseUI from '@lobehub/ui';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SharePopoverContent } from './index';
 
 const mocks = vi.hoisted(() => ({
   canPublishLink: true,
+  close: vi.fn(),
   share: undefined as undefined | { id: string; visibility: 'link' | 'private' },
 }));
 
@@ -17,7 +18,7 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
   return {
     ...actual,
     QRCode: () => <div data-testid={'qrcode'} />,
-    usePopoverContext: () => ({ close: vi.fn() }),
+    usePopoverContext: () => ({ close: mocks.close }),
   };
 });
 
@@ -49,6 +50,7 @@ describe('SharePopover social share section', () => {
   beforeEach(() => {
     mocks.canPublishLink = true;
     mocks.share = undefined;
+    mocks.close.mockReset();
   });
 
   it('disables social share and asks to enable link sharing when there is no share id', () => {
@@ -82,5 +84,17 @@ describe('SharePopover social share section', () => {
 
     expect(screen.queryByText('shareModal.social.disabledHint')).not.toBeInTheDocument();
     for (const tile of tiles()) expect(tile).toBeEnabled();
+  });
+
+  it('closes the popover when a channel sends the user to another site', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    mocks.share = { id: 'abc123', visibility: 'link' };
+    render(<SharePopoverContent topicId={'tpc_1'} />);
+
+    fireEvent.click(document.querySelector<HTMLButtonElement>('button[data-platform="x"]')!);
+
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(mocks.close).toHaveBeenCalledTimes(1);
+    open.mockRestore();
   });
 });
