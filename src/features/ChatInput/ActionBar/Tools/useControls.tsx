@@ -55,7 +55,6 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
-import { connectorSelectors } from '@/store/tool/slices/connector';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
 import { useAgentId } from '../../hooks/useAgentId';
@@ -65,6 +64,7 @@ import { closeToolDetailPopovers } from '../components/useDetailPopoverState';
 import { MemoryEffortControl } from '../Memory/Controls';
 import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 import { SearchAdvancedControls } from '../Search/Controls';
+import { useAgentMenuConnectors } from './agentMenuConnectors';
 import {
   isCapabilityTool,
   resolveCapabilityConfigPatch,
@@ -77,6 +77,7 @@ import LobehubSkillIcon from './LobehubSkillIcon';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
 import MarketAgentSkillPopoverContent from './MarketAgentSkillPopoverContent';
 import MarketSkillIcon from './MarketSkillIcon';
+import PrivateConnectorTag from './PrivateConnectorTag';
 import SkillRow from './SkillRow';
 import ToolItem from './ToolItem';
 import ToolItemDetailPopover from './ToolItemDetailPopover';
@@ -565,8 +566,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
 
-  // MCP connectors the user added: custom ones and marketplace installs
-  const customConnectors = useToolStore(connectorSelectors.userMcpConnectors, isEqual);
+  // MCP connectors the user added that this agent loads (custom and marketplace)
+  const customConnectors = useAgentMenuConnectors(agentId);
   const getConfigure = useConnectorConfigure();
   const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
   const fetchConnectors = useToolStore((s) => s.fetchConnectors);
@@ -1163,9 +1164,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [userAgentSkills, t, createManagedSkillItem, deleteAgentSkill],
   );
 
-  // Connector MCP list items (custom ones and marketplace installs).
-  // Toggling adds the connector identifier to agents.plugins[] — the same field
-  // the runtime resolves connectors from, so they become callable immediately.
+  // Connector MCP rows (custom and marketplace). Toggling adds the identifier to
+  // agents.plugins[], the field the runtime resolves connectors from.
   const customConnectorItems = useMemo(
     () =>
       customConnectors.map((connector) => {
@@ -1188,8 +1188,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             displayName: title,
             onDelete: async () => {
               await deleteConnector(connector.id);
-              // Mirror removeComposioServer: drop the identifier from agent.plugins so
-              // no orphaned pin survives the connector deletion.
+              // Like removeComposioServer: no orphaned pin survives the deletion
               try {
                 await togglePlugin(connector.identifier, false);
               } catch (error) {
@@ -1197,6 +1196,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
               }
             },
           },
+          extraTag: connector.visibility === 'private' ? <PrivateConnectorTag /> : undefined,
           icon,
           id: connector.identifier,
           popoverContent,
