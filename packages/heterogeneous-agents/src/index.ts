@@ -171,6 +171,9 @@ export {
 export type {
   AgentEventAdapter,
   AgentProcessConfig,
+  BackgroundTaskEventData,
+  HeteroBackgroundTask,
+  HeteroBackgroundTaskStatus,
   HeterogeneousAgentEvent,
   HeterogeneousEventType,
   HeterogeneousTerminalErrorData,
