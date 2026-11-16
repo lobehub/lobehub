@@ -46,7 +46,12 @@ jobs:
           cat >> "$RUNNER_TEMP/tfs-runtime.Dockerfile" <<'EOF'
           FROM busybox:latest
           COPY --from=base /distroless/ /
+          RUN mkdir -p /app
+          EOF
+          sed -n '/^# \/app\/.elasticsearch-reindex/,/^## Production image/{ /^## Production image/!p; }' Dockerfile >> "$RUNNER_TEMP/tfs-runtime.Dockerfile"
+          cat >> "$RUNNER_TEMP/tfs-runtime.Dockerfile" <<'EOF'
           USER 1001:1001
+          RUN /bin/node --version
           ENTRYPOINT ["/usr/bin/curl"]
           EOF
           docker buildx build --platform linux/amd64 --load \

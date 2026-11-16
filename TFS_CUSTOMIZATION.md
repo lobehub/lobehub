@@ -70,7 +70,7 @@ docker build --build-arg INSTALL_TFS_CURL=true -t lobehub-tfs .
 
 可在宿主机运行 `docker run --rm --entrypoint /usr/bin/curl ghcr.io/lichao0223/lobehub:canary --version` 检查镜像是否包含 NTLM；标签应换成实际部署标签。宿主机 `curl --version` 不能证明容器内可用。
 
-构建维护：curl 二进制放 `/distroless/usr/bin/`，`ldd` 得到的依赖和加载器沿用上游布局平铺到 `/distroless/lib/`；不能用 `cp --parents` 生成顶层 `/lib64` 目录，否则与 BusyBox 的同名链接冲突。发布工作流先合并相同运行文件系统并以非 root 用户检查 NTLM curl，再运行完整构建。这也覆盖只安装 builder 依赖、遗漏加载器或运行库的问题。
+构建维护：curl 二进制放 `/opt/tfs/bin/`，`ldd` 得到的依赖放 `/opt/tfs/lib/`，加载器固定放 `/opt/tfs/ld.so`；`/usr/bin/curl` 是调用该加载器和私有库的入口脚本。不要覆盖 BusyBox 的 libc（曾导致 `/bin/sh` 报 `GLIBC_2.38 not found`），也不要用 `cp --parents` 生成与其链接冲突的顶层 `/lib64` 目录。发布工作流先合并相同运行文件系统，执行真实用户 / 权限初始化命令，并以非 root 用户检查 Node 和 NTLM curl，再运行完整构建。
 
 每个用户的用户名 / 密码或 PAT 在「设置 → 集成 → TFS → 绑定个人账号」录入，不写到部署环境变量，不录入共享环境的 env。PAT 至少需要所读取资源的权限；读取代码与构建 / 发布可能需要不同权限。
 

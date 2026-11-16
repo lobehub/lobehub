@@ -28,15 +28,18 @@ RUN set -e && \
 
 # The TFS adapter needs a curl build with NTLM. Keep the upstream image lean unless enabled.
 ARG INSTALL_TFS_CURL=false
-# Keep libraries flat in /lib so the overlay preserves BusyBox's /lib64 symlink.
+# Isolate curl's loader and libraries so Debian's libc cannot replace BusyBox's libc.
 RUN if [ "$INSTALL_TFS_CURL" = true ]; then \
       apt-get update && apt-get install --no-install-recommends -y curl && \
       curl --version | grep -qw NTLM && \
       ldd /usr/bin/curl > /tmp/curl-dependencies && \
       ! grep -q 'not found' /tmp/curl-dependencies && \
-      mkdir -p /distroless/usr/bin && \
-      cp /usr/bin/curl /distroless/usr/bin/ && \
-      cp -L $(awk '$3 ~ /^\// { print $3 } $1 ~ /^\// { print $1 }' /tmp/curl-dependencies) /distroless/lib/ && \
+      mkdir -p /distroless/usr/bin /distroless/opt/tfs/bin /distroless/opt/tfs/lib && \
+      cp /usr/bin/curl /distroless/opt/tfs/bin/ && \
+      cp -L $(awk '$3 ~ /^\// { print $3 }' /tmp/curl-dependencies) /distroless/opt/tfs/lib/ && \
+      cp -L $(awk '$1 ~ /^\// { print $1 }' /tmp/curl-dependencies) /distroless/opt/tfs/ld.so && \
+      printf '#!/bin/sh\nexec /opt/tfs/ld.so --library-path /opt/tfs/lib /opt/tfs/bin/curl "$@"\n' > /distroless/usr/bin/curl && \
+      chmod 755 /distroless/usr/bin/curl && \
       rm -rf /var/lib/apt/lists/* /tmp/curl-dependencies; \
     fi
 
