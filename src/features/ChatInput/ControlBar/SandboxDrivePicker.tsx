@@ -2,12 +2,13 @@
 
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Github } from '@lobehub/icons';
-import { Flexbox, Icon, Popover, Skeleton, Text, toast, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Skeleton, Tag, Text, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
   ChevronDownIcon,
   FolderIcon,
+  HardDriveIcon,
   InfoIcon,
   PackageIcon,
   TimerIcon,
@@ -17,6 +18,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import { openSandboxStorageUpsell } from '@/business/client/features/SandboxStorageUpsell';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import RepositoryAvatar from '@/components/RepositoryAvatar';
 import { openCreateEnvironmentModal } from '@/features/EnvironmentManager/CreateEnvironmentModal';
@@ -85,6 +87,13 @@ const SUBMENU_STYLES = {
 interface SandboxDrivePickerProps {
   /** Whether this plan includes a drive. Without one the menu offers the way to a plan. */
   entitled: boolean;
+  /**
+   * Whether the execution-environment menu offers the temporary and the
+   * persistent sandbox. When it cannot — the author fixed the target, so a
+   * member sees it read-only — this menu keeps both, since the placement is
+   * still the member's own per conversation.
+   */
+  modeInEnvironmentMenu?: boolean;
   onChange: (selection: SandboxSelection) => Promise<void>;
   /** The project the conversation belongs to; its repositories have a checkout there. */
   projectId?: string;
@@ -117,7 +126,7 @@ const folderName = (path: string) => path.split('/').pop() || path;
  * replaces it.
  */
 const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
-  ({ entitled, onChange, projectId, topicId, value }) => {
+  ({ entitled, modeInEnvironmentMenu = true, onChange, projectId, topicId, value }) => {
     const { t } = useTranslation(['chat', 'device']);
     const [open, setOpen] = useState(false);
     const workspaceId = useActiveWorkspaceId();
@@ -250,7 +259,7 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
     const currentIcon = value.instanceId ? PackageIcon : FolderIcon;
     const showFolder = persistent && !onRepository;
     // The persistent sandbox: the conversation keeps its files on the drive.
-    const onDrive = ENABLE_BUSINESS_FEATURES && entitled && persistent;
+    const onDrive = ENABLE_BUSINESS_FEATURES && entitled && persistent && modeInEnvironmentMenu;
 
     const fallbackMessage = fallback ? t(`sandboxDrive.fallback.${fallback}`) : undefined;
     const chipIcon = fallback ? (
@@ -378,6 +387,46 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
           label={t('sandboxStorage.ephemeral')}
           onClick={() => void select({})}
         />
+
+        {/* No environment menu to switch sandboxes in: the drive stays a row here. */}
+        {!modeInEnvironmentMenu &&
+          ENABLE_BUSINESS_FEATURES &&
+          (entitled ? (
+            <Popover
+              arrow={false}
+              closeDelay={150}
+              content={driveMenu}
+              placement={'rightBottom'}
+              styles={SUBMENU_STYLES}
+              trigger={['hover', 'click']}
+            >
+              <div data-testid={'sandbox-drive-row'}>
+                <OptionRow
+                  arrow
+                  compact
+                  active={showFolder}
+                  icon={<Icon icon={HardDriveIcon} size={16} />}
+                  label={t('sandboxDrive.title')}
+                  onClick={() => {}}
+                />
+              </div>
+            </Popover>
+          ) : (
+            <OptionRow
+              compact
+              icon={<Icon icon={HardDriveIcon} size={16} />}
+              label={t('sandboxDrive.title')}
+              badge={
+                <Tag color={'gold'} size={'small'} style={{ borderRadius: 999, paddingInline: 8 }}>
+                  {t('pro', { ns: 'common' })}
+                </Tag>
+              }
+              onClick={() => {
+                setOpen(false);
+                openSandboxStorageUpsell();
+              }}
+            />
+          ))}
 
         {repositoryRow}
       </Flexbox>

@@ -59,8 +59,10 @@ vi.mock('../SandboxDriveMenu', () => ({
 }));
 vi.mock('../SandboxRepositoryMenu', () => ({ default: () => null }));
 
-const renderPicker = (value: SandboxSelection, props: { projectId?: string } = {}) =>
-  render(<SandboxDrivePicker entitled value={value} onChange={vi.fn()} {...props} />);
+const renderPicker = (
+  value: SandboxSelection,
+  props: { modeInEnvironmentMenu?: boolean; projectId?: string } = {},
+) => render(<SandboxDrivePicker entitled value={value} onChange={vi.fn()} {...props} />);
 
 // T-14161: the sandbox kind is picked in the execution-environment menu, so
 // this menu only asks what is left for that kind.
@@ -89,5 +91,15 @@ describe('SandboxDrivePicker', () => {
     expect(screen.getByTestId('sandbox-repository-row')).toBeInTheDocument();
     // The chip and the row both name it.
     expect(screen.getAllByText('sandboxStorage.ephemeral')).toHaveLength(2);
+  });
+
+  // A member of a workspace agent whose author fixed the target sees the
+  // execution environment read-only; the placement is still theirs to change.
+  it('keeps temporary and drive side by side when the environment menu is locked', () => {
+    renderPicker({ workingDirectory: 'notes' }, { modeInEnvironmentMenu: false });
+
+    expect(screen.getByTestId('sandbox-drive-row')).toBeInTheDocument();
+    expect(screen.getByTestId('sandbox-repository-row')).toBeInTheDocument();
+    expect(screen.getByText('sandboxStorage.ephemeral')).toBeInTheDocument();
   });
 });
