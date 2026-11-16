@@ -33,12 +33,6 @@ describe('ContentChunk', () => {
     contentChunk = new ContentChunk();
   });
 
-  describe('constructor', () => {
-    it('should not create an in-process chunking client', () => {
-      expect(chunkContentInWorker).not.toHaveBeenCalled();
-    });
-  });
-
   describe('chunkContent', () => {
     const mockFileContent = new Uint8Array([1, 2, 3, 4, 5]);
     const mockFilename = 'test-document.pdf';

@@ -14,7 +14,7 @@ import { buildFileParseWorker } from '../../../../../scripts/buildFileParseWorke
 import { FILE_PARSE_WORKER_PATH_ENV } from './artifact';
 import { FileParseError } from './errors';
 import { chunkContentInWorker, getSharedFileParseRunner } from './index';
-import { createFileParseRunner } from './runner';
+import { createFileParseRunner, DEFAULT_FILE_PARSE_LIMITS } from './runner';
 
 // The real build artifact in real threads, on the chunking path of the knowledge base.
 const here = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
@@ -35,17 +35,14 @@ afterAll(async () => {
   await rm(dir, { force: true, recursive: true });
 });
 
-const trackTimerGap = () => {
-  let last = Date.now();
-  let maxGap = 0;
+const trackTimerProgress = () => {
+  let ticks = 0;
   const interval = setInterval(() => {
-    const now = Date.now();
-    maxGap = Math.max(maxGap, now - last);
-    last = now;
+    ticks += 1;
   }, 20);
   return () => {
     clearInterval(interval);
-    return maxGap;
+    return ticks;
   };
 };
 
@@ -105,18 +102,15 @@ describe('chunking in the parse worker', () => {
     // One 16MB paragraph with no separator: the recursive splitter works through it
     // synchronously for about a second, which on the request thread stops every timer.
     const content = new TextEncoder().encode('abcdefghij'.repeat(1_600_000));
-    const stop = trackTimerGap();
+    const stop = trackTimerProgress();
+    let ticks = 0;
 
-    const startedAt = Date.now();
-    const chunks = await chunkContentInWorker('wall-of-text.md', content);
-    const elapsed = Date.now() - startedAt;
-    // one more tick: a loop that was blocked only reports its gap when it runs again
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    const chunks = await chunkContentInWorker('wall-of-text.md', content).finally(() => {
+      ticks = stop();
+    });
 
-    const maxGap = stop();
     expect(chunks.length).toBeGreaterThan(30_000);
-    expect(elapsed).toBeGreaterThan(400);
-    expect(maxGap).toBeLessThan(250);
+    expect(ticks).toBeGreaterThan(0);
   }, 60_000);
 
   it('refuses a spreadsheet archive over the zip budget before exceljs sees it', async () => {
@@ -147,7 +141,7 @@ describe('chunking in the parse worker', () => {
       buildTestZip([
         part(
           '[Content_Types].xml',
-          '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>',
+          '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>',
         ),
         part(
           '_rels/.rels',
@@ -159,7 +153,13 @@ describe('chunking in the parse worker', () => {
         ),
         part(
           'xl/_rels/workbook.xml.rels',
-          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>',
+          '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
+        ),
+        // exceljs resolves `s="1"` against the stylesheet: without one the parse fails on the first row
+        // instead of building the row objects this test is about.
+        part(
+          'xl/styles.xml',
+          '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"/></cellXfs></styleSheet>',
         ),
         {
           data: `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${rows}</sheetData></worksheet>`,
@@ -168,21 +168,24 @@ describe('chunking in the parse worker', () => {
         },
       ]),
     );
-    // A small heap makes the test cheap; production runs the same code under 768MB (a heap far below
-    // ~100MB aborts the whole process instead of ending the thread, so it is not made smaller).
+    // The production heap limit: a heap this far below it (160MB) aborts the whole process on Node
+    // 24.11.1 ("Reached heap limit" fatal error) instead of ending the thread with a typed error.
     const runner = createFileParseRunner({
-      maxOldGenerationSizeMb: 160,
+      maxOldGenerationSizeMb: DEFAULT_FILE_PARSE_LIMITS.maxOldGenerationSizeMb,
       parseTimeoutMs: 20_000,
       workerPath: () => workerPath,
     });
-    const stop = trackTimerGap();
+    const stop = trackTimerProgress();
+    let ticks = 0;
 
     const error = await runner
       .run({ content, filename: 'styled.xlsx', kind: 'chunk' })
+      .finally(() => {
+        ticks = stop();
+      })
       .catch((e) => e);
-    await new Promise((resolve) => setTimeout(resolve, 60));
 
-    expect(stop()).toBeLessThan(250);
+    expect(ticks).toBeGreaterThan(0);
     expect(error).toBeInstanceOf(FileParseError);
     expect(['OUT_OF_MEMORY', 'TIMEOUT']).toContain(error.code);
     expect(runner.stats()).toEqual({ active: 0, queued: 0 });

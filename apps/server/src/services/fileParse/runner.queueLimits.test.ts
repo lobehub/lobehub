@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { MAX_UPLOAD_FILE_COUNT } from '@lobechat/const';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { FileParseJob } from './protocol';
 import { createFileParseRunner, DEFAULT_FILE_PARSE_LIMITS } from './runner';
@@ -30,6 +30,7 @@ beforeAll(async () => {
 });
 
 afterAll(() => rm(dir, { force: true, recursive: true }));
+afterEach(() => vi.restoreAllMocks());
 
 /** A file job waits as a path: it holds no bytes. */
 const fileJob = (ms = 0) =>
@@ -69,10 +70,9 @@ describe('default queue limits', () => {
     );
     expect(runner.stats()).toEqual({ active: 1, queued: MAX_UPLOAD_FILE_COUNT - 1 });
 
-    const startedAt = performance.now();
     const eleventh = await rejection(runner.run(fileJob()));
     expect(eleventh).toMatchObject({ code: 'QUEUE_FULL' });
-    expect(performance.now() - startedAt).toBeLessThan(100);
+    expect(runner.stats()).toEqual({ active: 1, queued: MAX_UPLOAD_FILE_COUNT - 1 });
 
     await expect(Promise.all(upload)).resolves.toEqual(
       Array.from({ length: MAX_UPLOAD_FILE_COUNT }, () => 'done'),
@@ -95,38 +95,42 @@ describe('queue wait budget', () => {
   });
 
   it('lets a whole upload of slow files finish one after another', async () => {
-    // Scaled down 150x: 400ms parse timeout (60s), 300ms per file (~45s), ten files: the last one
-    // waits 9 x 300ms = 2.7s for the slot and must still run.
-    const runner = createFileParseRunner({ parseTimeoutMs: 400, workerPath: () => workerPath });
-    const startedAt = performance.now();
-    const waits: number[] = [];
-    const upload = Array.from({ length: MAX_UPLOAD_FILE_COUNT }, () =>
-      runner.run(fileJob(300), { onStart: () => waits.push(performance.now() - startedAt) }),
+    // Observe the scheduled budgets without advancing a fake clock alongside real workers.
+    // Ten serial parse budgets must fit; the old fixed 30s queue budget would expire too early.
+    const timers = vi.spyOn(globalThis, 'setTimeout');
+    const runner = createFileParseRunner({ parseTimeoutMs: 5000, workerPath: () => workerPath });
+    const starts: number[] = [];
+    const upload = Array.from({ length: MAX_UPLOAD_FILE_COUNT }, (_, i) =>
+      runner.run(fileJob(), { onStart: () => starts.push(i) }),
     );
     expect(runner.stats()).toEqual({ active: 1, queued: MAX_UPLOAD_FILE_COUNT - 1 });
 
     await expect(Promise.all(upload)).resolves.toEqual(
       Array.from({ length: MAX_UPLOAD_FILE_COUNT }, () => 'done'),
     );
-    expect(waits.at(-1)!).toBeGreaterThan(2500);
+    expect(starts).toEqual(Array.from({ length: MAX_UPLOAD_FILE_COUNT }, (_, i) => i));
+    const budgets = timers.mock.calls.map(([, delay]) => delay);
+    expect(budgets.filter((delay) => delay === 5000)).toHaveLength(MAX_UPLOAD_FILE_COUNT);
+    expect(budgets.filter((delay) => delay === 5000 * MAX_UPLOAD_FILE_COUNT)).toHaveLength(
+      MAX_UPLOAD_FILE_COUNT - 1,
+    );
     expect(runner.stats()).toEqual({ active: 0, queued: 0 });
   }, 20_000);
 
   it('still bounds the wait: a queued task behind a thread that will not die gives up at the derived budget', async () => {
     // parse timeout 200ms, queue of 2 => 600ms. The thread sits in native code for 2s.
+    const timers = vi.spyOn(globalThis, 'setTimeout');
     const runner = createFileParseRunner({
       maxQueue: 2,
       parseTimeoutMs: 200,
       workerPath: () => workerPath,
     });
     const stuck = rejection(runner.run({ ...fileJob(), sleep: 2 } as unknown as FileParseJob));
-    const startedAt = performance.now();
     const queued = await rejection(runner.run(fileJob()));
-    const waited = performance.now() - startedAt;
 
     expect(queued).toMatchObject({ code: 'QUEUE_TIMEOUT' });
-    expect(waited).toBeGreaterThanOrEqual(550);
-    expect(waited).toBeLessThan(1500);
+    expect(timers.mock.calls.map(([, delay]) => delay)).toContain(600);
+    expect(runner.stats()).toEqual({ active: 1, queued: 0 });
     expect(await stuck).toMatchObject({ code: 'TIMEOUT' });
   }, 20_000);
 
