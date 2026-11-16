@@ -17,6 +17,8 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useClientDataSWR } from '@/libs/swr';
 import { inboundWebhookService } from '@/services/inboundWebhook';
 
+import { type OlderDeliveryPages, visibleDeliveries } from './deliveryPages';
+
 dayjs.extend(relativeTime);
 
 export const WEBHOOK_DELIVERIES_SWR_KEY = 'agent-webhook-deliveries';
@@ -73,21 +75,23 @@ const DeliveryLog = memo<{ agentId: string; webhookId: string }>(({ agentId, web
     [WEBHOOK_DELIVERIES_SWR_KEY, webhookId],
     () => inboundWebhookService.listDeliveries(webhookId),
   );
-  // Older pages, appended by "Load more"; dropped when the first page is reloaded.
-  const [older, setOlder] = useState<InboundWebhookDeliveryPage>();
+  // Older pages, appended by "Load more"; dropped when the first page moves (see visibleDeliveries).
+  const [older, setOlder] = useState<OlderDeliveryPages>();
   const [loadingMore, setLoadingMore] = useState(false);
-  const items = [...(first.data?.items ?? []), ...(older?.items ?? [])];
-  const nextCursor = older ? older.nextCursor : first.data?.nextCursor;
+  const { items, nextCursor, older: current } = visibleDeliveries(first.data, older);
 
   const loadMore = async () => {
     if (!nextCursor) return;
     setLoadingMore(true);
     try {
       const page = await inboundWebhookService.listDeliveries(webhookId, nextCursor);
-      setOlder((prev) => ({
-        items: [...(prev?.items ?? []), ...(page.items ?? [])],
-        nextCursor: page.nextCursor,
-      }));
+      setOlder({
+        after: first.data?.nextCursor,
+        page: {
+          items: [...(current?.items ?? []), ...(page.items ?? [])],
+          nextCursor: page.nextCursor,
+        },
+      });
     } finally {
       setLoadingMore(false);
     }
