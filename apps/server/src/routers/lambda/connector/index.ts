@@ -518,8 +518,14 @@ const connectorCoreRouter = router({
       } else if (
         patch.oidcConfig &&
         !patch.oidcConfig.clientId &&
-        target.oidcConfig?.scheme !== 'pre_registration'
+        target.oidcConfig &&
+        target.oidcConfig.scheme !== 'pre_registration' &&
+        patch.oidcConfig.scheme === target.oidcConfig.scheme
       )
+        // The edit form resends the automatic client it shows without the
+        // fields the server resolved: keep the stored client and its accounts.
+        // A connector switching to OAuth, or to another scheme, stores the new
+        // one and waits for its authorization.
         delete patch.oidcConfig;
       if (patch.oidcConfig?.clientId && patch.oidcConfig.clientId === target.oidcConfig?.clientId) {
         // A form/CLI may resend the client without its resolved server fields.
