@@ -142,6 +142,7 @@ const WebhookItem = memo<WebhookItemProps>(
 
     const rotate = () =>
       confirmModal({
+        cancelText: t('webhook.cancel'),
         content: t('webhook.rotate.content'),
         okButtonProps: { danger: true },
         okText: t('webhook.rotate.ok'),
@@ -158,6 +159,7 @@ const WebhookItem = memo<WebhookItemProps>(
 
     const remove = () =>
       confirmModal({
+        cancelText: t('webhook.cancel'),
         content: t('webhook.delete.content', { name }),
         okButtonProps: { danger: true },
         okText: t('webhook.delete.ok'),

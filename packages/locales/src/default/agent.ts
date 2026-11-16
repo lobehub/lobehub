@@ -1277,6 +1277,7 @@ export default {
   'webhook.actions.test': 'Send test',
   'webhook.actions.usage': 'How to call',
   'webhook.autoApproveTag': 'Auto-approve',
+  'webhook.cancel': 'Cancel',
   'webhook.create': 'Create webhook',
   'webhook.created.done': 'Done',
   'webhook.created.title': 'Webhook created',

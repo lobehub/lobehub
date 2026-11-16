@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { getWebhookEventSource, parseWebhookEvent } from './parseWebhookEvent';
+import {
+  formatWebhookCallData,
+  getWebhookEventSource,
+  parseWebhookEvent,
+} from './parseWebhookEvent';
 
 const block = [
   '<webhookEvent webhookId="wh-1" name="CI &quot;alerts&quot;" thread="PR-7">',
@@ -35,5 +39,22 @@ describe('parseWebhookEvent', () => {
     expect([...parsed.testIds]).toEqual(['s1']);
     expect(parsed.omitted).toBe(3);
     expect(parsed.instruction).toBe('Triage it');
+  });
+});
+
+describe('formatWebhookCallData', () => {
+  it('previews what the caller sent and expands to the whole delivery', () => {
+    const data = JSON.stringify({ body: 'disk\nfull', headers: { 'user-agent': 'curl' } });
+    const formatted = formatWebhookCallData(data);
+    expect(formatted.preview).toBe('disk full');
+    expect(formatted.pretty).toContain('"user-agent": "curl"');
+    expect(formatWebhookCallData(JSON.stringify({ body: { build: 42 } })).preview).toBe(
+      '{"build":42}',
+    );
+  });
+
+  it('shows data that is not a delivery as written', () => {
+    expect(formatWebhookCallData('not json').preview).toBe('not json');
+    expect(formatWebhookCallData('{"other":1}').preview).toBe('{"other":1}');
   });
 });

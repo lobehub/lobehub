@@ -5,6 +5,7 @@ import {
   Button,
   createModal,
   Flexbox,
+  Highlighter,
   Icon,
   Input,
   type ModalInstance,
@@ -22,7 +23,6 @@ import { CheckCircle2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import CommandLine from '@/components/CommandLine';
 import CopyableLabel from '@/components/CopyableLabel';
 import { inboundWebhookService } from '@/services/inboundWebhook';
 
@@ -120,7 +120,9 @@ const WebhookForm = ({ agentId, item, onSaved }: WebhookFormProps) => {
           />
         </Field>
         <Field label={t('webhook.created.tryIt')}>
-          <CommandLine command={curlExamples(created.endpoint).text} />
+          <Highlighter wrap language={'bash'}>
+            {curlExamples(created.endpoint).text}
+          </Highlighter>
         </Field>
         <Button block type={'primary'} onClick={() => close()}>
           {t('webhook.created.done')}

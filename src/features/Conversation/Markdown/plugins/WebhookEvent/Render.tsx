@@ -7,7 +7,11 @@ import { useTranslation } from 'react-i18next';
 
 import { eventCardStyles, EventPill, EventRow } from '../McpEvent/Render';
 import { type MarkdownElementProps } from '../type';
-import { parseWebhookEvent, type WebhookEventAttributes } from './parseWebhookEvent';
+import {
+  formatWebhookCallData,
+  parseWebhookEvent,
+  type WebhookEventAttributes,
+} from './parseWebhookEvent';
 
 /**
  * The card for the message a generic webhook call wakes the Agent with. The webhook is the
@@ -34,7 +38,7 @@ const Render = memo<MarkdownElementProps<WebhookEventAttributes>>(({ children, n
     <div {...stylex.props(eventCardStyles.root)}>
       <div {...stylex.props(eventCardStyles.body)}>
         {single ? (
-          <EventRow event={single} leading={leadingOf(single.id)} />
+          <EventRow event={single} format={formatWebhookCallData} leading={leadingOf(single.id)} />
         ) : (
           <>
             {total > 0 && (
@@ -53,7 +57,12 @@ const Render = memo<MarkdownElementProps<WebhookEventAttributes>>(({ children, n
               </Flexbox>
             )}
             {parsed.events.map((event) => (
-              <EventRow event={event} key={event.id} leading={leadingOf(event.id)} />
+              <EventRow
+                event={event}
+                format={formatWebhookCallData}
+                key={event.id}
+                leading={leadingOf(event.id)}
+              />
             ))}
           </>
         )}

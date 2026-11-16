@@ -151,10 +151,15 @@ export const EventPill = ({
  * the full data folded out underneath on request. The data is untrusted text
  * from the connector, so it renders as text in a `<pre>`, never as markup.
  */
-export const EventRow = memo<{ event: McpEventItem; leading?: ReactNode }>(({ event, leading }) => {
+export const EventRow = memo<{
+  event: McpEventItem;
+  /** How the data reads collapsed and expanded; defaults to the data as JSON. */
+  format?: (data: string) => { preview: string; pretty: string };
+  leading?: ReactNode;
+}>(({ event, format = formatEventData, leading }) => {
   const { t } = useTranslation('integration');
   const [open, setOpen] = useState(false);
-  const data = useMemo(() => formatEventData(event.data), [event.data]);
+  const data = useMemo(() => format(event.data), [event.data, format]);
   const time = formatEventTime(event.timestamp);
 
   return (

@@ -18,15 +18,21 @@ const UsageGuide = memo<{ endpoint: string }>(({ endpoint }) => {
     <Flexbox gap={12}>
       <Flexbox gap={6}>
         <Text type={'secondary'}>{t('webhook.usage.simple')}</Text>
-        <Highlighter language={'bash'}>{examples.text}</Highlighter>
+        <Highlighter wrap language={'bash'}>
+          {examples.text}
+        </Highlighter>
       </Flexbox>
       <Flexbox gap={6}>
         <Text type={'secondary'}>{t('webhook.usage.json')}</Text>
-        <Highlighter language={'bash'}>{examples.json}</Highlighter>
+        <Highlighter wrap language={'bash'}>
+          {examples.json}
+        </Highlighter>
       </Flexbox>
       <Flexbox gap={6}>
         <Text type={'secondary'}>{t('webhook.usage.thread')}</Text>
-        <Highlighter language={'bash'}>{examples.thread}</Highlighter>
+        <Highlighter wrap language={'bash'}>
+          {examples.thread}
+        </Highlighter>
       </Flexbox>
       <Text style={{ fontSize: 12 }} type={'secondary'}>
         {t('webhook.usage.notes')}

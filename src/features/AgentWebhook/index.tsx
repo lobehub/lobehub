@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import AgentProfileTabs, { AGENT_PROFILE_TABS_CENTER_STYLE } from '@/features/AgentProfileTabs';
 import NavHeader from '@/features/NavHeader';
@@ -17,6 +18,8 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 import { useAgentWebhooks } from './useAgentWebhooks';
 import { openWebhookFormModal } from './WebhookFormModal';
 import WebhookItem from './WebhookItem';
+
+const PageSkeleton = createSurfaceSkeleton('list');
 
 interface AgentWebhookProps {
   agentId: string;
@@ -30,7 +33,8 @@ interface AgentWebhookProps {
  * its own block.
  */
 const WebhookPage = ({ agentId, disabled }: AgentWebhookProps) => {
-  const { t } = useTranslation('agent');
+  // The `agent` namespace loads lazily; painting before it arrives would show raw keys.
+  const { t, ready } = useTranslation('agent');
   const navigate = useWorkspaceAwareNavigate();
   const enabled = useServerConfigStore(serverConfigSelectors.enableAgentWebhooks);
   const configLoaded = useServerConfigStore((s) => s.serverConfigLoaded);
@@ -47,6 +51,7 @@ const WebhookPage = ({ agentId, disabled }: AgentWebhookProps) => {
   }, [agentId, navigate, unavailable]);
 
   if (unavailable) return null;
+  if (!ready) return <PageSkeleton />;
 
   const create = () =>
     openWebhookFormModal({

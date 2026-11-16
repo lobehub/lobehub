@@ -1,4 +1,4 @@
-import { type ParsedMcpEvent, parseMcpEvent } from '../McpEvent/parseMcpEvent';
+import { formatEventData, type ParsedMcpEvent, parseMcpEvent } from '../McpEvent/parseMcpEvent';
 import { parseXmlAttributes } from '../remarkPlugins/createRemarkXmlBlockPlugin';
 
 /** Attributes of the `<webhookEvent>` open tag the server's wake prompt writes. */
@@ -40,4 +40,21 @@ export const parseWebhookEvent = (raw: string): ParsedWebhookEvent => {
     if (attrs.test === 'true' && attrs.id) testIds.add(attrs.id);
   }
   return { ...parseMcpEvent(raw), testIds };
+};
+
+/**
+ * A webhook call for display: collapsed, what the caller sent (the request body); expanded, the
+ * whole delivery, headers and query included. Data that is not a delivery shows as written.
+ */
+export const formatWebhookCallData = (data: string): { preview: string; pretty: string } => {
+  const full = formatEventData(data);
+  try {
+    const parsed: unknown = JSON.parse(data);
+    if (!parsed || typeof parsed !== 'object' || !('body' in parsed)) return full;
+    const { body } = parsed as { body: unknown };
+    const preview = typeof body === 'string' ? body : JSON.stringify(body);
+    return { preview: preview.replaceAll(/\s+/g, ' '), pretty: full.pretty };
+  } catch {
+    return full;
+  }
 };
