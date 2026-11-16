@@ -323,6 +323,7 @@
   "automations.status.paused": "已停用",
   "automations.status.reconnect": "需要重新连接",
   "automations.status.terminated": "已终止",
+  "automations.target.webhookCalls": "调用与话题",
   "automations.untitledTopic": "未命名话题",
   "chatPreference.assist.desc": "个人偏好，仅对你自己生效，在个人空间和所有工作空间中通用。",
   "chatPreference.assist.title": "对话辅助",

@@ -305,6 +305,7 @@ export default {
   'management.status.failed': 'Failed',
   'management.status.idle': 'Idle',
   'management.status.running': 'Running',
+  'management.status.unread': 'Unread',
   'management.status.scheduled': 'Scheduled',
   'management.status.waitingForHuman': 'Awaiting input',
   'management.title': 'Topics',

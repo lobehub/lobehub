@@ -248,6 +248,7 @@
   "management.status.idle": "空闲中",
   "management.status.running": "运行中",
   "management.status.scheduled": "已排期",
+  "management.status.unread": "未读",
   "management.status.waitingForHuman": "等待响应",
   "management.title": "话题",
   "management.view.card": "卡片",

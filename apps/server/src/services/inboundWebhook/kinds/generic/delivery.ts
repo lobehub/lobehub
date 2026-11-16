@@ -46,8 +46,8 @@ const looksLikeJson = (text: string) => /^\s*[[{]/.test(text);
 
 /**
  * Whatever the caller sent, as the Agent will see it: JSON as JSON, a form as fields, anything else
- * as text. `curl -d '{...}'` sends JSON labelled as a form, so a form body that parses as JSON is
- * read as JSON.
+ * as text. `curl -d` labels every body as a form, so a "form" that parses as JSON is read as JSON,
+ * and one without any `key=value` pair is read as text.
  */
 export const parseBody = (
   body: string,
@@ -74,7 +74,8 @@ export const parseBody = (
     const json = tryJson();
     if (json) return json;
   }
-  if (type === 'application/x-www-form-urlencoded')
+  // `curl -d 'some text'` also labels plain text as a form; without a single `=` it is not one.
+  if (type === 'application/x-www-form-urlencoded' && body.includes('='))
     return { ok: true, value: entriesToRecord(new URLSearchParams(body)) };
   return { ok: true, value: body };
 };

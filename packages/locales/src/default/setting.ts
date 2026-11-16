@@ -5224,6 +5224,7 @@ When I am ___, I need ___
   'automations.source.topicMode.new': 'New topic per call',
   'automations.source.topicMode.reuse': 'One shared topic',
   'automations.untitledTopic': 'Untitled topic',
+  'automations.target.webhookCalls': 'Calls and topics',
   'automations.lastDelivery.never': 'No events yet',
   'automations.status.active': 'Active',
   'automations.status.reconnect': 'Reconnect needed',

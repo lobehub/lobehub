@@ -323,6 +323,7 @@
   "automations.status.paused": "Paused",
   "automations.status.reconnect": "Reconnect needed",
   "automations.status.terminated": "Ended",
+  "automations.target.webhookCalls": "Calls and topics",
   "automations.untitledTopic": "Untitled topic",
   "chatPreference.assist.desc": "Personal preferences: they only apply to you, in your personal space and every workspace.",
   "chatPreference.assist.title": "Chat Assist",

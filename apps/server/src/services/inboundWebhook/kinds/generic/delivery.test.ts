@@ -18,6 +18,13 @@ describe('parseBody', () => {
     // `curl -d '{...}'` labels JSON as a form.
     ['JSON sent as a form', '{"a":1}', 'application/x-www-form-urlencoded', { a: 1 }],
     ['JSON without a type', '{"a":1}', '', { a: 1 }],
+    // `curl -d 'text'` labels plain text as a form too.
+    [
+      'text sent as a form',
+      'Disk almost full on web-1',
+      'application/x-www-form-urlencoded',
+      'Disk almost full on web-1',
+    ],
     ['plain text', 'disk full', 'text/plain', 'disk full'],
     ['text that only looks like JSON', '{not json', 'text/plain', '{not json'],
     ['an empty body', '   ', 'application/json', {}],

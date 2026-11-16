@@ -157,7 +157,16 @@ export const TargetCell = memo<{ item: InboundWebhookItem }>(({ item }) => {
         />
         <Text ellipsis>{agentName}</Text>
       </Flexbox>
-      {topic && topicTitle ? (
+      {item.source.kind === 'generic' ? (
+        // A webhook starts its own topics; its page lists every call and where it ran.
+        <WorkspaceLink
+          to={`/agent/${agent.id}/webhook`}
+          {...stylex.props(styles.topicLink)}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {t('automations.target.webhookCalls')}
+        </WorkspaceLink>
+      ) : topic && topicTitle ? (
         <WorkspaceLink
           title={topicTitle}
           to={AGENT_CHAT_TOPIC_URL(agent.id, topic.id)}
