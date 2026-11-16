@@ -53,6 +53,7 @@ const PUBLIC_METHODS = [
   'cancelRateLimitContinuation',
   'count',
   'countBySender',
+  'countInFlightInDirectory',
   'countShareVisitors',
   'countTopicsForMemoryExtractor',
   'create',

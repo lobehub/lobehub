@@ -60,10 +60,12 @@ export const countInFlightInDirectory = async (
       and(
         scope,
         sql`COALESCE(${topics.metadata} -> 'runningOperation' ->> 'deviceId', ${topics.metadata} ->> 'boundDeviceId') = ${deviceId}`,
+        // Key existence, never `-> 'x' IS NOT NULL`: that shape crashes the
+        // pg_search planner on bm25-indexed tables (see jsonbNullTest).
         or(
           eq(topics.status, 'running'),
-          sql`${topics.metadata} -> 'runningOperation' IS NOT NULL`,
-          sql`${topics.metadata} -> 'taskCallbackReservation' IS NOT NULL`,
+          sql`COALESCE(jsonb_exists(${topics.metadata}, 'runningOperation'), false)`,
+          sql`COALESCE(jsonb_exists(${topics.metadata}, 'taskCallbackReservation'), false)`,
         ),
       ),
     );
