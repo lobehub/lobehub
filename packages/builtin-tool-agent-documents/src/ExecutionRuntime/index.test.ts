@@ -723,6 +723,75 @@ describe('AgentDocumentsExecutionRuntime', () => {
     );
   });
 
+  // T-14186: an offset past the last line used to come back as an empty success. Agents then
+  // filled the gap from other tool results in context and quoted another page as this document.
+  describe('readDocument offset past the end', () => {
+    const markdown = Array.from({ length: 216 }, (_, i) => `paper line ${i + 1}`).join('\n');
+    const createPagedRuntime = () =>
+      createRuntime({
+        readDocument: vi.fn().mockResolvedValue({
+          content: markdown,
+          id: 'agent-doc-paper',
+          litexml: '',
+          title: 'Paper',
+        }),
+      });
+
+    it('fails with the document size instead of an empty success', async () => {
+      const result = await createPagedRuntime().readDocument(
+        { format: 'markdown', id: 'agent-doc-paper', limit: 130, offset: 584 },
+        { agentId: 'agent-1' },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).toBe(
+        `offset=584 is past the end of document "Paper" (id="agent-doc-paper"): its markdown text has 216 lines, ${markdown.length} characters. Nothing was read. Use an offset from 1 to 216; line numbers count this document's own markdown text, so an offset taken from another document or tool result does not apply.`,
+      );
+      expect(result.content).not.toContain('paper line');
+    });
+
+    it('reports the same size on every read of the same id', async () => {
+      const runtime = createPagedRuntime();
+      const inRange = await runtime.readDocument(
+        { format: 'markdown', id: 'agent-doc-paper', limit: 200, offset: 1 },
+        { agentId: 'agent-1' },
+      );
+      const pastEnd = await runtime.readDocument(
+        { format: 'markdown', id: 'agent-doc-paper', limit: 200, offset: 384 },
+        { agentId: 'agent-1' },
+      );
+
+      expect(inRange.success).toBe(true);
+      expect(inRange.content).toContain('[Showing lines 1-200 of 216 lines,');
+      expect(pastEnd.success).toBe(false);
+      expect(pastEnd.content).toContain('its markdown text has 216 lines,');
+    });
+
+    it('still reads the last line and a format=both read that one field reaches', async () => {
+      const runtime = createRuntime({
+        readDocument: vi.fn().mockResolvedValue({
+          content: 'only line',
+          id: 'agent-doc-1',
+          litexml: '<p id="a">one</p>\n<p id="b">two</p>',
+          title: 'Doc',
+        }),
+      });
+
+      const last = await runtime.readDocument(
+        { format: 'xml', id: 'agent-doc-1', offset: 2 },
+        { agentId: 'agent-1' },
+      );
+      const both = await runtime.readDocument(
+        { format: 'both', id: 'agent-doc-1', offset: 2 },
+        { agentId: 'agent-1' },
+      );
+
+      expect(last).toMatchObject({ content: '<p id="b">two</p>', success: true });
+      expect(both.success).toBe(true);
+      expect(JSON.parse(both.content).xml).toBe('<p id="b">two</p>');
+    });
+  });
+
   describe('modifyNodes operation shapes', () => {
     const existing = { documentId: 'docs_1', id: 'agent-doc-1', title: 'Doc' };
     const setup = () => {

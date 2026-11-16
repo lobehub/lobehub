@@ -165,6 +165,88 @@ describe('WebBrowsingExecutionRuntime', () => {
       );
     });
 
+    // T-14186: the saved document stores a normalized Markdown snapshot (blank-line runs and
+    // loose lists collapse), so offsets counted on the raw page pointed past its end.
+    it('windows the stored document text so the continuation offset lands in it', async () => {
+      const rawPage = Array.from({ length: 3000 }, (_, i) => `paragraph ${i + 1}\n\n\n`).join('');
+      const storedPage = Array.from({ length: 3000 }, (_, i) => `paragraph ${i + 1}`).join('\n\n');
+      const runtime = new WebBrowsingExecutionRuntime({
+        canReadSavedDocuments: true,
+        documentService: {
+          associateDocument: vi.fn().mockResolvedValue({ id: 'agent-doc-1' }),
+          createDocument: vi.fn().mockResolvedValue({ content: storedPage, id: 'docs-1' }),
+        },
+        searchService: {
+          crawlPages: vi.fn().mockResolvedValue({
+            results: [
+              {
+                data: { content: rawPage, title: 'Paper', url: 'https://example.com/paper' },
+                originalUrl: 'https://example.com/paper',
+              },
+            ],
+          }),
+          webSearch: vi.fn(),
+        } as any,
+      });
+
+      const result = await runtime.crawlMultiPages({ urls: ['https://example.com/paper'] });
+
+      const notice = result.content.match(
+        /\[Showing lines 1-(\d+) of (\d+) lines, (\d+) characters\. To continue, call lobe-agent-documents readDocument with id="agent-doc-1", format="markdown" and offset=(\d+)\.\]/,
+      );
+      expect(notice).not.toBeNull();
+      const [, endLine, totalLines, totalChars, offset] = notice!.map(Number);
+      const storedLines = storedPage.split('\n');
+      expect(totalLines).toBe(storedLines.length);
+      expect(totalChars).toBe(storedPage.length);
+      expect(offset).toBe(endLine + 1);
+      expect(result.content).toContain(storedLines.slice(0, endLine).join('\n'));
+    });
+
+    it('keeps each page on its own saved document when saves finish out of order', async () => {
+      const page = (name: string) =>
+        Array.from({ length: 2000 }, (_, i) => `${name} line ${i + 1}`).join('\n');
+      const pages = { fowler: page('fowler'), paper: page('paper') };
+      const createDocument = vi.fn(async ({ content, url }: { content: string; url: string }) => {
+        // The first page's save resolves last, as when two crawls archive concurrently.
+        if (url.endsWith('/paper')) await new Promise((resolve) => setTimeout(resolve, 20));
+        return { content, id: `docs-${url.split('/').pop()}` };
+      });
+      const runtime = new WebBrowsingExecutionRuntime({
+        canReadSavedDocuments: true,
+        documentService: {
+          associateDocument: vi.fn(async (documentId: string) => ({
+            id: `agent-${documentId}`,
+          })),
+          createDocument,
+        },
+        searchService: {
+          crawlPages: vi.fn().mockResolvedValue({
+            results: Object.entries(pages)
+              .reverse()
+              .map(([name, content]) => ({
+                data: { content, title: name, url: `https://example.com/${name}` },
+                originalUrl: `https://example.com/${name}`,
+              })),
+          }),
+          webSearch: vi.fn(),
+        } as any,
+      });
+
+      const result = await runtime.crawlMultiPages({
+        urls: ['https://example.com/paper', 'https://example.com/fowler'],
+      });
+
+      for (const name of Object.keys(pages)) {
+        const section = result.content.match(
+          new RegExp(`<page url="https://example.com/${name}"[\\s\\S]*?</page>`),
+        )?.[0];
+        expect(section).toContain(`${name} line 1\n`);
+        expect(section).toContain(`readDocument with id="agent-docs-${name}"`);
+        expect(section).not.toMatch(name === 'paper' ? /fowler/ : /paper/);
+      }
+    });
+
     it('does not name readDocument when the run cannot call it', async () => {
       // Chat mode, or a custom tool set with browsing alone, has no lobe-agent-documents.
       const createDocument = vi.fn().mockResolvedValue({ id: 'docs-1' });
