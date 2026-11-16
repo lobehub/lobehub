@@ -663,7 +663,7 @@ describe('dispatchWorkRegistrationIntent · artboard', () => {
         messageId: 'msg-1',
         rootOperationId: 'op-root',
         toolCallId: 'call-1',
-        toolIdentifier: 'lobe-artboard',
+        toolIdentifier: 'builtin-artboard',
         toolName: 'createArtboard',
         topicId: 'topic-1',
       },
@@ -676,7 +676,7 @@ describe('dispatchWorkRegistrationIntent · artboard', () => {
         projectId: 'prj_1',
         rootOperationId: 'op-root',
         toolCallId: 'call-1',
-        toolIdentifier: 'lobe-artboard',
+        toolIdentifier: 'builtin-artboard',
         toolName: 'createArtboard',
       }),
     );

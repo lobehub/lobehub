@@ -42,7 +42,7 @@ export const registerArtboardCommand = (program: Command) => {
   const artboard = program
     .command('artboard')
     .description(
-      'Lay out a requirement on a project artboard (same ops as the lobe-artboard tool)',
+      'Lay out a requirement on a project artboard (same ops as the builtin-artboard tool)',
     );
 
   artboard

@@ -11,7 +11,7 @@ describe('artboardHookExecutor', () => {
 
     await artboardHookExecutor.onAfterCall({
       apiName: 'updateArtboard',
-      identifier: 'lobe-artboard',
+      identifier: 'builtin-artboard',
       params: {},
       result,
     });

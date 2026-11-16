@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { ArtboardIdentifier } from '@lobechat/builtin-tool-artboard';
 import type { ArtboardItem, ArtboardOp } from '@lobechat/types';
 import { checkFinalizeReadiness } from '@lobechat/types';
 import pMap from 'p-map';
@@ -36,7 +37,7 @@ export type { ArtboardServiceErrorCode } from './errors';
 export { ArtboardServiceError } from './errors';
 export { describeArtboard } from './view';
 
-export const ARTBOARD_TOOL_IDENTIFIER = 'lobe-artboard';
+export const ARTBOARD_TOOL_IDENTIFIER = ArtboardIdentifier;
 
 export interface ArtboardContext {
   agentId?: string | null;

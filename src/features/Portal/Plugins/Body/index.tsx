@@ -1,3 +1,4 @@
+import { ArtboardIdentifier } from '@lobechat/builtin-tool-artboard';
 import { getBuiltinPortal } from '@lobechat/builtin-tools/portals';
 import { Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
@@ -8,14 +9,12 @@ import { safeParseJSON } from '@/utils/safeParseJSON';
 
 import ToolRender from './ToolRender';
 
-const ARTBOARD_TOOL = 'lobe-artboard';
-
 const ToolUI = () => {
   const messageId = useChatStore(chatPortalSelectors.toolMessageId);
   const message = useChatStore(dbMessageSelectors.getDbMessageById(messageId || ''), isEqual);
   const identifier = useChatStore(chatPortalSelectors.toolUIIdentifier);
   const params = useChatStore(chatPortalSelectors.toolUIParams, isEqual);
-  if (identifier === ARTBOARD_TOOL && typeof params?.artboardId === 'string') {
+  if (identifier === ArtboardIdentifier && typeof params?.artboardId === 'string') {
     // Resolved through the registry so hosts that never load the artboard tool (Share) keep it out of their bundle.
     const ArtboardPortal = getBuiltinPortal(identifier);
     if (!ArtboardPortal) return null;

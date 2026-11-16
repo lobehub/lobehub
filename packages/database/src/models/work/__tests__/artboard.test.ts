@@ -54,7 +54,7 @@ const params = (
   threadId,
   title: '新用户首次进入项目',
   toolCallId: 'call-artboard-1',
-  toolIdentifier: 'lobe-artboard',
+  toolIdentifier: 'builtin-artboard',
   toolName: 'createArtboard',
   topicId,
   ...overrides,

@@ -90,7 +90,7 @@ export const FeatureFlagsSchema = z.object({
   mcp_apps: FeatureFlagValue.optional(),
 
   /**
-   * Artboard: the agent's lobe-artboard tool in project conversations, the
+   * Artboard: the agent's builtin-artboard tool in project conversations, the
    * board card and side panel, and the Artboard Works tab. Off: the tool is
    * never offered and artboard Works are not requested. Array values are user
    * ids.

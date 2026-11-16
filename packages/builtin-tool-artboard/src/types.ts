@@ -1,6 +1,6 @@
 import type { ArtboardCommentThreadView, ArtboardContent, ArtboardPhase } from '@lobechat/types';
 
-export const ArtboardIdentifier = 'lobe-artboard';
+export const ArtboardIdentifier = 'builtin-artboard';
 
 export const ArtboardApiName = {
   askArtboardQuestion: 'askArtboardQuestion',
