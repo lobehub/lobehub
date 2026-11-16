@@ -176,20 +176,23 @@ export const imageRouter = router({
       const parametersSchema =
         modelCard && 'parameters' in modelCard ? modelCard.parameters : undefined;
       if (parametersSchema) {
-        const unsupportedParams = findUnsupportedImageParams(params, parametersSchema);
-        if (unsupportedParams.length > 0) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: `Unsupported parameters for ${model}: ${unsupportedParams.join(', ')}. Supported: ${Object.keys(parametersSchema).join(', ')}`,
-          });
-        }
-
+        // Value problems come first: a rejected `outputFormat: "gif"` also explains why the GIF
+        // frame fields are undeclared, so the caller sees the value and the allowed formats.
+        const problems: string[] = [];
         const invalidValues = findInvalidImageOutputParamValues(params, parametersSchema);
         if (invalidValues.length > 0) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: `Unsupported parameter values for ${model}: ${invalidValues.join('; ')}`,
-          });
+          problems.push(`Unsupported parameter values for ${model}: ${invalidValues.join('; ')}`);
+        }
+
+        const unsupportedParams = findUnsupportedImageParams(params, parametersSchema);
+        if (unsupportedParams.length > 0) {
+          problems.push(
+            `Unsupported parameters for ${model}: ${unsupportedParams.join(', ')}. Supported: ${Object.keys(parametersSchema).join(', ')}`,
+          );
+        }
+
+        if (problems.length > 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: problems.join('. ') });
         }
       }
 

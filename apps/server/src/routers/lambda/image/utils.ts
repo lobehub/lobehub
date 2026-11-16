@@ -1,4 +1,5 @@
 import { getModelParameters, getModelPricing } from '@lobechat/model-runtime';
+import { ANIMATED_IMAGE_OUTPUT_FORMAT, ANIMATION_FRAME_PARAMS } from 'model-bank';
 
 /**
  * Fill model-card parameter defaults into `generationParams` for parameters
@@ -105,10 +106,6 @@ export const findUnsupportedImageParams = (
     )
     .map(([key]) => key);
 
-const ANIMATED_OUTPUT_FORMAT = 'gif';
-/** Frame controls the runtime only sends with GIF output (it drops them for static images). */
-const ANIMATION_FRAME_PARAMS = ['frameCount', 'frameDurationMs'] as const;
-
 interface DeclaredEnumParam {
   default?: unknown;
   enum?: unknown[];
@@ -156,7 +153,7 @@ export const findInvalidImageOutputParamValues = (
   }
 
   const outputFormat = isSet(requestedFormat) ? requestedFormat : formatSchema?.default;
-  if (outputFormat !== ANIMATED_OUTPUT_FORMAT) return [];
+  if (outputFormat !== ANIMATED_IMAGE_OUTPUT_FORMAT) return [];
 
   const issues: string[] = [];
   for (const key of ANIMATION_FRAME_PARAMS) {

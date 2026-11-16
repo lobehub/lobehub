@@ -460,6 +460,49 @@ describe('imageRouter', () => {
       expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
     });
 
+    it('should refuse the GIF call on a model served without GIF, naming the value and the allowed formats', async () => {
+      // The schema AiInfraRepos serves for lobehub/gpt-image-2.6-sunburst: static formats only, no
+      // frame params.
+      mockGetAiProviderModelList.mockResolvedValue([
+        {
+          id: 'gpt-image-2.6-sunburst',
+          parameters: {
+            imageUrls: { default: [], maxCount: 1 },
+            outputFormat: { default: 'png', enum: ['png', 'jpeg', 'webp'] },
+            prompt: { default: '' },
+            size: { default: 'auto', enum: ['auto', '1024x1024'] },
+          },
+          type: 'image',
+        },
+      ]);
+
+      const caller = imageRouter.createCaller(createMockCtx());
+
+      await expect(
+        caller.createImage(
+          createDefaultInput({
+            model: 'gpt-image-2.6-sunburst',
+            params: {
+              frameCount: 12,
+              frameDurationMs: 100,
+              outputFormat: 'gif',
+              prompt: 'a bouncing ball',
+            },
+            provider: 'lobehub',
+          }),
+        ),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message:
+          'Unsupported parameter values for gpt-image-2.6-sunburst: outputFormat "gif" (supported: png, jpeg, webp). ' +
+          'Unsupported parameters for gpt-image-2.6-sunburst: frameCount, frameDurationMs. Supported: imageUrls, outputFormat, prompt, size',
+      });
+
+      expect(mockChargeBeforeGenerate).not.toHaveBeenCalled();
+      expect(mockServerDB.transaction).not.toHaveBeenCalled();
+      expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
+    });
+
     it('should reject GIF frames outside the declared range before charging or creating records', async () => {
       mockGetAiProviderModelList.mockResolvedValue([
         {

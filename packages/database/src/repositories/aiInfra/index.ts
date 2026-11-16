@@ -11,6 +11,7 @@ import { isEmpty } from 'es-toolkit/compat';
 import type { AIChatModelCard, AiProviderModelListItem, EnabledAiModel } from 'model-bank';
 import {
   AiModelSourceEnum,
+  applyImageOutputCapabilities,
   isAiModelVisible,
   normalizeAiModelType,
   resolveModelSearchDefaultSettings,
@@ -27,6 +28,28 @@ import type { LobeChatDatabase } from '../../type';
 type DecryptUserKeyVaults = (encryptKeyVaultsStr: string | null) => Promise<any>;
 
 const normalizeProvider = (provider: string) => provider.toLowerCase();
+
+/**
+ * Narrow an image model's parameter schema to what its provider route serves (see
+ * `applyImageOutputCapabilities`). Applied at read time, after builtin and user rows are merged, so
+ * the image page, the image generation tool and the server-side `createImage` validation all see
+ * the same schema, whatever the card's source (model bank, remote config or a user row).
+ */
+const withImageOutputCapabilities = <
+  T extends { id: string; parameters?: unknown; type?: string | null },
+>(
+  providerId: string,
+  item: T,
+): T => {
+  if (item.type !== 'image' || !item.parameters || typeof item.parameters !== 'object') return item;
+
+  const parameters = applyImageOutputCapabilities(item.parameters as Record<string, unknown>, {
+    model: item.id,
+    provider: providerId,
+  });
+
+  return parameters === item.parameters ? item : { ...item, parameters };
+};
 
 // Only inject settings during read; add or remove search-related fields in settings based on abilities.search
 const injectSearchSettings = (providerId: string, item: any) => {
@@ -208,9 +231,9 @@ export class AiInfraRepos {
         injectSearchSettings(item.providerId, { ...item, type: normalizeAiModelType(item.type) }),
       );
 
-    return [...builtinModels, ...appendedUserModels].sort(
-      (a, b) => (a?.sort ?? Infinity) - (b?.sort ?? Infinity),
-    ) as EnabledAiModel[];
+    return [...builtinModels, ...appendedUserModels]
+      .map((item) => withImageOutputCapabilities(item.providerId, item))
+      .sort((a, b) => (a?.sort ?? Infinity) - (b?.sort ?? Infinity)) as EnabledAiModel[];
   };
 
   getAiProviderRuntimeState = async (
@@ -395,7 +418,7 @@ export class AiInfraRepos {
     mergedModel = mergedModel.filter(isAiModelVisible);
 
     let list = mergedModel.map((m) =>
-      injectSearchSettings(providerId, m),
+      withImageOutputCapabilities(providerId, injectSearchSettings(providerId, m)),
     ) as AiProviderModelListItem[];
 
     if (typeof options?.enabled === 'boolean') {
