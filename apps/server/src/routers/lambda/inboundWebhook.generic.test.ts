@@ -31,7 +31,7 @@ vi.mock('@/envs/app', async (importOriginal) => {
   return { appEnv: { ...actual.appEnv, APP_URL: 'https://app.test' } };
 });
 vi.mock('@/server/services/inboundWebhook/featureGate', () => ({
-  isAgentWebhooksEnabled: boundary.enabled,
+  isWebhookEnabled: boundary.enabled,
 }));
 vi.mock('@/server/services/resourcePermission', () => ({
   assertCanEditResource: boundary.canEdit,

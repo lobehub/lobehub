@@ -47,8 +47,7 @@ You can achieve various feature combinations using the above configuration synta
 | `agent_deferred_hetero_dispatch` | Returns a plain chat send to a heterogeneous agent (Claude Code, Codex, …) on an online device before the device accepts the run; the dispatch runs after the response, and a failure is shown on the assistant message.                                                                                      | Disabled      |
 | `dashboard`                      | Dashboards: the home and project dashboard pages, the widget Portal, in-chat widget previews and the `builtin-dashboard` agent tool that builds monitoring widgets. When off, these are hidden and the widget / dashboard APIs return FORBIDDEN; widgets already published keep refreshing on their schedule. | Disabled      |
 | `mcp_apps`                       | MCP Apps: a tool result whose MCP server declares an interactive `ui://` view renders that view (the server's HTML, in a sandboxed iframe) in the conversation. When off, such results render as plain tool results and the server does not announce MCP Apps support to MCP servers.                         | Disabled      |
-| `mcp_events`                     | MCP Events: lets an Agent subscribe to remote connector events and run in the original Topic. Each subscription requires approval; each event run uses credits. Requires a public HTTPS callback, secret encryption, and an authenticated MCP server offering webhook events.                                 | Disabled      |
-| `agent_webhooks`                 | Agent webhooks: each Agent can have URLs that any outside system calls to run it, managed under Agent Profile → Webhook. Each call uses credits. Requires a public `APP_URL` and secret encryption. When off, the tab is hidden and calls are still recorded but run nothing.                                 | Disabled      |
+| `webhook`                        | Inbound webhooks wake Agents. MCP Events: an Agent subscribes to remote connector events and runs in the original Topic; subscribing follows the user's tool approval settings. Agent webhooks: URLs under Agent Profile → Webhook that any outside system calls to run the Agent. Each event or call uses credits. Requires a public `APP_URL` and secret encryption; MCP Events also needs an authenticated MCP server offering webhook events. When off, the entries are hidden and deliveries are still recorded but run nothing. | Disabled      |
 | `edit_agent`                     | Allows users to edit assistants.                                                                                                                                                                                                                                                                              | Enabled       |
 | `ai_image`                       | Controls AI image generation feature and page (/image).                                                                                                                                                                                                                                                       | Enabled       |
 | `speech_to_text`                 | Enables speech-to-text functionality.                                                                                                                                                                                                                                                                         | Enabled       |
@@ -89,25 +88,25 @@ You can always check the [featureFlags](https://github.com/lobehub/lobehub/blob/
 
 ## Agent Webhooks: Deployment Requirements
 
-`agent_webhooks` is off by default. Before enabling it:
+Agent webhooks and MCP Events share the `webhook` flag, off by default. Before enabling it for Agent webhooks:
 
 1. Set `APP_URL` to the public address callers will use; webhook URLs are built from it.
 2. Configure `KEY_VAULTS_SECRET` to encrypt webhook tokens, and preserve it across deployment updates.
 3. Optionally configure QStash so wake-ups and recovery of pending calls run on a schedule. Without it, wake-ups run in the application process and recovery depends on application requests.
-4. Set `FEATURE_FLAGS="+agent_webhooks"` and restart.
+4. Set `FEATURE_FLAGS="+webhook"` and restart.
 
 Open an Agent, go to Agent Profile → Webhook, create a webhook and use **Send test**: the call should show as run under **Recent calls**, with a link to the topic the Agent replied in.
 
-Turning the flag off hides the Webhook tab and stops webhook-triggered runs. Calls are still authenticated, stored and acknowledged, but skipped without using credits; webhooks and their URLs are kept and resume working when the flag is turned back on.
+Turning the flag off hides the Webhook and Automations tabs and stops webhook-triggered runs. Calls are still authenticated, stored and acknowledged, but skipped without using credits; webhooks and their URLs are kept and resume working when the flag is turned back on.
 
 ## MCP Events: Deployment Requirements
 
-`mcp_events` is off by default. Before enabling it:
+MCP Events needs more than Agent webhooks. Before enabling `webhook` for it:
 
 1. Set `APP_URL` to a public HTTPS address the MCP server can reach. Localhost, private hostnames and IP-literal addresses are unsupported.
 2. Configure `KEY_VAULTS_SECRET` to encrypt webhook signing secrets. Generate it using the [server environment variable guide](/docs/self-hosting/platform/docker), and preserve it across deployment updates.
 3. Configure QStash for scheduled renewal, unsubscribe retries and pending-event recovery. The Docker launcher registers a sweep every five minutes; other deployments need their own schedule. Without QStash, maintenance depends on application requests and has no guaranteed timing.
-4. Set `FEATURE_FLAGS="+mcp_events"` and restart. Connect an authenticated remote HTTP MCP server offering SEP-3415 webhook events, then refresh its connector tools.
+4. Set `FEATURE_FLAGS="+webhook"` and restart. Connect an authenticated remote HTTP MCP server offering SEP-3415 webhook events, then refresh its connector tools.
 
 Ask the Agent to subscribe in a conversation and approve it. Open Settings → Automations and confirm the subscription is active. Trigger an upstream event and confirm an event message and Agent reply appear in the original Topic. No-expiry subscriptions have no scheduled health check; use **Check** in Automations to restore interrupted delivery.
 

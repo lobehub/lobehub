@@ -6,8 +6,8 @@ import { getMcpEventErrorName } from '@/libs/mcp/events/errors';
 import { buildConnectorMcpParams } from '@/server/services/connector/sync';
 import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
 import { mcpService } from '@/server/services/mcp';
-import { isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
 
+import { isWebhookEnabled } from '../../featureGate';
 import { verifyInboundWebhook } from '../../verification';
 import type { InboundWebhookKindHandler } from '../types';
 import { handleMcpEventDelivery, isVerificationEnvelope } from './delivery';
@@ -23,7 +23,7 @@ import { buildMcpEventPrompt } from './wakePrompt';
 export const mcpEventsKind: InboundWebhookKindHandler<'mcp_events'> = {
   canCheck: true,
   expiresAt: (row) => row.state.refreshBefore ?? null,
-  isEnabled: isMcpEventsEnabled,
+  isEnabled: isWebhookEnabled,
   maintain: maintainMcpSubscription,
   async onPersisted({ model, row }, event) {
     if (event.cursor !== undefined)

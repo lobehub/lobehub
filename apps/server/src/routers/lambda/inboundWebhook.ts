@@ -17,7 +17,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { listInboundWebhookDeliveries } from '@/server/services/inboundWebhook/deliveries';
-import { isAgentWebhooksEnabled } from '@/server/services/inboundWebhook/featureGate';
+import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 import {
   canManageInboundWebhook,
   inboundWebhookItems,
@@ -98,7 +98,7 @@ const audit = async (
 
 /** Changing a generic webhook needs the feature on, and the row managed by the caller. */
 const manageableGeneric = async (ctx: RouterScope, id: string) => {
-  if (!(await isAgentWebhooksEnabled(ctx.userId))) throw new TRPCError({ code: 'NOT_FOUND' });
+  if (!(await isWebhookEnabled(ctx.userId))) throw new TRPCError({ code: 'NOT_FOUND' });
   const row = await ctx.webhookModel.findById(id);
   if (!row) throw new TRPCError({ code: 'NOT_FOUND' });
   assertWorkspaceRowManageable(ctx, row.userId, 'webhook', { allowAdmin: true });
@@ -162,7 +162,7 @@ export const inboundWebhookRouter = router({
     .use(withScopedPermission('agent:update'))
     .input(z.object({ agentId: z.string().min(1), ...genericSettings }))
     .mutation(async ({ ctx, input }): Promise<InboundWebhookItem> => {
-      if (!(await isAgentWebhooksEnabled(ctx.userId))) throw new TRPCError({ code: 'NOT_FOUND' });
+      if (!(await isWebhookEnabled(ctx.userId))) throw new TRPCError({ code: 'NOT_FOUND' });
       await assertAgentUsableBy(ctx.serverDB, input.agentId, {
         userId: ctx.userId,
         workspaceId: ctx.workspaceId ?? undefined,

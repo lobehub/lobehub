@@ -4,7 +4,7 @@ import { RequestTrigger } from '@lobechat/types';
 import type { InboundWebhookViewOf } from '@/database/models/inboundWebhook';
 import { TopicModel } from '@/database/models/topic';
 
-import { isAgentWebhooksEnabled } from '../../featureGate';
+import { isWebhookEnabled } from '../../featureGate';
 import type { InboundWebhookKindHandler } from '../types';
 import { parseGenericDelivery } from './delivery';
 import { presentedToken, tokenMatches } from './token';
@@ -51,7 +51,7 @@ export const genericKind: InboundWebhookKindHandler<'generic'> = {
       ? [first]
       : signals.filter((signal) => groupKeyOf(row, signal) === key).slice(0, MAX_EVENTS_PER_PROMPT);
   },
-  isEnabled: isAgentWebhooksEnabled,
+  isEnabled: isWebhookEnabled,
   async parseDelivery(ctx, request) {
     if (ctx.row.status === 'paused')
       return { response: { error: 'Webhook is paused' }, status: 409 };

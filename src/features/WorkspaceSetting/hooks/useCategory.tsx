@@ -87,7 +87,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
   const { allowed: canCreateContent } = usePermission('create_content');
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
   const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
-  const enableAutomations = useServerConfigStore(serverConfigSelectors.enableAutomations);
+  const enableWebhook = useServerConfigStore(serverConfigSelectors.enableWebhook);
   const [avatar, username] = useUserStore((s) => [
     userProfileSelectors.userAvatar(s),
     userProfileSelectors.nickName(s),
@@ -268,7 +268,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             },
             // Every member sees the workspace's event subscriptions, so it is
             // clear what fires the shared agents; managing one is per row.
-            enableAutomations && {
+            enableWebhook && {
               icon: ZapIcon,
               key: WorkspaceSettingsTabs.Automations,
               label: t('tab.automations'),
@@ -380,7 +380,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
       canViewBilling,
       canCreateContent,
       hideDocs,
-      enableAutomations,
+      enableWebhook,
       avatarUrl,
       username,
     ],

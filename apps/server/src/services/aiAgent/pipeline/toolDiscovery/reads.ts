@@ -16,7 +16,8 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { refreshExpiredConnectorTokens } from '@/server/services/connector/tokens';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
-import { isMcpAppsEnabled, isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
+import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import type { ExecRunContext } from '../../types';
 import { markDegradedStage, traceDiscoveryStage } from '../discoveryTracing';
@@ -195,7 +196,7 @@ const readConnectors = async (
       hasEventConnector:
         !ctx.shareGate &&
         hasSupportedEventConnector([...connectorsMcp, ...discoverable.connectorsMcp]) &&
-        (await isMcpEventsEnabled(deps.userId)),
+        (await isWebhookEnabled(deps.userId)),
       connectorTools,
       discoverableConnectorManifests: discoverable.manifests,
       discoverableConnectorsMcp: discoverable.connectorsMcp,

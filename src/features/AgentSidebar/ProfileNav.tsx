@@ -17,6 +17,7 @@ import {
   UserRoundIcon,
   WebhookIcon,
   WrenchIcon,
+  ZapIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -36,6 +37,7 @@ import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import Agent from './Header/Agent';
 
 const TAB_ICONS: Record<AgentProfileTab, LucideIcon> = {
+  'automations': ZapIcon,
   'channel': RadioTowerIcon,
   'engine': CpuIcon,
   'environment': MonitorSmartphoneIcon,

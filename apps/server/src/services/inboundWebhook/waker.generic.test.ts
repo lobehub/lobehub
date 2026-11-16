@@ -19,7 +19,7 @@ const boundary = vi.hoisted(() => ({
     decrypt: async (value: string) => ({ plaintext: value.slice(7) }),
   },
 }));
-vi.mock('./featureGate', () => ({ isAgentWebhooksEnabled: boundary.enabled }));
+vi.mock('./featureGate', () => ({ isWebhookEnabled: boundary.enabled }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => boundary.gateKeeper },
 }));

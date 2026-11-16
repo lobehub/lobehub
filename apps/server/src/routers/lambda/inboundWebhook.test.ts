@@ -37,7 +37,7 @@ const { checkClaims, enabled, gateKeeper, maintain, teardown } = vi.hoisted(() =
   teardown:
     vi.fn<(ctx: { model: InboundWebhookModel; row: InboundWebhookView }) => Promise<void>>(),
 }));
-vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpEventsEnabled: enabled }));
+vi.mock('@/server/services/inboundWebhook/featureGate', () => ({ isWebhookEnabled: enabled }));
 
 // Exercise the real router and DB while replacing platform authentication with a bounded test context.
 vi.mock('@/libs/trpc/lambda', async () => {
@@ -325,6 +325,14 @@ describe('inboundWebhook tRPC resource contract', () => {
       connector: { agentId: row.agentId, name: 'Linear' },
       topic: { title: 'Event topic' },
     });
+  });
+
+  it("narrows the list to one agent's automations", async () => {
+    const row = await seed();
+    expect((await caller().list({ agentId: row.agentId })).map((item) => item.id)).toEqual([
+      row.id,
+    ]);
+    expect(await caller().list({ agentId: 'another-agent' })).toEqual([]);
   });
 
   it('checks through kind maintenance and returns the fresh public row', async () => {

@@ -27,7 +27,7 @@ export interface ListEventTypesState {
   eventTypes: McpEventTypeItem[];
 }
 
-// ── subscribeEvent（humanIntervention: always）
+// ── subscribeEvent（humanIntervention: required）
 export interface SubscribeEventArgs {
   arguments?: Record<string, unknown>;
   /** 连接器 identifier */

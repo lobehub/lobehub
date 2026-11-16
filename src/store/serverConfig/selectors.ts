@@ -24,11 +24,7 @@ export const serverConfigSelectors = {
   enableMagicLink: (s: ServerConfigStore) => s.serverConfig.enableMagicLink || false,
   /** Runtime flag `mcp_apps`: MCP Apps views in the conversation. */
   enableMcpApps: (s: ServerConfigStore) => s.featureFlags.enableMcpApps === true,
-  enableMcpEvents: (s: ServerConfigStore) => s.featureFlags.enableMcpEvents === true,
-  enableAgentWebhooks: (s: ServerConfigStore) => s.featureFlags.enableAgentWebhooks === true,
-  /** The automations list has something to show: MCP event subscriptions or generic webhooks. */
-  enableAutomations: (s: ServerConfigStore) =>
-    s.featureFlags.enableMcpEvents === true || s.featureFlags.enableAgentWebhooks === true,
+  enableWebhook: (s: ServerConfigStore) => s.featureFlags.enableWebhook === true,
   enableAgentKnowledgeSpace: (s: ServerConfigStore) =>
     s.featureFlags.enableAgentKnowledgeSpace === true,
   enableMarketTrustedClient: (s: ServerConfigStore) =>

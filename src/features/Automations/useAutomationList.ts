@@ -7,15 +7,15 @@ import { inboundWebhookService } from '@/services/inboundWebhook';
 export const AUTOMATIONS_SWR_KEY = 'inbound-webhooks';
 
 /**
- * The automation list, plus the two local edits its rows make. A check
+ * The automation list (one agent's, given `agentId`), plus the two local edits its rows make. A check
  * returns the refreshed row and a delete removes one; both patch the cached
  * list in place instead of refetching it, so the other rows do not jump under
  * the user while one is being handled.
  */
-export const useAutomationList = () => {
+export const useAutomationList = (agentId?: string) => {
   const { data, error, isLoading, mutate } = useClientDataSWR<InboundWebhookItem[]>(
-    [AUTOMATIONS_SWR_KEY],
-    () => inboundWebhookService.list(),
+    agentId ? [AUTOMATIONS_SWR_KEY, agentId] : [AUTOMATIONS_SWR_KEY],
+    () => inboundWebhookService.list(agentId),
   );
 
   const replaceRow = (next: InboundWebhookItem) =>

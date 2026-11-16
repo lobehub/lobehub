@@ -36,7 +36,7 @@ const WebhookPage = ({ agentId, disabled }: AgentWebhookProps) => {
   // The `agent` namespace loads lazily; painting before it arrives would show raw keys.
   const { t, ready } = useTranslation('agent');
   const navigate = useWorkspaceAwareNavigate();
-  const enabled = useServerConfigStore(serverConfigSelectors.enableAgentWebhooks);
+  const enabled = useServerConfigStore(serverConfigSelectors.enableWebhook);
   const configLoaded = useServerConfigStore((s) => s.serverConfigLoaded);
   const { addRow, data, error, isLoading, reload, removeRow, replaceRow } =
     useAgentWebhooks(agentId);

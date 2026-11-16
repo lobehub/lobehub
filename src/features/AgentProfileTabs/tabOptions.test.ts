@@ -9,6 +9,7 @@ import {
 } from './tabOptions';
 
 const labels = {
+  'automations': 'tab.automations',
   'channel': 'tab.integration',
   'engine': 'tab.engine',
   'environment': 'tab.environment',
@@ -43,6 +44,7 @@ describe('getAgentProfileTab', () => {
     ['/_dangerous_local_dev_proxy/acme/agent/agt_1/share', 'share'],
     ['/agent/agt_1/self-evolving', 'self-evolving'],
     ['/agent/agt_1/webhook', 'webhook'],
+    ['/acme/agent/agt_1/automations', 'automations'],
     ['/agent/agt_1/self-evolving/new', 'self-evolving'],
     ['/acme/agent/agt_1/self-evolving/dom_1/experience/les_1', 'self-evolving'],
   ])('maps %s to its tab', (pathname, tab) => {
@@ -356,5 +358,49 @@ describe('webhook tab', () => {
       canConfigure: false,
     });
     expect(options.map((option) => option.value)).toContain('webhook');
+  });
+});
+
+describe('automations tab', () => {
+  const base = {
+    labels,
+    mailSupported: false,
+    selfLearningSupported: false,
+    shareSupported: false,
+    heterogeneous: false,
+  };
+
+  it('lists the automations after channels under identity while webhooks are on', () => {
+    const options = buildAgentProfileTabOptions({
+      ...base,
+      active: 'profile',
+      automationsSupported: true,
+      canConfigure: true,
+    });
+    expect(
+      groupAgentProfileTabOptions(options)
+        .find((group) => group.key === 'identity')
+        ?.options.map((option) => option.value),
+    ).toEqual(['channel', 'automations']);
+  });
+
+  it('shows the list to a member who cannot edit the agent too', () => {
+    const options = buildAgentProfileTabOptions({
+      ...base,
+      active: 'statistics',
+      automationsSupported: true,
+      canConfigure: false,
+    });
+    expect(options.map((option) => option.value)).toContain('automations');
+  });
+
+  it('leaves the tab out while webhooks are off, except on its own page', () => {
+    const off = { ...base, canConfigure: true };
+    expect(
+      buildAgentProfileTabOptions({ ...off, active: 'profile' }).map((option) => option.value),
+    ).not.toContain('automations');
+    expect(
+      buildAgentProfileTabOptions({ ...off, active: 'automations' }).map((option) => option.value),
+    ).toContain('automations');
   });
 });

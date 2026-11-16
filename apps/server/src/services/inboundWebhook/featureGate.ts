@@ -1,17 +1,19 @@
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 
 /**
- * Whether generic inbound webhooks are on for this user (runtime flag `agent_webhooks`, off by
- * default). An unreadable flag counts as off, like the MCP flags.
+ * Whether inbound webhooks wake this user's Agents (runtime flag `webhook`, off by default).
+ * Off: deliveries are still verified, recorded and acknowledged, but run nothing.
+ *
+ * An unreadable flag counts as off.
  */
-export const isAgentWebhooksEnabled = async (userId?: string | null): Promise<boolean> => {
+export const isWebhookEnabled = async (userId?: string | null): Promise<boolean> => {
   try {
     return (
-      (await getServerFeatureFlagsStateFromRuntimeConfig(userId ?? undefined))
-        .enableAgentWebhooks === true
+      (await getServerFeatureFlagsStateFromRuntimeConfig(userId ?? undefined)).enableWebhook ===
+      true
     );
   } catch (error) {
-    console.error('[AgentWebhooks] Failed to read the agent_webhooks feature flag:', error);
+    console.error('[inboundWebhook] Failed to read the webhook feature flag:', error);
     return false;
   }
 };

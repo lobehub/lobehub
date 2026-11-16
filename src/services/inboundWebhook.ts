@@ -17,7 +17,7 @@ export interface GenericWebhookSettings {
  * TRPC client already sends.
  */
 class InboundWebhookService {
-  /** Every automation in scope, or only one agent's. */
+  /** Everything in the active scope, or one agent's automations. */
   list = async (agentId?: string) =>
     lambdaClient.inboundWebhook.list.query(agentId ? { agentId } : undefined);
 

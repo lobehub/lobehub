@@ -42,9 +42,9 @@ vi.mock('@/server/services/mcp', () => ({
 vi.mock('@/server/services/connector/tokens', () => ({
   ensureFreshConnectorToken: async (connector: unknown) => connector,
 }));
-vi.mock('@/server/services/mcp/featureGate', () => ({
-  isMcpAppsEnabled: async () => false,
-  isMcpEventsEnabled: boundary.enabled,
+vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: async () => false }));
+vi.mock('@/server/services/inboundWebhook/featureGate', () => ({
+  isWebhookEnabled: boundary.enabled,
 }));
 vi.mock('./scheduler', () => ({ scheduleInboundWebhookWake: boundary.schedule }));
 const db = await getTestDB();

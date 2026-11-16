@@ -1,6 +1,7 @@
 import urlJoin from 'url-join';
 
 export type AgentProfileTab =
+  | 'automations'
   | 'channel'
   | 'engine'
   | 'environment'
@@ -31,7 +32,7 @@ export const buildAgentProfileTabPath = (agentId: string, tab: AgentProfileTab) 
   urlJoin('/agent', agentId, tab);
 
 const AGENT_PROFILE_ROUTE =
-  /^(?:\/[^/]+)?\/agent\/[^/]+\/(profile|instruction|knowledge|engine|environment|tools|skills|mail(?:\/[^/]+)?|channel(?:\/[^/]+)?|webhook|self-evolving(?:\/[^/]+)*|statistics|share)\/?$/;
+  /^(?:\/[^/]+)?\/agent\/[^/]+\/(profile|instruction|knowledge|engine|environment|tools|skills|mail(?:\/[^/]+)?|channel(?:\/[^/]+)?|automations|webhook|self-evolving(?:\/[^/]+)*|statistics|share)\/?$/;
 
 /**
  * The profile-group tab a URL belongs to, if any. Anchored on Agent subroutes,
@@ -60,6 +61,7 @@ export const getAgentProfileTab = (pathname: string): AgentProfileTab | undefine
  */
 export const buildAgentProfileTabOptions = ({
   active,
+  automationsSupported = false,
   canConfigure,
   labels,
   mailSupported,
@@ -69,6 +71,8 @@ export const buildAgentProfileTabOptions = ({
   webhookSupported = false,
 }: {
   active: AgentProfileTab;
+  /** Inbound webhooks are switched on for this member (`webhook`). */
+  automationsSupported?: boolean;
   canConfigure: boolean;
   labels: Record<AgentProfileTab, string>;
   mailSupported: boolean;
@@ -79,7 +83,7 @@ export const buildAgentProfileTabOptions = ({
    * so the instruction, tools and skills pages have nothing to configure for them.
    */
   heterogeneous: boolean;
-  /** Generic webhooks are switched on for this member (`agent_webhooks`). */
+  /** Generic webhooks are switched on for this member (`webhook`). */
   webhookSupported?: boolean;
 }): AgentProfileTabOption[] => {
   const showProfile = canConfigure || active === 'profile';
@@ -95,6 +99,9 @@ export const buildAgentProfileTabOptions = ({
   const showMail = (canConfigure && mailSupported) || active === 'mail';
   // Channels can dispatch to a bound device; cloud sandbox support is not required.
   const showChannel = canConfigure || active === 'channel';
+  // What wakes this agent without the user, as in Settings → Automations: every member who can
+  // see the agent may look, and each row says whether they may check or delete it.
+  const showAutomations = automationsSupported || active === 'automations';
   // Creating a webhook lets outsiders wake the agent, so it needs the same edit access.
   const showWebhook = (canConfigure && webhookSupported) || active === 'webhook';
   // Sharing hands visitors real execution on the owner's account, so the
@@ -113,6 +120,7 @@ export const buildAgentProfileTabOptions = ({
     showSkills ? { label: labels.skills, value: 'skills' as const } : null,
     showMail ? { label: labels.mail, value: 'mail' as const } : null,
     showChannel ? { label: labels.channel, value: 'channel' as const } : null,
+    showAutomations ? { label: labels.automations, value: 'automations' as const } : null,
     showWebhook ? { label: labels.webhook, value: 'webhook' as const } : null,
     showSelfLearning ? { label: labels['self-evolving'], value: 'self-evolving' as const } : null,
     { label: labels.statistics, value: 'statistics' as const },
@@ -124,7 +132,7 @@ const AGENT_PROFILE_TAB_GROUPS: { key: AgentProfileTabGroupKey; tabs: AgentProfi
   { key: 'profile', tabs: ['profile'] },
   { key: 'shape', tabs: ['instruction', 'knowledge'] },
   { key: 'setup', tabs: ['engine', 'environment', 'tools', 'skills'] },
-  { key: 'identity', tabs: ['mail', 'channel', 'webhook'] },
+  { key: 'identity', tabs: ['mail', 'channel', 'automations', 'webhook'] },
   { key: 'general', tabs: ['self-evolving', 'statistics', 'share'] },
 ];
 

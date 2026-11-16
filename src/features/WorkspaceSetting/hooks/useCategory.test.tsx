@@ -45,7 +45,7 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 
 const wrapperWithMcpEvents = ({ children }: { children: ReactNode }) => (
   <Provider
-    createStore={() => initServerConfigStore({ featureFlags: { enableMcpEvents: true } as never })}
+    createStore={() => initServerConfigStore({ featureFlags: { enableWebhook: true } as never })}
   >
     {children}
   </Provider>
@@ -275,7 +275,7 @@ describe('workspace settings useCategory automations', () => {
       ?.items.map((item) => item.key);
   };
 
-  // Unreleased: the tab follows the `mcp_events` flag (LOBE-UX-015).
+  // Unreleased: the tab follows the `webhook` flag (LOBE-UX-015).
   it('hides Automations while MCP Events is off', () => {
     expect(connectionKeys(false)).not.toContain(WorkspaceSettingsTabs.Automations);
   });

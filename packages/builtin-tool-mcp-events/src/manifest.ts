@@ -31,7 +31,8 @@ export const McpEventsManifest: BuiltinToolManifest = {
     },
     {
       name: McpEventsApiName.subscribeEvent,
-      humanIntervention: 'always',
+      // Asks like any tool that needs approval: an auto-run user is not asked.
+      humanIntervention: 'required',
       description:
         'Subscribe in this topic with approved handling instructions. Each event runs the agent and uses credits.',
       parameters: {

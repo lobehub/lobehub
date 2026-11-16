@@ -33,7 +33,8 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
     !!isAgentEditable && isAccessResolved && canEditContent && canManageResource;
   const { visible: shareVisible } = useAgentShareSupported(agentId);
   const mailSupported = useShowAgentIdentity(agentId);
-  const webhookSupported = useServerConfigStore(serverConfigSelectors.enableAgentWebhooks);
+  // One flag switches on everything that wakes an agent from outside: its list and its webhooks.
+  const webhookSupported = useServerConfigStore(serverConfigSelectors.enableWebhook);
   const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
   const { enabled: enableSelfLearning } = useSelfLearningSurface();
   // The mobile Segmented has no room for another segment, so mobile keeps the
@@ -44,8 +45,10 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
     () =>
       buildAgentProfileTabOptions({
         active,
+        automationsSupported: webhookSupported,
         canConfigure,
         labels: {
+          'automations': t('tab.automations'),
           'channel': t('tab.integration'),
           'engine': t('tab.engine'),
           'environment': t('tab.environment'),

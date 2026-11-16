@@ -5,6 +5,7 @@ import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import {
+  agentAutomationsRouteMeta,
   agentChannelDetailRouteMeta,
   agentChannelRouteMeta,
   agentEngineRouteMeta,
@@ -158,6 +159,14 @@ export const agentPageChildren: RouteObject[] = [
     handle: { meta: agentChannelDetailRouteMeta },
     loader: channelDataLoader,
     path: 'channel/:platform',
+  },
+  {
+    element: dynamicElement(
+      () => import('@/routes/(main)/agent/automations'),
+      'Desktop > Chat > Automations',
+    ),
+    handle: { meta: agentAutomationsRouteMeta },
+    path: 'automations',
   },
   {
     element: dynamicElement(
