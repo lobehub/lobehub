@@ -36,6 +36,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MarketSkillIcon from '@/components/MarketSkillIcon';
 import { useConnectorConfigure } from '@/features/Connectors/CustomConnectorModal/useConnectorConfigure';
 import { openPluginEditDrawer } from '@/features/PluginDevModal/imperative';
 import { createSkillStoreModal } from '@/features/SkillStore';
@@ -76,7 +77,6 @@ import { SKILL_ICON_SIZE } from './constants';
 import LobehubSkillIcon from './LobehubSkillIcon';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
 import MarketAgentSkillPopoverContent from './MarketAgentSkillPopoverContent';
-import MarketSkillIcon from './MarketSkillIcon';
 import SkillRow from './SkillRow';
 import ToolItem from './ToolItem';
 import ToolItemDetailPopover from './ToolItemDetailPopover';

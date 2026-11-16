@@ -27,6 +27,8 @@ export interface SkillListItem {
    * empty or omitted the row stays atomic (no chevron, no expansion).
    */
   files?: string[];
+  /** Custom icon; omitted for skills that use the generic skill glyph. */
+  icon?: React.ReactNode;
   id: string;
   name: string;
   /** Filesystem skill scope when the row comes from a device scan. */
@@ -408,7 +410,7 @@ const SkillRow = memo<SkillRowProps>(
         ) : reserveChevronSlot ? (
           <span style={{ flexShrink: 0, height: 20, width: 20 }} />
         ) : null}
-        <Icon className={styles.itemIcon} icon={SkillsIcon} size={14} />
+        {item.icon ?? <Icon className={styles.itemIcon} icon={SkillsIcon} size={14} />}
         {item.description ? (
           <Tooltip
             placement={'left'}
