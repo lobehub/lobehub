@@ -1,4 +1,8 @@
 import type {
+  AddBitableRecordsParams,
+  AddBitableRecordsState,
+  CreateBitableParams,
+  CreateBitableState,
   CreatePollParams,
   CreatePollState,
   CreateThreadParams,
@@ -122,6 +126,22 @@ export class MessageDispatcherService implements MessageRuntimeService {
       throw new Error(`readDocument is not supported on ${params.platform}`);
     }
     return service.readDocument(params);
+  };
+
+  createBitable = async (params: CreateBitableParams): Promise<CreateBitableState> => {
+    const service = await this.getService(params);
+    if (!service.createBitable) {
+      throw new Error(`createBitable is not supported on ${params.platform}`);
+    }
+    return service.createBitable(params);
+  };
+
+  addBitableRecords = async (params: AddBitableRecordsParams): Promise<AddBitableRecordsState> => {
+    const service = await this.getService(params);
+    if (!service.addBitableRecords) {
+      throw new Error(`addBitableRecords is not supported on ${params.platform}`);
+    }
+    return service.addBitableRecords(params);
   };
 
   editMessage = async (params: EditMessageParams): Promise<EditMessageState> => {

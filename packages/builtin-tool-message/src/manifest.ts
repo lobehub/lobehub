@@ -1,6 +1,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import type { BuiltinToolManifest } from '@lobechat/types';
 
+import { bitableApis } from './bitableManifest';
 import { systemPrompt } from './systemRole';
 import { MessageApiName, MessageToolIdentifier, MESSENGER_PUSH_CONTENT_MAX_LENGTH } from './types';
 
@@ -458,6 +459,7 @@ export const MessageManifest: BuiltinToolManifest = {
         type: 'object',
       },
     },
+    ...bitableApis,
     {
       description: 'Edit an existing message. Only the message author can edit their messages.',
       name: MessageApiName.editMessage,

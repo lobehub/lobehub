@@ -362,6 +362,142 @@ export class LarkApiClient {
   }
 
   // ------------------------------------------------------------------
+  // Bitable (多维表格)
+  // ------------------------------------------------------------------
+
+  /**
+   * Create a Bitable app in the app's own space (or `folderToken`). The
+   * app — not any user — owns it, so callers grant people access with
+   * {@link addDriveCollaborator}. Needs `bitable:app`. The new app comes with
+   * one default table (`defaultTableId`).
+   *
+   * @see https://open.feishu.cn/document/server-docs/docs/bitable-v1/app/create
+   */
+  async createBitableApp(params: {
+    folderToken?: string;
+    name: string;
+    timeZone?: string;
+  }): Promise<{ appToken: string; defaultTableId?: string; name?: string; url?: string }> {
+    const body: Record<string, unknown> = { name: params.name };
+    if (params.folderToken) body.folder_token = params.folderToken;
+    if (params.timeZone) body.time_zone = params.timeZone;
+    const data = await this.call('POST', '/bitable/v1/apps', body);
+    const app = data.data?.app ?? {};
+    return {
+      appToken: app.app_token,
+      defaultTableId: app.default_table_id || undefined,
+      name: app.name,
+      url: app.url,
+    };
+  }
+
+  /**
+   * Create a table with its columns in one call. `fields` use Feishu's own
+   * shape (`field_name`, numeric `type`, optional `property`); the first
+   * field becomes the primary (index) column.
+   *
+   * @see https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table/create
+   */
+  async createBitableTable(
+    appToken: string,
+    params: {
+      fields: Array<{ field_name: string; property?: Record<string, unknown>; type: number }>;
+      name: string;
+    },
+  ): Promise<{ defaultViewId?: string; fieldIds: string[]; tableId: string }> {
+    const data = await this.call('POST', `/bitable/v1/apps/${appToken}/tables`, {
+      table: { default_view_name: params.name, fields: params.fields, name: params.name },
+    });
+    return {
+      defaultViewId: data.data?.default_view_id,
+      fieldIds: data.data?.field_id_list ?? [],
+      tableId: data.data?.table_id,
+    };
+  }
+
+  /** @see https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table/delete */
+  async deleteBitableTable(appToken: string, tableId: string): Promise<void> {
+    await this.call('DELETE', `/bitable/v1/apps/${appToken}/tables/${tableId}`, {});
+  }
+
+  /**
+   * First page (up to 100) of the tables in a Bitable app, in display order.
+   *
+   * @see https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table/list
+   */
+  async listBitableTables(appToken: string): Promise<Array<{ name?: string; tableId: string }>> {
+    const data = await this.call('GET', `/bitable/v1/apps/${appToken}/tables?page_size=100`, {});
+    return (data.data?.items ?? []).map((item: any) => ({
+      name: item.name,
+      tableId: item.table_id,
+    }));
+  }
+
+  /**
+   * First page (up to 100) of a table's columns: name, numeric type and the
+   * type-specific `property` (select options and the like).
+   *
+   * @see https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-field/list
+   */
+  async listBitableFields(
+    appToken: string,
+    tableId: string,
+  ): Promise<Array<{ fieldId: string; fieldName: string; type: number }>> {
+    const data = await this.call(
+      'GET',
+      `/bitable/v1/apps/${appToken}/tables/${tableId}/fields?page_size=100`,
+      {},
+    );
+    return (data.data?.items ?? []).map((item: any) => ({
+      fieldId: item.field_id,
+      fieldName: item.field_name,
+      type: item.type,
+    }));
+  }
+
+  /**
+   * Insert up to 500 records (Feishu's per-request cap) in one call. Each
+   * record maps a column name to a value already in the column type's wire
+   * shape (milliseconds for dates, `[{ id }]` for people, …).
+   *
+   * @see https://open.feishu.cn/document/server-docs/docs/bitable-v1/app-table-record/batch_create
+   */
+  async batchCreateBitableRecords(
+    appToken: string,
+    tableId: string,
+    records: Array<Record<string, unknown>>,
+  ): Promise<{ recordIds: string[] }> {
+    const data = await this.call(
+      'POST',
+      `/bitable/v1/apps/${appToken}/tables/${tableId}/records/batch_create?user_id_type=open_id`,
+      { records: records.map((fields) => ({ fields })) },
+    );
+    return {
+      recordIds: (data.data?.records ?? []).map((record: any) => record.record_id).filter(Boolean),
+    };
+  }
+
+  /**
+   * Add a user (by open_id) as a collaborator on a cloud document the app
+   * owns. Needs `docs:permission.member:create` (or `drive:drive`). No
+   * notification is sent: the bot posts the link in the chat itself.
+   *
+   * @see https://open.feishu.cn/document/server-docs/docs/permission/permission-member/create
+   */
+  async addDriveCollaborator(
+    token: string,
+    docType: 'bitable' | 'docx' | 'sheet',
+    member: { openId: string; perm: 'edit' | 'full_access' | 'view' },
+  ): Promise<void> {
+    const params = new URLSearchParams({ need_notification: 'false', type: docType });
+    await this.call('POST', `/drive/v1/permissions/${token}/members?${params.toString()}`, {
+      member_id: member.openId,
+      member_type: 'openid',
+      perm: member.perm,
+    });
+  }
+
+  // ------------------------------------------------------------------
   // Auth
   // ------------------------------------------------------------------
 

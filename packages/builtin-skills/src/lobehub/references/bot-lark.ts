@@ -75,6 +75,8 @@ Connect a Lark custom app bot to your agent. Lark is the international version o
    - \`im:message.group_msg\` — "获取群组中所有消息", read **group** chat history; required *in addition to* \`im:message:readonly\`, otherwise history reads in groups fail with \`230027 Permission denied\`. Search Permissions & Scopes by that display name — the console does not match on the code. No review is required, but the app must be re-published for it to take effect. Do NOT confuse it with \`im:message.group_msg.include_bot:read\`, which governs the receive-message event, not history reads
    - \`docx:document:readonly\` — "View new docs", lets \`readDocument\` pull the text of docx documents (meeting minutes, specs) shared into the chat. The document must ALSO be visible to the app: sharing it into a group the bot is in is not enough — the owner adds the app as a collaborator (Share → add collaborator → search the app name), or the wiki space grants the app access
    - \`wiki:wiki:readonly\` — only if users share \`/wiki/\` links; resolves a wiki page to the docx behind it
+   - \`bitable:app\` — "View, comment, edit and manage Base", lets \`createBitable\` / \`addBitableRecords\` build a Base (to-do list, tracker) and write rows on the app's own credentials. A Base created this way is owned by the app; to append rows to an existing one, its owner adds the app as a collaborator
+   - \`docs:permission.member:create\` — "Add, modify and remove collaborators of docs", lets \`createBitable\` share the new Base with the requester (and anyone they name); without it the Base is created but nobody but the app can open it
 
 ### Step 7: Publish the App
 

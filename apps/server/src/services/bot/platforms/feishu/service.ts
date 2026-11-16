@@ -1,4 +1,8 @@
 import type {
+  AddBitableRecordsParams,
+  AddBitableRecordsState,
+  CreateBitableParams,
+  CreateBitableState,
   CreatePollParams,
   CreatePollState,
   CreateThreadParams,
@@ -52,6 +56,7 @@ import { PlatformUnsupportedError } from '@/server/services/toolExecution/server
 
 import type { AttachmentSendResult } from '../attachmentDelivery';
 import { attachmentDeliveryState, warnAttachmentFailures } from '../attachmentDelivery';
+import { addBitableRecords, createBitable } from './bitable';
 import { MAX_FEISHU_DOCUMENT_CHARS, MAX_FEISHU_HISTORY_LIMIT } from './const';
 import { sendFeishuAttachments } from './sendAttachments';
 
@@ -312,6 +317,14 @@ export class FeishuMessageService implements MessageRuntimeService {
       url: target.url,
     };
   };
+
+  // ==================== Bitable (多维表格) ====================
+
+  createBitable = async (params: CreateBitableParams): Promise<CreateBitableState> =>
+    createBitable(this.api, params, this.platformName);
+
+  addBitableRecords = async (params: AddBitableRecordsParams): Promise<AddBitableRecordsState> =>
+    addBitableRecords(this.api, params, this.platformName);
 
   editMessage = async (params: EditMessageParams): Promise<EditMessageState> => {
     await this.api.editMessage(params.messageId, params.content);

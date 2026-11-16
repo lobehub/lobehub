@@ -3,7 +3,9 @@ import { BaseExecutor } from '@lobechat/types';
 
 import type { MessageExecutionRuntime } from '../ExecutionRuntime';
 import type {
+  AddBitableRecordsParams,
   ConnectBotParams,
+  CreateBitableParams,
   CreateBotParams,
   CreatePollParams,
   CreateThreadParams,
@@ -73,6 +75,20 @@ class MessageExecutor extends BaseExecutor<typeof MessageApiName> {
     _ctx?: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     return this.runtime.readDocument(params);
+  };
+
+  createBitable = async (
+    params: CreateBitableParams,
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return this.runtime.createBitable(params);
+  };
+
+  addBitableRecords = async (
+    params: AddBitableRecordsParams,
+    _ctx?: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    return this.runtime.addBitableRecords(params);
   };
 
   editMessage = async (

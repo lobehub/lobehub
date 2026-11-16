@@ -278,6 +278,14 @@ export const trpcMessageService: MessageRuntimeService = {
     return lambdaClient.botMessage.readDocument.query(await buildTrpcInput(params)) as any;
   },
 
+  createBitable: async (params) => {
+    return lambdaClient.botMessage.createBitable.mutate(await buildTrpcInput(params)) as any;
+  },
+
+  addBitableRecords: async (params) => {
+    return lambdaClient.botMessage.addBitableRecords.mutate(await buildTrpcInput(params)) as any;
+  },
+
   editMessage: async (params) => {
     return lambdaClient.botMessage.editMessage.mutate(await buildTrpcInput(params)) as any;
   },

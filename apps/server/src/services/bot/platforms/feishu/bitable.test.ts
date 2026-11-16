@@ -1,0 +1,365 @@
+import type { LarkApiClient } from '@lobechat/chat-adapter-feishu';
+import { describe, expect, it, vi } from 'vitest';
+
+import {
+  addBitableRecords,
+  BITABLE_FIELD_TYPE_CODES,
+  BITABLE_RECORD_BATCH_SIZE,
+  createBitable,
+  toBitableCellValue,
+} from './bitable';
+import { FeishuMessageService } from './service';
+
+const createApi = () => {
+  const api = {
+    addDriveCollaborator: vi.fn().mockResolvedValue(undefined),
+    batchCreateBitableRecords: vi
+      .fn()
+      .mockImplementation(async (_app: string, _table: string, rows: unknown[]) => ({
+        recordIds: rows.map((_, i) => `rec${i}`),
+      })),
+    createBitableApp: vi.fn().mockResolvedValue({
+      appToken: 'bascnABC',
+      defaultTableId: 'tblDefault',
+      name: '项目待办',
+      url: 'https://x.feishu.cn/base/bascnABC',
+    }),
+    createBitableTable: vi
+      .fn()
+      .mockResolvedValue({ defaultViewId: 'vew1', fieldIds: [], tableId: 'tblNew' }),
+    deleteBitableTable: vi.fn().mockResolvedValue(undefined),
+    getWikiNode: vi.fn(),
+    listBitableFields: vi.fn().mockResolvedValue([
+      { fieldId: 'f1', fieldName: '任务', type: 1 },
+      { fieldId: 'f2', fieldName: '负责人', type: 11 },
+      { fieldId: 'f3', fieldName: '截止日期', type: 5 },
+    ]),
+    listBitableTables: vi.fn().mockResolvedValue([{ name: '任务表', tableId: 'tblFirst' }]),
+  };
+  return api as typeof api & LarkApiClient;
+};
+
+const FIELDS = [
+  { name: '任务', type: 'text' as const },
+  { name: '负责人', type: 'person' as const },
+  { name: '截止日期', type: 'date' as const },
+  { name: '状态', options: ['待开始', '进行中', '已完成'], type: 'singleSelect' as const },
+  { name: '标签', type: 'multiSelect' as const },
+  { name: '工时', type: 'number' as const },
+  { name: '完成', type: 'checkbox' as const },
+  { name: '链接', type: 'url' as const },
+];
+
+describe('createBitable', () => {
+  it('creates the app and typed table, drops the default table, writes rows and shares it', async () => {
+    const api = createApi();
+
+    const result = await createBitable(
+      api,
+      {
+        collaborators: [{ openId: 'ou_owner' }, { openId: 'ou_viewer', perm: 'view' }],
+        fields: FIELDS,
+        name: '项目待办',
+        platform: 'feishu',
+        records: [
+          {
+            任务: '整理需求',
+            完成: '否',
+            工时: '3',
+            截止日期: '2026-11-20',
+            标签: '后端',
+            状态: '进行中',
+            负责人: 'ou_owner',
+            链接: 'https://example.com',
+          },
+        ],
+        tableName: '任务表',
+      },
+      'feishu',
+    );
+
+    expect(api.createBitableApp).toHaveBeenCalledWith({ folderToken: undefined, name: '项目待办' });
+    expect(api.createBitableTable).toHaveBeenCalledWith('bascnABC', {
+      fields: [
+        { field_name: '任务', type: 1 },
+        { field_name: '负责人', property: { multiple: true }, type: 11 },
+        {
+          field_name: '截止日期',
+          property: { auto_fill: false, date_formatter: 'yyyy/MM/dd' },
+          type: 5,
+        },
+        {
+          field_name: '状态',
+          property: { options: [{ name: '待开始' }, { name: '进行中' }, { name: '已完成' }] },
+          type: 3,
+        },
+        { field_name: '标签', type: 4 },
+        { field_name: '工时', type: 2 },
+        { field_name: '完成', type: 7 },
+        { field_name: '链接', type: 15 },
+      ],
+      name: '任务表',
+    });
+    expect(api.deleteBitableTable).toHaveBeenCalledWith('bascnABC', 'tblDefault');
+    expect(api.batchCreateBitableRecords).toHaveBeenCalledWith('bascnABC', 'tblNew', [
+      {
+        任务: '整理需求',
+        完成: false,
+        工时: 3,
+        截止日期: Date.parse('2026-11-20'),
+        标签: ['后端'],
+        状态: '进行中',
+        负责人: [{ id: 'ou_owner' }],
+        链接: { link: 'https://example.com', text: 'https://example.com' },
+      },
+    ]);
+    expect(api.addDriveCollaborator).toHaveBeenNthCalledWith(1, 'bascnABC', 'bitable', {
+      openId: 'ou_owner',
+      perm: 'full_access',
+    });
+    expect(api.addDriveCollaborator).toHaveBeenNthCalledWith(2, 'bascnABC', 'bitable', {
+      openId: 'ou_viewer',
+      perm: 'view',
+    });
+    expect(result).toEqual({
+      appToken: 'bascnABC',
+      collaborators: ['ou_owner', 'ou_viewer'],
+      issues: undefined,
+      name: '项目待办',
+      platform: 'feishu',
+      recordIds: ['rec0'],
+      tableId: 'tblNew',
+      url: 'https://x.feishu.cn/base/bascnABC',
+    });
+  });
+
+  it('keeps the Bitable and reports per-collaborator failures instead of throwing', async () => {
+    const api = createApi();
+    api.addDriveCollaborator
+      .mockRejectedValueOnce(new Error('Lark API POST /drive failed: 99991672 Access denied'))
+      .mockResolvedValueOnce(undefined);
+
+    const result = await createBitable(
+      api,
+      {
+        collaborators: [{ openId: 'ou_a' }, { openId: 'ou_b' }, { openId: 'ou_b' }],
+        fields: [{ name: '任务', type: 'text' }],
+        name: '待办',
+        platform: 'feishu',
+      },
+      'feishu',
+    );
+
+    expect(api.addDriveCollaborator).toHaveBeenCalledTimes(2);
+    expect(result.collaborators).toEqual(['ou_b']);
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues![0].target).toBe('ou_a');
+    expect(result.issues![0].error).toContain('docs:permission.member:create');
+    expect(result.url).toBe('https://x.feishu.cn/base/bascnABC');
+  });
+
+  it('reports bad rows as an issue but still returns the created table', async () => {
+    const api = createApi();
+
+    const result = await createBitable(
+      api,
+      {
+        fields: [{ name: '任务', type: 'text' }],
+        name: '待办',
+        platform: 'feishu',
+        records: [{ 不存在: 'x' }],
+      },
+      'feishu',
+    );
+
+    expect(api.batchCreateBitableRecords).not.toHaveBeenCalled();
+    expect(result.tableId).toBe('tblNew');
+    expect(result.issues?.[0]).toMatchObject({ target: 'records' });
+    expect(result.issues?.[0].error).toContain('unknown column "不存在"');
+    expect(result.issues?.[0].error).toContain('addBitableRecords');
+  });
+
+  it('splits more than 500 rows into several batch requests', async () => {
+    const api = createApi();
+    const records = Array.from({ length: BITABLE_RECORD_BATCH_SIZE + 1 }, (_, i) => ({
+      任务: `t${i}`,
+    }));
+
+    const result = await createBitable(
+      api,
+      { fields: [{ name: '任务', type: 'text' }], name: '待办', platform: 'feishu', records },
+      'feishu',
+    );
+
+    expect(api.batchCreateBitableRecords).toHaveBeenCalledTimes(2);
+    expect(api.batchCreateBitableRecords.mock.calls[1][2]).toHaveLength(1);
+    expect(result.recordIds).toHaveLength(BITABLE_RECORD_BATCH_SIZE + 1);
+  });
+
+  it('validates columns before creating anything', async () => {
+    const api = createApi();
+
+    await expect(
+      createBitable(
+        api,
+        {
+          fields: [
+            { name: '任务', type: 'text' },
+            { name: '任务', type: 'number' },
+          ],
+          name: '待办',
+          platform: 'feishu',
+        },
+        'feishu',
+      ),
+    ).rejects.toThrow('Duplicate column name "任务"');
+    expect(api.createBitableApp).not.toHaveBeenCalled();
+  });
+
+  it('turns a missing bitable scope into an actionable hint', async () => {
+    const api = createApi();
+    api.createBitableApp.mockRejectedValueOnce(
+      new Error('Lark API POST /bitable/v1/apps failed: 99991672 Access denied'),
+    );
+
+    await expect(
+      createBitable(
+        api,
+        { fields: [{ name: '任务', type: 'text' }], name: '待办', platform: 'feishu' },
+        'feishu',
+      ),
+    ).rejects.toThrow('bitable:app');
+  });
+
+  it('names the orphan Bitable when its table cannot be created', async () => {
+    const api = createApi();
+    api.createBitableTable.mockRejectedValueOnce(new Error('boom'));
+
+    await expect(
+      createBitable(
+        api,
+        { fields: [{ name: '任务', type: 'text' }], name: '待办', platform: 'feishu' },
+        'feishu',
+      ),
+    ).rejects.toThrow('The Bitable was created (https://x.feishu.cn/base/bascnABC)');
+  });
+});
+
+describe('addBitableRecords', () => {
+  it('takes the app token and table from a /base/ URL and converts by column type', async () => {
+    const api = createApi();
+
+    const result = await addBitableRecords(
+      api,
+      {
+        platform: 'feishu',
+        records: [{ 任务: '验收', 截止日期: 1_763_600_000, 负责人: ['ou_1', { id: 'ou_2' }] }],
+        url: 'https://x.feishu.cn/base/bascnABC?table=tblX&view=vew1',
+      },
+      'feishu',
+    );
+
+    expect(api.listBitableTables).not.toHaveBeenCalled();
+    expect(api.listBitableFields).toHaveBeenCalledWith('bascnABC', 'tblX');
+    expect(api.batchCreateBitableRecords).toHaveBeenCalledWith('bascnABC', 'tblX', [
+      { 任务: '验收', 截止日期: 1_763_600_000_000, 负责人: [{ id: 'ou_1' }, { id: 'ou_2' }] },
+    ]);
+    expect(result).toEqual({
+      appToken: 'bascnABC',
+      platform: 'feishu',
+      recordIds: ['rec0'],
+      tableId: 'tblX',
+    });
+  });
+
+  it('falls back to the first table when none is named', async () => {
+    const api = createApi();
+
+    const result = await addBitableRecords(
+      api,
+      { appToken: 'bascnABC', platform: 'lark', records: [{ 任务: 'a' }] },
+      'lark',
+    );
+
+    expect(api.listBitableTables).toHaveBeenCalledWith('bascnABC');
+    expect(result.tableId).toBe('tblFirst');
+  });
+
+  it('resolves a wiki link wrapping a Bitable', async () => {
+    const api = createApi();
+    api.getWikiNode.mockResolvedValueOnce({
+      nodeToken: 'wikcn1',
+      objToken: 'bascnWIKI',
+      objType: 'bitable',
+    });
+
+    const result = await addBitableRecords(
+      api,
+      { platform: 'feishu', records: [{ 任务: 'a' }], url: 'https://x.feishu.cn/wiki/wikcn1' },
+      'feishu',
+    );
+
+    expect(result.appToken).toBe('bascnWIKI');
+  });
+
+  it('rejects non-Bitable links', async () => {
+    const api = createApi();
+
+    await expect(
+      addBitableRecords(
+        api,
+        { platform: 'feishu', records: [{ 任务: 'a' }], url: 'https://x.feishu.cn/docx/doxcn1' },
+        'feishu',
+      ),
+    ).rejects.toThrow('not a Bitable');
+  });
+
+  it('lists the real columns when a row names an unknown one', async () => {
+    const api = createApi();
+
+    await expect(
+      addBitableRecords(
+        api,
+        { appToken: 'bascnABC', platform: 'feishu', records: [{ 优先级: '高' }] },
+        'feishu',
+      ),
+    ).rejects.toThrow('Columns are: 任务, 负责人, 截止日期');
+  });
+});
+
+describe('toBitableCellValue', () => {
+  it('rejects values that cannot fit the column type', () => {
+    expect(() => toBitableCellValue('工时', BITABLE_FIELD_TYPE_CODES.number, 'abc')).toThrow(
+      'not a number',
+    );
+    expect(() => toBitableCellValue('截止', BITABLE_FIELD_TYPE_CODES.date, '下周')).toThrow(
+      'not a date',
+    );
+  });
+
+  it('passes values of column types it does not create through unchanged', () => {
+    const value = [{ file_token: 'x' }];
+    expect(toBitableCellValue('附件', 17, value)).toBe(value);
+  });
+});
+
+describe('FeishuMessageService bitable', () => {
+  it('delegates to the bitable helpers with its platform name', async () => {
+    const api = createApi();
+    const service = new FeishuMessageService(api, 'lark');
+
+    const created = await service.createBitable({
+      fields: [{ name: '任务', type: 'text' }],
+      name: '待办',
+      platform: 'lark',
+    });
+    const added = await service.addBitableRecords({
+      appToken: 'bascnABC',
+      platform: 'lark',
+      records: [{ 任务: 'a' }],
+    });
+
+    expect(created.platform).toBe('lark');
+    expect(added.platform).toBe('lark');
+  });
+});
