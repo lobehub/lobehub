@@ -24,6 +24,7 @@ const buildCtx = () => {
       messageModel: { create, updatePluginState },
       operationId: 'op_1',
       scheduleShellExpiry,
+      stepIndex: 4,
       streamManager: { markOperationParked },
       topicId: 'topic_1',
     } as any,
@@ -82,9 +83,10 @@ describe('parkAsyncShell', () => {
         tool_call_id: 'call_1',
       }),
     );
+    // Scoped to the parking step, whose own closing events follow the park.
     expect(markOperationParked).toHaveBeenCalledWith(
       'op_1',
-      expect.objectContaining({ reason: 'async_shell' }),
+      expect.objectContaining({ reason: 'async_shell', stepIndex: 4 }),
     );
     // One deadline message, not a poll loop.
     expect(scheduleShellExpiry).toHaveBeenCalledWith(

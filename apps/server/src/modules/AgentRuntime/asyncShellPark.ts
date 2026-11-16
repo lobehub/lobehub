@@ -132,9 +132,12 @@ export const parkAsyncShell = async (
   // Ask the gateway to stop treating this run's silence as a dead function
   // until the command comes back. Best-effort: an older gateway answers 404 and
   // the caller's own timeout still bounds the wait.
+  // `stepIndex` scopes the park to this step: the step's own closing events
+  // still follow, and must not end the park the way the resume does.
   await ctx.streamManager.markOperationParked?.(ctx.operationId, {
     parkedUntil: Date.now() + ASYNC_SHELL_PARK_WINDOW_MS,
     reason: 'async_shell',
+    stepIndex: ctx.stepIndex,
   });
 
   // One deadline, not a poll: if the device never reports back the run would

@@ -450,13 +450,14 @@ export class GatewayStreamNotifier implements IStreamEventManager {
    */
   async markOperationParked(
     operationId: string,
-    params: { parkedUntil: number; reason?: string },
+    params: { parkedUntil: number; reason?: string; stepIndex?: number },
   ): Promise<boolean> {
     try {
       const res = await this.httpPostResponse('/api/operations/park', {
         operationId,
         parkedUntil: params.parkedUntil,
         reason: params.reason ?? 'deferred_tool',
+        stepIndex: params.stepIndex,
       });
       if (res.ok) return true;
       if (res.status === 404) {

@@ -221,8 +221,11 @@ export async function completeDeferredShell(
     );
   }
 
+  // `applied: false` means an earlier answer (the device result or the expiry)
+  // already filled the placeholder; this one changed nothing.
   log(
-    'shell completed: op=%s tool=%s message=%s exit=%s blocked=%s',
+    'shell %s: op=%s tool=%s message=%s exit=%s blocked=%s',
+    backfill.applied ? 'completed' : 'already answered, ignored',
     operationId,
     result.toolCallId,
     plugin.id,

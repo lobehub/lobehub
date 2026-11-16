@@ -255,7 +255,11 @@ export interface IStreamEventManager {
    */
   markOperationParked?: (
     operationId: string,
-    params: { parkedUntil: number; reason?: string },
+    /**
+     * `stepIndex` is the parking step: its own later events must not end the
+     * park, only a later step (the resume) or the run ending does.
+     */
+    params: { parkedUntil: number; reason?: string; stepIndex?: number },
   ) => Promise<boolean>;
 
   /**
