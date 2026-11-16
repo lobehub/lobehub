@@ -157,7 +157,8 @@ describe('connector status after webhook maintenance authentication', () => {
     await sweepInboundWebhooks(db);
     expect(boundary.enabled).toHaveBeenCalledExactlyOnceWith(userId);
     expect(boundary.subscribe).toHaveBeenCalledTimes(2);
-    expect(boundary.subscribe.mock.calls[0][1]).toMatchObject({ cursor: 'last-cursor' });
+    // Rows due at the same instant come back in no particular order; `a` resumes from its cursor.
+    expect(boundary.subscribe.mock.calls.map(([, input]) => input.cursor)).toContain('last-cursor');
     expect(await model.findById(a.id)).toMatchObject({ status: 'active', maintenanceFailures: 0 });
   });
 
