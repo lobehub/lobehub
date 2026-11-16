@@ -689,7 +689,7 @@
   "channel.wecom.botId": "BotID",
   "channel.wecom.botIdHint": "The BotID of your WeCom AI bot (API mode).",
   "channel.wecom.secret": "Secret",
-  "channel.wecom.secretHint": "The bot's long-connection Secret. Connecting the same bot anywhere else disconnects it here.",
+  "channel.wecom.secretHint": "The bot's long-connection Secret. A bot can be connected in only one place at a time: saving here takes over a connection it has elsewhere, and connecting it elsewhere later disconnects it here.",
   "share.entry": "Share this Agent",
   "share.settings.limits.desc": "Every visitor run is billed to your account, so these caps are what keep a shared link from running up your bill. They always apply — you can change the numbers, but not turn them off.",
   "share.settings.limits.maxFileStorageHint": "Files visitors attach are stored on your account. Uploads stop once they reach this total; set 0 to turn attachments off.",

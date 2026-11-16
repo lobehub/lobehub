@@ -689,7 +689,7 @@
   "channel.wecom.botId": "BotID",
   "channel.wecom.botIdHint": "企业微信智能机器人（API 模式）的 BotID。",
   "channel.wecom.secret": "Secret",
-  "channel.wecom.secretHint": "机器人的长连接 Secret。在其他地方接入同一个机器人，会让这里的连接断开。",
+  "channel.wecom.secretHint": "机器人的长连接 Secret。同一个机器人同一时间只能接入一处：在这里保存会接管它在别处的连接，之后在别处接入也会让这里断开。",
   "share.entry": "分享此助手",
   "share.settings.limits.desc": "访客的每次运行都记在你的账户上，这些上限是分享链接不会跑出高额账单的唯一保障。上限始终生效，你可以调整数值，但不能关闭。",
   "share.settings.limits.maxFileStorageHint": "访客上传的文件会存放在你的账号里。累计达到这个总量后就不能再上传；填 0 表示关闭附件功能。",

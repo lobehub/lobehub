@@ -363,7 +363,7 @@ export default {
   'channel.wecom.botIdHint': 'The BotID of your WeCom AI bot (API mode).',
   'channel.wecom.secret': 'Secret',
   'channel.wecom.secretHint':
-    "The bot's long-connection Secret. Connecting the same bot anywhere else disconnects it here.",
+    "The bot's long-connection Secret. A bot can be connected in only one place at a time: saving here takes over a connection it has elsewhere, and connecting it elsewhere later disconnects it here.",
   'channel.wechat.description':
     'Connect this agent to WeChat via iLink Bot for private and group chats.',
   'channel.wechatQrExpired': 'QR code expired. Please refresh to get a new one.',
