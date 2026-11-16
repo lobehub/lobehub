@@ -164,6 +164,26 @@ describe('generic webhook management', () => {
     expect(actions).toEqual([{ action: 'webhook.created' }]);
   });
 
+  it("keeps a private agent's webhook task and URL from the other members", async () => {
+    await db.insert(agents).values({
+      id: `${agentId}-private`,
+      userId: creator,
+      visibility: 'private',
+      workspaceId,
+    });
+    const created = await inWorkspace(creator).create({
+      agentId: `${agentId}-private`,
+      instructions: 'Read the payroll sheet',
+    });
+    const [seen] = await inWorkspace(colleague, 'admin').list();
+    expect(seen).toMatchObject({ agent: null, endpoint: null, id: created.id, instructions: null });
+    const [own] = await inWorkspace(creator).list();
+    expect(own).toMatchObject({
+      endpoint: created.endpoint,
+      instructions: 'Read the payroll sheet',
+    });
+  });
+
   it('pauses, resumes and changes settings, leaving the URL as it was', async () => {
     const created = await caller().create({ agentId });
     const paused = await caller().update({ id: created.id, paused: true });

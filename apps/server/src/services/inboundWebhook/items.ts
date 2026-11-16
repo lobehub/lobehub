@@ -95,7 +95,7 @@ export async function inboundWebhookItems(
       const kind = getInboundWebhookKind(row.kind);
       if (!kind) return [];
       const agentRow = agentRows.find((a) => a.id === row.agentId);
-      // Without the agent, its Topic and the connector it owns are its details too.
+      // Without the agent, its Topic, the connector it owns and its task are its details too.
       const connector = connectorRows.find(
         (c) => c.id === row.connectorId && (agentRow || !c.agentId),
       );
@@ -116,10 +116,11 @@ export async function inboundWebhookItems(
             : null,
           createdAt: row.createdAt.toISOString(),
           creatorId: row.userId,
-          endpoint: canManage ? (endpoints.get(row.id) ?? null) : null,
+          // The call URL and the task it runs act on the agent, so they go with its visibility.
+          endpoint: canManage && agentRow ? (endpoints.get(row.id) ?? null) : null,
           expiresAt: kind.expiresAt?.(row) ?? null,
           id: row.id,
-          instructions: row.instructions,
+          instructions: agentRow ? row.instructions : null,
           kind: row.kind,
           lastDeliveryAt: row.lastDeliveryAt?.toISOString() ?? null,
           lastError: row.lastError,
