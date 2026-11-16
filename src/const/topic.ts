@@ -11,6 +11,8 @@
  * panel, not from the agent's chat history.
  * `Channel` marks an agent's execution context for a Channel conversation;
  * its messages are surfaced through the Channel UI.
+ * `Webhook` marks a topic a generic inbound webhook call started; it is read
+ * from Inbox, the topic manager and the webhook's delivery log.
  */
 export const TopicTrigger = {
   Channel: 'channel',
@@ -19,11 +21,13 @@ export const TopicTrigger = {
   Eval: 'eval',
   GoalSupervision: 'goal_supervision',
   RunTask: 'task',
+  Webhook: 'webhook',
 } as const;
 
 /**
  * Triggers to exclude from the main chat sidebar so system-owned topics
- * (channel runs, cron jobs, evals, task runs, doc chats, goal supervision) don't
+ * (channel runs, cron jobs, evals, task runs, doc chats, goal supervision,
+ * webhook calls) don't
  * pollute the user's main history.
  */
 export const MAIN_SIDEBAR_EXCLUDE_TRIGGERS: string[] = [
@@ -33,4 +37,5 @@ export const MAIN_SIDEBAR_EXCLUDE_TRIGGERS: string[] = [
   TopicTrigger.Eval,
   TopicTrigger.GoalSupervision,
   TopicTrigger.RunTask,
+  TopicTrigger.Webhook,
 ];

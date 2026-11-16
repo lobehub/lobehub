@@ -203,5 +203,10 @@
   "upcoming.cloudflare.tagline": "Workers / Pages 构建失败时通知智能体",
   "upcoming.notion.tagline": "自动同步 Notion 文档",
   "upcoming.railway.tagline": "部署失败或服务崩溃时通知智能体",
-  "upcoming.vercel.tagline": "部署失败时把构建日志送给智能体"
+  "upcoming.vercel.tagline": "部署失败时把构建日志送给智能体",
+  "webhookEvent.callCount_one": "{{count}} 次调用",
+  "webhookEvent.callCount_other": "{{count}} 次调用",
+  "webhookEvent.defaultName": "Webhook",
+  "webhookEvent.senderCaption": "Webhook",
+  "webhookEvent.test": "测试"
 }

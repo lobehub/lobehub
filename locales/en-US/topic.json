@@ -217,6 +217,7 @@
   "management.filters.trigger.eval": "Eval",
   "management.filters.trigger.label": "Trigger",
   "management.filters.trigger.task": "Task",
+  "management.filters.trigger.webhook": "Webhook",
   "management.group.byProject": "By project",
   "management.group.byTime": "By time",
   "management.group.label": "Group",

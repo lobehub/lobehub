@@ -203,5 +203,10 @@
   "upcoming.cloudflare.tagline": "Notify the agent when a Workers or Pages build fails",
   "upcoming.notion.tagline": "Sync Notion documents automatically",
   "upcoming.railway.tagline": "Notify the agent when a deploy fails or a service crashes",
-  "upcoming.vercel.tagline": "Wake the agent with the build log when a deployment fails"
+  "upcoming.vercel.tagline": "Wake the agent with the build log when a deployment fails",
+  "webhookEvent.callCount_one": "{{count}} call",
+  "webhookEvent.callCount_other": "{{count}} calls",
+  "webhookEvent.defaultName": "Webhook",
+  "webhookEvent.senderCaption": "Webhook",
+  "webhookEvent.test": "Test"
 }

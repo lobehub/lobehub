@@ -21,7 +21,7 @@ export function buildGenericWebhookPrompt(params: {
     const receivedAt = (signal.occurredAt ?? signal.createdAt).toISOString().replace('.000Z', 'Z');
     const test = signal.metadata.extra?.test === true ? ' test="true"' : '';
     lines.push(
-      `<event id="${attribute(signal.id)}" receivedAt="${attribute(receivedAt)}"${test}>${escapeText(JSON.stringify(signal.payload))}</event>`,
+      `<event id="${attribute(signal.id)}" timestamp="${attribute(receivedAt)}"${test}>${escapeText(JSON.stringify(signal.payload))}</event>`,
     );
   }
   if (signals.length > MAX_EVENTS) lines.push(`<omitted count="${signals.length - MAX_EVENTS}" />`);
