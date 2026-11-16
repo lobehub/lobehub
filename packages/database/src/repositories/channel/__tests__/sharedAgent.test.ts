@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import {
+  agentOperations,
   agents,
   agentShares,
   channelJobs,
@@ -12,7 +13,7 @@ import {
   userContacts,
   userSettings,
 } from '../../../schemas';
-import { ChannelExecutionRepository, ChannelRepository } from '..';
+import { ChannelExecutionRepository, ChannelHistoryRepository, ChannelRepository } from '..';
 import { createChannelFixture, jobsOf, lease, operationById } from './testUtils';
 
 const db = await getTestDB();
@@ -187,5 +188,57 @@ describe('a contact’s shared Agent in a direct conversation', () => {
     const third = await claim('c');
     expect(third.topic.id).not.toBe(first.topic.id);
     expect(third.topic).toMatchObject({ senderId: visitorId, userId: ownerId });
+  });
+
+  describe('reading its conversation history', () => {
+    const start = async () => {
+      const { channel } = await visitor.create({
+        agentId,
+        sharedAgent: true,
+        title: 'Shared Helper',
+      });
+      // An earlier exchange, answered and settled, then the live run.
+      const earlier = await visitor.send(channel.id, {
+        content: 'Earlier note',
+        requestKey: 'earlier',
+        routing: 'fallback',
+      });
+      const [earlierJob] = await jobsOf(db, earlier.id);
+      await execution.claim(channel.id, earlierJob.id, lease);
+      await execution.accepted(channel.id, earlierJob.id);
+      await execution.saveDraft(channel.id, earlierJob.id, 'Earlier answer');
+      await execution.publish(channel.id, earlierJob.id);
+      await execution.releaseWriter(channel.id, earlierJob.id);
+      const first = (await execution.claim(channel.id, (await send(channel.id, 'now')).id, lease))!;
+      await db
+        .update(agentOperations)
+        .set({ status: 'running' })
+        .where(eq(agentOperations.id, first.job.operationId!));
+      return { channel, operationId: first.job.operationId! };
+    };
+
+    it('lets the run, as its owner, read the visitor’s public conversation', async () => {
+      const { operationId } = await start();
+      const history = new ChannelHistoryRepository(db, ownerId);
+      const page = await history.readMessages(operationId);
+      expect(page.messages.map((message) => message.content)).toContain('Earlier note');
+    });
+
+    it('refuses anything that would act in the owner’s Channels', async () => {
+      const { operationId } = await start();
+      await expect(
+        new ChannelHistoryRepository(db, ownerId).currentRun(operationId),
+      ).rejects.toThrow('A shared Agent can only read its own conversation');
+    });
+
+    it('does not open the run to the visitor or to another scope', async () => {
+      const { operationId } = await start();
+      await expect(
+        new ChannelHistoryRepository(db, visitorId).readMessages(operationId),
+      ).rejects.toThrow('Channel operation not found');
+      await expect(
+        new ChannelHistoryRepository(db, ownerId, fixture.workspaceId).readMessages(operationId),
+      ).rejects.toThrow('Channel operation not found');
+    });
   });
 });

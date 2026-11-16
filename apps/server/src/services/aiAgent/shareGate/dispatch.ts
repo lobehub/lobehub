@@ -1,7 +1,12 @@
 import { isShareToolApiGranted } from '@lobechat/const';
 import type { AgentShareToolGrant } from '@lobechat/types';
 
-import { isGovernedByBuiltinAllowlist, SHARE_VISITOR_ALLOWED_IDENTIFIERS } from './allowlist';
+import {
+  isGovernedByBuiltinAllowlist,
+  isShareVisitorChannelRead,
+  isShareVisitorChannelTool,
+  SHARE_VISITOR_ALLOWED_IDENTIFIERS,
+} from './allowlist';
 import { DATA_TOOL_ACCESS_RULES } from './dataToolRules';
 import { resolveEffectiveShareToolGrants } from './grants';
 import { SUB_AGENT_DISPATCH_APIS } from './subAgentDispatch';
@@ -39,6 +44,7 @@ export const isShareBlockedDataToolCall = (
   // Outside this gate's jurisdiction entirely — MCP/market/custom plugin
   // identifiers are governed by the toolGrants picker, not this allowlist.
   if (!isGovernedByBuiltinAllowlist(identifier)) return false;
+  if (isShareVisitorChannelTool(identifier)) return !isShareVisitorChannelRead(identifier, apiName);
 
   // Default-deny: a known builtin identifier not on the allowlist is blocked
   // unconditionally, including any tool registered after this allowlist was
@@ -86,6 +92,8 @@ export const isShareBlockedBuiltinDispatch = (
 ): boolean => {
   if (!isGovernedByBuiltinAllowlist(identifier)) return false;
 
+  // A Channel run's history reads only; see `isShareVisitorChannelRead`.
+  if (isShareVisitorChannelTool(identifier)) return !isShareVisitorChannelRead(identifier, apiName);
   if (!SHARE_VISITOR_ALLOWED_IDENTIFIERS.has(identifier)) return true;
   // The owner's picker must grant this identifier at all (toolset-level or
   // naming this specific `apiName`) — a grant scoped to a DIFFERENT api on

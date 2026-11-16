@@ -89,8 +89,10 @@ never take one. The claim freezes `executionConfig.share` (owner, share and the 
 - It is always a Native cloud run: no device, no Channel project, no attachments (sending refuses
   them because the owner's run cannot read the requester's files).
 - The coordinator rechecks the live share and its monthly spend limit before submission and runs
-  under the share's `shareGate`, which also removes Channel tools. The Agent answers from the
-  request and its recent public context.
+  under the share's `shareGate`. Of the Channel tools it keeps only `readMessages` /
+  `readMessage`, and `ChannelHistoryRepository` authorizes those reads against the frozen share
+  (owner operation, the person's Channel) while every other use of the run (`currentRun`, so
+  `listChannels` / `sendMessage`) is refused: they would act in the owner's Channels.
 - A topic ends at the share's `maxTurnsPerTopic`; the next request starts a new one.
 
 ## Conversations between contacts
