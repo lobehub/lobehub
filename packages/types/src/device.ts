@@ -3,6 +3,7 @@ import type { ManagedDevicePhase } from './managedDevice';
 import type { DeviceClient } from './tool/builtin';
 import type {
   DeviceGitLinkedPullRequest,
+  DeviceGitLinkedPullRequestLookupStatus,
   DeviceGitUpstreamRef,
   WorkingDirConfig,
 } from './workingDir';
