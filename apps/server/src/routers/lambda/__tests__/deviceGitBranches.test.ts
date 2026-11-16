@@ -10,7 +10,15 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn() }));
-vi.mock('@/database/models/device', () => ({ DeviceModel: class {} }));
+vi.mock('@/database/models/device', () => ({
+  DeviceModel: class {
+    // Personal-scope caller: the approved-root check reads the personal row;
+    // '/repo' stands in for a bound working directory.
+    findByDeviceId = vi
+      .fn()
+      .mockResolvedValue({ defaultCwd: null, workingDirs: [{ path: '/repo' }] });
+  },
+}));
 vi.mock('@/server/services/deviceGateway', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   deviceGateway: {
