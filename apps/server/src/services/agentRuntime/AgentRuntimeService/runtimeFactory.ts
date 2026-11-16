@@ -21,6 +21,7 @@ import { createWidgetDryRunAudit } from '@/server/services/widget/dryRunAudit';
 import { stateHasEntityFileEdits } from '@/server/services/workRegistration';
 
 import { hookDispatcher } from '../hooks';
+import { completeDeferredShell } from './asyncShellResult';
 import { createEvalConnectorHook } from './evalConnectorHook';
 import { createEvalToolGateHook } from './evalToolGateHook';
 import { DurableStatusUnavailableError } from './executionErrors';
@@ -35,6 +36,7 @@ export type RuntimeFactoryDeps = Pick<
   | 'agentFactory'
   | 'baseURL'
   | 'completeGroupMemberBarrier'
+  | 'controlCompletedToolResult'
   | 'coordinator'
   | 'delegate'
   | 'executeStep'
@@ -43,6 +45,7 @@ export type RuntimeFactoryDeps = Pick<
   | 'serverDB'
   | 'streamManager'
   | 'toolExecutionService'
+  | 'tryResumeParentFromAsyncTool'
   | 'userId'
   | 'workspaceId'
 >;
@@ -65,6 +68,15 @@ export function setupLocalExecutionCallback(deps: RuntimeFactoryDeps): void {
   if (impl instanceof LocalQueueServiceImpl) {
     log('Setting up local execution callback');
     impl.setExecutionCallback(async (operationId, stepIndex, context, payload) => {
+      // A parked shell's deadline rides this same local callback, but it is not
+      // a step: it is delivered with `stepIndex: 0`, which the completed-step
+      // guard skips, so the placeholder would stay parked past its deadline.
+      // Close it the way the QStash `/shell-expire` endpoint does instead.
+      if (payload?.expireShell === true) {
+        await expireLocalDeferredShell(deps, operationId, payload.toolCallId);
+        return;
+      }
+
       // Mirror the QStash path where payload fields (approvedToolCall,
       // toolMessageId, resumeAsyncTool, …) ride the request body into
       // executeStep. Without this spread, local/in-memory resumes silently
@@ -87,6 +99,45 @@ export function setupLocalExecutionCallback(deps: RuntimeFactoryDeps): void {
       }
     });
   }
+}
+
+/**
+ * Close a parked shell that outlived its wait window on the local queue.
+ *
+ * Mirrors `/api/agent/shell-expire`: the same `waiting_for_async_tool` guard
+ * (a device result that won the race leaves the operation alone) and the same
+ * `completeDeferredShell(..., { reason: 'timeout' })` call, which backfills the
+ * placeholder and re-dispatches the parked step. Only the delivery differs —
+ * the local queue has no HTTP hop to route through.
+ */
+async function expireLocalDeferredShell(
+  deps: RuntimeFactoryDeps,
+  operationId: string,
+  toolCallId?: string,
+): Promise<void> {
+  if (!toolCallId) {
+    log('[%s] shell expiry carried no toolCallId; nothing to close', operationId);
+    return;
+  }
+
+  const state = await deps.coordinator.loadAgentState(operationId);
+  if (!state || state.status !== 'waiting_for_async_tool') {
+    log('[%s] shell expiry skipped: operation is no longer parked', operationId);
+    return;
+  }
+
+  const outcome = await completeDeferredShell(
+    {
+      controlCompletedToolResult: (input) => deps.controlCompletedToolResult(input),
+      messageModel: deps.messageModel,
+      serverDB: deps.serverDB,
+      tryResumeParentFromAsyncTool: (params, resumeOptions) =>
+        deps.tryResumeParentFromAsyncTool(params, resumeOptions),
+    },
+    { operationId, reason: 'timeout', result: { content: null, success: false, toolCallId } },
+  );
+
+  log('[%s] shell expiry handled the placeholder=%s', operationId, String(outcome.handled));
 }
 
 /**
