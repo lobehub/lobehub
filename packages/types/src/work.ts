@@ -655,3 +655,44 @@ export type WorkRegistrationIntent =
       };
       type: 'canvas';
     };
+
+/**
+ * One GitHub pull request linked to a topic through its Work rows (Better
+ * Coding Experience): any `work_versions` row of a `github_pull_request` Work
+ * with that `topicId` links it, so a topic can carry several. The Work is the
+ * only source — nothing here is guessed from the working directory's branch.
+ */
+export interface TopicPullRequestWork {
+  baseBranch?: string;
+  headBranch?: string;
+  /** `owner/repo#number`. */
+  identifier: string;
+  /** Newest version of this Work registered in the topic. */
+  linkedAt: Date;
+  number: number;
+  repoFullName: string;
+  /** Status the agent's own commands left it in (`open`, `draft`, `merged`). */
+  status: string | null;
+  title: string | null;
+  url: string | null;
+  workId: string;
+}
+
+/**
+ * What the GitHub App last reported about a linked pull request. Present only
+ * when an installation the viewer can see tracks the repository — that is the
+ * confirmed source; without it the client probes the execution device.
+ */
+export interface TopicPullRequestScmState {
+  ciStatus: 'failure' | 'pending' | 'success' | 'unknown' | null;
+  isDraft: boolean;
+  mergedAt: Date | null;
+  reviewDecision: 'approved' | 'changes_requested' | 'review_required' | null;
+  state: 'closed' | 'merged' | 'open';
+  title: string | null;
+  updatedAt: Date;
+}
+
+export interface TopicPullRequestItem extends TopicPullRequestWork {
+  scm: TopicPullRequestScmState | null;
+}
