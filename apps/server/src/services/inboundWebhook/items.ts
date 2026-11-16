@@ -14,6 +14,13 @@ export interface InboundWebhookActor {
   workspaceId?: string | null;
   workspaceRole?: string;
 }
+/**
+ * Runs execute as the row's creator, so what a row runs (its task, approvals, URL, test calls)
+ * is the creator's alone; managing it (pause, delete, check) is shared with workspace admins.
+ */
+export const canConfigureInboundWebhook = (actor: InboundWebhookActor, row: InboundWebhookView) =>
+  row.userId === actor.userId;
+
 export const canManageInboundWebhook = (actor: InboundWebhookActor, row: InboundWebhookView) =>
   row.userId === actor.userId ||
   (!!actor.workspaceId &&
@@ -100,10 +107,12 @@ export async function inboundWebhookItems(
         (c) => c.id === row.connectorId && (agentRow || !c.agentId),
       );
       const canManage = canManageInboundWebhook(actor, row);
+      const canConfigure = !!agentRow && canConfigureInboundWebhook(actor, row);
       return [
         {
           agent: agentRow ? toAgentItem(agentRow) : null,
           canCheck: kind.canCheck,
+          canConfigure,
           canManage,
           connector: connector
             ? {
@@ -117,7 +126,7 @@ export async function inboundWebhookItems(
           createdAt: row.createdAt.toISOString(),
           creatorId: row.userId,
           // The call URL and the task it runs act on the agent, so they go with its visibility.
-          endpoint: canManage && agentRow ? (endpoints.get(row.id) ?? null) : null,
+          endpoint: canConfigure ? (endpoints.get(row.id) ?? null) : null,
           expiresAt: kind.expiresAt?.(row) ?? null,
           id: row.id,
           instructions: agentRow ? row.instructions : null,

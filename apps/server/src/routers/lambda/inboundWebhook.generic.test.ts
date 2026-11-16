@@ -147,14 +147,17 @@ describe('generic webhook management', () => {
     );
   });
 
-  it('shows the call URL only to the members who may manage the webhook', async () => {
+  it("shows the call URL only to the webhook's creator", async () => {
     const created = await inWorkspace(creator).create({ agentId: `${agentId}-ws` });
     const mine = await inWorkspace(creator).list({ agentId: `${agentId}-ws` });
     expect(mine.map((item) => item.endpoint)).toEqual([created.endpoint]);
     const theirs = await inWorkspace(colleague).list({ agentId: `${agentId}-ws` });
-    expect(theirs).toMatchObject([{ canManage: false, endpoint: null, id: created.id }]);
+    expect(theirs).toMatchObject([
+      { canConfigure: false, canManage: false, endpoint: null, id: created.id },
+    ]);
+    // Calls run as the creator, so an admin who manages the webhook still gets no URL to call.
     const admin = await inWorkspace(colleague, 'admin').list({ agentId: `${agentId}-ws` });
-    expect(admin[0].endpoint).toBe(created.endpoint);
+    expect(admin).toMatchObject([{ canConfigure: false, canManage: true, endpoint: null }]);
     expect(await inWorkspace(creator).list({ agentId: 'another-agent' })).toEqual([]);
 
     const actions = await db
@@ -209,6 +212,32 @@ describe('generic webhook management', () => {
     const [own] = await inWorkspace(creator).list();
     expect(own).toMatchObject({ instructions: null, source: { autoApprove: false } });
     expect(tokenOf(own.endpoint)).toBe(tokenOf(created.endpoint));
+  });
+
+  it("keeps what another member's webhook runs out of an admin's hands, even on a public agent", async () => {
+    const created = await inWorkspace(creator).create({
+      agentId: `${agentId}-ws`,
+      instructions: 'Triage CI',
+    });
+    const admin = inWorkspace(colleague, 'admin');
+
+    for (const attempt of [
+      () => admin.update({ autoApprove: true, id: created.id, instructions: 'Export everything' }),
+      () => admin.sendTest({ id: created.id }),
+      () => admin.rotateToken({ id: created.id }),
+    ])
+      await expect(attempt()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    expect((await admin.update({ id: created.id, paused: true })).status).toBe('paused');
+    const [own] = await inWorkspace(creator).list({ agentId: `${agentId}-ws` });
+    expect(own).toMatchObject({
+      canConfigure: true,
+      endpoint: created.endpoint,
+      instructions: 'Triage CI',
+      source: { autoApprove: false },
+    });
+    await admin.delete({ id: created.id });
+    expect(await inWorkspace(creator).list({ agentId: `${agentId}-ws` })).toEqual([]);
   });
 
   it('pauses, resumes and changes settings, leaving the URL as it was', async () => {

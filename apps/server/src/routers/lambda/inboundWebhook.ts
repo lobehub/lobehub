@@ -19,6 +19,7 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { listInboundWebhookDeliveries } from '@/server/services/inboundWebhook/deliveries';
 import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 import {
+  canConfigureInboundWebhook,
   canManageInboundWebhook,
   inboundWebhookItems,
 } from '@/server/services/inboundWebhook/items';
@@ -74,7 +75,7 @@ const itemsWithEndpoints = async (ctx: RouterScope, rows: InboundWebhookRowView[
     ctx,
     await genericWebhookEndpoints(
       ctx.serverDB,
-      rows.filter((row) => canManageInboundWebhook(ctx, row)),
+      rows.filter((row) => canConfigureInboundWebhook(ctx, row)),
     ),
   );
 
@@ -128,6 +129,19 @@ const assertAgentAccess = async (
       resourceId: row.agentId,
       resourceType: 'agent',
       ...scope,
+    });
+};
+
+/**
+ * A webhook runs as its creator, under their approval settings. Only they may change what it runs,
+ * test it or get its URL: anyone else doing so would drive the agent as them. Admins still pause,
+ * resume and delete it.
+ */
+const assertConfigures = (ctx: RouterScope, row: InboundWebhookRowView) => {
+  if (!canConfigureInboundWebhook(ctx, row))
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Only the member who created this webhook can change what it runs.',
     });
 };
 
@@ -245,6 +259,7 @@ export const inboundWebhookRouter = router({
     .mutation(async ({ ctx, input }): Promise<InboundWebhookItem> => {
       const row = await manageableGeneric(ctx, input.id);
       await assertAgentAccess(ctx, row, 'edit');
+      assertConfigures(ctx, row);
       try {
         const rotated = await rotateGenericWebhookToken(ctx.serverDB, row);
         await audit(ctx, 'webhook.updated', rotated.row, { rotatedToken: true });
@@ -264,6 +279,7 @@ export const inboundWebhookRouter = router({
   sendTest: writeProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     const row = await manageableGeneric(ctx, input.id);
     await assertAgentAccess(ctx, row, 'edit');
+    assertConfigures(ctx, row);
     try {
       return await sendGenericWebhookTest(ctx.serverDB, row);
     } catch (error) {
@@ -276,8 +292,11 @@ export const inboundWebhookRouter = router({
       const row = await manageableGeneric(ctx, input.id);
       const { id: _id, paused, ...settings } = input;
       // Pausing or resuming alone stays an administrative action.
-      if (Object.values(settings).some((value) => value !== undefined))
+      if (Object.values(settings).some((value) => value !== undefined)) {
+        // An agent the caller cannot see stays not-found rather than forbidden.
         await assertAgentAccess(ctx, row, 'edit');
+        assertConfigures(ctx, row);
+      }
       const changes = { ...settings, paused };
       try {
         const updated = await updateGenericWebhook(ctx.serverDB, row, changes);

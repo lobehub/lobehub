@@ -1026,7 +1026,7 @@
   "webhook.empty.title": "让其它系统唤醒这个助理",
   "webhook.endpoint.copy": "复制 URL",
   "webhook.endpoint.label": "Webhook URL",
-  "webhook.endpoint.noAccess": "只有创建这个 Webhook 的成员或工作区管理员可以查看它的 URL。",
+  "webhook.endpoint.noAccess": "只有创建这个 Webhook 的成员可以查看它的 URL，因为调用会以创建者的身份运行。",
   "webhook.form.autoApprove.label": "自动批准工具调用",
   "webhook.form.autoApprove.offHint": "运行时遵循你的工具审批设置；需要审批的调用会停在话题里，等你确认。",
   "webhook.form.autoApprove.onHint": "这个 Webhook 唤醒的运行会直接使用工具、不再等待审批，拿到 URL 的人都能让助理执行操作。标记为必须确认的工具仍会等待。",

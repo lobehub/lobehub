@@ -175,20 +175,25 @@ const WebhookItem = memo<WebhookItemProps>(
         title: t('webhook.delete.title'),
       });
 
+    // What the webhook runs is its creator's to change; others who manage it can stop or delete it.
     const menu: DropdownItem[] = [
-      {
-        icon: <Icon icon={PencilIcon} />,
-        key: 'edit',
-        label: t('webhook.actions.edit'),
-        onClick: () => openWebhookFormModal({ agentId, item, onSaved: onChange }),
-      },
-      {
-        icon: <Icon icon={KeyRoundIcon} />,
-        key: 'rotate',
-        label: t('webhook.actions.rotate'),
-        onClick: rotate,
-      },
-      { type: 'divider' },
+      ...(item.canConfigure
+        ? ([
+            {
+              icon: <Icon icon={PencilIcon} />,
+              key: 'edit',
+              label: t('webhook.actions.edit'),
+              onClick: () => openWebhookFormModal({ agentId, item, onSaved: onChange }),
+            },
+            {
+              icon: <Icon icon={KeyRoundIcon} />,
+              key: 'rotate',
+              label: t('webhook.actions.rotate'),
+              onClick: rotate,
+            },
+            { type: 'divider' },
+          ] satisfies DropdownItem[])
+        : []),
       {
         danger: true,
         icon: <Icon icon={Trash2Icon} />,
@@ -256,7 +261,7 @@ const WebhookItem = memo<WebhookItemProps>(
         )}
 
         <Flexbox horizontal gap={8} wrap={'wrap'}>
-          {item.canManage && (
+          {item.canConfigure && (
             <Button
               disabled={item.status === 'paused'}
               icon={SendIcon}

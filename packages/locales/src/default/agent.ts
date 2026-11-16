@@ -1324,7 +1324,7 @@ export default {
   'webhook.endpoint.copy': 'Copy URL',
   'webhook.endpoint.label': 'Webhook URL',
   'webhook.endpoint.noAccess':
-    'Only the member who created this webhook or a workspace admin can see its URL.',
+    'Only the member who created this webhook can see its URL, because calls run as them.',
   'webhook.form.autoApprove.label': 'Auto-approve tool calls',
   'webhook.form.autoApprove.offHint':
     'Runs follow your tool approval settings; a call that needs approval waits in the topic until you answer it.',

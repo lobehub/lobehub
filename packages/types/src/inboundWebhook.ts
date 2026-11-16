@@ -116,6 +116,11 @@ export interface InboundWebhookItem {
   } | null;
   /** 这个 kind 是否支持手动检查（mcp_events 为 true，generic 为 false） */
   canCheck: boolean;
+  /**
+   * Whether the current user may change what the webhook runs, send a test, get a new URL or see
+   * it. Runs execute as the creator, so only the creator, and only while they can see the agent.
+   */
+  canConfigure: boolean;
   /** 当前用户能否删除 / 检查这一行 */
   canManage: boolean;
   connector: {
