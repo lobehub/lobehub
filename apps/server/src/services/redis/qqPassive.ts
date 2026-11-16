@@ -158,11 +158,23 @@ const createLocalStore = (): LocalStore => {
 const local = createLocalStore();
 
 /**
- * The older reply `takePending()` put back when it preferred the newer local one. `restorePending()`
- * is allowed to replace exactly this value — the claimed reply is newer, so overwriting it loses
- * nothing — while any other value means a newer reply was parked afterwards and must be kept.
+ * The older reply `takePending()` put back when it preferred the newer local one, together with the
+ * reply that claim handed out. `restorePending()` may replace exactly that value — the claimed
+ * reply is newer, so overwriting it loses nothing — while any other value means a newer reply was
+ * parked afterwards and must be kept.
+ *
+ * Bound to the claim rather than only to the conversation: two deferred deliveries can overlap for
+ * the same conversation, and letting one of them read the other's entry would overwrite a reply
+ * parked after its own claim.
  */
-const requeuedOlder = new Map<string, string>();
+interface RequeuedOlder {
+  /** The reply this claim handed out, and so the only caller allowed to replace `older`. */
+  claimed: string;
+  /** The value this claim put back into the slot. */
+  older: string;
+}
+
+const requeuedOlder = new Map<string, RequeuedOlder>();
 
 const parseSlot = (raw: unknown, now: number): QQPassiveSlot | null => {
   if (!Array.isArray(raw) || raw.length < 3) return null;
@@ -274,8 +286,9 @@ export const qqPassive: QQPassiveStore = {
           nx: true,
         });
         // Remember which reply now sits in the slot: if the newer one fails to send, it may
-        // replace exactly this value rather than lose itself to `SET NX`.
-        requeuedOlder.set(key, redisText);
+        // replace exactly this value rather than lose itself to `SET NX`. The claimed text is part
+        // of the record so another delivery's permission is never spent on this claim.
+        requeuedOlder.set(key, { claimed: localText, older: redisText });
       } catch {
         await local.restorePending(key, redisText);
         requeuedOlder.delete(key);
@@ -291,8 +304,12 @@ export const qqPassive: QQPassiveStore = {
 
   async restorePending(key, text) {
     const redis = await getClient();
-    const older = requeuedOlder.get(key);
-    requeuedOlder.delete(key);
+    const entry = requeuedOlder.get(key);
+    // Only the claim that recorded this entry may replace what it put back: a second delivery for
+    // the same conversation records its own entry, and that permission says nothing about what this
+    // claim parked.
+    const older = entry && entry.claimed === text ? entry.older : undefined;
+    if (older !== undefined) requeuedOlder.delete(key);
 
     if (!redis) {
       await local.restorePending(key, text);
