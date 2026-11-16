@@ -39,11 +39,15 @@ Feature: Discover Interactions
     Then I should be navigated to the assistant detail page
     And I should see the assistant detail content
 
+  # Models / Model Providers are hidden from the Marketplace (routes redirect to the
+  # Marketplace home, see src/spa/router/communityHiddenRoutes.tsx). Their scenarios are
+  # kept under @skip until the pages are either restored or deleted for good.
+
   # ============================================
   # Model Page Interactions
   # ============================================
 
-  @COMMUNITY-INTERACT-005 @P1
+  @COMMUNITY-INTERACT-005 @P1 @skip
   Scenario: Sort models
     Given I navigate to "/community/model"
     When I click on the sort dropdown
@@ -51,7 +55,7 @@ Feature: Discover Interactions
     And I wait for the sorted results to load
     Then I should see model cards in the sorted order
 
-  @COMMUNITY-INTERACT-006 @P1
+  @COMMUNITY-INTERACT-006 @P1 @skip
   Scenario: Navigate to model detail page
     Given I navigate to "/community/model"
     When I click on the first model card
@@ -62,7 +66,7 @@ Feature: Discover Interactions
   # Provider Page Interactions
   # ============================================
 
-  @COMMUNITY-INTERACT-007 @P1
+  @COMMUNITY-INTERACT-007 @P1 @skip
   Scenario: Navigate to provider detail page
     Given I navigate to "/community/provider"
     When I click on the first provider card

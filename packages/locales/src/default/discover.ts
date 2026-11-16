@@ -50,7 +50,8 @@ export default {
   'assistants.duplicateAdd.content': '“{{title}}” is already in your Agents. Add another copy?',
   'assistants.duplicateAdd.ok': 'Add copy',
   'assistants.duplicateAdd.title': 'Add duplicate?',
-  'assistants.empty.description': 'Try adjusting filters, or explore more Agents in the Community.',
+  'assistants.empty.description':
+    'Try adjusting filters, or explore more Agents in the Marketplace.',
   'assistants.empty.search': 'No matching Agents found',
   'assistants.empty.title': 'No Agents found',
   'assistants.list': 'Agent List',
@@ -69,7 +70,7 @@ export default {
   'assistants.status.archived.reasons.owner': 'The creator archived or removed this Agent.',
   'assistants.status.archived.subtitle': 'This Agent has been archived. Possible reasons:',
   'assistants.status.archived.title': 'Agent archived',
-  'assistants.status.backToMarket': 'Back to Agent Community',
+  'assistants.status.backToMarket': 'Back to Agent Marketplace',
   'assistants.status.deprecated.reasons.official':
     'The platform removed this Agent due to security, policy, or other concerns.',
   'assistants.status.deprecated.reasons.owner': 'The creator rejected or removed this Agent.',
@@ -146,8 +147,8 @@ export default {
   'filterBy.timePeriod.week': 'Last 7 Days',
   'filterBy.timePeriod.year': 'Last Year',
   'footer.desc':
-    'Evolve with AI users worldwide. Become a creator to submit your agents and skills to the LobeHub Community.',
-  'footer.title': 'Share your creation on LobeHub Community today',
+    'Evolve with AI users worldwide. Become a creator to submit your agents and skills to the LobeHub Marketplace.',
+  'footer.title': 'Share your creation on LobeHub Marketplace today',
 
   'fork.alreadyForked': 'You have already forked this agent. Navigating to your fork...',
 
@@ -165,7 +166,7 @@ export default {
   'fork.forksCount_other': '{{count}} forks',
 
   'fork.orgSetupRequired.memberContent':
-    "This workspace has not yet set up a Community profile, so forks from the marketplace can't be saved here. Please ask the workspace owner to set it up under Community → Workspace.",
+    "This workspace has not yet set up a Community profile, so forks from the marketplace can't be saved here. Please ask the workspace owner to set it up under Marketplace → Workspace.",
   'fork.orgSetupRequired.ownerContent':
     'This workspace has not yet set up a Community profile. Set one up to fork agents from the marketplace into your workspace.',
   'fork.orgSetupRequired.ownerOk': 'Go to setup',
@@ -181,10 +182,6 @@ export default {
   'groupAgents.tag': 'Group',
 
   'groupAgents.underReview': 'Under Review',
-
-  'home.creatorReward.action': 'Apply Now',
-  'home.creatorReward.subtitle': '2026 Creator Reward Program is officially live.',
-  'home.creatorReward.title': 'Create. Share. Get Paid.',
 
   'home.communityAgents': 'Community Agents',
 
@@ -1271,13 +1268,14 @@ export default {
 
   'user.noAgents': 'This user hasn’t published any Agents yet',
 
-  'user.noAgents.ownerDescription': 'Create your first Agent and share it with the Community.',
+  'user.noAgents.ownerDescription': 'Create your first Agent and share it on the Marketplace.',
 
   'user.noAgents.title': 'No Agents yet',
 
   'user.org.noAgents': 'This organization hasn’t published any Agents yet',
 
-  'user.workspace.noAgents': 'This organization has not published any Agents to Community yet.',
+  'user.workspace.noAgents':
+    'This organization has not published any Agents to the Marketplace yet.',
 
   'user.noFavoriteAgents': 'No saved Agents yet',
 
@@ -1286,7 +1284,7 @@ export default {
   'user.noGroups.title': 'No Agent Groups yet',
 
   'user.workspace.noGroups':
-    'This organization has not published any Agent Groups to Community yet.',
+    'This organization has not published any Agent Groups to the Marketplace yet.',
 
   'user.noForkedAgentGroups': 'No forked Agent Groups yet',
 
@@ -1334,7 +1332,7 @@ export default {
   'user.submit': 'Submit',
   'user.submitRepo': 'Submit Repo',
   'user.submitRepoDescription':
-    'Submit your GitHub repository to import your Skills or MCPs to the community.',
+    'Submit your GitHub repository to import your Skills or MCPs to the Marketplace.',
   'user.submitRepoError': 'Failed to submit repository. Please try again.',
   'user.submitRepoHint': 'The repository will be reviewed before being published.',
   'user.submitRepoSuccess': 'Repository submitted successfully! It will be reviewed shortly.',

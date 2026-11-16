@@ -60,6 +60,7 @@ import { WorkspaceSettingsTabs } from '@/types/workspaceSettings';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
 import { collaborationRoutes } from './collaborationRoutes';
+import { hiddenCommunityRoutes } from './communityHiddenRoutes';
 
 export { ResourceCategorySkeleton };
 
@@ -200,6 +201,8 @@ export const sharedMainAreaChildren: RouteObject[] = [
         handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('form') }) },
         path: 'workspace/settings',
       },
+      // Models / Model Providers are hidden, not deleted: see communityHiddenRoutes.
+      ...hiddenCommunityRoutes,
       // List routes (with ListLayout)
       {
         children: [
@@ -224,35 +227,6 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Desktop > Discover > List > Agent > Layout',
             ),
             path: 'agent',
-          },
-          {
-            children: [
-              {
-                element: dynamicElement(
-                  () => import('@/routes/(main)/community/(list)/model'),
-                  'Desktop > Discover > List > Model',
-                ),
-                handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverModels' }),
-                },
-                index: true,
-              },
-            ],
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/model/_layout'),
-              'Desktop > Discover > List > Model > Layout',
-            ),
-            path: 'model',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(list)/provider'),
-              'Desktop > Discover > List > Provider',
-            ),
-            handle: {
-              meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverProviders' }),
-            },
-            path: 'provider',
           },
           {
             children: [
@@ -341,22 +315,6 @@ export const sharedMainAreaChildren: RouteObject[] = [
             ),
             handle: { meta: communityDetailRouteMeta.groupAgent },
             path: 'group_agent/:slug',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(detail)/model'),
-              'Desktop > Discover > Detail > Model',
-            ),
-            handle: { meta: communityDetailRouteMeta.model },
-            path: 'model/:slug',
-          },
-          {
-            element: dynamicElement(
-              () => import('@/routes/(main)/community/(detail)/provider'),
-              'Desktop > Discover > Detail > Provider',
-            ),
-            handle: { meta: communityDetailRouteMeta.provider },
-            path: 'provider/:slug',
           },
           {
             element: dynamicElement(

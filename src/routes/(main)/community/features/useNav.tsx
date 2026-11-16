@@ -1,7 +1,7 @@
 import { MCP } from '@lobehub/icons';
 import { Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { Bot, Brain, BrainCircuit, House } from 'lucide-react';
+import { Bot, House } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -51,16 +51,8 @@ export const useNav = () => {
           <div style={{ color: 'inherit', display: 'inline' }}>{`MCP ${t('tab.plugin')}`}</div>
         ),
       },
-      {
-        icon: <Icon icon={Brain} size={ICON_SIZE} />,
-        key: DiscoverTab.Models,
-        label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.model')}</div>,
-      },
-      {
-        icon: <Icon icon={BrainCircuit} size={ICON_SIZE} />,
-        key: DiscoverTab.Providers,
-        label: <div style={{ color: 'inherit', display: 'inline' }}>{t('tab.provider')}</div>,
-      },
+      // Models / Model Providers are hidden, not deleted: see
+      // `@/spa/router/communityHiddenRoutes` for the restore path.
     ],
     [t],
   );

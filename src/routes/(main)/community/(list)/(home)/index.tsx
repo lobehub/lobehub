@@ -12,7 +12,6 @@ import ListLoading from '../../components/ListLoading';
 import Title from '../../components/Title';
 import AssistantList from '../agent/features/List';
 import McpList from '../mcp/features/List';
-import CreatorRewardBanner from './features/CreatorRewardBanner';
 
 const HomePage = memo(() => {
   const { t } = useTranslation('discover');
@@ -46,7 +45,6 @@ const HomePage = memo(() => {
 
   return (
     <>
-      <CreatorRewardBanner />
       <Title more={t('home.more')} moreLink={'/community/agent'}>
         {t('home.featuredAssistants')}
       </Title>

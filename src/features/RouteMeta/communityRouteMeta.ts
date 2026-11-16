@@ -22,6 +22,8 @@ export const communityDetailRouteMeta = {
   agent: createCommunityDetailRouteMeta('AssistantDynamicMeta'),
   groupAgent: createCommunityDetailRouteMeta('GroupAgentDynamicMeta'),
   mcp: createCommunityDetailRouteMeta('McpDynamicMeta'),
+  // `model` / `provider` are unregistered while those sections are hidden; they stay for
+  // the restore path described in `@/spa/router/communityHiddenRoutes`.
   model: createCommunityDetailRouteMeta('ModelDynamicMeta'),
   provider: createCommunityDetailRouteMeta('ProviderDynamicMeta'),
   skill: createCommunityDetailRouteMeta('SkillDynamicMeta'),

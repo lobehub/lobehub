@@ -40,11 +40,20 @@ export interface NavigationRoute {
  */
 export const NAVIGATION_ROUTES: NavigationRoute[] = [
   {
-    cmdkKey: 'cmdk.community',
+    cmdkKey: 'cmdk.marketplace',
     electronKey: 'navigation.discover',
     icon: ShapesIcon,
     id: 'community',
-    keywords: ['discover', 'market', 'assistant', 'model', 'provider', 'mcp'],
+    keywords: [
+      'discover',
+      'market',
+      'marketplace',
+      'community',
+      'assistant',
+      'agent',
+      'skill',
+      'mcp',
+    ],
     keywordsKey: 'cmdk.keywords.community',
     path: '/community',
     pathPrefix: '/community',

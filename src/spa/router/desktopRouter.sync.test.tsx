@@ -89,6 +89,7 @@ async function readRouterSources() {
       'onboardingRoute.tsx',
       'collaborationRoutes.tsx',
       'evalRoutes.tsx',
+      'communityHiddenRoutes.tsx',
     ].map((filename) => readFile(path.join(process.cwd(), 'src/spa/router', filename), 'utf8')),
   );
 }

@@ -20,7 +20,11 @@ Feature: Community Smoke Tests
     And I should see assistant cards
     And I should see pagination controls
 
-  @COMMUNITY-SMOKE-003 @P0
+  # Models / Model Providers are hidden from the Marketplace (routes redirect to the
+  # Marketplace home, see src/spa/router/communityHiddenRoutes.tsx). Their scenarios are
+  # kept under @skip until the pages are either restored or deleted for good.
+
+  @COMMUNITY-SMOKE-003 @P0 @skip
   Scenario: Load Model List Page
     Given I navigate to "/community/model"
     Then the page should load without errors
@@ -28,7 +32,7 @@ Feature: Community Smoke Tests
     And I should see model cards
     And I should see the sort dropdown
 
-  @COMMUNITY-SMOKE-004 @P0
+  @COMMUNITY-SMOKE-004 @P0 @skip
   Scenario: Load Provider List Page
     Given I navigate to "/community/provider"
     Then the page should load without errors

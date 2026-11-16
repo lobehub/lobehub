@@ -28,11 +28,15 @@ Feature: Discover Detail Pages
     When I click the back button
     Then I should be on the assistant list page
 
+  # Models / Model Providers are hidden from the Marketplace (routes redirect to the
+  # Marketplace home, see src/spa/router/communityHiddenRoutes.tsx). Their scenarios are
+  # kept under @skip until the pages are either restored or deleted for good.
+
   # ============================================
   # Model Detail Page
   # ============================================
 
-  @COMMUNITY-DETAIL-003 @P1
+  @COMMUNITY-DETAIL-003 @P1 @skip
   Scenario: Load model detail page and verify content
     Given I navigate to "/community/model"
     And I wait for the page to fully load
@@ -42,7 +46,7 @@ Feature: Discover Detail Pages
     And I should see the model description
     And I should see the model parameters information
 
-  @COMMUNITY-DETAIL-004 @P1
+  @COMMUNITY-DETAIL-004 @P1 @skip
   Scenario: Navigate back from model detail page
     Given I navigate to "/community/model"
     And I wait for the page to fully load
@@ -54,7 +58,7 @@ Feature: Discover Detail Pages
   # Provider Detail Page
   # ============================================
 
-  @COMMUNITY-DETAIL-005 @P1
+  @COMMUNITY-DETAIL-005 @P1 @skip
   Scenario: Load provider detail page and verify content
     Given I navigate to "/community/provider"
     And I wait for the page to fully load
@@ -64,7 +68,7 @@ Feature: Discover Detail Pages
     And I should see the provider description
     And I should see the provider website link
 
-  @COMMUNITY-DETAIL-006 @P1
+  @COMMUNITY-DETAIL-006 @P1 @skip
   Scenario: Navigate back from provider detail page
     Given I navigate to "/community/provider"
     And I wait for the page to fully load

@@ -23,7 +23,6 @@ const SectionTitle = () => (
 const CommunityHomeSkeleton = memo<RouteSkeletonProps>(({ chrome = 'page' }) => (
   <CommunityPageChrome chrome={chrome}>
     <Flexbox aria-busy gap={16} width={'100%'}>
-      <Skeleton height={150} style={{ borderRadius: 12 }} />
       <SectionTitle />
       <CommunityListSkeleton chrome={'body'} length={8} rows={4} />
       <div />
