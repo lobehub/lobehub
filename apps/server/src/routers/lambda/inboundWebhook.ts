@@ -109,6 +109,28 @@ const manageableGeneric = async (ctx: RouterScope, id: string) => {
   }
 };
 
+/**
+ * Managing a webhook row (pause, delete) is the workspace's business, but what the webhook runs
+ * acts on its agent. Its task, its URL, a test run and what callers sent need that agent: `use`
+ * to see it, `edit` to change or run it, the same gate as creating the webhook. A workspace admin
+ * may stop a colleague's private-agent webhook without being able to drive that agent.
+ */
+const assertAgentAccess = async (
+  ctx: RouterScope,
+  row: InboundWebhookRowView,
+  level: 'edit' | 'use',
+) => {
+  const scope = { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined };
+  await assertAgentUsableBy(ctx.serverDB, row.agentId, scope);
+  if (level === 'edit')
+    await assertCanEditResource({
+      db: ctx.serverDB,
+      resourceId: row.agentId,
+      resourceType: 'agent',
+      ...scope,
+    });
+};
+
 const toTRPCError = (error: unknown) => {
   if (error instanceof GenericWebhookError)
     return new TRPCError({
@@ -202,13 +224,16 @@ export const inboundWebhookRouter = router({
   listDeliveries: procedure
     .input(
       z.object({
-        cursor: z.object({ createdAt: z.string(), id: z.string().uuid() }).optional(),
+        cursor: z
+          .object({ createdAt: z.string().datetime(), id: z.string().uuid() })
+          .optional(),
         id: z.string().uuid(),
       }),
     )
     .query(async ({ ctx, input }): Promise<InboundWebhookDeliveryPage> => {
       const row = await ctx.webhookModel.findById(input.id);
       if (!row || !canManageInboundWebhook(ctx, row)) throw new TRPCError({ code: 'NOT_FOUND' });
+      await assertAgentAccess(ctx, row, 'use');
       return listInboundWebhookDeliveries(ctx.serverDB, row, input.cursor);
     }),
   list: procedure
@@ -221,6 +246,7 @@ export const inboundWebhookRouter = router({
     .input(idInput)
     .mutation(async ({ ctx, input }): Promise<InboundWebhookItem> => {
       const row = await manageableGeneric(ctx, input.id);
+      await assertAgentAccess(ctx, row, 'edit');
       try {
         const rotated = await rotateGenericWebhookToken(ctx.serverDB, row);
         await audit(ctx, 'webhook.updated', rotated.row, { rotatedToken: true });
@@ -239,6 +265,7 @@ export const inboundWebhookRouter = router({
   /** Run a sample request through the real receiver, so the Agent wakes as it would for a caller. */
   sendTest: writeProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     const row = await manageableGeneric(ctx, input.id);
+    await assertAgentAccess(ctx, row, 'edit');
     try {
       return await sendGenericWebhookTest(ctx.serverDB, row);
     } catch (error) {
@@ -249,7 +276,11 @@ export const inboundWebhookRouter = router({
     .input(z.object({ id: z.string().uuid(), paused: z.boolean().optional(), ...genericSettings }))
     .mutation(async ({ ctx, input }): Promise<InboundWebhookItem> => {
       const row = await manageableGeneric(ctx, input.id);
-      const { id: _id, ...changes } = input;
+      const { id: _id, paused, ...settings } = input;
+      // Pausing or resuming alone stays an administrative action.
+      if (Object.values(settings).some((value) => value !== undefined))
+        await assertAgentAccess(ctx, row, 'edit');
+      const changes = { ...settings, paused };
       try {
         const updated = await updateGenericWebhook(ctx.serverDB, row, changes);
         await audit(ctx, 'webhook.updated', updated, {

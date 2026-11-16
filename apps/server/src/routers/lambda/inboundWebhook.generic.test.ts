@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { getTestDB } from '@lobechat/database/test-utils';
 import { TRPCError } from '@trpc/server';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
@@ -184,6 +184,33 @@ describe('generic webhook management', () => {
     });
   });
 
+  it("lets an admin pause a private agent's webhook, but not change, test or read it", async () => {
+    await db.insert(agents).values({
+      id: `${agentId}-private`,
+      userId: creator,
+      visibility: 'private',
+      workspaceId,
+    });
+    const created = await inWorkspace(creator).create({ agentId: `${agentId}-private` });
+    const admin = inWorkspace(colleague, 'admin');
+
+    await expect(
+      admin.update({ autoApprove: true, id: created.id, instructions: 'Export everything' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(admin.sendTest({ id: created.id })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(admin.rotateToken({ id: created.id })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await expect(admin.listDeliveries({ id: created.id })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect((await admin.update({ id: created.id, paused: true })).status).toBe('paused');
+
+    const [own] = await inWorkspace(creator).list();
+    expect(own).toMatchObject({ instructions: null, source: { autoApprove: false } });
+    expect(tokenOf(own.endpoint)).toBe(tokenOf(created.endpoint));
+  });
+
   it('pauses, resumes and changes settings, leaving the URL as it was', async () => {
     const created = await caller().create({ agentId });
     const paused = await caller().update({ id: created.id, paused: true });
@@ -289,5 +316,21 @@ describe('generic webhook management', () => {
     const second = await caller().listDeliveries({ cursor: first.nextCursor, id: created.id });
     expect(second.items.map((item) => item.preview)).toEqual(['{"i":1}', '{"i":0}']);
     expect(second.nextCursor).toBeUndefined();
+  });
+
+  it('pages calls that share a millisecond without skipping any', async () => {
+    const created = await caller().create({ agentId });
+    // 21 calls within one millisecond, apart only in their microseconds.
+    for (let i = 0; i < 21; i++)
+      await db.execute(
+        sql`insert into signals (agent_id, created_at, external_id, payload, scope_key, source, type, user_id)
+            values (${agentId}, ${`2026-01-01T00:00:00.123${String(100 + i * 10).padStart(3, '0')}Z`}::timestamptz,
+                    ${`${created.id}:u${i}`}, ${JSON.stringify({ body: { i } })}::jsonb,
+                    ${`inbound-webhook:${created.id}`}, 'webhook', 'webhook', ${creator})`,
+      );
+    const first = await caller().listDeliveries({ id: created.id });
+    const second = await caller().listDeliveries({ cursor: first.nextCursor, id: created.id });
+    expect(first.nextCursor?.createdAt).toMatch(/\.\d{6}Z$/);
+    expect([...first.items, ...second.items].map((item) => item.preview)).toHaveLength(21);
   });
 });

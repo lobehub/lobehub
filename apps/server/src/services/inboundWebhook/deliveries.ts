@@ -1,5 +1,5 @@
 import type { InboundWebhookDeliveryItem, InboundWebhookDeliveryPage } from '@lobechat/types';
-import { and, desc, eq, inArray, lt, or } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm';
 
 import type { InboundWebhookView } from '@/database/models/inboundWebhook';
 import { signalDecisions, signals, topics } from '@/database/schemas';
@@ -9,6 +9,12 @@ import { getInboundWebhookKind } from './kinds';
 
 export const DELIVERY_PAGE_SIZE = 20;
 const PREVIEW_CHARS = 300;
+
+/**
+ * `created_at` as UTC ISO text with its microseconds. A JS `Date` keeps only milliseconds, so a
+ * cursor built from one would skip the calls that share the boundary row's millisecond.
+ */
+const createdAtText = sql<string>`to_char(${signals.createdAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 
 /** What the caller sent, compactly: the request body when the kind keeps one, else the payload. */
 const previewOf = (payload: Record<string, unknown>) => {
@@ -29,10 +35,11 @@ export async function listInboundWebhookDeliveries(
 ): Promise<InboundWebhookDeliveryPage> {
   const kind = getInboundWebhookKind(row.kind);
   if (!kind) return { items: [] };
-  const cursorAt = cursor ? new Date(cursor.createdAt) : undefined;
+  const cursorAt = cursor ? sql`${cursor.createdAt}::timestamptz` : undefined;
   const page = await db
     .select({
       createdAt: signals.createdAt,
+      createdAtText,
       error: signals.error,
       id: signals.id,
       metadata: signals.metadata,
@@ -95,6 +102,6 @@ export async function listInboundWebhookDeliveries(
   }));
   const last = rows.at(-1)!;
   return page.length > DELIVERY_PAGE_SIZE
-    ? { items, nextCursor: { createdAt: last.createdAt.toISOString(), id: last.id } }
+    ? { items, nextCursor: { createdAt: last.createdAtText, id: last.id } }
     : { items };
 }
