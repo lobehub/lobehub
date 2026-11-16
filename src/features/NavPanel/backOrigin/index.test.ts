@@ -192,4 +192,14 @@ describe('owner retention', () => {
     expect(getBackOrigin('tab-24', '/agent/agt_1')).toBe('/page/24');
     expect(getBackOrigin('tab-5', '/agent/agt_1')).toBe('/page/5');
   });
+
+  it('keeps a refocused tab that did not move', () => {
+    const record = createBackOriginRecorder();
+    record('tab-0', '/tasks');
+    record('tab-0', '/agent/agt_1');
+    for (let tab = 1; tab < 20; tab++) record(`tab-${tab}`, `/page/${tab}`);
+    record('tab-0', '/agent/agt_1');
+    record('tab-20', '/page/20');
+    expect(getBackOrigin('tab-0', '/agent/agt_1')).toBe('/tasks');
+  });
 });

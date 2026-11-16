@@ -91,7 +91,11 @@ export const recordBackLocation = (
 ): void => {
   const stack = stacks[owner] ?? [];
   const top = stack.at(-1);
-  if (top?.location === location && top.historyIndex === historyIndex) return;
+  if (top?.location === location && top.historyIndex === historyIndex) {
+    // Focusing a tab that did not move still counts as using it.
+    if (Object.keys(stacks).at(-1) !== owner) setStack(owner, stack);
+    return;
+  }
 
   const entry: BackEntry = { historyIndex, location };
   const scope = resolveBackScope(location);
