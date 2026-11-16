@@ -453,6 +453,11 @@ export interface ChannelAvatarMember {
 export interface ChannelListItem {
   /** The bound Agent of a direct conversation; null for a group. */
   agentId: string | null;
+  /**
+   * Every active Agent member, oldest first, so a page about one Agent can list the Channels it
+   * takes part in; set by the Channel list.
+   */
+  agentIds?: string[];
   /** Server-computed for the current member. */
   canDelete: boolean;
   createdAt: Date;
