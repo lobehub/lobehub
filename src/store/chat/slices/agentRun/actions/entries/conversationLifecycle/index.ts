@@ -109,7 +109,7 @@ import { type StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { useUserMemoryStore } from '@/store/userMemory';
-import { markdownToTxt } from '@/utils/markdownToTxt';
+import { toTitleText } from '@/utils/markdownToTxt';
 import { aggregateSubagentMetrics } from '@/utils/subagentMetrics';
 
 import { materializeLocalSystemToolSnapshots } from '../../transports/client/localSystemToolSnapshots';
@@ -621,7 +621,7 @@ export class ConversationLifecycleActionImpl {
       return;
     }
 
-    const newTopicTitle = markdownToTxt(message).slice(0, 80) || t('defaultTitle', { ns: 'topic' });
+    const newTopicTitle = toTitleText(message).slice(0, 80) || t('defaultTitle', { ns: 'topic' });
 
     // ━━━ Message Queue: enqueue if this context is already busy ━━━
     // Include the initial `sendMessage` persist/create-topic phase: while a first

@@ -36,7 +36,7 @@ import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDe
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
-import { markdownToTxt } from '@/utils/markdownToTxt';
+import { toTitleText } from '@/utils/markdownToTxt';
 
 import type { DeviceAccessReason } from '../deviceAccessPolicy';
 import { resolveDeviceAccessPolicy } from '../deviceAccessPolicy';
@@ -638,7 +638,7 @@ export const setupTurn = async (
         taskId: operationTaskId,
       });
 
-      const fallbackTitleSource = markdownToTxt(prompt);
+      const fallbackTitleSource = toTitleText(prompt);
       const snapshot = await resolveNewTopicSnapshot(deps, agentConfig);
       const metadataWithSnapshot = await withProjectSandbox(deps, {
         agentId: resolvedAgentId,

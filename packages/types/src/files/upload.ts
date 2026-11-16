@@ -53,6 +53,11 @@ export interface UploadFileItem {
    * base64 data, it will use in other data
    */
   base64Url?: string;
+  /**
+   * SHA-256 of the image as it was attached, before compression. A chat draft attaches an
+   * image with the same content only once: pasting it again adds nothing.
+   */
+  contentHash?: string;
   /** Intrinsic dimensions captured for image uploads. */
   dimensions?: {
     height: number;

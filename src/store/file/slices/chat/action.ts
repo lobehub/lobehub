@@ -73,6 +73,48 @@ export interface ChatUploadOptions {
  */
 const createPendingUploadId = (file: File) => `${file.name}#${createNanoId(8)()}`;
 
+/**
+ * Best-effort: `crypto.subtle` is missing outside a secure context (a self-hosted page over
+ * plain HTTP from a non-localhost address), where the image is uploaded without dedupe.
+ */
+const hashImageContent = async (file: File): Promise<string | undefined> => {
+  try {
+    const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+    return Buffer.from(digest).toString('hex');
+  } catch {
+    return undefined;
+  }
+};
+
+/** A failed or cancelled upload is not sent, so a new copy of its image is uploaded again. */
+const isLiveUpload = (item: UploadFileItem) =>
+  item.status !== 'error' && item.status !== 'cancelled';
+
+/**
+ * Drops newly prepared uploads whose content matches an image already in the draft (or
+ * earlier in the same batch). A second card would upload the same file again, the server
+ * keeps one copy, and the message would name an `[Image #2]` the model never receives.
+ */
+const withoutDuplicateImages = (
+  current: UploadFileItem[],
+  prepared: UploadFileItem[],
+): UploadFileItem[] => {
+  const hashes = new Set<string>();
+  for (const item of current) {
+    if (item.contentHash && isLiveUpload(item)) hashes.add(item.contentHash);
+  }
+
+  return prepared.filter((item) => {
+    if (!item.contentHash) return true;
+    if (hashes.has(item.contentHash)) {
+      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      return false;
+    }
+    hashes.add(item.contentHash);
+    return true;
+  });
+};
+
 const formatShareUploadLimit = () => `${Math.round(SHARE_VISITOR_MAX_FILE_SIZE / 1024 / 1024)} MB`;
 
 const getUploadErrorDescription = (error: unknown): string => {
@@ -434,16 +476,22 @@ export class FileActionImpl {
 
     if (admittedFiles.length === 0) return;
 
-    // 1. compress images and add files with base64
-    const files = await Promise.all(
-      admittedFiles.map((file) =>
-        COMPRESSIBLE_IMAGE_TYPES.has(file.type) ? compressImageFile(file) : file,
-      ),
+    // 1. compress images and add files with base64. Images are hashed first, since
+    // compression re-encodes them and the same picture must hash the same every time.
+    const prepared = await Promise.all(
+      admittedFiles.map(async (rawFile) => {
+        const contentHash = rawFile.type.startsWith('image')
+          ? await hashImageContent(rawFile)
+          : undefined;
+        const file = COMPRESSIBLE_IMAGE_TYPES.has(rawFile.type)
+          ? await compressImageFile(rawFile)
+          : rawFile;
+        return { contentHash, file };
+      }),
     );
 
-    const uploadIds = new Map(files.map((file) => [file, createPendingUploadId(file)]));
-    const uploadFiles: UploadFileItem[] = await Promise.all(
-      files.map(async (file) => {
+    const preparedItems: UploadFileItem[] = await Promise.all(
+      prepared.map(async ({ contentHash, file }) => {
         let previewUrl: string | undefined = undefined;
         let base64Url: string | undefined = undefined;
 
@@ -460,8 +508,9 @@ export class FileActionImpl {
         return {
           agentId,
           base64Url,
+          contentHash,
           file,
-          id: uploadIds.get(file)!,
+          id: createPendingUploadId(file),
           previewUrl,
           shareId,
           status: 'pending',
@@ -469,7 +518,18 @@ export class FileActionImpl {
       }),
     );
 
-    dispatchChatUploadFileList({ files: uploadFiles, type: 'addFiles' });
+    // Read the list and add to it in one synchronous step, so concurrent pastes of the
+    // same image see each other.
+    const uploadFiles = withoutDuplicateImages(
+      this.#getChatUploadFileList(upload.contextKey),
+      preparedItems,
+    );
+
+    if (uploadFiles.length > 0)
+      dispatchChatUploadFileList({ files: uploadFiles, type: 'addFiles' });
+
+    const files = uploadFiles.map((item) => item.file);
+    const uploadIds = new Map(uploadFiles.map((item) => [item.file, item.id]));
 
     // upload files and process it
     const pools = files.map(async (file) => {

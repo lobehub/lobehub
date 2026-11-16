@@ -7,6 +7,10 @@ import { useTranslation } from 'react-i18next';
 
 import { FileUploadErrorActions } from '@/business/client/features/FileUploadErrorActions';
 import { useChatInputUploadKey } from '@/features/ChatInput/hooks/useChatInputUpload';
+import {
+  CHAT_INPUT_IMAGE_ATTR,
+  getChatInputImageKey,
+} from '@/features/ChatInput/utils/sentImageFlight';
 import { useEventCallback } from '@/hooks/useEventCallback';
 import { useFileStore } from '@/store/file';
 import { type UploadFileItem } from '@/types/files/upload';
@@ -17,11 +21,6 @@ import UploadTooltipContent from './UploadTooltipContent';
 import { getUploadChipState } from './utils';
 
 const IMAGE_CARD_SIZE = 112;
-
-const enter = stylex.keyframes({
-  from: { opacity: 0, transform: 'scale(0.92)' },
-  to: { opacity: 1, transform: 'scale(1)' },
-});
 
 const styles = stylex.create({
   card: {
@@ -35,12 +34,6 @@ const styles = stylex.create({
     borderColor: cssVar.colorBorderSecondary,
     borderRadius: cssVar.borderRadiusLG,
     backgroundColor: cssVar.colorFillQuaternary,
-    animationName: {
-      'default': enter,
-      '@media (prefers-reduced-motion: reduce)': 'none',
-    },
-    animationDuration: '160ms',
-    animationTimingFunction: 'ease-out',
   },
   cardError: { borderColor: cssVar.colorErrorBorder },
   image: {
@@ -114,7 +107,15 @@ const ImageCard = memo<UploadFileItem>((item) => {
 
   return (
     <div aria-busy={busy} {...stylex.props(styles.card, canRetry && styles.cardError)}>
-      {src && <img alt={file.name} draggable={false} src={src} {...stylex.props(styles.image)} />}
+      {src && (
+        <img
+          alt={file.name}
+          draggable={false}
+          src={src}
+          {...{ [CHAT_INPUT_IMAGE_ATTR]: getChatInputImageKey(item) }}
+          {...stylex.props(styles.image)}
+        />
+      )}
       <Tooltip title={<UploadTooltipContent {...item} />}>
         <button
           aria-label={t('upload.image.preview', { name: file.name })}
