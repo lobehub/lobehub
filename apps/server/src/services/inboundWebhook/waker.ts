@@ -6,6 +6,8 @@ import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
 import type { InboundWebhookView } from '@/database/models/inboundWebhook';
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
+import { TaskModel } from '@/database/models/task';
+import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TopicModel } from '@/database/models/topic';
 import { signals } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
@@ -76,6 +78,18 @@ const ownerMayRun = async (db: LobeChatDatabase, row: InboundWebhookView) => {
   });
 };
 
+/**
+ * Whether the subscription's Topic belongs to a task that has since been archived. Archived tasks
+ * are hidden everywhere and every task run refuses them, so an event must not run one either.
+ */
+const inArchivedTask = async (db: LobeChatDatabase, row: InboundWebhookView) => {
+  if (!row.topicId) return false;
+  const scope = row.workspaceId ?? undefined;
+  const link = await new TaskTopicModel(db, row.userId, scope).findByTopicId(row.topicId);
+  if (!link) return false;
+  return !!(await new TaskModel(db, row.userId, scope).findById(link.taskId))?.archivedAt;
+};
+
 /** Durable, renewable claims serialize a batch without holding a database lock during network I/O. */
 export async function wakeInboundWebhook(
   db: LobeChatDatabase,
@@ -122,11 +136,17 @@ export async function wakeInboundWebhook(
       );
     return { outcome: 'gone' };
   }
-  // Kept, not deleted: access can come back, and the owner or an admin decides about the row.
-  if (!(await ownerMayRun(db, row))) {
+  // Kept, not deleted: access can come back, a task can be restored, and the owner or an admin
+  // decides about the row.
+  const held = !(await ownerMayRun(db, row))
+    ? 'owner_access_revoked'
+    : (await inArchivedTask(db, row))
+      ? 'task_archived'
+      : undefined;
+  if (held) {
     await db
       .update(signals)
-      .set({ error: 'owner_access_revoked', processedAt: new Date(), status: 'ignored' })
+      .set({ error: held, processedAt: new Date(), status: 'ignored' })
       .where(
         and(
           eq(signals.source, 'mcp-events'),
