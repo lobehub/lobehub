@@ -12,6 +12,7 @@ import { TrashModel } from '../../models/trash';
 import type { ChannelItem, ChannelJobItem, ChannelMessageItem } from '../../schemas';
 import {
   agents,
+  agentShares,
   channelJobs,
   channelMembers,
   channelMessages,
@@ -441,6 +442,7 @@ export class ChannelRepository {
         memberAvatars: ChannelAvatarMember[];
         mentionCount: number;
         replyJobs: ChannelReplyJob[];
+        sharedAgentHandle: string | null;
         unreadCount: number;
       }
     >
@@ -452,10 +454,13 @@ export class ChannelRepository {
         lastReadSequence: channelMembers.lastReadSequence,
         memberId: channelMembers.id,
         role: channelMembers.role,
+        shareId: agentShares.id,
+        shareSlug: sql<string | null>`${agentShares.shareConfig} ->> 'slug'`,
       })
       .from(channels)
       .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
       .leftJoin(agents, eq(agents.id, channels.agentId))
+      .leftJoin(agentShares, eq(agentShares.agentId, channels.agentId))
       .where(and(this.membershipWhere(), notTrashed(channels.isDeleted)))
       .orderBy(desc(channels.createdAt));
 
@@ -581,18 +586,23 @@ export class ChannelRepository {
       agentIdsOf.set(channelId, ids);
     }
 
-    return rows.map(({ agentOwnerId, channel, lastReadSequence, role }) => ({
-      ...channel,
-      agentIds: agentIdsOf.get(channel.id) ?? [],
-      sharedAgent: !!channel.agentId && !channel.workspaceId && agentOwnerId !== this.userId,
-      canDelete: hasRole(role, 'admin'),
-      lastMessage: lastMessageOf.get(channel.id) ?? null,
-      memberAvatars: avatarsOf.get(channel.id) ?? [],
-      mentionCount: mentionCountOf.get(channel.id) ?? 0,
-      peerUserId: peerOf(channel, this.userId),
-      replyJobs: replyJobsOf.get(channel.id) ?? [],
-      unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
-    }));
+    return rows.map(({ agentOwnerId, channel, lastReadSequence, role, shareId, shareSlug }) => {
+      const sharedAgent = !!channel.agentId && !channel.workspaceId && agentOwnerId !== this.userId;
+      return {
+        ...channel,
+        agentIds: agentIdsOf.get(channel.id) ?? [],
+        sharedAgent,
+        // Its visitor page (`/a/<handle>`) is where the caller can see this Agent; it has no other.
+        sharedAgentHandle: sharedAgent ? (shareSlug ?? shareId) : null,
+        canDelete: hasRole(role, 'admin'),
+        lastMessage: lastMessageOf.get(channel.id) ?? null,
+        memberAvatars: avatarsOf.get(channel.id) ?? [],
+        mentionCount: mentionCountOf.get(channel.id) ?? 0,
+        peerUserId: peerOf(channel, this.userId),
+        replyJobs: replyJobsOf.get(channel.id) ?? [],
+        unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
+      };
+    });
   };
 
   /**
