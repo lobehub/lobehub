@@ -313,7 +313,7 @@
   "automations.error.timeout": "连接器向 LobeHub 投递事件超时。",
   "automations.error.tls_error": "连接器无法与 LobeHub 建立安全连接。",
   "automations.error.unknown": "订阅报告了一个没有说明的错误，点「检查」重试。",
-  "automations.error.wake_cap": "事件太频繁，本小时内的部分运行已跳过。",
+  "automations.error.wake_cap": "事件太频繁，最近 10 分钟内的部分运行已跳过。",
   "automations.lastDelivery.never": "还没有事件",
   "automations.remedy.reconnect": "去重新连接",
   "automations.source.moreArgs": "{{text}} +{{count}}",

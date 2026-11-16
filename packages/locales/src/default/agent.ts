@@ -1302,7 +1302,7 @@ export default {
   'webhook.deliveries.reason.target_removed': 'The agent was removed',
   'webhook.deliveries.reason.topic_busy': 'Waiting for the topic to finish its current run',
   'webhook.deliveries.reason.unknown': 'Not run',
-  'webhook.deliveries.reason.wake_cap': 'Skipped: over 60 runs this hour',
+  'webhook.deliveries.reason.wake_cap': 'Skipped: over 30 runs in 10 minutes',
   'webhook.deliveries.reason.webhook_paused': 'Skipped: the webhook was paused',
   'webhook.deliveries.reason.webhook_removed': 'The webhook was deleted',
   'webhook.deliveries.refresh': 'Refresh',
@@ -1342,7 +1342,7 @@ export default {
   'webhook.form.saved': 'Webhook saved',
   'webhook.form.topicMode.label': 'Topic',
   'webhook.form.topicMode.newHint':
-    'Each call starts a topic of its own. A caller can add ?thread=<key> to keep related calls in one topic.',
+    'Each run starts a new topic. Calls that arrive while others are waiting are handled together in one run. A caller can add ?thread=<key> to keep related calls in one topic.',
   'webhook.form.topicMode.reuseHint':
     'Every call continues one shared topic, so the agent sees the earlier calls.',
   'webhook.instructionsPreview': 'Task: {{instructions}}',
@@ -1357,12 +1357,12 @@ export default {
   'webhook.test.failed': "Couldn't send the test. Try again",
   'webhook.test.paused': 'Resume the webhook before sending a test',
   'webhook.test.sent': 'Test sent. The agent will run shortly',
-  'webhook.topicMode.new': 'New topic per call',
+  'webhook.topicMode.new': 'New topic',
   'webhook.topicMode.reuse': 'One shared topic',
   'webhook.updateFailed': "Couldn't update the webhook. Try again",
   'webhook.usage.json': 'Send JSON',
   'webhook.usage.notes':
-    'Send the key as "Authorization: Bearer <key>"; it is shown once, when the webhook is created or given a new key. Any body works: JSON, a form or plain text, up to 256 KB. Up to 120 calls a minute are accepted; retries with the same Idempotency-Key run once.',
+    'Send the key as "Authorization: Bearer <key>"; it is shown once, when the webhook is created or given a new key. Any body works: JSON, a form or plain text, up to 256 KB. Retries with the same Idempotency-Key run once. Calls are limited per workspace, or per personal space: 120 a minute for each member, across all its webhooks and event subscriptions.',
   'webhook.usage.simple': 'The simplest call',
   'webhook.usage.thread': 'Keep a thread in one topic, safe to retry',
   'webhook.endpoint.hint': 'Calls go to this URL. It never changes.',

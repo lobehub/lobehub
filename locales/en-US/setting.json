@@ -313,7 +313,7 @@
   "automations.error.timeout": "The connector timed out delivering events to LobeHub.",
   "automations.error.tls_error": "The connector could not open a secure connection to LobeHub.",
   "automations.error.unknown": "The subscription reported an error without details. Check to retry.",
-  "automations.error.wake_cap": "Events arrived too often, so some runs this hour were skipped.",
+  "automations.error.wake_cap": "Events arrived too often, so some runs in the last 10 minutes were skipped.",
   "automations.lastDelivery.never": "No events yet",
   "automations.remedy.reconnect": "Reconnect",
   "automations.source.moreArgs": "{{text}} +{{count}}",

@@ -5245,7 +5245,8 @@ When I am ___, I need ___
     "The connector could not verify LobeHub's callback address.",
   'automations.error.delivery_suspended':
     'The connector had paused delivery after repeated failures and has been asked to resume. This clears when the next event arrives.',
-  'automations.error.wake_cap': 'Events arrived too often, so some runs this hour were skipped.',
+  'automations.error.wake_cap':
+    'Events arrived too often, so some runs in the last 10 minutes were skipped.',
   'automations.error.insufficient_budget':
     'Not enough credits to run the agent. Later events run once you top up.',
   'automations.error.access_revoked':
