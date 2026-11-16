@@ -45,13 +45,30 @@ const copyEntries = async (from: string, into: string) => {
 
 /**
  * Copy the workspace `from` into `to`, written into a sibling first and renamed,
- * so a lane directory is either complete or absent.
+ * so a lane directory is either complete or absent. `replace` allows landing on a
+ * target that already holds a copy.
  */
-export const copyWorkspace = async (from: string, to: string) => {
+export const copyWorkspace = async (
+  from: string,
+  to: string,
+  options: { replace?: boolean } = {},
+) => {
   const staging = `${to}.partial-${process.pid}`;
   await rm(staging, { force: true, recursive: true });
   await copyEntries(from, staging);
+  if (!options.replace) {
+    await rename(staging, to);
+    return;
+  }
+  // `rename` refuses to land on an existing non-empty directory (ENOTEMPTY), so a
+  // second copy onto the same target would fail after the score was recorded. Move
+  // the old copy aside first, then drop it: the target is missing only between two
+  // renames and never holds a half-written tree.
+  const retired = `${to}.retired-${process.pid}`;
+  await rm(retired, { force: true, recursive: true });
+  if (await exists(to)) await rename(to, retired);
   await rename(staging, to);
+  await rm(retired, { force: true, recursive: true });
 };
 
 /**
@@ -102,6 +119,10 @@ export const adoptSwarmLane = async (cwd: string, fromKey: string) => {
  * a lane mid-edit would promote a tree that scores worse than the leaderboard
  * claims. Only a new goal-wide best is copied: that is the state champion
  * selection can point at.
+ *
+ * A lane can take the lead more than once, so a snapshot replaces the previous
+ * one — a leaderboard that reports the later score must promote its files, not
+ * the first best's.
  */
 export const snapshotSwarmLaneBest = async (cwd: string) => {
   const lane = parseSwarmLanePath(cwd);
@@ -109,7 +130,7 @@ export const snapshotSwarmLaneBest = async (cwd: string) => {
   const from = path.join(lane.workspace, SWARM_LANES_DIR, lane.key);
   if (!(await exists(from))) return undefined;
   const to = swarmLaneBestDirectory(lane.workspace, lane.key);
-  await copyWorkspace(from, to);
+  await copyWorkspace(from, to, { replace: true });
   return to;
 };
 

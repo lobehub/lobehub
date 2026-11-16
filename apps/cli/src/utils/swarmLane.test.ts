@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -85,6 +85,26 @@ describe('adopt and promote', () => {
     expect(await read(path.join(laneA, 'train.py'))).toBe('half-finished');
     // The archive of the lanes is bookkeeping: it is not copied into the workspace.
     await expect(read(path.join(root, '.lanes', 'A', 'train.py'))).resolves.toBe('half-finished');
+  });
+
+  it('replaces the snapshot when the same lane takes the lead a second time', async () => {
+    const root = await workspace();
+    const laneA = path.join(root, '.lanes', 'A');
+    await prepareSwarmLane(laneA);
+    await writeFile(path.join(laneA, 'train.py'), 'first best');
+    await snapshotSwarmLaneBest(laneA);
+
+    await writeFile(path.join(laneA, 'train.py'), 'second best');
+    await snapshotSwarmLaneBest(laneA);
+
+    expect(await read(path.join(swarmLaneBestDirectory(root, 'A'), 'train.py'))).toBe(
+      'second best',
+    );
+    // Serving the later score means promoting its files, not the first best's.
+    expect((await promoteSwarmLane(root, 'A')).graded).toBe(true);
+    expect(await read(path.join(root, 'train.py'))).toBe('second best');
+    // Neither the staging copy nor the retired one is left next to the snapshots.
+    expect(await readdir(path.join(root, '.lanes', '_best'))).toEqual(['A']);
   });
 
   it('promotes a lane over the workspace, keeping the old workspace and the lanes', async () => {
