@@ -55,12 +55,17 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
   const modeInEnvironmentMenu =
     canUseResource && canDisplayExecutionTarget && canSelectExecutionTarget;
   const userId = useUserStore(userProfileSelectors.userId);
+  const workspaceId = useActiveWorkspaceId();
+  const prefersTemporary = usePrefersTemporarySandbox({ userId, workspaceId }, agentId);
   // Only a pick made in that menu counts; a member who cannot make it is not
   // held to one made before the target was fixed.
-  const temporary =
-    usePrefersTemporarySandbox({ userId, workspaceId: useActiveWorkspaceId() }, agentId) &&
-    modeInEnvironmentMenu;
-  useFollowSandboxModePreference(agentId, { hasTopic: !!topicId, temporary });
+  const temporary = prefersTemporary && modeInEnvironmentMenu;
+  useFollowSandboxModePreference(agentId, {
+    enabled: modeInEnvironmentMenu,
+    hasTopic: !!topicId,
+    scopeKey: `${userId ?? ''}:${workspaceId ?? ''}:${agentId}`,
+    temporary: prefersTemporary,
+  });
   useSeedDefaultSelection(agentId, {
     eligible: eligible && !temporary,
     entitled: status === 'ready' && !temporary,

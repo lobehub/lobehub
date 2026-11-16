@@ -27,22 +27,39 @@ export const staleForMode = (pending: SandboxSelection, temporary: boolean): boo
 
 /**
  * Keep a conversation that has not started yet in step with the agent's
- * sandbox mode. Runs on a change only, never on mount: a slot filled before
- * the composer opened was filled under the current mode already. Must run
- * before the default is seeded, so an emptied slot is filled in the same pass.
+ * sandbox mode. Acts on a change of the preference only — never on mount, and
+ * never when what changed is whose preference it is (another agent, workspace
+ * or user reusing this composer), which only moves the baseline. A member who
+ * cannot pick the mode in the environment menu is not moved by it either. Must
+ * run before the default is seeded, so an emptied slot is filled in the same
+ * pass.
  */
 export const useFollowSandboxModePreference = (
   agentId: string,
-  { hasTopic, temporary }: { hasTopic: boolean; temporary: boolean },
+  {
+    enabled,
+    hasTopic,
+    scopeKey,
+    temporary,
+  }: {
+    /** Whether the mode is picked in the environment menu for this member. */
+    enabled: boolean;
+    hasTopic: boolean;
+    /** Whose preference `temporary` is: user, workspace and agent. */
+    scopeKey: string;
+    /** The stored preference itself, not gated by `enabled`. */
+    temporary: boolean;
+  },
 ) => {
-  const previous = useRef(temporary);
+  const previous = useRef({ scopeKey, temporary });
 
   useEffect(() => {
-    if (previous.current === temporary) return;
-    previous.current = temporary;
-    if (hasTopic) return;
+    const before = previous.current;
+    previous.current = { scopeKey, temporary };
+    if (before.scopeKey !== scopeKey || before.temporary === temporary) return;
+    if (!enabled || hasTopic) return;
 
     const pending = getPendingSandboxSelection(agentId);
     if (pending && staleForMode(pending, temporary)) setPendingSandboxSelection(agentId);
-  }, [agentId, hasTopic, temporary]);
+  }, [agentId, enabled, hasTopic, scopeKey, temporary]);
 };

@@ -11,10 +11,22 @@ import { useFollowSandboxModePreference } from './useFollowSandboxModePreference
 
 const AGENT = 'agent-follow';
 
+const SCOPE = `user-1::${AGENT}`;
+
+interface Props {
+  agentId?: string;
+  enabled?: boolean;
+  hasTopic: boolean;
+  scopeKey?: string;
+  temporary: boolean;
+}
+
 const renderFollow = (temporary: boolean, hasTopic = false) =>
-  renderHook((props) => useFollowSandboxModePreference(AGENT, props), {
-    initialProps: { hasTopic, temporary },
-  });
+  renderHook(
+    ({ agentId = AGENT, enabled = true, scopeKey = SCOPE, ...rest }: Props) =>
+      useFollowSandboxModePreference(agentId, { enabled, scopeKey, ...rest }),
+    { initialProps: { hasTopic, temporary } as Props },
+  );
 
 afterEach(() => setPendingSandboxSelection(AGENT));
 
@@ -65,5 +77,26 @@ describe('useFollowSandboxModePreference', () => {
     const { rerender } = renderFollow(false, true);
     rerender({ hasTopic: true, temporary: true });
     expect(getPendingSandboxSelection(AGENT)).toEqual({ workingDirectory: '.' });
+  });
+
+  // The same composer reused for another agent (or workspace, or user) reads a
+  // different preference; that is not this agent's mode changing.
+  it('moves the baseline instead of acting when whose preference it is changes', () => {
+    setPendingSandboxSelection(AGENT, {});
+    const { rerender } = renderFollow(true);
+
+    rerender({ hasTopic: false, scopeKey: 'user-1::other-agent', temporary: false });
+    rerender({ hasTopic: false, scopeKey: SCOPE, temporary: true });
+
+    expect(getPendingSandboxSelection(AGENT)).toEqual({});
+  });
+
+  it('leaves a member who cannot pick the mode where they are', () => {
+    setPendingSandboxSelection(AGENT, {});
+    const { rerender } = renderFollow(true);
+
+    rerender({ enabled: false, hasTopic: false, temporary: false });
+
+    expect(getPendingSandboxSelection(AGENT)).toEqual({});
   });
 });
