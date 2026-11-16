@@ -12,12 +12,7 @@ import {
   buildWorkspaceWhere,
   normalizeWorkspaceId,
 } from '../utils/workspace';
-import {
-  EvalConnectorUpdateError,
-  normalizeEvalConnectorPatch,
-  withoutEvalConnectorMarker,
-} from './connectorEval';
-import { ConnectorLinkModel, isConnectorOAuthAccounts } from './connectorLink';
+import { EvalConnectorUpdateError, normalizeEvalConnectorPatch } from './connectorEval';
 import {
   type BaseIdentifierScope,
   claimBaseIdentifier,
@@ -26,6 +21,8 @@ import {
   queryBaseHolders,
   sameBaseVisibility,
 } from './connectorIdentifierClaim';
+import { ConnectorLinkModel, isConnectorOAuthAccounts } from './connectorLink';
+import { deleteIfMetadataContains, updateMetadataIfContains } from './connectorMetadataGuard';
 import {
   connectorAccessScope,
   connectorAgentConfigScope,
@@ -491,56 +488,16 @@ export class ConnectorModel {
     await this.db.delete(userConnectors).where(and(eq(userConnectors.id, id), this.ownership()));
   };
 
-  /**
-   * Delete the row, with its tools, only while its metadata still contains
-   * `match`: a writer that tagged the row removes it only if no one has
-   * rewritten it since (a re-add replaces the metadata). Returns whether it did.
-   */
-  deleteIfMetadataContains = async (
-    id: string,
-    match: Record<string, unknown>,
-  ): Promise<boolean> => {
-    const deleted = await this.db
-      .delete(userConnectors)
-      .where(
-        and(
-          eq(userConnectors.id, id),
-          this.ownership(),
-          sql`${userConnectors.metadata} @> ${JSON.stringify(match)}::jsonb`,
-        ),
-      )
-      .returning({ id: userConnectors.id });
-    return deleted.length > 0;
-  };
+  /** See {@link deleteIfMetadataContains}. */
+  deleteIfMetadataContains = async (id: string, match: Record<string, unknown>) =>
+    deleteIfMetadataContains(this.db, this.ownership, id, match);
 
-  /**
-   * Replace the row's metadata only while it still contains `match`, as
-   * {@link deleteIfMetadataContains} deletes: a writer that tagged the row
-   * finishes it only if no one has re-added it since, whose writer owns it now.
-   * An evaluation connection is left alone (its provenance goes through
-   * {@link update}). In a transaction, a write that lands holds the row's lock
-   * until it ends, so the writer's other writes to the row land with it, before
-   * any {@link update}. Returns whether it did.
-   */
+  /** See {@link updateMetadataIfContains}. */
   updateMetadataIfContains = async (
     id: string,
     match: Record<string, unknown>,
     metadata: NonNullable<DecryptedConnector['metadata']>,
-  ): Promise<boolean> => {
-    const updated = await this.db
-      .update(userConnectors)
-      .set({ metadata: withoutEvalConnectorMarker(metadata), updatedAt: new Date() })
-      .where(
-        and(
-          eq(userConnectors.id, id),
-          this.ownership(),
-          sql`${userConnectors.metadata} @> ${JSON.stringify(match)}::jsonb`,
-          sql`NOT COALESCE(jsonb_exists(${userConnectors.metadata}, 'agentEval'), false)`,
-        ),
-      )
-      .returning({ id: userConnectors.id });
-    return updated.length > 0;
-  };
+  ) => updateMetadataIfContains(this.db, this.ownership, id, match, metadata);
 
   query = async (
     gateKeeper: GateKeeper | undefined = this.gateKeeper,
