@@ -273,6 +273,53 @@ describe('WeComLongConnection — replies', () => {
 });
 
 describe('WeComLongConnection — lifecycle', () => {
+  it('drain() finishes open streams before stopping, so no bubble is left spinning', async () => {
+    const { connection, socket } = setup();
+    active = connection;
+    await connection.start();
+    socket().serverSend(inbound('req-1'));
+    socket().serverSend(inbound('req-2', { from: { userid: 'lisi' } }));
+    await flush();
+    await connection.openStream({ id: 'zhangsan', type: 'single' });
+    await connection.openStream({ id: 'lisi', type: 'single' });
+    const live = socket();
+
+    await connection.drain();
+
+    const finishes = live.sentWith(WECOM_CMD.RESPOND).filter((f) => f.body.stream.finish);
+    expect(finishes.map((f) => f.headers.req_id).sort()).toEqual(['req-1', 'req-2']);
+    expect(finishes[0].body.stream.content).toBe('…');
+    expect(connection.isConnected).toBe(false);
+    expect(live.readyState).toBe(3);
+  });
+
+  it('drain() does not wait past maxWaitMs for receipts', async () => {
+    const { connection, socket } = setup();
+    active = connection;
+    await connection.start();
+    socket().serverSend(inbound('req-1'));
+    await flush();
+    await connection.openStream({ id: 'zhangsan', type: 'single' });
+    socket().ackFor = () => undefined;
+
+    const started = Date.now();
+    await connection.drain(20);
+
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(connection.isConnected).toBe(false);
+  });
+
+  it('drain() just stops when no stream is open', async () => {
+    const { connection, socket } = setup();
+    active = connection;
+    await connection.start();
+
+    await connection.drain();
+
+    expect(socket().sentWith(WECOM_CMD.RESPOND)).toHaveLength(0);
+    expect(connection.isConnected).toBe(false);
+  });
+
   it('stops without reconnecting when a newer connection displaces it', async () => {
     const onDisplaced = vi.fn();
     const { connection, socket, sockets } = setup({ onDisplaced });

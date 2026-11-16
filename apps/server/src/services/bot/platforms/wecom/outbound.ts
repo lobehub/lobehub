@@ -41,10 +41,48 @@ const resolveConnectionId = async (botId: string, refresh = false): Promise<stri
 export const resetWeComGatewayConnectionIds = (): void => connectionIds.clear();
 
 /**
+ * Waits between attempts while the gateway does not hold the bot's connection. A gateway restart
+ * (deploy) drops every connection and re-registers them from lobehub's desired set, which took
+ * ~30 s in production (T-14145); a reply that lands in that window must wait for it, not be lost.
+ * About a minute in total, well inside the callback's function budget.
+ */
+export const WECOM_GATEWAY_RETRY_DELAYS_MS = [2000, 4000, 8000, 15_000, 15_000, 15_000];
+
+const NOT_HELD_DETAIL = /not connected|connection closed|socket is not open/i;
+
+/**
+ * Whether a failed send means "the gateway does not hold a live connection right now": a 404 (no
+ * such connection), the gateway's own "not connected" / "connection closed" refusal, or no answer
+ * from the gateway at all. In all of these the reply did not reach the user, so waiting for the
+ * connection to come back and sending again is the only way it ever arrives. A rejection from
+ * WeCom itself is not retried.
+ */
+export const isConnectionNotHeldError = (error: unknown): boolean => {
+  if (error instanceof MessageGatewaySendError) {
+    return error.status === 404 || (error.status >= 500 && NOT_HELD_DETAIL.test(error.message));
+  }
+  // `fetch` itself failed: the gateway is down or restarting.
+  return error instanceof TypeError;
+};
+
+export interface GatewayWeComOutboundOptions {
+  retryDelaysMs?: number[];
+  sleep?: (ms: number) => Promise<void>;
+}
+
+const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
  * Replies through the Node message gateway, which holds the bot's long connection and keeps its
  * reply state (each conversation's latest req_id and open stream) next to the socket.
  */
-export const createGatewayWeComOutbound = (botId: string): WeComOutbound => ({
+export const createGatewayWeComOutbound = (
+  botId: string,
+  {
+    retryDelaysMs = WECOM_GATEWAY_RETRY_DELAYS_MS,
+    sleep = defaultSleep,
+  }: GatewayWeComOutboundOptions = {},
+): WeComOutbound => ({
   deliver: async (thread, text) => {
     const client = getMessageGatewayClient(PLATFORM);
     const platformThreadId = encodeThreadId(thread);
@@ -53,15 +91,29 @@ export const createGatewayWeComOutbound = (botId: string): WeComOutbound => ({
       return { id: messageId ?? '' };
     };
 
-    const connectionId = await resolveConnectionId(botId);
-    try {
-      return await send(connectionId);
-    } catch (error) {
-      // The bot was recreated under the same BotID: its connection now has a new id.
-      if (!(error instanceof MessageGatewaySendError) || error.status !== 404) throw error;
-      const fresh = await resolveConnectionId(botId, true);
-      if (fresh === connectionId) throw error;
-      return send(fresh);
+    let connectionId = await resolveConnectionId(botId);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await send(connectionId);
+      } catch (error) {
+        if (!isConnectionNotHeldError(error)) throw error;
+        // The bot may have been recreated under the same BotID: its connection then has a new id,
+        // worth trying right away.
+        const fresh = await resolveConnectionId(botId, true);
+        if (attempt >= retryDelaysMs.length) throw error;
+        if (fresh !== connectionId) {
+          connectionId = fresh;
+          continue;
+        }
+        log(
+          'deliver: the gateway does not hold %s (attempt %d), retrying in %dms: %O',
+          botId,
+          attempt + 1,
+          retryDelaysMs[attempt],
+          error,
+        );
+        await sleep(retryDelaysMs[attempt]);
+      }
     }
   },
   openStream: async (thread) => {
