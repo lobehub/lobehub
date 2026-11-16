@@ -145,3 +145,9 @@ A Channel day divider stamps the first message of the day the way WeChat does: t
 Enforcement: `src/features/Channels/messagePresentation.test.ts` (`channelDayLabel`) covers today, the yesterday boundary, weekdays, this year and earlier years in zh-CN and en-US.
 
 Source: user correction on PR #22556 (2026-11-08): "今天应该显示时间", after a first version labelled today as "今天".
+
+## LOBE-UX-021 — Let success stay quiet; mark only the exceptions
+
+On result surfaces (acceptance checks, verify boards, run summaries), passing is the default state and carries no badge of its own: no per-item "Passed" tag, check stamp or green outline. Show the outcome once, in one plain sentence (for example "6 项已核对，等你确认"). Item identifiers stay neutral (`01`, `04B`), without a check mark. Color and badges are reserved for what needs a person: a failed check (error color with the reason) or a pending decision. Actions such as "Accept" may keep their icon; status may not.
+
+Source: lead review of the artboard acceptance redesign (2026-11-16): too many Pass tags read as AI-generated.
