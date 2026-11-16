@@ -1,7 +1,7 @@
 import { WEBHOOK_EVENT_TAG } from '@lobechat/const';
+import type { SignalItem } from '@lobechat/types';
 
 import type { InboundWebhookViewOf } from '@/database/models/inboundWebhook';
-import type { SignalItem } from '@/database/schemas';
 
 import { escapeXmlAttribute as attribute, escapeXmlText as escapeText } from '../xml';
 

@@ -1,8 +1,8 @@
+import type { SignalItem } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 
 import type { InboundWebhookViewOf } from '@/database/models/inboundWebhook';
 import { TopicModel } from '@/database/models/topic';
-import type { SignalItem } from '@/database/schemas';
 
 import { isAgentWebhooksEnabled } from '../../featureGate';
 import type { InboundWebhookKindHandler } from '../types';
