@@ -4,6 +4,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
+import type { InboundWebhookView } from '@/database/models/inboundWebhook';
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
 import { TopicModel } from '@/database/models/topic';
 import { signals } from '@/database/schemas';
@@ -16,6 +17,7 @@ import { buildConnectorMcpParams } from '@/server/services/connector/sync';
 import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
 import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 import { mcpService } from '@/server/services/mcp';
+import { canPerformResourceAction, getResourceMeta } from '@/server/services/resourcePermission';
 
 import { getInboundWebhookKind } from './kinds';
 import { connectorForWebhook, refreshSubscription } from './kinds/mcpEvents/subscription';
@@ -53,6 +55,27 @@ export function classifyWakeError(error: unknown): 'busy' | 'budget' | 'unknown'
   }
   return 'unknown';
 }
+
+/**
+ * Whether the webhook's owner may still run its agent, checked at every wake rather than once at
+ * creation: a member removed from the workspace, or one whose access to the agent was taken away,
+ * keeps the rows they created, and a delivery must not run the agent as them. Personal agents have
+ * no one else to answer to.
+ */
+const ownerMayRun = async (db: LobeChatDatabase, row: InboundWebhookView) => {
+  if (!row.workspaceId) return true;
+  const meta = await getResourceMeta(db, 'agent', row.agentId);
+  if (!meta) return false;
+  return canPerformResourceAction({
+    action: 'use',
+    db,
+    meta,
+    resourceId: row.agentId,
+    resourceType: 'agent',
+    userId: row.userId,
+    workspaceId: row.workspaceId,
+  });
+};
 
 /** Durable, renewable claims serialize a batch without holding a database lock during network I/O. */
 export async function wakeInboundWebhook(
@@ -99,6 +122,20 @@ export async function wakeInboundWebhook(
         ),
       );
     return { outcome: 'gone' };
+  }
+  // Kept, not deleted: access can come back, and the owner or an admin decides about the row.
+  if (!(await ownerMayRun(db, row))) {
+    await db
+      .update(signals)
+      .set({ error: 'owner_access_revoked', processedAt: new Date(), status: 'ignored' })
+      .where(
+        and(
+          eq(signals.source, 'mcp-events'),
+          eq(signals.scopeKey, `inbound-webhook:${id}`),
+          inArray(signals.status, ['pending', 'failed']),
+        ),
+      );
+    return { outcome: 'ignored' };
   }
   const connector = row.connectorId
     ? await new ConnectorModel(db, row.userId, scope).findPublicById(row.connectorId)

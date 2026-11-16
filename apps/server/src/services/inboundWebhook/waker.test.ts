@@ -15,12 +15,14 @@ import {
   topics,
   userConnectors,
   users,
+  workspaces,
 } from '@/database/schemas';
 
 import type { WebhookWakeDeps } from './waker';
 import { classifyWakeError, wakeInboundWebhook } from './waker';
 
 const boundary = vi.hoisted(() => ({
+  canUse: vi.fn(),
   enabled: vi.fn(),
   unsubscribe: vi.fn(),
   subscribe: vi.fn(),
@@ -32,6 +34,14 @@ const boundary = vi.hoisted(() => ({
 }));
 vi.mock('@/server/services/inboundWebhook/featureGate', () => ({
   isWebhookEnabled: boundary.enabled,
+}));
+vi.mock('@/server/services/resourcePermission', () => ({
+  canPerformResourceAction: boundary.canUse,
+  getResourceMeta: async () => ({
+    userId: 'wake-user',
+    visibility: 'public',
+    workspaceId: 'wake-ws',
+  }),
 }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => boundary.gateKeeper },
@@ -93,6 +103,7 @@ const signalRows = () =>
 beforeEach(async () => {
   vi.clearAllMocks();
   boundary.enabled.mockResolvedValue(true);
+  boundary.canUse.mockResolvedValue(true);
   vi.spyOn(console, 'error').mockImplementation(() => {});
   boundary.unsubscribe.mockResolvedValue({});
   boundary.subscribe.mockResolvedValue({ id: 'remote', refreshBefore: null });
@@ -128,6 +139,7 @@ beforeEach(async () => {
   ).id;
 });
 afterEach(async () => {
+  await db.delete(workspaces).where(eq(workspaces.id, 'wake-ws'));
   await db.delete(users).where(eq(users.id, userId));
   vi.restoreAllMocks();
 });
@@ -333,6 +345,36 @@ describe('durable inbound webhook wakes', () => {
     expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'processed' });
     expect((await model.findById(id))?.status).toBe('active');
     expect(execute.mock.calls[0][0].prompt).not.toContain('<notice ');
+  });
+
+  it('runs nothing as an owner who may no longer use the workspace agent', async () => {
+    await db
+      .insert(workspaces)
+      .values({ id: 'wake-ws', name: 'Team', primaryOwnerId: userId, slug: 'wake-ws' });
+    const inTeam = { workspaceId: 'wake-ws' };
+    await db.update(agents).set(inTeam).where(eq(agents.id, agentId));
+    await db.update(topics).set(inTeam).where(eq(topics.id, topicId));
+    await db.update(userConnectors).set(inTeam).where(eq(userConnectors.id, connectorId));
+    await db.update(inboundWebhooks).set(inTeam).where(eq(inboundWebhooks.id, id));
+    await seedSignal();
+    // e.g. removed from the workspace, or the agent's access level lowered.
+    boundary.canUse.mockResolvedValue(false);
+
+    expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'ignored' });
+    expect(execute).not.toHaveBeenCalled();
+    expect(boundary.canUse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'use',
+        resourceId: agentId,
+        userId,
+        workspaceId: 'wake-ws',
+      }),
+    );
+    expect(await signalRows()).toMatchObject([
+      { error: 'owner_access_revoked', status: 'ignored' },
+    ]);
+    const [kept] = await db.select().from(inboundWebhooks).where(eq(inboundWebhooks.id, id));
+    expect(kept).toBeDefined();
   });
 
   it('ignores durable events for a removed webhook', async () => {
