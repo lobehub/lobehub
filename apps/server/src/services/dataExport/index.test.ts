@@ -23,21 +23,25 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    createDownloadUrl: mocks.createDownloadUrl,
-    deleteFile: mocks.deleteFile,
-    uploadBuffer: mocks.uploadBuffer,
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      createDownloadUrl: mocks.createDownloadUrl,
+      deleteFile: mocks.deleteFile,
+      uploadBuffer: mocks.uploadBuffer,
+    };
+  }),
 }));
 
 vi.mock('@/database/repositories/dataExporter', () => ({
-  DataExporterRepos: vi.fn().mockImplementation(() => ({ export: mocks.exportTables })),
+  DataExporterRepos: vi.fn().mockImplementation(function () {
+    return { export: mocks.exportTables };
+  }),
 }));
 
 vi.mock('@/database/models/drizzleMigration', () => ({
-  DrizzleMigrationModel: vi.fn().mockImplementation(() => ({
-    getLatestMigrationHash: vi.fn().mockResolvedValue('schema-hash'),
-  })),
+  DrizzleMigrationModel: vi.fn().mockImplementation(function () {
+    return { getLatestMigrationHash: vi.fn().mockResolvedValue('schema-hash') };
+  }),
 }));
 
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({ after: mocks.after }));
