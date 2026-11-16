@@ -533,6 +533,25 @@ describe('mapFeatureFlagsEnvToState', () => {
     expect(mappedState.enableDashboard).toBe(false);
   });
 
+  describe('agent_runtime_slim_state', () => {
+    it('is off by default', () => {
+      expect(DEFAULT_FEATURE_FLAGS.agent_runtime_slim_state).toBe(false);
+      expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableSlimAgentState).toBe(
+        false,
+      );
+    });
+
+    it('maps true and a user allowlist', () => {
+      expect(
+        mapFeatureFlagsEnvToState({ agent_runtime_slim_state: true }).enableSlimAgentState,
+      ).toBe(true);
+
+      const config = FeatureFlagsSchema.parse({ agent_runtime_slim_state: ['user-1'] });
+      expect(mapFeatureFlagsEnvToState(config, 'user-1').enableSlimAgentState).toBe(true);
+      expect(mapFeatureFlagsEnvToState(config, 'user-2').enableSlimAgentState).toBe(false);
+    });
+  });
+
   describe('agent_runtime_strip_operation_toolset', () => {
     it('is off by default', () => {
       expect(DEFAULT_FEATURE_FLAGS.agent_runtime_strip_operation_toolset).toBe(false);

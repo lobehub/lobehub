@@ -402,11 +402,13 @@ describe('AgentStateManager', () => {
 
     beforeEach(() => {
       delete process.env[STRIP_FLAG];
+      delete process.env.AGENT_RUNTIME_SLIM_STATE;
     });
 
     afterAll(() => {
       if (originalFlag === undefined) delete process.env[STRIP_FLAG];
       else process.env[STRIP_FLAG] = originalFlag;
+      delete process.env.AGENT_RUNTIME_SLIM_STATE;
     });
 
     it('strips the saveAgentState blob when the flag is on, resolved for the owner', async () => {
@@ -514,6 +516,7 @@ describe('AgentStateManager', () => {
 
     it("env '1' forces stripping without consulting the flag provider", async () => {
       process.env[STRIP_FLAG] = '1';
+      process.env.AGENT_RUNTIME_SLIM_STATE = '0';
       const op = 'op-ff-force';
 
       await stateManager.saveAgentState(op, {
@@ -626,6 +629,166 @@ describe('AgentStateManager', () => {
       // First save keeps the blob inline, the retry strips it.
       expect(JSON.parse(blobs[0][2] as string).operationToolSet).toEqual(toolSet);
       expect(JSON.parse(blobs.at(-1)![2] as string).operationToolSet).toBeUndefined();
+    });
+  });
+
+  describe('slim state (agent_runtime_slim_state)', () => {
+    const manifest = { api: [{ name: 'x' }], identifier: 'x' };
+    const toolSet = {
+      enabledToolIds: ['x'],
+      manifestMap: { x: manifest },
+      sourceMap: {},
+      tools: [{ function: { name: 'x' } }],
+    };
+    const expertise = { renderedContext: 'expert' };
+    const origin = { userId: 'user-slim' };
+    const buildState = () => ({
+      activatedStepTools: [{ activatedAtStep: 1, id: 'x', manifest, source: 'discovery' }],
+      expertise,
+      initialContext: { payload: { tools: toolSet.tools }, phase: 'user_input' },
+      operationToolSet: toolSet,
+      origin,
+      status: 'running',
+      stepCount: 2,
+      world: { expertise },
+    });
+    const ENVS = ['AGENT_RUNTIME_STRIP_OPERATION_TOOLSET', 'AGENT_RUNTIME_SLIM_STATE'];
+
+    const mockFlags = (flags: { slim: boolean; strip: boolean }) =>
+      vi.mocked(getServerFeatureFlagsStateFromRuntimeConfig).mockResolvedValue({
+        enableSlimAgentState: flags.slim,
+        enableStripOperationToolset: flags.strip,
+      } as any);
+
+    const stepBlob = (op: string) =>
+      JSON.parse(
+        pipelineMock.setex.mock.calls.find((c) => c[0] === `agent_runtime_state:${op}`)![2],
+      );
+
+    beforeEach(() => {
+      for (const name of ENVS) delete process.env[name];
+    });
+
+    afterAll(() => {
+      for (const name of ENVS) delete process.env[name];
+    });
+
+    it('leaves the copies out of the step blob when the flag is on', async () => {
+      mockFlags({ slim: true, strip: true });
+      const op = 'op-slim-on';
+
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: buildState(),
+        stepIndex: 2,
+      } as any);
+
+      const blob = stepBlob(op);
+      expect(blob.initialContext.payload.tools).toBeUndefined();
+      expect(blob.activatedStepTools[0].manifest).toBeUndefined();
+      expect(blob.expertise).toBeUndefined();
+      expect(blob.world.expertise).toEqual(expertise);
+      expect(blob.__slim).toEqual({ activatedManifests: [0], expertise: true, payloadTools: true });
+    });
+
+    it('loads a slimmed blob back to the full state', async () => {
+      mockFlags({ slim: true, strip: true });
+      const op = 'op-slim-load';
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: buildState(),
+        stepIndex: 2,
+      } as any);
+      const stored = pipelineMock.setex.mock.calls.find(
+        (c) => c[0] === `agent_runtime_state:${op}`,
+      )![2];
+      redisMock.get.mockImplementation(async (key: string) =>
+        key === `agent_runtime_toolset:${op}` ? JSON.stringify(toolSet) : stored,
+      );
+
+      const loaded = await stateManager.loadAgentState(op);
+
+      expect(loaded).toMatchObject(JSON.parse(JSON.stringify(buildState())));
+      expect((loaded as any).__slim).toBeUndefined();
+    });
+
+    it('slims with the tool set kept inline too', async () => {
+      mockFlags({ slim: true, strip: false });
+      const op = 'op-slim-inline-toolset';
+
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: buildState(),
+        stepIndex: 2,
+      } as any);
+
+      const blob = stepBlob(op);
+      expect(blob.operationToolSet).toEqual(toolSet);
+      expect(blob.initialContext.payload.tools).toBeUndefined();
+      redisMock.get.mockResolvedValueOnce(JSON.stringify(blob));
+      const loaded = await stateManager.loadAgentState(op);
+      expect((loaded as any).initialContext.payload.tools).toEqual(toolSet.tools);
+    });
+
+    it('keeps the blob unchanged when the flag is off', async () => {
+      mockFlags({ slim: false, strip: true });
+      const op = 'op-slim-off';
+      const { operationToolSet: _toolSet, ...expected } = buildState();
+
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: buildState(),
+        stepIndex: 2,
+      } as any);
+
+      expect(stepBlob(op)).toEqual(JSON.parse(JSON.stringify(expected)));
+    });
+
+    it('the tool set kill switch turns slimming off without consulting the provider', async () => {
+      process.env.AGENT_RUNTIME_STRIP_OPERATION_TOOLSET = '0';
+      mockFlags({ slim: true, strip: true });
+      const op = 'op-slim-kill';
+
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: buildState(),
+        stepIndex: 2,
+      } as any);
+
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).not.toHaveBeenCalled();
+      expect(stepBlob(op)).toEqual(JSON.parse(JSON.stringify(buildState())));
+    });
+
+    it("AGENT_RUNTIME_SLIM_STATE='0' overrides an enabled flag", async () => {
+      process.env.AGENT_RUNTIME_SLIM_STATE = '0';
+      mockFlags({ slim: true, strip: true });
+      const op = 'op-slim-env-off';
+
+      await stateManager.saveStepResult(op, {
+        executionTime: 1,
+        newState: buildState(),
+        stepIndex: 2,
+      } as any);
+
+      const blob = stepBlob(op);
+      expect(blob.__slim).toBeUndefined();
+      expect(blob.initialContext.payload.tools).toEqual(toolSet.tools);
+      expect(blob.operationToolSet).toBeUndefined();
+    });
+
+    it('resolves both flags with one provider read per owner', async () => {
+      mockFlags({ slim: true, strip: true });
+      const op = 'op-slim-one-read';
+
+      for (const stepIndex of [2, 3]) {
+        await stateManager.saveStepResult(op, {
+          executionTime: 1,
+          newState: buildState(),
+          stepIndex,
+        } as any);
+      }
+
+      expect(getServerFeatureFlagsStateFromRuntimeConfig).toHaveBeenCalledTimes(1);
     });
   });
 
