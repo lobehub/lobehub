@@ -398,10 +398,13 @@ export class ChannelRepository {
         return {
           channel: { ...access.channel, canDelete: admin },
           ...view,
-          // Mirrors `stop`: the requester or an admin.
-          jobs: view.jobs.map(({ requesterMemberId, ...job }) => ({
+          jobs: view.jobs.map(({ requesterMemberId, topicId, topicOwnerId, ...job }) => ({
             ...job,
+            // Mirrors `stop`: the requester or an admin.
             canStop: admin || requesterMemberId === access.member.id,
+            // Only the viewer who runs the reply can follow it into its topic; for anyone else
+            // the job carries no topic at all.
+            ...(topicId && topicOwnerId === this.userId ? { topicId } : {}),
           })),
         };
       },
