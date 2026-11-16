@@ -15,7 +15,7 @@ import Groups from './Groups';
 import { SelectionBar, ZoomBar } from './Overlays';
 import { canvasStyles } from './styles';
 import { useViewport } from './useViewport';
-import { liveBoardKey } from './visibleBoards';
+import { nextLiveBoards } from './visibleBoards';
 
 interface ContentProps {
   board: BoardModel;
@@ -54,7 +54,10 @@ const Canvas = () => {
     board,
     clearSelection,
   );
-  const live = size ? liveBoardKey(board.boards, { ...view, ...size }) : '';
+  const liveRef = useRef<readonly string[]>([]);
+  if (size && !flying)
+    liveRef.current = nextLiveBoards(liveRef.current, board.boards, { ...view, ...size });
+  const live = liveRef.current.toSorted().join(' ');
   const discussing = useArtboardStore((s) => s.mode === 'discuss');
   const commenting = useArtboardStore((s) => s.mode === 'discuss' && s.tool === 'comment');
 
@@ -93,7 +96,7 @@ const Canvas = () => {
             transform: `translate(${view.x}px, ${view.y}px) scale(${view.k})`,
           })}
         >
-          <Content board={board} k={view.k} live={flying ? '' : live} />
+          <Content board={board} k={view.k} live={live} />
         </div>
       </div>
       <SelectionBar view={view} />
