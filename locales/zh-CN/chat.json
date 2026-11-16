@@ -67,6 +67,7 @@
   "agentSignal.receipts.revert.unsupported": "不支持撤销",
   "agentSignal.receipts.skill.detail": "已自主优化处理相似请求的方式",
   "agentSignal.receipts.skill.title": "已自动习得新技能",
+  "agentSkillModal.frontmatterInvalid": "这个技能的 SKILL.md frontmatter 格式有误，名称和描述取自上一次保存的版本。请打开文档修复。",
   "agentSkillModal.loadFailed": "技能加载失败",
   "agentSkillModal.notFound": "这个技能已不存在，可能已被删除。",
   "agentSkillModal.openDocument": "在文档中打开",
