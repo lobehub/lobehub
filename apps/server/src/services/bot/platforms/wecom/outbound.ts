@@ -48,21 +48,43 @@ export const resetWeComGatewayConnectionIds = (): void => connectionIds.clear();
  */
 export const WECOM_GATEWAY_RETRY_DELAYS_MS = [2000, 4000, 8000, 15_000, 15_000, 15_000];
 
-const NOT_HELD_DETAIL = /not connected|connection closed|socket is not open/i;
+/**
+ * Refusals raised before any frame is written: the gateway has no live socket for the bot, or the
+ * connection refuses to enqueue. Not "connection closed": a socket that drops while a frame waits
+ * for its receipt may already have delivered it.
+ */
+const NOT_SENT_DETAIL = /is not connected|socket is not open/i;
+
+/** `fetch` failed while connecting, so the request never reached the gateway. */
+const CONNECT_ERROR_CODES = new Set([
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'UND_ERR_CONNECT_TIMEOUT',
+]);
+
+const connectErrorCode = (error: TypeError): string | undefined => {
+  const cause = (error as { cause?: { code?: unknown } }).cause;
+  return typeof cause?.code === 'string' ? cause.code : undefined;
+};
 
 /**
- * Whether a failed send means "the gateway does not hold a live connection right now": a 404 (no
- * such connection), the gateway's own "not connected" / "connection closed" refusal, or no answer
- * from the gateway at all. In all of these the reply did not reach the user, so waiting for the
- * connection to come back and sending again is the only way it ever arrives. A rejection from
- * WeCom itself is not retried.
+ * Whether a failed send is known to have sent nothing because the gateway does not hold a live
+ * connection right now: a 404 (no such connection), the "not connected" refusal raised before a
+ * frame is written, or a gateway that could not be reached at all. Only these are retried —
+ * `sendText` carries no idempotency key, so a failure that may have reached WeCom (a lost receipt,
+ * a reset mid-request) is surfaced instead of risking a duplicate reply. A rejection from WeCom
+ * itself is not retried either.
  */
 export const isConnectionNotHeldError = (error: unknown): boolean => {
   if (error instanceof MessageGatewaySendError) {
-    return error.status === 404 || (error.status >= 500 && NOT_HELD_DETAIL.test(error.message));
+    return error.status === 404 || (error.status >= 500 && NOT_SENT_DETAIL.test(error.message));
   }
-  // `fetch` itself failed: the gateway is down or restarting.
-  return error instanceof TypeError;
+  if (error instanceof TypeError) {
+    const code = connectErrorCode(error);
+    return !!code && CONNECT_ERROR_CODES.has(code);
+  }
+  return false;
 };
 
 export interface GatewayWeComOutboundOptions {

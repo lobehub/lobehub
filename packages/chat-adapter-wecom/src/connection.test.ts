@@ -293,20 +293,23 @@ describe('WeComLongConnection — lifecycle', () => {
     expect(live.readyState).toBe(3);
   });
 
-  it('drain() does not wait past maxWaitMs for receipts', async () => {
-    const { connection, socket } = setup();
+  it('drain() stops after maxWaitMs even when receipts never come', async () => {
+    // Receipts would only time out after a minute: if `maxWaitMs` were ignored, drain() would
+    // outlive the test's own timeout.
+    const { connection, socket } = setup({ ackTimeoutMs: 60_000 });
     active = connection;
     await connection.start();
     socket().serverSend(inbound('req-1'));
     await flush();
     await connection.openStream({ id: 'zhangsan', type: 'single' });
     socket().ackFor = () => undefined;
+    const live = socket();
 
-    const started = Date.now();
     await connection.drain(20);
 
-    expect(Date.now() - started).toBeLessThan(1000);
+    expect(live.sentWith(WECOM_CMD.RESPOND).at(-1)?.body.stream).toMatchObject({ finish: true });
     expect(connection.isConnected).toBe(false);
+    expect(live.readyState).toBe(3);
   });
 
   it('drain() just stops when no stream is open', async () => {

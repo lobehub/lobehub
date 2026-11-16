@@ -439,7 +439,7 @@ describe('WeComClient on the Node message gateway', () => {
     it('retries when the gateway cannot be reached at all', async () => {
       const sleep = vi.fn(async () => {});
       gw.sendText
-        .mockRejectedValueOnce(new TypeError('fetch failed'))
+        .mockRejectedValueOnce(new TypeError('fetch failed', { cause: { code: 'ECONNREFUSED' } }))
         .mockResolvedValueOnce({ messageId: 'push-1' });
 
       const outbound = createGatewayWeComOutbound('bot-1', { retryDelaysMs: delays, sleep });
@@ -457,6 +457,27 @@ describe('WeComClient on the Node message gateway', () => {
       await expect(outbound.deliver(thread, 'answer')).rejects.toThrow('Connection not found');
       expect(gw.sendText).toHaveBeenCalledTimes(delays.length + 1);
       expect(sleep).toHaveBeenCalledTimes(delays.length);
+    });
+
+    it.each([
+      [
+        'a receipt lost when the socket dropped',
+        new MessageGatewaySendError(500, '{"error":"WeCom bot bot-1 connection closed"}'),
+      ],
+      [
+        'a gateway connection reset mid-request',
+        new TypeError('fetch failed', { cause: { code: 'ECONNRESET' } }),
+      ],
+      ['a fetch failure without a known cause', new TypeError('fetch failed')],
+    ])('does not resend %s: it may already have reached WeCom', async (_label, failure) => {
+      const sleep = vi.fn(async () => {});
+      gw.sendText.mockRejectedValue(failure);
+
+      const outbound = createGatewayWeComOutbound('bot-1', { retryDelaysMs: delays, sleep });
+
+      await expect(outbound.deliver(thread, 'answer')).rejects.toBe(failure);
+      expect(gw.sendText).toHaveBeenCalledTimes(1);
+      expect(sleep).not.toHaveBeenCalled();
     });
 
     it('does not resend what WeCom itself refused', async () => {
