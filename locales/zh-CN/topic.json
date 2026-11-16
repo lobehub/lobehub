@@ -94,6 +94,7 @@
   "forkTitle": "{{title}} 的分支",
   "groupTitle.byAgent.unknown": "未知 Agent",
   "groupTitle.byDevice.unknown": "未知设备",
+  "groupTitle.byDevice.unknownDirectory": "未知目录",
   "groupTitle.byProject.noProject": "无目录",
   "groupTitle.byStatus.active": "活跃",
   "groupTitle.byStatus.archived": "已归档",

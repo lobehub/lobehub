@@ -27,13 +27,13 @@ export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
   ]);
 
   return useCallback(() => {
-    // "by agent" and "by device" only exist where topics span multiple agents
-    // and machines — the project-scoped list, where "by agent" is the default
-    // and listed first. A single agent's own sidebar hides them. The project-scoped list already is one project, so it hides
-    // "by project" instead.
+    // "by agent" only exists where topics span multiple agents — the
+    // project-scoped list, where it is the default and listed first. That list
+    // already is one project, so it hides "by project" instead. One agent's
+    // topics still run on several machines, so both lists group by device.
     const groupModes: TopicGroupMode[] = scope
       ? ['byAgent', 'byStatus', 'byTime', 'byDevice', 'flat']
-      : ['byStatus', 'byTime', 'byProject', 'flat'];
+      : ['byStatus', 'byTime', 'byProject', 'byDevice', 'flat'];
     const sortByOptions: TopicSortBy[] = ['createdAt', 'updatedAt'];
 
     return [
