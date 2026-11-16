@@ -32,6 +32,13 @@ describe('formatWorktreeTimestamp', () => {
 });
 
 describe('generateWorktreeBranchName', () => {
+  it('namespaces generated branches under lobehub/ by default', () => {
+    expect(WORKTREE_BRANCH_PREFIX).toBe('lobehub');
+    expect(generateWorktreeBranchName({ now: NOW, random: () => 0 })).toBe(
+      `lobehub/202610020308-${WORKTREE_ADJECTIVES[0]}-${WORKTREE_NOUNS[0]}`,
+    );
+  });
+
   it('yields <prefix>/<YYYYMMDDHHmm>-<adjective>-<noun>', () => {
     const shape = new RegExp(`^${WORKTREE_BRANCH_PREFIX}/\\d{12}-[a-z]+-[a-z]+$`);
 
@@ -45,7 +52,7 @@ describe('generateWorktreeBranchName', () => {
     const nouns = new Set<string>(WORKTREE_NOUNS);
 
     for (const name of sample()) {
-      // `wt/202610020308-quiet-hill` → ['wt/202610020308', 'quiet', 'hill']
+      // `lobehub/202610020308-quiet-hill` → ['lobehub/202610020308', 'quiet', 'hill']
       const [, adjective, noun] = name.split('-');
       expect(adjectives.has(adjective)).toBe(true);
       expect(nouns.has(noun)).toBe(true);
@@ -72,42 +79,45 @@ describe('generateWorktreeBranchName', () => {
 
   it('keeps the first draw when nothing it drew is taken', () => {
     expect(
-      generateWorktreeBranchName({ exclude: ['wt/202001010000-other-name'], now: NOW }),
-    ).toMatch(/^wt\/202610020308-/);
+      generateWorktreeBranchName({ exclude: ['lobehub/202001010000-other-name'], now: NOW }),
+    ).toMatch(/^lobehub\/202610020308-/);
   });
 
   it('spreads across the pool so repeats are rare', () => {
     expect(new Set(sample(200)).size).toBeGreaterThan(150);
   });
 
-  // Git refuses `refs/heads/wt/x` while a ref `refs/heads/wt` exists, and every
+  // Git refuses `refs/heads/lobehub/x` while a ref `refs/heads/lobehub` exists, and every
   // namespaced draw shares that segment — so the namespace, not the word pair,
   // is what has to give.
   describe('when a ref occupies the namespace path', () => {
     it('falls back to the flat form instead of handing out a ref git will refuse', () => {
-      expect(generateWorktreeBranchName({ exclude: ['wt'], now: NOW, random: () => 0 })).toMatch(
-        /^wt-\d{12}-[a-z]+-[a-z]+$/,
-      );
+      expect(
+        generateWorktreeBranchName({ exclude: ['lobehub'], now: NOW, random: () => 0 }),
+      ).toMatch(/^lobehub-\d{12}-[a-z]+-[a-z]+$/);
     });
 
     it('ignores the case of the occupying ref, like git refs do', () => {
-      expect(generateWorktreeBranchName({ exclude: ['WT'], now: NOW, random: () => 0 })).toMatch(
-        /^wt-\d{12}-/,
-      );
+      expect(
+        generateWorktreeBranchName({ exclude: ['LOBEHUB'], now: NOW, random: () => 0 }),
+      ).toMatch(/^lobehub-\d{12}-/);
     });
 
     it('keeps the namespace for taken names that are unrelated', () => {
       expect(
-        generateWorktreeBranchName({ exclude: ['main', 'wt/202001010000-other-name'], now: NOW }),
-      ).toMatch(/^wt\//);
+        generateWorktreeBranchName({
+          exclude: ['main', 'lobehub/202001010000-other-name'],
+          now: NOW,
+        }),
+      ).toMatch(/^lobehub\//);
     });
 
     it('redraws the flat form when the drawn flat name is taken too', () => {
-      const taken = generateWorktreeBranchName({ exclude: ['wt'], now: NOW, random: () => 0 });
+      const taken = generateWorktreeBranchName({ exclude: ['lobehub'], now: NOW, random: () => 0 });
 
       expect(
         generateWorktreeBranchName({
-          exclude: ['wt', taken],
+          exclude: ['lobehub', taken],
           now: NOW,
           random: sequence([0, 0, 0.5, 0.5]),
         }),
