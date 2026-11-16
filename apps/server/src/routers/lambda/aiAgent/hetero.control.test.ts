@@ -145,6 +145,36 @@ describe('waitHeteroSteer control messages', () => {
     expect(mocks.renewHeteroSteers).not.toHaveBeenCalled();
   });
 
+  it('claims nothing for a poller that already went away', async () => {
+    const id = await enqueueHeteroControl('op-1', 'test_command');
+    const gone = new AbortController();
+    gone.abort();
+    const abandoned = heteroRouter.createCaller(
+      { heteroAuthKind: 'user', userId: 'user-1' } as never,
+      { signal: gone.signal },
+    );
+
+    expect(
+      await abandoned.waitHeteroSteer({ acceptsControl: true, blockMs: 1, operationId: 'op-1' }),
+    ).toEqual({ control: null, message: null });
+    expect(await readHeteroControlResult('op-1', id)).toEqual({ status: 'pending' });
+  });
+
+  it('stops holding the poll once the poller goes away', async () => {
+    const leaving = new AbortController();
+    const held = heteroRouter
+      .createCaller({ heteroAuthKind: 'user', userId: 'user-1' } as never, {
+        signal: leaving.signal,
+      })
+      .waitHeteroSteer({ acceptsControl: true, blockMs: 20_000, operationId: 'op-1' });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const id = await enqueueHeteroControl('op-1', 'test_command');
+    leaving.abort();
+
+    expect(await held).toEqual({ control: null, message: null });
+    expect(await readHeteroControlResult('op-1', id)).toEqual({ status: 'pending' });
+  });
+
   it("refuses another user's operation", async () => {
     mocks.operation = { ...mainRun, userId: 'someone-else' };
     await expect(

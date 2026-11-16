@@ -205,6 +205,19 @@ type WaitHeteroSteerAnswer = {
 /** How often a `waitHeteroSteer` poll re-checks the queue while it holds the request. */
 const HETERO_STEER_CHECK_MS = 1500;
 
+/** Sleep `ms`, or less when `signal` aborts first. */
+const waitOrAbort = (ms: number, signal: AbortSignal | undefined) =>
+  new Promise<void>((resolve) => {
+    if (signal?.aborted) return resolve();
+    const done = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    };
+    const timer = setTimeout(done, ms);
+    signal?.addEventListener('abort', done, { once: true });
+  });
+
 /**
  * Schema for `aiAgent.submitHeteroIntervention` — the browser leg of remote
  * Human-in-the-loop. The user's answer to an `agent_intervention_request` is
@@ -573,7 +586,7 @@ export const heteroRouter = router({
    */
   waitHeteroSteer: heteroAgentProcedure
     .input(WaitHeteroSteerSchema)
-    .mutation(async ({ input, ctx }): Promise<WaitHeteroSteerAnswer> => {
+    .mutation(async ({ input, ctx, signal }): Promise<WaitHeteroSteerAnswer> => {
       const { acceptsControl, acceptsImages, operationId, blockMs } = input;
 
       await authorizeOperationCallback(ctx, operationId, 'hetero:ingest');
@@ -625,6 +638,12 @@ export const heteroRouter = router({
 
       const deadline = Date.now() + blockMs;
       for (;;) {
+        // The poller went away (its run ended, or the request timed out):
+        // take nothing more for it. A follow-up would come back once its
+        // lease lapses, but a control message is claimed at most once and
+        // would be lost. A poller that leaves between a claim and the answer
+        // still loses it; its sender sees `claimed` and times out.
+        if (signal?.aborted) return answer(null);
         // Control first: a command (stop a task) should not wait behind follow-ups.
         if (acceptsControl) {
           const control = await takeHeteroControl(operationId);
@@ -640,7 +659,7 @@ export const heteroRouter = router({
           if (message) return answer(message);
         }
         if (Date.now() + HETERO_STEER_CHECK_MS > deadline) return answer(null);
-        await new Promise((resolve) => setTimeout(resolve, HETERO_STEER_CHECK_MS));
+        await waitOrAbort(HETERO_STEER_CHECK_MS, signal);
       }
     }),
   /**
