@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "f008d614-19f3-4f3b-9b9a-ced0779730fd",
+  "id": "9528eef4-6455-4538-9530-1ee4be3c7e09",
   "policies": {},
   "prevId": "7c29d9b7-1cda-4670-a1a0-27ecc5cf0017",
   "roles": {},
@@ -12053,30 +12053,8 @@
           "method": "btree",
           "with": {}
         },
-        "channel_jobs_active_branch_unique": {
-          "name": "channel_jobs_active_branch_unique",
-          "columns": [
-            {
-              "expression": "member_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "coalesce(\"thread_id\", '')",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"channel_jobs\".\"writer_held\" AND \"channel_jobs\".\"isolated_at\" IS NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "channel_jobs_active_directory_unique": {
-          "name": "channel_jobs_active_directory_unique",
+        "channel_jobs_active_directory_idx": {
+          "name": "channel_jobs_active_directory_idx",
           "columns": [
             {
               "expression": "device_id",
@@ -12091,8 +12069,8 @@
               "nulls": "last"
             }
           ],
-          "isUnique": true,
-          "where": "\"channel_jobs\".\"device_id\" IS NOT NULL AND \"channel_jobs\".\"working_directory\" IS NOT NULL AND \"channel_jobs\".\"writer_held\"",
+          "isUnique": false,
+          "where": "\"channel_jobs\".\"writer_held\"",
           "concurrently": false,
           "method": "btree",
           "with": {}
