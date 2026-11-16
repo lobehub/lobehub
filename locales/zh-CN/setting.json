@@ -2017,6 +2017,7 @@
   "storage.actions.copyLobeAI.desc": "保留原助理，并在另一个工作区或个人账户中创建独立副本。话题和消息为可选项。",
   "storage.actions.copyLobeAI.title": "复制助理",
   "storage.actions.export.button": "导出",
+  "storage.actions.export.error": "导出失败，请稍后重试。",
   "storage.actions.export.exportType.agent": "导出助理设定",
   "storage.actions.export.exportType.agentWithMessage": "导出助理和消息",
   "storage.actions.export.exportType.all": "导出全局设置和所有助理数据",

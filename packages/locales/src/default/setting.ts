@@ -1971,6 +1971,7 @@ When I am ___, I need ___
     'Copy agent groups and their member agents into another workspace or personal account.',
   'storage.actions.copyAgentGroups.title': 'Agent Groups Copy',
   'storage.actions.export.button': 'Export',
+  'storage.actions.export.error': 'Export failed. Please try again later.',
   'storage.actions.export.exportType.agent': 'Export Agent Settings',
   'storage.actions.export.exportType.agentWithMessage': 'Export Agent and Messages',
   'storage.actions.export.exportType.all': 'Export Global Settings and All Agent Data',

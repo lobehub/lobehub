@@ -2017,6 +2017,7 @@
   "storage.actions.copyLobeAI.desc": "Keep the originals and create independent copies in another Workspace or your personal account. Topics and messages are optional.",
   "storage.actions.copyLobeAI.title": "Copy Agents",
   "storage.actions.export.button": "Export",
+  "storage.actions.export.error": "Export failed. Please try again later.",
   "storage.actions.export.exportType.agent": "Export Agent Settings",
   "storage.actions.export.exportType.agentWithMessage": "Export Agent and Messages",
   "storage.actions.export.exportType.all": "Export Global Settings and All Agent Data",
