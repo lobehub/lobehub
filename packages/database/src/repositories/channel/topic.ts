@@ -1,11 +1,12 @@
-import { AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC } from '@lobechat/const';
 import type { ChannelExecutionConfig } from '@lobechat/types';
 import { and, count, desc, eq, isNotNull, isNull, ne } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
+import { AgentShareModel } from '../../models/agentShare';
 import type { ChannelItem, ChannelJobItem, ChannelMemberItem } from '../../schemas';
-import { agentOperations, agentShares, channelJobs, messages, topics } from '../../schemas';
-import type { Transaction } from '../../type';
+import { agentOperations, channelJobs, messages, topics } from '../../schemas';
+import type { LobeChatDatabase, Transaction } from '../../type';
+import { notTrashed } from '../../utils/softDelete';
 import { CHANNEL_TOPIC_TRIGGER } from '../../utils/topicVisibility';
 
 // Matches Bot AgentBridgeService: check on the next request, never expire guild Threads.
@@ -96,6 +97,9 @@ export const resolveTopic = async (
     return topic;
   }
 
+  if (scope.senderId)
+    await reserveShareTopic(tx, member.agentId!, { ...scope, senderId: scope.senderId });
+
   const [created] = await tx
     .insert(topics)
     .values({
@@ -113,13 +117,49 @@ export const resolveTopic = async (
   return created;
 };
 
+/** The share's per-visitor topic cap is reached; the request waits until the owner allows more. */
+export class ShareTopicLimitError extends Error {
+  constructor() {
+    super('This shared Agent reached its conversation limit for you');
+  }
+}
+
+/**
+ * A new topic for a visitor counts against the share's `maxTopicsPerVisitor`, the same counter a
+ * share-page visit uses: topics of this Agent the visitor started under the owner, the Channel's
+ * included. Locks the Agent row the share page locks before it counts, so the two never both
+ * take the last slot.
+ */
+const reserveShareTopic = async (
+  tx: Transaction,
+  agentId: string,
+  scope: Required<Pick<ChannelTopicScope, 'senderId'>> & ChannelTopicScope,
+) => {
+  const db = tx as unknown as LobeChatDatabase;
+  await AgentShareModel.lockScopedAgentRow(db, agentId, {
+    userId: scope.userId,
+    workspaceId: scope.workspaceId ?? undefined,
+  });
+  const { maxTopicsPerVisitor } = await AgentShareModel.readCurrentVisitorCaps(db, agentId);
+  const [started] = await tx
+    .select({ value: count() })
+    .from(topics)
+    .where(
+      and(
+        eq(topics.agentId, agentId),
+        eq(topics.userId, scope.userId),
+        eq(topics.senderId, scope.senderId),
+        notTrashed(topics.isDeleted),
+      ),
+    );
+  if ((started?.value ?? 0) >= maxTopicsPerVisitor) throw new ShareTopicLimitError();
+};
+
 const reachedShareTurnLimit = async (tx: Transaction, agentId: string, topicId: string) => {
-  const [share] = await tx
-    .select({ config: agentShares.shareConfig })
-    .from(agentShares)
-    .where(eq(agentShares.agentId, agentId))
-    .limit(1);
-  const limit = share?.config?.maxTurnsPerTopic ?? AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC;
+  const { maxTurnsPerTopic: limit } = await AgentShareModel.readCurrentVisitorCaps(
+    tx as unknown as LobeChatDatabase,
+    agentId,
+  );
   const [turns] = await tx
     .select({ value: count() })
     .from(messages)

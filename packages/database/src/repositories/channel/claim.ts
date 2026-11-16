@@ -19,7 +19,7 @@ import { uniqueViolationConstraint } from '../../utils/uniqueViolation';
 import { resolveExecutionConfig } from './agent';
 import { AWAITING_PRIMARY_REASON, findThread } from './delivery';
 import { buildManifest } from './manifest';
-import { resolveTopic } from './topic';
+import { resolveTopic, ShareTopicLimitError } from './topic';
 import { audit } from './transaction';
 import { assignedWorktree } from './worktree';
 
@@ -158,6 +158,7 @@ const STUCK_BLOCKS = new Set<ChannelJobBlockCode>([
   'device_approval_pending',
   'device_offline',
   'device_required',
+  'share_limit',
   'unavailable',
   'workspace_changed',
 ]);
@@ -415,6 +416,11 @@ export const claimJob = async (
       return { job: updated, topic };
     });
   } catch (error) {
+    // The savepoint rolled back; the request waits, visible, until the owner allows more.
+    if (error instanceof ShareTopicLimitError) {
+      await block(tx, job, 'share_limit', error.message);
+      return null;
+    }
     const constraint = uniqueViolationConstraint(error);
     if (constraint === undefined) throw error;
     if (constraint === DIRECTORY_LOCK)

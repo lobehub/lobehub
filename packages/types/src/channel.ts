@@ -316,6 +316,8 @@ export type ChannelJobBlockCode =
   | 'device_required'
   | 'directory_locked'
   | 'member_busy'
+  /** Another person's shared Agent reached its per-visitor conversation limit. */
+  | 'share_limit'
   | 'unavailable'
   | 'workspace_changed';
 

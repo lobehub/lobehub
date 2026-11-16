@@ -13,6 +13,7 @@ const EXTERNAL_BLOCKS = new Set<ChannelJobBlockCode>([
   'device_approval_pending',
   'device_offline',
   'device_required',
+  'share_limit',
   'unavailable',
   'workspace_changed',
 ]);

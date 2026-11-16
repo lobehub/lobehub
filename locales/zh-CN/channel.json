@@ -30,6 +30,7 @@
   "blocked.device_required": "请为这个 Agent 选择运行设备",
   "blocked.directory_locked": "等待工作目录释放",
   "blocked.member_busy": "等待上一条回复完成",
+  "blocked.share_limit": "已达到这个分享 Agent 的会话上限",
   "blocked.unavailable": "Agent 暂不可用",
   "blocked.workspace_changed": "工作空间已变更",
   "cancel": "取消",

@@ -10,6 +10,7 @@ import {
   channelJobs,
   files,
   messages,
+  topics,
   userContacts,
   userSettings,
 } from '../../../schemas';
@@ -188,6 +189,77 @@ describe('a contact’s shared Agent in a direct conversation', () => {
     const third = await claim('c');
     expect(third.topic.id).not.toBe(first.topic.id);
     expect(third.topic).toMatchObject({ senderId: visitorId, userId: ownerId });
+  });
+
+  it('starts no topic beyond the share’s per-visitor limit, share-page visits included', async () => {
+    await db
+      .update(agentShares)
+      .set({ shareConfig: { maxTopicsPerVisitor: 1, monthlySpendLimit: 1 } })
+      .where(eq(agentShares.id, shareId));
+    // A conversation the visitor already had on the share page takes the only slot.
+    await db
+      .insert(topics)
+      .values({ agentId, senderId: visitorId, title: 'Share page', userId: ownerId });
+    const { channel } = await visitor.create({
+      agentId,
+      sharedAgent: true,
+      title: 'Shared Helper',
+    });
+    const job = await send(channel.id, 'over');
+
+    expect(await execution.claim(channel.id, job.id, lease)).toBeNull();
+    const [blocked] = await db.select().from(channelJobs).where(eq(channelJobs.id, job.id));
+    expect(blocked).toMatchObject({ blockedCode: 'share_limit', status: 'queued' });
+    expect(await db.select().from(topics).where(eq(topics.senderId, visitorId))).toHaveLength(1);
+
+    // The request waits; it runs once the owner allows more.
+    await db
+      .update(agentShares)
+      .set({ shareConfig: { maxTopicsPerVisitor: 2, monthlySpendLimit: 1 } })
+      .where(eq(agentShares.id, shareId));
+    const claim = await execution.claim(channel.id, job.id, lease);
+    expect(claim?.topic).toMatchObject({ senderId: visitorId, userId: ownerId });
+  });
+
+  describe('a failed run, as the visitor sees it', () => {
+    const fail = async () => {
+      const { channel } = await visitor.create({
+        agentId,
+        sharedAgent: true,
+        title: 'Shared Helper',
+      });
+      const job = await send(channel.id, 'boom');
+      const claim = (await execution.claim(channel.id, job.id, lease))!;
+      await db
+        .update(agentOperations)
+        .set({
+          error: { message: 'Upstream 401 for the owner key', type: 'InvalidProviderAPIKey' },
+          status: 'error',
+        })
+        .where(eq(agentOperations.id, claim.job.operationId!));
+      await db.update(channelJobs).set({ status: 'failed' }).where(eq(channelJobs.id, job.id));
+      return (await visitor.detail(channel.id)).jobs.find((entry) => entry.id === job.id)!;
+    };
+
+    it('withholds the owner’s diagnostics and device', async () => {
+      const job = await fail();
+      expect(job.errorMessage).toBeNull();
+      expect(job.errorType).not.toBe('InvalidProviderAPIKey');
+      expect(job.deviceId).toBeNull();
+      expect(job).not.toHaveProperty('showErrorDetails');
+    });
+
+    it('shows the raw failure once the owner opts into error details', async () => {
+      await db
+        .update(agentShares)
+        .set({ shareConfig: { monthlySpendLimit: 1, showErrorDetails: true } })
+        .where(eq(agentShares.id, shareId));
+      const job = await fail();
+      expect(job).toMatchObject({
+        errorMessage: 'Upstream 401 for the owner key',
+        errorType: 'InvalidProviderAPIKey',
+      });
+    });
   });
 
   describe('reading its conversation history', () => {

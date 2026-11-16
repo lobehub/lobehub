@@ -1,9 +1,11 @@
 import { channelMessageReceipt, channelMessageVia } from '@lobechat/types';
 import { and, asc, count, desc, eq, getTableColumns, inArray, isNull, lt, sql } from 'drizzle-orm';
 
+import { sanitizeVisitorError } from '../../models/message/visitor';
 import {
   agentOperations,
   agents,
+  agentShares,
   channelJobs,
   channelMembers,
   channelMessages,
@@ -18,6 +20,41 @@ import { fileIdsByMessage } from './attachments';
 import { activeMembers } from './delivery';
 import { ChannelError } from './error';
 import { externalWorksByMessage } from './works';
+
+/**
+ * A shared Agent's run executes as its owner, so its failure can carry the owner's provider or
+ * infrastructure diagnostics, and its frozen settings the owner's own device. The person it ran
+ * for gets what a share-page visitor gets: the visitor-safe error (raw only when the owner turned
+ * on `showErrorDetails`, read live) and no device.
+ */
+const redactSharedRun = <
+  T extends {
+    deviceId: string | null;
+    errorMessage: string | null;
+    errorType: string | null;
+    sharedRun: boolean;
+    showErrorDetails: boolean;
+  },
+>({
+  sharedRun,
+  showErrorDetails,
+  ...job
+}: T): Omit<T, 'sharedRun' | 'showErrorDetails'> => {
+  if (!sharedRun) return job;
+  const error =
+    job.errorMessage || job.errorType
+      ? sanitizeVisitorError(
+          { message: job.errorMessage ?? undefined, type: job.errorType ?? undefined } as never,
+          { showErrorDetails },
+        )
+      : undefined;
+  return {
+    ...job,
+    deviceId: null,
+    errorMessage: error?.message ?? null,
+    errorType: (error?.type as string | undefined) ?? null,
+  };
+};
 
 const publicMessageColumns = {
   ...getTableColumns(channelMessages),
@@ -253,9 +290,16 @@ export const readChannelView = async (
         operationStatus: agentOperations.status,
         createdAt: channelJobs.createdAt,
         publicationRevoked: channelJobs.publicationRevoked,
+        // Another person's shared Agent ran as its owner; see `redactSharedRun`.
+        sharedRun: sql<boolean>`coalesce(${channelJobs.executionConfig} ? 'share', false)`,
+        showErrorDetails: sql<boolean>`coalesce((${agentShares.shareConfig}->>'showErrorDetails')::boolean, false)`,
       })
       .from(channelJobs)
       .leftJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
+      .leftJoin(
+        agentShares,
+        sql`${agentShares.id}::text = ${channelJobs.executionConfig}->'share'->>'shareId'`,
+      )
       .where(
         and(
           eq(channelJobs.channelId, channelId),
@@ -339,7 +383,7 @@ export const readChannelView = async (
   return {
     attachments,
     hasMore: reversed.length > limit,
-    jobs,
+    jobs: jobs.map(redactSharedRun),
     members,
     threads: threads.map((entry) => {
       const title = entry.metadata?.title;

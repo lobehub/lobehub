@@ -171,6 +171,7 @@ export default {
   'blocked.device_required': 'Choose a device for this Agent to run on',
   'blocked.directory_locked': 'Waiting for this directory to be released',
   'blocked.member_busy': 'Waiting for the previous reply',
+  'blocked.share_limit': 'Conversation limit reached for this shared Agent',
   'blocked.unavailable': 'Agent unavailable',
   'blocked.workspace_changed': 'Workspace changed',
   'activity.many': '{{count}} members are replying…',
