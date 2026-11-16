@@ -611,6 +611,19 @@ export class ProjectModel {
     return agent ?? null;
   }
 
+  /** Whether an Agent belongs to a readable project: its main Agent or a bound member. */
+  async hasAgent(projectId: string, agentId: string) {
+    const project = await this.findById(projectId);
+    if (!project) return false;
+    if (project.coordinatorAgentId === agentId) return true;
+    const [binding] = await this.db
+      .select({ id: projectAgents.id })
+      .from(projectAgents)
+      .where(and(eq(projectAgents.projectId, projectId), eq(projectAgents.agentId, agentId)))
+      .limit(1);
+    return !!binding;
+  }
+
   async addAgent(projectId: string, input: ProjectAgentInput) {
     const project = await this.findMembersManageableById(projectId);
     if (!project) return null;

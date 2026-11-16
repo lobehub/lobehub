@@ -508,6 +508,11 @@ export interface ChannelListItem {
    * set by the Channel list.
    */
   memberAvatars?: ChannelAvatarMember[];
+  /**
+   * The caller's own role here; null for an open project Channel they have not joined. Set by the
+   * Channel list. Everyone but the owner may leave a group Channel.
+   */
+  memberRole?: ChannelMemberRole | null;
   /** Unread messages, Threads included, that @mention the caller; set by the Channel list. */
   mentionCount?: number;
   /**

@@ -38,6 +38,7 @@ import { findThread } from './delivery';
 import { editMessage } from './edit';
 import { ChannelError } from './error';
 import { channelLastMessages } from './lastMessage';
+import { leaveChannel, removeChannelMember } from './membership';
 import { setMemberMuted } from './mute';
 import { findPeer, lockPeerPair, peerOf, requirePeerRelation } from './peer';
 import {
@@ -75,6 +76,7 @@ export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';
 export { ChannelHistoryRepository } from './history';
+export { removeAgentFromProjectChannels } from './membership';
 export type { ChannelOpeningCandidate, ChannelOpeningDecision } from './opening';
 export type { ChannelAgentPostInput } from './post';
 export type { AppliedChannelRouting, ChannelRoutingDecision } from './routing';
@@ -538,6 +540,17 @@ export class ChannelRepository {
   addUser = async (channelId: string, userId: string) =>
     this.write(channelId, (tx, access) => addChannelUser(tx, access, userId), { minRole: 'admin' });
 
+  /** Removes a person or an Agent; returns the writers still to stop. See {@link removeChannelMember}. */
+  removeMember = async (channelId: string, memberId: string): Promise<ChannelJobItem[]> =>
+    this.write(channelId, (tx, access) => removeChannelMember(tx, access, memberId), {
+      allowArchived: true,
+      minRole: 'admin',
+    });
+
+  /** The caller leaves a group Channel. See {@link leaveChannel}. */
+  leave = async (channelId: string): Promise<void> =>
+    this.write(channelId, (tx, access) => leaveChannel(tx, access), { allowArchived: true });
+
   /** People a new Channel in this workspace can start with. */
   newChannelUserCandidates = async (search?: string) => {
     const { workspaceId } = this;
@@ -646,6 +659,7 @@ export class ChannelRepository {
         joined: boolean;
         lastMessage: ChannelLastMessage | null;
         memberAvatars: ChannelAvatarMember[];
+        memberRole: ChannelMemberRole | null;
         mentionCount: number;
         replyJobs: ChannelReplyJob[];
         sharedAgentHandle: string | null;
@@ -803,6 +817,7 @@ export class ChannelRepository {
         joined: true,
         lastMessage: lastMessageOf.get(channel.id) ?? null,
         memberAvatars: avatarsOf.get(channel.id) ?? [],
+        memberRole: role,
         mentionCount: mentionCountOf.get(channel.id) ?? 0,
         peerUserId: peerOf(channel, this.userId),
         replyJobs: replyJobsOf.get(channel.id) ?? [],
@@ -821,6 +836,7 @@ export class ChannelRepository {
         joined: false,
         lastMessage: lastMessageOf.get(channel.id) ?? null,
         memberAvatars: avatarsOf.get(channel.id) ?? [],
+        memberRole: null,
         mentionCount: 0,
         peerUserId: peerOf(channel, this.userId),
         replyJobs: [],

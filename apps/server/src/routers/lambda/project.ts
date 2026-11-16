@@ -10,15 +10,8 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
-import {
-  type WorkspaceRole,
-  wsCompatProcedure,
-} from '@/business/server/trpc-middlewares/workspaceAuth';
-import {
-  ProjectIdentifierTakenError,
-  ProjectModel,
-  type ProjectModelOptions,
-} from '@/database/models/project';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { ProjectIdentifierTakenError, ProjectModel } from '@/database/models/project';
 import { ProjectRepository } from '@/database/repositories/project';
 import { ProjectCoordinatorRepository } from '@/database/repositories/projectCoordinator';
 import { ProjectOverviewRepository } from '@/database/repositories/projectOverview';
@@ -26,29 +19,17 @@ import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createDefaultChannel } from '@/server/services/channel/defaultChannel';
+import { leaveProjectChannels } from '@/server/services/channel/projectMembership';
 import { GoalService } from '@/server/services/goal';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { rethrowDuplicateProjectField } from './_helpers/projectConstraintErrors';
-
-/**
- * Reads `workspaceRole` as an optional context field: the cloud workspace-auth
- * override injects it, while the OSS stub leaves it absent.
- */
-const isWorkspaceAdmin = (ctx: { userId: string; workspaceRole?: WorkspaceRole }) =>
-  ctx.workspaceRole === 'owner' || ctx.workspaceRole === 'admin';
-
-/** Viewers hold no `agent:update` grant, so `projectWriteProcedure` rejects them. */
-const isWorkspaceViewer = (ctx: { workspaceId?: string | null; workspaceRole?: WorkspaceRole }) =>
-  !!ctx.workspaceId && ctx.workspaceRole === 'viewer';
+import { projectModelOptions } from './_helpers/projectRights';
 
 const projectProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const workspaceId = ctx.workspaceId ?? undefined;
-  const options: ProjectModelOptions = {
-    canManageAllMembers: isWorkspaceAdmin(ctx),
-    readOnly: isWorkspaceViewer(ctx),
-  };
+  const options = projectModelOptions(ctx);
   return opts.next({
     ctx: {
       projectCoordinatorRepo: new ProjectCoordinatorRepository(
@@ -386,6 +367,7 @@ export const projectRouter = router({
       try {
         const removed = await ctx.projectModel.removeAgent(input.id, input.agentId);
         if (!removed) throw new TRPCError({ code: 'NOT_FOUND', message: 'Binding not found' });
+        await leaveProjectChannels(ctx.serverDB, input.id, input.agentId);
         return { message: 'Agent removed from project', success: true };
       } catch (error) {
         mapProjectError(error, 'removeAgent');
