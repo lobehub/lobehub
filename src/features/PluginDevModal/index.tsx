@@ -9,6 +9,12 @@ import { useTranslation } from 'react-i18next';
 import { openConnectorOAuthPopup } from '@/utils/connectorOAuth';
 
 import MCPManifestForm from './MCPManifestForm';
+import {
+  AUTHORIZE_ALWAYS,
+  type DevModalOAuthFields,
+  type DevModalOAuthPlan,
+  planOAuthSave,
+} from './oauthSavePlan';
 import PluginPreview from './PluginPreview';
 import { pruneHiddenFields } from './pruneHiddenFields';
 import { getSaveErrorToast } from './saveErrorToast';
@@ -17,11 +23,19 @@ const INITIAL_VALUES = {
   customParams: { mcp: { auth: { type: 'none' }, type: 'http' } },
 } as LobeToolCustomPlugin;
 
+export type { DevModalOAuthFields, DevModalOAuthPlan } from './oauthSavePlan';
+
 interface DevModalProps {
   /** Let a device-run server be bound to one device (connectors only, see MCPManifestForm). */
   enableDeviceBinding?: boolean;
   /** Enable the connector-backed OAuth auth type in the MCP form (see MCPManifestForm). */
   enableOAuth?: boolean;
+  /**
+   * For the OAuth fields as they stand: whether saving authorizes, and what to
+   * tell the user about the connected accounts. Without it every OAuth save
+   * authorizes (creating a connector has nothing to keep).
+   */
+  getOAuthPlan?: (fields: DevModalOAuthFields) => DevModalOAuthPlan;
   mode?: 'edit' | 'create';
   onDelete?: () => void;
   onOpenChange: (open: boolean) => void;
@@ -45,6 +59,7 @@ const DevModal = memo<DevModalProps>(
     onDelete,
     enableDeviceBinding,
     enableOAuth,
+    getOAuthPlan,
   }) => {
     const isEditMode = mode === 'edit';
     const { t } = useTranslation('plugin');
@@ -61,7 +76,11 @@ const DevModal = memo<DevModalProps>(
         onValueChange?.(values);
       },
     });
-    const authType = useWatch(form, 'customParams.mcp.auth.type');
+    const serverUrl = useWatch(form, 'customParams.mcp.url');
+    const clientId = useWatch(form, 'customParams.mcp.auth.clientId');
+    const clientSecret = useWatch(form, 'customParams.mcp.auth.clientSecret');
+    const oauthPlan =
+      getOAuthPlan?.({ clientId, clientSecret, url: serverUrl }) ?? AUTHORIZE_ALWAYS;
 
     // Seed the form once per modal open, waiting for `value` to arrive (it may
     // be undefined initially while edit-mode credentials are being fetched).
@@ -125,7 +144,10 @@ const DevModal = memo<DevModalProps>(
     };
 
     const handlePrimaryClick = () => {
-      if (enableOAuth && authType === 'oauth2') return runOAuthFlow();
+      // Decided on the values being saved, so the popup opens exactly when the
+      // save handler will authorize (it applies the same plan).
+      if (planOAuthSave({ enableOAuth, getOAuthPlan, values: form.getValues() }).authorize)
+        return runOAuthFlow();
       form.submit();
     };
 
@@ -215,7 +237,8 @@ const DevModal = memo<DevModalProps>(
               enableOAuth={enableOAuth}
               form={form}
               isEditMode={isEditMode}
-              onAuthorizeOAuth={runOAuthFlow}
+              oauthNotice={oauthPlan.notice}
+              onAuthorizeOAuth={oauthPlan.authorize ? runOAuthFlow : undefined}
             />
           </Flexbox>
           <PluginPreview form={form} />

@@ -307,7 +307,11 @@ describe('syncConnectorToolsById', () => {
     const updateStatus = vi.fn();
 
     const result = await syncConnectorToolsById('c1', {
-      connectorModel: { findById: async () => httpConnector(null), updateStatus } as any,
+      connectorModel: {
+        getLinkModel: () => ({ listByConnectorIds: async () => [] }),
+        findById: async () => httpConnector(null),
+        updateStatus,
+      } as any,
       connectorToolModel: { upsertMany } as any,
     });
 
@@ -351,7 +355,11 @@ describe('syncConnectorToolsById', () => {
       vi.mocked(mcpService.listRawTools).mockResolvedValue([]);
 
       await syncConnectorToolsById('c1', {
-        connectorModel: { findById: async () => httpConnector(null), updateStatus: vi.fn() } as any,
+        connectorModel: {
+          getLinkModel: () => ({ listByConnectorIds: async () => [] }),
+          findById: async () => httpConnector(null),
+          updateStatus: vi.fn(),
+        } as any,
         connectorToolModel: { upsertMany: vi.fn() } as any,
         userId: 'user-1',
       });

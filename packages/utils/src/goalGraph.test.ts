@@ -5,9 +5,12 @@ import {
   experimentMembers,
   experimentStatus,
   graphScopeIds,
+  isBatchTemplate,
+  isMarkKind,
   isProtocolRevision,
   protocolRevisionCount,
   provenanceParentId,
+  withoutMarks,
 } from './goalGraph';
 
 const node = (
@@ -125,5 +128,49 @@ describe('provenance and protocol revisions', () => {
     expect(isProtocolRevision(graph, 'hand')).toBe(false);
     expect(protocolRevisionCount(graph, 'exp')).toBe(1);
     expect(protocolRevisionCount(graph, 'older')).toBe(0);
+  });
+});
+
+describe('marks', () => {
+  const withMarks = () => {
+    const base = graph();
+    return {
+      edges: [
+        ...base.edges,
+        ...[
+          ['task', 'pattern', 'produces'],
+          ['task', 'hazard', 'confirms'],
+        ].map(([sourceNodeId, targetNodeId, kind]) => ({
+          ...base.edges[0],
+          id: sourceNodeId + targetNodeId,
+          kind: kind as GoalGraphSnapshot['edges'][number]['kind'],
+          sourceNodeId,
+          targetNodeId,
+        })),
+      ],
+      nodes: [...base.nodes, node('pattern', 'pattern', 'active'), node('hazard', 'hazard')],
+    };
+  };
+
+  it('recognizes only the four mark kinds', () => {
+    expect(['pattern', 'tool', 'hazard', 'dead_end'].every(isMarkKind)).toBe(true);
+    expect(['finding', 'template', 'task'].some(isMarkKind)).toBe(false);
+  });
+
+  it('leaves marks and every edge touching them out of the planning view', () => {
+    const view = withoutMarks(withMarks());
+    expect(view.nodes.map((item) => item.id)).toEqual(graph().nodes.map((item) => item.id));
+    expect(view.edges).toEqual(graph().edges);
+  });
+
+  it('returns the same graph when it holds no marks', () => {
+    const plain = graph();
+    expect(withoutMarks(plain)).toBe(plain);
+  });
+
+  it('reads a recipe from its own kind or from the titled finding older batches wrote', () => {
+    expect(isBatchTemplate({ kind: 'template', title: 'anything' })).toBe(true);
+    expect(isBatchTemplate({ kind: 'finding', title: 'Batch recipe' })).toBe(true);
+    expect(isBatchTemplate({ kind: 'finding', title: 'Completed: probe 1' })).toBe(false);
   });
 });

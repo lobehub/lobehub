@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ToolStore } from '@/store/tool/store';
 
-import { mcpEntryTabKey, parseMcpEntryTab, selectMcpAppEntrypoints } from './entrypoints';
+import {
+  isEntryOfTab,
+  mcpEntryTabKey,
+  parseMcpEntryTab,
+  selectMcpAppEntrypoints,
+} from './entrypoints';
 
 const env = vi.hoisted(() => ({ desktop: false, gateway: true }));
 vi.mock('@lobechat/const', async (importOriginal) => ({
@@ -56,6 +61,48 @@ describe('sidebar app entries', () => {
       toolName: 'open/page',
     });
     expect(parseMcpEntryTab('mcp-entry:bad:%XX')).toBeUndefined();
+  });
+  // An entrypoint's call carries no arguments, so it can't select an account
+  it('offers an app once per account of a connector holding several', () => {
+    const connector = (links: { id: string; name: string }[]) =>
+      ({
+        ...state,
+        connectors: [
+          {
+            id: 'mail',
+            identifier: 'mail',
+            isEnabled: true,
+            links,
+            mcpServerUrl: 'https://example.com',
+            tools: [{ metadata: { threadEntry: entry }, permission: 'auto', toolName: 'open' }],
+          },
+        ],
+        installedPlugins: [],
+      }) as unknown as ToolStore;
+
+    expect(
+      selectMcpAppEntrypoints(
+        connector([
+          { id: 'lnk_a', name: 'Work' },
+          { id: 'lnk_b', name: 'Personal' },
+        ]),
+        true,
+      ),
+    ).toEqual([
+      { ...entry, accountName: 'Work', identifier: 'mail', linkId: 'lnk_a' },
+      { ...entry, accountName: 'Personal', identifier: 'mail', linkId: 'lnk_b' },
+    ]);
+    expect(selectMcpAppEntrypoints(connector([{ id: 'lnk_a', name: 'Work' }]), true)).toEqual([
+      { ...entry, identifier: 'mail' },
+    ]);
+  });
+  it("keeps an entry's account in its tab", () => {
+    const tab = parseMcpEntryTab(mcpEntryTabKey('mail', 'open', 'lnk_b'));
+    expect(tab).toEqual({ identifier: 'mail', linkId: 'lnk_b', toolName: 'open' });
+    const base = { ...entry, identifier: 'mail' };
+    expect(isEntryOfTab({ ...base, linkId: 'lnk_b' }, tab)).toBe(true);
+    expect(isEntryOfTab({ ...base, linkId: 'lnk_a' }, tab)).toBe(false);
+    expect(isEntryOfTab(base, parseMcpEntryTab(mcpEntryTabKey('mail', 'open')))).toBe(true);
   });
   it('offers apps only a desktop can run (stdio) on the desktop alone', () => {
     const open = { title: 'Local', toolName: 'open' };

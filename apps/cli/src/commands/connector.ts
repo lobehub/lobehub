@@ -390,9 +390,10 @@ export function registerConnectorCommand(program: Command) {
         c.sourceType || '',
         c.status === 'connected' ? pc.green(c.status) : c.status || '',
         String(c.toolCount),
+        String(c.links?.length ?? 0),
       ]);
 
-      printTable(rows, ['ID', 'IDENTIFIER', 'NAME', 'SOURCE', 'STATUS', 'TOOLS']);
+      printTable(rows, ['ID', 'IDENTIFIER', 'NAME', 'SOURCE', 'STATUS', 'TOOLS', 'ACCOUNTS']);
     });
 
   // ── add ───────────────────────────────────────────────

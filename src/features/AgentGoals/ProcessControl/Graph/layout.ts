@@ -15,19 +15,29 @@ type LayoutNode = Omit<GoalGraphNode, 'kind'> & { kind: GoalGraphNodeKind };
 
 export const NODE_WIDTH = {
   batch: 260,
+  dead_end: 240,
   decision: 250,
   experiment: 260,
   finding: 240,
+  hazard: 240,
+  pattern: 240,
   problem: 230,
   task: 260,
+  template: 240,
+  tool: 240,
 } as const;
 export const NODE_HEIGHT = {
   batch: 112,
+  dead_end: 76,
   decision: 76,
   experiment: 112,
   finding: 76,
+  hazard: 76,
+  pattern: 76,
   problem: 76,
   task: 112,
+  template: 76,
+  tool: 76,
 } as const;
 
 const RANK_GAP = 56;

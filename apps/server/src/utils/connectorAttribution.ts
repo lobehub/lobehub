@@ -1,3 +1,5 @@
+import { sanitizeConnectorPromptText } from '@lobechat/mecha';
+
 import { UserModel } from '@/database/models/user';
 import type { LobeChatDatabase } from '@/database/type';
 
@@ -123,8 +125,7 @@ export const collectBorrowedConnectors = (
  * brackets so a crafted name can't forge a closing `</tool_credential_ownership>`
  * tag or inject its own system-level instructions, then cap the length.
  */
-const sanitizeForPrompt = (value: string): string =>
-  value.replaceAll(/\s+/g, ' ').replaceAll(/[<>]/g, '').trim().slice(0, 120);
+const sanitizeForPrompt = sanitizeConnectorPromptText;
 
 /**
  * Build the system-prompt block that tells the model which of its tools run
