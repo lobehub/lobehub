@@ -227,6 +227,28 @@ describe('reasoning headline extraction', () => {
     expect((state as any).fallbackTool).not.toContain('set -a');
   });
 
+  it('renders a running undescribed shell command as what it does', () => {
+    const state = getWorkflowStreamingHeadlineState([
+      blk({
+        id: '0',
+        tools: [
+          {
+            apiName: 'Bash',
+            arguments: JSON.stringify({ command: 'cd /repo && rg -n "TODO" src' }),
+            id: 't1',
+            identifier: 'claude-code',
+          } as any,
+        ],
+      }),
+    ]);
+
+    // The plugin namespace is not loaded here, so the label resolves to its key.
+    expect(state).toMatchObject({
+      fallbackTool: 'builtins.shellCommand.search TODO in src',
+      kind: 'tool',
+    });
+  });
+
   it('uses prose state when the trailing block is prose', () => {
     const state = getWorkflowStreamingHeadlineState([
       blk({
