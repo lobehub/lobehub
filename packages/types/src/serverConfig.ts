@@ -84,6 +84,8 @@ export type IFeatureFlagsState = {
   enableMcpApps: boolean | undefined;
   /** MCP Events webhook subscriptions (`mcp_events`), off by default. */
   enableMcpEvents: boolean | undefined;
+  /** Generic inbound webhooks that wake an Agent (`agent_webhooks`), off by default. */
+  enableAgentWebhooks: boolean | undefined;
   /**
    * Agent documents move into a dedicated knowledge base at runtime
    * (`agent_knowledge_space`). Off by default.

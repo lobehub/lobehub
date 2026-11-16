@@ -2,11 +2,12 @@
 
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { agentDisplayName, type InboundWebhookItem } from '@lobechat/types';
-import { Center, Flexbox, Text } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { WebhookIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -59,6 +60,32 @@ export const EmptyValue = () => <span {...stylex.props(styles.muted)}>--</span>;
 export const SubscriptionCell = memo<{ item: InboundWebhookItem }>(({ item }) => {
   const { t } = useTranslation('setting');
   const { connector, source } = item;
+  if (source.kind === 'generic') {
+    const name = item.name?.trim() || t('automations.source.webhook');
+    const detail = [
+      t('automations.source.webhook'),
+      t(
+        source.topicMode === 'reuse'
+          ? 'automations.source.topicMode.reuse'
+          : 'automations.source.topicMode.new',
+      ),
+    ].join(' · ');
+    return (
+      <Flexbox horizontal align={'center'} gap={12} style={{ minWidth: 0, overflow: 'hidden' }}>
+        <Center {...stylex.props(styles.iconTile)}>
+          <Icon icon={WebhookIcon} size={18} />
+        </Center>
+        <Flexbox gap={2} style={{ minWidth: 0 }}>
+          <Text ellipsis weight={500}>
+            {name}
+          </Text>
+          <span title={detail} {...stylex.props(styles.source)}>
+            {detail}
+          </span>
+        </Flexbox>
+      </Flexbox>
+    );
+  }
   const name = item.name?.trim() || source.eventName;
   const args = summarizeArguments(source.arguments);
 

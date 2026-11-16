@@ -130,6 +130,7 @@ export class TopicModel {
   findByAgentAndDocumentTrigger = this.withContext(find.findByAgentAndDocumentTrigger);
   findRunInitiators = this.withContext(find.findRunInitiators);
   findRecentByBotThread = this.withContext(find.findRecentByBotThread);
+  findByWebhookThread = this.withContext(find.findByWebhookThread);
   queryByKeyword = this.withContext(find.queryByKeyword);
   count = this.withContext(find.countTopics);
   rank = this.withContext(find.rank);

@@ -44,6 +44,7 @@ export const AGENT_SIGNAL_SOURCE_PERSISTENCE: Readonly<
  */
 export const SIGNAL_ORACLE_PERSISTENCE: Readonly<Record<string, SignalPersistencePolicy>> = {
   'mcp-events': 'always',
+  'webhook': 'always',
   'agent-mail': 'always',
 };
 

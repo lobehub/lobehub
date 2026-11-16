@@ -1,16 +1,14 @@
 import { and, eq, inArray, lt, or } from 'drizzle-orm';
-import { memoize } from 'es-toolkit';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
 import { signals } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
 import { redisService } from '@/server/services/redis';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
-import { getInboundWebhookKind } from './kinds';
+import { createKindGate, getInboundWebhookKind, INBOUND_WEBHOOK_SIGNAL_SOURCES } from './kinds';
 import { removeInboundWebhook } from './lifecycle';
 import { scheduleInboundWebhookWake } from './scheduler';
 
@@ -20,22 +18,19 @@ const MAINTENANCE_BATCH = 100;
 const MAINTENANCE_SCAN_LIMIT = 1000;
 
 /**
- * Due rows this sweep can act on, earliest first. Rows whose owner switched the feature off are
+ * Due rows this sweep can act on, earliest first. Rows whose kind is switched off for their owner are
  * left untouched (the kill switch keeps their schedule), so the scan pages past them: otherwise the
  * same skipped rows would fill every batch and starve the ones behind them.
  */
 async function dueForMaintenance(db: LobeChatDatabase) {
-  const eventsEnabledFor = memoize(isMcpEventsEnabled);
+  const enabledFor = createKindGate();
   const actionable: Awaited<ReturnType<typeof InboundWebhookModel.queryMaintenance>> = [];
   let after: { id: string; nextMaintenanceAt: Date } | undefined;
   for (let scanned = 0; scanned < MAINTENANCE_SCAN_LIMIT;) {
     const page = await InboundWebhookModel.queryMaintenance(db, MAINTENANCE_BATCH, after);
     for (const row of page) {
-      const skipped =
-        row.status !== 'deleting' &&
-        row.kind === 'mcp_events' &&
-        !(await eventsEnabledFor(row.userId));
-      if (!skipped) actionable.push(row);
+      // A kind that is switched off keeps its rows untouched, but deletions still finish.
+      if (row.status === 'deleting' || (await enabledFor(row))) actionable.push(row);
       if (actionable.length === MAINTENANCE_BATCH) return actionable;
     }
     scanned += page.length;
@@ -75,7 +70,7 @@ export async function sweepInboundWebhooks(db: LobeChatDatabase) {
     .from(signals)
     .where(
       and(
-        eq(signals.source, 'mcp-events'),
+        inArray(signals.source, INBOUND_WEBHOOK_SIGNAL_SOURCES),
         inArray(signals.status, ['pending', 'failed']),
         or(eq(signals.status, 'pending'), lt(signals.attempts, 3)),
         lt(signals.updatedAt, new Date(Date.now() - 60_000)),

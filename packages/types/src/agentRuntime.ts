@@ -96,6 +96,8 @@ export enum RequestTrigger {
   /** Acceptance verification: plan generation, judging, review prediction and reports. */
   Verify = 'verify',
   Video = 'video',
+  /** An Agent run a generic inbound webhook call started. */
+  Webhook = 'webhook',
 }
 
 /**

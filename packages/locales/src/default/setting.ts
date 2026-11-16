@@ -5220,12 +5220,16 @@ When I am ___, I need ___
   'automations.columns.target': 'Agent & topic',
   'automations.columns.lastDelivery': 'Last event',
   'automations.source.moreArgs': '{{text}} +{{count}}',
+  'automations.source.webhook': 'Webhook',
+  'automations.source.topicMode.new': 'New topic per call',
+  'automations.source.topicMode.reuse': 'One shared topic',
   'automations.untitledTopic': 'Untitled topic',
   'automations.lastDelivery.never': 'No events yet',
   'automations.status.active': 'Active',
   'automations.status.reconnect': 'Reconnect needed',
   'automations.status.deliveryError': 'Delivery failing',
   'automations.status.terminated': 'Ended',
+  'automations.status.paused': 'Paused',
   'automations.error.auth': "The connector's authorization has expired.",
   'automations.error.connection_refused':
     'The connector could not connect to LobeHub to deliver events.',
@@ -5264,6 +5268,8 @@ When I am ___, I need ___
   'automations.delete.title': 'Delete this subscription?',
   'automations.delete.content':
     '{{event}} events from {{connector}} will no longer run "{{agent}}". To get them again, ask the agent to subscribe in a conversation.',
+  'automations.delete.contentWebhook':
+    'The URL of "{{name}}" stops working at once, and calls to it no longer run "{{agent}}". This cannot be undone.',
   'automations.delete.ok': 'Delete',
   'automations.delete.cancel': 'Cancel',
   'automations.delete.failed': "Couldn't delete the subscription. Try again",

@@ -107,6 +107,7 @@ describe('webhooks hono routes', () => {
       '/api/webhooks/casdoor',
       '/api/webhooks/github',
       '/api/webhooks/inbound/:id',
+      '/api/webhooks/inbound/:id/:token',
       '/api/webhooks/logto',
       '/api/webhooks/memory-extraction',
       '/api/webhooks/memory-extraction/benchmark-locomo',

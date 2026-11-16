@@ -3,13 +3,21 @@ import { bodyLimit } from 'hono/body-limit';
 import { z } from 'zod';
 
 import { getServerDB } from '@/database/core/db-adaptor';
-import { receiveInboundWebhook } from '@/server/services/inboundWebhook/receiver';
+import {
+  INBOUND_WEBHOOK_MAX_BODY_BYTES,
+  receiveInboundWebhook,
+} from '@/server/services/inboundWebhook/receiver';
 import { scheduleInboundWebhookSweep } from '@/server/services/inboundWebhook/sweep';
 
 export const inboundWebhookBodyLimit = bodyLimit({
-  maxSize: 256 * 1024,
+  maxSize: INBOUND_WEBHOOK_MAX_BODY_BYTES,
   onError: (c) => c.json({ error: 'Payload too large' }, 413),
 });
+
+/**
+ * `POST /inbound/:id` (signed, or `Authorization: Bearer`) and `POST /inbound/:id/:token` (the
+ * secret in the URL, for callers that can set neither a signature nor a header).
+ */
 export async function inboundWebhook(c: Context) {
   const id = c.req.param('id');
   if (!z.uuid().safeParse(id).success) return c.json({ error: 'Webhook is gone' }, 410);
@@ -18,8 +26,11 @@ export async function inboundWebhook(c: Context) {
       body: await c.req.text(),
       headers: c.req.raw.headers,
       id: id!,
+      pathToken: c.req.param('token') || undefined,
+      query: new URL(c.req.url).searchParams,
     });
     scheduleInboundWebhookSweep();
+    if (result.retryAfter) c.header('Retry-After', String(result.retryAfter));
     return c.json(result.body, result.status);
   } catch {
     console.error('[inboundWebhook:route] Delivery failed');

@@ -80,21 +80,18 @@ describe('durable webhook signal claims', () => {
     expect(second.truncated).toBe(true);
     expect(second.row.state.truncated).toBe(true);
     expect(await renewWebhookSignalClaim(db, first)).toBe(false);
-    await settleWebhookSignals(db, first, first.batch, 'processed', 'obsolete', 'wrong-op');
+    await settleWebhookSignals(db, first, first.batch, 'processed', 'obsolete', {
+      operationId: 'wrong-op',
+    });
     await releaseWebhookSignalClaim(db, first, false);
     expect((await signal()).status).toBe('pending');
     expect((await signal()).metadata.extra?.inboundWebhookWake).toMatchObject({
       token: second.token,
     });
     expect(await db.select().from(signalDecisions)).toHaveLength(0);
-    await settleWebhookSignals(
-      db,
-      second,
-      second.batch,
-      'processed',
-      'event_delivery',
-      'correct-op',
-    );
+    await settleWebhookSignals(db, second, second.batch, 'processed', 'event_delivery', {
+      operationId: 'correct-op',
+    });
     expect((await signal()).status).toBe('processed');
     expect((await db.select().from(signalDecisions))[0].operationId).toBe('correct-op');
   });
@@ -112,7 +109,9 @@ describe('durable webhook signal claims', () => {
   it('never clears a new gap received after the claim was committed', async () => {
     const claim = (await claimWebhookSignals(db, row))!;
     await model.mergeState(row.id, { truncated: true, cursor: 'new-gap' });
-    await settleWebhookSignals(db, claim, claim.batch, 'processed', 'event_delivery', 'op');
+    await settleWebhookSignals(db, claim, claim.batch, 'processed', 'event_delivery', {
+      operationId: 'op',
+    });
     await releaseWebhookSignalClaim(db, claim, false);
     expect((await model.findById(row.id))?.state).toMatchObject({
       truncated: true,

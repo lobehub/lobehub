@@ -21,7 +21,7 @@ const control = z.discriminatedUnion('type', [
 ]);
 
 export async function handleMcpEventDelivery(
-  ctx: InboundWebhookContext,
+  ctx: InboundWebhookContext<'mcp_events'>,
   body: unknown,
   deliveryId: string,
 ): Promise<DeliveryResult> {

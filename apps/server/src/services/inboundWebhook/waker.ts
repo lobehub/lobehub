@@ -1,24 +1,17 @@
-import { RequestTrigger } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
-import { ConnectorModel } from '@/database/models/connector';
+import type { InboundWebhookView } from '@/database/models/inboundWebhook';
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
-import { TopicModel } from '@/database/models/topic';
 import { signals } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { getMcpEventErrorName } from '@/libs/mcp/events/errors';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { resolveForegroundInterventionConfig } from '@/server/services/aiAgent/foregroundIntervention';
-import { buildConnectorMcpParams } from '@/server/services/connector/sync';
-import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
-import { mcpService } from '@/server/services/mcp';
-import { isMcpEventsEnabled } from '@/server/services/mcp/featureGate';
 
 import { getInboundWebhookKind } from './kinds';
-import { connectorForWebhook, refreshSubscription } from './kinds/mcpEvents/subscription';
+import type { InboundWebhookKindHandler } from './kinds/types';
 import { removeInboundWebhook } from './lifecycle';
 import {
   claimWebhookSignals,
@@ -28,9 +21,20 @@ import {
   WEBHOOK_WAKE_RENEW_MS,
 } from './wakeClaim';
 
+/** Runs one wake starts at most for a kind that runs its deliveries in groups; the rest wait. */
+export const MAX_RUNS_PER_WAKE = 10;
+
 export interface WebhookWakeDeps {
   execute?: AiAgentService['execAgent'];
   intervention?: typeof resolveForegroundInterventionConfig;
+}
+
+/**
+ * - `more`: this wake hit {@link MAX_RUNS_PER_WAKE} with deliveries still waiting; wake again now.
+ * - `deferred`: retry later (busy Topic, lost claim).
+ */
+export interface WebhookWakeResult {
+  outcome: string;
 }
 
 /** Classify both thrown errors and execAgent's returned {error} shape, including nested causes. */
@@ -54,26 +58,29 @@ export function classifyWakeError(error: unknown): 'busy' | 'budget' | 'unknown'
   return 'unknown';
 }
 
+/** Settle what is still waiting for a webhook that can no longer run anything. */
+const ignoreWaiting = (db: LobeChatDatabase, id: string, reason: string) =>
+  db
+    .update(signals)
+    .set({ error: reason, processedAt: new Date(), status: 'ignored' })
+    .where(
+      and(
+        eq(signals.scopeKey, `inbound-webhook:${id}`),
+        inArray(signals.status, ['pending', 'failed']),
+      ),
+    );
+
 /** Durable, renewable claims serialize a batch without holding a database lock during network I/O. */
 export async function wakeInboundWebhook(
   db: LobeChatDatabase,
   id: string,
   deps: WebhookWakeDeps = {},
-): Promise<{ outcome: string }> {
+): Promise<WebhookWakeResult> {
   let keyPromise: ReturnType<typeof KeyVaultsGateKeeper.initWithEnvKey> | undefined;
   const getGateKeeper = () => (keyPromise ??= KeyVaultsGateKeeper.initWithEnvKey());
   const found = await InboundWebhookModel.findForDelivery(db, id, getGateKeeper);
   if (!found) {
-    await db
-      .update(signals)
-      .set({ error: 'webhook_removed', processedAt: new Date(), status: 'ignored' })
-      .where(
-        and(
-          eq(signals.source, 'mcp-events'),
-          eq(signals.scopeKey, `inbound-webhook:${id}`),
-          inArray(signals.status, ['pending', 'failed']),
-        ),
-      );
+    await ignoreWaiting(db, id, 'webhook_removed');
     return { outcome: 'gone' };
   }
   const gateKeeper = await getGateKeeper();
@@ -81,33 +88,42 @@ export async function wakeInboundWebhook(
   if (row.status === 'pending') return { outcome: 'pending' };
   const kind = getInboundWebhookKind(row.kind);
   if (!kind) return { outcome: 'gone' };
-  const scope = row.workspaceId ?? undefined;
-  const topic = row.topicId
-    ? await new TopicModel(db, row.userId, scope).findById(row.topicId)
-    : undefined;
-  const agentExists = await new AgentModel(db, row.userId, scope).existsById(row.agentId);
-  if (!topic || topic.agentId !== row.agentId || !agentExists) {
+  const model = new InboundWebhookModel(db, row.userId, row.workspaceId ?? undefined, gateKeeper);
+  const agentExists = await new AgentModel(db, row.userId, row.workspaceId ?? undefined).existsById(
+    row.agentId,
+  );
+  if (!agentExists || !(await kind.targetExists({ db, model, row }))) {
     await removeInboundWebhook(db, row);
-    await db
-      .update(signals)
-      .set({ error: 'target_removed', processedAt: new Date(), status: 'ignored' })
-      .where(
-        and(
-          eq(signals.source, 'mcp-events'),
-          eq(signals.scopeKey, `inbound-webhook:${id}`),
-          inArray(signals.status, ['pending', 'failed']),
-        ),
-      );
+    await ignoreWaiting(db, id, 'target_removed');
     return { outcome: 'gone' };
   }
-  const connector = row.connectorId
-    ? await new ConnectorModel(db, row.userId, scope).findPublicById(row.connectorId)
-    : null;
+  const runs = kind.groupSignals ? MAX_RUNS_PER_WAKE : 1;
+  let result: WebhookWakeResult = { outcome: 'empty' };
+  for (let run = 0; run < runs; run++) {
+    const next = await wakeOnce(db, kind, row, model, deps);
+    if (next.outcome === 'empty') return result;
+    result = next;
+    // A failure or a busy Topic stops here; its deliveries are retried with backoff, not now.
+    if (next.outcome !== 'processed' && next.outcome !== 'ignored') return result;
+  }
+  return kind.groupSignals ? { outcome: 'more' } : result;
+}
 
-  const claim = await claimWebhookSignals(db, row);
+/** Claim one batch (a kind's group, or everything waiting) and start at most one run for it. */
+async function wakeOnce(
+  db: LobeChatDatabase,
+  kind: InboundWebhookKindHandler,
+  row: InboundWebhookView,
+  model: InboundWebhookModel,
+  deps: WebhookWakeDeps,
+): Promise<WebhookWakeResult> {
+  const { id } = row;
+  const claim = await claimWebhookSignals(db, row, {
+    group: kind.groupSignals ? (candidates) => kind.groupSignals!(row, candidates) : undefined,
+    source: kind.signalSource,
+  });
   if (!claim) return { outcome: 'empty' };
   const { batch } = claim;
-  const model = new InboundWebhookModel(db, row.userId, scope, gateKeeper);
   let handled = false;
   let leaseLost = false;
   let renewal: Promise<void> | undefined;
@@ -130,89 +146,63 @@ export async function wakeInboundWebhook(
   const settle = (
     status: 'pending' | 'processed' | 'ignored' | 'failed',
     reason: string,
-    operationId?: string,
-  ) => settleWebhookSignals(db, claim, batch, status, reason, operationId);
+    extra: { operationId?: string; signals?: typeof batch; topicId?: string } = {},
+  ) =>
+    settleWebhookSignals(db, claim, extra.signals ?? batch, status, reason, {
+      operationId: extra.operationId,
+      topicId: extra.topicId,
+    });
   try {
-    if (row.kind === 'mcp_events' && !(await isMcpEventsEnabled(row.userId))) {
+    if (!(await kind.isEnabled(row.userId))) {
       await settle('ignored', 'feature_disabled');
       return { outcome: 'ignored' };
     }
-    if (!connector?.isEnabled) {
-      await settle('ignored', 'connector_disabled');
-      return { outcome: 'ignored' };
-    }
-    // Only authenticated control metadata can terminate a subscription. Payload fields are never control instructions.
-    const termination = batch.find((s) => s.metadata.extra?.control === 'terminated');
-    if (termination) {
-      const error = termination.payload.error;
-      const name = getMcpEventErrorName(error);
-      let recovered = false;
-      if (name === 'NotFound' || name === 'Unsupported') {
-        if (!(await ownsClaim())) return { outcome: 'deferred' };
-        try {
-          const ctx = { db, featureEnabled: true, model, row: claim.row };
-          const { connector: c, connectorModel } = await connectorForWebhook(ctx);
-          const fresh = await ensureFreshConnectorToken(c, connectorModel);
-          const available = await mcpService.listEvents(buildConnectorMcpParams(fresh));
-          if (
-            available.some(
-              (event) => event.name === row.config.eventName && event.delivery.includes('webhook'),
-            )
-          ) {
-            if (!(await ownsClaim())) return { outcome: 'deferred' };
-            await refreshSubscription(ctx);
-            recovered = true;
-          }
-        } catch {
-          console.error('[inboundWebhook:wake] Event rediscovery failed', id);
-        }
-      }
-      if (recovered) {
-        // Preserve any actual events in the same debounce window for the next run.
-        await settleWebhookSignals(db, claim, [termination], 'ignored', 'subscription_recovered');
-        return { outcome: 'recovered' };
-      }
-      const reason = name === 'Forbidden' ? 'access_revoked' : 'event_unavailable';
-      termination.error = reason;
-      await model.update(id, { lastError: reason, nextMaintenanceAt: null, status: 'terminated' });
-    }
-    const reserved = await model.reserveWake(id);
+    const intervention = deps.intervention ?? resolveForegroundInterventionConfig;
+    const plan = await kind.planWake({
+      batch,
+      db,
+      intervention,
+      model,
+      ownsClaim,
+      row: claim.row,
+      settle: (status, reason, subset) => settle(status, reason, { signals: subset }),
+    });
+    if ('outcome' in plan) return plan;
+    const { run } = plan;
+    const reserved = await model.reserveWake(id, kind.wakesPerHour);
     if (!reserved) {
       await model.update(id, { lastError: 'wake_cap' });
       await settle('ignored', 'wake_cap');
       return { outcome: 'capped' };
     }
-    const currentRow = claim.row;
     try {
       const execute =
         deps.execute ??
-        (async (params) => {
-          return new AiAgentService(db, row.userId, { workspaceId: scope }).execAgent(params);
-        });
-      const userInterventionConfig = await (
-        deps.intervention ?? resolveForegroundInterventionConfig
-      )(db, row.userId);
+        (async (params) =>
+          new AiAgentService(db, row.userId, {
+            workspaceId: row.workspaceId ?? undefined,
+          }).execAgent(params));
       if (!(await ownsClaim())) {
         await model.releaseWake(id, reserved);
         return { outcome: 'deferred' };
       }
       const result = await execute({
         agentId: row.agentId,
-        appContext: { topicId: row.topicId! },
+        ...(run.topicId ? { appContext: { topicId: run.topicId } } : {}),
         autoStart: true,
         markTopicRunning: true,
-        externalOrigin: {
-          kind: row.config.eventName,
-          label: connector.name,
-          provider: 'mcp-events',
-          resourceId: row.id,
-        },
-        prompt: kind.buildPrompt({ connector, row: currentRow, signals: batch }),
-        trigger: RequestTrigger.McpEvent,
-        userInterventionConfig,
+        externalOrigin: run.externalOrigin,
+        prompt: run.prompt,
+        ...(run.title !== undefined ? { title: run.title } : {}),
+        trigger: kind.trigger,
+        userInterventionConfig: run.userInterventionConfig,
+        ...(run.webhookThread ? { webhookThread: run.webhookThread } : {}),
       });
       if (result.error) throw result.error;
-      await settle('processed', 'event_delivery', result.operationId);
+      await settle('processed', 'event_delivery', {
+        operationId: result.operationId,
+        topicId: result.topicId ?? run.topicId,
+      });
       handled = true;
       return { outcome: 'processed' };
     } catch (error) {

@@ -25,6 +25,7 @@ export const serverConfigSelectors = {
   /** Runtime flag `mcp_apps`: MCP Apps views in the conversation. */
   enableMcpApps: (s: ServerConfigStore) => s.featureFlags.enableMcpApps === true,
   enableMcpEvents: (s: ServerConfigStore) => s.featureFlags.enableMcpEvents === true,
+  enableAgentWebhooks: (s: ServerConfigStore) => s.featureFlags.enableAgentWebhooks === true,
   enableAgentKnowledgeSpace: (s: ServerConfigStore) =>
     s.featureFlags.enableAgentKnowledgeSpace === true,
   enableMarketTrustedClient: (s: ServerConfigStore) =>

@@ -10,6 +10,8 @@ import { SignalDecisionModel } from '@/database/models/signalDecision';
 import { inboundWebhooks, signals } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { getInboundWebhookKind } from './kinds';
+
 export const WEBHOOK_WAKE_LEASE_MS = 5 * 60_000;
 export const WEBHOOK_WAKE_RENEW_MS = 30_000;
 
@@ -26,20 +28,30 @@ const withoutClaim = sql`jsonb_set(${signals.metadata}, '{extra}', coalesce(${si
 const claimMetadata = (claim: { leaseUntil: number; token: string; truncated: boolean }) =>
   sql`jsonb_set(${signals.metadata}, '{extra}', coalesce(${signals.metadata}->'extra', '{}'::jsonb) || jsonb_build_object('inboundWebhookWake', ${JSON.stringify(claim)}::jsonb))`;
 
+export interface ClaimWebhookSignalsOptions {
+  /** Narrow the claimable signals (oldest first) to the batch this wake runs; the rest stay free. */
+  group?: (candidates: SignalItem[]) => SignalItem[];
+  /** `signals.source` of the row's kind; defaults to the registered kind's. */
+  source?: string;
+}
+
 /** Commit a durable claim before doing any network I/O. Expired claims are recoverable by sweep. */
 export async function claimWebhookSignals(
   db: LobeChatDatabase,
   row: InboundWebhookView,
+  options: ClaimWebhookSignalsOptions = {},
 ): Promise<WebhookSignalClaim | undefined> {
   const now = Date.now();
   const token = randomUUID();
+  const source = options.source ?? getInboundWebhookKind(row.kind)?.signalSource;
+  if (!source) return undefined;
   return db.transaction(async (tx) => {
-    const batch = await tx
+    const candidates = await tx
       .select()
       .from(signals)
       .where(
         and(
-          eq(signals.source, 'mcp-events'),
+          eq(signals.source, source),
           eq(signals.scopeKey, `inbound-webhook:${row.id}`),
           eq(signals.userId, row.userId),
           or(
@@ -52,6 +64,8 @@ export async function claimWebhookSignals(
       .orderBy(asc(signals.occurredAt), asc(signals.createdAt))
       .limit(10_000)
       .for('update', { skipLocked: true });
+    // Rows left out of the group stay locked only until this short transaction ends.
+    const batch = options.group ? options.group(candidates) : candidates;
     if (!batch.length) return undefined;
     // Consume the gap flag under a short lock. New gaps after commit set it again;
     // settlement never clears a newer receipt's flag. The claim retains it across crashes.
@@ -62,7 +76,7 @@ export async function claimWebhookSignals(
         and(
           eq(inboundWebhooks.id, row.id),
           eq(inboundWebhooks.userId, row.userId),
-          inArray(inboundWebhooks.status, ['active', 'error', 'terminated']),
+          inArray(inboundWebhooks.status, ['active', 'error', 'terminated', 'paused']),
         ),
       )
       .for('update');
@@ -73,13 +87,15 @@ export async function claimWebhookSignals(
       row.workspaceId ?? undefined,
     );
     const current = (await model.findById(row.id))!;
+    // Only an event stream (MCP) has a gap flag; other kinds never set it.
+    const gapFlag = current.kind === 'mcp_events' && !!current.state.truncated;
     const truncated =
-      !!current.state.truncated ||
+      gapFlag ||
       batch.some((signal) => {
         const previous = signal.metadata.extra?.inboundWebhookWake;
         return isRecord(previous) && previous.truncated === true;
       });
-    if (current.state.truncated) await model.mergeState(row.id, { truncated: false });
+    if (gapFlag) await model.mergeState(row.id, { truncated: false });
     await tx
       .update(signals)
       .set({
@@ -91,7 +107,11 @@ export async function claimWebhookSignals(
           batch.map((signal) => signal.id),
         ),
       );
-    return { batch, row: { ...current, state: { ...current.state, truncated } }, token, truncated };
+    const claimed: InboundWebhookView =
+      current.kind === 'mcp_events'
+        ? { ...current, state: { ...current.state, truncated } }
+        : current;
+    return { batch, row: claimed, token, truncated };
   });
 }
 
@@ -131,8 +151,10 @@ export async function settleWebhookSignals(
   batch: SignalItem[],
   status: SignalItem['status'],
   reason: string,
-  operationId?: string,
+  /** The run the batch started, and its Topic when the row has none of its own (generic). */
+  run: { operationId?: string; topicId?: string } = {},
 ) {
+  const topicId = run.topicId ?? claim.row.topicId ?? undefined;
   if (!batch.length) return;
   await db.transaction(async (tx) => {
     const rows = await tx
@@ -174,10 +196,10 @@ export async function settleWebhookSignals(
         pipelineVersion: `inbound-webhook@1:attempt-${signal.attempts}`,
         scopeKey: `inbound-webhook:${claim.row.id}`,
         signalId: signal.id,
-        topicId: claim.row.topicId,
+        topicId: topicId ?? null,
       });
-      if (decision && operationId)
-        await model.linkRun(decision.id, { operationId, topicId: claim.row.topicId ?? undefined });
+      if (decision && run.operationId)
+        await model.linkRun(decision.id, { operationId: run.operationId, topicId });
     }
   });
 }
@@ -201,7 +223,7 @@ export async function releaseWebhookSignalClaim(
         eq(tokenOf, claim.token),
       ),
     );
-  if (restoreGap && claim.truncated) {
+  if (restoreGap && claim.truncated && claim.row.kind === 'mcp_events') {
     await new InboundWebhookModel(
       db,
       claim.row.userId,

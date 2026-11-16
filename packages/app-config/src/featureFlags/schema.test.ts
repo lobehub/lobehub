@@ -569,3 +569,19 @@ describe('mcp_events flag', () => {
     expect(mapFeatureFlagsEnvToState({ mcp_events: ['u1'] }, 'u2').enableMcpEvents).toBe(false);
   });
 });
+
+describe('agent_webhooks flag', () => {
+  it('defaults off and only enables allowlisted users', () => {
+    expect(DEFAULT_FEATURE_FLAGS.agent_webhooks).toBe(false);
+    expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'u1').enableAgentWebhooks).toBe(false);
+    expect(mapFeatureFlagsEnvToState({ agent_webhooks: true }, 'u1').enableAgentWebhooks).toBe(
+      true,
+    );
+    expect(mapFeatureFlagsEnvToState({ agent_webhooks: ['u1'] }, 'u1').enableAgentWebhooks).toBe(
+      true,
+    );
+    expect(mapFeatureFlagsEnvToState({ agent_webhooks: ['u1'] }, 'u2').enableAgentWebhooks).toBe(
+      false,
+    );
+  });
+});

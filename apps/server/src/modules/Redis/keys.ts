@@ -86,6 +86,8 @@ export const RedisKeys = {
     check: (id: string) => `check:v1:${id}`,
     maintenance: (id: string) => `maintenance:v1:${id}`,
     sweep: () => 'sweep:v1:slot',
+    /** Per-webhook ingress counter of the current minute (generic webhooks). */
+    deliveries: (id: string, minute: number) => `deliveries:v1:${id}:${minute}`,
   },
   /**
    * Agent Signal spend bounds — see {@link RedisKeyNamespace.AGENT_SIGNAL}. Per-user

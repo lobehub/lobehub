@@ -185,6 +185,32 @@ export const findRunInitiators = async (
 };
 
 /**
+ * The Topic a generic webhook thread continues: the newest of the agent's
+ * Topics stamped with `metadata.webhook` for this webhook and thread key at
+ * creation. Narrowed by `agent_id` first, which keeps the unindexed JSON path
+ * test to one agent's Topics.
+ */
+export const findByWebhookThread = async (
+  ctx: TopicModelContext,
+  params: { agentId: string; threadKey: string; webhookId: string },
+): Promise<TopicItem | undefined> => {
+  const [topic] = await ctx.db
+    .select()
+    .from(topics)
+    .where(
+      and(
+        ctx.ownership(),
+        eq(topics.agentId, params.agentId),
+        sql`${topics.metadata} -> 'webhook' ->> 'webhookId' = ${params.webhookId}`,
+        sql`${topics.metadata} -> 'webhook' ->> 'threadKey' = ${params.threadKey}`,
+      ),
+    )
+    .orderBy(desc(topics.createdAt))
+    .limit(1);
+  return topic;
+};
+
+/**
  * Recent topics from the same IM channel, most-recent first. Matches the
  * channel via the `metadata.bot.platformThreadId` path written at topic
  * creation (see `ChatTopicBotContext`). Used to pre-inject cross-session

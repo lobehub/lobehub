@@ -6,6 +6,8 @@ import { agents, topics, userConnectors } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { normalizeInboxAgentMeta } from '@/database/utils/inboxAgent';
 
+import { getInboundWebhookKind } from './kinds';
+
 export interface InboundWebhookActor {
   userId: string;
   workspaceId?: string | null;
@@ -22,6 +24,8 @@ export async function inboundWebhookItems(
   db: LobeChatDatabase,
   rows: InboundWebhookView[],
   actor: InboundWebhookActor,
+  /** Full call URLs of the generic rows `actor` may manage, keyed by webhook id. */
+  endpoints: ReadonlyMap<string, string> = new Map(),
 ): Promise<InboundWebhookItem[]> {
   if (!rows.length) return [];
   const [connectorRows, agentRows, topicRows] = await Promise.all([
@@ -72,38 +76,41 @@ export async function inboundWebhookItems(
     normalizeInboxAgentMeta(agent, { slug });
 
   return rows
-    .filter((r) => ['active', 'error', 'terminated'].includes(r.status))
-    .map((row) => {
+    .filter((r) => ['active', 'error', 'terminated', 'paused'].includes(r.status))
+    .flatMap((row): InboundWebhookItem[] => {
+      const kind = getInboundWebhookKind(row.kind);
+      if (!kind) return [];
       const connector = connectorRows.find((c) => c.id === row.connectorId);
       const agentRow = agentRows.find((a) => a.id === row.agentId);
-      return {
-        agent: agentRow ? toAgentItem(agentRow) : null,
-        canCheck: row.kind === 'mcp_events',
-        canManage: canManageInboundWebhook(actor, row),
-        connector: connector
-          ? {
-              agentId: connector.agentId,
-              avatar: connector.metadata?.avatar ?? null,
-              id: connector.id,
-              identifier: connector.identifier,
-              name: connector.name,
-            }
-          : null,
-        createdAt: row.createdAt.toISOString(),
-        creatorId: row.userId,
-        expiresAt: row.state.refreshBefore ?? null,
-        id: row.id,
-        kind: row.kind,
-        lastDeliveryAt: row.lastDeliveryAt?.toISOString() ?? null,
-        lastError: row.lastError,
-        name: row.name,
-        source: {
-          arguments: row.config.arguments,
-          eventName: row.config.eventName,
+      const canManage = canManageInboundWebhook(actor, row);
+      return [
+        {
+          agent: agentRow ? toAgentItem(agentRow) : null,
+          canCheck: kind.canCheck,
+          canManage,
+          connector: connector
+            ? {
+                agentId: connector.agentId,
+                avatar: connector.metadata?.avatar ?? null,
+                id: connector.id,
+                identifier: connector.identifier,
+                name: connector.name,
+              }
+            : null,
+          createdAt: row.createdAt.toISOString(),
+          creatorId: row.userId,
+          endpoint: canManage ? (endpoints.get(row.id) ?? null) : null,
+          expiresAt: kind.expiresAt?.(row) ?? null,
+          id: row.id,
+          instructions: row.instructions,
           kind: row.kind,
+          lastDeliveryAt: row.lastDeliveryAt?.toISOString() ?? null,
+          lastError: row.lastError,
+          name: row.name,
+          source: kind.source(row),
+          status: row.status as InboundWebhookItem['status'],
+          topic: topicRows.find((t) => t.id === row.topicId) ?? null,
         },
-        status: row.status as InboundWebhookItem['status'],
-        topic: topicRows.find((t) => t.id === row.topicId) ?? null,
-      };
+      ];
     });
 }

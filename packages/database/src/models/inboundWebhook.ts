@@ -1,5 +1,8 @@
 import type {
+  InboundWebhookConfig,
+  InboundWebhookData,
   InboundWebhookInsert,
+  InboundWebhookKind,
   InboundWebhookRow,
   InboundWebhookState,
   InboundWebhookStatus,
@@ -7,9 +10,10 @@ import type {
 import {
   INBOUND_WEBHOOK_DELIVERY_ERRORS,
   INBOUND_WEBHOOK_ERRORS,
+  INBOUND_WEBHOOK_KIND_SCHEMAS,
+  INBOUND_WEBHOOK_KINDS,
   INBOUND_WEBHOOK_STATUSES,
   InboundWebhookDataSchema,
-  McpEventsWebhookStateSchema,
 } from '@lobechat/types';
 import {
   and,
@@ -36,19 +40,39 @@ export interface InboundWebhookGateKeeper {
   encrypt: (plaintext: string) => Promise<string>;
 }
 
-export type InboundWebhookView = Omit<InboundWebhookRow, 'secret'>;
+type InboundWebhookCommonColumns = Omit<
+  InboundWebhookRow,
+  'secret' | 'kind' | 'config' | 'state' | 'verification'
+>;
+/** A row without its secret, narrowed by `kind` to that kind's config, state and verification. */
+export type InboundWebhookView = InboundWebhookCommonColumns & InboundWebhookData;
+export type InboundWebhookViewOf<K extends InboundWebhookKind> = Extract<
+  InboundWebhookView,
+  { kind: K }
+>;
 export type CreateInboundWebhook = Omit<InboundWebhookInsert, 'userId' | 'workspaceId'>;
+
 export type InboundWebhookPatch = Partial<
   Pick<
     InboundWebhookRow,
-    'status' | 'name' | 'nextMaintenanceAt' | 'maintenanceFailures' | 'lastDeliveryAt' | 'lastError'
+    | 'status'
+    | 'name'
+    | 'instructions'
+    | 'nextMaintenanceAt'
+    | 'maintenanceFailures'
+    | 'lastDeliveryAt'
+    | 'lastError'
   >
->;
+> & {
+  /** Replaces the whole config; applies only to rows whose kind accepts it. */
+  config?: InboundWebhookConfig;
+};
 
 export interface InboundWebhookQuery {
   agentId?: string;
   connectorId?: string;
   includeHidden?: boolean;
+  kind?: InboundWebhookKind;
   topicId?: string;
 }
 
@@ -65,6 +89,7 @@ const patchSchema = z
   .object({
     status: z.enum(INBOUND_WEBHOOK_STATUSES).optional(),
     name: z.string().nullable().optional(),
+    instructions: z.string().nullable().optional(),
     nextMaintenanceAt: z.date().nullable().optional(),
     maintenanceFailures: z.number().int().nonnegative().optional(),
     lastDeliveryAt: z.date().nullable().optional(),
@@ -74,12 +99,31 @@ const patchSchema = z
 
 const { secret: _secret, ...viewColumns } = getTableColumns(inboundWebhooks);
 
-const validateView = (row: InboundWebhookView): InboundWebhookView => {
+const validateView = (row: Omit<InboundWebhookRow, 'secret'>): InboundWebhookView => {
   InboundWebhookDataSchema.parse(row);
-  return row;
+  return row as InboundWebhookView;
 };
 
 const toView = ({ secret: _ciphertext, ...row }: InboundWebhookRow) => validateView(row);
+
+/**
+ * The kinds whose schema for `column` accepts `value`, and the value as that schema parsed it
+ * (unknown nested fields stripped). A partial update is then limited to rows of those kinds, so an
+ * MCP state patch can never land on a generic row or the other way round.
+ */
+const parseForKinds = (
+  column: 'config' | 'state',
+  value: unknown,
+): { kinds: InboundWebhookKind[]; value: unknown } => {
+  const accepted = INBOUND_WEBHOOK_KINDS.flatMap((kind) => {
+    const result = INBOUND_WEBHOOK_KIND_SCHEMAS[kind][column].safeParse(value);
+    return result.success ? [{ kind, value: result.data }] : [];
+  });
+  if (!accepted.length) throw new Error(`Invalid inbound webhook ${column} patch`);
+  return { kinds: accepted.map((entry) => entry.kind), value: accepted[0].value };
+};
+
+const VISIBLE_STATUSES: InboundWebhookStatus[] = ['active', 'error', 'terminated', 'paused'];
 
 /** Workspace reads are shared; row-level mutation permission belongs to the resource router. */
 export class InboundWebhookModel {
@@ -166,9 +210,8 @@ export class InboundWebhookModel {
           filter.topicId ? eq(inboundWebhooks.topicId, filter.topicId) : undefined,
           filter.agentId ? eq(inboundWebhooks.agentId, filter.agentId) : undefined,
           filter.connectorId ? eq(inboundWebhooks.connectorId, filter.connectorId) : undefined,
-          filter.includeHidden
-            ? undefined
-            : inArray(inboundWebhooks.status, ['active', 'error', 'terminated']),
+          filter.kind ? eq(inboundWebhooks.kind, filter.kind) : undefined,
+          filter.includeHidden ? undefined : inArray(inboundWebhooks.status, VISIBLE_STATUSES),
         ),
       )
       .orderBy(desc(inboundWebhooks.createdAt));
@@ -186,16 +229,21 @@ export class InboundWebhookModel {
 
   update = async (
     id: string,
-    patch: InboundWebhookPatch,
+    { config, ...patch }: InboundWebhookPatch,
   ): Promise<InboundWebhookView | undefined> => {
     const parsed = patchSchema.parse(patch);
+    const configPatch = config === undefined ? undefined : parseForKinds('config', config);
     const [row] = await this.db
       .update(inboundWebhooks)
-      .set(parsed)
+      .set({
+        ...parsed,
+        ...(configPatch ? { config: configPatch.value as InboundWebhookConfig } : {}),
+      })
       .where(
         and(
           this.ownership(),
           eq(inboundWebhooks.id, id),
+          configPatch ? inArray(inboundWebhooks.kind, configPatch.kinds) : undefined,
           parsed.status && parsed.status !== 'deleting'
             ? ne(inboundWebhooks.status, 'deleting')
             : undefined,
@@ -213,14 +261,14 @@ export class InboundWebhookModel {
     state?: Partial<InboundWebhookState>,
   ): Promise<InboundWebhookView | undefined> => {
     const parsed = patchSchema.parse(patch);
-    const statePatch = state === undefined ? undefined : McpEventsWebhookStateSchema.parse(state);
+    const statePatch = state === undefined ? undefined : parseForKinds('state', state);
     const [row] = await this.db
       .update(inboundWebhooks)
       .set({
         ...parsed,
         ...(statePatch
           ? {
-              state: sql`${inboundWebhooks.state} || ${JSON.stringify(statePatch)}::jsonb`,
+              state: sql`${inboundWebhooks.state} || ${JSON.stringify(statePatch.value)}::jsonb`,
             }
           : {}),
       })
@@ -229,6 +277,7 @@ export class InboundWebhookModel {
           this.ownership(),
           eq(inboundWebhooks.id, id),
           inArray(inboundWebhooks.status, statuses),
+          statePatch ? inArray(inboundWebhooks.kind, statePatch.kinds) : undefined,
         ),
       )
       .returning(viewColumns);
@@ -263,11 +312,17 @@ export class InboundWebhookModel {
     id: string,
     patch: Partial<InboundWebhookState>,
   ): Promise<InboundWebhookView | undefined> => {
-    const parsed = McpEventsWebhookStateSchema.parse(patch);
+    const parsed = parseForKinds('state', patch);
     const [row] = await this.db
       .update(inboundWebhooks)
-      .set({ state: sql`${inboundWebhooks.state} || ${JSON.stringify(parsed)}::jsonb` })
-      .where(and(this.ownership(), eq(inboundWebhooks.id, id)))
+      .set({ state: sql`${inboundWebhooks.state} || ${JSON.stringify(parsed.value)}::jsonb` })
+      .where(
+        and(
+          this.ownership(),
+          eq(inboundWebhooks.id, id),
+          inArray(inboundWebhooks.kind, parsed.kinds),
+        ),
+      )
       .returning(viewColumns);
     return row ? validateView(row) : undefined;
   };
@@ -278,16 +333,24 @@ export class InboundWebhookModel {
     patch: Partial<InboundWebhookState>,
     expected: Partial<InboundWebhookState>,
   ): Promise<InboundWebhookView | undefined> => {
-    const parsed = McpEventsWebhookStateSchema.parse(patch);
-    McpEventsWebhookStateSchema.parse(expected);
+    const parsed = parseForKinds('state', patch);
+    const expectedKinds = parseForKinds('state', expected).kinds;
+    const kinds = parsed.kinds.filter((kind) => expectedKinds.includes(kind));
     const comparisons = Object.entries(expected).map(([key, value]) => {
       const observed = value === undefined ? sql`NULL` : sql`${JSON.stringify(value)}::jsonb`;
       return sql`(${inboundWebhooks.state} -> ${key}::text) IS NOT DISTINCT FROM ${observed}`;
     });
     const [row] = await this.db
       .update(inboundWebhooks)
-      .set({ state: sql`${inboundWebhooks.state} || ${JSON.stringify(parsed)}::jsonb` })
-      .where(and(this.ownership(), eq(inboundWebhooks.id, id), ...comparisons))
+      .set({ state: sql`${inboundWebhooks.state} || ${JSON.stringify(parsed.value)}::jsonb` })
+      .where(
+        and(
+          this.ownership(),
+          eq(inboundWebhooks.id, id),
+          inArray(inboundWebhooks.kind, kinds),
+          ...comparisons,
+        ),
+      )
       .returning(viewColumns);
     return row ? validateView(row) : undefined;
   };
@@ -304,6 +367,18 @@ export class InboundWebhookModel {
       .limit(1);
     if (!row?.secret) return null;
     return (await this.requireGateKeeper().decrypt(row.secret)).plaintext;
+  };
+
+  /** Replace the secret; the old one stops authenticating as soon as this commits. */
+  rotateSecret = async (id: string, secret: string): Promise<InboundWebhookView | undefined> => {
+    const [row] = await this.db
+      .update(inboundWebhooks)
+      .set({ secret: await this.requireGateKeeper().encrypt(secret) })
+      .where(
+        and(this.ownership(), eq(inboundWebhooks.id, id), ne(inboundWebhooks.status, 'deleting')),
+      )
+      .returning(viewColumns);
+    return row ? validateView(row) : undefined;
   };
 
   /** Reserve one wake atomically, resetting the rolling hourly bucket when it expires. */
