@@ -17,10 +17,10 @@ export interface WorktreeBranchSeed {
  * directory's full local branch list.
  *
  * Waiting for that list to settle is the point of this hook. Git stores refs as
- * paths, so a branch literally called `wt` blocks the whole `wt/` namespace —
+ * paths, so a branch literally called `lobehub` blocks the whole `lobehub/` namespace —
  * and a name drawn from a list that is still in flight reads as "no branches",
  * handing out a ref git is guaranteed to refuse (`cannot lock ref
- * 'refs/heads/wt/…': 'refs/heads/wt' exists`). The modal snapshots the name when
+ * 'refs/heads/lobehub/…': 'refs/heads/lobehub' exists`). The modal snapshots the name when
  * it opens, so a late result could never repair that. For the same reason the
  * list persisted from an earlier session does not count as settled: it may miss
  * a branch made since. Shares the branch switcher's replica, so a dropdown
