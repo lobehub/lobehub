@@ -612,6 +612,7 @@ describe('SkillImporter', () => {
         `skills/zip/${zipHash}.zip`,
         expect.any(Buffer),
         'application/zip',
+        undefined,
       );
     });
 
@@ -673,6 +674,7 @@ describe('SkillImporter', () => {
         expect.stringContaining('skills/zip/'),
         smallSkillZip, // Should be the small repacked ZIP
         'application/zip',
+        undefined,
       );
     });
 
