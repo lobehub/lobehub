@@ -1,4 +1,4 @@
-import type { CustomPluginParams, ToolManifest } from '@lobechat/types';
+import type { ConnectorVisibility, CustomPluginParams, ToolManifest } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -142,6 +142,15 @@ export interface ComposioConnectorMetadata {
 export interface ConnectorMetadata {
   [key: string]: unknown;
   avatar?: string;
+  /**
+   * Stdio / device-routed HTTP only: the device this connector always runs on,
+   * through the device gateway. Absent means the device is picked automatically
+   * (the run's device, else the newest capable personal one). A personal
+   * connector binds one of its owner's personal devices, a workspace connector
+   * a public device of its workspace. Never falls back: an offline bound device
+   * fails the call (`connectorDeviceBinding` in `@lobechat/utils/mcpEndpoint`).
+   */
+  boundDeviceId?: string;
   composio?: ComposioConnectorMetadata;
   /**
    * HTTP only: `device` reaches the MCP server from the user's device through
@@ -230,6 +239,18 @@ export const userConnectors = pgTable(
 
     /** Safe non-sensitive metadata for display and future extensibility */
     metadata: jsonb('metadata').$type<ConnectorMetadata>(),
+
+    /**
+     * Visibility WITHIN a workspace (same contract as devices / agents, filtered
+     * by `buildWorkspaceWhere`):
+     * - 'public'  → shared with the workspace; every member sees it and every
+     *   agent in the workspace may load it.
+     * - 'private' → the creator's own; only `user_id` sees it, and only that
+     *   member's private agents load it.
+     * Defaults to 'public' so rows that predate the column keep their shared
+     * behaviour. Ignored for personal rows (`workspace_id IS NULL`).
+     */
+    visibility: text('visibility').$type<ConnectorVisibility>().default('public').notNull(),
 
     ...timestamps,
   },

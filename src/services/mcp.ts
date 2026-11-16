@@ -17,6 +17,7 @@ import {
 } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import {
+  connectorDeviceBinding,
   connectorMcpEndpoint,
   isDeviceOnlyMcpEndpoint,
   type McpConnectVia,
@@ -28,6 +29,7 @@ import { type CallReportRequest } from '@lobehub/market-types';
 import { type ReadResourceResult } from '@modelcontextprotocol/client';
 import { omit } from 'es-toolkit/compat';
 
+import { runsOnAnotherDevice } from '@/helpers/mcpDeviceBinding';
 import { type MCPToolCallResult } from '@/libs/mcp';
 import { resolveLocalConnectorHttpParams } from '@/libs/mcp/localConnector';
 import { renderMcpArgs, renderMcpUrlTemplate } from '@/libs/mcp/urlTemplate';
@@ -308,9 +310,11 @@ class MCPService {
         connector?.mcpConnectionType !== 'stdio' &&
         !!connector?.mcpServerUrl &&
         isDeviceOnlyMcpEndpoint(connectorMcpEndpoint(connector));
+      // A connector bound to another device runs there, through the server
       const runsHere =
         connector &&
         isDesktop &&
+        !runsOnAnotherDevice(connectorDeviceBinding(connector)?.deviceId) &&
         ((connector.mcpConnectionType === 'stdio' &&
           (fromMcpApp ||
             fromEntrypoint ||
@@ -320,10 +324,17 @@ class MCPService {
           (isDeviceHttp && (fromMcpApp ? !!onThisDevice : true)));
       // A view's calls run where its result was produced
       if (fromMcpApp && !!runsHere !== !!onThisDevice) throw new Error(VIEW_SITE_MISMATCH);
-      if (runsHere) {
-        // Persisted connector projections omit env secrets and may be stale.
-        // This protected read retains the connector's credential ownership gate.
-        const detail = await lambdaClient.connector.getForEdit.query({ id: connector.id });
+      // Persisted connector projections omit env secrets and may be stale.
+      // This protected read retains the connector's credential ownership gate,
+      // and carries the current binding: a connector rebound to another device
+      // since this projection loaded runs there, through the server.
+      const detail = runsHere
+        ? await lambdaClient.connector.getForEdit.query({ id: connector.id })
+        : undefined;
+      const reboundElsewhere =
+        !!detail && runsOnAnotherDevice(connectorDeviceBinding(detail)?.deviceId);
+      if (reboundElsewhere && fromMcpApp) throw new Error(VIEW_SITE_MISMATCH);
+      if (connector && detail && !reboundElsewhere) {
         if (!detail.isEnabled) throw new Error('Connector is disabled');
         const tool = detail.tools.find((item) => item.toolName === apiName);
         if (!tool || tool.permission === 'disabled') {
@@ -794,6 +805,11 @@ class MCPService {
         token?: string;
         type: 'none' | 'bearer' | 'oauth2';
       };
+      /**
+       * The device a server reached from the user's device is pinned to: it is
+       * read there, through the server, unless that device is this desktop.
+       */
+      boundDeviceId?: string;
       /** `device`: reach the server from the user's device, whatever its address. */
       connectVia?: McpConnectVia;
       headers?: Record<string, string>;
@@ -803,7 +819,22 @@ class MCPService {
     },
     signal?: AbortSignal,
   ) {
-    const { connectVia, ...connection } = params;
+    const { boundDeviceId, connectVia, ...connection } = params;
+
+    if (
+      runsOnAnotherDevice(boundDeviceId) &&
+      isDeviceOnlyMcpEndpoint({ connectVia, type: 'http', url: params.url })
+    ) {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      const manifest = (await lambdaClient.connector.getDeviceMcpManifest.mutate(
+        { ...connection, boundDeviceId },
+        { signal },
+      )) as any;
+      // An `auto` server keeps the params its calls send (no `connectVia`)
+      return connectVia === 'device' || !manifest?.mcpParams
+        ? manifest
+        : { ...manifest, mcpParams: omit(manifest.mcpParams, 'connectVia') };
+    }
 
     // A server only this machine reaches (a localhost / LAN address, or one set
     // to connect through the device) is read from the desktop over IPC (main
@@ -863,6 +894,11 @@ class MCPService {
   async getStdioMcpServerManifest(
     stdioParams: {
       args?: string[];
+      /**
+       * The device the server is pinned to: it is started there, through the
+       * server, unless that device is this desktop.
+       */
+      boundDeviceId?: string;
       command: string;
       env?: Record<string, string>;
       name: string;
@@ -870,10 +906,26 @@ class MCPService {
     metadata?: CustomPluginMetadata,
     _signal?: AbortSignal,
   ) {
+    const { boundDeviceId, ...localParams } = stdioParams;
+    if (runsOnAnotherDevice(boundDeviceId)) {
+      const { lambdaClient } = await import('@/libs/trpc/client');
+      return lambdaClient.connector.getDeviceMcpManifest.mutate(
+        {
+          args: localParams.args ?? [],
+          boundDeviceId,
+          command: localParams.command,
+          env: localParams.env,
+          identifier: localParams.name,
+          metadata,
+          type: 'stdio',
+        },
+        { signal: _signal },
+      ) as any;
+    }
     void _signal;
     // Note: IPC doesn't support AbortSignal yet
     // With MCP Apps on, the tools only views call are listed and kept too
-    const serialized = serializeMcpIpcPayload({ ...stdioParams, mcpApps: isMcpAppsOn(), metadata });
+    const serialized = serializeMcpIpcPayload({ ...localParams, mcpApps: isMcpAppsOn(), metadata });
     const serializedResult = await ensureElectronIpc().mcp.getStdioMcpServerManifest(
       serialized as any,
     );

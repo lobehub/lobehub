@@ -273,6 +273,56 @@ describe('WeComLongConnection — replies', () => {
 });
 
 describe('WeComLongConnection — lifecycle', () => {
+  it('drain() finishes open streams before stopping, so no bubble is left spinning', async () => {
+    const { connection, socket } = setup();
+    active = connection;
+    await connection.start();
+    socket().serverSend(inbound('req-1'));
+    socket().serverSend(inbound('req-2', { from: { userid: 'lisi' } }));
+    await flush();
+    await connection.openStream({ id: 'zhangsan', type: 'single' });
+    await connection.openStream({ id: 'lisi', type: 'single' });
+    const live = socket();
+
+    await connection.drain();
+
+    const finishes = live.sentWith(WECOM_CMD.RESPOND).filter((f) => f.body.stream.finish);
+    expect(finishes.map((f) => f.headers.req_id).sort()).toEqual(['req-1', 'req-2']);
+    expect(finishes[0].body.stream.content).toBe('…');
+    expect(connection.isConnected).toBe(false);
+    expect(live.readyState).toBe(3);
+  });
+
+  it('drain() stops after maxWaitMs even when receipts never come', async () => {
+    // Receipts would only time out after a minute: if `maxWaitMs` were ignored, drain() would
+    // outlive the test's own timeout.
+    const { connection, socket } = setup({ ackTimeoutMs: 60_000 });
+    active = connection;
+    await connection.start();
+    socket().serverSend(inbound('req-1'));
+    await flush();
+    await connection.openStream({ id: 'zhangsan', type: 'single' });
+    socket().ackFor = () => undefined;
+    const live = socket();
+
+    await connection.drain(20);
+
+    expect(live.sentWith(WECOM_CMD.RESPOND).at(-1)?.body.stream).toMatchObject({ finish: true });
+    expect(connection.isConnected).toBe(false);
+    expect(live.readyState).toBe(3);
+  });
+
+  it('drain() just stops when no stream is open', async () => {
+    const { connection, socket } = setup();
+    active = connection;
+    await connection.start();
+
+    await connection.drain();
+
+    expect(socket().sentWith(WECOM_CMD.RESPOND)).toHaveLength(0);
+    expect(connection.isConnected).toBe(false);
+  });
+
   it('stops without reconnecting when a newer connection displaces it', async () => {
     const onDisplaced = vi.fn();
     const { connection, socket, sockets } = setup({ onDisplaced });

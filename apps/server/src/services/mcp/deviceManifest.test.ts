@@ -2,7 +2,11 @@ import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getDeviceMcpManifest } from './deviceManifest';
-import { listMcpToolsOnPersonalDevice, McpDeviceUnavailableError } from './deviceTunnel';
+import {
+  listMcpToolsOnDevice,
+  McpBoundDeviceUnavailableError,
+  McpDeviceUnavailableError,
+} from './deviceTunnel';
 
 const gateway = vi.hoisted(() => ({ isConfigured: true }));
 
@@ -21,7 +25,7 @@ vi.mock('@/server/services/mcp', () => ({
 }));
 vi.mock('./deviceTunnel', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
-  listMcpToolsOnPersonalDevice: vi.fn(),
+  listMcpToolsOnDevice: vi.fn(),
 }));
 
 const serverDB = {} as never;
@@ -40,14 +44,14 @@ describe('getDeviceMcpManifest', () => {
 
   it("lists the tools on the user's desktop app and maps them into a manifest", async () => {
     const { mcpService } = await import('@/server/services/mcp');
-    vi.mocked(listMcpToolsOnPersonalDevice).mockResolvedValue(tools as never);
+    vi.mocked(listMcpToolsOnDevice).mockResolvedValue(tools as never);
 
     await expect(getDeviceMcpManifest({ connection, serverDB, userId: 'u1' })).resolves.toEqual({
       api: tools,
       identifier: 'nas',
     });
 
-    expect(listMcpToolsOnPersonalDevice).toHaveBeenCalledWith({
+    expect(listMcpToolsOnDevice).toHaveBeenCalledWith({
       mcpApps: true,
       params: {
         auth: connection.auth,
@@ -74,11 +78,11 @@ describe('getDeviceMcpManifest', () => {
       expect.objectContaining({ name: 'nas', url: connection.url }),
       { mcpApps: true },
     );
-    expect(listMcpToolsOnPersonalDevice).not.toHaveBeenCalled();
+    expect(listMcpToolsOnDevice).not.toHaveBeenCalled();
   });
 
   it('fails as a precondition, with what to do, when no desktop app is online', async () => {
-    vi.mocked(listMcpToolsOnPersonalDevice).mockRejectedValue(new McpDeviceUnavailableError('nas'));
+    vi.mocked(listMcpToolsOnDevice).mockRejectedValue(new McpDeviceUnavailableError('nas'));
 
     const error = await getDeviceMcpManifest({ connection, serverDB, userId: 'u1' }).catch(
       (e) => e,
@@ -91,7 +95,7 @@ describe('getDeviceMcpManifest', () => {
 
   it("passes a connection's own TRPC error through with its data", async () => {
     const authError = new TRPCError({ code: 'UNAUTHORIZED', message: 'Reconnect this MCP' });
-    vi.mocked(listMcpToolsOnPersonalDevice).mockRejectedValue(authError);
+    vi.mocked(listMcpToolsOnDevice).mockRejectedValue(authError);
 
     await expect(getDeviceMcpManifest({ connection, serverDB, userId: 'u1' })).rejects.toBe(
       authError,
@@ -99,10 +103,74 @@ describe('getDeviceMcpManifest', () => {
   });
 
   it('reports a failed listing on the device as a bad request', async () => {
-    vi.mocked(listMcpToolsOnPersonalDevice).mockRejectedValue(new Error('ECONNREFUSED'));
+    vi.mocked(listMcpToolsOnDevice).mockRejectedValue(new Error('ECONNREFUSED'));
 
     await expect(
       getDeviceMcpManifest({ connection, serverDB, userId: 'u1' }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: 'ECONNREFUSED' });
+  });
+
+  it("lists on the bound device of the caller's workspace", async () => {
+    vi.mocked(listMcpToolsOnDevice).mockResolvedValue(tools as never);
+
+    await getDeviceMcpManifest({
+      connection: { ...connection, boundDeviceId: 'nas-box' },
+      serverDB,
+      userId: 'u1',
+      workspaceId: 'ws1',
+    });
+
+    expect(listMcpToolsOnDevice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          boundDevice: { deviceId: 'nas-box', workspaceId: 'ws1' },
+          type: 'http',
+        }),
+      }),
+    );
+  });
+
+  it('starts a stdio server on its bound device', async () => {
+    vi.mocked(listMcpToolsOnDevice).mockResolvedValue(tools as never);
+
+    await expect(
+      getDeviceMcpManifest({
+        connection: {
+          args: ['serve'],
+          boundDeviceId: 'build-box',
+          command: 'my-mcp',
+          identifier: 'local-tool',
+          type: 'stdio',
+        },
+        serverDB,
+        userId: 'u1',
+      }),
+    ).resolves.toMatchObject({ identifier: 'local-tool' });
+
+    expect(listMcpToolsOnDevice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: {
+          args: ['serve'],
+          boundDevice: { deviceId: 'build-box' },
+          command: 'my-mcp',
+          name: 'local-tool',
+          type: 'stdio',
+        },
+      }),
+    );
+  });
+
+  it('fails as a precondition when the bound device is offline', async () => {
+    vi.mocked(listMcpToolsOnDevice).mockRejectedValue(
+      new McpBoundDeviceUnavailableError('nas', 'offline', 'Office NAS'),
+    );
+
+    await expect(
+      getDeviceMcpManifest({
+        connection: { ...connection, boundDeviceId: 'nas-box' },
+        serverDB,
+        userId: 'u1',
+      }),
+    ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
   });
 });

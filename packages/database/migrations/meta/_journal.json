@@ -1509,8 +1509,15 @@
     {
       "idx": 215,
       "version": "7",
+      "when": 1794770338614,
+      "tag": "0215_user_connectors_add_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 216,
+      "version": "7",
       "when": 1794757149562,
-      "tag": "0215_add_documents_created_by_agent_id_fk",
+      "tag": "0216_add_documents_created_by_agent_id_fk",
       "breakpoints": true
     }
   ],

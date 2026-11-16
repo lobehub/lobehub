@@ -7,6 +7,7 @@ import { WeComIcon } from './WeComIcon';
 
 /** Known icon names from @lobehub/ui/icons that correspond to chat platforms. */
 const ICON_NAMES = [
+  'DingTalk',
   'Discord',
   'GoogleChat',
   'IMessage',
@@ -17,17 +18,18 @@ const ICON_NAMES = [
   'Slack',
   'Telegram',
   'WeChat',
+  'WeCom',
   'WhatsApp',
 ] as const;
-
-/** Platforms whose icon is not in `@lobehub/ui/icons` yet, keyed by lowercased id / name. */
-const LOCAL_ICONS: Record<string, FC<any>> = {
-  wecom: WeComIcon,
-};
 
 /** Alias map for platforms whose display name differs from the icon name. */
 const ICON_ALIASES: Record<string, string> = {
   feishu: 'Lark',
+};
+
+/** Local replacements for @lobehub/ui/icons entries whose `.Color` variant is wrong. */
+const ICON_OVERRIDES: Partial<Record<(typeof ICON_NAMES)[number], FC<any>>> = {
+  WeCom: WeComIcon,
 };
 
 /**
@@ -35,16 +37,14 @@ const ICON_ALIASES: Record<string, string> = {
  * Accepts either a platform display name (e.g. "Feishu / Lark") or id (e.g. "discord").
  */
 export function getPlatformIcon(nameOrId: string): FC<any> | undefined {
-  const local = LOCAL_ICONS[nameOrId.toLowerCase()];
-  if (local) return local;
-
   const alias = ICON_ALIASES[nameOrId.toLowerCase()];
   if (alias) return (Icons as Record<string, any>)[alias];
 
   const name = ICON_NAMES.find(
     (n) => nameOrId.includes(n) || nameOrId.toLowerCase() === n.toLowerCase(),
   );
-  return name ? (Icons as Record<string, any>)[name] : undefined;
+  if (!name) return undefined;
+  return ICON_OVERRIDES[name] ?? (Icons as Record<string, any>)[name];
 }
 
 /**

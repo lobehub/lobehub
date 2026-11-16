@@ -310,7 +310,7 @@ export default {
     'Set an all-members rule first before adding an unlimited override for a single member.',
   'credits.memberBudget.emptyTitle': 'No member limits yet',
   'credits.costEstimateHint.desc':
-    'Show a lightweight warning before sending when the estimated model cost reaches your threshold',
+    'Before you send a message, warn above the chat input if its estimated model cost reaches this amount',
   'credits.costEstimateHint.saveError': 'Failed to save cost estimate alert settings',
   'credits.costEstimateHint.saveSuccess': 'Cost estimate alert settings saved',
   'credits.costEstimateHint.threshold': 'Warning threshold',

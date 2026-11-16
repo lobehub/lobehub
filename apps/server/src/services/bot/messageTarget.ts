@@ -1,5 +1,6 @@
 import type { MessagePlatformType } from '@lobechat/builtin-tool-message';
 import type { MessageRuntimeService } from '@lobechat/builtin-tool-message/executionRuntime';
+import { DingTalkApiClient } from '@lobechat/chat-adapter-dingtalk';
 import { LarkApiClient } from '@lobechat/chat-adapter-feishu';
 import { QQApiClient } from '@lobechat/chat-adapter-qq';
 import { WechatApiClient } from '@lobechat/chat-adapter-wechat';
@@ -15,6 +16,7 @@ import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLin
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { mergeWithDefaults, platformRegistry } from '@/server/services/bot/platforms';
+import { DingTalkMessageService } from '@/server/services/bot/platforms/dingtalk/service';
 import { DiscordApi } from '@/server/services/bot/platforms/discord/api';
 import { DiscordMessageService } from '@/server/services/bot/platforms/discord/service';
 import { FeishuMessageService } from '@/server/services/bot/platforms/feishu/service';
@@ -78,6 +80,16 @@ export const createMessageServiceForCredentials = (
       return new FeishuMessageService(
         new LarkApiClient(applicationId, credentials.appSecret, 'lark'),
         'lark',
+      );
+    }
+    case 'dingtalk': {
+      return new DingTalkMessageService(
+        new DingTalkApiClient(
+          applicationId,
+          credentials.clientSecret,
+          credentials.robotCode || applicationId,
+        ),
+        applicationId,
       );
     }
     case 'qq': {

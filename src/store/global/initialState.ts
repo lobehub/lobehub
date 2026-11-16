@@ -184,9 +184,6 @@ export const DEFAULT_DOCS_PAGE_SECTION_VIEW: DocsPageSectionView = {
   type: 'all',
 };
 
-/** How the Contacts list is ordered: by name, or most recently updated first. */
-export type ContactListSortBy = 'title' | 'updatedAt';
-
 /** How a sidebar Channel section orders its Channels. */
 export interface ChannelListSort {
   /** `updatedAt` follows the latest message, so it orders by activity. */
@@ -257,8 +254,6 @@ export interface SystemStatus {
    * match and every group would render collapsed.
    */
   collapsedTopicGroupKeysByMode?: Partial<Record<TopicGroupMode, string[]>>;
-  /** Order of the Contacts list; absent means by name. Device-local view setting. */
-  contactListSortBy?: ContactListSortBy;
   disabledModelProvidersSortType?: string;
   disabledModelsSortType?: string;
   /**

@@ -3,7 +3,7 @@ import { CHANNEL_LIMITS } from '@lobechat/types';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 
 import type { ChannelMessageItem } from '../../schemas';
-import { channelMembers, channelMessages, channelThreads, files } from '../../schemas';
+import { agents, channelMembers, channelMessages, channelThreads, files } from '../../schemas';
 import type { Transaction } from '../../type';
 import { isUuid } from '../../utils/uuid';
 import { buildWorkspaceWhere } from '../../utils/workspace';
@@ -18,6 +18,7 @@ import {
   pairedAgent,
 } from './delivery';
 import { ChannelError } from './error';
+import { peerOf, requireMutualContacts } from './peer';
 import { audit } from './transaction';
 import type { ChannelAccess } from './types';
 import { createChannelThread } from './view';
@@ -153,6 +154,20 @@ export const sendMessage = async (
     )
       throw new ChannelError('CONFLICT', 'Retry key was already used for a different message');
     return existing;
+  }
+
+  // Removing a contact silences the conversation for both people; its history stays.
+  if (channel.peerUserId && member.userId)
+    await requireMutualContacts(tx, member.userId, peerOf(channel, member.userId)!);
+
+  if (fileIds.length && channel.agentId) {
+    // Another person's shared Agent runs as its owner, who cannot read the sender's files.
+    const [bound] = await tx
+      .select({ ownerId: agents.userId })
+      .from(agents)
+      .where(eq(agents.id, channel.agentId));
+    if (bound?.ownerId !== member.userId && !channel.workspaceId)
+      throw new ChannelError('BAD_REQUEST', 'Attachments cannot be sent to a shared Agent');
   }
 
   if (fileIds.length) {

@@ -83,7 +83,7 @@ describe('resolveTopic — the topic inherits the Channel’s project', () => {
       channel('proj-1'),
       job,
       member,
-      'user-1',
+      { userId: 'user-1', workspaceId: 'ws-1' },
       2,
       executionConfig,
     );
@@ -104,7 +104,7 @@ describe('resolveTopic — the topic inherits the Channel’s project', () => {
       channel('proj-1'),
       job,
       member,
-      'user-1',
+      { userId: 'user-1', workspaceId: 'ws-1' },
       2,
       executionConfig,
     );
@@ -121,7 +121,7 @@ describe('resolveTopic — the topic inherits the Channel’s project', () => {
       channel('proj-1'),
       job,
       member,
-      'user-1',
+      { userId: 'user-1', workspaceId: 'ws-1' },
       2,
       executionConfig,
     );
@@ -138,7 +138,7 @@ describe('resolveTopic — the topic inherits the Channel’s project', () => {
       channel(null),
       job,
       member,
-      'user-1',
+      { userId: 'user-1', workspaceId: 'ws-1' },
       2,
       executionConfig,
     );

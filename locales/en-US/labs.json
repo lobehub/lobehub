@@ -30,7 +30,7 @@
   "features.imessage.title": "iMessage Channel",
   "features.inAppBrowser.desc": "Show the Browser tab in the conversation side panel: an embedded browser that opens search results in place and lets agents browse visibly.",
   "features.inAppBrowser.title": "In-App Browser",
-  "features.messageTextSelectionActions.desc": "Show a quick action when selecting text in chat messages so the selected text can be added to the next conversation context.",
+  "features.messageTextSelectionActions.desc": "Show Quote and Copy actions when selecting text in chat messages. Quote adds the selected text to your message as a quote.",
   "features.messageTextSelectionActions.title": "Message Text Selection Actions",
   "features.oauthApps.desc": "Show OAuth app management in personal and workspace settings. This feature is hidden by default.",
   "features.oauthApps.title": "OAuth Apps",

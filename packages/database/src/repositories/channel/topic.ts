@@ -1,9 +1,10 @@
+import { AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC } from '@lobechat/const';
 import type { ChannelExecutionConfig } from '@lobechat/types';
-import { and, desc, eq, isNotNull, isNull, ne } from 'drizzle-orm';
+import { and, count, desc, eq, isNotNull, isNull, ne } from 'drizzle-orm';
 import isEqual from 'fast-deep-equal';
 
 import type { ChannelItem, ChannelJobItem, ChannelMemberItem } from '../../schemas';
-import { agentOperations, channelJobs, topics } from '../../schemas';
+import { agentOperations, agentShares, channelJobs, messages, topics } from '../../schemas';
 import type { Transaction } from '../../type';
 import { CHANNEL_TOPIC_TRIGGER } from '../../utils/topicVisibility';
 
@@ -18,13 +19,25 @@ const TOPIC_STALE_THRESHOLD = 4 * 60 * 60 * 1000;
  * their credentials, devices and tool results. Sharing it with another requester's run would
  * hand that private transcript to someone else, so a member's work for other people reaches
  * this topic only as public replies (marked `self` in the prompt).
+ *
+ * Another person's shared Agent runs as its owner, so the topic belongs to the owner and its
+ * scope, with the requester as `senderId` — the same row a visit to the share page would write,
+ * hidden from the owner's own lists. Such a topic also ends at the share's per-topic turn limit,
+ * where the share page would ask for a new conversation.
  */
+export interface ChannelTopicScope {
+  /** The requester when the run executes as a shared Agent's owner. */
+  senderId?: string;
+  userId: string;
+  workspaceId: string | null;
+}
+
 export const resolveTopic = async (
   tx: Transaction,
   channel: ChannelItem,
   job: ChannelJobItem,
   member: ChannelMemberItem,
-  userId: string,
+  scope: ChannelTopicScope,
   requestSequence: number,
   executionConfig: ChannelExecutionConfig,
 ) => {
@@ -60,10 +73,12 @@ export const resolveTopic = async (
     previous.operation?.status === 'done' &&
     isEqual(prior.executionConfig, executionConfig) &&
     topic.agentId === member.agentId &&
-    topic.userId === userId &&
-    topic.workspaceId === channel.workspaceId &&
+    topic.userId === scope.userId &&
+    topic.workspaceId === scope.workspaceId &&
+    (topic.senderId ?? undefined) === scope.senderId &&
     !topic.isDeleted &&
-    (job.threadId || Date.now() - topic.updatedAt.getTime() <= TOPIC_STALE_THRESHOLD)
+    (job.threadId || Date.now() - topic.updatedAt.getTime() <= TOPIC_STALE_THRESHOLD) &&
+    !(executionConfig.share && (await reachedShareTurnLimit(tx, member.agentId!, topic.id)))
   ) {
     // A Channel that belongs to a project runs inside it, so the topic it works in
     // must say which project it belongs to: that binding is what the run resolves
@@ -89,10 +104,25 @@ export const resolveTopic = async (
       // The Channel's project, read from the Channel itself (never inferred from the
       // Agent), so a conversation started by a project Channel is born in the project.
       projectId: channel.projectId ?? undefined,
+      senderId: scope.senderId,
       trigger: CHANNEL_TOPIC_TRIGGER,
-      userId,
-      workspaceId: channel.workspaceId,
+      userId: scope.userId,
+      workspaceId: scope.workspaceId,
     })
     .returning();
   return created;
+};
+
+const reachedShareTurnLimit = async (tx: Transaction, agentId: string, topicId: string) => {
+  const [share] = await tx
+    .select({ config: agentShares.shareConfig })
+    .from(agentShares)
+    .where(eq(agentShares.agentId, agentId))
+    .limit(1);
+  const limit = share?.config?.maxTurnsPerTopic ?? AGENT_SHARE_DEFAULT_MAX_TURNS_PER_TOPIC;
+  const [turns] = await tx
+    .select({ value: count() })
+    .from(messages)
+    .where(and(eq(messages.topicId, topicId), eq(messages.role, 'user')));
+  return (turns?.value ?? 0) >= limit;
 };

@@ -9,6 +9,7 @@ import {
   resolveBotConcurrency,
   resolveBotProviderConfig,
   resolveConnectionMode,
+  restrictPlatformToWebhook,
   withResolvedConcurrencySettings,
 } from './utils';
 
@@ -146,6 +147,52 @@ describe('resolveConnectionMode', () => {
   it('falls back to webhook when platform definition is missing', () => {
     expect(resolveConnectionMode(undefined, null)).toBe('webhook');
     expect(resolveConnectionMode(undefined, { connectionMode: 'websocket' })).toBe('websocket');
+  });
+});
+
+describe('restrictPlatformToWebhook', () => {
+  const platform = {
+    connectionMode: 'websocket',
+    schema: [
+      {
+        key: 'settings',
+        properties: [
+          {
+            default: 'websocket',
+            enum: ['websocket', 'webhook'],
+            enumDescriptions: ['ws hint', 'webhook hint'],
+            enumLabels: ['WebSocket', 'Webhook'],
+            key: 'connectionMode',
+          },
+          { default: 5, key: 'charLimit' },
+        ],
+      },
+      { key: 'credentials' },
+    ],
+  } as unknown as Pick<PlatformDefinition, 'connectionMode' | 'schema'>;
+
+  it('offers webhook as the default and only mode, keeping labels aligned', () => {
+    const restricted = restrictPlatformToWebhook(platform);
+
+    expect(restricted.connectionMode).toBe('webhook');
+    expect(restricted.schema[0].properties).toEqual([
+      {
+        default: 'webhook',
+        enum: ['webhook'],
+        enumDescriptions: ['webhook hint'],
+        enumLabels: ['Webhook'],
+        key: 'connectionMode',
+      },
+      { default: 5, key: 'charLimit' },
+    ]);
+    expect(restricted.schema[1]).toEqual({ key: 'credentials' });
+  });
+
+  it('does not mutate the shared registry definition', () => {
+    restrictPlatformToWebhook(platform);
+
+    expect(platform.connectionMode).toBe('websocket');
+    expect(platform.schema[0].properties?.[0].default).toBe('websocket');
   });
 });
 

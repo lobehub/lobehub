@@ -359,12 +359,16 @@ export const claimJob = async (
     // A savepoint, so losing the directory race to another channel keeps this transaction
     // and leaves no topic or operation behind.
     claimed = await tx.transaction(async (savepoint) => {
+      const { share } = executionConfig;
+      const scope = share
+        ? { senderId: requester.userId!, userId: share.ownerId, workspaceId: share.workspaceId }
+        : { userId: requester.userId!, workspaceId: channel.workspaceId };
       const topic = await resolveTopic(
         savepoint,
         channel,
         job,
         member,
-        requester.userId!,
+        scope,
         request.sequence,
         executionConfig,
       );
@@ -380,8 +384,8 @@ export const claimJob = async (
       const operationId = `op_${Date.now()}_${member.agentId}_${topic.id}_${createNanoId(8)()}`;
       await savepoint.insert(agentOperations).values({
         id: operationId,
-        userId: requester.userId!,
-        workspaceId: channel.workspaceId,
+        userId: scope.userId,
+        workspaceId: scope.workspaceId,
         topicId: topic.id,
         agentId: member.agentId,
         trigger: 'channel',
