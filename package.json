@@ -167,15 +167,15 @@
       "prettier --write --no-error-on-unmatched-pattern"
     ],
     "*.{mjs,cjs}": [
-      "oxlint --fix",
+      "oxlint --fix --no-error-on-unmatched-pattern",
       "prettier --write"
     ],
     "*.{js,jsx}": [
-      "oxlint --fix",
+      "oxlint --fix --no-error-on-unmatched-pattern",
       "prettier --write"
     ],
     "*.{ts,tsx}": [
-      "oxlint --fix",
+      "oxlint --fix --no-error-on-unmatched-pattern",
       "prettier --parser=typescript --write"
     ],
     "*.{css,less}": [
@@ -223,7 +223,7 @@
     "@fal-ai/client": "^1.10.1",
     "@floating-ui/react": "^0.27.20",
     "@formkit/auto-animate": "^0.9.0",
-    "@google/genai": "^2.13.0",
+    "@google/genai": "^2.24.0",
     "@henrygd/queue": "^1.2.0",
     "@huggingface/inference": "^4.13.25",
     "@icons-pack/react-simple-icons": "^13.15.1",
@@ -289,11 +289,13 @@
     "@lobechat/business-model-bank": "workspace:*",
     "@lobechat/business-model-runtime": "workspace:*",
     "@lobechat/canvas": "workspace:*",
+    "@lobechat/chat-adapter-dingtalk": "workspace:*",
     "@lobechat/chat-adapter-feishu": "workspace:*",
     "@lobechat/chat-adapter-imessage": "workspace:*",
     "@lobechat/chat-adapter-line": "workspace:*",
     "@lobechat/chat-adapter-qq": "workspace:*",
     "@lobechat/chat-adapter-wechat": "workspace:*",
+    "@lobechat/chat-adapter-wecom": "workspace:*",
     "@lobechat/config": "workspace:*",
     "@lobechat/connector-data": "workspace:*",
     "@lobechat/const": "workspace:*",
@@ -335,9 +337,10 @@
     "@lobehub/charts": "^6.0.0",
     "@lobehub/desktop-ipc-typings": "workspace:*",
     "@lobehub/editor": "7.2.1",
-    "@lobehub/icons": "^6.13.0",
+    "@lobehub/icons": "^6.15.2",
     "@lobehub/market-sdk": "0.46.0",
-    "@lobehub/ui": "^6.13.1",
+    "@lobehub/tts": "^6.1.0",
+    "@lobehub/ui": "^6.16.0",
     "@modelcontextprotocol/client": "~2.4.0",
     "@modelcontextprotocol/ext-apps": "^2.0.3",
     "@neondatabase/serverless": "^1.1.0",

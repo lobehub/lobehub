@@ -276,7 +276,7 @@ const ProjectListPage = memo(() => {
   const listState = resolveProjectListState({ error, isHydrated, isValidating, projects });
   const sortBy = useGlobalStore(systemStatusSelectors.projectListSortBy);
   const viewMode = useGlobalStore(systemStatusSelectors.projectListViewMode);
-  // Cards draw recent topics, tasks and members, which the light list row never needs.
+  // Cards draw recent tasks and members, which the light list row never needs.
   const overviewSync = useProjectStore((s) => s.useFetchProjectOverviews)(
     enabled && viewMode === 'folder',
   );

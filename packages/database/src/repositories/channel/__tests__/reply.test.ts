@@ -47,15 +47,10 @@ const threads = (channelId: string) =>
 
 describe('Channel replies', () => {
   it.each(['decision', 'fallback'] as const)(
-    'quotes a human without dispatch even when @mentioning an Agent (%s)',
+    'quotes a human without dispatch when mentioning no one (%s)',
     async (routing) => {
-      const { asOwner, author, channel, input, root } = await setup();
-      const message = await asOwner.send(channel.id, {
-        ...input,
-        mentions: [author.id],
-        replyToId: root.id,
-        routing,
-      });
+      const { asOwner, channel, input, root } = await setup();
+      const message = await asOwner.send(channel.id, { ...input, replyToId: root.id, routing });
       expect(message).toMatchObject({
         replyToId: root.id,
         threadId: null,
@@ -73,10 +68,32 @@ describe('Channel replies', () => {
     },
   );
 
+  it.each(['decision', 'fallback'] as const)(
+    'dispatches the Agents @mentioned in a human quote, in the same feed (%s)',
+    async (routing) => {
+      const { asOwner, author, channel, input, root } = await setup();
+      const message = await asOwner.send(channel.id, {
+        ...input,
+        mentions: [author.id],
+        replyToId: root.id,
+        routing,
+      });
+      expect(message).toMatchObject({
+        replyToId: root.id,
+        threadId: null,
+        routingStatus: 'directed',
+        routingReason: 'Mentioned',
+        recipientMemberIds: [author.id],
+      });
+      expect(await jobsOf(db, message.id)).toMatchObject([{ memberId: author.id }]);
+      expect(await threads(channel.id)).toEqual([]);
+    },
+  );
+
   it('does not invoke the paired Agent when replying to a human', async () => {
     const repo = new ChannelRepository(db, fixture.ownerId);
     const { channel } = await repo.create({ title: 'Pair' });
-    const author = await fixture.addAgent(channel.id, 'Only Agent');
+    await fixture.addAgent(channel.id, 'Only Agent');
     const root = await repo.send(channel.id, {
       content: 'Hi',
       requestKey: 'root',
@@ -87,7 +104,6 @@ describe('Channel replies', () => {
       requestKey: 'correction',
       routing: 'fallback',
       replyToId: root.id,
-      mentions: [author.id],
     });
     expect(message.routingStatus).toBe('skipped');
     expect(await jobsOf(db, message.id)).toEqual([]);
@@ -148,8 +164,12 @@ describe('Channel replies', () => {
       replyToId: next.id,
       threadId: thread.id,
     });
+    // Quoting a person stays in the thread; only the mentioned Agent is asked.
     expect(humanQuote.threadId).toBe(thread.id);
-    expect(await jobsOf(db, humanQuote.id)).toEqual([]);
+    expect(humanQuote.recipientMemberIds).toEqual([other.id]);
+    expect(await jobsOf(db, humanQuote.id)).toMatchObject([
+      { memberId: other.id, threadId: thread.id },
+    ]);
     expect(await threads(channel.id)).toHaveLength(1);
   });
 

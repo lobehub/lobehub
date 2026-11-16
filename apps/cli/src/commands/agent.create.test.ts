@@ -96,6 +96,43 @@ describe('agent create', () => {
     expect(consoleSpy).toHaveBeenCalledWith(`  Visibility: ${v}`);
   });
 
+  it('passes repeated --tag flags as config.tags, trimmed and without duplicates', async () => {
+    mockTrpcClient.agent.createAgent.mutate.mockResolvedValue({ agentId: 'a-new' });
+
+    const program = createProgram();
+    await program.parseAsync([
+      'node',
+      'test',
+      'agent',
+      'create',
+      '-t',
+      'x',
+      '--tag',
+      'lobe-pet',
+      '--tag',
+      ' pet:dafeiyu ',
+      '--tag',
+      'lobe-pet',
+      '--tag',
+      ' ',
+    ]);
+
+    expect(mockTrpcClient.agent.createAgent.mutate).toHaveBeenCalledWith({
+      config: { tags: ['lobe-pet', 'pet:dafeiyu'], title: 'x' },
+    });
+  });
+
+  it('sends no tags without --tag', async () => {
+    mockTrpcClient.agent.createAgent.mutate.mockResolvedValue({ agentId: 'a-new' });
+
+    const program = createProgram();
+    await program.parseAsync(['node', 'test', 'agent', 'create', '-t', 'x']);
+
+    expect(mockTrpcClient.agent.createAgent.mutate.mock.calls[0][0].config).not.toHaveProperty(
+      'tags',
+    );
+  });
+
   it('rejects an unknown --visibility value before calling the server', async () => {
     const program = createProgram();
     program.exitOverride();

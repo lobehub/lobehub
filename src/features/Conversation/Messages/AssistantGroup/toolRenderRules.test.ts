@@ -5,9 +5,11 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import {
+  getBreakoutPredicate,
   isBreakoutTool,
   isImageBearingTool,
   isImageOutputTool,
+  isImageReadTool,
   isMcpAppTool,
   shouldRenderToolCall,
 } from './toolRenderRules';
@@ -148,5 +150,31 @@ describe('isMcpAppTool', () => {
   it('breaks out of collapsed workflow runs', () => {
     expect(isBreakoutTool(mcp(view))).toBe(true);
     expect(isBreakoutTool(mcp({ content: [] }))).toBe(false);
+  });
+});
+
+describe('getBreakoutPredicate', () => {
+  const imageRead = {
+    apiName: 'Read',
+    id: 't',
+    identifier: 'claude-code',
+    result: { content: 'x', id: 'r', state: { images: [{ url: 'https://x/a.png' }] } },
+  } as any;
+  const mcpApp = {
+    apiName: 'get_weather',
+    id: 't',
+    identifier: 'weather-demo',
+    result: { content: 'x', id: 'r', state: { mcpApp: { resourceUri: 'ui://weather/view' } } },
+  } as any;
+
+  it('breaks out image reads unless the user turned them off', () => {
+    expect(isImageReadTool(imageRead)).toBe(true);
+    expect(getBreakoutPredicate({})(imageRead)).toBe(true);
+    expect(getBreakoutPredicate({ showImageReads: false })(imageRead)).toBe(false);
+  });
+
+  it('breaks out MCP App views only behind the runtime flag', () => {
+    expect(getBreakoutPredicate({ showImageReads: false })(mcpApp)).toBe(false);
+    expect(getBreakoutPredicate({ enableMcpApps: true, showImageReads: false })(mcpApp)).toBe(true);
   });
 });

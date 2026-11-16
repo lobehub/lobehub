@@ -5,7 +5,7 @@ import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import dayjs from 'dayjs';
 import { StarIcon } from 'lucide-react';
-import { Fragment, memo } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFavoriteToggle } from '@/features/Favorites';
@@ -24,8 +24,14 @@ import { folderCardMarker } from './markers.stylex';
 
 const PAPER_EASE = 'cubic-bezier(.2,.8,.2,1)';
 const REDUCED_MOTION = '@media (prefers-reduced-motion: reduce)';
-// Opaque, so the tab laid over the back panel joins it without a darker overlap.
-const FOLDER_COLOR = `color-mix(in srgb, ${cssVar.colorText} 6%, ${cssVar.colorBgContainer})`;
+// Light mode keeps three tones apart so the card does not wash into the white
+// page: a grey folder, a lighter pocket in front of it, and the paper as the
+// only near-white surface, a shade off pure white. All opaque, so the tab laid
+// over the back panel joins it without a darker overlap.
+const FOLDER_COLOR = `color-mix(in srgb, ${cssVar.colorText} 8%, ${cssVar.colorBgContainer})`;
+const POCKET_COLOR = `color-mix(in srgb, ${cssVar.colorText} 6%, ${cssVar.colorBgContainer})`;
+const PAPER_COLOR = `color-mix(in srgb, ${cssVar.colorText} 2%, ${cssVar.colorBgContainer})`;
+const PAPER_BEHIND_COLOR = `color-mix(in srgb, ${cssVar.colorText} 4%, ${cssVar.colorBgContainer})`;
 // Dark mode keeps the light layering: a recessed folder, the paper as the
 // brightest surface, and a pocket close to the page.
 const FOLDER_COLOR_DARK = `color-mix(in srgb, ${cssVar.colorBgLayout} 50%, ${cssVar.colorBgContainer})`;
@@ -33,7 +39,7 @@ const FOLDER_COLOR_DARK = `color-mix(in srgb, ${cssVar.colorBgLayout} 50%, ${css
 const styles = stylex.create({
   back: {
     backgroundColor: FOLDER_COLOR,
-    borderColor: cssVar.colorBorderSecondary,
+    borderColor: cssVar.colorBorder,
     borderStyle: 'solid',
     borderWidth: 1,
     borderEndEndRadius: 16,
@@ -106,8 +112,8 @@ const styles = stylex.create({
     paddingInlineEnd: 28,
   },
   paper: {
-    backgroundColor: cssVar.colorBgElevated,
-    borderColor: cssVar.colorBorderSecondary,
+    backgroundColor: PAPER_COLOR,
+    borderColor: cssVar.colorBorder,
     borderRadius: 10,
     borderStyle: 'solid',
     borderWidth: 1,
@@ -127,7 +133,7 @@ const styles = stylex.create({
     transitionTimingFunction: PAPER_EASE,
   },
   paperBehind: {
-    backgroundColor: cssVar.colorBgContainer,
+    backgroundColor: PAPER_BEHIND_COLOR,
     boxShadow: 'none',
     insetBlockStart: 14,
     insetInline: 28,
@@ -143,10 +149,11 @@ const styles = stylex.create({
   paperDark: {
     backgroundColor: `color-mix(in srgb, ${cssVar.colorText} 8%, ${cssVar.colorBgElevated})`,
   },
+  // Opaque, without a backdrop blur: the papers slide up behind the pocket on
+  // hover, and a blur over them repaints the strip on every frame of that slide.
   pocket: {
-    backdropFilter: 'blur(16px) saturate(1.2)',
-    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgLayout} 78%, transparent)`,
-    borderColor: cssVar.colorBorderSecondary,
+    backgroundColor: POCKET_COLOR,
+    borderColor: cssVar.colorBorder,
     borderRadius: 16,
     borderStyle: 'solid',
     borderWidth: 1,
@@ -162,27 +169,22 @@ const styles = stylex.create({
     position: 'absolute',
   },
   pocketDark: {
-    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 78%, transparent)`,
+    backgroundColor: cssVar.colorBgContainer,
   },
   root: {
     height: 300,
     position: 'relative',
   },
-  sep: {
-    backgroundColor: cssVar.colorTextQuaternary,
-    borderRadius: '50%',
-    flexShrink: 0,
-    height: 2,
-    width: 2,
-  },
   star: {
+    alignSelf: 'center',
+    display: 'inline-flex',
     flexShrink: 0,
-    marginInlineStart: 'auto',
+    marginInlineEnd: -4,
   },
   tab: {
     backgroundColor: FOLDER_COLOR,
     borderBlockEndWidth: 0,
-    borderColor: cssVar.colorBorderSecondary,
+    borderColor: cssVar.colorBorder,
     borderStartEndRadius: 12,
     borderStartStartRadius: 12,
     borderStyle: 'solid',
@@ -203,7 +205,7 @@ interface FolderCardProps {
 
 /**
  * A project as a folder: a back panel with a tab, the project's latest content
- * on a paper inside, and a frosted pocket in front with its name and numbers.
+ * on a paper inside, and a pocket in front with its name and numbers.
  */
 export const FolderCard = memo<FolderCardProps>(({ overviewStatus, project }) => {
   const { t } = useTranslation('project');
@@ -216,18 +218,12 @@ export const FolderCard = memo<FolderCardProps>(({ overviewStatus, project }) =>
   const rich = isRichFolder(overview);
   const running = project.status === 'active';
   const showCounts = overviewStatus === 'loaded';
-  const topicCount = overview?.topicCount ?? 0;
   const taskCount = overview?.taskCount ?? 0;
-
-  const metaItems = [
-    showCounts &&
-      (topicCount > 0
-        ? t('list.folder.topicCount', { count: topicCount })
-        : t('list.folder.noTopics')),
-    showCounts &&
-      taskCount > 0 &&
-      t('list.folder.taskProgress', { done: overview?.taskDoneCount ?? 0, total: taskCount }),
-  ].filter((item): item is string => !!item);
+  const taskSummary = showCounts
+    ? taskCount > 0
+      ? t('list.folder.taskProgress', { done: overview?.taskDoneCount ?? 0, total: taskCount })
+      : t('list.folder.noTasks')
+    : undefined;
 
   return (
     <ContextMenuTrigger items={menuItems}>
@@ -254,8 +250,6 @@ export const FolderCard = memo<FolderCardProps>(({ overviewStatus, project }) =>
         >
           <div {...stylex.props(styles.pocket, isDark && styles.pocketDark)}>
             <div {...stylex.props(styles.nameRow)}>
-              <span {...stylex.props(styles.name)}>{project.name}</span>
-              <span {...stylex.props(styles.identifier)}>{project.identifier}</span>
               {isFavorite && (
                 <span {...stylex.props(styles.star)}>
                   <Icon
@@ -266,6 +260,8 @@ export const FolderCard = memo<FolderCardProps>(({ overviewStatus, project }) =>
                   />
                 </span>
               )}
+              <span {...stylex.props(styles.name)}>{project.name}</span>
+              <span {...stylex.props(styles.identifier)}>{project.identifier}</span>
             </div>
             <div {...stylex.props(styles.meta)}>
               {running && (
@@ -273,12 +269,7 @@ export const FolderCard = memo<FolderCardProps>(({ overviewStatus, project }) =>
                   <span aria-label={t('list.folder.running')} {...stylex.props(styles.dot)} />
                 </Tooltip>
               )}
-              {metaItems.map((item, index) => (
-                <Fragment key={index}>
-                  {index > 0 && <span {...stylex.props(styles.sep)} />}
-                  <span>{item}</span>
-                </Fragment>
-              ))}
+              {taskSummary && <span>{taskSummary}</span>}
               <span {...stylex.props(styles.metaFill)} />
               <AgentStack agents={overview?.agents} project={project} />
               <span title={dayjs(project.updatedAt).format('YYYY-MM-DD HH:mm')}>

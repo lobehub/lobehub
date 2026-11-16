@@ -10,6 +10,15 @@ export interface CustomPluginMetadata {
   name?: string;
 }
 
+/**
+ * How an HTTP MCP server is reached: `auto` decides by its address (a
+ * localhost / private-network URL from the user's device, any other from
+ * wherever the call runs); `device` always connects from the user's device, for
+ * addresses only their machine reaches (Tailscale, `.local`, intranet DNS).
+ * Mirrors `McpConnectVia` in `@lobechat/utils/mcpEndpoint`, the routing rule.
+ */
+export type McpConnectVia = 'auto' | 'device';
+
 export interface CustomPluginParams {
   apiMode?: 'openapi' | 'simple';
   avatar?: string;
@@ -60,6 +69,13 @@ export interface CustomPluginParams {
     };
     // Added headers configuration support
     headers?: Record<string, string>;
+    /** HTTP only: where the server is reached from. Absent means `auto`. */
+    connectVia?: McpConnectVia;
+    /**
+     * Connectors only: the device a server that runs on the user's device is
+     * pinned to (`metadata.boundDeviceId`). Absent: picked automatically.
+     */
+    boundDeviceId?: string;
   };
   useProxy?: boolean;
 }

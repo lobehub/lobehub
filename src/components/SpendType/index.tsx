@@ -9,6 +9,7 @@ import {
   ImagePlus,
   MessageSquareText,
   Mic,
+  Music,
   Video,
 } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
@@ -18,6 +19,7 @@ const styles = stylex.create({
   chat: { color: cssVar.colorInfo },
   embedding: { color: cssVar.purple },
   imageGeneration: { color: cssVar.colorSuccess },
+  musicGeneration: { color: cssVar.volcano },
   speechRecognition: { color: cssVar.colorInfo },
   textToSpeech: { color: cssVar.cyan },
   videoGeneration: { color: cssVar.colorWarning },
@@ -28,6 +30,7 @@ export type SpendTypeValue =
   | 'chat'
   | 'embedding'
   | 'imageGeneration'
+  | 'musicGeneration'
   | 'speechRecognition'
   | 'textToSpeech'
   | 'videoGeneration';
@@ -51,6 +54,9 @@ const getIcon = (type: string) => {
     }
     case 'imageGeneration': {
       return ImagePlus;
+    }
+    case 'musicGeneration': {
+      return Music;
     }
     case 'speechRecognition': {
       return Mic;

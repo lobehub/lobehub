@@ -16,10 +16,11 @@ import {
 } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { Archive, ArrowDownUp, Hash, MoreHorizontal, Plus } from 'lucide-react';
+import { Archive, ArrowDownUp, Compass, Hash, MoreHorizontal, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AsyncError from '@/components/AsyncError';
 import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
@@ -33,9 +34,10 @@ import { useGlobalStore } from '@/store/global';
 import type { ChannelListSort } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
+import { openBrowseChannels } from './BrowseChannels';
 import { channelsInScope } from './channelScope';
 import { openCreateChannel } from './CreateChannel';
-import { matchChannel } from './paths';
+import { matchChannel, matchChannelThread } from './paths';
 import { sortChannels } from './sortChannels';
 import { threadTitle } from './threadTitle';
 import { useChannelEvents } from './useChannelEvents';
@@ -200,7 +202,7 @@ interface ChannelSectionProps {
  */
 const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSectionProps) => {
   const { t } = useTranslation('channel');
-  const { pathname, search } = useActiveLocation();
+  const { pathname } = useActiveLocation();
   const navigate = useWorkspaceAwareNavigate();
   const slug = useActiveWorkspaceSlug();
   const sync = channelActions.useFetchList();
@@ -217,9 +219,12 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
   const activeChannelId = matchChannel(pathname);
   const create = () =>
     openCreateChannel((id) => navigate(CHANNEL_URL(id, null, projectId)), projectId);
+  // Public Channels exist only in a workspace; a personal space has nobody else's to join.
+  const workspaceId = useActiveWorkspaceId();
+  const browse = () =>
+    openBrowseChannels((channel) => navigate(CHANNEL_URL(channel.id, null, channel.projectId)));
   // Only a thread opened as the page is the current entry; one beside the Channel is not.
-  const query = new URLSearchParams(search);
-  const activeThreadId = query.get('view') === 'page' ? query.get('thread') : null;
+  const activeThreadId = matchChannelThread(pathname) ?? null;
   const menuItems = useChannelMenu();
   const setSort = (channelListSort: ChannelListSort) => updateSystemStatus({ channelListSort });
   // Name sorts read as A–Z / Z–A; time sorts as newest / oldest first.
@@ -335,6 +340,18 @@ const EnabledChannelSection = ({ itemKey = 'channels', projectId }: ChannelSecti
               onClick={(event) => event.stopPropagation()}
             />
           </DropdownMenu>
+          {workspaceId && (
+            <ActionIcon
+              aria-label={t('browse.title')}
+              icon={Compass}
+              size="small"
+              title={t('browse.title')}
+              onClick={(event) => {
+                event.stopPropagation();
+                browse();
+              }}
+            />
+          )}
           <ActionIcon
             aria-label={t('create')}
             icon={Plus}

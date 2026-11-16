@@ -17,6 +17,7 @@ import { useHomeStore } from '@/store/home';
 import { useImageStore } from '@/store/image';
 import { integrationActions } from '@/store/integration';
 import { useKnowledgeBaseStore } from '@/store/library';
+import { mcpAppActions } from '@/store/mcpApp/action';
 import { useMentionStore } from '@/store/mention';
 import { messengerActions } from '@/store/messenger';
 import { useNotebookStore } from '@/store/notebook';
@@ -62,6 +63,7 @@ const resetableStores: ResetableStoreApi[] = [
 
 const resetableActions: ResetableStore[] = [
   channelActions,
+  mcpAppActions,
   agentDocumentActions,
   expertiseActions,
   integrationActions,

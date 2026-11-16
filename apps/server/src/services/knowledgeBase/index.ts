@@ -22,7 +22,10 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { DocumentService } from '@/server/services/document';
 import { resolveEnterpriseContentScopes } from '@/server/services/enterpriseKnowledge/contentAccess';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
-import { assertContentsNotInRestrictedKnowledgeBase } from '@/server/services/knowledgeBaseAccess';
+import {
+  assertContentsNotInRestrictedKnowledgeBase,
+  type UsableKnowledgeBaseResolver,
+} from '@/server/services/knowledgeBaseAccess';
 
 export interface FileContentResult {
   content: string;
@@ -232,7 +235,15 @@ export class KnowledgeBaseSearchService {
     };
   }
 
-  async getFileContents(ids: string[]): Promise<FileContentResult[]> {
+  /**
+   * @param options.resolveUsableKnowledgeBaseIds Only agent tool runtimes pass it, so a
+   *   member's "No access" knowledge base stays readable by the agents it is mounted on while
+   *   direct reads keep the manager-only rule.
+   */
+  async getFileContents(
+    ids: string[],
+    options: { resolveUsableKnowledgeBaseIds?: UsableKnowledgeBaseResolver } = {},
+  ): Promise<FileContentResult[]> {
     await assertContentsNotInRestrictedKnowledgeBase(
       {
         serverDB: this.serverDB,
@@ -240,6 +251,7 @@ export class KnowledgeBaseSearchService {
         workspaceId: this.workspaceId,
       },
       ids,
+      options,
     );
     const scopes = await resolveEnterpriseContentScopes(
       { serverDB: this.serverDB, userId: this.askerId, workspaceId: this.workspaceId },

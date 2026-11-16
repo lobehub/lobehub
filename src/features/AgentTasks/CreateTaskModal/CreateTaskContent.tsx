@@ -535,6 +535,7 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
             )}
 
             <TaskExecutionControls
+              canPinPrivateDevices
               assigneeAgentId={assigneeAgentId}
               disabled={!canCreateTask}
               value={execution}

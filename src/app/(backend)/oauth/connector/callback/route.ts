@@ -174,6 +174,8 @@ export const GET = async (req: NextRequest) => {
       const { toolCount } = await syncConnectorToolsById(payload.connectorId, {
         connectorModel,
         connectorToolModel,
+        // A connector set to connect through the device lists on the user's device
+        serverDB,
         userId: payload.lobeUserId,
       });
       synced = true;

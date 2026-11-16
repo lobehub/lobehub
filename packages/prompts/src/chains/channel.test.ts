@@ -1,7 +1,12 @@
 import type { ChannelContextMessage, ChannelInputManifest } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { buildChannelPrompt, CHANNEL_INSTRUCTIONS, CHANNEL_REPLY_GUIDELINES } from './channel';
+import {
+  buildChannelPrompt,
+  CHANNEL_INSTRUCTIONS,
+  CHANNEL_REPLY_GUIDELINES,
+  projectChannelHistory,
+} from './channel';
 
 describe('Channel request prompt', () => {
   it('includes the public-reply policy with the technical-detail exception', () => {
@@ -132,6 +137,33 @@ describe('Channel request prompt', () => {
         '</channel_request boundary="b0">',
       ].join('\n'),
     );
+  });
+
+  it('names the Agent that relayed a request from another Channel', () => {
+    const relayed = message('current', 'Please take a look', caller, {
+      via: { agentId: 'agent-relayer', name: 'Project Agent' },
+    });
+    expect(buildChannelPrompt(manifest, [relayed], { boundary: 'b0' })).toContain(
+      '<channel_request from="Mia" type="user" via="Project Agent" to="Codex" boundary="b0">',
+    );
+    expect(
+      projectChannelHistory({
+        cutoffSequence: 1,
+        messages: [{ ...relayed, contentLength: 18, truncated: false }],
+        nextBeforeSequence: null,
+      }).messages[0],
+    ).toMatchObject({ via: 'Project Agent' });
+  });
+
+  it('marks a relayed reply brought back to the Agent that relayed the message', () => {
+    const receipt = message('current', 'Taking it', caller, {
+      receipt: { channelId: 'channel-platform', channelTitle: 'Platform', messageId: 'reply-1' },
+      via: { agentId: 'agent-answerer', name: 'Answerer' },
+    });
+    expect(buildChannelPrompt(manifest, [receipt], { boundary: 'b0' })).toContain(
+      '<channel_request from="Mia" type="user" via="Answerer" reply_from="#Platform" to="Codex" boundary="b0">',
+    );
+    expect(CHANNEL_INSTRUCTIONS).toContain('do not relay it again');
   });
 
   it('points at the full message only when the excerpt is not enough', () => {

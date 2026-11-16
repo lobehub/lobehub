@@ -21,8 +21,19 @@ vi.mock('@/hooks/useGatewayReconnect', () => ({ useGatewayReconnect: hooks.useGa
 vi.mock('@/hooks/useTopicRunEvents', () => ({ useTopicRunEvents: hooks.useTopicRunEvents }));
 vi.mock('@/hooks/useOperationState', () => ({ useOperationState: () => ({}) }));
 
+const conversation = vi.hoisted(() => ({ contexts: [] as { topicId?: string | null }[] }));
+
 vi.mock('@/features/Conversation', () => ({
-  ConversationProvider: ({ children }: { children: unknown }) => children,
+  ConversationProvider: ({
+    children,
+    context,
+  }: {
+    children: unknown;
+    context: { topicId?: string | null };
+  }) => {
+    conversation.contexts.push(context);
+    return children;
+  },
 }));
 
 vi.mock('@/store/agent', () => {
@@ -60,6 +71,7 @@ vi.mock('@/store/chat/selectors', () => ({
 beforeEach(() => {
   hooks.useGatewayReconnect.mockReset();
   hooks.useTopicRunEvents.mockReset();
+  conversation.contexts = [];
   chat.state = {
     activeAgentId: 'agt_goal',
     activeTopicId: 'tpc_goal',
@@ -101,12 +113,38 @@ describe('GoalChatProvider', () => {
     chat.state.activeTopicId = 'tpc_other';
 
     render(
-      <GoalChatProvider pinned agentId="agt_goal" goalId="goal_1" initialTopicId="tpc_goal">
+      <GoalChatProvider agentId="agt_goal" goalId="goal_1" initialTopicId="tpc_goal">
         <div />
       </GoalChatProvider>,
     );
 
     for (const [topicId] of hooks.useGatewayReconnect.mock.calls) expect(topicId).toBeUndefined();
     for (const [topicId] of hooks.useTopicRunEvents.mock.calls) expect(topicId).toBeUndefined();
+  });
+
+  // ROOT CAUSE (T-14085):
+  //
+  // The supervision panel read the store's `activeTopicId`, which other hosts
+  // on the page also write. On the agent-less `/goal/:goalId` route the task
+  // manager panel stays mounted while folded; when its built-in agent finished
+  // loading after the panel opened, it switched the store to a blank topic, so
+  // the panel fetched no messages and showed "Waiting for the first run" over
+  // a record that has turns — only on some loads, depending on which came last.
+  //
+  // Before: context topic = store's active topic. After: the bound record.
+  it('keeps reading its bound record when another host moves the active topic', () => {
+    chat.state.activeAgentId = 'agt_task';
+    chat.state.activeTopicId = null as unknown as string;
+
+    render(
+      <GoalChatProvider pinned agentId="agt_goal" goalId="goal_1" initialTopicId="tpc_goal">
+        <div />
+      </GoalChatProvider>,
+    );
+
+    expect(conversation.contexts.length).toBeGreaterThan(0);
+    for (const context of conversation.contexts) expect(context.topicId).toBe('tpc_goal');
+    expect(hooks.useGatewayReconnect).toHaveBeenLastCalledWith('tpc_goal', marker, 'agt_goal');
+    expect(hooks.useTopicRunEvents).toHaveBeenLastCalledWith('tpc_goal', 'agt_goal');
   });
 });

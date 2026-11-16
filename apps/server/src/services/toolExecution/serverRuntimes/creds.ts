@@ -6,7 +6,16 @@ import debug from 'debug';
 import { UserModel } from '@/database/models/user';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { MarketService } from '@/server/services/market';
-import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
+import {
+  getSandboxProviderKind,
+  MarketSandboxProvider,
+  resolveSandboxSessionConfig,
+  type SandboxProvider,
+} from '@/server/services/sandbox';
+import {
+  mergeCredsEnvListing,
+  resolveInjectedEnvVarsByKey,
+} from '@/server/services/sandbox/credsEnv';
 
 import { type ToolExecutionContext } from '../types';
 import { resolveContentWorkspaceId } from './resolveWorkspaceScope';
@@ -34,6 +43,7 @@ export class ServerCredsService implements ICredsService {
   private workspaceId?: string;
 
   private isShareVisitor: boolean;
+  private sandboxProvider?: Pick<SandboxProvider, 'callTool'>;
 
   private sandboxTarget: CredsSandboxTarget;
 
@@ -50,6 +60,11 @@ export class ServerCredsService implements ICredsService {
        * the allowlist alone.
        */
       isShareVisitor?: boolean;
+      /**
+       * The Market sandbox the injection lands in. When set, `~/.creds/env` is
+       * merged after each injection so earlier injections stay listed.
+       */
+      sandboxProvider?: Pick<SandboxProvider, 'callTool'>;
       /** Where the topic's tool calls run; injection must land in the same sandbox. */
       sandboxTarget?: CredsSandboxTarget;
       workspaceId?: string;
@@ -58,6 +73,7 @@ export class ServerCredsService implements ICredsService {
     this.marketService = marketService;
     this.workspaceId = options.workspaceId;
     this.isShareVisitor = options.isShareVisitor ?? false;
+    this.sandboxProvider = options.sandboxProvider;
     this.sandboxTarget = options.sandboxTarget ?? {};
   }
 
@@ -142,6 +158,7 @@ export class ServerCredsService implements ICredsService {
       env?: Record<string, string>;
       files?: Array<{ filename: string; key: string; path: string }>;
     };
+    envVarsByKey?: Record<string, string[]>;
     notFound?: string[];
     success: boolean;
     unsupportedInSandbox?: string[];
@@ -185,7 +202,20 @@ export class ServerCredsService implements ICredsService {
 
     log('injectCreds success: notFound=%d', result.notFound?.length || 0);
 
-    return result as any;
+    const envVarsByKey = await resolveInjectedEnvVarsByKey(params.keys, result, (key) =>
+      this.marketService.market.creds.inject({
+        keys: [key],
+        sandbox: false,
+        topicId: params.topicId,
+        userId: params.userId,
+      }),
+    );
+
+    if (params.sandbox !== false && this.sandboxProvider) {
+      await mergeCredsEnvListing(this.sandboxProvider);
+    }
+
+    return { ...result, envVarsByKey } as any;
   }
 
   async listCreds(): Promise<{
@@ -280,8 +310,26 @@ export const credsRuntime: ServerRuntimeRegistration = {
       sandbox.claim,
     );
 
+    // Market's inject endpoint only writes into a Market sandbox, so the
+    // listing merge runs there too, in the same session the commands use.
+    const sandboxProvider =
+      getSandboxProviderKind() === 'market' && context.topicId
+        ? new MarketSandboxProvider({
+            marketService,
+            sandboxCwd: sandbox.cwd,
+            sandboxInstanceId: sandbox.environment,
+            sandboxMode: sandbox.mode,
+            sandboxSpecification: sandbox.specification,
+            sandboxWorkingDir: sandbox.workingDir,
+            serverDB: context.serverDB,
+            topicId: context.topicId,
+            userId: context.userId,
+          })
+        : undefined;
+
     const credsService = new ServerCredsService(marketService, {
       isShareVisitor: Boolean(context.agentShareVisitor),
+      sandboxProvider,
       sandboxTarget: { instanceId: sandbox.environment, mode: sandbox.mode },
       workspaceId,
     });

@@ -1,6 +1,7 @@
 import type { IconType } from '@lobehub/icons';
 import {
   Amp,
+  Antigravity,
   ClaudeCode,
   CodeBuddy,
   Codex,
@@ -40,6 +41,7 @@ export type LocalRuntimeHeterogeneousAgentClientConfig =
   };
 
 const heterogeneousAgentIcons = {
+  'antigravity': Antigravity,
   'amp': Amp,
   'claude-code': ClaudeCode,
   'codebuddy': CodeBuddy,

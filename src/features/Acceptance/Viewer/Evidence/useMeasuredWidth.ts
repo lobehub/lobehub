@@ -18,15 +18,19 @@ import { useLayoutEffect, useState } from 'react';
 export const useMeasuredWidth = <T extends HTMLElement = HTMLDivElement>() => {
   const [node, setNode] = useState<T | null>(null);
   const [width, setWidth] = useState<number>();
+  const [height, setHeight] = useState<number>();
 
   useLayoutEffect(() => {
     if (!node) return;
-    const measure = () => setWidth(node.clientWidth || undefined);
+    const measure = () => {
+      setWidth(node.clientWidth || undefined);
+      setHeight(node.clientHeight || undefined);
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(node);
     return () => observer.disconnect();
   }, [node]);
 
-  return { node, ref: setNode, width };
+  return { height, node, ref: setNode, width };
 };

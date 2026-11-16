@@ -34,6 +34,7 @@ import {
 } from '@/server/services/aiAgent/deviceToolAudit';
 import { resolveRunWorkAccessScope } from '@/server/services/workRegistration';
 
+import { parkAsyncShell } from '../asyncShellPark';
 import type { RuntimeExecutorContext } from '../context';
 import { dispatchClientTool } from '../dispatchClientTool';
 import {
@@ -352,6 +353,27 @@ export class ServerToolTransport implements ToolTransport {
               ),
           },
         );
+
+        // A device command still running after its wait window, which the
+        // device promised to report on: park instead of returning the
+        // `shell_id`. A no-op for every other result.
+        execution =
+          (await parkAsyncShell(
+            this.ctx,
+            {
+              existingToolMessageId: context.reuseExistingMessage
+                ? context.toolMessageId
+                : undefined,
+              parentMessageId: context.parentMessageId,
+              resultLimit: {
+                canReadArchive: enabledToolIds.includes(AgentDocumentsIdentifier),
+                maxLength: context.toolResultMaxLength,
+              },
+              state: context.state,
+              toolCall: chatToolPayload,
+            },
+            execution.result,
+          )) ?? execution;
       }
 
       if (execution.result.deferred) {

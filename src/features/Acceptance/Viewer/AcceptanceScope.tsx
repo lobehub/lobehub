@@ -1,11 +1,14 @@
 'use client';
 
-import { Button, Center, Empty, Spin } from '@lobehub/ui';
+import { Button, Center, Icon, Spin } from '@lobehub/ui';
+import { Info, RefreshCw } from 'lucide-react';
 import { createContext, type ReactNode, use } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
+import AcceptanceNotFound from './AcceptanceNotFound';
+import QuietState from './QuietState';
 import { useAcceptanceBundle } from './useAcceptanceBundle';
 
 type AcceptanceScopeValue = {
@@ -44,7 +47,7 @@ export const AcceptanceBundleGate = ({
   height?: string | number;
 }) => {
   const { t } = useTranslation('verify');
-  const { acceptanceId } = useAcceptanceScope();
+  const { acceptanceId, embedded } = useAcceptanceScope();
   const { data, error, isLoading, mutate } = useAcceptanceBundle(acceptanceId);
 
   if (isLoading && !data) {
@@ -64,10 +67,7 @@ export const AcceptanceBundleGate = ({
   if (!data && isTrpcErrorCode(error, 'NOT_FOUND')) {
     return (
       <Center height={height}>
-        <Empty
-          description={t('acceptance.notFound.description')}
-          title={t('acceptance.notFound.title')}
-        />
+        <AcceptanceNotFound embedded={embedded} />
       </Center>
     );
   }
@@ -75,9 +75,17 @@ export const AcceptanceBundleGate = ({
   if (!data) {
     return (
       <Center height={height}>
-        <Empty description={t('acceptance.error.description')} title={t('acceptance.error.title')}>
-          <Button onClick={() => void mutate()}>{t('report.actions.retry')}</Button>
-        </Empty>
+        <QuietState
+          description={t('acceptance.error.description')}
+          icon={Info}
+          title={t('acceptance.error.title')}
+          tone={'warning'}
+          action={
+            <Button icon={<Icon icon={RefreshCw} />} onClick={() => void mutate()}>
+              {t('report.actions.retry')}
+            </Button>
+          }
+        />
       </Center>
     );
   }

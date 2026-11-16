@@ -2,9 +2,10 @@ import { createStaticStyles, cx } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({
-  // Cards carry their own frame, so the grid sits bare in its host. The page
-  // is full width, so columns step by the host's own width — one on a phone,
-  // then two, three and four — keeping every card at least ~270px wide.
+  // Cards carry their own frame, so the grid sits bare in its host. Columns
+  // step by the host's own width — one on a phone, then two, three and four —
+  // keeping every card at least ~270px wide. In the 1024px settings column the
+  // grid tops out at three; the four-column step serves wider hosts.
   grid: css`
     display: grid;
     grid-template-columns: minmax(0, 1fr);

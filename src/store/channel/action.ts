@@ -1,5 +1,9 @@
-import { isDesktop } from '@lobechat/const';
-import type { ChannelPublicThread, ChannelStatus, ChannelThreadStatus } from '@lobechat/types';
+import type {
+  ChannelPublicThread,
+  ChannelStatus,
+  ChannelThreadStatus,
+  ChannelVisibility,
+} from '@lobechat/types';
 
 import { cacheScope } from '@/libs/replica';
 import { mutate, useClientDataSWR } from '@/libs/swr';
@@ -10,7 +14,6 @@ import {
   type ChannelViewParams,
   type ChannelWakeConfig,
 } from '@/services/channel';
-import { getElectronStoreState } from '@/store/electron';
 
 import {
   addOutgoing,
@@ -49,11 +52,12 @@ class ChannelActionImpl {
     useClientDataSWR(channelKeys.userCandidates(channelId, search), () =>
       channelService.userCandidates(channelId, search),
     );
-  useFetchList = () => {
+  /** Pass `false` where the list is only needed behind a user choice, so nothing polls before. */
+  useFetchList = (enabled = true) => {
     const pending = useChannelStore(channelSelectors.listHasPendingWork);
     return this.#private.list.useSync(
       {},
-      { refreshInterval: pending ? CHANNEL_ACTIVE_REFRESH_MS : CHANNEL_IDLE_REFRESH_MS },
+      { enabled, refreshInterval: pending ? CHANNEL_ACTIVE_REFRESH_MS : CHANNEL_IDLE_REFRESH_MS },
     );
   };
   useFetchDetail = (params: ChannelViewParams | null) => {
@@ -117,11 +121,7 @@ class ChannelActionImpl {
   openDirect = async (agentId: string) => {
     const existing = channelSelectors.directByAgent(agentId)(useChannelStore.getState());
     if (existing) return existing.id;
-    // On desktop, name this machine so a direct Channel to a local Agent can run here.
-    const localDeviceId = isDesktop
-      ? await getElectronStoreState().resolveGatewayDeviceId()
-      : undefined;
-    const channelId = await channelService.openDirect({ agentId, localDeviceId });
+    const channelId = await channelService.openDirect({ agentId });
     if (channelId) await this.#refreshAfterWrite(this.refreshList);
     return channelId ?? undefined;
   };
@@ -191,6 +191,22 @@ class ChannelActionImpl {
       channelId,
       (channel) => ({ ...channel, title }),
       () => channelService.rename(channelId, title),
+    );
+  };
+  /** The settings switch shows the new visibility before the server confirms. */
+  setVisibility = async (channelId: string, visibility: ChannelVisibility) => {
+    await this.#private.entity.optimistic(
+      channelId,
+      (channel) => ({ ...channel, visibility }),
+      () => channelService.updateVisibility(channelId, visibility),
+    );
+  };
+  useFetchJoinable = (search: string) => this.#private.joinable.useSync({ search });
+  /** Joins a public Channel; it enters the sidebar once the list refreshes. */
+  join = async (channelId: string, search = '') => {
+    await channelService.join(channelId);
+    await this.#refreshAfterWrite(() =>
+      Promise.all([this.refreshList(), this.#private.joinable.fetch({ search }, { fresh: true })]),
     );
   };
   useFetchAgentEnvironment = (channelId: string, memberId: string) =>

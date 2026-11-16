@@ -5,12 +5,11 @@ import type { LocalDatabaseEntry } from '@/libs/localDatabase';
 import {
   createLocalDatabaseTableRows,
   filterLocalDatabaseFields,
-  filterLocalDatabaseRows,
-  filterRowsByResource,
   formatLocalDatabaseFieldValue,
   getLocalDatabaseColumns,
-  getReplicaResourceGroups,
+  getLocalDatabaseFields,
   parseReplicaStorageKey,
+  replicaResourcePrefix,
 } from './model';
 
 const replicaKey = (resource: string, scope: string, queryKey: string, version = 1) =>
@@ -44,8 +43,8 @@ describe('Local Database table model', () => {
     expect(parseReplicaStorageKey('swr:message:list')).toBeUndefined();
   });
 
-  it('expands timestamped envelopes into replica columns before the data fields', () => {
-    const rows = createLocalDatabaseTableRows(entries);
+  it('builds table rows and columns from keys alone', () => {
+    const rows = createLocalDatabaseTableRows([...entries.map(({ key }) => key), 'not-a-replica']);
 
     expect(getLocalDatabaseColumns(rows).map(({ label }) => label)).toEqual([
       'key',
@@ -53,23 +52,35 @@ describe('Local Database table model', () => {
       'version',
       'scope',
       'query',
+    ]);
+    expect(rows[2].fields.map(({ label }) => label)).toEqual(['key']);
+    expect(replicaResourcePrefix('topicList')).toBe('replica:topicList:');
+    expect(entries[0].key.startsWith(replicaResourcePrefix('topicList'))).toBe(true);
+  });
+
+  it('expands a loaded timestamped envelope into detail fields after the key fields', () => {
+    const fields = getLocalDatabaseFields(entries[1], parseReplicaStorageKey(entries[1].key));
+
+    expect(fields.map(({ label }) => label)).toEqual([
+      'key',
+      'resource',
+      'version',
+      'scope',
+      'query',
       'updatedAt',
       'id',
-      'items',
-      'total',
       'title',
     ]);
-    expect(rows[1].fields.find(({ label }) => label === 'updatedAt')?.value).toEqual(
-      new Date(1000),
-    );
+    expect(fields.find(({ label }) => label === 'updatedAt')?.value).toEqual(new Date(1000));
   });
 
   it('keeps data fields that collide with key columns under a data prefix', () => {
-    const [row] = createLocalDatabaseTableRows([
-      { key: 'plain', value: { data: { key: 'k', version: 'v2' }, updatedAt: 0, version: '7' } },
-    ]);
+    const fields = getLocalDatabaseFields({
+      key: 'plain',
+      value: { data: { key: 'k', version: 'v2' }, updatedAt: 0, version: '7' },
+    });
 
-    expect(row.fields.map(({ label }) => label)).toEqual([
+    expect(fields.map(({ label }) => label)).toEqual([
       'key',
       'version',
       'updatedAt',
@@ -78,27 +89,11 @@ describe('Local Database table model', () => {
     ]);
   });
 
-  it('groups replica rows by resource and filters the table to one resource', () => {
-    const rows = createLocalDatabaseTableRows([
-      ...entries,
-      { key: 'not-a-replica', value: 1 },
-      { key: replicaKey('topicList', 'user-b', 'agent_2'), value: { data: null, updatedAt: 0 } },
-    ]);
+  it('finds detail fields by name, type or nested persisted values', () => {
+    const fields = getLocalDatabaseFields(entries[0], parseReplicaStorageKey(entries[0].key));
 
-    expect(getReplicaResourceGroups(rows)).toEqual([
-      { entryCount: 1, name: 'agentDetail' },
-      { entryCount: 2, name: 'topicList' },
-    ]);
-    expect(filterRowsByResource(rows, 'topicList')).toHaveLength(2);
-    expect(filterRowsByResource(rows, null)).toHaveLength(4);
-  });
-
-  it('finds rows and details by field names or nested persisted values', () => {
-    const rows = createLocalDatabaseTableRows(entries);
-
-    expect(filterLocalDatabaseRows(rows, 'storage')).toEqual([rows[0]]);
-    expect(filterLocalDatabaseRows(rows, 'alpha')).toEqual([rows[1]]);
-    expect(filterLocalDatabaseFields(rows[0].fields, 'array').map(({ label }) => label)).toEqual([
+    expect(filterLocalDatabaseFields(fields, 'array').map(({ label }) => label)).toEqual(['items']);
+    expect(filterLocalDatabaseFields(fields, 'storage').map(({ label }) => label)).toEqual([
       'items',
     ]);
   });

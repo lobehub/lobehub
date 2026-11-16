@@ -47,6 +47,21 @@ Related: [LOBE-2417](https://linear.app/lobehub/issue/LOBE-2417/建立核心产�
 @routes       # 核心路由
 ```
 
+### 渲染预算（`@perf`）
+
+`@perf` 场景读取 React `<Profiler>` 的渲染次数和耗时，只能跑在 `LOBE_REACT_PROFILING=1` 构建上；普通套件会跳过它们，PR CI 的 `Render Budget` job 单独构建并运行，超预算即失败。
+
+```bash
+# 在项目根目录构建 profiling 版本并启动服务
+LOBE_REACT_PROFILING=1 SKIP_LINT=1 bun run build && bunx next start -p 3006
+
+# 在 e2e 目录运行（串行执行，回执写入 reports/render-budget/<scenario>.json）
+BASE_URL=http://localhost:3006 DATABASE_URL=... bun run test:perf
+```
+
+- 区域：`src/components/RenderProfiler` 包住侧栏（`sidebar`）、会话区（`conversation`，含消息区）和消息区（`messages`）；页面通过 `window.__LOBE_RENDER_PROFILE__` 暴露 `begin` / `end` / `status`，profiling 构建在启动时自动开始 `boot` 场景。
+- 预算：`src/performance/chatRenderBudgets.ts`，按 p50 判定，本地与 CI（`CI` 环境变量）分别设置。调整预算时用多次运行的回执实测值，不要凭感觉改。
+
 ### 执行策略
 
 ```bash

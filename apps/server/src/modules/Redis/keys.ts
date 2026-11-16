@@ -40,6 +40,12 @@ export const RedisKeyNamespace = {
    */
   BOT_WAKE: 'bot-wake',
   /**
+   * Short-lived reply routes an IM platform hands out with an inbound message
+   * (DingTalk's `sessionWebhook`), kept so the process that posts the reply
+   * can use them even when another one received the message.
+   */
+  BOT_REPLY: 'bot-reply',
+  /**
    * QQ passive-reply windows: the inbound message a bot may answer, the replies spent, and the
    * text a closed window could not carry.
    */
@@ -106,6 +112,15 @@ export const RedisKeys = {
      */
     nightlyTopics: (userId: string, localDate: string): string =>
       `nightly_topics:v1:${userId}:${localDate}`,
+  },
+  /** Bot reply-route scope — see {@link RedisKeyNamespace.BOT_REPLY}. */
+  botReply: {
+    /**
+     * Latest DingTalk `sessionWebhook` for one conversation of one bot.
+     * Full key: bot-reply:dingtalk_session_webhook:v1:{applicationId}:{threadId}
+     */
+    dingtalkSessionWebhook: (applicationId: string, threadId: string): string =>
+      `dingtalk_session_webhook:v1:${applicationId}:${threadId}`,
   },
   /**
    * Bot-wake scope — see {@link RedisKeyNamespace.BOT_WAKE}. `{key}` is a channel or thread key
@@ -211,6 +226,12 @@ export const RedisKeys = {
      * Full key: agentSteer:hetero_deliveries:v1:{operationId}
      */
     heteroDeliveries: (operationId: string): string => `hetero_deliveries:v1:${operationId}`,
+    /**
+     * Marks a sub-agent run whose final queue read came back empty: it ends
+     * without reading again, so a steer appended behind it must be taken back.
+     * Full key: agentSteer:sealed_run:v1:{operationId}
+     */
+    sealedRun: (operationId: string): string => `sealed_run:v1:${operationId}`,
   },
   /**
    * Agent identity scope — see {@link RedisKeyNamespace.AGENT_IDENTITY}.
@@ -252,6 +273,12 @@ export const RedisKeys = {
    * Lobechat core scope - for application-level caching
    */
   lobechat: {
+    /**
+     * The agent-document index snapshot one conversation renders from, and its change notes.
+     * Full key: lobechat:agent_document_index:v1:{topicId}:{threadId|main}:{agentId}
+     */
+    agentDocumentIndex: (topicId: string, threadId: string | undefined, agentId: string): string =>
+      `agent_document_index:v1:${topicId}:${threadId ?? 'main'}:${agentId}`,
     /**
      * Digest of the body the last projection of a page's collaboration room wrote.
      * Full key: lobechat:page_projection:v1:{documentId}
@@ -312,6 +339,7 @@ export const RedisKeyScopeNamespace = {
   agentSignal: RedisKeyNamespace.AGENT_SIGNAL,
   agentSteer: RedisKeyNamespace.AGENT_STEER,
   aiGeneration: RedisKeyNamespace.AI_GENERATION,
+  botReply: RedisKeyNamespace.BOT_REPLY,
   botWake: RedisKeyNamespace.BOT_WAKE,
   integrations: RedisKeyNamespace.INTEGRATIONS,
   lobechat: RedisKeyNamespace.LOBEHUB,

@@ -35,14 +35,13 @@ export default {
   'environment.agentUnavailable':
     'This Agent is no longer available. Remove it and choose another.',
   'environment.checkingDevice': 'Checking status',
-  'environment.chooseDevice': 'Choose a device',
+  'environment.followAgent': "Use the Agent's own settings",
   'environment.configurationFailed': 'Could not load this Agent’s settings. Try again.',
   'environment.configurationLoading': 'Loading this Agent’s settings…',
   'environment.connectorUpgradeRequired':
     'This device’s LobeHub connector needs an update. Update LobeHub Desktop or the LobeHub CLI on that device, then reconnect and try again.',
   'environment.deviceLabel': 'Device for {{name}}',
   'environment.deviceOffline': 'This device is offline. Reconnect it or choose another device.',
-  'environment.deviceRequired': 'Choose an online device for this coding Agent.',
   'environment.deviceUnreachable':
     'Could not connect to the device to check the working directory. Check the device connection and try again.',
   'environment.deviceUnavailable':
@@ -56,8 +55,6 @@ export default {
   'environment.directoryRequired': 'Choose a working directory on this device.',
   'environment.inherited.deviceOffline':
     'This Agent’s device is offline. Reconnect the device, or remove the Agent.',
-  'environment.inherited.deviceRequired':
-    'This coding Agent has no default device. Choose one in its settings, or remove the Agent.',
   'environment.inherited.deviceUnavailable':
     'This Agent’s device is unavailable in the current space. Change it in the Agent’s settings, or remove the Agent.',
   'environment.directoryUnavailable':
@@ -74,7 +71,6 @@ export default {
   'environment.unsupportedRuntime': 'This Agent cannot run in a channel yet. Choose another Agent.',
   'directoryRequired': 'Choose a working directory for each device.',
   'deviceRequired': 'Choose an online device and a working directory for each coding Agent.',
-  'noDevice': 'No device',
   'chooseDevice': 'Choose a device',
   'noDevices': 'No device is connected. Connect one, then choose it here.',
   'offline': 'Offline',
@@ -247,6 +243,8 @@ export default {
   'reply.to': 'Replying to {{name}}',
   'reply.cancel': 'Cancel reply',
   'reply.attachment': 'Attachment',
+  'message.relayReplyFrom': '{{name}} replied in #{{channel}}',
+  'message.relayedBy': 'Relayed by {{name}}',
   'reply.viewOriginal': 'View original message',
   'reply.unavailable': 'Original message unavailable',
   'settings.title': 'Channel settings',
@@ -297,4 +295,17 @@ export default {
   'settings.reply.instructionsHint':
     'Tell Agents who to answer and what to leave alone. It guides them and is not a hard rule.',
   'settings.reply.instructionsContent': 'Instructions',
+  'browse.empty': 'No public channels to join yet.',
+  'browse.join': 'Join',
+  'browse.joinFailed': 'Could not join the channel. Try again.',
+  'browse.memberCount': 'Members · {{count}}',
+  'browse.noMatches': 'No matching public channels',
+  'browse.search': 'Search public channels',
+  'browse.title': 'Browse channels',
+  'settings.visibility.privateHint':
+    'Only invited members can see this channel. Turn it on to let everyone in the workspace find and join it.',
+  'settings.visibility.publicHint': 'Everyone in the workspace can find and join this channel.',
+  'settings.visibility.title': 'Public channel',
+  'visibilityFailed': 'Could not change who can see the channel. Try again.',
+  'visibilityForbidden': 'Only the channel owner or an administrator can change who can see it.',
 };

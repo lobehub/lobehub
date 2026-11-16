@@ -1,3 +1,5 @@
+import { type AgentState, GeneralChatAgent } from '@lobechat/agent-runtime';
+import { withMandatoryApprovalMark } from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
 import type { DecryptedConnector } from '@/database/models/connector';
@@ -71,5 +73,98 @@ describe('buildConnectorManifests mcpParams headers', () => {
 
     expect(params.auth).toEqual({ token: 'tok', type: 'bearer' });
     expect(params.headers).toBeUndefined();
+  });
+});
+
+describe('buildConnectorManifests cloud connectors', () => {
+  it('routes a cloud connector to the cloud executor by identifier', () => {
+    const connector = {
+      ...httpConnector(null, { cloudEndPoint: 'https://cloud.example', customHeaders: { A: '1' } }),
+      mcpConnectionType: 'cloud',
+      mcpServerUrl: null,
+    } as DecryptedConnector;
+
+    expect(mcpParamsOf(connector)).toEqual({
+      headers: { A: '1' },
+      name: 'my-conn',
+      type: 'cloud',
+      url: 'https://cloud.example',
+    });
+  });
+});
+
+describe('buildConnectorManifests approval', () => {
+  const cloudConnector = {
+    ...httpConnector(null, { cloudEndPoint: 'https://cloud.example' }),
+    mcpConnectionType: 'cloud',
+    mcpServerUrl: null,
+  } as DecryptedConnector;
+
+  /** A tool as `syncToolsFromClientById` stores it from the market's manifest. */
+  const syncedTool = (toolName: string, humanIntervention: unknown, permission: string) =>
+    ({
+      ...tool(),
+      metadata: withMandatoryApprovalMark(null, humanIntervention),
+      permission,
+      toolName,
+    }) as UserConnectorToolItem;
+
+  /** What the runtime's approval gate does with one call under `approvalMode`. */
+  const gate = async (manifests: ReturnType<typeof buildConnectorManifests>, apiName: string) => {
+    const toolCalling = {
+      apiName,
+      arguments: '{}',
+      id: `call-${apiName}`,
+      identifier: 'my-conn',
+      type: 'mcp',
+    } as const;
+    const now = new Date().toISOString();
+    const state = {
+      cost: { calculatedAt: now, currency: 'USD', total: 0 },
+      createdAt: now,
+      lastModified: now,
+      messages: [],
+      operationId: 'op',
+      status: 'running',
+      stepCount: 0,
+      toolManifestMap: Object.fromEntries(manifests.map((m) => [m.identifier, m])),
+      usage: {},
+      userInterventionConfig: { allowList: [], approvalMode: 'auto-run' },
+    } as unknown as AgentState;
+    const agent = new GeneralChatAgent({
+      agentConfig: { maxSteps: 10 },
+      modelRuntimeConfig: { model: 'm', provider: 'p' },
+      operationId: 'op',
+    });
+    const [instruction] = await agent.runner(
+      {
+        payload: { hasToolsCalling: true, parentMessageId: 'msg', toolsCalling: [toolCalling] },
+        phase: 'llm_result',
+        session: { messageCount: 0, sessionId: 'op', status: 'running', stepCount: 0 },
+      } as any,
+      state,
+    );
+    return (instruction as { type: string }).type;
+  };
+
+  // Auto-run skips `required`; a market `always` must still stop the call
+  it('keeps a cloud tool the market marks always behind approval in auto-run', async () => {
+    const manifests = buildConnectorManifests(
+      [cloudConnector],
+      [
+        syncedTool('delete_repo', 'always', 'needs_approval'),
+        syncedTool('purge', [{ match: { force: true }, policy: 'always' }], 'auto'),
+        syncedTool('send_mail', 'required', 'needs_approval'),
+      ],
+    );
+
+    expect(manifests[0].api.map((a) => [a.name, a.humanIntervention])).toEqual([
+      ['delete_repo', 'always'],
+      ['purge', 'always'],
+      ['send_mail', 'required'],
+    ]);
+    expect(await gate(manifests, 'delete_repo')).toBe('request_human_approve');
+    expect(await gate(manifests, 'purge')).toBe('request_human_approve');
+    expect(await gate(manifests, 'send_mail')).toBe('call_tool');
   });
 });

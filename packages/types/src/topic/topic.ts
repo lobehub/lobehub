@@ -130,9 +130,17 @@ export interface OnboardingSessionSnapshot {
 export interface ChatTopicMetadata {
   /** Watermark written by the background topic-summary workflow. */
   autoSummary?: {
+    /**
+     * Set when the summary model rejected the request for a reason only the user
+     * can fix (invalid key, no balance, missing model). The watermark still moves,
+     * so the topic is retried only after a new message.
+     */
+    failedAt?: string;
+    failureReason?: string;
     lastMessageId: string;
     lastMessageUpdatedAt: string;
-    summarizedAt: string;
+    /** Absent until a summary has been written for this topic. */
+    summarizedAt?: string;
     version: number;
   };
 

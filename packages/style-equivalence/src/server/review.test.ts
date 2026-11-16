@@ -326,16 +326,26 @@ describe('rework and annotate commands', () => {
     expect(text).toContain('颜色变红了');
   });
 
-  it('lists agent-read items and stores notes bound to the current hash', async () => {
+  it('lists agent-read items and keeps a rework note for a person', async () => {
     const stored = await loadRun(runDir);
     const list = await annotateList(stored);
     expect(list.map((entry) => entry.key)).toEqual(['src/A.tsx|A#2']);
     expect(list[0]).toMatchObject({ component: 'SkillsIcon', hash: 'hash-A#2' });
     await applyNotes(stored, [
-      { finding: 'className 落在根 svg 上', key: 'src/A.tsx|A#2', suggestion: 'pass' },
+      { finding: '图标颜色变了', key: 'src/A.tsx|A#2', suggestion: 'rework' },
     ]);
     const item = (await queue()).items.find((entry: any) => entry.key === 'src/A.tsx|A#2');
     expect(item).toMatchObject({ canPass: true, state: 'todo' });
+    expect(item.note.finding).toBe('图标颜色变了');
+  });
+
+  it('signs a rendered-equal item when the agent note confirms it', async () => {
+    const stored = await loadRun(runDir);
+    await applyNotes(stored, [
+      { finding: 'className 落在根 svg 上', key: 'src/A.tsx|A#2', suggestion: 'pass' },
+    ]);
+    const item = (await queue()).items.find((entry: any) => entry.key === 'src/A.tsx|A#2');
+    expect(item).toMatchObject({ state: 'passed' });
     expect(item.note.finding).toBe('className 落在根 svg 上');
   });
 });

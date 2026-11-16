@@ -1021,7 +1021,7 @@ describe('lobeAgentRuntime', () => {
     it('explains why an earlier sub-agent could not be continued', async () => {
       const runtime = lobeAgentRuntime.factory(baseContext);
       const run = vi.fn().mockResolvedValue({
-        error: 'Sub-agent "thread-1" is still running.',
+        error: 'Sub-agent "thread-1" already has too many instructions waiting.',
         started: false,
         threadId: 'thread-1',
       });
@@ -1033,8 +1033,33 @@ describe('lobeAgentRuntime', () => {
 
       expect(result.deferred).toBeUndefined();
       expect(result.content).toBe(
-        'Sub-agent could not be continued: Sub-agent "thread-1" is still running.',
+        'Sub-agent could not be continued: Sub-agent "thread-1" already has too many instructions waiting.',
       );
+    });
+
+    it('returns a receipt instead of parking when it steers a running sub-agent', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi.fn().mockResolvedValue({
+        started: true,
+        steered: true,
+        subOperationId: 'sub-op-1',
+        threadId: 'thread-1',
+        toolMessageId: 'tool-msg-steer',
+      });
+
+      const result = await runtime.callSubAgent(
+        { description: 'Correct course', instruction: 'Only cover 2025', subAgentId: 'thread-1' },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(result.deferred).toBeUndefined();
+      expect(result).toMatchObject({
+        state: { status: 'completed', steered: true, threadId: 'thread-1' },
+        success: true,
+        toolMessageId: 'tool-msg-steer',
+      });
+      expect(result.content).toContain('queued');
+      expect(result.content).toContain('<sub_agent id="thread-1" />');
     });
 
     // GPT-family models fill every declared field, so "start a new sub-agent"

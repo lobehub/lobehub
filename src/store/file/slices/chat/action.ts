@@ -1,5 +1,6 @@
 import { SHARE_VISITOR_MAX_FILE_SIZE } from '@lobechat/const';
 import { type ChatContextContent } from '@lobechat/types';
+import { createNanoId } from '@lobechat/utils';
 import { COMPRESSIBLE_IMAGE_TYPES, compressImageFile } from '@lobechat/utils/compressImage';
 import { toast } from '@lobehub/ui';
 import { Buffer } from 'buffer.js';
@@ -64,6 +65,13 @@ export interface ChatUploadOptions {
    */
   shareId?: string;
 }
+
+/**
+ * Id of a chip while its upload is pending, replaced by the file's id once it finishes.
+ * Pasted images are all named `image.png`, so the file name alone would let concurrent
+ * uploads report to each other's chips and send an image the chip does not show.
+ */
+const createPendingUploadId = (file: File) => `${file.name}#${createNanoId(8)()}`;
 
 const formatShareUploadLimit = () => `${Math.round(SHARE_VISITOR_MAX_FILE_SIZE / 1024 / 1024)} MB`;
 
@@ -433,6 +441,7 @@ export class FileActionImpl {
       ),
     );
 
+    const uploadIds = new Map(files.map((file) => [file, createPendingUploadId(file)]));
     const uploadFiles: UploadFileItem[] = await Promise.all(
       files.map(async (file) => {
         let previewUrl: string | undefined = undefined;
@@ -452,7 +461,7 @@ export class FileActionImpl {
           agentId,
           base64Url,
           file,
-          id: file.name,
+          id: uploadIds.get(file)!,
           previewUrl,
           shareId,
           status: 'pending',
@@ -464,6 +473,7 @@ export class FileActionImpl {
 
     // upload files and process it
     const pools = files.map(async (file) => {
+      const uploadId = uploadIds.get(file)!;
       let fileResult: { id: string; url: string } | undefined;
 
       try {
@@ -472,18 +482,20 @@ export class FileActionImpl {
               file,
               onStatusUpdate: dispatchChatUploadFileList,
               shareId,
+              uploadId,
             })
           : await this.#get().uploadWithProgress({
               conversationAgentId: agentId,
               file,
               onStatusUpdate: dispatchChatUploadFileList,
+              uploadId,
             });
       } catch (error) {
         if (getErrorMessage(error) === 'UNAUTHORIZED') {
-          dispatchChatUploadFileList({ id: file.name, type: 'removeFile' });
+          dispatchChatUploadFileList({ id: uploadId, type: 'removeFile' });
         } else {
           dispatchChatUploadFileList({
-            id: file.name,
+            id: uploadId,
             type: 'updateFile',
             value: {
               error: getUploadErrorDescription(error),

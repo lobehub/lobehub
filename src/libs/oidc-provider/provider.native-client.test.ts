@@ -6,7 +6,7 @@
  * HTTP: discovery, a code + PKCE sign-in, and sign-out through the advertised
  * revocation endpoint.
  */
-import { createHash, generateKeyPairSync, randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -135,9 +135,22 @@ const signIn = async () => {
 };
 
 beforeAll(async () => {
-  const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  // Export through Web Crypto like the dev runtime and many self-hosted setups do: the
+  // private JWK then carries `key_ops: ['sign']`, which oidc-provider 9.14+ rejects.
+  const { privateKey } = await crypto.subtle.generateKey(
+    {
+      hash: 'SHA-256',
+      modulusLength: 2048,
+      name: 'RSASSA-PKCS1-v1_5',
+      publicExponent: new Uint8Array([1, 0, 1]),
+    },
+    true,
+    ['sign', 'verify'],
+  );
+  const privateJwk = await crypto.subtle.exportKey('jwk', privateKey);
+  expect(privateJwk.key_ops).toEqual(['sign']);
   authEnvMock.JWKS_KEY = JSON.stringify({
-    keys: [{ ...privateKey.export({ format: 'jwk' }), alg: 'RS256', kid: 'test', use: 'sig' }],
+    keys: [{ ...privateJwk, alg: 'RS256', kid: 'test', use: 'sig' }],
   });
   provider = await createOIDCProvider({} as any);
   server = createServer(provider.callback());
@@ -147,6 +160,19 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve()));
+});
+
+describe('signing keys', () => {
+  it('serves a JWKS_KEY exported with key_ops as its public signing key', async () => {
+    const { jwks_uri } = await discovery();
+    const response = await fetch(`${origin}${new URL(jwks_uri).pathname}`);
+
+    expect(response.status).toBe(200);
+    const { keys } = (await response.json()) as { keys: Record<string, unknown>[] };
+    expect(keys).toEqual([expect.objectContaining({ alg: 'RS256', kid: 'test', use: 'sig' })]);
+    expect(keys[0]).not.toHaveProperty('key_ops');
+    expect(keys[0]).not.toHaveProperty('d');
+  });
 });
 
 describe('native client endpoints', () => {

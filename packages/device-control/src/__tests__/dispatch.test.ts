@@ -14,12 +14,14 @@ import path from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { getAntigravityQuota } from '../antigravityQuota';
 import {
   APP_UPDATE_UNSUPPORTED_MESSAGE,
   CLI_UPDATE_UNSUPPORTED_MESSAGE,
   DEVICE_RPC_METHODS,
   deviceRpcClients,
   executeDeviceRpc,
+  MCP_UNSUPPORTED_MESSAGE,
   TERMINAL_UNSUPPORTED_MESSAGE,
   TRASH_UNSUPPORTED_MESSAGE,
 } from '../dispatch';
@@ -71,7 +73,21 @@ const makeDeps = (): DeviceControlDeps => ({
   })),
 });
 
+vi.mock('../antigravityQuota', () => ({
+  getAntigravityQuota: vi.fn(async () => ({ status: 'ok', groups: [] })),
+}));
+
 describe('executeDeviceRpc', () => {
+  it('routes Antigravity quota RPCs through the shared host sampler', async () => {
+    const params = { command: '/custom/agy', env: { AGY_PROFILE: 'fixture' }, force: true };
+    expect(DEVICE_RPC_METHODS).toContain('getAntigravityQuota');
+    await expect(executeDeviceRpc('getAntigravityQuota', params, makeDeps())).resolves.toEqual({
+      status: 'ok',
+      groups: [],
+    });
+    expect(getAntigravityQuota).toHaveBeenCalledWith(params);
+  });
+
   it.each(['getCliUpdateState', 'checkCliUpdate', 'restartCli'])(
     'rejects missing CLI handler %s with a stable reason',
     async (method) => {
@@ -146,7 +162,9 @@ describe('executeDeviceRpc', () => {
     };
 
     expect(result.skills.map((s) => s.name)).toEqual(['spa-routes']);
-    expect(result.instructions).toEqual([{ content: '# Agents', source: 'AGENTS.md' }]);
+    expect(result.instructions).toEqual([
+      { content: '# Agents', path: path.join(root, 'AGENTS.md'), source: 'AGENTS.md' },
+    ]);
     expect(deps.approveProjectRoot).toHaveBeenCalledWith(root);
   });
 
@@ -288,6 +306,34 @@ describe('executeDeviceRpc', () => {
     await expect(
       executeDeviceRpc('listHeterogeneousAgentModels', { type: 'opencode' }, makeDeps()),
     ).rejects.toThrow('does not support heterogeneous agent model discovery');
+  });
+
+  it('routes MCP tool listing to the host MCP client', async () => {
+    const deps = makeDeps();
+    const tools = [{ inputSchema: { type: 'object' }, name: 'search' }];
+    deps.listMcpTools = vi.fn(async () => tools);
+    const params = {
+      mcpApps: true,
+      params: {
+        headers: { 'X-Team': 'a' },
+        name: 'nas',
+        type: 'http' as const,
+        url: 'https://nas.tail1234.ts.net/mcp',
+      },
+    };
+
+    await expect(executeDeviceRpc('listMcpTools', params, deps)).resolves.toEqual(tools);
+    expect(deps.listMcpTools).toHaveBeenCalledWith(params);
+  });
+
+  it('rejects MCP tool listing on a client that runs no MCP servers', async () => {
+    await expect(
+      executeDeviceRpc(
+        'listMcpTools',
+        { params: { name: 'x', type: 'http', url: 'http://x' } },
+        makeDeps(),
+      ),
+    ).rejects.toThrow(MCP_UNSUPPORTED_MESSAGE);
   });
 
   it('delegates project file and preview methods to injected deps', async () => {
@@ -735,6 +781,11 @@ describe('deviceRpcClients', () => {
 
   it.each(cliOnly)('routes %s, which the desktop rejects, to the CLI', (method) => {
     expect(deviceRpcClients(method)).toEqual(['cli']);
+  });
+
+  // Both clients run MCP servers; the server pins the one it picked per device
+  it('leaves MCP tool listing to the client the server pins', () => {
+    expect(deviceRpcClients('listMcpTools')).toBeUndefined();
   });
 
   it('lets any client serve the other methods', () => {

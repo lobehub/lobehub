@@ -12,9 +12,6 @@ import { useActiveLocation } from '@/hooks/useActiveLocation';
  * The sidebar the active route registered through `NavPanelPortal`, for the
  * mobile drawer. `home` is the desktop agent list, which mobile already shows
  * as its home page, so it never opens as a drawer.
- *
- * Mobile keeps the per-route sidebars (agent topics, group members), so it
- * resolves with the legacy mapping rather than the desktop rail one.
  */
 export const useNavPanelDrawerContent = (): ReactNode | undefined => {
   const { pathname } = useActiveLocation();

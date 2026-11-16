@@ -5,6 +5,7 @@ import { SdkErrorCode, SdkHttpError } from '@modelcontextprotocol/client';
 import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MCP_SSRF_BLOCKED_MESSAGE } from '@/libs/mcp/ssrf';
 import { createMCPError } from '@/libs/mcp/types';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
@@ -18,8 +19,13 @@ vi.mock('@/server/services/deviceGateway', () => ({
     executeToolCall: vi.fn(),
     isConfigured: false,
     queryDeviceList: vi.fn().mockResolvedValue([]),
+    // An `lh connect` that predates MCP support reports no `mcp` call type.
+    readDeviceSystemInfo: vi.fn().mockResolvedValue({ ok: true, systemInfo: {} }),
   },
 }));
+
+/** System info from an `lh connect` that runs tunneled MCP calls. */
+const mcpCapableCli = { ok: true, systemInfo: { supportedToolCallTypes: ['tool', 'mcp'] } };
 const mcpAppsEnabled = vi.hoisted(() => vi.fn().mockResolvedValue(false));
 vi.mock('@/server/services/mcp/featureGate', () => ({ isMcpAppsEnabled: mcpAppsEnabled }));
 vi.mock('@/server/services/deviceGateway/dispatchAuthorization', () => ({
@@ -584,8 +590,8 @@ describe('ToolExecutionService', () => {
       // order and includes offline DB rows — the fallback must skip those.
       vi.mocked(getScopedOnlineDevices).mockResolvedValue([
         { channels: [{ channel: 'desktop' }], deviceId: 'offline-row', online: false },
-        // A newer CLI-only connection must be skipped: the CLI's
-        // tool_call_request handler cannot execute `mcp` calls.
+        // A newer CLI-only connection must be skipped when that CLI predates
+        // MCP support: it would dispatch the call by apiName.
         { channels: [{ channel: 'cli' }], deviceId: 'cli-only', online: true },
         {
           channels: [{ channel: 'cli' }, { channel: 'desktop' }],
@@ -601,15 +607,70 @@ describe('ToolExecutionService', () => {
 
       expect(getScopedOnlineDevices).toHaveBeenCalledWith(context.serverDB, 'user-1', undefined);
       expect(deviceGateway.queryDeviceList).not.toHaveBeenCalled();
+      // The desktop app beside `lh connect` runs it, pinned so the gateway
+      // never hands the call to the CLI.
       expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
-        expect.objectContaining({ deviceId: 'newest' }),
+        expect.objectContaining({ clientKinds: ['desktop'], deviceId: 'newest' }),
         undefined,
       );
     });
 
-    // `lh connect` answers `mcp` tool calls with `Unknown tool API: <tool>` — an
-    // active device that is CLI-only must not receive the tunnel (Honcho-Memory
-    // vents: calls worked until the agent activated a CLI-only Mac mini).
+    it('falls back to the newest online lh connect device that runs MCP calls', async () => {
+      vi.mocked(deviceGateway.readDeviceSystemInfo).mockResolvedValueOnce(mcpCapableCli as any);
+      vi.mocked(getScopedOnlineDevices).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'devbox-cli', online: true },
+        { channels: [{ channel: 'desktop' }], deviceId: 'older-desktop', online: true },
+      ] as any);
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith({ args: [], command: 'npx', name: 'my-mcp', type: 'stdio' }),
+      );
+
+      expect(result.success).toBe(true);
+      expect(deviceGateway.readDeviceSystemInfo).toHaveBeenCalledWith(
+        'user-1',
+        'devbox-cli',
+        undefined,
+        { clientKinds: ['cli'] },
+      );
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+        expect.objectContaining({ clientKinds: ['cli'], deviceId: 'devbox-cli' }),
+        undefined,
+      );
+    });
+
+    it('tunnels to a CLI-only active device whose lh connect runs MCP calls', async () => {
+      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli' },
+      ] as any);
+      vi.mocked(deviceGateway.readDeviceSystemInfo).mockResolvedValueOnce(mcpCapableCli as any);
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+          { activeDeviceId: 'mac-mini-cli', workspaceId: 'ws-1' },
+        ),
+      );
+
+      expect(result.success).toBe(true);
+      expect(getScopedOnlineDevices).not.toHaveBeenCalled();
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clientKinds: ['cli'],
+          deviceId: 'mac-mini-cli',
+          workspaceId: 'ws-1',
+        }),
+        undefined,
+      );
+    });
+
+    // An older `lh connect` answers `mcp` tool calls by apiName — an active
+    // device whose only client is such a CLI must not receive the tunnel
+    // (Honcho-Memory vents: calls worked until the agent activated a CLI-only Mac mini).
     it('skips a CLI-only active device and tunnels to the newest desktop device', async () => {
       vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
         { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli' },
@@ -635,7 +696,7 @@ describe('ToolExecutionService', () => {
       );
     });
 
-    it('fails with an actionable error when only CLI devices are online', async () => {
+    it('fails with an actionable error when only older CLI devices are online', async () => {
       vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
         { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli' },
       ] as any);
@@ -658,7 +719,7 @@ describe('ToolExecutionService', () => {
       expect(result.content).toContain('lh connect');
     });
 
-    it('fails closed for a workspace run whose active device is CLI-only', async () => {
+    it('fails closed for a workspace run whose active device has only an older CLI', async () => {
       vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
         { channels: [{ channel: 'cli' }], deviceId: 'ws-cli' },
       ] as any);
@@ -758,6 +819,79 @@ describe('ToolExecutionService', () => {
       expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
     });
 
+    it.each([
+      'https://mcp.example.com/mcp',
+      'http://nas.tail1234.ts.net:8080/mcp',
+      'http://printer.local/mcp',
+    ])('tunnels an HTTP MCP set to connect via device to the device (URL: %s)', async (url) => {
+      const callTool = vi.fn();
+      const service = makeService({ callTool });
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { connectVia: 'device', headers: { 'X-Team': 'a' }, name: 'my-mcp', type: 'http', url },
+          { activeDeviceId: 'device-1' },
+        ),
+      );
+
+      expect(result.success).toBe(true);
+      expect(callTool).not.toHaveBeenCalled();
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deviceId: 'device-1',
+          // The routing choice stays on the server: the device just connects
+          params: {
+            auth: undefined,
+            headers: { 'X-Team': 'a' },
+            name: 'my-mcp',
+            type: 'http',
+            url,
+          },
+        }),
+        undefined,
+      );
+    });
+
+    it('fails a connect-via-device HTTP MCP with an actionable error when no desktop is online', async () => {
+      const callTool = vi.fn();
+      const service = makeService({ callTool });
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith({
+          connectVia: 'device',
+          name: 'my-mcp',
+          type: 'http',
+          url: 'https://nas.tail1234.ts.net/mcp',
+        }),
+      );
+
+      expect(callTool).not.toHaveBeenCalled();
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
+      expect(result.content).toContain('Connect via device');
+      expect(result.content).toContain('desktop app');
+    });
+
+    it('keeps a connect-via-device HTTP MCP in-process without a gateway (self-hosted)', async () => {
+      (deviceGateway as any).isConfigured = false;
+      const callTool = vi.fn().mockResolvedValue({ ok: true });
+      const service = makeService({ callTool });
+
+      await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { connectVia: 'device', name: 'my-mcp', type: 'http', url: 'https://nas.internal/mcp' },
+          { activeDeviceId: 'device-1' },
+        ),
+      );
+
+      expect(callTool).toHaveBeenCalledTimes(1);
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+    });
+
     it.each([true, false])(
       "passes the run owner's mcp_apps flag (%s) to the server MCP call",
       async (enabled) => {
@@ -851,7 +985,7 @@ describe('ToolExecutionService', () => {
       expect(callTool).not.toHaveBeenCalled();
       expect(result.success).toBe(false);
       expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
-      expect(result.content).toContain('open the LobeHub desktop app');
+      expect(result.content).toContain('Open the LobeHub desktop app or run `lh connect`');
     });
 
     it('fails closed when no serverDB is available to apply device visibility', async () => {
@@ -879,6 +1013,10 @@ describe('ToolExecutionService', () => {
       it.each([
         ['stdio', { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' }],
         ['local-network HTTP', { name: 'my-mcp', type: 'http', url: 'http://10.0.0.5:8000/mcp' }],
+        [
+          'connect-via-device HTTP',
+          { connectVia: 'device', name: 'my-mcp', type: 'http', url: 'https://mcp.example.com' },
+        ],
       ])(
         'refuses a %s MCP call instead of tunneling to the creator device',
         async (_, mcpParams) => {
@@ -1043,6 +1181,23 @@ describe('ToolExecutionService', () => {
       expect(result.error).toMatchObject({
         code: 'MCP_TOOL_ERROR',
         message: 'Additional input is unsupported',
+      });
+    });
+
+    it('reports an SSRF-refused MCP server address with its own stop code', async () => {
+      const blocked = createMCPError('SSRF_BLOCKED', MCP_SSRF_BLOCKED_MESSAGE);
+      const result = await run(
+        {},
+        new TRPCError({ cause: blocked, code: 'FORBIDDEN', message: blocked.message }),
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).toBe(MCP_SSRF_BLOCKED_MESSAGE);
+      expect(result.content).toContain('SSRF_ALLOW_PRIVATE_IP_ADDRESS');
+      expect(result.error).toMatchObject({
+        code: 'MCP_SSRF_BLOCKED',
+        kind: 'stop',
+        message: MCP_SSRF_BLOCKED_MESSAGE,
       });
     });
 

@@ -3,6 +3,8 @@ import {
   agentDisplayName,
   CHANNEL_DELETED_AGENT_NAME,
   CHANNEL_DELETED_USER_NAME,
+  channelMessageReceipt,
+  channelMessageVia,
 } from '@lobechat/types';
 import { and, asc, count, desc, eq, gt, isNull, lt, lte, notInArray, or } from 'drizzle-orm';
 
@@ -111,6 +113,7 @@ export const readManifestMessages = async (
       username: users.username,
       content: channelMessages.content,
       id: channelMessages.id,
+      metadata: channelMessages.metadata,
       sequence: channelMessages.sequence,
       replyToId: channelMessages.replyToId,
       threadId: channelMessages.threadId,
@@ -130,6 +133,8 @@ export const readManifestMessages = async (
 
   return visible.map((message) => {
     const isAgent = message.routingStatus === 'reply';
+    const via = isAgent ? undefined : channelMessageVia(message.metadata);
+    const receipt = isAgent ? undefined : channelMessageReceipt(message.metadata);
     return {
       author: {
         id: isAgent ? message.agentId : message.userId,
@@ -146,6 +151,8 @@ export const readManifestMessages = async (
       sequence: message.sequence,
       replyToId: message.replyToId,
       threadId: message.threadId,
+      ...(receipt && { receipt }),
+      ...(via && { via }),
     };
   });
 };

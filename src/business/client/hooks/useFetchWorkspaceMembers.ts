@@ -1,4 +1,6 @@
 export interface FetchWorkspaceMembersOptions {
+  /** Skip the request while false, keeping hook order stable. */
+  enabled?: boolean;
   includeDeleted?: boolean;
 }
 

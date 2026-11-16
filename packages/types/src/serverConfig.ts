@@ -39,12 +39,6 @@ export type IFeatureFlagsState = {
   enableDashboard: boolean | undefined;
   enableDevDock: boolean | undefined;
   /**
-   * Rail layout trial (`im_layout`): icon rail, IM-style Messages list,
-   * Contacts, Tasks scope list and the agent profile side panel. Off keeps the
-   * current sidebar layout.
-   */
-  enableImLayout: boolean | undefined;
-  /**
    * @deprecated The new subscription tiers are always on. Kept as a constant
    * `true` because released desktop clients still read it and fall back to the
    * retired plans when it is missing. Remove once those clients are no longer
@@ -72,6 +66,11 @@ export type IFeatureFlagsState = {
   enableLlmRelay: boolean | undefined;
   /** A plain chat send leaves its init to the step-0 worker (`agent_deferred_init`). */
   enableDeferredInit: boolean | undefined;
+  /**
+   * A plain chat send to a heterogeneous agent on an online device returns
+   * before the device dispatch completes (`agent_deferred_hetero_dispatch`).
+   */
+  enableDeferredHeteroDispatch: boolean | undefined;
   /**
    * Creating managed cloud devices (`managed_cloud_device`). Off by default: the "Create in
    * cloud" entry is hidden and the creation APIs answer FORBIDDEN. Existing managed devices keep

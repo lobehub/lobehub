@@ -167,7 +167,7 @@ AgentItemActions.displayName = 'AgentItemActions';
 
 const GroupItemActions = memo<ItemActionsProps>(({ anchor, item, ...rest }) => {
   const { t } = useTranslation('common');
-  const { avatar, backgroundColor, description, id, pinned, title, userId } = item;
+  const { avatar, backgroundColor, description, id, pinned, title, userId, visibility } = item;
 
   const customAvatar = typeof avatar === 'string' ? avatar : undefined;
   const memberAvatars = Array.isArray(avatar) ? avatar : [];
@@ -182,6 +182,7 @@ const GroupItemActions = memo<ItemActionsProps>(({ anchor, item, ...rest }) => {
     pinned: pinned ?? false,
     title: title || t('agentViewAll.untitled'),
     userId,
+    visibility,
   });
 
   return <ActionsDropdown getMenuItems={getGroupMenu} item={item} {...rest} />;

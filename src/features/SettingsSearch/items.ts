@@ -359,18 +359,27 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     visible: (ctx) => ctx.isDesktop,
   },
   {
-    anchor: 'about-debug-logs',
-    descKey: 'settingAbout.debugLogs.desc',
-    keywords: ['debug', 'logs', 'log level', 'diagnostics', 'troubleshoot'],
-    labelKey: 'settingAbout.debugLogs.title',
-    tab: SettingsTabs.About,
+    anchor: 'advanced-diagnostics',
+    descKey: 'settingAbout.diagnostics.bundle.desc',
+    keywords: ['diagnostics', 'export', 'logs', 'report', 'bug', 'feedback', 'zip'],
+    labelKey: 'settingAbout.diagnostics.bundle.title',
+    tab: SettingsTabs.Advanced,
     visible: (ctx) => ctx.isDesktop,
   },
   {
-    anchor: 'about-remote-debugging',
+    anchor: 'advanced-debug-logs',
+    descKey: 'settingAbout.debugLogs.desc',
+    keywords: ['debug', 'logs', 'log level', 'diagnostics', 'troubleshoot'],
+    labelKey: 'settingAbout.debugLogs.title',
+    tab: SettingsTabs.Advanced,
+    visible: (ctx) => ctx.isDesktop,
+  },
+  {
+    anchor: 'advanced-remote-debugging',
+    descKey: 'settingAbout.remoteDebugging.desc',
     keywords: ['remote debugging', 'cdp', 'devtools', 'diagnostics', 'debug port'],
     labelKey: 'settingAbout.remoteDebugging.title',
-    tab: SettingsTabs.About,
+    tab: SettingsTabs.Advanced,
     visible: (ctx) => ctx.isDesktop,
   },
   {
@@ -663,20 +672,20 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     ns: 'subscription',
     tab: SettingsTabs.Billing,
   },
-  // Credits
+  // Usage and balance (balance anchors keep their `credits-` ids for old links)
   {
     anchor: 'credits-balance',
     keywords: ['balance', 'credits'],
     labelKey: 'balance.title',
     ns: 'subscription',
-    tab: SettingsTabs.Credits,
+    tab: SettingsTabs.Usage,
   },
   {
     anchor: 'credits-top-up',
     keywords: ['top up', 'topup', 'buy credits', 'recharge'],
     labelKey: 'credits.topUp.title',
     ns: 'subscription',
-    tab: SettingsTabs.Credits,
+    tab: SettingsTabs.Usage,
   },
   {
     anchor: 'credits-cost-estimate-hint',
@@ -684,7 +693,7 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     keywords: ['cost estimate'],
     labelKey: 'credits.costEstimateHint.title',
     ns: 'subscription',
-    tab: SettingsTabs.Credits,
+    tab: SettingsTabs.Usage,
   },
   {
     anchor: 'credits-auto-top-up',
@@ -692,23 +701,16 @@ export const SETTINGS_SEARCH_ITEMS: SettingsSearchItem[] = [
     keywords: ['auto top up', 'automatic recharge'],
     labelKey: 'credits.autoTopUp.title',
     ns: 'subscription',
-    tab: SettingsTabs.Credits,
+    tab: SettingsTabs.Usage,
   },
   {
     anchor: 'credits-packages',
     keywords: ['package', 'budget'],
     labelKey: 'credits.packages.title',
     ns: 'subscription',
-    tab: SettingsTabs.Credits,
+    tab: SettingsTabs.Usage,
   },
   // Plans
-  {
-    anchor: 'plans-model-pricing',
-    keywords: ['model pricing', 'price'],
-    labelKey: 'modelPricing.title',
-    ns: 'subscription',
-    tab: SettingsTabs.Plans,
-  },
   {
     anchor: 'plans-qa',
     keywords: ['faq', 'question'],

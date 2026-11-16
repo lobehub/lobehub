@@ -266,6 +266,7 @@ describe('MCPService log redaction', () => {
     ['AUTHORIZATION_ERROR', 'FORBIDDEN'],
     ['INITIALIZATION_TIMEOUT', 'TIMEOUT'],
     ['CONNECTION_FAILED', 'SERVICE_UNAVAILABLE'],
+    ['SSRF_BLOCKED', 'BAD_REQUEST'],
   ] as const)('exposes %s without an HTTP 500 or retry', async (type, code) => {
     // The module is auto-mocked in this suite; retain the actual error contract.
     const actual = await vi.importActual<typeof McpModule>('@/libs/mcp');
@@ -303,6 +304,7 @@ describe('MCPService log redaction', () => {
       callTool: vi.fn().mockResolvedValue({
         content: [{ text: 'tool-result-secret', type: 'text' }],
       }),
+      getToolUiMeta: vi.fn().mockResolvedValue(undefined),
       getToolUiResourceUri: vi.fn().mockResolvedValue(undefined),
     };
     vi.spyOn(service as any, 'getClient').mockResolvedValue(mockClient);
@@ -335,6 +337,7 @@ describe('MCPService', () => {
     // 创建 mock 客户端
     mockClient = {
       callTool: vi.fn(),
+      getToolUiMeta: vi.fn().mockResolvedValue(undefined),
       getToolUiResourceUri: vi.fn().mockResolvedValue(undefined),
       isToolCallableByApp: vi.fn().mockResolvedValue(true),
       isToolHiddenFromModel: vi.fn().mockResolvedValue(false),
@@ -529,7 +532,46 @@ describe('MCPService', () => {
       expect(result.state).toEqual(errorResult);
     });
 
-    it('should attach the MCP App resource for tools that declare a ui:// resource', async () => {
+    it('calls an enabled thread entrypoint with empty arguments regardless of visibility', async () => {
+      mockClient.getToolUiMeta.mockResolvedValue({
+        resourceUri: 'ui://app',
+        entrypoints: [{ type: 'thread' }],
+      });
+      mockClient.isToolHiddenFromModel.mockResolvedValue(true);
+      mockClient.isToolCallableByApp.mockResolvedValue(false);
+      mockClient.callTool.mockResolvedValue({ content: [{ type: 'text', text: 'entry' }] });
+      const result = await mcpService.callTool({
+        clientParams: mockParams,
+        toolName: 'open',
+        argsStr: '{"ignored":true}',
+        mcpApps: true,
+        fromEntrypoint: true,
+      });
+      expect(result.success).toBe(true);
+      expect(mockClient.callTool).toHaveBeenCalledWith('open', {});
+    });
+    it.each([false, true])(
+      'rejects undeclared entrypoints (flag=%s) before calling the tool',
+      async (mcpApps) => {
+        mockClient.getToolUiMeta.mockResolvedValue({
+          resourceUri: 'ui://app',
+          entrypoints: [{ type: 'global' }],
+        });
+        const result = await mcpService.callTool({
+          clientParams: mockParams,
+          toolName: 'open',
+          argsStr: '{}',
+          mcpApps,
+          fromEntrypoint: true,
+        });
+        expect(result.success).toBe(false);
+        expect(mockClient.callTool).not.toHaveBeenCalled();
+        if (!mcpApps) expect(mockClient.getToolUiMeta).not.toHaveBeenCalled();
+      },
+    );
+
+    it('should persist the MCP App resource and display preference', async () => {
+      mockClient.getToolUiMeta.mockResolvedValue({ preferredModelDisplayMode: 'fullscreen' });
       mockClient.getToolUiResourceUri.mockResolvedValue('ui://weather/view.html');
       mockClient.callTool.mockResolvedValue({
         content: [{ type: 'text', text: 'sunny' }],
@@ -547,6 +589,7 @@ describe('MCPService', () => {
       expect(mockClient.getToolUiResourceUri).toHaveBeenCalledWith('weather');
       // With the server it may be read back from
       expect(result.state.mcpApp).toEqual({
+        preferredModelDisplayMode: 'fullscreen',
         resourceUri: 'ui://weather/view.html',
         server: await getMcpServerFingerprint(mockParams),
       });
@@ -651,6 +694,7 @@ describe('MCPService', () => {
       // A session without the MCP Apps capability, and no listTools round trip
       expect(getClientSpy).toHaveBeenCalledWith(mockParams, false, { mcpApps: false });
       expect(mockClient.getToolUiResourceUri).not.toHaveBeenCalled();
+      expect(mockClient.getToolUiMeta).not.toHaveBeenCalled();
       expect(result.state.mcpApp).toBeUndefined();
     });
 
@@ -669,6 +713,20 @@ describe('MCPService', () => {
       });
 
       expect(result.state.mcpApp).toBeUndefined();
+    });
+
+    it('exposes an SSRF block on a cached session as BAD_REQUEST, not a 500', async () => {
+      // The host may resolve elsewhere after the session was initialized
+      const actual = await vi.importActual<typeof McpModule>('@/libs/mcp');
+      const blocked = actual.createMCPError('SSRF_BLOCKED', 'refused by the SSRF policy');
+      mockClient.callTool.mockRejectedValue(blocked);
+
+      await expect(mcpService.callTool(testToolInput(mockParams))).rejects.toMatchObject({
+        cause: blocked,
+        code: 'BAD_REQUEST',
+        message: 'refused by the SSRF policy',
+      });
+      expect(mockClient.callTool).toHaveBeenCalledOnce();
     });
 
     it('should throw TRPCError when client throws error', async () => {

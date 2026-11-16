@@ -16,6 +16,7 @@ import {
   spawnTraeAcpAgent,
 } from './acpSpawnAgent';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
+import { buildAntigravityArgs } from './antigravity';
 import { ClaudeCodeLiveInput } from './claudeCodeLiveInput';
 import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
 import { resolveCliSpawnPlan } from './cliSpawn';
@@ -92,8 +93,6 @@ export interface SpawnAgentOptions {
    * events still carry the conventional shape.
    */
   operationId: string;
-  /** (Devin ACP only) Global `--permission-mode` value, placed before `acp`. */
-  permissionMode?: string;
   /**
    * User prompt. A plain string is sugar for a single text block; the array
    * form supports mixed text + image content blocks (URL / path / base64).
@@ -390,6 +389,9 @@ export const buildQoderArgs = ({
 
 const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
   switch (params.agentType) {
+    case 'antigravity': {
+      return buildAntigravityArgs(params);
+    }
     case 'amp': {
       return buildAmpArgs(params);
     }

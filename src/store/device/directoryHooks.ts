@@ -9,12 +9,14 @@ import { deviceService } from '@/services/device';
 /**
  * Each device/path has its own page series, so late responses cannot replace a new location.
  * Listings stay cached per path for fast revisits, so folders created outside the picker
- * only show up after `refresh`.
+ * only show up after `refresh`. `enabled: false` holds the request, e.g. until a
+ * sleeping cloud device is online.
  */
-export const useFetchDeviceDirectory = (deviceId: string, path?: string) => {
+export const useFetchDeviceDirectory = (deviceId: string, path?: string, enabled = true) => {
   const workspaceId = useActiveWorkspaceId();
   const { data, error, isLoading, isValidating, mutate, setSize, size } = useSWRInfinite(
     (_index: number, previous: DeviceDirectoryBrowseResult | null) => {
+      if (!enabled) return null;
       if (previous && !previous.nextCursor) return null;
       return deviceKeys.browseDirectory(
         workspaceId,

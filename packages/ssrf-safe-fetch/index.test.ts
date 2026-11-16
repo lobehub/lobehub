@@ -2,7 +2,7 @@
 import fetch from 'node-fetch';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ssrfSafeFetch } from './index';
+import { isSSRFBlockedError, SSRFBlockedError, ssrfSafeFetch } from './index';
 
 // Mock node-fetch to avoid actual network requests
 vi.mock('node-fetch', () => ({
@@ -98,7 +98,10 @@ describe('ssrfSafeFetch', () => {
 
         await expect(ssrfSafeFetch(url)).rejects.toThrow(/Fetch failed/);
 
-        expect(console.error).toHaveBeenCalledWith('Fetch error:', expect.any(Error));
+        expect(console.error).toHaveBeenCalledWith(
+          'Fetch error:',
+          expect.objectContaining({ name: 'Error' }),
+        );
       });
     });
 
@@ -144,6 +147,33 @@ describe('ssrfSafeFetch', () => {
 
         await expect(ssrfSafeFetch(url)).rejects.toThrow(/SSRF blocked/);
       });
+    });
+
+    it('throws a typed SSRFBlockedError that survives being wrapped', async () => {
+      mockFetch.mockImplementation(() => {
+        throw new Error('DNS lookup 10.0.0.1 is not allowed. Because, It is private IP address.');
+      });
+
+      const error = await ssrfSafeFetch('http://10.0.0.1.nip.io/').catch((e) => e);
+      expect(error).toBeInstanceOf(SSRFBlockedError);
+      expect(error.message).toMatch(/^SSRF blocked: /);
+      expect(isSSRFBlockedError(error)).toBe(true);
+      // An SDK or retry helper that wraps the fetch error keeps it as `cause`
+      const wrapped = new Error('Version negotiation probe failed', {
+        cause: new Error('send failed', { cause: error }),
+      });
+      expect(isSSRFBlockedError(wrapped)).toBe(true);
+    });
+
+    it('does not report ordinary network failures as SSRF blocks', async () => {
+      mockFetch.mockImplementation(() => {
+        throw new Error('connect ECONNREFUSED 93.184.215.14:443');
+      });
+
+      const error = await ssrfSafeFetch('https://example.com/').catch((e) => e);
+      expect(error).not.toBeInstanceOf(SSRFBlockedError);
+      expect(isSSRFBlockedError(error)).toBe(false);
+      expect(isSSRFBlockedError(new Error('wrapper', { cause: error }))).toBe(false);
     });
 
     const unsupportedSchemeUrls = [
@@ -194,7 +224,10 @@ describe('ssrfSafeFetch', () => {
         'Fetch failed: Network error',
       );
 
-      expect(console.error).toHaveBeenCalledWith('Fetch error:', originalError);
+      expect(console.error).toHaveBeenCalledWith('Fetch error:', {
+        message: 'Network error',
+        name: 'Error',
+      });
     });
 
     it('should throw SSRF blocked error when request-filtering-agent blocks', async () => {
@@ -205,7 +238,43 @@ describe('ssrfSafeFetch', () => {
 
       await expect(ssrfSafeFetch('http://10.0.0.1/internal')).rejects.toThrow(/SSRF blocked/);
 
-      expect(console.error).toHaveBeenCalledWith('SSRF protection blocked request:', ssrfError);
+      expect(console.error).toHaveBeenCalledWith('SSRF protection blocked request:', {
+        message: ssrfError.message,
+        name: 'Error',
+      });
+    });
+
+    it.each([
+      ['a failed request', 'ECONNREFUSED', 'connect ECONNREFUSED 203.0.113.7:443'],
+      [
+        'a blocked request',
+        undefined,
+        'DNS lookup 10.0.0.1(family:4, host:mcp.example.com) is not allowed. Because, It is private IP address.',
+      ],
+    ])('logs %s without the credentials in its URL', async (_, code, reason) => {
+      // Regression: node-fetch errors carry the full request URL, which was logged
+      // as-is, leaking path / query / userinfo credentials into server logs.
+      const url =
+        'https://url-user:url-password@mcp.example.com/path-token-secret/mcp?api_key=url-query-secret#fragment-secret';
+      const fetchError = Object.assign(new Error(`request to ${url} failed, reason: ${reason}`), {
+        ...(code && { code }),
+        type: 'system',
+      });
+      mockFetch.mockRejectedValue(fetchError);
+
+      await expect(ssrfSafeFetch(url)).rejects.toThrow();
+
+      const logged = JSON.stringify(vi.mocked(console.error).mock.calls);
+      for (const secret of [
+        'url-user',
+        'url-password',
+        'path-token-secret',
+        'url-query-secret',
+        'fragment-secret',
+      ]) {
+        expect(logged).not.toContain(secret);
+      }
+      expect(logged).toContain('https://mcp.example.com');
     });
 
     it('should handle non-Error thrown values', async () => {

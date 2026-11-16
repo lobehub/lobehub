@@ -17,7 +17,6 @@ import type {
   RpcRequestMessage,
   SystemInfoRequestMessage,
   ToolCallRequestMessage,
-  ToolCallResponseMessage,
 } from '@lobechat/device-gateway-client';
 import {
   type DeviceGatewayEndpoint,
@@ -46,6 +45,7 @@ import { safeGetPath } from '@/utils/user-path';
 
 import { discoverDeviceGateway } from './gatewayDiscovery';
 import { collectBundledCliAgentRuntimes, collectGatewaySystemInfo } from './gatewaySystemInfo';
+import { prepareToolCallReply, serializeWireError, toWireResult } from './gatewayToolCallReply';
 import { ServiceModule } from './index';
 
 const logger = createLogger('services:GatewayConnectionSrv');
@@ -98,20 +98,6 @@ interface McpCallHandler {
  * object) into the string shape the wire protocol expects. Returns undefined
  * when there's no error to transmit.
  */
-const serializeWireError = (err: unknown): string | undefined => {
-  if (err === undefined || err === null) return undefined;
-  if (typeof err === 'string') return err;
-  if (err instanceof Error) return err.message;
-  if (typeof err === 'object' && 'message' in err && typeof err.message === 'string') {
-    return err.message;
-  }
-  try {
-    return JSON.stringify(err);
-  } catch {
-    return String(err);
-  }
-};
-
 interface AgentRunHandler {
   (request: AgentRunRequestMessage): Promise<{ reason?: string; status: 'accepted' | 'rejected' }>;
 }
@@ -1308,6 +1294,14 @@ export default class GatewayConnectionService extends ServiceModule {
 
   // ─── Tool Call Routing ───
 
+  /** The live connection on `client`'s principal, after any reconnect or re-enroll. */
+  private currentClientFor(client: GatewayClient): () => GatewayClient | null {
+    for (const [workspaceId, current] of this.workspaceClients) {
+      if (current === client) return () => this.workspaceClients.get(workspaceId) ?? null;
+    }
+    return () => this.client;
+  }
+
   private handleToolCallRequest = async (
     request: ToolCallRequestMessage,
     client: GatewayClient,
@@ -1345,22 +1339,16 @@ export default class GatewayConnectionService extends ServiceModule {
         }
       });
 
-      // Forward the typed envelope unchanged. Critically, do NOT stringify the
-      // whole result into `content` — that would bury the structured payload
-      // inside a JSON blob and lose `state`. The wire protocol carries each
-      // field separately so downstream (`DeviceGateway` → `RuntimeExecutors`)
-      // can persist `state` to `pluginState`. Optional fields are only set
-      // when present so payloads stay minimal.
-      const wireResult: ToolCallResponseMessage['result'] = {
-        content: result.content,
-        executionTimeMs: Math.round(performance.now() - startedAt),
-        success: result.success,
-      };
-      const wireError = serializeWireError(result.error);
-      if (wireError !== undefined) wireResult.error = wireError;
-      if (result.state !== undefined) wireResult.state = result.state;
+      const wireResult = toWireResult(result, Math.round(performance.now() - startedAt));
+      const reply = await prepareToolCallReply({
+        getReporter: this.currentClientFor(client),
+        logger,
+        request,
+        result: wireResult,
+        runTool: (id, name, args) => this.toolCallHandler!(id, name, args),
+      });
 
-      client.sendToolCallResponse({ requestId, result: wireResult });
+      client.sendToolCallResponse({ requestId, result: reply });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.error(`Tool call failed: apiName=${apiName}, error=${errorMsg}`);

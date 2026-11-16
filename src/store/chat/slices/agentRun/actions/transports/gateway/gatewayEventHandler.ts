@@ -8,7 +8,6 @@ import type {
   StepCompleteData,
   StreamChunkData,
   StreamStartData,
-  SubAgentProgressData,
   ToolEndData,
   ToolExecuteData,
   ToolStartData,
@@ -44,6 +43,7 @@ import {
   resolveRuntimeEndStatus,
 } from './runtimeEndReason';
 import { applyStepMetrics } from './stepMetrics';
+import { resolveStepSideEvent } from './stepSideEvent';
 import { insertStreamStartSeeds, streamStartOperationMetadata } from './streamStartSeed';
 
 // Lazy-loaded to break the import cycle:
@@ -1172,41 +1172,10 @@ export const createGatewayEventHandler = (
       case 'step_complete': {
         const data = event.data as StepCompleteData | undefined;
 
-        // A parked `callSubAgent` child reporting its running totals. Patch them
-        // onto the placeholder tool message in memory only — the persisted values
-        // are written once, by `completeSubAgentBridge`, when the child finishes.
-        // Kept under a `progress` key so a DB refetch can never leave a stale live
-        // number sitting where the authoritative one belongs.
-        //
-        // ENQUEUED, not dispatched inline: the placeholder row only enters the
-        // store via the `toolMessageIds` refetch that the preceding `tools_calling`
-        // chunk queued. A fast child can emit its first progress event while that
-        // fetch is still in flight, and `updatePluginState` against a row the store
-        // doesn't have is a silent no-op — for a single-step sub-agent that lone
-        // sample is the whole live readout, so there is nothing later to self-heal
-        // it. Queueing puts this behind the fetch that creates its target.
-        if (data?.phase === 'subagent_progress') {
-          const progress = event.data as SubAgentProgressData;
-          if (progress.toolMessageId) {
-            enqueue(() => {
-              get().internal_dispatchMessage(
-                {
-                  id: progress.toolMessageId,
-                  key: 'progress',
-                  type: 'updatePluginState',
-                  value: {
-                    model: progress.model,
-                    totalCost: progress.totalCost,
-                    totalInputTokens: progress.totalInputTokens,
-                    totalOutputTokens: progress.totalOutputTokens,
-                    totalTokens: progress.totalTokens,
-                    totalToolCalls: progress.totalToolCalls,
-                  },
-                },
-                dispatchContext,
-              );
-            });
-          }
+        // Sub-agent progress and live steer reads, not step boundaries.
+        const sideEvent = resolveStepSideEvent(get, data, context, dispatchContext);
+        if (sideEvent) {
+          if (sideEvent.apply) enqueue(sideEvent.apply);
           break;
         }
 
@@ -1289,6 +1258,16 @@ export const createGatewayEventHandler = (
                 action: 'gateway/agent_runtime_end',
               });
             }
+          } else if (data?.reason === 'interrupted' && hasStreamedContent) {
+            // MID-stream cancel. `interruptOperation` publishes this event as
+            // soon as it saves `interrupted`, while the in-flight step persists
+            // the partial text only when it returns afterwards. Any DB read here
+            // (the patch-mode refetch too: a Stop lands mid-step, so its revision
+            // is ahead of the last patch) sees the empty placeholder and wipes
+            // the streamed text, and nothing repairs it: the socket closes on
+            // this frame. Keep what was streamed — the server persists the same.
+            // Without streamed content, the optimistic `tmp_*` rows are all we
+            // have and still need the refetch below.
           } else if (data?.messagePatchMode) {
             if (
               typeof data.messageRevision === 'number' &&
@@ -1299,28 +1278,11 @@ export const createGatewayEventHandler = (
             } else {
               terminalMessages = get().dbMessagesMap[messageMapKey(context)] ?? [];
             }
-          } else if (
-            (data?.reason === 'interrupted' || data?.reason === 'waiting_for_async_tool') &&
-            hasStreamedContent
-          ) {
-            // MID-stream cancel, or a deferred-tool pause
-            // (`waiting_for_async_tool`). The server's
+          } else if (data?.reason === 'waiting_for_async_tool' && hasStreamedContent) {
+            // Deferred-tool pause. The server's
             // `AgentRuntimeCoordinator.resolveUiMessages` omits uiMessages
-            // for both statuses precisely so we can preserve the
-            // in-memory streamed content here. The executor's partial-
-            // finalize catch writes the real content to DB asynchronously,
-            // but it may not be durable yet — refetching here would race
-            // against that update and clobber the streamed content with
-            // the LOADING_FLAT placeholder. Keep what we have; the next
-            // explicit refresh (route change, user-driven mutate) picks
-            // up the finalized partial content from DB.
-            //
-            // The `hasStreamedContent` guard limits this skip to the case
-            // where server state actually landed (server-assigned assistant
-            // id from stream_start OR any chunk dispatched). If cancel
-            // arrives BEFORE any stream activity, the optimistic `tmp_*`
-            // messages are the only in-memory state and they need the
-            // refetch to be reconciled with the server-side rows.
+            // for it (as for `interrupted`) so the in-memory streamed content
+            // is preserved here instead of racing the executor's DB write.
           } else if (!isSuperseded) {
             await refreshMessagesFromDb().catch(console.error);
           }

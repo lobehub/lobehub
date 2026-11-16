@@ -42,16 +42,20 @@ const plan = (after: string, before = base) => {
 };
 
 describe('an inline style moved from the style prop into sx', () => {
-  it('renders neither side with it when the expression is the same', () => {
+  it('renders both sides with the same unset mask when the expression is the same', () => {
     const { pair, plan: result } = plan(head());
     const [entry] = result.cases;
     expect(entry.flags).toEqual([]);
     expect(entry.variables).toEqual([]);
     expect(entry.inlineStyles?.head).toEqual([
-      { binding: 0, index: 0, without: 'sx([styles.divider], undefined, undefined)' },
+      { binding: 0, index: 0, without: "sx([styles.divider], undefined, { left: 'unset' })" },
     ]);
-    const module = generateModule(pair.head, result, 'head', { layoutComponents: [] });
-    expect(module).not.toContain('view.ratio');
+    expect(entry.inlineMasks?.base).toEqual([{ index: 0, style: "{ left: 'unset' }" }]);
+    const headModule = generateModule(pair.head, result, 'head', { layoutComponents: [] });
+    expect(headModule).not.toContain('view.ratio');
+    const baseModule = generateModule(pair.base, result, 'base', { layoutComponents: [] });
+    expect(baseModule).toContain("style={({ left: 'unset' })}");
+    expect(baseModule).not.toContain('view.ratio');
   });
 
   it('keeps the variable when the style expression changed', () => {
@@ -89,7 +93,80 @@ describe('an inline style moved from the style prop into sx', () => {
     const [entry] = plan(headWith(`sx(styles.divider, ${style}, 'caller')`)).plan.cases;
     expect(entry.flags).toEqual([]);
     expect(entry.inlineStyles?.head).toEqual([
-      { binding: 0, index: 0, without: "sx(styles.divider, undefined, 'caller')" },
+      { binding: 0, index: 0, without: "sx(styles.divider, { left: 'unset' }, 'caller')" },
+    ]);
+  });
+});
+
+const limitBase = (style: string) => `import { createStaticStyles } from '@lobehub/ui';
+
+import { LIMIT, widthOf } from './layout';
+
+const styles = createStaticStyles(({ css }) => ({ column: css\`max-width: 1280px;\` }));
+
+export const Column = ({ size, tab }) => <div className={styles.column} style={${style}} />;
+`;
+
+const limitHead = (style: string) => `import * as stylex from '@stylexjs/stylex';
+
+import { sx } from '@/styles/sx';
+
+import { LIMIT, widthOf } from './layout';
+
+const styles = stylex.create({ column: { width: '100%' } });
+
+export const Column = ({ size, tab }) => <div {...sx([styles.column], undefined, ${style})} />;
+`;
+
+const limitCase = (style: string) => plan(limitHead(style), limitBase(style)).plan.cases[0];
+
+describe('a shared inline style that overrides the class on both sides', () => {
+  it('masks a module constant without flagging it', () => {
+    const entry = limitCase('{ maxWidth: LIMIT }');
+    expect(entry.flags).toEqual([]);
+    expect(entry.inlineMasks?.base).toEqual([{ index: 0, style: "{ maxWidth: 'unset' }" }]);
+  });
+
+  it('masks literals, member reads of constants and arithmetic without flagging them', () => {
+    const entry = limitCase("{ maxWidth: LIMIT.wide * 2, minWidth: 'min-content', margin: 0 }");
+    expect(entry.flags).toEqual([]);
+    expect(entry.inlineMasks?.base).toEqual([
+      { index: 0, style: "{ maxWidth: 'unset', minWidth: 'unset', margin: 'unset' }" },
+    ]);
+  });
+
+  it('compares a call that may return nothing both with and without the mask', () => {
+    const entry = limitCase("{ maxWidth: tab === 'flow' ? 1500 : widthOf(tab) }");
+    expect(entry.flags).toEqual([]);
+    expect(entry.combos).toEqual([{ __inlineStyle: true }, { __inlineStyle: false }]);
+    expect(entry.inlineMasks?.base).toEqual([
+      { index: 0, style: "__v.__inlineStyle ? { maxWidth: 'unset' } : undefined" },
+    ]);
+    expect(entry.inlineStyles?.head?.[0].without).toBe(
+      "sx([styles.column], undefined, __v.__inlineStyle ? { maxWidth: 'unset' } : undefined)",
+    );
+  });
+
+  it('toggles the mask for a prop that may be absent', () => {
+    expect(limitCase('{ width: size }').combos).toEqual([
+      { __inlineStyle: true },
+      { __inlineStyle: false },
+    ]);
+  });
+
+  it('toggles the mask for a value that can short-circuit to nothing', () => {
+    expect(limitCase('{ maxWidth: LIMIT ?? undefined }').combos).toHaveLength(2);
+  });
+
+  it('renders a certain mask in every combination without toggling it', () => {
+    expect(limitCase('{ maxWidth: LIMIT }').combos).toEqual([{}]);
+  });
+
+  it('drops a style it cannot name every property of, as before', () => {
+    const entry = limitCase('{ ...LIMIT, maxWidth: 1 }');
+    expect(entry.inlineMasks).toBeUndefined();
+    expect(entry.inlineStyles?.head).toEqual([
+      { binding: 0, index: 0, without: 'sx([styles.column], undefined, undefined)' },
     ]);
   });
 });

@@ -47,6 +47,13 @@ const isAgentHiddenFromSidebar =
   (s: UserStore): boolean =>
     !!s.workspaceUserPreference.sidebarHiddenAgentIds?.includes(agentId);
 
+/**
+ * Agents / chat groups the caller pinned for themselves in the active
+ * workspace's merged Agents section, newest first.
+ */
+const sidebarPinnedItemIds = (s: UserStore): string[] =>
+  s.workspaceUserPreference.sidebarPinnedItemIds ?? EMPTY_HIDDEN;
+
 /** Per-member sidebar sections layout for the active workspace. */
 const sidebarLayout = (s: UserStore) => s.workspaceUserPreference.sidebar;
 
@@ -62,4 +69,5 @@ export const workspaceUserSettingsSelectors = {
   sidebarHiddenAgentIds,
   sidebarHiddenGroupIds,
   sidebarLayout,
+  sidebarPinnedItemIds,
 };

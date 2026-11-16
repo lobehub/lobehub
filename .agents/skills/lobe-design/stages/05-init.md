@@ -1,4 +1,4 @@
-# Stage 05 · 项目接入与初始化（init）
+# Stage 05・项目接入与初始化（init）
 
 > 只回答一个问题：**这个项目里，lobe-design 的入口、项目层画像（产品 + 组件）和自迭代规则写在哪、有没有写。**
 > 只在 `bootstrap` 场景运行，或在用户明确要求「初始化 / 接入 / 建立指南 / 升级后刷新」时运行；**装完或升级 skill 后也应主动跑一遍**。
@@ -46,14 +46,14 @@
 3. 用户确认后跑 `node scripts/bootstrap.mjs --root <根>`；已有文件时只报告「新增 / 替换了哪一块」。
 4. 跑 `node scripts/bootstrap.mjs --check --root <根>` 确认托管块幂等。
 
-### B. Round 1 · 产品画像
+### B. Round 1・产品画像
 
 5. 跑 `node scripts/project-scan.mjs --root <根>`（或 `--json`）收集事实。
 6. 结合 README、路由、i18n、已有 docs，判断平台 / 产品类型 / 用户 / 核心任务；据此定**文案 profile**（`consumer` / `saas` / `admin` / `devtool`，可按路由分区）与人称（无主语 / 你 / 您），写成一行 `copy-profile: …`（I-07）。
 7. 对照 skill 的 P-xx 与关键规则，标出**强调**与**不适用**（适用性表，一行一条；mobile 项目把 web 专属规则标为不适用）。平台写成机读一行 `平台：<web|desktop|mobile>`（I-10）。
 8. 起草 `.agents/ux/product.md`（文件头带 `<!-- lobe-design-init: version=… fingerprint=… -->`），给用户看后写入。已有文件则**整份更新**，不追加第二份。
 
-### C. Round 2 · 组件盘点
+### C. Round 2・组件盘点
 
 9. 按 scan 给出的组件目录与分类方案（`componentScheme` / 逐文件初分），把现有组件分成：web —— 薄包装、与 lobe-ui 重复、业务组件；mobile —— 项目原子层、薄包装、业务组件（不写「改用 lobe-ui」）。
 10. 起草 `.agents/ux/components.md`（同样带 init meta）：只写「哪个场景用哪个 + 注意点」。
@@ -68,7 +68,7 @@
 
 1. 探测顺序正确（`AGENTS.md` 优先于 `CLAUDE.md`）。
 2. 写入前给用户看过内容，且得到确认。
-3. **托管块之外的内容零改动**——这是硬保证。
+3. **托管块之外的内容零改动**—— 这是硬保证。
 4. 块内含入口、触发（含升级后重跑）、纪律（含先读项目层）、自迭代。
 5. `product.md` 含机读的 `平台：` 行、产品类型、用户、核心任务、适用性表、`copy-profile:` 行，且带 init meta。
 6. `components.md` 按平台的三类分清，无实现细节，且带 init meta。

@@ -55,9 +55,10 @@ const QuickSetupSection = memo<QuickSetupSectionProps>(
   }) => {
     const { t } = useTranslation('agent');
     const applicationId = useWatch(form, (values) => values?.applicationId as string | undefined);
+    const connectionMode = useWatch(form, 'settings.connectionMode') as string | undefined;
     const guide = useMemo(
-      () => getSetupGuide(platformId, { applicationId, appName }),
-      [platformId, applicationId, appName],
+      () => getSetupGuide(platformId, { applicationId, appName, connectionMode }),
+      [platformId, applicationId, appName, connectionMode],
     );
     // Platforms with a scan flow keep the manual steps one click away; the rest
     // have no other way in, so the steps are open from the start.
