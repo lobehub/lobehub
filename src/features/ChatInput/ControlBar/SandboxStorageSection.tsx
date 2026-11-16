@@ -12,6 +12,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { useTopicId } from '../hooks/useTopicId';
 import SandboxDrivePicker from './SandboxDrivePicker';
 import { usePrefersTemporarySandbox } from './temporarySandboxPreference';
+import { useFollowSandboxModePreference } from './useFollowSandboxModePreference';
 import { useSandboxPlacement } from './useSandboxPlacement';
 import { useSandboxStorageAccess } from './useSandboxStorageAccess';
 import { useSeedDefaultSelection } from './useSeedDefaultSelection';
@@ -59,6 +60,7 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
   const temporary =
     usePrefersTemporarySandbox({ userId, workspaceId: useActiveWorkspaceId() }, agentId) &&
     modeInEnvironmentMenu;
+  useFollowSandboxModePreference(agentId, { hasTopic: !!topicId, temporary });
   useSeedDefaultSelection(agentId, {
     eligible: eligible && !temporary,
     entitled: status === 'ready' && !temporary,
