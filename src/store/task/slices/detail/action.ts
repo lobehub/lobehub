@@ -108,6 +108,8 @@ export class TaskDetailSliceActionImpl {
   readonly #detail;
   readonly #reconciliations = new WeakMap<TaskDetailData, Promise<void>>();
   readonly #previous = new WeakMap<TaskDetailData, TaskDetailData | undefined>();
+  /** Mounted task-detail surfaces, oldest first — see `claimActiveTask`. */
+  readonly #activeTaskClaims: { ref: string }[] = [];
 
   constructor(set: Setter, get: () => TaskStore, _api?: unknown) {
     void _api;
@@ -397,6 +399,32 @@ export class TaskDetailSliceActionImpl {
   reorderSubtasks = async (taskId: string, order: string[]): Promise<void> => {
     await taskService.reorderSubtasks(taskId, order);
     await this.internal_refreshTaskDetail(taskId);
+  };
+
+  /**
+   * Make `taskRef` the active task for as long as the caller stays mounted.
+   *
+   * Several surfaces can show a task detail at once — the `/task` page and a
+   * task opened beside it in the Portal — and every detail section reads the
+   * one global `activeTaskId`. Claims stack: the newest wins, and releasing the
+   * top claim hands the task back to the claim below instead of clearing it,
+   * so closing the Portal leaves the page under it on its own task. Releasing
+   * a claim that is not on top changes nothing.
+   *
+   * Returns the release function; call it on unmount.
+   */
+  claimActiveTask = (taskRef: string): (() => void) => {
+    const claim = { ref: taskRef };
+    this.#activeTaskClaims.push(claim);
+    this.setActiveTaskId(taskRef);
+
+    return () => {
+      const index = this.#activeTaskClaims.indexOf(claim);
+      if (index === -1) return;
+      const wasTop = index === this.#activeTaskClaims.length - 1;
+      this.#activeTaskClaims.splice(index, 1);
+      if (wasTop) this.setActiveTaskId(this.#activeTaskClaims.at(-1)?.ref);
+    };
   };
 
   setActiveTaskId = (taskId?: string): void => {
