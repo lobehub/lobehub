@@ -7,6 +7,7 @@ import { revalidateReplica } from '@/libs/replica';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { aiChatService } from '@/services/aiChat';
 import { goalService } from '@/services/goal';
+import { briefListResource } from '@/store/brief/slices/list/projection';
 import { taskGroupListResource, taskListResource } from '@/store/task/slices/list/projection';
 
 import { useGoalStore } from './index';
@@ -33,6 +34,7 @@ vi.mock('@/services/goal', () => ({
     advance: vi.fn(),
     archive: vi.fn(),
     close: vi.fn(),
+    decide: vi.fn(),
     delete: vi.fn(),
     getGraph: vi.fn(),
     list: vi.fn(),
@@ -430,6 +432,21 @@ describe('GoalAction', () => {
     // Its Tasks move with it, so the task lists and boards re-read as well.
     expect(revalidateReplica).toHaveBeenCalledWith(taskListResource);
     expect(revalidateReplica).toHaveBeenCalledWith(taskGroupListResource);
+  });
+
+  it('refreshes the inbox brief feed after a decision gate is answered', async () => {
+    await useGoalStore
+      .getState()
+      .decideGoal('goal-1', { decisionId: 'decision-1', optionId: 'option-1' });
+
+    expect(goalService.decide).toHaveBeenCalledWith({
+      decisionId: 'decision-1',
+      id: 'goal-1',
+      optionId: 'option-1',
+    });
+    // The inbox brief asking the same gate is the `briefList` replica — the old
+    // `brief:list` SWR prefix mutate matched nothing, so the brief stayed put.
+    expect(revalidateReplica).toHaveBeenCalledWith(briefListResource);
   });
 
   it('reports an archive that landed as done even when the refresh after it fails', async () => {

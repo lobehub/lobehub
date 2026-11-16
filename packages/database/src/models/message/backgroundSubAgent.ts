@@ -72,17 +72,26 @@ export class MessageBackgroundSubAgentQueries extends MessageScope {
    * Claim finished background sub-agent results for delivery: stamps
    * `state.deliveredAt` on the rows that do not carry it yet and returns their
    * ids. Two deliveries racing for the same row cannot both win it.
+   *
+   * `cancelSubAgent` claims a still-running call with `suppressedByCancel`, so
+   * the run it stops does not wake the parent. The claim also carries
+   * `state.cancelSuppressed`, which tells it apart from a real delivery for
+   * {@link releaseCancelSuppressedDelivery}.
    */
   claimBackgroundSubAgentDelivery = async (
     ids: string[],
     deliveredAt: string,
+    options: { suppressedByCancel?: boolean } = {},
   ): Promise<string[]> => {
     if (ids.length === 0) return [];
 
+    const patch = options.suppressedByCancel
+      ? { cancelSuppressed: true, deliveredAt }
+      : { deliveredAt };
     const claimed = await this.db
       .update(messagePlugins)
       .set({
-        state: sql`coalesce(${messagePlugins.state}, '{}'::jsonb) || ${JSON.stringify({ deliveredAt })}::jsonb`,
+        state: sql`coalesce(${messagePlugins.state}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
       })
       .where(
         and(
@@ -102,7 +111,31 @@ export class MessageBackgroundSubAgentQueries extends MessageScope {
 
     await this.db
       .update(messagePlugins)
-      .set({ state: sql`${messagePlugins.state} - 'deliveredAt'` })
+      .set({ state: sql`${messagePlugins.state} - 'deliveredAt' - 'cancelSuppressed'` })
       .where(and(inArray(messagePlugins.id, ids), this.pluginsOwnership()));
+  };
+
+  /**
+   * Hand back only the claims `cancelSubAgent` made, and return their ids. A
+   * row a real delivery claimed afterwards keeps its claim, so the stopped
+   * run's cancel and its completion can both call this without delivering an
+   * answer twice.
+   */
+  releaseCancelSuppressedDelivery = async (ids: string[]): Promise<string[]> => {
+    if (ids.length === 0) return [];
+
+    const released = await this.db
+      .update(messagePlugins)
+      .set({ state: sql`${messagePlugins.state} - 'deliveredAt' - 'cancelSuppressed'` })
+      .where(
+        and(
+          inArray(messagePlugins.id, ids),
+          sql`coalesce(jsonb_exists(${messagePlugins.state}, 'cancelSuppressed'), false)`,
+          this.pluginsOwnership(),
+        ),
+      )
+      .returning({ id: messagePlugins.id });
+
+    return released.map((row) => row.id);
   };
 }

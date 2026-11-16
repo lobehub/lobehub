@@ -3,7 +3,7 @@ import { ModelProvider, zhipu as zhipuChatModels } from 'model-bank';
 import {
   createOpenAICompatibleRuntime,
   type OpenAICompatibleFactoryOptions,
-} from '../../core/openaiCompatibleFactory';
+} from '../../core/openaiCompatible';
 import { resolveParameters } from '../../core/parameterResolver';
 import { OpenAIStream } from '../../core/protocols/openaiChatCompletions/stream';
 import { convertIterableToStream } from '../../core/streams/protocol';

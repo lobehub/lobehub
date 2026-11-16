@@ -19,6 +19,7 @@ vi.mock('@/services/mentionMarketInstall', async (importOriginal) => ({
 
 const createHelloEditor = () => ({
   cleanDocument: vi.fn(),
+  dispatchCommand: vi.fn(),
   focus: vi.fn(),
   getLexicalEditor: () => ({}),
   getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { root: {} })),
@@ -56,6 +57,7 @@ describe('ChatInput store actions', () => {
     const editorData = { root: { children: [{ text: 'Hello' }] } };
     const editor = {
       cleanDocument: vi.fn(),
+      dispatchCommand: vi.fn(),
       focus: vi.fn(),
       getLexicalEditor: () => ({}),
       getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : editorData)),
@@ -79,6 +81,7 @@ describe('ChatInput store actions', () => {
   it('drops the stored draft once the send handler clears the composer', () => {
     const editor = {
       cleanDocument: vi.fn(),
+      dispatchCommand: vi.fn(),
       focus: vi.fn(),
       getLexicalEditor: () => ({}),
       getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { text: 'Hello' })),
@@ -100,6 +103,7 @@ describe('ChatInput store actions', () => {
   it('keeps the stored draft when the send handler declines to clear the composer', () => {
     const editor = {
       cleanDocument: vi.fn(),
+      dispatchCommand: vi.fn(),
       focus: vi.fn(),
       getLexicalEditor: () => ({}),
       getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : { text: 'Hello' })),
@@ -124,6 +128,7 @@ describe('ChatInput store actions', () => {
     const editorData = { root: { children: [{ text: 'Hello' }] } };
     const editor = {
       cleanDocument: vi.fn(),
+      dispatchCommand: vi.fn(),
       focus: vi.fn(),
       getLexicalEditor: () => ({}),
       getDocument: vi.fn((type: string) => (type === 'markdown' ? 'Hello' : editorData)),
@@ -151,6 +156,7 @@ describe('ChatInput store actions', () => {
     });
     const editor = {
       cleanDocument: vi.fn(),
+      dispatchCommand: vi.fn(),
       focus: vi.fn(),
       getLexicalEditor: () => ({}),
       getDocument: vi.fn((type: string) =>
@@ -218,7 +224,7 @@ describe('ChatInput store actions', () => {
 
     store.getState().handleSendButton();
 
-    expect(dispatchCommand).not.toHaveBeenCalled();
+    expect(dispatchCommand).not.toHaveBeenCalledWith(KEY_ESCAPE_COMMAND, expect.anything());
   });
 
   // Regression: sendButtonProps.disabled mirrors editor content through the

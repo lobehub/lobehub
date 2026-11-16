@@ -10,6 +10,7 @@ import {
   DeviceMetricsSampler,
   pushMetrics,
 } from '@lobechat/device-control';
+import { createTerminalDeps, TerminalSessionManager } from '@lobechat/device-control/terminal';
 import { GatewayClient } from '@lobechat/device-gateway-client';
 import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
 import { createRuntimeProbeCache } from '@lobechat/heterogeneous-agents/runtimeProbeCache';
@@ -48,6 +49,7 @@ import {
   resolveCliDeviceGateway,
 } from '../../device/gatewayEndpoint';
 import { MANAGED_GATEWAY_ENV } from '../../device/managed';
+import { disposeDeviceMcp, listDeviceMcpTools } from '../../device/mcp';
 import {
   mintWorkspaceConnectToken,
   registerDevice,
@@ -56,7 +58,6 @@ import {
   resolveWorkspaceDeviceIdentity,
 } from '../../device/register';
 import { probeNativeRuntimes } from '../../device/systemInfo';
-import { TerminalSessionManager } from '../../device/terminal';
 import { redactUrlCredentials } from '../../doctor/redact';
 import { cliVersion } from '../../pkg';
 import {
@@ -574,7 +575,14 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // Constructing it is cheap — the native PTY binding is only loaded when a
   // session is actually created, so a daemon that never opens a terminal never
   // touches it.
-  const terminals = new TerminalSessionManager({ logger: { warn: (message) => info(message) } });
+  const terminals = new TerminalSessionManager({
+    client: 'cli',
+    // Lazy: the CLI bundle is embedded in contexts that have no `node_modules`
+    // at all (the desktop app runs it from `Resources/bin`), so a static import
+    // would fail every one of them at startup.
+    loadPty: () => import('@lydell/node-pty'),
+    logger: { warn: (message) => info(message) },
+  });
 
   const countActiveTasks = () =>
     getActiveShellCount() + listTasks().filter((task) => isProcessAlive(task.pid)).length;
@@ -589,8 +597,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
 
   const deviceControlDeps: DeviceControlDeps = {
     checkCliUpdate: maintenance.check,
-    closeTerminal: (params) => Promise.resolve(terminals.close(params)),
-    createTerminalSession: (params) => terminals.create(params),
+    ...createTerminalDeps(terminals),
     getCliUpdateState: maintenance.getState,
     getLocalFilePreview: defaultGetLocalFilePreview,
     getProjectFileIndex: defaultGetProjectFileIndex,
@@ -599,11 +606,10 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
         ...params,
         env: { ...process.env, ...params.env },
       }),
-    readTerminal: (params) => Promise.resolve(terminals.read(params)),
-    resizeTerminal: (params) => Promise.resolve(terminals.resize(params)),
+    // A server that can't reach an MCP server itself lists its tools here
+    listMcpTools: listDeviceMcpTools,
     restartCli: maintenance.restart,
     searchProjectFiles: defaultSearchProjectFiles,
-    writeTerminal: (params) => Promise.resolve(terminals.write(params)),
   };
 
   // One native runtime probe per connection: system info is queried by tool runs and
@@ -1021,6 +1027,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     managed?.session.stop();
     activity?.stop();
     cleanupAllProcesses();
+    void disposeDeviceMcp();
     // Kill every remote-terminal shell this daemon started, so a stopping
     // `lh connect` does not leave orphaned PTYs behind on the machine.
     terminals.dispose();
@@ -1042,6 +1049,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     await Promise.all([
       metricsSampler?.stop({ flushTimeoutMs: SHUTDOWN_METRICS_FLUSH_MS }),
       closeBrowserSessions(browser),
+      disposeDeviceMcp(),
     ]);
     cleanup();
     process.exit(exitCode);

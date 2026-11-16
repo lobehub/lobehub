@@ -4,10 +4,10 @@ import type { Pricing } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { USD_TO_CNY } from '../../const/currency';
+import { countMiniMaxSpeechCharacters } from '../../core/usageConverters/tts';
 import { getModelPricing } from '../../utils/getModelPricing';
 import {
   buildMiniMaxSpeechRequest,
-  countMiniMaxSpeechCharacters,
   createMiniMaxSpeech,
   decodeMiniMaxHexAudio,
   getMiniMaxSpeechErrorType,

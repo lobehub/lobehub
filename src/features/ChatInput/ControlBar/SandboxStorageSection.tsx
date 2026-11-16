@@ -31,7 +31,10 @@ interface SandboxStorageSectionProps {
  */
 const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }) => {
   const { eligible, status } = useSandboxStorageAccess(agentId);
-  const { selection, setSelection, topicId } = useSandboxPlacement(agentId, useTopicId());
+  const { projectId, selection, setSelection, topicId } = useSandboxPlacement(
+    agentId,
+    useTopicId(),
+  );
   useSeedDefaultSelection(agentId, {
     eligible,
     entitled: status === 'ready',
@@ -43,6 +46,7 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
   return (
     <SandboxDrivePicker
       entitled={status === 'ready'}
+      projectId={projectId}
       topicId={topicId}
       value={selection}
       onChange={setSelection}

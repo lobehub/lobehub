@@ -3,7 +3,7 @@
  *
  * Creates and exports the ActivatorExecutor instance for registration.
  * Resolves tool manifests from the tool store (installedPlugins + builtinTools +
- * lobehubSkillServers + composio servers).
+ * lobehubSkillServers + composio servers + MCP connectors).
  *
  * State tracking (getActivatedToolIds / markActivated) is intentionally a no-op
  * because the activated state is persisted in message pluginState and accumulated
@@ -131,6 +131,24 @@ const service: ActivatorRuntimeService = {
           type: (composioManifest.manifest as { type?: string }).type,
         });
         continue;
+      }
+
+      // MCP connectors no plugin row serves (every MCP install now), built the
+      // way the tools engine offers them
+      const connectorManifest = toolSelectors
+        .executableConnectorManifests(s)
+        .find((manifest) => manifest.identifier === id);
+      if (connectorManifest) {
+        results.push({
+          apiDescriptions: connectorManifest.api.map((a) => ({
+            description: a.description,
+            name: a.name,
+          })),
+          avatar: connectorManifest.meta?.avatar,
+          identifier: connectorManifest.identifier,
+          name: connectorManifest.meta?.title ?? connectorManifest.identifier,
+          type: connectorManifest.type,
+        });
       }
     }
 

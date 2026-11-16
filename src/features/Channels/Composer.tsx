@@ -9,6 +9,7 @@ import {
 } from '@lobehub/editor';
 import { ChatInput, Editor, SendButton, useEditor } from '@lobehub/editor/react';
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { $getSelection, $isRangeSelection, KEY_DOWN_COMMAND } from 'lexical';
 import { Reply, X } from 'lucide-react';
@@ -75,7 +76,11 @@ type ComposerDelivery =
       onSend: ChannelComposerSend;
     };
 
-const plugins = [ReactCodePlugin, ReactListPlugin, ReactLinkHighlightPlugin, ReactMentionPlugin];
+const plugins = [ReactCodePlugin, ReactListPlugin, ReactLinkHighlightPlugin];
+
+/** Highlighted text like the rest of the line, not the editor's default boxed tag. */
+const mentionTheme = { mention: stylex.props(styles.composerMention).className };
+const writeMention = (node: { label: string }) => `@${node.label}`;
 
 /** Keeps ChatInput's raised card (elevated background, border, soft shadow) from the chat page. */
 const inputShell = { borderRadius: 12 };
@@ -119,7 +124,7 @@ export function Composer({
   /** The card the mention picker docks to, full width above the input like an IM. */
   const [card, setCard] = useState<HTMLDivElement | null>(null);
   const requests = useSingleton(createChannelSendRequest);
-  const attachments = useAttachments();
+  const attachments = useAttachments(draftKey);
   const { allowed } = usePermission('create_content');
   const enableUpload = useServerConfigStore((s) => featureFlagsSelectors(s).enableKnowledgeBase);
   const canUpload = allowed && enableUpload;
@@ -155,7 +160,7 @@ export function Composer({
     );
   };
   const send = async () => {
-    const value = String(editor.getDocument('markdown') || '').trim();
+    const value = String(editor.getDocument('markdown', { format: false }) || '').trim();
     const fileIds = attachments.readyFileIds();
     if (sending.current || !fileIds || (!value && !fileIds.length)) return;
     const document = editor.getDocument('json');
@@ -249,9 +254,9 @@ export function Composer({
               <Flexbox gap={4}>
                 {replyTarget && (
                   <Flexbox horizontal align="center" gap={8} padding={8}>
-                    <Reply size={14} />
+                    <Reply color={cssVar.colorTextTertiary} size={14} />
                     <Flexbox flex={1} style={{ minWidth: 0 }}>
-                      <Text ellipsis fontSize={12}>
+                      <Text ellipsis fontSize={12} type="secondary">
                         {t('reply.to', { name: replyTarget.author.name || t('deletedMember') })}
                         {' · '}
                         {replyTarget.content || t('reply.attachment')}
@@ -346,7 +351,7 @@ export function Composer({
                         ]
                       : options;
                   },
-                  markdownWriter: (node) => `@${node.label}`,
+                  markdownWriter: writeMention,
                   onSelect: (instance, option) => {
                     instance.dispatchCommand(INSERT_MENTION_COMMAND, {
                       label: String(option.label),
@@ -371,7 +376,7 @@ export function Composer({
                   const document = JSON.stringify(json);
                   if (document !== previousDocument.current) {
                     previousDocument.current = document;
-                    setContent(String(editor.getDocument('markdown') || ''));
+                    setContent(String(editor.getDocument('markdown', { format: false }) || ''));
                     draft.save();
                   }
                 }}
@@ -384,7 +389,11 @@ export function Composer({
                   void send();
                   return true;
                 }}
-              />
+              >
+                {/* <Editor> registers its own mention plugin after `plugins`, and a later
+                    registration replaces the config; a child registers last, so this theme wins. */}
+                <ReactMentionPlugin markdownWriter={writeMention} theme={mentionTheme} />
+              </Editor>
             </div>
             {/* Replies run asynchronously, so Send never turns into Stop; each reply stops from the activity line. */}
             {/* Enter sends; like an IM, the button only appears once there is something to send. */}

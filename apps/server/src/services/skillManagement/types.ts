@@ -34,6 +34,8 @@ export interface SkillSummary {
   bundle: SkillDocumentRef;
   /** Skill description parsed from index frontmatter. */
   description: string;
+  /** Why the SKILL.md frontmatter could not be parsed; set only when name and description fell back to saved values. */
+  frontmatterError?: string;
   /** Child index document reference. */
   index: SkillDocumentRef;
   /** Stable skill bundle name. */

@@ -40,6 +40,28 @@ export const styles = stylex.create({
     height: '100%',
     minHeight: 0,
   },
+  // The Channel half of a thread page's `# Channel › thread` title, leading back to the Channel.
+  crumb: {
+    display: 'flex',
+    flexShrink: 0,
+    gap: 8,
+    alignItems: 'center',
+    maxWidth: 200,
+    minWidth: 0,
+    marginBlock: 0,
+    marginInline: 0,
+    paddingBlock: 2,
+    paddingInline: 4,
+    borderWidth: 0,
+    borderStyle: 'none',
+    borderRadius: 6,
+    font: 'inherit',
+    backgroundColor: {
+      default: 'transparent',
+      [HOVER]: { 'default': 'transparent', ':hover': cssVar.colorFillTertiary },
+    },
+    cursor: 'pointer',
+  },
   threadHeader: {
     borderBlockEndWidth: 1,
     borderBlockEndStyle: 'solid',
@@ -52,12 +74,15 @@ export const styles = stylex.create({
     paddingBlockStart: 8,
     paddingBlockEnd: 24,
   },
-  /** One message row; hovering highlights it and reveals its toolbar, like a chat app. */
+  /**
+   * One message row; hovering highlights it and reveals its toolbar, like a chat app.
+   * The wash spans the feed edge to edge (cancelling the feed's 16px padding), square,
+   * so it reads as a list row rather than a floating card.
+   */
   messageRow: {
     position: 'relative',
-    marginInline: -12,
-    paddingInline: 12,
-    borderRadius: cssVar.borderRadiusLG,
+    marginInline: -16,
+    paddingInline: 16,
     backgroundColor: {
       default: 'transparent',
       [HOVER]: { 'default': 'transparent', ':hover': cssVar.colorFillQuaternary },
@@ -73,20 +98,21 @@ export const styles = stylex.create({
   },
   // A continuation has no header for its toolbar; reserve room for both actions.
   continuationWithAction: {
-    paddingInlineEnd: 84,
+    paddingInlineEnd: 88,
   },
   messageTime: {
     flexShrink: 0,
     fontSize: cssVar.fontSizeSM,
     fontVariantNumeric: 'tabular-nums',
-    color: cssVar.colorTextSecondary,
+    // One step below the author name, which is one step below the message.
+    color: cssVar.colorTextTertiary,
     whiteSpace: 'nowrap',
     opacity: 1,
   },
   continuationTime: {
     position: 'absolute',
     insetBlockStart: 4,
-    insetInlineStart: 0,
+    insetInlineStart: 4,
     width: 54,
     textAlign: 'center',
     opacity: {
@@ -111,7 +137,7 @@ export const styles = stylex.create({
   messageToolbar: {
     position: 'absolute',
     insetBlockStart: 6,
-    insetInlineEnd: 12,
+    insetInlineEnd: 16,
     zIndex: 1,
     display: 'flex',
     alignItems: 'center',
@@ -155,6 +181,9 @@ export const styles = stylex.create({
     marginInline: 2,
     verticalAlign: 'baseline',
   },
+  eventMemberAgent: {
+    cursor: 'pointer',
+  },
   eventMemberName: {
     // Let the name supply the inline flex baseline instead of the avatar.
     alignSelf: 'baseline',
@@ -170,11 +199,31 @@ export const styles = stylex.create({
     color: cssVar.colorInfo,
     backgroundColor: cssVar.colorInfoBg,
   },
-  composer: {
-    flexShrink: 0,
-    paddingBlockEnd: 12,
+  /** A mention inside the composer: highlighted text, no tag; tinted like selected text while selected. */
+  composerMention: {
+    userSelect: 'none',
+    fontWeight: 500,
+    color: cssVar.colorInfo,
+    // `.selected` is added by the editor's selection observer, not by React.
+    borderRadius: { 'default': null, ':is(.selected)': cssVar.borderRadiusXS },
+    backgroundColor: { 'default': null, ':is(.selected)': cssVar.colorInfoBgHover },
   },
-  /** Typing activity above the input; keeps its height when empty. */
+  composer: {
+    'position': 'relative',
+    'flexShrink': 0,
+    'paddingBlockEnd': 12,
+    // The feed fades out into the composer instead of being cut at its top edge.
+    '::before': {
+      pointerEvents: 'none',
+      content: '""',
+      position: 'absolute',
+      insetBlockEnd: '100%',
+      insetInline: 0,
+      height: 24,
+      backgroundImage: `linear-gradient(to top, ${cssVar.colorBgContainer}, transparent)`,
+    },
+  },
+  /** Typing activity above the input; rendered only while someone is replying. */
   composerStatus: {
     display: 'flex',
     alignItems: 'center',
@@ -352,14 +401,6 @@ export const activityStyles = stylex.create({
     height: 24,
     paddingInline: 4,
     color: cssVar.colorTextSecondary,
-  },
-  /** Beside the Agent's name in a direct conversation's header. */
-  header: {
-    color: cssVar.colorTextDescription,
-  },
-  headerButton: {
-    height: 22,
-    paddingInline: 4,
   },
   avatars: {
     display: 'inline-flex',

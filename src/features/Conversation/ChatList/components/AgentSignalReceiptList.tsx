@@ -18,6 +18,7 @@ import { useStableNavigate } from '@/hooks/useStableNavigate';
 import { mutate } from '@/libs/swr';
 import { userMemoryKeys } from '@/libs/swr/keys';
 import { agentSignalService } from '@/services/agentSignal';
+import { agentSignalActions } from '@/store/agentSignal';
 import { useChatStore } from '@/store/chat';
 
 import type { AgentSignalReceiptView } from '../hooks/useAgentSignalReceipts';
@@ -220,6 +221,10 @@ const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(
         onRollbackStatusChange(receipt.id, status);
 
         if (ROLLBACK_SUCCESS_STATUSES.has(status)) {
+          agentSignalActions.markReceiptRolledBack(
+            { agentId: receipt.agentId, topicId: receipt.topicId },
+            receipt.id,
+          );
           // Drop the cached detail so an open Portal / memory page shows the memory is gone.
           if (target?.type === 'memory' && target.memoryLayer && target.id) {
             void mutate(userMemoryKeys.memoryDetail(target.memoryLayer, target.id));
@@ -265,7 +270,9 @@ const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(
     }, [
       canRollback,
       onRollbackStatusChange,
+      receipt.agentId,
       receipt.id,
+      receipt.topicId,
       rollbackAgentDocumentId,
       rollbackDocumentId,
       rollbackHistoryId,

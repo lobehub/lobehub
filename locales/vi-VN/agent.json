@@ -359,8 +359,6 @@
   "channel.qq.webhookMigrationTitle": "Cân nhắc chuyển sang chế độ WebSocket",
   "channel.quickSetup.connect.desc": "Lưu những gì bạn đã điền ở trên và đưa bot trực tuyến. Mọi thứ khác có thể thay đổi sau.",
   "channel.quickSetup.connect.title": "Lưu và kết nối",
-  "channel.quickSetup.discord.bot.desc": "Trên trang Bot, Đặt lại Token và sao chép nó, sau đó bật Message Content Intent.",
-  "channel.quickSetup.discord.bot.title": "Lấy token bot và cho phép nội dung tin nhắn",
   "channel.quickSetup.discord.create.desc": "Trong Developer Portal, nhấp vào New Application và đặt tên cho nó.",
   "channel.quickSetup.discord.create.title": "Tạo một ứng dụng",
   "channel.quickSetup.discord.credentials.desc": "Cả hai đều nằm trong General Information.",

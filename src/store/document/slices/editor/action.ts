@@ -52,6 +52,19 @@ export interface RemoteDocumentRow extends DocumentFormatFields {
 
 export type ReconcileResult = 'unchanged' | 'rebased' | 'adopted';
 
+/**
+ * How a save may recover from a version CONFLICT once the store has reconciled
+ * the latest row: `body` replays a content save over an unchanged body base;
+ * `metadata` replays a title / emoji-only save when nobody else touched the
+ * meta it was built from (`base`, the cached row; without one it never replays).
+ */
+type ConflictRetry =
+  | { kind: 'body' }
+  | {
+      base?: { metadata?: unknown; title?: string | null };
+      kind: 'metadata';
+    };
+
 type Setter = StoreSetter<DocumentStore>;
 export const createEditorSlice = (set: Setter, get: () => DocumentStore, _api?: unknown) =>
   new EditorActionImpl(set, get, _api);
@@ -141,9 +154,11 @@ export class EditorActionImpl {
 
       const markdownChanged = markdown !== doc.lastSavedContent;
       const editorDataChanged = !isEqual(editorData, doc.lastSavedEditorData);
+      // The editor state determines its markdown, so an unchanged tree under the
+      // same frontmatter is the loaded body without comparing markdown text.
       const isLoadedBody =
         !!doc.loadedBody &&
-        markdown === doc.loadedBody.content &&
+        doc.loadedBody.skillFrontmatter === doc.skillFrontmatter &&
         isEqual(editorData, doc.loadedBody.editorData);
       const contentChanged = !isLoadedBody && (markdownChanged || editorDataChanged);
 
@@ -478,30 +493,32 @@ export class EditorActionImpl {
    * reads as an edit — opening the page marks it dirty, autosaves it and holds
    * navigation behind a "Saving…" toast although the user changed nothing.
    *
+   * Only the tree is recorded. Its markdown export costs more than the load
+   * itself on a long, deeply nested page and would run inside the route switch;
+   * `content` keeps the stored markdown, which is this body.
+   *
    * `lastSaved*` keeps the server's body: conflict reconciliation compares
    * remote rows against it, and a normalized copy there would make a remote
    * title-only change look like a body change and discard local edits.
    */
   #adoptLoadedBody = (editor: IEditor, documentId: string): void => {
     try {
-      const markdown = this.getPersistedMarkdown(
-        documentId,
-        (editor.getDocument('markdown') as unknown as string) || '',
-      );
       const editorData = editor.getDocument('json');
       if (!isValidEditorData(editorData)) return;
 
-      // The load's own change event already queued an autosave of this body.
+      // An unlocked load's own change event may have queued an autosave of this body.
       this.#get().cancelDebouncedSave(documentId);
       this.#get().internal_dispatchDocument(
         {
           id: documentId,
           type: 'updateDocument',
           value: {
-            content: markdown,
             editorData,
             isDirty: false,
-            loadedBody: { content: markdown, editorData },
+            loadedBody: {
+              editorData,
+              skillFrontmatter: this.#get().documents[documentId]?.skillFrontmatter,
+            },
           },
         },
         'adoptLoadedBody',
@@ -535,7 +552,7 @@ export class EditorActionImpl {
     if (doc.contentFormat === 'skillMarkdown') {
       if (hasValidEditorData) {
         try {
-          editor.setDocument('json', JSON.stringify(doc.editorData), { keepId: true });
+          editor.setDocument('json', doc.editorData, { keepId: true });
           return;
         } catch {
           console.warn(
@@ -557,7 +574,7 @@ export class EditorActionImpl {
     // Set content from document state
     if (hasValidEditorData) {
       try {
-        editor.setDocument('json', JSON.stringify(doc.editorData), { keepId: true });
+        editor.setDocument('json', doc.editorData, { keepId: true });
         return;
       } catch {
         // Fallback to markdown if JSON fails
@@ -661,12 +678,27 @@ export class EditorActionImpl {
           title: metadata?.title,
         });
 
+      // A title / emoji-only save sends no body, so a version moved by a body
+      // write (another session, or this page's own room projection) cannot be
+      // clobbered by replaying it — only a concurrent meta change could.
+      const cachedMeta = this.#get().documentDetailMap[id]?.document;
+      let conflictRetry: ConflictRetry | undefined;
+      if (!options?.restoreFromHistoryId) {
+        if (!hasMetadataChanges) conflictRetry = { kind: 'body' };
+        else if (metadataOnly)
+          conflictRetry = {
+            base: cachedMeta
+              ? { metadata: cachedMeta.metadata, title: cachedMeta.title }
+              : undefined,
+            kind: 'metadata',
+          };
+      }
+
       let result: Awaited<ReturnType<typeof requestSave>>;
       try {
         result = await requestSave(doc.lastUpdatedTime ?? undefined);
       } catch (error) {
-        const canRetry = !hasMetadataChanges && !options?.restoreFromHistoryId;
-        result = await this.retrySaveAfterReconcile(id, doc, error, requestSave, canRetry);
+        result = await this.retrySaveAfterReconcile(id, doc, error, requestSave, conflictRetry);
       }
 
       // Old servers omit updatedAt. Keep the known token; conflict reconciliation
@@ -768,10 +800,15 @@ export class EditorActionImpl {
       internal_dispatchDocument({
         id,
         type: 'updateDocument',
-        value: {
-          saveBlockedByLock: lockBlocked || undefined,
-          saveStatus: adoptedRemote ? 'saved' : 'idle',
-        },
+        // A refused title / emoji has no autosave to re-arm, and the body lock
+        // never gates it: `idle` would read as "Latest version loaded" over a
+        // rename that never reached the server.
+        value: metadataOnly
+          ? { saveStatus: 'failed' }
+          : {
+              saveBlockedByLock: lockBlocked || undefined,
+              saveStatus: adoptedRemote ? 'saved' : 'idle',
+            },
       });
       if (conflicted && !lockBlocked && live?.isDirty && live.autoSave !== false) {
         this.#get().triggerDebouncedSave(id);
@@ -789,7 +826,7 @@ export class EditorActionImpl {
     },
     error: unknown,
     requestSave: (expectedUpdatedAt?: Date) => Promise<T>,
-    canRetry: boolean,
+    retry: ConflictRetry | undefined,
   ): Promise<T> => {
     const errorCode = (error as { data?: { code?: string } })?.data?.code;
     if (errorCode !== 'CONFLICT') throw error;
@@ -816,7 +853,26 @@ export class EditorActionImpl {
       // reconciles against it instead of re-adopting a stale server read.
       this.#get().internal_adoptDocumentDetail(id, latest, scope);
     }
-    if (outcome === 'adopted' || !canRetry) throw error;
+    if (!retry) throw error;
+
+    if (retry.kind === 'metadata') {
+      // The request carries no body, so whatever moved the version (a body
+      // write — for a room page, its own projection) is not overwritten, and
+      // the body lock does not gate it. Only a concurrent title / emoji change
+      // would be: replay just when the meta still matches the base it was built
+      // from (`savedMetadata` replaces the whole object). Without a cached
+      // base there is nothing to compare, so a collaborator's change cannot be
+      // ruled out: keep the conflict.
+      const { base } = retry;
+      const metaUnchanged =
+        !!base &&
+        (latest.title ?? null) === (base.title ?? null) &&
+        isEqual(latest.metadata ?? null, base.metadata ?? null);
+      if (!metaUnchanged) throw error;
+      return await requestSave(latest.updatedAt);
+    }
+
+    if (outcome === 'adopted') throw error;
 
     // `baseDoc` is the store snapshot this request was built from; an
     // overlapping newer save from this tab may have moved the live base since,

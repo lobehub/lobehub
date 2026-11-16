@@ -31,6 +31,11 @@ export interface ClientSecretPayload {
   cloudflareBaseURLOrAccountID?: string;
   customHeaders?: Record<string, string>;
   /**
+   * Doubao Speech legacy console credentials (App ID + Access Token)
+   */
+  doubaoSpeechAccessToken?: string;
+  doubaoSpeechAppId?: string;
+  /**
    * GitHub Copilot OAuth fields
    */
   oauthAccessToken?: string;

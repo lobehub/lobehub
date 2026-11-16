@@ -47,19 +47,15 @@ export const getUploadChipState = ({
     typeof rawProgress === 'number' && Number.isFinite(rawProgress)
       ? Math.min(100, Math.max(0, rawProgress))
       : undefined;
+  const indicator: 'busy' | 'error' | 'file' =
+    status === 'error' || status === 'cancelled' ? 'error' : busy ? 'busy' : 'file';
 
   return {
     busy,
     canPreview: status === 'success',
     canRetry: status === 'error' || status === 'cancelled',
-    indicator:
-      status === 'error' || status === 'cancelled'
-        ? 'error'
-        : status === 'uploading' && progress !== undefined
-          ? 'progress'
-          : busy
-            ? 'loading'
-            : 'file',
+    /** Every busy step shares one `busy` indicator, so users see a single spinner throughout. */
+    indicator,
     progress,
   };
 };

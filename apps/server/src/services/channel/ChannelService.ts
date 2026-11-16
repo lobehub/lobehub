@@ -1,15 +1,18 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
+import type { ChannelVisibility } from '@lobechat/types';
 import {
   agentDisplayName,
   CHANNEL_LIMITS,
-  defaultChannelAgentDevice,
   defaultChannelAgentDirectory,
   isChannelRuntime,
 } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
 import pMap from 'p-map';
 
+import { AgentShareModel } from '@/database/models/agentShare';
+import { ContactModel, parseContactHandle } from '@/database/models/contact';
 import { DeviceModel } from '@/database/models/device';
 import { ProjectModel } from '@/database/models/project';
 import type {
@@ -18,11 +21,13 @@ import type {
   ChannelStopScope,
 } from '@/database/repositories/channel';
 import { ChannelError, ChannelRepository } from '@/database/repositories/channel';
+import { users } from '@/database/schemas';
 import { AgentService } from '@/server/services/agent';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
+import { notifyChannelDirectMessages } from './directMessage';
 import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
 import { wakeChannel } from './queue';
@@ -120,7 +125,9 @@ export class ChannelService {
       config.deviceId = device.deviceId;
       config.deviceOwnerId = device.userId;
       config.workingDirectory = path.canonicalPath;
-    } else if (runtime !== 'native' || input.workingDirectory) {
+    } else if (input.workingDirectory) {
+      // A directory only means something on a device. Without one the Agent runs where its own
+      // settings say, as in an ordinary conversation.
       throw new ChannelError('BAD_REQUEST', 'Choose an online device and working directory');
     }
     return { agentId: input.agentId, config, description: input.description, name: input.name };
@@ -191,29 +198,62 @@ export class ChannelService {
   };
 
   /**
-   * The direct conversation between a person and an Agent, titled with the Agent's name. The Agent
-   * keeps the device and directory a new Channel would give it, checked the same way. An external
-   * Agent with no device yet still gets its conversation; it asks for a device in the Channel
-   * before it can reply.
+   * The direct conversation between a person and an Agent, titled with the Agent's name. A Channel
+   * binds no device by default: the Agent runs where its own settings say, as in an ordinary
+   * conversation, until a member picks a device for it in the Channel.
    */
-  createDirect = async (agentId: string, { localDeviceId }: { localDeviceId?: string } = {}) => {
+  createDirect = async (agentId: string) => {
     const agent = await this.agentService.getAgentConfigById(agentId);
-    if (!agent) return;
-    const runtime = agentRuntime(agent);
-    if (!isChannelRuntime(runtime)) return;
-    const deviceId = defaultChannelAgentDevice({
-      agencyConfig: agent.agencyConfig,
-      localDeviceId,
-      runtime,
-    });
-    const { config } =
-      deviceId || runtime === 'native'
-        ? await this.resolveAgent({ agentId, deviceId }, agent)
-        : { config: {} };
+    if (!agent) return this.createSharedDirect(agentId);
+    if (!isChannelRuntime(agentRuntime(agent))) return;
     return this.repository.create({
-      agentConfig: config,
+      agentConfig: {},
       agentId,
       title: agentDisplayName(agent, 'Agent').slice(0, CHANNEL_LIMITS.titleLength),
+    });
+  };
+
+  /**
+   * Another person's Agent the caller added to their contacts through its link share; the entry
+   * shows they reached the share. The repository rechecks the live share. Always a personal
+   * direct conversation, run in the cloud as the owner.
+   */
+  private createSharedDirect = async (agentId: string) => {
+    if (this.workspaceId) return;
+    const shared = await new ContactModel(this.db, this.userId).findAgentAccess(agentId);
+    if (!shared) return;
+    return this.repository.create({
+      agentConfig: {},
+      agentId,
+      sharedAgent: true,
+      title: agentDisplayName(shared, 'Agent').slice(0, CHANNEL_LIMITS.titleLength),
+    });
+  };
+
+  /**
+   * The direct conversation with another person's Agent, opened from its share (id, handle or
+   * pasted link) — no contact entry or friendship needed, since a link share is open to anyone
+   * signed in. Adding it to contacts stays optional. One's own Agent opens as usual.
+   */
+  openShared = async (share: string) => {
+    if (this.workspaceId)
+      throw new ChannelError('BAD_REQUEST', 'A shared Agent is messaged from a personal scope');
+    const key = parseContactHandle(share);
+    const found = key ? await AgentShareModel.findBySlugOrId(this.db, key) : null;
+    if (!found || found.visibility !== 'link')
+      throw new ChannelError('NOT_FOUND', 'Agent not found');
+    if (found.ownerId === this.userId) return this.openDirect(found.agentId);
+
+    const existing = await this.repository.findDirectAccess(found.agentId);
+    if (existing) return existing.channel.isDeleted ? undefined : existing;
+    return this.repository.create({
+      agentConfig: {},
+      agentId: found.agentId,
+      sharedAgent: true,
+      title: agentDisplayName({ name: found.agentName, title: found.agentTitle }, 'Agent').slice(
+        0,
+        CHANNEL_LIMITS.titleLength,
+      ),
     });
   };
 
@@ -222,10 +262,30 @@ export class ChannelService {
    * Channels. An existing conversation opens as it is, without probing its device again; one the
    * person moved to the trash stays there, and the Agent opens as before.
    */
-  openDirect = async (agentId: string, options: { localDeviceId?: string } = {}) => {
+  openDirect = async (agentId: string) => {
     const existing = await this.repository.findDirectAccess(agentId);
     if (existing) return existing.channel.isDeleted ? undefined : existing;
-    return this.createDirect(agentId, options);
+    return this.createDirect(agentId);
+  };
+
+  /**
+   * The personal conversation with a contact. The stored title is the other person's name for
+   * whoever opened it; clients title it with whoever the viewer is talking to.
+   */
+  openPeer = async (peerUserId: string) => {
+    const [peer] = await this.db
+      .select({ fullName: users.fullName, username: users.username })
+      .from(users)
+      .where(eq(users.id, peerUserId))
+      .limit(1);
+    if (!peer) throw new ChannelError('NOT_FOUND', 'User not found');
+    const title = (peer.fullName?.trim() || peer.username || 'Conversation').slice(
+      0,
+      CHANNEL_LIMITS.titleLength,
+    );
+    const access = await this.repository.openPeer(peerUserId, title);
+    await this.changed(access.channel.id);
+    return access;
   };
 
   /**
@@ -274,6 +334,19 @@ export class ChannelService {
     const member = await this.repository.addUser(channelId, userId);
     await this.changed(channelId);
     return member;
+  };
+
+  updateVisibility = async (channelId: string, visibility: ChannelVisibility) => {
+    const channel = await this.repository.updateVisibility(channelId, visibility);
+    await this.changed(channelId);
+    return channel;
+  };
+
+  /** Members already in the Channel see the newcomer without waiting for their next poll. */
+  join = async (channelId: string) => {
+    const access = await this.repository.join(channelId);
+    await this.changed(channelId);
+    return access;
   };
 
   changed = (channelId: string) => notifyChannel(this.db, channelId);
@@ -337,8 +410,10 @@ export class ChannelService {
       ...input,
       routing: config ? 'decision' : 'fallback',
     });
-    notifyChannelMentions(this.db, { userId: this.userId, workspaceId: this.workspaceId }, message);
-    // Human quotes only update the public feed; they never schedule Agent work.
+    const notifyContext = { userId: this.userId, workspaceId: this.workspaceId };
+    notifyChannelMentions(this.db, notifyContext, message);
+    notifyChannelDirectMessages(this.db, notifyContext, message);
+    // A human quote without mentions only updates the public feed; it schedules no Agent work.
     if (message.replyToId && message.routingStatus === 'skipped') await this.changed(channelId);
     else await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
     return message;
@@ -348,6 +423,12 @@ export class ChannelService {
     const message = await this.repository.retryRouting(channelId, messageId);
     await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
     return message;
+  };
+
+  retryJob = async (channelId: string, jobId: string) => {
+    const job = await this.repository.retryJob(channelId, jobId);
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+    return job;
   };
 
   stop = async (channelId: string, scope: ChannelStopScope) => {

@@ -15,6 +15,22 @@ import {
   listComments,
   setResolved,
 } from './handlers';
+import { getExtensionInbox } from './inbox';
+import {
+  addMark,
+  addMarkReply,
+  deleteMark,
+  discardReview,
+  getReview,
+  listAgents,
+  listMarkReplies,
+  listReviews,
+  sendReviewBack,
+  setMarkVerdict,
+  startReview,
+  submitReview,
+  updateMark,
+} from './reviews';
 import { getSiteInfo, recordSiteBeacon } from './sites';
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
@@ -42,6 +58,7 @@ app.use(
 app.get('/sites/:siteId', getSiteInfo);
 app.post('/sites/:siteId/beacon', recordSiteBeacon);
 app.get('/extension/targets', extensionAuth, getExtensionTargets);
+app.get('/extension/inbox', extensionAuth, getExtensionInbox);
 app.post('/extension/token', extensionAuth, mintExtensionToken);
 app.use('*', reviewAuth);
 app.onError(handleReviewError);
@@ -54,5 +71,18 @@ app.patch('/comments/:id', setResolved);
 app.delete('/comments/:id', deleteComment);
 app.post('/decision', decide);
 app.get('/events', streamEvents);
+app.get('/reviews', listReviews);
+app.post('/reviews', startReview);
+app.get('/reviews/:id', getReview);
+app.delete('/reviews/:id', discardReview);
+app.post('/reviews/:id/marks', addMark);
+app.patch('/reviews/:id/marks/:markId', updateMark);
+app.delete('/reviews/:id/marks/:markId', deleteMark);
+app.post('/reviews/:id/submit', submitReview);
+app.get('/agents', listAgents);
+app.post('/reviews/:id/send-back', sendReviewBack);
+app.post('/reviews/:id/marks/:markId/verdict', setMarkVerdict);
+app.get('/reviews/:id/marks/:markId/replies', listMarkReplies);
+app.post('/reviews/:id/marks/:markId/replies', addMarkReply);
 
 export default app;

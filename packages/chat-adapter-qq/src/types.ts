@@ -1,6 +1,13 @@
+import type { QQPassiveStore } from './passive';
+
 export interface QQAdapterConfig {
   appId: string;
   clientSecret: string;
+  /**
+   * Tracks each conversation's passive-reply window (see `passive.ts`). Defaults to an in-process
+   * store, which only works for a single instance — a multi-instance deployment passes a shared one.
+   */
+  passiveStore?: QQPassiveStore;
 }
 
 export interface QQThreadId {

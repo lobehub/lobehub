@@ -55,6 +55,7 @@ import {
   type InsertActionTagPayload,
   useSlashActionItems,
 } from './ActionTag';
+import { useImageRefTagSync } from './ImageRefTag';
 import { createInputCompletionError, isInputCompletionAbortError } from './inputCompletionError';
 import InputHistoryPopup, { getHistoryPreviewText } from './InputHistoryPopup';
 import { INSERT_LOCAL_FILE_TAG_COMMAND } from './LocalFileTag';
@@ -292,6 +293,9 @@ const InputEditor = memo<{
 
   // Listen to editor's paste event for file uploads
   usePasteFile(editor, handlePasteFiles);
+  // Attaching an image inserts no inline reference; references saved in older drafts and
+  // messages still follow removals and renumbering.
+  useImageRefTagSync(editor);
 
   useEffect(() => {
     const fn = (e: BeforeUnloadEvent) => {

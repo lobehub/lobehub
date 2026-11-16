@@ -1,16 +1,18 @@
 import type { CreatableAcceptanceSubjectType } from '@lobechat/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import type { ReplicaSyncResult } from '@/libs/replica';
 import { useClientDataSWR } from '@/libs/swr';
 import { verifyKeys } from '@/libs/swr/keys';
-import { documentService } from '@/services/document';
 import type {
   AcceptanceBySubject,
   AcceptanceListFilter,
   AcceptanceListItem,
   AcceptanceListQuery,
+  VerifyReportBundle,
 } from '@/services/verify';
 import { verifyService } from '@/services/verify';
+import { useDocumentStore } from '@/store/document';
 import { useVerifyStore, verifySelectors } from '@/store/verify';
 import type { AcceptanceListParams, AcceptancePageParams } from '@/store/verify/projection';
 
@@ -60,13 +62,45 @@ export const useVerifyResults = (operationId: string | null) => {
   return { data: run?.results, mutate };
 };
 
-/** Full standalone report bundle (run + report + results + evidence) by verifyRunId. */
-export const useVerifyReportBundle = (verifyRunId: string | null) =>
-  useClientDataSWR(
-    verifyRunId ? verifyKeys.reportBundle(verifyRunId) : null,
-    () => verifyService.getReportBundle(verifyRunId!),
-    VERIFY_REPORT_SWR_CONFIG,
-  );
+/**
+ * What a replica-backed read hands the views that used to read an SWR response:
+ * `data` is the store entry (`undefined` until hydrated or fetched), `mutate`
+ * re-runs the network sync.
+ */
+export interface VerifyReplicaRead<T> {
+  data: T | undefined;
+  error: unknown;
+  /** Nothing to show yet, and no failure either. */
+  isLoading: boolean;
+  isValidating: boolean;
+  mutate: () => Promise<unknown>;
+}
+
+const toReplicaRead = <T>(
+  data: T | undefined,
+  sync: ReplicaSyncResult,
+  enabled: boolean,
+): VerifyReplicaRead<T> => ({
+  data,
+  error: sync.error,
+  isLoading: enabled && data === undefined && sync.error == null,
+  isValidating: sync.isValidating,
+  mutate: sync.revalidate,
+});
+
+/**
+ * Full standalone report bundle (run + report + results + evidence) by
+ * verifyRunId. `data` is `null` once the server answered there is no such run;
+ * a finished report paints from IndexedDB on reload, then refreshes.
+ */
+export const useVerifyReportBundle = (
+  verifyRunId: string | null,
+): VerifyReplicaRead<VerifyReportBundle | null> => {
+  const useFetchVerifyReportBundle = useVerifyStore((s) => s.useFetchVerifyReportBundle);
+  const data = useVerifyStore(verifySelectors.verifyReportBundle(verifyRunId));
+  const sync = useFetchVerifyReportBundle(verifyRunId);
+  return toReplicaRead(data, sync, !!verifyRunId);
+};
 
 export { useAcceptanceBundle } from './Viewer/useAcceptanceBundle';
 
@@ -243,33 +277,43 @@ export const useAcceptanceListInfinite = (
 };
 
 /** Model / token / latency for an LLM verifier judgment. Pass null to skip. */
-export const useVerifierTracing = (tracingId: string | null | undefined) =>
-  useClientDataSWR(tracingId ? verifyKeys.tracing(tracingId) : null, () =>
-    verifyService.getVerifierTracing(tracingId!),
-  );
+export const useVerifierTracing = (tracingId: string | null | undefined) => {
+  const useFetchVerifierTracing = useVerifyStore((s) => s.useFetchVerifierTracing);
+  const data = useVerifyStore(verifySelectors.verifierTracing(tracingId));
+  const sync = useFetchVerifierTracing(tracingId);
+  return toReplicaRead(data, sync, !!tracingId);
+};
 
-/** The criterion's original judging rule, stored in its instruction document. */
-export const useVerifyInstruction = (documentId: string | null | undefined) =>
-  useClientDataSWR(documentId ? verifyKeys.instruction(documentId) : null, () =>
-    documentService.getDocumentById(documentId!),
-  );
-
-/** A rubric and its run-policy config (e.g. maxRepairRounds). Pass null to skip. */
-export const useRubric = (rubricId: string | null | undefined) =>
-  useClientDataSWR(rubricId ? verifyKeys.rubric(rubricId) : null, () =>
-    verifyService.getRubric(rubricId!),
-  );
+/**
+ * The criterion's original judging rule, stored in its instruction document.
+ * Shares the document detail replica, so it paints from the same persisted row
+ * as every other view of that document.
+ */
+export const useVerifyInstruction = (documentId: string | null | undefined) => {
+  const useFetchDocumentDetail = useDocumentStore((s) => s.useFetchDocumentDetail);
+  return useFetchDocumentDetail(documentId || undefined);
+};
 
 /** The workspace's reusable rubric templates (delivery-standard groups). */
-export const useRubrics = (enabled = true) =>
-  useClientDataSWR(enabled ? verifyKeys.rubrics() : null, () => verifyService.listRubrics());
-
-/** The workspace's reusable atomic criteria. */
-export const useCriteria = () =>
-  useClientDataSWR(verifyKeys.criteria(), () => verifyService.listCriteria());
+export const useRubrics = (enabled = true) => {
+  const useFetchVerifyRubrics = useVerifyStore((s) => s.useFetchVerifyRubrics);
+  const data = useVerifyStore(verifySelectors.verifyRubrics);
+  const sync = useFetchVerifyRubrics(enabled);
+  return toReplicaRead(data, sync, enabled);
+};
 
 /** The criteria a rubric groups, in rubric order. Pass null to skip. */
-export const useRubricCriteria = (rubricId: string | null | undefined) =>
-  useClientDataSWR(rubricId ? verifyKeys.rubricCriteria(rubricId) : null, () =>
-    verifyService.getRubricCriteria(rubricId!),
-  );
+export const useRubricCriteria = (rubricId: string | null | undefined) => {
+  const useFetchVerifyRubricCriteria = useVerifyStore((s) => s.useFetchVerifyRubricCriteria);
+  const data = useVerifyStore(verifySelectors.verifyRubricCriteria(rubricId));
+  const sync = useFetchVerifyRubricCriteria(rubricId);
+  return toReplicaRead(data, sync, !!rubricId);
+};
+
+/** The persisted criteria a Goal is accepted against, in its order. Empty ids skip. */
+export const useGoalCriteria = (criteriaIds: string[]) => {
+  const useFetchGoalCriteria = useVerifyStore((s) => s.useFetchGoalCriteria);
+  const data = useVerifyStore(verifySelectors.goalCriteria(criteriaIds));
+  const sync = useFetchGoalCriteria(criteriaIds);
+  return toReplicaRead(data, sync, criteriaIds.length > 0);
+};

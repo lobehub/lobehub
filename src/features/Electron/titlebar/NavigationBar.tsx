@@ -7,8 +7,6 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
-import { RAIL_WIDTH } from '@/features/NavRail/const';
-import { useImLayout } from '@/features/NavRail/useImLayout';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
@@ -39,13 +37,7 @@ const navPanelSelector = (s: GlobalState) => {
   return systemStatusSelectors.leftPanelWidth(s);
 };
 
-const useNavPanelWidth = () => {
-  const width = useGlobalStore(navPanelSelector);
-  // Under `im_layout` the list column starts after the icon rail, so the
-  // titlebar spans both.
-  const imLayout = useImLayout();
-  return imLayout && width > 0 ? width + RAIL_WIDTH : width;
-};
+const useNavPanelWidth = () => useGlobalStore(navPanelSelector);
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   clock: css`

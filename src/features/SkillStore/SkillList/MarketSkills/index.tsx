@@ -28,7 +28,7 @@ const MarketSkillList = memo<MarketSkillListProps>(({ keywords }) => {
   const useFetchAgentSkills = useToolStore((s) => s.useFetchAgentSkills);
   useFetchAgentSkills(true);
 
-  const { error, isLoading, items, loadMore, page, retry, totalPages } =
+  const { error, isConfirmed, isLoading, items, loadMore, page, retry, totalPages } =
     useMarketSkillList(keywords);
 
   // A rate limit is not a network error, and saying so sends the user off
@@ -38,7 +38,8 @@ const MarketSkillList = memo<MarketSkillListProps>(({ keywords }) => {
       ? t('skillStore.rateLimited')
       : t('skillStore.networkError');
 
-  if (isLoading && items.length === 0) return <Loading />;
+  // A hydrated empty first page is not "no skills" until the server confirms it.
+  if (items.length === 0 && !error && (isLoading || !isConfirmed)) return <Loading />;
 
   // Only take over the whole surface when there is nothing to show. Once pages
   // have loaded, a failed *next* page must not wipe them.

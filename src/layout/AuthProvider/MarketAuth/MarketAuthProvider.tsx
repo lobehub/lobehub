@@ -4,11 +4,11 @@ import { toast } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { createContext, lazy, Suspense, use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { mutate as globalMutate } from 'swr';
 
 import { useSingleton } from '@/hooks/useSingleton';
 import { lambdaClient } from '@/libs/trpc/client';
 import { MARKET_OIDC_ENDPOINTS } from '@/services/_url';
+import { useDiscoverStore } from '@/store/discover';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
@@ -601,10 +601,8 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
       setPendingClaimSuccessCallback(null);
     }
 
-    // Also refresh all user-profile related SWR cache as fallback
-    globalMutate((key) => typeof key === 'string' && key.startsWith('user-profile'), undefined, {
-      revalidate: true,
-    });
+    // Also refresh the community profiles on screen as fallback
+    void useDiscoverStore.getState().refreshUserProfiles();
   }, [pendingClaimSuccessCallback]);
 
   /**
@@ -794,27 +792,18 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   // Get current user's profile for the edit modal
   const userInfo = session?.userInfo;
   const username = userInfo?.sub;
-  const { data: userProfile, mutate: mutateUserProfile } = useMarketUserProfile(username);
+  const { data: userProfile } = useMarketUserProfile(username);
 
   // Handle profile update success - also refresh the cached profile
   const handleProfileSuccess = useCallback(
     (profile: MarketUserProfile) => {
       handleProfileUpdateSuccess();
-      // Update the SWR cache with the new profile
-      mutateUserProfile(profile, false);
-
-      // Also refresh the discover store's user profile cache
-      // The discover store uses keys like 'user-profile-{locale}-{username}'
-      if (profile.userName) {
-        globalMutate(
-          (key) =>
-            typeof key === 'string' &&
-            key.includes(`user-profile`) &&
-            key.includes(profile.userName!),
-          undefined,
-          { revalidate: true },
-        );
-      }
+      const discover = useDiscoverStore.getState();
+      // The edit returned the saved profile: write it to the replica (memory
+      // and persisted row) instead of waiting for a refetch.
+      if (username) discover.setMarketUserProfile(username, profile);
+      // The community profile pages read their own replica; refetch them too.
+      if (profile.userName) void discover.refreshUserProfiles();
 
       // Call the external success callback if provided
       if (pendingProfileSuccessCallback) {
@@ -822,7 +811,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
         setPendingProfileSuccessCallback(null);
       }
     },
-    [handleProfileUpdateSuccess, mutateUserProfile, pendingProfileSuccessCallback],
+    [handleProfileUpdateSuccess, pendingProfileSuccessCallback, username],
   );
 
   return (

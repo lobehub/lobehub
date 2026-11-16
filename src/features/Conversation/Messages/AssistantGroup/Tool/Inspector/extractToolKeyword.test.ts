@@ -9,22 +9,30 @@ describe('extractToolKeyword', () => {
   });
 
   describe('command args', () => {
-    it('skips env setup and runners to find the script being run', () => {
+    it('drops setup statements and output plumbing from the command line', () => {
       expect(
         extractToolKeyword({
           command:
             'set -a && source .env && set +a && npx tsx scripts/gross-margin/monthly.ts 2>/dev/null',
         }),
-      ).toBe('monthly.ts');
+      ).toBe('npx tsx scripts/gross-margin/monthly.ts');
     });
 
-    it('returns the program for a plain command', () => {
-      expect(extractToolKeyword({ command: 'git status' })).toBe('git');
+    it('returns the whole command for a plain command', () => {
+      expect(extractToolKeyword({ command: 'git status' })).toBe('git status');
     });
 
-    it('skips env assignments and sudo', () => {
+    it('names a heredoc by its opener line instead of a single token', () => {
+      expect(
+        extractToolKeyword({
+          command: "cd /repo && python3 - <<'EOF'\nprint('hi')\nEOF",
+        }),
+      ).toBe("python3 - <<'EOF'");
+    });
+
+    it('keeps an inline environment prefix', () => {
       expect(extractToolKeyword({ command: 'FOO=1 sudo systemctl restart nginx' })).toBe(
-        'systemctl',
+        'FOO=1 sudo systemctl restart nginx',
       );
     });
 
@@ -34,8 +42,8 @@ describe('extractToolKeyword', () => {
       ).toBe('List files in current directory');
     });
 
-    it('falls back to the command program when no description exists', () => {
-      expect(extractToolKeyword({ command: 'ls -la' })).toBe('ls');
+    it('falls back to the command line when no description exists', () => {
+      expect(extractToolKeyword({ command: 'ls -la' })).toBe('ls -la');
     });
   });
 

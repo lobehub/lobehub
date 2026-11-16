@@ -6,7 +6,7 @@ import type {
   ConnectorOAuthRequest,
   ConnectorOAuthResult,
 } from '@lobechat/electron-client-ipc/types';
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, session } from 'electron';
 
 import { preloadDir } from '@/const/dir';
 import { createLogger } from '@/utils/logger';
@@ -68,6 +68,8 @@ export default class ConnectorOAuthCtr extends ControllerModule implements Conne
       return 'failed';
     }
 
+    if (params.freshSession) await session.fromPartition('connector-oauth').clearStorageData();
+    if (pending.canceled) return 'dismissed';
     const parent = this.app.browserManager.getMainWindow().browserWindow;
     const popup = new BrowserWindow({
       autoHideMenuBar: true,

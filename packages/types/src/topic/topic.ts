@@ -130,9 +130,17 @@ export interface OnboardingSessionSnapshot {
 export interface ChatTopicMetadata {
   /** Watermark written by the background topic-summary workflow. */
   autoSummary?: {
+    /**
+     * Set when the summary model rejected the request for a reason only the user
+     * can fix (invalid key, no balance, missing model). The watermark still moves,
+     * so the topic is retried only after a new message.
+     */
+    failedAt?: string;
+    failureReason?: string;
     lastMessageId: string;
     lastMessageUpdatedAt: string;
-    summarizedAt: string;
+    /** Absent until a summary has been written for this topic. */
+    summarizedAt?: string;
     version: number;
   };
 
@@ -420,6 +428,20 @@ export interface ChatTopicMetadata {
    * directory inside a remote volume.
    */
   sandboxInstanceId?: string;
+  /**
+   * Creation-time only, never stored: the placement this topic is created with
+   * is the plan's default, filled in by the composer rather than chosen. A
+   * project conversation is given the project's repository checkout in its
+   * place. The server reads it and drops it.
+   */
+  sandboxSeeded?: boolean;
+  /**
+   * Creation-time only, never stored: the composer explicitly chose a
+   * temporary sandbox before the topic existed. Without it that choice looks
+   * the same as no choice at all, and the server would apply a project's
+   * repository checkout over it. The server reads it and drops it.
+   */
+  sandboxTemporary?: boolean;
   /**
    * The folder on the user's drive this topic's cloud sandbox works in,
    * relative to the drive's root; `'.'` is the root itself. Choosing a folder

@@ -15,7 +15,9 @@ import { dataSelectors, useConversationStore } from '../../../../../store';
 import CustomRender from './CustomRender';
 import { FallbackArgumentRender } from './FallbacktArgumentRender';
 
-const McpAppView = dynamic(() => import('@/features/MCPApp/McpAppView'), { ssr: false });
+const McpAppView = dynamic(() => import('./InlineMcpAppView').then((m) => m.InlineMcpAppView), {
+  ssr: false,
+});
 
 interface ToolRenderProps {
   content: string;
@@ -77,6 +79,8 @@ const ToolRender = memo<ToolRenderProps>(
     const fallback = (
       <FallbackArgumentRender
         content={resolvedContent}
+        identifier={plugin?.identifier}
+        messageId={messageId}
         requestArgs={plugin?.arguments}
         toolCallId={toolCallId}
       />
@@ -91,6 +95,7 @@ const ToolRender = memo<ToolRenderProps>(
           fallback={fallback}
           identifier={plugin.identifier}
           messageId={messageId}
+          preferred={mcpApp.preferredModelDisplayMode}
           resourceUri={mcpApp.resourceUri}
           result={{ content: resolvedContent, state: unwrapMcpToolState(resolvedState) }}
           server={mcpApp.server}

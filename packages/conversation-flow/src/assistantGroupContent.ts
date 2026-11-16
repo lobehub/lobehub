@@ -168,9 +168,6 @@ export const isAssistantGroupStatusText = (content?: string | null): boolean => 
   return sentenceCount <= 1;
 };
 
-const shouldPromoteMixedBlockContent = (block: AssistantContentBlock): boolean =>
-  hasTools(block) && hasSubstantiveContent(block) && !isAssistantGroupStatusText(block.content);
-
 const appendWorkflowRangeBlock = (
   segments: AssistantGroupSegment[],
   block: AssistantContentBlock,
@@ -207,7 +204,7 @@ const appendWorkflowRangeBlock = (
     return;
   }
 
-  if (collapsesIntoWorkflow && shouldPromoteMixedBlockContent(block)) {
+  if (collapsesIntoWorkflow && hasSubstantiveContent(block)) {
     appendAnswerBlock(
       segments,
       createProjectedBlock(block, 'answer', {
@@ -215,13 +212,15 @@ const appendWorkflowRangeBlock = (
         tools: undefined,
       }),
     );
-    appendWorkflowRest(
-      createProjectedBlock(block, 'workflow', {
-        content: '',
-        imageList: undefined,
-        reasoning: undefined,
-      }),
-    );
+    if (hasTools(block)) {
+      appendWorkflowRest(
+        createProjectedBlock(block, 'workflow', {
+          content: '',
+          imageList: undefined,
+          reasoning: undefined,
+        }),
+      );
+    }
     return;
   }
 

@@ -43,6 +43,7 @@ const ChatItem = memo<ChatItemProps>(
     showAvatar = true,
     showHeader = true,
     titleAddon,
+    quietHeader,
     disabled = false,
     id,
     style,
@@ -83,7 +84,7 @@ const ChatItem = memo<ChatItemProps>(
       >
         {showHeader && (
           <Flexbox
-            align={'center'}
+            align={quietHeader ? 'baseline' : 'center'}
             className={'message-header'}
             direction={isUser ? 'horizontal-reverse' : 'horizontal'}
             gap={8}
@@ -97,7 +98,13 @@ const ChatItem = memo<ChatItemProps>(
             {showAvatar &&
               (customAvatarRender ? customAvatarRender(avatar, avatarContent) : avatarContent)}
             {headerAddon}
-            <Title avatar={avatar} showTitle={showTitle} time={time} titleAddon={titleAddon} />
+            <Title
+              avatar={avatar}
+              quiet={quietHeader}
+              showTitle={showTitle}
+              time={time}
+              titleAddon={titleAddon}
+            />
           </Flexbox>
         )}
         <Flexbox

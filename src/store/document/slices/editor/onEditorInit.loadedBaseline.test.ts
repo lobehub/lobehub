@@ -1,3 +1,4 @@
+import type { IEditor } from '@lobehub/editor';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -177,5 +178,67 @@ describe('onEditorInit — the loaded body is the clean baseline', () => {
     const doc = useDocumentStore.getState().documents['doc-1'];
     expect(doc.isDirty).toBe(true);
     expect(doc.content).toBe('# Title\n\nLocal edit\n');
+  });
+
+  it('loads a page without exporting its body as markdown', async () => {
+    const { result } = renderHook(() => useDocumentStore());
+    // The canvas locks its change callback while loading, so the load reports nothing.
+    const editor = createLoadingEditor(() => {});
+
+    act(() => {
+      result.current.initDocumentWithEditor({
+        content: '# Title',
+        documentId: 'doc-1',
+        editor: editor as unknown as IEditor,
+        editorData: null,
+        sourceType: 'page',
+      });
+      useDocumentStore.setState({
+        activeDocumentId: 'doc-1',
+        editor: editor as unknown as IEditor,
+      });
+    });
+
+    await act(async () => {
+      await result.current.onEditorInit(editor as unknown as IEditor, 'doc-1');
+    });
+
+    // A long page's markdown export costs more than loading it.
+    expect(editor.getDocument).not.toHaveBeenCalledWith('markdown');
+    expect(useDocumentStore.getState().documents['doc-1'].isDirty).toBe(false);
+  });
+
+  it('keeps a SKILL.md frontmatter edit made after loading as an edit', async () => {
+    const { result } = renderHook(() => useDocumentStore());
+    const editor = createLoadingEditor(() => {});
+
+    act(() => {
+      result.current.initDocumentWithEditor({
+        content: '---\nname: old-skill\n---\n\n# Title',
+        contentFormat: 'skillMarkdown',
+        documentId: 'doc-1',
+        editor: editor as unknown as IEditor,
+        editorData: null,
+        sourceType: 'page',
+      });
+      useDocumentStore.setState({
+        activeDocumentId: 'doc-1',
+        editor: editor as unknown as IEditor,
+      });
+    });
+
+    await act(async () => {
+      await result.current.onEditorInit(editor as unknown as IEditor, 'doc-1');
+    });
+
+    act(() => {
+      result.current.updateSkillFrontmatter('doc-1', 'name: new-skill');
+    });
+    // The body tree is still the loaded one; only the frontmatter moved.
+    act(() => {
+      useDocumentStore.getState().handleContentChange();
+    });
+
+    expect(useDocumentStore.getState().documents['doc-1'].isDirty).toBe(true);
   });
 });

@@ -9,6 +9,7 @@ import { QstashError } from '@upstash/qstash';
 
 import { OtelQstashClient } from '@/libs/qstash';
 import { toQStashDeduplicationId } from '@/libs/qstash/deduplicationId';
+import { signInternalCallback } from '@/libs/qstash/internalSignature';
 
 import type { AgentHookWebhook } from './types';
 
@@ -96,9 +97,11 @@ async function fetchWebhook<T>(
   const combinedSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
   try {
     combinedSignal.throwIfAborted();
-    const response = await fetch(resolveUrl(webhook.url), {
-      body: JSON.stringify(payload),
-      headers: resolveWebhookHeaders(webhook),
+    const url = resolveUrl(webhook.url);
+    const body = JSON.stringify(payload);
+    const response = await fetch(url, {
+      body,
+      headers: { ...resolveWebhookHeaders(webhook), ...signInternalCallback(url, body) },
       method: 'POST',
       redirect: 'error',
       signal: combinedSignal,

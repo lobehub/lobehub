@@ -1,7 +1,6 @@
 import { isIP } from 'node:net';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import type {
   AuthorizationServerMetadata,
   FetchLike,
@@ -27,6 +26,7 @@ import debug from 'debug';
 
 import type { OIDCConfig } from '@/database/schemas';
 import { appEnv } from '@/envs/app';
+import { mcpSsrfSafeFetch } from '@/libs/mcp/ssrf';
 
 const log = debug('lobe-server:connector:oauth');
 
@@ -88,7 +88,7 @@ const isClientMetadataUrlReachable = (url: string): boolean => {
  * the connector, so all connector OAuth requests go through the SSRF-safe
  * transport. The SDK helpers take it as `fetchFn`.
  */
-const connectorFetch: FetchLike = (url, init) => ssrfSafeFetch(url.toString(), init);
+const connectorFetch: FetchLike = mcpSsrfSafeFetch;
 
 /** RFC 8414 / OIDC discovery for a connector's authorization server. */
 export const discoverConnectorAuthorizationServerMetadata = (
@@ -177,6 +177,7 @@ export const discoverConnectorOAuth = async (mcpServerUrl: string): Promise<Disc
 export const resolveConnectorOAuthScopes = (params: {
   discovery: DiscoveredOAuth;
   existingScopes?: string[];
+  preRegistered?: boolean;
 }): string[] | undefined => {
   if (params.existingScopes?.length) return params.existingScopes;
   const { metadata, scopes: resourceScopes } = params.discovery;
@@ -189,6 +190,12 @@ export const resolveConnectorOAuthScopes = (params: {
     !scopes.includes('offline_access')
   ) {
     scopes.push('offline_access');
+  }
+  if (scopes?.length && !params.preRegistered) {
+    for (const identityScope of ['openid', 'profile', 'email']) {
+      if (metadata.scopes_supported?.includes(identityScope) && !scopes.includes(identityScope))
+        scopes.push(identityScope);
+    }
   }
   return scopes;
 };
@@ -334,6 +341,7 @@ export const buildAuthorizationUrl = async (params: {
   clientInformation: OAuthClientInformationMixed;
   metadata: AuthorizationServerMetadata;
   redirectUri: string;
+  prompt?: string;
   resource?: string;
   scopes?: string[];
   state: string;
@@ -349,6 +357,17 @@ export const buildAuthorizationUrl = async (params: {
       state: params.state,
     },
   );
+  if (params.prompt) {
+    const prompts = authorizationUrl.searchParams
+      .getAll('prompt')
+      .join(' ')
+      .split(/\s+/)
+      .filter(Boolean);
+    authorizationUrl.searchParams.set(
+      'prompt',
+      [...new Set([...prompts, ...params.prompt.split(/\s+/)])].join(' '),
+    );
+  }
   return { authorizationUrl: authorizationUrl.toString(), codeVerifier };
 };
 

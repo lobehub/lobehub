@@ -40,8 +40,6 @@
   "generation.editing.hint": "Opisz, co zmienić; wszystko inne pozostaje bez zmian",
   "generation.editing.modelLocked": "Edycje zachowują model oryginalnego wideo",
   "generation.editing.title": "Edycja V{{version}}",
-  "generation.freeQuota.exhausted": "🎁 Darmowy limit został wyczerpany. Wideo korzystają teraz z Twojego salda.",
-  "generation.freeQuota.remaining": "🎁 {{remaining}} darmowych wideo dzisiaj",
   "generation.status.editing": "Generowanie edycji...",
   "generation.status.failed": "Generowanie nie powiodło się",
   "generation.status.generating": "Generowanie...",

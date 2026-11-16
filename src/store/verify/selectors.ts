@@ -7,6 +7,10 @@ import {
   type AcceptanceListParams,
   acceptancePageKey,
   type AcceptancePageParams,
+  goalCriteriaKey,
+  skillVersionKey,
+  type SkillVersionParams,
+  VERIFY_RUBRIC_LIST_KEY,
 } from './projection';
 
 const EMPTY_EDIT: VerifyCriterionEdit = {};
@@ -54,6 +58,60 @@ const rubricTitleEdit = (rubricId?: string) => (s: Store) =>
 const verifyRun = (operationId?: string | null) => (s: Store) =>
   operationId ? s.verifyRunMap[operationId] : undefined;
 
+/**
+ * A list restored from IndexedDB is not a server answer: an empty snapshot
+ * (or one from before the last edit) must read as "still loading", not as
+ * "nothing here", until this session's request confirms it.
+ */
+const confirmedList =
+  <T>(
+    pick: (s: Store) => { entries: Record<string, { source: string }> },
+    map: (s: Store) => Record<string, T[]>,
+    key: string | undefined,
+  ) =>
+  (s: Store): T[] | undefined => {
+    if (!key) return undefined;
+    const list = map(s)[key];
+    if (!list) return undefined;
+    if (list.length === 0 && pick(s).entries[key]?.source !== 'server') return undefined;
+    return list;
+  };
+
+/** The verify report; `null` once the server answered there is none. */
+const verifyReportBundle = (verifyRunId?: string | null) => (s: Store) =>
+  verifyRunId ? s.verifyReportBundleMap[verifyRunId]?.value : undefined;
+
+const verifierTracing = (tracingId?: string | null) => (s: Store) =>
+  tracingId ? s.verifierTracingMap[tracingId]?.value : undefined;
+
+const verifyRubrics = confirmedList(
+  (s) => s.verifyRubricListReplica,
+  (s) => s.verifyRubricListMap,
+  VERIFY_RUBRIC_LIST_KEY,
+);
+
+const verifyRubricCriteria = (rubricId?: string | null) =>
+  confirmedList(
+    (s) => s.verifyRubricCriteriaReplica,
+    (s) => s.verifyRubricCriteriaMap,
+    rubricId || undefined,
+  );
+
+const goalCriteria = (criteriaIds: string[]) =>
+  confirmedList(
+    (s) => s.goalCriteriaReplica,
+    (s) => s.goalCriteriaMap,
+    criteriaIds.length > 0 ? goalCriteriaKey(criteriaIds) : undefined,
+  );
+
+/** The plan skill; `null` once the server answered it is gone. */
+const planSkill = (skillId?: string | null) => (s: Store) =>
+  skillId ? s.planSkillMap[skillId]?.value : undefined;
+
+/** One shipped skill version; `null` once the server answered it has none. */
+const skillVersion = (params: SkillVersionParams | null) => (s: Store) =>
+  params ? s.skillVersionMap[skillVersionKey(params)]?.value : undefined;
+
 export const verifySelectors = {
   acceptanceBundle,
   acceptanceBySubject,
@@ -61,11 +119,18 @@ export const verifySelectors = {
   acceptanceList,
   acceptancePage,
   criterionEdit,
+  goalCriteria,
   instructionEdit,
   isAcceptanceCommentsConfirmed,
   isAcceptanceListConfirmed,
   isAcceptancePageConfirmed,
+  planSkill,
   rubricConfigEdit,
   rubricTitleEdit,
+  skillVersion,
+  verifierTracing,
+  verifyReportBundle,
+  verifyRubricCriteria,
+  verifyRubrics,
   verifyRun,
 };

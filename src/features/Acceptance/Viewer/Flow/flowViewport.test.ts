@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { getSelectedFlowNodeId, isRectVisible, panNodeIntoView } from './flowViewport';
+import { getSelectedFlowNodeId, isRectVisible, panNodeIntoView, revealNode } from './flowViewport';
 
 const size = { height: 600, width: 1000 };
 
@@ -89,5 +89,31 @@ describe('getSelectedFlowNodeId', () => {
       ]),
     ).toBe('b');
     expect(getSelectedFlowNodeId([{ data: {}, id: 'a' }])).toBeUndefined();
+  });
+});
+
+describe('revealNode', () => {
+  const size = { height: 600, width: 800 };
+  const flowAt = (
+    viewport: { x: number; y: number; zoom: number },
+    bounds = { height: 200, width: 260, x: 1000, y: 100 },
+  ) => {
+    const setViewport = vi.fn();
+    return {
+      flow: { getNodesBounds: () => bounds, getViewport: () => viewport, setViewport },
+      setViewport,
+    };
+  };
+
+  it('brings a half-clipped state fully inside, which a click would have left alone', () => {
+    const { flow, setViewport } = flowAt({ x: -300, y: 0, zoom: 1 });
+    revealNode(flow, size, 'n');
+    expect(setViewport).toHaveBeenCalledWith({ x: -484, y: 0, zoom: 1 });
+  });
+
+  it('leaves the canvas still when the state is already whole on screen', () => {
+    const { flow, setViewport } = flowAt({ x: -700, y: 0, zoom: 1 });
+    revealNode(flow, size, 'n');
+    expect(setViewport).not.toHaveBeenCalled();
   });
 });

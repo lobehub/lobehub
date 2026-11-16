@@ -24,11 +24,8 @@ import {
 } from '@lobechat/heterogeneous-agents/scanHost';
 import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 import { managedProcessEnvironment, spawnManaged } from '@lobechat/utils/managedProcess';
-import { app as electronApp } from 'electron';
 
 import { withEmbeddedCliEnv } from '@/modules/cliEmbedding';
-import { updaterConfig } from '@/modules/updater/configs';
-import { createRemoteAppUpdateDeps } from '@/modules/updater/remoteUpdate';
 import AuvService, { type AuvRunCommandParams } from '@/services/auvSrv';
 import { backfillDeviceArchitecture } from '@/services/deviceArchitectureBackfill';
 import GatewayConnectionService, {
@@ -41,6 +38,7 @@ import { setDesktopUserAgentHeader } from '@/utils/user-agent';
 
 import BrowserControlCtr from './BrowserControlCtr';
 import { executeGatewayAgentRun, type PlatformTaskEntry } from './gatewayAgentRun';
+import { createDesktopDeviceControlDeps } from './gatewayDeviceControlDeps';
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, createProtocolHandler, IpcMethod } from './index';
 import LocalFileCtr from './LocalFileCtr';
@@ -401,44 +399,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
     return this.localSystemRuntime;
   }
 
-  /**
-   * Desktop handlers for the shared `@lobechat/device-control` dispatcher: only
-   * file preview / index (and preview approval) route back to controllers here.
-   */
+  /** Desktop handlers for the shared `@lobechat/device-control` dispatcher. */
   private get deviceControlDeps(): DeviceControlDeps {
-    return {
-      approveProjectRoot: async (root) => {
-        try {
-          await this.app.localFileProtocolManager.approveIndexedProjectRoot(root);
-        } catch (error) {
-          logger.error(`Failed to approve project preview root ${root}:`, error);
-        }
-      },
-      // Workspace share (server-driven enroll/unenroll RPCs): the service owns
-      // the gateway connections, so both handlers route straight to it.
-      enrollWorkspace: (params) => this.service.enrollWorkspace(params),
-      getLocalFilePreview: (params) => this.localFileCtr.getLocalFilePreview(params),
-      readExternalAssetForPublish: (params) =>
-        this.localFileCtr.readExternalAssetForPublish(params),
-      copyAssetForPublish: (params) => this.localFileCtr.copyAssetForPublish(params),
-      getProjectFileIndex: (params) => this.localFileCtr.getProjectFileIndex(params),
-      listHeterogeneousAgentModels: (params) => this.heterogeneousAgentCtr.listModels(params),
-      searchProjectFiles: (params) => this.localFileCtr.searchProjectFiles(params),
-      // Remote "delete" goes to this machine's trash (`shell.trashItem`), same
-      // as the local Files tree, so it stays recoverable.
-      trashLocalFiles: (params) => this.localFileCtr.trashLocalFiles(params),
-      unenrollWorkspace: (params) => this.service.unenrollWorkspace(params),
-      // Skill-archive cache (`prepareSkillDirectory` RPC): reuse LocalFileCtr's
-      // deps so gateway-prepared skills share one cache with the renderer-IPC path.
-      ...this.localFileCtr.getSkillDirectoryDeps(),
-      // Remote app update from the web device page, over the same updater the
-      // local "Check for updates" menu drives.
-      ...createRemoteAppUpdateDeps({
-        currentVersion: electronApp.getVersion(),
-        enabled: updaterConfig.enableAppUpdate,
-        getUpdater: () => this.app.getUpdaterManager(),
-      }),
-    };
+    return createDesktopDeviceControlDeps(this.app);
   }
 
   /**

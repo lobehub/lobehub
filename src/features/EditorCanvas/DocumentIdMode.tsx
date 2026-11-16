@@ -2,7 +2,7 @@
 
 import { type IEditor } from '@lobehub/editor';
 import isEqual from 'fast-deep-equal';
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createStoreUpdater } from 'zustand-utils';
 
@@ -26,6 +26,14 @@ const EditorSkeleton = () => (
     <ArticleSkeleton rows={8} />
   </div>
 );
+
+/**
+ * Stored markdown length from which a body loads after the switch has painted
+ * instead of inside it. Building a long, deeply nested body blocks the main thread
+ * for hundreds of milliseconds; inside the click it freezes the previous page until
+ * it is done. Shorter bodies keep the atomic swap, so they never flash a skeleton.
+ */
+const AFTER_PAINT_HYDRATION_MIN_LENGTH = 50_000;
 
 export interface DocumentIdModeProps extends EditorCanvasProps {
   documentId: string;
@@ -129,6 +137,70 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
     // Track which documentId has already had onEditorInit called
     const initializedDocIdRef = useRef<string | null>(null);
     const hydratedVersionRef = useRef<string | undefined>(undefined);
+    // Cancels a load still waiting for the switch to paint.
+    const cancelPendingHydrationRef = useRef<(() => void) | undefined>(undefined);
+
+    // The document whose body the editor holds. Until a long body is this one's,
+    // the editor (still holding the previous body) hides behind a skeleton.
+    const [bodyDocumentId, setBodyDocumentId] = useState<string>();
+    const isLongBody = useDocumentStore(
+      (s) => editorSelectors.content(documentId)(s).length >= AFTER_PAINT_HYDRATION_MIN_LENGTH,
+    );
+    const isAwaitingBody = !collab && isLongBody && bodyDocumentId !== documentId;
+
+    // Every load of the stored body runs with the content-change callback locked:
+    // the load's own update is not an edit, and reporting it would serialize the
+    // whole body again inside the route switch.
+    const hydrate = useCallback(
+      (editorInstance: IEditor, afterPaint = false) => {
+        cancelPendingHydrationRef.current?.();
+        cancelPendingHydrationRef.current = undefined;
+
+        const run = () => {
+          cancelPendingHydrationRef.current = undefined;
+          const runId = ++initRunIdRef.current;
+          contentChangeLockRef.current = true;
+
+          void onEditorInit(editorInstance, documentId).finally(() => {
+            onInit?.(editorInstance);
+            queueMicrotask(() => {
+              if (initRunIdRef.current === runId) {
+                contentChangeLockRef.current = false;
+              }
+            });
+          });
+          setBodyDocumentId(documentId);
+        };
+
+        if (!afterPaint) {
+          run();
+          return;
+        }
+
+        // A frame callback runs before that frame paints; a task it queues runs after.
+        let timer: number | undefined;
+        const frame = window.requestAnimationFrame(() => {
+          timer = window.setTimeout(run, 0);
+        });
+        cancelPendingHydrationRef.current = () => {
+          window.cancelAnimationFrame(frame);
+          window.clearTimeout(timer);
+        };
+      },
+      [documentId, onEditorInit, onInit],
+    );
+
+    // A load waiting for its paint belongs to the document it was scheduled for.
+    // Leaving that document first drops it, and a return has to load it again.
+    useEffect(
+      () => () => {
+        if (!cancelPendingHydrationRef.current) return;
+        cancelPendingHydrationRef.current();
+        cancelPendingHydrationRef.current = undefined;
+        if (initializedDocIdRef.current === documentId) initializedDocIdRef.current = null;
+      },
+      [documentId],
+    );
 
     const handleEditorInit = useCallback(
       (editorInstance: IEditor) => {
@@ -145,11 +217,9 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
         initializedDocIdRef.current = documentId;
         hydratedVersionRef.current = remoteDocumentVersion;
 
-        void onEditorInit(editorInstance, documentId).finally(() => {
-          onInit?.(editorInstance);
-        });
+        hydrate(editorInstance, isAwaitingBody);
       },
-      [collab, documentId, onEditorInit, onInit, remoteDocumentVersion],
+      [collab, documentId, hydrate, isAwaitingBody, onInit, remoteDocumentVersion],
     );
 
     // Critical fix: if the editor is already initialized, we need to manually call onEditorInit
@@ -163,30 +233,19 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
         !isLoading &&
         initializedDocIdRef.current !== documentId
       ) {
-        const runId = ++initRunIdRef.current;
         initializedDocIdRef.current = documentId;
         hydratedVersionRef.current = remoteDocumentVersion;
 
-        // Lock content-change callback while hydrating document content into editor.
-        contentChangeLockRef.current = true;
-
-        void onEditorInit(editor, documentId).finally(() => {
-          onInit?.(editor);
-          queueMicrotask(() => {
-            if (initRunIdRef.current === runId) {
-              contentChangeLockRef.current = false;
-            }
-          });
-        });
+        hydrate(editor, isAwaitingBody);
       }
     }, [
       collab,
       documentId,
       editor,
+      hydrate,
+      isAwaitingBody,
       isEditorInitialized,
       isLoading,
-      onEditorInit,
-      onInit,
       remoteDocumentVersion,
     ]);
 
@@ -207,26 +266,15 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
       const doc = useDocumentStore.getState().documents[documentId];
       if (doc && isEqual(editor.getDocument('json'), doc.editorData)) return;
 
-      const runId = ++initRunIdRef.current;
-      contentChangeLockRef.current = true;
-
-      void onEditorInit(editor, documentId).finally(() => {
-        onInit?.(editor);
-        queueMicrotask(() => {
-          if (initRunIdRef.current === runId) {
-            contentChangeLockRef.current = false;
-          }
-        });
-      });
+      hydrate(editor);
     }, [
       collab,
       documentId,
       editor,
+      hydrate,
       isDirty,
       isEditorInitialized,
       isLoading,
-      onEditorInit,
-      onInit,
       remoteDocumentVersion,
     ]);
 
@@ -285,8 +333,10 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
           />
         )}
         {pendingBody}
-        {/* A room binds to the mounted editor, so it stays mounted behind the pending body. */}
-        <div style={{ display: pendingBody ? 'none' : 'contents' }}>
+        {isAwaitingBody && <EditorSkeleton />}
+        {/* A room binds to the mounted editor, so it stays mounted behind the pending body;
+            a long body loads into the hidden editor after the switch paints. */}
+        <div style={{ display: pendingBody || isAwaitingBody ? 'none' : 'contents' }}>
           <InternalEditor
             contentChangeLockRef={contentChangeLockRef}
             editor={editor}

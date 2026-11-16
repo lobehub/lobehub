@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { AnthropicStream } from '../protocols/anthropicMessages/stream';
 import { OpenAIStream } from '../protocols/openaiChatCompletions/stream';
 import { OpenAIResponsesStream } from '../protocols/openaiResponses/stream';
-import { AnthropicStream } from './anthropic';
 import { AWSBedrockClaudeStream } from './bedrock/claude';
 import { readProviderReportedCost } from './providerReportedCost';
 

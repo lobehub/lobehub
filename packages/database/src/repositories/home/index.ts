@@ -15,6 +15,8 @@ import {
   chatGroups,
   sessionGroups,
   topics,
+  users,
+  workspaces,
 } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { sanitizeBm25Query } from '../../utils/bm25';
@@ -24,6 +26,7 @@ import { notShareVisitorTopic } from '../../utils/shareVisitor';
 import { CHANNEL_TOPIC_TRIGGER } from '../../utils/topicVisibility';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 import type { FtsSearchCandidateSource } from '../ftsSearch';
+import { applyPinnedOrder, MAX_PINNED_ORDER_ITEMS, parsePinnedOrder } from './pinnedOrder';
 
 // Mirrors the main chat sidebar's system-topic exclusions, plus the legacy
 // task_manager trigger. These topics are surfaced in their own product surfaces,
@@ -194,7 +197,7 @@ export class HomeRepository {
           .orderBy(sessionGroups.sort);
 
     // 4. Process and categorize
-    return this.processAgentList(
+    const result = this.processAgentList(
       agentList,
       chatGroupList,
       groupList,
@@ -203,6 +206,67 @@ export class HomeRepository {
       groupUnread,
       agentLabelsMap,
     );
+
+    // 5. Pinned rows follow the order chosen by drag and drop: the team order
+    // in a workspace, the user's own order in personal mode.
+    if (result.pinned.length > 1) {
+      result.pinned = applyPinnedOrder(result.pinned, await this.getPinnedOrder());
+    }
+
+    return result;
+  }
+
+  /**
+   * The saved order of the `pinned` bucket. In a workspace those rows are the
+   * team pins every member sees, so the order is shared and lives on the
+   * workspace (`settings.sidebar.teamPinnedOrder`). In personal mode they are
+   * the user's own pins (`preference.sidebarPinnedOrder`).
+   */
+  async getPinnedOrder(): Promise<string[]> {
+    if (this.workspaceId) {
+      const [row] = await this.db
+        .select({ order: sql<unknown>`${workspaces.settings} #> '{sidebar,teamPinnedOrder}'` })
+        .from(workspaces)
+        .where(eq(workspaces.id, this.workspaceId));
+      return parsePinnedOrder(row?.order);
+    }
+
+    const [row] = await this.db
+      .select({ order: sql<unknown>`${users.preference} -> 'sidebarPinnedOrder'` })
+      .from(users)
+      .where(eq(users.id, this.userId));
+    return parsePinnedOrder(row?.order);
+  }
+
+  /**
+   * Replace the saved order of the `pinned` bucket (see {@link getPinnedOrder}).
+   * One UPDATE that rewrites only this key, so a concurrent write to any other
+   * setting or preference is never lost. Callers authorize the workspace write:
+   * it changes the team section for every member.
+   */
+  async updatePinnedOrder(ids: string[]): Promise<void> {
+    const order = JSON.stringify([...new Set(ids)].slice(0, MAX_PINNED_ORDER_ITEMS));
+
+    if (this.workspaceId) {
+      await this.db
+        .update(workspaces)
+        .set({
+          settings: sql`coalesce(${workspaces.settings}, '{}'::jsonb) || jsonb_build_object(
+            'sidebar',
+            coalesce(${workspaces.settings} -> 'sidebar', '{}'::jsonb)
+              || jsonb_build_object('teamPinnedOrder', ${order}::jsonb)
+          )`,
+        })
+        .where(eq(workspaces.id, this.workspaceId));
+      return;
+    }
+
+    await this.db
+      .update(users)
+      .set({
+        preference: sql`coalesce(${users.preference}, '{}'::jsonb) || jsonb_build_object('sidebarPinnedOrder', ${order}::jsonb)`,
+      })
+      .where(eq(users.id, this.userId));
   }
 
   /**
@@ -246,6 +310,8 @@ export class HomeRepository {
     groupUnread: Map<string, number>;
   }> {
     const isUnread = eq(topics.status, 'unread');
+    // A workspace scope matches every member's topics; the badge is the caller's own unread.
+    const isMine = eq(topics.userId, this.userId);
     const isMainSidebarTopic = or(
       isNull(topics.trigger),
       not(inArray(topics.trigger, HOME_UNREAD_EXCLUDE_TRIGGERS)),
@@ -261,6 +327,7 @@ export class HomeRepository {
             // Agent-share visitor topics keep the creator's userId — never bump
             // the creator's own unread badge for a visitor's conversation.
             notShareVisitorTopic(),
+            isMine,
             isUnread,
             isMainSidebarTopic,
             sql`${topics.agentId} is not null`,
@@ -274,6 +341,7 @@ export class HomeRepository {
           and(
             buildWorkspaceWhere(this.scope, topics),
             notShareVisitorTopic(),
+            isMine,
             isUnread,
             isMainSidebarTopic,
             sql`${topics.groupId} is not null`,

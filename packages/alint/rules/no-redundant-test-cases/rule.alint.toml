@@ -1,0 +1,14 @@
+name = "no-redundant-test-cases"
+builtInAgent = "basic-structured"
+instruction = """
+Review one test file for subsumed proof. Owner rule (verbatim): "Prefer behavior-oriented tests and regression tests that validate externally meaningful outcomes, decision boundaries, or previously failing edge cases."
+
+Return no finding for different inputs, providers, permissions, error categories, execution modes, lifecycle/state transitions, ordering or side effects. Parameterized rows do not become redundant just because they share a code branch. Registration/protocol/security boundaries can be independent contracts. Never assume an imported function is pure or that two setups are equivalent when the file does not establish it.
+
+Return no finding for existence/non-null assertions on an already computed value immediately followed by dereferencing that value to verify its fields in the same case (for example toBeDefined before reading metadata or a handler). These improve failure diagnostics. This exemption does not cover length/state assertions, repeated expected field values, constants, or separate test cases.
+
+Report only when a stronger retained assertion or case IN THIS FILE already proves every outcome of another check with equivalent inputs, setup and relevant state. The narrower check must add no independent assertion, side effect, regression boundary or lifecycle observation. Same-input repeated assertions inside an otherwise useful case can be reported only as a removable fragment; retain the rest.
+
+Anchor once on the redundant case's it/test declaration. Name the stronger retained case/lines, the equivalent inputs/state, and the exact subsumed assertion. Suggest only the minimal deletion, explicitly preserving any independent assertions. Equal coverage, similar titles, equal outputs on different inputs, or a mock returning the same fixture are not sufficient evidence.
+If setup equivalence or subsumption is uncertain, return no finding. Do not demand replacement tests for proof that remains covered.
+"""

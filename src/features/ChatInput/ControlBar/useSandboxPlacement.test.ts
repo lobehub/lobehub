@@ -6,15 +6,19 @@ import { getPendingSandboxSelection } from '@/store/chat/pendingSandboxSelection
 import { isPersistentSelection, useSandboxPlacement } from './useSandboxPlacement';
 
 interface TopicSandbox {
+  projectId?: string;
   sandboxDrive?: 'personal' | 'public';
+  sandboxEnvironmentId?: string;
   sandboxInstanceId?: string;
   sandboxWorkingDirectory?: string;
 }
 
 const state = vi.hoisted(() => ({
   activeTopicId: undefined as string | undefined,
+  refreshTopicDetail: vi.fn(),
   topics: {} as Record<string, TopicSandbox>,
   updateTopicMetadata: vi.fn(),
+  useFetchTopicDetail: vi.fn(),
 }));
 
 // Store boundary: the real topic selectors run against this state.
@@ -23,10 +27,15 @@ vi.mock('@/store/chat', () => ({
     selector({
       activeTopicId: state.activeTopicId,
       topicDataMap: {},
+      refreshTopicDetail: state.refreshTopicDetail,
       topicDetailMap: Object.fromEntries(
-        Object.entries(state.topics).map(([id, metadata]) => [id, { id, metadata }]),
+        Object.entries(state.topics).map(([id, { projectId, ...metadata }]) => [
+          id,
+          { id, metadata, projectId },
+        ]),
       ),
       updateTopicMetadata: state.updateTopicMetadata,
+      useFetchTopicDetail: state.useFetchTopicDetail,
     }),
 }));
 
@@ -38,6 +47,8 @@ beforeEach(() => {
     'pane-topic': { sandboxDrive: 'personal', sandboxWorkingDirectory: 'reports' },
   };
   state.updateTopicMetadata.mockReset();
+  state.refreshTopicDetail.mockReset();
+  state.useFetchTopicDetail.mockReset();
 });
 
 describe('useSandboxPlacement', () => {
@@ -84,6 +95,47 @@ describe('useSandboxPlacement', () => {
 
     expect(state.updateTopicMetadata).not.toHaveBeenCalled();
     expect(getPendingSandboxSelection('agent-new-topic')).toEqual({ workingDirectory: '.' });
+  });
+
+  // ROOT CAUSE:
+  //
+  // A project conversation opened right after the project home created it is in
+  // no loaded topic list. The chip read it as having no metadata (a temporary
+  // sandbox while it worked in a repository), and a repository pick reached the
+  // server but nothing local read it back — the pick looked ignored.
+  //
+  // Before: an unlisted topic was neither fetched nor read back.
+  // After: it is fetched by id, and read back after a write.
+  it('fetches an unlisted topic and reads it back after a pick', async () => {
+    const { result } = renderHook(() => useSandboxPlacement('agent-1', 'fresh-topic'));
+
+    expect(state.useFetchTopicDetail).toHaveBeenLastCalledWith('fresh-topic');
+
+    await act(() => result.current.setSelection({ environmentId: 'env-repo' }));
+
+    expect(state.updateTopicMetadata).toHaveBeenCalledWith(
+      'fresh-topic',
+      expect.objectContaining({ sandboxEnvironmentId: 'env-repo' }),
+    );
+    expect(state.refreshTopicDetail).toHaveBeenCalledWith('fresh-topic', true);
+  });
+
+  it('leaves a listed topic to the list it is in', async () => {
+    const { result } = renderHook(() => useSandboxPlacement('agent-1', 'pane-topic'));
+
+    expect(state.useFetchTopicDetail).toHaveBeenLastCalledWith(undefined);
+
+    await act(() => result.current.setSelection({ environmentId: 'env-repo' }));
+
+    expect(state.refreshTopicDetail).not.toHaveBeenCalled();
+  });
+
+  it("names the conversation's project", () => {
+    state.topics['project-topic'] = { projectId: 'proj_1' };
+
+    const { result } = renderHook(() => useSandboxPlacement('agent-1', 'project-topic'));
+
+    expect(result.current.projectId).toBe('proj_1');
   });
 
   it('follows the global active topic when no topic is given', () => {

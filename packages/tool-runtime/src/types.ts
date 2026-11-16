@@ -275,6 +275,14 @@ export interface RunCommandState {
     stdout: { path: string; size: number; truncated: boolean };
   };
   /**
+   * Whether the command was still executing when the observation window closed.
+   *
+   * `exitCode === undefined` is not the same signal: a command killed by a
+   * signal never reports one. Callers that decide whether to keep waiting (the
+   * server's async-shell park, the client's completion watcher) read this.
+   */
+  running?: boolean;
+  /**
    * Whether the device sandbox actually confined this command.
    *
    * The execution-environment chip states the user's *intent*; this states the

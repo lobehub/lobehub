@@ -38,11 +38,30 @@ describe('ProjectInstructionsInjector', () => {
     });
 
     const system = systemContentOf(result);
-    expect(system).toContain('<project_instructions source="AGENTS.md">\nUse bun.\n</project_instructions>');
+    expect(system).toContain(
+      '<project_instructions source="AGENTS.md">\nUse bun.\n</project_instructions>',
+    );
     expect(system).toContain('<project_instructions source="CLAUDE.md">');
     // Appended after the persona, not replacing it.
     expect(system.startsWith('You are a helpful assistant.')).toBe(true);
     expect(result.metadata.projectInstructionCount).toBe(2);
+  });
+
+  it('names the file path when the scan recorded one', async () => {
+    const result = await run({
+      instructions: [
+        { content: 'Repo rules.', path: '/repo/AGENTS.md', source: 'AGENTS.md' },
+        { content: 'Web rules.', path: '/repo/packages/web/AGENTS.md', source: 'AGENTS.md' },
+      ],
+    });
+
+    const system = systemContentOf(result);
+    expect(system).toContain(
+      '<project_instructions source="AGENTS.md" path="/repo/AGENTS.md">\nRepo rules.\n</project_instructions>',
+    );
+    expect(system).toContain(
+      '<project_instructions source="AGENTS.md" path="/repo/packages/web/AGENTS.md">',
+    );
   });
 
   it('keeps the files in the order they were collected', async () => {
@@ -58,7 +77,11 @@ describe('ProjectInstructionsInjector', () => {
   });
 
   it('leaves the system message untouched when there are no files', async () => {
-    for (const config of [{}, { instructions: [] }, { enabled: false, instructions: [{ content: 'x', source: 'a.md' }] }]) {
+    for (const config of [
+      {},
+      { instructions: [] },
+      { enabled: false, instructions: [{ content: 'x', source: 'a.md' }] },
+    ]) {
       const result = await run(config);
       expect(systemContentOf(result)).toBe('You are a helpful assistant.');
     }

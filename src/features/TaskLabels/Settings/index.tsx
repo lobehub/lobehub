@@ -104,7 +104,7 @@ const TaskLabelRow = memo<RowProps>(({ canManage, depth, label, manageBlockedRea
       horizontal
       align={'center'}
       gap={12}
-      {...sx([styles.row], undefined, { paddingInlineStart: 12 + depth * 24 })}
+      {...sx(styles.row, { paddingInlineStart: 12 + depth * 24 })}
     >
       <Flexbox horizontal align={'center'} flex={1} gap={12} style={{ minWidth: 0 }}>
         <TaskLabelDot color={label.color} size={10} />

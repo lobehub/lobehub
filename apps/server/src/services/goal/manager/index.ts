@@ -37,7 +37,7 @@ import {
   moveConversationTo,
 } from './conversation';
 import { decideFailedTurn } from './failedTurn';
-import { budgetBlocked, managerUsage, reviewFeedback } from './planningInputs';
+import { budgetBlocked, managerUsage, reviewFeedback, verifiedTasks } from './planningInputs';
 import type { GoalPlan } from './planSchema';
 import { submitPlan } from './submit';
 import {
@@ -157,9 +157,10 @@ export class GoalManagerService {
    * interrupt — its dispatch failed before the run was written, e.g. a database
    * timeout in `execAgent`. That person's decision settles it the way
    * `confirmTurnExit` does once the dispatch is known to be over: it returned
-   * without a run (`dispatchReturnedWithoutRun`) and the turn is past the turn
-   * timeout, or no outcome was recorded and the turn is older than any request
-   * could run. Otherwise such a Goal could never be closed from the product. A
+   * without a run (`dispatchReturnedWithoutRun`) or was refused its topic
+   * reservation (`dispatchNeverStarted`) and the turn is past the turn timeout,
+   * or no outcome was recorded and the turn is older than any request could
+   * run. Otherwise such a Goal could never be closed from the product. A
    * turn that did get an operation id (or was adopted from a local run) may be
    * live without a row, so it keeps refusing; should a dispatch still return
    * late, `startTurn` stops its run.
@@ -180,7 +181,9 @@ export class GoalManagerService {
       !state.operationId &&
       !state.adopted &&
       Date.now() - Date.parse(state.startedAt) >
-        (state.dispatchReturnedWithoutRun ? TIMEOUT_MS : STRANDED_DISPATCH_MS)
+        (state.dispatchReturnedWithoutRun || state.dispatchNeverStarted
+          ? TIMEOUT_MS
+          : STRANDED_DISPATCH_MS)
     ) {
       // Decide again under the goal row lock the dispatch records its
       // operation id under: a straggling `execAgent` may have written its run
@@ -619,6 +622,7 @@ export class GoalManagerService {
       // dated before a turn that did not see it; at worst it is shown as new twice.
       const startedAt = new Date().toISOString();
       const reviews = await reviewFeedback(this.ctx, current, db);
+      const verified = await verifiedTasks(this.ctx, current, db);
       const next: GoalManagerState = {
         ...(problem
           ? {
@@ -660,6 +664,7 @@ export class GoalManagerService {
         modelOverride: goalModelOverride(fresh.config),
         earlierFeedback: listed.filter((n) => !isNew(n)).map(note),
         newFeedback: listed.filter(isNew).map(note),
+        verifiedTasks: verified,
         omittedFeedback: {
           earlier: omitted.filter((n) => !isNew(n)).length,
           new: omitted.filter(isNew).length,
@@ -695,6 +700,7 @@ export class GoalManagerService {
           newFeedback: claimed.newFeedback,
           omittedFeedback: claimed.omittedFeedback,
           earlierFeedback: claimed.earlierFeedback,
+          verifiedTasks: claimed.verifiedTasks,
           problem: problem?.reason,
           problemKind: problem?.kind,
           continuation:

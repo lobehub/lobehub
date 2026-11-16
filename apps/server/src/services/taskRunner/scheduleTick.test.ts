@@ -213,4 +213,22 @@ describe('runScheduleTick', () => {
     });
     expect(mockRunner.runTask).not.toHaveBeenCalled();
   });
+
+  describe('delayed delivery', () => {
+    const task = {
+      automationMode: 'schedule',
+      schedulePattern: '15 9 * * *',
+      scheduleTimezone: 'UTC',
+      status: 'scheduled',
+    };
+
+    it('skips an occurrence the schedule no longer includes', async () => {
+      mockSelectTask.mockResolvedValue([task]);
+
+      await expect(
+        runScheduleTick(taskId, userId, { occurrence: '2026-09-21T09:17:00.000Z' }),
+      ).resolves.toEqual({ ran: false, reason: 'schedule-changed' });
+      expect(mockRunner.runTask).not.toHaveBeenCalled();
+    });
+  });
 });

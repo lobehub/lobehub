@@ -7,6 +7,8 @@ import { memo, useCallback, useMemo } from 'react';
 import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import TaskExecutionControls from '../features/TaskExecutionControls';
 
@@ -28,6 +30,8 @@ const TaskExecutionConfig = memo(() => {
   const taskConfig = useTaskStore((s) => taskDetailSelectors.activeTaskDetail(s)?.config);
   const updateTaskExecution = useTaskStore((s) => s.updateTaskExecution);
   const { allowed: canEditTask } = usePermission('create_content');
+  const userId = useUserStore(userProfileSelectors.userId);
+  const createdByUserId = useTaskStore(taskDetailSelectors.activeTaskCreatedByUserId);
 
   // Derived from the raw `config` reference so the reader runs once per config
   // change: it builds a fresh object, which as a store selector would report a
@@ -48,6 +52,7 @@ const TaskExecutionConfig = memo(() => {
   return (
     <TaskExecutionControls
       assigneeAgentId={assigneeAgentId}
+      canPinPrivateDevices={!!userId && createdByUserId === userId}
       disabled={!canEditTask}
       key={taskId}
       value={execution}

@@ -10,6 +10,7 @@ import { Acceptance } from './Acceptance';
 import { AcceptanceCheck } from './AcceptanceCheck';
 import { AgentDetail } from './AgentDetail';
 import { Artifacts } from './Artifacts';
+import { Browser } from './Browser';
 import Header from './components/Header';
 import { PortalMoreMenuProvider } from './components/PortalMoreMenu/context';
 import { DashboardWidget } from './DashboardWidget';
@@ -46,6 +47,7 @@ const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {
     Title: HomeTitle,
   },
   [PortalViewType.Artifact]: Artifacts,
+  [PortalViewType.Browser]: Browser,
   [PortalViewType.DashboardWidget]: DashboardWidget,
   [PortalViewType.Document]: Document,
   [PortalViewType.Notebook]: Notebook,

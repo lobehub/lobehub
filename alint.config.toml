@@ -251,6 +251,22 @@ lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/no-removal-only-tests" = "warn"
 "lobehub/no-constant-stub-tests" = "warn"
+"lobehub/no-self-proving-tests" = "warn"
+"lobehub/no-redundant-test-cases" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-self-proving-tests/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-self-proving-tests" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-redundant-test-cases/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-redundant-test-cases" = "warn"
 
 # Ordinary API instructions: avoid removal announcements and locally redundant
 # descriptions while preserving migration guidance and useful input semantics.

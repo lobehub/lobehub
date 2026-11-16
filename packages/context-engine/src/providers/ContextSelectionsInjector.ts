@@ -26,6 +26,7 @@ const fromLegacyPageSelections = (
 export interface ContextSelectionsInjectorConfig {
   /** Whether generic contextSelections injection is enabled */
   enabled?: boolean;
+  mcpAppsEnabled?: boolean;
 }
 
 /**
@@ -61,7 +62,11 @@ export class ContextSelectionsInjector extends BaseEveryUserContentProvider {
       return null;
     }
 
-    const formattedSelections = formatContextSelections(contextSelections);
+    const formattedSelections = formatContextSelections(
+      contextSelections.filter(
+        (selection) => selection.source !== 'mcpApp' || this.config.mcpAppsEnabled,
+      ),
+    );
 
     if (!formattedSelections) return null;
 

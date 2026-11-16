@@ -1,7 +1,7 @@
 import type { ChannelDetail } from '@lobechat/types';
 import { ActionIcon, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { GitBranch, MoreHorizontal, X } from 'lucide-react';
+import { GitBranch, Maximize2, MoreHorizontal, X } from 'lucide-react';
 import { Activity, type ComponentProps, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,7 +23,7 @@ export const THREAD_FLOAT_BREAKPOINT = 760;
 
 const MAX_FOLLOWER_AVATARS = 3;
 
-const ThreadFollowers = ({
+export const ThreadFollowers = ({
   detail,
   target,
 }: {
@@ -69,12 +69,14 @@ export function ThreadPanel({
   threadId,
   draft,
   onClose,
+  onOpenPage,
   onSendDraft,
 }: {
   availableWidth?: number;
   detail: ChannelDetail;
   draft: ChannelThreadDraft | null;
   onClose: () => void;
+  onOpenPage: (threadId: string) => void;
   onSendDraft: ComponentProps<typeof DraftThreadConversation>['onSend'];
   threadId: string | null;
 }) {
@@ -91,7 +93,7 @@ export function ThreadPanel({
   const channelId = detail.channel?.id ?? '';
   const { messages = [], threads = [] } = detail;
   const lastThreadId = typeof lastTarget === 'string' ? lastTarget : null;
-  // Same name as the sidebar entry: the first line of the message the thread branched from.
+  // Same name as the sidebar entry: the Agent's title, or the first line of its root message.
   const threadView = useChannelStore(
     channelSelectors.detail({ channelId, threadId: lastThreadId }),
   );
@@ -102,6 +104,7 @@ export function ThreadPanel({
     threadTitle(
       (lastTarget && typeof lastTarget !== 'string' ? lastTarget.root : threadView?.rootMessage) ??
         messages.find((message) => message.id === rootMessageId),
+      threads.find((entry) => entry.id === lastThreadId),
     ) || t('thread');
 
   return (
@@ -154,6 +157,15 @@ export function ThreadPanel({
                       title={t('more', { ns: 'common' })}
                     />
                   </DropdownMenu>
+                )}
+                {threadId && (
+                  <ActionIcon
+                    aria-label={t('openThreadPage')}
+                    icon={Maximize2}
+                    size="small"
+                    title={t('openThreadPage')}
+                    onClick={() => onOpenPage(threadId)}
+                  />
                 )}
                 <ActionIcon
                   aria-label={t('closeThread')}

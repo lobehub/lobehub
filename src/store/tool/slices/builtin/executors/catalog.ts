@@ -20,6 +20,7 @@ import type { IBuiltinToolExecutor } from '../types';
 import { artboardHookExecutor } from './artboard';
 import {
   ampExecutor,
+  antigravityExecutor,
   claudeCodeExecutor,
   codeBuddyExecutor,
   codexExecutor,
@@ -52,6 +53,7 @@ export const builtinToolExecutors = [
   // Hook-only executors for heterogeneous CLI agents —
   // observe their shell tool results via `onAfterCall` (never invoked).
   ampExecutor,
+  antigravityExecutor,
   claudeCodeExecutor,
   codeBuddyExecutor,
   codexExecutor,

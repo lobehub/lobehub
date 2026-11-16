@@ -41,6 +41,7 @@ import {
 import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
 import { resolveUnsupportedMessageApis } from '@/server/services/bot/platforms/messageCapabilities';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { buildAllowedBuiltinTools } from '../../deviceToolRegistry';
 import { applyFrozenEvalManifests } from '../../evalGate/frozenManifests';
@@ -294,10 +295,18 @@ export const discoverTools = async (
 
     // 5a-1b. Model awareness: tell the model whose connected account each
     // borrowed tool runs on (see `buildOwnershipNote`).
-    connectorOwnershipNote = await buildOwnershipNote(deps, connectors);
+    connectorOwnershipNote = await buildOwnershipNote(
+      deps,
+      connectors.map((c) => connectorsMcp.find((mcp) => mcp.id === c.id) ?? c),
+      !!shareGate,
+    );
 
     connectorManifests = [
-      ...buildConnectorManifests(connectorsMcp, connectorTools),
+      ...buildConnectorManifests(
+        connectorsMcp,
+        connectorTools,
+        await isMcpAppsEnabled(deps.userId),
+      ),
       ...boundConnectorManifests,
     ];
 

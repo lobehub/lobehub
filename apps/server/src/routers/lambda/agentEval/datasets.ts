@@ -1,9 +1,15 @@
-import { parseDataset } from '@lobechat/eval-dataset-parser';
+import type { ParseResult } from '@lobechat/eval-dataset-parser';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { FILE_PARSE_SIZE_LIMIT_ERROR_MESSAGE, MAX_FILE_PARSE_SIZE } from '@/const/file';
 import { AgentEvalDatasetWriteError } from '@/database/models/agentEval/datasetAccess';
 import { router } from '@/libs/trpc/lambda';
+import type { FileService } from '@/server/services/file';
+import { FileParseError, parseDatasetInWorker } from '@/server/services/fileParse';
+import { isFileParseError } from '@/server/services/fileParse/errors';
+import { isDeterministicParseFailure } from '@/server/services/fileParse/failure';
+import { normalizeParseFileError } from '@/server/services/fileParse/normalizeError';
 
 import {
   importDatasetPackageProcedure,
@@ -13,6 +19,38 @@ import {
 import { assertDatasetDeletable, assertDatasetMove } from './lobeBenchMembership';
 import { agentEvalProcedure, agentEvalProcedureWrite } from './procedures';
 import { evalConfigSchema, evalTestCaseContentSchema, rubricTypeSchema } from './schemas';
+
+/**
+ * Refuses a stored upload larger than the in-memory parse cap by its stored size, before the
+ * bytes are fetched: a few hundred MiB would otherwise be read, then cloned into the parse thread.
+ */
+const assertWithinParseLimit = async (fileService: FileService, pathname: string) => {
+  const { contentLength } = await fileService.getFileMetadata(pathname);
+  if (contentLength > MAX_FILE_PARSE_SIZE) {
+    throw new FileParseError('INPUT_TOO_LARGE', FILE_PARSE_SIZE_LIMIT_ERROR_MESSAGE);
+  }
+};
+
+/**
+ * A parse failure that is the worker's state, not the file's (queue full or timed out, artifact
+ * missing, thread could not start or died): the same upload can parse later, so it is kept.
+ */
+const isRetryableParseFailure = (error: unknown) =>
+  isFileParseError(error) && !isDeterministicParseFailure(error);
+
+/** Retryable: 429 when busy, 503 otherwise. Anything else is a bad file, as before. */
+const toParseRequestError = (error: any) => {
+  if (!isRetryableParseFailure(error)) {
+    return new TRPCError({
+      code: 'BAD_REQUEST',
+      message: `Failed to parse file: ${error.message}`,
+    });
+  }
+  const mapped = normalizeParseFileError(error) as TRPCError;
+  return mapped.code === 'INTERNAL_SERVER_ERROR'
+    ? new TRPCError({ cause: error, code: 'SERVICE_UNAVAILABLE', message: error.message })
+    : mapped;
+};
 
 export const datasetRouter = router({
   importDatasetPackage: importDatasetPackageProcedure,
@@ -174,6 +212,19 @@ export const datasetRouter = router({
       const archive = isZip
         ? await readDatasetPackageUpload(ctx.fileService, input.pathname)
         : undefined;
+      if (!archive) {
+        try {
+          await assertWithinParseLimit(ctx.fileService, input.pathname);
+        } catch (error) {
+          // A storage failure is not a user validation error; only the size refusal is.
+          if (!(error instanceof FileParseError)) throw error;
+          if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Failed to parse file: ${error.message}`,
+          });
+        }
+      }
       const content =
         archive ??
         (isXlsx
@@ -184,7 +235,7 @@ export const datasetRouter = router({
         if (archive) {
           return previewDatasetPackage(archive);
         }
-        const result = parseDataset(content, {
+        const result = await parseDatasetInWorker<ParseResult>(content, {
           filename: resolvedFilename,
           format: format === 'auto' || format === 'zip' ? undefined : format,
           preview: 50,
@@ -198,11 +249,11 @@ export const datasetRouter = router({
           datasetPackage: undefined,
         };
       } catch (error: any) {
-        if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: `Failed to parse file: ${error.message}`,
-        });
+        // A busy or unavailable worker keeps the upload so the same pathname can be retried.
+        if (upload && !isRetryableParseFailure(error)) {
+          await ctx.fileUploadService.releaseBestEffort(input.pathname);
+        }
+        throw toParseRequestError(error);
       }
     }),
   importDataset: agentEvalProcedureWrite
@@ -226,6 +277,7 @@ export const datasetRouter = router({
     .mutation(async ({ input, ctx }) => {
       const upload = await ctx.fileUploadService.assertActiveOrLegacy(input.pathname);
       let imported = false;
+      let keepUpload = false;
 
       try {
         const format = input.format || 'auto';
@@ -234,18 +286,17 @@ export const datasetRouter = router({
 
         let parsed;
         try {
+          await assertWithinParseLimit(ctx.fileService, input.pathname);
           const content = isXlsx
             ? await ctx.fileService.getFileByteArray(input.pathname)
             : await ctx.fileService.getFileContent(input.pathname);
-          parsed = parseDataset(content, {
+          parsed = await parseDatasetInWorker<ParseResult>(content, {
             filename: resolvedFilename,
             format: format === 'auto' ? undefined : format,
           });
         } catch (error: any) {
-          throw new TRPCError({
-            code: 'BAD_REQUEST',
-            message: `Failed to parse file: ${error.message}`,
-          });
+          keepUpload = isRetryableParseFailure(error);
+          throw toParseRequestError(error);
         }
 
         const { fieldMapping } = input;
@@ -327,8 +378,9 @@ export const datasetRouter = router({
         }
         throw error;
       } finally {
-        if (upload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
-        else if (imported) await ctx.fileService.deleteFile(input.pathname);
+        if (upload) {
+          if (!keepUpload) await ctx.fileUploadService.releaseBestEffort(input.pathname);
+        } else if (imported) await ctx.fileService.deleteFile(input.pathname);
       }
     }),
 });

@@ -1,48 +1,40 @@
 import { useCallback } from 'react';
-import useSWR from 'swr';
 
-import { shareKeys } from '@/libs/swr/keys';
-import { topicService } from '@/services/topic';
+import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
+import type { TopicShareVisibility } from '@/store/chat/slices/topic/projection';
 
-export type ShareVisibility = 'private' | 'link';
+export type ShareVisibility = TopicShareVisibility;
 
 /**
- * Share record of a topic. A topic without a record is private: the record is
- * created on the first visibility change rather than when the share UI opens,
- * so opening it never waits on a write.
+ * Share record of a topic, from the topic share replica. A topic without a
+ * record is private: the record is created on the first visibility change
+ * rather than when the share UI opens, so opening it never waits on a write.
+ * A persisted record paints at once while the server confirms it.
  */
 export const useTopicShare = (topicId: string | undefined, enabled: boolean) => {
-  const { data, error, isLoading, mutate } = useSWR(
-    topicId && enabled ? shareKeys.topicInfo(topicId) : null,
-    () => topicService.getShareInfo(topicId!),
-    { revalidateOnFocus: false },
-  );
+  const { error, revalidate } = useChatStore((s) => s.useFetchTopicShare)(topicId, enabled);
+  const entry = useChatStore(topicSelectors.getTopicShare(enabled ? topicId : undefined));
+  const setTopicShareVisibility = useChatStore((s) => s.setTopicShareVisibility);
 
   /** Resolves to the share id after the change. */
   const setVisibility = useCallback(
     async (visibility: ShareVisibility) => {
       if (!topicId) return;
-
-      let record = data
-        ? await topicService.updateShareVisibility(topicId, visibility)
-        : await topicService.enableSharing(topicId, visibility);
-      // A stale cache can miss a record created elsewhere; create then keeps
-      // the existing visibility, so apply the requested one on top.
-      if (record && record.visibility !== visibility)
-        record = await topicService.updateShareVisibility(topicId, visibility);
-
-      await mutate();
-      return record?.id ?? data?.id;
+      return setTopicShareVisibility(topicId, visibility);
     },
-    [data, mutate, topicId],
+    [setTopicShareVisibility, topicId],
   );
 
+  const shareInfo = entry?.share ?? undefined;
+
   return {
-    error,
-    isLoading,
-    retry: mutate,
+    // A failed refresh keeps the record on screen; only a first load surfaces it.
+    error: entry ? undefined : error,
+    isLoading: !!topicId && enabled && !entry && !error,
+    retry: revalidate,
     setVisibility,
-    shareInfo: data,
-    visibility: (data?.visibility as ShareVisibility) || 'private',
+    shareInfo,
+    visibility: (shareInfo?.visibility as ShareVisibility) || 'private',
   };
 };

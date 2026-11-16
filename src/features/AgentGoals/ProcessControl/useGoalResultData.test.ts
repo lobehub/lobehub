@@ -12,7 +12,8 @@ const mocks = vi.hoisted(() => ({
   getCriteria: vi.fn(),
 }));
 
-vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   useActiveWorkspaceId: () => undefined,
 }));
 vi.mock('@/services/verify', () => ({

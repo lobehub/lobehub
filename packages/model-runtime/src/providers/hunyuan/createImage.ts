@@ -1,6 +1,6 @@
 import createDebug from 'debug';
 
-import type { CreateImageOptions } from '../../core/openaiCompatibleFactory';
+import type { CreateImageOptions } from '../../core/openaiCompatible';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
 import { asyncifyPolling } from '../../utils/asyncifyPolling';
 import { AgentRuntimeError } from '../../utils/createError';

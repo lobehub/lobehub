@@ -28,9 +28,13 @@ export const isArtboardTab = (tab: string) => tab.startsWith(ARTBOARD_TAB_PREFIX
 
 export const isWorkTab = (tab: string) => isCanvasTab(tab) || isArtboardTab(tab);
 
+export const isMcpAppTab = (tab: string) =>
+  tab.startsWith('mcp-app:') || tab.startsWith('mcp-entry:');
+
 // Browser pages, canvases and artboards belong to one conversation, so pinning them
 // across every topic of the agent would reopen content that does not exist there.
-export const isDynamicTab = (tab: string) => isBrowserTab(tab) || isWorkTab(tab);
+export const isDynamicTab = (tab: string) =>
+  isBrowserTab(tab) || isWorkTab(tab) || isMcpAppTab(tab);
 
 export const browserSessionIdOfTab = (baseSessionId: string, tab: string) =>
   tab === BROWSER_TAB_KEY

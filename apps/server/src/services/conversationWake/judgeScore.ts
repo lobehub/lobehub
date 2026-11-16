@@ -13,7 +13,12 @@ const KIND_BY_POLICY: Record<string, BotWakeJudgeKind> = {
 };
 
 /** Decisions the routing model made, whose score is the one that counts. */
-const ROUTING_REASONS = new Set(['not-chosen', 'routing-selected', 'routing-uncertain']);
+const ROUTING_REASONS = new Set([
+  'not-chosen',
+  'routing-deferred',
+  'routing-selected',
+  'routing-uncertain',
+]);
 
 /**
  * A verdict that carries no score: the model timed out or failed (`*-timeout`, `*-error: …`), or

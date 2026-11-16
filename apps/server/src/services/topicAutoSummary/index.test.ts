@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   snapshotTopicUsage: vi.fn(),
   getUserSettings: vi.fn(),
   resolveSystemAgentModelConfig: vi.fn(),
+  markSummaryFailed: vi.fn(),
   updateSummaryIfCurrent: vi.fn(),
 }));
 
@@ -27,6 +28,7 @@ vi.mock('@/database/models/topicAnalysis', () => ({
 }));
 vi.mock('@/database/models/topicSummary', () => ({
   TopicSummaryModel: class {
+    markSummaryFailed = mocks.markSummaryFailed;
     updateSummaryIfCurrent = mocks.updateSummaryIfCurrent;
   },
   topicSummaryEligibleMessage: undefined,
@@ -171,6 +173,44 @@ describe('TopicAutoSummaryService', () => {
     expect(mocks.updateSummaryIfCurrent).not.toHaveBeenCalled();
   });
 
+  it.each([
+    'InvalidProviderAPIKey',
+    'InsufficientQuota',
+    'ModelNotFound',
+    'InsufficientBudgetForModel',
+  ])(
+    'records a %s rejection so the topic is not re-dispatched until a new message',
+    async (errorType) => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mocks.generateObject.mockRejectedValue({ errorType, provider: 'deepseek' });
+      const service = new TopicAutoSummaryService(createDb(), 'user-1');
+
+      const result = await service.summarize('topic-1');
+
+      expect(result).toEqual({ reason: 'provider-rejected', summarized: false });
+      expect(mocks.markSummaryFailed).toHaveBeenCalledWith({
+        lastMessageId: 'message-1',
+        lastMessageUpdatedAt: new Date('2026-07-31T10:00:00Z'),
+        reason: errorType,
+        topicId: 'topic-1',
+      });
+      expect(mocks.updateSummaryIfCurrent).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    'ProviderNetworkError',
+    'RateLimitExceeded',
+    'ProviderBizError',
+    'InvalidRequestFormat',
+  ])('rethrows a retryable or unclassified %s without recording a failure', async (errorType) => {
+    mocks.generateObject.mockRejectedValue({ errorType });
+    const service = new TopicAutoSummaryService(createDb(), 'user-1');
+
+    await expect(service.summarize('topic-1')).rejects.toMatchObject({ errorType });
+    expect(mocks.markSummaryFailed).not.toHaveBeenCalled();
+  });
+
   it('still fails the step on any other generation error', async () => {
     mocks.generateObject.mockRejectedValue(new Error('provider down'));
     const service = new TopicAutoSummaryService(createDb(), 'user-1');
@@ -276,6 +316,13 @@ describe('TopicAutoSummaryService', () => {
       expect(await new TopicAutoSummaryService(createDb(), 'user-1').analyze('topic-1')).toEqual({
         analyzed: false,
         reason: 'no-executor',
+      });
+
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mocks.analyzeTopic.mockRejectedValueOnce({ errorType: 'InvalidProviderAPIKey' });
+      expect(await new TopicAutoSummaryService(createDb(), 'user-1').analyze('topic-1')).toEqual({
+        analyzed: false,
+        reason: 'provider-rejected',
       });
 
       mocks.analyzeTopic.mockRejectedValueOnce(new Error('provider down'));

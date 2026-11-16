@@ -15,6 +15,8 @@ import { ArrowRight, ChevronRight, Database, Ellipsis, Pencil, Play, Trash2 } fr
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { benchmarkDatasetPath } from '@/features/LobeBench/experimentNavigation';
+import { useIsLobeBenchBenchmark } from '@/features/LobeBench/useIsLobeBenchBenchmark';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useEvalStore } from '@/store/eval';
 
@@ -178,6 +180,7 @@ const DatasetCard = memo<DatasetCardProps>(
   }) => {
     const { t } = useTranslation('eval');
     const deleteDataset = useEvalStore((s) => s.deleteDataset);
+    const lobeBench = useIsLobeBenchBenchmark(benchmarkId);
 
     const handleDelete = useCallback(() => {
       confirmModal({
@@ -292,7 +295,7 @@ const DatasetCard = memo<DatasetCardProps>(
             <Flexbox horizontal align="center" className={styles.footer} justify="center">
               <WorkspaceLink
                 className={styles.footerLink}
-                to={`/eval/bench/${benchmarkId}/datasets/${dataset.id}`}
+                to={benchmarkDatasetPath(dataset.id, lobeBench)}
               >
                 <Button icon={ArrowRight} iconPosition="end" size="small" type="text">
                   {t('dataset.detail.viewDetail')}

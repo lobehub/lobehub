@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 import type { RuntimeImageGenParamsValue } from 'model-bank';
 
-import type { CreateImageOptions } from '../../core/openaiCompatibleFactory';
+import type { CreateImageOptions } from '../../core/openaiCompatible';
 import type { CreateImagePayload, CreateImageResponse } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';

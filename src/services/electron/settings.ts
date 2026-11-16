@@ -1,4 +1,5 @@
 import {
+  type DebugLoggingDuration,
   type NetworkProxySettings,
   type ShortcutUpdateResult,
   type WindowsShellMode,
@@ -12,6 +13,48 @@ class DesktopSettingsService {
    */
   getAppTrayVisible = async () => {
     return ensureElectronIpc().tray.getAppTrayVisible();
+  };
+
+  /**
+   * Get the Debug logs setting (Settings → About)
+   */
+  getDebugLoggingSettings = async () => {
+    return ensureElectronIpc().system.getDebugLoggingSettings();
+  };
+
+  /**
+   * Turn `debug` records in `<userData>/logs/*.jsonl` off, or on for a duration, in packaged builds
+   */
+  setDebugLogging = async (duration: DebugLoggingDuration | 'off') => {
+    return ensureElectronIpc().system.setDebugLogging(duration);
+  };
+
+  /**
+   * Zip the last day of logs with app and system details, and select it in the file manager
+   */
+  exportDiagnostics = async () => {
+    return ensureElectronIpc().system.exportDiagnostics();
+  };
+
+  /**
+   * Get the Remote debugging setting (Settings → About)
+   */
+  getRemoteDebuggingSettings = async () => {
+    return ensureElectronIpc().system.getRemoteDebuggingSettings();
+  };
+
+  /**
+   * Persist the CDP toggle; it applies at the next launch
+   */
+  setRemoteDebuggingEnabled = async (enabled: boolean) => {
+    return ensureElectronIpc().system.setRemoteDebuggingEnabled(enabled);
+  };
+
+  /**
+   * Reveal the desktop log directory in the system file manager
+   */
+  openLogDirectory = async () => {
+    return ensureElectronIpc().system.openLogDirectory();
   };
 
   /**

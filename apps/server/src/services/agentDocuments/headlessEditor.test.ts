@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 
+import { AgentDocumentEditRejectedError } from './editRejectedError';
 import {
   applyLiteXMLOperations,
   createAgentMarkdownSnapshot,
@@ -47,6 +48,21 @@ describe('agent document headless editor', () => {
     expect(snapshot.content).toContain('Budget variable: $x$ and $100k');
     expect(hasNodeType(snapshot.editorData, 'math')).toBe(false);
     expect(hasNodeType(snapshot.editorData, 'mathBlock')).toBe(true);
+  });
+
+  it('should round-trip a heading list item between Markdown and editor data', async () => {
+    const markdown = '1. ## Overview\n2. Details\n';
+
+    const fromMarkdown = await createMarkdownEditorSnapshot(markdown);
+    const [overview, details] = (fromMarkdown.editorData as any).root.children[0].children;
+
+    expect(overview.$.listHeading).toBe('h2');
+    expect(details.$.listHeading).toBeUndefined();
+    expect(hasNodeType(fromMarkdown.editorData, 'heading')).toBe(false);
+
+    const fromEditorData = await exportEditorDataSnapshot({ editorData: fromMarkdown.editorData });
+
+    expect(fromEditorData.content).toBe(markdown);
   });
 
   it('should safely serialize concurrent headless document lifecycles', async () => {
@@ -208,6 +224,21 @@ describe('agent document headless editor', () => {
         ],
       }),
     ).rejects.toThrow('Operation 1 of 1 (insert) failed: node "missing-node" not found');
+  });
+
+  it("should mark a rejected node edit as the caller's error", async () => {
+    const initial = await exportEditorDataSnapshot({
+      fallbackContent: 'Original',
+      litexml: true,
+    });
+
+    await expect(
+      applyLiteXMLOperations({
+        editorData: initial.editorData,
+        fallbackContent: initial.content,
+        operations: [{ action: 'remove', id: 'missing-node' }],
+      }),
+    ).rejects.toBeInstanceOf(AgentDocumentEditRejectedError);
   });
 
   describe('LiteXML that is not well-formed', () => {

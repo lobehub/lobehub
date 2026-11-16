@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { unreadableVersions } from './skillVersions';
 
-vi.mock('@/services/userSkill', () => ({ userSkillService: {} }));
+vi.mock('@/store/verify', () => ({ useVerifyStore: vi.fn(), verifySelectors: {} }));
 
 describe('unreadableVersions', () => {
   const error = new Error('storage down');

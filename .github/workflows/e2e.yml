@@ -265,3 +265,85 @@ jobs:
             e2e/reports
             e2e/screenshots
           if-no-files-found: ignore
+
+  render-budget:
+    name: Render Budget
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: paradedb/paradedb:latest
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s  --health-retries 5
+
+        ports:
+          - 5432:5432
+
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        env:
+          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "${REF_SHA}"
+          git checkout --force FETCH_HEAD
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Generate OIDC test signing key
+        run: |
+          JWKS_KEY="$(bun -e "import { createTestOidcJwks } from './e2e/src/support/oidcTestKey'; process.stdout.write(createTestOidcJwks());")"
+          printf 'JWKS_KEY=%s\n' "$JWKS_KEY" >> "$GITHUB_ENV"
+
+      - name: Install Playwright browsers (with system deps)
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run database migrations
+        run: bun run db:migrate
+
+      # React's profiling build makes <Profiler> report in a production bundle;
+      # the regular E2E job keeps the shipped bundle so its size gates stay exact.
+      - name: Build application (React profiling)
+        run: bun run build
+        env:
+          LOBE_REACT_PROFILING: '1'
+          SKIP_LINT: '1'
+
+      - name: Start E2E server
+        run: |
+          bunx next start -p 3006 > /tmp/lobehub-e2e-server.log 2>&1 &
+          for i in {1..60}; do
+            if curl -fsS http://localhost:3006 > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/lobehub-e2e-server.log
+          exit 1
+
+      - name: Run render budget scenarios
+        working-directory: e2e
+        run: bun run test:perf
+        env:
+          BASE_URL: http://localhost:3006
+          E2E_REPORTS: '0'
+          HEADLESS: 'true'
+
+      - name: Upload render budget receipts
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: render-budget
+          path: |
+            e2e/reports/render-budget
+            e2e/screenshots
+          retention-days: 30
+          if-no-files-found: ignore

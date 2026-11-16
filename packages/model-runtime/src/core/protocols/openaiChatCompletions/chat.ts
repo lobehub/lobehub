@@ -8,15 +8,15 @@ import { debugPayload, debugResponse, debugStream } from '../../../utils/debugSt
 import { desensitizeUrl } from '../../../utils/desensitizeUrl';
 import { getModelPricing } from '../../../utils/getModelPricing';
 import { StreamingResponse } from '../../../utils/response';
-import type { OpenAICompatibleRuntimeContext } from '../../openaiCompatibleFactory/context';
-import type { OpenAICompatibleFactoryOptions } from '../../openaiCompatibleFactory/factoryOptions';
+import type { OpenAICompatibleRuntimeContext } from '../../openaiCompatible/context';
+import type { OpenAICompatibleFactoryOptions } from '../../openaiCompatible/factoryOptions';
 import {
   initializeOpenAIDiagnostics,
   observeOpenAIChatCompletionStream,
   recordOpenAIChatCompletionResponse,
   recordOpenAIResponseMetadata,
   resolveOpenAIResponseWithMetadata,
-} from '../../openaiCompatibleFactory/providerDiagnostics';
+} from '../../openaiCompatible/providerDiagnostics';
 import { resolveModelSamplingParameters } from '../../parameterResolver';
 import { readableFromAsyncIterable } from '../../streams/protocol';
 import { convertOpenAIMessages } from './messages';

@@ -50,3 +50,42 @@ Gemini AI 是由 Google AI 创建的一组大型语言模型（LLM），以其�
 </Steps>
 
 至此，你已经可以在 LobeHub 中使用 Google Gemini 啦。
+
+## 语音合成（Gemini TTS）
+
+Google 服务商还可以通过 Gemini TTS 把文字转成语音，使用与对话模型相同的 API Key。
+
+### 选择模型与默认音色
+
+- 打开 **应用设置 → AI 服务商 → Google**，模型列表的 **TTS** 标签页会列出 Gemini 语音模型：
+
+  | 模型                             | 说明                               |
+  | ------------------------------ | -------------------------------- |
+  | `gemini-3.8-flash-tts`         | 默认启用，推荐使用。                       |
+  | `gemini-3.8-flash-lite-tts`    | 默认启用，成本与延迟更低。                    |
+  | `gemini-2.5-flash-preview-tts` | 旧版预览模型，Google 最早于 2026-11-17 下线。 |
+  | `gemini-2.5-pro-preview-tts`   | 旧版预览模型，Google 最早于 2026-11-17 下线。 |
+
+- 用模型右侧的开关启用或停用模型。
+
+- 如需修改请求未指定音色时使用的音色，点击模型的 **配置** 按钮，在 **默认音色** 中选择。列表包含 Gemini 全部 30 个预置音色及其风格（如 `Kore · Firm`、`Puck · Upbeat`）。留空则使用模型默认音色 `Kore`。该设置按模型保存，对 LobeHub CLI 和 `/api/v1/audio/speech` 接口生效。
+
+### 生成语音
+
+```bash
+lh generate tts "Hello from LobeHub" -m gemini-3.8-flash-tts -o hello.mp3
+lh generate tts "你好，欢迎使用 LobeHub。" -m google/gemini-3.8-flash-tts --voice Puck \
+  --instructions "Say it slowly and warmly" -o hello-zh.mp3
+```
+
+- **音色**：30 个预置音色之一，如 `Kore`、`Puck`、`Zephyr`、`Charon`。每个音色都支持全部语言，包括中文和英文。
+- **风格**：Gemini 没有数值化的语速、音调和音量参数，请用 `--instructions` 以自然语言描述语速和语气，例如「用平静的语气慢慢说」。Gemini 模型会拒绝 `--speed`、`--pitch`、`--volume` 和 `--emotion`。
+- **格式**：Gemini 返回 24 kHz、16 位单声道 PCM，LobeHub 将其编码为 MP3（24 kHz 单声道，40 kbps）。通过 CLI 和语音接口只返回这一种格式（`audio/mpeg`）。
+- **长度**：单次请求最多返回约 11 分钟音频，更长的文本请拆成多次请求。
+- **计费**：Gemini TTS 按输入文本 Token 与生成的音频 Token（每秒音频约 25 个 Token）计费，详见 [Gemini API 价格](https://ai.google.dev/gemini-api/docs/pricing)。
+
+### 常见问题
+
+- **「Google API Key 不正确或为空……」**：未设置 API Key，或 Google 拒绝了该 Key。请在 **应用设置 → AI 服务商 → Google** 中检查，自部署服务请检查 `GOOGLE_API_KEY`。
+- **限流错误**：请求超出了当前 Gemini API 档位的 TTS 速率限制。请稍后重试，或提升 Google Cloud 项目的档位。
+- **内容被拦截**：Gemini 出于安全原因拒绝了该文本，请调整措辞。

@@ -127,7 +127,10 @@ const EnvironmentItem = memo<EnvironmentItemProps>(({ environment, onSelect, sel
   const actions = useEnvironmentActions();
   const canEdit = useCanEditEnvironment()(environment);
 
-  const repository = repositoryPath(environment.configuration);
+  // A row restored from storage carries only its plain `owner/name`.
+  const repository = environment.configuration
+    ? repositoryPath(environment.configuration)
+    : environment.repository;
   const creator =
     environment.creator?.fullName ||
     environment.creator?.username ||

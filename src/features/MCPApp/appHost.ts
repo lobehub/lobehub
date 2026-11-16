@@ -1,13 +1,17 @@
+import { resolveConnectorLinkParam } from '@lobechat/mecha';
 import type { SendMessageParams } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
+import { isRecord } from '@lobechat/utils/object';
 import type { AppBridge } from '@modelcontextprotocol/ext-apps/app-bridge';
 import type { TFunction } from 'i18next';
 
 import { mcpService } from '@/services/mcp';
 import { getToolStoreState } from '@/store/tool';
+import { connectorSelectors } from '@/store/tool/slices/connector/selectors';
 
 import { anySignal } from './abortSignal';
 import { mcpAppNameSelector } from './appName';
+import type { AppDisplayContext, McpAppBridgeHost } from './bridge';
 import { buildHostContext, connectMcpAppBridge } from './bridge';
 import { confirmAppMessage, confirmAppOpenLink, confirmAppToolCall } from './confirm';
 import { isAppFrameNavigatedNotice } from './frameDocument';
@@ -30,8 +34,12 @@ export interface AppViewContext {
    * read-only one (a thread a tool started) keeps the view from posting too.
    */
   canSendMessage: boolean;
+  display?: AppDisplayContext;
   identifier: string;
   isDark: boolean;
+  lifecycle?: McpAppBridgeHost['lifecycle'];
+  /** The account the view acts as, when its arguments cannot name one (an entrypoint's `{}`). */
+  linkId?: string;
   /** This desktop's own MCP process produced the result; the view's calls run there. */
   onThisDevice: boolean;
   /** Tool call result envelope (`{ content, state, success }`). */
@@ -72,6 +80,12 @@ export interface AppViewSession {
   bridge: AppBridge;
   /** End the session at once: the view is already gone. */
   dispose: () => void;
+  /**
+   * The view is leaving: its context was cleared and must stay so, though its
+   * frame still runs (finishing, or waiting for its teardown). Later model
+   * context updates from it are dropped.
+   */
+  retire: () => void;
   /** Let the view finish, within {@link APP_VIEW_TEARDOWN_TIMEOUT_MS}, then end the session. */
   teardown: () => Promise<void>;
 }
@@ -124,11 +138,34 @@ export const connectAppView = ({
     }
   };
 
+  // Set once the view starts leaving; see `AppViewSession.retire`
+  let retiring = false;
   const { bridge, dispose, teardown } = connectMcpAppBridge(target, {
+    ...(getContext().lifecycle && {
+      lifecycle: {
+        getDisplayContext: () => getContext().lifecycle!.getDisplayContext(),
+        onInitialized: (modes) => getContext().lifecycle!.onInitialized?.(modes),
+        onRequestDisplayMode: (mode, modes) =>
+          getContext().lifecycle!.onRequestDisplayMode(mode, modes),
+        onTeardown: () => getContext().lifecycle!.onTeardown(),
+        onUpdateModelContext: (params) => {
+          if (!retiring) getContext().lifecycle!.onUpdateModelContext(params);
+        },
+      } satisfies NonNullable<McpAppBridgeHost['lifecycle']>,
+    }),
     // Views may only call tools on the server that rendered them, and
     // under the same approval rules as the conversation.
     callTool: async (name, toolArgs, request) => {
-      const { agentId, identifier, onThisDevice, server, t } = getContext();
+      const {
+        agentId,
+        identifier,
+        onThisDevice,
+        server,
+        t,
+        args: initiatingArgs,
+        linkId: viewLinkId,
+      } = getContext();
+      const linkId = viewLinkId ?? getMcpAppLinkId(identifier, agentId, initiatingArgs);
       const policy = await getAppToolCallPolicy(identifier, name, { agentId, toolArgs });
       let allowed = policy === 'allow';
       if (policy === 'confirm') {
@@ -177,14 +214,15 @@ export const connectAppView = ({
               type: 'mcp',
             },
             // The view's HTML came from this machine for a local server, so its calls do too
-            { agentId, fromMcpApp: true, onThisDevice, server, signal },
+            { agentId, fromMcpApp: true, onThisDevice, server, signal, linkId },
           ),
         );
       } finally {
         disposeCall();
       }
     },
-    hostContext: buildHostContext(getContext().isDark),
+    hostContext: buildHostContext(getContext().isDark, getContext().display),
+    getHostContext: () => buildHostContext(getContext().isDark, getContext().display),
     onSizeChange: (nextHeight) => onHeight(Math.min(nextHeight, MAX_APP_VIEW_HEIGHT)),
     // A view can ask without a gesture and carry data in the URL, so the
     // user sees the link before it opens
@@ -255,7 +293,11 @@ export const connectAppView = ({
     },
     // Prompts go at once; calls that need none still run while the view
     // finishes (saves its edits), and end with it
+    retire: () => {
+      retiring = true;
+    },
     teardown: async () => {
+      retiring = true;
       approvals.abort();
       try {
         await teardown(APP_VIEW_TEARDOWN_TIMEOUT_MS);
@@ -285,4 +327,19 @@ export const getAppViewPhase = ({
   if (isLoading) return 'loading';
   if (!srcDoc || navigated) return 'fallback';
   return 'view';
+};
+
+/** Bind a view to the account of the tool call that created it. */
+export const getMcpAppLinkId = (
+  identifier: string,
+  agentId?: string,
+  args?: string,
+): string | undefined => {
+  const connector = connectorSelectors.connectorByIdentifierForAgent(
+    identifier,
+    agentId,
+  )(getToolStoreState());
+  const param = resolveConnectorLinkParam(connector?.tools.map((tool) => tool.inputSchema) ?? []);
+  const input: unknown = safeParseJSON(args ?? '{}');
+  return isRecord(input) && typeof input[param] === 'string' ? (input[param] as string) : undefined;
 };

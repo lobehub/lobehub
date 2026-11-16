@@ -1,3 +1,4 @@
+import type { AntigravityQuotaParams } from '@lobechat/heterogeneous-agents/quota';
 import {
   copyLocalFiles,
   createLocalDirectory,
@@ -38,6 +39,7 @@ import type {
 } from '@lobechat/local-file-shell/types';
 import type { DeviceCliRestartParams } from '@lobechat/types';
 
+import { getAntigravityQuota } from './antigravityQuota';
 import { listClaudeCodeMemory } from './claudeCodeMemory';
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
@@ -57,6 +59,7 @@ import type {
   InitWorkspaceParams,
   ListClaudeCodeMemoryParams,
   ListHeterogeneousAgentModelsParams,
+  ListMcpToolsParams,
   ListProjectSkillsParams,
   LocalFilePreviewUrlParams,
   PrepareSkillDirectoryParams,
@@ -83,6 +86,8 @@ export const DEVICE_RPC_METHODS = [
   'unenrollWorkspace',
   'initWorkspace',
   'listHeterogeneousAgentModels',
+  'listMcpTools',
+  'getAntigravityQuota',
   'getClaudeCodeQuota',
   'getCodexQuota',
   'getKimiCodeQuota',
@@ -151,6 +156,9 @@ export const APP_UPDATE_UNSUPPORTED_MESSAGE = 'This device client does not suppo
 
 export const CLI_UPDATE_UNSUPPORTED_MESSAGE =
   'This device client does not support remote CLI updates';
+
+/** Why a client that runs no MCP servers rejects `listMcpTools`. */
+export const MCP_UNSUPPORTED_MESSAGE = 'This device client does not support MCP servers';
 
 /** Why a client without a recoverable trash (the CLI daemon) rejects `trashLocalFiles`. */
 export const TRASH_UNSUPPORTED_MESSAGE = 'This device does not support moving files to the trash';
@@ -227,8 +235,17 @@ export const executeDeviceRpc = async (
       return deps.listHeterogeneousAgentModels(params as ListHeterogeneousAgentModelsParams);
     }
 
+    case 'listMcpTools': {
+      if (!deps.listMcpTools) throw new Error(MCP_UNSUPPORTED_MESSAGE);
+      return deps.listMcpTools(params as ListMcpToolsParams);
+    }
+
     case 'getClaudeCodeQuota': {
       return getClaudeCodeQuota(params as GetClaudeCodeQuotaParams);
+    }
+
+    case 'getAntigravityQuota': {
+      return getAntigravityQuota(params as AntigravityQuotaParams);
     }
 
     case 'getCodexQuota': {

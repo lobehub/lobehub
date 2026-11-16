@@ -1,13 +1,11 @@
 import { readFile } from 'node:fs/promises';
 
 import type {
-  GoalEdgeKind,
   GoalEventEntityType,
   GoalEventType,
   GoalGraphDecision,
   GoalGraphEvent,
   GoalGraphSnapshot,
-  GoalNodeKind,
   GoalPlanContext,
   GoalTickResult,
 } from '@lobechat/types';
@@ -28,12 +26,15 @@ import {
 } from './assignment';
 import { registerGoalConfigurationCommands } from './configuration';
 import { registerGoalGraphEditCommands } from './graphEdit';
+import { inverseEdgeLabel, nodeIcon } from './graphGlyphs';
+import { registerGoalMarkCommands } from './mark';
 import {
   type GoalMetricState,
   printMetricState,
   readMetricState,
   registerGoalMetricCommands,
 } from './metric';
+import { registerGoalObjectiveCommands } from './objective';
 import { goalReads, hasOperationToken } from './reads';
 import { registerGoalReportCommand } from './report';
 import { missingSeedDependencies, parseTaskFile } from './seedTasks';
@@ -52,33 +53,6 @@ const parseVariant = (raw: string) => {
     .filter(Boolean);
   if (!axis || !values.length) throw new Error(`--variant expects axis=value1,value2; got ${raw}`);
   return { axis, values };
-};
-
-const nodeIcon: Record<GoalNodeKind, string> = {
-  batch: '▦',
-  decision: '◆',
-  experiment: '⚗',
-  finding: '●',
-  problem: '◇',
-  task: '▣',
-};
-/**
- * Every edge kind reads `source <kind> target`, so a row listing its INCOMING
- * edges by kind states the relationship backwards: an incoming `depends_on`
- * means the other node depends on THIS one, not the reverse. Render the inverse
- * verb instead, so each entry is a true sentence about the row it sits on.
- */
-const inverseEdgeLabel: Record<GoalEdgeKind, string> = {
-  answers: 'answered by',
-  contains: 'inside',
-  contradicts: 'contradicted by',
-  decomposes: 'part of',
-  depends_on: 'blocks',
-  derived_from: 'ancestor of',
-  investigates: 'investigated by',
-  leads_to: 'follows',
-  produces: 'produced by',
-  supports: 'supported by',
 };
 
 const terminalOutcomes = new Set(['achieved', 'waiting_human', 'no_progress', 'failed']);
@@ -497,9 +471,9 @@ export function registerGoalCommand(program: Command) {
         'When the work applies one recipe to many units (migrate N stores to one mechanism, give N resources',
         'the same caching, update N callers), declare a batch instead of listing every unit: add "rollout" with',
         '"recipe" (the procedure every unit follows), "units" (every unit beyond the probes, as a title or',
-        '{"title","description"}) and optional "variants" ([{"axis","values"}]); "tasks" then hold 2-5',
-        'representative probes. The probes run first; once they ran through without a person the owner approves',
-        'the first wave, and each later wave is handed to this agent to release or escalate; a rejected',
+        '{"title","description"}), optional "skillName" (kebab-case, what the recipe does) and "variants"',
+        '([{"axis","values"}]); "tasks" then hold 2-5 representative probes. The probes run first; once they',
+        'ran through without a person the owner approves the first wave, and each later wave is handed to this agent to release or escalate; a rejected',
         'release comes back to this agent to rewrite the plan for review. Units that differ',
         'only in names, files or details are still one mould; work whose steps differ per task is not.',
       ].join('\n'),
@@ -1238,5 +1212,7 @@ export function registerGoalCommand(program: Command) {
     });
 
   registerGoalGraphEditCommands(goal);
+  registerGoalMarkCommands(goal);
   registerGoalMetricCommands(goal);
+  registerGoalObjectiveCommands(goal);
 }

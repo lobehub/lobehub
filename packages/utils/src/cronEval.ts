@@ -129,6 +129,89 @@ export const findDueOccurrence = (input: IsExecutionTimeInput): Date | null => {
   return new Date(prev);
 };
 
+export type FindUpcomingOccurrenceInput = Omit<IsExecutionTimeInput, 'graceMinutes'>;
+
+/**
+ * Find the occurrence that falls strictly between this dispatcher tick and the
+ * next one, or `null`. Such an occurrence would otherwise fire up to one
+ * interval late, so the dispatcher reserves it now and delays its delivery to
+ * the exact minute. An occurrence on a tick boundary is left to that tick.
+ */
+export const findUpcomingOccurrence = (input: FindUpcomingOccurrenceInput): Date | null => {
+  const { armedAt, cronPattern, currentTime = new Date(), lastExecutedAt, timezone } = input;
+
+  let expression: ReturnType<typeof parseCron>;
+  try {
+    expression = parseCron(cronPattern, timezone, currentTime);
+  } catch {
+    return null;
+  }
+
+  const now = currentTime.getTime();
+  const intervalMs = SCHEDULE_DISPATCH_INTERVAL_MINUTES * MINUTE_MS;
+  const nextTick = (Math.floor(now / intervalMs) + 1) * intervalMs;
+
+  for (
+    let candidate = (Math.floor(now / MINUTE_MS) + 1) * MINUTE_MS;
+    candidate < nextTick;
+    candidate += MINUTE_MS
+  ) {
+    if (!expression.includesDate(new Date(candidate))) continue;
+    if (armedAt && new Date(armedAt).getTime() > candidate) return null;
+    if (lastExecutedAt && new Date(lastExecutedAt).getTime() >= candidate) return null;
+    return new Date(candidate);
+  }
+
+  return null;
+};
+
+/** Whether `date` is an occurrence of the pattern. Invalid input is never one. */
+export const isCronOccurrence = (
+  cronPattern: string,
+  timezone: string | null,
+  date: Date,
+): boolean => {
+  if (Number.isNaN(date.getTime())) return false;
+  try {
+    return parseCron(cronPattern, timezone, date).includesDate(date);
+  } catch {
+    return false;
+  }
+};
+
+const STANDARD_SCHEDULE_MINUTES = new Set([0, 30]);
+
+const getCronMinuteField = (cronPattern: string): string => cronPattern.trim().split(/\s+/)[0];
+
+/**
+ * Whether a pattern pins a clock minute other than :00 / :30, the custom exact
+ * time a deployment may reserve for paid plans. Every-minute and `*\/N` interval
+ * patterns repeat rather than pick a time, so they do not count.
+ */
+export const isPreciseSchedulePattern = (cronPattern: string): boolean => {
+  const minute = getCronMinuteField(cronPattern);
+  if (!minute || minute === '*' || /^\*\/\d+$/.test(minute)) return false;
+
+  return !minute
+    .split(',')
+    .every((item) => /^\d+$/.test(item) && STANDARD_SCHEDULE_MINUTES.has(Number(item)));
+};
+
+/** Whether two patterns keep the same minute field, so an edit picks no new exact time. */
+export const hasSameScheduleMinute = (a: string, b: string): boolean =>
+  getCronMinuteField(a) === getCronMinuteField(b);
+
+/** Move a precise pattern to the nearest of :00 / :30 in its hour; others pass through. */
+export const snapScheduleToStandardMinute = (cronPattern: string): string => {
+  if (!isPreciseSchedulePattern(cronPattern)) return cronPattern;
+
+  const [minute, ...rest] = cronPattern.trim().split(/\s+/);
+  const raw = Number.parseInt(minute, 10);
+  const snapped = raw >= 15 && raw < 45 ? 30 : 0;
+
+  return [snapped, ...rest].join(' ');
+};
+
 /** Whether `findDueOccurrence` finds an occurrence to fire on this tick. */
 export const isExecutionTime = (input: IsExecutionTimeInput): boolean =>
   findDueOccurrence(input) !== null;

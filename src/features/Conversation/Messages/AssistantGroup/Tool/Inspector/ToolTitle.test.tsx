@@ -115,7 +115,7 @@ describe('ToolTitle', () => {
       );
 
       expect(screen.getByText('runCommand')).toBeInTheDocument();
-      expect(screen.getByText('docker')).toBeInTheDocument();
+      expect(screen.getByText('docker ps')).toBeInTheDocument();
     });
 
     it('keeps the label for a latin model description (reads as a spec, not a step)', () => {
@@ -129,6 +129,61 @@ describe('ToolTitle', () => {
 
       expect(screen.getByText('runCommand')).toBeInTheDocument();
       expect(screen.getByText('docker-compose.yaml')).toBeInTheDocument();
+    });
+  });
+
+  describe('undescribed shell commands', () => {
+    // The mocked `t` echoes the last key segment: `builtins.shellCommand.read` → `read`.
+    it.each([
+      ['sed -n 1,80p src/a.ts 2>&1 | head -40', 'read', 'a.ts'],
+      ['rg -n "TODO" src', 'search', 'TODO in src'],
+      ["bunx vitest run --silent='passed-only' src/foo.test.ts", 'runTests', 'foo.test.ts'],
+      ['/bin/zsh -lc "cat docs/a.md"', 'read', 'a.md'],
+    ])('titles `%s` by what it does', (command, label, subject) => {
+      render(<ToolTitle apiName={'Bash'} args={{ command }} identifier={'claude-code'} />);
+
+      expect(screen.getByText(label)).toBeInTheDocument();
+      expect(screen.getByText(subject)).toBeInTheDocument();
+      expect(screen.queryByText('Bash')).toBeNull();
+    });
+
+    it('names an inline script by its language, without its code', () => {
+      const { container } = render(
+        <ToolTitle
+          apiName={'Bash'}
+          args={{ command: "cd /repo && python3 - <<'EOF'\nprint(1)\nEOF" }}
+          identifier={'claude-code'}
+        />,
+      );
+
+      expect(screen.getByText('python')).toBeInTheDocument();
+      expect(container.textContent).not.toContain('EOF');
+    });
+
+    it('keeps "<label> <command line>" for a command no action describes', () => {
+      render(
+        <ToolTitle
+          apiName={'Bash'}
+          args={{ command: 'cd /repo && bun run build' }}
+          identifier={'claude-code'}
+        />,
+      );
+
+      expect(screen.getByText('Bash')).toBeInTheDocument();
+      expect(screen.getByText('bun run build')).toBeInTheDocument();
+    });
+
+    it('leaves a described command on its description', () => {
+      render(
+        <ToolTitle
+          apiName={LocalSystemApiName.runCommand}
+          args={{ command: 'sed -n 1,80p src/a.ts', description: '查看文件开头' }}
+          identifier={LocalSystemIdentifier}
+        />,
+      );
+
+      expect(screen.getByText('查看文件开头')).toBeInTheDocument();
+      expect(screen.queryByText('read')).toBeNull();
     });
   });
 });

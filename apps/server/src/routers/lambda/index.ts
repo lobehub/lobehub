@@ -59,6 +59,7 @@ import { comfyuiRouter } from './comfyui';
 import { composioRouter } from './composio';
 import { configRouter } from './config';
 import { connectorRouter } from './connector';
+import { contactRouter } from './contact';
 import { dashboardRouter } from './dashboard';
 import { deviceRouter } from './device';
 import { deviceMetricRouter } from './deviceMetric';
@@ -75,6 +76,7 @@ import { generationRouter } from './generation';
 import { generationBatchRouter } from './generationBatch';
 import { generationTopicRouter } from './generationTopic';
 import { goalRouter } from './goal';
+import { goalShareRouter } from './goalShare';
 import { homeRouter } from './home';
 import { imageRouter } from './image';
 import { importerRouter } from './importer';
@@ -88,6 +90,7 @@ import { meetingRouter } from './meeting';
 import { messageRouter } from './message';
 import { messengerRouter } from './messenger';
 import { metricRouter } from './metric';
+import { musicRouter } from './music';
 import { notebookRouter } from './notebook';
 import { notificationRouter } from './notification';
 import { oauthAppRouter } from './oauthApp';
@@ -154,6 +157,7 @@ export const lambdaRouter = router({
   canvas: canvasRouter,
   changelog: changelogRouter,
   channel: channelRouter,
+  contact: contactRouter,
   brief: briefRouter,
   aiAgent: aiAgentRouter,
   aiChat: aiChatRouter,
@@ -182,6 +186,7 @@ export const lambdaRouter = router({
   generationBatch: generationBatchRouter,
   generationTopic: generationTopicRouter,
   goal: goalRouter,
+  goalShare: goalShareRouter,
   group: agentGroupRouter,
   healthcheck: publicProcedure.query(() => "i'm live!"),
   home: homeRouter,
@@ -199,6 +204,7 @@ export const lambdaRouter = router({
   message: messageRouter,
   messenger: messengerRouter,
   metric: metricRouter,
+  music: musicRouter,
   notebook: notebookRouter,
   notification: notificationRouter,
   oauthApp: oauthAppRouter,

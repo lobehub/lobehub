@@ -162,6 +162,59 @@ describe('AudioController.handleSpeech', () => {
     });
   });
 
+  it('passes an ElevenLabs request through with its voice, model and format', async () => {
+    const res = await speech({
+      input: 'Hello',
+      model: 'eleven_multilingual_v2',
+      provider: 'elevenlabs',
+      response_format: 'opus',
+      speed: 1.1,
+      voice: 'gOupLcAkjEnguROwi4oS',
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-LobeHub-Provider')).toBe('elevenlabs');
+    expect(synthesizeMock).toHaveBeenCalledWith({
+      input: 'Hello',
+      model: 'eleven_multilingual_v2',
+      params: { format: 'opus', speed: 1.1 },
+      provider: 'elevenlabs',
+      voice: 'gOupLcAkjEnguROwi4oS',
+    });
+  });
+
+  it('reports a missing ElevenLabs key as a readable 502, not a silent 500', async () => {
+    synthesizeMock.mockRejectedValue(
+      new TTSProviderError(
+        'ElevenLabs API Key is incorrect or empty, please check your ElevenLabs API Key and try again. Set it in Settings → AI Providers → ElevenLabs, or in the server environment.',
+        'InvalidProviderAPIKey',
+      ),
+    );
+
+    const res = await speech({ input: 'hi', model: 'eleven_v4', provider: 'elevenlabs' });
+
+    expect(res.status).toBe(502);
+    expect((await res.json()).error).toMatchObject({
+      code: 'InvalidProviderAPIKey',
+      message: expect.stringContaining('ElevenLabs API Key is incorrect or empty'),
+    });
+  });
+
+  it.each([
+    { model: 's2.1-pro', provider: 'fishaudio', voice: '0123456789abcdef0123456789abcdef' },
+    { model: 'seed-tts-2.0', provider: 'doubaospeech', voice: 'zh_male_m191_uranus_bigtts' },
+  ])('passes a $provider request through with its voice, model and format', async (request) => {
+    const res = await speech({ ...request, input: 'Hello', response_format: 'mp3', speed: 1.2 });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-LobeHub-Provider')).toBe(request.provider);
+    expect(synthesizeMock).toHaveBeenCalledWith({
+      ...request,
+      input: 'Hello',
+      params: { format: 'mp3', speed: 1.2 },
+    });
+  });
+
   it('surfaces upstream failures as 502 with a readable message', async () => {
     synthesizeMock.mockRejectedValue(
       new TTSProviderError('voice id not exist', 'ProviderBizError'),

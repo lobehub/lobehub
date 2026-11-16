@@ -12,8 +12,11 @@ import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
+import { useUserStore } from '@/store/user';
+import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { dataSelectors, useConversationStore } from '../../../store';
+import { isImageReadTool } from '../toolRenderRules';
 import Actions from './Actions';
 import Detail from './Detail';
 import Inspectors from './Inspector';
@@ -56,11 +59,16 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
   const isMcpApp = useServerConfigStore(
     (s) => serverConfigSelectors.enableMcpApps(s) && !!getMcpAppFromState(result?.state),
   );
+  // With `showImageReadPreview` off, a call that only read an image stays
+  // collapsed like any other call; the user can still click it open.
+  const showImageReads = useUserStore(userGeneralSettingsSelectors.showImageReadPreview);
+  const foldImageRead = !showImageReads && !!tool && isImageReadTool(tool);
   const isPending = intervention?.status === 'pending';
   const isReject = intervention?.status === 'rejected';
   const isAbort = intervention?.status === 'aborted';
-  const needExpand = renderDisplayControl !== 'collapsed' || isPending || isMcpApp;
-  const isAlwaysExpand = renderDisplayControl === 'alwaysExpand';
+  const needExpand =
+    (renderDisplayControl !== 'collapsed' && !foldImageRead) || isPending || isMcpApp;
+  const isAlwaysExpand = renderDisplayControl === 'alwaysExpand' && !foldImageRead;
 
   const { handleExpand, setShowDebug, showDebug, showToolRender } = useToolExpandState({
     isAlwaysExpand,

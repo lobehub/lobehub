@@ -17,6 +17,18 @@ describe('resolveAcceptanceVerdictMeta', () => {
   });
 });
 
+describe('statuses that used to fall through to the generic in-progress pill', () => {
+  it('names a delivered acceptance as waiting on the reviewer, without a spinner', () => {
+    const meta = resolveAcceptanceVerdictMeta('delivered', t);
+    expect(meta.label).toBe('acceptance.status.delivered');
+    expect(meta.spin).toBeUndefined();
+  });
+
+  it('names a failed verification instead of calling it in progress', () => {
+    expect(resolveAcceptanceVerdictMeta('failed', t).label).toBe('acceptance.status.failed');
+  });
+});
+
 describe('formatAcceptanceCountsText', () => {
   it('joins only the counts that are present', () => {
     expect(

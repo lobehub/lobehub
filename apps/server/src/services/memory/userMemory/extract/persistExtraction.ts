@@ -18,7 +18,7 @@ import { LayersEnum } from '@/types/userMemory';
 import { LAYER_LABEL_MAP } from './constants';
 import type { MemoryExtractionExecutorContext } from './context';
 import type { MemoryExtractionTaskErrorItem } from './errors';
-import { makeTaskErrorItem, MemoryExtractionAggregateError } from './errors';
+import { describeError, makeTaskErrorItem, MemoryExtractionAggregateError } from './errors';
 import type { PersistLayerResult, ResolvedMemoryServiceConfig, RuntimeBundle } from './types';
 
 export function recordJobMetrics(
@@ -53,8 +53,10 @@ export function normalizeLayerError(
   stage: 'extract' | 'persist',
   error: unknown,
 ) {
-  const message = error instanceof Error ? error.message : String(error);
-  return new Error(`[${stage}] ${LAYER_LABEL_MAP[layer]}: ${message}`);
+  // Keep the original as `cause`: serializeError records it with the task error.
+  return new Error(`[${stage}] ${LAYER_LABEL_MAP[layer]}: ${describeError(error)}`, {
+    cause: error,
+  });
 }
 
 export async function persistExtraction(

@@ -224,13 +224,35 @@ export const channelRouter = router({
    * direct Channels. Null when the Agent cannot answer in a Channel (no reachable device).
    */
   openDirect: channelProcedure
-    .input(z.object({ agentId: z.string().min(1), localDeviceId: z.string().min(1).optional() }))
+    .input(z.object({ agentId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
-      const access = await ctx.channelService.openDirect(input.agentId, {
-        localDeviceId: input.localDeviceId,
-      });
+      const access = await ctx.channelService.openDirect(input.agentId);
       return { data: access?.channel.id ?? null, success: true };
     }),
+  /** The direct conversation with another person's Agent, from its share id, handle or link. */
+  openShared: channelProcedure
+    .input(z.object({ share: z.string().trim().min(1).max(512) }))
+    .mutation(async ({ ctx, input }) => {
+      const access = await ctx.channelService.openShared(input.share);
+      return { data: access?.channel.id ?? null, success: true };
+    }),
+  /** The personal conversation with a contact; both people must still be contacts. */
+  openPeer: channelProcedure
+    .input(z.object({ userId: z.string().min(1).max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      const access = await ctx.channelService.openPeer(input.userId);
+      return { data: access.channel.id, success: true };
+    }),
+  /** Public Channels in the active workspace the caller can join. */
+  listJoinable: channelProcedure
+    .input(z.object({ search: z.string().max(100).optional() }).optional())
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.channelService.repository.listJoinable(input?.search),
+    })),
+  join: channelProcedure.input(z.object({ channelId })).mutation(async ({ ctx, input }) => {
+    const { channel } = await ctx.channelService.join(input.channelId);
+    return { data: channel, success: true };
+  }),
   list: channelProcedure.query(async ({ ctx }) => ({
     data: await ctx.channelService.repository.list(),
     success: true,
@@ -251,10 +273,22 @@ export const channelRouter = router({
       data: await ctx.channelService.rename(input.channelId, input.title),
       success: true,
     })),
+  updateVisibility: channelProcedure
+    .input(z.object({ channelId, visibility: z.enum(['private', 'public']) }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.updateVisibility(input.channelId, input.visibility),
+      success: true,
+    })),
   removeThread: channelProcedure
     .input(z.object({ channelId, threadId }))
     .mutation(async ({ ctx, input }) => {
       await ctx.channelService.removeThread(input.channelId, input.threadId);
+      return { success: true };
+    }),
+  retryJob: channelProcedure
+    .input(z.object({ channelId, jobId: z.uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.retryJob(input.channelId, input.jobId);
       return { success: true };
     }),
   retryRouting: channelProcedure

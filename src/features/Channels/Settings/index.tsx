@@ -19,6 +19,7 @@ import { MembersSection } from './MembersSection';
 import { ReplySection } from './ReplySection';
 import { settingsStyles } from './styles';
 import { channelSettingsTabs, resolveChannelSettingsTab } from './tabs';
+import { VisibilitySection } from './VisibilitySection';
 
 /** Everything an admin manages about a group Channel: its conversation stays uncluttered. */
 function EnabledChannelSettings() {
@@ -89,6 +90,7 @@ function EnabledChannelSettings() {
               )}
               <div hidden={tab !== 'advanced'}>
                 <Flexbox gap={24}>
+                  {channel.workspaceId && <VisibilitySection channel={channel} />}
                   <DangerSection channel={channel} />
                 </Flexbox>
               </div>

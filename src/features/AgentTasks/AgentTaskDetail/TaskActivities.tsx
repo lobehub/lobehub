@@ -32,6 +32,7 @@ import { Trans, useTranslation } from 'react-i18next';
 
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import type { BriefItem } from '@/features/DailyBrief/types';
+import MemberProfilePopup from '@/features/MemberProfileCard/MemberProfilePopup';
 import { useActivityTime } from '@/hooks/useActivityTime';
 import { useTaskStore } from '@/store/task';
 import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selectors';
@@ -39,6 +40,7 @@ import { taskActivitySelectors, taskDetailSelectors } from '@/store/task/selecto
 import { PRIORITY_META } from '../features/TaskPriorityTag';
 import AccordionArrowIcon from '../shared/AccordionArrowIcon';
 import { styles } from '../shared/style';
+import ActivityAuthorProfile from './ActivityAuthorProfile';
 import { resolveAssignmentActivityCopy } from './assignmentActivityCopy';
 import CommentCard from './CommentCard';
 import CommentInput from './CommentInput';
@@ -130,7 +132,13 @@ const ActivityAuthor = memo<{
     : fallbackName;
 
   if (!name) return null;
-  if (!isAgent || !author?.id) return <span>{name}</span>;
+  if (!author?.id) return <span>{name}</span>;
+  if (!isAgent)
+    return (
+      <MemberProfilePopup fallback={<span>{name}</span>} userId={author.id}>
+        <span className={styles.profileAuthorName}>{name}</span>
+      </MemberProfilePopup>
+    );
 
   return (
     <AgentProfilePopup
@@ -138,7 +146,7 @@ const ActivityAuthor = memo<{
       agentId={author.id}
       trigger={'hover'}
     >
-      <span className={styles.agentAuthorName}>{name}</span>
+      <span className={styles.profileAuthorName}>{name}</span>
     </AgentProfilePopup>
   );
 });
@@ -182,7 +190,9 @@ const RowMark = ({
   icon: LucideIcon;
 }) =>
   author?.avatar ? (
-    <Avatar avatar={author.avatar} size={16} />
+    <ActivityAuthorProfile author={author}>
+      <Avatar avatar={author.avatar} size={16} />
+    </ActivityAuthorProfile>
   ) : (
     <Icon color={cssVar.colorTextTertiary} icon={icon} size={14} />
   );
@@ -576,7 +586,7 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
         gap={8}
         paddingBlock={4}
         paddingInline={8}
-        style={{ cursor: 'pointer', width: 'fit-content' }}
+        style={{ cursor: 'pointer', marginInlineStart: -8, width: 'fit-content' }}
         variant="borderless"
         onClick={() => setIsExpanded((prev) => !prev)}
       >
@@ -587,7 +597,7 @@ const TaskActivities = memo<TaskActivitiesProps>(({ variant = 'activity' }) => {
         <AccordionArrowIcon isOpen={isExpanded} style={{ color: cssVar.colorTextDescription }} />
       </Block>
       <Collapsible open={isExpanded}>
-        <Flexbox gap={12} paddingBlock={4} paddingInline={12}>
+        <Flexbox gap={12} paddingBlock={4}>
           {commentInput}
           {rows}
           {loadMoreFooter}

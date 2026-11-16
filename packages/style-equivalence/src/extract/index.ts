@@ -1,11 +1,17 @@
 import ts from 'typescript';
 
 import { aliasDeclaration, aliasOf, constInitializer } from './aliases';
-import { booleanAttribute, isStateAttribute } from './attributes';
+import {
+  booleanAttribute,
+  evaluableAttribute,
+  isStateAttribute,
+  spreadAttributes,
+} from './attributes';
 import { collectChildren, literalOf } from './children';
+import { componentFields, componentImport } from './components';
 import { localCondition, renderGuards } from './constraints';
-import { parseRules } from './css';
 import { applicationIn, componentOfStatement, forwardsOf } from './forward';
+import { GLOBALS } from './globals';
 import { globalStyleRules } from './globalStyles';
 import {
   declaredLocally,
@@ -15,8 +21,10 @@ import {
   usageKinds,
   valueIdentifierNodes,
 } from './identifiers';
+import { ownerOf } from './owner';
 import { applyRenderedStyle, renderedStyle, slotStylesOf } from './renderedStyle';
-import { classifyRules, classNamesIn, foreignClassNames } from './selectors';
+import { collectRules, memberOf } from './rules';
+import { classifyRules, foreignClassNames } from './selectors';
 import { collectTables } from './tables';
 import { collectTopLevel } from './topLevel';
 import type {
@@ -25,39 +33,14 @@ import type {
   LiteralValue,
   StyleBinding,
   StyleElement,
-  StyleRule,
   VariableKind,
 } from './types';
-import { stylexUnsupported } from './unsupported';
+import { localWrappers, wrapperFields } from './wrappers';
 
+export { GLOBALS } from './globals';
 export type * from './types';
 
-export const GLOBALS = new Set([
-  'Array',
-  'Boolean',
-  'JSON',
-  'Math',
-  'Number',
-  'Object',
-  'String',
-  'console',
-  'document',
-  'false',
-  'null',
-  'true',
-  'undefined',
-  'window',
-]);
-
 const CLASS_PROPS = new Set(['...', 'className', 'classNames']);
-
-const ownerOf = (statement: ts.Statement, ast: ts.SourceFile) => {
-  if (ts.isVariableStatement(statement))
-    return statement.declarationList.declarations.map((d) => d.name.getText(ast)).join(',');
-  if (ts.isFunctionDeclaration(statement)) return statement.name?.text ?? 'default';
-  if (ts.isExportAssignment(statement)) return 'default';
-  return `statement@${ast.getLineAndCharacterOfPosition(statement.getStart(ast)).line + 1}`;
-};
 
 export const extractFile = (
   code: string,
@@ -72,18 +55,8 @@ export const extractFile = (
   const layout = new Set(options.layoutComponents);
   const isReal = (tag: string) => {
     const component = options.realComponents?.[tag];
-    const statement = top.importOf.get(tag);
-    if (!component || !statement || !ts.isStringLiteral(statement.moduleSpecifier)) return false;
-    if (statement.moduleSpecifier.text !== component.source) return false;
-    const named = statement.importClause?.namedBindings;
-    return (
-      !!named &&
-      ts.isNamedImports(named) &&
-      named.elements.some(
-        (element) =>
-          element.name.text === tag && (element.propertyName ?? element.name).text === tag,
-      )
-    );
+    const found = componentImport(tag, top.importOf);
+    return !!component && found?.source === component.source && found.imported === tag;
   };
   const derived = new Map<string, string>();
   const isStyleName = (name: string) => top.styleSymbols.has(name) || markers.has(name);
@@ -106,6 +79,12 @@ export const extractFile = (
     const visit = (current: ts.Node) => {
       if (isJsxNode(current)) return;
       if (
+        ts.isIdentifier(current) &&
+        top.cssConstants.has(current.text) &&
+        !(ts.isPropertyAccessExpression(current.parent) && current.parent.name === current)
+      )
+        slots.add(`${current.text}.${current.text}`);
+      if (
         ts.isPropertyAccessExpression(current) &&
         ts.isIdentifier(current.expression) &&
         (top.styleSymbols.has(current.expression.text) ||
@@ -117,78 +96,17 @@ export const extractFile = (
       ts.forEachChild(current, visit);
     };
     if (!isJsxNode(node)) ts.forEachChild(node, visit);
-    if (ts.isPropertyAccessExpression(node)) visit(node);
+    if (ts.isPropertyAccessExpression(node) || ts.isIdentifier(node)) visit(node);
     return slots;
   };
 
-  const gaps: string[] = [];
-  const rules: StyleRule[] = [];
-  const slotProperties: Record<string, string[]> = {};
-  const slotConditions: Record<string, string[]> = {};
-  const unsupported = stylexUnsupported(top.styleFactories);
-  for (const [symbol, factory] of top.styleFactories)
-    for (const adapter of options.adapters)
-      if (adapter.recognizeFactory(factory)) {
-        rules.push(...(adapter.rulesOf?.(symbol, factory) ?? []));
-        Object.assign(slotProperties, adapter.propertiesOf?.(symbol, factory));
-        Object.assign(slotConditions, adapter.conditionsOf?.(symbol, factory));
-      }
-  const globalClasses = new Set<string>();
-  for (const { binding, source } of top.stylesheets) {
-    const css = options.readStylesheet?.(file, source);
-    if (css === undefined) {
-      gaps.push(`STYLESHEET_UNREADABLE:${source}`);
-      continue;
-    }
-    const parsed = parseRules(css);
-    if (parsed.error) gaps.push(`STYLESHEET_UNPARSEABLE:${source}`);
-    const classes = new Set(parsed.rules.flatMap((rule) => classNamesIn(rule.selector)));
-    const owned =
-      binding.kind === 'module'
-        ? Object.fromEntries([...classes].map((name) => [name, `${binding.symbol}.${name}`]))
-        : {};
-    if (binding.kind === 'global') classes.forEach((name) => globalClasses.add(name));
-    for (const rule of parsed.rules) rules.push({ ...rule, owned, stylesheet: source });
-  }
-  for (const [local, imported] of top.importedClasses) {
-    if (!imported.factories.size && !imported.tokens.some((token) => globalClasses.has(token)))
-      continue;
-    derived.set(local, imported.expansion);
-    for (const [symbol, factory] of imported.factories) {
-      top.styleSymbols.add(symbol);
-      for (const adapter of options.adapters)
-        if (adapter.recognizeFactory(factory)) {
-          rules.push(...(adapter.rulesOf?.(symbol, factory) ?? []));
-          Object.assign(slotProperties, adapter.propertiesOf?.(symbol, factory));
-          Object.assign(slotConditions, adapter.conditionsOf?.(symbol, factory));
-        }
-    }
-  }
-  for (const statement of ast.statements)
-    if (ts.isVariableStatement(statement) && statement.declarationList.flags & ts.NodeFlags.Const)
-      for (const declaration of statement.declarationList.declarations) {
-        const value = declaration.initializer;
-        if (!ts.isIdentifier(declaration.name) || !value || !ts.isStringLiteralLike(value))
-          continue;
-        if (value.text.split(/\s+/).some((token) => globalClasses.has(token)))
-          derived.set(declaration.name.text, JSON.stringify(value.text));
-      }
-  const memberOf = (node: ts.Identifier, expansion: string) => {
-    if (!ts.isPropertyAccessExpression(node.parent) || node.parent.expression !== node) return;
-    const parsed = ts.createSourceFile('x.ts', `(${expansion});`, ts.ScriptTarget.Latest, true);
-    const [statement] = parsed.statements;
-    let value = statement && ts.isExpressionStatement(statement) ? statement.expression : undefined;
-    while (value && ts.isParenthesizedExpression(value)) value = value.expression;
-    if (!value || !ts.isObjectLiteralExpression(value)) return;
-    const name = node.parent.name.text;
-    const property = value.properties.find(
-      (item): item is ts.PropertyAssignment =>
-        ts.isPropertyAssignment(item) &&
-        (ts.isIdentifier(item.name) || ts.isStringLiteral(item.name)) &&
-        item.name.text === name,
-    );
-    return property?.initializer.getText(parsed);
-  };
+  const { gaps, globalClasses, rules, slotConditions, slotProperties, unsupported } = collectRules(
+    ast,
+    file,
+    top,
+    options,
+    derived,
+  );
   const expandedOf = (expression: ts.Expression) => {
     const start = expression.getStart(ast);
     let text = expression.getText(ast);
@@ -245,6 +163,8 @@ export const extractFile = (
       const literalProps: Record<string, LiteralValue> = {};
       const attributes: Record<string, string> = {};
       const attributeNames: ts.Identifier[] = [];
+      const evaluated: Array<{ expression: ts.Expression; values: Record<string, string> }> = [];
+      let modeledSpreads = 0;
       let iconNode: ts.Node | undefined;
       const slots = new Set<string>();
       const expressions: ts.Expression[] = [];
@@ -282,6 +202,12 @@ export const extractFile = (
         if (ts.isJsxSpreadAttribute(attribute)) {
           const spread = styledConst(attribute.expression, '...');
           if (!referencesStyle(spread, '...')) {
+            const values = spreadAttributes(attribute.expression, ast);
+            if (values) {
+              evaluated.push({ expression: attribute.expression, values });
+              modeledSpreads++;
+              continue;
+            }
             lastForeign = position;
             continue;
           }
@@ -337,6 +263,8 @@ export const extractFile = (
         ) {
           attributes[name] = expression.text;
           attributeNames.push(expression);
+        } else if (isStateAttribute(name) && evaluableAttribute(expression)) {
+          evaluated.push({ expression, values: { [name]: expression.getText(ast) } });
         } else if (
           name === 'style' &&
           !(ts.isIdentifier(expression) && GLOBALS.has(expression.text))
@@ -381,6 +309,23 @@ export const extractFile = (
             names.add(node.text);
             kinds.set(node.text, [...(kinds.get(node.text) ?? []), 'boolean']);
           }
+        for (const { expression, values } of evaluated) {
+          const own = valueIdentifierNodes(expression, { skipJsx: true }).filter(
+            (node) =>
+              !GLOBALS.has(node.text) &&
+              (declaredLocally(node) ||
+                (!top.styleSymbols.has(node.text) && !top.require(node.text))),
+          );
+          const found = usageKinds(expression, new Set(own.map((node) => node.text)));
+          if ([...found.values()].flat().includes('unknown')) continue;
+          Object.assign(attributes, values);
+          for (const node of own) {
+            names.add(node.text);
+            const condition = localCondition(node);
+            if (condition) derivedConditions[node.text] = condition;
+          }
+          for (const [name, list] of found) kinds.set(name, [...(kinds.get(name) ?? []), ...list]);
+        }
         const real = isReal(tag);
         const guards = renderGuards(node);
         if (layout.has(tag) || real) top.require(tag);
@@ -400,6 +345,7 @@ export const extractFile = (
         classTokens.set(id, tokens);
         const element: StyleElement = {
           bindings,
+          ...componentFields(tag, opening, ast, top.importOf),
           flags: [],
           id,
           literalProps,
@@ -415,7 +361,8 @@ export const extractFile = (
             : {}),
           slots: [...slots].sort(),
           ...(styleExpr ? { styleExpr } : {}),
-          ...(opening.attributes.properties.filter(ts.isJsxSpreadAttribute).length >
+          ...(opening.attributes.properties.filter(ts.isJsxSpreadAttribute).length -
+            modeledSpreads >
           bindings.filter((binding) => binding.spread).length
             ? { foreignSpread: true }
             : {}),
@@ -451,11 +398,23 @@ export const extractFile = (
     visit(statement, undefined);
   }
 
-  const plain = collectChildren(styled, ast, (tag) => {
-    const real = isReal(tag);
-    if (layout.has(tag) || real) top.require(tag);
-    return real;
-  });
+  const wrappers = localWrappers(ast, styled);
+  const plain = collectChildren(
+    styled,
+    ast,
+    (tag) => {
+      const real = isReal(tag);
+      if (layout.has(tag) || real) top.require(tag);
+      return real;
+    },
+    (tag, opening) => {
+      const wrapped = wrappers.get(tag);
+      if (wrapped) top.require(tag);
+      return wrapped
+        ? wrapperFields(wrapped, opening, ast)
+        : componentFields(tag, opening, ast, top.importOf);
+    },
+  );
 
   const outsideReferences: string[] = [];
   for (const statement of ast.statements) {
@@ -515,6 +474,7 @@ export const extractFile = (
     ...(globalRules.length ? { globalRules } : {}),
     ...(literalClasses.size ? { literalClasses: [...literalClasses].sort() } : {}),
     ...(Object.keys(unsupported).length ? { unsupported } : {}),
+    moduleNames: top.moduleNames(),
     outsideReferences,
     ...(plain.length ? { plain } : {}),
     prelude: top.prelude(),

@@ -10,6 +10,7 @@ import { initialConnectorState } from './initialState';
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
     connector: {
+      create: { mutate: vi.fn() },
       list: { query: vi.fn() },
       listAgentBound: { query: vi.fn() },
       listByAgent: { query: vi.fn() },
@@ -122,5 +123,42 @@ describe('createConnectorSlice — scope guard', () => {
 
     expect(useToolStore.getState().agentConnectors['agt_1']).toBeUndefined();
     expect(useToolStore.getState().agentConnectorsInit['agt_1']).toBeUndefined();
+  });
+});
+
+describe('createConnector', () => {
+  beforeEach(() => {
+    useToolStore.setState({ ...initialConnectorState });
+    vi.spyOn(cacheScope, 'get').mockReturnValue('user-a:personal');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  // An install rolls back by the returned id: a create that rejected after the
+  // server wrote the row would leave the row it replaced unrecoverable
+  it('returns the written row even when the list refresh after it fails', async () => {
+    vi.mocked(lambdaClient.connector.create.mutate).mockResolvedValue({
+      id: 'conn-1',
+      isNew: false,
+    } as never);
+    listQuery.mockRejectedValue(new Error('network down'));
+
+    await expect(
+      useToolStore.getState().createConnector({ identifier: 'mcp', name: 'MCP' } as never),
+    ).resolves.toEqual({ id: 'conn-1', isNew: false });
+    expect(useToolStore.getState().connectorCreating).toBe(false);
+  });
+
+  it('still fails a create the server refused', async () => {
+    vi.mocked(lambdaClient.connector.create.mutate).mockRejectedValue(new Error('conflict'));
+
+    await expect(
+      useToolStore.getState().createConnector({ identifier: 'mcp', name: 'MCP' } as never),
+    ).rejects.toThrow('conflict');
+    expect(listQuery).not.toHaveBeenCalled();
   });
 });

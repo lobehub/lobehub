@@ -60,7 +60,8 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
         },
         datasetId,
         evalConfig:
-          values.evalMode === 'llm-rubric' && values.evalConfig?.judgePrompt
+          (values.evalMode === 'llm-rubric' || values.evalMode === 'rule-checklist') &&
+          values.evalConfig?.judgePrompt
             ? values.evalConfig
             : undefined,
         evalMode: values.evalMode || undefined,
@@ -125,10 +126,11 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
             { label: t('evalMode.equals'), value: 'equals' },
             { label: t('evalMode.contains'), value: 'contains' },
             { label: t('evalMode.llm-rubric'), value: 'llm-rubric' },
+            { label: t('evalMode.rule-checklist'), value: 'rule-checklist' },
           ]}
         />
       </Form.Field>
-      {evalModeValue === 'llm-rubric' && (
+      {(evalModeValue === 'llm-rubric' || evalModeValue === 'rule-checklist') && (
         <Form.Field label={t('evalMode.prompt.label')} name="evalConfig.judgePrompt">
           <TextArea
             autoSize={{ maxRows: 8, minRows: 3 }}

@@ -9,12 +9,21 @@ interface MockOrgCredRow {
 }
 
 const {
+  mockCredsInject,
+  mockMarketSandboxProvider,
+  mockResolveSandboxSessionConfig,
   mockOrgCredsList,
   mockPersonalCredsList,
   mockPersonalCredsShare,
   mockPersonalCredsPublish,
   mockPersonalCredsUnshare,
 } = vi.hoisted(() => ({
+  mockCredsInject: vi.fn(async () => ({ credentials: { env: {} }, success: true })),
+  mockMarketSandboxProvider: vi.fn(function (this: any, options: any) {
+    this.options = options;
+    this.callTool = vi.fn(async () => ({ result: {}, success: true }));
+  }),
+  mockResolveSandboxSessionConfig: vi.fn(),
   mockOrgCredsList: vi.fn(async (): Promise<{ data: MockOrgCredRow[] }> => ({
     data: [{ id: 1, key: 'ORG_SECRET' }],
   })),
@@ -69,6 +78,7 @@ vi.mock('@/server/services/market', () => ({
     return {
       market: {
         creds: {
+          inject: mockCredsInject,
           list: mockPersonalCredsList,
           publish: mockPersonalCredsPublish,
           share: mockPersonalCredsShare,
@@ -82,6 +92,12 @@ vi.mock('@/server/services/market', () => ({
       },
     };
   }),
+}));
+
+vi.mock('@/server/services/sandbox', () => ({
+  getSandboxProviderKind: () => 'market',
+  MarketSandboxProvider: mockMarketSandboxProvider,
+  resolveSandboxSessionConfig: mockResolveSandboxSessionConfig,
 }));
 
 describe('credsRouter is always personal-scoped', () => {
@@ -294,5 +310,99 @@ describe('credsRouter share/publish/unshare', () => {
       code: 'FORBIDDEN',
       message: 'Not a member of this organization',
     });
+  });
+});
+
+describe('credsRouter inject routes to the topic sandbox', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // Regression: this route forwarded only keys/sandbox/topicId/userId and
+  // signed no storage claim, so the client-executor path always injected into
+  // a throwaway sandbox, never the topic's persistent environment or drive.
+  it('resolves mode, instance and claim server-side and signs the claim', async () => {
+    const { MarketService } = await import('@/server/services/market');
+    mockResolveSandboxSessionConfig.mockResolvedValue({
+      claim: { key: 'u-user-1' },
+      drive: 'personal',
+      environment: 'inst-1',
+      mode: 'persistent',
+    });
+    const { credsRouter } = await import('./creds');
+
+    const caller = credsRouter.createCaller({ userId: 'user-1' } as any);
+    await caller.inject({ keys: ['FOO'], topicId: 'topic-1', userId: 'someone-else' });
+
+    expect(mockResolveSandboxSessionConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ topicId: 'topic-1', userId: 'user-1' }),
+    );
+    expect(MarketService).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        userInfo: expect.objectContaining({
+          sandboxStorage: { key: 'u-user-1' },
+          userId: 'user-1',
+        }),
+      }),
+    );
+    expect(mockCredsInject).toHaveBeenCalledWith(
+      expect.objectContaining({
+        keys: ['FOO'],
+        sandbox: true,
+        sandboxInstanceId: 'inst-1',
+        sandboxMode: 'persistent',
+        topicId: 'topic-1',
+        userId: 'user-1',
+      }),
+    );
+  });
+
+  // Market rewrites ~/.creds/env on every inject, so the route merges the
+  // listing afterwards. That merge must run in the sandbox the credentials
+  // were just written into: without the placement and the signed claim it
+  // would open (or replace) a throwaway sandbox instead.
+  it('merges ~/.creds/env in the same sandbox the credentials were injected into', async () => {
+    const { MarketService } = await import('@/server/services/market');
+    mockResolveSandboxSessionConfig.mockResolvedValue({
+      claim: { key: 'u-user-1' },
+      cwd: '/workspace/project',
+      drive: 'personal',
+      environment: 'inst-1',
+      mode: 'persistent',
+      workingDir: '/home/user/project',
+    });
+    const { credsRouter } = await import('./creds');
+
+    const caller = credsRouter.createCaller({ userId: 'user-1' } as any);
+    await caller.inject({ keys: ['FOO'], topicId: 'topic-1' });
+
+    expect(mockMarketSandboxProvider).toHaveBeenCalledTimes(1);
+    const { options, callTool } = mockMarketSandboxProvider.mock.instances[0] as any;
+    expect(options).toMatchObject({
+      sandboxCwd: '/workspace/project',
+      sandboxInstanceId: 'inst-1',
+      sandboxMode: 'persistent',
+      sandboxWorkingDir: '/home/user/project',
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+    // The claim-signed service, not the request's unsigned one.
+    expect(options.marketService).toBe(vi.mocked(MarketService).mock.results.at(-1)?.value);
+    expect(callTool).toHaveBeenCalledWith('runCommand', {
+      command: expect.stringContaining('~/.creds/.env.ledger'),
+    });
+  });
+
+  it('skips sandbox resolution when not injecting into a sandbox', async () => {
+    const { credsRouter } = await import('./creds');
+
+    const caller = credsRouter.createCaller({ userId: 'user-1' } as any);
+    await caller.inject({ keys: ['FOO'], sandbox: false, topicId: 'topic-1' });
+
+    expect(mockResolveSandboxSessionConfig).not.toHaveBeenCalled();
+    expect(mockCredsInject).toHaveBeenCalledWith(
+      expect.objectContaining({ sandbox: false, sandboxMode: undefined }),
+    );
+    expect(mockMarketSandboxProvider).not.toHaveBeenCalled();
   });
 });

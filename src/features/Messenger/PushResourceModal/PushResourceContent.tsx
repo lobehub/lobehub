@@ -18,11 +18,9 @@ import {
 } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import useSWR from 'swr';
 
 import FileIcon from '@/components/FileIcon';
-import { messengerKeys } from '@/libs/swr/keys';
-import { messengerService } from '@/services/messenger';
+import { messengerActions, messengerSelectors, useMessengerStore } from '@/store/messenger';
 import { formatSize } from '@/utils/format';
 
 import type { MessengerPlatform } from '../constants';
@@ -30,8 +28,6 @@ import { getMessengerErrorMessage, getMessengerQueuedToast } from '../i18n';
 import { MessengerPushWindowState } from '../IntegrationDetail/MessengerPushWindowState';
 import { resolveAttachmentType } from './resolveAttachmentType';
 import { resolveOversizePlan } from './resolveOversizePlan';
-
-const PUSH_WINDOW_REFRESH_INTERVAL = 5000;
 
 export interface PushResourceFile {
   fileType?: string;
@@ -74,16 +70,9 @@ export const PushResourceContent = memo<PushResourceModalProps>(
     const [oversizeImageStrategy, setOversizeImageStrategy] =
       useState<MessengerOversizeImageStrategy>(DEFAULT_OVERSIZE_IMAGE_STRATEGY);
 
-    const windowSWR = useSWR(
-      messengerKeys.pushWindow(platform, tenantId),
-      () => messengerService.getMessengerPushWindow(platform, tenantId),
-      {
-        refreshInterval: platform === 'wechat' ? PUSH_WINDOW_REFRESH_INTERVAL : 0,
-        refreshWhenHidden: false,
-        refreshWhenOffline: false,
-      },
-    );
-    const status = windowSWR.data;
+    const windowSync = messengerActions.useFetchPushWindow({ platform, tenantId });
+    // Live status, never restored from disk: undefined until the server answers.
+    const status = useMessengerStore(messengerSelectors.pushWindow({ platform, tenantId }));
 
     const canPush = status?.deliverability === 'always' ? status.linked : !!status?.windowOpen;
 
@@ -139,7 +128,7 @@ export const PushResourceContent = memo<PushResourceModalProps>(
         // and reads the name/MIME type off the owned row (a client-side
         // presigned URL can expire before the platform sender downloads it,
         // silently dropping the attachment).
-        const result = await messengerService.sendMessengerPush({
+        const result = await messengerActions.sendPush({
           attachments: [
             {
               fileId: file.id,
@@ -179,7 +168,6 @@ export const PushResourceContent = memo<PushResourceModalProps>(
             toast.warning(t('messenger.push.unavailableToast'));
           }
         }
-        await windowSWR.mutate();
       } catch (error) {
         toast.error(getMessengerErrorMessage(error, t, 'messenger.push.unavailableToast'));
       } finally {
@@ -273,10 +261,12 @@ export const PushResourceContent = memo<PushResourceModalProps>(
             )}
 
             <MessengerPushWindowState
-              error={windowSWR.error}
+              error={windowSync.error}
               name={platformName}
               status={status}
-              onRetry={() => windowSWR.mutate()}
+              onRetry={() => {
+                void windowSync.revalidate();
+              }}
             />
 
             {!!status?.queued && (

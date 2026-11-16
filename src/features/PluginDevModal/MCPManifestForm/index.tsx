@@ -1,5 +1,15 @@
-import { type LobeToolCustomPlugin } from '@lobechat/types';
-import { Alert, Button, Divider, Flexbox, Input, InputPassword, RadioGroup } from '@lobehub/ui';
+import { type LobeToolCustomPlugin, type McpConnectVia } from '@lobechat/types';
+import { isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
+import {
+  Alert,
+  Button,
+  Divider,
+  Flexbox,
+  Input,
+  InputPassword,
+  RadioGroup,
+  Text,
+} from '@lobehub/ui';
 import { type FieldPath, Form, type FormInstance, useWatch } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { useEffect, useState } from 'react';
@@ -14,6 +24,7 @@ import { mcpStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
 import { type McpConnectionParams, type MCPErrorInfoMetadata } from '@/types/plugins';
 
 import ArgsInput from './ArgsInput';
+import BoundDeviceSelect from './BoundDeviceSelect';
 import CollapsibleSection from './CollapsibleSection';
 import MCPTypeSelect from './MCPTypeSelect';
 import QuickImportSection from './QuickImportSection';
@@ -24,18 +35,36 @@ interface MCPManifestFormProps {
    * OAuth flow is backed by the connector subsystem, so it must NOT show up for
    * the plain custom-plugin DevModal callers (editing plugins, agent tools, …).
    */
+  /**
+   * Let a server that runs on the user's device be bound to one device. Only
+   * the custom-connector entry sets this: the binding is stored on the
+   * connector (`metadata.boundDeviceId`), which plain custom plugins don't have.
+   */
+  enableDeviceBinding?: boolean;
   enableOAuth?: boolean;
   form: FormInstance<LobeToolCustomPlugin>;
   isEditMode?: boolean;
+  /** What saving the OAuth settings will do to the connected accounts. */
+  oauthNotice?: OAuthNotice;
   /**
    * Run the connector OAuth authorize flow. Called instead of the token-less
    * manifest test when the OAuth auth type is selected (testing an OAuth server
-   * without authorizing first only ever 401s).
+   * without authorizing first only ever 401s). Omitted while saving would not
+   * authorize (an edit that keeps the connected accounts), which hides the
+   * button: there is nothing to authorize or test.
    */
   onAuthorizeOAuth?: () => void;
 }
 
+export interface OAuthNotice {
+  text: string;
+  /** `warning` when saving removes accounts; `info` when it keeps them. */
+  type: 'info' | 'warning';
+}
+
 const HTTP_URL_KEY = 'customParams.mcp.url';
+const CONNECT_VIA = 'customParams.mcp.connectVia';
+const BOUND_DEVICE = 'customParams.mcp.boundDeviceId';
 const STDIO_COMMAND = 'customParams.mcp.command';
 const STDIO_ARGS = 'customParams.mcp.args';
 const STDIO_ENV = 'customParams.mcp.env';
@@ -49,15 +78,42 @@ const AUTH_CLIENT_SECRET = 'customParams.mcp.auth.clientSecret';
 // Headers-related constants
 const HEADERS = 'customParams.mcp.headers';
 
+/** Unset reads as `auto`, the behavior a server without the choice always had. */
+const ConnectViaRadio = ({
+  onChange,
+  options,
+  value,
+}: {
+  onChange?: (value: McpConnectVia) => void;
+  options: { label: string; value: McpConnectVia }[];
+  value?: McpConnectVia;
+}) => (
+  <RadioGroup
+    options={options}
+    style={{ width: '100%' }}
+    value={value ?? 'auto'}
+    onChange={(next) => onChange?.(next as McpConnectVia)}
+  />
+);
+
 const MCPManifestForm = ({
   form,
   isEditMode,
+  enableDeviceBinding,
   enableOAuth,
   onAuthorizeOAuth,
+  oauthNotice,
 }: MCPManifestFormProps) => {
   const { t } = useTranslation('plugin');
   const mcpType = useWatch(form, MCP_TYPE);
   const authType = useWatch(form, AUTH_TYPE);
+  const connectVia = useWatch(form, CONNECT_VIA);
+  const httpUrl = useWatch(form, HTTP_URL_KEY);
+  // Only a server that runs on the user's device can be bound to one
+  const showDeviceBinding =
+    enableDeviceBinding &&
+    (mcpType === 'stdio' ||
+      (mcpType === 'http' && isDeviceOnlyMcpEndpoint({ connectVia, type: 'http', url: httpUrl })));
   // For OAuth servers there is no token to test with — "testing" the connection
   // means running the authorize flow instead.
   const isOAuth = enableOAuth && mcpType === 'http' && authType === 'oauth2';
@@ -219,6 +275,22 @@ const MCPManifestForm = ({
                 <Input placeholder="https://mcp.higress.ai/mcp-github/xxxxx" />
               </Form.Field>
               <Form.Field
+                label={t('dev.mcp.connectVia.label')}
+                name={CONNECT_VIA}
+                desc={
+                  connectVia === 'device'
+                    ? t('dev.mcp.connectVia.deviceDesc')
+                    : t('dev.mcp.connectVia.autoDesc')
+                }
+              >
+                <ConnectViaRadio
+                  options={[
+                    { label: t('dev.mcp.connectVia.auto'), value: 'auto' },
+                    { label: t('dev.mcp.connectVia.device'), value: 'device' },
+                  ]}
+                />
+              </Form.Field>
+              <Form.Field
                 desc={t('dev.mcp.auth.desc')}
                 label={t('dev.mcp.auth.label')}
                 name={AUTH_TYPE}
@@ -340,17 +412,37 @@ const MCPManifestForm = ({
               </Form.Field>
             </>
           )}
-          <Form.Field label={t('dev.mcp.testConnectionTip')} layout={'horizontal'}>
-            <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'}>
-              <Button
-                loading={isTesting}
-                type={!!mcpType ? 'primary' : undefined}
-                onClick={isOAuth ? onAuthorizeOAuth : handleTestConnection}
-              >
-                {isOAuth ? t('dev.mcp.auth.oauth.authorize') : t('dev.mcp.testConnection')}
-              </Button>
-            </Flexbox>
-          </Form.Field>
+          {showDeviceBinding && (
+            <Form.Field
+              desc={t('dev.mcp.boundDevice.desc')}
+              label={t('dev.mcp.boundDevice.label')}
+              name={BOUND_DEVICE}
+            >
+              <BoundDeviceSelect />
+            </Form.Field>
+          )}
+          {isOAuth &&
+            oauthNotice &&
+            (oauthNotice.type === 'warning' ? (
+              <Alert showIcon title={oauthNotice.text} type={'warning'} />
+            ) : (
+              <Text fontSize={12} type={'secondary'}>
+                {oauthNotice.text}
+              </Text>
+            ))}
+          {(!isOAuth || onAuthorizeOAuth) && (
+            <Form.Field label={t('dev.mcp.testConnectionTip')} layout={'horizontal'}>
+              <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'}>
+                <Button
+                  loading={isTesting}
+                  type={!!mcpType ? 'primary' : undefined}
+                  onClick={isOAuth ? onAuthorizeOAuth : handleTestConnection}
+                >
+                  {isOAuth ? t('dev.mcp.auth.oauth.authorize') : t('dev.mcp.testConnection')}
+                </Button>
+              </Flexbox>
+            </Form.Field>
+          )}
           {(connectionError || testState.error) && (
             <Alert
               closable

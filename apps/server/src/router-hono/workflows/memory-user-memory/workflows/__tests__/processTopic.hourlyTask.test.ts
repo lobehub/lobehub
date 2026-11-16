@@ -1,4 +1,5 @@
 import { LayersEnum, MemorySourceType } from '@lobechat/types';
+import { WorkflowAbort } from '@upstash/workflow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createStepRunner } from '@/server/workflows/testing/stepContext';
@@ -114,24 +115,31 @@ describe('processTopicHandler hourly task behavior', () => {
     expect(mocks.extractTopic).toHaveBeenCalledTimes(2);
   });
 
-  it('does not extract for a banned user, including runs queued before the ban', async () => {
+  it('cancels a banned user untracked run before any step instead of returning', async () => {
     mocks.isBanned.mockResolvedValue(true);
-    const context = createContext({
-      baseUrl: 'https://app.example.com',
-      sources: [MemorySourceType.ChatTopic],
-      topicIds: ['t1'],
-      userIds: ['u1'],
-    });
+    // Upstash's request authentication and its real context both surface cancel() as a
+    // WorkflowAbort; a handler that returns instead fails authentication with a 400.
+    const cancel = vi.fn().mockRejectedValue(new WorkflowAbort('cancel', undefined, true));
+    const context = {
+      ...createContext({
+        baseUrl: 'https://app.example.com',
+        sources: [MemorySourceType.ChatTopic],
+        topicIds: ['t1'],
+        userIds: ['u1'],
+      }),
+      cancel,
+    };
 
-    await expect(processTopicHandler(context as never)).resolves.toMatchObject({ skipped: true });
+    await expect(processTopicHandler(context as never)).rejects.toBeInstanceOf(WorkflowAbort);
 
+    expect(cancel).toHaveBeenCalledTimes(1);
     // Ends before any persisted step, so nothing is queued on the shared flow-control key. The
     // startup helpers are mocked, so assert they were never reached rather than `context.run`.
     expect(ensureWorkflowStarted).not.toHaveBeenCalled();
     expect(checkGuard).not.toHaveBeenCalled();
     expect(context.run).not.toHaveBeenCalled();
-    expect(mocks.spanEnd).toHaveBeenCalledTimes(1);
     expect(mocks.extractTopic).not.toHaveBeenCalled();
+    expect(mocks.spanEnd).toHaveBeenCalledTimes(1);
   });
 
   it('still reports progress for a banned user tracked task, without extracting', async () => {

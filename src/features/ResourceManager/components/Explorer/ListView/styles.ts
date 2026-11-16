@@ -21,6 +21,20 @@ export const styles = createStaticStyles(({ css }) => ({
     padding-block: 6px;
     padding-inline: 0 24px;
   `,
+  headerItemSortable: css`
+    cursor: pointer;
+    user-select: none;
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+
+    &:focus-visible {
+      border-radius: ${cssVar.borderRadiusSM};
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: -2px;
+    }
+  `,
   scrollContainer: css`
     overflow: auto hidden;
     flex: 1;
