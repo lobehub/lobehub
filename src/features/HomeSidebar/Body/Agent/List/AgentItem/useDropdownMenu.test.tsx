@@ -176,10 +176,7 @@ const getMenuItem = (
 };
 
 type PublicAgentMenuOptions = Partial<
-  Pick<
-    Parameters<typeof useAgentDropdownMenu>[0],
-    'id' | 'labelsEnabled' | 'pinned' | 'sidebarVisibilityEnabled' | 'visibility'
-  >
+  Pick<Parameters<typeof useAgentDropdownMenu>[0], 'id' | 'labelsEnabled' | 'pinned' | 'visibility'>
 >;
 
 const renderPublicAgentMenu = (
@@ -188,7 +185,6 @@ const renderPublicAgentMenu = (
     id = 'agent-1',
     labelsEnabled,
     pinned = false,
-    sidebarVisibilityEnabled,
     visibility = 'public',
   }: PublicAgentMenuOptions = {},
 ) =>
@@ -199,7 +195,6 @@ const renderPublicAgentMenu = (
       ...(labelsEnabled === undefined ? {} : { labelsEnabled }),
       openCreateGroupModal: vi.fn(),
       pinned,
-      ...(sidebarVisibilityEnabled === undefined ? {} : { sidebarVisibilityEnabled }),
       title: 'Public Agent',
       userId,
       visibility,
@@ -369,15 +364,6 @@ describe('useAgentDropdownMenu', () => {
     await hideItem.onClick({ domEvent: { stopPropagation: vi.fn() } } as never);
 
     expect(mocks.setSidebarItemVisible).toHaveBeenCalledWith('agent-1', false);
-  });
-
-  it('omits the hide action for lists that ignore the sidebar preference', () => {
-    const { result } = renderPublicAgentMenu('member-1', { sidebarVisibilityEnabled: false });
-
-    const keys = (result.current() ?? []).map((item) =>
-      item && typeof item === 'object' && 'key' in item ? item.key : undefined,
-    );
-    expect(keys).not.toContain('hideFromSidebar');
   });
 
   it('tells the user to wait when delete is refused by a pending history migration', async () => {

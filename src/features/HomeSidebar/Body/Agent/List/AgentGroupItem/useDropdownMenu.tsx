@@ -35,12 +35,6 @@ interface UseGroupDropdownMenuParams {
   id: string;
   memberAvatars?: { avatar?: string; background?: string }[];
   pinned: boolean;
-  /**
-   * Offer "Remove from sidebar". Off for lists that ignore the sidebar
-   * visibility preference (the `im_layout` Messages list), where it would
-   * change nothing visible. Defaults to on.
-   */
-  sidebarVisibilityEnabled?: boolean;
   title: string;
   userId?: string | null;
   visibility?: SidebarVisibility;
@@ -54,7 +48,6 @@ export const useGroupDropdownMenu = ({
   id,
   memberAvatars,
   pinned,
-  sidebarVisibilityEnabled = true,
   title,
   userId,
   visibility,
@@ -99,8 +92,7 @@ export const useGroupDropdownMenu = ({
   // groups through one membership predicate keyed by row id, so hiding a
   // group only needs the menu entry. Restore it from the Agents page.
   const { isSidebarItemVisible, setSidebarItemVisible } = useSidebarItemVisibility();
-  const isShownInSidebar =
-    sidebarVisibilityEnabled && isSidebarItemVisible({ id, type: 'group', userId });
+  const isShownInSidebar = isSidebarItemVisible({ id, type: 'group', userId });
 
   return useMemo(
     () => () =>
