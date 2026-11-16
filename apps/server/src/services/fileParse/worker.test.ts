@@ -16,6 +16,10 @@ import { FileParseError, parseDatasetInWorker, parseFileInWorker } from './index
 // a worker busy for ~1.5s, which on the request thread would stall every timer for as long.
 const here = (relative: string) => fileURLToPath(new URL(relative, import.meta.url));
 const SPARSE_ROWS = 100_000;
+// Every test here starts a thread that loads the ~22 MiB artifact; the sparse parses take ~3s on an
+// idle machine and went past vitest's 5s default on a busy CI runner, failing PRs that never touch
+// this code. The assertions are about timer progress, not speed, so the limit is a hang guard only.
+const WORKER_TEST_TIMEOUT_MS = 30_000;
 const CORRUPTED_PPTX = here(
   '../../../../../packages/file-loaders/src/loaders/pptx/fixtures/corrupted-slides.pptx',
 );
@@ -74,7 +78,7 @@ const trackTimerProgress = () => {
   };
 };
 
-describe('file parse worker artifact', () => {
+describe('file parse worker artifact', { timeout: WORKER_TEST_TIMEOUT_MS }, () => {
   it('parses a spreadsheet with a huge declared range without stalling the main thread', async () => {
     const stop = trackTimerProgress();
     let ticks = 0;
