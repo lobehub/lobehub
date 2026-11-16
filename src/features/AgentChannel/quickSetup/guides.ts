@@ -161,15 +161,16 @@ export const getSetupGuide = (
     }
     case 'wecom': {
       // Long-connection bots can only be created by an admin until the admin grants members
-      // the right, and the bot reaches only the people in its visible range. The API settings
+      // the right, and the bot reaches only the people in its visible range. Admins skip the
+      // permission step, so the admin-console link sits on the create step. The API settings
       // page generates the BotID and Secret; they are copied before the bot settings are saved
       // so the Secret is not lost. Using the bot (direct chat, internal groups) needs it
       // connected, so that step follows the save.
       return {
         guide: 'wecom',
         steps: [
-          { key: 'access', link: { href: WECOM_ADMIN_CONSOLE_URL, label: 'openAdminConsole' } },
-          { key: 'create' },
+          { key: 'access' },
+          { key: 'create', link: { href: WECOM_ADMIN_CONSOLE_URL, label: 'openAdminConsole' } },
           { key: 'connection' },
           { key: 'credentials', fields: ['applicationId', 'secret'] },
           { key: 'usage' },

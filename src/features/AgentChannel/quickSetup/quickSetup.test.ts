@@ -264,8 +264,10 @@ describe('getSetupGuide', () => {
       'credentials',
       'usage',
     ]);
-    // WeCom has an admin console, not a developer console; one link is enough for the steps.
-    expect(guide.steps[0].link).toEqual({
+    // WeCom has an admin console, not a developer console. Admins skip the permission step,
+    // so the one link sits on the create step that both paths go through.
+    expect(guide.steps[0].link).toBeUndefined();
+    expect(guide.steps[1].link).toEqual({
       href: 'https://work.weixin.qq.com/wework_admin/frame',
       label: 'openAdminConsole',
     });
