@@ -25,11 +25,6 @@ import type { ComposioService } from '@/server/services/composio';
 import { DocumentService } from '@/server/services/document';
 import type { MarketService } from '@/server/services/market';
 
-import {
-  type InlineFirstStepRun,
-  isInlineFirstStepEnabled,
-  shouldRunFirstStepInline,
-} from '../inlineFirstStep';
 import { createRunFacts, type RunFacts } from '../runFacts';
 import { applyShareGateToAgentConfig } from '../shareGate';
 import { assertAgentRelayHop } from '../sourceAttribution';
@@ -84,11 +79,6 @@ export interface ExecAgentTurnDeps {
     sourceOperationId?: string,
   ) => Promise<AgentSenderMetadata | undefined>;
   retirePendingApprovalOperation: (operationId: string) => Promise<void>;
-  /**
-   * Run step 0 of a just-started operation in this invocation, after the
-   * response (`agent_inline_first_step`). Returns at once.
-   */
-  scheduleInlineFirstStep: (run: InlineFirstStepRun) => void;
   topicModel: TopicModel;
   userId: string;
   withholdGatewayToken: boolean;
@@ -715,16 +705,6 @@ export const execAgentTurn = async (
     },
     () => isDeferredInitEnabled(deps.userId),
   );
-  // Such a send may also run its step 0 here, after the response, rather than
-  // wait for the queue to deliver it.
-  const inlineFirstStep = await shouldRunFirstStepInline(
-    {
-      deferredInit: deferInit,
-      requestStartedAt: params.inlineFirstStep?.requestStartedAt,
-      stepIndex: initialStepCount ?? 0,
-    },
-    () => isInlineFirstStepEnabled(deps.userId),
-  );
   const init: StartOperationInit = deferInit
     ? { pendingRequest: toPersistedInitRequest(initRequest) }
     : await traceSendStage('operation_init', () =>
@@ -840,7 +820,6 @@ export const execAgentTurn = async (
         init,
         initialLlmCalls,
         initialStepCount,
-        inlineFirstStep,
         maxSteps,
         operationId,
         operationTaskId,
@@ -862,12 +841,5 @@ export const execAgentTurn = async (
       },
     ),
   );
-  if (inlineFirstStep && started.success && started.autoStarted && params.inlineFirstStep) {
-    deps.scheduleInlineFirstStep({
-      operationId,
-      requestStartedAt: params.inlineFirstStep.requestStartedAt,
-      stepIndex: initialStepCount ?? 0,
-    });
-  }
   return started;
 };

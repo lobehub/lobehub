@@ -136,7 +136,6 @@ export async function handleStepLockConflict(
     context,
     externalRetryCount = 0,
     finishAfterAsyncTool,
-    firstStepDispatch,
     humanInput,
     lockRetryAttempt = 0,
     operationId,
@@ -240,8 +239,6 @@ export async function handleStepLockConflict(
           approvedToolCall,
           finishAfterAsyncTool,
           humanInput,
-          // Only the fallback keeps its marker: the inline run never re-queues.
-          inlineFirstStepFallback: firstStepDispatch === 'inline_fallback' || undefined,
           lockRetryAttempt: nextLockRetryAttempt,
           rejectAndContinue,
           rejectionReason,
