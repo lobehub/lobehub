@@ -1,7 +1,7 @@
 import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
 import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
 import { Accordion, Divider, Flexbox, Skeleton } from '@lobehub/ui';
-import { memo, useCallback, useState } from 'react';
+import { memo, useState } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
 import { getMcpAppFromState } from '@/libs/mcp/mcpApp';
@@ -20,6 +20,7 @@ import Actions from './Actions';
 import Detail from './Detail';
 import Inspectors from './Inspector';
 import { hasToolResultBody } from './toolResultBody';
+import { useArmOnInteraction } from './useArmOnInteraction';
 import { useToolExpandState } from './useToolExpandState';
 
 const Debug = dynamic(() => import('./Debug'), {
@@ -84,8 +85,7 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
   // The row actions only show on hover/focus, yet they are most of a collapsed
   // row's DOM (≈28 of ≈46 nodes). Mount them the first time the row is pointed
   // at or focused, so a list of hundreds of finished calls mounts titles only.
-  const [actionsArmed, setActionsArmed] = useState(false);
-  const armActions = useCallback(() => setActionsArmed(true), []);
+  const { armed: actionsArmed, armProps } = useArmOnInteraction();
 
   let isArgumentsStreaming = false;
   try {
@@ -131,10 +131,7 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
   const mountActions = !disableEditing && (actionsArmed || isToolDetailExpand);
 
   return (
-    <div
-      onFocus={actionsArmed ? undefined : armActions}
-      onPointerEnter={actionsArmed ? undefined : armActions}
-    >
+    <div {...armProps}>
       <Accordion
         hideIndicator={isAlwaysExpand}
         indicatorPlacement="inline"

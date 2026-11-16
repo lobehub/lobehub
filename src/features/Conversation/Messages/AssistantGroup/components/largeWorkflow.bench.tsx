@@ -1,9 +1,9 @@
 /**
  * Performance probe for a very long workflow (hundreds of tool calls in one
- * assistant group). Skipped by default; run it explicitly:
+ * assistant group). Run it on its own, from the repo root:
  *
- *   LOBE_PERF_BENCH=1 bunx vitest run --silent=false \
- *     src/features/Conversation/Messages/AssistantGroup/components/largeWorkflow.perf.test.tsx
+ *   bunx vitest bench --run --project 'app*' --maxWorkers=1 --no-file-parallelism \
+ *     src/features/Conversation/Messages/AssistantGroup/components/largeWorkflow.bench.tsx
  *
  * It mounts the real expanded workflow list (`WorkflowExpandedList`, what
  * opening a workflow row renders) against a real conversation store and
@@ -126,7 +126,7 @@ const mountList = (store: ReturnType<typeof newStore>, limit?: number) => {
 const median = (values: number[]) =>
   [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
 
-describe.skipIf(!process.env.LOBE_PERF_BENCH)(`large workflow (${TOOL_COUNT} tools)`, () => {
+describe(`large workflow (${TOOL_COUNT} tools)`, () => {
   afterEach(() => cleanup());
 
   it('measures mount and per-chunk cost of the expanded list', { timeout: 600_000 }, () => {
