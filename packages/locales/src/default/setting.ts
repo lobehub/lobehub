@@ -1565,6 +1565,11 @@ export default {
   'settingChatAppearance.autoScrollOnStreaming.title': 'Auto-scroll During AI Response',
   'settingChatAppearance.chatBehavior.title': 'Chat Behavior',
   'settingChatAppearance.workflowStreamingExpand.title': 'Expand Tool Steps While Running',
+  'settingChatAppearance.followUpBehavior.desc':
+    'Queue follow-ups while the agent runs, or steer the current run',
+  'settingChatAppearance.followUpBehavior.options.queue': 'Queue',
+  'settingChatAppearance.followUpBehavior.options.steer': 'Steer',
+  'settingChatAppearance.followUpBehavior.title': 'Follow-up behavior',
   'settingChatAppearance.fontSize.desc': 'Font size of messages',
   'settingChatAppearance.fontSize.marks.normal': 'Standard',
   'settingChatAppearance.fontSize.title': 'Font Size',
