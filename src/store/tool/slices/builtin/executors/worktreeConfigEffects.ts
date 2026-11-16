@@ -3,6 +3,7 @@ import type {
   DeviceGitUpstreamRef,
   WorkingDirConfig,
 } from '@lobechat/types';
+import { dropStaleAutoCreated } from '@lobechat/types';
 
 /**
  * How each detected git / gh side effect rewrites a topic's working-directory
@@ -140,6 +141,7 @@ export const applyWorktreeAddToConfig = (
     delete git.github;
     delete git.upstream;
   }
+  dropStaleAutoCreated(git, currentConfig?.git?.activeWorktree);
 
   return {
     ...currentConfig,
@@ -171,6 +173,7 @@ export const applyWorktreeExitToConfig = (
   const leftWorktree =
     !!currentConfig?.git?.isWorktree || (!!activeWorktree && activeWorktree !== source);
   delete git.activeWorktree;
+  dropStaleAutoCreated(git, activeWorktree);
   if (leftWorktree) {
     delete git.branch;
     delete git.github;

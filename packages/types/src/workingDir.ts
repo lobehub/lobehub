@@ -111,6 +111,24 @@ export interface WorkingDirConfig {
 
 export type WorkingDirConfigValue = string | WorkingDirConfig;
 
+/**
+ * Keep the {@link WorkingDirGitState.autoCreated} marker only while the topic is
+ * still on the worktree the app created. Once a writer moves `activeWorktree`
+ * (an agent forking another worktree, or leaving it), the marker would point a
+ * later cleanup — and the CLI session cwd — at the wrong checkout. Mutates and
+ * returns `git`.
+ */
+export const dropStaleAutoCreated = <T extends WorkingDirGitState>(
+  git: T,
+  previousWorktree: string | undefined,
+): T => {
+  if (git.activeWorktree !== previousWorktree) {
+    delete git.autoCreated;
+    delete git.autoCreatedAt;
+  }
+  return git;
+};
+
 export const getWorkingDirSourcePath = (
   entry?: WorkingDirConfigValue | null,
 ): string | undefined => {
