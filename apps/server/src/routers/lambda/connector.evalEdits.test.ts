@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
 }));
 vi.mock('@/server/services/inboundWebhook/lifecycle', () => ({
-  refreshByConnector: mocks.refresh,
+  scheduleRefreshByConnector: mocks.refresh,
   removeByConnector: vi.fn(),
 }));
 vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
@@ -51,7 +51,6 @@ beforeEach(() => {
   mocks.findById.mockResolvedValue({ id, userId: 'creator' });
   mocks.findScopedByIdentifier.mockResolvedValue(null);
   mocks.create.mockResolvedValue({ id });
-  mocks.refresh.mockResolvedValue(undefined);
 });
 
 describe('imported evaluation connector edit boundary', () => {
@@ -81,7 +80,7 @@ describe('imported evaluation connector edit boundary', () => {
     });
   });
 
-  it('refreshes event subscriptions only after replacement credentials are persisted', async () => {
+  it('schedules the subscription refresh only after replacement credentials are persisted', async () => {
     await caller.update({
       id,
       patch: { credentials: { type: 'bearer', token: 'replacement-token' } },
@@ -101,7 +100,7 @@ describe('imported evaluation connector edit boundary', () => {
     );
   });
 
-  it('refreshes subscriptions after changing header-based authentication without a credential patch', async () => {
+  it('schedules the subscription refresh after a header-based authentication change without a credential patch', async () => {
     await caller.update({
       id,
       patch: { metadata: { customHeaders: { 'X-Api-Key': 'replacement-header' } } },
@@ -116,7 +115,7 @@ describe('imported evaluation connector edit boundary', () => {
     );
   });
 
-  it('does not refresh subscriptions when the credential update fails', async () => {
+  it('schedules no subscription refresh when the credential update fails', async () => {
     mocks.update.mockRejectedValueOnce(new Error('Could not persist credentials'));
     await expect(
       caller.update({ id, patch: { credentials: { type: 'bearer', token: 'replacement-token' } } }),
