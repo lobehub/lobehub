@@ -28,12 +28,15 @@ RUN set -e && \
 
 # The TFS adapter needs a curl build with NTLM. Keep the upstream image lean unless enabled.
 ARG INSTALL_TFS_CURL=false
+# Keep libraries flat in /lib so the overlay preserves BusyBox's /lib64 symlink.
 RUN if [ "$INSTALL_TFS_CURL" = true ]; then \
       apt-get update && apt-get install --no-install-recommends -y curl && \
       curl --version | grep -qw NTLM && \
       ldd /usr/bin/curl > /tmp/curl-dependencies && \
       ! grep -q 'not found' /tmp/curl-dependencies && \
-      cp -L --parents /usr/bin/curl $(awk '$3 ~ /^\// { print $3 } $1 ~ /^\// { print $1 }' /tmp/curl-dependencies) /distroless && \
+      mkdir -p /distroless/usr/bin && \
+      cp /usr/bin/curl /distroless/usr/bin/ && \
+      cp -L $(awk '$3 ~ /^\// { print $3 } $1 ~ /^\// { print $1 }' /tmp/curl-dependencies) /distroless/lib/ && \
       rm -rf /var/lib/apt/lists/* /tmp/curl-dependencies; \
     fi
 

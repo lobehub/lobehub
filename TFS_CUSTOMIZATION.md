@@ -68,7 +68,9 @@ docker build --build-arg INSTALL_TFS_CURL=true -t lobehub-tfs .
 
 此开关为 distroless 运行层复制 curl 及其动态库；默认关闭以减少对上游镜像的影响。其他镜像 / 独立 backend 部署需要在其运行环境自行安装 curl，不能仅给 builder 安装。可在相同运行层执行 `curl --version`，确认含 NTLM。不要为连接失败而加 `--insecure` 或全局关闭证书验证；有内网 CA 时按实际运行环境安装证书。若上游改为单独部署 Hono server，也要同步把 Collection、加密密钥和 curl 配到真正执行 TFS router 的服务。
 
-对于本 Fork 的无 shell 运行镜像，可在宿主机运行 `docker run --rm --entrypoint /usr/bin/curl ghcr.io/lichao0223/lobehub:canary --version` 检查镜像是否包含 NTLM；标签应换成实际部署标签。宿主机 `curl --version` 不能证明容器内可用。
+可在宿主机运行 `docker run --rm --entrypoint /usr/bin/curl ghcr.io/lichao0223/lobehub:canary --version` 检查镜像是否包含 NTLM；标签应换成实际部署标签。宿主机 `curl --version` 不能证明容器内可用。
+
+构建维护：curl 二进制放 `/distroless/usr/bin/`，`ldd` 得到的依赖和加载器沿用上游布局平铺到 `/distroless/lib/`；不能用 `cp --parents` 生成顶层 `/lib64` 目录，否则与 BusyBox 的同名链接冲突。发布工作流先合并相同运行文件系统并以非 root 用户检查 NTLM curl，再运行完整构建。这也覆盖只安装 builder 依赖、遗漏加载器或运行库的问题。
 
 每个用户的用户名 / 密码或 PAT 在「设置 → 集成 → TFS → 绑定个人账号」录入，不写到部署环境变量，不录入共享环境的 env。PAT 至少需要所读取资源的权限；读取代码与构建 / 发布可能需要不同权限。
 

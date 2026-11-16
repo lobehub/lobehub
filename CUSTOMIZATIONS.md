@@ -19,6 +19,7 @@
 - 镜像名称由 `ghcr.io/${{ github.repository }}` 生成；当前部署脚本默认 `ghcr.io/lichao0223/lobehub`。main/canary 和 SHA 标签支持复现与切换，手动运行可指定标签及是否移动 latest。
 - 保留工作流的 GHCR 写入权限、登录、标签规则、Dockerfile 构建及缓存。目前平台为 `linux/amd64`，不能承诺 ARM 镜像。
 - 本轮在本 Fork 发布工作流传入 `INSTALL_TFS_CURL=true`；根 `Dockerfile` 保留可选安装，复制 NTLM curl **及动态库到最终 distroless 运行层**。仅 builder 安装 curl 无效；不要求用户进入容器安装。
+- curl 依赖和动态加载器平铺复制到已有 `/distroless/lib/`，不要恢复 `cp --parents`：它会生成 `/distroless/lib64` 目录，与 BusyBox 的 `/lib64` 链接冲突，导致运行层 COPY 失败。发布工作流在完整构建前先生成最小运行镜像，用非 root 用户执行 `curl --version` 并检查 NTLM；同时验证目录合并、加载器及依赖库是否可用。
 - 历史依据：`e3c84a0ad6`、`991d1466f7`。上游重构 Docker 多阶段构建时，要重新确认安装参数、最终复制路径和非 root 用户执行权限。
 - 检查：Actions 构建成功、目标标签指向正确 SHA；在目标镜像运行 `docker run --rm --entrypoint /usr/bin/curl <镜像:标签> --version`，输出含 `NTLM`。此镜像构建检查本机尚未执行。
 
