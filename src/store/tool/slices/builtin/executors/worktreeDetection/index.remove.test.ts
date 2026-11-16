@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { recordGitCommandEffects } from './worktreeDetection';
+import { recordGitCommandEffects } from '.';
 
 const listGitWorktrees = vi.hoisted(() => vi.fn());
 
