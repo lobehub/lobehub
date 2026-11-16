@@ -1,5 +1,6 @@
+import type { SignalItem } from '@lobechat/types';
+
 import type { InboundWebhookModel, InboundWebhookView } from '@/database/models/inboundWebhook';
-import type { SignalItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 export interface InboundWebhookContext {

@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
+import type { SignalItem } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import { and, asc, eq, inArray, lt, or, sql } from 'drizzle-orm';
 
 import type { InboundWebhookView } from '@/database/models/inboundWebhook';
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
 import { SignalDecisionModel } from '@/database/models/signalDecision';
-import type { SignalItem } from '@/database/schemas';
 import { inboundWebhooks, signals } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
