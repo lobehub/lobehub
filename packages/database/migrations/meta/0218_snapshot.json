@@ -6,7 +6,7 @@
   },
   "dialect": "postgresql",
   "enums": {},
-  "id": "f7bdae70-6142-408d-a9a8-a2d28d3e5e7c",
+  "id": "f333c27e-af69-4fc7-bb95-59bf849ced71",
   "policies": {},
   "prevId": "44fde6f5-404e-4745-a43d-3fa16db429c8",
   "roles": {},
@@ -16727,6 +16727,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "type": {
           "name": "type",
           "type": "text",
@@ -16831,7 +16837,29 @@
             }
           ],
           "isUnique": true,
-          "where": "\"user_contacts\".\"agent_id\" IS NOT NULL",
+          "where": "\"user_contacts\".\"agent_id\" IS NOT NULL AND \"user_contacts\".\"workspace_id\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "user_contacts_workspace_agent_unique": {
+          "name": "user_contacts_workspace_agent_unique",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "agent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"user_contacts\".\"agent_id\" IS NOT NULL AND \"user_contacts\".\"workspace_id\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -16873,6 +16901,15 @@
           "tableFrom": "user_contacts",
           "tableTo": "users",
           "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "user_contacts_workspace_id_workspaces_id_fk": {
+          "name": "user_contacts_workspace_id_workspaces_id_fk",
+          "tableFrom": "user_contacts",
+          "tableTo": "workspaces",
+          "columnsFrom": ["workspace_id"],
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
