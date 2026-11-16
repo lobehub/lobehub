@@ -602,6 +602,8 @@ export class ChannelRepository {
     const rows = await this.db
       .select({
         agentOwnerId: agents.userId,
+        agentVisibility: agents.visibility,
+        agentWorkspaceId: agents.workspaceId,
         channel: channels,
         lastReadSequence: channelMembers.lastReadSequence,
         memberId: channelMembers.id,
@@ -738,8 +740,17 @@ export class ChannelRepository {
       agentIdsOf.set(channelId, ids);
     }
 
-    return rows.map(({ agentOwnerId, channel, lastReadSequence, role, shareId, shareSlug }) => {
-      const sharedAgent = !!channel.agentId && !channel.workspaceId && agentOwnerId !== this.userId;
+    return rows.map(({ channel, lastReadSequence, role, shareId, shareSlug, ...agent }) => {
+      // Reached through its share: someone else's Agent this scope does not hold. A workspace
+      // colleague's public Agent is the workspace's own.
+      const sharedAgent =
+        !!channel.agentId &&
+        agent.agentOwnerId !== this.userId &&
+        !(
+          channel.workspaceId &&
+          agent.agentWorkspaceId === channel.workspaceId &&
+          agent.agentVisibility !== 'private'
+        );
       return {
         ...channel,
         agentIds: agentIdsOf.get(channel.id) ?? [],

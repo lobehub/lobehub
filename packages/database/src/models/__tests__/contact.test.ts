@@ -3,7 +3,14 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, agentShares, userContactRequests, userContacts, users } from '../../schemas';
+import {
+  agents,
+  agentShares,
+  userContactRequests,
+  userContacts,
+  users,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ContactModel, parseContactHandle } from '../contact';
 
@@ -18,6 +25,9 @@ const aliceAgent = 'agt_contact_alice';
 const aliceModel = new ContactModel(serverDB, alice);
 const bobModel = new ContactModel(serverDB, bob);
 const carolModel = new ContactModel(serverDB, carol);
+const teamId = 'contact-test-team';
+const aliceInTeam = new ContactModel(serverDB, alice, teamId);
+const carolInTeam = new ContactModel(serverDB, carol, teamId);
 
 let bobShareId: string;
 
@@ -28,6 +38,9 @@ beforeEach(async () => {
     { fullName: 'Bob', id: bob, username: 'Bob' },
     { id: carol, username: 'carol' },
   ]);
+  await serverDB
+    .insert(workspaces)
+    .values({ id: teamId, name: 'Team', primaryOwnerId: alice, slug: teamId });
   await serverDB.insert(agents).values([
     { id: bobAgent, title: 'Bob Helper', userId: bob },
     { id: aliceAgent, title: 'Alice Helper', userId: alice },
@@ -50,6 +63,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
   await serverDB.delete(userContactRequests);
   await serverDB.delete(userContacts);
+  await serverDB.delete(workspaces);
   await serverDB.delete(users);
 });
 
@@ -218,6 +232,44 @@ describe('shared Agents', () => {
     expect((await carolModel.listSharedAgentsOf(bob)).map((a) => a.agentId)).toEqual([bobAgent]);
     await serverDB.update(agentShares).set({ visibility: 'private' });
     expect(await carolModel.listSharedAgentsOf(bob)).toEqual([]);
+  });
+});
+
+describe('shared Agents in a workspace', () => {
+  it('belong to the workspace: every member sees and can message them', async () => {
+    await aliceInTeam.addAgent('bob-helper');
+    const [entry] = await serverDB.select().from(userContacts);
+    expect(entry).toMatchObject({ agentId: bobAgent, userId: alice, workspaceId: teamId });
+
+    for (const member of [aliceInTeam, carolInTeam]) {
+      expect(await member.list()).toMatchObject([{ agent: { agentId: bobAgent } }]);
+      expect(await member.findAgentAccess(bobAgent)).toMatchObject({ ownerId: bob });
+      expect((await member.search('bob-helper'))[0]).toMatchObject({ relation: 'contact' });
+    }
+    // Neither personal address book holds it.
+    expect(await aliceModel.list()).toEqual([]);
+    expect(await carolModel.findAgentAccess(bobAgent)).toBeUndefined();
+    expect((await aliceModel.search('bob-helper'))[0]).toMatchObject({ relation: 'none' });
+  });
+
+  it('keeps people personal in every scope', async () => {
+    await bobModel.sendRequest(alice);
+    const [request] = await aliceModel.listRequests();
+    await aliceModel.acceptRequest(request.id);
+    expect(await aliceInTeam.list()).toMatchObject([{ type: 'user', user: { id: bob } }]);
+    expect(await carolInTeam.list()).toEqual([]);
+  });
+
+  it('holds an Agent once per workspace, apart from personal entries', async () => {
+    await aliceModel.addAgent('bob-helper');
+    await aliceInTeam.addAgent('bob-helper');
+    await carolInTeam.addAgent(bobShareId);
+    expect(await serverDB.select().from(userContacts)).toHaveLength(2);
+
+    // Any member removes it for the workspace; the personal entry stays.
+    await carolInTeam.removeAgent(bobAgent);
+    expect(await aliceInTeam.list()).toEqual([]);
+    expect(await aliceModel.list()).toHaveLength(1);
   });
 });
 

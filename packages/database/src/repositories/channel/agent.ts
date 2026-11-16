@@ -38,8 +38,9 @@ export interface ChannelAddAgentInput {
 
 /**
  * Another person's Agent that `userId` may talk to through its live link share. A link share is
- * open to anyone signed in, so no contact entry is needed; only a personal direct conversation
- * can hold one, because the share admits one person at a time and counts its limits per person.
+ * open to anyone signed in, so no contact entry is needed; only a direct conversation (personal
+ * or in a workspace) can hold one, because the share admits one person at a time and counts its
+ * limits per person.
  */
 export const findSharedChannelAgent = async (
   tx: Transaction,
@@ -78,11 +79,12 @@ export const findSharedChannelAgent = async (
   };
 };
 
-/** Whether a direct conversation may bind another person's Agent through its share. */
-const acceptsSharedAgent = (
-  channel: Pick<ChannelItem, 'agentId' | 'workspaceId'>,
-  agentId: string,
-) => channel.agentId === agentId && !channel.workspaceId;
+/**
+ * Whether a direct conversation may bind another person's Agent through its share. A direct
+ * conversation has one person in any scope, so a workspace one can hold it as well.
+ */
+const acceptsSharedAgent = (channel: Pick<ChannelItem, 'agentId'>, agentId: string) =>
+  channel.agentId === agentId;
 
 /** Check Agent scope and hold it through creation of the Channel/member reference. */
 export const requireChannelAgent = async (
@@ -100,10 +102,9 @@ export const requireChannelAgent = async (
   if (agent)
     // LobeAI rows are stored without a title; label it the way the rest of the product does.
     return { name: agent.name, title: normalizeInboxAgentTitle(agent.title, agent) };
-  const shared =
-    options.allowShared && !workspaceId
-      ? await findSharedChannelAgent(tx, userId, agentId)
-      : undefined;
+  const shared = options.allowShared
+    ? await findSharedChannelAgent(tx, userId, agentId)
+    : undefined;
   if (!shared) throw new ChannelError('NOT_FOUND', 'Agent not found');
   return { name: shared.name, title: shared.title };
 };

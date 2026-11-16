@@ -2,23 +2,30 @@ import { CONTACT_REQUEST_MESSAGE_MAX_LENGTH } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import {
+  requireWorkspaceRoleWhenScoped,
+  wsCompatProcedure,
+} from '@/business/server/trpc-middlewares/workspaceAuth';
 import { ContactModel } from '@/database/models/contact';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { isChannelEnabled } from '@/server/services/channel/featureGate';
 import { notifyContactRequestAfterResponse } from '@/server/services/contact/notify';
 
 /**
  * The address book belongs to the Channel experience: contacts are who you can message there.
- * It is personal, so it never takes a workspace scope.
+ * People are the caller's own in every scope. Shared Agents belong to the active scope: the
+ * caller's own in the personal space, the workspace's — seen by every member — in a workspace.
  */
-const contactProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
+const contactProcedure = wsCompatProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
   if (!(await isChannelEnabled(ctx.userId)))
     throw new TRPCError({
       code: 'FORBIDDEN',
       message: 'Channels are not enabled for this account',
     });
-  return next({ ctx: { contactModel: new ContactModel(ctx.serverDB, ctx.userId) } });
+  return next({
+    ctx: { contactModel: new ContactModel(ctx.serverDB, ctx.userId, ctx.workspaceId) },
+  });
 });
 
 const userId = z.string().min(1).max(64);
@@ -101,11 +108,14 @@ export const contactRouter = router({
 
   // ── Agents ────────────────────────────────────────────────────────────
 
+  // Changing a workspace's address book takes a member; a viewer only reads it.
   addAgent: contactProcedure
+    .use(requireWorkspaceRoleWhenScoped('member'))
     .input(z.object({ share: handle }))
     .mutation(async ({ ctx, input }) => ctx.contactModel.addAgent(input.share)),
 
   removeAgent: contactProcedure
+    .use(requireWorkspaceRoleWhenScoped('member'))
     .input(z.object({ agentId: z.string().min(1).max(64) }))
     .mutation(async ({ ctx, input }) => {
       await ctx.contactModel.removeAgent(input.agentId);

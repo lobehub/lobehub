@@ -83,9 +83,9 @@ export class ChannelHistoryRepository {
         .innerJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
         .where(and(eq(channelJobs.operationId, operationId), eq(channelJobs.channelId, channel.id)))
         .limit(1);
-      // A shared Agent runs as its owner in its own scope for the person of a personal direct
-      // conversation (`executionConfig.share`, frozen at claim): the operation is the owner's,
-      // the Channel and its requester are that person's.
+      // A shared Agent runs as its owner in its own scope for the person of a direct
+      // conversation, personal or in that person's workspace (`executionConfig.share`, frozen at
+      // claim): the operation is the owner's, the Channel and its requester are that person's.
       const share = row?.job.executionConfig?.share;
       const requesterId = share ? channel.userId : this.userId;
       if (
@@ -95,7 +95,6 @@ export class ChannelHistoryRepository {
         (share
           ? share.ownerId !== this.userId ||
             share.workspaceId !== this.workspaceId ||
-            channel.workspaceId !== null ||
             channel.agentId !== row.job.manifest?.self.agentId ||
             !requesterId
           : channel.workspaceId !== this.workspaceId ||
