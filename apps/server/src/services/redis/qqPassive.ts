@@ -84,7 +84,15 @@ interface LocalWindow {
  * barrel every service imports, and a runtime import of `@lobechat/chat-adapter-qq` would drag the
  * adapter (and `chat` itself) into callers that never touch QQ.
  */
-const createLocalStore = (): QQPassiveStore => {
+/**
+ * The in-process store plus a way to drop a parked reply. Redis owns the slot whenever it answers,
+ * so a copy written here during an outage is stale as soon as Redis takes the same key again.
+ */
+interface LocalStore extends QQPassiveStore {
+  dropPending: (key: string) => void;
+}
+
+const createLocalStore = (): LocalStore => {
   const windows = new Map<string, LocalWindow>();
   const pending = new Map<string, string>();
 
@@ -121,6 +129,10 @@ const createLocalStore = (): QQPassiveStore => {
     restorePending: async (key: string, text: string) => {
       if (pending.has(key)) return;
       pending.set(key, text);
+    },
+
+    dropPending: (key: string) => {
+      pending.delete(key);
     },
   };
 };
@@ -196,6 +208,8 @@ export const qqPassive: QQPassiveStore = {
 
     try {
       await redis.set(RedisKeys.qqPassive.pending(key), text, { ex: PENDING_TTL_SECONDS });
+      // Redis holds the slot again; anything parked here during the outage was superseded by it.
+      local.dropPending(key);
     } catch {
       await local.savePending(key, text);
     }
@@ -208,7 +222,15 @@ export const qqPassive: QQPassiveStore = {
     try {
       const text = await redis.eval(PENDING_TAKE_SCRIPT, 1, RedisKeys.qqPassive.pending(key));
 
-      return typeof text === 'string' && text ? text : undefined;
+      if (typeof text === 'string' && text) {
+        local.dropPending(key);
+
+        return text;
+      }
+
+      // An empty read can also mean Redis just recovered: drain the reply this instance parked
+      // while it was down instead of leaving it stranded for the key's whole TTL.
+      return local.takePending(key);
     } catch {
       return local.takePending(key);
     }
@@ -227,6 +249,7 @@ export const qqPassive: QQPassiveStore = {
         ex: PENDING_TTL_SECONDS,
         nx: true,
       });
+      local.dropPending(key);
     } catch {
       await local.restorePending(key, text);
     }
