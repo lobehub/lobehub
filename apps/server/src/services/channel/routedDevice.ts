@@ -67,8 +67,10 @@ export const createRoutedDevicePresence = (
  * `resolveHeteroRouting`. Undefined when the run needs no device to start: a Native run, a
  * remote (platform) Agent, a sandbox or unrouted plan, or a managed device dispatch would wake.
  *
- * It does not see a device pinned by a reused topic or a project directory, which only the
- * ordinary pipeline resolves; those still fail at dispatch when offline.
+ * A continued conversation is checked against the device it will actually run on: the topic's
+ * pin wins over the Agent binding, except when the workspace fixes the target, or the target is
+ * `auto` and the pin was only an earlier auto pick. A project-directory continuation routes to
+ * its directory's device, which only the run resolves, so it is not gated here.
  */
 export const resolveChannelRoutedDevice = async (
   db: LobeChatDatabase,
