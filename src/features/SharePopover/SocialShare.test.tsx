@@ -152,7 +152,7 @@ describe('SocialShare', () => {
   });
 
   describe('closing the popover before leaving the page', () => {
-    it.each(['x', 'weibo'])('calls onLeave after opening the %s intent', (platform) => {
+    it.each(['x', 'weibo'])('closes the popover before opening the %s intent', (platform) => {
       const open = vi.spyOn(window, 'open').mockReturnValue(null);
       const onLeave = vi.fn();
       render(<SocialShare shareUrl={shareUrl} title={'My topic'} onLeave={onLeave} />);
@@ -161,7 +161,7 @@ describe('SocialShare', () => {
 
       expect(open).toHaveBeenCalledTimes(1);
       expect(onLeave).toHaveBeenCalledTimes(1);
-      expect(open.mock.invocationCallOrder[0]).toBeLessThan(onLeave.mock.invocationCallOrder[0]);
+      expect(onLeave.mock.invocationCallOrder[0]).toBeLessThan(open.mock.invocationCallOrder[0]);
     });
 
     it('calls onLeave from "Open Instagram" but not when the panel opens', async () => {
