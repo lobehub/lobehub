@@ -101,6 +101,8 @@
   "environment.unsupportedRuntime": "频道暂不支持此 Agent，请选择其他 Agent。",
   "environment.updateFailed": "运行环境没有保存成功，已保留你的选择，请重试。",
   "environmentHint": "Native Agent 可以直接回复。编程 Agent 需要选择在线设备和工作目录。",
+  "events.agentExchange": "来自 <agent/> 的消息",
+  "events.agentExchangeOpen": "查看对话",
   "events.invited": "{{inviter}} 邀请了 {{names}} 加入频道",
   "events.invitedMembers": "{{inviter}} 邀请了 <members/> 加入频道",
   "events.joined": "{{names}} 加入了频道",

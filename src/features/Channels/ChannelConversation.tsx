@@ -16,6 +16,7 @@ import { channelActions, channelSelectors, useChannelStore } from '@/store/chann
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { AgentExchangeLine, exchangeAgentOf } from './AgentExchangeLine';
 import { ArchivedNotice } from './ArchivedNotice';
 import { visibleChannelDetail } from './channelAccess';
 import { ChannelMessage, ThreadRootMessage } from './ChannelMessage';
@@ -224,6 +225,9 @@ const Timeline = ({
                           {timeFormats.date.format(date)}
                         </time>
                       </div>
+                    )}
+                    {item.kind === 'message' && exchangeAgentOf(item.message) && (
+                      <AgentExchangeLine message={item.message} />
                     )}
                     {item.kind === 'event' ? (
                       <JoinEventLine event={item.event} />

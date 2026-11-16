@@ -622,7 +622,12 @@ export interface ChannelPublicMessage {
   id: string;
   mentions: string[];
   /** Another Channel's reply this request brings back to the relaying Agent; null otherwise. */
-  receipt?: ChannelMessageReceipt | null;
+  /** The answering Channel and reply; on an Agent's report, also the Agent that answered. */
+  receipt?:
+    | (Omit<ChannelMessageReceipt, 'agent'> & {
+        agent?: (NonNullable<ChannelMessageReceipt['agent']> & { avatar: string | null }) | null;
+      })
+    | null;
   recipientMemberIds: string[];
   /** Bounded public quote, including when its original is outside the loaded page. */
   replyTo?: Pick<

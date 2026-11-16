@@ -101,6 +101,8 @@
   "environment.unsupportedRuntime": "This Agent cannot run in a channel yet. Choose another Agent.",
   "environment.updateFailed": "Could not save the runtime environment. Your choices are preserved; try again.",
   "environmentHint": "Native Agents can reply without a device. Coding Agents need an online device and a working directory.",
+  "events.agentExchange": "Messages from <agent/>",
+  "events.agentExchangeOpen": "View conversation",
   "events.invited": "{{inviter}} invited {{names}} to the channel",
   "events.invitedMembers": "{{inviter}} invited <members/> to the channel",
   "events.joined": "{{names}} joined the channel",

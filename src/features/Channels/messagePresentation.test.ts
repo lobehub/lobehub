@@ -36,6 +36,11 @@ describe('channel reading groups', () => {
       { author: { avatar: null, id: null, name: 'Deleted', type: 'user' } },
       { replyToId: 'another-request' },
       { threadId: 'another-thread' },
+      // A report from an exchange between Agents opens with its own line.
+      {
+        receipt: { channelId: 'chn_pair', channelTitle: 'A · B', messageId: 'msg_2' },
+        via: null,
+      },
     ];
     for (const patch of variations) {
       expect(presentChannelTimeline([message(at), message(later(1), patch)])[1].continuation).toBe(

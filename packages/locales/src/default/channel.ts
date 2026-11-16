@@ -199,6 +199,8 @@ export default {
   'environment.title': 'Runtime environment',
   'environment.updateFailed':
     'Could not save the runtime environment. Your choices are preserved; try again.',
+  'events.agentExchange': 'Messages from <agent/>',
+  'events.agentExchangeOpen': 'View conversation',
   'events.invited': '{{inviter}} invited {{names}} to the channel',
   'events.joined': '{{names}} joined the channel',
   'events.youInvited': 'You invited {{names}} to the channel',
