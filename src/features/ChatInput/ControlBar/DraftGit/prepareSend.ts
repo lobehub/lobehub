@@ -43,7 +43,16 @@ export interface DraftGitSendPrompts {
 }
 
 export type DraftGitSendResult =
-  { ok: false } | { newTopicWorkingDirectory?: WorkingDirConfig; ok: true };
+  | { ok: false }
+  | {
+      /**
+       * Git was actually run (a switch or a new worktree), so the send waited
+       * on it: the composer may have changed hands in the meantime.
+       */
+      acted?: boolean;
+      newTopicWorkingDirectory?: WorkingDirConfig;
+      ok: true;
+    };
 
 const PASS: DraftGitSendResult = { ok: true };
 const STOP: DraftGitSendResult = { ok: false };
@@ -142,6 +151,7 @@ const createWorktree = async (
       return fail(describeGitFailure(result, t, t('workingDirectory.worktreeCreateFailed')));
 
     return {
+      acted: true,
       newTopicWorkingDirectory: {
         git: {
           activeWorktree: result.worktreePath,
@@ -213,7 +223,7 @@ const switchInPlace = async (
     dismiss();
   }
   await getGitStatusStoreState().revalidateGitStatus(deviceId, path);
-  return PASS;
+  return { acted: true, ok: true };
 };
 
 /**

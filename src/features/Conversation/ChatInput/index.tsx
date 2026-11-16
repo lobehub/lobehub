@@ -17,6 +17,7 @@ import {
 import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import { prepareComposerGitSend } from '@/features/ChatInput/ControlBar/DraftGit';
+import { resolveComposerHandoff } from '@/features/ChatInput/ControlBar/DraftGit/composerHandoff';
 import {
   type SendButtonHandler,
   type SendButtonProps,
@@ -408,8 +409,16 @@ const ChatInput = memo<ChatInputProps>(
         const gitPrep = await prepareComposerGitSend(sendContext);
         if (!gitPrep.ok) return;
 
-        // Clear content immediately for responsive UX
-        clearComposer();
+        // Clear content immediately for responsive UX — unless a git step ran
+        // and the composer changed hands meanwhile (see `resolveComposerHandoff`).
+        const handoff = resolveComposerHandoff({
+          acted: !!gitPrep.acted,
+          editorUnchanged: getMarkdownContent() === message,
+          stillHere: messageMapKey(storeApi.getState().context) === messageMapKey(sendContext),
+        });
+        if (handoff.clearEditor) clearContent();
+        fileStore.clearChatUploadFileList(contextKey);
+        fileStore.clearChatContextSelections(contextKey);
 
         const { contextSelections, pageSelections } =
           buildMessageContextSelections(currentContextList);
@@ -423,6 +432,7 @@ const ChatInput = memo<ChatInputProps>(
           ...(gitPrep.newTopicWorkingDirectory
             ? { newTopicWorkingDirectory: gitPrep.newTopicWorkingDirectory }
             : {}),
+          ...(handoff.sendToOrigin ? { conversationContext: sendContext } : {}),
           onPreflightFailure: () => {
             const store = useFileStore.getState();
             // The composer was cleared up front; a send rejected before any

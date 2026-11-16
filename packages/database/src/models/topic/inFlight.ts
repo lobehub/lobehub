@@ -8,16 +8,21 @@ import { getTopicDeviceId } from './runningOperation';
 import { hasLiveTaskCallbackReservation } from './taskCallback';
 
 /**
- * The directory a topic actually runs in: its selected worktree, else its
- * working-directory source, else the legacy bare `workingDirectory`.
+ * Every checkout a topic may be running in. A worktree picked mid-conversation
+ * is where a native agent works, but a local CLI agent's process still starts
+ * in the source repository (`getWorkingDirSessionPath`), so both count. A
+ * worktree the app created on the first send is the only one: nothing of that
+ * topic runs in its source. Over-counting only adds a confirmation; missing a
+ * directory would let a branch switch run under a live agent.
  */
-export const getTopicRunDirectory = (
+export const getTopicRunDirectories = (
   metadata: ChatTopicMetadata | null | undefined,
-): string | undefined =>
-  metadata?.workingDirectoryConfig?.git?.activeWorktree ||
-  metadata?.workingDirectoryConfig?.path ||
-  metadata?.workingDirectory ||
-  undefined;
+): string[] => {
+  const config = metadata?.workingDirectoryConfig;
+  const worktree = config?.git?.activeWorktree;
+  if (worktree && config?.git?.autoCreated) return [worktree];
+  return [worktree, config?.path, metadata?.workingDirectory].filter((dir): dir is string => !!dir);
+};
 
 /**
  * Same test as the project-directory guards (`isTopicInFlight`): a running
@@ -74,7 +79,6 @@ export const countInFlightInDirectory = async (
     const metadata = row.metadata ?? null;
     if (!isInFlight({ metadata, status: row.status })) return false;
     if (getTopicDeviceId(metadata) !== deviceId) return false;
-    const dir = getTopicRunDirectory(metadata);
-    return !!dir && normalizeDirectoryPath(dir) === target;
+    return getTopicRunDirectories(metadata).some((dir) => normalizeDirectoryPath(dir) === target);
   }).length;
 };

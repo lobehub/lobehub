@@ -58,7 +58,9 @@ describe('TopicModel.countInFlightInDirectory', () => {
     ).toBe(2);
   });
 
-  it('uses the selected worktree as the run directory', async () => {
+  it('counts a picked worktree against both checkouts a run may use', async () => {
+    // A native agent works in the worktree, but a local CLI process starts in
+    // the source repository.
     await insert(
       't-wt',
       inRepo('/code/lobehub', {
@@ -71,12 +73,35 @@ describe('TopicModel.countInFlightInDirectory', () => {
 
     const model = personal();
     expect(await model.countInFlightInDirectory({ deviceId: 'dev-1', path: '/code/lobehub' })).toBe(
-      0,
+      1,
     );
     expect(
       await model.countInFlightInDirectory({
         deviceId: 'dev-1',
         path: '/home/.lobehub/worktrees/x',
+      }),
+    ).toBe(1);
+  });
+
+  it('counts a worktree made on the first send only against itself', async () => {
+    await insert(
+      't-auto',
+      inRepo('/code/lobehub', {
+        workingDirectoryConfig: {
+          git: { activeWorktree: '/home/.lobehub/worktrees/y', autoCreated: true },
+          path: '/code/lobehub',
+        },
+      }),
+    );
+
+    const model = personal();
+    expect(await model.countInFlightInDirectory({ deviceId: 'dev-1', path: '/code/lobehub' })).toBe(
+      0,
+    );
+    expect(
+      await model.countInFlightInDirectory({
+        deviceId: 'dev-1',
+        path: '/home/.lobehub/worktrees/y',
       }),
     ).toBe(1);
   });

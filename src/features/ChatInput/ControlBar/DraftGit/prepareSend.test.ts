@@ -141,7 +141,7 @@ describe('prepareDraftGitSend — switch in place', () => {
     pick('feat');
     const result = await prepareDraftGitSend(context, { prompts: prompts(), t });
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ acted: true, ok: true });
     expect(gitService.checkoutGitBranch).toHaveBeenCalledWith({
       branch: 'feat',
       deviceId: 'dev-1',
@@ -194,7 +194,10 @@ describe('prepareDraftGitSend — switch in place', () => {
   it('still switches when the running-topic count cannot be read', async () => {
     pick('feat');
     vi.mocked(deviceService.countRunningTopicsInDirectory).mockRejectedValue(new Error('down'));
-    expect(await prepareDraftGitSend(context, { prompts: prompts(), t })).toEqual({ ok: true });
+    expect(await prepareDraftGitSend(context, { prompts: prompts(), t })).toEqual({
+      acted: true,
+      ok: true,
+    });
   });
 
   it('reports a refused checkout and keeps the draft', async () => {
@@ -226,7 +229,10 @@ describe('prepareDraftGitSend — switch in place', () => {
     const p = prompts();
     p.askBranchName.mockResolvedValue('lobehub/mine');
 
-    expect(await prepareDraftGitSend(context, { prompts: p, t })).toEqual({ ok: true });
+    expect(await prepareDraftGitSend(context, { prompts: p, t })).toEqual({
+      acted: true,
+      ok: true,
+    });
     expect(p.askBranchName).toHaveBeenCalledWith(
       expect.objectContaining({ branch: 'feat', holder: 'feat' }),
     );
@@ -295,6 +301,7 @@ describe('prepareDraftGitSend — new worktree', () => {
     });
     expect(call.branch).toMatch(/^[a-z]+\/\d{12}-[a-z]+-[a-z]+$/);
     expect(result).toEqual({
+      acted: true,
       newTopicWorkingDirectory: {
         git: {
           activeWorktree: expect.stringContaining('/.lobehub/worktrees/'),
