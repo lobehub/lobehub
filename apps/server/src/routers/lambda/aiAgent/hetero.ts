@@ -20,6 +20,7 @@ import { signHeteroOperationJWT } from '@/libs/trpc/utils/internalJwt';
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { mapAgentInterventionTRPCError } from '@/server/routers/lambda/_helpers/agentInterventionError';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { readFollowUpMode } from '@/server/services/aiAgent/steerQueue/followUpMode';
 import {
   renewHeteroSteers,
   returnHeteroSteer,
@@ -635,6 +636,8 @@ export const heteroRouter = router({
         : undefined;
 
       if (scope) await renewHeteroSteers(operationId);
+      // Queue mode leaves the follow-ups to the run end; read once per poll.
+      const followUpMode = scope ? await readFollowUpMode(ctx.serverDB, ctx.userId) : 'legacy';
 
       const deadline = Date.now() + blockMs;
       for (;;) {
@@ -649,10 +652,11 @@ export const heteroRouter = router({
           const control = await takeHeteroControl(operationId);
           if (control) return answer(null, control);
         }
-        if (scope) {
+        if (scope && followUpMode !== 'queue') {
           const message = await takeHeteroSteer(storeCtx, {
             acceptsImages,
             agentId: operation.agentId,
+            mode: followUpMode,
             operationId,
             scope,
           });
