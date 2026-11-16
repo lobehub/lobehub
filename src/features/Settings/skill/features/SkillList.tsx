@@ -30,7 +30,11 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
-import { connectorSelectors, isInConnectorTab } from '@/store/tool/slices/connector';
+import {
+  connectorSelectors,
+  isInConnectorTab,
+  isIntegrationInConnectorTab,
+} from '@/store/tool/slices/connector';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 import { type LobeToolType } from '@/types/tool/tool';
@@ -107,6 +111,14 @@ const SkillList = memo<SkillListProps>(
     const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
     const allAgentBoundConnectors = useToolStore(connectorSelectors.agentBoundConnectors, isEqual);
+    // What an OAuth integration's tab is decided by: the visibility of its rows
+    const connectorTabRows = useToolStore(
+      (s) =>
+        connectorSelectors
+          .connectorList(s)
+          .map(({ identifier, visibility }) => ({ identifier, visibility })),
+      isEqual,
+    );
     const isAgentBoundInit = useToolStore((s) => s.isAgentBoundInit);
     const fetchAgentBoundConnectors = useToolStore((s) => s.fetchAgentBoundConnectors);
     const allBuiltinTools = useToolStore((s) => s.builtinTools, isEqual);
@@ -318,19 +330,34 @@ const SkillList = memo<SkillListProps>(
       builtinSkills,
     ]);
 
-    // Each workspace tab lists its own pool. Built-in tools, OAuth catalog
-    // entries, plugins and agent connectors carry no visibility and stay with
-    // the shared pool; a connector row lists under the tab of its visibility.
+    // Each workspace tab lists its own pool. Built-in tools, plugins and agent
+    // connectors carry no visibility and stay with the shared pool; a connector
+    // row lists under the tab of its visibility, and an OAuth integration
+    // (Composio, LobeHub) under the tabs of its connector rows.
     const isPrivateTab = isConnectorView && visibility === 'private';
     const inTab = (c: ConnectorWithTools) => isInConnectorTab(c, visibility);
     const customConnectors = allCustomConnectors.filter(inTab);
     const marketplaceConnectors = allMarketplaceConnectors.filter(inTab);
-    const integrations = isPrivateTab ? [] : allIntegrations;
+    const tabVisibility = isConnectorView ? visibility : undefined;
+    const integrations = allIntegrations.filter((item) => {
+      if (item.type === 'composio')
+        return isIntegrationInConnectorTab(
+          item.serverType.identifier,
+          connectorTabRows,
+          tabVisibility,
+        );
+      if (item.type === 'lobehub')
+        return isIntegrationInConnectorTab(item.provider.id, connectorTabRows, tabVisibility);
+      return !isPrivateTab;
+    });
     const communityMCPs = isPrivateTab ? [] : allCommunityMCPs;
     const customMCPs = isPrivateTab ? [] : allCustomMCPs;
     const agentBoundConnectors = isPrivateTab ? [] : allAgentBoundConnectors;
 
-    if (isPrivateTab && customConnectors.length + marketplaceConnectors.length === 0) {
+    if (
+      isPrivateTab &&
+      customConnectors.length + marketplaceConnectors.length + integrations.length === 0
+    ) {
       return (
         <Center className={stylex.props(styles.container).className} paddingBlock={48}>
           <Empty

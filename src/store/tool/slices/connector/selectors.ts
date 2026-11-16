@@ -42,6 +42,25 @@ export const isInConnectorTab = (
 ): boolean => !visibility || (connector.visibility === 'private') === (visibility === 'private');
 
 /**
+ * Whether an OAuth integration (a Composio or LobeHub catalog entry) lists under
+ * a workspace connector page's tab. The entry carries no visibility; its
+ * connector rows do. It lists under `private` when the caller has a private row
+ * of it, and under `public` unless its only rows are private: an entry nobody
+ * connected stays with the shared pool, where it can be connected.
+ */
+export const isIntegrationInConnectorTab = (
+  identifier: string,
+  connectors: Pick<ConnectorWithTools, 'identifier' | 'visibility'>[],
+  visibility?: ConnectorVisibility,
+): boolean => {
+  if (!visibility) return true;
+  const rows = connectors.filter((c) => c.identifier === identifier);
+  if (rows.length === 0) return visibility !== 'private';
+
+  return rows.some((c) => isInConnectorTab(c, visibility));
+};
+
+/**
  * The connectors a run loads from the caller's list, one per identifier, ranked
  * as the server's `ConnectorModel.pickByPriority` ranks base rows: the owner's
  * private row shadows the shared one, and equal ranks keep the lowest id (the

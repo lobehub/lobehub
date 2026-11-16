@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { ToolStore } from '@/store/tool/store';
 
-import { connectorSelectors, isInConnectorTab, pickRunConnectors } from './selectors';
+import {
+  connectorSelectors,
+  isInConnectorTab,
+  isIntegrationInConnectorTab,
+  pickRunConnectors,
+} from './selectors';
 import type { ConnectorWithTools } from './types';
 
 const connector = (patch: Partial<ConnectorWithTools>): ConnectorWithTools => ({
@@ -66,6 +71,50 @@ describe('connectorSelectors.connectorByIdentifier', () => {
       connectorSelectors.connectorByIdentifier('linear', 'private')(state([sharedRow]))?.id,
     ).toBe('shared-row');
     expect(connectorSelectors.connectorByIdentifier('missing')(state([sharedRow]))).toBe(undefined);
+  });
+});
+
+describe('isIntegrationInConnectorTab', () => {
+  // A Composio connection's row: endpoint-less, named by the app identifier
+  const gmail = (id: string, visibility: 'private' | 'public') =>
+    connector({
+      id,
+      identifier: 'gmail',
+      mcpServerUrl: null,
+      sourceType: 'composio' as never,
+      visibility,
+    });
+
+  it('lists an integration whose only row is private under the private tab alone', () => {
+    // Regression: the private tab hid every OAuth integration, so a Composio
+    // connection made private showed the empty state there and stayed listed
+    // under the shared tab.
+    const rows = [gmail('my-gmail', 'private')];
+
+    expect(isIntegrationInConnectorTab('gmail', rows, 'private')).toBe(true);
+    expect(isIntegrationInConnectorTab('gmail', rows, 'public')).toBe(false);
+  });
+
+  it('lists an integration with a shared row under the shared tab', () => {
+    expect(isIntegrationInConnectorTab('gmail', [gmail('ws-gmail', 'public')], 'public')).toBe(
+      true,
+    );
+    expect(isIntegrationInConnectorTab('gmail', [gmail('ws-gmail', 'public')], 'private')).toBe(
+      false,
+    );
+  });
+
+  it('lists an integration with both rows under both tabs', () => {
+    const rows = [gmail('ws-gmail', 'public'), gmail('my-gmail', 'private')];
+
+    expect(isIntegrationInConnectorTab('gmail', rows, 'public')).toBe(true);
+    expect(isIntegrationInConnectorTab('gmail', rows, 'private')).toBe(true);
+  });
+
+  it('keeps an integration nobody connected with the shared pool, and lists all without a tab', () => {
+    expect(isIntegrationInConnectorTab('gmail', [], 'public')).toBe(true);
+    expect(isIntegrationInConnectorTab('gmail', [], 'private')).toBe(false);
+    expect(isIntegrationInConnectorTab('gmail', [gmail('my-gmail', 'private')])).toBe(true);
   });
 });
 
