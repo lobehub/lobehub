@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import HeteroDeviceSwitcher from '../HeteroDeviceSwitcher';
 
 const state = vi.hoisted(() => ({
-  driveStatus: 'ready' as 'hidden' | 'ready' | 'upgrade',
+  driveStatus: 'ready' as 'hidden' | 'loading' | 'ready' | 'upgrade',
   openUpsell: vi.fn(),
   persistent: false,
   selectTarget: vi.fn(),
@@ -160,8 +160,8 @@ describe('HeteroDeviceSwitcher — persistent sandbox', () => {
     expect(state.selectTarget).not.toHaveBeenCalled();
   });
 
-  it('hides the row where there is no drive service', () => {
-    state.driveStatus = 'hidden';
+  it.each(['hidden', 'loading'] as const)('hides the row while the drive is %s', (driveStatus) => {
+    state.driveStatus = driveStatus;
     render(<HeteroDeviceSwitcher agentId="agent-1" />);
 
     expect(screen.queryByText(PERSISTENT)).toBeNull();

@@ -793,7 +793,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           Picking it is picking the drive, so the working-directory chip then
           goes straight to the drive's folders. A plan without a drive sees the
           row in the same place, tagged, as the way to one. */}
-      {supportsSandbox && sandboxMode.driveStatus !== 'hidden' ? (
+      {supportsSandbox &&
+      (sandboxMode.driveStatus === 'ready' || sandboxMode.driveStatus === 'upgrade') ? (
         <OptionRow
           active={isActive('sandbox') && sandboxMode.persistent}
           desc={t('heteroAgent.executionTarget.persistentSandboxDesc')}

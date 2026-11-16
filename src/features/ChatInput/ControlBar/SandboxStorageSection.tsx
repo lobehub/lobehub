@@ -4,6 +4,8 @@ import { memo } from 'react';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SafeBoundary from '@/components/ErrorBoundary';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { useTopicId } from '../hooks/useTopicId';
 import SandboxDrivePicker from './SandboxDrivePicker';
@@ -38,7 +40,11 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
     agentId,
     useTopicId(),
   );
-  const temporary = usePrefersTemporarySandbox(useActiveWorkspaceId(), agentId);
+  const userId = useUserStore(userProfileSelectors.userId);
+  const temporary = usePrefersTemporarySandbox(
+    { userId, workspaceId: useActiveWorkspaceId() },
+    agentId,
+  );
   useSeedDefaultSelection(agentId, {
     eligible: eligible && !temporary,
     entitled: status === 'ready' && !temporary,

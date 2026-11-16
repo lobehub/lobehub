@@ -2,6 +2,8 @@ import { useCallback } from 'react';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { seedPendingSandboxSelection } from '@/store/chat/pendingSandboxSelection';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { resolveDefaultSandboxSelection } from './defaultSandboxSelection';
 import { setPrefersTemporarySandbox } from './temporarySandboxPreference';
@@ -40,6 +42,7 @@ export const useSandboxModeSelect = (
   { enabled, topicId }: { enabled: boolean; topicId: string | null },
 ) => {
   const workspaceId = useActiveWorkspaceId();
+  const userId = useUserStore(userProfileSelectors.userId);
   const driveStatus = useSandboxDriveStatus(enabled);
   const { selection, setSelection, topicId: scopeTopicId } = useSandboxPlacement(agentId, topicId);
   const onDrive = isPersistentSelection(selection);
@@ -51,8 +54,8 @@ export const useSandboxModeSelect = (
     // Remembered only once the conversation has moved: a failed write leaves
     // it where it was, and new conversations must not start elsewhere.
     if (onDrive) await setSelection(temporarySelection(selection));
-    setPrefersTemporarySandbox(workspaceId, agentId, true);
-  }, [agentId, driveStatus, onDrive, selection, setSelection, workspaceId]);
+    setPrefersTemporarySandbox({ userId, workspaceId }, agentId, true);
+  }, [agentId, driveStatus, onDrive, selection, setSelection, userId, workspaceId]);
 
   const toPersistent = useCallback(async () => {
     if (!onDrive) {
@@ -63,12 +66,14 @@ export const useSandboxModeSelect = (
       else seedPendingSandboxSelection(agentId, next);
     }
     // After the move, as above: a failed write keeps the old preference too.
-    setPrefersTemporarySandbox(workspaceId, agentId, false);
-  }, [agentId, onDrive, scopeTopicId, setSelection, workspaceId]);
+    setPrefersTemporarySandbox({ userId, workspaceId }, agentId, false);
+  }, [agentId, onDrive, scopeTopicId, setSelection, userId, workspaceId]);
 
   return {
     driveStatus,
-    persistent: driveStatus === 'ready' && onDrive,
+    // While the entitlement loads, the placement the conversation already has
+    // is still what it runs on — said as such rather than as temporary.
+    persistent: (driveStatus === 'ready' || driveStatus === 'loading') && onDrive,
     toPersistent,
     toTemporary,
   };

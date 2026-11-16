@@ -9,7 +9,7 @@ import { temporarySelection, useSandboxModeSelect } from './useSandboxModeSelect
 import type { SandboxSelection } from './useSandboxPlacement';
 
 const state = vi.hoisted(() => ({
-  driveStatus: 'ready' as 'hidden' | 'ready' | 'upgrade',
+  driveStatus: 'ready' as 'hidden' | 'loading' | 'ready' | 'upgrade',
   seedPendingSandboxSelection: vi.fn(),
   selection: {} as Record<string, unknown>,
   setSelection: vi.fn(),
@@ -19,6 +19,9 @@ const state = vi.hoisted(() => ({
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
   useActiveWorkspaceId: () => state.workspaceId,
+}));
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (s: object) => unknown) => selector({ user: { id: 'user-1' } }),
 }));
 vi.mock('@/store/chat/pendingSandboxSelection', () => ({
   seedPendingSandboxSelection: state.seedPendingSandboxSelection,
@@ -34,6 +37,8 @@ vi.mock('./useSandboxPlacement', async (importOriginal) => ({
     topicId: state.topicId,
   }),
 }));
+
+const ME = { userId: 'user-1', workspaceId: null };
 
 const renderMode = () =>
   renderHook(() =>
@@ -80,7 +85,7 @@ describe('useSandboxModeSelect', () => {
     await act(() => result.current.toTemporary());
 
     expect(state.setSelection).toHaveBeenCalledWith({});
-    expect(prefersTemporarySandbox(null, 'agent-1')).toBe(true);
+    expect(prefersTemporarySandbox(ME, 'agent-1')).toBe(true);
   });
 
   it('puts an open conversation on the default drive folder', async () => {
@@ -88,14 +93,14 @@ describe('useSandboxModeSelect', () => {
     state.workspaceId = 'ws_1';
     localStorage.setItem(
       TEMPORARY_SANDBOX_PREFERENCE_KEY,
-      JSON.stringify({ 'ws_1:agent-1': true }),
+      JSON.stringify({ 'user-1:ws_1:agent-1': true }),
     );
 
     const { result } = renderMode();
     await act(() => result.current.toPersistent());
 
     expect(state.setSelection).toHaveBeenCalledWith({ drive: 'personal', workingDirectory: '.' });
-    expect(prefersTemporarySandbox('ws_1', 'agent-1')).toBe(false);
+    expect(prefersTemporarySandbox({ ...ME, workspaceId: 'ws_1' }, 'agent-1')).toBe(false);
   });
 
   it('keeps the folder a conversation already works in', async () => {
@@ -125,7 +130,7 @@ describe('useSandboxModeSelect', () => {
     const { result } = renderMode();
     await act(() => result.current.toTemporary());
 
-    expect(prefersTemporarySandbox(null, 'agent-1')).toBe(false);
+    expect(prefersTemporarySandbox(ME, 'agent-1')).toBe(false);
     expect(state.setSelection).not.toHaveBeenCalled();
   });
 
@@ -138,15 +143,30 @@ describe('useSandboxModeSelect', () => {
 
     const { result } = renderMode();
     await expect(act(() => result.current.toTemporary())).rejects.toThrow('offline');
-    expect(prefersTemporarySandbox(null, 'agent-1')).toBe(false);
+    expect(prefersTemporarySandbox(ME, 'agent-1')).toBe(false);
 
     state.selection = {};
     localStorage.setItem(
       TEMPORARY_SANDBOX_PREFERENCE_KEY,
-      JSON.stringify({ 'personal:agent-1': true }),
+      JSON.stringify({ 'user-1:personal:agent-1': true }),
     );
     const { result: again } = renderMode();
     await expect(act(() => again.current.toPersistent())).rejects.toThrow('offline');
-    expect(prefersTemporarySandbox(null, 'agent-1')).toBe(true);
+    expect(prefersTemporarySandbox(ME, 'agent-1')).toBe(true);
+  });
+
+  // Not yet known is not "no drive": the pick still has to take the
+  // conversation off the drive, or it flips back once the answer arrives.
+  it('moves the conversation off the drive while the entitlement loads', async () => {
+    state.driveStatus = 'loading';
+    state.topicId = 'topic-1';
+    state.selection = { workingDirectory: 'notes' };
+
+    const { result } = renderMode();
+    expect(result.current.persistent).toBe(true);
+    await act(() => result.current.toTemporary());
+
+    expect(state.setSelection).toHaveBeenCalledWith({});
+    expect(prefersTemporarySandbox(ME, 'agent-1')).toBe(true);
   });
 });
