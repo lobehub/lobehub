@@ -603,6 +603,10 @@ export interface ChannelDetail {
   attachments: Array<{ fileType: string; id: string; name: string; size: number; url: string }>;
   channel: ChannelListItem;
   hasMore: boolean;
+  /**
+   * The view's jobs. A main-timeline view also carries its threads' jobs still at work (queued,
+   * running, or holding the writer); filter by `threadId` for one conversation's own.
+   */
   jobs: ChannelPublicJob[];
   members: ChannelPublicMember[];
   messages: ChannelPublicMessage[];
