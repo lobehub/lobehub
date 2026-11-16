@@ -85,6 +85,7 @@ export class MessageModel {
   restoreHumanApproval: MessageApprovalRepo['restore'];
   findMessagePlugin: MessagePluginStore['findMessagePlugin'];
   listMessagePluginsByTopic: MessagePluginStore['listMessagePluginsByTopic'];
+  listToolCallIndexByTopic: MessagePluginStore['listToolCallIndexByTopic'];
   findLatestPluginStateInTopic: MessagePluginStore['findLatestPluginStateInTopic'];
   listToolCallsInTopics: MessagePluginStore['listToolCallsInTopics'];
   listMessagePluginsForOperation: MessagePluginStore['listMessagePluginsForOperation'];
@@ -204,6 +205,7 @@ export class MessageModel {
     this.restoreHumanApproval = approvals.restore;
     this.findMessagePlugin = plugins.findMessagePlugin;
     this.listMessagePluginsByTopic = plugins.listMessagePluginsByTopic;
+    this.listToolCallIndexByTopic = plugins.listToolCallIndexByTopic;
     this.findLatestPluginStateInTopic = plugins.findLatestPluginStateInTopic;
     this.listToolCallsInTopics = plugins.listToolCallsInTopics;
     this.listMessagePluginsForOperation = plugins.listMessagePluginsForOperation;

@@ -313,7 +313,7 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
         tool_call_id: 'todo-existing',
         topicId: h.topicId,
       });
-      h.messageModel.listMessagePluginsByTopic.mockResolvedValue([
+      h.messageModel.listToolCallIndexByTopic.mockResolvedValue([
         {
           id: 'tool-existing',
           metadata: h.messages.get('tool-existing')?.metadata,

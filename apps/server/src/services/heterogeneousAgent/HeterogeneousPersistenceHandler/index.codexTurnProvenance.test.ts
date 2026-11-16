@@ -54,7 +54,7 @@ const createHarness = (params: {
     }),
     findById: vi.fn(async (id: string) => messages.get(id) ?? null),
     getLatestSpineMessageId: vi.fn(async () => undefined),
-    listMessagePluginsByTopic: vi.fn(async () => []),
+    listToolCallIndexByTopic: vi.fn(async () => []),
     query: vi.fn(async () => [...messages.values()]),
     update: vi.fn(async (id: string, patch: Partial<FakeMessage>) => {
       const existing = messages.get(id);

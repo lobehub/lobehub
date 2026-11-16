@@ -195,7 +195,7 @@ const createHarness = () => {
         return match?.id;
       },
     ),
-    listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
+    listToolCallIndexByTopic: vi.fn(async (_topicId: string) => []),
   };
 
   const threadModel = {

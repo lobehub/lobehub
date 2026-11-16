@@ -20,7 +20,7 @@ const createPersistenceHandler = (
     messageModel: {
       findById: vi.fn(async () => null),
       getLatestSpineMessageId: vi.fn(async () => null),
-      listMessagePluginsByTopic: vi.fn(async () => []),
+      listToolCallIndexByTopic: vi.fn(async () => []),
       update: vi.fn(async () => ({ success: true })),
     } as any,
     threadModel: {} as any,

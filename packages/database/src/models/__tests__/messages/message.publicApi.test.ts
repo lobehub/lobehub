@@ -69,6 +69,7 @@ const PUBLIC_INSTANCE_METHODS = [
   'listMessagePluginsByIds',
   'listMessagePluginsByTopic',
   'listMessagePluginsForOperation',
+  'listToolCallIndexByTopic',
   'purgeMessages',
   'query',
   'queryAll',
