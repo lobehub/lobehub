@@ -110,6 +110,12 @@ export interface IAgentStateManager {
   hasQueuedMessages: (operationId: string) => Promise<boolean>;
 
   /**
+   * Whether the `execAgent` invocation that ran step 0 inline finished with it
+   * (see `markInlineFirstStepSettled`). False when it cannot be read.
+   */
+  isInlineFirstStepSettled: (operationId: string) => Promise<boolean>;
+
+  /**
    * Check the interrupt sentinel written by `markInterrupted`. Cheap enough
    * to poll, unlike `loadAgentState` which pulls the whole state blob.
    */
@@ -122,6 +128,13 @@ export interface IAgentStateManager {
 
   /** Read the inline step loop's parked envelope, if any. */
   loadInlineResume: (operationId: string) => Promise<null | string>;
+
+  /**
+   * Record that the `execAgent` invocation running step 0 inline finished its
+   * step loop without throwing, so the queued fallback delivery of step 0 has
+   * nothing left to do. Best-effort.
+   */
+  markInlineFirstStepSettled: (operationId: string) => Promise<void>;
 
   /**
    * Set the interrupt sentinel for the operation, alongside the

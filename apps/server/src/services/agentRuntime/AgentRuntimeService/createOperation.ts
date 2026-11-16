@@ -13,6 +13,7 @@ import {
   type OperationCreationParams,
   type OperationCreationResult,
 } from '../types';
+import { INLINE_FIRST_STEP_FALLBACK_DELAY_MS } from './constants';
 import {
   applyOperationInitSlots,
   buildPreInitState,
@@ -68,6 +69,7 @@ export async function createOperation(
     reservedOperation,
     signal,
     initialStepCount = 0,
+    inlineFirstStep = false,
   } = params;
 
   // Persist initial agent_operations row. CompletionLifecycle owns both
@@ -309,9 +311,11 @@ export async function createOperation(
         queueService.scheduleMessage({
           context: initialContext,
           deduplicationId,
-          delay: 50, // Short delay for startup
+          // An inline step 0 normally runs first; this delivery is its fallback.
+          delay: inlineFirstStep ? INLINE_FIRST_STEP_FALLBACK_DELAY_MS : 50,
           endpoint: `${deps.baseURL}/run`,
           operationId,
+          ...(inlineFirstStep ? { payload: { inlineFirstStepFallback: true } } : {}),
           priority: 'high',
           retryDelay: queueRetryDelay,
           retries: queueRetries,

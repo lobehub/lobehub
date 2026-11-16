@@ -27,6 +27,7 @@ export type ComposerRunRequest = Pick<
   | 'existingMessageIds'
   | 'fileIds'
   | 'includeFinalState'
+  | 'inlineFirstStep'
   | 'llmExecutor'
   | 'localDeviceId'
   | 'mentionedAgents'
@@ -119,6 +120,7 @@ export const startComposerRun = async (ctx: ComposerRunContext, input: ComposerR
     },
     clientProtocol: input.clientProtocol,
     includeFinalState: input.includeFinalState,
+    inlineFirstStep: input.inlineFirstStep,
     llmExecutor: input.llmExecutor,
     // This path serves the composer (`aiAgentService.execAgentTask`).
     // The client already queues follow-ups behind a live run and shows the

@@ -7,6 +7,7 @@ import {
   buildPreInitState,
   pickOperationInitSlots,
 } from '@/server/services/agentRuntime/AgentRuntimeService/operationInitSlots';
+import type * as ScheduleAfterResponseModule from '@/server/utils/scheduleAfterResponse';
 
 import { AiAgentService } from '../index';
 import type * as OperationInitModule from '../pipeline/operationInit';
@@ -23,7 +24,9 @@ const {
   mockAppEnv,
   mockFeatureFlags,
   mockTopicFindById,
+  mockAfterUnscoped,
 } = vi.hoisted(() => ({
+  mockAfterUnscoped: vi.fn(),
   mockAppEnv: {} as Record<string, unknown>,
   mockFeatureFlags: vi.fn(),
   mockCreateOperation: vi.fn(),
@@ -43,6 +46,12 @@ vi.mock('@/envs/app', async (importOriginal) => {
       get: (target, key: string) => (key in mockAppEnv ? mockAppEnv[key] : target[key]),
     }),
   };
+});
+
+// Captures the post-response hand-off of an inline step 0 without running it.
+vi.mock('@/server/utils/scheduleAfterResponse', async (importOriginal) => {
+  const actual = await importOriginal<typeof ScheduleAfterResponseModule>();
+  return { ...actual, afterUnscoped: mockAfterUnscoped };
 });
 
 vi.mock('@/server/featureFlags', () => ({
@@ -434,6 +443,83 @@ describe('AiAgentService.runDeferredInit - parity with the send path', () => {
 
       expect(runOperationInit).toHaveBeenCalledTimes(1);
       expect(mockCreateOperation.mock.calls[0][0].pendingInitRequest).toBeUndefined();
+    });
+
+    describe('agent_inline_first_step', () => {
+      const route = { inlineFirstStep: { requestStartedAt: Date.now() } };
+
+      it('leaves step 0 to the queue while the flag is off', async () => {
+        await service.execAgent({ ...plainSend, ...route });
+
+        expect(mockCreateOperation.mock.calls[0][0].inlineFirstStep).toBe(false);
+        expect(mockAfterUnscoped).not.toHaveBeenCalled();
+      });
+
+      it('runs step 0 after the response once the flag is on', async () => {
+        mockFeatureFlags.mockResolvedValue({
+          enableDeferredInit: true,
+          enableInlineFirstStep: true,
+        });
+
+        const result = await service.execAgent({ ...plainSend, ...route });
+
+        expect(result.success).toBe(true);
+        expect(mockCreateOperation.mock.calls[0][0].inlineFirstStep).toBe(true);
+        expect(mockAfterUnscoped).toHaveBeenCalledTimes(1);
+      });
+
+      it('fails closed when the flag cannot be read', async () => {
+        mockFeatureFlags
+          .mockResolvedValueOnce({ enableDeferredInit: true })
+          .mockRejectedValueOnce(new Error('edge config down'));
+
+        await service.execAgent({ ...plainSend, ...route });
+
+        expect(mockCreateOperation.mock.calls[0][0].pendingInitRequest).toBeDefined();
+        expect(mockCreateOperation.mock.calls[0][0].inlineFirstStep).toBe(false);
+        expect(mockAfterUnscoped).not.toHaveBeenCalled();
+      });
+
+      it('keeps step 0 on the queue for a caller that did not ask for it', async () => {
+        mockFeatureFlags.mockResolvedValue({
+          enableDeferredInit: true,
+          enableInlineFirstStep: true,
+        });
+
+        await service.execAgent(plainSend);
+
+        expect(mockCreateOperation.mock.calls[0][0].inlineFirstStep).toBe(false);
+        expect(mockAfterUnscoped).not.toHaveBeenCalled();
+      });
+
+      it('keeps step 0 on the queue for a send that runs its init on the send path', async () => {
+        mockFeatureFlags.mockResolvedValue({
+          enableDeferredInit: true,
+          enableInlineFirstStep: true,
+        });
+
+        await service.execAgent({ ...plainSend, ...route, autoStart: false });
+
+        expect(mockCreateOperation.mock.calls[0][0].pendingInitRequest).toBeUndefined();
+        expect(mockCreateOperation.mock.calls[0][0].inlineFirstStep).toBe(false);
+        expect(mockAfterUnscoped).not.toHaveBeenCalled();
+      });
+
+      it('does not run a step the queue was never handed', async () => {
+        mockFeatureFlags.mockResolvedValue({
+          enableDeferredInit: true,
+          enableInlineFirstStep: true,
+        });
+        mockCreateOperation.mockResolvedValueOnce({
+          autoStarted: false,
+          operationId: 'op-123',
+          success: true,
+        });
+
+        await service.execAgent({ ...plainSend, ...route });
+
+        expect(mockAfterUnscoped).not.toHaveBeenCalled();
+      });
     });
   });
 

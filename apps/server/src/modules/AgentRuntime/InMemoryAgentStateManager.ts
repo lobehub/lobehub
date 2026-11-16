@@ -16,6 +16,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
   private metadata: Map<string, AgentOperationMetadata> = new Map();
   private stepLocks: Map<string, { expiresAt: number; ownerId: string }> = new Map();
   private inlineResumes: Map<string, string> = new Map();
+  private inlineFirstStepsSettled: Set<string> = new Set();
   private interrupted: Set<string> = new Set();
   private queuedMessages: Set<string> = new Set();
 
@@ -162,6 +163,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     this.interrupted.delete(operationId);
     this.queuedMessages.delete(operationId);
     this.inlineResumes.delete(operationId);
+    this.inlineFirstStepsSettled.delete(operationId);
     log('Deleted operation %s', operationId);
   }
 
@@ -250,6 +252,14 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
     if (lock?.ownerId !== ownerId) return;
 
     this.inlineResumes.delete(operationId);
+  }
+
+  async markInlineFirstStepSettled(operationId: string): Promise<void> {
+    this.inlineFirstStepsSettled.add(operationId);
+  }
+
+  async isInlineFirstStepSettled(operationId: string): Promise<boolean> {
+    return this.inlineFirstStepsSettled.has(operationId);
   }
 
   async tryClaimStep(

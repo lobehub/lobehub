@@ -719,7 +719,37 @@ describe('AgentStateManager', () => {
         'agent_runtime_interrupt:op-del',
         'agent_runtime_queued_messages:op-del',
         'agent_runtime_inline_resume:op-del',
+        'agent_runtime_inline_first_step:op-del',
       );
+    });
+  });
+
+  describe('inline first step marker', () => {
+    it('marks the step settled with the state TTL and reads it back', async () => {
+      await stateManager.markInlineFirstStepSettled('op-inline');
+
+      expect(redisMock.setex).toHaveBeenCalledWith(
+        'agent_runtime_inline_first_step:op-inline',
+        2 * 3600,
+        '1',
+      );
+
+      redisMock.get.mockResolvedValueOnce('1');
+      await expect(stateManager.isInlineFirstStepSettled('op-inline')).resolves.toBe(true);
+      redisMock.get.mockResolvedValueOnce(null);
+      await expect(stateManager.isInlineFirstStepSettled('op-inline')).resolves.toBe(false);
+    });
+
+    // Unread or unwritten, the fallback delivery still runs as a redelivery and
+    // the step claim keeps it from running the step twice.
+    it('treats an unreachable Redis as not settled, and a failed mark as best-effort', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      redisMock.get.mockRejectedValueOnce(new Error('ECONNRESET'));
+      redisMock.setex.mockRejectedValueOnce(new Error('ECONNRESET'));
+
+      await expect(stateManager.isInlineFirstStepSettled('op-inline')).resolves.toBe(false);
+      await expect(stateManager.markInlineFirstStepSettled('op-inline')).resolves.toBeUndefined();
+      errorSpy.mockRestore();
     });
   });
 

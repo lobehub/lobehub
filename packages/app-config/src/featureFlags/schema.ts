@@ -66,6 +66,15 @@ export const FeatureFlagsSchema = z.object({
   agent_deferred_hetero_dispatch: FeatureFlagValue.optional(),
 
   /**
+   * Rollout gate for running step 0 of a deferred-init chat send inside the
+   * `execAgent` invocation, after its response is sent, instead of waiting for
+   * the queue to deliver it. The queued delivery is still published, later, as
+   * the fallback. Off: step 0 is delivered by the queue. Only the server reads
+   * it. Array values are user ids.
+   */
+  agent_inline_first_step: FeatureFlagValue.optional(),
+
+  /**
    * Keep the immutable per-operation tool set out of the agent state blob that
    * is rewritten at every step; it is written once to its own Redis key and
    * re-attached on load. Off: the blob keeps its inline copy. Server only;
@@ -220,6 +229,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   agent_llm_relay: false,
   agent_deferred_init: false,
   agent_deferred_hetero_dispatch: false,
+  agent_inline_first_step: false,
   agent_runtime_strip_operation_toolset: false,
 
   // Off until an admin publishes a user allowlist or flips it to true.
@@ -287,6 +297,11 @@ export const mapFeatureFlagsEnvToState = (
       config.agent_deferred_hetero_dispatch,
       userId,
       'agent_deferred_hetero_dispatch',
+    ),
+    enableInlineFirstStep: evaluateFeatureFlag(
+      config.agent_inline_first_step,
+      userId,
+      'agent_inline_first_step',
     ),
     enableStripOperationToolset: evaluateFeatureFlag(
       config.agent_runtime_strip_operation_toolset,

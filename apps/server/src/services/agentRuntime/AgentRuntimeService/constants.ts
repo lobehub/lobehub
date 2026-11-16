@@ -66,3 +66,16 @@ export const STEP_LOCK_RETRY_BASE_DELAY_MS = 15_000;
  * holds the lock for minutes no longer strands the delivery waiting behind it.
  */
 export const STEP_LOCK_RETRY_MAX_DELAY_MS = 120_000;
+
+/**
+ * How long the queued delivery of an inline step 0 waits before it runs.
+ *
+ * It is the fallback for an inline run that never starts or dies: until it
+ * fires, nothing else picks the run up. It is also delivered on every run, and
+ * while the inline run still holds the step it re-queues itself on the lock
+ * backoff (15s, 30s, …), so firing too early costs queue messages. The inline
+ * run normally starts within milliseconds of the response.
+ */
+export const INLINE_FIRST_STEP_FALLBACK_DELAY_MS = Number(
+  process.env.AGENT_INLINE_FIRST_STEP_FALLBACK_DELAY_MS ?? 20_000,
+);

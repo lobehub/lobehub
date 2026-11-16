@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hookDispatcher } from '../../hooks';
 import { type OperationCreationParams } from '../../types';
 import { AgentRuntimeService } from '..';
+import { INLINE_FIRST_STEP_FALLBACK_DELAY_MS } from '../constants';
 import { setUpService } from './testUtils';
 
 vi.mock('@lobechat/model-runtime', (...args) =>
@@ -194,6 +195,38 @@ describe('AgentRuntimeService', () => {
       expect(saved.initialContext).toEqual(mockParams.initialContext);
       expect(scheduleMessage).toHaveBeenCalledWith(
         expect.objectContaining({ context: mockParams.initialContext, stepIndex: 0 }),
+      );
+    });
+
+    it('queues step 0 right away when nothing runs it inline', async () => {
+      const scheduleMessage = vi.fn().mockResolvedValue('msg-1');
+      (service as any).queueService = { scheduleMessage };
+
+      await service.createOperation({ ...mockParams, pendingInitRequest: { prompt: 'hi' } as any });
+
+      const message = scheduleMessage.mock.calls[0][0];
+      expect(message.delay).toBe(50);
+      expect(message).not.toHaveProperty('payload');
+    });
+
+    it('still queues an inline step 0, later and marked as its fallback', async () => {
+      const scheduleMessage = vi.fn().mockResolvedValue('msg-1');
+      (service as any).queueService = { scheduleMessage };
+
+      const result = await service.createOperation({
+        ...mockParams,
+        inlineFirstStep: true,
+        pendingInitRequest: { prompt: 'hi' } as any,
+      });
+
+      expect(result.autoStarted).toBe(true);
+      expect(scheduleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          delay: INLINE_FIRST_STEP_FALLBACK_DELAY_MS,
+          endpoint: expect.stringMatching(/\/run$/),
+          payload: { inlineFirstStepFallback: true },
+          stepIndex: 0,
+        }),
       );
     });
 

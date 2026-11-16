@@ -117,6 +117,38 @@ async function assertStepOwnership(
 }
 
 /**
+ * Record how an operation's first step reached its worker and how long after
+ * the operation was created it started: the wait the user has between the send
+ * returning and anything happening. One record per operation that starts.
+ */
+function recordFirstStepStart(
+  span: { setAttributes: (attributes: Record<string, number | string>) => unknown },
+  {
+    createdAt,
+    dispatch,
+    operationId,
+    startedAt,
+  }: {
+    createdAt?: string;
+    dispatch: 'inline' | 'inline_fallback' | 'queue';
+    operationId: string;
+    startedAt: number;
+  },
+): void {
+  const createdAtMs = createdAt ? Date.parse(createdAt) : Number.NaN;
+  const startDelayMs = Number.isFinite(createdAtMs) ? startedAt - createdAtMs : undefined;
+  span.setAttributes({
+    'lobehub.agent_step.first_step_dispatch': dispatch,
+    ...(startDelayMs === undefined
+      ? {}
+      : { 'lobehub.agent_step.first_step_start_delay_ms': startDelayMs }),
+  });
+  console.info(
+    JSON.stringify({ dispatch, event: 'agent.first_step.start', operationId, startDelayMs }),
+  );
+}
+
+/**
  * Execute Agent step
  */
 export async function executeStep(
@@ -128,6 +160,7 @@ export async function executeStep(
     stepIndex,
     resumeClientLlm,
     externalRetryCount = 0,
+    firstStepDispatch,
     inlineContinuation = false,
     retainStepLock = false,
     stepLockOwner: providedStepLockOwner,
@@ -201,6 +234,14 @@ export async function executeStep(
         throw new Error(`Agent state not found for operation ${operationId}`);
       }
       stopRunSlotLease = startRunSlotLease(deps.userId, agentState);
+      if (agentState.stepCount === 0) {
+        recordFirstStepStart(invokeAgentSpan, {
+          createdAt: agentState.createdAt,
+          dispatch: firstStepDispatch ?? 'queue',
+          operationId,
+          startedAt: stepStartAt,
+        });
+      }
 
       // A run created without its init still carries the turn's request: run
       // that init here, after the step claim and before anything is published.

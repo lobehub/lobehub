@@ -569,4 +569,20 @@ describe('mapFeatureFlagsEnvToState', () => {
       expect(mapFeatureFlagsEnvToState(config).enableStripOperationToolset).toBe(false);
     });
   });
+
+  describe('agent_inline_first_step', () => {
+    it('is off by default', () => {
+      expect(DEFAULT_FEATURE_FLAGS.agent_inline_first_step).toBe(false);
+      expect(mapFeatureFlagsEnvToState(DEFAULT_FEATURE_FLAGS, 'user-1').enableInlineFirstStep).toBe(
+        false,
+      );
+    });
+
+    it('maps a user allowlist to the listed users only', () => {
+      const config = FeatureFlagsSchema.parse({ agent_inline_first_step: ['user-1'] });
+
+      expect(mapFeatureFlagsEnvToState(config, 'user-1').enableInlineFirstStep).toBe(true);
+      expect(mapFeatureFlagsEnvToState(config, 'user-2').enableInlineFirstStep).toBe(false);
+    });
+  });
 });

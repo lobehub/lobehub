@@ -210,6 +210,8 @@ export const bridgeLegacyResumeToSourceIntervention = async (
 
 export const execRouter = router({
   execAgent: aiAgentWriteProcedure.input(ExecAgentSchema).mutation(async ({ input, ctx }) => {
+    // The clock an inline step 0 (`agent_inline_first_step`) budgets against.
+    const requestStartedAt = Date.now();
     const {
       agentId,
       slug,
@@ -284,6 +286,8 @@ export const execRouter = router({
           ...request,
           acceptsFileWorks: acceptsFileWorksOf(input.streamFeatures),
           acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
+          // Only this route offers to run step 0 itself: it knows its own clock.
+          inlineFirstStep: { requestStartedAt },
           // A non-superseding start waits on the surface like a server-started
           // follow-up, so a thread's live run is refused as well.
           ...(supersedeLiveRun ? {} : { queuedSuccessor: true }),
