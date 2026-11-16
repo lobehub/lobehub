@@ -1,29 +1,34 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 
 import { readHistoryIndex } from './historyIndex';
-import { createBackOriginRecorder, pruneBackOwners } from './index';
-import { useLocationOwner, useOpenOwnersKey } from './useLocationOwner';
+import { closedOwnersBetween, createBackOriginRecorder, pruneBackOwners } from './index';
+import { parseOpenOwners, useLocationOwner, useOpenOwnersKey } from './useLocationOwner';
 
 /** Feeds every in-app navigation to the back-origin store. Renders nothing. */
 const BackOriginTracker = () => {
-  const { hash, pathname, search } = useActiveLocation();
+  const { hash, key, pathname, search } = useActiveLocation();
   const owner = useLocationOwner();
   const openOwnersKey = useOpenOwnersKey();
   const [record] = useState(createBackOriginRecorder);
 
+  const openOwnersKeyRef = useRef(openOwnersKey);
+
   useEffect(() => {
-    if (openOwnersKey === null) return;
-    pruneBackOwners(new Set(openOwnersKey.split('\n')));
+    const previous = parseOpenOwners(openOwnersKeyRef.current);
+    pruneBackOwners(closedOwnersBetween(previous, parseOpenOwners(openOwnersKey)));
+    openOwnersKeyRef.current = openOwnersKey;
   }, [openOwnersKey]);
 
   useEffect(() => {
     // Desktop tab urls carry no hash; on web it brings back a section anchor.
     record(owner, `${pathname}${search}${hash}`, readHistoryIndex());
-  }, [owner, pathname, search, hash, record]);
+    // `key` changes when the same url is pushed or popped again (a new history
+    // entry with a new index).
+  }, [owner, pathname, search, hash, key, record]);
 
   return null;
 };

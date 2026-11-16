@@ -1,8 +1,9 @@
+import { tabScopeKey } from '@/features/Electron/titlebar/TabBar/scope';
 import { useElectronStore } from '@/store/electron';
 
 import { MAIN_OWNER } from './useLocationOwner';
 
-export { MAIN_OWNER };
+export { MAIN_OWNER, type OpenOwners, parseOpenOwners } from './useLocationOwner';
 
 /**
  * Which history a location belongs to: each Electron tab (or split pane) keeps
@@ -10,6 +11,8 @@ export { MAIN_OWNER };
  */
 export const useLocationOwner = (): string => useElectronStore((s) => s.activeTabId) ?? MAIN_OWNER;
 
-/** The open tab ids joined by `\n`, so closing a tab can drop its back trail. */
+/** The active tab scope, then its open tab ids, joined by `\n`. */
 export const useOpenOwnersKey = (): string | null =>
-  useElectronStore((s) => s.tabs.map((tab) => tab.id).join('\n'));
+  useElectronStore((s) =>
+    [tabScopeKey(s.activeTabScope), ...s.tabs.map((tab) => tab.id)].join('\n'),
+  );

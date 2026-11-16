@@ -4,7 +4,7 @@ import { RESERVED_ROOT_SEGMENTS } from '@/features/Workspace/rootSegments';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 
 import { readHistoryIndex } from './historyIndex';
-import { MAIN_OWNER, useLocationOwner } from './useLocationOwner';
+import { MAIN_OWNER, type OpenOwners, useLocationOwner } from './useLocationOwner';
 
 /**
  * Sidebars that own a back button for one entity (an agent or a group) send it
@@ -64,17 +64,30 @@ const setStack = (owner: string, stack: readonly BackEntry[]) => {
 };
 
 /**
- * Forget the trails of owners that no longer exist (closed Electron tabs).
- * `main` (the web router, or desktop without tabs) is always kept.
+ * Forget the trails of owners that were closed (Electron tabs). `main` (the web
+ * router, or desktop without tabs) is always kept.
  */
-export const pruneBackOwners = (openOwners: ReadonlySet<string>): void => {
-  const kept = Object.entries(stacks).filter(
-    ([owner]) => owner === MAIN_OWNER || openOwners.has(owner),
-  );
-  if (kept.length === Object.keys(stacks).length) return;
+export const pruneBackOwners = (closedOwners: Iterable<string>): void => {
+  const closed = new Set(closedOwners);
+  closed.delete(MAIN_OWNER);
+  if (![...closed].some((owner) => owner in stacks)) return;
 
-  stacks = Object.fromEntries(kept);
+  stacks = Object.fromEntries(Object.entries(stacks).filter(([owner]) => !closed.has(owner)));
   listeners.forEach((listener) => listener());
+};
+
+/**
+ * The owners closed between two snapshots of the open owners. A snapshot taken
+ * in another scope (personal vs a workspace) lists that scope's tabs instead, so
+ * a scope switch closes nothing: those tabs come back when the user returns.
+ */
+export const closedOwnersBetween = (
+  previous: OpenOwners | null,
+  next: OpenOwners | null,
+): string[] => {
+  if (!previous || !next || previous.scope !== next.scope) return [];
+  const open = new Set(next.ids);
+  return previous.ids.filter((id) => !open.has(id));
 };
 
 const findScope = (stack: readonly BackEntry[], scope: string): number =>

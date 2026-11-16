@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  closedOwnersBetween,
   createBackOriginRecorder,
   getBackOrigin,
   historyDeltaTo,
@@ -189,8 +190,7 @@ describe('pruneBackOwners', () => {
       record(`tab-${tab}`, `/page/${tab}`);
       record(`tab-${tab}`, '/agent/agt_1');
     }
-    const open = new Set(Array.from({ length: 29 }, (_, tab) => `tab-${tab + 1}`));
-    pruneBackOwners(open);
+    pruneBackOwners(['tab-0']);
 
     expect(getBackOrigin('tab-0', '/agent/agt_1')).toBeUndefined();
     expect(getBackOrigin('tab-1', '/agent/agt_1')).toBe('/page/1');
@@ -199,7 +199,28 @@ describe('pruneBackOwners', () => {
 
   it('always keeps the main owner', () => {
     walk('/tasks', '/agent/agt_1');
-    pruneBackOwners(new Set());
+    pruneBackOwners(['main']);
     expect(getBackOrigin('main', '/agent/agt_1')).toBe('/tasks');
+  });
+});
+
+describe('closedOwnersBetween', () => {
+  it('reports tabs that left the list within one scope', () => {
+    expect(
+      closedOwnersBetween(
+        { ids: ['tab-1', 'tab-2'], scope: 'personal' },
+        { ids: ['tab-2'], scope: 'personal' },
+      ),
+    ).toEqual(['tab-1']);
+  });
+
+  it('closes nothing when the scope switches', () => {
+    expect(
+      closedOwnersBetween(
+        { ids: ['tab-1', 'tab-2'], scope: 'personal' },
+        { ids: ['tab-3'], scope: 'workspace:acme' },
+      ),
+    ).toEqual([]);
+    expect(closedOwnersBetween(null, { ids: ['tab-3'], scope: 'personal' })).toEqual([]);
   });
 });
