@@ -484,6 +484,8 @@ const groupedTopicsForSidebar =
     groupMode: TopicGroupMode = 'byTime',
     includeCompleted = true,
     localDeviceIds?: readonly string[],
+    /** Project directories, so byDevice can place a topic by its directory's device. */
+    directories?: ReadonlyArray<TopicDeviceDirectory>,
   ) =>
   (s: ChatStoreState): GroupedTopic[] => {
     const limitedTopics = displayTopicsForSidebar(pageSize, sortBy, includeCompleted)(s);
@@ -499,7 +501,7 @@ const groupedTopicsForSidebar =
       groupMode,
       sortBy,
       loadingTopicIds,
-      undefined,
+      directories,
       localDeviceIds,
     );
   };

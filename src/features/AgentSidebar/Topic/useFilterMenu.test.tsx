@@ -80,14 +80,15 @@ describe('useTopicFilterDropdownMenu group modes', () => {
     vi.clearAllMocks();
   });
 
-  /** @example A single agent's own sidebar must not offer grouping by agent. */
-  it('hides by agent in an unscoped agent sidebar', () => {
+  /** @example A single agent's own sidebar groups by device but never by agent. */
+  it('offers by device but hides by agent in an unscoped agent sidebar', () => {
     const { result } = renderHook(() => useTopicFilterDropdownMenu());
 
     expect(organizeLabels(result.current())).toEqual([
       'filter.groupMode.byStatus',
       'filter.groupMode.byTime',
       'filter.groupMode.byProject',
+      'filter.groupMode.byDevice',
       'filter.groupMode.flat',
     ]);
   });
