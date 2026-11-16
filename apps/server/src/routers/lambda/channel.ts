@@ -267,6 +267,18 @@ export const channelRouter = router({
     await ctx.channelService.remove(input.channelId);
     return { success: true };
   }),
+  editMessage: channelProcedure
+    .input(
+      z.object({
+        channelId,
+        content: z.string().max(CHANNEL_LIMITS.contentLength),
+        messageId: z.uuid(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.channelService.editMessage(input.channelId, input.messageId, input.content),
+      success: true,
+    })),
   rename: channelProcedure
     .input(z.object({ channelId, title: z.string().trim().min(1).max(CHANNEL_LIMITS.titleLength) }))
     .mutation(async ({ ctx, input }) => ({

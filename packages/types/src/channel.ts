@@ -210,6 +210,14 @@ export const channelMessageReceipt = (
     : undefined;
 };
 
+/** When a person last edited their message (`metadata.editedAt`); null if never. */
+export const channelMessageEditedAt = (
+  metadata: ChannelMessageMetadata | null | undefined,
+): Date | null => {
+  const editedAt = metadata?.editedAt;
+  return typeof editedAt === 'string' ? new Date(editedAt) : null;
+};
+
 /** `metadata.via` of a relayed request, or undefined for anything else. */
 export const channelMessageVia = (
   metadata: ChannelMessageMetadata | null | undefined,
@@ -541,6 +549,8 @@ export interface ChannelPublicMessage {
   };
   content: string;
   createdAt: Date;
+  /** Set once the author has edited the text; shown as "(edited)". */
+  editedAt?: Date | null;
   fileIds: string[];
   id: string;
   mentions: string[];
