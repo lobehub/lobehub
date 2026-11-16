@@ -23,6 +23,7 @@ import { MarketService } from '@/server/services/market';
 import { createSandboxService } from '@/server/services/sandbox';
 
 import { UNEXECUTED_INTERVENTION_STATUSES } from './constants';
+import { resolveShellPullRequestLinking } from './pullRequestLinking';
 import { resolveRunWorkAccessScope, type ShareVisitorWorkIdentity } from './shareWorkScope';
 import { registerShellWorks } from './shellWorkRegistration';
 
@@ -428,11 +429,23 @@ export const registerWorksForOperation = async (
   // counted, never thrown. Unlike file Works there is no device-provenance
   // objection: the registered entities are REMOTE resources whose identity/url
   // is independent of where the CLI ran.
+  // A share visitor's run is fenced off from the creator's topics, so it never
+  // links pull requests into them.
+  const pullRequestLinking = params.agentShareVisitor
+    ? undefined
+    : await resolveShellPullRequestLinking({
+        db: serverDB,
+        topicId,
+        userId,
+        workModel,
+        workspaceId,
+      });
   const shellOutcome = await registerShellWorks({
     agentId: completingOp.agentId,
     cumulativeCost,
     cumulativeUsage,
     operationId,
+    pullRequestLinking,
     records,
     threadId: completingOp.threadId,
     topicId,

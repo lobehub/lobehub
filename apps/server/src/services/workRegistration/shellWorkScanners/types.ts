@@ -2,6 +2,8 @@ import type { WorkVersionCumulativeUsage } from '@lobechat/types';
 
 import type { WorkModel } from '@/database/models/work';
 
+import type { ShellPullRequestLinking } from '../pullRequestLinking';
+
 /**
  * One CLI family the shell Work scan knows how to turn into Works. The engine
  * (`registerShellWorks` in `../shellWorkRegistration`) owns everything
@@ -30,12 +32,25 @@ export interface ShellWorkScanner {
     cumulativeUsage: WorkVersionCumulativeUsage | null;
     data: { command: string; exitCode?: number; output?: string };
     messageId: string;
+    /** Present when the lab is on; see {@link ShellPullRequestLinking}. */
+    pullRequestLinking?: ShellPullRequestLinking;
     rootOperationId: string;
     threadId: string | null;
     toolCallId: string | null;
     toolIdentifier: string;
     toolName: string;
     topicId: string;
+    /**
+     * Every text the run left (stdout, stderr, combined output, message body)
+     * joined. `data.output` is the stdout-first pick the gh normalizer wants;
+     * git writes its push report to stderr, so a push needs all of it.
+     */
+    transcript: string;
     workModel: WorkModel;
   }) => Promise<unknown | null>;
+  /**
+   * Runs only when the scan carries {@link ShellPullRequestLinking} (the
+   * Better Coding Experience lab is on); without it the scanner is skipped.
+   */
+  requiresPullRequestLinking?: boolean;
 }

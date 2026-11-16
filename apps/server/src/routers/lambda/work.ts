@@ -17,7 +17,12 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createCanvasStorageService, isOwnCanvasManifestKey } from '@/server/services/canvas';
 import { deleteCanvas } from '@/server/services/canvas/delete';
-import { registerShellWorksForLocalRun } from '@/server/services/workRegistration';
+import {
+  linkPushedPullRequests,
+  listTopicPullRequestsWithStatus,
+  registerShellWorksForLocalRun,
+  resolveShellPullRequestLinking,
+} from '@/server/services/workRegistration';
 
 const workProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -272,8 +277,64 @@ export const workRouter = router({
         anchorMessageId: input.anchorMessageId,
         messageIds: input.messageIds,
         messageModel: ctx.messageModel,
+        pullRequestLinking: await resolveShellPullRequestLinking({
+          db: ctx.serverDB,
+          topicId: input.topicId,
+          userId: ctx.userId,
+          workModel: ctx.workModel,
+          workspaceId: ctx.workspaceId,
+        }),
         topicId: input.topicId,
         workModel: ctx.workModel,
+      }),
+    ),
+
+  // Better Coding Experience: the GitHub pull requests a topic's Work rows
+  // link, with the GitHub App's state where an installation tracks the repo.
+  listTopicPullRequests: workProcedure
+    .input(z.object({ topicId: z.string().min(1) }))
+    .query(async ({ ctx, input }) =>
+      listTopicPullRequestsWithStatus({
+        db: ctx.serverDB,
+        topicId: input.topicId,
+        userId: ctx.userId,
+        workModel: ctx.workModel,
+        workspaceId: ctx.workspaceId,
+      }),
+    ),
+
+  // Better Coding Experience: link the pull requests a `git push` tool call
+  // updated, right after it ran. The push itself is re-read from the persisted
+  // tool message; see `linkPushedPullRequests` for what the device may add.
+  linkPushedPullRequests: skillWorkProcedureWrite
+    .input(
+      z.object({
+        pullRequests: z
+          .array(
+            z.object({
+              headRefName: z.string().min(1).max(255),
+              isDraft: z.boolean().optional(),
+              number: z.number().int().positive(),
+              state: z.string().max(32).optional(),
+              title: z.string().max(1024).optional(),
+              url: z.string().url().max(2048),
+            }),
+          )
+          .max(10),
+        toolCallId: z.string().min(1).max(255),
+        topicId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      linkPushedPullRequests({
+        db: ctx.serverDB,
+        devicePullRequests: input.pullRequests,
+        messageModel: ctx.messageModel,
+        toolCallId: input.toolCallId,
+        topicId: input.topicId,
+        userId: ctx.userId,
+        workModel: ctx.workModel,
+        workspaceId: ctx.workspaceId,
       }),
     ),
 });
