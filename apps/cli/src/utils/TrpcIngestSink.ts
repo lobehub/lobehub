@@ -15,6 +15,13 @@ import type { IngestAck, IngestSink } from './BatchIngester';
  * injected by the server before spawning the sandbox / desktop process).
  */
 export class TrpcIngestSink implements IngestSink {
+  /**
+   * Cleared once the server refused a batch for carrying `background_task`
+   * events: a server that predates them rejects the whole batch at input
+   * validation, so they are dropped for the rest of the run instead.
+   */
+  private sendBackgroundTasks = true;
+
   constructor(
     private readonly client: TrpcClient,
     private readonly agentType: LocalHeterogeneousAgentType | LocalRuntimeHeterogeneousAgentType,
@@ -53,6 +60,21 @@ export class TrpcIngestSink implements IngestSink {
   }
 
   async ingest(events: AgentStreamEvent[]): Promise<IngestAck> {
+    const sendable = this.sendBackgroundTasks
+      ? events
+      : events.filter((event) => event.type !== 'background_task');
+    try {
+      return await this.send(sendable);
+    } catch (error) {
+      const code = (error as { data?: { code?: string } } | null)?.data?.code;
+      const hasTasks = sendable.some((event) => event.type === 'background_task');
+      if (code !== 'BAD_REQUEST' || !hasTasks) throw error;
+      this.sendBackgroundTasks = false;
+      return this.send(sendable.filter((event) => event.type !== 'background_task'));
+    }
+  }
+
+  private async send(events: AgentStreamEvent[]): Promise<IngestAck> {
     const ack = (await this.client.aiAgent.heteroIngest.mutate({
       agentType: this.agentType,
       assistantMessageId: this.assistantMessageId,
