@@ -1,5 +1,6 @@
 import { channelDocUrl } from '@lobechat/const';
 
+import { PLATFORM_UNSUPPORTED_MESSAGE_APIS } from '../messageCapabilities';
 import type { PlatformDefinition } from '../types';
 import { LineClientFactory } from './client';
 import { schema } from './schema';
@@ -18,4 +19,5 @@ export const line: PlatformDefinition = {
   supportsMarkdown: false,
   supportsMessageEdit: false,
   clientFactory: new LineClientFactory(),
+  unsupportedMessageApis: PLATFORM_UNSUPPORTED_MESSAGE_APIS.line,
 };

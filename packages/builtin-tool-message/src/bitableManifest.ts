@@ -55,7 +55,7 @@ export const bitableApis: BuiltinToolManifest['api'] = [
               },
               type: {
                 description:
-                  'Column type. `person` cells hold open_ids, `date` cells a date string ("2026-11-20") or millisecond timestamp, `url` cells a link.',
+                  'Column type. `person` cells hold open_ids, `date` cells a date string ("2026-11-20") or millisecond timestamp (a value of 10 digits or fewer is read as Unix seconds), `url` cells a link.',
                 enum: [
                   'text',
                   'number',

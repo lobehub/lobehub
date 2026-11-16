@@ -120,6 +120,13 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
   // The shared Linq pool (messenger iMessage / SMS) has no channel API behind
   // the message tool — replies flow through the messenger, nothing else.
   linq: [...CHANNEL_MESSAGE_APIS],
+  // LINE has no document or Bitable API; those Feishu/Lark-only tools are
+  // trimmed so a LINE chat never routes them to an unrelated Feishu bot.
+  line: [
+    MessageApiName.addBitableRecords,
+    MessageApiName.createBitable,
+    MessageApiName.readDocument,
+  ],
   // Lark shares Feishu's service, so it has the same limitations.
   lark: [
     MessageApiName.createPoll,

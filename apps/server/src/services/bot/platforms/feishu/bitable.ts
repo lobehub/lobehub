@@ -105,8 +105,10 @@ const validateFields = (fields: BitableFieldSpec[]) => {
 
 const toDateMillis = (column: string, value: unknown): number => {
   if (typeof value === 'number') {
-    // A 10-digit value is a Unix second timestamp; Feishu wants milliseconds.
-    return value < 1e11 ? value * 1000 : value;
+    // Numbers are milliseconds per the tool contract. Only a value of at most
+    // 10 digits is read as Unix seconds: as milliseconds it would fall before
+    // April 1970, while as seconds it covers every date up to 2286.
+    return Math.abs(value) < 1e10 ? value * 1000 : value;
   }
   if (typeof value === 'string') {
     const trimmed = value.trim();

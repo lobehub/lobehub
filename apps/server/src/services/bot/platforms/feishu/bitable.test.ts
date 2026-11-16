@@ -377,6 +377,14 @@ describe('toBitableCellValue', () => {
     );
   });
 
+  it('keeps millisecond timestamps and reads only short values as seconds', () => {
+    const date = BITABLE_FIELD_TYPE_CODES.date;
+    expect(toBitableCellValue('d', date, 31_536_000_000)).toBe(31_536_000_000);
+    expect(toBitableCellValue('d', date, 1_763_600_000_000)).toBe(1_763_600_000_000);
+    expect(toBitableCellValue('d', date, 1_763_600_000)).toBe(1_763_600_000_000);
+    expect(toBitableCellValue('d', date, '1763600000')).toBe(1_763_600_000_000);
+  });
+
   it('passes values of column types it does not create through unchanged', () => {
     const value = [{ file_token: 'x' }];
     expect(toBitableCellValue('附件', 17, value)).toBe(value);
