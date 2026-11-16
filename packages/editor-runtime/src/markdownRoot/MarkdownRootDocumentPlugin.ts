@@ -1,4 +1,4 @@
-import { DecoratorNode, ElementNode, getRegisteredNode, type LexicalEditor } from 'lexical';
+import { getRegisteredNode, type LexicalEditor } from 'lexical';
 
 import { MARKDOWN_SERVICE_ID, type ServiceKernel } from '../markdownService';
 
@@ -15,13 +15,21 @@ interface MarkdownRootService {
 // package's main entry, which the server cannot load.
 const BASE_CONTENT = { direction: 'ltr', format: '', indent: 0, version: 1 } as const;
 
-/** Lexical's root holds element and decorator nodes only (`RootNode.splice`). */
+/**
+ * Lexical's root holds element and decorator nodes only (`RootNode.splice`).
+ *
+ * Decided by what the node class can do, not by `instanceof`: the server bundle
+ * loads its own copy of `lexical` for this package, so the editor's node classes
+ * do not extend the `ElementNode` imported here, and every block would look
+ * like text and be wrapped.
+ */
 const canSitAtRoot = (editor: LexicalEditor, node: ReadNode) => {
-  const klass = getRegisteredNode(editor, node.type)?.klass;
+  const prototype = getRegisteredNode(editor, node.type)?.klass.prototype;
   // An unregistered type is a different failure, and Lexical names it itself.
-  if (!klass) return true;
+  if (!prototype) return true;
 
-  return klass.prototype instanceof ElementNode || klass.prototype instanceof DecoratorNode;
+  const hasMethod = (name: string) => typeof Reflect.get(prototype, name) === 'function';
+  return hasMethod('getChildren') || hasMethod('decorate');
 };
 
 /**
