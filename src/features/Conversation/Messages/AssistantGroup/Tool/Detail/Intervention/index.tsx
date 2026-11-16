@@ -287,7 +287,9 @@ const Intervention = memo<InterventionProps>(
     if (BuiltinToolInterventionRender) {
       if (isEditing)
         return (
-          <Suspense fallback={<Arguments arguments={requestArgs} />}>
+          <Suspense
+            fallback={<Arguments arguments={requestArgs} identifier={identifier} messageId={id} />}
+          >
             <KeyValueEditor
               initialValue={parsedArgs}
               onCancel={handleCancel}

@@ -90,7 +90,9 @@ const accountNames: Record<string, string> = { lnk_work: 'work@acme.com' };
 
 vi.mock('@/store/tool/slices/connector', () => ({
   connectorSelectors: {
-    connectorLinkNameById: (linkId: string) => () => accountNames[linkId],
+    // Names resolve only on the connector the call runs on, for the agent that ran it
+    connectorLinkNameForTool: (identifier: string, linkId: string, agentId?: string) => () =>
+      identifier === 'mail' && agentId === 'agt_mail' ? accountNames[linkId] : undefined,
   },
 }));
 
@@ -123,6 +125,8 @@ vi.mock('../../../../../store', () => ({
     }) => unknown,
   ) =>
     selector({
+      context: { agentId: 'agt_mail' },
+      dbMessages: [],
       cancelToolInteraction: vi.fn(),
       skipToolInteraction: vi.fn(),
       submitHeteroIntervention,

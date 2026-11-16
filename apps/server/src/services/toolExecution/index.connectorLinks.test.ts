@@ -6,14 +6,25 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { ToolExecutionService } from './index';
 
-const mocks = vi.hoisted(() => ({ find: vi.fn(), links: vi.fn(), call: vi.fn() }));
+const mocks = vi.hoisted(() => ({ find: vi.fn(), links: vi.fn(), call: vi.fn(), tools: vi.fn() }));
 vi.mock('@/database/models/connector', () => ({
   ConnectorModel: vi.fn(function () {
     return {
       context: { db: {}, userId: 'me' },
+      // Any row by id: the marker alone must never pick the connector
       findById: mocks.find,
+      // The connector the call's identifier resolves to for the run
+      resolveByIdentifiers: async () => {
+        const row = await mocks.find();
+        return row ? [row] : [];
+      },
       getLinkModel: () => ({ listByConnectorIds: mocks.links }),
     };
+  }),
+}));
+vi.mock('@/database/models/connectorTool', () => ({
+  ConnectorToolModel: vi.fn(function () {
+    return { queryByConnector: mocks.tools };
   }),
 }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
@@ -78,6 +89,7 @@ beforeEach(() => {
     })),
   );
   mocks.call.mockResolvedValue({ content: 'ok', success: true });
+  mocks.tools.mockResolvedValue([{ permission: 'auto', toolName: 'echo', userConnectorId: 'c' }]);
   vi.mocked(deviceGateway.executeMcpCall).mockResolvedValue({
     success: true,
     content: 'device ok',
@@ -177,5 +189,41 @@ describe('live connector account resolution at dispatch', () => {
     });
     expect(result.content).toContain("without the user's consent");
     expect(result.content).toContain('Provider rejected authorization');
+  });
+
+  // A plugin row can carry any manifest, marker included
+  describe('a marker the connector does not back', () => {
+    it('lends no account to a manifest whose marker names another connector', async () => {
+      const result = await service.executeTool(payload, {
+        ...context('https://mcp.example'),
+        toolManifestMap: {
+          multi: {
+            mcpParams: { type: 'http', url: 'https://mcp.example' },
+            connectorLinks: { connectorId: 'someone-elses', param: 'link_id' },
+          },
+        },
+      });
+      expect(result).toMatchObject({ success: false });
+      expect(mocks.links).not.toHaveBeenCalled();
+      expect(mocks.call).not.toHaveBeenCalled();
+    });
+    it('blocks a tool the connector has disabled', async () => {
+      mocks.tools.mockResolvedValue([
+        { permission: 'disabled', toolName: 'echo', userConnectorId: 'c' },
+      ]);
+      const result = await service.executeTool(payload, context('https://mcp.example'));
+      expect(result.content).toContain('has been disabled by the user');
+      expect(mocks.links).not.toHaveBeenCalled();
+      expect(mocks.call).not.toHaveBeenCalled();
+    });
+    it('refuses a tool the connector does not serve', async () => {
+      const result = await service.executeTool(
+        { ...payload, apiName: 'not_synced' },
+        context('https://mcp.example'),
+      );
+      expect(result).toMatchObject({ success: false });
+      expect(mocks.links).not.toHaveBeenCalled();
+      expect(mocks.call).not.toHaveBeenCalled();
+    });
   });
 });

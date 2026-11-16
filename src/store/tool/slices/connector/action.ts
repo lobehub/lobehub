@@ -444,37 +444,34 @@ export class ConnectorActionImpl {
     link: { mode: 'add' } | { mode: 'reauthorize'; linkId: string },
     options: ConnectorAccountFlowOptions = {},
   ): Promise<ConnectorAccountFlowResult> => {
-    const before =
+    const linksOf = () =>
       [
         ...(this.#get().connectors ?? []),
         ...(this.#get().agentBoundConnectors ?? []),
         ...Object.values(this.#get().agentConnectors ?? {}).flat(),
       ].find((c) => c.id === connectorId)?.links ?? [];
+    const before = linksOf();
+    let flowId: string | undefined;
     try {
       options.signal?.throwIfAborted();
-      const { authorizationUrl, flowId } = await lambdaClient.connector.startOAuth.mutate(
+      const started = await lambdaClient.connector.startOAuth.mutate(
         {
           id: connectorId,
           link,
         },
         { signal: options.signal },
       );
+      flowId = started.flowId;
       await waitForConnectorOAuth(
         options.popup,
         connectorId,
-        authorizationUrl,
+        started.authorizationUrl,
         options.signal,
         link.mode === 'add',
       );
       await this.#refreshConnectorLists();
-      const after =
-        [
-          ...(this.#get().connectors ?? []),
-          ...(this.#get().agentBoundConnectors ?? []),
-          ...Object.values(this.#get().agentConnectors ?? {}).flat(),
-        ].find((c) => c.id === connectorId)?.links ?? [];
       if (flowId) return await lambdaClient.connector.oauthResult.query({ flowId });
-      const created = after.find((item) => !before.some((old) => old.id === item.id));
+      const created = linksOf().find((item) => !before.some((old) => old.id === item.id));
       return created
         ? { outcome: 'created', linkId: created.id }
         : {
@@ -483,12 +480,34 @@ export class ConnectorActionImpl {
           };
     } catch (error) {
       if (options.signal?.aborted) throw new ConnectorOAuthError('dismissed');
+      // Providers whose COOP policy severs `window.opener` lose the callback's
+      // message: the window then reads as closed or never reporting back,
+      // although the callback stored the account. The server recorded how the
+      // flow ended, so ask it before calling the authorization lost.
+      const recovered = await this.#recoverAccountAuthorization(error, flowId);
+      if (recovered) return recovered;
       // Server rejections (a 403, an OAuth server that refuses registration)
       // carry the reason the caller shows; only the window flow is an OAuth error.
       throw error;
     } finally {
       options.popup?.close();
     }
+  };
+
+  #recoverAccountAuthorization = async (
+    error: unknown,
+    flowId: string | undefined,
+  ): Promise<ConnectorAccountFlowResult | undefined> => {
+    if (!flowId || !(error instanceof ConnectorOAuthError)) return;
+    if (error.reason !== 'dismissed' && error.reason !== 'timeout') return;
+    let result: ConnectorAccountFlowResult;
+    try {
+      result = await lambdaClient.connector.oauthResult.query({ flowId });
+    } catch {
+      return; // no completion recorded: the authorization did not finish
+    }
+    await this.#refreshConnectorLists();
+    return result;
   };
 
   /** Rename an account and refresh every loaded connector list. */

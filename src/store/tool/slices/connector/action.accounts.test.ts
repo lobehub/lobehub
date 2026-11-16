@@ -93,6 +93,61 @@ describe('connector account store actions', () => {
     ).rejects.toMatchObject({ reason: 'dismissed' });
     expect(popup.close).toHaveBeenCalled();
   });
+  // Providers whose COOP policy severs `window.opener` lose the callback's message
+  describe('a window that never reports back', () => {
+    const startWithFlow = () =>
+      vi.mocked(lambdaClient.connector.startOAuth.mutate).mockResolvedValueOnce({
+        authorizationUrl: 'https://provider/authorize',
+        flowId: 'flow-1',
+      } as never);
+
+    it.each(['dismissed', 'timeout'] as const)(
+      'takes the account the callback stored when the window is %s',
+      async (reason) => {
+        await useToolStore.getState().fetchConnectors();
+        startWithFlow();
+        mocks.wait.mockRejectedValueOnce(new ConnectorOAuthError(reason));
+        vi.mocked(lambdaClient.connector.list.query).mockResolvedValue([connector(['old', 'new'])]);
+        vi.mocked(lambdaClient.connector.oauthResult.query).mockResolvedValueOnce({
+          linkId: 'new',
+          outcome: 'created',
+        });
+
+        expect(await useToolStore.getState().connectConnectorAccount('c1')).toEqual({
+          linkId: 'new',
+          outcome: 'created',
+        });
+        expect(lambdaClient.connector.oauthResult.query).toHaveBeenCalledWith({ flowId: 'flow-1' });
+        expect(useToolStore.getState().connectors[0].links).toHaveLength(2);
+      },
+    );
+
+    it('keeps the dismissal when the callback recorded nothing', async () => {
+      startWithFlow();
+      mocks.wait.mockRejectedValueOnce(new ConnectorOAuthError('dismissed'));
+      vi.mocked(lambdaClient.connector.oauthResult.query).mockRejectedValueOnce({
+        data: { code: 'NOT_FOUND' },
+      });
+
+      await expect(useToolStore.getState().connectConnectorAccount('c1')).rejects.toMatchObject({
+        reason: 'dismissed',
+      });
+    });
+
+    it('never recovers a flow the user cancelled', async () => {
+      const controller = new AbortController();
+      startWithFlow();
+      mocks.wait.mockImplementationOnce(async () => {
+        controller.abort();
+        throw new ConnectorOAuthError('dismissed');
+      });
+
+      await expect(
+        useToolStore.getState().connectConnectorAccount('c1', { signal: controller.signal }),
+      ).rejects.toMatchObject({ reason: 'dismissed' });
+      expect(lambdaClient.connector.oauthResult.query).not.toHaveBeenCalled();
+    });
+  });
   it('passes a server rejection through with its reason and closes the popup', async () => {
     const popup = { close: vi.fn() } as unknown as Window;
     const rejection = Object.assign(new Error('OAuth server rejected the registration'), {

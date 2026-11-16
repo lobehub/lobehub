@@ -15,9 +15,18 @@ vi.mock('@/store/tool', () => ({
 
 vi.mock('@/store/tool/slices/connector', () => ({
   connectorSelectors: {
-    connectorLinkNameById: (linkId: string) => () => accountNames[linkId],
+    // Names resolve only on the connector the call runs on, for the agent that ran it
+    connectorLinkNameForTool: (identifier: string, linkId: string, agentId?: string) => () =>
+      identifier === 'mail' && agentId === 'agt_mail' ? accountNames[linkId] : undefined,
   },
 }));
+
+vi.mock('../../../../../store', () => ({
+  useConversationStore: <T,>(selector: (state: object) => T) =>
+    selector({ context: { agentId: 'agt_mail' }, dbMessages: [] }),
+}));
+
+const scope = { identifier: 'mail', messageId: 'msg_1' };
 
 vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -83,6 +92,7 @@ describe('Arguments', () => {
   it('names the connector account a call uses instead of its link id', () => {
     render(
       <Arguments
+        {...scope}
         arguments={JSON.stringify({ link_id: 'lnk_work', subject: 'Hello', to: 'lnk_work' })}
       />,
     );
@@ -97,6 +107,7 @@ describe('Arguments', () => {
   it('uses the renamed argument when the tool has its own link_id', () => {
     render(
       <Arguments
+        {...scope}
         arguments={JSON.stringify({ connector_link_id: 'lnk_work', link_id: 'https://a.b/c' })}
       />,
     );
@@ -105,8 +116,22 @@ describe('Arguments', () => {
   });
 
   it('shows an id that names no known account as it was sent', () => {
-    render(<Arguments arguments={JSON.stringify({ link_id: 'lnk_gone' })} />);
+    render(<Arguments {...scope} arguments={JSON.stringify({ link_id: 'lnk_gone' })} />);
 
     expect(screen.getByTestId('descriptions')).toHaveTextContent('lnk_gone');
+  });
+
+  // Account ids repeat across connectors (every legacy one is `lnk_default`)
+  it("never names an account from a connector other than the call's", () => {
+    render(
+      <Arguments
+        arguments={JSON.stringify({ link_id: 'lnk_work' })}
+        identifier="calendar"
+        messageId="msg_1"
+      />,
+    );
+
+    expect(screen.getByTestId('descriptions')).toHaveTextContent('lnk_work');
+    expect(screen.getByTestId('descriptions')).not.toHaveTextContent('work@acme.com');
   });
 });

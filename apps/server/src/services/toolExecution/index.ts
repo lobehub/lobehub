@@ -5,6 +5,7 @@ import { isDeviceOnlyMcpEndpoint, shouldConnectViaDevice } from '@lobechat/utils
 import debug from 'debug';
 
 import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { ConnectorToolPermission } from '@/database/schemas';
 import { type CloudMCPParams, type HttpMCPClientParams, type StdioMCPParams } from '@/libs/mcp';
 import {
@@ -345,17 +346,35 @@ export class ToolExecutionService {
             'Connector account resolution requires an authenticated execution context',
           );
         const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+        const workspaceId = await resolveRunWorkspaceId(context);
         const connectorModel = new ConnectorModel(
           context.serverDB,
           context.userId,
-          await resolveRunWorkspaceId(context),
+          workspaceId,
           gateKeeper,
         );
-        const connector = await connectorModel.findById(marker.connectorId);
-        if (!connector || !connector.isEnabled)
+        // The marker rides in a manifest, and a plugin row can carry any
+        // manifest. Only the connector this call's identifier resolves to for
+        // the run (the one the permission gate checked) may lend its accounts,
+        // and only to a tool it serves and has not disabled.
+        const [connector] = await connectorModel.resolveByIdentifiers(
+          [identifier],
+          context.agentId,
+        );
+        if (!connector || connector.id !== marker.connectorId || !connector.isEnabled)
           throw new Error(
             'Connector is no longer available. Ask the user to connect an account in Settings > Connectors.',
           );
+        const tool = (
+          await new ConnectorToolModel(
+            context.serverDB,
+            context.userId,
+            workspaceId,
+          ).queryByConnector(connector.id)
+        ).find((item) => item.toolName === apiName);
+        if (!tool) throw new Error(`Connector '${identifier}' has no tool named '${apiName}'.`);
+        if (tool.permission === ConnectorToolPermission.disabled)
+          return buildBlockedToolResponse(apiName);
         const currentEndpoint = buildConnectorMcpParams({ ...connector, credentials: null });
         if (context.agentShareVisitor && isDeviceOnlyMcpEndpoint(currentEndpoint)) {
           const message = `MCP server '${identifier}' runs on the agent owner's own machine and is not available in shared conversations.`;

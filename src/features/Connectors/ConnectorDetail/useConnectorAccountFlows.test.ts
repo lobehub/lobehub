@@ -59,8 +59,9 @@ vi.mock('@/store/tool', () => {
 vi.mock('@/store/tool/slices/connector', async () => ({
   ...(await import('@/store/tool/slices/connector/types')),
   connectorSelectors: {
-    connectorLinkNameById: (linkId: string) => (state: typeof mocks.state) =>
-      state.connectors.flatMap((c) => c.links ?? []).find((link) => link.id === linkId)?.name,
+    connectorLinkName: (connectorId: string, linkId: string) => (state: typeof mocks.state) =>
+      state.connectors.find((c) => c.id === connectorId)?.links?.find((link) => link.id === linkId)
+        ?.name,
   },
 }));
 

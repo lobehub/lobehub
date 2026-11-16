@@ -43,7 +43,9 @@ export const useConnectorAccountFlows = (connector: ConnectorWithTools) => {
   const [failure, setFailure] = useState<string>();
 
   const nameOf = (linkId?: string) =>
-    linkId ? connectorSelectors.connectorLinkNameById(linkId)(useToolStore.getState()) : undefined;
+    linkId
+      ? connectorSelectors.connectorLinkName(connector.id, linkId)(useToolStore.getState())
+      : undefined;
 
   const reportFailure = (error: unknown, lead: (reason: string) => string) => {
     if (isDismissedAuthorization(error)) return;

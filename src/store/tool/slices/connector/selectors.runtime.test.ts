@@ -186,6 +186,31 @@ describe('connectorSelectors.connectorByIdentifierForAgent', () => {
 });
 
 describe('connector link names across replica pools', () => {
+  // Every legacy connector's account is `lnk_default`: a name must come from the
+  // connector the call runs on, not the first one holding that id
+  it('names a shared account id after the connector a tool call runs on', () => {
+    const legacy = (id: string, identifier: string, name: string, agentId?: string) =>
+      connector({ agentId, id, identifier, links: [{ id: 'lnk_default', name } as any] });
+    const state = {
+      connectors: [legacy('a', 'work-mail', 'Work'), legacy('b', 'home-mail', 'Personal')],
+      agentConnectors: { agt_x: [legacy('c', 'home-mail', 'Agent copy', 'agt_x')] },
+    } as unknown as ToolStore;
+
+    expect(connectorSelectors.connectorLinkNameForTool('home-mail', 'lnk_default')(state)).toBe(
+      'Personal',
+    );
+    expect(connectorSelectors.connectorLinkNameForTool('work-mail', 'lnk_default')(state)).toBe(
+      'Work',
+    );
+    // An agent's own copy wins, as it does when the call resolves its connector
+    expect(
+      connectorSelectors.connectorLinkNameForTool('home-mail', 'lnk_default', 'agt_x')(state),
+    ).toBe('Agent copy');
+    expect(
+      connectorSelectors.connectorLinkNameForTool('unknown', 'lnk_default')(state),
+    ).toBeUndefined();
+  });
+
   it('resolves base, aggregate and per-agent links and preserves unknown IDs', () => {
     const make = (id: string) => connector({ id, links: [{ id: `lnk_${id}`, name: id } as any] });
     const state = {
@@ -194,8 +219,9 @@ describe('connector link names across replica pools', () => {
       agentConnectors: { agent: [make('agent')] },
     } as unknown as ToolStore;
     for (const name of ['base', 'aggregate', 'agent'])
-      expect(connectorSelectors.connectorLinkNameById(`lnk_${name}`)(state)).toBe(name);
-    expect(connectorSelectors.connectorLinkNameById('missing')(state)).toBeUndefined();
+      expect(connectorSelectors.connectorLinkName(name, `lnk_${name}`)(state)).toBe(name);
+    expect(connectorSelectors.connectorLinkName('base', 'missing')(state)).toBeUndefined();
+    expect(connectorSelectors.connectorLinkName('agent', 'lnk_base')(state)).toBeUndefined();
     expect(
       buildClientConnectorManifests([
         connector({

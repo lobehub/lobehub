@@ -207,20 +207,31 @@ const agentOverriddenIdentifiers =
   };
 
 export const connectorSelectors = {
-  connectorLinkNameById:
-    (linkId: string) =>
+  /**
+   * An account's name on one connector. Account ids are unique per connector
+   * only (every legacy connector's account is `lnk_default`), so the lookup
+   * is always scoped to the connector that owns the account.
+   */
+  connectorLinkName:
+    (connectorId: string, linkId: string) =>
     (s: ToolStore): string | undefined => {
       const pools = [
         ...(s.connectors ?? []),
         ...(s.agentBoundConnectors ?? []),
         ...Object.values(s.agentConnectors ?? {}).flat(),
       ];
-      for (const connector of pools) {
-        const link = connector.links?.find((item) => item.id === linkId);
-        if (link) return link.name;
-      }
-      return undefined;
+      return pools
+        .find((connector) => connector.id === connectorId)
+        ?.links?.find((link) => link.id === linkId)?.name;
     },
+  /** An account's name on the connector a tool call runs on, resolved as the call is. */
+  connectorLinkNameForTool:
+    (identifier: string, linkId: string, agentId?: string) =>
+    (s: ToolStore): string | undefined =>
+      connectorByIdentifierForAgent(
+        identifier,
+        agentId,
+      )(s)?.links?.find((link) => link.id === linkId)?.name,
   agentBoundConnectors,
   agentConnectors,
   agentOverriddenIdentifiers,

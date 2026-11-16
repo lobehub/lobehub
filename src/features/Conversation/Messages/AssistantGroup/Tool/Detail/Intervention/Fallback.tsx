@@ -100,7 +100,9 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
     const argCount = typeof parsedArgs === 'object' ? Object.keys(parsedArgs).length : 0;
     // The parameters start collapsed, so the account a connector call acts as
     // is named next to the action: approving "send email" must say from where.
-    const accountName = Object.values(useConnectorAccountNames(parsedArgs))[0];
+    const accountName = Object.values(
+      useConnectorAccountNames(parsedArgs, { identifier, messageId: id }),
+    )[0];
     const isActivateToolsIntervention =
       identifier === LobeActivatorIdentifier && apiName === ActivatorApiName.activateTools;
     const requestedToolIdentifiers = useMemo(() => {
@@ -160,7 +162,9 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
 
     if (isEditing)
       return (
-        <Suspense fallback={<Arguments arguments={renderedArgs} />}>
+        <Suspense
+          fallback={<Arguments arguments={renderedArgs} identifier={identifier} messageId={id} />}
+        >
           <KeyValueEditor
             initialValue={parsedArgs}
             onCancel={handleCancel}
@@ -242,7 +246,9 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
                 />
               )}
             </Flexbox>
-            {showArgs && <Arguments arguments={renderedArgs} />}
+            {showArgs && (
+              <Arguments arguments={renderedArgs} identifier={identifier} messageId={id} />
+            )}
           </>
         )}
 
