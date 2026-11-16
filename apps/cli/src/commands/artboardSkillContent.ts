@@ -20,14 +20,15 @@ Read the repository for the data and the screens the requirement touches, so the
 
 Run \`lh man artboard\` for the exact flags and \`lh artboard ops\` for the shape of every op; both come from the installed CLI and are not repeated here. One requirement gets one artboard: \`lh artboard create\` makes it for this conversation's project, \`lh artboard list\` shows the ones that already exist.
 
-**Screens.** A board shows a screen. Its source is an image file or a Canvas, and neither is made by the artboard commands:
+**Screens.** A board shows a screen. Build each screen as a Canvas, a page the artboard renders live; the artboard commands do not make one:
 
-- an image: draw or render the screen to a picture, upload it with \`lh file upload\`, and place it as an image board;
-- a Canvas: \`lh artifact guide canvas\` explains how to publish one.
+- \`lh artifact guide canvas\` gives the components and rules a Canvas page follows;
+- write one page per screen and save it with \`lh artifact save <file> --json\`, which returns the \`canvasId\` and \`version\` the board's source takes. Saving the same file again makes a new version of that Canvas; \`--new\` starts another one. Do not publish it: the artboard only needs it saved;
+- a screen that already exists as a picture (a screenshot of the current product) can be an image board instead: upload it with \`lh file upload\`.
 
-\`lh man file\` and \`lh man artifact\` have the details. A board of type "decision" needs no source.
+\`lh man artifact\` and \`lh man file\` have the details. A board of type "decision" needs no source.
 
-If neither can be made (the upload or the publish is refused or times out), tell the user in one line which step failed and hold the discussion in chat. Never stand a decision board or a text card in for a screen: a decision board marks where the journey branches and shows only a short title.
+If no screen can be made (the save or the upload is refused or times out), tell the user in one line which step failed and hold the discussion in chat. Never stand a decision board or a text card in for a screen: a decision board marks where the journey branches and shows only a short title.
 
 **Layout.**
 

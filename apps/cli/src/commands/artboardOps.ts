@@ -45,7 +45,7 @@ const NOTES = [
   '"ref" is a name you choose on an add op; later ops in the same call can use it wherever an id is expected.',
   'x and y are page coordinates; w and h default to 640×400. A board without pageId lands on the page of its group or round, otherwise on the first page.',
   'An image source takes the file id that `lh file upload --json` returns as "fileRef".',
-  'A canvas source takes the id of a published Canvas (`lh artifact guide canvas`).',
+  'A canvas source takes the canvasId and version that `lh artifact save` returns (`lh artifact guide canvas` has the page rules).',
   'A board of type "decision" has no source and no "expected". Type "html" goes with a canvas source and "image" with an image source; "video" is refused.',
   '"recommended" marks a board as the option you would pick in its round; it needs "roundId", and a board with a "roundId" must sit in an options group.',
 ];

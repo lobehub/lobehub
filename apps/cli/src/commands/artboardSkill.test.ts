@@ -126,11 +126,20 @@ describe('lh artboard skill init', () => {
     expect(await readFile(path.join(elsewhere, 'keep.md'), 'utf8')).toBe('not ours');
   });
 
+  it('builds screens as saved Canvases, which needs no publishing', async () => {
+    await run('--dir', directory);
+
+    const skill = await readFile(skillPath('SKILL.md'), 'utf8');
+    expect(skill).toMatch(/build each screen as a canvas/i);
+    expect(skill).toContain('lh artifact save <file> --json');
+    expect(skill).toMatch(/do not publish it/i);
+  });
+
   it('says what to do when no screen can be made, instead of a decision board', async () => {
     await run('--dir', directory);
 
     const skill = await readFile(skillPath('SKILL.md'), 'utf8');
-    expect(skill).toMatch(/neither can be made[^.]*\./i);
+    expect(skill).toMatch(/no screen can be made[^.]*\./i);
     expect(skill).toMatch(/never stand a decision board[^.]*in for a screen/i);
   });
 

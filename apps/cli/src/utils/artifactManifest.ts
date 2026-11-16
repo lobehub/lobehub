@@ -23,6 +23,7 @@ export interface ArtifactBinding {
     rejectedPublication?: { requestedSlug?: string };
     saved?: { canvasId: string; version: number; workId: string };
   };
+  pendingCanvasSave?: { fingerprint: string; requestId: string };
   /**
    * What the pending HTML create sent (title, slug and file bytes). Market
    * replays a key only for the identical request, so a changed publish must
@@ -76,6 +77,9 @@ const bindingSchema = z
           })
           .optional(),
       })
+      .optional(),
+    pendingCanvasSave: z
+      .object({ fingerprint: z.string().regex(/^[\da-f]{64}$/), requestId: z.uuid() })
       .optional(),
     pendingCreateFingerprint: z.string().min(1).optional(),
     pendingCreateKey: z.string().min(1).optional(),

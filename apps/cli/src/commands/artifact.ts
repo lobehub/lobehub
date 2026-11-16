@@ -24,7 +24,7 @@ import { formatError } from '../utils/error';
 import { outputJson } from '../utils/format';
 import { log } from '../utils/logger';
 import { readLocalHtmlAsset } from '../utils/readLocalHtmlAsset';
-import { publishCanvasArtifact } from './artifactCanvas';
+import { publishCanvasArtifact, saveCanvasArtifact } from './artifactCanvas';
 
 interface PreparedUploadTarget {
   headers: Record<string, string>;
@@ -141,6 +141,68 @@ export function registerArtifactCommand(program: Command) {
       }
       console.log(output.content);
     });
+
+  artifact
+    .command('save <file>')
+    .description(
+      'Save a local Canvas page as a new Canvas version without publishing it to the web',
+    )
+    .option(
+      '--root <dir>',
+      'Directory the page may reference assets from (defaults to the working directory)',
+    )
+    .option('--new', 'Start a separate Canvas instead of a new version of the bound one')
+    .option('--title <title>', 'Override the page title')
+    .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
+    .action(
+      async (
+        file: string,
+        options: { json?: string | boolean; new?: boolean; root?: string; title?: string },
+      ) => {
+        const entryPath = path.resolve(file);
+        const rootDirectory = path.resolve(options.root ?? process.cwd());
+        if (!entryPath.startsWith(`${rootDirectory}${path.sep}`) && entryPath !== rootDirectory) {
+          fail(`${file} is outside ${rootDirectory}. Pass --root to widen the saved directory.`);
+          return;
+        }
+
+        const entry = await readLocalHtmlAsset(entryPath);
+        if (!entry.ok || entry.text === undefined) {
+          fail(`Cannot read ${file}`);
+          return;
+        }
+
+        const manifest = resolveManifest(entryPath, rootDirectory);
+        const binding = readBinding(manifest);
+        if (!options.new && binding.deploymentId && (binding.type ?? 'html') !== 'canvas') {
+          fail('This file is bound to an HTML artifact; pass --new to save it as a Canvas.');
+          return;
+        }
+
+        try {
+          const saved = await saveCanvasArtifact(await getTrpcClient(), {
+            binding,
+            html: entry.text,
+            manifest,
+            new: options.new,
+            title:
+              options.title ||
+              extractHtmlTitle(entry.text) ||
+              path.basename(entryPath, path.extname(entryPath)),
+          });
+          if (options.json !== undefined) {
+            outputJson(saved, typeof options.json === 'string' ? options.json : undefined);
+          } else {
+            console.log(
+              `${pc.green('✓')} Saved Canvas ${saved.canvasId} (version ${saved.version})`,
+            );
+          }
+        } catch (error) {
+          if (options.json !== undefined) outputJson({ error: formatError(error), success: false });
+          fail(formatError(error));
+        }
+      },
+    );
 
   artifact
     .command('publish <file>')
