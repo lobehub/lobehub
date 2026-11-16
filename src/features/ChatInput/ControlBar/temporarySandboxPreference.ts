@@ -39,10 +39,21 @@ const writeStore = (store: Store) => {
   for (const listener of listeners) listener();
 };
 
+// Another tab writing the same key only reaches this one through the browser's
+// `storage` event; without it, a tab left open keeps seeding the old choice.
+const onStorage = (event: StorageEvent) => {
+  if (event.key !== null && event.key !== TEMPORARY_SANDBOX_PREFERENCE_KEY) return;
+  for (const listener of listeners) listener();
+};
+
 const subscribe = (listener: () => void) => {
+  if (listeners.size === 0 && typeof window !== 'undefined')
+    window.addEventListener('storage', onStorage);
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
+    if (listeners.size === 0 && typeof window !== 'undefined')
+      window.removeEventListener('storage', onStorage);
   };
 };
 

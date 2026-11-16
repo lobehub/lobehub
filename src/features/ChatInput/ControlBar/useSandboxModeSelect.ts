@@ -48,22 +48,22 @@ export const useSandboxModeSelect = (
     // Without a drive there is only one sandbox, and nothing to remember.
     if (driveStatus === 'hidden') return;
 
-    setPrefersTemporarySandbox(workspaceId, agentId, true);
+    // Remembered only once the conversation has moved: a failed write leaves
+    // it where it was, and new conversations must not start elsewhere.
     if (onDrive) await setSelection(temporarySelection(selection));
+    setPrefersTemporarySandbox(workspaceId, agentId, true);
   }, [agentId, driveStatus, onDrive, selection, setSelection, workspaceId]);
 
   const toPersistent = useCallback(async () => {
-    setPrefersTemporarySandbox(workspaceId, agentId, false);
-    if (onDrive) return;
-
-    const next = resolveDefaultSandboxSelection(workspaceId);
-    if (scopeTopicId) {
-      await setSelection(next);
-      return;
+    if (!onDrive) {
+      const next = resolveDefaultSandboxSelection(workspaceId);
+      // A conversation not started yet gets the default as a default, not as a
+      // pick: a project conversation is then still given its repository checkout.
+      if (scopeTopicId) await setSelection(next);
+      else seedPendingSandboxSelection(agentId, next);
     }
-    // A conversation not started yet gets the default as a default, not as a
-    // pick: a project conversation is then still given its repository checkout.
-    seedPendingSandboxSelection(agentId, next);
+    // After the move, as above: a failed write keeps the old preference too.
+    setPrefersTemporarySandbox(workspaceId, agentId, false);
   }, [agentId, onDrive, scopeTopicId, setSelection, workspaceId]);
 
   return {

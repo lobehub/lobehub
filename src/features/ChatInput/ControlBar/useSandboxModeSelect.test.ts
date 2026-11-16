@@ -128,4 +128,25 @@ describe('useSandboxModeSelect', () => {
     expect(prefersTemporarySandbox(null, 'agent-1')).toBe(false);
     expect(state.setSelection).not.toHaveBeenCalled();
   });
+
+  // A failed move leaves the conversation where it was, so new ones must not
+  // start in the other mode either.
+  it('keeps the preference when moving the conversation fails', async () => {
+    state.topicId = 'topic-1';
+    state.selection = { workingDirectory: 'notes' };
+    state.setSelection.mockRejectedValue(new Error('offline'));
+
+    const { result } = renderMode();
+    await expect(act(() => result.current.toTemporary())).rejects.toThrow('offline');
+    expect(prefersTemporarySandbox(null, 'agent-1')).toBe(false);
+
+    state.selection = {};
+    localStorage.setItem(
+      TEMPORARY_SANDBOX_PREFERENCE_KEY,
+      JSON.stringify({ 'personal:agent-1': true }),
+    );
+    const { result: again } = renderMode();
+    await expect(act(() => again.current.toPersistent())).rejects.toThrow('offline');
+    expect(prefersTemporarySandbox(null, 'agent-1')).toBe(true);
+  });
 });

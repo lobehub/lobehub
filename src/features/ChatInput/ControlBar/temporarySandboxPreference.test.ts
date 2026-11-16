@@ -44,4 +44,19 @@ describe('temporarySandboxPreference', () => {
     act(() => setPrefersTemporarySandbox(null, 'agent-1', true));
     expect(result.current).toBe(true);
   });
+
+  it('re-renders a reader when another tab writes', () => {
+    const { result } = renderHook(() => usePrefersTemporarySandbox(null, 'agent-1'));
+    expect(result.current).toBe(false);
+
+    act(() => {
+      // What the browser does for a write made in another tab.
+      localStorage.setItem(
+        TEMPORARY_SANDBOX_PREFERENCE_KEY,
+        JSON.stringify({ 'personal:agent-1': true }),
+      );
+      window.dispatchEvent(new StorageEvent('storage', { key: TEMPORARY_SANDBOX_PREFERENCE_KEY }));
+    });
+    expect(result.current).toBe(true);
+  });
 });
