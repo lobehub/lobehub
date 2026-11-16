@@ -85,7 +85,7 @@ LobeHub provides a complete authentication service capability when deployed. The
 #### `INTERNAL_JWT_EXPIRATION`
 
 - Type: Optional
-- Description: Expiration time for internal JWT tokens used in lambda → async calls. Format: number followed by unit (s=seconds, m=minutes, h=hours). Should be as short as possible for security, but long enough to account for network latency and server processing time.
+- Description: Expiration time for internal JWT tokens used in lambda → async calls. Format: number followed by unit (s=seconds, m=minutes, h=hours). A bare number (`30`) and milliseconds (`30ms`) are not supported; a value that cannot be parsed is logged and the default is used. Should be as short as possible for security, but long enough to account for network latency and server processing time.
 - Default: `30s`
 - Example: `30s`, `1m`, `1h`
 
