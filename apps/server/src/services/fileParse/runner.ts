@@ -6,7 +6,7 @@ import { Worker } from 'node:worker_threads';
 import { MAX_UPLOAD_FILE_COUNT } from '@lobechat/const';
 import { FileParseBudgetError, UnsupportedFileTypeError } from '@lobechat/file-loaders';
 
-import { FileParseError } from './errors';
+import { FileParseError, isFileParseError } from './errors';
 import type { FileParseJob, FileParseWorkerMessage, SerializedWorkerError } from './protocol';
 import {
   BUDGET_ERROR_NAME,
@@ -57,6 +57,51 @@ export const DEFAULT_FILE_PARSE_LIMITS = {
 
 /** Environment a worker is given: parsing needs none of the process credentials. */
 const WORKER_ENV_KEYS = ['DEBUG', 'LANG', 'NODE_ENV', 'TEMP', 'TMP', 'TMPDIR', 'TZ'] as const;
+
+/**
+ * A V8 heap flag on the parent process (`--max-old-space-size` and friends, from the command line
+ * or `NODE_OPTIONS`) overrides the `resourceLimits` of every worker thread (Node docs, `Worker`
+ * options), and neither the worker `env` nor `execArgv` can undo it. So the budget is verified,
+ * not assumed: a probe thread, never a parser, reports the heap limit it really got.
+ */
+const HEAP_PROBE_YOUNG_MB = 48;
+const HEAP_PROBE_SOURCE = `
+const { parentPort } = require('node:worker_threads');
+parentPort.postMessage(require('node:v8').getHeapStatistics().heap_size_limit);
+`;
+
+/**
+ * Heap limit (bytes) a thread gets with the given old generation size, as the parent flags leave it.
+ * Settles only after the probe thread has exited; a probe that errors or never answers within
+ * `timeoutMs` is terminated and rejected, so a stuck probe cannot hold a task forever.
+ */
+const probeHeapLimitBytes = (maxOldGenerationSizeMb: number, timeoutMs: number) =>
+  new Promise<number>((resolve, reject) => {
+    let limit: number | undefined;
+    let failure: Error | undefined;
+    const probe = new Worker(HEAP_PROBE_SOURCE, {
+      env: {},
+      eval: true,
+      execArgv: [],
+      resourceLimits: {
+        // Explicit, so the expected limit is exactly old + young instead of a V8 default.
+        maxOldGenerationSizeMb,
+        maxYoungGenerationSizeMb: HEAP_PROBE_YOUNG_MB,
+      },
+    });
+    const timer = setTimeout(() => {
+      failure ??= new Error(`heap probe did not answer within ${timeoutMs}ms`);
+      void probe.terminate();
+    }, timeoutMs);
+    probe.on('message', (value: number) => (limit = value));
+    probe.on('error', (error) => (failure ??= error));
+    probe.on('exit', () => {
+      clearTimeout(timer);
+      if (failure) reject(failure);
+      else if (limit === undefined) reject(new Error('heap probe exited without a result'));
+      else resolve(limit);
+    });
+  });
 
 const buildWorkerEnv = () => {
   const env: Record<string, string> = {};
@@ -128,6 +173,39 @@ export const createFileParseRunner = (
   };
   const queue: Array<Task & { timer: NodeJS.Timeout }> = [];
   let active = 0;
+  /** The process flags never change, so one successful probe holds for the runner's life. */
+  let heapProbe: Promise<number> | undefined;
+
+  /**
+   * Fails closed when the parent's V8 flags give a worker more heap than `maxOldGenerationSizeMb`
+   * allows. A smaller limit is kept: it is inside the budget (a parse may then run out of memory
+   * earlier, as a typed `OUT_OF_MEMORY`).
+   */
+  const assertHeapBudgetHolds = async () => {
+    heapProbe ??= probeHeapLimitBytes(
+      options.maxOldGenerationSizeMb,
+      // The default parse budget, not the caller's: a thread cold start must not depend on a tight one.
+      DEFAULT_FILE_PARSE_LIMITS.parseTimeoutMs,
+    );
+    let actualBytes: number;
+    try {
+      actualBytes = await heapProbe;
+    } catch (error) {
+      heapProbe = undefined;
+      throw error;
+    }
+    const allowedBytes = (options.maxOldGenerationSizeMb + HEAP_PROBE_YOUNG_MB) * 1024 * 1024;
+    if (actualBytes > allowedBytes) {
+      throw new FileParseError(
+        'START_FAILED',
+        `File parse workers get ${Math.round(actualBytes / 1024 / 1024)}MB of heap instead of the ` +
+          `${options.maxOldGenerationSizeMb}MB old generation budget: the Node process was started ` +
+          'with a larger V8 heap flag (--max-old-space-size / --max-heap-size, on the command line ' +
+          'or in NODE_OPTIONS), which overrides the worker limit. Remove it or lower it to at most ' +
+          'the budget.',
+      );
+    }
+  };
 
   /**
    * Removes a scratch directory. A failure never changes the outcome of the task (the parse result
@@ -172,6 +250,24 @@ export const createFileParseRunner = (
           'File parse worker artifact is missing; build it with `bun run build:file-parse-worker`',
           { cause: error },
         ),
+      );
+      return release();
+    }
+
+    // Before any parser is loaded: a worker that would outgrow its budget never starts.
+    try {
+      await assertHeapBudgetHolds();
+    } catch (error) {
+      task.reject(
+        isFileParseError(error)
+          ? error
+          : new FileParseError(
+              'START_FAILED',
+              'Could not verify the file parse worker heap limit',
+              {
+                cause: error,
+              },
+            ),
       );
       return release();
     }
