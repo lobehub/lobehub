@@ -1066,6 +1066,11 @@ export default {
   'share.visitor.profile.ctaSignIn': 'Sign in to start',
   'share.visitor.profile.freeNote': 'Free · paid for by the creator',
   'share.visitor.profile.freeNoteWorkspace': 'Free · paid for by the Workspace',
+  'share.visitor.profile.lobotFallback.description':
+    'If Lobot is not installed yet, download it to chat with this Agent from your desktop, or keep chatting in the browser.',
+  'share.visitor.profile.lobotFallback.download': 'Download Lobot',
+  'share.visitor.profile.lobotFallback.title': 'Lobot didn’t open',
+  'share.visitor.profile.openInLobot': 'Open in Lobot',
   'share.visitor.profile.metrics.conversations': 'Topics',
   'share.visitor.profile.metrics.conversationsCaption': 'started so far',
   'share.visitor.profile.metrics.tools': 'Open tools',
