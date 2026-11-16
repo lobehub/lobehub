@@ -973,6 +973,9 @@ export default {
   'heteroAgent.executionTarget.personalGroup': 'Private Devices',
   'heteroAgent.executionTarget.sandbox': 'Cloud Sandbox',
   'heteroAgent.executionTarget.sandboxDesc': 'Runs in the cloud, no machine needed',
+  'heteroAgent.executionTarget.persistentSandbox': 'Persistent Sandbox',
+  'heteroAgent.executionTarget.persistentSandboxDesc':
+    'Runs in the cloud, files stay on your drive across conversations',
   'heteroAgent.executionTarget.workspaceGroup': 'Workspace Devices',
   'heteroAgent.executionTarget.downloadDesktop': 'Get Desktop App',
   'heteroAgent.executionTarget.downloadDesktopDesc': 'Run agents with access to your computer',

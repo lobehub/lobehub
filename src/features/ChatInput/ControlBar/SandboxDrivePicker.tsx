@@ -2,13 +2,12 @@
 
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Github } from '@lobehub/icons';
-import { Flexbox, Icon, Popover, Skeleton, Tag, Text, toast, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Skeleton, Text, toast, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
   ChevronDownIcon,
   FolderIcon,
-  HardDriveIcon,
   InfoIcon,
   PackageIcon,
   TimerIcon,
@@ -18,7 +17,6 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import { openSandboxStorageUpsell } from '@/business/client/features/SandboxStorageUpsell';
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import RepositoryAvatar from '@/components/RepositoryAvatar';
 import { openCreateEnvironmentModal } from '@/features/EnvironmentManager/CreateEnvironmentModal';
@@ -99,8 +97,10 @@ const folderName = (path: string) => path.split('/').pop() || path;
 
 /**
  * Where a cloud-sandbox run works, offered the way the device picker offers
- * folders: the chip names the place, the menu holds the temporary sandbox and
- * the way into the drive's directory browser.
+ * folders: the chip names the place. Which sandbox it is — temporary, or
+ * persistent on the drive — is picked in the execution-environment menu, so
+ * the menu here is the drive's folders on the persistent sandbox, and the
+ * temporary folder or a repository checkout on the temporary one.
  *
  * Nothing picked is the temporary sandbox; picking a folder on the drive is
  * the choice to keep files. A pick that can no longer be honoured — the
@@ -249,6 +249,8 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
           : undefined;
     const currentIcon = value.instanceId ? PackageIcon : FolderIcon;
     const showFolder = persistent && !onRepository;
+    // The persistent sandbox: the conversation keeps its files on the drive.
+    const onDrive = ENABLE_BUSINESS_FEATURES && entitled && persistent;
 
     const fallbackMessage = fallback ? t(`sandboxDrive.fallback.${fallback}`) : undefined;
     const chipIcon = fallback ? (
@@ -276,7 +278,85 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
           ? currentLabel
           : t('sandboxStorage.ephemeral');
 
-    const content = (
+    const driveMenu = (
+      <SandboxDriveMenu
+        selectedLabel={showFolder ? currentLabel : undefined}
+        selectedPath={showFolder ? value.workingDirectory : undefined}
+        onBrowse={openBrowser}
+        onPick={(folder) => void select(folder)}
+        onOpenStorage={() => {
+          setOpen(false);
+          navigate(SANDBOX_STORAGE_PATH);
+        }}
+      />
+    );
+
+    const repositoryRow = (
+      <Popover
+        arrow={false}
+        closeDelay={150}
+        placement={'rightBottom'}
+        styles={SUBMENU_STYLES}
+        trigger={['hover', 'click']}
+        content={
+          <SandboxRepositoryMenu
+            environments={environments}
+            failed={!!environmentsError}
+            loaded={!!environmentList}
+            selectedId={value.environmentId}
+            onAdd={addRepository}
+            onClose={() => setOpen(false)}
+            onPick={pickRepository}
+            onRetry={() => void refreshEnvironments()}
+            onManage={() => {
+              setOpen(false);
+              navigate('/settings/environments');
+            }}
+          />
+        }
+      >
+        <div data-testid={'sandbox-repository-row'}>
+          <OptionRow
+            arrow
+            compact
+            active={onRepository}
+            hint={onRepository && repository ? repositorySlug(repository) : undefined}
+            icon={
+              onRepository && repository ? (
+                <RepositoryAvatar size={16} url={repositorySlug(repository)} />
+              ) : (
+                <Github size={16} />
+              )
+            }
+            label={
+              // The repository the conversation works in, by name; the
+              // generic title only while none is picked.
+              onRepository && repositoryState.kind === 'picked'
+                ? repositoryState.name
+                : t('sandboxEnvironment.title')
+            }
+            onClick={() => {}}
+          />
+        </div>
+      </Popover>
+    );
+
+    const notice = fallbackMessage && (
+      <Text className={stylex.props(styles.notice).className}>{fallbackMessage}</Text>
+    );
+
+    // The execution-environment menu already said which sandbox this is, so the
+    // menu here only asks the question left: on the persistent sandbox, which
+    // folder of the drive; on the temporary one, an empty folder or a checkout.
+    // A project's repository is checked out in the project's own folder, which
+    // persists, so it is offered on the persistent side too.
+    const content = onDrive ? (
+      <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
+        {notice}
+        {driveMenu}
+        {projectId && repositoryRow}
+      </Flexbox>
+    ) : (
       <Flexbox gap={2} style={{ maxWidth: 360, minWidth: 280 }}>
         <div {...stylex.props(styles.header)}>
           <Flexbox horizontal align={'center'} gap={4}>
@@ -289,9 +369,7 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
           </Flexbox>
         </div>
 
-        {fallbackMessage && (
-          <Text className={stylex.props(styles.notice).className}>{fallbackMessage}</Text>
-        )}
+        {notice}
 
         <OptionRow
           compact
@@ -301,105 +379,7 @@ const SandboxDrivePicker = memo<SandboxDrivePickerProps>(
           onClick={() => void select({})}
         />
 
-        {ENABLE_BUSINESS_FEATURES &&
-          (entitled ? (
-            <Popover
-              arrow={false}
-              closeDelay={150}
-              placement={'rightBottom'}
-              styles={SUBMENU_STYLES}
-              trigger={['hover', 'click']}
-              content={
-                <SandboxDriveMenu
-                  selectedLabel={showFolder ? currentLabel : undefined}
-                  selectedPath={showFolder ? value.workingDirectory : undefined}
-                  onBrowse={openBrowser}
-                  onPick={(folder) => void select(folder)}
-                  onOpenStorage={() => {
-                    setOpen(false);
-                    navigate(SANDBOX_STORAGE_PATH);
-                  }}
-                />
-              }
-            >
-              <div data-testid={'sandbox-drive-row'}>
-                <OptionRow
-                  arrow
-                  compact
-                  active={showFolder}
-                  icon={<Icon icon={HardDriveIcon} size={16} />}
-                  label={t('sandboxDrive.title')}
-                  onClick={() => {}}
-                />
-              </div>
-            </Popover>
-          ) : (
-            // The drive is part of a plan this account is not on. Offered in the
-            // same list, in the same shape, so the row reads as one more place
-            // files could go — and the tag says why it is not simply selectable.
-            <OptionRow
-              compact
-              icon={<Icon icon={HardDriveIcon} size={16} />}
-              label={t('sandboxDrive.title')}
-              badge={
-                <Tag color={'gold'} size={'small'} style={{ borderRadius: 999, paddingInline: 8 }}>
-                  {t('pro', { ns: 'common' })}
-                </Tag>
-              }
-              onClick={() => {
-                setOpen(false);
-                openSandboxStorageUpsell();
-              }}
-            />
-          ))}
-
-        <Popover
-          arrow={false}
-          closeDelay={150}
-          placement={'rightBottom'}
-          styles={SUBMENU_STYLES}
-          trigger={['hover', 'click']}
-          content={
-            <SandboxRepositoryMenu
-              environments={environments}
-              failed={!!environmentsError}
-              loaded={!!environmentList}
-              selectedId={value.environmentId}
-              onAdd={addRepository}
-              onClose={() => setOpen(false)}
-              onPick={pickRepository}
-              onRetry={() => void refreshEnvironments()}
-              onManage={() => {
-                setOpen(false);
-                navigate('/settings/environments');
-              }}
-            />
-          }
-        >
-          <div data-testid={'sandbox-repository-row'}>
-            <OptionRow
-              arrow
-              compact
-              active={onRepository}
-              hint={onRepository && repository ? repositorySlug(repository) : undefined}
-              icon={
-                onRepository && repository ? (
-                  <RepositoryAvatar size={16} url={repositorySlug(repository)} />
-                ) : (
-                  <Github size={16} />
-                )
-              }
-              label={
-                // The repository the conversation works in, by name; the
-                // generic title only while none is picked.
-                onRepository && repositoryState.kind === 'picked'
-                  ? repositoryState.name
-                  : t('sandboxEnvironment.title')
-              }
-              onClick={() => {}}
-            />
-          </div>
-        </Popover>
+        {repositoryRow}
       </Flexbox>
     );
 

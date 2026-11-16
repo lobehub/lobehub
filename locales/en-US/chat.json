@@ -1565,6 +1565,8 @@
   "heteroAgent.executionTarget.onlineConnections_one": "Online · {{count}} connection",
   "heteroAgent.executionTarget.onlineConnections_other": "Online · {{count}} connections",
   "heteroAgent.executionTarget.otherDevicesGroup": "Other devices",
+  "heteroAgent.executionTarget.persistentSandbox": "Persistent Sandbox",
+  "heteroAgent.executionTarget.persistentSandboxDesc": "Runs in the cloud, files stay on your drive across conversations",
   "heteroAgent.executionTarget.personalGroup": "Private Devices",
   "heteroAgent.executionTarget.presenceChecking": "Checking status…",
   "heteroAgent.executionTarget.projectDevicesHint": "Only devices with this project's working directory are listed. Add a directory for another device in the project settings.",

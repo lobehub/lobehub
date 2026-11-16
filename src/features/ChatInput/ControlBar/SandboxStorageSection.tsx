@@ -2,10 +2,12 @@
 
 import { memo } from 'react';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import SafeBoundary from '@/components/ErrorBoundary';
 
 import { useTopicId } from '../hooks/useTopicId';
 import SandboxDrivePicker from './SandboxDrivePicker';
+import { usePrefersTemporarySandbox } from './temporarySandboxPreference';
 import { useSandboxPlacement } from './useSandboxPlacement';
 import { useSandboxStorageAccess } from './useSandboxStorageAccess';
 import { useSeedDefaultSelection } from './useSeedDefaultSelection';
@@ -23,7 +25,8 @@ interface SandboxStorageSectionProps {
  * Nothing chosen means a temporary sandbox, cleaned up with the session; a
  * folder on the drive keeps its files, and a repository starts from a checkout.
  * A plan with a drive starts each new conversation on its default folder rather
- * than nothing.
+ * than nothing — unless the execution-environment menu moved the agent to the
+ * temporary cloud sandbox, which new conversations then keep.
  *
  * A plan without a drive still gets the chip: the temporary sandbox is
  * everyone's, and the way to a plan is a row in the same menu rather than a
@@ -35,9 +38,10 @@ const SandboxStorageSectionInner = memo<SandboxStorageSectionProps>(({ agentId }
     agentId,
     useTopicId(),
   );
+  const temporary = usePrefersTemporarySandbox(useActiveWorkspaceId(), agentId);
   useSeedDefaultSelection(agentId, {
-    eligible,
-    entitled: status === 'ready',
+    eligible: eligible && !temporary,
+    entitled: status === 'ready' && !temporary,
     hasTopic: !!topicId,
   });
 

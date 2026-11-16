@@ -178,4 +178,39 @@ describe('useTopicAwareTargetSelect', () => {
       boundDeviceId: 'stable-this-desktop',
     });
   });
+
+  // T-14161: the persistent-sandbox row moves the conversation onto the drive
+  // only once the target is really switched.
+  describe('afterApply', () => {
+    it('runs once the target is saved', async () => {
+      const afterApply = vi.fn(async () => {});
+      const { result } = renderSelect(null);
+
+      await act(() => result.current.selectTarget('sandbox', undefined, undefined, afterApply));
+
+      expect(afterApply).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not run when the target was not saved', async () => {
+      state.selectExecutionTarget.mockResolvedValue(false);
+      const afterApply = vi.fn(async () => {});
+      const { result } = renderSelect(null);
+
+      await act(() => result.current.selectTarget('sandbox', undefined, undefined, afterApply));
+
+      expect(afterApply).not.toHaveBeenCalled();
+    });
+
+    it('waits for a topic on another machine to be moved, and not before', async () => {
+      const afterApply = vi.fn(async () => {});
+      const { result } = renderSelect('pane-topic');
+
+      await act(() => result.current.selectTarget('sandbox', undefined, undefined, afterApply));
+      // Asked first; a cancelled move changes nothing.
+      expect(afterApply).not.toHaveBeenCalled();
+
+      await act(() => state.confirmModal.mock.calls[0][0].onOk());
+      expect(afterApply).toHaveBeenCalledTimes(1);
+    });
+  });
 });

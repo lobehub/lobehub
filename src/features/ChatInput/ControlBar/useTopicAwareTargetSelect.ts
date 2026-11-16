@@ -98,7 +98,14 @@ export const useTopicAwareTargetSelect = ({
   const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
 
   const selectTarget = useCallback(
-    async (target: DeviceExecutionTarget, deviceId?: string, localSandbox?: boolean) => {
+    async (
+      target: DeviceExecutionTarget,
+      deviceId?: string,
+      localSandbox?: boolean,
+      // Runs once the target is saved — and, for a topic on another machine,
+      // only once the move is confirmed — so a cancelled switch changes nothing.
+      afterApply?: () => Promise<void>,
+    ) => {
       const apply = async () => {
         if (localSandbox) await ensureSandboxWorkingDirectory();
         return selectExecutionTarget(target, deviceId, { localSandbox });
@@ -111,6 +118,7 @@ export const useTopicAwareTargetSelect = ({
       const machineKnown = target !== 'local' || !!currentDeviceId;
       if (!topicId || !topicDeviceId || !machineKnown || nextMachineId === topicDeviceId) {
         const saved = await apply();
+        if (saved) await afterApply?.();
         // A topic whose cwd never recorded its machine: this pick is the user
         // naming it, so pin it — nothing on another machine is left behind.
         // Only once the target saved, or topic and agent would disagree; and
@@ -158,6 +166,7 @@ export const useTopicAwareTargetSelect = ({
           });
           // A refused/failed target save already toasted inside the hook.
           if (result === 'topic-not-saved') toast.error(t('saveAgentConfigFail', { ns: 'common' }));
+          if (result === 'moved') await afterApply?.();
         },
         title: t('heteroAgent.executionTarget.switchTopic.title'),
       });

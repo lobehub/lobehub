@@ -1565,6 +1565,8 @@
   "heteroAgent.executionTarget.onlineConnections_one": "在线 · {{count}} 个连接",
   "heteroAgent.executionTarget.onlineConnections_other": "在线 · {{count}} 个连接",
   "heteroAgent.executionTarget.otherDevicesGroup": "其他设备",
+  "heteroAgent.executionTarget.persistentSandbox": "持久化沙箱",
+  "heteroAgent.executionTarget.persistentSandboxDesc": "云端运行，文件保存在云盘，跨会话保留",
   "heteroAgent.executionTarget.personalGroup": "私人设备",
   "heteroAgent.executionTarget.presenceChecking": "正在确认状态…",
   "heteroAgent.executionTarget.projectDevicesHint": "仅列出已绑定此项目工作目录的设备。其他设备可在项目设置中添加目录。",
