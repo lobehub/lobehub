@@ -38,9 +38,11 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
 import { useTopicSharePermission } from '@/hooks/useTopicSharePermission';
 import { useChatStore } from '@/store/chat';
+import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
+import SocialShare from './SocialShare';
 import { styles } from './style';
 import { type ShareVisibility as Visibility, useTopicShare } from './useTopicShare';
 
@@ -74,6 +76,9 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ agentId, onOpenMod
 
   const chatActiveTopicId = useChatStore((s) => s.activeTopicId);
   const activeTopicId = topicId ?? chatActiveTopicId;
+  const topicTitle = useChatStore((s) =>
+    activeTopicId ? topicSelectors.getTopicById(activeTopicId)(s)?.title : undefined,
+  );
   const [hideTopicSharePrivacyWarning, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.systemStatus(s).hideTopicSharePrivacyWarning ?? false,
     s.updateSystemStatus,
@@ -268,6 +273,16 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ agentId, onOpenMod
 
       <div className={styles.divider} />
 
+      {/* Posting needs a public link; the section stays disabled until there is one. */}
+      <SocialShare
+        // The publish restriction is already explained above.
+        disabledHint={linkRestricted ? undefined : t('shareModal.social.disabledHint')}
+        shareUrl={isLinkShared ? shareUrl : undefined}
+        title={topicTitle}
+      />
+
+      <div className={styles.divider} />
+
       <button className={styles.exportRow} type={'button'} onClick={handleOpenModal}>
         <Icon className={styles.exportIcon} icon={DownloadIcon} size={16} />
         <span className={styles.exportLabel}>{t('shareModal.popover.export')}</span>
@@ -325,5 +340,7 @@ const SharePopover = memo<SharePopoverProps>(
     );
   },
 );
+
+export { SharePopoverContent };
 
 export default SharePopover;
