@@ -121,14 +121,10 @@ export const nodeState = (view: JourneyView | undefined, boardId: string): FlowN
 export const nodeReview = (view: JourneyView | undefined, boardId: string) =>
   nodeAttempts(view, boardId)[0]?.review ?? undefined;
 
-export const boardPreview = (
-  view: JourneyView | undefined,
-  boardId: string,
-  showReal: boolean,
-): { kind: 'reference' | 'unavailable' } | { kind: 'screenshot'; url: string } => {
-  if (!showReal) return { kind: 'reference' };
-  const url = nodeAttempts(view, boardId)
+export const nodeScreenshot = (view: JourneyView | undefined, boardId: string) =>
+  nodeAttempts(view, boardId)
     .flatMap((attempt) => attempt.evidence)
-    .find((evidence) => evidence.type === 'screenshot' && evidence.fileUrl)?.fileUrl;
-  return url ? { kind: 'screenshot', url } : { kind: 'unavailable' };
-};
+    .find((evidence) => evidence.type === 'screenshot' && evidence.fileUrl)?.fileUrl ?? undefined;
+
+// Passing is the expected outcome and stays unmarked; only a result that needs a person is flagged.
+export const isFlagged = (state: FlowNodeState) => !!state && state !== 'passed';

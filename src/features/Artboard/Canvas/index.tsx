@@ -12,7 +12,7 @@ import BoardNode from './BoardNode';
 import CommentLayer from './CommentLayer';
 import Edges from './Edges';
 import Groups from './Groups';
-import { SelectionBar, ZoomBar } from './Overlays';
+import { CompareBar, SelectionBar, ZoomBar } from './Overlays';
 import { canvasStyles } from './styles';
 import { useViewport } from './useViewport';
 import { nextLiveBoards } from './visibleBoards';
@@ -100,6 +100,7 @@ const Canvas = () => {
         </div>
       </div>
       <SelectionBar view={view} />
+      <CompareBar />
       {discussing && <CommentLayer size={size} view={view} />}
       <ZoomBar k={view.k} onFit={fitAll} onZoom={zoomBy} />
     </>

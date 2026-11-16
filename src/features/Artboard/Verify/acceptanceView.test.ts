@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { acceptanceJourneyView } from './acceptanceView';
-import { boardPreview, nodeState } from './flow';
+import { isFlagged, nodeScreenshot, nodeState } from './flow';
 import { testBoard, testEdge, testModel } from './testBoard';
 
 const board = testModel(
@@ -82,7 +82,7 @@ describe('acceptanceJourneyView', () => {
     expect(acceptanceJourneyView(board, { flows: [], rounds: [] } as any)).toBeUndefined();
   });
 
-  it('switches from the pinned reference to the actual screenshot for the journey board', () => {
+  it('picks the screenshot evidence of the journey board', () => {
     const withEvidence = structuredClone(bundle);
     withEvidence.flows[0].versions[0].runs[0].attempts[0].evidence = [
       { fileUrl: 'https://evidence.test/log.txt', type: 'log' },
@@ -90,16 +90,18 @@ describe('acceptanceJourneyView', () => {
     ];
     const journey = acceptanceJourneyView(board, withEvidence);
 
-    expect(boardPreview(journey, 'b1', false)).toEqual({ kind: 'reference' });
-    expect(boardPreview(journey, 'b1', true)).toEqual({
-      kind: 'screenshot',
-      url: 'https://evidence.test/b1.png',
-    });
-    expect(boardPreview(journey, 'b1', false)).toEqual({ kind: 'reference' });
+    expect(nodeScreenshot(journey, 'b1')).toBe('https://evidence.test/b1.png');
   });
 
-  it('shows unavailable evidence rather than the reference or another board screenshot', () => {
-    expect(boardPreview(view, 'b2', true)).toEqual({ kind: 'unavailable' });
-    expect(boardPreview(undefined, 'b1', true)).toEqual({ kind: 'unavailable' });
+  it('has no screenshot for a board without evidence instead of borrowing another board', () => {
+    expect(nodeScreenshot(view, 'b2')).toBeUndefined();
+    expect(nodeScreenshot(undefined, 'b1')).toBeUndefined();
+  });
+
+  it('flags only results that need a person', () => {
+    expect(isFlagged('passed')).toBe(false);
+    expect(isFlagged(undefined)).toBe(false);
+    expect(isFlagged('failed')).toBe(true);
+    expect(isFlagged('blocked')).toBe(true);
   });
 });

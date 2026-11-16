@@ -21,7 +21,7 @@ import { useArtboardComments } from '../data/useArtboardComments';
 import { createFinalizeModal } from '../Finalize';
 import OpenConversation from '../Gallery/OpenConversation';
 import { artboardActions, useArtboardStore } from '../store';
-import type { BoardMode } from '../types';
+import type { BoardMode, VerifyView } from '../types';
 import PageMenu from './PageMenu';
 import { useTitleBarInset } from './useTitleBarInset';
 
@@ -57,12 +57,13 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
   const hasTask = !!board.artboard.taskId;
   const { data: threads = [] } = useArtboardComments(board.artboard.id);
   const waiting = waitingQuestions(threads).length;
-  const { gallery, mode, outlineOpen, tool, verifyOpen } = useArtboardStore((s) => ({
+  const { gallery, mode, outlineOpen, tool, verifyOpen, verifyView } = useArtboardStore((s) => ({
     gallery: s.gallery,
     mode: s.mode,
     outlineOpen: s.outlineOpen,
     tool: s.tool,
     verifyOpen: s.verifyOpen,
+    verifyView: s.verifyView,
   }));
 
   const showNextQuestion = () => {
@@ -102,6 +103,17 @@ const Header = ({ narrow, onExitFullscreen }: HeaderProps) => {
         >
           {t('artboard.header.questions', { count: waiting })}
         </Tag>
+      )}
+      {mode === 'verify' && (
+        <Segmented
+          size={'small'}
+          value={verifyView}
+          options={[
+            { label: t('artboard.verifyBar.board'), value: 'board' },
+            { label: t('artboard.verifyBar.list'), value: 'list' },
+          ]}
+          onChange={(value) => artboardActions.setVerifyView(value as VerifyView)}
+        />
       )}
       {mode === 'discuss' && (
         <Flexbox horizontal gap={2}>

@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { commentAnchorId, commentAnchorUrl, commentIdFromHash, holdInView } from './anchor';
+import {
+  commentAnchorId,
+  commentAnchorUrl,
+  commentIdFromHash,
+  holdInView,
+  tabFromHash,
+} from './anchor';
 
 describe('comment anchors', () => {
   it('round-trips a comment id through the fragment', () => {
@@ -105,5 +111,13 @@ describe('holding a linked comment in view', () => {
     vi.advanceTimersByTime(4001);
     resize();
     expect(other.scrollIntoView).not.toHaveBeenCalled();
+  });
+});
+
+describe('tabFromHash', () => {
+  it('lands a flow link on the flow tab and a comment link on the discussion', () => {
+    expect(tabFromHash('#flow')).toBe('flow');
+    expect(tabFromHash('#comment-c1')).toBe('discussion');
+    expect(tabFromHash('')).toBeUndefined();
   });
 });

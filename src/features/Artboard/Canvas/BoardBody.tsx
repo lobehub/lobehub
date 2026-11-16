@@ -38,13 +38,11 @@ interface BoardBodyProps {
   board: ArtboardBoardView;
   imageUrl?: string;
   live: boolean;
-  screenshotUrl?: string | null;
+  screenshotUrl?: string;
 }
 
 const BoardBody = memo<BoardBodyProps>(({ board, imageUrl, live, screenshotUrl }) => {
   const { t } = useTranslation('project');
-  if (screenshotUrl === null)
-    return <Placeholder icon={ImageOffIcon} text={t('artboard.verify.noShot')} />;
   if (screenshotUrl)
     return (
       <img

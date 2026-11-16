@@ -1,5 +1,5 @@
 import type { CommentTarget } from '../data/commentActions';
-import type { BoardMode, BoardTool, CameraTarget, VerifyView } from '../types';
+import type { BoardMode, BoardTool, CameraTarget, CompareView, VerifyView } from '../types';
 
 export interface CommentDraft extends CommentTarget {
   x: number;
@@ -9,6 +9,7 @@ export interface CommentDraft extends CommentTarget {
 export interface ArtboardState {
   boardId: string | null;
   camera: CameraTarget | null;
+  compare: CompareView;
   draft: CommentDraft | null;
   flash: string[];
   fullscreen: boolean;
@@ -19,7 +20,6 @@ export interface ArtboardState {
   pageByBoard: Record<string, string>;
   pageId: string | null;
   selected: string | null;
-  showReal: boolean;
   staleRevision: number | null;
   tool: BoardTool;
   verifyOpen: boolean;
@@ -29,6 +29,7 @@ export interface ArtboardState {
 export const initialState: ArtboardState = {
   boardId: null,
   camera: null,
+  compare: 'real',
   draft: null,
   flash: [],
   fullscreen: false,
@@ -39,9 +40,8 @@ export const initialState: ArtboardState = {
   pageByBoard: {},
   pageId: null,
   selected: null,
-  showReal: false,
   staleRevision: null,
   tool: 'select',
   verifyOpen: true,
-  verifyView: 'flow',
+  verifyView: 'board',
 };

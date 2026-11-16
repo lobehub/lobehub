@@ -10,7 +10,7 @@ import { flowStateColor } from '@/features/Acceptance/Viewer/Flow/FlowNode';
 import { sx } from '@/styles/sx';
 
 import StatusTag, { stateIcon } from '../StatusTag';
-import type { FlowNodeState } from '../Verify/flow';
+import { type FlowNodeState, isFlagged } from '../Verify/flow';
 import { canvasStyles } from './styles';
 
 const styles = stylex.create({
@@ -101,7 +101,7 @@ const BoardLabel = ({ board, choice, k, linked, recommended, state, verify }: Bo
     return (
       <ScaledLabel gap={4} k={k} width={width}>
         <Flexbox horizontal align="center" gap={4} style={{ minWidth: 0 }}>
-          {verify && linked && (
+          {verify && linked && isFlagged(state) && (
             <Icon color={flowStateColor(state)} icon={stateIcon(state)} size={12} />
           )}
           {choice && <ChoiceRadio {...choice} />}
@@ -144,7 +144,7 @@ const BoardLabel = ({ board, choice, k, linked, recommended, state, verify }: Bo
             {t('artboard.board.locked')}
           </Tag>
         )}
-        {verify && linked && <StatusTag state={state} />}
+        {verify && linked && isFlagged(state) && <StatusTag state={state} />}
       </Flexbox>
     </ScaledLabel>
   );

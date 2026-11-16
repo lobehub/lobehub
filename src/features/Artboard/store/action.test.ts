@@ -157,4 +157,18 @@ describe('artboardActions', () => {
     artboardActions.setTool('select');
     expect(useArtboardStore.getState().draft).toBeNull();
   });
+
+  it('shows the next board as its screenshot again after another board is selected', () => {
+    artboardActions.bindBoard('art_1');
+    artboardActions.setMode('verify');
+    artboardActions.select('b1');
+    artboardActions.setCompare('split');
+
+    artboardActions.select('b2');
+    expect(useArtboardStore.getState()).toMatchObject({ compare: 'real', selected: 'b2' });
+
+    artboardActions.setCompare('design');
+    artboardActions.focusItem('b3');
+    expect(useArtboardStore.getState().compare).toBe('real');
+  });
 });

@@ -8,10 +8,11 @@ import { useBoard } from '../BoardContext';
 import { chooseOption } from '../data/actions';
 import type { BoardModel } from '../model';
 import { artboardActions, useArtboardStore } from '../store';
-import { boardPreview, nodeState } from '../Verify/flow';
+import { isFlagged, nodeScreenshot, nodeState } from '../Verify/flow';
 import { useJourneyView } from '../Verify/useJourneyView';
 import BoardBody from './BoardBody';
 import BoardLabel from './BoardLabel';
+import CompareBody from './CompareBody';
 import { canvasStyles } from './styles';
 
 const isRelated = (board: BoardModel, selected: string | null, id: string) =>
@@ -33,19 +34,21 @@ const BoardNode = ({ board: item, k, live }: BoardNodeProps) => {
   const board = useBoard();
   const journey = useJourneyView();
   const s = useArtboardStore((st) => ({
+    compare: st.compare,
     flash: st.flash.includes(item.id),
     related: st.mode === 'discuss' && isRelated(board, st.selected, item.id),
     selected: st.selected === item.id,
-    showReal: st.showReal,
     verify: st.mode === 'verify',
   }));
 
   const inJourney = !!board.journeyGroupId && item.groupId === board.journeyGroupId;
   const muted = s.verify && !inJourney;
   const state = inJourney ? nodeState(journey, item.id) : undefined;
-  const border = s.verify && inJourney ? flowStateColor(state) : undefined;
-  const preview = boardPreview(journey, item.id, s.verify && inJourney && s.showReal);
-  const { rect, source } = item;
+  const border = s.verify && isFlagged(state) ? flowStateColor(state) : undefined;
+  const screenshotUrl = s.verify && inJourney ? nodeScreenshot(journey, item.id) : undefined;
+  const compare = s.selected && screenshotUrl ? s.compare : 'real';
+  const imageUrl = item.source?.kind === 'image' ? board.imageUrls[item.source.fileId] : undefined;
+  const { rect } = item;
   const round = item.groupId ? board.roundByGroupId[item.groupId] : undefined;
   const option = !s.verify && round && round.id === item.roundId ? round : undefined;
   const picked = option?.chosenBoardId === item.id;
@@ -96,18 +99,16 @@ const BoardNode = ({ board: item, k, live }: BoardNodeProps) => {
           border ? { borderColor: border, borderWidth: 3 } : undefined,
         )}
       >
-        <BoardBody
-          board={item}
-          imageUrl={source?.kind === 'image' ? board.imageUrls[source.fileId] : undefined}
-          live={live}
-          screenshotUrl={
-            preview.kind === 'reference'
-              ? undefined
-              : preview.kind === 'screenshot'
-                ? preview.url
-                : null
-          }
-        />
+        {compare === 'split' && screenshotUrl ? (
+          <CompareBody board={item} imageUrl={imageUrl} screenshotUrl={screenshotUrl} />
+        ) : (
+          <BoardBody
+            board={item}
+            imageUrl={imageUrl}
+            live={live}
+            screenshotUrl={compare === 'design' ? undefined : screenshotUrl}
+          />
+        )}
       </div>
     </div>
   );

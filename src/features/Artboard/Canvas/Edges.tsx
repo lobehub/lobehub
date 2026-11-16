@@ -24,12 +24,8 @@ const toneOf = (
   states: Record<string, FlowNodeState>,
   hot: string | null,
 ): EdgeTone => {
-  if (verify) {
-    const ends = [states[edge.from], states[edge.to]];
-    if (ends.includes('failed')) return { color: cssVar.colorError, strong: true };
-    if (ends.every((x) => x === 'passed')) return { color: cssVar.colorSuccess, strong: true };
-    return { color: cssVar.colorTextQuaternary, dash: '4 3', strong: false };
-  }
+  if (verify && (states[edge.from] === 'failed' || states[edge.to] === 'failed'))
+    return { color: cssVar.colorError, strong: true };
   if (hot && (edge.from === hot || edge.to === hot))
     return { color: cssVar.colorPrimary, strong: true };
   return { color: cssVar.colorTextTertiary, strong: false };

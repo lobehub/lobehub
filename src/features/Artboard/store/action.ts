@@ -1,7 +1,7 @@
 import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import type { BoardMode, BoardTool, CameraTarget, VerifyView } from '../types';
+import type { BoardMode, BoardTool, CameraTarget, CompareView, VerifyView } from '../types';
 import { type ArtboardState, type CommentDraft, initialState } from './initialState';
 import { useArtboardStore } from './store';
 
@@ -48,7 +48,7 @@ export class ArtboardActionImpl {
   };
 
   focusItem = (id: string) => {
-    this.#set({ selected: id }, false, n('focusItem'));
+    this.#set({ compare: 'real', selected: id }, false, n('focusItem'));
     this.focus({ id, kind: 'item' });
   };
 
@@ -125,15 +125,15 @@ export class ArtboardActionImpl {
 
   setOutlineOpen = (outlineOpen: boolean) => this.#set({ outlineOpen }, false, n('outline'));
 
-  setShowReal = (showReal: boolean) => this.#set({ showReal }, false, n('setShowReal'));
-
   setVerifyView = (verifyView: VerifyView) => {
     this.#set({ verifyView }, false, n('setVerifyView'));
     if (verifyView === 'board') this.focus({ kind: 'journey' });
   };
 
+  setCompare = (compare: CompareView) => this.#set({ compare }, false, n('setCompare'));
+
   select = (id: string | null) => {
-    this.#set({ selected: id }, false, n('select'));
+    this.#set({ compare: 'real', selected: id }, false, n('select'));
     if (id && this.#get().mode === 'verify') this.setVerifyOpen(true);
   };
 

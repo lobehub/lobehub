@@ -1,4 +1,4 @@
-import { ActionIcon, Flexbox, Text, toast } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Segmented, Text, toast } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import {
@@ -17,6 +17,9 @@ import { useBoard } from '../BoardContext';
 import { addBoardReference } from '../data/addBoardReference';
 import { boardReference } from '../data/references';
 import { artboardActions, useArtboardStore } from '../store';
+import type { CompareView } from '../types';
+import { nodeScreenshot } from '../Verify/flow';
+import { useJourneyView } from '../Verify/useJourneyView';
 import type { ViewState } from './useViewport';
 
 export const floatStyles = stylex.create({
@@ -26,9 +29,16 @@ export const floatStyles = stylex.create({
     borderRadius: cssVar.borderRadiusLG,
     borderStyle: 'solid',
     borderWidth: 1,
-    boxShadow: '0 4px 16px rgb(0 0 0 / 6%)',
+    boxShadow: cssVar.boxShadowTertiary,
     padding: 4,
     position: 'absolute',
+    zIndex: 5,
+  },
+  topCenter: {
+    insetBlockStart: 12,
+    insetInlineStart: '50%',
+    position: 'absolute',
+    transform: 'translateX(-50%)',
     zIndex: 5,
   },
   selectionBar: {
@@ -88,6 +98,33 @@ export const SelectionBar = ({ view }: { view: ViewState }) => {
         />
       )}
     </Flexbox>
+  );
+};
+
+export const CompareBar = () => {
+  const { t } = useTranslation('project');
+  const board = useBoard();
+  const journey = useJourneyView();
+  const { compare, selected } = useArtboardStore((s) => ({
+    compare: s.compare,
+    selected: s.mode === 'verify' && s.selected ? board.boardById[s.selected] : undefined,
+  }));
+  if (!selected || selected.pageId !== board.pageId || !nodeScreenshot(journey, selected.id))
+    return null;
+
+  return (
+    <div {...stylex.props(floatStyles.topCenter)}>
+      <Segmented
+        size={'small'}
+        value={compare}
+        options={[
+          { label: t('artboard.compare.real'), value: 'real' },
+          { label: t('artboard.compare.design'), value: 'design' },
+          { label: t('artboard.compare.split'), value: 'split' },
+        ]}
+        onChange={(value) => artboardActions.setCompare(value as CompareView)}
+      />
+    </div>
   );
 };
 

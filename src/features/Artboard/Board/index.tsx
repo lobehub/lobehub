@@ -10,13 +10,12 @@ import { BoardProvider, useBoard } from '../BoardContext';
 import Canvas from '../Canvas';
 import { useArtboard } from '../data/useArtboard';
 import { useArtboardRevisionWatch } from '../data/useArtboardRevisionWatch';
-import { artboardActions, useArtboardStore } from '../store';
+import { artboardActions, artboardSelectors, useArtboardStore } from '../store';
 import { useArtboardFeature } from '../useArtboardFeature';
 import VerifyPanel from '../Verify';
-import FlowStage from '../Verify/FlowStage';
+import CheckTable from '../Verify/CheckTable';
 import Header from './Header';
 import Outline from './Outline';
-import { VerifyBar } from './StageBars';
 import StaleBanner from './StaleBanner';
 import { BoardEmpty, BoardError, BoardLoading } from './States';
 import SubmitBar from './SubmitBar';
@@ -61,9 +60,8 @@ const Stage = ({ narrow }: { narrow: boolean }) => {
 
   return (
     <div {...stylex.props(styles.stage)}>
-      {mode === 'verify' && verifyView === 'flow' ? <FlowStage /> : <Canvas />}
+      {mode === 'verify' && verifyView === 'list' ? <CheckTable narrow={narrow} /> : <Canvas />}
       {outlineOpen && !narrow && mode === 'discuss' && <Outline />}
-      {mode === 'verify' && <VerifyBar />}
       {mode === 'discuss' && <SubmitBar narrow={narrow} />}
     </div>
   );
@@ -100,10 +98,13 @@ const BoardLayout = ({ onExitFullscreen }: { onExitFullscreen?: () => void }) =>
   const rootRef = useRef<HTMLDivElement>(null);
   const size = useSize(rootRef);
   const narrow = !!size && size.width < NARROW_WIDTH;
-  const { mode, verifyOpen } = useArtboardStore((s) => ({
+  const selectedCheck = useArtboardStore(artboardSelectors.selectedCheckBoard(board));
+  const { mode, verifyOpen, verifyView } = useArtboardStore((s) => ({
     mode: s.mode,
     verifyOpen: s.verifyOpen,
+    verifyView: s.verifyView,
   }));
+  const panelOpen = verifyOpen && (verifyView === 'board' || !!selectedCheck);
 
   useEffect(() => {
     if (size) artboardActions.setNarrow(narrow);
@@ -116,7 +117,7 @@ const BoardLayout = ({ onExitFullscreen }: { onExitFullscreen?: () => void }) =>
       <div {...stylex.props(styles.body)}>
         <Stage narrow={narrow} />
         {mode === 'verify' && (
-          <SidePanel narrow={narrow} open={verifyOpen}>
+          <SidePanel narrow={narrow} open={panelOpen}>
             <VerifyPanel
               onClose={narrow ? () => artboardActions.setVerifyOpen(false) : undefined}
             />
