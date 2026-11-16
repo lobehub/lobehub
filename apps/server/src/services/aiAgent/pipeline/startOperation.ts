@@ -62,8 +62,6 @@ export interface StartOperationInput {
   init: StartOperationInit;
   initialLlmCalls?: number;
   initialStepCount?: number;
-  /** The caller runs step 0 after this returns; see `OperationCreationParams.inlineFirstStep`. */
-  inlineFirstStep?: boolean;
   /** Relay executor the calling client declared; lands on `state.host.llmExecutor`. */
   llmExecutor?: InternalExecAgentParams['llmExecutor'];
   maxSteps?: number;
@@ -140,7 +138,6 @@ export const startOperation = async (
     init,
     initialLlmCalls,
     initialStepCount,
-    inlineFirstStep,
     maxSteps,
     operationId,
     operationTaskId,
@@ -331,7 +328,6 @@ export const startOperation = async (
       enableExpertise,
       initialLlmCalls,
       initialStepCount,
-      inlineFirstStep,
       ...(providedApprovalResolutionRequestId && approvalSourceOperationId
         ? {
             interventionResolution: {
