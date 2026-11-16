@@ -202,10 +202,10 @@ export class ContactModel {
         .where(and(eq(userContactRequests.status, 'pending'), this.pairWhere(addresseeId)))
         .limit(1);
       if (pending?.requesterId === this.userId) return { requestId: pending.id, status: 'pending' };
-      if (pending) {
-        await this.accept(tx, pending.id, addresseeId);
+      // Their pending request is answered by mine, unless they withdrew it meanwhile; then mine
+      // goes out as a new request.
+      if (pending && (await this.accept(tx, pending.id, addresseeId)))
         return { requestId: pending.id, status: 'accepted' };
-      }
 
       const [created] = await tx
         .insert(userContactRequests)
@@ -255,17 +255,23 @@ export class ContactModel {
     this.db.transaction(async (tx) => {
       const request = await this.incomingPending(tx, requestId);
       await this.lockPair(tx, request.requesterId);
-      await this.accept(tx, request.id, request.requesterId);
+      if (!(await this.accept(tx, request.id, request.requesterId)))
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Request not found' });
       return { contactUserId: request.requesterId };
     });
 
   declineRequest = async (requestId: string) => {
     await this.db.transaction(async (tx) => {
       const request = await this.incomingPending(tx, requestId);
-      await tx
+      // Same rule as accepting: only a request still pending can be answered.
+      const [declined] = await tx
         .update(userContactRequests)
         .set({ respondedAt: new Date(), status: 'declined', updatedAt: new Date() })
-        .where(eq(userContactRequests.id, request.id));
+        .where(
+          and(eq(userContactRequests.id, request.id), eq(userContactRequests.status, 'pending')),
+        )
+        .returning({ id: userContactRequests.id });
+      if (!declined) throw new TRPCError({ code: 'NOT_FOUND', message: 'Request not found' });
     });
   };
 
@@ -443,16 +449,23 @@ export class ContactModel {
     return request;
   }
 
+  /**
+   * Move a request from pending to accepted and add both contact entries. The transition is
+   * conditional on the row still being pending: a withdrawal or decline that committed after the
+   * request was read wins, and no contacts are added. Returns whether it was accepted.
+   */
   private async accept(
     tx: Pick<LobeChatDatabase, 'insert' | 'update'>,
     requestId: string,
     requesterId: string,
-  ) {
+  ): Promise<boolean> {
     const now = new Date();
-    await tx
+    const [accepted] = await tx
       .update(userContactRequests)
       .set({ respondedAt: now, status: 'accepted', updatedAt: now })
-      .where(eq(userContactRequests.id, requestId));
+      .where(and(eq(userContactRequests.id, requestId), eq(userContactRequests.status, 'pending')))
+      .returning({ id: userContactRequests.id });
+    if (!accepted) return false;
     await tx
       .insert(userContacts)
       .values([
@@ -460,6 +473,7 @@ export class ContactModel {
         { contactUserId: this.userId, type: 'user', userId: requesterId },
       ])
       .onConflictDoNothing();
+    return true;
   }
 
   private async findLinkShare(shareIdOrSlug: string) {

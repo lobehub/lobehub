@@ -1,5 +1,6 @@
 // @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import { agents, agentShares, userContactRequests, userContacts, users } from '../../schemas';
@@ -46,6 +47,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await serverDB.delete(userContactRequests);
   await serverDB.delete(userContacts);
   await serverDB.delete(users);
@@ -100,6 +102,55 @@ describe('contact requests', () => {
     expect(await bobModel.listRequests()).toEqual([]);
     // A new request may follow a cancelled one.
     expect((await aliceModel.sendRequest(bob)).status).toBe('pending');
+  });
+
+  /**
+   * The requester withdraws after the addressee's answer read the request as pending but before
+   * it wrote: the withdrawal wins and no contacts appear. Simulated by withdrawing right after
+   * the read, inside the answering transaction.
+   */
+  const withdrawAfterRead = (model: ContactModel) => {
+    const target = model as unknown as {
+      incomingPending: (tx: LobeChatDatabase, id: string) => Promise<{ id: string }>;
+    };
+    const read = target.incomingPending.bind(model);
+    vi.spyOn(target, 'incomingPending').mockImplementation(async (tx, id) => {
+      const request = await read(tx, id);
+      await tx
+        .update(userContactRequests)
+        .set({ status: 'cancelled' })
+        .where(eq(userContactRequests.id, request.id));
+      return request;
+    });
+  };
+
+  it('does not accept a request withdrawn while it was being accepted', async () => {
+    const { requestId } = await aliceModel.sendRequest(bob);
+    withdrawAfterRead(bobModel);
+
+    await expect(bobModel.acceptRequest(requestId)).rejects.toThrow('Request not found');
+
+    expect(await aliceModel.isContact(bob)).toBe(false);
+    expect(await bobModel.isContact(alice)).toBe(false);
+    const [row] = await serverDB
+      .select({ status: userContactRequests.status })
+      .from(userContactRequests)
+      .where(eq(userContactRequests.id, requestId));
+    // The refused answer rolls back with its transaction; it never became accepted.
+    expect(row.status).not.toBe('accepted');
+  });
+
+  it('does not decline a request withdrawn while it was being declined', async () => {
+    const { requestId } = await aliceModel.sendRequest(bob);
+    withdrawAfterRead(bobModel);
+
+    await expect(bobModel.declineRequest(requestId)).rejects.toThrow('Request not found');
+
+    const [row] = await serverDB
+      .select({ status: userContactRequests.status })
+      .from(userContactRequests)
+      .where(eq(userContactRequests.id, requestId));
+    expect(row.status).not.toBe('declined');
   });
 
   it('rejects requests to yourself and to existing contacts', async () => {
