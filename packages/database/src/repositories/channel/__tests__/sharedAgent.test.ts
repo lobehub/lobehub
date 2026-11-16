@@ -78,8 +78,27 @@ describe('a contact’s shared Agent in a direct conversation', () => {
     expect(channel).toMatchObject({ agentId, userId: visitorId, workspaceId: null });
 
     const [listed] = await visitor.list();
-    expect(listed).toMatchObject({ id: channel.id, sharedAgent: true });
+    expect(listed).toMatchObject({
+      id: channel.id,
+      sharedAgent: true,
+      sharedAgentHandle: 'shared-helper',
+    });
     expect(listed.memberAvatars).toMatchObject([{ actorType: 'agent', id: agentId }]);
+  });
+
+  it('lists the share id as its handle when the owner set no custom slug', async () => {
+    await db
+      .update(agentShares)
+      .set({ shareConfig: { maxTurnsPerTopic: 2, monthlySpendLimit: 1 } })
+      .where(eq(agentShares.id, shareId));
+    const { channel } = await visitor.create({
+      agentId,
+      sharedAgent: true,
+      title: 'Shared Helper',
+    });
+
+    const [listed] = await visitor.list();
+    expect(listed).toMatchObject({ id: channel.id, sharedAgentHandle: shareId });
   });
 
   it('cannot be added to a group', async () => {

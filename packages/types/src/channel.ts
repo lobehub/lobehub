@@ -489,6 +489,11 @@ export interface ChannelListItem {
    * and its share; pictured by `memberAvatars`, since the caller has no sidebar row for it.
    */
   sharedAgent?: boolean;
+  /**
+   * On a `sharedAgent` conversation, the share's custom slug or else its id: the Agent's visitor
+   * page lives at `/a/<handle>`, the only page of it the caller can open. Null otherwise.
+   */
+  sharedAgentHandle?: string | null;
   status: ChannelStatus;
   title: string;
   /** Main-channel messages the caller has not read; set by the Channel list. */
