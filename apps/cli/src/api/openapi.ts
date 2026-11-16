@@ -1,22 +1,19 @@
 import { resolveServerUrl } from '../settings';
 import { log } from '../utils/logger';
 import { getAgentStreamAuthInfo } from './http';
-import { isOperationToken, storedLoginFor } from './operationTokenFallback';
+import { isOperationToken } from './operationToken';
 import { withWorkspaceHeader } from './workspace';
 
 /**
  * The Bearer token for `/api/v1/*`. That API accepts OIDC JWTs and API keys
- * but refuses a run's `hetero-operation` token outright, so an operation token
- * in `LOBEHUB_JWT` is swapped for this machine's stored login of the same
- * account, the same rule `operationTokenFallbackLink` applies to tRPC.
+ * but refuses a run's `hetero-operation` token outright, and `lh` does not
+ * swap in this machine's own login for it (see `operationToken`).
  */
 const resolveBearerToken = async (): Promise<string> => {
-  const envJwt = process.env.LOBEHUB_JWT;
-  if (envJwt && isOperationToken(envJwt)) {
-    const lookup = await storedLoginFor(envJwt);
-    if ('token' in lookup) return lookup.token;
-
-    log.error(lookup.warning);
+  if (isOperationToken(process.env.LOBEHUB_JWT)) {
+    log.error(
+      "This command is not available inside an agent run: its LobeHub API does not accept the run's sign-in. Ask the user to run it in a terminal.",
+    );
     process.exit(1);
   }
 

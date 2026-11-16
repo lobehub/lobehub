@@ -39,14 +39,14 @@ describe('credentials.source', () => {
     });
 
     /** The agent that hit this pointed the user at a desktop restart instead of a login. */
-    it('tells an agent run why it has no credential and that the user must log in', async () => {
+    it('tells an agent run why it has no credential, without sending it to log in', async () => {
       vi.stubEnv('LOBEHUB_TOPIC_ID', 'tpc_1');
 
       const outcome = await runCheck(credentialChecks, 'credentials.source');
 
       expect(outcome.status).toBe('fail');
-      expect(outcome.detail).toContain('agent conversation');
-      expect(outcome.fix).toContain("Ask the user to run 'lh login'");
+      expect(outcome.detail).toContain('passed no LobeHub sign-in');
+      expect(outcome.fix).toContain("Do not run 'lh login'");
     });
   });
 

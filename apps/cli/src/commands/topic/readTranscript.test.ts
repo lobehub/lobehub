@@ -1,7 +1,7 @@
 import { TRPCClientError } from '@trpc/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { OPERATION_TOKEN_REFUSAL } from '../../api/operationTokenFallback';
+import { OPERATION_TOKEN_REFUSAL } from '../../api/operationToken';
 import { readTopicTranscript } from './readTranscript';
 
 const jwt = (payload: Record<string, unknown>) =>

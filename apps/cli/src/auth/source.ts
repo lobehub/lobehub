@@ -1,7 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 
-import { readCliApiKeyEnvSource, resolveCliDirName } from '../constants/identity';
+import { isInsideAgentRun, readCliApiKeyEnvSource, resolveCliDirName } from '../constants/identity';
 import { loadCredentials } from './credentials';
 
 export type AuthSourceKind =
@@ -54,6 +54,14 @@ export function pickAuthSource(
   const apiKey = readCliApiKeyEnvSource();
   if (apiKey)
     return { kind: 'env-api-key', origin: apiKey.name, token: apiKey.value, tokenType: 'apiKey' };
+
+  // Inside an agent run, the stored login is never the run's credential (`getValidToken`).
+  if (isInsideAgentRun())
+    return {
+      kind: 'stored',
+      origin: 'none: an agent run uses only its own sign-in',
+      tokenType: 'jwt',
+    };
 
   return {
     kind: 'stored',

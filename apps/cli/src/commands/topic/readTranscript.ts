@@ -1,7 +1,7 @@
 import { isTRPCClientError } from '@trpc/client';
 
 import type { TrpcClient } from '../../api/client';
-import { isOperationToken, isOperationTokenRefusal } from '../../api/operationTokenFallback';
+import { isOperationToken, isOperationTokenRefusal } from '../../api/operationToken';
 
 export interface TranscriptQuery {
   includeMessages: boolean;
@@ -22,9 +22,9 @@ const isMissingProcedure = (error: unknown) =>
  * run's own principal, limited to its own conversation and the ones the user
  * names in it. When that route cannot serve the read — a server without it, a
  * topic outside that boundary, a run that already ended — the ordinary route is
- * tried, which on a machine logged in as the same account still answers (see
- * `operationTokenFallback`). If the ordinary route only repeats the operation
- * token refusal, the operation route's own answer is the one worth showing.
+ * tried, which a server that accepts the run's token as its caller answers. If
+ * the ordinary route only repeats the operation token refusal (an older server),
+ * the operation route's own answer is the one worth showing.
  *
  * `--workspace` names a scope the run's token was not minted for, so it always
  * takes the ordinary route.

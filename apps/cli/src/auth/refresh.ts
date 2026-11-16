@@ -1,4 +1,4 @@
-import { CLI_PRIMARY_BIN } from '../constants/identity';
+import { CLI_PRIMARY_BIN, isInsideAgentRun } from '../constants/identity';
 import { resolveServerUrl } from '../settings';
 import { loadCredentials, saveCredentials, type StoredCredentials } from './credentials';
 
@@ -17,6 +17,12 @@ export type TokenLookup =
   | { credentials: StoredCredentials; status: 'ok' }
   /** Nothing on disk to work with: no credentials file, or no refresh token to spend. */
   | { status: 'no-login' }
+  /**
+   * Inside an agent run that passed no sign-in of its own. The stored login is not read there:
+   * it belongs to whoever logged in on this machine, who on a shared device is not the user the
+   * run belongs to.
+   */
+  | { status: 'agent-run' }
   /** The server proved the stored refresh token is done. Signing in again is the fix. */
   | { detail: string; status: 'spent' }
   /**
@@ -55,6 +61,8 @@ let refreshInFlight: Promise<TokenLookup> | undefined;
  * Get a valid access token, refreshing if expired.
  */
 export async function getValidToken(bufferSeconds = 60): Promise<TokenLookup> {
+  if (isInsideAgentRun()) return { status: 'agent-run' };
+
   const credentials = loadCredentials();
   if (!credentials) return { status: 'no-login' };
 
@@ -108,26 +116,20 @@ export interface TokenLookupReport {
   fix: string;
 }
 
-/**
- * Whether this process runs inside a LobeHub agent run: the app stamps the run's ids into the
- * environment of every agent it launches, and every shell that agent opens inherits them.
- */
-export const isInsideAgentRun = (env: NodeJS.ProcessEnv = process.env): boolean =>
-  !!(env.LOBEHUB_TOPIC_ID || env.LOBEHUB_OPERATION_ID);
+export { isInsideAgentRun } from '../constants/identity';
 
 /**
- * The missing-login report for a command run by an agent inside LobeHub.
+ * The report for a command run by an agent inside LobeHub without the run's own sign-in.
  *
- * Read by the agent, not by a person at a terminal, and a bare "run `lh login`" there got turned
- * into guesses — restart the app, set a workspace id — because nothing said why a conversation the
- * user is signed in to has no credential. Spell out the cause and hand the login to the user:
- * `lh login` rewrites this machine's CLI credentials and registers the device, which is not the
- * agent's call to make.
+ * Read by the agent, not by a person at a terminal. Inside a run `lh` uses only the sign-in the
+ * run passed it, never this machine's login or API key, so a bare "run `lh login`" would send the
+ * agent after exactly the credential it must not use. Spell out the cause and the one fix that
+ * works: a LobeHub that passes the run its sign-in.
  */
-export const agentRunMissingLoginReport = (): TokenLookupReport => ({
+export const agentRunNoSignInReport = (): TokenLookupReport => ({
   detail:
-    'This command runs inside a LobeHub agent conversation, but the run passed no LobeHub sign-in to the CLI and this machine has no CLI login of its own.',
-  fix: `Ask the user to run '${CLI_PRIMARY_BIN} login' in a terminal on this machine and approve it in the browser, then retry. Do not run it yourself; restarting LobeHub does not fix this. Updating LobeHub Desktop lets local agents use the app's own sign-in.`,
+    "This command runs inside a LobeHub agent run, but the run passed no LobeHub sign-in to the CLI. Inside an agent run the CLI uses only the run's own sign-in, never this machine's login or API key.",
+  fix: `Tell the user that LobeHub (Desktop, or '${CLI_PRIMARY_BIN} connect' on this machine) needs updating so its runs carry their sign-in. Do not run '${CLI_PRIMARY_BIN} login', set an API key, or clear the run's environment to get around this.`,
 });
 
 /**
@@ -136,8 +138,8 @@ export const agentRunMissingLoginReport = (): TokenLookupReport => ({
  */
 export function describeTokenLookup(lookup: TokenLookup): TokenLookupReport | undefined {
   switch (lookup.status) {
-    case 'no-login': {
-      return isInsideAgentRun() ? agentRunMissingLoginReport() : undefined;
+    case 'agent-run': {
+      return agentRunNoSignInReport();
     }
     case 'spent': {
       return {

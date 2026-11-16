@@ -1,4 +1,5 @@
 import { readCliApiKeyEnv } from '../constants/auth';
+import { isInsideAgentRun } from '../constants/identity';
 import { loadCredentials } from './credentials';
 
 /**
@@ -22,7 +23,7 @@ export function resolveIdentityFingerprint(): string | undefined {
   const envJwt = process.env.LOBEHUB_JWT;
   if (envJwt) return userIdentity(envJwt);
 
-  if (readCliApiKeyEnv()) return undefined;
+  if (readCliApiKeyEnv() || isInsideAgentRun()) return undefined;
 
   const stored = loadCredentials();
   return stored?.accessToken ? userIdentity(stored.accessToken) : undefined;

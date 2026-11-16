@@ -99,7 +99,7 @@ describe('oidcAuth with a device run caller token', () => {
     );
   });
 
-  it('still refuses an operation token without caller:act, with the message lh falls back on', async () => {
+  it('still refuses an operation token without caller:act, with the message lh recognizes', async () => {
     const caller = createCaller({
       oidcAuth: callerToken({ capabilities: ['hetero:ingest', 'hetero:finish'] }),
       workspaceId: 'ws-team',

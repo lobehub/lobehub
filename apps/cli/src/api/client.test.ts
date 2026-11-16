@@ -143,46 +143,31 @@ describe('api/client workspace scoping', () => {
     expect(scoped).not.toBe(personal);
   });
 
+  /**
+   * Regression: a refused operation token was re-sent with this machine's
+   * stored login. On a shared device that login can belong to someone other
+   * than the user whose run it is, so the run's own token is the only
+   * credential its clients send.
+   */
   it.each(['getTrpcClient', 'getToolsTrpcClient'] as const)(
-    '%s preserves per-request fallback credentials and the run workspace',
+    '%s sends only the run token, never the stored login',
     async (clientFactory) => {
       process.env.LOBEHUB_JWT = `e30.${Buffer.from(
         JSON.stringify({ purpose: 'hetero-operation', sub: 'user-1' }),
       ).toString('base64url')}.s`;
       process.env.LOBEHUB_WORKSPACE_ID = 'workspace-1';
+      const refresh = await import('../auth/refresh');
       const clients = await import('./client');
       await clients[clientFactory]();
 
+      const { links } = (mockCreateTRPCClient.mock.calls.at(-1) as any[])[0];
+      expect(links).toHaveLength(1);
       expect(
         await headersOfLastLink({
-          op: {
-            context: { storedLogin: 'same-user-login' },
-            id: 1,
-            input: undefined,
-            path: 'doc.list',
-            type: 'query',
-          },
+          op: { context: { storedLogin: 'same-user-login' } } as unknown as Operation,
         }),
-      ).toEqual({ 'Oidc-Auth': 'same-user-login', 'X-Workspace-Id': 'workspace-1' });
-      expect(await headersOfLastLink()).toEqual({
-        'Oidc-Auth': process.env.LOBEHUB_JWT,
-        'X-Workspace-Id': 'workspace-1',
-      });
+      ).toEqual({ 'Oidc-Auth': process.env.LOBEHUB_JWT, 'X-Workspace-Id': 'workspace-1' });
+      expect(refresh.getValidToken).not.toHaveBeenCalled();
     },
   );
-
-  // Only a device run's operation token is refused on user-scoped routes, so
-  // only its clients get the stored-login fallback (see operationTokenFallback).
-  it.each([
-    ['an operation token', { purpose: 'hetero-operation', sub: 'user-1' }, 2],
-    ['a user-scoped token', { purpose: 'cli-sandbox', sub: 'user-1' }, 1],
-  ])('builds the fallback link only for %s', async (_label, payload, linkCount) => {
-    process.env.LOBEHUB_JWT = `e30.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.s`;
-    const { getTrpcClient } = await import('./client');
-    await getTrpcClient();
-
-    const { links } = (mockCreateTRPCClient.mock.calls.at(-1) as any[])[0];
-    expect(links).toHaveLength(linkCount);
-    expect(await headersOfLastLink()).toMatchObject({ 'Oidc-Auth': process.env.LOBEHUB_JWT });
-  });
 });
