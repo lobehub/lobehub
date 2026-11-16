@@ -127,6 +127,25 @@ describe('ChatInput StoreUpdater', () => {
     expect(send).toHaveBeenCalledOnce();
   });
 
+  it('drops a send queued for uploads as soon as the conversation switches', () => {
+    const store = createStore();
+    const renderAt = (draftKey: string) => (
+      <Provider createStore={() => store}>
+        <StoreUpdater draftKey={draftKey} leftActions={[]} rightActions={[]} />
+      </Provider>
+    );
+    const { rerender } = render(renderAt('tpc_a'));
+    const unsubscribe = vi.fn();
+    act(() => store.setState({ uploadQueuedSend: { draftKey: 'tpc_a', unsubscribe } }));
+
+    rerender(renderAt('tpc_b'));
+    // Coming back before the uploads settle must not revive it.
+    rerender(renderAt('tpc_a'));
+
+    expect(unsubscribe).toHaveBeenCalledOnce();
+    expect(store.getState().uploadQueuedSend).toBeUndefined();
+  });
+
   it('shows Send as loading instead of Stop while the sent message is being created', () => {
     const store = createStore();
     render(

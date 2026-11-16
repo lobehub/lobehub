@@ -56,6 +56,9 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     // it post-paint would flash the previous topic's draft for one frame.
     useLayoutEffect(() => {
       if (draftKey !== undefined && storeApi.getState().draftKey !== draftKey) {
+        // A send queued in the conversation being left must not fire if the user
+        // comes back before its uploads settle: drop it on the first switch.
+        storeApi.getState().cancelUploadQueuedSend();
         storeApi.setState({ draftKey });
       }
     }, [draftKey, storeApi]);
