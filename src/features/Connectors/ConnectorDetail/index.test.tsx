@@ -219,7 +219,6 @@ describe('ConnectorDetail', () => {
     expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
   });
 
-
   it('says the connector supports event subscriptions when its server does and the feature is on', () => {
     mocks.toolState.connectors[0] = {
       ...mocks.toolState.connectors[0],

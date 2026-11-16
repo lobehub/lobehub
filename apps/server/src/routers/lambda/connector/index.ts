@@ -50,6 +50,7 @@ import {
   pruneMissingAutoConnectorTools,
   syncConnectorToolsById,
 } from '@/server/services/connector/sync';
+import { refreshByConnector, removeByConnector } from '@/server/services/inboundWebhook/lifecycle';
 import {
   DeviceMcpManifestInputSchema,
   getDeviceMcpManifest,
@@ -58,7 +59,6 @@ import {
   McpBoundDeviceUnavailableError,
   McpDeviceUnavailableError,
 } from '@/server/services/mcp/deviceTunnel';
-import { refreshByConnector, removeByConnector } from '@/server/services/inboundWebhook/lifecycle';
 import {
   resolveConnectorAuthorizerId,
   resolveUserDisplayMap,

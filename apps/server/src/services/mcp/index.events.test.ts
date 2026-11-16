@@ -12,6 +12,8 @@ describe('MCPService events session integration', () => {
   let fixture: Awaited<ReturnType<typeof startEventsServer>>;
   let service: MCPService;
   beforeEach(async () => {
+    // The fixture listens on loopback, which the client's SSRF guard refuses by default.
+    vi.stubEnv('SSRF_ALLOW_IP_ADDRESS_LIST', '127.0.0.1');
     fixture = await startEventsServer();
     service = new MCPService();
   });
@@ -19,6 +21,7 @@ describe('MCPService events session integration', () => {
     await Promise.all([...service['clients'].values()].map((client) => client.disconnect()));
     await fixture.close();
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
   const params = () => ({ name: 'fixture', type: 'http' as const, url: fixture.url });
 
