@@ -1,7 +1,7 @@
 import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
 import { getBuiltinStreaming } from '@lobechat/builtin-tools/streamings';
 import { Accordion, Divider, Flexbox, Skeleton } from '@lobehub/ui';
-import { memo, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 
 import SafeBoundary from '@/components/ErrorBoundary';
 import { getMcpAppFromState } from '@/libs/mcp/mcpApp';
@@ -81,6 +81,11 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
   });
   // Controls switching between custom render and fallback ArgumentRender
   const [showCustomToolRender, setShowCustomToolRender] = useState(true);
+  // The row actions only show on hover/focus, yet they are most of a collapsed
+  // row's DOM (≈28 of ≈46 nodes). Mount them the first time the row is pointed
+  // at or focused, so a list of hundreds of finished calls mounts titles only.
+  const [actionsArmed, setActionsArmed] = useState(false);
+  const armActions = useCallback(() => setActionsArmed(true), []);
 
   let isArgumentsStreaming = false;
   try {
@@ -123,80 +128,86 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
   if (!tool) return null;
 
   const isToolDetailExpand = forceShowStreamingRender || showToolRender || showDebug;
+  const mountActions = !disableEditing && (actionsArmed || isToolDetailExpand);
 
   return (
-    <Accordion
-      hideIndicator={isAlwaysExpand}
-      indicatorPlacement="inline"
-      styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
-      value={isToolDetailExpand ? [id] : []}
-      items={[
-        {
-          action: !disableEditing && (
-            <Actions
-              assistantMessageId={assistantMessageId}
-              canToggleCustomToolRender={canToggleCustomToolRender}
-              identifier={identifier}
-              setShowCustomToolRender={setShowCustomToolRender}
-              setShowDebug={setShowDebug}
-              showCustomToolRender={showCustomToolRender}
-              showDebug={showDebug}
-            />
-          ),
-          children: (
-            <Flexbox gap={8} paddingBlock={8}>
-              {showDebug && (
-                <Debug
-                  apiName={apiName}
-                  identifier={identifier}
-                  intervention={intervention}
-                  requestArgs={requestArgs}
-                  result={result}
-                  toolCallId={id}
-                  toolMessageId={toolMessageId}
-                  type={type}
-                />
-              )}
-              <SafeBoundary alertTitle={`${identifier} / ${apiName}`} variant="alert">
-                <Detail
-                  apiName={apiName}
-                  arguments={requestArgs}
-                  disableEditing={disableEditing}
-                  identifier={identifier}
-                  intervention={intervention}
-                  isArgumentsStreaming={isArgumentsStreaming}
-                  isToolCalling={isToolCalling}
-                  messageId={assistantMessageId}
-                  result={result}
-                  showCustomToolRender={showCustomToolRender}
-                  toolCallId={id}
-                  toolMessageId={toolMessageId}
-                  type={type}
-                />
-              </SafeBoundary>
-              <Divider dashed style={{ marginBottom: 0, marginTop: 8 }} />
-            </Flexbox>
-          ),
-          key: id,
-          title: (
-            <Inspectors
-              apiName={apiName}
-              arguments={requestArgs}
-              identifier={identifier}
-              intervention={intervention}
-              isArgumentsStreaming={isArgumentsStreaming}
-              isExpanded={isToolDetailExpand}
-              isToolCalling={isToolCalling}
-              messageId={assistantMessageId}
-              result={result}
-              toolCallId={id}
-              toolCallStartTime={toolCallStartTime}
-            />
-          ),
-        },
-      ]}
-      onValueChange={(value) => handleExpand(value.includes(id))}
-    />
+    <div
+      onFocus={actionsArmed ? undefined : armActions}
+      onPointerEnter={actionsArmed ? undefined : armActions}
+    >
+      <Accordion
+        hideIndicator={isAlwaysExpand}
+        indicatorPlacement="inline"
+        styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+        value={isToolDetailExpand ? [id] : []}
+        items={[
+          {
+            action: mountActions && (
+              <Actions
+                assistantMessageId={assistantMessageId}
+                canToggleCustomToolRender={canToggleCustomToolRender}
+                identifier={identifier}
+                setShowCustomToolRender={setShowCustomToolRender}
+                setShowDebug={setShowDebug}
+                showCustomToolRender={showCustomToolRender}
+                showDebug={showDebug}
+              />
+            ),
+            children: (
+              <Flexbox gap={8} paddingBlock={8}>
+                {showDebug && (
+                  <Debug
+                    apiName={apiName}
+                    identifier={identifier}
+                    intervention={intervention}
+                    requestArgs={requestArgs}
+                    result={result}
+                    toolCallId={id}
+                    toolMessageId={toolMessageId}
+                    type={type}
+                  />
+                )}
+                <SafeBoundary alertTitle={`${identifier} / ${apiName}`} variant="alert">
+                  <Detail
+                    apiName={apiName}
+                    arguments={requestArgs}
+                    disableEditing={disableEditing}
+                    identifier={identifier}
+                    intervention={intervention}
+                    isArgumentsStreaming={isArgumentsStreaming}
+                    isToolCalling={isToolCalling}
+                    messageId={assistantMessageId}
+                    result={result}
+                    showCustomToolRender={showCustomToolRender}
+                    toolCallId={id}
+                    toolMessageId={toolMessageId}
+                    type={type}
+                  />
+                </SafeBoundary>
+                <Divider dashed style={{ marginBottom: 0, marginTop: 8 }} />
+              </Flexbox>
+            ),
+            key: id,
+            title: (
+              <Inspectors
+                apiName={apiName}
+                arguments={requestArgs}
+                identifier={identifier}
+                intervention={intervention}
+                isArgumentsStreaming={isArgumentsStreaming}
+                isExpanded={isToolDetailExpand}
+                isToolCalling={isToolCalling}
+                messageId={assistantMessageId}
+                result={result}
+                toolCallId={id}
+                toolCallStartTime={toolCallStartTime}
+              />
+            ),
+          },
+        ]}
+        onValueChange={(value) => handleExpand(value.includes(id))}
+      />
+    </div>
   );
 });
 

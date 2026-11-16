@@ -35,15 +35,21 @@ vi.mock('@lobehub/ui', async (importOriginal) => {
       Accordion: ({
         items,
         onValueChange,
+        styles,
         value,
       }: {
         items?: { action?: ReactNode; children?: ReactNode; key: string; title?: ReactNode }[];
         onValueChange?: (keys: string[]) => void;
+        styles?: { panel?: { transitionDuration?: string } };
         value?: string[];
       }) => {
         const isExpanded = (value ?? []).includes('workflow');
         return (
-          <div data-expanded-keys={JSON.stringify(value ?? [])} data-testid="workflow-accordion">
+          <div
+            data-expanded-keys={JSON.stringify(value ?? [])}
+            data-panel-transition={styles?.panel?.transitionDuration}
+            data-testid="workflow-accordion"
+          >
             <button
               aria-label="toggle-accordion-header"
               type="button"
@@ -150,6 +156,33 @@ describe('WorkflowCollapse', () => {
     mockIsGenerating = true;
     mockDbMessages = [];
     vi.useRealTimers();
+  });
+
+  /** @example Animating a 500-step panel's height re-laid out every row per frame. */
+  it('opens and closes a long tool list without the height animation', () => {
+    mockIsGenerating = false;
+    const manyTools: AssistantContentBlock[] = Array.from({ length: 101 }, (_, i) => ({
+      content: '',
+      id: `block-${i}`,
+      tools: [
+        {
+          apiName: 'search',
+          arguments: '{}',
+          id: `tool-${i}`,
+          identifier: 'search',
+          result: { content: 'ok' },
+          type: 'builtin',
+        } as any,
+      ],
+    }));
+
+    const { rerender } = render(
+      <WorkflowCollapse assistantMessageId="msg-1" blocks={makeBlocks()} />,
+    );
+    expect(screen.getByTestId('workflow-accordion')).not.toHaveAttribute('data-panel-transition');
+
+    rerender(<WorkflowCollapse assistantMessageId="msg-1" blocks={manyTools} />);
+    expect(screen.getByTestId('workflow-accordion')).toHaveAttribute('data-panel-transition', '0s');
   });
 
   it('defaults to the full list while streaming', () => {
