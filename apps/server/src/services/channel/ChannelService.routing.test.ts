@@ -23,6 +23,7 @@ vi.mock('@/server/services/agent', () => ({ AgentService: class {} }));
 vi.mock('@/server/services/file', () => ({ FileService: class {} }));
 vi.mock('./ChannelCoordinator', () => ({ ChannelCoordinator: class {} }));
 vi.mock('./mention', () => ({ notifyChannelMentions: mocks.notifyMentions }));
+vi.mock('./directMessage', () => ({ notifyChannelDirectMessages: vi.fn() }));
 vi.mock('./notify', () => ({ notifyChannel: mocks.notify }));
 vi.mock('./queue', () => ({ wakeChannel: mocks.wake }));
 vi.mock('./routingConfig', () => ({ resolveChannelRoutingConfig: mocks.config }));
