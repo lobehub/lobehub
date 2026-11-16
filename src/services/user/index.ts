@@ -133,6 +133,11 @@ export class UserService {
     return lambdaClient.user.updatePreference.mutate(preference);
   };
 
+  /** Personal-mode "New worktree" switch for one directory; resolves to the stored list. */
+  setWorktreeModeDir = async (key: string, enabled: boolean): Promise<string[]> => {
+    return lambdaClient.user.setWorktreeModeDir.mutate({ enabled, key });
+  };
+
   updateGuide = async (guide: Partial<UserGuide>) => {
     return lambdaClient.user.updateGuide.mutate(guide);
   };

@@ -21,14 +21,21 @@ import type { GitBranchSummary } from '@/services/git';
  * state.
  */
 export interface GitStatusParams {
+  /**
+   * A local branch the read describes instead of HEAD. Only the ahead/behind
+   * read takes one (the composer counts the branch picked for a new topic,
+   * which is not checked out yet); a branchless key is unchanged, so rows
+   * persisted before this field keep their keys.
+   */
+  branch?: string;
   /** Remote device; `undefined` reads this machine over Electron IPC. */
   deviceId?: string;
   path: string;
 }
 
 /** `local` stands for this machine, like the SWR device keys. */
-export const gitStatusKey = ({ deviceId, path }: GitStatusParams) =>
-  `${deviceId ?? 'local'}\u0000${path}`;
+export const gitStatusKey = ({ branch, deviceId, path }: GitStatusParams) =>
+  `${deviceId ?? 'local'}\u0000${path}${branch ? `\u0000${branch}` : ''}`;
 
 /**
  * One answered read. The value is wrapped so a read that answered with nothing
