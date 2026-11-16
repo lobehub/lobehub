@@ -6,7 +6,6 @@ import debug from 'debug';
 import {
   ASYNC_SHELL_PARK_WINDOW_MS,
   ASYNC_SHELL_TIMEOUT_MS,
-  isAsyncShellEnabled,
 } from '@/server/services/deviceGateway/toolCallCompletion';
 
 import type { RuntimeExecutorContext } from './context';
@@ -79,7 +78,6 @@ export const parkAsyncShell = async (
   /** Only the device's command state is read. */
   result: { state?: unknown },
 ): Promise<ToolRunExecution | null> => {
-  if (!isAsyncShellEnabled()) return null;
   if (toolCall.identifier !== LocalSystemIdentifier) return null;
   if (toolCall.apiName !== 'runCommand') return null;
 

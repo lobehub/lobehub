@@ -173,9 +173,9 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         }
 
         const deviceWorkspaceId = await getDeviceWorkspaceId();
-        // Only a command can outlive its call. With async shell on, the device
-        // may keep watching it and report the final result later, which lets
-        // the transport park the run instead of the model polling.
+        // Only a command can outlive its call. The device may keep watching it
+        // and report the final result later, which lets the transport park the
+        // run instead of the model polling.
         const completion =
           api.name === LocalSystemApiName.runCommand
             ? buildShellCompletion(context.toolCallId)

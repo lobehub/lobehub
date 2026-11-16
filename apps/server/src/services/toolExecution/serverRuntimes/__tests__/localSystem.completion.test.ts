@@ -9,14 +9,6 @@ vi.mock('@/server/services/deviceGateway/authorizedToolCall', () => ({
     (mockExecuteToolCall as any)(...args),
 }));
 
-// The async-shell switch is a deployment flag; flip it through a mutable object.
-const envMock = vi.hoisted(() => ({
-  AGENT_ASYNC_SHELL: 'true' as string | undefined,
-  AGENT_ASYNC_SHELL_PARK_WINDOW_MS: undefined as number | undefined,
-  AGENT_ASYNC_SHELL_TIMEOUT_MS: 60_000 as number | undefined,
-}));
-vi.mock('@lobechat/env/agent', () => ({ agentEnv: envMock }));
-
 const { localSystemRuntime } = await import('../localSystem');
 
 const context = (overrides: Partial<ToolExecutionContext> = {}): ToolExecutionContext => ({
@@ -33,7 +25,6 @@ const dispatchedParams = () => (mockExecuteToolCall.mock.calls[0] as unknown[])[
 describe('localSystemRuntime late-completion registration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    envMock.AGENT_ASYNC_SHELL = 'true';
   });
 
   it('lets the device report a command result later', async () => {
@@ -48,22 +39,13 @@ describe('localSystemRuntime late-completion registration', () => {
       // decides when the wait is over.
       ttlMs: expect.any(Number),
     });
-    expect(dispatchedParams().completion.ttlMs).toBeGreaterThan(60_000);
+    expect(dispatchedParams().completion.ttlMs).toBeGreaterThan(30 * 60 * 1000);
   });
 
   it('registers nothing for a call that cannot outlive itself', async () => {
     const proxy = localSystemRuntime.factory(context()) as Record<string, (a: any) => any>;
 
     await proxy[LocalSystemApiName.readFile]({ path: 'a.txt' });
-
-    expect(dispatchedParams().completion).toBeUndefined();
-  });
-
-  it('registers nothing with async shell off', async () => {
-    envMock.AGENT_ASYNC_SHELL = undefined;
-    const proxy = localSystemRuntime.factory(context()) as Record<string, (a: any) => any>;
-
-    await proxy[LocalSystemApiName.runCommand]({ command: 'sleep 600' });
 
     expect(dispatchedParams().completion).toBeUndefined();
   });

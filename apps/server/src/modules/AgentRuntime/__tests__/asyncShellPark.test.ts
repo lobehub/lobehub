@@ -1,17 +1,7 @@
 import { LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { parkAsyncShell } from '../asyncShellPark';
-
-// The park switch is a deployment flag; read it through a mutable object so a
-// test can flip it without reloading the env module (which validates on import).
-const envMock = vi.hoisted(() => ({
-  AGENT_ASYNC_SHELL: 'true' as string | undefined,
-  AGENT_ASYNC_SHELL_PARK_WINDOW_MS: undefined as number | undefined,
-  AGENT_ASYNC_SHELL_TIMEOUT_MS: undefined as number | undefined,
-}));
-
-vi.mock('@lobechat/env/agent', () => ({ agentEnv: envMock }));
 
 const buildCtx = () => {
   const create = vi.fn(async () => ({ id: 'msg_placeholder' }));
@@ -47,10 +37,6 @@ const runningResult = (state: Record<string, unknown>) =>
   ({ content: '', executionTime: 10, state, success: true }) as any;
 
 describe('parkAsyncShell', () => {
-  afterEach(() => {
-    envMock.AGENT_ASYNC_SHELL = 'true';
-  });
-
   it('parks a command started in the background', async () => {
     const { ctx, create, markOperationParked, scheduleShellExpiry } = buildCtx();
 
@@ -166,19 +152,5 @@ describe('parkAsyncShell', () => {
     );
 
     expect(execution).toBeNull();
-  });
-
-  it('falls back to the normal result when the flag is off', async () => {
-    envMock.AGENT_ASYNC_SHELL = 'false';
-    const { ctx, create } = buildCtx();
-
-    const execution = await parkAsyncShell(
-      ctx,
-      { parentMessageId: 'msg_parent', state, toolCall },
-      runningResult({ commandId: 'sh-5', completionWatch: true, isBackground: true }),
-    );
-
-    expect(execution).toBeNull();
-    expect(create).not.toHaveBeenCalled();
   });
 });
