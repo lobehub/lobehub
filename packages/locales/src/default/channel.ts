@@ -94,6 +94,7 @@ export default {
   'members.agents': 'Agents · {{count}}',
   'openAgent': 'Open Agent',
   'openAgentNamed': 'Open {{name}}',
+  'memberActionsNamed': 'Actions for {{name}}',
   'profile.about': 'About',
   'profile.hide': 'Hide Agent profile',
   'profile.noDescription': 'No description yet',

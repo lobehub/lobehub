@@ -134,6 +134,18 @@ export const styles = stylex.create({
     color: cssVar.colorTextSecondary,
   },
   /** Floats over the row's top-right corner while the row is hovered or focused. */
+  /** A member row's "more" button: shown on row hover or focus where hover exists. */
+  memberActions: {
+    flex: 'none',
+    opacity: {
+      default: 1,
+      [HOVER]: {
+        default: 0,
+        [stylex.when.ancestor(':hover')]: 1,
+        [stylex.when.ancestor(':focus-within')]: 1,
+      },
+    },
+  },
   messageToolbar: {
     position: 'absolute',
     insetBlockStart: 6,

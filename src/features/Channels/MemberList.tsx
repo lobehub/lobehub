@@ -1,7 +1,8 @@
 import type { ChannelDetail, ChannelPublicMember } from '@lobechat/types';
-import { ActionIcon, Flexbox, Spin, Text } from '@lobehub/ui';
+import type { DropdownItem } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
-import { ExternalLink, FolderCog } from 'lucide-react';
+import { ExternalLink, FolderCog, MoreHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -13,7 +14,7 @@ import { channelJobTone, memberCurrentJob, memberJobStatus } from './jobStatus';
 import { MemberAvatar } from './MemberAvatar';
 import { memberName } from './memberName';
 import { MemberProfileTrigger } from './MemberProfileTrigger';
-import { statusStyles, toneStyles } from './styles';
+import { statusStyles, styles, toneStyles } from './styles';
 import { getVisibleStatusMembers, groupMembersByActor } from './visibleMembers';
 
 interface MemberEntry {
@@ -26,7 +27,8 @@ interface MemberEntry {
 export const StatusAvatar = ({ entry, size }: { entry: MemberEntry; size: number }) => (
   <span {...stylex.props(statusStyles.memberAvatar)}>
     <MemberAvatar member={entry.member} size={size} />
-    {entry.member.actorType === 'agent' && (
+    {/* Idle is the default; only a reply in progress, waiting or failed earns a dot. */}
+    {entry.member.actorType === 'agent' && entry.tone !== 'quiet' && (
       <span
         aria-hidden
         {...stylex.props(
@@ -81,9 +83,37 @@ const MemberRow = ({ channelId, entry, manageable, onAction, showDescription }: 
   const { t } = useTranslation('channel');
   const navigate = useWorkspaceAwareNavigate();
   const isAgent = entry.member.actorType === 'agent';
+  const { agentId } = entry.member;
+  const menuItems: DropdownItem[] = [];
+  if (agentId && entry.member.status === 'active' && manageable)
+    menuItems.push({
+      icon: <Icon icon={FolderCog} />,
+      key: 'environment',
+      label: t('environment.title'),
+      onClick: () => {
+        onAction?.();
+        openChannelAgentEnvironment(channelId, entry.member);
+      },
+    });
+  if (agentId)
+    menuItems.push({
+      icon: <Icon icon={ExternalLink} />,
+      key: 'open',
+      label: t('openAgent'),
+      onClick: () => {
+        onAction?.();
+        navigate(`/agent/${agentId}`);
+      },
+    });
 
   return (
-    <Flexbox horizontal align="center" gap={8} paddingBlock={6}>
+    <Flexbox
+      horizontal
+      align="center"
+      gap={8}
+      paddingBlock={6}
+      {...stylex.props(stylex.defaultMarker())}
+    >
       <MemberProfileTrigger member={entry.member}>
         <StatusAvatar entry={entry} size={28} />
       </MemberProfileTrigger>
@@ -103,29 +133,17 @@ const MemberRow = ({ channelId, entry, manageable, onAction, showDescription }: 
           ))}
       </Flexbox>
       {showDescription && isAgent && <MemberState entry={entry} />}
-      {entry.member.agentId && entry.member.status === 'active' && manageable && (
-        <ActionIcon
-          aria-label={t('environment.editNamed', { name: entry.name })}
-          icon={FolderCog}
-          size="small"
-          title={t('environment.title')}
-          onClick={() => {
-            onAction?.();
-            openChannelAgentEnvironment(channelId, entry.member);
-          }}
-        />
-      )}
-      {entry.member.agentId && (
-        <ActionIcon
-          aria-label={t('openAgentNamed', { name: entry.name })}
-          icon={ExternalLink}
-          size="small"
-          title={t('openAgent')}
-          onClick={() => {
-            onAction?.();
-            navigate(`/agent/${entry.member.agentId}`);
-          }}
-        />
+      {menuItems.length > 0 && (
+        <span {...stylex.props(styles.memberActions)}>
+          <DropdownMenu items={menuItems}>
+            <ActionIcon
+              aria-label={t('memberActionsNamed', { name: entry.name })}
+              icon={MoreHorizontal}
+              size="small"
+              title={t('more', { ns: 'common' })}
+            />
+          </DropdownMenu>
+        </span>
       )}
     </Flexbox>
   );
