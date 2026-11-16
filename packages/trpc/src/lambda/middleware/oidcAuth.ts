@@ -1,3 +1,4 @@
+import { HETERO_CALLER_SCOPES } from '@lobechat/const/apiKeyScope';
 import { TRPCError } from '@trpc/server';
 
 import type { HeteroOperationJwtClaims } from '../../utils/internalJwt';
@@ -12,10 +13,7 @@ import {
  * Let a device run's `caller:act` token act as its `sub`, or throw.
  *
  * The run's scope and lifetime are re-checked on every request (see
- * `authorizeHeteroCallerToken`). Its refusals carry their own messages, never
- * the operation-token refusal, so the CLI's same-account fallback
- * (`operationTokenFallback`) cannot step outside the run's workspace or past its
- * end with the machine's login.
+ * `authorizeHeteroCallerToken`), and its refusals carry their own messages.
  */
 const authorizeHeteroCaller = async (
   claims: HeteroOperationJwtClaims,
@@ -53,7 +51,8 @@ export const oidcAuth = trpc.middleware(async (opts) => {
   if (ctx.oidcAuth) {
     // hetero-operation tokens are long-lived (4h). A device run's token with
     // `caller:act` acts as the user who started the run, in the run's workspace,
-    // while the run lasts. Any other operation token is scoped to heteroIngest /
+    // while the run lasts, limited to HETERO_CALLER_SCOPES like a restricted API
+    // key (`apiKeyScopeGuard`, `assertReachableByCaller`). Any other operation token is scoped to heteroIngest /
     // heteroFinish and the run's own routes in HETERO_OPERATION_ROUTE_CAPABILITIES
     // (acceptance evidence, tool-result file store), and is rejected on every
     // other route so a leaked sandbox JWT cannot be replayed against it.
@@ -77,7 +76,9 @@ export const oidcAuth = trpc.middleware(async (opts) => {
       }
 
       const userId = await authorizeHeteroCaller(claims, ctx.workspaceId);
-      return next({ ctx: { oidcAuth: ctx.oidcAuth, userId } });
+      return next({
+        ctx: { apiKeyScopes: [...HETERO_CALLER_SCOPES], oidcAuth: ctx.oidcAuth, userId },
+      });
     }
 
     return next({

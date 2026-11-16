@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   API_KEY_SCOPES,
   hasApiKeyScope,
+  HETERO_CALLER_SCOPES,
+  INTERNAL_API_KEY_SCOPES,
   isFullAccessApiKey,
   isValidApiKeyScope,
   requiredApiKeyScopeForPermission,
@@ -19,6 +21,39 @@ describe('isValidApiKeyScope', () => {
     expect(isValidApiKeyScope('agent:admin')).toBe(false);
     expect(isValidApiKeyScope('')).toBe(false);
     expect(isValidApiKeyScope('billing:read')).toBe(false);
+  });
+});
+
+describe('internal scopes', () => {
+  it('can never be issued to an API key', () => {
+    for (const scope of INTERNAL_API_KEY_SCOPES) expect(isValidApiKeyScope(scope)).toBe(false);
+  });
+
+  it('gate the acceptance surfaces, which a caller token reaches and a restricted key does not', () => {
+    for (const path of ['acceptance.accept', 'acceptanceComment.create', 'verify.uploadEvidence']) {
+      expect(requiredApiKeyScopeForTrpc(path, 'mutation')).toEqual({
+        scopes: ['acceptance:write'],
+      });
+    }
+    expect(hasApiKeyScope([...HETERO_CALLER_SCOPES], 'acceptance:write')).toBe(true);
+  });
+});
+
+describe('HETERO_CALLER_SCOPES', () => {
+  it.each([
+    ['workspace.delete', 'mutation'],
+    ['apiKey.createApiKey', 'mutation'],
+    ['oauthApp.rotateSecret', 'mutation'],
+    ['accountDeletion.requestDeletion', 'mutation'],
+    ['subscription.cancelSubscription', 'mutation'],
+  ] as const)('does not reach %s', (path, type) => {
+    const decision = requiredApiKeyScopeForTrpc(path, type);
+    const allowed =
+      'open' in decision ||
+      ('scopes' in decision &&
+        decision.scopes.every((scope) => hasApiKeyScope([...HETERO_CALLER_SCOPES], scope)));
+
+    expect(allowed).toBe(false);
   });
 });
 
@@ -280,15 +315,18 @@ describe('requiredApiKeyScopeForTrpc', () => {
     expect(requiredApiKeyScopeForTrpc('config.getGlobalConfig', 'query')).toEqual({ open: true });
   });
 
-  it('every rule references catalog scopes only', () => {
+  it('every rule references catalog or internal scopes only', () => {
+    const known = (scope: string) =>
+      isValidApiKeyScope(scope) || (INTERNAL_API_KEY_SCOPES as readonly string[]).includes(scope);
+
     for (const rule of Object.values(TRPC_NAMESPACE_API_KEY_RULES)) {
       if (rule === 'open' || rule === 'blocked') continue;
       if ('any' in rule) {
-        expect(isValidApiKeyScope(rule.any)).toBe(true);
+        expect(known(rule.any)).toBe(true);
         continue;
       }
-      if (rule.read) expect(isValidApiKeyScope(rule.read)).toBe(true);
-      if (rule.write) expect(isValidApiKeyScope(rule.write)).toBe(true);
+      if (rule.read) expect(known(rule.read)).toBe(true);
+      if (rule.write) expect(known(rule.write)).toBe(true);
     }
   });
 

@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import superjson from 'superjson';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { OPERATION_TOKEN_REFUSAL } from '../../../api/operationTokenFallback';
+import { OPERATION_TOKEN_REFUSAL } from '../../../api/operationToken';
 import type * as RefreshModule from '../../../auth/refresh';
 import { getValidToken } from '../../../auth/refresh';
 import type * as SettingsModule from '../../../settings';
