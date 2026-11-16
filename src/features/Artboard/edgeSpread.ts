@@ -1,11 +1,35 @@
 import type { EdgePath } from './model';
 
 export const EDGE_LANE_GAP = 14;
-export const EDGE_LABEL_SLOT = 32;
+/** Minimum vertical gap kept between two label boxes before they count as clear. */
+export const EDGE_LABEL_SLOT = 8;
+/** Vertical slots a label may try before it is treated as crowded and hidden. */
+const MAX_LABEL_SLOTS = 4;
 const LANE_MARGIN = 4;
-const LABEL_NEAR = 160;
 
 type Spreadable = EdgePath & { id: string };
+
+export interface EdgeLabelBox {
+  h: number;
+  w: number;
+}
+
+export interface SpreadEdgesOptions<T extends Spreadable> {
+  /** Size of the label that renders at `edge.lx` / `edge.ly`. */
+  labelBox: (edge: T) => EdgeLabelBox;
+  labelled: (edge: T) => boolean;
+  /** Boards a label must not sit on. */
+  obstacles?: readonly Box[];
+}
+
+export interface SpreadEdgesResult<T extends Spreadable> {
+  edges: T[];
+  /**
+   * Labels whose box could not be cleared from every other label. Rendering
+   * keeps them to hover/selection so the overview stays readable.
+   */
+  hiddenLabels: Set<string>;
+}
 
 const corridorOf = (edge: EdgePath) => {
   const [, a, b] = edge.points;
@@ -63,31 +87,72 @@ const splitLanes = <T extends Spreadable>(edges: T[]): T[] => {
   return edges.map((edge) => moved.get(edge.id) ?? edge);
 };
 
-const stackLabels = <T extends Spreadable>(edges: T[], labelled: (edge: T) => boolean): T[] => {
-  const sorted = edges.filter(labelled).toSorted((p, q) => p.ly - q.ly || p.lx - q.lx);
-  const piles: T[][] = [];
-  for (const edge of sorted) {
-    const pile = piles.find((members) => {
-      const last = members.at(-1)!;
-      return Math.abs(last.lx - edge.lx) < LABEL_NEAR && edge.ly - last.ly < EDGE_LABEL_SLOT;
-    });
-    if (pile) pile.push(edge);
-    else piles.push([edge]);
-  }
+interface Box {
+  h: number;
+  w: number;
+  x: number;
+  y: number;
+}
 
+const overlaps = (a: Box, b: Box, gap: number) =>
+  a.x < b.x + b.w + gap && b.x < a.x + a.w + gap && a.y < b.y + b.h + gap && b.y < a.y + a.h + gap;
+
+/**
+ * Width-aware label placement. Labels are anchored at their edge midpoint, so a
+ * long label on a near-parallel edge used to run straight through its
+ * neighbour: the old centre-distance heuristic never saw the glyphs. Here every
+ * label is treated as a box the size it actually renders, and the first clear
+ * vertical slot wins (0, +1, −1, +2, −2 …). A label with no clear slot within
+ * {@link MAX_LABEL_SLOTS} is reported as crowded instead of being drawn on top
+ * of another one.
+ */
+const placeLabels = <T extends Spreadable>(
+  edges: T[],
+  { labelBox, labelled, obstacles = [] }: SpreadEdgesOptions<T>,
+): { edges: T[]; hiddenLabels: Set<string> } => {
+  const hiddenLabels = new Set<string>();
+  const placed: Box[] = [];
   const moved = new Map<string, T>();
-  for (const pile of piles) {
-    if (pile.length < 2) continue;
-    const centre = pile.reduce((sum, e) => sum + e.ly, 0) / pile.length;
-    pile.forEach((edge, index) => {
-      moved.set(edge.id, { ...edge, ly: centre + centred(index, pile.length, EDGE_LABEL_SLOT) });
-    });
+
+  const sorted = edges
+    .filter(labelled)
+    .toSorted((p, q) => p.ly - q.ly || p.lx - q.lx || p.id.localeCompare(q.id));
+
+  for (const edge of sorted) {
+    const size = labelBox(edge);
+    if (size.w <= 0 || size.h <= 0) continue;
+
+    const step = size.h + EDGE_LABEL_SLOT;
+    const slots = [0];
+    for (let slot = 1; slot <= MAX_LABEL_SLOTS; slot += 1) slots.push(slot, -slot);
+
+    const dy = slots
+      .map((slot) => slot * step)
+      .find((offset) => {
+        const candidate = {
+          h: size.h,
+          w: size.w,
+          x: edge.lx - size.w / 2,
+          y: edge.ly + offset - size.h / 2,
+        };
+        const clear =
+          placed.every((other) => !overlaps(candidate, other, EDGE_LABEL_SLOT)) &&
+          obstacles.every((board) => !overlaps(candidate, board, 0));
+        if (clear) placed.push(candidate);
+        return clear;
+      });
+
+    if (dy === undefined) {
+      hiddenLabels.add(edge.id);
+      continue;
+    }
+    if (dy !== 0) moved.set(edge.id, { ...edge, ly: edge.ly + dy });
   }
 
-  return edges.map((edge) => moved.get(edge.id) ?? edge);
+  return { edges: edges.map((edge) => moved.get(edge.id) ?? edge), hiddenLabels };
 };
 
 export const spreadEdges = <T extends Spreadable>(
   edges: T[],
-  labelled: (edge: T) => boolean,
-): T[] => stackLabels(splitLanes(edges), labelled);
+  options: SpreadEdgesOptions<T>,
+): SpreadEdgesResult<T> => placeLabels(splitLanes(edges), options);

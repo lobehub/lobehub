@@ -70,6 +70,44 @@ describe('computeEdgePath', () => {
       ],
     });
   });
+
+  const crosses = (points: [number, number][], r: ReturnType<typeof rect>) =>
+    points.slice(1).some(([bx, by], i) => {
+      const [ax, ay] = points[i];
+      if (ay === by)
+        return ay > r.y && ay < r.y + r.h && Math.min(ax, bx) < r.x + r.w && Math.max(ax, bx) > r.x;
+      return ax > r.x && ax < r.x + r.w && Math.min(ay, by) < r.y + r.h && Math.max(ay, by) > r.y;
+    });
+
+  it('goes around a board that sits between two boards in a row', () => {
+    const from = rect(0, 100, 260, 160);
+    const between = rect(400, 0);
+    const to = rect(1200, 0);
+
+    const path = computeEdgePath(from, to, [from, between, to]);
+
+    expect(crosses(path.points, between)).toBe(false);
+    expect(path.points[0]).toEqual([130, 260]);
+    expect(path.points.at(-1)).toEqual([1520, 400]);
+    expect(path.ly).toBeGreaterThan(400);
+  });
+
+  it('goes around a board that sits between two stacked boards', () => {
+    const from = rect(0, 0);
+    const between = rect(0, 600);
+    const to = rect(0, 1200);
+
+    const path = computeEdgePath(from, to, [from, between, to]);
+
+    expect(crosses(path.points, between)).toBe(false);
+    expect(path.lx).toBeGreaterThan(640);
+  });
+
+  it('keeps the direct route when nothing is in the way', () => {
+    expect(
+      computeEdgePath(rect(0, 0), rect(840, 0), [rect(0, 0), rect(840, 0), rect(0, 900)]),
+    ).toEqual(computeEdgePath(rect(0, 0), rect(840, 0)));
+  });
 });
 
 const board = (id: string, patch: Partial<ArtboardBoardView> = {}): ArtboardBoardView => ({

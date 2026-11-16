@@ -10,6 +10,12 @@ import {
   type ArtboardRoundView,
 } from '@lobechat/types';
 
+import {
+  EDGE_LABEL_HEIGHT,
+  EDGE_LABEL_MAX_WIDTH,
+  edgeLabelText,
+  edgeLabelWidth,
+} from './Canvas/edgeLabel';
 import { spreadEdges } from './edgeSpread';
 
 export interface Rect {
@@ -27,7 +33,11 @@ export interface EdgePath {
   room: number;
 }
 
-export type BoardEdge = ArtboardEdgeView & EdgePath;
+export type BoardEdge = ArtboardEdgeView &
+  EdgePath & {
+    /** Layout found no free slot at this zoom: only hover/selection reveals it. */
+    labelHidden?: boolean;
+  };
 
 export type BoardBlocker =
   | { groupId: string | null; id: string; kind: 'round'; pageId: string; text: string }
@@ -55,7 +65,82 @@ export interface BoardModel {
   roundByGroupId: Record<string, ArtboardRoundView>;
 }
 
-export const computeEdgePath = (from: ArtboardRect, to: ArtboardRect): EdgePath => {
+const DETOUR_GAP = 40;
+
+type Point = [number, number];
+
+const segmentHits = ([ax, ay]: Point, [bx, by]: Point, r: ArtboardRect) =>
+  ay === by
+    ? ay > r.y && ay < r.y + r.h && Math.min(ax, bx) < r.x + r.w && Math.max(ax, bx) > r.x
+    : ax > r.x && ax < r.x + r.w && Math.min(ay, by) < r.y + r.h && Math.max(ay, by) > r.y;
+
+const crossing = (points: Point[], rects: ArtboardRect[]) =>
+  rects.filter((r) => points.slice(1).some((point, i) => segmentHits(points[i], point, r)));
+
+const aroundBelowOrAbove = (from: ArtboardRect, to: ArtboardRect, blocking: ArtboardRect[]) => {
+  const x1 = from.x + from.w / 2;
+  const x2 = to.x + to.w / 2;
+  const below = Math.max(...[from, to, ...blocking].map((r) => r.y + r.h)) + DETOUR_GAP;
+  const above = Math.min(...[from, to, ...blocking].map((r) => r.y)) - DETOUR_GAP;
+  return [
+    [from.y + from.h, below, to.y + to.h],
+    [from.y, above, to.y],
+  ].map(([y1, y, y2]): EdgePath => ({
+    d: `M${x1} ${y1} V${y} H${x2} V${y2}`,
+    lx: (x1 + x2) / 2,
+    ly: y,
+    points: [
+      [x1, y1],
+      [x1, y],
+      [x2, y],
+      [x2, y2],
+    ],
+    room: Math.abs(x2 - x1),
+  }));
+};
+
+const aroundRightOrLeft = (from: ArtboardRect, to: ArtboardRect, blocking: ArtboardRect[]) => {
+  const y1 = from.y + from.h / 2;
+  const y2 = to.y + to.h / 2;
+  const right = Math.max(...[from, to, ...blocking].map((r) => r.x + r.w)) + DETOUR_GAP;
+  const left = Math.min(...[from, to, ...blocking].map((r) => r.x)) - DETOUR_GAP;
+  return [
+    [from.x + from.w, right, to.x + to.w],
+    [from.x, left, to.x],
+  ].map(([x1, x, x2]): EdgePath => ({
+    d: `M${x1} ${y1} H${x} V${y2} H${x2}`,
+    lx: x,
+    ly: (y1 + y2) / 2,
+    points: [
+      [x1, y1],
+      [x, y1],
+      [x, y2],
+      [x2, y2],
+    ],
+    room: DETOUR_GAP * 2,
+  }));
+};
+
+const sameRect = (a: ArtboardRect, b: ArtboardRect) =>
+  a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+
+export const computeEdgePath = (
+  from: ArtboardRect,
+  to: ArtboardRect,
+  obstacles: ArtboardRect[] = [],
+): EdgePath => {
+  const direct = directEdgePath(from, to);
+  const others = obstacles.filter((r) => !sameRect(r, from) && !sameRect(r, to));
+  const blocking = crossing(direct.points, others);
+  if (!blocking.length) return direct;
+
+  const sideBySide = to.x >= from.x + from.w || to.x + to.w <= from.x;
+  const detours = (sideBySide ? aroundBelowOrAbove : aroundRightOrLeft)(from, to, blocking);
+  // Below before above: board titles sit on top of each board.
+  return detours.find((path) => !crossing(path.points, others).length) ?? direct;
+};
+
+const directEdgePath = (from: ArtboardRect, to: ArtboardRect): EdgePath => {
   const right = to.x >= from.x + from.w;
   const left = to.x + to.w <= from.x;
 
@@ -135,13 +220,32 @@ export const buildBoardModel = (
   const boards = content.boards.filter((b) => b.pageId === pageId);
   const groups = content.groups.filter((g) => g.pageId === pageId);
   const onPage = new Set(boards.map((b) => b.id));
-  const edges = spreadEdges(
+  const spread = spreadEdges(
     content.edges.flatMap((edge) =>
       onPage.has(edge.from) && onPage.has(edge.to)
-        ? [{ ...edge, ...computeEdgePath(boardById[edge.from].rect, boardById[edge.to].rect) }]
+        ? [
+            {
+              ...edge,
+              ...computeEdgePath(
+                boardById[edge.from].rect,
+                boardById[edge.to].rect,
+                boards.map((b) => b.rect),
+              ),
+            },
+          ]
         : [],
     ),
-    (edge) => !!(edge.label || edge.condition),
+    {
+      labelBox: (edge) => ({
+        h: EDGE_LABEL_HEIGHT,
+        w: Math.min(edgeLabelWidth(edgeLabelText(edge)), Math.min(edge.room, EDGE_LABEL_MAX_WIDTH)),
+      }),
+      labelled: (edge) => !!(edge.label || edge.condition),
+      obstacles: boards.map((b) => b.rect),
+    },
+  );
+  const edges: BoardEdge[] = spread.edges.map((edge) =>
+    spread.hiddenLabels.has(edge.id) ? { ...edge, labelHidden: true } : edge,
   );
 
   const journey = artboardJourneyOf(content);

@@ -8,7 +8,7 @@ import type { BoardEdge } from '../model';
 import { useArtboardStore } from '../store';
 import { type FlowNodeState, nodeState } from '../Verify/flow';
 import { useJourneyView } from '../Verify/useJourneyView';
-import { EDGE_LABEL_FONT, edgeLabelMode, edgeLabelText } from './edgeLabel';
+import { EDGE_LABEL_FONT, EDGE_LABEL_MAX_WIDTH, edgeLabelMode, edgeLabelText } from './edgeLabel';
 import { arrowSize, sketchArrow, sketchLine, strokeWidthOf } from './sketch';
 import { canvasStyles } from './styles';
 
@@ -51,7 +51,14 @@ const Edges = ({ k }: { k: number }) => {
     const linked = !!hot && (edge.from === hot || edge.to === hot);
     return {
       edge,
-      mode: edgeLabelMode({ hovered: edge.id === hovered, k, linked, room: edge.room, text }),
+      mode: edgeLabelMode({
+        crowded: edge.labelHidden,
+        hovered: edge.id === hovered,
+        k,
+        linked,
+        room: edge.room,
+        text,
+      }),
       text,
       tone: toneOf(edge, verify, states, hot),
     };
@@ -112,7 +119,7 @@ const Edges = ({ k }: { k: number }) => {
               {...sx(canvasStyles.edgeText, undefined, {
                 fontSize: EDGE_LABEL_FONT,
                 left: edge.lx,
-                maxWidth: edge.room,
+                maxWidth: Math.min(edge.room, EDGE_LABEL_MAX_WIDTH),
                 top: edge.ly,
               })}
             >
