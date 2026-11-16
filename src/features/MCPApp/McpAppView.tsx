@@ -61,6 +61,11 @@ export interface McpAppViewProps {
    */
   host: Pick<AppViewContext, 'agentId' | 'sendMessage' | 'canSendMessage' | 'topicId'>;
   identifier: string;
+  /**
+   * The connector account the view acts as, when its arguments cannot name
+   * one: an entrypoint opens with `{}`.
+   */
+  linkId?: string;
   /** The message carrying the result; its agent is the one the view acts as. */
   messageId?: string;
   /** This desktop's own MCP process produced the result: the view is read, and calls, there. */
@@ -96,6 +101,7 @@ const McpAppView = memo<McpAppViewProps>(
     fallback,
     identifier,
     host,
+    linkId,
     presentation,
     onThisDevice = false,
     resourceUri,
@@ -117,8 +123,10 @@ const McpAppView = memo<McpAppViewProps>(
     const useFetchMcpAppResource = useToolStore((s) => s.useFetchMcpAppResource);
     const { data, error, isLoading } = useFetchMcpAppResource(identifier, resourceUri, {
       agentId,
+      linkId,
       onThisDevice,
       server,
+      toolArguments: args,
       topicId,
     });
 
@@ -176,6 +184,7 @@ const McpAppView = memo<McpAppViewProps>(
       canSendMessage,
       identifier,
       isDark,
+      linkId,
       onThisDevice,
       result,
       sendMessage,

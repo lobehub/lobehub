@@ -52,4 +52,22 @@ describe('Channel list avatars', () => {
     const rows = await asOwner.list();
     expect(rows.find((row) => row.id === channel.id)?.memberAvatars).toEqual([]);
   });
+
+  // The avatars stop at the first few members; an Agent's page must still find every Channel
+  // it takes part in, and not ones it has left.
+  it('lists every active Agent member beyond the avatar cap', async () => {
+    const { asOwner, channel } = await fixture.createTeamChannel();
+    const agents = [];
+    for (let index = 0; index < CHANNEL_AVATAR_MEMBERS + 1; index++)
+      agents.push(await fixture.addAgent(channel.id, `Agent ${index}`));
+    const removed = await fixture.addAgent(channel.id, 'Removed');
+    await db
+      .update(channelMembers)
+      .set({ status: 'removed' })
+      .where(eq(channelMembers.id, removed.id));
+
+    const row = (await asOwner.list()).find((item) => item.id === channel.id);
+    expect(row?.agentIds).toEqual(agents.map((agent) => agent.agentId));
+    expect(row?.agentIds).not.toContain(removed.agentId);
+  });
 });

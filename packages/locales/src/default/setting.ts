@@ -1577,6 +1577,9 @@ export default {
   'settingChatAppearance.pasteAutoConvert.desc':
     'Pasted Markdown turns into formatted text in the input. Turn this off to keep text exactly as copied. Press ⇧⌘V (Ctrl+Shift+V on Windows) to paste plain text anytime.',
   'settingChatAppearance.pasteAutoConvert.title': 'Format Markdown on Paste',
+  'settingChatAppearance.showImageReadPreview.desc':
+    'When off, tool calls that read an image fold in with the other calls and stay collapsed until clicked.',
+  'settingChatAppearance.showImageReadPreview.title': 'Show Image Reads on Their Own',
   'settingChatAppearance.title': 'Chat Appearance',
   'settingChatAppearance.transitionMode.desc': 'Choose how chat messages appear',
   'settingChatAppearance.transitionMode.options.fadeIn': 'Fade In',

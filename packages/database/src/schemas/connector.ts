@@ -1,5 +1,5 @@
 import type {
-  ConnectorOidcConfig,
+  ConnectorOIDCConfig,
   ConnectorVisibility,
   CustomPluginParams,
   ToolManifest,
@@ -26,31 +26,9 @@ import { workspaces } from './workspace';
 // user_connectors — types & consts
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Declared in `@lobechat/types` as `ConnectorOidcConfig`; this alias keeps
- * existing `@/database/schemas` imports working.
- */
-export type OIDCConfig = ConnectorOidcConfig;
-
-/**
- * Decrypted shape of the `credentials` column.
- * Encrypted at rest via KeyVaultsGateKeeper (same as messengerInstallations).
- */
-export type ConnectorCredentials =
-  | {
-      type: 'oauth2';
-      accessToken: string;
-      refreshToken?: string;
-      clientSecret?: string;
-      /** DCR — token for managing the dynamic registration */
-      registrationAccessToken?: string;
-      expiresAt?: number;
-      scope?: string;
-      idToken?: string;
-    }
-  | { type: 'bearer'; token: string }
-  | { type: 'apikey'; apiKey: string }
-  | { type: 'header'; headers: Record<string, string> };
+/** Declared in `@lobechat/types`; re-exported for the existing schema imports. */
+export type OIDCConfig = ConnectorOIDCConfig;
+export type { ConnectorCredentials } from '@lobechat/types';
 
 export const ConnectorSourceType = {
   builtin: 'builtin',
@@ -121,6 +99,8 @@ export interface ConnectorMetadata {
    * fails the call (`connectorDeviceBinding` in `@lobechat/utils/mcpEndpoint`).
    */
   boundDeviceId?: string;
+  /** Protocol capabilities learned when connector tools are synchronized. */
+  capabilities?: { events?: { supported: boolean } };
   composio?: ComposioConnectorMetadata;
   /**
    * HTTP only: `device` reaches the MCP server from the user's device through
@@ -201,10 +181,16 @@ export const userConnectors = pgTable(
     isEnabled: boolean('is_enabled').notNull().default(true),
 
     // ── OIDC/OAuth config (plaintext — non-sensitive) ─────────────────────
-    oidcConfig: jsonb('oidc_config').$type<ConnectorOidcConfig>(),
+    oidcConfig: jsonb('oidc_config').$type<ConnectorOIDCConfig>(),
 
     // ── Encrypted credentials ─────────────────────────────────────────────
+    /**
+     * Static credentials, or every OAuth account of the connector together
+     * (`ConnectorOAuthAccounts`). Accounts are read and changed through
+     * `ConnectorLinkModel` only, which locks this row for each change.
+     */
     credentials: text('credentials'),
+    /** Earliest expiry among the stored OAuth tokens. */
     tokenExpiresAt: timestamptz('token_expires_at'),
 
     /** Safe non-sensitive metadata for display and future extensibility */

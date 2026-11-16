@@ -110,7 +110,35 @@ export interface DeviceMetricsMessage {
   type: 'device_metrics';
 }
 
+/**
+ * The late, final result of a tool call whose reply said the device would keep
+ * watching it (`state.completionWatch: true`). Keyed by the call's operation
+ * and tool call ids; the gateway forwards it only for a call the server
+ * registered for completion, and answers with a {@link ToolCallCompletionAckMessage}.
+ */
+export interface ToolCallCompletionMessage {
+  operationId: string;
+  result: ToolCallResponseMessage['result'];
+  toolCallId: string;
+  type: 'tool_call_completion';
+}
+
 // Server → Client
+/**
+ * - `delivered`: the server took the result; stop.
+ * - `rejected`: nobody wants it any more (expired, unknown, refused); stop.
+ * - `retry`: the server could not take it yet; send the same message again later.
+ */
+export type ToolCallCompletionAckStatus = 'delivered' | 'rejected' | 'retry';
+
+export interface ToolCallCompletionAckMessage {
+  operationId: string;
+  reason?: string;
+  status: ToolCallCompletionAckStatus;
+  toolCallId: string;
+  type: 'tool_call_completion_ack';
+}
+
 export interface DeviceMetricsAckMessage {
   accepted: number;
   batchId: string;
@@ -175,7 +203,40 @@ export type GatewayMcpParams = GatewayMcpStdioParams | GatewayMcpHttpParams;
  */
 export type GatewayToolCallType = 'tool' | 'mcp';
 
+/**
+ * Server → gateway registration for a call's late result (see
+ * {@link ToolCallCompletionMessage}). The gateway posts the device's completion
+ * to `callbackUrl` with its service token, so only the server may set it.
+ */
+export interface GatewayToolCallCompletion {
+  callbackUrl: string;
+  toolCallId: string;
+  /** How long the gateway keeps the registration; later completions are rejected. */
+  ttlMs: number;
+}
+
+/**
+ * Gateway → server body posted to {@link GatewayToolCallCompletion.callbackUrl}.
+ * `userId` / `workspaceId` are the principal the call was dispatched under.
+ */
+export interface GatewayToolCallCompletionCallback {
+  deviceId: string;
+  operationId: string;
+  result: ToolCallResponseMessage['result'];
+  toolCallId: string;
+  userId?: string;
+  workspaceId?: string;
+}
+
 export interface ToolCallRequestMessage {
+  /**
+   * Present when the server can take this call's final result later, as a
+   * {@link ToolCallCompletionMessage}: a `runCommand` that outlives its wait
+   * window then parks the run instead of having the model poll. The device
+   * opts in per call by answering with `state.completionWatch: true`; a device
+   * that ignores the field keeps the old reply-only behaviour.
+   */
+  completion?: { toolCallId: string };
   /** Operation that triggered the call, propagated by the gateway for tracing. */
   operationId?: string;
   requestId: string;
@@ -514,6 +575,7 @@ export type ClientMessage =
   | MessageApiResponseMessage
   | RpcResponseMessage
   | SystemInfoResponseMessage
+  | ToolCallCompletionMessage
   | ToolCallResponseMessage
   | TunnelClientFrame;
 export type ServerMessage =
@@ -526,6 +588,7 @@ export type ServerMessage =
   | MessageApiRequestMessage
   | RpcRequestMessage
   | SystemInfoRequestMessage
+  | ToolCallCompletionAckMessage
   | ToolCallRequestMessage
   | TunnelServerFrame;
 

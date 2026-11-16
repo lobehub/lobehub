@@ -192,6 +192,53 @@ describe('FileService', () => {
       expect(mockTempManager.writeTempFile).toHaveBeenCalledWith(mockContent, mockFile.name);
     });
 
+    describe('maxBytes', () => {
+      it('refuses by the stored size before any bytes are read', async () => {
+        mockFileModel.findById.mockResolvedValue({ ...mockFile, size: 65 });
+
+        await expect(
+          service.downloadFileToLocal('test-file-id', undefined, { maxBytes: 64 }),
+        ).rejects.toMatchObject({ code: 'PAYLOAD_TOO_LARGE' });
+
+        expect(service['impl'].getFileByteArray).not.toHaveBeenCalled();
+        expect(mockTempManager.writeTempFile).not.toHaveBeenCalled();
+      });
+
+      it('refuses by the received bytes when the stored size understates them', async () => {
+        mockFileModel.findById.mockResolvedValue({ ...mockFile, size: 3 });
+        vi.mocked(service['impl'].getFileByteArray).mockResolvedValue(new Uint8Array(65));
+
+        await expect(
+          service.downloadFileToLocal('test-file-id', undefined, { maxBytes: 64 }),
+        ).rejects.toMatchObject({ code: 'PAYLOAD_TOO_LARGE' });
+
+        expect(mockTempManager.writeTempFile).not.toHaveBeenCalled();
+      });
+
+      it('keeps the access scope and downloads a file within the limit', async () => {
+        const accessScope = agentShareFileAccessScope({
+          shareId: 'share-1',
+          visitorUserId: 'visitor-1',
+        });
+        mockFileModel.findById.mockResolvedValue({ ...mockFile, size: 3 });
+        vi.mocked(service['impl'].getFileByteArray).mockResolvedValue(new Uint8Array(3));
+        mockTempManager.writeTempFile.mockResolvedValue('/tmp/test.txt');
+
+        await service.downloadFileToLocal('test-file-id', accessScope, { maxBytes: 64 });
+
+        expect(mockFileModel.findById).toHaveBeenCalledWith('test-file-id', { accessScope });
+        expect(mockTempManager.writeTempFile).toHaveBeenCalled();
+      });
+
+      it('applies no limit unless one is passed (skill ZIP import keeps its own contract)', async () => {
+        mockFileModel.findById.mockResolvedValue({ ...mockFile, size: 10 ** 9 });
+        vi.mocked(service['impl'].getFileByteArray).mockResolvedValue(new Uint8Array(3));
+        mockTempManager.writeTempFile.mockResolvedValue('/tmp/test.txt');
+
+        await expect(service.downloadFileToLocal('test-file-id')).resolves.toBeDefined();
+      });
+    });
+
     it('should resolve an agent-share file only through its provenance scope', async () => {
       const accessScope = agentShareFileAccessScope({
         shareId: 'share-1',

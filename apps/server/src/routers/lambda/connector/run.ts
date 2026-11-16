@@ -18,6 +18,7 @@ import {
   getConnectorLocalCallToken,
   getResolvedConnectorLocalCallToken,
 } from '@/server/services/connector/localCallToken';
+import { loadConnectorPresentation } from '@/server/services/connector/presentation';
 
 import { assertWorkspaceRowManageable } from '../_helpers/assertWorkspaceRowManageable';
 import { withRequestConnectorCallers } from '../_helpers/connectorCallContext';
@@ -99,6 +100,8 @@ export const connectorRunRouter = router({
     .input(
       z.object({
         id: z.string().uuid(),
+        /** The account to call as, for a connector holding several; its primary otherwise. */
+        linkId: z.string().optional(),
         run: z
           .object({
             agentId: z.string().optional(),
@@ -110,14 +113,14 @@ export const connectorRunRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      if (!input.run) return getConnectorLocalCallToken(ctx, input.id);
+      if (!input.run) return getConnectorLocalCallToken(ctx, input.id, input.linkId);
 
       const [connector] = await resolveConnectorForRun(input.run, ctx);
       // The call runs another row by now (or none): its token is not this one's
       if (connector?.id !== input.id) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       }
-      return getResolvedConnectorLocalCallToken(ctx, connector);
+      return getResolvedConnectorLocalCallToken(ctx, connector, input.linkId);
     }),
 
   /**
@@ -128,8 +131,8 @@ export const connectorRunRouter = router({
    * executes, not the client's guess.
    *
    * Besides the id it returns what routing and approval read: the row's
-   * transport, its tools and its install state (binding, source, status and the
-   * routing fields of its metadata), the fields a member's connector list
+   * transport, its tools, its accounts and its install state (binding, source,
+   * status and the routing fields of its metadata), the fields a member's connector list
    * already carries, never credentials or a stdio command, so any member who
    * can call the tool may ask. A private agent's own topic may run its owner's personal
    * connector, which no workspace list on the client holds; the client routes
@@ -150,11 +153,15 @@ export const connectorRunRouter = router({
       // A personal connector's tool rows live in the personal scope
       const wsId = ctx.workspaceId ?? undefined;
       const toolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId, { agentRun: true });
+      // Its accounts, as a member's list shows them: a local call needs to know
+      // whether the model must name one (`takeLocalConnectorAccount`)
+      const presentation = (await loadConnectorPresentation([connector], ctx)).get(connector.id);
       return {
         agentId: connector.agentId,
         id: connector.id,
         identifier: connector.identifier,
         isEnabled: connector.isEnabled,
+        links: presentation?.links ?? [],
         mcpConnectionType: connector.mcpConnectionType,
         mcpServerUrl: connector.mcpServerUrl,
         // Whether an unfinished marketplace install may run, whether a stdio
@@ -183,6 +190,8 @@ export const connectorRunRouter = router({
         fromApp: z.boolean().optional(),
         fromEntrypoint: z.boolean().optional(),
         identifier: z.string().min(1),
+        /** The account to call as, for a connector holding several. */
+        linkId: z.string().optional(),
         /** With `fromApp`: the server the view came from (`getMcpServerFingerprint`). */
         server: z.string().optional(),
         toolName: z.string().min(1),
@@ -229,6 +238,8 @@ export const connectorRunRouter = router({
       z.object({
         agentId: z.string().optional(),
         identifier: z.string().min(1),
+        /** The account the tool ran as, for a connector holding several. */
+        linkId: z.string().optional(),
         /** The server the result came from (`getMcpServerFingerprint`). */
         server: z.string().min(1),
         /** The conversation the result belongs to; see `callTool`. */

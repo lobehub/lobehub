@@ -70,7 +70,7 @@ export interface ResolvedRunAgentConfig {
   resolvedAgentId: string;
 }
 
-interface WorkspaceMemberOverrides {
+export interface WorkspaceMemberOverrides {
   device?: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'>;
   mode?: boolean;
   model?: AgentModelOverride;
@@ -82,8 +82,8 @@ interface WorkspaceMemberOverrides {
  * never mutate the shared Agent config. Losing them is non-fatal: execution
  * falls back to the shared row.
  */
-const loadWorkspaceMemberOverrides = async (
-  deps: ResolveRunAgentConfigDeps,
+export const loadWorkspaceMemberOverrides = async (
+  deps: Pick<ResolveRunAgentConfigDeps, 'db' | 'userId' | 'workspaceId'>,
   agentId: string,
 ): Promise<WorkspaceMemberOverrides> => {
   if (!deps.workspaceId) return {};
@@ -112,9 +112,9 @@ const loadWorkspaceMemberOverrides = async (
  * fail-closed: applying member policy is safer than accidentally granting
  * shared-config semantics.
  */
-const resolveCanManage = async (
-  deps: ResolveRunAgentConfigDeps,
-  agentConfig: AgentConfigWithId,
+export const resolveCanManage = async (
+  deps: Pick<ResolveRunAgentConfigDeps, 'db' | 'userId'>,
+  agentConfig: Pick<AgentConfigWithId, 'userId' | 'visibility'>,
   agentWorkspaceId: string | undefined,
   isPublicWorkspaceAgent: boolean,
 ): Promise<boolean> => {

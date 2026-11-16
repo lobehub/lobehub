@@ -1,7 +1,7 @@
-import { ActionIcon, Flexbox, Icon, Progress, Tag, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { CircleAlertIcon, CircleCheckIcon, Loader2Icon, RotateCwIcon } from 'lucide-react';
+import { CircleAlertIcon, CircleCheckIcon, RotateCwIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,6 +13,7 @@ import { type UploadFileItem } from '@/types/files/upload';
 
 import Content from './Content';
 import { openFilePreviewModal } from './FilePreviewModal.loader';
+import UploadIndicator from './UploadIndicator';
 import UploadTooltipContent from './UploadTooltipContent';
 import { useUploadCompletion } from './useUploadCompletion';
 import { getFileBasename, getUploadChipSize, getUploadChipState } from './utils';
@@ -55,7 +56,7 @@ const ContextItem = memo<FileItemProps>((props) => {
   const contextKey = useChatInputUploadKey();
   const removeChatUploadFile = useFileStore((s) => s.removeChatUploadFile);
   const retryChatUploadFile = useFileStore((s) => s.retryChatUploadFile);
-  const { busy, canPreview, canRetry, indicator, progress } = getUploadChipState(props);
+  const { busy, canPreview, canRetry, indicator } = getUploadChipState(props);
   const basename = getFileBasename(file.name);
   const sizeLabel = getUploadChipSize(props);
   const showCompletion = useUploadCompletion(status);
@@ -93,36 +94,8 @@ const ContextItem = memo<FileItemProps>((props) => {
                   size={12}
                   style={{ color: cssVar.colorSuccess }}
                 />
-              ) : indicator === 'loading' ? (
-                <Icon
-                  spin
-                  icon={Loader2Icon}
-                  size={12}
-                  aria-label={t(
-                    status === 'processing'
-                      ? 'upload.preview.status.processing'
-                      : status === 'pending'
-                        ? 'upload.preview.status.pending'
-                        : 'upload.preview.status.uploading',
-                  )}
-                />
-              ) : indicator === 'progress' ? (
-                <span
-                  aria-label={t('upload.preview.status.uploading')}
-                  aria-valuemax={100}
-                  aria-valuemin={0}
-                  aria-valuenow={progress}
-                  {...stylex.props(styles.statusIcon)}
-                  role={'progressbar'}
-                >
-                  <Progress
-                    percent={progress ?? 0}
-                    showInfo={false}
-                    size={12}
-                    status={'normal'}
-                    type={'circle'}
-                  />
-                </span>
+              ) : indicator === 'busy' ? (
+                <UploadIndicator label={t('upload.preview.status.uploading')} size={12} />
               ) : (
                 <Icon icon={CircleAlertIcon} size={12} style={{ color: cssVar.colorError }} />
               )}

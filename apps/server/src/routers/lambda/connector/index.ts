@@ -1,11 +1,7 @@
 import { builtinTools } from '@lobechat/builtin-tools';
 import { getComposioAppByIdentifier, hasCallableMcpEndpoint } from '@lobechat/const';
 import { isFullAccessApiKey } from '@lobechat/const/apiKeyScope';
-import {
-  CONNECTOR_VISIBILITIES,
-  type ConnectorOidcConfig,
-  upsertPluginMode,
-} from '@lobechat/types';
+import { CONNECTOR_VISIBILITIES, upsertPluginMode } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import pMap from 'p-map';
 import { z } from 'zod';
@@ -31,18 +27,8 @@ import { getComposioClient } from '@/libs/composio';
 import { inferCrudType } from '@/libs/mcp/utils';
 import { mergeRouters, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import {
-  buildAuthorizationUrl,
-  discoverConnectorOAuth,
-  getConnectorRedirectUri,
-  resolveConnectorClient,
-  resolveConnectorOAuthScopes,
-  toClientInformation,
-} from '@/server/services/connector/oauth';
-import {
-  generateConnectorOAuthState,
-  saveConnectorOAuthState,
-} from '@/server/services/connector/stateStore';
+import { getConnectorRedirectUri } from '@/server/services/connector/oauth';
+import { loadConnectorPresentation } from '@/server/services/connector/presentation';
 import {
   pruneMissingAutoConnectorTools,
   syncConnectorToolsById,
@@ -80,6 +66,7 @@ import {
 import { resolveDefaultPermission } from '../_helpers/connectorToolPermission';
 import { resolveVisibilityChange, resolveWriteVisibility } from '../_helpers/connectorVisibility';
 import { upsertConnectorEntry } from '../_helpers/upsertConnectorEntry';
+import { connectorAccountProcedures } from './accounts';
 import { connectorAgentScopeRouter } from './agentScope';
 import { connectorProcedure, connectorWriteProcedure } from './procedures';
 import { connectorRunRouter } from './run';
@@ -154,10 +141,12 @@ const createConnectorSchema = z.object({
 });
 
 const connectorCoreRouter = router({
+  ...connectorAccountProcedures,
   // ── Queries ──────────────────────────────────────────────────────────────
 
   list: connectorProcedure.query(async ({ ctx }) => {
     const connectors = await ctx.connectorModel.query();
+    const presentation = await loadConnectorPresentation(connectors, ctx);
 
     // Attribution — resolve the member who authorized each connector (workspace
     // dimension), so the profile can tag "authorized by X". The ids come from
@@ -177,6 +166,7 @@ const connectorCoreRouter = router({
         const author = authorMap.get(resolveConnectorAuthorizerId(c) ?? '');
         return {
           ...rest,
+          ...presentation.get(c.id),
           authorizedByAvatar: author?.avatar ?? null,
           authorizedByName: author?.name ?? null,
           oidcConfig: safeOidcConfig,
@@ -198,6 +188,7 @@ const connectorCoreRouter = router({
     .input(z.object({ agentId: z.string() }))
     .query(async ({ input, ctx }) => {
       const connectors = await ctx.connectorModel.queryByAgent(input.agentId);
+      const presentation = await loadConnectorPresentation(connectors, ctx);
 
       // Attribution — the member who authorized each agent-scoped connector, so
       // a teammate viewing the agent sees "authorized by X" on each chip.
@@ -217,6 +208,7 @@ const connectorCoreRouter = router({
           const author = authorMap.get(resolveConnectorAuthorizerId(c) ?? '');
           return {
             ...rest,
+            ...presentation.get(c.id),
             authorizedByAvatar: author?.avatar ?? null,
             authorizedByName: author?.name ?? null,
             oidcConfig: safeOidcConfig,
@@ -254,9 +246,11 @@ const connectorCoreRouter = router({
     // connector inventory never leaks across members.
     const agentMetas = agentIds.length > 0 ? await agentModel.getAgentAvatarsByIds(agentIds) : [];
     const agentMetaById = new Map(agentMetas.map((m) => [m.id, m]));
+    const visibleConnectors = connectors.filter((c) => !!c.agentId && agentMetaById.has(c.agentId));
+    const presentation = await loadConnectorPresentation(visibleConnectors, ctx);
 
     return pMap(
-      connectors.filter((c) => !!c.agentId && agentMetaById.has(c.agentId)),
+      visibleConnectors,
       async (c) => {
         const tools = await ctx.connectorToolModel.queryByConnector(c.id);
         const { credentials: _credentials, oidcConfig, ...rest } = c;
@@ -264,6 +258,7 @@ const connectorCoreRouter = router({
         const meta = agentMetaById.get(c.agentId!);
         return {
           ...rest,
+          ...presentation.get(c.id),
           agentAvatar: meta?.avatar ?? null,
           agentName: meta?.name ?? null,
           agentTitle: meta?.title ?? null,
@@ -480,102 +475,7 @@ const connectorCoreRouter = router({
     return { id: created.id, isNew: true };
   }),
 
-  /**
-   * Begin the OAuth authorization-code flow for a custom MCP connector.
-   *
-   * Discovers the authorization server (RFC 9728 → RFC 8414), resolves the
-   * client (pre-registration when a client_id was provided, otherwise a Client
-   * ID Metadata Document or RFC 7591 dynamic registration), persists the
-   * resolved OIDC config, and returns the authorize URL for the client to open. The PKCE verifier is stashed in Redis
-   * keyed by `state`; the callback route completes the exchange.
-   */
-  startOAuth: connectorWriteProcedure
-    .input(z.object({ id: z.string().uuid(), returnTo: z.string().optional() }))
-    .mutation(async ({ input, ctx }) => {
-      const connector = await ctx.connectorModel.findById(input.id);
-      if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
-      // Re-authorizing replaces the stored OAuth credentials with the caller's.
-      await assertConnectorMaintainable(ctx, connector);
-      if (!connector.mcpServerUrl) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Connector has no MCP server URL' });
-      }
-
-      const existing: ConnectorOidcConfig = connector.oidcConfig ?? { scheme: 'dcr' };
-      const redirectUri = getConnectorRedirectUri();
-
-      // 1. Discover the authorization server backing the MCP resource.
-      // Discovery and registration failures below are server-compatibility
-      // problems the user must fix in their OAuth setup, not internal errors —
-      // surface them as BAD_REQUEST with the reason so the form can show it.
-      const discovery = await discoverConnectorOAuth(connector.mcpServerUrl).catch(
-        (error: unknown) => {
-          throw new TRPCError({
-            cause: error,
-            code: 'BAD_REQUEST',
-            message: (error as Error)?.message ?? String(error),
-          });
-        },
-      );
-
-      const { authorizationServerUrl, metadata } = discovery;
-      const scopes = resolveConnectorOAuthScopes({ discovery, existingScopes: existing.scopes });
-
-      // 2. Resolve the OAuth client: pre-registration, CIMD, then DCR.
-      const { clientId, clientSecret, scheme, tokenEndpointAuthMethod } =
-        await resolveConnectorClient({
-          authorizationServerUrl,
-          existing,
-          metadata,
-          redirectUri,
-          scopes,
-        }).catch((error: unknown) => {
-          throw new TRPCError({
-            cause: error,
-            code: 'BAD_REQUEST',
-            message: (error as Error)?.message ?? String(error),
-          });
-        });
-
-      // 3. Persist the resolved config so the callback + refresh can reuse it.
-      const resolvedOidc: ConnectorOidcConfig = {
-        ...existing,
-        authorizationEndpoint: metadata.authorization_endpoint,
-        clientId,
-        clientSecret,
-        issuer: authorizationServerUrl,
-        redirectUri,
-        registrationEndpoint: metadata.registration_endpoint,
-        scheme,
-        scopes,
-        tokenEndpoint: metadata.token_endpoint,
-        tokenEndpointAuthMethod,
-      };
-      await ctx.connectorModel.update(input.id, { oidcConfig: resolvedOidc });
-
-      // 4. Build the authorize URL (with PKCE) and stash the verifier under `state`.
-      const state = generateConnectorOAuthState();
-      const { authorizationUrl, codeVerifier } = await buildAuthorizationUrl({
-        authorizationServerUrl,
-        clientInformation: toClientInformation(resolvedOidc),
-        metadata,
-        redirectUri,
-        resource: connector.mcpServerUrl,
-        scopes,
-        state,
-      });
-
-      await saveConnectorOAuthState(state, {
-        authorizationServerUrl,
-        codeVerifier,
-        connectorId: input.id,
-        lobeUserId: ctx.userId,
-        returnTo: input.returnTo,
-        workspaceId: ctx.workspaceId ?? undefined,
-      });
-
-      return { authorizationUrl };
-    }),
-
+  /** Update connector configuration while preserving server-resolved OAuth state. */
   update: connectorWriteProcedure
     .input(
       z.object({
@@ -614,6 +514,39 @@ const connectorCoreRouter = router({
 
       const { credentials, visibility: requestedVisibility, ...patch } = input.patch;
       const visibility = await resolveVisibilityChange(ctx, target, requestedVisibility);
+      const changesUrl =
+        patch.mcpServerUrl !== undefined && patch.mcpServerUrl !== target.mcpServerUrl;
+      if (
+        changesUrl &&
+        target.oidcConfig &&
+        target.oidcConfig.scheme !== 'pre_registration' &&
+        !patch.oidcConfig?.clientId
+      ) {
+        // An automatic client is registered with the old authorization server.
+        // A new endpoint must resolve its own client and initial scopes.
+        patch.oidcConfig = { scheme: 'dcr' };
+      } else if (
+        patch.oidcConfig &&
+        !patch.oidcConfig.clientId &&
+        target.oidcConfig &&
+        target.oidcConfig.scheme !== 'pre_registration' &&
+        patch.oidcConfig.scheme === target.oidcConfig.scheme
+      )
+        // The edit form resends the automatic client it shows without the
+        // fields the server resolved: keep the stored client and its accounts.
+        // A connector switching to OAuth, or to another scheme, stores the new
+        // one and waits for its authorization.
+        delete patch.oidcConfig;
+      if (patch.oidcConfig?.clientId && patch.oidcConfig.clientId === target.oidcConfig?.clientId) {
+        // A form/CLI may resend the client without its resolved server fields.
+        // Undefined fields mean omitted, including an unfilled client secret.
+        patch.oidcConfig = {
+          ...target.oidcConfig,
+          ...Object.fromEntries(
+            Object.entries(patch.oidcConfig).filter(([, value]) => value !== undefined),
+          ),
+        };
+      }
       // Checked against who will run the connector after this write
       await assertConnectorDeviceBindingAllowed(ctx, {
         connector: { userId: target.userId, visibility: visibility ?? target.visibility },

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import type { GoalGraphSnapshot, GoalManagerState } from '@lobechat/types';
+import { withoutMarks } from '@lobechat/utils/goalGraph';
 import { eq, sql } from 'drizzle-orm';
 
 import type { AgentOperationModel } from '@/database/models/agentOperation';
@@ -49,7 +50,9 @@ export const managerTurnToken = (goalId: string) => `${goalId}_${randomUUID()}`;
  * node look stale, so `startTurn` re-queued itself every five seconds forever.
  */
 export const managerSnapshot = (input: GoalGraphSnapshot) => {
-  const graph = withoutGoalReport(input);
+  // Marks are left by Tasks that keep running during a takeover turn; they are
+  // context, not planning input, so they must not make the turn's plan stale.
+  const graph = withoutMarks(withoutGoalReport(input));
   // Coordinator receipts are not planning input: arming a Task's quota wake while a
   // turn runs must not make that turn's plan stale, and neither may the system
   // planner's lease — a hand-over starts the turn while the lease is still held

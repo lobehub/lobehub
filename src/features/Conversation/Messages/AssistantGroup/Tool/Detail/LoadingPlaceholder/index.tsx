@@ -31,7 +31,14 @@ const LoadingPlaceholder = memo<LoadingPlaceholderProps>(
       );
     }
 
-    return <Arguments arguments={requestArgs} loading={loading} />;
+    return (
+      <Arguments
+        arguments={requestArgs}
+        identifier={identifier}
+        loading={loading}
+        messageId={messageId}
+      />
+    );
   },
 );
 

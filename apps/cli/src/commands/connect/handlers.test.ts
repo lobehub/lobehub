@@ -118,3 +118,98 @@ describe('bindGatewayClientHandlers tool_call_request routing', () => {
     });
   });
 });
+
+describe('bindGatewayClientHandlers tool_call_request completion', () => {
+  const stillRunning = {
+    content: 'Command is still running after the wait window.\nshell_id: sh-1',
+    state: { commandId: 'sh-1', isBackground: false, running: true, success: true },
+    success: true,
+  };
+  const finished = {
+    content: 'Exit code: 0\nASYNC_DONE',
+    state: { exitCode: 0, running: false, stdout: 'ASYNC_DONE', success: true },
+    success: true,
+  };
+  const runCommand = (completion?: { toolCallId: string }): ToolCallRequestMessage => ({
+    completion,
+    operationId: 'op-1',
+    requestId: 'req-1',
+    toolCall: {
+      apiName: 'runCommand',
+      arguments: '{"command":"sleep 120"}',
+      identifier: 'lobe-local-system',
+    },
+    type: 'tool_call_request',
+  });
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  let client: ReturnType<typeof createClient>['client'] & {
+    off: ReturnType<typeof vi.fn>;
+    reportToolCallCompletion: ReturnType<typeof vi.fn>;
+  };
+  let handlers: ReturnType<typeof createClient>['handlers'];
+
+  beforeEach(() => {
+    vi.mocked(executeToolCall).mockReset();
+    const created = createClient();
+    handlers = created.handlers;
+    client = Object.assign(created.client, {
+      off: vi.fn(),
+      reportToolCallCompletion: vi
+        .fn()
+        .mockResolvedValue({ operationId: 'op-1', status: 'delivered', toolCallId: 'call-1' }),
+    });
+    bindGatewayClientHandlers(client as unknown as GatewayClient, createContext());
+  });
+
+  it('keeps watching a still-running command and reports its final output', async () => {
+    vi.mocked(executeToolCall).mockResolvedValueOnce(stillRunning).mockResolvedValueOnce(finished);
+
+    await handlers.tool_call_request(runCommand({ toolCallId: 'call-1' }));
+    await flush();
+
+    expect(client.sendToolCallResponse).toHaveBeenCalledWith({
+      requestId: 'req-1',
+      result: expect.objectContaining({
+        state: expect.objectContaining({ commandId: 'sh-1', completionWatch: true }),
+      }),
+    });
+    expect(executeToolCall).toHaveBeenLastCalledWith(
+      'getCommandOutput',
+      JSON.stringify({ shell_id: 'sh-1', timeout: 600_000 }),
+      600_000,
+      expect.anything(),
+    );
+    expect(client.reportToolCallCompletion).toHaveBeenCalledWith({
+      operationId: 'op-1',
+      result: { content: finished.content, state: finished.state, success: true },
+      toolCallId: 'call-1',
+    });
+  });
+
+  it('answers as before when the server did not ask for a late result', async () => {
+    vi.mocked(executeToolCall).mockResolvedValueOnce(stillRunning);
+
+    await handlers.tool_call_request(runCommand());
+    await flush();
+
+    expect(client.sendToolCallResponse.mock.calls[0][0].result.state).not.toHaveProperty(
+      'completionWatch',
+    );
+    expect(executeToolCall).toHaveBeenCalledTimes(1);
+    expect(client.reportToolCallCompletion).not.toHaveBeenCalled();
+  });
+
+  it('does not watch a command that already finished', async () => {
+    vi.mocked(executeToolCall).mockResolvedValueOnce(finished);
+
+    await handlers.tool_call_request(runCommand({ toolCallId: 'call-1' }));
+    await flush();
+
+    expect(client.sendToolCallResponse.mock.calls[0][0].result.state).not.toHaveProperty(
+      'completionWatch',
+    );
+    expect(executeToolCall).toHaveBeenCalledTimes(1);
+    expect(client.reportToolCallCompletion).not.toHaveBeenCalled();
+  });
+});

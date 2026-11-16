@@ -3,8 +3,6 @@ import type { FC } from 'react';
 
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
 
-import { WeComIcon } from './WeComIcon';
-
 /** Known icon names from @lobehub/ui/icons that correspond to chat platforms. */
 const ICON_NAMES = [
   'DingTalk',
@@ -27,11 +25,6 @@ const ICON_ALIASES: Record<string, string> = {
   feishu: 'Lark',
 };
 
-/** Local replacements for @lobehub/ui/icons entries whose `.Color` variant is wrong. */
-const ICON_OVERRIDES: Partial<Record<(typeof ICON_NAMES)[number], FC<any>>> = {
-  WeCom: WeComIcon,
-};
-
 /**
  * Resolve icon component by matching against known icon names.
  * Accepts either a platform display name (e.g. "Feishu / Lark") or id (e.g. "discord").
@@ -43,8 +36,7 @@ export function getPlatformIcon(nameOrId: string): FC<any> | undefined {
   const name = ICON_NAMES.find(
     (n) => nameOrId.includes(n) || nameOrId.toLowerCase() === n.toLowerCase(),
   );
-  if (!name) return undefined;
-  return ICON_OVERRIDES[name] ?? (Icons as Record<string, any>)[name];
+  return name ? (Icons as Record<string, any>)[name] : undefined;
 }
 
 /**

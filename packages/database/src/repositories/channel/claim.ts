@@ -1,4 +1,4 @@
-import type { ChannelJobBlockCode, LobeAgentConfig } from '@lobechat/types';
+import type { ChannelExecutionConfig, ChannelJobBlockCode, LobeAgentConfig } from '@lobechat/types';
 import { and, asc, eq, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
@@ -19,7 +19,8 @@ import { uniqueViolationConstraint } from '../../utils/uniqueViolation';
 import { resolveExecutionConfig } from './agent';
 import { AWAITING_PRIMARY_REASON, findThread } from './delivery';
 import { buildManifest } from './manifest';
-import { resolveTopic } from './topic';
+import type { ChannelTopicScope } from './topic';
+import { continuationTopic, resolveTopic } from './topic';
 import { audit } from './transaction';
 import { assignedWorktree } from './worktree';
 
@@ -30,8 +31,35 @@ export interface ChannelClaimOptions {
   leaseOwner: string;
   /** Trusted presence snapshot from the current Gateway scope; omitted by storage-only callers. */
   onlineDeviceIds?: string[];
+  /**
+   * The device a run with no device picked in the Channel will route to, from the Agent's own
+   * settings as the requester's ordinary conversation would resolve them, and whether it is
+   * online for that requester; undefined when it needs none or would wake it. Lets an offline
+   * Agent-bound device wait like a Channel one. Its presence is the requester's, which may
+   * include their personal device, so it stays out of `onlineDeviceIds`. Only consulted with
+   * `onlineDeviceIds`.
+   */
+  routedDevice?: (run: ChannelRoutedDeviceInput) => Promise<ChannelRoutedDevice | undefined>;
   /** Trusted server defaults from getServerDefaultAgentConfig(); use {} when unconfigured. */
   serverDefaultAgentConfig: PartialDeep<LobeAgentConfig>;
+}
+
+export interface ChannelRoutedDevice {
+  deviceId: string;
+  online: boolean;
+}
+
+export interface ChannelRoutedDeviceInput {
+  agentId: string;
+  /**
+   * The topic this run will continue, if any. A conversation stays on the device it ran on, so
+   * its pin can outrank the Agent's binding.
+   */
+  continuation?: Pick<TopicItem, 'agentId' | 'groupId' | 'metadata' | 'projectWorkingDirectoryId'>;
+  executionConfig: ChannelExecutionConfig;
+  /** The requester: the run executes as them, with their device preference for the Agent. */
+  userId: string;
+  workspaceId: string | null;
 }
 
 export interface ChannelClaim {
@@ -44,20 +72,25 @@ export interface ChannelClaim {
 
 const DIRECTORY_LOCK = 'channel_jobs_active_directory_unique';
 
-/** Records why a queued job cannot start; clients read the code, never the text. */
+/**
+ * Records why a queued job cannot start; clients read the code, never the text. A job waiting
+ * for a device also records which one in `deviceId`, so it can be shown before any claim sets
+ * it. Only a claim gives a job its writer, so a queued job's device holds no directory.
+ */
 const block = async (
   tx: Transaction,
   job: ChannelJobItem,
   code: ChannelJobBlockCode,
   reason: string,
+  deviceId: string | null = null,
 ) => {
-  if (job.blockedCode === code && job.blockedReason === reason) return;
+  if (job.blockedCode === code && job.blockedReason === reason && job.deviceId === deviceId) return;
 
   await tx
     .update(channelJobs)
-    .set({ blockedCode: code, blockedReason: reason })
+    .set({ blockedCode: code, blockedReason: reason, deviceId })
     .where(eq(channelJobs.id, job.id));
-  await audit(tx, job.channelId, 'job_blocked', job.id, { code, reason });
+  await audit(tx, job.channelId, 'job_blocked', job.id, { code, deviceId, reason });
 };
 
 /** Settles a job that must never run, e.g. its requester left or its branch was archived. */
@@ -344,12 +377,51 @@ export const claimJob = async (
     return null;
   }
 
-  if (
-    member.config?.deviceId &&
-    options.onlineDeviceIds &&
-    !options.onlineDeviceIds.includes(member.config.deviceId)
-  ) {
-    await block(tx, job, 'device_offline', 'Waiting for the configured device to connect');
+  // The execution identity the topic belongs to: a shared Agent's owner (with the requester as
+  // `senderId`), else the requester. The routing pre-check below and the claim itself resolve
+  // the same topic, so they have to agree on this scope.
+  const { share } = executionConfig;
+  const scope: ChannelTopicScope = share
+    ? { senderId: requester.userId!, userId: share.ownerId, workspaceId: share.workspaceId }
+    : { userId: requester.userId!, workspaceId: channel.workspaceId };
+
+  // A device picked in the Channel, else the one the Agent's own settings route the run to.
+  const channelDeviceId = member.config?.deviceId;
+  const routed =
+    options.onlineDeviceIds && !channelDeviceId
+      ? await options.routedDevice?.({
+          agentId: member.agentId!,
+          continuation: await continuationTopic(
+            tx,
+            channel,
+            job,
+            member,
+            scope,
+            request.sequence,
+            executionConfig,
+          ),
+          executionConfig,
+          userId: requester.userId!,
+          workspaceId: channel.workspaceId,
+        })
+      : undefined;
+  const offlineDeviceId = !options.onlineDeviceIds
+    ? undefined
+    : channelDeviceId
+      ? options.onlineDeviceIds.includes(channelDeviceId)
+        ? undefined
+        : channelDeviceId
+      : routed && !routed.online
+        ? routed.deviceId
+        : undefined;
+  if (offlineDeviceId) {
+    await block(
+      tx,
+      job,
+      'device_offline',
+      'Waiting for the configured device to connect',
+      offlineDeviceId,
+    );
     return null;
   }
 
@@ -359,10 +431,6 @@ export const claimJob = async (
     // A savepoint, so losing the directory race to another channel keeps this transaction
     // and leaves no topic or operation behind.
     claimed = await tx.transaction(async (savepoint) => {
-      const { share } = executionConfig;
-      const scope = share
-        ? { senderId: requester.userId!, userId: share.ownerId, workspaceId: share.workspaceId }
-        : { userId: requester.userId!, workspaceId: channel.workspaceId };
       const topic = await resolveTopic(
         savepoint,
         channel,
@@ -399,7 +467,8 @@ export const claimJob = async (
           claimedAt: sql`clock_timestamp()`,
           blockedCode: null,
           blockedReason: null,
-          deviceId: member.config!.deviceId,
+          // Only a device picked in the Channel; a wait marker from `block` must not linger.
+          deviceId: member.config!.deviceId ?? null,
           executionConfig,
           leaseExpiresAt: new Date(now.getTime() + options.leaseMs),
           leaseOwner: options.leaseOwner,

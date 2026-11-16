@@ -432,10 +432,19 @@ export const mcpAppKeys = {
       uri: string,
       {
         agentId,
+        linkId,
         onThisDevice = false,
         server,
+        toolArguments,
         topicId,
-      }: { agentId?: string; onThisDevice?: boolean; server?: string; topicId?: string },
+      }: {
+        agentId?: string;
+        linkId?: string;
+        onThisDevice?: boolean;
+        server?: string;
+        toolArguments?: string;
+        topicId?: string;
+      },
     ) => [
       'mcpApp:resource',
       identifier,
@@ -443,6 +452,8 @@ export const mcpAppKeys = {
       agentId ?? null,
       onThisDevice,
       server ?? null,
+      toolArguments ?? null,
+      linkId ?? null,
       topicId ?? null,
     ],
   ),

@@ -10,6 +10,8 @@ export interface McpAppEntrypointCall {
   /** The tab instance: one per topic and entrypoint. */
   id: string;
   identifier: string;
+  /** The account to open as, on a connector holding several. */
+  linkId?: string;
   toolName: string;
   /**
    * The conversation the app opens in. A private connector resolves only in
@@ -24,6 +26,7 @@ export const callMcpAppEntrypoint = async ({
   agentId,
   id,
   identifier,
+  linkId,
   toolName,
   topicId,
 }: McpAppEntrypointCall): Promise<MCPToolCallResult> => {
@@ -37,7 +40,7 @@ export const callMcpAppEntrypoint = async ({
 
   const response = await mcpService.invokeMcpToolCall(
     { apiName: toolName, arguments: '{}', id, identifier, type: 'mcp' },
-    { agentId, fromEntrypoint: true, topicId },
+    { agentId, fromEntrypoint: true, linkId, topicId },
   );
   if (!response?.success || !getMcpAppFromState(response.state)) {
     throw new Error('The entrypoint returned no app view');

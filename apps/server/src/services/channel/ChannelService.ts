@@ -1,6 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
+import type { ChannelVisibility } from '@lobechat/types';
 import {
   agentDisplayName,
   CHANNEL_LIMITS,
@@ -26,6 +27,7 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
 
 import { ChannelCoordinator } from './ChannelCoordinator';
+import { notifyChannelDirectMessages } from './directMessage';
 import { notifyChannelMentions } from './mention';
 import { notifyChannel } from './notify';
 import { wakeChannel } from './queue';
@@ -334,6 +336,19 @@ export class ChannelService {
     return member;
   };
 
+  updateVisibility = async (channelId: string, visibility: ChannelVisibility) => {
+    const channel = await this.repository.updateVisibility(channelId, visibility);
+    await this.changed(channelId);
+    return channel;
+  };
+
+  /** Members already in the Channel see the newcomer without waiting for their next poll. */
+  join = async (channelId: string) => {
+    const access = await this.repository.join(channelId);
+    await this.changed(channelId);
+    return access;
+  };
+
   changed = (channelId: string) => notifyChannel(this.db, channelId);
 
   detail = async (channelId: string, options: Parameters<ChannelRepository['detail']>[1]) => {
@@ -395,7 +410,9 @@ export class ChannelService {
       ...input,
       routing: config ? 'decision' : 'fallback',
     });
-    notifyChannelMentions(this.db, { userId: this.userId, workspaceId: this.workspaceId }, message);
+    const notifyContext = { userId: this.userId, workspaceId: this.workspaceId };
+    notifyChannelMentions(this.db, notifyContext, message);
+    notifyChannelDirectMessages(this.db, notifyContext, message);
     // A human quote without mentions only updates the public feed; it schedules no Agent work.
     if (message.replyToId && message.routingStatus === 'skipped') await this.changed(channelId);
     else await Promise.all([wakeChannel(channelId), this.changed(channelId)]);

@@ -18,23 +18,50 @@ import mime from 'mime';
 
 import { QQApiClient } from './api';
 import { signWebhookResponse } from './crypto';
+import { isQQActiveRateLimited, isQQDuplicateReply, isQQPassiveExpired } from './errors';
 import { QQFormatConverter } from './format-converter';
 import { QQGatewayConnection } from './gateway';
+import {
+  createMemoryQQPassiveStore,
+  QQ_DEFERRED_PREFIX,
+  QQ_PASSIVE_LIMITS,
+  type QQPassiveSlot,
+  type QQPassiveStore,
+  type QQPassiveThreadType,
+} from './passive';
 import type {
   QQAdapterConfig,
   QQAttachment,
   QQRawMessage,
   QQThreadId,
+  QQSendMessageResponse,
   QQWebhookEventData,
   QQWebhookPayload,
 } from './types';
 import { QQ_EVENT_TYPES, QQ_OP_CODES } from './types';
 
+/**
+ * QQ event types that only fire when the bot itself was @-mentioned.
+ *
+ * chat-sdk's own `detectMention()` scans `message.text` for an `@name` / `<@!id>` marker, and
+ * neither survives here: QQ already strips the "@bot" prefix from a group message's content, and
+ * this adapter strips whatever `<@!…>` markers remain before parsing. Without the explicit flag
+ * `onNewMention` never fires, so a group @-mention is routed as ordinary channel chatter (and,
+ * with no watch keyword and bot-wake off, silently dropped).
+ */
+const BOT_MENTION_EVENT_TYPES = new Set<string>([
+  QQ_EVENT_TYPES.AT_MESSAGE_CREATE,
+  QQ_EVENT_TYPES.GROUP_AT_MESSAGE_CREATE,
+]);
+
 export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
   readonly name = 'qq';
   private readonly api: QQApiClient;
+  private readonly appId: string;
   private readonly clientSecret: string;
   private readonly formatConverter: QQFormatConverter;
+  /** Tracks each conversation's passive-reply window; see `passive.ts`. */
+  private readonly passive: QQPassiveStore;
   private _userName: string;
   private _botUserId?: string;
   private chat!: ChatInstance;
@@ -50,8 +77,10 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
 
   constructor(config: QQAdapterConfig & { userName?: string }) {
     this.api = new QQApiClient(config.appId, config.clientSecret);
+    this.appId = config.appId;
     this.clientSecret = config.clientSecret;
     this.formatConverter = new QQFormatConverter();
+    this.passive = config.passiveStore ?? createMemoryQQPassiveStore();
     this._userName = config.userName || 'qq-bot';
   }
 
@@ -133,6 +162,16 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
     if (!threadId) {
       return Response.json({ ok: true });
     }
+
+    // Every inbound message opens (or restarts) the passive-reply window the answer prefers: a
+    // passive reply costs no quota, an active one is rate limited per bot and per group. A reply
+    // parked because both were unavailable goes out first, before the new message is answered.
+    await this.passive.open(this.passiveKey(threadId), {
+      at: Date.now(),
+      eventId: payload.id,
+      msgId: eventData.id,
+    });
+    await this.flushDeferred(threadId, this.threadTypeOf(threadId));
 
     // Create message via factory
     const messageFactory = () => this.parseRawEvent(eventData, threadId, eventType!);
@@ -221,27 +260,18 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
     const { type, id, guildId } = this.decodeThreadId(threadId);
     const text = this.formatConverter.renderPostable(message);
 
-    let response;
-    switch (type) {
-      case 'group': {
-        response = await this.api.sendGroupMessage(id, text);
-        break;
-      }
-      case 'guild': {
-        response = await this.api.sendGuildMessage(id, text);
-        break;
-      }
-      case 'c2c': {
-        response = await this.api.sendC2CMessage(id, text);
-        break;
-      }
-      case 'dms': {
-        response = await this.api.sendDmsMessage(guildId || id, text);
-        break;
-      }
-      default: {
-        throw new Error(`Unknown thread type: ${type}`);
-      }
+    const response = await this.sendReply(threadId, type, id, guildId, text);
+    if (!response) {
+      return {
+        id: `qq-deferred-${Date.now()}`,
+        raw: {
+          author: { id: this._botUserId || '' },
+          content: text,
+          id: '',
+          timestamp: new Date().toISOString(),
+        } as QQRawMessage,
+        threadId,
+      };
     }
 
     return {
@@ -254,6 +284,176 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
       } as QQRawMessage,
       threadId,
     };
+  }
+
+  // ------------------------------------------------------------------
+  // Passive reply window
+  // ------------------------------------------------------------------
+
+  private passiveKey(threadId: string): string {
+    return `${this.appId}:${threadId}`;
+  }
+
+  private threadTypeOf(threadId: string): QQPassiveThreadType {
+    return this.decodeThreadId(threadId).type;
+  }
+
+  /**
+   * Send one reply, cheapest transport first.
+   *
+   * A passive reply (inside the inbound message's window) costs no quota; once the window closes
+   * or its five replies are spent, QQ still accepts an active message — it is rate limited per bot
+   * and per group, not forbidden — so the reply goes out uncoupled. Only when that quota is gone
+   * too does the text get parked for the next inbound message.
+   *
+   * @returns the sent message, or undefined when the text was parked instead.
+   */
+  private async sendReply(
+    threadId: string,
+    type: QQPassiveThreadType,
+    id: string,
+    guildId: string | undefined,
+    text: string,
+  ): Promise<QQSendMessageResponse | undefined> {
+    const slot = await this.reserveReplySlot(threadId, type);
+
+    if (slot) {
+      try {
+        return await this.sendInThread(type, id, guildId, text, slot);
+      } catch (error) {
+        if (isQQDuplicateReply(error)) {
+          // QQ already has this (msg_id, msg_seq): the text is in the chat, do not repeat it.
+          this.logger?.warn('QQ rejected a duplicate reply in %s, keeping the first', threadId);
+          return undefined;
+        }
+        if (!isQQPassiveExpired(error)) throw error;
+
+        this.logger?.warn('QQ passive window refused a reply in %s, retrying as active', threadId);
+      }
+    }
+
+    return this.sendAsActiveMessage(threadId, type, id, guildId, text);
+  }
+
+  /** Uncoupled send, subject to QQ's active-message frequency cap. */
+  private async sendAsActiveMessage(
+    threadId: string,
+    type: QQPassiveThreadType,
+    id: string,
+    guildId: string | undefined,
+    text: string,
+  ): Promise<QQSendMessageResponse | undefined> {
+    try {
+      return await this.sendInThread(type, id, guildId, text, undefined);
+    } catch (error) {
+      if (!isQQActiveRateLimited(error)) throw error;
+
+      // Bot-wide / per-group quota is exhausted right now: wait for the next inbound message,
+      // which reopens a free window.
+      this.logger?.warn('QQ active-message quota exhausted in %s, deferring', threadId);
+      await this.deferReply(threadId, text);
+      return undefined;
+    }
+  }
+
+  /** One reply slot inside the conversation's window, or null when nothing may go out passively. */
+  private async reserveReplySlot(
+    threadId: string,
+    type: QQPassiveThreadType,
+  ): Promise<QQPassiveSlot | null> {
+    try {
+      return await this.passive.reserve(this.passiveKey(threadId), QQ_PASSIVE_LIMITS[type]);
+    } catch (error) {
+      this.logger?.warn('QQ passive window lookup failed for %s: %O', threadId, error);
+      return null;
+    }
+  }
+
+  private async sendInThread(
+    type: QQPassiveThreadType,
+    id: string,
+    guildId: string | undefined,
+    text: string,
+    slot: QQPassiveSlot | undefined,
+  ) {
+    const options = slot && { eventId: slot.eventId, msgId: slot.msgId, msgSeq: slot.seq };
+
+    switch (type) {
+      case 'group': {
+        return this.api.sendGroupMessage(id, text, options);
+      }
+      case 'guild': {
+        return this.api.sendGuildMessage(id, text, options);
+      }
+      case 'c2c': {
+        return this.api.sendC2CMessage(id, text, options);
+      }
+      case 'dms': {
+        return this.api.sendDmsMessage(guildId || id, text, options);
+      }
+      default: {
+        throw new Error(`Unknown thread type: ${type}`);
+      }
+    }
+  }
+
+  /** Park text the current window cannot carry, so the next inbound message delivers it. */
+  private async deferReply(threadId: string, text: string): Promise<void> {
+    if (!text.trim()) return;
+
+    this.logger?.warn(
+      'QQ passive window closed for %s, deferring reply (%d chars)',
+      threadId,
+      text.length,
+    );
+
+    try {
+      await this.passive.savePending(this.passiveKey(threadId), text);
+    } catch (error) {
+      this.logger?.error('QQ failed to park a deferred reply for %s: %O', threadId, error);
+    }
+  }
+
+  /**
+   * Deliver a reply the previous window could not carry. Runs when the next inbound message opens
+   * a fresh window, so the reader gets the missed answer before the new one.
+   */
+  private async flushDeferred(threadId: string, type: QQPassiveThreadType): Promise<void> {
+    let text: string | undefined;
+    try {
+      text = await this.passive.takePending(this.passiveKey(threadId));
+    } catch (error) {
+      this.logger?.warn('QQ failed to read a deferred reply for %s: %O', threadId, error);
+      return;
+    }
+    if (!text?.trim()) return;
+
+    const { id, guildId } = this.decodeThreadId(threadId);
+    try {
+      const sent = await this.sendReply(
+        threadId,
+        type,
+        id,
+        guildId,
+        `${QQ_DEFERRED_PREFIX}${text}`,
+      );
+      if (sent) this.logger?.info('QQ delivered a deferred reply in %s', threadId);
+    } catch (error) {
+      this.logger?.error('QQ failed to deliver a deferred reply in %s: %O', threadId, error);
+      await this.restoreDeferred(threadId, text);
+    }
+  }
+
+  /**
+   * Put a claimed reply back after its delivery failed. `takePending()` deletes the text before
+   * the send, so without this a transient QQ 5xx or a network error loses the answer for good.
+   */
+  private async restoreDeferred(threadId: string, text: string): Promise<void> {
+    try {
+      await this.passive.restorePending(this.passiveKey(threadId), text);
+    } catch (error) {
+      this.logger?.error('QQ failed to restore a deferred reply for %s: %O', threadId, error);
+    }
   }
 
   async editMessage(
@@ -326,6 +526,9 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
       },
       formatted,
       id: raw.id,
+      // A group message can only reach the bot through GROUP_AT_MESSAGE_CREATE, so it is always a
+      // mention; a guild message keeps the `<@!id>` marker in its raw content.
+      isMention: !!raw.group_openid || this.contentMentionsBot(raw.content),
       metadata: {
         dateSent: new Date(raw.timestamp),
         edited: false,
@@ -336,10 +539,19 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
     });
   }
 
+  /** Whether the raw content carries a `<@!botUserId>` marker for this bot. */
+  private contentMentionsBot(content?: string): boolean {
+    if (!content || !this._botUserId) return false;
+
+    const escapedId = this._botUserId.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    return new RegExp(`<@!?${escapedId}>`).test(content);
+  }
+
   private async parseRawEvent(
     data: QQWebhookEventData,
     threadId: string,
-    _eventType: string,
+    eventType: string,
   ): Promise<Message<QQRawMessage>> {
     const content = data.content || '';
     const cleanText = this.formatConverter.cleanMentions(content);
@@ -374,6 +586,9 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
       author,
       formatted,
       id: data.id || '',
+      // Both AT_MESSAGE_CREATE (guild) and GROUP_AT_MESSAGE_CREATE only reach the bot when it was
+      // @-mentioned — see BOT_MENTION_EVENT_TYPES. c2c / dms are DMs, which chat-sdk marks itself.
+      isMention: BOT_MENTION_EVENT_TYPES.has(eventType),
       metadata: {
         dateSent: new Date(data.timestamp || Date.now()),
         edited: false,

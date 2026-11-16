@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentModel } from '@/database/models/agent';
 import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorLinkModel } from '@/database/models/connectorLink';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 
 import { connectorRouter } from './connector';
 
 vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
 vi.mock('@/database/models/connector', () => ({ ConnectorModel: vi.fn() }));
+vi.mock('@/database/models/connectorLink', () => ({ ConnectorLinkModel: vi.fn() }));
 vi.mock('@/database/models/connectorTool', () => ({ ConnectorToolModel: vi.fn() }));
 vi.mock('@/database/models/plugin', () => ({ PluginModel: vi.fn() }));
 const workspaceMocks = vi.hoisted(() => ({
@@ -187,6 +189,7 @@ describe('connectorRouter.resolveForRun', () => {
       id: connector.id,
       identifier: 'local-mcp',
       isEnabled: true,
+      links: [],
       mcpConnectionType: 'stdio',
       mcpServerUrl: undefined,
       metadata: {},
@@ -198,6 +201,48 @@ describe('connectorRouter.resolveForRun', () => {
       agentId: 'agent-private',
       topicId: 'topic-group',
     });
+  });
+
+  it("lists the accounts of the owner's personal connector a private agent runs", async () => {
+    // The workspace scope cannot list a personal row's accounts; without them
+    // a desktop's local call could not tell that the model must name one.
+    const account = (id: string) => ({
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      credentials: { accessToken: id, type: 'oauth2' },
+      id,
+      name: id,
+      status: 'connected',
+      userConnectorId: 'personal-row',
+      userId: 'creator',
+    });
+    const personalLinks = {
+      listByConnectorIds: vi.fn().mockResolvedValue([account('lnk_a'), account('lnk_b')]),
+    };
+    const personalModel = {
+      forRow() {
+        return this;
+      },
+      getLinkModel: () => personalLinks,
+    };
+    vi.mocked(ConnectorModel).mockImplementation(function () {
+      return { forRow: () => personalModel, resolveByIdentifiers } as never;
+    });
+    resolveByIdentifiers.mockResolvedValue([
+      {
+        ...connector,
+        credentials: null,
+        id: 'personal-row',
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://nas.tail1234.ts.net/mcp',
+        oidcConfig: { clientId: 'client', scheme: 'dcr' },
+        workspaceId: null,
+      },
+    ]);
+
+    const answer = await caller('creator').resolveForRun(input);
+
+    expect(answer?.links.map((link) => link.id)).toEqual(['lnk_a', 'lnk_b']);
+    expect(personalLinks.listByConnectorIds).toHaveBeenCalledWith(['personal-row']);
   });
 
   it("reads the tools of the owner's personal connector a private agent runs", async () => {
@@ -275,14 +320,32 @@ describe('connectorRouter.getLocalCallToken', () => {
   const existsById = vi.fn();
   // A personal OAuth HTTP connector on a tailnet, set to connect through the device
   const personal = {
-    credentials: { accessToken: 'personal-access', type: 'oauth2' },
+    credentials: null,
     id: '9f1f6f30-0000-4000-8000-00000000000a',
     identifier: 'nas',
     mcpConnectionType: 'http',
     mcpServerUrl: 'https://nas.tail1234.ts.net/mcp',
     metadata: { connectVia: 'device' },
+    oidcConfig: { clientId: 'client', scheme: 'dcr' },
     userId: 'creator',
     workspaceId: null,
+  };
+  const account = {
+    credentials: { accessToken: 'personal-access', type: 'oauth2' },
+    id: 'lnk_personal',
+    name: 'Personal',
+    status: 'connected',
+    userConnectorId: personal.id,
+    userId: 'creator',
+  };
+  // Accounts are listed per scope: the workspace's, or the creator's personal one
+  const workspaceLinks = { listByConnectorIds: vi.fn() };
+  const personalLinks = { listByConnectorIds: vi.fn() };
+  const personalModel = {
+    forRow() {
+      return this;
+    },
+    getLinkModel: () => personalLinks,
   };
 
   beforeEach(() => {
@@ -291,12 +354,24 @@ describe('connectorRouter.getLocalCallToken', () => {
       return { existsById } as never;
     });
     vi.mocked(ConnectorModel).mockImplementation(function () {
-      return { findById, resolveByIdentifiers } as never;
+      const model = {
+        findById,
+        forRow: (row: { workspaceId: string | null }) =>
+          row.workspaceId === null ? personalModel : model,
+        getLinkModel: () => workspaceLinks,
+        resolveByIdentifiers,
+      };
+      return model as never;
+    });
+    vi.mocked(ConnectorLinkModel).mockImplementation(function () {
+      return workspaceLinks as never;
     });
     existsById.mockResolvedValue(true);
     resolveByIdentifiers.mockResolvedValue([personal]);
-    // The workspace scope cannot read a personal row by id
+    // The workspace scope can read neither a personal row by id nor its accounts
     findById.mockResolvedValue(null);
+    workspaceLinks.listByConnectorIds.mockResolvedValue([]);
+    personalLinks.listByConnectorIds.mockResolvedValue([account]);
   });
 
   const caller = (userId: string) =>
@@ -322,6 +397,8 @@ describe('connectorRouter.getLocalCallToken', () => {
       topicId: 'topic-own',
     });
     expect(findById).not.toHaveBeenCalled();
+    expect(personalLinks.listByConnectorIds).toHaveBeenCalledWith([personal.id]);
+    expect(workspaceLinks.listByConnectorIds).not.toHaveBeenCalled();
   });
 
   it('refuses a row the conversation does not run', async () => {
@@ -350,6 +427,7 @@ describe('connectorRouter.getLocalCallToken', () => {
 
   it("reads a row of the caller's scope by id outside a conversation", async () => {
     findById.mockResolvedValue({ ...personal, workspaceId: 'workspace' });
+    workspaceLinks.listByConnectorIds.mockResolvedValue([account]);
 
     await expect(caller('creator').getLocalCallToken({ id: personal.id })).resolves.toEqual({
       accessToken: 'personal-access',

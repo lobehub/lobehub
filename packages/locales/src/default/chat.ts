@@ -328,6 +328,8 @@ export default {
   'permission.configAccess.groupRoleRestricted':
     'Your workspace role cannot configure Agent Groups. You were returned to chat.',
   'agentNotFound.title': 'Agent Unavailable',
+  'agentSkillModal.frontmatterInvalid':
+    "This skill's SKILL.md has malformed frontmatter, so its name and description come from the last saved version. Open the document to fix it.",
   'agentSkillModal.loadFailed': "Couldn't load this skill",
   'agentSkillModal.notFound': 'This skill no longer exists. It may have been deleted.',
   'agentSkillModal.openDocument': 'Open in documents',
@@ -3028,6 +3030,11 @@ export default {
   'goalProcess.kind.finding': 'Finding',
   'goalProcess.kind.decision': 'Decision',
   'goalProcess.kind.batch': 'Batch',
+  'goalProcess.kind.pattern': 'Pattern',
+  'goalProcess.kind.tool': 'Tool',
+  'goalProcess.kind.hazard': 'Hazard',
+  'goalProcess.kind.dead_end': 'Dead end',
+  'goalProcess.kind.template': 'Recipe',
   'goalProcess.node.running': 'Running',
   'goalProcess.node.stopped': 'Stopped',
   'goalProcess.node.done': 'Done',
@@ -3066,6 +3073,11 @@ export default {
   'goalProcess.lifecycle.kind.goal': 'goal',
   'goalProcess.lifecycle.kind.problem': 'question',
   'goalProcess.lifecycle.kind.task': 'task',
+  'goalProcess.lifecycle.kind.pattern': 'pattern',
+  'goalProcess.lifecycle.kind.tool': 'tool',
+  'goalProcess.lifecycle.kind.hazard': 'hazard',
+  'goalProcess.lifecycle.kind.dead_end': 'dead end',
+  'goalProcess.lifecycle.kind.template': 'recipe',
   'goalProcess.lifecycle.note.budgetExhausted': 'The goal or the main Agent ran out of turns',
   'goalProcess.lifecycle.note.mainAgent': 'Main Agent: {{text}}',
   'goalProcess.lifecycle.note.recoveredAbandoned':

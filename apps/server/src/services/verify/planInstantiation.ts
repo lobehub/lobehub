@@ -1,9 +1,12 @@
 import debug from 'debug';
 
+import { AcceptanceReviewModel } from '@/database/models/acceptanceReview';
 import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
+import { buildReviewPlanItems } from '@/server/services/acceptanceReview/reviewPlan';
+import { reviewIdOfTask } from '@/server/services/acceptanceReview/roundContext';
 
 import { AcceptanceService, buildAcceptanceCheckUnion } from './acceptanceService';
 import { VerifyPlanGeneratorService } from './planGenerator';
@@ -105,6 +108,31 @@ const instantiatePlan = async (
           workspaceId,
         );
       }
+      return;
+    }
+
+    const reviewId = reviewIdOfTask(task?.config);
+    if (reviewId) {
+      const marks = await new AcceptanceReviewModel(db).listMarks(reviewId);
+      const service = new AcceptanceService(db, userId, workspaceId);
+      const { results, runs } = await service.loadRounds(acceptance.id);
+      const previous = new Map(
+        buildAcceptanceCheckUnion(
+          runs.map((run) => ({
+            results: results.filter((result) => result.verifyRunId === run.id),
+            run,
+          })),
+        ).map((check) => [
+          check.planItem?.id ?? check.id,
+          { state: check.state, userDecision: check.result?.userDecision ?? null },
+        ]),
+      );
+      const items = buildReviewPlanItems(marks, previous);
+      if (!items.length) return;
+      const reviewRun = await runModel.ensureForOperation(params.operationId);
+      await runModel.setPlan(reviewRun.id, items);
+      await runModel.confirmPlan(reviewRun.id);
+      await service.attachPolicyRun(reviewRun.id, acceptance.id);
       return;
     }
 

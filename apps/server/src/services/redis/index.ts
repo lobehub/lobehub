@@ -4,9 +4,11 @@ import { agentRunSlots } from './agentRunSlots';
 import { agentSignal } from './agentSignal';
 import { botReply } from './botReply';
 import { botWake } from './botWake';
+import { connectorOAuth } from './connectorOAuth';
 import { deviceSystemInfo } from './deviceSystemInfo';
 import { linear } from './linear';
 import { pageCollab } from './pageCollab';
+import { qqPassive } from './qqPassive';
 import { skillTools } from './skillTools';
 import { steerQueue } from './steerQueue';
 import { taskRunDelivery } from './taskRunDelivery';
@@ -21,9 +23,11 @@ export const redisService = {
   agentSignal,
   botReply,
   botWake,
+  connectorOAuth,
   deviceSystemInfo,
   linear,
   pageCollab,
+  qqPassive,
   skillTools,
   steerQueue,
   taskRunDelivery,

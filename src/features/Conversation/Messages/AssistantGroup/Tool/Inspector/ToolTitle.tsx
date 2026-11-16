@@ -13,7 +13,7 @@ import { shinyTextStyles } from '@/styles';
 import { sx } from '@/styles/sx';
 
 import { getToolDisplayName } from '../../toolDisplayNames';
-import { extractToolKeyword } from './extractToolKeyword';
+import { extractToolKeyword, getShellCommandTitle } from './extractToolKeyword';
 
 export const styles = stylex.create({
   aborted: { color: cssVar.colorTextQuaternary },
@@ -84,6 +84,7 @@ const ToolTitle = memo<ToolTitleProps>(
 
     const effectiveArgs = args ?? partialArgs;
     const keyword = useMemo(() => extractToolKeyword(effectiveArgs), [effectiveArgs]);
+    const commandTitle = useMemo(() => getShellCommandTitle(effectiveArgs), [effectiveArgs]);
 
     // Only command step descriptions can replace the action. Resource titles,
     // queries, and paths can also contain CJK text but do not say what the tool
@@ -118,6 +119,22 @@ const ToolTitle = memo<ToolTitleProps>(
             {t(`builtins.goalCommand.${goalCommand.kind}.${status}`)}
           </span>
           {goalTitle && <span {...stylex.props(styles.standalone)}>{goalTitle}</span>}
+        </div>
+      );
+    }
+
+    // An undescribed shell command reads as what it does ("读取 app.ts"); the
+    // exact command line stays one click away in the expanded row.
+    if (commandTitle) {
+      const { action, isProse, subject } = commandTitle;
+      return (
+        <div {...stylex.props(styles.root, isAborted && styles.aborted)}>
+          <span {...sx(styles.label, isLoading ? shinyTextStyles.shinyText : undefined)}>
+            {t(`builtins.shellCommand.${action}`)}
+          </span>
+          {subject && (
+            <span {...stylex.props(isProse ? styles.standalone : styles.keyword)}>{subject}</span>
+          )}
         </div>
       );
     }

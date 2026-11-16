@@ -8,6 +8,7 @@ export type RunConnector = Pick<
   | 'id'
   | 'identifier'
   | 'isEnabled'
+  | 'links'
   | 'mcpConnectionType'
   | 'mcpServerUrl'
   | 'metadata'

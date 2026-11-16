@@ -439,6 +439,16 @@ export interface ChannelInputManifest {
 /** Flat audit payload: routing decisions, claims, stops, isolation reasons. */
 export type ChannelAuditDetails = Record<string, boolean | number | string | string[] | null>;
 
+/** A public group Channel the caller has not joined yet, as the browse list shows it. */
+export interface ChannelJoinableItem {
+  createdAt: Date;
+  id: string;
+  /** Active people in it, Agents not counted. */
+  memberCount: number;
+  projectId: string | null;
+  title: string;
+}
+
 /** A member pictured in a Channel's list avatar. */
 export interface ChannelAvatarMember {
   actorType: ChannelMemberActorType;
@@ -453,6 +463,11 @@ export interface ChannelAvatarMember {
 export interface ChannelListItem {
   /** The bound Agent of a direct conversation; null for a group. */
   agentId: string | null;
+  /**
+   * Every active Agent member, oldest first, so a page about one Agent can list the Channels it
+   * takes part in; set by the Channel list.
+   */
+  agentIds?: string[];
   /** Server-computed for the current member. */
   canDelete: boolean;
   createdAt: Date;
@@ -484,12 +499,19 @@ export interface ChannelListItem {
    * and its share; pictured by `memberAvatars`, since the caller has no sidebar row for it.
    */
   sharedAgent?: boolean;
+  /**
+   * On a `sharedAgent` conversation, the share's custom slug or else its id: the Agent's visitor
+   * page lives at `/a/<handle>`, the only page of it the caller can open. Null otherwise.
+   */
+  sharedAgentHandle?: string | null;
   status: ChannelStatus;
   title: string;
   /** Main-channel messages the caller has not read; set by the Channel list. */
   unreadCount?: number;
   /** Bumped by every new message, so it orders conversations by latest activity. */
   updatedAt?: Date;
+  /** Ignored for a direct conversation, which is always private. */
+  visibility: ChannelVisibility;
   workspaceId: string | null;
 }
 
@@ -566,6 +588,11 @@ export interface ChannelPublicJob {
   publicationRevoked: boolean;
   status: ChannelJobStatus;
   threadId: string | null;
+  /**
+   * The Agent topic the reply runs in, present only for the viewer who owns it (as
+   * `sourceTopicId` on replies), so they can follow a reply still at work.
+   */
+  topicId?: string;
   /** Git branch of the worktree the run works in, instead of the member's own directory. */
   worktreeBranch?: string | null;
   writerHeld: boolean;
@@ -598,6 +625,10 @@ export interface ChannelDetail {
   attachments: Array<{ fileType: string; id: string; name: string; size: number; url: string }>;
   channel: ChannelListItem;
   hasMore: boolean;
+  /**
+   * The view's jobs. A main-timeline view also carries its threads' jobs still at work (queued,
+   * running, or holding the writer); filter by `threadId` for one conversation's own.
+   */
   jobs: ChannelPublicJob[];
   members: ChannelPublicMember[];
   messages: ChannelPublicMessage[];
