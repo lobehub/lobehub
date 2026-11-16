@@ -4,6 +4,7 @@ import {
   createBackOriginRecorder,
   getBackOrigin,
   historyDeltaTo,
+  pruneBackOwners,
   recordBackLocation,
   resetBackOrigins,
   resolveBackScope,
@@ -181,25 +182,24 @@ describe('history walk-back', () => {
   });
 });
 
-describe('owner retention', () => {
-  it('forgets the least recently used owners (closed tabs)', () => {
+describe('pruneBackOwners', () => {
+  it('drops the trails of closed tabs and keeps open ones however many there are', () => {
     const record = createBackOriginRecorder();
-    for (let tab = 0; tab < 25; tab++) {
+    for (let tab = 0; tab < 30; tab++) {
       record(`tab-${tab}`, `/page/${tab}`);
       record(`tab-${tab}`, '/agent/agt_1');
     }
+    const open = new Set(Array.from({ length: 29 }, (_, tab) => `tab-${tab + 1}`));
+    pruneBackOwners(open);
+
     expect(getBackOrigin('tab-0', '/agent/agt_1')).toBeUndefined();
-    expect(getBackOrigin('tab-24', '/agent/agt_1')).toBe('/page/24');
-    expect(getBackOrigin('tab-5', '/agent/agt_1')).toBe('/page/5');
+    expect(getBackOrigin('tab-1', '/agent/agt_1')).toBe('/page/1');
+    expect(getBackOrigin('tab-29', '/agent/agt_1')).toBe('/page/29');
   });
 
-  it('keeps a refocused tab that did not move', () => {
-    const record = createBackOriginRecorder();
-    record('tab-0', '/tasks');
-    record('tab-0', '/agent/agt_1');
-    for (let tab = 1; tab < 20; tab++) record(`tab-${tab}`, `/page/${tab}`);
-    record('tab-0', '/agent/agt_1');
-    record('tab-20', '/page/20');
-    expect(getBackOrigin('tab-0', '/agent/agt_1')).toBe('/tasks');
+  it('always keeps the main owner', () => {
+    walk('/tasks', '/agent/agt_1');
+    pruneBackOwners(new Set());
+    expect(getBackOrigin('main', '/agent/agt_1')).toBe('/tasks');
   });
 });

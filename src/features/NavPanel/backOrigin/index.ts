@@ -4,7 +4,7 @@ import { RESERVED_ROOT_SEGMENTS } from '@/features/Workspace/rootSegments';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 
 import { readHistoryIndex } from './historyIndex';
-import { useLocationOwner } from './useLocationOwner';
+import { MAIN_OWNER, useLocationOwner } from './useLocationOwner';
 
 /**
  * Sidebars that own a back button for one entity (an agent or a group) send it
@@ -40,8 +40,6 @@ type Stacks = Readonly<Record<string, readonly BackEntry[]>>;
 
 /** Stacks never grow past this many entries; the oldest are dropped first. */
 const MAX_STACK = 50;
-/** Trails are kept for this many owners (Electron tabs); the least recently used go first. */
-const MAX_OWNERS = 20;
 
 /**
  * Per owner (an Electron tab, or `main` on web), the trail that led to the
@@ -61,11 +59,21 @@ const subscribe = (listener: Listener) => {
 const getStacks = () => stacks;
 
 const setStack = (owner: string, stack: readonly BackEntry[]) => {
-  // Re-insert so key order is least → most recently used, then drop owners
-  // (closed tabs) that fell out of the window.
-  const { [owner]: _previous, ...rest } = stacks;
-  const owners = Object.entries(rest).slice(-(MAX_OWNERS - 1));
-  stacks = { ...Object.fromEntries(owners), [owner]: stack.slice(-MAX_STACK) };
+  stacks = { ...stacks, [owner]: stack.slice(-MAX_STACK) };
+  listeners.forEach((listener) => listener());
+};
+
+/**
+ * Forget the trails of owners that no longer exist (closed Electron tabs).
+ * `main` (the web router, or desktop without tabs) is always kept.
+ */
+export const pruneBackOwners = (openOwners: ReadonlySet<string>): void => {
+  const kept = Object.entries(stacks).filter(
+    ([owner]) => owner === MAIN_OWNER || openOwners.has(owner),
+  );
+  if (kept.length === Object.keys(stacks).length) return;
+
+  stacks = Object.fromEntries(kept);
   listeners.forEach((listener) => listener());
 };
 
@@ -91,11 +99,7 @@ export const recordBackLocation = (
 ): void => {
   const stack = stacks[owner] ?? [];
   const top = stack.at(-1);
-  if (top?.location === location && top.historyIndex === historyIndex) {
-    // Focusing a tab that did not move still counts as using it.
-    if (Object.keys(stacks).at(-1) !== owner) setStack(owner, stack);
-    return;
-  }
+  if (top?.location === location && top.historyIndex === historyIndex) return;
 
   const entry: BackEntry = { historyIndex, location };
   const scope = resolveBackScope(location);
