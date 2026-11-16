@@ -57,3 +57,52 @@ describe('describeLockedDevicePicker', () => {
     expect(hint).toContain('DEVICE_WAKING');
   });
 });
+
+describe('describeWithheldDevicePicker', () => {
+  const load = async () => {
+    vi.resetModules();
+    return (await import('./executionTargetRules')).describeWithheldDevicePicker;
+  };
+
+  it.each([
+    [{ kind: 'none', target: 'none' }, 'has no execution environment'],
+    [{ kind: 'sandbox', target: 'sandbox' }, 'runs in the cloud sandbox'],
+  ] as const)('explains a run without a device (%o)', async (plan, expected) => {
+    const describeWithheldDevicePicker = await load();
+    const hint = describeWithheldDevicePicker(plan as unknown as ExecutionPlan);
+
+    expect(hint).toContain(expected);
+    expect(hint).toContain('device selector');
+  });
+
+  it('keeps the locked-run wording for a locked plan', async () => {
+    const describeWithheldDevicePicker = await load();
+
+    expect(describeWithheldDevicePicker(offlineBoundDevice)).toContain(
+      "locked to the user's bound device",
+    );
+  });
+
+  it('promises no device selector when device access is denied', async () => {
+    const describeWithheldDevicePicker = await load();
+    const hint = describeWithheldDevicePicker(
+      { kind: 'none', target: 'none' } as unknown as ExecutionPlan,
+      { canUseDevice: false },
+    );
+
+    expect(hint).toContain('not available in this conversation');
+    expect(hint).not.toContain('device selector');
+  });
+
+  it('returns nothing while the picker is offered', async () => {
+    const describeWithheldDevicePicker = await load();
+
+    expect(
+      describeWithheldDevicePicker({
+        kind: 'device-unrouted',
+        reason: 'ambiguous-online-devices',
+        target: 'auto',
+      } as unknown as ExecutionPlan),
+    ).toBeUndefined();
+  });
+});

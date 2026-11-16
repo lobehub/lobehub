@@ -406,6 +406,27 @@ describe('gatherContextFacts', () => {
       expect(ctx.availablePlugins?.map((p) => p.identifier)).not.toContain('lobe-agent-builder');
     });
 
+    it('leaves runtime-managed device tools out of the plugin catalog', async () => {
+      const facts = await gatherContextFacts(
+        request({
+          agent: { chatConfig: { skillActivateMode: 'manual' } as never },
+          enabledToolIds: ['lobe-agent-management'],
+        }),
+        {},
+      );
+
+      const ids = facts.step.agentManagementContext!.availablePlugins!.map((p) => p.identifier);
+      // The device plan owns these; listing them reads as "activatable here"
+      // and the activator then answers "Not found".
+      for (const id of ['lobe-remote-device', 'lobe-local-system', 'lobe-browser']) {
+        expect(ids).not.toContain(id);
+      }
+      // Hidden-but-real capabilities stay attachable, and so does Computer Use:
+      // pinning it is the opt-in that enables it on a supported device.
+      expect(ids).toContain('lobe-web-browsing');
+      expect(ids).toContain('lobe-computer-use');
+    });
+
     it('carries mentioned agents even without the tool or auto mode', async () => {
       const facts = await gatherContextFacts(
         request({

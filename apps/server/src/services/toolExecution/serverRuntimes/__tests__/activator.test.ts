@@ -137,10 +137,46 @@ describe('activatorRuntime', () => {
       20_000,
     );
 
-    it('keeps "Not found" when the picker was withheld for another reason', async () => {
+    it('says the run has no device when the picker is withheld from a sandbox run', async () => {
       const { activatorRuntime } = await import('../activator');
       const runtime = await activatorRuntime.factory({
         executionPlan: { kind: 'sandbox', target: 'sandbox' },
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({ identifiers: ['lobe-remote-device'] });
+
+      expect(result.content).toContain('Not available: lobe-remote-device.');
+      expect(result.content).toContain('runs in the cloud sandbox');
+      expect(result.content).not.toContain('Not found');
+    });
+
+    it('does not send a caller without device access to the device selector', async () => {
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        canUseDevice: false,
+        executionPlan: { kind: 'none', target: 'none' },
+        serverDB: {} as never,
+        toolManifestMap: {},
+        userId: 'user-1',
+      });
+
+      const result = await runtime.activateTools({ identifiers: ['lobe-remote-device'] });
+
+      expect(result.content).toContain('not available in this conversation');
+      expect(result.content).not.toContain('device selector');
+    });
+
+    it('keeps "Not found" while the picker is offered but missing from the map', async () => {
+      const { activatorRuntime } = await import('../activator');
+      const runtime = await activatorRuntime.factory({
+        executionPlan: {
+          kind: 'device-unrouted',
+          reason: 'ambiguous-online-devices',
+          target: 'auto',
+        },
         serverDB: {} as never,
         toolManifestMap: {},
         userId: 'user-1',
