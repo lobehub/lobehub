@@ -57,20 +57,6 @@ const styles = stylex.create({
     borderWidth: 0,
     backgroundColor: 'transparent',
   },
-  badge: {
-    pointerEvents: 'none',
-    position: 'absolute',
-    insetBlockStart: '4px',
-    insetInlineStart: '4px',
-    paddingInline: '4px',
-    borderRadius: cssVar.borderRadiusSM,
-    fontSize: '11px',
-    fontVariantNumeric: 'tabular-nums',
-    fontWeight: 500,
-    lineHeight: '16px',
-    color: cssVar.colorText,
-    backgroundColor: `color-mix(in srgb, ${cssVar.colorBgContainer} 85%, transparent)`,
-  },
   close: {
     cursor: 'pointer',
     position: 'absolute',
@@ -107,12 +93,7 @@ const styles = stylex.create({
   overlayActions: { pointerEvents: 'auto' },
 });
 
-interface ImageCardProps extends UploadFileItem {
-  /** Position among the draft's images; matches the inline `[Image #N]` references. */
-  number?: number;
-}
-
-const ImageCard = memo<ImageCardProps>(({ number, ...item }) => {
+const ImageCard = memo<UploadFileItem>((item) => {
   const { errorCode, file, id, previewUrl } = item;
   const { t } = useTranslation(['chat', 'common']);
   const contextKey = useChatInputUploadKey();
@@ -171,7 +152,6 @@ const ImageCard = memo<ImageCardProps>(({ number, ...item }) => {
           )}
         </div>
       )}
-      {number !== undefined && <span {...stylex.props(styles.badge)}>#{number}</span>}
       <button
         aria-label={t('upload.image.remove', { name: file.name })}
         type={'button'}
