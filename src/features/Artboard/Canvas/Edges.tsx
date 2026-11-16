@@ -8,8 +8,8 @@ import type { BoardEdge } from '../model';
 import { useArtboardStore } from '../store';
 import { type FlowNodeState, nodeState } from '../Verify/flow';
 import { useJourneyView } from '../Verify/useJourneyView';
+import { arrowSize, edgeArrow, edgeCurve, strokeWidthOf } from './curve';
 import { EDGE_LABEL_FONT, EDGE_LABEL_MAX_WIDTH, edgeLabelMode, edgeLabelText } from './edgeLabel';
-import { arrowSize, sketchArrow, sketchLine, strokeWidthOf } from './sketch';
 import { canvasStyles } from './styles';
 
 interface EdgeTone {
@@ -86,15 +86,15 @@ const Edges = ({ k }: { k: number }) => {
             <g key={edge.id}>
               <path
                 {...line}
-                d={sketchLine(edge.points, edge.id)}
+                d={edgeCurve(edge.points, arrowSize(k))}
                 strokeDasharray={tone.dash
                   ?.split(' ')
                   .map((v) => Number(v) * width)
                   .join(' ')}
               />
-              <path {...line} d={sketchArrow(edge.points, arrowSize(k), edge.id)} />
+              <path {...line} d={edgeArrow(edge.points, arrowSize(k))} />
               <path
-                d={edge.d}
+                d={edgeCurve(edge.points)}
                 fill="none"
                 stroke="transparent"
                 strokeWidth={16 / k}
