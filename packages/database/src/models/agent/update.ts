@@ -8,6 +8,7 @@ import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
 
+import { followAgentRename } from '../../repositories/channel/agentRename';
 import type { AgentItem } from '../../schemas';
 import { agents, sessionGroups } from '../../schemas';
 import { sanitizeAgentApiConfig } from '../../utils/sanitizeAgentApiConfig';
@@ -132,10 +133,20 @@ export const update = async (ctx: AgentModelContext, agentId: string, data: Part
   const sanitizedData = stripImmutableFields(apiSafeData);
   await assertNotAgentBuilderProtectedWrite(ctx, agentId, sanitizedData);
 
-  return ctx.db
+  const renamed = sanitizedData.name !== undefined || sanitizedData.title !== undefined;
+  const before = renamed
+    ? await ctx.db.query.agents.findFirst({
+        columns: { name: true, slug: true, title: true },
+        where: and(eq(agents.id, agentId), ctx.ownership()),
+      })
+    : undefined;
+
+  const result = await ctx.db
     .update(agents)
     .set({ ...sanitizedData, updatedAt: new Date() })
     .where(and(eq(agents.id, agentId), ctx.ownership()));
+  if (before) await followAgentRename(ctx.db, agentId, before, { ...before, ...sanitizedData });
+  return result;
 };
 
 /**
@@ -373,10 +384,13 @@ export const updateConfig = async (
   ) as Partial<typeof mergedValue>;
   if (!Object.values(updateData).some((value) => value !== undefined)) return;
 
-  return ctx.db
+  const result = await ctx.db
     .update(agents)
     .set(updateData)
     .where(and(eq(agents.id, agentId), ctx.ownership()));
+  if (touchedColumns.has('name') || touchedColumns.has('title'))
+    await followAgentRename(ctx.db, agentId, agent, mergedValue);
+  return result;
 };
 
 /**
