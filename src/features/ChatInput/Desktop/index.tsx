@@ -243,15 +243,9 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
                 style={actionBarStyle ?? { paddingRight: 8 }}
                 right={
                   loadingRightSlot ??
-                  rightContent ??
-                  (sendAreaPrefix ? (
-                    <Flexbox horizontal align={'center'} gap={6}>
-                      {sendAreaPrefix}
-                      <SendArea hideContextWindow={hasControlBar} />
-                    </Flexbox>
-                  ) : (
-                    <SendArea hideContextWindow={hasControlBar} />
-                  ))
+                  rightContent ?? (
+                    <SendArea hideContextWindow={hasControlBar} prefix={sendAreaPrefix} />
+                  )
                 }
               />
             )

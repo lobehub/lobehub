@@ -9,6 +9,7 @@ import {
   getConversationChatInputUiState,
   getConversationSendButtonProps,
   getQueuedHintKey,
+  partitionSendableUploads,
   putQueuedMessageInEditor,
   sendQueuedMessageNow,
   toChatInputMessages,
@@ -254,43 +255,38 @@ describe('getContextWindow', () => {
 });
 
 describe('getConversationSendButtonProps', () => {
-  it.each([false, true])(
-    'keeps uploads disabled with generating=%s despite a host override',
-    (generating) => {
-      const defaults = {
-        disabled: true,
-        generating,
-        onStop: vi.fn(),
-        showSendWhileGenerating: generating,
-      };
-      const overrides = { disabled: false, shape: 'round' as const };
-
-      expect(getConversationSendButtonProps(defaults, overrides, true)).toEqual({
-        ...defaults,
-        disabled: true,
-        shape: 'round',
-      });
-      expect(getConversationSendButtonProps(defaults, overrides, false).disabled).toBe(false);
-    },
-  );
-
   it.each([
     { customDisabled: undefined, disabled: true, expected: true },
     { customDisabled: undefined, disabled: false, expected: false },
     { customDisabled: true, disabled: false, expected: true },
     { customDisabled: false, disabled: true, expected: false },
   ])(
-    'preserves non-upload disabled overrides: $customDisabled / $disabled',
+    'lets a host override disabled: $customDisabled / $disabled',
     ({ customDisabled, disabled, expected }) => {
       expect(
         getConversationSendButtonProps(
           { disabled, generating: false, onStop: vi.fn() },
           customDisabled === undefined ? undefined : { disabled: customDisabled },
-          false,
         ).disabled,
       ).toBe(expected);
     },
   );
+});
+
+describe('partitionSendableUploads', () => {
+  it('leaves failed and cancelled uploads out, keeping the rest in composer order', () => {
+    const files = [
+      { id: 'a', status: 'success' as const },
+      { id: 'b', status: 'error' as const },
+      { id: 'c', status: 'success' as const },
+      { id: 'd', status: 'cancelled' as const },
+    ];
+
+    expect(partitionSendableUploads(files)).toEqual({
+      failed: [files[1], files[3]],
+      sendable: [files[0], files[2]],
+    });
+  });
 });
 
 describe('getConversationChatInputUiState', () => {

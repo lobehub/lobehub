@@ -35,6 +35,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     allowExpand,
     slashPlacement,
     getMessages,
+    queueSendWhileUploading,
     resolveSendBlocked,
     topicId,
     uploadContextKey,
@@ -69,6 +70,10 @@ const StoreUpdater = memo<StoreUpdaterProps>(
 
     useStoreUpdater('sendButtonProps', sendButtonProps);
     useStoreUpdater('resolveSendBlocked', resolveSendBlocked);
+    useStoreUpdater('queueSendWhileUploading', queueSendWhileUploading);
+    // A send queued for uploads watches the global file store; an unmounted
+    // composer has nothing left to send it from.
+    useEffect(() => () => storeApi.getState().cancelUploadQueuedSend(), [storeApi]);
     useStoreUpdater('onSend', onSend);
     useStoreUpdater('onVoiceMessageSend', onVoiceMessageSend);
     useStoreUpdater('onMarkdownContentChange', onMarkdownContentChange);
