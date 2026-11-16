@@ -24,6 +24,7 @@ export * from './betterAuth';
 export * from './channel';
 export * from './chatGroup';
 export * from './connector';
+export * from './contact';
 export * from './dashboard';
 export * from './device';
 export * from './documentComment';

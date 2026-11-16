@@ -21,6 +21,7 @@ import {
   DEVICE_RPC_METHODS,
   deviceRpcClients,
   executeDeviceRpc,
+  MCP_UNSUPPORTED_MESSAGE,
   TERMINAL_UNSUPPORTED_MESSAGE,
   TRASH_UNSUPPORTED_MESSAGE,
 } from '../dispatch';
@@ -305,6 +306,34 @@ describe('executeDeviceRpc', () => {
     await expect(
       executeDeviceRpc('listHeterogeneousAgentModels', { type: 'opencode' }, makeDeps()),
     ).rejects.toThrow('does not support heterogeneous agent model discovery');
+  });
+
+  it('routes MCP tool listing to the host MCP client', async () => {
+    const deps = makeDeps();
+    const tools = [{ inputSchema: { type: 'object' }, name: 'search' }];
+    deps.listMcpTools = vi.fn(async () => tools);
+    const params = {
+      mcpApps: true,
+      params: {
+        headers: { 'X-Team': 'a' },
+        name: 'nas',
+        type: 'http' as const,
+        url: 'https://nas.tail1234.ts.net/mcp',
+      },
+    };
+
+    await expect(executeDeviceRpc('listMcpTools', params, deps)).resolves.toEqual(tools);
+    expect(deps.listMcpTools).toHaveBeenCalledWith(params);
+  });
+
+  it('rejects MCP tool listing on a client that runs no MCP servers', async () => {
+    await expect(
+      executeDeviceRpc(
+        'listMcpTools',
+        { params: { name: 'x', type: 'http', url: 'http://x' } },
+        makeDeps(),
+      ),
+    ).rejects.toThrow(MCP_UNSUPPORTED_MESSAGE);
   });
 
   it('delegates project file and preview methods to injected deps', async () => {
@@ -752,6 +781,11 @@ describe('deviceRpcClients', () => {
 
   it.each(cliOnly)('routes %s, which the desktop rejects, to the CLI', (method) => {
     expect(deviceRpcClients(method)).toEqual(['cli']);
+  });
+
+  // Both clients run MCP servers; the server pins the one it picked per device
+  it('leaves MCP tool listing to the client the server pins', () => {
+    expect(deviceRpcClients('listMcpTools')).toBeUndefined();
   });
 
   it('lets any client serve the other methods', () => {

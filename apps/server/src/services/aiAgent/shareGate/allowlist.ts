@@ -1,3 +1,4 @@
+import { ChannelApiName, ChannelIdentifier } from '@lobechat/builtin-tool-channel';
 import {
   AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS,
   isBuiltinToolIdentifier,
@@ -20,3 +21,25 @@ export const SHARE_VISITOR_ALLOWED_IDENTIFIERS = AGENT_SHARE_ALLOWED_BUILTIN_IDE
  * pre-existing (and unaffected) gate for that population.
  */
 export const isGovernedByBuiltinAllowlist = isBuiltinToolIdentifier;
+
+/**
+ * The Channel history reads a shared Agent may make when a Channel runs it for a visitor: the
+ * public timeline of that visitor's own conversation, which they already see. Every read
+ * re-authorizes against the run's reserved Channel operation (`ChannelHistoryRepository`), so a
+ * share-page run, which has none, reads nothing. `listChannels` and `sendMessage` stay blocked:
+ * the run executes as the owner, and they would list or post into the owner's own Channels.
+ * Exempt from the owner's `toolGrants`, which picks the Agent's tools, not the Channel's.
+ */
+const SHARE_VISITOR_CHANNEL_READ_APIS = new Set<string>([
+  ChannelApiName.readMessage,
+  ChannelApiName.readMessages,
+]);
+
+export const SHARE_VISITOR_CHANNEL_BLOCKED_APIS = new Set<string>(
+  Object.values(ChannelApiName).filter((name) => !SHARE_VISITOR_CHANNEL_READ_APIS.has(name)),
+);
+
+export const isShareVisitorChannelTool = (identifier: string) => identifier === ChannelIdentifier;
+
+export const isShareVisitorChannelRead = (identifier: string, apiName: string) =>
+  isShareVisitorChannelTool(identifier) && SHARE_VISITOR_CHANNEL_READ_APIS.has(apiName);

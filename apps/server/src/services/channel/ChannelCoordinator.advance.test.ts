@@ -10,6 +10,8 @@ const {
   getScopedOnlineDevices,
   notifyChannel,
   openChannelReply,
+  resolveChannelRoutedDevice,
+  routedPresence,
 } = vi.hoisted(() => ({
   createChannelWorktree: vi.fn(),
   executions: {
@@ -30,6 +32,8 @@ const {
   getScopedOnlineDevices: vi.fn(),
   notifyChannel: vi.fn(),
   openChannelReply: vi.fn(),
+  resolveChannelRoutedDevice: vi.fn(),
+  routedPresence: { isOnline: vi.fn(), prefetch: vi.fn() },
 }));
 vi.mock('@/database/repositories/channel', () => ({
   ChannelExecutionRepository: class {
@@ -56,6 +60,10 @@ vi.mock('./ChannelRoutingService', () => ({
 vi.mock('./notify', () => ({ notifyChannel }));
 vi.mock('./queue', () => ({ registerLocalChannelAdvance: vi.fn(), wakeChannel: vi.fn() }));
 vi.mock('./replyOpening', () => ({ openChannelReply }));
+vi.mock('./routedDevice', () => ({
+  createRoutedDevicePresence: () => routedPresence,
+  resolveChannelRoutedDevice,
+}));
 vi.mock('./worktree', () => ({ createChannelWorktree }));
 
 const coordinator = (count = 3, recovering = false, members: unknown[] = []) => {
@@ -237,6 +245,46 @@ describe('Channel concurrent startup', () => {
     expect(await result).toBeInstanceOf(Error);
     expect(executions.accepted).toHaveBeenCalledTimes(2);
     expect(notifyChannel).toHaveBeenCalledWith(expect.anything(), 'channel');
+  });
+
+  it('reads requester presence before claiming an Agent with no device picked in the Channel', async () => {
+    executions.candidates.mockResolvedValue({
+      heads: [{ id: 'job-0', memberId: 'agent', requesterMemberId: 'person', status: 'queued' }],
+      inFlight: [],
+    });
+    const query = (rows: unknown[]) => {
+      const result = Object.assign(Promise.resolve(rows), { from: vi.fn(), where: vi.fn() });
+      result.from.mockReturnValue(result);
+      result.where.mockReturnValue(result);
+      return result;
+    };
+    const select = vi
+      .fn()
+      .mockReturnValueOnce(query([{ id: 'channel', workspaceId: 'workspace' }]))
+      .mockReturnValueOnce(query([{ config: {}, id: 'agent' }]))
+      .mockReturnValueOnce(query([{ userId: 'requester' }]));
+    getScopedOnlineDevices.mockResolvedValue([{ deviceId: 'agent-device', online: false }]);
+    executions.claim.mockResolvedValue(null);
+
+    await new ChannelCoordinator({ select } as never).advance('channel');
+
+    // Outside the channel lock, before the claim resolves the routed device.
+    expect(routedPresence.prefetch).toHaveBeenCalledWith('requester');
+    expect(routedPresence.prefetch.mock.invocationCallOrder[0]).toBeLessThan(
+      executions.claim.mock.invocationCallOrder[0],
+    );
+    const [, , options] = executions.claim.mock.calls[0];
+    // The requester's devices never join the pool a Channel-picked device is checked against.
+    expect(getScopedOnlineDevices).not.toHaveBeenCalled();
+    expect(options.onlineDeviceIds).toEqual([]);
+    const run = {
+      agentId: 'agt',
+      executionConfig: {},
+      userId: 'requester',
+      workspaceId: 'workspace',
+    };
+    await options.routedDevice(run);
+    expect(resolveChannelRoutedDevice).toHaveBeenCalledWith(expect.anything(), run, routedPresence);
   });
 
   it('does not dispatch a blocked job or prevent other Agents from starting', async () => {

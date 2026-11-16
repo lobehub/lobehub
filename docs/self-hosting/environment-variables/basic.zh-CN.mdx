@@ -202,6 +202,8 @@ LobeHub 会在以下场景执行 SSRF 安全检查：
 
 3. **代理请求**：代理外部 API 请求时。
 
+4. **HTTP MCP 服务器与连接器**：服务端连接 Streamable HTTP 类型的 MCP 服务器或连接器时（包括其 OAuth 发现与令牌请求）。检查基于域名实际解析出的 IP，每次请求和重定向都会检查。未配置设备网关、需要直连本地网络中 MCP 服务器的自部署实例，需通过 `SSRF_ALLOW_PRIVATE_IP_ADDRESS` 或 `SSRF_ALLOW_IP_ADDRESS_LIST` 放行；经桌面端在用户本机运行的 MCP 服务器不受影响。
+
 **配置示例**：
 
 ```bash

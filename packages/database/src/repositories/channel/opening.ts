@@ -33,8 +33,8 @@ export const openingRequestKey = (jobId: string) => `opening:${jobId}`;
 export interface ChannelOpeningCandidate {
   agent: { id: string; name: string | null; title: string | null };
   /**
-   * Whether the reply may move into a new Thread: only a request on a group's main timeline can.
-   * A direct conversation is a DM with the Agent, where a bot never opens one either.
+   * Whether the reply may move into a new Thread: only a request on the main timeline can, in a
+   * group or a direct conversation alike, so a long run leaves that timeline free.
    */
   canOpenThread: boolean;
   /** Public messages just before the request, oldest first. */
@@ -115,7 +115,7 @@ export const findOpeningCandidate = async (
           .where(eq(channelThreads.id, job.threadId))
       : [],
     db
-      .select({ agentId: channels.agentId, workspaceId: channels.workspaceId })
+      .select({ workspaceId: channels.workspaceId })
       .from(channels)
       .where(eq(channels.id, channelId)),
   ]);
@@ -139,7 +139,7 @@ export const findOpeningCandidate = async (
 
   return {
     agent: { id: row.agentId, name: row.agentName, title: row.agentTitle },
-    canOpenThread: !job.threadId && !channel.agentId,
+    canOpenThread: !job.threadId,
     recent: messages.filter((message) => message.id !== job.messageId),
     request: requestMessage,
     requesterUserId: requester.userId,
@@ -159,7 +159,7 @@ export const applyOpening = async (
   jobId: string,
   decision: ChannelOpeningDecision,
 ): Promise<boolean> =>
-  withChannelLock(db, channelId, async (tx, channel) => {
+  withChannelLock(db, channelId, async (tx) => {
     const [job] = await tx
       .select()
       .from(channelJobs)
@@ -197,12 +197,7 @@ export const applyOpening = async (
     // Without an acknowledgement the Thread opens under the request itself, unless an archived
     // one already sits there: it takes no new work, so the reply stays where it was asked.
     const rootMessageId = posted?.id ?? job.messageId;
-    if (
-      title &&
-      !threadId &&
-      !channel.agentId &&
-      !(await hasArchivedThread(tx, channelId, rootMessageId))
-    ) {
+    if (title && !threadId && !(await hasArchivedThread(tx, channelId, rootMessageId))) {
       // Follow-ups deferred behind this answer move with it: they must read it to stay silent.
       const deferred = await tx
         .select({ id: channelJobs.id, memberId: channelJobs.memberId })

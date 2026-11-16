@@ -125,6 +125,20 @@ describe('connector OAuth callback', () => {
     expect(body).toContain('"synced":true');
   });
 
+  // A connector set to connect through the device lists its tools on the
+  // user's device, which the sync can only find with the database
+  it('syncs with the database, so a device-routed connector can list on the device', async () => {
+    mockSync.mockResolvedValue({ toolCount: 5 });
+    const { serverDB } = await import('@/database/server');
+
+    await GET(makeReq());
+
+    expect(mockSync).toHaveBeenCalledWith(
+      'c1',
+      expect.objectContaining({ serverDB, userId: 'u1' }),
+    );
+  });
+
   it('looks the connector up in the workspace it was started from', async () => {
     mockSync.mockResolvedValue({ toolCount: 5 });
     mockConsume.mockResolvedValue({

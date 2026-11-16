@@ -3,12 +3,13 @@
 import { cssVar, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { ChevronDown, ChevronUp, MoreHorizontal, PinIcon, UsersIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
@@ -21,6 +22,7 @@ import { resolveAgentListContentState } from './agentListContentState';
 import Group from './Group';
 import InboxItem from './InboxItem';
 import SessionList from './List';
+import SortableList from './SortableList';
 import { useWorkspaceAgentSections } from './useWorkspaceAgentSections';
 
 /** Team pins beyond this many fold behind a "show more" row. */
@@ -76,8 +78,32 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
   const agentPageSize = useGlobalStore(systemStatusSelectors.agentPageSize);
   const navigate = useWorkspaceAwareNavigate();
   const [teamExpanded, setTeamExpanded] = useState(false);
+  // Team pins are shared by every member, so only owners/admins (the roles the
+  // server lets write team pins) can reorder them; everyone orders their own.
+  const { allowed: canManageTeamPins } = usePermission('manage_settings');
+  const [reorderPinnedAgents, reorderMyPinned] = useHomeStore((s) => [
+    s.reorderPinnedAgents,
+    s.reorderMyPinned,
+  ]);
 
   const resolved = useWorkspaceAgentSections();
+  const { teamPinned } = resolved;
+  const teamOverflow = teamPinned.length > TEAM_PINNED_VISIBLE_LIMIT;
+  const visibleTeamPinned =
+    teamOverflow && !teamExpanded ? teamPinned.slice(0, TEAM_PINNED_VISIBLE_LIMIT) : teamPinned;
+
+  // While the team section is folded only its visible rows can move; the
+  // folded ones keep their order after them.
+  const handleReorderTeamPinned = useCallback(
+    (ids: string[]) => {
+      const moved = new Set(ids);
+      return reorderPinnedAgents([
+        ...ids,
+        ...teamPinned.map((item) => item.id).filter((id) => !moved.has(id)),
+      ]);
+    },
+    [reorderPinnedAgents, teamPinned],
+  );
   const sections = useMemo(
     () => ({
       ...resolved,
@@ -95,10 +121,7 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
       </>
     );
 
-  const { folders, hasMore, myPinned, rest, teamPinned } = sections;
-  const teamOverflow = teamPinned.length > TEAM_PINNED_VISIBLE_LIMIT;
-  const visibleTeamPinned =
-    teamOverflow && !teamExpanded ? teamPinned.slice(0, TEAM_PINNED_VISIBLE_LIMIT) : teamPinned;
+  const { folders, hasMore, myPinned, rest } = sections;
 
   return (
     <>
@@ -111,7 +134,11 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
             title={t('navPanel.teamPinned')}
             tooltip={t('navPanel.teamPinnedHint')}
           />
-          <SessionList dataSource={visibleTeamPinned} />
+          {canManageTeamPins ? (
+            <SortableList dataSource={visibleTeamPinned} onReorder={handleReorderTeamPinned} />
+          ) : (
+            <SessionList dataSource={visibleTeamPinned} />
+          )}
           {teamOverflow && (
             // Subordinate to the team pins above, so it reads lighter and
             // smaller than an agent row instead of competing with them.
@@ -141,7 +168,7 @@ const WorkspaceAgentListContent = memo<{ hideInbox?: boolean }>(({ hideInbox }) 
             testId={'sidebar-my-pinned-header'}
             title={t('navPanel.myPinned')}
           />
-          <SessionList dataSource={myPinned} />
+          <SortableList dataSource={myPinned} onReorder={reorderMyPinned} />
         </Flexbox>
       )}
       {folders.length > 0 && <Group dataSource={folders} />}

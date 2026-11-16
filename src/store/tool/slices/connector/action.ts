@@ -1,8 +1,14 @@
 import { isDesktop } from '@lobechat/const';
-import { isLocalOrPrivateUrl } from '@lobechat/utils';
+import {
+  connectorDeviceBinding,
+  connectorMcpEndpoint,
+  isDeviceOnlyMcpEndpoint,
+} from '@lobechat/utils/mcpEndpoint';
 import type { SWRResponse } from 'swr';
 
 import type { ConnectorToolPermission } from '@/database/schemas';
+import { runsOnAnotherDevice } from '@/helpers/mcpDeviceBinding';
+import { resolveLocalConnectorHttpParams } from '@/libs/mcp/localConnector';
 import {
   cacheScope,
   createReplicaSlice,
@@ -516,8 +522,8 @@ export class ConnectorActionImpl {
 
   /**
    * Desktop-only install/refresh path for connectors the cloud server cannot
-   * reach itself: stdio MCP (must spawn on this machine) and local/private
-   * network HTTP endpoints. The server-side `syncTools` would try to connect
+   * reach itself: stdio MCP (must spawn on this machine), local/private
+   * network HTTP endpoints, and HTTP set to connect through the device. The server-side `syncTools` would try to connect
    * FROM the cloud and fail with "Failed to start MCP service process" /
    * "fetch failed" (#16533), so the client lists the tools locally (via the
    * Electron main process, same path Test Connection uses) and reports them
@@ -533,13 +539,16 @@ export class ConnectorActionImpl {
     if (!isDesktop) return false;
 
     // `getForEdit` returns the decrypted user-set credentials (bearer/apikey/
-    // header) needed to connect locally. OAuth2 tokens are machine-managed and
-    // never leave the server — but OAuth against a localhost endpoint would be
-    // server-unreachable anyway, so that combination stays on the server path.
+    // header) needed to connect locally; an OAuth connector's access token is
+    // fetched on its own (`resolveLocalConnectorHttpParams`).
     const detail = await lambdaClient.connector.getForEdit.query({ id });
     const isStdio = detail.mcpConnectionType === 'stdio';
-    const isLocalHttp = !!detail.mcpServerUrl && isLocalOrPrivateUrl(detail.mcpServerUrl);
+    // A localhost / LAN address, or one the user set to connect through the device
+    const isLocalHttp =
+      !!detail.mcpServerUrl && isDeviceOnlyMcpEndpoint(connectorMcpEndpoint(detail));
     if (!isStdio && !isLocalHttp) return false;
+    // Bound to another device: the server lists it there, where its calls run
+    if (runsOnAnotherDevice(connectorDeviceBinding(detail)?.deviceId)) return false;
 
     // The full tool list, not a manifest: a manifest leaves out view-only
     // tools, yet a view's call must find its tool synced.
@@ -555,23 +564,11 @@ export class ConnectorActionImpl {
         },
       });
     } else {
-      const credentials = detail.credentials;
-      const auth =
-        credentials?.type === 'bearer'
-          ? { token: credentials.token, type: 'bearer' as const }
-          : credentials?.type === 'apikey'
-            ? { token: credentials.apiKey, type: 'bearer' as const }
-            : undefined;
-      // Custom headers live in metadata.customHeaders; legacy rows stored them
-      // as a 'header' credential — merge both, mirroring the server-side
-      // buildConnectorMcpParams.
-      const headerCreds = credentials?.type === 'header' ? credentials.headers : undefined;
-      const customHeaders = detail.metadata?.customHeaders as Record<string, string> | undefined;
-      const headers =
-        headerCreds || customHeaders ? { ...headerCreds, ...customHeaders } : undefined;
-      tools = await mcpService.listLocalMcpTools({
-        http: { auth, headers, name: detail.identifier, url: detail.mcpServerUrl! },
-      });
+      // The same credentials and headers its tool calls send
+      const http = await resolveLocalConnectorHttpParams(detail, (connectorId) =>
+        lambdaClient.connector.getLocalCallToken.mutate({ id: connectorId }),
+      );
+      tools = await mcpService.listLocalMcpTools({ http });
     }
 
     await lambdaClient.connector.syncToolsFromClientById.mutate({

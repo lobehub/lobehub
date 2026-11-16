@@ -55,6 +55,12 @@ export class ChannelHistoryRepository {
   private async read<T>(
     operationId: string,
     fn: (tx: Transaction, channelId: string, manifest: ChannelInputManifest) => Promise<T>,
+    /**
+     * Whether another person's shared Agent may use this read. Only plain history reads opt in:
+     * the run executes as the owner, so anything acting from it (listing or posting into
+     * Channels) would act in the owner's Channels.
+     */
+    { allowShared = false }: { allowShared?: boolean } = {},
   ): Promise<T> {
     // This lookup reveals nothing to the caller; authorization is repeated after taking the lock.
     const [reference] = await this.db
@@ -71,14 +77,27 @@ export class ChannelHistoryRepository {
         .innerJoin(agentOperations, eq(agentOperations.id, channelJobs.operationId))
         .where(and(eq(channelJobs.operationId, operationId), eq(channelJobs.channelId, channel.id)))
         .limit(1);
+      // A shared Agent runs as its owner in its own scope for the person of a personal direct
+      // conversation (`executionConfig.share`, frozen at claim): the operation is the owner's,
+      // the Channel and its requester are that person's.
+      const share = row?.job.executionConfig?.share;
+      const requesterId = share ? channel.userId : this.userId;
       if (
         !row ||
         row.operation.userId !== this.userId ||
         row.operation.workspaceId !== this.workspaceId ||
-        channel.workspaceId !== this.workspaceId ||
-        (channel.agentId && channel.userId !== this.userId)
+        (share
+          ? share.ownerId !== this.userId ||
+            share.workspaceId !== this.workspaceId ||
+            channel.workspaceId !== null ||
+            channel.agentId !== row.job.manifest?.self.agentId ||
+            !requesterId
+          : channel.workspaceId !== this.workspaceId ||
+            (channel.agentId && channel.userId !== this.userId))
       )
         throw new ChannelError('NOT_FOUND', 'Channel operation not found');
+      if (share && !allowShared)
+        throw new ChannelError('FORBIDDEN', 'A shared Agent can only read its own conversation');
       const { job, operation } = row;
       if (
         channel.isDeleted ||
@@ -96,7 +115,7 @@ export class ChannelHistoryRepository {
       const agent = members.find((member) => member.id === job.memberId);
       if (
         requester?.actorType !== 'user' ||
-        requester.userId !== this.userId ||
+        requester.userId !== requesterId ||
         agent?.actorType !== 'agent' ||
         agent.agentId !== job.manifest.self.agentId
       )
@@ -158,19 +177,23 @@ export class ChannelHistoryRepository {
       params.beforeSequence === undefined
         ? undefined
         : integer(params.beforeSequence, 1, 1, Number.MAX_SAFE_INTEGER);
-    return this.read(operationId, async (tx, channelId, manifest) => {
-      const rows = await readManifestMessages(tx, channelId, manifest, {
-        beforeSequence,
-        limit: limit + 1,
-      });
-      const hasMore = rows.length > limit;
-      const page = rows.slice(-limit);
-      return {
-        cutoffSequence: manifest.cutoffSequence,
-        messages: page.map((message) => excerpt(message, 0, EXCERPT_LENGTH)),
-        nextBeforeSequence: hasMore ? page[0].sequence : null,
-      };
-    });
+    return this.read(
+      operationId,
+      async (tx, channelId, manifest) => {
+        const rows = await readManifestMessages(tx, channelId, manifest, {
+          beforeSequence,
+          limit: limit + 1,
+        });
+        const hasMore = rows.length > limit;
+        const page = rows.slice(-limit);
+        return {
+          cutoffSequence: manifest.cutoffSequence,
+          messages: page.map((message) => excerpt(message, 0, EXCERPT_LENGTH)),
+          nextBeforeSequence: hasMore ? page[0].sequence : null,
+        };
+      },
+      { allowShared: true },
+    );
   };
 
   readMessage = async (
@@ -179,19 +202,23 @@ export class ChannelHistoryRepository {
   ): Promise<ChannelHistoryMessageDetail> => {
     if (!params.messageId?.trim()) throw new ChannelError('BAD_REQUEST', 'messageId is required');
     const offset = integer(params.offset, 0, 0, Number.MAX_SAFE_INTEGER);
-    return this.read(operationId, async (tx, channelId, manifest) => {
-      const [message] = await readManifestMessages(tx, channelId, manifest, {
-        messageId: params.messageId,
-      });
-      if (!message) throw new ChannelError('NOT_FOUND', 'Message not found in this conversation');
-      if (offset > message.content.length)
-        throw new ChannelError('BAD_REQUEST', 'Offset exceeds message length');
-      const result = excerpt(message, offset, DETAIL_LENGTH);
-      return {
-        message: result,
-        nextOffset: result.truncated ? offset + DETAIL_LENGTH : null,
-        offset,
-      };
-    });
+    return this.read(
+      operationId,
+      async (tx, channelId, manifest) => {
+        const [message] = await readManifestMessages(tx, channelId, manifest, {
+          messageId: params.messageId,
+        });
+        if (!message) throw new ChannelError('NOT_FOUND', 'Message not found in this conversation');
+        if (offset > message.content.length)
+          throw new ChannelError('BAD_REQUEST', 'Offset exceeds message length');
+        const result = excerpt(message, offset, DETAIL_LENGTH);
+        return {
+          message: result,
+          nextOffset: result.truncated ? offset + DETAIL_LENGTH : null,
+          offset,
+        };
+      },
+      { allowShared: true },
+    );
   };
 }

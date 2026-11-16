@@ -8,7 +8,7 @@ replies never trigger another classification.
 
 ## Enable
 
-Configure a TypeSafe API key through the deployment's \`TYPESAFE_API_KEY\` environment variable,
+Configure a TypeSafe API key through the deployment's \`TYPESAFE\_API\_KEY\` environment variable,
 or in the sender's provider settings (workspace provider settings in workspace scope).
 Routing is enabled by default. Configure its switch and decision model in Settings → Service Models → Advanced → Channels:
 
@@ -138,6 +138,8 @@ select that member. Explicit mentions cannot overtake those decisions; unrelated
 and other Channels remain independent. A failed, skipped or stopped decision releases the wait.
 `channel.retryRouting({ channelId, messageId })` lets the author/admin retry an unassigned message;
 sending a new message with an explicit mention remains available.
+`channel.retryJob({ channelId, jobId })` lets the requester/admin re-queue a reply that failed
+because its device could not be reached; it waits for the device like any queued reply.
 
 `routing_decided` audit details record the model/provider, prompt version, scenario, probabilities,
 token count, latency, and each member's own rule verdicts (`wakeRules`). No raw provider errors are stored. Runtime hooks still receive

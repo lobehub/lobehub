@@ -9,6 +9,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/components/AgentAvatar';
+import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
@@ -43,7 +44,7 @@ const styles = stylex.create({
     fontSize: '9px',
     fontWeight: 600,
     lineHeight: 1,
-    color: '#fff',
+    color: cssVar.colorTextLightSolid,
     backgroundColor: cssVar.colorError,
     backgroundImage: 'none',
   },
@@ -77,7 +78,19 @@ interface AgentItemProps {
 }
 
 const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, secondaryLabel }) => {
-  const { id, avatar, backgroundColor, pinned, slug, userId, visibility } = item;
+  const {
+    id,
+    avatar,
+    backgroundColor,
+    description,
+    name,
+    pinned,
+    slug,
+    title,
+    userId,
+    visibility,
+  } = item;
+  const avatarUrl = typeof avatar === 'string' ? avatar : undefined;
   // Unread count is server-computed (topics.status === 'unread') and carried on
   // the sidebar list item, so it stays accurate across agents whose topics
   // aren't loaded into the chat store on this client.
@@ -159,42 +172,53 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
     const avatarNode = (
       <AgentAvatar
         agentId={id}
-        avatar={typeof avatar === 'string' ? avatar : undefined}
+        avatar={avatarUrl}
         background={backgroundColor || undefined}
         name={displayTitle}
         size={22}
       />
     );
 
-    if (isLoading) {
-      return (
+    // Hovering the avatar (not the whole row, which the pointer crosses all
+    // the time) shows the same profile card the Task assignees use.
+    return (
+      <AgentProfilePopup
+        agent={{ avatar: avatarUrl, backgroundColor, description, name, title }}
+        agentId={id}
+        placement={'right'}
+        trigger={'hover'}
+      >
         <span {...stylex.props(styles.wrapper)}>
           {avatarNode}
-          <span {...stylex.props(styles.runningBadge)}>
-            <Spin size={9} style={{ color: 'inherit' }} />
-          </span>
+          {isLoading ? (
+            <span {...stylex.props(styles.runningBadge)}>
+              <Spin size={9} style={{ color: 'inherit' }} />
+            </span>
+          ) : unreadCount > 0 ? (
+            <span {...stylex.props(styles.badge)}>{unreadCount > 99 ? '99+' : unreadCount}</span>
+          ) : null}
         </span>
-      );
-    }
-
-    if (unreadCount > 0) {
-      return (
-        <span {...stylex.props(styles.wrapper)}>
-          {avatarNode}
-          <span {...stylex.props(styles.badge)}>{unreadCount > 99 ? '99+' : unreadCount}</span>
-        </span>
-      );
-    }
-
-    return avatarNode;
-  }, [isUpdating, isLoading, id, avatar, backgroundColor, displayTitle, unreadCount]);
+      </AgentProfilePopup>
+    );
+  }, [
+    isUpdating,
+    isLoading,
+    id,
+    avatarUrl,
+    backgroundColor,
+    description,
+    displayTitle,
+    name,
+    title,
+    unreadCount,
+  ]);
 
   const dropdownMenu = useAgentDropdownMenu({
-    avatar: typeof avatar === 'string' ? avatar : undefined,
+    avatar: avatarUrl,
     backgroundColor: backgroundColor || undefined,
     group: undefined, // TODO: pass group from parent if needed
     id,
-    name: item.name,
+    name,
     openCreateGroupModal: handleOpenCreateGroupModal,
     pinned: pinned ?? false,
     slug,

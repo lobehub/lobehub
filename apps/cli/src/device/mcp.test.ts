@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { disposeDeviceMcp, executeDeviceMcpCall } from './mcp';
+import { disposeDeviceMcp, executeDeviceMcpCall, listDeviceMcpTools } from './mcp';
 
 const { resolveUserSpawnPath } = vi.hoisted(() => ({
   resolveUserSpawnPath: vi.fn(async () => process.env.PATH),
@@ -90,5 +90,41 @@ describe('executeDeviceMcpCall', () => {
 
     expect(result.success).toBe(false);
     expect(result.error).toBeTruthy();
+  });
+});
+
+describe('listDeviceMcpTools', () => {
+  it(
+    'lists a stdio server on the pooled session its tunneled calls then reuse',
+    { timeout: 20_000 },
+    async () => {
+      const dir = await mkdtemp(path.join(tmpdir(), 'cli-device-mcp-'));
+      dirs.push(dir);
+      const trace = path.join(dir, 'wire.txt');
+      const { params } = stdioCall(trace);
+
+      const tools = await listDeviceMcpTools({ params });
+      const call = await executeDeviceMcpCall(stdioCall(trace), () => undefined);
+
+      // As listed, for the server to map like its own listings
+      expect(tools.map((tool) => tool.name)).toEqual(['echo']);
+      expect(tools[0].inputSchema).toBeDefined();
+      expect(call).toMatchObject({ success: true });
+      const spawns = (await readFile(trace, 'utf8')).split('\n').filter((line) => line === 'spawn');
+      expect(spawns).toHaveLength(1);
+    },
+  );
+
+  it('fails with the reason when the server cannot start', async () => {
+    await expect(
+      listDeviceMcpTools({
+        params: {
+          args: [],
+          command: 'lobehub-missing-mcp-server-binary',
+          name: 'x',
+          type: 'stdio',
+        },
+      }),
+    ).rejects.toThrow();
   });
 });

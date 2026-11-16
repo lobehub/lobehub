@@ -1,5 +1,6 @@
 import { buildConnectorManifest } from '@lobechat/mecha';
 import type { ToolManifest } from '@lobechat/types';
+import { connectorConnectVia, connectorDeviceBinding } from '@lobechat/utils/mcpEndpoint';
 
 import type { DecryptedConnector } from '@/database/models/connector';
 import type { UserConnectorToolItem } from '@/database/schemas';
@@ -54,9 +55,13 @@ export function buildConnectorManifests(
 }
 
 function buildMcpParams(connector: DecryptedConnector) {
+  // Only set when bound, so an unbound connector keeps the params it always
+  // had. Must match `buildConnectorMcpParams`.
+  const boundDevice = connectorDeviceBinding(connector);
   if (connector.mcpConnectionType === 'stdio') {
     return {
       args: connector.mcpStdioConfig?.args ?? [],
+      ...(boundDevice && { boundDevice }),
       command: connector.mcpStdioConfig?.command ?? '',
       env: connector.mcpStdioConfig?.env,
       name: connector.identifier,
@@ -85,6 +90,10 @@ function buildMcpParams(connector: DecryptedConnector) {
 
   return {
     auth,
+    ...(boundDevice && { boundDevice }),
+    // Only set when chosen, so `auto` keeps the params (and the MCP session
+    // cached by them) it always had. Must match `buildConnectorMcpParams`.
+    ...(connectorConnectVia(connector.metadata) === 'device' && { connectVia: 'device' as const }),
     headers: mergedHeaders,
     name: connector.identifier,
     type: 'http' as const,

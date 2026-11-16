@@ -6,12 +6,13 @@ import type {
   ChannelVisibility,
 } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
-import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
 import { TrashModel } from '../../models/trash';
 import type { ChannelItem, ChannelJobItem, ChannelMessageItem } from '../../schemas';
 import {
   agents,
+  agentShares,
   channelJobs,
   channelMembers,
   channelMessages,
@@ -31,9 +32,11 @@ import {
 import { channelAvatarMembers } from './avatars';
 import { findThread } from './delivery';
 import { ChannelError } from './error';
+import { lockPeerPair, peerOf, requireMutualContacts } from './peer';
 import { addChannelUser, channelUserCandidates, newChannelUserCandidates } from './people';
 import type { ChannelAgentPostInput } from './post';
 import { postAgentMessage } from './post';
+import { retryJob } from './retry';
 import { retryRouting } from './routing';
 import type { ChannelSendInput } from './send';
 import { sendMessage } from './send';
@@ -49,7 +52,12 @@ export {
   CHANNEL_ROUTING_LEASE_MS,
   ChannelRoutingRepository,
 } from './ChannelRoutingRepository';
-export type { ChannelClaim, ChannelClaimOptions } from './claim';
+export type {
+  ChannelClaim,
+  ChannelClaimOptions,
+  ChannelRoutedDevice,
+  ChannelRoutedDeviceInput,
+} from './claim';
 export type { ChannelErrorCode } from './error';
 export { ChannelError } from './error';
 export { ChannelExecutionRepository } from './execution';
@@ -108,6 +116,8 @@ export class ChannelRepository {
     title: string;
     /** Workspace people a group starts with, checked the same way as adding them later. */
     userIds?: string[];
+    /** The direct conversation binds another person's Agent through its live link share. */
+    sharedAgent?: boolean;
     visibility?: ChannelVisibility;
   }) =>
     this.db.transaction(async (tx) => {
@@ -124,7 +134,11 @@ export class ChannelRepository {
           'A direct conversation requires an Agent and private visibility',
         );
       if (agentId) {
-        await requireChannelAgent(tx, this.workspaceId, this.userId, agentId);
+        // Only the service opens one with another person's shared Agent, after resolving the
+        // share the person reached; a plain Agent id never does.
+        await requireChannelAgent(tx, this.workspaceId, this.userId, agentId, {
+          allowShared: !!params.sharedAgent,
+        });
         const existing = await this.findDirect(tx, agentId);
         if (existing) return existing;
       }
@@ -385,10 +399,13 @@ export class ChannelRepository {
         return {
           channel: { ...access.channel, canDelete: admin },
           ...view,
-          // Mirrors `stop`: the requester or an admin.
-          jobs: view.jobs.map(({ requesterMemberId, ...job }) => ({
+          jobs: view.jobs.map(({ requesterMemberId, topicId, topicOwnerId, ...job }) => ({
             ...job,
+            // Mirrors `stop`: the requester or an admin.
             canStop: admin || requesterMemberId === access.member.id,
+            // Only the viewer who runs the reply can follow it into its topic; for anyone else
+            // the job carries no topic at all.
+            ...(topicId && topicOwnerId === this.userId ? { topicId } : {}),
           })),
         };
       },
@@ -422,24 +439,31 @@ export class ChannelRepository {
   list = async (): Promise<
     Array<
       ChannelItem & {
+        agentIds: string[];
         canDelete: boolean;
         lastMessage: { content: string; createdAt: Date } | null;
         memberAvatars: ChannelAvatarMember[];
         mentionCount: number;
         replyJobs: ChannelReplyJob[];
+        sharedAgentHandle: string | null;
         unreadCount: number;
       }
     >
   > => {
     const rows = await this.db
       .select({
+        agentOwnerId: agents.userId,
         channel: channels,
         lastReadSequence: channelMembers.lastReadSequence,
         memberId: channelMembers.id,
         role: channelMembers.role,
+        shareId: agentShares.id,
+        shareSlug: sql<string | null>`${agentShares.shareConfig} ->> 'slug'`,
       })
       .from(channels)
       .innerJoin(channelMembers, eq(channelMembers.channelId, channels.id))
+      .leftJoin(agents, eq(agents.id, channels.agentId))
+      .leftJoin(agentShares, eq(agentShares.agentId, channels.agentId))
       .where(and(this.membershipWhere(), notTrashed(channels.isDeleted)))
       .orderBy(desc(channels.createdAt));
 
@@ -531,22 +555,107 @@ export class ChannelRepository {
       : [];
     const mentionCountOf = new Map(mentioned.map(({ channelId, count }) => [channelId, count]));
 
-    // A group Channel's list avatar pictures its first members; a direct one shows its Agent.
+    // A group Channel's list avatar pictures its first members; a direct one, its Agent or the
+    // other person, which also pictures a shared Agent the caller has no sidebar row for.
     const avatarsOf = await channelAvatarMembers(
       this.db,
-      rows.filter(({ channel }) => !channel.agentId).map(({ channel }) => channel.id),
+      rows.map(({ channel }) => channel.id),
       this.userId,
     );
 
-    return rows.map(({ channel, lastReadSequence, role }) => ({
-      ...channel,
-      canDelete: hasRole(role, 'admin'),
-      lastMessage: lastMessageOf.get(channel.id) ?? null,
-      memberAvatars: avatarsOf.get(channel.id) ?? [],
-      mentionCount: mentionCountOf.get(channel.id) ?? 0,
-      replyJobs: replyJobsOf.get(channel.id) ?? [],
-      unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
-    }));
+    // Every active Agent member, so a page about one Agent can list the Channels it takes part in;
+    // the avatars above are capped and leave later members out.
+    const agentMembers = rows.length
+      ? await this.db
+          .select({ agentId: channelMembers.agentId, channelId: channelMembers.channelId })
+          .from(channelMembers)
+          .where(
+            and(
+              inArray(
+                channelMembers.channelId,
+                rows.map(({ channel }) => channel.id),
+              ),
+              eq(channelMembers.actorType, 'agent'),
+              eq(channelMembers.status, 'active'),
+              isNotNull(channelMembers.agentId),
+            ),
+          )
+          .orderBy(channelMembers.createdAt)
+      : [];
+    const agentIdsOf = new Map<string, string[]>();
+    for (const { agentId, channelId } of agentMembers) {
+      const ids = agentIdsOf.get(channelId) ?? [];
+      ids.push(agentId!);
+      agentIdsOf.set(channelId, ids);
+    }
+
+    return rows.map(({ agentOwnerId, channel, lastReadSequence, role, shareId, shareSlug }) => {
+      const sharedAgent = !!channel.agentId && !channel.workspaceId && agentOwnerId !== this.userId;
+      return {
+        ...channel,
+        agentIds: agentIdsOf.get(channel.id) ?? [],
+        sharedAgent,
+        // Its visitor page (`/a/<handle>`) is where the caller can see this Agent; it has no other.
+        sharedAgentHandle: sharedAgent ? (shareSlug ?? shareId) : null,
+        canDelete: hasRole(role, 'admin'),
+        lastMessage: lastMessageOf.get(channel.id) ?? null,
+        memberAvatars: avatarsOf.get(channel.id) ?? [],
+        mentionCount: mentionCountOf.get(channel.id) ?? 0,
+        peerUserId: peerOf(channel, this.userId),
+        replyJobs: replyJobsOf.get(channel.id) ?? [],
+        unreadCount: Math.max(0, channel.sequence - (lastReadSequence ?? 0)),
+      };
+    });
+  };
+
+  /**
+   * The caller's personal conversation with a contact, opened by either of them. Requires the
+   * mutual contact relation; an existing conversation opens as it is, trashed or not.
+   */
+  openPeer = (peerUserId: string, title: string): Promise<ChannelAccess> =>
+    this.db.transaction(async (tx) => {
+      if (this.workspaceId)
+        throw new ChannelError('BAD_REQUEST', 'A conversation between people is personal');
+      if (peerUserId === this.userId)
+        throw new ChannelError('BAD_REQUEST', 'You cannot message yourself');
+      await requireMutualContacts(tx, this.userId, peerUserId);
+      // No unique index keeps one conversation per pair: serialize opening it, so two people
+      // opening it at once (or one twice) find the first one instead of creating a second.
+      await lockPeerPair(tx, this.userId, peerUserId);
+      const existing = await this.findPeer(tx, peerUserId);
+      if (existing) return existing;
+
+      const [channel] = await tx
+        .insert(channels)
+        .values({ peerUserId, title, userId: this.userId, visibility: 'private' })
+        .returning();
+      const member = await this.addOwner(tx, channel.id);
+      await tx.insert(channelMembers).values({
+        actorType: 'user',
+        channelId: channel.id,
+        lastReadSequence: 0,
+        role: 'owner',
+        userId: peerUserId,
+      });
+      return { channel, member };
+    });
+
+  private findPeer = async (tx: Transaction, peerUserId: string) => {
+    const [row] = await tx
+      .select({ channel: channels, member: channelMembers })
+      .from(channels)
+      .innerJoin(
+        channelMembers,
+        and(eq(channelMembers.channelId, channels.id), eq(channelMembers.userId, this.userId)),
+      )
+      .where(
+        or(
+          and(eq(channels.userId, this.userId), eq(channels.peerUserId, peerUserId)),
+          and(eq(channels.userId, peerUserId), eq(channels.peerUserId, this.userId)),
+        ),
+      )
+      .limit(1);
+    return row as ChannelAccess | undefined;
   };
 
   /**
@@ -863,6 +972,23 @@ export class ChannelRepository {
           throw new ChannelError('FORBIDDEN', 'Only the author or an admin can retry routing');
       }
       return retryRouting(tx, channelId, messageId);
+    });
+
+  /**
+   * Queues a reply that could not reach its device again. Like a stop, only its requester or an
+   * admin may retry it.
+   */
+  retryJob = async (channelId: string, jobId: string): Promise<ChannelJobItem> =>
+    this.write(channelId, async (tx, { member }) => {
+      if (!hasRole(member.role, 'admin')) {
+        const [job] = await tx
+          .select({ requesterMemberId: channelJobs.requesterMemberId })
+          .from(channelJobs)
+          .where(and(eq(channelJobs.channelId, channelId), eq(channelJobs.id, jobId)));
+        if (job && job.requesterMemberId !== member.id)
+          throw new ChannelError('FORBIDDEN', 'Only the requester or an admin can retry this job');
+      }
+      return retryJob(tx, channelId, jobId);
     });
 
   private addOwner = async (tx: Transaction, channelId: string) => {

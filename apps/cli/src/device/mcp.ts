@@ -1,3 +1,4 @@
+import type { ListedMcpServerTool, ListMcpToolsParams } from '@lobechat/device-control';
 import type { GatewayMcpParams } from '@lobechat/device-gateway-client';
 import type { DeviceMcpRuntime, MCPClientParams } from '@lobechat/device-mcp';
 import { resolveUserSpawnPath } from '@lobechat/heterogeneous-agents/resolveCliCommand';
@@ -112,6 +113,20 @@ export async function executeDeviceMcpCall(
     const message = error instanceof Error ? error.message : String(error);
     return { content: message, error: message, state: undefined, success: false };
   }
+}
+
+/**
+ * List an MCP server's tools on this machine (the `listMcpTools` device RPC),
+ * for a server the cloud must not connect to itself: an install, a tool
+ * refresh or a connection test. Listed on the runtime the tunneled calls run
+ * on, so a stdio server is listed on the session its calls then reuse.
+ */
+export async function listDeviceMcpTools({
+  mcpApps,
+  params,
+}: ListMcpToolsParams): Promise<ListedMcpServerTool[]> {
+  const mcp = await getRuntime();
+  return mcp.listTools(await toClientParams(params), { mcpApps });
 }
 
 /**

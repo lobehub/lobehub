@@ -1,7 +1,6 @@
 import { isIP } from 'node:net';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import type {
   AuthorizationServerMetadata,
   FetchLike,
@@ -27,6 +26,7 @@ import debug from 'debug';
 
 import type { OIDCConfig } from '@/database/schemas';
 import { appEnv } from '@/envs/app';
+import { mcpSsrfSafeFetch } from '@/libs/mcp/ssrf';
 
 const log = debug('lobe-server:connector:oauth');
 
@@ -88,7 +88,7 @@ const isClientMetadataUrlReachable = (url: string): boolean => {
  * the connector, so all connector OAuth requests go through the SSRF-safe
  * transport. The SDK helpers take it as `fetchFn`.
  */
-const connectorFetch: FetchLike = (url, init) => ssrfSafeFetch(url.toString(), init);
+const connectorFetch: FetchLike = mcpSsrfSafeFetch;
 
 /** RFC 8414 / OIDC discovery for a connector's authorization server. */
 export const discoverConnectorAuthorizationServerMetadata = (

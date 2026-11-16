@@ -6,6 +6,7 @@ import {
   partitionMcpToolsForViews,
   resolveMcpUiToolMeta,
 } from '@lobechat/const/mcpApp';
+import type { ListMcpToolsParams } from '@lobechat/device-control';
 import {
   DeviceMcpRuntime,
   type McpCallOptions,
@@ -381,6 +382,33 @@ export default class McpCtr extends ControllerModule {
     return serializePayload(
       toListed(await this.runtime.listTools(params, { mcpApps: input.mcpApps })),
     );
+  }
+
+  /**
+   * The device-gateway `listMcpTools` RPC: the cloud server can't reach this
+   * MCP server (stdio, an endpoint on this machine's network, or one the user
+   * set to connect through this device), so it asks this machine for the tool
+   * list and maps it as it maps its own listings. The tools go back as listed.
+   * Listed by the same runtime the tunneled calls run on.
+   */
+  async listToolsForGateway({ mcpApps, params }: ListMcpToolsParams): Promise<McpTool[]> {
+    const client: MCPClientParams =
+      params.type === 'http'
+        ? {
+            auth: params.auth,
+            headers: params.headers,
+            name: params.name,
+            type: 'http',
+            url: params.url,
+          }
+        : {
+            args: params.args ?? [],
+            command: params.command,
+            env: params.env,
+            name: params.name,
+            type: 'stdio',
+          };
+    return this.runtime.listTools(client, { mcpApps });
   }
 
   @IpcMethod()

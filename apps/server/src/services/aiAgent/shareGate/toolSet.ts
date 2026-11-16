@@ -10,7 +10,12 @@ import { SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import { hasShareToolGrant, PLUGIN_SCHEMA_SEPARATOR, type ShareToolGrant } from '@lobechat/const';
 import { isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
 
-import { isGovernedByBuiltinAllowlist, SHARE_VISITOR_ALLOWED_IDENTIFIERS } from './allowlist';
+import {
+  isGovernedByBuiltinAllowlist,
+  isShareVisitorChannelTool,
+  SHARE_VISITOR_ALLOWED_IDENTIFIERS,
+  SHARE_VISITOR_CHANNEL_BLOCKED_APIS,
+} from './allowlist';
 import { DATA_TOOL_ACCESS_RULES } from './dataToolRules';
 import { resolveEffectiveShareToolGrants } from './grants';
 import { stripSubAgentDispatchApis } from './subAgentDispatch';
@@ -96,6 +101,8 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
 
   const isAllowed = (id: string) => {
     if (deviceOnlyMcpIds.has(id)) return false;
+    // Only a Channel run injects this tool; its reads are narrowed below.
+    if (isShareVisitorChannelTool(id)) return true;
     if (!hasShareToolGrant(grants, id)) return false;
     if (!isGovernedByBuiltinAllowlist(id)) return true;
     return SHARE_VISITOR_ALLOWED_IDENTIFIERS.has(id);
@@ -144,6 +151,9 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
   }
 
   stripSubAgentDispatchApis(toolSet);
+  for (const id of Object.keys(toolSet.manifestMap))
+    if (isShareVisitorChannelTool(id))
+      stripApisFromTool(toolSet, id, SHARE_VISITOR_CHANNEL_BLOCKED_APIS);
   applyShareGateToDataToolAccess(toolSet, gate);
   applyShareGateToPerApiGrants(toolSet, grants);
   applyShareGateToActivator(toolSet);

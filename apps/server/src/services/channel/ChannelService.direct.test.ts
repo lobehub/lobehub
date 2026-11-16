@@ -12,6 +12,8 @@ const {
   findAccess,
   findDevice,
   findDirectAccess,
+  findShare,
+  findSharedAgent,
   getAgent,
   notify,
   querySystemInfo,
@@ -22,6 +24,8 @@ const {
   findAccess: vi.fn(),
   findDevice: vi.fn(),
   findDirectAccess: vi.fn(),
+  findShare: vi.fn(),
+  findSharedAgent: vi.fn(),
   getAgent: vi.fn(),
   notify: vi.fn(),
   querySystemInfo: vi.fn(),
@@ -37,6 +41,15 @@ vi.mock('@/database/repositories/channel', async (original) => ({
   },
 }));
 vi.mock('@/database/models/project', () => ({ ProjectModel: class {} }));
+vi.mock('@/database/models/contact', async (original) => ({
+  ...(await original<object>()),
+  ContactModel: class {
+    findAgentAccess = findSharedAgent;
+  },
+}));
+vi.mock('@/database/models/agentShare', () => ({
+  AgentShareModel: { findBySlugOrId: findShare },
+}));
 vi.mock('@/database/models/device', () => ({
   DeviceModel: class {
     findPersonalByDeviceId = findDevice;
@@ -126,6 +139,27 @@ describe('the direct Channel of a new Agent', () => {
     await expect(createDirect()).resolves.toBeUndefined();
     expect(create).not.toHaveBeenCalled();
   });
+
+  it('opens a contact’s shared Agent in a personal conversation without a device', async () => {
+    getAgent.mockResolvedValue(null);
+    findSharedAgent.mockResolvedValue({ name: null, ownerId: 'other', title: 'Shared Helper' });
+    await createDirect();
+    expect(create).toHaveBeenCalledWith({
+      agentConfig: {},
+      agentId: 'agt_new',
+      sharedAgent: true,
+      title: 'Shared Helper',
+    });
+  });
+
+  it('never opens a shared Agent in a workspace', async () => {
+    getAgent.mockResolvedValue(null);
+    findSharedAgent.mockResolvedValue({ name: null, ownerId: 'other', title: 'Shared Helper' });
+    await expect(
+      new ChannelService({} as never, 'owner', 'ws_1').createDirect('agt_1'),
+    ).resolves.toBeUndefined();
+    expect(findSharedAgent).not.toHaveBeenCalled();
+  });
 });
 
 describe('opening the direct Channel of an existing Agent', () => {
@@ -187,5 +221,55 @@ describe('inviting from a direct conversation', () => {
     await expect(invite()).rejects.toBeInstanceOf(ChannelError);
     expect(getAgent).not.toHaveBeenCalled();
     expect(createGroupFromDirect).not.toHaveBeenCalled();
+  });
+});
+
+describe('opening another person’s Agent from its share', () => {
+  const share = {
+    agentId: 'agt_shared',
+    agentName: null,
+    agentTitle: 'Shared Helper',
+    ownerId: 'other',
+    visibility: 'link',
+  };
+  beforeEach(() => {
+    vi.resetAllMocks();
+    create.mockResolvedValue({ channel: { id: 'chn_shared' } });
+    findShare.mockResolvedValue(share);
+  });
+  const openShared = (input: string, workspaceId?: string) =>
+    new ChannelService({} as never, 'me', workspaceId).openShared(input);
+
+  it('opens a direct conversation from a pasted link without any contact entry', async () => {
+    await openShared('https://app.lobehub.com/a/shared-helper');
+    expect(findShare).toHaveBeenCalledWith(expect.anything(), 'shared-helper');
+    expect(findSharedAgent).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledWith({
+      agentConfig: {},
+      agentId: 'agt_shared',
+      sharedAgent: true,
+      title: 'Shared Helper',
+    });
+  });
+
+  it('reopens the existing conversation', async () => {
+    findDirectAccess.mockResolvedValue({ channel: { id: 'chn_old', isDeleted: false } });
+    await expect(openShared('shared-helper')).resolves.toMatchObject({
+      channel: { id: 'chn_old' },
+    });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a paused share', { ...share, visibility: 'private' }],
+    ['a missing share', null],
+  ])('refuses %s', async (_, found) => {
+    findShare.mockResolvedValue(found);
+    await expect(openShared('shared-helper')).rejects.toThrow('Agent not found');
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it('is personal only', async () => {
+    await expect(openShared('shared-helper', 'ws_1')).rejects.toThrow('personal scope');
   });
 });

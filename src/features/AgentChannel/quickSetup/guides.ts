@@ -3,6 +3,7 @@ import {
   buildDiscordInviteUrl,
   buildSlackAppPageUrl,
   buildSlackCreateAppUrl,
+  DINGTALK_CONSOLE_URL,
   DISCORD_DEVELOPER_PORTAL_URL,
   FEISHU_CONSOLE_URL,
   LINE_ACCOUNT_ENTRY_URL,
@@ -11,6 +12,7 @@ import {
   QQ_BOT_CONSOLE_URL,
   SLACK_APPS_URL,
   TELEGRAM_BOTFATHER_URL,
+  WECOM_ADMIN_CONSOLE_URL,
 } from './links';
 
 export type SetupLinkLabel =
@@ -56,6 +58,8 @@ export interface SetupGuideContext {
   /** Application ID already in the form, unlocking deep links into that app. */
   applicationId?: string;
   appName: string;
+  /** Connection mode selected in the form, for steps that differ between modes. */
+  connectionMode?: string;
 }
 
 /**
@@ -64,7 +68,7 @@ export interface SetupGuideContext {
  */
 export const getSetupGuide = (
   platformId: string,
-  { applicationId, appDescription, appName }: SetupGuideContext,
+  { applicationId, appDescription, appName, connectionMode }: SetupGuideContext,
 ): SetupGuide | undefined => {
   const appId = applicationId?.trim() || undefined;
 
@@ -151,6 +155,35 @@ export const getSetupGuide = (
         steps: [
           { key: 'create', link: { href: QQ_BOT_CONSOLE_URL, label: 'openConsole' } },
           { key: 'credentials', fields: ['applicationId', 'appSecret'] },
+        ],
+      };
+    }
+    case 'wecom': {
+      return {
+        guide: 'wecom',
+        steps: [
+          { key: 'create', link: { href: WECOM_ADMIN_CONSOLE_URL, label: 'openConsole' } },
+          { key: 'credentials', fields: ['applicationId', 'secret'] },
+        ],
+      };
+    }
+    case 'dingtalk': {
+      // The robot, its receiving mode and the send permission only take effect once a
+      // version is published. In Stream mode the connection opens on save, so the whole
+      // console setup comes first; in webhook mode the save is what produces the
+      // callback URL the robot step asks for, so those steps follow it.
+      const beforeConnect = connectionMode !== 'webhook';
+      return {
+        guide: 'dingtalk',
+        steps: [
+          {
+            key: 'create',
+            fields: ['applicationId', 'clientSecret'],
+            link: { href: DINGTALK_CONSOLE_URL, label: 'openConsole' },
+          },
+          { beforeConnect, key: beforeConnect ? 'robot' : 'robotWebhook' },
+          { beforeConnect, key: 'permissions' },
+          { beforeConnect, key: 'publish' },
         ],
       };
     }

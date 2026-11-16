@@ -1498,6 +1498,20 @@
       "when": 1794492684486,
       "tag": "0213_acceptance_review_rounds",
       "breakpoints": true
+    },
+    {
+      "idx": 214,
+      "version": "7",
+      "when": 1794757089562,
+      "tag": "0214_user_contacts",
+      "breakpoints": true
+    },
+    {
+      "idx": 215,
+      "version": "7",
+      "when": 1794770338614,
+      "tag": "0215_user_connectors_add_visibility",
+      "breakpoints": true
     }
   ],
   "version": "6"

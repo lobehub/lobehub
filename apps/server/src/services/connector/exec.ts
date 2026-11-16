@@ -1,7 +1,13 @@
 import { hasCallableMcpEndpoint, isMarketplaceInstallRunnable } from '@lobechat/const';
 import { getMcpServerFingerprint, isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
+import type { LobeChatDatabase } from '@lobechat/database';
 import { getDisabledPluginIds } from '@lobechat/types';
-import { isLocalOrPrivateUrl } from '@lobechat/utils';
+import {
+  connectorDeviceBinding,
+  connectorMcpEndpoint,
+  type McpDeviceBinding,
+  shouldConnectViaDevice,
+} from '@lobechat/utils/mcpEndpoint';
 
 import type { AgentModel } from '@/database/models/agent';
 import type { DecryptedConnector } from '@/database/models/connector';
@@ -12,13 +18,23 @@ import type { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
 import { callCloudMcpTool, type CloudMcpCaller } from '@/server/services/mcp/cloudTool';
 import { processContentBlocks } from '@/server/services/mcp/contentProcessor';
+import {
+  McpBoundDeviceUnavailableError,
+  resolveBoundMcpDevice,
+  toGatewayMcpParams,
+} from '@/server/services/mcp/deviceTunnel';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { buildLastSyncedAtMap, scheduleStaleConnectorToolsRefresh } from './refresh';
 import { buildConnectorMcpParams, type ConnectorToolSyncContext } from './sync';
 import { ensureFreshConnectorToken } from './tokens';
 
-export type ConnectorToolCallErrorCode = 'NOT_FOUND' | 'FORBIDDEN' | 'BAD_REQUEST';
+export type ConnectorToolCallErrorCode =
+  | 'NOT_FOUND'
+  | 'FORBIDDEN'
+  | 'BAD_REQUEST'
+  /** The device a bound connector runs on can't run it now (offline, gone, too old). */
+  | 'PRECONDITION_FAILED';
 
 /** Typed error so the tRPC layer can map to the right code and tests can assert. */
 export class ConnectorToolCallError extends Error {
@@ -74,6 +90,11 @@ export interface ConnectorExecContext extends ConnectorToolSyncContext {
    * user turned telemetry off.
    */
   resolveToolCallReporter?: () => Promise<ConnectorToolCallReporter | undefined>;
+  /**
+   * Finds the device a connector bound to one runs on. `undefined`: such a
+   * connector's call fails instead of reaching the device.
+   */
+  serverDB?: LobeChatDatabase;
   /** `userId` decides the caller's `mcp_apps` flag. */
   userId?: string | null;
 }
@@ -226,6 +247,7 @@ export const callConnectorToolById = async (
           id: connector.id,
           mcpConnectionType: connector.mcpConnectionType,
           mcpServerUrl: connector.mcpServerUrl,
+          metadata: connector.metadata,
         },
       ],
       buildLastSyncedAtMap(tools),
@@ -235,19 +257,26 @@ export const callConnectorToolById = async (
     // Background tool-list refresh is best-effort — never fail the tool call.
   }
 
-  // Stdio runs on the user's own device, never in the server process. Private HTTP
-  // endpoints also require a device when a gateway is configured; self-hosted
-  // servers without a gateway can still connect to their own LAN over HTTP.
-  const requiresDevice =
-    connector.mcpConnectionType === ConnectorMcpConnectionType.stdio ||
-    (deviceGateway.isConfigured &&
-      !!connector.mcpServerUrl &&
-      isLocalOrPrivateUrl(connector.mcpServerUrl));
-  if (requiresDevice) {
+  // Stdio runs on the user's own device, never in the server process. HTTP set
+  // to connect through the device, or a private one, also requires a device
+  // when a gateway is configured; self-hosted servers without a gateway keep
+  // connecting in-process. Same rule as agent runs (`ToolExecutionService`).
+  if (
+    shouldConnectViaDevice(connectorMcpEndpoint(connector), {
+      deviceGatewayConfigured: deviceGateway.isConfigured,
+    })
+  ) {
+    // A connector bound to a device runs there: the caller's client may be on
+    // another machine (the web, or a desktop that isn't the bound one). A view's
+    // call is refused: a device's result offers no view to call back into.
+    const binding = connectorDeviceBinding(connector);
+    if (binding && deviceGateway.isConfigured && !params.fromApp && !params.fromEntrypoint) {
+      return runConnectorToolOnBoundDevice(connector, binding, { ...params, mcpApps }, ctx);
+    }
     throw new ConnectorToolCallError(
       'BAD_REQUEST',
-      `Connector '${connector.name}' points at an MCP endpoint that only your machine can reach (stdio or local network). ` +
-        'It runs only on your own device — the desktop app or `lh connect` — through a configured device gateway.',
+      `Connector '${connector.name}' connects through your own device (stdio, a local-network address, or set to "Connect via device"), so the server can't call it directly. ` +
+        'Run these tools from a chat, with the desktop app or `lh connect` running on a computer that can reach this MCP server.',
     );
   }
 
@@ -347,6 +376,69 @@ const runConnectorTool = async (
 };
 
 /**
+ * Run a bound connector's tool on its device through the device gateway, with
+ * the credentials its agent-run calls send (`buildConnectorMcpParams`, token
+ * fields only). Never moves to another device: when the bound one can't run
+ * it, the call fails with the reason.
+ */
+const runConnectorToolOnBoundDevice = async (
+  connector: DecryptedConnector,
+  binding: McpDeviceBinding,
+  params: { args?: string; mcpApps: boolean; toolName: string },
+  ctx: ConnectorExecContext,
+): Promise<unknown> => {
+  if (!ctx.serverDB || !ctx.userId) {
+    throw new ConnectorToolCallError(
+      'BAD_REQUEST',
+      `Connector '${connector.name}' runs on a bound device, which this call can't reach.`,
+    );
+  }
+
+  let target: Awaited<ReturnType<typeof resolveBoundMcpDevice>>;
+  try {
+    target = await resolveBoundMcpDevice({
+      binding,
+      identifier: connector.identifier,
+      serverDB: ctx.serverDB,
+      userId: ctx.userId,
+    });
+  } catch (error) {
+    if (error instanceof McpBoundDeviceUnavailableError) {
+      throw new ConnectorToolCallError('PRECONDITION_FAILED', error.message);
+    }
+    throw error;
+  }
+
+  const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);
+  const result = await deviceGateway.executeMcpCall({
+    apiName: params.toolName,
+    arguments: params.args ?? '{}',
+    clientKinds: target.clientKinds,
+    deviceId: target.deviceId,
+    identifier: connector.identifier,
+    params: toGatewayMcpParams(buildConnectorMcpParams(fresh)),
+    userId: ctx.userId,
+    workspaceId: target.workspaceId,
+  });
+
+  // A view is read from the client that opens the conversation, so a device's
+  // result offers none (as agent runs drop it).
+  const { mcpApp: _deviceView, ...state } = (result.state as Record<string, unknown>) ?? {};
+  return {
+    content: result.content,
+    // A failure keeps its marker and structured details, as agent runs do
+    ...(!result.success && {
+      error: result.errorData ?? {
+        code: 'MCP_DEVICE_EXECUTION_ERROR',
+        message: result.error || result.content,
+      },
+    }),
+    state: result.state ? state : undefined,
+    success: result.success,
+  };
+};
+
+/**
  * Read an MCP Apps `ui://` resource from a connector's server, so the chat can
  * render a connector tool result's interactive view. Same connector checks as
  * {@link callConnectorToolById}, minus the per-tool ones. Refused while the
@@ -378,12 +470,13 @@ export const readConnectorUiResourceById = async (
       `Interactive views are not supported for ${connector.mcpConnectionType} connectors yet`,
     );
   }
-  // A cloud server can't reach a localhost / LAN endpoint, and resource reads
-  // aren't tunneled to the device yet; the chat falls back to the plain result.
+  // A cloud server can't reach a device-routed endpoint (localhost / LAN, or
+  // set to connect through the device), and resource reads aren't tunneled to
+  // the device yet; the chat falls back to the plain result.
   if (
-    deviceGateway.isConfigured &&
-    !!connector.mcpServerUrl &&
-    isLocalOrPrivateUrl(connector.mcpServerUrl)
+    shouldConnectViaDevice(connectorMcpEndpoint(connector), {
+      deviceGatewayConfigured: deviceGateway.isConfigured,
+    })
   ) {
     throw new ConnectorToolCallError(
       'BAD_REQUEST',
