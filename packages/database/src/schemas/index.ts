@@ -44,6 +44,7 @@ export * from './goalGraph';
 export * from './goalShare';
 export * from './goalSubscription';
 export * from './goalTrace';
+export * from './inboundWebhook';
 export * from './linear';
 export * from './llmGenerationTracing';
 export * from './meeting';

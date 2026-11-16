@@ -151,6 +151,8 @@ export interface ConnectorMetadata {
    * fails the call (`connectorDeviceBinding` in `@lobechat/utils/mcpEndpoint`).
    */
   boundDeviceId?: string;
+  /** Protocol capabilities learned when connector tools are synchronized. */
+  capabilities?: { events?: { supported: boolean } };
   composio?: ComposioConnectorMetadata;
   /**
    * HTTP only: `device` reaches the MCP server from the user's device through
