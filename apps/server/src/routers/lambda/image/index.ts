@@ -37,6 +37,7 @@ import { generateUniqueSeeds } from '@/utils/number';
 import { buildEnabledImageProviderModels } from './defaultModel';
 import {
   applyLookupPricingParamDefaults,
+  findInvalidImageOutputParamValues,
   findUnsupportedImageParams,
   validateNoUrlsInConfig,
 } from './utils';
@@ -164,10 +165,11 @@ export const imageRouter = router({
         });
       }
 
-      // Reject params the model does not declare before anything is queued or charged. The
-      // schema comes from the same merged model list the image page and image tool read, so a
-      // user-customized model is validated against its own declaration. Models without a
-      // declared schema (e.g. custom ids) are passed through unchanged.
+      // Reject params the model does not declare, and output-control values its schema rules out
+      // (an undeclared outputFormat, out-of-range GIF frames), before anything is queued or
+      // charged. The schema comes from the same merged model list the image page and image tool
+      // read, so a user-customized model is validated against its own declaration. Models
+      // without a declared schema (e.g. custom ids) are passed through unchanged.
       const modelCard = (
         await aiInfraRepos.getAiProviderModelList(provider, { type: 'image' })
       ).find((item) => item.id === model);
@@ -179,6 +181,14 @@ export const imageRouter = router({
           throw new TRPCError({
             code: 'BAD_REQUEST',
             message: `Unsupported parameters for ${model}: ${unsupportedParams.join(', ')}. Supported: ${Object.keys(parametersSchema).join(', ')}`,
+          });
+        }
+
+        const invalidValues = findInvalidImageOutputParamValues(params, parametersSchema);
+        if (invalidValues.length > 0) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Unsupported parameter values for ${model}: ${invalidValues.join('; ')}`,
           });
         }
       }

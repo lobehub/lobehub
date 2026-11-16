@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   applyLookupPricingParamDefaults,
+  findInvalidImageOutputParamValues,
   findUnsupportedImageParams,
   validateNoUrlsInConfig,
 } from './utils';
@@ -300,6 +301,87 @@ describe('findUnsupportedImageParams', () => {
       findUnsupportedImageParams(
         { imageUrl: null, prompt: 'a cat', seed: undefined },
         gptImageSchema,
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe('findInvalidImageOutputParamValues', () => {
+  const gifSchema = {
+    frameCount: { default: 9, max: 16, min: 2 },
+    frameDurationMs: { default: 200, max: 2000, min: 20 },
+    outputFormat: { default: 'png', enum: ['png', 'gif'] },
+    prompt: { default: '' },
+  };
+  const staticSchema = {
+    frameCount: { default: 9, max: 16, min: 2 },
+    frameDurationMs: { default: 200, max: 2000, min: 20 },
+    outputFormat: { default: 'png', enum: ['png', 'jpeg', 'webp'] },
+    prompt: { default: '' },
+  };
+
+  it('reports an output format the model does not declare', () => {
+    expect(
+      findInvalidImageOutputParamValues(
+        { frameCount: 12, frameDurationMs: 100, outputFormat: 'gif', prompt: 'a ball' },
+        staticSchema,
+      ),
+    ).toEqual(['outputFormat "gif" (supported: png, jpeg, webp)']);
+  });
+
+  it('accepts a declared output format with frames in range', () => {
+    expect(
+      findInvalidImageOutputParamValues(
+        { frameCount: 12, frameDurationMs: 100, outputFormat: 'gif', prompt: 'a ball' },
+        gifSchema,
+      ),
+    ).toEqual([]);
+  });
+
+  it('reports GIF frame values outside the declared range', () => {
+    expect(
+      findInvalidImageOutputParamValues(
+        { frameCount: 64, frameDurationMs: 10, outputFormat: 'gif', prompt: 'a ball' },
+        gifSchema,
+      ),
+    ).toEqual(['frameCount 64 (allowed: 2 to 16)', 'frameDurationMs 10 (allowed: 20 to 2000)']);
+  });
+
+  it('reports a non-numeric frame value', () => {
+    expect(
+      findInvalidImageOutputParamValues(
+        { frameCount: '12', outputFormat: 'gif', prompt: 'a ball' },
+        gifSchema,
+      ),
+    ).toEqual(['frameCount "12" (allowed: 2 to 16)']);
+  });
+
+  it('checks frames against the schema default when the output format is omitted', () => {
+    expect(
+      findInvalidImageOutputParamValues(
+        { frameCount: 99, prompt: 'a ball' },
+        { ...gifSchema, outputFormat: { default: 'gif', enum: ['gif'] } },
+      ),
+    ).toEqual(['frameCount 99 (allowed: 2 to 16)']);
+  });
+
+  it('ignores frame values for static output, which the runtime drops', () => {
+    expect(
+      findInvalidImageOutputParamValues(
+        { frameCount: 99, outputFormat: 'png', prompt: 'a ball' },
+        gifSchema,
+      ),
+    ).toEqual([]);
+    expect(
+      findInvalidImageOutputParamValues({ frameCount: 99, prompt: 'a ball' }, gifSchema),
+    ).toEqual([]);
+  });
+
+  it('leaves models without output controls to the key check', () => {
+    expect(
+      findInvalidImageOutputParamValues(
+        { frameCount: 99, outputFormat: 'gif', prompt: 'a ball' },
+        { prompt: { default: '' }, size: { default: 'auto', enum: ['auto'] } },
       ),
     ).toEqual([]);
   });
