@@ -5,22 +5,26 @@
  *   LOBE_PERF_BENCH=1 bunx vitest run --silent=false \
  *     src/features/Conversation/Messages/AssistantGroup/components/largeWorkflow.perf.test.tsx
  *
- * It mounts the real expanded workflow list against a real conversation store
- * and reports (1) the mount time of the expanded list and (2) the average cost
- * of one streaming chunk (a content update on the last step) while the list is
- * mounted, next to the same chunk with nothing mounted (parse + reference
- * stabilisation only). happy-dom timings are not browser timings; compare runs
- * of this file against each other, not against the browser.
+ * It mounts the real expanded workflow list (`WorkflowExpandedList`, what
+ * opening a workflow row renders) against a real conversation store and
+ * reports: the mount time of the opened list (median of 3), the average cost of
+ * one streaming chunk (a content update on the last step) while the list is
+ * mounted next to the same chunk with nothing mounted (parse + reference
+ * stabilisation only), and the cost of one "show earlier steps" click when the
+ * list is windowed. `LOBE_PERF_TOOLS` sets the number of tool calls (600).
+ * happy-dom timings are not browser timings; compare runs of this file against
+ * each other, not against the browser.
  */
 import type { UIChatMessage } from '@lobechat/types';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createStore, Provider } from '@/features/Conversation/store';
+import { ServerConfigStoreProvider } from '@/store/serverConfig/Provider';
 
-import ContentBlocksScroll from './ContentBlocksScroll';
 import type { RenderableAssistantContentBlock } from './types';
+import WorkflowExpandedList from './WorkflowExpandedList';
 
 vi.mock('react-i18next', () => ({
   Trans: ({ children }: PropsWithChildren) => children,
@@ -105,58 +109,73 @@ const streamChunks = (store: ReturnType<typeof newStore>) => {
 
 const fmt = (ms: number) => `${ms.toFixed(1)}ms`;
 
+const mountList = (store: ReturnType<typeof newStore>, limit?: number) => {
+  const { blocks, groupId } = groupBlocks(store);
+  return render(
+    <ServerConfigStoreProvider>
+      <Provider createStore={() => store}>
+        <WorkflowExpandedList
+          assistantId={groupId}
+          blocks={limit ? blocks.slice(0, limit) : blocks}
+        />
+      </Provider>
+    </ServerConfigStoreProvider>,
+  );
+};
+
+const median = (values: number[]) =>
+  [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+
 describe.skipIf(!process.env.LOBE_PERF_BENCH)(`large workflow (${TOOL_COUNT} tools)`, () => {
   afterEach(() => cleanup());
 
-  it('measures mount and per-chunk cost of the expanded list', () => {
+  it('measures mount and per-chunk cost of the expanded list', { timeout: 600_000 }, () => {
     // Warm module caches (builtin renders, i18n stubs) with a small mount.
-    {
-      const warm = newStore();
-      const { blocks, groupId } = groupBlocks(warm);
-      const { unmount } = render(
-        <Provider createStore={() => warm}>
-          <ContentBlocksScroll
-            assistantId={groupId}
-            blocks={blocks.slice(0, 5)}
-            scroll={false}
-            variant="workflow"
-          />
-        </Provider>,
-      );
-      unmount();
+    mountList(newStore(), 5).unmount();
+
+    const bareChunkMs = streamChunks(newStore());
+
+    const mounts: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const store = newStore();
+      const start = performance.now();
+      mountList(store).unmount();
+      mounts.push(performance.now() - start);
     }
 
-    const bare = newStore();
-    const bareChunkMs = streamChunks(bare);
-
     const store = newStore();
-    const { blocks, groupId } = groupBlocks(store);
-
+    const { blocks } = groupBlocks(store);
     const mountStart = performance.now();
-    const { container } = render(
-      <Provider createStore={() => store}>
-        <ContentBlocksScroll
-          assistantId={groupId}
-          blocks={blocks}
-          scroll={false}
-          variant="workflow"
-        />
-      </Provider>,
-    );
-    const mountMs = performance.now() - mountStart;
+    const { container } = mountList(store);
+    mounts.push(performance.now() - mountStart);
     const mountedNodes = container.querySelectorAll('*').length;
 
     const mountedChunkMs = streamChunks(store);
 
+    const showEarlier = screen.queryByText('workflow.showEarlierSteps');
+    let showEarlierMs: number | undefined;
+    if (showEarlier) {
+      const start = performance.now();
+      act(() => {
+        fireEvent.click(showEarlier);
+      });
+      showEarlierMs = performance.now() - start;
+    }
+
     process.stderr.write(
       `${[
         `[perf] tools=${TOOL_COUNT} blocks=${blocks.length} dom=${mountedNodes}`,
-        `[perf] mount expanded list: ${fmt(mountMs)}`,
+        `[perf] mount opened list (median of ${mounts.length}): ${fmt(median(mounts))}`,
         `[perf] chunk, nothing mounted: ${fmt(bareChunkMs)}`,
         `[perf] chunk, list mounted: ${fmt(mountedChunkMs)} (list overhead ${fmt(mountedChunkMs - bareChunkMs)})`,
+        showEarlierMs === undefined
+          ? '[perf] show earlier: not windowed'
+          : `[perf] show earlier (+100 steps): ${fmt(showEarlierMs)}`,
       ].join('\n')}\n`,
     );
 
-    expect(mountMs).toBeGreaterThan(0);
+    // A crashed row renders SafeBoundary's fallback instead of the tool card.
+    expect(container.textContent).not.toContain('Render Error');
+    expect(mountedNodes).toBeGreaterThan(0);
   });
 });
