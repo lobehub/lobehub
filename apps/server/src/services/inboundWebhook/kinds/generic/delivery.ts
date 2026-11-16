@@ -26,9 +26,12 @@ export const pickHeaders = (headers: Headers): Record<string, string> => {
   return picked;
 };
 
-/** Repeated keys become arrays, so `?tag=a&tag=b` keeps both values. */
+/**
+ * Repeated keys become arrays, so `?tag=a&tag=b` keeps both values. Keys are the caller's, so the
+ * record has no prototype: `__proto__` or `constructor` is kept as a field like any other.
+ */
 const entriesToRecord = (entries: Iterable<[string, string]>, skip?: Set<string>) => {
-  const record: Record<string, string | string[]> = {};
+  const record = Object.create(null) as Record<string, string | string[]>;
   for (const [key, value] of entries) {
     if (skip?.has(key)) continue;
     const previous = record[key];

@@ -84,6 +84,22 @@ describe('parseGenericDelivery', () => {
     });
   });
 
+  it('keeps prototype-named query and form keys as plain fields', () => {
+    const { event } = parseGenericDelivery(
+      request({
+        body: '__proto__=a&__proto__=b&constructor=c',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        query: '__proto__=x&__proto__=y&prototype=z',
+      }),
+    );
+    const data = event!.data as { body: object; query: object };
+    // Compared as JSON: in an object literal, `__proto__:` would set the prototype instead.
+    expect(JSON.stringify(data.body)).toBe('{"__proto__":["a","b"],"constructor":"c"}');
+    expect(JSON.stringify(data.query)).toBe('{"__proto__":["x","y"],"prototype":"z"}');
+    expect(Object.getPrototypeOf(data.query)).toBeNull();
+    expect(({} as Record<string, unknown>).x).toBeUndefined();
+  });
+
   it('takes the thread from X-Thread-Key, and gives an unkeyed call a fresh id', () => {
     const first = parseGenericDelivery(request({ headers: { 'x-thread-key': ' t-1 ' } })).event!;
     const second = parseGenericDelivery(request()).event!;
