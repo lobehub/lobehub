@@ -85,7 +85,7 @@ export default {
   'channel.quickSetup.qq.credentials.desc': "Find them in the bot's Development settings.",
   'channel.quickSetup.wecom.access.title': 'Get permission to create long-connection bots',
   'channel.quickSetup.wecom.access.desc':
-    'Admins can skip this. Other members need an admin to grant them access under Smart Zone → AI Bots → Permissions → API Mode Management in the admin console.',
+    'Admins can skip this. Other members need an admin to grant them access under Smart Zone → AI Bots → Permissions → API Mode Management in the admin console, and to add them to Bot Creation Permission too if the organization restricts it.',
   'channel.quickSetup.wecom.create.title': 'Create an AI bot in API mode',
   'channel.quickSetup.wecom.create.desc':
     'In the admin console, go to Smart Zone → AI Bots and click Create, or open Workbench → AI Bots in the WeCom app. Choose to create it in API mode.',

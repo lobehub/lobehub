@@ -454,7 +454,7 @@
   "channel.quickSetup.telegram.privacy.title": "Let it read group messages (optional)",
   "channel.quickSetup.telegram.token.desc": "BotFather replies with a token like 1234567890:ABC… — paste it here.",
   "channel.quickSetup.telegram.token.title": "Copy the token",
-  "channel.quickSetup.wecom.access.desc": "Admins can skip this. Other members need an admin to grant them access under Smart Zone → AI Bots → Permissions → API Mode Management in the admin console.",
+  "channel.quickSetup.wecom.access.desc": "Admins can skip this. Other members need an admin to grant them access under Smart Zone → AI Bots → Permissions → API Mode Management in the admin console, and to add them to Bot Creation Permission too if the organization restricts it.",
   "channel.quickSetup.wecom.access.title": "Get permission to create long-connection bots",
   "channel.quickSetup.wecom.connection.desc": "On the API settings page, set the connection method to Use long connection, then set the visible range: only members in it can find and use the bot. Leave the rest as is.",
   "channel.quickSetup.wecom.connection.title": "Choose long connection and set the visible range",

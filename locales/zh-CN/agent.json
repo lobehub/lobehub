@@ -454,7 +454,7 @@
   "channel.quickSetup.telegram.privacy.title": "允许读取群消息（可选）",
   "channel.quickSetup.telegram.token.desc": "BotFather 会回复形如 1234567890:ABC… 的 Token，粘贴到这里即可。",
   "channel.quickSetup.telegram.token.title": "复制 Token",
-  "channel.quickSetup.wecom.access.desc": "企业管理员可跳过这一步。其他成员需请管理员在管理后台「智能专区 → 智能机器人 → 权限管理 → API 模式管理」中为你授权。",
+  "channel.quickSetup.wecom.access.desc": "企业管理员可跳过这一步。其他成员需请管理员在管理后台「智能专区 → 智能机器人 → 权限管理 → API 模式管理」中为你授权；如果企业限制了「机器人创建权限」，也要把你加进去。",
   "channel.quickSetup.wecom.access.title": "开通长连接机器人的创建权限",
   "channel.quickSetup.wecom.connection.desc": "在 API 配置页把连接方式选为「使用长连接」，再设置可见范围：范围内的成员才能找到和使用机器人。其余保持默认。",
   "channel.quickSetup.wecom.connection.title": "选择长连接并设置可见范围",
