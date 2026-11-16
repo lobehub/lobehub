@@ -2,18 +2,18 @@
 
 import { type PropsWithChildren } from 'react';
 
-import { useBackOrigin } from '@/features/NavPanel/backOrigin';
+import { useBackButtonProps } from '@/features/NavPanel/backOrigin';
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
 
 import Agent from './Agent';
 import Nav from './Nav';
 
 const HeaderInfo = (_props: PropsWithChildren) => {
-  const origin = useBackOrigin();
+  const back = useBackButtonProps();
 
   return (
     <>
-      <SideBarHeaderLayout backEscape={!!origin} backTo={origin ?? '/'} left={<Agent />} />
+      <SideBarHeaderLayout {...back} left={<Agent />} />
       <Nav />
     </>
   );

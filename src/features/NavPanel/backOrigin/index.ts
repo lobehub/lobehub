@@ -1,8 +1,9 @@
-import { useSyncExternalStore } from 'react';
+import { type MouseEvent, useSyncExternalStore } from 'react';
 
 import { RESERVED_ROOT_SEGMENTS } from '@/features/Workspace/rootSegments';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 
+import { readHistoryIndex } from './historyIndex';
 import { useLocationOwner } from './useLocationOwner';
 
 /**
@@ -28,15 +29,26 @@ export const resolveBackScope = (pathname: string): string | null => {
 
 type Listener = () => void;
 
+/** One step of a trail: where the user was, and its browser history index when known. */
+export interface BackEntry {
+  /** `history.state.idx` of that location on web; unknown on desktop tabs. */
+  historyIndex?: number;
+  location: string;
+}
+
+type Stacks = Readonly<Record<string, readonly BackEntry[]>>;
+
 /** Stacks never grow past this many entries; the oldest are dropped first. */
 const MAX_STACK = 50;
+/** Trails are kept for this many owners (Electron tabs); the least recently used go first. */
+const MAX_OWNERS = 20;
 
 /**
  * Per owner (an Electron tab, or `main` on web), the trail that led to the
  * current page: the last unscoped page, then each agent / group entered from it
  * in order, each holding the latest location seen inside it.
  */
-let stacks: Readonly<Record<string, readonly string[]>> = {};
+let stacks: Stacks = {};
 const listeners = new Set<Listener>();
 
 const subscribe = (listener: Listener) => {
@@ -48,13 +60,17 @@ const subscribe = (listener: Listener) => {
 
 const getStacks = () => stacks;
 
-const setStack = (owner: string, stack: readonly string[]) => {
-  stacks = { ...stacks, [owner]: stack.slice(-MAX_STACK) };
+const setStack = (owner: string, stack: readonly BackEntry[]) => {
+  // Re-insert so key order is least → most recently used, then drop owners
+  // (closed tabs) that fell out of the window.
+  const { [owner]: _previous, ...rest } = stacks;
+  const owners = Object.entries(rest).slice(-(MAX_OWNERS - 1));
+  stacks = { ...Object.fromEntries(owners), [owner]: stack.slice(-MAX_STACK) };
   listeners.forEach((listener) => listener());
 };
 
-const findScope = (stack: readonly string[], scope: string): number =>
-  stack.findLastIndex((location) => resolveBackScope(location) === scope);
+const findScope = (stack: readonly BackEntry[], scope: string): number =>
+  stack.findLastIndex((entry) => resolveBackScope(entry.location) === scope);
 
 /**
  * Record that `owner` is now at `location`.
@@ -68,15 +84,21 @@ const findScope = (stack: readonly string[], scope: string): number =>
  *   A → B → A and pressing back leaves for the page A was opened from instead
  *   of bouncing between A and B.
  */
-export const recordBackLocation = (owner: string, location: string): void => {
+export const recordBackLocation = (
+  owner: string,
+  location: string,
+  historyIndex?: number,
+): void => {
   const stack = stacks[owner] ?? [];
-  if (stack.at(-1) === location) return;
+  const top = stack.at(-1);
+  if (top?.location === location && top.historyIndex === historyIndex) return;
 
+  const entry: BackEntry = { historyIndex, location };
   const scope = resolveBackScope(location);
-  if (!scope) return setStack(owner, [location]);
+  if (!scope) return setStack(owner, [entry]);
 
   const index = findScope(stack, scope);
-  setStack(owner, index === -1 ? [...stack, location] : [...stack.slice(0, index), location]);
+  setStack(owner, index === -1 ? [...stack, entry] : [...stack.slice(0, index), entry]);
 };
 
 /**
@@ -88,24 +110,20 @@ export const recordBackLocation = (owner: string, location: string): void => {
 export const createBackOriginRecorder = () => {
   let lastOwner: string | null = null;
 
-  return (owner: string, location: string): void => {
+  return (owner: string, location: string, historyIndex?: number): void => {
     const sourceOwner = lastOwner;
     lastOwner = owner;
 
     const source = sourceOwner ? stacks[sourceOwner] : undefined;
-    if (!stacks[owner] && source?.at(-1) === location) {
+    if (!stacks[owner] && source?.at(-1)?.location === location) {
       setStack(owner, source);
       return;
     }
-    recordBackLocation(owner, location);
+    recordBackLocation(owner, location, historyIndex);
   };
 };
 
-const selectOrigin = (
-  all: Readonly<Record<string, readonly string[]>>,
-  owner: string,
-  pathname: string,
-): string | undefined => {
+const selectOrigin = (all: Stacks, owner: string, pathname: string): BackEntry | undefined => {
   const scope = resolveBackScope(pathname);
   const stack = all[owner];
   if (!scope || !stack) return undefined;
@@ -115,7 +133,21 @@ const selectOrigin = (
 };
 
 export const getBackOrigin = (owner: string, pathname: string): string | undefined =>
-  selectOrigin(stacks, owner, pathname);
+  selectOrigin(stacks, owner, pathname)?.location;
+
+/**
+ * How many browser history steps lead back to `origin`, or `undefined` when it
+ * is not an earlier entry of the current history (desktop tabs, a `replace`
+ * into the agent, a reload that lost the index).
+ */
+export const historyDeltaTo = (
+  origin: BackEntry,
+  currentIndex: number | undefined,
+): number | undefined => {
+  if (origin.historyIndex === undefined || currentIndex === undefined) return undefined;
+  const delta = origin.historyIndex - currentIndex;
+  return delta < 0 ? delta : undefined;
+};
 
 /** Test-only: forget every recorded trail. */
 export const resetBackOrigins = (): void => {
@@ -124,16 +156,40 @@ export const resetBackOrigins = (): void => {
 };
 
 /**
- * The page the current agent / group was opened from, or `undefined`. It is the
- * literal location the user was on, so it already carries its own personal or
- * workspace scope: navigate to it as-is instead of rebasing it onto the active
- * workspace (an escaped cross-workspace link would otherwise send a personal
- * `/tasks` origin to `/<slug>/tasks`).
+ * Back button props for the agent / group sidebar header.
+ *
+ * The origin is the literal location the user was on, so it already carries its
+ * own personal or workspace scope: it is navigated to as-is instead of being
+ * rebased onto the active workspace (an escaped cross-workspace link would
+ * otherwise send a personal `/tasks` origin to `/<slug>/tasks`).
+ *
+ * When the origin is still an earlier entry of the browser history, a plain
+ * click walks the history back to it instead of pushing it again, so the
+ * browser back button and the in-page one stay in step. Without an origin
+ * (opened straight from a link) back goes home.
  */
-export const useBackOrigin = (): string | undefined => {
+export const useBackButtonProps = (): {
+  backEscape: boolean;
+  backTo: string;
+  onBack?: (event: MouseEvent) => void;
+} => {
   const { pathname } = useActiveLocation();
   const owner = useLocationOwner();
   const all = useSyncExternalStore(subscribe, getStacks, getStacks);
+  const origin = selectOrigin(all, owner, pathname);
 
-  return selectOrigin(all, owner, pathname);
+  if (!origin) return { backEscape: false, backTo: '/' };
+
+  return {
+    backEscape: true,
+    backTo: origin.location,
+    onBack: (event) => {
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
+        return;
+      const delta = historyDeltaTo(origin, readHistoryIndex());
+      if (delta === undefined) return;
+      event.preventDefault();
+      window.history.go(delta);
+    },
+  };
 };

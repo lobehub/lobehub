@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 
+import { readHistoryIndex } from './historyIndex';
 import { createBackOriginRecorder } from './index';
 import { useLocationOwner } from './useLocationOwner';
 
@@ -15,7 +16,7 @@ const BackOriginTracker = () => {
 
   useEffect(() => {
     // Desktop tab urls carry no hash; on web it brings back a section anchor.
-    record(owner, `${pathname}${search}${hash}`);
+    record(owner, `${pathname}${search}${hash}`, readHistoryIndex());
   }, [owner, pathname, search, hash, record]);
 
   return null;

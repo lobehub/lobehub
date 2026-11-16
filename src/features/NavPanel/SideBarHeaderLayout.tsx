@@ -9,7 +9,7 @@ import {
   Text,
 } from '@lobehub/ui';
 import { ChevronRightIcon, HomeIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import { memo } from 'react';
 import { flushSync } from 'react-dom';
 
@@ -46,6 +46,8 @@ interface SideBarHeaderLayoutProps {
   /** Override the leading home breadcrumb item (defaults to home icon → `/`). */
   homeItem?: BreadcrumbItem;
   left?: ReactNode;
+  /** Runs before the back navigation; `preventDefault()` cancels it. */
+  onBack?: (event: MouseEvent) => void;
   right?: ReactNode;
   showBack?: boolean;
   showTogglePanelButton?: boolean;
@@ -57,6 +59,7 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
     right,
     backTo = '/',
     backEscape,
+    onBack,
     showBack = true,
     breadcrumb = [],
     homeItem,
@@ -74,7 +77,12 @@ const SideBarHeaderLayout = memo<SideBarHeaderLayoutProps>(
         }}
       >
         {showBack && (
-          <BackButton escape={backEscape} size={DESKTOP_HEADER_ICON_SMALL_SIZE} to={backTo} />
+          <BackButton
+            escape={backEscape}
+            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
+            to={backTo}
+            onClick={onBack}
+          />
         )}
         {left && typeof left === 'string' ? (
           <Text ellipsis fontSize={16} weight={500}>

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   createBackOriginRecorder,
   getBackOrigin,
+  historyDeltaTo,
   recordBackLocation,
   resetBackOrigins,
   resolveBackScope,
@@ -152,5 +153,43 @@ describe('createBackOriginRecorder', () => {
     record('main', '/page/docs_1#notes');
     record('main', '/agent/agt_1');
     expect(getBackOrigin('main', '/agent/agt_1')).toBe('/page/docs_1#notes');
+  });
+});
+
+describe('history walk-back', () => {
+  it('steps back over the entries opened inside the agent', () => {
+    recordBackLocation('main', '/tasks', 3);
+    recordBackLocation('main', '/agent/agt_1', 4);
+    recordBackLocation('main', '/agent/agt_1/tpc_1', 5);
+    const origin = { historyIndex: 3, location: '/tasks' };
+    expect(historyDeltaTo(origin, 5)).toBe(-2);
+  });
+
+  it('falls back to pushing when the origin is not an earlier history entry', () => {
+    // replaced into the agent, unknown indexes (desktop tabs), or a later entry
+    expect(historyDeltaTo({ historyIndex: 4, location: '/tasks' }, 4)).toBeUndefined();
+    expect(historyDeltaTo({ location: '/tasks' }, 4)).toBeUndefined();
+    expect(historyDeltaTo({ historyIndex: 2, location: '/tasks' }, undefined)).toBeUndefined();
+    expect(historyDeltaTo({ historyIndex: 6, location: '/tasks' }, 4)).toBeUndefined();
+  });
+
+  it('records a revisit of the same location at a new history index', () => {
+    recordBackLocation('main', '/tasks', 1);
+    recordBackLocation('main', '/tasks', 3);
+    recordBackLocation('main', '/agent/agt_1', 4);
+    expect(getBackOrigin('main', '/agent/agt_1')).toBe('/tasks');
+  });
+});
+
+describe('owner retention', () => {
+  it('forgets the least recently used owners (closed tabs)', () => {
+    const record = createBackOriginRecorder();
+    for (let tab = 0; tab < 25; tab++) {
+      record(`tab-${tab}`, `/page/${tab}`);
+      record(`tab-${tab}`, '/agent/agt_1');
+    }
+    expect(getBackOrigin('tab-0', '/agent/agt_1')).toBeUndefined();
+    expect(getBackOrigin('tab-24', '/agent/agt_1')).toBe('/page/24');
+    expect(getBackOrigin('tab-5', '/agent/agt_1')).toBe('/page/5');
   });
 });
