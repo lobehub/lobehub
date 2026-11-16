@@ -4,6 +4,31 @@ import { isManagedCloudDevice } from '@lobechat/types';
 type CardDevice = Pick<DeviceListItem, 'identitySource' | 'registered' | 'scope'>;
 
 /**
+ * The visibility a device page shows: only persisted workspace rows have one.
+ * Ghost rows (online, not yet registered) and personal devices show none.
+ */
+export const shownDeviceVisibility = (
+  device: Pick<DeviceListItem, 'registered' | 'scope' | 'visibility'>,
+) => (device.scope === 'workspace' && device.registered ? device.visibility : null);
+
+/**
+ * Whether the caller may publish this device to the workspace or make it
+ * private. Only persisted workspace rows carry a visibility (ghosts and
+ * personal devices don't), and the toggle is enroller-only: an owner demoting
+ * another member's public device would move it into that member's private
+ * list, appropriating their data. The server rejects other writers as the
+ * backstop.
+ */
+export const canToggleDeviceVisibility = (
+  device: Pick<DeviceListItem, 'enroller' | 'registered' | 'scope'>,
+  currentUserId: string | null | undefined,
+): boolean =>
+  device.scope === 'workspace' &&
+  device.registered &&
+  !!currentUserId &&
+  device.enroller?.userId === currentUserId;
+
+/**
  * Whether the device card offers "Share to Workspace". Only a registered
  * personal device the user connected can be shared: the share flow asks the
  * machine's desktop app for a workspace identity, and the server refuses a

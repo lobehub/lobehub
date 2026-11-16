@@ -27,9 +27,6 @@ import { memo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import UserAvatar from '@/components/UserAvatar';
-import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
 
 import { DeviceRunningSummaryValue } from './DeviceActivity/RunningUsers';
 import { canOfferDeviceShare, removeConfirmDescKey } from './deviceCardActions';
@@ -43,6 +40,7 @@ import { openShareDeviceModal } from './ShareDeviceModal';
 import { useCanEditDevice } from './useCanEditDevice';
 import { useDeviceActivityText } from './useDeviceActivityText';
 import { useDeviceCardMutations } from './useDeviceCardMutations';
+import { useDeviceVisibilityActions } from './useDeviceVisibilityActions';
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
@@ -139,9 +137,8 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
   const { t } = useTranslation('setting');
   const { t: tCommon } = useTranslation('common');
   const canEdit = useCanEditDevice()(device);
-  const currentUserId = useUserStore(userProfileSelectors.userId);
-
-  const { removeDevice, setVisibility } = useDeviceCardMutations(device.scope);
+  const { removeDevice } = useDeviceCardMutations(device.scope);
+  const visibility = useDeviceVisibilityActions(device);
 
   const displayName = device.friendlyName || device.hostname || device.deviceId;
   const isFallback = device.identitySource === 'fallback';
@@ -155,57 +152,25 @@ const DeviceCard = memo<DeviceCardProps>(({ device, isCurrent, onOpen }) => {
   // answer it for a whole list at once — nor at all on touch.
   const activityText = useDeviceActivityText(device);
 
-  // Publish / make-private for workspace enrollments. Reuses the
-  // shared visibility-confirm body so the consequences copy matches agents /
-  // files.
-
-  const handlePublish = () =>
-    confirmModal({
-      content: <VisibilityConfirmContent variant={'publish'} />,
-      okText: t('devices.visibility.publish'),
-      onOk: async () => {
-        await setVisibility.mutateAsync({ deviceId: device.deviceId, visibility: 'public' });
-      },
-      title: t('devices.visibility.publishConfirmTitle'),
-    });
-
-  const handleMakePrivate = () =>
-    confirmModal({
-      content: <VisibilityConfirmContent variant={'makePrivate'} />,
-      okButtonProps: { danger: true },
-      okText: tCommon('makePrivate.confirm.ok'),
-      onOk: async () => {
-        await setVisibility.mutateAsync({ deviceId: device.deviceId, visibility: 'private' });
-      },
-      title: tCommon('makePrivate.confirm.title'),
-    });
-
-  // Only persisted workspace rows carry a visibility to toggle — ghosts
-  // (unregistered) and personal devices don't. The toggle is enroller-only
-  //: an owner demoting another member's public device would
-  // move it into that member's private list, appropriating their data. The
-  // server rejects non-enroller writes as the backstop.
-  const isEnroller = !!currentUserId && device.enroller?.userId === currentUserId;
-  const visibilityItems =
-    device.scope === 'workspace' && device.registered && isEnroller
-      ? device.visibility === 'private'
-        ? [
-            {
-              icon: <Icon icon={GlobeIcon} />,
-              key: 'publish',
-              label: t('devices.visibility.publish'),
-              onClick: handlePublish,
-            },
-          ]
-        : [
-            {
-              icon: <Icon icon={EyeOffIcon} />,
-              key: 'makePrivate',
-              label: tCommon('makePrivate'),
-              onClick: handleMakePrivate,
-            },
-          ]
-      : [];
+  const visibilityItems = visibility.canToggle
+    ? device.visibility === 'private'
+      ? [
+          {
+            icon: <Icon icon={GlobeIcon} />,
+            key: 'publish',
+            label: t('devices.visibility.publish'),
+            onClick: visibility.publish,
+          },
+        ]
+      : [
+          {
+            icon: <Icon icon={EyeOffIcon} />,
+            key: 'makePrivate',
+            label: tCommon('makePrivate'),
+            onClick: visibility.makePrivate,
+          },
+        ]
+    : [];
 
   // Share-to-workspace entry for personal enrollments. The share
   // handshake needs a live connection to mint the workspace identity, so the
