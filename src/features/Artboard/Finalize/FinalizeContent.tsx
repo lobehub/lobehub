@@ -1,5 +1,5 @@
 import { type ArtboardFinalizeIssue, checkFinalizeReadiness } from '@lobechat/types';
-import { Button, Flexbox, Icon, Tag, Text, toast, useModalContext } from '@lobehub/ui';
+import { Button, Flexbox, Icon, ScrollArea, Tag, Text, toast, useModalContext } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { type TFunction } from 'i18next';
@@ -15,7 +15,21 @@ import { useBoardModel } from '../data/useBoardModel';
 import type { BoardModel } from '../model';
 import PendingItem from './PendingItem';
 
+const BODY_MAX_HEIGHT = 'min(60vh, 520px)';
+
 const styles = stylex.create({
+  body: {
+    paddingBlockStart: '4px',
+    paddingBlockEnd: '16px',
+    paddingInline: 16,
+  },
+  footer: {
+    borderBlockStartColor: cssVar.colorBorderSecondary,
+    borderBlockStartStyle: 'solid',
+    borderBlockStartWidth: 1,
+    paddingBlock: 12,
+    paddingInline: 16,
+  },
   check: {
     borderBlockEndColor: cssVar.colorBorderSecondary,
     borderBlockEndStyle: 'solid',
@@ -93,64 +107,78 @@ const FinalizeContent = ({ artboardId }: { artboardId: string }) => {
   };
 
   return (
-    <Flexbox gap={16}>
-      {structureIssues.length > 0 && (
-        <Flexbox gap={4}>
-          {structureIssues.map((issue) => (
-            <Text
-              key={issue.code === 'unreachable' ? `${issue.code}:${issue.boardId}` : issue.code}
-              type="warning"
-            >
-              {issueText(board, t, issue)}
-            </Text>
-          ))}
-        </Flexbox>
-      )}
-      {board.blockers.length > 0 && (
-        <Flexbox gap={8}>
-          <Text strong>
-            {t('artboard.finalize.pendingTitle', { count: board.blockers.length })}
-          </Text>
-          {board.blockers.map((blocker) => (
-            <PendingItem blocker={blocker} key={blocker.id} onDiscuss={close} />
-          ))}
-        </Flexbox>
-      )}
-      {checks.length > 0 && (
-        <Flexbox gap={4}>
-          <Text strong>{t('artboard.finalize.checksTitle', { count: checks.length })}</Text>
-          {checks.map((item) => (
-            <Flexbox
-              horizontal
-              align="center"
-              gap={8}
-              key={item.id}
-              {...stylex.props(styles.check)}
-            >
-              <Text style={{ flex: 1, minWidth: 0 }} type={item.expected ? undefined : 'warning'}>
-                {item.expected || t('artboard.finalize.missingCheck')}
-              </Text>
-              <Tag size={'small'}>
-                {item.title}
-                {item.source?.kind === 'canvas' ? ` · v${item.source.version}` : ''}
-              </Tag>
+    <>
+      <ScrollArea
+        disableContentFit
+        scrollFade
+        style={{ maxHeight: BODY_MAX_HEIGHT, overflow: 'hidden' }}
+        viewportProps={{ style: { height: 'auto', maxHeight: BODY_MAX_HEIGHT } }}
+      >
+        <Flexbox gap={16} {...stylex.props(styles.body)}>
+          {structureIssues.length > 0 && (
+            <Flexbox gap={4}>
+              {structureIssues.map((issue) => (
+                <Text
+                  key={issue.code === 'unreachable' ? `${issue.code}:${issue.boardId}` : issue.code}
+                  type="warning"
+                >
+                  {issueText(board, t, issue)}
+                </Text>
+              ))}
             </Flexbox>
-          ))}
+          )}
+          {board.blockers.length > 0 && (
+            <Flexbox gap={8}>
+              <Text strong>
+                {t('artboard.finalize.pendingTitle', { count: board.blockers.length })}
+              </Text>
+              {board.blockers.map((blocker) => (
+                <PendingItem blocker={blocker} key={blocker.id} onDiscuss={close} />
+              ))}
+            </Flexbox>
+          )}
+          {checks.length > 0 && (
+            <Flexbox gap={4}>
+              <Text strong>{t('artboard.finalize.checksTitle', { count: checks.length })}</Text>
+              {checks.map((item) => (
+                <Flexbox
+                  horizontal
+                  align="center"
+                  gap={8}
+                  key={item.id}
+                  {...stylex.props(styles.check)}
+                >
+                  <Text
+                    style={{ flex: 1, minWidth: 0 }}
+                    type={item.expected ? undefined : 'warning'}
+                  >
+                    {item.expected || t('artboard.finalize.missingCheck')}
+                  </Text>
+                  <Tag size={'small'}>
+                    {item.title}
+                    {item.source?.kind === 'canvas' ? ` · v${item.source.version}` : ''}
+                  </Tag>
+                </Flexbox>
+              ))}
+            </Flexbox>
+          )}
         </Flexbox>
-      )}
-      <Flexbox horizontal align="flex-start" gap={8} {...stylex.props(styles.lock)}>
-        <Icon icon={LockIcon} size={14} style={{ marginTop: 3 }} />
-        <span>{t('artboard.finalize.lockNote')}</span>
+      </ScrollArea>
+      <Flexbox gap={12} {...stylex.props(styles.footer)}>
+        <Flexbox horizontal align="flex-start" gap={8} {...stylex.props(styles.lock)}>
+          <Icon icon={LockIcon} size={14} style={{ marginTop: 3 }} />
+          <span>{t('artboard.finalize.lockNote')}</span>
+        </Flexbox>
+        <Flexbox horizontal gap={8} justify="flex-end">
+          <Button onClick={close}>{t('artboard.finalize.cancel')}</Button>
+          <Button disabled={issues.length > 0} loading={saving} type={'primary'} onClick={confirm}>
+            {issues.length
+              ? t('artboard.finalize.blocked', { count: issues.length })
+              : t('artboard.finalize.confirm')}
+          </Button>
+        </Flexbox>
       </Flexbox>
-      <Flexbox horizontal gap={8} justify="flex-end">
-        <Button onClick={close}>{t('artboard.finalize.cancel')}</Button>
-        <Button disabled={issues.length > 0} loading={saving} type={'primary'} onClick={confirm}>
-          {issues.length
-            ? t('artboard.finalize.blocked', { count: issues.length })
-            : t('artboard.finalize.confirm')}
-        </Button>
-      </Flexbox>
-    </Flexbox>
+    </>
   );
 };
 
