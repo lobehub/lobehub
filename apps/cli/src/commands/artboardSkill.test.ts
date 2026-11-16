@@ -126,6 +126,14 @@ describe('lh artboard skill init', () => {
     expect(await readFile(path.join(elsewhere, 'keep.md'), 'utf8')).toBe('not ours');
   });
 
+  it('says what to do when no screen can be made, instead of a decision board', async () => {
+    await run('--dir', directory);
+
+    const skill = await readFile(skillPath('SKILL.md'), 'utf8');
+    expect(skill).toMatch(/neither can be made[^.]*\./i);
+    expect(skill).toMatch(/never stand a decision board[^.]*in for a screen/i);
+  });
+
   it('says that a decision board takes no acceptance check', async () => {
     await run('--dir', directory);
 

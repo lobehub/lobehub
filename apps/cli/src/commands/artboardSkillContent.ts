@@ -27,6 +27,8 @@ Run \`lh man artboard\` for the exact flags and \`lh artboard ops\` for the shap
 
 \`lh man file\` and \`lh man artifact\` have the details. A board of type "decision" needs no source.
 
+If neither can be made (the upload or the publish is refused or times out), tell the user in one line which step failed and hold the discussion in chat. Never stand a decision board or a text card in for a screen: a decision board marks where the journey branches and shows only a short title.
+
 **Layout.**
 
 - An artboard has pages; each page has its own coordinates. Use a second page when the choices would crowd the flow.
