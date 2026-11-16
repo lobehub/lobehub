@@ -30,8 +30,8 @@ describe('openai chat model cards', () => {
   });
 
   /**
-   * Gateways reserve quota from `maxOutput` before forwarding a request, so an
-   * official card without it cannot be listed (`max_output_missing`).
+   * Consumers size per-request output budgets from `maxOutput`, so every
+   * official card must declare it.
    */
   it('declares maxOutput on every official chat card', () => {
     const missing = openaiChatModels
