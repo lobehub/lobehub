@@ -17,6 +17,7 @@ import type {
 import { agents, channelMessages, users } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { fileIdsByMessage } from './attachments';
+import { isAgentAuthored } from './author';
 
 /** Freeze the public history cutoff and branch for this request. */
 export const buildManifest = (params: {
@@ -132,9 +133,9 @@ export const readManifestMessages = async (
   );
 
   return visible.map((message) => {
-    const isAgent = message.routingStatus === 'reply';
+    const isAgent = isAgentAuthored(message);
     const via = isAgent ? undefined : channelMessageVia(message.metadata);
-    const receipt = isAgent ? undefined : channelMessageReceipt(message.metadata);
+    const receipt = channelMessageReceipt(message.metadata);
     return {
       author: {
         id: isAgent ? message.agentId : message.userId,

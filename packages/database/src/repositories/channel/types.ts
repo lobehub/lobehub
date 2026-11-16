@@ -15,3 +15,14 @@ export interface ChannelWriteOptions {
   allowTrashed?: boolean;
   minRole?: ChannelMemberRole;
 }
+
+/** A conversation between two of the caller's Agents, with their active Agent members. */
+export interface ChannelAgentPairAccess extends ChannelAccess {
+  agents: ChannelMemberItem[];
+}
+
+/** `channels.agentPairKey`: the same for either Agent asking. */
+export const channelAgentPairKey = (agentId: string, otherAgentId: string) => {
+  if (agentId === otherAgentId) throw new Error('A conversation between Agents needs two Agents');
+  return [agentId, otherAgentId].sort().join(':');
+};

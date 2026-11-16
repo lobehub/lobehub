@@ -29,6 +29,7 @@ import {
 import type { Transaction } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
 import { fileIdsByMessage } from './attachments';
+import { isAgentAuthored } from './author';
 import { activeMembers } from './delivery';
 import { ChannelError } from './error';
 import { externalWorksByMessage } from './works';
@@ -62,7 +63,7 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
     senderUsername,
     ...message
   } = row;
-  const isAgent = message.routingStatus === 'reply';
+  const isAgent = isAgentAuthored(message);
   return {
     ...message,
     fileIds,
@@ -73,7 +74,8 @@ const publicMessage = (row: MessageRow, fileIds: string[]) => {
       type: isAgent ? ('agent' as const) : ('user' as const),
     },
     editedAt: channelMessageEditedAt(message.metadata),
-    receipt: isAgent ? null : (channelMessageReceipt(message.metadata) ?? null),
+    // On an Agent's message, the exchange between Agents it reports from.
+    receipt: channelMessageReceipt(message.metadata) ?? null,
     via: isAgent
       ? null
       : (() => {

@@ -166,8 +166,13 @@ export const appendMessage = async (
   tx: Transaction,
   values: Omit<NewChannelMessage, 'sequence' | 'id'> & { id?: string },
 ): Promise<ChannelMessageItem> => {
+  // A reply is an Agent's; a request is a person's, or an Agent's in a conversation between Agents.
   const isReply = values.routingStatus === 'reply';
-  if (isReply ? !values.agentId || values.userId != null : !values.userId || values.agentId != null)
+  if (
+    isReply
+      ? !values.agentId || values.userId != null
+      : Boolean(values.userId) === Boolean(values.agentId)
+  )
     throw new ChannelError(
       'BAD_REQUEST',
       'A message requires exactly one sender of the correct type',

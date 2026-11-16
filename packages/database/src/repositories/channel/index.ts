@@ -32,6 +32,7 @@ import {
   requireAgentMember,
   requireChannelAgent,
 } from './agent';
+import { openAgentPair } from './agentPair';
 import { channelAvatarMembers } from './avatars';
 import { findThread } from './delivery';
 import { editMessage } from './edit';
@@ -53,10 +54,11 @@ import { sendMessage } from './send';
 import type { ChannelStopScope } from './stop';
 import { stopScope } from './stop';
 import { audit, lockChannel } from './transaction';
-import type { ChannelAccess, ChannelWriteOptions } from './types';
+import type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from './types';
 import { createChannelThread, readChannelView } from './view';
 
 export type { ChannelAddAgentInput } from './agent';
+export { memberEnvironment } from './agent';
 export {
   CHANNEL_ROUTING_BATCH_SIZE,
   CHANNEL_ROUTING_LEASE_MS,
@@ -77,7 +79,8 @@ export type { ChannelAgentPostInput } from './post';
 export type { AppliedChannelRouting, ChannelRoutingDecision } from './routing';
 export type { ChannelSendInput } from './send';
 export type { ChannelStopScope } from './stop';
-export type { ChannelAccess, ChannelWriteOptions } from './types';
+export type { ChannelAccess, ChannelAgentPairAccess, ChannelWriteOptions } from './types';
+export { channelAgentPairKey } from './types';
 export type { ChannelWorktreeCandidate } from './worktree';
 
 /** Recycle-bin row title: the start of the thread's root message. */
@@ -796,6 +799,13 @@ export class ChannelRepository {
       });
       return { channel, member };
     });
+
+  /** The conversation in which one of the caller's Agents asks another. See {@link openAgentPair}. */
+  openAgentPair = (params: Parameters<typeof openAgentPair>[2]): Promise<ChannelAgentPairAccess> =>
+    this.db.transaction((tx) =>
+      openAgentPair(tx, { userId: this.userId, workspaceId: this.workspaceId }, params),
+    );
+
 
   /**
    * The caller's active Channels with their active Agent members, newest first: where the caller
