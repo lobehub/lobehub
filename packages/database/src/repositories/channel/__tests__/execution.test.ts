@@ -282,11 +282,6 @@ describe('ChannelExecutionRepository', () => {
     expect(await execution.claim(channel.id, b1.id, lease)).not.toBeNull();
     expect(await execution.claim(channel.id, main.id, lease)).not.toBeNull();
 
-    // The database backs it: a second writer in the same branch is refused.
-    await expect(
-      db.update(channelJobs).set({ writerHeld: true }).where(eq(channelJobs.id, a2.id)),
-    ).rejects.toThrow();
-
     expect(await execution.retireReservation(channel.id, a1.id)).toBe(true);
     expect(await execution.claim(channel.id, a2.id, lease)).not.toBeNull();
   });

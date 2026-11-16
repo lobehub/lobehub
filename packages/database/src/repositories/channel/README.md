@@ -158,13 +158,18 @@ runs and sub-agents do not inherit it.
 ## Branch concurrency
 
 A member runs one reply per conversation branch (a Thread, or the main timeline) and answers each
-branch in message order; its branches run alongside each other. The partial unique index
-`channel_jobs_active_branch_unique` on `(member_id, coalesce(thread_id, ''))` holds one live writer
-per member and branch, `candidates` returns one queue head per member and branch, and the
-coordinator settles and claims each branch without waiting on the member's others. A Thread
-starts only after the member's main-timeline answer to its root, so a follow-up never overtakes
-the reply it follows. A reply that opens a Thread before its claim runs in that Thread, which
-leaves the main timeline free for the next request.
+branch in message order; its branches run alongside each other. `candidates` returns one queue
+head per member and branch, and the coordinator settles and claims each branch without waiting on
+the member's others. A Thread starts only after the member's main-timeline answer to its root, so
+a follow-up never overtakes the reply it follows. A reply that opens a Thread before its claim
+runs in that Thread, which leaves the main timeline free for the next request.
+
+These locks are application rules in `claimJob`, not database constraints, so they can change
+without a migration. The branch lock is checked under the channel lock, which already serializes
+every claim of a member. The directory lock spans channels, so `claimJob` first takes a
+transaction-scoped advisory lock on the device directory, then looks for a live writer there; the
+plain index `channel_jobs_active_directory_idx` keeps that lookup cheap. Nothing else may set
+`writer_held`.
 
 Branches still share what a run touches. The directory lock stays per device directory: a second
 branch of the same member in a Channel-picked directory moves into its own worktree, as for

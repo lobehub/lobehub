@@ -454,7 +454,7 @@ export const channelJobs = pgTable(
     /**
      * Set when termination could not be confirmed in time (INC-049). Publication is revoked so
      * the member may run again, though not in the same device directory until the stop is
-     * confirmed: isolation frees the branch lock but never `writerHeld`.
+     * confirmed: isolation frees the member's branch but never `writerHeld`.
      */
     isolatedAt: timestamptz('isolated_at'),
     /** Final answer saved by the run; immutable once set. */
@@ -482,22 +482,13 @@ export const channelJobs = pgTable(
       .on(t.leaseExpiresAt)
       .where(sql`${t.writerHeld} AND ${t.isolatedAt} IS NULL`),
     /**
-     * At most one writer per member and conversation branch (a Thread, or the main timeline as
-     * ''): a branch answers in order, while an Agent works in several Threads at once.
+     * Live writers by device directory. The locks themselves are application rules checked in
+     * `claimJob` (one writer per member and branch under the channel lock, one per device
+     * directory under an advisory lock), not database constraints, so they can change freely.
      */
-    uniqueIndex('channel_jobs_active_branch_unique')
-      .on(t.memberId, sql`coalesce(${t.threadId}, '')`)
-      .where(sql`${t.writerHeld} AND ${t.isolatedAt} IS NULL`),
-    /**
-     * At most one writer per device directory, across all channels. Unlike the branch lock,
-     * isolation does not release it: only physical stop confirmation proves the old process
-     * has left the directory.
-     */
-    uniqueIndex('channel_jobs_active_directory_unique')
+    index('channel_jobs_active_directory_idx')
       .on(t.deviceId, t.workingDirectory)
-      .where(
-        sql`${t.deviceId} IS NOT NULL AND ${t.workingDirectory} IS NOT NULL AND ${t.writerHeld}`,
-      ),
+      .where(sql`${t.writerHeld}`),
     foreignKey({
       columns: [t.channelId, t.memberId],
       foreignColumns: [channelMembers.channelId, channelMembers.id],
