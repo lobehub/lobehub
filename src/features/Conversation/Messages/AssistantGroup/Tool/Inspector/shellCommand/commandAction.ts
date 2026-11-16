@@ -341,6 +341,34 @@ const searchDialect = (name: string, arguments_: readonly string[]): SearchPatte
 const isSedInPlace = (word: string): boolean =>
   word === '--in-place' || word.startsWith('--in-place=') || /^-[A-Za-z]*i/u.test(word);
 
+/**
+ * A sed script that writes a file (`w out`, `s/a/b/w out`) or runs a command
+ * (`e`, `s/a/b/e`). Matches loosely: a false match only costs the action title.
+ */
+const SED_WRITE_SCRIPT = /(?:^|[;{}\s\d$])[wWe](?:\s|$)|\/[gpiImM\d]*[we](?:\s|;|$)/u;
+
+/** Whether a stage that otherwise reads or filters also writes a file or runs a command. */
+const writesFiles = (name: string, arguments_: readonly string[]): boolean => {
+  switch (name) {
+    case 'sed': {
+      return arguments_.some(
+        (word) => isSedInPlace(word) || (!word.startsWith('-') && SED_WRITE_SCRIPT.test(word)),
+      );
+    }
+    case 'sort': {
+      // `-o FILE`, `--output=FILE`, and clusters like `-uo FILE` write the sorted result.
+      return arguments_.some((word) => word.startsWith('--output') || /^-[A-Za-z]*o/u.test(word));
+    }
+    case 'uniq': {
+      // `uniq in out` writes its second operand.
+      return arguments_.filter((word) => word === '-' || !word.startsWith('-')).length > 1;
+    }
+    default: {
+      return false;
+    }
+  }
+};
+
 const describeStage = (words: readonly string[]): ExploreAction | null => {
   const [name = '', ...arguments_] = words;
   const { hasPatternFile, patterns, values } = positionals(name, arguments_);
@@ -348,7 +376,7 @@ const describeStage = (words: readonly string[]): ExploreAction | null => {
   if (READ_COMMANDS.has(name)) return values.length > 0 ? { kind: 'read', paths: values } : null;
   if (name === 'sed') {
     // Only `sed -n '1,40p' file` prints a file; any other script edits or transforms it.
-    if (!arguments_.includes('-n') || arguments_.some(isSedInPlace)) return null;
+    if (!arguments_.includes('-n') || writesFiles(name, arguments_)) return null;
     const paths = hasOptionScript ? values : values.slice(1);
     return paths.length > 0 ? { kind: 'read', paths } : null;
   }
@@ -395,8 +423,11 @@ const describeExplorePipeline = (stages: readonly string[][]): ExploreAction | n
   if (!action) return null;
   let filtered: ExploreAction = action;
   for (const words of rest) {
-    const [name = ''] = words;
-    if (FILTER_COMMANDS.has(name)) continue;
+    const [name = '', ...arguments_] = words;
+    if (FILTER_COMMANDS.has(name)) {
+      if (writesFiles(name, arguments_)) return null;
+      continue;
+    }
     if (!SEARCH_COMMANDS.has(name)) return null;
     const filter = describeStage(words);
     if (filter?.kind !== 'search' || filtered.kind !== 'list') return null;

@@ -71,6 +71,27 @@ describe('describeShellCommandTitle', () => {
       expect(title("sed -n --in-place=.bak 's/a/b/p' app.ts")).toBeUndefined();
     });
 
+    it('keeps a read whose sed script writes or runs a command a plain command', () => {
+      expect(title("sed -n 'w out.ts' app.ts")).toBeUndefined();
+      expect(title("sed -n 's/a/b/w out.ts' app.ts")).toBeUndefined();
+      expect(title("sed -n '1e date' app.ts")).toBeUndefined();
+    });
+
+    it('keeps a pipeline whose filter writes a file a plain command', () => {
+      // `sort -o` used to read as "读取 a.ts" while overwriting b.ts.
+      expect(title('cat src/a.ts | sort -o src/b.ts')).toBeUndefined();
+      expect(title('cat src/a.ts | sort --output=src/b.ts')).toBeUndefined();
+      expect(title('cat src/a.ts | sort -uo src/b.ts')).toBeUndefined();
+      expect(title('cat src/a.ts | uniq - src/b.ts')).toBeUndefined();
+      expect(title("cat src/a.ts | sed -i 's/a/b/' src/b.ts")).toBeUndefined();
+      expect(title("cat src/a.ts | sed 's/a/b/w src/b.ts'")).toBeUndefined();
+      // Pure filters still read.
+      expect(title("cat src/a.ts | sort -u | uniq -c | sed 's/a/b/g' | head -5")).toEqual({
+        action: 'read',
+        subject: 'a.ts',
+      });
+    });
+
     it('keeps a find or fd that deletes or runs commands a plain command', () => {
       // `find -delete` used to read as "列出文件" while it removed files.
       expect(title('find . -name "*.tmp" -delete')).toBeUndefined();
