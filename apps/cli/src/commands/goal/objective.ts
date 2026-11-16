@@ -11,6 +11,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../../api/client';
 import { outputJson } from '../../utils/format';
 import { log } from '../../utils/logger';
+import { snapshotSwarmLaneBest } from '../../utils/swarmLane';
 import { hasOperationToken } from './reads';
 
 const DEFAULT_TIMEOUT_SECONDS = 1800;
@@ -410,6 +411,12 @@ export function registerGoalObjectiveCommands(goal: Command) {
       if (recorded.recorded) {
         if (recorded.newBest) log.info(pc.green('New best score for this goal.'));
         else if (recorded.newLaneBest) log.info(pc.green('New best score for your lane.'));
+        // A new goal-wide best is what promotion may point at, so keep the graded
+        // files now: the lane goes on editing, and the deadline may cut it mid-edit.
+        if (recorded.newBest)
+          await snapshotSwarmLaneBest(cwd).catch((error) => {
+            log.info(pc.yellow(`Could not keep this lane's best-scoring files: ${error.message}`));
+          });
       }
       if (recorded.leaderboard) printLeaderboard({ ...recorded.leaderboard, you: recorded.lane });
     });

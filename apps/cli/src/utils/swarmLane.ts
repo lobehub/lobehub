@@ -1,5 +1,5 @@
 import { constants } from 'node:fs';
-import { cp, mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
+import { cp, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { parseSwarmLanePath, SWARM_LANES_DIR } from '@lobechat/utils/goalSwarm';
@@ -12,6 +12,23 @@ const exists = async (target: string) =>
 
 const COPY = { mode: constants.COPYFILE_FICLONE, recursive: true, verbatimSymlinks: true };
 
+/** Holds the files each lane was graded on when it took the lead. */
+export const SWARM_BEST_DIR = '_best';
+/** Names the swarm that owns `.lanes`, so a later swarm does not read its copies as its own. */
+export const SWARM_MARKER = '.swarm';
+
+/** Where a lane's best-scoring files are kept: `<workspace>/.lanes/_best/<key>`. */
+export const swarmLaneBestDirectory = (workspace: string, key: string) =>
+  path.join(workspace, SWARM_LANES_DIR, SWARM_BEST_DIR, key);
+
+/**
+ * Swarm bookkeeping, not workspace content: the lane copies themselves and the
+ * `.lanes-<id>` archives left by an earlier swarm. Copying them into a lane (or
+ * into the pre-promotion snapshot) would nest one swarm's work inside another.
+ */
+const isBookkeeping = (entry: string) =>
+  entry === SWARM_LANES_DIR || entry.startsWith(`${SWARM_LANES_DIR}-`);
+
 /**
  * Copy every entry of `from` except `.lanes` into `into`. Entry by entry: a
  * lane lives inside the workspace, and `cp` refuses to copy a directory into
@@ -21,7 +38,7 @@ const COPY = { mode: constants.COPYFILE_FICLONE, recursive: true, verbatimSymlin
 const copyEntries = async (from: string, into: string) => {
   await mkdir(into, { recursive: true });
   for (const entry of await readdir(from)) {
-    if (entry === SWARM_LANES_DIR) continue;
+    if (isBookkeeping(entry)) continue;
     await cp(path.join(from, entry), path.join(into, entry), COPY);
   }
 };
@@ -57,8 +74,7 @@ const replaceContents = async (source: string, target: string, snapshot: string)
   await rm(snapshot, { force: true, recursive: true });
   await copyWorkspace(target, snapshot);
   for (const entry of await readdir(target)) {
-    if (entry !== SWARM_LANES_DIR)
-      await rm(path.join(target, entry), { force: true, recursive: true });
+    if (!isBookkeeping(entry)) await rm(path.join(target, entry), { force: true, recursive: true });
   }
   await copyEntries(source, target);
 };
@@ -80,14 +96,65 @@ export const adoptSwarmLane = async (cwd: string, fromKey: string) => {
 };
 
 /**
- * Promote a lane into the workspace: the workspace (minus `.lanes`) is kept in
- * `.lanes/_before_promote`, then replaced by the lane's files.
+ * Keep the files a lane was just graded on, when that run took the goal-wide
+ * lead. Evaluation records only score and fingerprint, so without this copy the
+ * champion's files are whatever the lane left behind — and a deadline that cuts
+ * a lane mid-edit would promote a tree that scores worse than the leaderboard
+ * claims. Only a new goal-wide best is copied: that is the state champion
+ * selection can point at.
+ */
+export const snapshotSwarmLaneBest = async (cwd: string) => {
+  const lane = parseSwarmLanePath(cwd);
+  if (!lane) return undefined;
+  const from = path.join(lane.workspace, SWARM_LANES_DIR, lane.key);
+  if (!(await exists(from))) return undefined;
+  const to = swarmLaneBestDirectory(lane.workspace, lane.key);
+  await copyWorkspace(from, to);
+  return to;
+};
+
+/** Which swarm owns `<workspace>/.lanes`, or undefined when it was never staked. */
+export const readSwarmOwner = async (workspace: string) =>
+  readFile(path.join(workspace, SWARM_LANES_DIR, SWARM_MARKER), 'utf8').then(
+    (value) => value.trim(),
+    () => undefined,
+  );
+
+/**
+ * Claim `<workspace>/.lanes` for one swarm. Lane keys restart at `A` for every
+ * swarm, so without an owner the second swarm in a workspace would start from
+ * the first one's copies and overwrite whatever the workspace gained since.
+ * A retry of the same swarm keeps its lanes; another swarm's lanes are moved
+ * aside to `<workspace>/.lanes-<owner>` instead of being reused or deleted.
+ */
+export const stakeSwarmLanes = async (workspace: string, swarmId: string) => {
+  if (!(await exists(workspace))) return undefined;
+  const lanes = path.join(workspace, SWARM_LANES_DIR);
+  const owner = await readSwarmOwner(workspace);
+  if (owner === swarmId) return lanes;
+  if (await exists(lanes)) {
+    const archive = `${lanes}-${(owner ?? 'unstaked').replaceAll(/[^\w-]/g, '_')}`;
+    await rm(archive, { force: true, recursive: true });
+    await rename(lanes, archive);
+  }
+  await mkdir(lanes, { recursive: true });
+  await writeFile(path.join(lanes, SWARM_MARKER), `${swarmId}\n`);
+  return lanes;
+};
+
+/**
+ * Promote a lane into the workspace: the workspace (minus swarm bookkeeping) is
+ * kept in `.lanes/_before_promote`, then replaced by the lane's files — the ones
+ * it was graded on when it took the lead, falling back to its current files for
+ * a lane that never recorded a led evaluation.
  */
 export const promoteSwarmLane = async (workspace: string, key: string) => {
   const lanes = path.join(workspace, SWARM_LANES_DIR);
-  const source = path.join(lanes, key);
-  if (!(await exists(source))) throw new Error(`Lane ${key} has no directory at ${source}.`);
+  const live = path.join(lanes, key);
+  if (!(await exists(live))) throw new Error(`Lane ${key} has no directory at ${live}.`);
+  const best = swarmLaneBestDirectory(workspace, key);
+  const source = (await exists(best)) ? best : live;
   const snapshot = path.join(lanes, '_before_promote');
   await replaceContents(source, workspace, snapshot);
-  return { snapshot, source, target: workspace };
+  return { graded: source === best, snapshot, source, target: workspace };
 };

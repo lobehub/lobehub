@@ -52,7 +52,7 @@ export const laneContinuationNote = (graph: GoalGraphSnapshot, nodeId: string) =
 export const buildPromoteInstruction = (swarm: GoalSwarm, laneKey: string) =>
   [
     `The swarm's deadline has passed and lane ${laneKey} has the best score. Promote it into the workspace.`,
-    `Run exactly: \`lh goal lane promote ${laneKey}\` in ${swarm.workspace}. It snapshots the workspace into .lanes/_before_promote and copies lane ${laneKey}'s files over it.`,
+    `Run exactly: \`lh goal lane promote ${laneKey}\` in ${swarm.workspace}. It snapshots the workspace into .lanes/_before_promote and copies over it the files lane ${laneKey} was graded on when it took the lead (its current files, if it never recorded a leading score).`,
     'Do nothing else: no edits, no evaluations. Report the command output.',
   ].join('\n\n');
 

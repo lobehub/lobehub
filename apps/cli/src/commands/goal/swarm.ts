@@ -4,7 +4,7 @@ import type { Command } from 'commander';
 
 import { getTrpcClient } from '../../api/client';
 import { log } from '../../utils/logger';
-import { adoptSwarmLane, promoteSwarmLane } from '../../utils/swarmLane';
+import { adoptSwarmLane, promoteSwarmLane, stakeSwarmLanes } from '../../utils/swarmLane';
 
 const DURATION = /^(\d+(?:\.\d+)?)\s*(m|min|h|d)$/i;
 
@@ -79,6 +79,13 @@ export function registerGoalSwarmCommands(goal: Command) {
           workspace: path.resolve(options.workspace),
         });
         const swarm = result.data.goal.config?.swarm;
+        // Lane keys restart at A per swarm, so claim `.lanes` now: a retry keeps
+        // this swarm's lanes, an earlier swarm's copies move out of the way.
+        const staked = await stakeSwarmLanes(path.resolve(options.workspace), result.data.goal.id);
+        if (!staked)
+          log.info(
+            `Workspace ${path.resolve(options.workspace)} is not on this machine; lanes will be created on their device.`,
+          );
         log.info(
           `Started swarm ${result.data.goal.id}: ${swarm?.lanes.length ?? 0} lanes in ${swarm?.workspace}/.lanes until ${result.data.goal.config?.schedule?.deadline}`,
         );
@@ -102,10 +109,15 @@ export function registerGoalSwarmCommands(goal: Command) {
     )
     .option('--workspace <dir>', 'The swarm workspace (default: the current directory)')
     .action(async (key: string, options: { workspace?: string }) => {
-      const { snapshot, source, target } = await promoteSwarmLane(
+      const { graded, snapshot, source, target } = await promoteSwarmLane(
         path.resolve(options.workspace ?? process.cwd()),
         key,
       );
-      log.info(`Promoted ${source} into ${target}. The previous workspace is in ${snapshot}.`);
+      const what = graded
+        ? `the files lane ${key} was graded on`
+        : `lane ${key}'s current files (it never recorded a leading score)`;
+      log.info(
+        `Promoted ${what} from ${source} into ${target}. The previous workspace is in ${snapshot}.`,
+      );
     });
 }
