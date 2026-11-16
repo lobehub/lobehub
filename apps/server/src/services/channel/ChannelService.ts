@@ -348,7 +348,10 @@ export class ChannelService {
     return channel;
   };
 
-  /** Members already in the Channel see the newcomer without waiting for their next poll. */
+  /**
+   * Joins an open project Channel or a public one of the workspace. Members already in it see the
+   * newcomer without waiting for their next poll.
+   */
   join = async (channelId: string) => {
     const access = await this.repository.join(channelId);
     await this.changed(channelId);

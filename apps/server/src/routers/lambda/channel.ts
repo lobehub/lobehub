@@ -252,6 +252,7 @@ export const channelRouter = router({
     .query(async ({ ctx, input }) => ({
       data: await ctx.channelService.repository.listJoinable(input?.search),
     })),
+  /** Joins an open project Channel or a public one the caller can join. */
   join: channelProcedure.input(z.object({ channelId })).mutation(async ({ ctx, input }) => {
     const { channel } = await ctx.channelService.join(input.channelId);
     return { data: channel, success: true };

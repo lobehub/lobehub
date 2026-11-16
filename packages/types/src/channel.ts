@@ -496,6 +496,11 @@ export interface ChannelListItem {
   canDelete: boolean;
   createdAt: Date;
   id: string;
+  /**
+   * False for a project Channel the caller can read through the project but has not joined; it
+   * belongs in that project's list only. Absent means joined.
+   */
+  joined?: boolean;
   /** The newest message, Threads included, cut for a preview; set by the Channel list. */
   lastMessage?: ChannelLastMessage | null;
   /**
@@ -658,6 +663,8 @@ export interface ChannelDetail {
    * running, or holding the writer); filter by `threadId` for one conversation's own.
    */
   jobs: ChannelPublicJob[];
+  /** False while the caller reads an open project Channel without being a member; sending joins. */
+  joined?: boolean;
   members: ChannelPublicMember[];
   messages: ChannelPublicMessage[];
   rootMessage: ChannelPublicMessage | null;

@@ -13,5 +13,7 @@ export interface ChannelWriteOptions {
   allowArchived?: boolean;
   /** Lets owners and admins act on a channel that sits in the recycle bin. */
   allowTrashed?: boolean;
+  /** A caller who is not a member yet joins an open project Channel first (see `projectAccess`). */
+  joinOpen?: boolean;
   minRole?: ChannelMemberRole;
 }
