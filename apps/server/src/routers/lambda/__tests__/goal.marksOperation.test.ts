@@ -27,10 +27,15 @@ vi.mock('@/server/services/heterogeneousAgent/operationPrincipal', async (import
 const mockRunNode = vi.fn();
 const mockAdd = vi.fn();
 const mockJudge = vi.fn();
+vi.mock('@/database/models/goalMark', () => ({
+  GoalMarkModel: vi.fn(function () {
+    return { findRunNode: mockRunNode };
+  }),
+}));
 vi.mock('@/server/services/goal/marks', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   GoalMarkService: vi.fn(function () {
-    return { add: mockAdd, judge: mockJudge, runNode: mockRunNode };
+    return { add: mockAdd, judge: mockJudge };
   }),
 }));
 

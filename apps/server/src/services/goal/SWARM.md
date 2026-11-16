@@ -203,8 +203,8 @@ below holds.
 | PR | Content | Depends on |
 |---|---|---|
 | 1 | Goal marks (done, 0f5d9bb672a) | — |
-| 2 | `lh goal evaluate`, objective series with lane metadata, operation-token write path, leaderboard read model | 1 |
-| 3 | `config.swarm`, lane containers, per-lane directory (device) / per-lane sandbox, archive-based `lane adopt`, timeboxed lane Tasks, deadline wrap-up and champion | 2 |
+| 2 | `config.objective`, `lh goal set-objective` / `evaluate` / `objective`, objective series with lane metadata, operation-token write path, leaderboard read model, `<goal_objective>` prompt section, per-machine evaluation lock (built) | 1 |
+| 3 | `config.swarm`, lane containers, per-lane directory (device) / per-lane sandbox, graded-archive upload and `lane adopt`, timeboxed lane Tasks, deadline wrap-up and champion | 2 |
 | 4 | Coordinator policy in tick, `directive` marks, prompt pinning | 3 |
 | 5 | Goal page leaderboard and champion promote (web) | 2 (reads), 4 |
 

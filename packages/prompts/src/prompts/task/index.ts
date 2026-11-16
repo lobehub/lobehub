@@ -1,6 +1,7 @@
 import type { TaskDetailData, TaskDetailWorkspaceNode, TaskStatus } from '@lobechat/types';
 
 import { buildGoalMarksSection, type TaskRunPromptGoalMarks } from './goalMarks';
+import { buildGoalObjectiveSection, type TaskRunPromptGoalObjective } from './goalObjective';
 
 // ── Formatting helpers for Task tool responses ──
 
@@ -599,6 +600,8 @@ export interface TaskRunPromptInput {
   goalLoop?: TaskRunPromptGoalLoop;
   /** Present only for runs of a Task that works for a Goal. */
   goalMarks?: TaskRunPromptGoalMarks;
+  /** Present only for runs of a Task whose Goal has an objective. */
+  goalObjective?: TaskRunPromptGoalObjective;
   /** Parent task context (when current task is a subtask) */
   parentTask?: {
     id?: string;
@@ -704,7 +707,16 @@ const briefIcon = (type: string): string => {
  * 4. Original Task (instruction + description) — the base requirement
  */
 export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): string => {
-  const { task, activities, extraPrompt, goalLoop, goalMarks, workspace, parentTask } = input;
+  const {
+    task,
+    activities,
+    extraPrompt,
+    goalLoop,
+    goalMarks,
+    goalObjective,
+    workspace,
+    parentTask,
+  } = input;
   const sections: string[] = [];
 
   // ── 1. High Priority Instruction ──
@@ -1042,6 +1054,7 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
 
   taskLines.push('</task>');
   sections.push(taskLines.join('\n'));
+  if (goalObjective) sections.push(buildGoalObjectiveSection(goalObjective));
   if (goalMarks) sections.push(buildGoalMarksSection(goalMarks));
 
   return sections.join('\n\n');
@@ -1054,5 +1067,6 @@ export { buildTaskDetailPrompt } from './buildTaskDetailPrompt';
 export type { BuildTaskListPromptInput } from './buildTaskListPrompt';
 export { buildTaskListPrompt } from './buildTaskListPrompt';
 export type { TaskRunPromptGoalMark, TaskRunPromptGoalMarks } from './goalMarks';
+export type { TaskRunPromptGoalObjective, TaskRunPromptObjectiveLane } from './goalObjective';
 export type { TaskManagerPromptDefaults } from './taskManagerDefaults';
 export { buildTaskManagerDefaultsPrompt } from './taskManagerDefaults';

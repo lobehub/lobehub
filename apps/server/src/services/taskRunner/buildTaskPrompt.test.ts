@@ -25,6 +25,7 @@ import {
   verifyRuns,
 } from '@/database/schemas';
 
+import { GoalObjectiveService } from '../goal/objective';
 import { buildTaskPrompt } from './buildTaskPrompt';
 
 const promptDeps = (
@@ -145,6 +146,22 @@ describe('buildTaskPrompt goal marks', () => {
     const { prompt } = await buildTaskPrompt(task, promptDeps(db, taskModel, userId));
 
     expect(prompt).not.toContain('<goal_marks>');
+  });
+
+  it('hands a run of an optimisation goal its objective and leaderboard', async () => {
+    const { task, taskModel } = await goalTask('Tune the model');
+    const goal = await new GoalModel(db, userId).findByGraphTask(task.id);
+    await new GoalObjectiveService(db, userId).setObjective(goal!.id, {
+      direction: 'max',
+      evaluator: './score.sh',
+      title: 'Judge score',
+    });
+
+    const { prompt } = await buildTaskPrompt(task, promptDeps(db, taskModel, userId));
+
+    expect(prompt).toContain('<goal_objective>');
+    expect(prompt).toContain('This Goal maximises Judge score');
+    expect(prompt).toContain('runs `./score.sh` there');
   });
 
   it('gives a Task outside any Goal none', async () => {

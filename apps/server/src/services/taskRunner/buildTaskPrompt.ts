@@ -4,6 +4,7 @@ import {
   buildTaskRunPrompt,
   type TaskRunPromptGoalLoop,
   type TaskRunPromptGoalMarks,
+  type TaskRunPromptGoalObjective,
 } from '@lobechat/prompts';
 import type {
   TaskItem,
@@ -27,6 +28,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { extractFileIdsFromEditorData } from '@/server/services/file/extractFileIdsFromEditorData';
 import { resolveAttachmentMetadata } from '@/server/services/file/resolveAttachments';
 import { marksForPrompt } from '@/server/services/goal/marks';
+import { GoalObjectiveService } from '@/server/services/goal/objective';
 import {
   countChargedTaskAttempts,
   countUnchargedRuns,
@@ -96,6 +98,47 @@ const isJudgedResult = (result: { status: string; verdict: string | null }) =>
   result.status !== 'errored' &&
   (!!result.verdict || result.status === 'passed' || result.status === 'failed');
 
+/** How many lanes a run's prompt lists; the rest are behind `lh goal objective`. */
+const OBJECTIVE_LANES_IN_PROMPT = 8;
+
+/**
+ * The Goal context every run of a Goal Task is handed — the marks other runs
+ * left and, when the goal optimises a score, its objective and leaderboard —
+ * read fresh for this run so what a sibling did a minute ago reaches it. The
+ * terminal acceptance Task judges the Goal rather than doing its work, so it
+ * gets neither. A failed read costs the run this context, never the run.
+ */
+const resolveGoalRunContext = async (
+  task: TaskItem,
+  deps: BuildTaskPromptDeps,
+): Promise<{ marks?: TaskRunPromptGoalMarks; objective?: TaskRunPromptGoalObjective }> => {
+  if (task.name === GOAL_ACCEPTANCE_TASK_TITLE) return {};
+  const { db, userId, workspaceId } = deps;
+  try {
+    const goal = await new GoalModel(db, userId, workspaceId).findByGraphTask(task.id);
+    if (!goal) return {};
+    const graph = await new GoalGraphModel(db, userId, workspaceId).getGraph(goal.id);
+    if (!graph) return {};
+    const node = graph.nodes.find((item) => item.taskId === task.id);
+    const board = graph.goal.config?.objective
+      ? await new GoalObjectiveService(db, userId, workspaceId).leaderboard(goal.id, node?.id)
+      : undefined;
+    return {
+      marks: marksForPrompt(graph),
+      objective: board && {
+        direction: board.objective.direction,
+        evaluator: board.objective.evaluator,
+        lanes: board.lanes.slice(0, OBJECTIVE_LANES_IN_PROMPT),
+        title: board.objective.title,
+        you: board.you,
+      },
+    };
+  } catch (error) {
+    console.error('[buildTaskPrompt] failed to read the goal context:', error);
+    return {};
+  }
+};
+
 /**
  * For a goal task that already ran at least one round, collect what the next
  * round must know: the previous round's unresolved checks (with the verifier's
@@ -103,29 +146,6 @@ const isJudgedResult = (result: { status: string; verdict: string | null }) =>
  * acceptance aggregate. Best-effort — any lookup failure degrades to the bare
  * round counters so prompt building never blocks a run.
  */
-/**
- * The marks every run of a Goal Task is handed, read fresh for this run so a
- * mark a sibling left a minute ago reaches it. The terminal acceptance Task
- * judges the Goal rather than doing its work, so it gets none. A failed read
- * costs the run its marks, never the run.
- */
-const resolveGoalMarks = async (
-  task: TaskItem,
-  deps: BuildTaskPromptDeps,
-): Promise<TaskRunPromptGoalMarks | undefined> => {
-  if (task.name === GOAL_ACCEPTANCE_TASK_TITLE) return undefined;
-  const { db, userId, workspaceId } = deps;
-  try {
-    const goal = await new GoalModel(db, userId, workspaceId).findByGraphTask(task.id);
-    if (!goal) return undefined;
-    const graph = await new GoalGraphModel(db, userId, workspaceId).getGraph(goal.id);
-    return graph ? marksForPrompt(graph) : undefined;
-  } catch (error) {
-    console.error('[buildTaskPrompt] failed to read goal marks:', error);
-    return undefined;
-  }
-};
-
 const resolveGoalLoopContext = async (
   task: TaskItem,
   deps: BuildTaskPromptDeps,
@@ -470,14 +490,15 @@ export async function buildTaskPrompt(
       });
   }
 
-  const [goalLoop, goalMarks] = await Promise.all([
+  const [goalLoop, { marks: goalMarks, objective: goalObjective }] = await Promise.all([
     resolveGoalLoopContext(task, deps),
-    resolveGoalMarks(task, deps),
+    resolveGoalRunContext(task, deps),
   ]);
 
   const prompt = buildTaskRunPrompt({
     ...(goalLoop ? { goalLoop } : {}),
     ...(goalMarks ? { goalMarks } : {}),
+    ...(goalObjective ? { goalObjective } : {}),
     activities: {
       briefs: briefs.map((b: any) => ({
         createdAt: b.createdAt,

@@ -3,20 +3,16 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import type { LobeChatDatabase } from '@/database/type';
-import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
-import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { router } from '@/libs/trpc/lambda';
 import {
   GoalMarkError,
   GoalMarkService,
   MARK_DESCRIPTION_MAX,
   MARK_TITLE_MAX,
 } from '@/server/services/goal/marks';
-import {
-  HeteroOperationPrincipalError,
-  resolveActiveHeteroOperationPrincipal,
-} from '@/server/services/heterogeneousAgent/operationPrincipal';
 
 import { goalProcedure, goalWriteProcedure, idInput, mapGoalError } from '../goalProcedures';
+import { goalRunOperationProcedure } from './runOperation';
 
 const markInput = z.object({
   description: z.string().max(MARK_DESCRIPTION_MAX).optional(),
@@ -36,50 +32,17 @@ const markServiceFor = (ctx: {
   workspaceId?: string | null;
 }) => new GoalMarkService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
 
-/**
- * The run a device or gateway Task holds an operation token for, and the Goal
- * Task node it works for.
- *
- * Marks are left mid-run, by exactly the runs that hold operation tokens — and
- * `oidcAuth` refuses those on ordinary routes. The Goal is never an input: it
- * is the one whose Task node the operation runs, so a token reaches the marks
- * of its own Goal and no other. `hetero:ingest` is what every such run already
- * carries.
- */
-const markOperationProcedure = heteroAuthedProcedure.use(serverDatabase).use(async (opts) => {
-  if (opts.ctx.heteroAuthKind !== 'operation' || !opts.ctx.heteroOperation) {
-    throw new TRPCError({ code: 'UNAUTHORIZED', message: 'An operation-bound token is required' });
-  }
-  let principal;
-  try {
-    principal = await resolveActiveHeteroOperationPrincipal({
-      capability: 'hetero:ingest',
-      claims: opts.ctx.heteroOperation,
-      db: opts.ctx.serverDB,
-      operationId: opts.ctx.heteroOperation.operation_id,
-    });
-  } catch (error) {
-    if (!(error instanceof HeteroOperationPrincipalError)) throw error;
-    throw new TRPCError({
-      cause: error,
-      code: error.status === 401 ? 'UNAUTHORIZED' : error.status === 409 ? 'CONFLICT' : 'FORBIDDEN',
-      message: error.message,
-    });
-  }
-  const markService = new GoalMarkService(
-    opts.ctx.serverDB,
-    principal.userId,
-    principal.workspaceId,
-  );
-  const run = await markService.runNode(principal.operationId);
-  if (!run) {
-    throw new TRPCError({
-      code: 'FORBIDDEN',
-      message: 'This run does not work for a Goal Task, so it has no Goal marks',
-    });
-  }
-  return opts.next({ ctx: { markService, run } });
-});
+const markOperationProcedure = goalRunOperationProcedure.use(async (opts) =>
+  opts.next({
+    ctx: {
+      markService: new GoalMarkService(
+        opts.ctx.serverDB,
+        opts.ctx.principal.userId,
+        opts.ctx.principal.workspaceId,
+      ),
+    },
+  }),
+);
 
 export const markRouter = router({
   addMark: goalWriteProcedure

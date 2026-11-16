@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
 import type {
-  GoalEdgeKind,
   GoalEventEntityType,
   GoalEventType,
   GoalGraphDecision,
@@ -27,6 +26,7 @@ import {
 } from './assignment';
 import { registerGoalConfigurationCommands } from './configuration';
 import { registerGoalGraphEditCommands } from './graphEdit';
+import { inverseEdgeLabel, nodeIcon } from './graphGlyphs';
 import { registerGoalMarkCommands } from './mark';
 import {
   type GoalMetricState,
@@ -34,7 +34,7 @@ import {
   readMetricState,
   registerGoalMetricCommands,
 } from './metric';
-import { nodeIcon } from './nodeIcon';
+import { registerGoalObjectiveCommands } from './objective';
 import { goalReads, hasOperationToken } from './reads';
 import { registerGoalReportCommand } from './report';
 import { missingSeedDependencies, parseTaskFile } from './seedTasks';
@@ -53,27 +53,6 @@ const parseVariant = (raw: string) => {
     .filter(Boolean);
   if (!axis || !values.length) throw new Error(`--variant expects axis=value1,value2; got ${raw}`);
   return { axis, values };
-};
-
-/**
- * Every edge kind reads `source <kind> target`, so a row listing its INCOMING
- * edges by kind states the relationship backwards: an incoming `depends_on`
- * means the other node depends on THIS one, not the reverse. Render the inverse
- * verb instead, so each entry is a true sentence about the row it sits on.
- */
-const inverseEdgeLabel: Record<GoalEdgeKind, string> = {
-  answers: 'answered by',
-  confirms: 'confirmed by',
-  contains: 'inside',
-  contradicts: 'contradicted by',
-  decomposes: 'part of',
-  depends_on: 'blocks',
-  derived_from: 'ancestor of',
-  investigates: 'investigated by',
-  leads_to: 'follows',
-  produces: 'produced by',
-  refutes: 'refuted by',
-  supports: 'supported by',
 };
 
 const terminalOutcomes = new Set(['achieved', 'waiting_human', 'no_progress', 'failed']);
@@ -1235,4 +1214,5 @@ export function registerGoalCommand(program: Command) {
   registerGoalGraphEditCommands(goal);
   registerGoalMarkCommands(goal);
   registerGoalMetricCommands(goal);
+  registerGoalObjectiveCommands(goal);
 }

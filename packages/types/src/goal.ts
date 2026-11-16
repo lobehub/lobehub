@@ -468,6 +468,31 @@ export interface GoalUnderstanding {
   updatedAt: string;
 }
 
+/**
+ * The score an optimisation goal pushes, and the command that measures it.
+ *
+ * A Task run grades its working directory with `lh goal evaluate`, which runs
+ * `evaluator` there and records the score as one point of the goal's metric
+ * series `key`, tagged with the lane (the run's experiment container, or its
+ * Task node). The leaderboard is that series grouped by lane.
+ */
+export interface GoalObjective {
+  /** Higher or lower is better. */
+  direction: 'max' | 'min';
+  /**
+   * Shell command run in the Task's working directory. Its output must carry
+   * the score: a JSON object with `score` (and optional `valid`, `summary`,
+   * `metrics`), a `TOTAL_SCORE <n>` / `score: <n>` line, or a bare number.
+   */
+  evaluator: string;
+  /** Metric series key on this goal. Defaults to `objective`. */
+  key?: string;
+  /** Seconds before an evaluation is abandoned. Defaults to 1800. */
+  timeoutSeconds?: number;
+  /** Human-facing name of the score. */
+  title?: string;
+}
+
 export interface GoalConfig {
   acceptance?: GoalAcceptancePolicy;
   /**
@@ -492,6 +517,8 @@ export interface GoalConfig {
    * together with `provider`, and dropped when the goal changes agent.
    */
   model?: string;
+  /** The score this goal optimises, when it has one; see {@link GoalObjective}. */
+  objective?: GoalObjective;
   /** Who the current pause belongs to; cleared when the goal runs again. */
   pausedBy?: GoalPauseReason;
   /** Coordinator-owned lease for initial decomposition; not a user policy. */
