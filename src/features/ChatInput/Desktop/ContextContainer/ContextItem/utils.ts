@@ -47,22 +47,31 @@ export const getUploadChipState = ({
     typeof rawProgress === 'number' && Number.isFinite(rawProgress)
       ? Math.min(100, Math.max(0, rawProgress))
       : undefined;
+  const indicator: 'busy' | 'error' | 'file' =
+    status === 'error' || status === 'cancelled' ? 'error' : busy ? 'busy' : 'file';
 
   return {
     busy,
     canPreview: status === 'success',
     canRetry: status === 'error' || status === 'cancelled',
-    indicator:
-      status === 'error' || status === 'cancelled'
-        ? 'error'
-        : status === 'uploading' && progress !== undefined
-          ? 'progress'
-          : busy
-            ? 'loading'
-            : 'file',
+    /**
+     * Every busy step shares one `busy` indicator so the ring keeps its size and shape from
+     * pending through processing; only `ringProgress` decides whether it fills or spins.
+     */
+    indicator,
     progress,
+    /** Fill level of the busy ring; `undefined` while no byte progress is measurable (spins). */
+    ringProgress: status === 'uploading' ? progress : undefined,
   };
 };
+
+/** Accessible label for the busy indicator, naming the upload step in progress. */
+export const getUploadBusyLabelKey = (status: UploadFileItem['status']) =>
+  status === 'processing'
+    ? 'upload.preview.status.processing'
+    : status === 'pending'
+      ? 'upload.preview.status.pending'
+      : 'upload.preview.status.uploading';
 
 /** Express transferred and total bytes in the same unit so the ratio is easy to compare. */
 export const getUploadChipSize = ({

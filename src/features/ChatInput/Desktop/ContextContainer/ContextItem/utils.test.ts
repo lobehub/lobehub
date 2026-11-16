@@ -14,7 +14,8 @@ describe('getUploadChipState', () => {
         busy: true,
         canPreview: false,
         canRetry: false,
-        indicator: 'loading',
+        indicator: 'busy',
+        ringProgress: undefined,
       });
     },
   );
@@ -24,8 +25,9 @@ describe('getUploadChipState', () => {
       {
         busy: true,
         canPreview: false,
-        indicator: 'progress',
+        indicator: 'busy',
         progress: 42,
+        ringProgress: 42,
       },
     );
     expect(getUploadChipState({ status: 'success', uploadState: uploadState(100) })).toMatchObject({
@@ -55,10 +57,22 @@ describe('getUploadChipState', () => {
         getUploadChipState({
           status: 'uploading',
           uploadState: progress === undefined ? undefined : uploadState(progress),
-        }).indicator,
-      ).toBe('loading');
+        }),
+      ).toMatchObject({ indicator: 'busy', ringProgress: undefined });
     },
   );
+
+  it('keeps one busy indicator from pending through processing', () => {
+    // A separate spinner for pending/processing made the ring shrink and change shape mid-upload.
+    const steps = [
+      getUploadChipState({ status: 'pending', uploadState: uploadState(0) }),
+      getUploadChipState({ status: 'uploading', uploadState: uploadState(42) }),
+      getUploadChipState({ status: 'processing', uploadState: uploadState(100) }),
+    ];
+
+    expect(steps.map((step) => step.indicator)).toEqual(['busy', 'busy', 'busy']);
+    expect(steps.map((step) => step.ringProgress)).toEqual([undefined, 42, undefined]);
+  });
 
   it.each([
     [-10, 0],
