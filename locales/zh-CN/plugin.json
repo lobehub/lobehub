@@ -480,6 +480,7 @@
   "builtins.lobe-mcp-events.apiName.subscribeEvent": "订阅事件",
   "builtins.lobe-mcp-events.apiName.unsubscribeEvent": "取消订阅",
   "builtins.lobe-mcp-events.error.callback_unreachable": "连接器无法访问 LobeHub 的回调地址",
+  "builtins.lobe-mcp-events.error.channel_unsupported": "频道里不能订阅事件，请在与这个助理的单独对话中订阅。",
   "builtins.lobe-mcp-events.error.connector_not_found": "这个助理没有这个连接器",
   "builtins.lobe-mcp-events.error.delivery_unsupported": "这个事件不支持 Webhook 投递，无法订阅",
   "builtins.lobe-mcp-events.error.events_unsupported": "这个连接器不提供事件",

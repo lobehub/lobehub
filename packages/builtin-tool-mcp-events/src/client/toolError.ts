@@ -2,6 +2,7 @@ import type { McpEventsToolErrorCode } from '../types';
 
 const ERROR_CODES = new Set<McpEventsToolErrorCode>([
   'callback_unreachable',
+  'channel_unsupported',
   'connector_not_found',
   'delivery_unsupported',
   'events_unsupported',

@@ -211,7 +211,9 @@ afterEach(() => {
 describe('MCP event subscription service scope', () => {
   it('rejects every API while the feature is disabled', async () => {
     mocks.enabled.mockResolvedValue(false);
-    await expect(service().listEventTypes({ agentId: 'agent' })).rejects.toMatchObject({
+    await expect(
+      service().listEventTypes({ agentId: 'agent', topicId: 'topic' }),
+    ).rejects.toMatchObject({
       code: 'feature_disabled',
     });
     await expect(service().subscribeEvent(args)).rejects.toMatchObject({
@@ -229,12 +231,27 @@ describe('MCP event subscription service scope', () => {
 
   it('rejects an inaccessible agent or a topic owned by another agent', async () => {
     mocks.agentExists.mockResolvedValueOnce(false);
-    await expect(service().listEventTypes({ agentId: 'other' })).rejects.toMatchObject({
+    await expect(
+      service().listEventTypes({ agentId: 'other', topicId: 'topic' }),
+    ).rejects.toMatchObject({
       code: 'forbidden',
     });
     mocks.topic.mockResolvedValueOnce({ id: 'topic', agentId: 'other' });
     await expect(service().subscribeEvent(args)).rejects.toMatchObject({ code: 'forbidden' });
     expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses every API in a Channel run, where events would land in a topic no one sees', async () => {
+    mocks.topic.mockResolvedValue({ agentId: 'agent', id: 'topic', trigger: 'channel' });
+    for (const call of [
+      () => service().listEventTypes({ agentId: 'agent', topicId: 'topic' }),
+      () => service().subscribeEvent(args),
+      () => service().listSubscriptions(args),
+      () => service().unsubscribeEvent({ ...args, subscriptionId: 'webhook' }),
+    ])
+      await expect(call()).rejects.toMatchObject({ code: 'channel_unsupported' });
+    expect(mocks.resolve).not.toHaveBeenCalled();
+    expect(mocks.subscribe).not.toHaveBeenCalled();
   });
 
   it.each([{ topicId: 'other-topic' }, { agentId: 'other-agent' }, { userId: 'other-user' }])(
@@ -426,7 +443,7 @@ describe('event type discovery', () => {
       { name: 'issue.created', delivery: ['webhook'] },
       { name: 'stream', delivery: ['push'] },
     ]);
-    expect(await service().listEventTypes({ agentId: 'agent' })).toEqual({
+    expect(await service().listEventTypes({ agentId: 'agent', topicId: 'topic' })).toEqual({
       eventTypes: [
         {
           connector: { identifier: 'linear', name: 'Linear' },
@@ -453,7 +470,7 @@ describe('event type discovery', () => {
       connector({ id: 'other', identifier: 'other' }),
     ]);
     mocks.listEvents.mockRejectedValueOnce({ code: -32024 });
-    const result = await service().listEventTypes({ agentId: 'agent' });
+    const result = await service().listEventTypes({ agentId: 'agent', topicId: 'topic' });
     expect(result.eventTypes).toHaveLength(1);
     expect(result.errors).toEqual([
       { connector: 'linear', message: expect.stringMatching(/Reconnect/) },
@@ -478,7 +495,7 @@ describe('OAuth connectors with accounts', () => {
   });
 
   it('lists event types through the connected account', async () => {
-    const state = await service().listEventTypes({ agentId: 'agent' });
+    const state = await service().listEventTypes({ agentId: 'agent', topicId: 'topic' });
     expect(state.errors).toBeUndefined();
     expect(state.eventTypes.map((event) => event.name)).toEqual(['issue.created']);
   });

@@ -57,6 +57,8 @@ export default {
     'Event subscriptions are turned off on this server',
   'builtins.lobe-mcp-events.error.public_url_required':
     'Event subscriptions need LobeHub on a public HTTPS address. Ask your administrator to set APP_URL',
+  'builtins.lobe-mcp-events.error.channel_unsupported':
+    "Event subscriptions aren't available in Channels. Ask in a direct conversation with this agent instead.",
   'builtins.lobe-mcp-events.error.connector_not_found': "This agent doesn't have that connector",
   'builtins.lobe-mcp-events.error.events_unsupported': "This connector doesn't offer events",
   'builtins.lobe-mcp-events.error.delivery_unsupported':
