@@ -95,6 +95,37 @@ afterEach(() => {
   cleanup();
 });
 
+const imageRefEditorState = {
+  root: {
+    children: [
+      {
+        children: [
+          {
+            detail: 0,
+            format: 0,
+            mode: 'normal',
+            style: '',
+            text: 'compare ',
+            type: 'text',
+            version: 1,
+          },
+          { number: 2, src: 'blob:gone', type: 'image-ref-tag', version: 1 },
+        ],
+        direction: null,
+        format: '',
+        indent: 0,
+        type: 'paragraph',
+        version: 1,
+      },
+    ],
+    direction: null,
+    format: '',
+    indent: 0,
+    type: 'root',
+    version: 1,
+  },
+};
+
 describe('RichTextMessage', () => {
   it('should allow document comments to use the default 16px renderer scale', async () => {
     const { container } = render(
@@ -144,6 +175,19 @@ describe('RichTextMessage', () => {
     });
 
     expect(container.textContent).toContain('report.md');
+  });
+
+  // Regression: an image pasted into the composer serializes to an `image-ref-tag`
+  // node. Unregistered on the renderer, it made the sent message drop all its text.
+  it('should render image-ref-tag nodes with the surrounding text', async () => {
+    const { container } = render(<RichTextMessage editorState={imageRefEditorState} />);
+
+    await act(async () => {
+      await moment();
+    });
+
+    expect(container.textContent).toContain('compare');
+    expect(container.textContent).toContain('upload.image.label');
   });
 
   // Regression: the renderer's stock image node is a bare <img>,

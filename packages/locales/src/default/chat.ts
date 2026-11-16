@@ -1679,9 +1679,9 @@ export default {
   'pageCopilot.title': 'Page Agent',
   'pageSelection.lines': 'Lines {{start}}-{{end}}',
   'pageSelection.reference': 'Selected Text',
-  'textSelection.added': 'Added to conversation context',
-  'textSelection.addToConversation': 'Add to conversation',
-  'textSelection.title': 'Message selection',
+  'textSelection.copied': 'Copied',
+  'textSelection.copy': 'Copy',
+  'textSelection.quote': 'Quote',
   'pin': 'Pin',
   'pinOff': 'Unpin',
   'pinForTeam': 'Pin for team',
@@ -3607,6 +3607,9 @@ export default {
     'File uploads are not supported in browser mode; only images are allowed.',
   'upload.clientMode.visionNotSupported':
     'The current model does not support visual recognition. Please switch to a different model to use this feature.',
+  'upload.image.label': 'Image {{number}}',
+  'upload.image.preview': 'Preview {{name}}',
+  'upload.image.remove': 'Remove {{name}}',
   'upload.localPathReference':
     'Large files are referenced by their local path instead of uploaded, so the agent reads the original file directly.',
   'upload.preview.prepareTasks': 'Preparing chunks...',
