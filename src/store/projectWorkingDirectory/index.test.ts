@@ -84,6 +84,24 @@ describe('projectWorkingDirectory store', () => {
     });
   });
 
+  describe('detachEnvironment', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it("unlinks through the service and refreshes only that project's environments", async () => {
+      vi.mocked(mutate).mockClear();
+      const detach = vi
+        .spyOn(projectWorkingDirectoryService, 'detachEnvironment')
+        .mockResolvedValue({ data: {}, success: true } as never);
+
+      await useProjectDirectoryStore.getState().detachEnvironment('project-1', 'env-1');
+
+      expect(detach).toHaveBeenCalledWith('project-1', 'env-1');
+      expect(invalidates('projectEnvironments', 'project-1')).toBe(true);
+      // The environment itself is untouched, so the scope-wide list stays as it is.
+      expect(invalidates('projectEnvironments', 'all')).toBe(false);
+    });
+  });
+
   describe('useFetchProjectTopics polling', () => {
     afterEach(() => {
       vi.restoreAllMocks();

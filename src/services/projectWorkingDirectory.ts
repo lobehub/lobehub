@@ -16,6 +16,8 @@ class ProjectWorkingDirectoryService {
     lambdaClient.projectWorkingDirectory.saveEnvironment.mutate(input);
   attachEnvironment = (projectId: string, environmentId: string) =>
     lambdaClient.projectWorkingDirectory.attachEnvironment.mutate({ projectId, environmentId });
+  detachEnvironment = (projectId: string, environmentId: string) =>
+    lambdaClient.projectWorkingDirectory.detachEnvironment.mutate({ projectId, environmentId });
   attachRepository = (input: Parameters<Client['attachRepository']['mutate']>[0]) =>
     lambdaClient.projectWorkingDirectory.attachRepository.mutate(input);
   bind = (input: BindProjectDirectoryInput) =>

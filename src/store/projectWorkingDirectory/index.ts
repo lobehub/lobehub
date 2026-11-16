@@ -103,6 +103,8 @@ interface ProjectDirectoryStore extends ProjectDirectoryStoreState {
   createProjectTopic: (
     ...args: ServiceParams<'createProjectTopic'>
   ) => Promise<ServiceData<'createProjectTopic'>>;
+  /** Unlink an environment from a project; the environment itself is kept. */
+  detachEnvironment: (...args: ServiceParams<'detachEnvironment'>) => Promise<void>;
   /** Move a directory conversation to its project's directory on another device. */
   moveTopic: (...args: ServiceParams<'moveTopic'>) => Promise<ServiceData<'moveTopic'>>;
   /** Refetch a project's conversations after a change made elsewhere, e.g. a new main agent. */
@@ -280,6 +282,10 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
         // The scope-wide list gained the environment instanced by the attach.
         environments.revalidate(ALL_PROJECTS_KEY),
       ]);
+    },
+    detachEnvironment: async (projectId, environmentId) => {
+      await projectWorkingDirectoryService.detachEnvironment(projectId, environmentId);
+      await environments.revalidate(projectId);
     },
     attachRepository: async (input) => {
       const result = await projectWorkingDirectoryService.attachRepository(input);

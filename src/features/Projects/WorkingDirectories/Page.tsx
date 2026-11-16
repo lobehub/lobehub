@@ -64,6 +64,7 @@ export function ProjectDirectoriesPage() {
       label: t('settings.environments'),
       render: () => (
         <ProjectWorkingDirectories
+          canManage={canManage}
           projectId={detail.project.id}
           shared={Boolean(detail.project.workspaceId) && detail.project.visibility === 'public'}
         />
