@@ -10,7 +10,7 @@ import {
   Icon,
   stopPropagation,
 } from '@lobehub/ui';
-import { Loader2, MoreVerticalIcon, Plus, Unplug } from 'lucide-react';
+import { Loader2, MoreHorizontalIcon, Plus, Unplug } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -72,7 +72,7 @@ const Item = memo<ItemProps>(
 
     const renderAction = () => {
       if (isConnecting) {
-        return <ActionIcon loading icon={Loader2} />;
+        return <ActionIcon loading aria-label={t('tools.lobehubSkill.connect')} icon={Loader2} />;
       }
 
       if (isConnected) {
@@ -91,7 +91,11 @@ const Item = memo<ItemProps>(
               },
             ]}
           >
-            <ActionIcon disabled={!canEdit} icon={MoreVerticalIcon} />
+            <ActionIcon
+              aria-label={t('connectorMarket.action.manage')}
+              disabled={!canEdit}
+              icon={MoreHorizontalIcon}
+            />
           </DropdownMenu>
         );
       }

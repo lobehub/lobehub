@@ -1,10 +1,19 @@
 'use client';
 
-import { Button, DropdownMenu, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  SearchBar,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
-import { FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';
+import { ChevronDown, FileArchive, Grid2x2Plus, Link, Plus, RefreshCw, Store } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,15 +32,26 @@ import { SkillListVariantProvider } from './SkillListRow';
 const styles = stylex.create({
   body: { overflowY: 'auto', flex: '1', paddingBlock: '4px', paddingInline: '8px' },
   pageBody: { paddingBlockStart: '0', paddingBlockEnd: '24px', paddingInline: '0' },
+  // Title and one line of what connectors do on the left; search and the page
+  // actions on the right, the primary Add last.
   pageHeader: {
     display: 'flex',
     flexShrink: 0,
+    flexWrap: 'wrap',
     gap: '16px',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingBlockStart: '24px',
-    paddingBlockEnd: '4px',
+    paddingBlockStart: '32px',
+    paddingBlockEnd: '8px',
     paddingInline: '12px',
+  },
+  pageSearch: { width: '240px' },
+  pageTitle: {
+    marginBlock: 0,
+    fontSize: cssVar.fontSizeHeading3,
+    fontWeight: 600,
+    lineHeight: 1.3,
+    color: cssVar.colorText,
   },
   header: {
     display: 'flex',
@@ -73,6 +93,7 @@ const LeftPanel = memo<LeftPanelProps>(
   ({ fullWidth, onDeleteSelected, onSelect, page, selectedIdentifier, viewMode }) => {
     const { t } = useTranslation(['setting', 'tool']);
     const [showAddConnector, setShowAddConnector] = useState(false);
+    const [keyword, setKeyword] = useState('');
 
     const handleOpenStore = useCallback(() => {
       createSkillStoreModal();
@@ -87,45 +108,77 @@ const LeftPanel = memo<LeftPanelProps>(
     });
     const isConnectorPage = page && isConnectorView;
 
-    if (isConnectorPage)
-      return (
-        <SkillListVariantProvider value={'page'}>
-          {/* The shared navigation header carries the title; the page actions
-              share the intro row so they line up with the list below. */}
+    if (isConnectorPage) {
+      const addItems = [
+        {
+          desc:
+            canAddConnector || isPolicyPending
+              ? t('connectorMarket.add.customDesc')
+              : t('tools.connectorFeedback.manageOnly'),
+          disabled: !canAddConnector,
+          icon: <Icon icon={Grid2x2Plus} />,
+          key: 'custom',
+          label: t('connectorMarket.add.custom'),
+          onClick: () => setShowAddConnector(true),
+        },
+        {
+          desc: t('connectorMarket.add.browseStoreDesc'),
+          icon: <Icon icon={Store} />,
+          key: 'store',
+          label: t('connectorMarket.add.browseStore'),
+          onClick: handleOpenStore,
+        },
+      ];
+
+      const renderHeader = (reload: () => void) => (
+        <>
           <div {...stylex.props(styles.pageHeader)}>
-            <Text type={'secondary'}>{t('skillView.connectorsDesc')}</Text>
-            <Flexbox horizontal flex={'none'} gap={8}>
-              <Tooltip title={t('skillStore.title')}>
-                <Button
-                  aria-label={t('skillStore.title')}
-                  icon={<Icon icon={Store} />}
-                  onClick={handleOpenStore}
-                />
-              </Tooltip>
-              <Tooltip
-                title={
-                  canAddConnector || isPolicyPending
-                    ? undefined
-                    : t('tools.connectorFeedback.manageOnly')
-                }
-              >
-                {/* Disabled buttons swallow hover events; the wrapper anchors the tooltip. */}
-                <span {...stylex.props(styles.tooltipAnchor)}>
-                  <Button
-                    disabled={!canAddConnector}
-                    icon={Grid2x2Plus}
-                    onClick={() => setShowAddConnector(true)}
-                  >
-                    {addConnectorTitle}
-                  </Button>
-                </span>
-              </Tooltip>
+            <Flexbox gap={4} style={{ minWidth: 0 }}>
+              <h1 {...stylex.props(styles.pageTitle)}>{t('skillView.connectors')}</h1>
+              <Text type={'secondary'}>{t('skillView.connectorsDesc')}</Text>
+            </Flexbox>
+            <Flexbox horizontal align={'center'} flex={'none'} gap={8}>
+              <SearchBar
+                allowClear
+                aria-label={t('connectorMarket.search.placeholder')}
+                className={stylex.props(styles.pageSearch).className}
+                placeholder={t('connectorMarket.search.placeholder')}
+                value={keyword}
+                variant={'outlined'}
+                onInputChange={setKeyword}
+              />
+              <ActionIcon
+                aria-label={t('connectorMarket.refresh')}
+                icon={RefreshCw}
+                title={t('connectorMarket.refresh')}
+                onClick={reload}
+              />
+              <ActionIcon
+                aria-label={t('skillStore.title')}
+                icon={Store}
+                title={t('skillStore.title')}
+                onClick={handleOpenStore}
+              />
+              <DropdownMenu items={addItems} placement={'bottomRight'}>
+                <Button icon={Plus} type={'primary'}>
+                  {t('connectorMarket.add')}
+                  <Icon icon={ChevronDown} size={14} />
+                </Button>
+              </DropdownMenu>
             </Flexbox>
           </div>
           <ConnectorManagePolicy variant={'page'} />
+        </>
+      );
+
+      return (
+        <SkillListVariantProvider value={'page'}>
           <div {...stylex.props(styles.pageBody)}>
             <SkillList
+              keyword={keyword}
+              renderHeader={renderHeader}
               viewMode={viewMode}
+              onClearKeyword={() => setKeyword('')}
               onDeleteSelected={onDeleteSelected}
               onSelect={onSelect}
             />
@@ -136,6 +189,7 @@ const LeftPanel = memo<LeftPanelProps>(
           />
         </SkillListVariantProvider>
       );
+    }
 
     return (
       <>
@@ -150,6 +204,7 @@ const LeftPanel = memo<LeftPanelProps>(
                 : t('skillView.skills', 'Skills')}
             </Text>
 
+            {/* lobe-design-ignore LOBE-DIV-CLICK: not a control; keeps header button clicks from reaching the panel */}
             <div style={{ display: 'flex', gap: 6 }} onClick={(e) => e.stopPropagation()}>
               {isConnectorView ? (
                 // Connector view: single action to add a custom OAuth connector.
@@ -163,6 +218,7 @@ const LeftPanel = memo<LeftPanelProps>(
                   {/* Disabled buttons swallow hover events; the wrapper anchors the tooltip. */}
                   <span {...stylex.props(styles.tooltipAnchor)}>
                     <Button
+                      aria-label={addConnectorTitle}
                       disabled={!canAddConnector}
                       icon={Grid2x2Plus}
                       size="small"
@@ -217,10 +273,15 @@ const LeftPanel = memo<LeftPanelProps>(
                     },
                   ]}
                 >
-                  <Button icon={Grid2x2Plus} size="small" />
+                  <Button aria-label={t('connectorMarket.add')} icon={Grid2x2Plus} size="small" />
                 </DropdownMenu>
               )}
-              <Button icon={<Icon icon={Store} />} size="small" onClick={handleOpenStore} />
+              <Button
+                aria-label={t('skillStore.title')}
+                icon={<Icon icon={Store} />}
+                size="small"
+                onClick={handleOpenStore}
+              />
             </div>
           </div>
 

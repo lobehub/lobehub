@@ -10,7 +10,7 @@ import {
   Icon,
   stopPropagation,
 } from '@lobehub/ui';
-import { MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
+import { MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -75,7 +75,11 @@ const Item = memo<ItemProps>(({ avatar, description, identifier, onOpenDetail, t
             },
           ]}
         >
-          <ActionIcon disabled={!canEdit} icon={MoreVerticalIcon} />
+          <ActionIcon
+            aria-label={t('connectorMarket.action.manage', { ns: 'setting' })}
+            disabled={!canEdit}
+            icon={MoreHorizontalIcon}
+          />
         </DropdownMenu>
       );
     }

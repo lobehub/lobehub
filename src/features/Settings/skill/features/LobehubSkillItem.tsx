@@ -27,6 +27,7 @@ import { toConnectorActionError } from '@/utils/connectorActionError';
 
 import { renderConnectorRowDescription } from './ConnectorRowFeedback';
 import { isSettledByConnection } from './connectorRowState';
+import { RowAddAction, RowMoreMenu } from './RowActions';
 import SkillListRow, { ConnectedStatus, useSkillListVariant } from './SkillListRow';
 import { styles } from './style';
 
@@ -319,7 +320,38 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
     // ChatInput skills dropdown UX: connected → green check; otherwise a Connect
     // button that opens the OAuth flow inline, so users can tell what is connected
     // and aren't left staring at a blank detail panel wondering if it's a bug.
+    // Page row: a quiet `+` connects in place; once connected the row's state
+    // reads from its position (Installed) and the action becomes the manage menu.
+    const renderPageExtra = () => {
+      if (isConnected)
+        return (
+          <RowMoreMenu
+            items={[
+              {
+                danger: true,
+                disabled: !canEdit,
+                icon: <Icon icon={Unplug} />,
+                key: 'disconnect',
+                label: t('tools.lobehubSkill.disconnect', { defaultValue: 'Disconnect' }),
+                onClick: handleDisconnect,
+              },
+            ]}
+            onOpenDetail={onSelect}
+          />
+        );
+      return (
+        <RowAddAction
+          disabled={!canCreate || !canEdit}
+          disabledReason={!canCreate ? createReason : editReason}
+          label={t('connectorMarket.action.connect')}
+          loading={isConnecting || isWaitingAuth}
+          onClick={handleConnect}
+        />
+      );
+    };
+
     const renderNavExtra = () => {
+      if (isPage) return renderPageExtra();
       if (isConnecting || isWaitingAuth) {
         return <Button disabled loading size="small" type="text" />;
       }

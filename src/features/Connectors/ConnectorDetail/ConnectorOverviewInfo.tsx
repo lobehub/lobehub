@@ -11,28 +11,19 @@ import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
 
+// A quiet key–value list: labels in a fixed column, no boxes or row rules.
 const styles = stylex.create({
   label: {
     color: cssVar.colorTextTertiary,
     flexShrink: 0,
-    fontSize: 13,
-    width: 96,
+    fontSize: 14,
+    width: 160,
   },
   list: {
-    borderColor: cssVar.colorBorderSecondary,
-    borderRadius: 8,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    paddingBlock: 4,
-    paddingInline: 12,
+    display: 'flex',
+    flexDirection: 'column',
   },
   row: {
-    borderBlockEndColor: {
-      ':last-child': 'transparent',
-      'default': cssVar.colorBorderSecondary,
-    },
-    borderBlockEndStyle: 'solid',
-    borderBlockEndWidth: 1,
     minHeight: 40,
   },
 });

@@ -1,9 +1,9 @@
 'use client';
 
-import { ActionIcon, Button, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
 import * as stylex from '@stylexjs/stylex';
 import isEqual from 'fast-deep-equal';
-import { ArrowLeft, ChevronLeft } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
@@ -13,6 +13,7 @@ import { useToolStore } from '@/store/tool';
 import { agentSkillsSelectors, builtinToolSelectors } from '@/store/tool/selectors';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
+import DetailBreadcrumb from './features/DetailBreadcrumb';
 import LeftPanel from './features/LeftPanel';
 import SkillDetail, { type ToolDetailType } from './features/SkillDetail';
 import { type SkillViewMode } from './features/SkillList';
@@ -206,18 +207,18 @@ export const ToolSettings = memo<ToolSettingsProps>(({ viewMode }) => {
   if (stacked)
     return (
       <>
-        <NavHeader styles={{ center: { alignItems: 'center' } }}>
-          <Text weight={500}>{t('tab.connector', { ns: 'setting' })}</Text>
-        </NavHeader>
+        {/* The page itself carries the title (list) or the breadcrumb (detail). */}
+        <NavHeader />
         <div {...stylex.props(styles.page)}>
           <div {...stylex.props(styles.pageBody)}>
             {stackedSelected ? (
               <>
-                <Flexbox horizontal align={'center'} paddingBlock={12} paddingInline={4}>
-                  <Button icon={ArrowLeft} type={'text'} onClick={closeStackedDetail}>
-                    {t('skillView.connectors', { ns: 'setting' })}
-                  </Button>
-                </Flexbox>
+                <DetailBreadcrumb
+                  identifier={stackedSelected.identifier}
+                  listLabel={t('skillView.connectors', { ns: 'setting' })}
+                  type={stackedSelected.type}
+                  onBack={closeStackedDetail}
+                />
                 <SkillDetail
                   identifier={stackedSelected.identifier}
                   type={stackedSelected.type}
