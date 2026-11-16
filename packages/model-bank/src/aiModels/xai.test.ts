@@ -37,4 +37,16 @@ describe('xai model cards', () => {
       },
     ]);
   });
+
+  /**
+   * Consumers size per-request output budgets from `maxOutput`, so every
+   * official chat card must declare it.
+   */
+  it('declares maxOutput on every official chat card', () => {
+    const missing = allModels
+      .filter((model) => model.type === 'chat' && model.isOfficial && model.maxOutput == null)
+      .map((model) => model.id);
+
+    expect(missing).toEqual([]);
+  });
 });
