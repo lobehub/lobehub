@@ -11,7 +11,7 @@ import {
 const walk = (...paths: string[]) => {
   let previous: string | null = null;
   for (const path of paths) {
-    recordBackOrigin(previous, path);
+    recordBackOrigin('main', previous, path);
     previous = path;
   }
 };
@@ -44,41 +44,41 @@ describe('resolveBackScope', () => {
 describe('recordBackOrigin', () => {
   it('remembers the page an agent was opened from', () => {
     walk('/tasks', '/agent/agt_1');
-    expect(getBackOrigin('/agent/agt_1')).toBe('/tasks');
+    expect(getBackOrigin('main', '/agent/agt_1')).toBe('/tasks');
   });
 
   it('keeps the origin while moving inside the agent', () => {
     walk('/agents', '/agent/agt_1', '/agent/agt_1/tpc_1', '/agent/agt_1/profile');
-    expect(getBackOrigin('/agent/agt_1/profile')).toBe('/agents');
+    expect(getBackOrigin('main', '/agent/agt_1/profile')).toBe('/agents');
   });
 
   it('keeps the query string of the origin', () => {
     walk('/resource?mode=list', '/lobehub/group/grp_1');
-    expect(getBackOrigin('/lobehub/group/grp_1')).toBe('/resource?mode=list');
+    expect(getBackOrigin('main', '/lobehub/group/grp_1')).toBe('/resource?mode=list');
   });
 
   it('inherits the origin when hopping between agents instead of ping-ponging', () => {
     walk('/project/p1', '/agent/agt_1', '/agent/agt_2', '/agent/agt_1');
-    expect(getBackOrigin('/agent/agt_2')).toBe('/project/p1');
-    expect(getBackOrigin('/agent/agt_1')).toBe('/project/p1');
+    expect(getBackOrigin('main', '/agent/agt_2')).toBe('/project/p1');
+    expect(getBackOrigin('main', '/agent/agt_1')).toBe('/project/p1');
   });
 
   it('has no origin when the agent is the first page or was reached from an unknown one', () => {
     walk('/agent/agt_1');
-    expect(getBackOrigin('/agent/agt_1')).toBeUndefined();
+    expect(getBackOrigin('main', '/agent/agt_1')).toBeUndefined();
 
     walk('/agent/agt_1', '/agent/agt_2');
-    expect(getBackOrigin('/agent/agt_2')).toBeUndefined();
+    expect(getBackOrigin('main', '/agent/agt_2')).toBeUndefined();
   });
 
   it('replaces a stale origin on the next entry', () => {
     walk('/tasks', '/agent/agt_1', '/memory', '/agent/agt_1');
-    expect(getBackOrigin('/agent/agt_1')).toBe('/memory');
+    expect(getBackOrigin('main', '/agent/agt_1')).toBe('/memory');
   });
 
   it('returns nothing for unscoped pages', () => {
     walk('/tasks', '/agent/agt_1');
-    expect(getBackOrigin('/tasks')).toBeUndefined();
+    expect(getBackOrigin('main', '/tasks')).toBeUndefined();
   });
 });
 
@@ -87,7 +87,7 @@ describe('createBackOriginRecorder', () => {
     const record = createBackOriginRecorder();
     record('tab-1', '/tasks');
     record('tab-1', '/agent/agt_1');
-    expect(getBackOrigin('/agent/agt_1')).toBe('/tasks');
+    expect(getBackOrigin('tab-1', '/agent/agt_1')).toBe('/tasks');
   });
 
   it('does not treat switching to another tab as a navigation', () => {
@@ -96,7 +96,17 @@ describe('createBackOriginRecorder', () => {
     record('tab-1', '/agent/agt_1');
     record('tab-2', '/tasks');
     record('tab-1', '/agent/agt_1');
-    expect(getBackOrigin('/agent/agt_1')).toBe('/projects');
+    expect(getBackOrigin('tab-1', '/agent/agt_1')).toBe('/projects');
+  });
+
+  it('keeps a separate origin for the same agent open in two tabs', () => {
+    const record = createBackOriginRecorder();
+    record('tab-1', '/projects');
+    record('tab-1', '/agent/agt_1');
+    record('tab-2', '/tasks');
+    record('tab-2', '/agent/agt_1');
+    expect(getBackOrigin('tab-1', '/agent/agt_1')).toBe('/projects');
+    expect(getBackOrigin('tab-2', '/agent/agt_1')).toBe('/tasks');
   });
 
   it('gives an agent first seen in a fresh tab no origin', () => {
@@ -105,6 +115,6 @@ describe('createBackOriginRecorder', () => {
     record('tab-2', '/agent/agt_1');
     record('tab-1', '/tasks');
     record('tab-2', '/agent/agt_1');
-    expect(getBackOrigin('/agent/agt_1')).toBeUndefined();
+    expect(getBackOrigin('tab-2', '/agent/agt_1')).toBeUndefined();
   });
 });

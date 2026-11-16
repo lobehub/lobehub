@@ -3,6 +3,8 @@ import { useSyncExternalStore } from 'react';
 import { RESERVED_ROOT_SEGMENTS } from '@/features/Workspace/rootSegments';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
 
+import { useLocationOwner } from './useLocationOwner';
+
 /**
  * Sidebars that own a back button for one entity (an agent or a group) send it
  * to the page the user opened that entity from, instead of always going home.
@@ -37,13 +39,16 @@ const subscribe = (listener: Listener) => {
 
 const getOrigins = () => origins;
 
+/** Origins are kept per owner (an Electron tab) and per agent / group scope. */
+const originKey = (owner: string, scope: string) => `${owner}\u0000${scope}`;
+
 /**
- * Remember where the user came from when a navigation enters a scope. Moving
- * inside a scope (topics, sub pages) keeps its origin. Hopping from one agent or
- * group straight to another inherits the previous origin, so back leaves the
- * chat area in one click instead of bouncing between the two.
+ * Remember where the user came from when a navigation in `owner` enters a scope.
+ * Moving inside a scope (topics, sub pages) keeps its origin. Hopping from one
+ * agent or group straight to another inherits the previous origin, so back
+ * leaves the chat area in one click instead of bouncing between the two.
  */
-export const recordBackOrigin = (from: string | null, to: string): void => {
+export const recordBackOrigin = (owner: string, from: string | null, to: string): void => {
   if (!from) return;
 
   const toScope = resolveBackScope(to);
@@ -52,12 +57,13 @@ export const recordBackOrigin = (from: string | null, to: string): void => {
   const fromScope = resolveBackScope(from);
   if (fromScope === toScope) return;
 
-  const origin = fromScope ? origins[fromScope] : from;
-  if (origins[toScope] === origin) return;
+  const key = originKey(owner, toScope);
+  const origin = fromScope ? origins[originKey(owner, fromScope)] : from;
+  if (origins[key] === origin) return;
 
   const next = { ...origins };
-  if (origin) next[toScope] = origin;
-  else delete next[toScope];
+  if (origin) next[key] = origin;
+  else delete next[key];
   origins = next;
   listeners.forEach((listener) => listener());
 };
@@ -73,15 +79,22 @@ export const createBackOriginRecorder = () => {
     const from = previous.get(owner) ?? null;
     if (from === location) return;
 
-    recordBackOrigin(from, location);
+    recordBackOrigin(owner, from, location);
     previous.set(owner, location);
   };
 };
 
-export const getBackOrigin = (pathname: string): string | undefined => {
+const selectOrigin = (
+  all: Readonly<Record<string, string>>,
+  owner: string,
+  pathname: string,
+): string | undefined => {
   const scope = resolveBackScope(pathname);
-  return scope ? origins[scope] : undefined;
+  return scope ? all[originKey(owner, scope)] : undefined;
 };
+
+export const getBackOrigin = (owner: string, pathname: string): string | undefined =>
+  selectOrigin(origins, owner, pathname);
 
 /** Test-only: forget every recorded origin. */
 export const resetBackOrigins = (): void => {
@@ -92,8 +105,8 @@ export const resetBackOrigins = (): void => {
 /** Where the current agent / group sidebar's back button goes; `fallback` without an origin. */
 export const useBackOrigin = (fallback = '/'): string => {
   const { pathname } = useActiveLocation();
+  const owner = useLocationOwner();
   const all = useSyncExternalStore(subscribe, getOrigins, getOrigins);
-  const scope = resolveBackScope(pathname);
 
-  return (scope && all[scope]) || fallback;
+  return selectOrigin(all, owner, pathname) || fallback;
 };
