@@ -32,7 +32,12 @@ export interface ChannelTopicScope {
   workspaceId: string | null;
 }
 
-export const resolveTopic = async (
+/**
+ * The topic this job continues, when it may: the requester's latest settled run for this member
+ * and branch, with an unchanged execution config and a fresh enough topic. Undefined starts a new
+ * topic. Read-only, so a claim can ask before it commits to running.
+ */
+export const continuationTopic = async (
   tx: Transaction,
   channel: ChannelItem,
   job: ChannelJobItem,
@@ -79,7 +84,29 @@ export const resolveTopic = async (
     !topic.isDeleted &&
     (job.threadId || Date.now() - topic.updatedAt.getTime() <= TOPIC_STALE_THRESHOLD) &&
     !(executionConfig.share && (await reachedShareTurnLimit(tx, member.agentId!, topic.id)))
-  ) {
+  )
+    return topic;
+};
+
+export const resolveTopic = async (
+  tx: Transaction,
+  channel: ChannelItem,
+  job: ChannelJobItem,
+  member: ChannelMemberItem,
+  scope: ChannelTopicScope,
+  requestSequence: number,
+  executionConfig: ChannelExecutionConfig,
+) => {
+  const topic = await continuationTopic(
+    tx,
+    channel,
+    job,
+    member,
+    scope,
+    requestSequence,
+    executionConfig,
+  );
+  if (topic) {
     // A Channel that belongs to a project runs inside it, so the topic it works in
     // must say which project it belongs to: that binding is what the run resolves
     // its project context from (project prompt, coordinator scope, task ownership).
