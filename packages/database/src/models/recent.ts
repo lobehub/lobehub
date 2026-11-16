@@ -53,6 +53,7 @@ const SYSTEM_TOPIC_TRIGGERS = [
   'task',
   'document',
   'goal_supervision',
+  'webhook',
 ];
 
 // Excluded so tool-owned document rows don't surface as generic recent docs;

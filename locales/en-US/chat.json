@@ -2432,6 +2432,7 @@
   "tab.skills": "Skills",
   "tab.tasks": "Tasks",
   "tab.tools": "Tools & Connectors",
+  "tab.webhook": "Webhook",
   "task.activity.calling": "Calling Skill...",
   "task.activity.clientExecuting": "Executing locally...",
   "task.activity.generating": "Generating response...",

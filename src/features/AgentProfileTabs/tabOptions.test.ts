@@ -22,6 +22,7 @@ const labels = {
   'skills': 'tab.skills',
   'statistics': 'usageStats.title',
   'tools': 'tab.tools',
+  'webhook': 'tab.webhook',
 };
 
 describe('buildAgentProfileTabPath', () => {
@@ -42,6 +43,7 @@ describe('getAgentProfileTab', () => {
     ['/acme/agent/agt_1/statistics/', 'statistics'],
     ['/_dangerous_local_dev_proxy/acme/agent/agt_1/share', 'share'],
     ['/agent/agt_1/self-evolving', 'self-evolving'],
+    ['/agent/agt_1/webhook', 'webhook'],
     ['/acme/agent/agt_1/automations', 'automations'],
     ['/agent/agt_1/self-evolving/new', 'self-evolving'],
     ['/acme/agent/agt_1/self-evolving/dom_1/experience/les_1', 'self-evolving'],
@@ -311,6 +313,51 @@ describe('groupAgentProfileTabOptions', () => {
     const groups = groupAgentProfileTabOptions([option('statistics')]);
 
     expect(groups.map((group) => group.key)).toEqual(['general']);
+  });
+});
+
+describe('webhook tab', () => {
+  const base = {
+    labels,
+    mailSupported: false,
+    selfLearningSupported: false,
+    shareSupported: false,
+    heterogeneous: false,
+  };
+
+  it('lists webhooks after channels for an editor where the feature is on', () => {
+    const options = buildAgentProfileTabOptions({
+      ...base,
+      active: 'profile',
+      canConfigure: true,
+      webhookSupported: true,
+    });
+    const values = options.map((option) => option.value);
+    expect(values.indexOf('webhook')).toBe(values.indexOf('channel') + 1);
+    expect(
+      groupAgentProfileTabOptions(options)
+        .find((group) => group.key === 'identity')
+        ?.options.map((option) => option.value),
+    ).toEqual(['channel', 'webhook']);
+  });
+
+  it('leaves webhooks out while the feature is off or the member cannot edit', () => {
+    for (const gate of [
+      { canConfigure: true, webhookSupported: false },
+      { canConfigure: false, webhookSupported: true },
+    ])
+      expect(
+        buildAgentProfileTabOptions({ ...base, active: 'profile', ...gate }).map((o) => o.value),
+      ).not.toContain('webhook');
+  });
+
+  it('keeps the tab of the current page even when gated off', () => {
+    const options = buildAgentProfileTabOptions({
+      ...base,
+      active: 'webhook',
+      canConfigure: false,
+    });
+    expect(options.map((option) => option.value)).toContain('webhook');
   });
 });
 

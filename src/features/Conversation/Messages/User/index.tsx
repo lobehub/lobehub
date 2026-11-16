@@ -9,6 +9,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import { getMcpEventSource } from '@/features/Conversation/Markdown/plugins/McpEvent/parseMcpEvent';
 import { getScmEventSource } from '@/features/Conversation/Markdown/plugins/ScmEvent/parseScmEvent';
+import { getWebhookEventSource } from '@/features/Conversation/Markdown/plugins/WebhookEvent/parseWebhookEvent';
 import { useMessageCommentCount } from '@/features/TopicComment/hooks';
 import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
 import { useUserAvatar } from '@/hooks/useUserAvatar';
@@ -28,6 +29,7 @@ import AgentSenderSourceLink from './components/AgentSenderSourceLink';
 import { McpEventAvatar, McpEventSenderTitle } from './components/McpEventSender';
 import UserMessageContent from './components/MessageContent';
 import { ScmEventAvatar, ScmEventSenderTitle } from './components/ScmEventSender';
+import { WebhookEventAvatar, WebhookEventSenderTitle } from './components/WebhookEventSender';
 import { UserMessageExtra } from './Extra';
 import { McpAppSourceFooter } from './McpAppSourceFooter';
 import { getAgentSender, getBotSender, resolveSenderIdentity } from './resolveSenderIdentity';
@@ -58,6 +60,8 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   // Same for an MCP event subscription: the connector the event came from is
   // the sender.
   const mcpSource = useMemo(() => getMcpEventSource(content), [content]);
+  // And for a generic webhook call: the webhook is the sender.
+  const webhookSource = useMemo(() => getWebhookEventSource(content), [content]);
   // A background sub-agent reporting back speaks in a user turn of its own.
   const subAgentCallback = metadata?.subAgentCallback;
   const subAgentSender = useSubAgentSenderIdentity(subAgentCallback);
@@ -164,13 +168,17 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
           ? () => <ScmEventAvatar />
           : mcpSource
             ? () => <McpEventAvatar source={mcpSource} />
-            : undefined
+            : webhookSource
+              ? () => <WebhookEventAvatar />
+              : undefined
       }
       headerAddon={
         scmSource ? (
           <ScmEventSenderTitle source={scmSource} />
         ) : mcpSource ? (
           <McpEventSenderTitle source={mcpSource} />
+        ) : webhookSource ? (
+          <WebhookEventSenderTitle source={webhookSource} />
         ) : undefined
       }
       titleAddon={

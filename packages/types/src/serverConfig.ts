@@ -82,7 +82,7 @@ export type IFeatureFlagsState = {
    * that declare a `ui://` view render as plain results.
    */
   enableMcpApps: boolean | undefined;
-  /** Inbound webhooks wake Agents (`webhook`): MCP Events and Automations. Off by default. */
+  /** Inbound webhooks wake Agents (`webhook`): MCP Events, generic webhooks, Automations. Off by default. */
   enableWebhook: boolean | undefined;
   /**
    * Agent documents move into a dedicated knowledge base at runtime

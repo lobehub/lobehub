@@ -275,6 +275,7 @@ describe('CompletionLifecycle.dispatchHooks — completion notification', () => 
     RequestTrigger.Scheduled,
     RequestTrigger.Cron,
     RequestTrigger.McpEvent,
+    RequestTrigger.Webhook,
   ])('notifies for a user-recallable %s-triggered completion', async (trigger) => {
     const lifecycle = buildLifecycle();
     stubSideEffects(lifecycle);

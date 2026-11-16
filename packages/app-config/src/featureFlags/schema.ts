@@ -92,9 +92,10 @@ export const FeatureFlagsSchema = z.object({
   mcp_apps: FeatureFlagValue.optional(),
 
   /**
-   * Inbound webhooks wake Agents: MCP Events subscriptions and the Settings → Automations list.
-   * Off: deliveries are still verified, stored and acknowledged, but run nothing, and the
-   * subscription tools and Automations entry are hidden. Array values are user ids.
+   * Inbound webhooks wake Agents: MCP Events subscriptions, generic webhooks (the Agent Profile
+   * Webhook tab) and the Automations lists. Off: deliveries are still verified, stored and
+   * acknowledged, but run nothing, and the subscription tools, the Webhook and Automations
+   * entries are hidden. Array values are user ids.
    */
   webhook: FeatureFlagValue.optional(),
 

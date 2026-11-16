@@ -63,11 +63,17 @@ export const useAutomationRowActions = (
   const confirmDelete = () =>
     confirmModal({
       cancelText: t('automations.delete.cancel'),
-      content: t('automations.delete.content', {
-        agent: agentDisplayName(item.agent, t('untitledAgent', { ns: 'chat' })),
-        connector: item.connector?.name ?? item.source.eventName,
-        event: item.source.eventName,
-      }),
+      content:
+        item.source.kind === 'generic'
+          ? t('automations.delete.contentWebhook', {
+              agent: agentDisplayName(item.agent, t('untitledAgent', { ns: 'chat' })),
+              name: item.name?.trim() || t('automations.source.webhook'),
+            })
+          : t('automations.delete.content', {
+              agent: agentDisplayName(item.agent, t('untitledAgent', { ns: 'chat' })),
+              connector: item.connector?.name ?? item.source.eventName,
+              event: item.source.eventName,
+            }),
       okButtonProps: { danger: true },
       okText: t('automations.delete.ok'),
       onOk: async () => {

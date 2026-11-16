@@ -13,7 +13,8 @@ import type { InboundWebhookError, InboundWebhookItem } from '@lobechat/types';
  */
 export type AutomationRemedy = 'check' | 'none' | 'reconnect' | 'resubscribe';
 
-export type AutomationStatusKind = 'active' | 'deliveryError' | 'reconnect' | 'terminated';
+export type AutomationStatusKind =
+  'active' | 'deliveryError' | 'paused' | 'reconnect' | 'terminated';
 
 export type AutomationTone = 'default' | 'error' | 'success' | 'warning';
 
@@ -78,6 +79,15 @@ export const resolveAutomationStatus = (
   item: Pick<InboundWebhookItem, 'lastError' | 'status'>,
 ): AutomationStatus => {
   const { lastError, status } = item;
+
+  // A generic webhook its owner switched off: nothing is wrong, calls are refused until resumed.
+  if (status === 'paused')
+    return {
+      kind: 'paused',
+      labelKey: 'automations.status.paused',
+      remedy: 'none',
+      tone: 'default',
+    };
 
   if (status === 'terminated')
     return {

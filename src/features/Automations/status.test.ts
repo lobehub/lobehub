@@ -81,6 +81,15 @@ describe('resolveAutomationStatus', () => {
       'automations.error.terminated',
     );
   });
+
+  it('shows a paused webhook as paused, not failing, even with a stale error', () => {
+    expect(resolveAutomationStatus({ lastError: 'wake_cap', status: 'paused' })).toEqual({
+      kind: 'paused',
+      labelKey: 'automations.status.paused',
+      remedy: 'none',
+      tone: 'default',
+    });
+  });
 });
 
 describe('automationErrorKey', () => {

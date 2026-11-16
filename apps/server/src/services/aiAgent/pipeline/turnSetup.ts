@@ -379,6 +379,7 @@ export interface TurnSetupInput {
   trigger?: string;
   /** The composer-authored part of the user message; see `ExecAgentParams.userMessage`. */
   userMessage?: InternalExecAgentParams['userMessage'];
+  webhookThread?: InternalExecAgentParams['webhookThread'];
 }
 
 export interface TurnSetupResult {
@@ -465,6 +466,7 @@ export const setupTurn = async (
     createdThreadId,
     externalOrigin,
     cronJobId,
+    webhookThread,
     files,
     modelOverride,
     operationTaskId,
@@ -627,6 +629,7 @@ export const setupTurn = async (
         projectDirectory,
         taskId: operationTaskId,
         topicBoundDeviceId,
+        webhookThread,
       });
       turnProjectId = await resolveTurnProjectId(deps, {
         directoryProjectId: projectDirectory?.projectId,

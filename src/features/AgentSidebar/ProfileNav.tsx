@@ -15,6 +15,7 @@ import {
   Share2Icon,
   SparklesIcon,
   UserRoundIcon,
+  WebhookIcon,
   WrenchIcon,
   ZapIcon,
 } from 'lucide-react';
@@ -49,6 +50,7 @@ const TAB_ICONS: Record<AgentProfileTab, LucideIcon> = {
   'skills': SparklesIcon,
   'statistics': ChartColumnBigIcon,
   'tools': WrenchIcon,
+  'webhook': WebhookIcon,
 };
 
 interface ProfileNavProps {

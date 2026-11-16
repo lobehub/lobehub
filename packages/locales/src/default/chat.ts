@@ -2034,6 +2034,7 @@ export default {
   'tab.integration': 'IM Bots',
   'tab.automations': 'Automations',
   'tab.mail': 'Mail',
+  'tab.webhook': 'Webhook',
   'tab.profile': 'Agent Profile',
   'tab.profileBasic': 'Profile',
   'tab.skills': 'Skills',

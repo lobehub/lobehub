@@ -2432,6 +2432,7 @@
   "tab.skills": "技能",
   "tab.tasks": "任务",
   "tab.tools": "工具与连接",
+  "tab.webhook": "Webhook",
   "task.activity.calling": "正在调用技能…",
   "task.activity.clientExecuting": "本地执行中…",
   "task.activity.generating": "正在生成回复…",

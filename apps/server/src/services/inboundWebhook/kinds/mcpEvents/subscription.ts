@@ -15,15 +15,16 @@ import { buildConnectorMcpParams } from '@/server/services/connector/sync';
 import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 import { mcpService } from '@/server/services/mcp';
 
+import { maintenanceBackoff } from '../../maintenance';
 import type { InboundWebhookContext } from '../types';
 import { isMcpAuthError } from './errors';
 
-export const maintenanceBackoff = (failures: number) =>
-  Math.min(6 * 3_600_000, 60_000 * 2 ** Math.min(failures, 9));
+export { maintenanceBackoff } from '../../maintenance';
+
 export const callbackUrl = (id: string) =>
   new URL(`/api/webhooks/inbound/${id}`, appEnv.APP_URL).toString();
 
-export async function connectorForWebhook(ctx: InboundWebhookContext) {
+export async function connectorForWebhook(ctx: InboundWebhookContext<'mcp_events'>) {
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
   const connectorModel = new ConnectorModel(
     ctx.db,
@@ -37,7 +38,7 @@ export async function connectorForWebhook(ctx: InboundWebhookContext) {
 }
 
 /** The connector as the account the subscription was made with; the server knows it by that. */
-export async function connectorAsSubscriber(ctx: InboundWebhookContext) {
+export async function connectorAsSubscriber(ctx: InboundWebhookContext<'mcp_events'>) {
   const { connector, connectorModel } = await connectorForWebhook(ctx);
   const { connector: fresh } = await resolveConnectorAccount(
     connector,
@@ -63,7 +64,7 @@ export async function subscribeRemote(
 
 /** Store a subscribe result; false when the row had moved on (ended, deleted) and kept nothing. */
 export async function applySubscriptionResult(
-  ctx: InboundWebhookContext,
+  ctx: InboundWebhookContext<'mcp_events'>,
   result: McpSubscribeEventResult,
 ): Promise<boolean> {
   const state: Partial<McpEventsWebhookState> = {
@@ -105,7 +106,7 @@ export async function applySubscriptionResult(
   return !!updated;
 }
 
-export async function refreshSubscription(ctx: InboundWebhookContext): Promise<void> {
+export async function refreshSubscription(ctx: InboundWebhookContext<'mcp_events'>): Promise<void> {
   if (!(ctx.featureEnabled ?? (await isWebhookEnabled(ctx.row.userId)))) return;
   const { connector, connectorModel } = await connectorForWebhook(ctx);
   if (!connector.isEnabled) {
@@ -150,7 +151,9 @@ export async function refreshSubscription(ctx: InboundWebhookContext): Promise<v
 }
 
 /** Manual checks return a row even when the upstream is broken; sweep uses exactly this operation. */
-export async function maintainMcpSubscription(ctx: InboundWebhookContext): Promise<void> {
+export async function maintainMcpSubscription(
+  ctx: InboundWebhookContext<'mcp_events'>,
+): Promise<void> {
   try {
     await refreshSubscription(ctx);
   } catch (error) {
@@ -187,7 +190,9 @@ export async function maintainMcpSubscription(ctx: InboundWebhookContext): Promi
   }
 }
 
-export async function teardownMcpSubscription(ctx: InboundWebhookContext): Promise<void> {
+export async function teardownMcpSubscription(
+  ctx: InboundWebhookContext<'mcp_events'>,
+): Promise<void> {
   let fresh;
   try {
     ({ fresh } = await connectorAsSubscriber(ctx));
