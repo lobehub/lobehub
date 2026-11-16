@@ -480,6 +480,7 @@
   "builtins.lobe-mcp-events.apiName.subscribeEvent": "Subscribe to event",
   "builtins.lobe-mcp-events.apiName.unsubscribeEvent": "Unsubscribe",
   "builtins.lobe-mcp-events.error.callback_unreachable": "The connector couldn't reach LobeHub's callback address",
+  "builtins.lobe-mcp-events.error.channel_unsupported": "Event subscriptions aren't available in Channels. Ask in a direct conversation with this agent instead.",
   "builtins.lobe-mcp-events.error.connector_not_found": "This agent doesn't have that connector",
   "builtins.lobe-mcp-events.error.delivery_unsupported": "This event can't be delivered by webhook, so it can't be subscribed to",
   "builtins.lobe-mcp-events.error.events_unsupported": "This connector doesn't offer events",

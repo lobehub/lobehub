@@ -12,6 +12,12 @@ describe('getToolError', () => {
     ).toEqual({ code: 'limit_reached', message: 'Topic has 10 subscriptions' });
   });
 
+  it('recognises a Channel refusal rather than reading it as unknown', () => {
+    expect(getToolError({ error: { code: 'channel_unsupported' } }, undefined)?.code).toBe(
+      'channel_unsupported',
+    );
+  });
+
   it('falls back to the plugin error when the state carries none', () => {
     expect(getToolError(undefined, { message: 'nope', type: 'forbidden' })).toEqual({
       code: 'forbidden',

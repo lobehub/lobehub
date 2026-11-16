@@ -19,9 +19,7 @@ export interface McpEventsScope {
 
 /** The server implements this service; the package has no database or network dependency. */
 export interface McpEventsExecutionService {
-  listEventTypes: (
-    params: ListEventTypesArgs & Pick<McpEventsScope, 'agentId'>,
-  ) => Promise<ListEventTypesState>;
+  listEventTypes: (params: ListEventTypesArgs & McpEventsScope) => Promise<ListEventTypesState>;
   listSubscriptions: (params: McpEventsScope) => Promise<ListSubscriptionsState>;
   subscribeEvent: (params: SubscribeEventArgs & McpEventsScope) => Promise<SubscribeEventState>;
   unsubscribeEvent: (
@@ -69,9 +67,7 @@ export class McpEventsExecutionRuntime {
   }
 
   listEventTypes = (args: ListEventTypesArgs = {}) =>
-    this.result(() =>
-      this.service.listEventTypes({ connector: args.connector, agentId: this.scope.agentId }),
-    );
+    this.result(() => this.service.listEventTypes({ connector: args.connector, ...this.scope }));
 
   listSubscriptions = () => this.result(() => this.service.listSubscriptions({ ...this.scope }));
 

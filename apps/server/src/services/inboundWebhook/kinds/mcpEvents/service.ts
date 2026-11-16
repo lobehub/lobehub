@@ -22,6 +22,7 @@ import { InboundWebhookLimitError, InboundWebhookModel } from '@/database/models
 import { TopicModel } from '@/database/models/topic';
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
 import type { LobeChatDatabase } from '@/database/type';
+import { CHANNEL_TOPIC_TRIGGER } from '@/database/utils/topicVisibility';
 import { appEnv } from '@/envs/app';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { resolveConnectorAccount } from '@/server/services/connector/links';
@@ -52,6 +53,13 @@ export class McpEventsService {
       const topic = await new TopicModel(this.db, this.userId, this.workspaceId).findById(topicId);
       if (!topic || topic.agentId !== agentId)
         throw new McpEventsServiceError('forbidden', 'This topic is not available to this agent.');
+      // A Channel run works in a hidden topic of its own: events would wake the agent there, where
+      // the Channel never sees the result.
+      if (topic.trigger === CHANNEL_TOPIC_TRIGGER)
+        throw new McpEventsServiceError(
+          'channel_unsupported',
+          'Event subscriptions are not available in Channels. Subscribe from a direct conversation with this agent.',
+        );
     }
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
     return {
@@ -107,8 +115,9 @@ export class McpEventsService {
   async listEventTypes(input: {
     agentId: string;
     connector?: string;
+    topicId: string;
   }): Promise<ListEventTypesState> {
-    const { connectorModel } = await this.context(input.agentId);
+    const { connectorModel } = await this.context(input.agentId, input.topicId);
     const connectors = input.connector
       ? await connectorModel.resolveByIdentifiers([input.connector], input.agentId)
       : await connectorModel.resolveAll(input.agentId);

@@ -76,6 +76,7 @@ export type McpEventsToolErrorCode =
   | 'forbidden' // 无权限或连接器未认证
   | 'invalid_arguments' // 参数不符合 inputSchema
   | 'callback_unreachable' // server 连不上回调地址
+  | 'channel_unsupported' // Channel 里的运行不能订阅：事件会落在 Channel 看不到的话题里
   | 'limit_reached' // 订阅数达到上限
   | 'not_found' // unsubscribe 的目标不存在或不属于当前 topic
   | 'unknown';

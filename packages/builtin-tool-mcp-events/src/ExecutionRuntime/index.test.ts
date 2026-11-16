@@ -65,6 +65,7 @@ describe('MCP Events execution', () => {
     expect(service.listEventTypes).toHaveBeenCalledWith({
       agentId: 'agent-current',
       connector: 'linear',
+      topicId: 'topic-current',
     });
   });
 
