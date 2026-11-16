@@ -77,6 +77,11 @@ class HeterogeneousAgentService {
     return this.ipc.heterogeneousAgent.cancelSession({ sessionId });
   }
 
+  /** Stop one background task of a local Claude Code SDK run. */
+  async stopBackgroundTask(sessionId: string, taskId: string) {
+    return this.ipc.heterogeneousAgent.stopBackgroundTask({ sessionId, taskId });
+  }
+
   async stopSession(sessionId: string) {
     return this.ipc.heterogeneousAgent.stopSession({ sessionId });
   }

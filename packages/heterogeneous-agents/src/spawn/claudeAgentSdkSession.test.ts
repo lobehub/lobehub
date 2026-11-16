@@ -260,3 +260,61 @@ describe('ClaudeAgentSdkSession plugins', () => {
     expect(options).not.toHaveProperty('plugins');
   });
 });
+
+describe('ClaudeAgentSdkSession.stopTask', () => {
+  afterEach(() => {
+    sdkQueryMock.mockReset();
+  });
+
+  const newSession = () =>
+    new ClaudeAgentSdkSession({
+      args: [],
+      commandPath: 'claude',
+      cwd: os.tmpdir(),
+      env: {} as NodeJS.ProcessEnv,
+      onEvents: () => {},
+      onRawMessage: () => {},
+      onRuntimeStatus: () => {},
+      onSessionId: () => {},
+      onStderr: () => {},
+      operationId: 'op-sdk-stop',
+      sessionId: 'session-1',
+      stdinPayload: `${JSON.stringify({ message: { content: 'hi', role: 'user' }, type: 'user' })}\n`,
+    });
+
+  it('asks the running query to stop the task', async () => {
+    const stopTask = vi.fn().mockResolvedValue(undefined);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    sdkQueryMock.mockImplementation(() => ({
+      async *[Symbol.asyncIterator]() {
+        await held;
+        yield* [];
+      },
+      close: vi.fn(),
+      stopTask,
+    }));
+
+    const session = newSession();
+    const running = session.run();
+    await vi.waitFor(() => expect(sdkQueryMock).toHaveBeenCalled());
+
+    await session.stopTask('bys1w0wxo');
+    expect(stopTask).toHaveBeenCalledWith('bys1w0wxo');
+
+    release();
+    await running;
+  });
+
+  it('refuses once the query ended', async () => {
+    sdkQueryMock.mockImplementation(() => ({
+      async *[Symbol.asyncIterator]() {},
+      close: vi.fn(),
+      stopTask: vi.fn(),
+    }));
+    const session = newSession();
+    await session.run();
+
+    await expect(session.stopTask('bys1w0wxo')).rejects.toThrow('no longer running');
+  });
+});

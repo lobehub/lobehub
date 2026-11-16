@@ -313,6 +313,18 @@ export class ClaudeAgentSdkSession {
     }
   }
 
+  /**
+   * Stop one background task of the live session. CC answers with a
+   * `task_notification` of status `stopped`, which is the only proof the stop
+   * took: resolving here means the request was accepted, nothing more.
+   *
+   * @throws When no query is running any more.
+   */
+  async stopTask(taskId: string): Promise<void> {
+    if (!this.queryHandle) throw new Error('The Claude Code session is no longer running');
+    await this.queryHandle.stopTask(taskId);
+  }
+
   close(): void {
     this.closedByHost = true;
     this.closeInput = true;

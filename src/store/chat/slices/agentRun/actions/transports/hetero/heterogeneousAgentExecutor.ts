@@ -72,7 +72,6 @@ import { hydrateProjectedToolMessages } from '@/services/message/hydrateProjecte
 import { threadService } from '@/services/thread';
 import { workService } from '@/services/work';
 import { topicSelectors } from '@/store/chat/selectors';
-import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import {
   mergeQueuedMessages,
   reconstructUploadFilesFromQueue,
@@ -91,6 +90,7 @@ import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler } from '../gateway/gatewayEventHandler';
 import { isCompletedRuntimeEnd } from '../gateway/runtimeEndReason';
 import { withHeteroContext } from '../viewedTaskPrompt';
+import { registerLocalBackgroundTaskStopper, writeBackgroundTaskSnapshot } from './backgroundTasks';
 import { markUnfinishedToolsCancelled } from './cancelledTools';
 import { getNativeHeteroSessionBindingKey, isRecoverableResumeError } from './heteroResume';
 import { preserveSkippedIntervention } from './interventionAck';
@@ -110,6 +110,7 @@ import {
   createSubagentStoreDispatcher,
   type SubagentStoreDispatcher,
 } from './subagentStoreDispatcher';
+import { createToolStateSnapshotClaimer } from './toolStateSnapshot';
 
 /** Mirrors `idGenerator('threads', 16)` on the server so sync-allocated ids have the same shape. */
 const generateThreadId = () => `thd_${createNanoId(16)()}`;
@@ -611,6 +612,7 @@ export const executeHeterogeneousAgent = async (
 
   let ipcRunSessionId: string | undefined;
   let unsubscribe: (() => void) | undefined;
+  let unregisterTaskStopper: (() => void) | undefined;
   let completed = false;
   const runFee: LocalRunFeeClaim = params.runFee ?? {};
   let fallbackPromise: Promise<void> | undefined;
@@ -646,7 +648,6 @@ export const executeHeterogeneousAgent = async (
   // a subagent finalizes, so unscoped bridge requests cannot create main copies.
   const toolMsgIdByCallId: Map<string, string> = new Map();
   const toolThreadIdByCallId = new Map<string, string>();
-  const lastAppliedToolStateSeqByCallId = new Map<string, number>();
   const mainToolCallIds = new Set<string>();
   /** Terminal results reject later state until a new tool_start reopens the call id. */
   const completedToolStateCallIds = new Set<string>();
@@ -967,26 +968,7 @@ export const executeHeterogeneousAgent = async (
       pendingToolFlush.set(toolMsgId, toolUpdate);
     });
   };
-  const claimToolStateSnapshot = (
-    toolCallId: string,
-    toolMsgId: string,
-    snapshotSeq: number,
-  ): NonNullable<UIChatMessage['metadata']> | undefined => {
-    const stored = dbMessageSelectors.getDbMessageById(toolMsgId)(get());
-    const durableSeq =
-      stored?.metadata?.heterogeneousToolStateOperationId === operationId &&
-      typeof stored.metadata.heterogeneousToolStateSeq === 'number'
-        ? stored.metadata.heterogeneousToolStateSeq
-        : 0;
-    const lastApplied = Math.max(durableSeq, lastAppliedToolStateSeqByCallId.get(toolCallId) ?? 0);
-    if (snapshotSeq <= lastApplied) return;
-
-    lastAppliedToolStateSeqByCallId.set(toolCallId, snapshotSeq);
-    return {
-      heterogeneousToolStateOperationId: operationId,
-      heterogeneousToolStateSeq: snapshotSeq,
-    };
-  };
+  const claimToolStateSnapshot = createToolStateSnapshotClaimer(get, operationId);
   const retryWithoutResume = (error: unknown): boolean => {
     if (
       resumeFallbackTriggered ||
@@ -1445,6 +1427,17 @@ export const executeHeterogeneousAgent = async (
   // The persisted row owns the thread for bridge transitions as well as tool results.
   const applyMainIntent = async (intent: MainAgentIntent) => {
     switch (intent.kind) {
+      case 'updateBackgroundTask': {
+        const toolMsgId = toolMsgIdByCallId.get(intent.toolCallId);
+        if (!toolMsgId || !mainToolCallIds.has(intent.toolCallId)) return;
+        writeBackgroundTaskSnapshot(get, messageWriteBatcher, {
+          messageWriteCtx,
+          operationId,
+          task: intent.backgroundTask,
+          toolMessageId: toolMsgId,
+        });
+        return;
+      }
       case 'setToolIntervention': {
         const toolMsgId = toolMsgIdByCallId.get(intent.toolCallId);
         if (!toolMsgId) throw new Error(`Missing intervention tool: ${intent.toolCallId}`);
@@ -1900,7 +1893,8 @@ export const executeHeterogeneousAgent = async (
           }
         : undefined;
 
-    // Start session (pass resumeSessionId for multi-turn --resume)
+    // Only the SDK session stops one background task; a plain CLI spawn closed its stdin.
+    const useClaudeCodeSdk = labPreferSelectors.enableClaudeCodeSdk(useUserStore.getState());
     const result = await heterogeneousAgentService.startSession({
       agentType: adapterType,
       args: spawnArgs,
@@ -1919,7 +1913,7 @@ export const executeHeterogeneousAgent = async (
           : undefined,
       providerBinding,
       resumeSessionId,
-      useClaudeCodeSdk: labPreferSelectors.enableClaudeCodeSdk(useUserStore.getState()),
+      useClaudeCodeSdk,
       useCodexAppServer: labPreferSelectors.enableCodexAppServer(useUserStore.getState()),
     });
     activeSessionBindingKey =
@@ -1965,6 +1959,11 @@ export const executeHeterogeneousAgent = async (
     // framework calls this; we SIGINT the CC process via the main-process IPC
     // so the CLI exits instead of running to completion off-screen.
     const sidForCancel = ipcRunSessionId;
+    if (adapterType === 'claude-code' && useClaudeCodeSdk) {
+      unregisterTaskStopper = registerLocalBackgroundTaskStopper(operationId, (taskId) =>
+        heterogeneousAgentService.stopBackgroundTask(sidForCancel, taskId),
+      );
+    }
     get().onOperationCancel?.(operationId, async () => {
       try {
         await heterogeneousAgentService.cancelSession(sidForCancel);
@@ -2082,11 +2081,11 @@ export const executeHeterogeneousAgent = async (
         return;
       }
 
-      // tool_state is interpreted locally after the preceding tools_calling
-      // intent has registered its tool row. Do not also forward it to the
-      // gateway handler: that path would bootstrap-refetch while the local
+      // tool_state / background_task are interpreted locally after the preceding
+      // tools_calling intent has registered its tool row. Do not also forward them
+      // to the gateway handler: that path would bootstrap-refetch while the local
       // write-behind create may still be queued.
-      if (event.type === 'stream_chunk' && event.data?.chunkType === 'tool_state') {
+      if (event.type === 'background_task' || event.data?.chunkType === 'tool_state') {
         sawStreamedEvent = true;
         persistQueue = persistQueue.then(() => reduceAndApplyMain(event));
         return;
@@ -2625,6 +2624,7 @@ export const executeHeterogeneousAgent = async (
         .catch((err) => console.error('[HeterogeneousAgent] cancelled tool cleanup failed:', err));
     }
     unsubscribe?.();
+    unregisterTaskStopper?.();
     // The desktop IPC session only owns this run's config and process handles.
     // Multi-turn resume uses the native agentSessionId persisted above, so the
     // IPC session must be released after every run instead of accumulating in
