@@ -265,11 +265,14 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     topicId,
     userId,
   });
-  const result = await sandboxService.callTool('runCommand', {
-    background: true,
-    command: shellCommand,
-    timeout: 600_000,
-  });
+  // The launch says so itself rather than leaving Market to recognise it from
+  // the command text: that is what gets this run its Claude Code credential,
+  // and what keeps every other `runCommand` from being asked for one.
+  const result = await sandboxService.callTool(
+    'runCommand',
+    { background: true, command: shellCommand, timeout: 600_000 },
+    { heteroLaunch: true },
+  );
 
   if (!result.success) {
     throw new Error(result.error?.message || 'Failed to spawn heterogeneous sandbox');

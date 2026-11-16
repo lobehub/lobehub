@@ -662,3 +662,47 @@ describe('SandboxMiddlewareService readFile images', () => {
     });
   });
 });
+
+// T-14185: the hetero-launch fact travels beside the params, never inside
+// them, so the provider can trust it.
+describe('SandboxMiddlewareService call options', () => {
+  const createShellProvider = () =>
+    ({
+      callTool: vi.fn(async () => ({ result: { exitCode: 0, stdout: '' }, success: true })),
+      capabilities: pythonSandboxCapabilities(),
+      exportFileToUploadUrl: vi.fn(),
+      kind: 'market',
+    }) satisfies SandboxProvider;
+
+  const createShellService = async (provider: SandboxProvider) => {
+    const { SandboxMiddlewareService } = await import('../service');
+
+    return new SandboxMiddlewareService(provider, {
+      marketService: {} as MarketService,
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+  };
+
+  it('hands the launch marker to the provider', async () => {
+    const provider = createShellProvider();
+    const service = await createShellService(provider);
+
+    await service.callTool('runCommand', { command: 'lh hetero exec' }, { heteroLaunch: true });
+
+    expect(provider.callTool).toHaveBeenCalledWith(
+      'runCommand',
+      { command: 'lh hetero exec' },
+      { heteroLaunch: true },
+    );
+  });
+
+  it('adds no options to an ordinary call', async () => {
+    const provider = createShellProvider();
+    const service = await createShellService(provider);
+
+    await service.callTool('runCommand', { command: 'lh skill list' });
+
+    expect(provider.callTool).toHaveBeenCalledWith('runCommand', { command: 'lh skill list' });
+  });
+});

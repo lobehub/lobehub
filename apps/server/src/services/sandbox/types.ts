@@ -1,5 +1,6 @@
 import type {
   ISandboxService,
+  SandboxCallToolResult,
   SandboxExportFileResult,
   SandboxMode,
 } from '@lobechat/builtin-tool-cloud-sandbox';
@@ -108,7 +109,30 @@ export interface SandboxProviderCapabilities {
   skillScripts: boolean;
 }
 
-export interface SandboxProvider extends Pick<ISandboxService, 'callTool'> {
+/**
+ * What the server, not the tool call, says about one sandbox call. Kept out of
+ * `params` because on most paths `params` is whatever the model wrote: the
+ * cloud-sandbox runtime and the client-side executor forward tool arguments
+ * whole.
+ */
+export interface SandboxCallOptions {
+  /**
+   * This `runCommand` is the platform launching `lh hetero exec` — the one call
+   * the execution plane should resolve the user's Claude Code credential for.
+   * Set only by `spawnHeteroSandbox`; see `withHeteroExecMarker`.
+   */
+  heteroLaunch?: boolean;
+}
+
+type SandboxCallTool = (
+  toolName: string,
+  params: Record<string, any>,
+  options?: SandboxCallOptions,
+) => Promise<SandboxCallToolResult>;
+
+export interface SandboxProvider {
+  callTool: SandboxCallTool;
+
   readonly capabilities: SandboxProviderCapabilities;
 
   exportFileToUploadUrl: (
@@ -119,6 +143,7 @@ export interface SandboxProvider extends Pick<ISandboxService, 'callTool'> {
 }
 
 export interface SandboxService extends ISandboxService {
+  callTool: SandboxCallTool;
   readonly capabilities: SandboxProviderCapabilities;
   readonly kind: SandboxProviderKind;
 }

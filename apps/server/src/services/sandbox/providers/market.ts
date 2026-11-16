@@ -6,6 +6,7 @@ import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorC
 
 import { SandboxMiddlewareService } from '../service';
 import type {
+  SandboxCallOptions,
   SandboxProvider,
   SandboxProviderCapabilities,
   SandboxProviderFileExportRequest,
@@ -55,8 +56,10 @@ export class MarketSandboxProvider implements SandboxProvider {
 
   async callTool(
     toolName: string,
-    params: Record<string, unknown>,
+    callerParams: Record<string, unknown>,
+    options?: SandboxCallOptions,
   ): Promise<SandboxCallToolResult> {
+    const params = withHeteroExecMarker(toolName, callerParams, options?.heteroLaunch);
     const {
       marketService,
       sandboxCwd,
@@ -214,6 +217,33 @@ export class MarketSandboxProvider implements SandboxProvider {
     }
   }
 }
+
+/**
+ * `heteroExec` is Market's switch for a heterogeneous-agent launch. On a
+ * `runCommand` that carries it, Market resolves the owner's
+ * `CLAUDE_CODE_OAUTH_TOKEN` and writes it into the sandbox, and it refuses the
+ * command when the token is not set. So the server sets it, never the caller:
+ * most `params` that reach here are a model's tool arguments, forwarded whole.
+ *
+ * Whatever the caller sent is dropped. Each `runCommand` then states the
+ * answer: `true` only for the launch `spawnHeteroSandbox` makes, `false` for
+ * everything else. The explicit `false` is the part that matters. Without it
+ * Market falls back to matching `lh hetero exec` in the command text, so a
+ * model command that only contained those words (a SKILL.md passed to
+ * `lh skill create`, an `echo`) was refused with "CLAUDE_CODE_OAUTH_TOKEN
+ * 未设置", as if it had started Claude Code.
+ */
+export const withHeteroExecMarker = (
+  toolName: string,
+  params: Record<string, unknown>,
+  heteroLaunch: boolean | undefined,
+): Record<string, unknown> => {
+  if (toolName !== 'runCommand' && !('heteroExec' in params)) return params;
+
+  const { heteroExec: _callerValue, ...rest } = params;
+
+  return toolName === 'runCommand' ? { ...rest, heteroExec: heteroLaunch === true } : rest;
+};
 
 export const redactSandboxParams = (params: Record<string, unknown>) => {
   const hasCommand = typeof params.command === 'string';

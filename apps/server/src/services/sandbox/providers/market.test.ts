@@ -66,9 +66,99 @@ describe('MarketSandboxProvider', () => {
 
     expect(runBuildInTool).toHaveBeenCalledWith(
       'runCommand',
-      { command: 'pwd' },
+      { command: 'pwd', heteroExec: false },
       expect.objectContaining({ sandboxCwd: 'projects/atlas', sandboxWorkingDir: '/root/work' }),
     );
+  });
+
+  // T-14185: Market resolves the owner's CLAUDE_CODE_OAUTH_TOKEN for any
+  // runCommand it takes for an `lh hetero exec` launch, and refuses the command
+  // when the token is unset. Without an explicit marker it decides from the
+  // command text, so ordinary `lh` work that mentioned those words failed with
+  // "CLAUDE_CODE_OAUTH_TOKEN 未设置" as if it had started Claude Code.
+  describe('heteroExec marker', () => {
+    const createProvider = () => {
+      const runBuildInTool = vi.fn(async () => ({ data: { result: {} }, success: true }));
+      const marketService = {
+        getSDK: vi.fn(() => ({ plugins: { runBuildInTool } })),
+      } as unknown as MarketService;
+      const provider = new MarketSandboxProvider({
+        marketService,
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      return { provider, runBuildInTool };
+    };
+
+    it('tells Market an ordinary command that mentions lh hetero exec is not a launch', async () => {
+      const { provider, runBuildInTool } = createProvider();
+      const command = [
+        "lh skill create --name cc-helper --content '# Claude Code helper",
+        'Start a session with lh hetero exec --type claude-code.',
+        "' && lh skill list && lh agent-group view grp_1",
+      ].join('\n');
+
+      await provider.callTool('runCommand', { command });
+
+      expect(runBuildInTool).toHaveBeenCalledWith(
+        'runCommand',
+        { command, heteroExec: false },
+        expect.anything(),
+      );
+    });
+
+    it('drops a heteroExec the tool arguments carry', async () => {
+      const { provider, runBuildInTool } = createProvider();
+
+      await provider.callTool('runCommand', { command: 'lh skill list', heteroExec: true });
+
+      expect(runBuildInTool).toHaveBeenCalledWith(
+        'runCommand',
+        { command: 'lh skill list', heteroExec: false },
+        expect.anything(),
+      );
+    });
+
+    it('marks only the launch the server asks for', async () => {
+      const { provider, runBuildInTool } = createProvider();
+
+      await provider.callTool(
+        'runCommand',
+        { background: true, command: "'lh' 'hetero' 'exec' '--type' 'claude-code'" },
+        { heteroLaunch: true },
+      );
+
+      expect(runBuildInTool).toHaveBeenCalledWith(
+        'runCommand',
+        {
+          background: true,
+          command: "'lh' 'hetero' 'exec' '--type' 'claude-code'",
+          heteroExec: true,
+        },
+        expect.anything(),
+      );
+    });
+
+    it('keeps the marker off other tools', async () => {
+      const { provider, runBuildInTool } = createProvider();
+
+      await provider.callTool('execScript', { command: 'lh skill list', heteroExec: true });
+      await provider.callTool('listFiles', { path: '/workspace' });
+
+      expect(runBuildInTool).toHaveBeenNthCalledWith(
+        1,
+        'execScript',
+        { command: 'lh skill list' },
+        expect.anything(),
+      );
+      expect(runBuildInTool).toHaveBeenNthCalledWith(
+        2,
+        'listFiles',
+        { path: '/workspace' },
+        expect.anything(),
+      );
+    });
   });
 
   it('keeps the previous Market sandbox callTool error mapping', async () => {
