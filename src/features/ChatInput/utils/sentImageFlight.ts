@@ -37,13 +37,15 @@ const prefersReducedMotion = () =>
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
- * The newest rendered image showing `url` outside the composer. The same image may appear in
- * earlier messages too; the sent one is the last in document order.
+ * The newest image showing `url` that rendered after the send started, outside the composer.
+ * `ignored` holds every image on the page when the send started (plus the copies): the same
+ * image may already show in an earlier message, e.g. one restored to the composer, and a
+ * queued send must not fly into it.
  */
-const findTarget = (url: string, ghosts: Set<Element>): HTMLImageElement | undefined => {
+const findTarget = (url: string, ignored: Set<Element>): HTMLImageElement | undefined => {
   let found: HTMLImageElement | undefined;
   for (const img of document.querySelectorAll('img')) {
-    if (ghosts.has(img) || img.hasAttribute(CHAT_INPUT_IMAGE_ATTR)) continue;
+    if (ignored.has(img) || img.hasAttribute(CHAT_INPUT_IMAGE_ATTR)) continue;
     if (img.getAttribute('src') === url) found = img;
   }
   return found;
@@ -133,6 +135,7 @@ const createGhost = (source: HTMLImageElement, rect: DOMRect, radius: string) =>
 export const flySentImages = (files: UploadFileItem[]): void => {
   if (typeof document === 'undefined' || prefersReducedMotion()) return;
 
+  const ignored = new Set<Element>(document.querySelectorAll('img'));
   const flights: Flight[] = [];
   for (const item of files.filter(isImageUpload).slice(0, MAX_FLIGHTS)) {
     const url = getSentImageUrl(item);
@@ -147,7 +150,7 @@ export const flySentImages = (files: UploadFileItem[]): void => {
   }
   if (flights.length === 0) return;
 
-  const ghosts = new Set<Element>(flights.map((flight) => flight.ghost));
+  for (const flight of flights) ignored.add(flight.ghost);
   const lastRects = new Map<Flight, DOMRect>();
   const pending = new Set(flights);
   const startedAt = performance.now();
@@ -155,7 +158,7 @@ export const flySentImages = (files: UploadFileItem[]): void => {
 
   const tick = () => {
     for (const flight of pending) {
-      const target = findTarget(flight.url, ghosts);
+      const target = findTarget(flight.url, ignored);
       const rect = target?.getBoundingClientRect();
       if (!target || !rect || rect.width === 0 || rect.height === 0) continue;
 

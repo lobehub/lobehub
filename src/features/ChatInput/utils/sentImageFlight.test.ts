@@ -76,6 +76,20 @@ describe('flySentImages', () => {
     expect(animations[0].keyframes).toEqual([{ opacity: 1 }, { opacity: 0 }]);
   });
 
+  it('does not fly into an earlier message showing the same image', () => {
+    const earlier = document.createElement('img');
+    earlier.src = 'https://cdn/image.png';
+    earlier.getBoundingClientRect = () => rect(300, 100, 200);
+    document.body.append(earlier);
+    mountThumbnail('blob:a');
+    flySentImages([image()]);
+
+    vi.advanceTimersByTime(2500);
+    expect(earlier.style.visibility).toBe('');
+    expect(animations).toHaveLength(1);
+    expect(animations[0].keyframes).toEqual([{ opacity: 1 }, { opacity: 0 }]);
+  });
+
   it('does nothing under reduced motion', () => {
     window.matchMedia = vi.fn().mockReturnValue({ matches: true }) as any;
     mountThumbnail('blob:a');
