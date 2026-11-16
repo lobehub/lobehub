@@ -50,6 +50,8 @@ export interface ToolRuleRequest {
   /** The run's effective execution target, resolved by the host. */
   executionTarget: DeviceExecutionTarget;
   hasEnabledKnowledgeBases?: boolean;
+  /** Server confirmed an enabled HTTP connector supports MCP Events and the flag is on. */
+  hasEventConnector?: boolean;
   /**
    * The executing agent owns at least one identity account (e.g. a mail
    * address). Gates the agent-account tool so an agent with no identity

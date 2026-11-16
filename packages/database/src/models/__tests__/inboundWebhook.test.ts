@@ -335,6 +335,27 @@ describe('InboundWebhookModel maintenance and quotas', () => {
     expect((await InboundWebhookModel.queryStalePending(db)).map((r) => r.id)).toEqual([stale.id]);
   });
 
+  it('pages due rows earliest first, continuing after a given row', async () => {
+    const at = (offset: number) => new Date(Date.now() - 10_000 + offset);
+    const rows = await Promise.all(
+      [0, 1000, 1000, 2000].map((offset) =>
+        model.create(input({ nextMaintenanceAt: at(offset), status: 'active' })),
+      ),
+    );
+    const all = await InboundWebhookModel.queryMaintenance(db);
+    expect(all.map((r) => r.id).sort()).toEqual(rows.map((r) => r.id).sort());
+    const pages = [];
+    let after: { id: string; nextMaintenanceAt: Date } | undefined;
+    for (;;) {
+      const page = await InboundWebhookModel.queryMaintenance(db, 1, after);
+      if (!page.length) break;
+      pages.push(page[0].id);
+      after = { id: page[0].id, nextMaintenanceAt: page[0].nextMaintenanceAt! };
+    }
+    // Every row exactly once, in the same order as one unpaged read, ties included.
+    expect(pages).toEqual(all.map((r) => r.id));
+  });
+
   it('atomically reserves a bounded number of wakes and resets an expired hour', async () => {
     const row = await model.create(input({ status: 'active' }));
     const reservations = await Promise.all(
@@ -414,8 +435,13 @@ describe('InboundWebhookModel delivery recovery', () => {
       lastError: 'http_5xx',
       lastDeliveryAt: null,
     });
+    // A control envelope (gap, terminated) is not an event: it must not move "last event".
     await model.recordDelivery(row.id, false);
-    expect(await model.findById(row.id)).toMatchObject({ status: 'error', lastError: 'http_5xx' });
+    expect(await model.findById(row.id)).toMatchObject({
+      status: 'error',
+      lastError: 'http_5xx',
+      lastDeliveryAt: null,
+    });
     await model.recordDelivery(row.id, true);
     expect(await model.findById(row.id)).toMatchObject({
       status: 'active',
@@ -431,5 +457,19 @@ describe('InboundWebhookModel delivery recovery', () => {
       status: 'deleting',
       lastError: 'http_5xx',
     });
+  });
+
+  it('clears only the run errors once a run starts, in scope', async () => {
+    const row = await model.create(input({ lastError: 'wake_cap' }));
+    await otherModel.recordRunStarted(row.id);
+    expect((await model.findById(row.id))?.lastError).toBe('wake_cap');
+    await model.recordRunStarted(row.id);
+    expect((await model.findById(row.id))?.lastError).toBeNull();
+    await model.update(row.id, { lastError: 'insufficient_budget' });
+    await model.recordRunStarted(row.id);
+    expect((await model.findById(row.id))?.lastError).toBeNull();
+    await model.update(row.id, { status: 'error', lastError: 'auth' });
+    await model.recordRunStarted(row.id);
+    expect(await model.findById(row.id)).toMatchObject({ status: 'error', lastError: 'auth' });
   });
 });

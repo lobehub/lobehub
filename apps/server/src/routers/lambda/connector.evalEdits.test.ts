@@ -9,7 +9,12 @@ const mocks = vi.hoisted(() => ({
   createUnlessIdentifierHeld: vi.fn(),
   findById: vi.fn(),
   findScopedByIdentifier: vi.fn(),
+  refresh: vi.fn(),
   update: vi.fn(),
+}));
+vi.mock('@/server/services/inboundWebhook/lifecycle', () => ({
+  scheduleRefreshByConnector: mocks.refresh,
+  removeByConnector: vi.fn(),
 }));
 vi.mock('@/database/models/agent', () => ({ AgentModel: vi.fn() }));
 vi.mock('@/database/models/connector', () => ({
@@ -75,9 +80,53 @@ describe('imported evaluation connector edit boundary', () => {
     });
   });
 
+  it('schedules the subscription refresh only after replacement credentials are persisted', async () => {
+    await caller.update({
+      id,
+      patch: { credentials: { type: 'bearer', token: 'replacement-token' } },
+    });
+
+    expect(JSON.parse(mocks.update.mock.calls[0][1].credentials)).toEqual({
+      type: 'bearer',
+      token: 'replacement-token',
+    });
+    expect(mocks.refresh).toHaveBeenCalledWith(
+      {},
+      { userId: 'creator', workspaceId: undefined },
+      id,
+    );
+    expect(mocks.update.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.refresh.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('schedules the subscription refresh after a header-based authentication change without a credential patch', async () => {
+    await caller.update({
+      id,
+      patch: { metadata: { customHeaders: { 'X-Api-Key': 'replacement-header' } } },
+    });
+    expect(mocks.refresh).toHaveBeenCalledWith(
+      {},
+      { userId: 'creator', workspaceId: undefined },
+      id,
+    );
+    expect(mocks.update.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.refresh.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('schedules no subscription refresh when the credential update fails', async () => {
+    mocks.update.mockRejectedValueOnce(new Error('Could not persist credentials'));
+    await expect(
+      caller.update({ id, patch: { credentials: { type: 'bearer', token: 'replacement-token' } } }),
+    ).rejects.toThrow('Could not persist credentials');
+    expect(mocks.refresh).not.toHaveBeenCalled();
+  });
+
   it('preserves the explicit-clear versus omitted credential distinction for model normalization', async () => {
     await caller.update({ id, patch: { metadata: { description: 'Keep authentication' } } });
     expect(mocks.update.mock.calls[0][1]).not.toHaveProperty('credentials');
+    expect(mocks.refresh).not.toHaveBeenCalled();
     await caller.update({
       id,
       patch: { credentials: null, metadata: { customHeaders: { 'X-Mock': 'header-token' } } },
@@ -86,5 +135,14 @@ describe('imported evaluation connector edit boundary', () => {
       credentials: null,
       metadata: { customHeaders: { 'X-Mock': 'header-token' } },
     });
+    expect(mocks.refresh).toHaveBeenCalledOnce();
+    expect(mocks.refresh).toHaveBeenCalledWith(
+      {},
+      { userId: 'creator', workspaceId: undefined },
+      id,
+    );
+    expect(mocks.update.mock.invocationCallOrder[1]).toBeLessThan(
+      mocks.refresh.mock.invocationCallOrder[0],
+    );
   });
 });

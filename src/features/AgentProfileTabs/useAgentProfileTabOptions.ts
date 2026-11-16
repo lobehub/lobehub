@@ -8,7 +8,11 @@ import { useSelfLearningSurface } from '@/features/SelfLearning/SurfaceGate/useS
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { type AgentProfileTab, buildAgentProfileTabOptions } from './tabOptions';
@@ -29,6 +33,7 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
     !!isAgentEditable && isAccessResolved && canEditContent && canManageResource;
   const { visible: shareVisible } = useAgentShareSupported(agentId);
   const mailSupported = useShowAgentIdentity(agentId);
+  const automationsSupported = useServerConfigStore(serverConfigSelectors.enableWebhook);
   const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
   const { enabled: enableSelfLearning } = useSelfLearningSurface();
   // The mobile Segmented has no room for another segment, so mobile keeps the
@@ -39,8 +44,10 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
     () =>
       buildAgentProfileTabOptions({
         active,
+        automationsSupported,
         canConfigure,
         labels: {
+          'automations': t('tab.automations'),
           'channel': t('tab.integration'),
           'engine': t('tab.engine'),
           'environment': t('tab.environment'),
@@ -64,6 +71,7 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
       }),
     [
       active,
+      automationsSupported,
       canConfigure,
       canManageShare,
       isHeterogeneous,

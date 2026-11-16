@@ -26,7 +26,11 @@ import { toClientToolSyncInputs } from '@/server/routers/lambda/_helpers/clientT
 import { canManageWorkspaceConnectors } from '@/server/routers/lambda/_helpers/connectorManagePolicy';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
-import { listConnectorToolSyncInputs, writeConnectorToolSyncInputs } from './sync';
+import {
+  listConnectorToolSyncInputs,
+  withEventsCapability,
+  writeConnectorToolSyncInputs,
+} from './sync';
 
 const log = debug('lobe-server:connector:marketplace-install');
 
@@ -396,20 +400,19 @@ export const installMarketplaceMcpConnector = async (
     // sends every HTTP request through the SSRF-safe fetch), held to the market
     // tool policies it stores. Never on a device (no `serverDB`): the picked
     // endpoint is one the server lists itself, or the listing fails.
-    const syncInputs =
+    const listing =
       deployment.type === 'cloud'
-        ? await toClientToolSyncInputs(marketTools, userId)
-        : (
-            await listConnectorToolSyncInputs(
-              created.id,
-              { connectorModel, connectorToolModel, serverDB: undefined, userId },
-              {
-                humanInterventions: new Map(
-                  marketTools.map((tool) => [tool.toolName, tool.humanIntervention]),
-                ),
-              },
-            )
-          ).syncInputs;
+        ? { syncInputs: await toClientToolSyncInputs(marketTools, userId) }
+        : await listConnectorToolSyncInputs(
+            created.id,
+            { connectorModel, connectorToolModel, serverDB: undefined, userId },
+            {
+              humanInterventions: new Map(
+                marketTools.map((tool) => [tool.toolName, tool.humanIntervention]),
+              ),
+            },
+          );
+    const { syncInputs } = listing;
 
     if (syncInputs.length === 0) {
       await rollback();
@@ -426,7 +429,7 @@ export const installMarketplaceMcpConnector = async (
       const txDB = tx as unknown as LobeChatDatabase;
       const txConnectorModel = new ConnectorModel(txDB, userId, workspaceId);
       const marked = await txConnectorModel.updateMetadataIfContains(created.id, attempt, {
-        ...metadata,
+        ...withEventsCapability(metadata, 'events' in listing ? listing.events : undefined),
         [MARKETPLACE_INSTALL_COMPLETED_KEY]: true,
       });
       if (!marked) return false;

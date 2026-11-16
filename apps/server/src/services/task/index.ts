@@ -13,6 +13,7 @@ import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AiAgentService } from '../aiAgent';
+import { removeByTopics } from '../inboundWebhook/lifecycle';
 import { displaySubtaskPlan, type SubtaskGraphPlan, TaskGraphService } from '../taskGraph';
 import { type ReviewResult, TaskReviewService } from '../taskReview';
 import { TaskRunnerService } from '../taskRunner';
@@ -337,6 +338,13 @@ export class TaskService {
       await this.interruptTaskOperation(aiAgentService, target.operationId);
     }
 
+    try {
+      await removeByTopics(this.db, { userId: this.userId, workspaceId: this.workspaceId }, [
+        topicId,
+      ]);
+    } catch (error) {
+      console.error('[task:deleteTopic] Inbound webhook cleanup failed', error);
+    }
     await this.taskTopicModel.remove(target.taskId, topicId);
     await this.topicModel.delete(topicId);
   }
@@ -392,6 +400,7 @@ export class TaskService {
     // hard-deleted at purge). The kept operation's own topic is excluded — it
     // must survive with its run (see the snapshot below).
     const handled = new Set(runningTopics.map((topic) => topic.operationId));
+    let removedTopicIds: string[] = [];
     const outcome = await this.db.transaction(async (tx) => {
       const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
       if (!(await taskModel.lockForUpdate(task.id))) return 'gone' as const;
@@ -424,6 +433,7 @@ export class TaskService {
         [{ status: task.status, taskId: task.id, topicIds }],
       );
       if (trashed.length === 0) return 'conflict' as const;
+      removedTopicIds = topicIds;
       return 'deleted' as const;
     });
     if (outcome === 'conflict') {
@@ -432,6 +442,18 @@ export class TaskService {
         message:
           'The task changed while it was being deleted (it may have just started). Try again.',
       });
+    }
+    // Remote teardown follows commit: conflicts and rollbacks preserve the live endpoints.
+    if (outcome === 'deleted' && removedTopicIds.length > 0) {
+      try {
+        await removeByTopics(
+          this.db,
+          { userId: this.userId, workspaceId: this.workspaceId },
+          removedTopicIds,
+        );
+      } catch (error) {
+        console.error('[task:delete] Inbound webhook cleanup failed', error);
+      }
     }
     return task;
   }

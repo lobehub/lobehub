@@ -31,6 +31,12 @@ export interface AsyncErrorProps {
    * (e.g. a Back button on a 403).
    */
   action?: ReactNode;
+  /**
+   * `inline` only: where the line sits. Centered by default, for a slot that
+   * stands alone (a load-more footer); `start` when it replaces content that
+   * reads left-aligned, such as a result card in a conversation.
+   */
+  align?: 'center' | 'start';
   /** Override the auto-derived description (status-based copy otherwise). */
   description?: ReactNode;
   /**
@@ -82,6 +88,7 @@ const styles = stylex.create({
 
 const AsyncError = memo<AsyncErrorProps>(
   ({
+    align = 'center',
     variant = 'block',
     error,
     onRetry,
@@ -135,7 +142,13 @@ const AsyncError = memo<AsyncErrorProps>(
     if (variant === 'inline') {
       return (
         <Flexbox className={stylex.props(styles.inline).className} gap={4}>
-          <Flexbox horizontal align={'center'} gap={8} justify={'center'} wrap={'wrap'}>
+          <Flexbox
+            horizontal
+            align={'center'}
+            gap={8}
+            justify={align === 'start' ? 'flex-start' : 'center'}
+            wrap={'wrap'}
+          >
             {/* Icon and copy stay together; only the copy wraps in a narrow slot. */}
             <Flexbox
               horizontal

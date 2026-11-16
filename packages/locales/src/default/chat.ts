@@ -2032,6 +2032,7 @@ export default {
   'tab.knowledge': 'Knowledge Base',
   'tab.tools': 'Tools & Connectors',
   'tab.integration': 'IM Bots',
+  'tab.automations': 'Automations',
   'tab.mail': 'Mail',
   'tab.profile': 'Agent Profile',
   'tab.profileBasic': 'Profile',

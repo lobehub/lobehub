@@ -2,6 +2,7 @@ import { splitAssistantGroupFinalAnswer } from '@lobechat/conversation-flow';
 
 import type { TopicPreview } from '@/services/message/topicPreview';
 
+import { getMcpEventSource } from '../../../Markdown/plugins/McpEvent/parseMcpEvent';
 import { getScmEventSource } from '../../../Markdown/plugins/ScmEvent/parseScmEvent';
 import {
   buildChainView,
@@ -97,7 +98,8 @@ const isPlainQuestion = (message: PreviewMessage) =>
   !getAgentSender(message) &&
   !message.metadata?.subAgentCallback &&
   !message.metadata?.steer &&
-  !getScmEventSource(message.content);
+  !getScmEventSource(message.content) &&
+  !getMcpEventSource(message.content);
 
 export const resolveWholeTopicLeading = ({ leading }: TopicPreview) =>
   leading && leading.every(isPlainQuestion) ? leading : undefined;

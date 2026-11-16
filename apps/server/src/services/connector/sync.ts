@@ -31,17 +31,12 @@ import type { AuthConfig, McpTool } from '@/libs/mcp';
 import { inferCrudType } from '@/libs/mcp/utils';
 import { resolveConnectorToolPermission } from '@/server/routers/lambda/_helpers/connectorToolPermission';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { isWebhookEnabled } from '@/server/services/inboundWebhook/featureGate';
 import { mcpService } from '@/server/services/mcp';
 import { listMcpToolsOnDevice } from '@/server/services/mcp/deviceTunnel';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
-import {
-  getConnectorLinkModel,
-  loadConnectorLinksMap,
-  pickPrimaryLink,
-  withLinkCredentials,
-} from './links';
-import { ensureFreshConnectorToken, ensureFreshLinkToken } from './tokens';
+import { getConnectorLinkModel, resolveConnectorAccount } from './links';
 
 export interface ConnectorToolSyncContext {
   connectorLinkModel?: ConnectorLinkModel;
@@ -246,8 +241,25 @@ export interface ConnectorToolListingAccount {
 }
 
 export interface ConnectorToolListing extends ConnectorToolListingAccount {
+  /**
+   * Whether the server offers MCP Events webhooks, when asked (the `webhook` flag is on). A
+   * connector listed through a device never offers them: webhooks need a server the cloud reaches.
+   */
+  events?: { supported: boolean };
   syncInputs: SyncToolInput[];
 }
+
+/** The connector's metadata with the events capability a listing found, for the caller to store. */
+export const withEventsCapability = <T extends Record<string, any> | null | undefined>(
+  metadata: T,
+  events: ConnectorToolListing['events'],
+) =>
+  events
+    ? {
+        ...metadata,
+        capabilities: { ...metadata?.capabilities, events: { supported: events.supported } },
+      }
+    : metadata;
 
 /**
  * Connect to a connector's MCP server and build the sync inputs of the tools
@@ -280,30 +292,29 @@ export const listConnectorToolSyncInputs = async (
   }
 
   // Refresh the OAuth access token if it has expired before connecting.
-  const links = (await loadConnectorLinksMap([connector], ctx)).get(connector.id) ?? [];
-  const link = options.linkId ? links.find((l) => l.id === options.linkId) : pickPrimaryLink(links);
-  if (options.linkId && !link) throw new Error('Connector account no longer exists');
-  connector = link
-    ? withLinkCredentials(
-        connector,
-        await ensureFreshLinkToken(connector, link, getConnectorLinkModel(ctx), ctx.connectorModel),
-      )
-    : await ensureFreshConnectorToken(connector, ctx.connectorModel);
+  const account = await resolveConnectorAccount(connector, ctx, options.linkId);
+  const { link } = account;
+  connector = account.connector;
 
   const mcpParams = buildConnectorMcpParams(connector);
 
   const mcpApps = await isMcpAppsEnabled(ctx.userId);
+  const mcpEvents = await isWebhookEnabled(ctx.userId);
   let rawTools: Awaited<ReturnType<typeof mcpService.listRawTools>>;
+  let events: ConnectorToolListing['events'];
   try {
     // A server may list the tools only its views call just to a client
     // announcing MCP Apps; they are synced, and kept from the model, all the same
-    rawTools =
-      (await listOnDevice(connector, mcpParams, ctx, mcpApps)) ??
-      (await mcpService.listRawTools(mcpParams, {
-        mcpApps,
-      }));
+    const deviceTools = await listOnDevice(connector, mcpParams, ctx, mcpApps);
+    rawTools = deviceTools ?? (await mcpService.listRawTools(mcpParams, { mcpApps, mcpEvents }));
+    if (mcpEvents)
+      // Event webhooks need a server the cloud reaches directly; a connector that runs
+      // through a device never offers them, so it is not even asked.
+      events = deviceTools
+        ? { supported: false }
+        : await mcpService.getEventsCapability(mcpParams, { mcpApps, mcpEvents });
   } catch (err) {
-    await options.onListError?.({ link, linkCount: links.length });
+    await options.onListError?.({ link, linkCount: account.accountCount });
     throw err;
   }
 
@@ -357,7 +368,7 @@ export const listConnectorToolSyncInputs = async (
     };
   });
 
-  return { link, linkCount: links.length, syncInputs };
+  return { events, link, linkCount: account.accountCount, syncInputs };
 };
 
 /**
@@ -379,7 +390,7 @@ export const syncConnectorToolsById = async (
   options: ConnectorToolSyncOptions & ConnectorToolListOptions = {},
 ): Promise<{ toolCount: number }> => {
   const { pruneMissingAutoTools, ...listOptions } = options;
-  const { link, syncInputs } = await listConnectorToolSyncInputs(connectorId, ctx, {
+  const { events, link, syncInputs } = await listConnectorToolSyncInputs(connectorId, ctx, {
     ...listOptions,
     onListError: async (account) => {
       if (account.link)
@@ -388,6 +399,13 @@ export const syncConnectorToolsById = async (
         await ctx.connectorModel.updateStatus(connectorId, ConnectorStatus.error);
     },
   });
+  if (events) {
+    const current = await ctx.connectorModel.findById(connectorId);
+    if (current)
+      await ctx.connectorModel.update(connectorId, {
+        metadata: withEventsCapability(current.metadata, events),
+      });
+  }
   const result = await writeConnectorToolSyncInputs(connectorId, syncInputs, ctx, {
     pruneMissingAutoTools,
   });

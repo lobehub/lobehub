@@ -35,6 +35,7 @@ export default {
   'navigation.knowledge': 'Agent Knowledge Base',
   'navigation.tools': 'Agent Tools',
   'navigation.skills': 'Agent Skills',
+  'navigation.automations': 'Automations',
   'navigation.mail': 'Mail',
   'navigation.memory': 'Memory',
   'navigation.memoryContexts': 'Memory - Contexts',

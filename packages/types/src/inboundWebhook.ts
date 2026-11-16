@@ -42,9 +42,21 @@ export const INBOUND_WEBHOOK_DELIVERY_ERRORS = [
   'delivery_suspended',
 ] as const satisfies readonly InboundWebhookError[];
 
+/** Errors a run that starts proves have recovered: the hourly window reopened, or credits came back. */
+export const INBOUND_WEBHOOK_RUN_ERRORS = [
+  'wake_cap',
+  'insufficient_budget',
+] as const satisfies readonly InboundWebhookError[];
+
 export interface McpEventsWebhookConfig {
   arguments: Record<string, unknown>;
   eventName: string;
+  /**
+   * The connector account (`connector_links.id`) the subscription was made with. The server knows
+   * it by that identity, so renewal and unsubscribe must use the same account. Absent for a
+   * connector without accounts.
+   */
+  linkId?: string;
 }
 
 export interface McpEventsWebhookState {
@@ -76,7 +88,14 @@ export interface InboundWebhookItem {
   canCheck: boolean;
   /** 当前用户能否删除 / 检查这一行 */
   canManage: boolean;
-  connector: { avatar: string | null; id: string; identifier: string; name: string } | null;
+  connector: {
+    /** Set when the connector is owned by an agent rather than the user (`user_connectors.agent_id`). */
+    agentId: string | null;
+    avatar: string | null;
+    id: string;
+    identifier: string;
+    name: string;
+  } | null;
   createdAt: string;
   creatorId: string;
   /** mcp_events：server 授予的到期时间；null = 永不过期 */
@@ -97,6 +116,7 @@ export const McpEventsWebhookConfigSchema = z
   .object({
     arguments: z.record(z.string(), z.unknown()),
     eventName: z.string().min(1),
+    linkId: z.string().min(1).optional(),
   })
   .strict();
 

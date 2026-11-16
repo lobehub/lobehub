@@ -122,6 +122,7 @@ const createDeps = (overrides: Partial<HeteroDispatchDeps> = {}) => {
     findById: vi.fn().mockResolvedValue({ metadata: {} }),
     patchRunningOperation: vi.fn().mockResolvedValue(true),
     updateMetadata: vi.fn().mockResolvedValue(undefined),
+    settleRunningOperation: vi.fn().mockResolvedValue({ status: 'settled' }),
   };
   const deps = {
     bindTopicWorkingDirectory: vi.fn().mockResolvedValue(undefined),
@@ -917,5 +918,85 @@ describe('dispatchHeteroAgent — cloud sandbox', () => {
 
       expect(params.dispatch).toEqual({ agentType: 'claude-code', stage: 'sandbox_spawn' });
     });
+  });
+});
+
+describe('explicit topic-status opt-in', () => {
+  const remoteConfig = (extra: Record<string, unknown> = {}) => ({
+    executionTarget: 'device',
+    heterogeneousProvider: { platformAgentId: 'platform-agent', type: 'openclaw' },
+    ...extra,
+  });
+  it('installs running with its marker before dispatch for an opted-in root event run', async () => {
+    const { deps, topicModel } = createDeps();
+    await dispatchHeteroAgent(
+      deps,
+      createCtx(remoteConfig({ boundDeviceId: 'dev-1' })),
+      createInput('openclaw', { markTopicRunning: true }),
+    );
+    expect(topicModel.updateMetadata).toHaveBeenCalledWith(
+      'topic-1',
+      expect.objectContaining({
+        runningOperation: expect.objectContaining({ operationId: expect.any(String) }),
+      }),
+      { status: 'running' },
+    );
+    expect(topicModel.updateMetadata.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.executeToolCall.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('cleans up an opted-in dispatch error through operation ownership', async () => {
+    const { deps, topicModel } = createDeps();
+    mocks.executeToolCall.mockResolvedValueOnce({
+      success: false,
+      error: 'device refused dispatch',
+    });
+    const result = await dispatchHeteroAgent(
+      deps,
+      createCtx(remoteConfig({ boundDeviceId: 'dev-1' })),
+      createInput('openclaw', { markTopicRunning: true }),
+    );
+    expect(result.error).toBeTruthy();
+    expect(topicModel.settleRunningOperation).toHaveBeenCalledWith(
+      'topic-1',
+      result.operationId,
+      'active',
+    );
+  });
+
+  it('settles an opted-in network exception before rethrowing it', async () => {
+    const { deps, topicModel } = createDeps();
+    mocks.executeToolCall.mockRejectedValueOnce(new Error('device connection failed'));
+    await expect(
+      dispatchHeteroAgent(
+        deps,
+        createCtx(remoteConfig({ boundDeviceId: 'dev-1' })),
+        createInput('openclaw', { markTopicRunning: true }),
+      ),
+    ).rejects.toThrow('device connection failed');
+    expect(topicModel.settleRunningOperation).toHaveBeenCalledWith(
+      'topic-1',
+      expect.stringMatching(/^op_/),
+      'active',
+    );
+  });
+
+  it('settles an opted-in marker write failure before propagating it', async () => {
+    const { deps, topicModel } = createDeps();
+    topicModel.updateMetadata.mockRejectedValueOnce(new Error('marker persistence failed'));
+    await expect(
+      dispatchHeteroAgent(
+        deps,
+        createCtx(remoteConfig({ boundDeviceId: 'dev-1' })),
+        createInput('openclaw', { markTopicRunning: true }),
+      ),
+    ).rejects.toThrow('marker persistence failed');
+    expect(topicModel.settleRunningOperation).toHaveBeenCalledWith(
+      'topic-1',
+      expect.stringMatching(/^op_/),
+      'active',
+    );
+    expect(mocks.executeToolCall).not.toHaveBeenCalled();
   });
 });

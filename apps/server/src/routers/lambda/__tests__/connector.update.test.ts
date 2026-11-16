@@ -15,6 +15,16 @@ vi.mock('@/database/models/device', () => ({
     return { findPersonalByDeviceId, findWorkspaceDeviceById: vi.fn() };
   }),
 }));
+const lifecycle = vi.hoisted(() => ({
+  // A connector server that never answers: nothing on the save path may wait for it.
+  refresh: vi.fn(() => new Promise<void>(() => {})),
+  schedule: vi.fn(),
+}));
+vi.mock('@/server/services/inboundWebhook/lifecycle', () => ({
+  refreshByConnector: lifecycle.refresh,
+  removeByConnector: vi.fn(),
+  scheduleRefreshByConnector: lifecycle.schedule,
+}));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => ({}) },
 }));
@@ -108,5 +118,17 @@ describe('connectorRouter.update', () => {
       code: 'BAD_REQUEST',
     });
     expect(connectorModelMock.update).not.toHaveBeenCalled();
+  });
+
+  it('saves new credentials without waiting to renew the event subscriptions', async () => {
+    await update({ credentials: { token: 'new-token', type: 'bearer' } });
+
+    expect(connectorModelMock.update).toHaveBeenCalled();
+    expect(lifecycle.schedule).toHaveBeenCalledWith(
+      {},
+      { userId: 'me', workspaceId: undefined },
+      CONNECTOR_ID,
+    );
+    expect(lifecycle.refresh).not.toHaveBeenCalled();
   });
 });

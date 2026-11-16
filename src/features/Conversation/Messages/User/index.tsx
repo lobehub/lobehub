@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { ChatItem } from '@/features/Conversation/ChatItem';
+import { getMcpEventSource } from '@/features/Conversation/Markdown/plugins/McpEvent/parseMcpEvent';
 import { getScmEventSource } from '@/features/Conversation/Markdown/plugins/ScmEvent/parseScmEvent';
 import { useMessageCommentCount } from '@/features/TopicComment/hooks';
 import MessageCommentBadge from '@/features/TopicComment/MessageCommentBadge';
@@ -24,6 +25,7 @@ import {
 } from '../Contexts/message-action-context';
 import Actions from './Actions';
 import AgentSenderSourceLink from './components/AgentSenderSourceLink';
+import { McpEventAvatar, McpEventSenderTitle } from './components/McpEventSender';
 import UserMessageContent from './components/MessageContent';
 import { ScmEventAvatar, ScmEventSenderTitle } from './components/ScmEventSender';
 import { UserMessageExtra } from './Extra';
@@ -53,6 +55,9 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   // A wake-up message from the SCM integration is authored by the pull
   // request, so GitHub takes the sender slot instead of the card's header.
   const scmSource = useMemo(() => getScmEventSource(content), [content]);
+  // Same for an MCP event subscription: the connector the event came from is
+  // the sender.
+  const mcpSource = useMemo(() => getMcpEventSource(content), [content]);
   // A background sub-agent reporting back speaks in a user turn of its own.
   const subAgentCallback = metadata?.subAgentCallback;
   const subAgentSender = useSubAgentSenderIdentity(subAgentCallback);
@@ -72,7 +77,12 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   // its sender is always shown. Same for an agent → agent turn and a
   // background sub-agent's report.
   const showSender =
-    Boolean(activeWorkspaceId) || !!botSender || !!scmSource || !!agentSender || !!subAgentSender;
+    Boolean(activeWorkspaceId) ||
+    !!botSender ||
+    !!scmSource ||
+    !!mcpSource ||
+    !!agentSender ||
+    !!subAgentSender;
   const currentUserId = useUserStore(userProfileSelectors.userId);
   const { avatar, title } = resolveSenderIdentity({
     currentUserId,
@@ -129,15 +139,13 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
     <ChatItem
       actions={<Actions data={item} disableEditing={editingDisabled} id={id} />}
       avatar={{ avatar, title }}
-      customAvatarRender={scmSource ? () => <ScmEventAvatar /> : undefined}
       editing={editing}
-      headerAddon={scmSource ? <ScmEventSenderTitle source={scmSource} /> : undefined}
       id={id}
       message={content}
       messageExtra={<UserMessageExtra extra={extra} id={id} />}
       placement={'right'}
       showAvatar={showSender}
-      showTitle={showSender && !scmSource}
+      showTitle={showSender && !scmSource && !mcpSource}
       time={createdAt}
       actionAddon={
         commentCount > 0 && commentTopicId ? (
@@ -150,6 +158,20 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
           {metadata?.mcpAppSource && <McpAppSourceFooter source={metadata.mcpAppSource} />}
           <ScheduledRunFooter id={id} />
         </>
+      }
+      customAvatarRender={
+        scmSource
+          ? () => <ScmEventAvatar />
+          : mcpSource
+            ? () => <McpEventAvatar source={mcpSource} />
+            : undefined
+      }
+      headerAddon={
+        scmSource ? (
+          <ScmEventSenderTitle source={scmSource} />
+        ) : mcpSource ? (
+          <McpEventSenderTitle source={mcpSource} />
+        ) : undefined
       }
       titleAddon={
         subAgentCallback ? (

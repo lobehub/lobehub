@@ -40,6 +40,10 @@ import {
   writeConnectorToolSyncInputs,
 } from '@/server/services/connector/sync';
 import {
+  removeByConnector,
+  scheduleRefreshByConnector,
+} from '@/server/services/inboundWebhook/lifecycle';
+import {
   DeviceMcpManifestInputSchema,
   getDeviceMcpManifest,
 } from '@/server/services/mcp/deviceManifest';
@@ -595,6 +599,17 @@ const connectorCoreRouter = router({
                 ...(credentials === null ? { tokenExpiresAt: null } : {}),
               }),
         } as any);
+        const headersChanged =
+          patch.metadata !== undefined &&
+          JSON.stringify(metadata?.customHeaders) !==
+            JSON.stringify(target.metadata?.customHeaders);
+        if (credentials !== undefined || headersChanged) {
+          scheduleRefreshByConnector(
+            ctx.serverDB,
+            { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+            input.id,
+          );
+        }
       } catch (error) {
         if (error instanceof EvalConnectorUpdateError)
           throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
@@ -627,6 +642,11 @@ const connectorCoreRouter = router({
         if (!target.agentId) await ctx.pluginModel.delete(target.identifier);
       }
 
+      await removeByConnector(
+        ctx.serverDB,
+        { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+        input.id,
+      );
       await ctx.connectorModel.delete(input.id);
 
       // Agent-owned connector: also unpin its tool from the owning agent's

@@ -263,7 +263,7 @@ describe('installMarketplaceMcpConnector', () => {
         type: 'http',
         url: 'https://mcp.example.com/mcp',
       }),
-      { mcpApps: false },
+      expect.objectContaining({ mcpApps: false }),
     );
     const [connector] = await connectorRows();
     expect(connector).toMatchObject({

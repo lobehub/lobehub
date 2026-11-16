@@ -1,13 +1,11 @@
-import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
-import { Avatar, Center, Icon } from '@lobehub/ui';
-import { McpIcon } from '@lobehub/ui/icons';
+import { Center } from '@lobehub/ui';
 import { cssVar } from '@lobehub/ui/stylex/cssVar.stylex';
 import * as stylex from '@stylexjs/stylex';
 import { memo } from 'react';
 
-import { ConnectorSourceType } from '@/database/schemas';
-import { useToolStore } from '@/store/tool';
 import type { ConnectorWithTools } from '@/store/tool/slices/connector/types';
+
+import ConnectorBrandIcon from '../ConnectorBrandIcon';
 
 const ICON_SIZE = 28;
 
@@ -33,28 +31,16 @@ interface ConnectorDetailIconProps {
  * The same brand mark the list row shows, so the detail page reads as the
  * row it was opened from.
  */
-const ConnectorDetailIcon = memo<ConnectorDetailIconProps>(({ connector }) => {
-  const builtinAvatar = useToolStore((s) =>
-    connector.sourceType === ConnectorSourceType.builtin
-      ? s.builtinTools?.find((tool) => tool.identifier === connector.identifier)?.avatar
-      : undefined,
-  );
-  const brand =
-    getComposioAppByIdentifier(connector.identifier) ??
-    getLobehubSkillProviderById(connector.identifier);
-
-  const renderIcon = () => {
-    if (builtinAvatar) return <Avatar avatar={builtinAvatar} size={ICON_SIZE} />;
-    if (brand) {
-      if (typeof brand.icon === 'string')
-        return <Avatar alt={brand.label} avatar={brand.icon} size={ICON_SIZE} />;
-      return <Icon fill={'currentColor'} icon={brand.icon} size={ICON_SIZE} />;
-    }
-    return <Icon icon={McpIcon} size={ICON_SIZE} />;
-  };
-
-  return <Center {...stylex.props(styles.tile)}>{renderIcon()}</Center>;
-});
+const ConnectorDetailIcon = memo<ConnectorDetailIconProps>(({ connector }) => (
+  <Center {...stylex.props(styles.tile)}>
+    <ConnectorBrandIcon
+      identifier={connector.identifier}
+      name={connector.name}
+      size={ICON_SIZE}
+      sourceType={connector.sourceType}
+    />
+  </Center>
+));
 
 ConnectorDetailIcon.displayName = 'ConnectorDetailIcon';
 

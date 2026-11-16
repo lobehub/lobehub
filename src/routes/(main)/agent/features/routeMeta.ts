@@ -14,6 +14,7 @@ import {
   SparklesIcon,
   UsersIcon,
   WrenchIcon,
+  ZapIcon,
 } from 'lucide-react';
 import { lazy } from 'react';
 
@@ -170,6 +171,12 @@ export const agentMailRouteMeta = routeMeta({
   icon: MailIcon,
   Skeleton: createSurfaceSkeleton('list'),
   titleKey: 'navigation.mail',
+});
+
+export const agentAutomationsRouteMeta = routeMeta({
+  icon: ZapIcon,
+  Skeleton: createSurfaceSkeleton('list'),
+  titleKey: 'navigation.automations',
 });
 
 export const agentChannelRouteMeta = routeMeta({
