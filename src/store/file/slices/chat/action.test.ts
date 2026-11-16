@@ -587,7 +587,12 @@ describe('useFileStore:chat', () => {
       });
 
       expect(uploadWithProgress).toHaveBeenCalledTimes(1);
-      expect(uploadList()).toEqual([expect.objectContaining({ contentHash: expect.any(String) })]);
+      expect(uploadList()).toEqual([
+        expect.objectContaining({
+          contentHash: expect.any(String),
+          repastedAt: expect.any(Number),
+        }),
+      ]);
     });
 
     it('keeps one card for the same image pasted twice at once', async () => {

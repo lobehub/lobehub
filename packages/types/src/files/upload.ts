@@ -83,6 +83,11 @@ export interface UploadFileItem {
    */
   previewUrl?: string;
   /**
+   * When the same image was last attached again. No second card is added, so the existing
+   * card pulses to show the paste was received.
+   */
+  repastedAt?: number;
+  /**
    * Set when the draft was uploaded as an agent-share VISITOR: the file lives
    * under the creator's account, so remove/retry must go through the
    * share-scoped endpoints instead of the visitor's own file API.

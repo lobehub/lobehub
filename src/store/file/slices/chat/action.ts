@@ -94,25 +94,32 @@ const isLiveUpload = (item: UploadFileItem) =>
  * Drops newly prepared uploads whose content matches an image already in the draft (or
  * earlier in the same batch). A second card would upload the same file again, the server
  * keeps one copy, and the message would name an `[Image #2]` the model never receives.
+ * `repastedIds` are the draft cards that matched, so they can show the paste landed.
  */
 const withoutDuplicateImages = (
   current: UploadFileItem[],
   prepared: UploadFileItem[],
-): UploadFileItem[] => {
-  const hashes = new Set<string>();
+): { added: UploadFileItem[]; repastedIds: string[] } => {
+  const existing = new Map<string, string>();
   for (const item of current) {
-    if (item.contentHash && isLiveUpload(item)) hashes.add(item.contentHash);
+    if (item.contentHash && isLiveUpload(item)) existing.set(item.contentHash, item.id);
   }
+  const seen = new Set<string>();
+  const repastedIds = new Set<string>();
 
-  return prepared.filter((item) => {
+  const added = prepared.filter((item) => {
     if (!item.contentHash) return true;
-    if (hashes.has(item.contentHash)) {
+    const existingId = existing.get(item.contentHash);
+    if (existingId !== undefined || seen.has(item.contentHash)) {
+      if (existingId !== undefined) repastedIds.add(existingId);
       if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
       return false;
     }
-    hashes.add(item.contentHash);
+    seen.add(item.contentHash);
     return true;
   });
+
+  return { added, repastedIds: [...repastedIds] };
 };
 
 const formatShareUploadLimit = () => `${Math.round(SHARE_VISITOR_MAX_FILE_SIZE / 1024 / 1024)} MB`;
@@ -520,13 +527,16 @@ export class FileActionImpl {
 
     // Read the list and add to it in one synchronous step, so concurrent pastes of the
     // same image see each other.
-    const uploadFiles = withoutDuplicateImages(
+    const { added: uploadFiles, repastedIds } = withoutDuplicateImages(
       this.#getChatUploadFileList(upload.contextKey),
       preparedItems,
     );
 
     if (uploadFiles.length > 0)
       dispatchChatUploadFileList({ files: uploadFiles, type: 'addFiles' });
+    const repastedAt = Date.now();
+    for (const id of repastedIds)
+      dispatchChatUploadFileList({ id, type: 'updateFile', value: { repastedAt } });
 
     const files = uploadFiles.map((item) => item.file);
     const uploadIds = new Map(uploadFiles.map((item) => [item.file, item.id]));
