@@ -1,4 +1,9 @@
-import type { ChannelDetail, ChannelListItem } from '@lobechat/types';
+import type {
+  ChannelDetail,
+  ChannelJoinableItem,
+  ChannelListItem,
+  ChannelVisibility,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -46,6 +51,12 @@ class ChannelService {
     lambdaClient.channel.updateWakeConfig.mutate({ channelId, wake });
   rename = (channelId: string, title: string) =>
     lambdaClient.channel.rename.mutate({ channelId, title });
+  updateVisibility = (channelId: string, visibility: ChannelVisibility) =>
+    lambdaClient.channel.updateVisibility.mutate({ channelId, visibility });
+  /** Public Channels in the active workspace the caller has not joined. */
+  listJoinable = async (search: string): Promise<ChannelJoinableItem[]> =>
+    (await lambdaClient.channel.listJoinable.query({ search })).data;
+  join = (channelId: string) => lambdaClient.channel.join.mutate({ channelId });
   addUser = (channelId: string, userId: string) =>
     lambdaClient.channel.addUser.mutate({ channelId, userId });
   /** Without a Channel, the people a new Channel in the active workspace can start with. */

@@ -295,4 +295,17 @@ export default {
   'settings.reply.instructionsHint':
     'Tell Agents who to answer and what to leave alone. It guides them and is not a hard rule.',
   'settings.reply.instructionsContent': 'Instructions',
+  'browse.empty': 'No public channels to join yet.',
+  'browse.join': 'Join',
+  'browse.joinFailed': 'Could not join the channel. Try again.',
+  'browse.memberCount': 'Members · {{count}}',
+  'browse.noMatches': 'No matching public channels',
+  'browse.search': 'Search public channels',
+  'browse.title': 'Browse channels',
+  'settings.visibility.privateHint':
+    'Only invited members can see this channel. Turn it on to let everyone in the workspace find and join it.',
+  'settings.visibility.publicHint': 'Everyone in the workspace can find and join this channel.',
+  'settings.visibility.title': 'Public channel',
+  'visibilityFailed': 'Could not change who can see the channel. Try again.',
+  'visibilityForbidden': 'Only the channel owner or an administrator can change who can see it.',
 };

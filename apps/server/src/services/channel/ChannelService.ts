@@ -1,6 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
+import type { ChannelVisibility } from '@lobechat/types';
 import {
   agentDisplayName,
   CHANNEL_LIMITS,
@@ -332,6 +333,19 @@ export class ChannelService {
     const member = await this.repository.addUser(channelId, userId);
     await this.changed(channelId);
     return member;
+  };
+
+  updateVisibility = async (channelId: string, visibility: ChannelVisibility) => {
+    const channel = await this.repository.updateVisibility(channelId, visibility);
+    await this.changed(channelId);
+    return channel;
+  };
+
+  /** Members already in the Channel see the newcomer without waiting for their next poll. */
+  join = async (channelId: string) => {
+    const access = await this.repository.join(channelId);
+    await this.changed(channelId);
+    return access;
   };
 
   changed = (channelId: string) => notifyChannel(this.db, channelId);

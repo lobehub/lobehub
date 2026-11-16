@@ -439,6 +439,16 @@ export interface ChannelInputManifest {
 /** Flat audit payload: routing decisions, claims, stops, isolation reasons. */
 export type ChannelAuditDetails = Record<string, boolean | number | string | string[] | null>;
 
+/** A public group Channel the caller has not joined yet, as the browse list shows it. */
+export interface ChannelJoinableItem {
+  createdAt: Date;
+  id: string;
+  /** Active people in it, Agents not counted. */
+  memberCount: number;
+  projectId: string | null;
+  title: string;
+}
+
 /** A member pictured in a Channel's list avatar. */
 export interface ChannelAvatarMember {
   actorType: ChannelMemberActorType;
@@ -500,6 +510,8 @@ export interface ChannelListItem {
   unreadCount?: number;
   /** Bumped by every new message, so it orders conversations by latest activity. */
   updatedAt?: Date;
+  /** Ignored for a direct conversation, which is always private. */
+  visibility: ChannelVisibility;
   workspaceId: string | null;
 }
 
