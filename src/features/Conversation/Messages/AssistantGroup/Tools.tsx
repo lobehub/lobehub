@@ -1,5 +1,4 @@
 import { Flexbox } from '@lobehub/ui';
-import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
 import { dataSelectors, useConversationStore } from '../../store';
@@ -16,13 +15,14 @@ export const Tools = memo<ToolsRendererProps>(({ disableEditing, messageId, tool
   // Subscribe only to the visible tool ids of this block. Streaming chunks that
   // change a single tool's args/result do not invalidate this string array, so
   // sibling Tool components stay isolated and only the changed one re-renders.
+  // The store's default equality is `shallow`, which compares the ids by value.
   const visibleToolCallIds = useConversationStore((s) => {
     const tools = dataSelectors.getToolsInBlock(messageId)(s);
     if (!tools || tools.length === 0) return [];
     return tools
       .filter((t) => shouldRenderToolCall(t) && (!toolIds || toolIds.includes(t.id)))
       .map((t) => t.id);
-  }, isEqual);
+  });
 
   if (visibleToolCallIds.length === 0) return null;
 
