@@ -551,6 +551,7 @@ export default {
   'plans.compare.notIncluded': 'Not included',
   'plans.compare.monthlySpend': 'Monthly limit',
   'plans.compare.monthlySpend.desc': 'Resets at the start of each billing month',
+  'plans.compare.monthlySpend.runs': 'About {{runs}} agent tasks',
   'plans.compare.rolling5hSpend': '5-hour limit',
   'plans.compare.rolling7dSpend': 'Weekly limit',
   'plans.compare.sandboxStorage': 'Cloud sandbox storage',

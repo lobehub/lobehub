@@ -533,6 +533,7 @@
   "plans.compare.included": "Included",
   "plans.compare.monthlySpend": "Monthly limit",
   "plans.compare.monthlySpend.desc": "Resets at the start of each billing month",
+  "plans.compare.monthlySpend.runs": "About {{runs}} agent tasks",
   "plans.compare.noLimit": "No limit",
   "plans.compare.none": "None",
   "plans.compare.notIncluded": "Not included",
