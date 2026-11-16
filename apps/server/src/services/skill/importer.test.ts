@@ -91,11 +91,10 @@ vi.mock('@/server/services/file/impls', () => ({
   })),
 }));
 
-// Mock fs/promises readFile
-vi.mock('node:fs/promises', () => ({
+vi.mock(import('node:fs/promises'), async (importOriginal) => ({
+  ...(await importOriginal()),
   readFile: vi.fn().mockResolvedValue(Buffer.from('mock-zip-content')),
 }));
-
 describe('SkillImporter', () => {
   let db: LobeChatDatabase;
   let userId: string;

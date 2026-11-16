@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { FileParseBudgetError } from '@lobechat/file-loaders';
 import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,6 +11,8 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { ChunkService } from '@/server/services/chunk';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
+import { FileParseError } from '@/server/services/fileParse/errors';
+import { normalizeParseFileError } from '@/server/services/fileParse/normalizeError';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 
 import { fileRouter } from '../file';
@@ -380,6 +383,211 @@ describe('fileRouter.parseFileToChunks — NoSuchKey + internal:// branches', ()
       embedding.resolve();
       await Promise.all(runs);
     });
+  });
+});
+
+describe('fileRouter.parseFileToChunks — document parse fallback and late persistence', () => {
+  const userId = 'user_test';
+  let asyncTaskModelMock: any;
+  let chunkModelMock: any;
+  let chunkServiceMock: any;
+  let documentServiceMock: any;
+  let caller: ReturnType<typeof fileRouter.createCaller>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    asyncTaskModelMock = { findById: vi.fn().mockResolvedValue({ id: 'task' }), update: vi.fn() };
+    chunkModelMock = { bulkCreate: vi.fn(), bulkCreateUnstructuredChunks: vi.fn() };
+    chunkServiceMock = {
+      asyncEmbeddingFileChunks: vi.fn(),
+      chunkContent: vi.fn().mockResolvedValue({
+        chunks: [{ index: 0, text: 'hello', type: 'DocumentChunk' }],
+      }),
+    };
+    documentServiceMock = { parseFile: vi.fn() };
+    const fileModelMock = {
+      findById: vi.fn().mockResolvedValue({
+        fileType: 'application/vnd.ms-excel',
+        id: 'file',
+        name: 'book.xlsx',
+        size: 10,
+        url: 'https://example.com/book.xlsx',
+      }),
+    };
+
+    vi.mocked(AsyncTaskModel).mockImplementation(function () {
+      return asyncTaskModelMock;
+    });
+    vi.mocked(FileModel).mockImplementation(function () {
+      return fileModelMock as any;
+    });
+    vi.mocked(FileService).mockImplementation(function () {
+      return { getFileByteArray: vi.fn().mockResolvedValue(new Uint8Array([1])) } as any;
+    });
+    vi.mocked(ChunkService).mockImplementation(function () {
+      return chunkServiceMock;
+    });
+    vi.mocked(DocumentService).mockImplementation(function () {
+      return documentServiceMock;
+    });
+    vi.mocked(ChunkModel).mockImplementation(function () {
+      return chunkModelMock;
+    });
+    vi.mocked(EmbeddingModel).mockImplementation(function () {
+      return {} as any;
+    });
+    Reflect.set(FileModel, 'getFileById', undefined);
+    caller = fileRouter.createCaller({ serverDB: {}, userId } as any);
+  });
+
+  const run = () => caller.parseFileToChunks({ fileId: 'file', taskId: 'task_v' });
+
+  it.each([
+    [
+      'the input size cap',
+      () => normalizeParseFileError(new FileParseError('INPUT_TOO_LARGE', 'too big')),
+    ],
+    [
+      'the xlsx ZIP structure budget',
+      () => normalizeParseFileError(new FileParseBudgetError('zip-expansion', 1, 2)),
+    ],
+  ])('does not run the chunk parse a second time after %s refused the file', async (_, failure) => {
+    documentServiceMock.parseFile.mockRejectedValue(failure());
+
+    await expect(run()).resolves.toMatchObject({ success: false });
+
+    // the chunk job reads the same bytes under the same limit: it would be refused too
+    expect(chunkServiceMock.chunkContent).not.toHaveBeenCalled();
+    expect(chunkModelMock.bulkCreate).not.toHaveBeenCalled();
+    expect(asyncTaskModelMock.update).toHaveBeenLastCalledWith(
+      'task_v',
+      expect.objectContaining({
+        error: expect.objectContaining({ name: AsyncTaskErrorType.FileTooLargeToParse }),
+        status: AsyncTaskStatus.Error,
+      }),
+    );
+    expect(asyncTaskModelMock.update).not.toHaveBeenCalledWith(
+      'task_v',
+      expect.objectContaining({ status: AsyncTaskStatus.Success }),
+    );
+  });
+
+  it.each([
+    [
+      'a document parser that cannot read the file',
+      () => normalizeParseFileError(new FileParseError('LOAD_FAILED', 'no usable pages')),
+    ],
+    [
+      'a corrupt file for the document parser',
+      () => normalizeParseFileError(new FileParseError('PARSE_FAILED', 'bad pdf')),
+    ],
+    [
+      'the document parser sheet-cells budget, which the chunk loader does not apply',
+      () => normalizeParseFileError(new FileParseBudgetError('sheet-cells', 5_000_000, 6_000_000)),
+    ],
+    [
+      'a document parse timeout',
+      () => normalizeParseFileError(new FileParseError('TIMEOUT', 'too slow')),
+    ],
+    [
+      'a document parse out of memory',
+      () => normalizeParseFileError(new FileParseError('OUT_OF_MEMORY', 'heap limit')),
+    ],
+    ['a busy parse queue', () => normalizeParseFileError(new FileParseError('QUEUE_FULL', 'busy'))],
+    ['an unrelated error', () => new Error('document db unavailable')],
+  ])('still chunks after %s, and the task succeeds with those chunks', async (_, failure) => {
+    documentServiceMock.parseFile.mockRejectedValue(failure());
+
+    await expect(run()).resolves.toEqual({ success: true });
+
+    expect(chunkServiceMock.chunkContent).toHaveBeenCalledTimes(1);
+    expect(chunkModelMock.bulkCreate).toHaveBeenCalledWith(
+      [expect.objectContaining({ index: 0 })],
+      'file',
+    );
+    expect(asyncTaskModelMock.update).toHaveBeenLastCalledWith(
+      'task_v',
+      expect.objectContaining({ status: AsyncTaskStatus.Success }),
+    );
+    expect(asyncTaskModelMock.update).not.toHaveBeenCalledWith(
+      'task_v',
+      expect.objectContaining({ status: AsyncTaskStatus.Error }),
+    );
+  });
+
+  it('records an error when the document parser and the chunk parser both fail', async () => {
+    documentServiceMock.parseFile.mockRejectedValue(
+      normalizeParseFileError(new FileParseError('LOAD_FAILED', 'no usable pages')),
+    );
+    chunkServiceMock.chunkContent.mockRejectedValue(
+      new FileParseError('PARSE_FAILED', 'cannot split'),
+    );
+
+    await expect(run()).resolves.toMatchObject({ success: false });
+
+    expect(chunkServiceMock.chunkContent).toHaveBeenCalledTimes(1);
+    expect(chunkModelMock.bulkCreate).not.toHaveBeenCalled();
+    expect(asyncTaskModelMock.update).toHaveBeenLastCalledWith(
+      'task_v',
+      expect.objectContaining({ status: AsyncTaskStatus.Error }),
+    );
+    expect(asyncTaskModelMock.update).not.toHaveBeenCalledWith(
+      'task_v',
+      expect.objectContaining({ status: AsyncTaskStatus.Success }),
+    );
+  });
+
+  it('records a deterministic chunking failure as the task error and never as a success', async () => {
+    chunkServiceMock.chunkContent.mockRejectedValue(
+      new FileParseError('OUTPUT_TOO_LARGE', 'too many chunks'),
+    );
+
+    await expect(run()).resolves.toMatchObject({ success: false });
+
+    expect(chunkModelMock.bulkCreate).not.toHaveBeenCalled();
+    expect(asyncTaskModelMock.update).toHaveBeenLastCalledWith(
+      'task_v',
+      expect.objectContaining({
+        error: expect.objectContaining({ name: AsyncTaskErrorType.FileTooLargeToParse }),
+        status: AsyncTaskStatus.Error,
+      }),
+    );
+  });
+
+  it('writes nothing once the task has timed out, however late the chunking finishes', async () => {
+    vi.useFakeTimers();
+    try {
+      let finish!: () => void;
+      chunkServiceMock.chunkContent.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finish = () => resolve({ chunks: [{ index: 0, text: 'late', type: 'DocumentChunk' }] });
+          }),
+      );
+
+      const running = run();
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+      await expect(running).resolves.toMatchObject({ success: false });
+      expect(asyncTaskModelMock.update).toHaveBeenLastCalledWith(
+        'task_v',
+        expect.objectContaining({
+          error: expect.objectContaining({ name: AsyncTaskErrorType.Timeout }),
+          status: AsyncTaskStatus.Error,
+        }),
+      );
+
+      finish();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(chunkModelMock.bulkCreate).not.toHaveBeenCalled();
+      expect(asyncTaskModelMock.update).not.toHaveBeenCalledWith(
+        'task_v',
+        expect.objectContaining({ status: AsyncTaskStatus.Success }),
+      );
+      expect(chunkServiceMock.asyncEmbeddingFileChunks).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
