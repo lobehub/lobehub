@@ -142,11 +142,33 @@ export class ArtboardExecutionRuntime {
     };
   }
 
-  async updateArtboard(params: UpdateArtboardParams): Promise<BuiltinServerRuntimeOutput> {
+  async updateArtboard(
+    params: UpdateArtboardParams,
+    context?: ArtboardRuntimeContext,
+  ): Promise<BuiltinServerRuntimeOutput> {
     const outcome = await this.service.update(params);
     if (!outcome.ok) return failure(outcome);
 
     const { artboard, changedIds } = outcome;
+
+    // A real edit is a new Work version: it moves the card under this reply and
+    // the version history to vN. A no-op edit (every op compared equal) stays
+    // out of the history — nothing changed for the user to review.
+    if (changedIds.length > 0) {
+      context?.onWorkRegistration?.({
+        action: 'register',
+        artboard: {
+          artboardId: artboard.id,
+          changeType: 'updated',
+          description: artboard.description,
+          projectId: artboard.projectId,
+          title: artboard.title,
+          toolName: ArtboardApiName.updateArtboard,
+        },
+        type: 'artboard',
+      });
+    }
+
     return {
       content: `Updated artboard ${artboard.id} · revision ${artboard.revision} · ${describeArtboardContent(artboard.content)}. Changed: ${changedIds.join(', ') || 'nothing'}.`,
       state: toState(artboard, changedIds),

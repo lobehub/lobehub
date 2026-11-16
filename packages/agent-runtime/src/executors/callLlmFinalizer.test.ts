@@ -598,6 +598,61 @@ describe('callLlmFinalizer', () => {
     expect(plainUpdate.metadata ?? {}).not.toHaveProperty('work');
   });
 
+  it('stamps the work display anchor when the tool interaction is nested in a parsed assistantGroup', async () => {
+    const messages = createMessageTransport();
+    // What the server runtime actually hands the finalizer: `state.messages` is
+    // `parse(...).flatList`, so a turn's tool calls live under
+    // `assistantGroup.children[].tools` — no `role: 'tool'` row and no
+    // top-level `tool_calls`.
+    const state = AgentRuntime.createInitialState({
+      messages: [
+        { content: 'Create a board', id: 'user-1', role: 'user' },
+        {
+          children: [
+            {
+              content: '',
+              id: 'assistant-0',
+              tools: [
+                {
+                  apiName: 'createArtboard',
+                  arguments: '{}',
+                  id: 'call-1',
+                  identifier: 'builtin-artboard',
+                  type: 'default',
+                },
+              ],
+            },
+          ],
+          content: '',
+          id: 'group-1',
+          role: 'assistantGroup',
+        },
+      ],
+      operationId: 'operation-1',
+      origin: { sourceMessageId: 'user-1' },
+    });
+
+    await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-1',
+      events: [],
+      host: createHost(messages),
+      model: 'gpt-4',
+      output: createOutput(),
+      provider: 'openai',
+      shouldReplayAssistantReasoning: false,
+      state,
+    });
+
+    expect(messages.update).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          work: { rootOperationId: 'operation-1', userMessageId: 'user-1' },
+        }),
+      }),
+    );
+  });
+
   it('serializes multimodal parts and keeps the null grounding sentinel', async () => {
     const messages = createMessageTransport();
     const state = AgentRuntime.createInitialState({ operationId: 'operation-1' });

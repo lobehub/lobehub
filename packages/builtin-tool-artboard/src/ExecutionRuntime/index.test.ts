@@ -130,20 +130,53 @@ describe('ArtboardExecutionRuntime', () => {
     expect(result.error).toMatchObject({ type: 'conflict' });
   });
 
-  it('reports what an update changed', async () => {
+  it('reports what an update changed and registers the new Work version', async () => {
     const update = vi.fn().mockResolvedValue({
       artboard: snapshot({ revision: 2 }),
       changedIds: ['brd-1'],
       ok: true,
     });
-    const result = await new ArtboardExecutionRuntime(service({ update })).updateArtboard({
-      id: 'art_1',
-      ops: [{ id: 'brd-1', patch: { x: 10 }, type: 'updateBoard' }],
-      revision: 1,
-    });
+    const onWorkRegistration = vi.fn();
+    const result = await new ArtboardExecutionRuntime(service({ update })).updateArtboard(
+      {
+        id: 'art_1',
+        ops: [{ id: 'brd-1', patch: { x: 10 }, type: 'updateBoard' }],
+        revision: 1,
+      },
+      { onWorkRegistration },
+    );
 
     expect(result.state).toMatchObject({ boardCount: 1, changedIds: ['brd-1'], revision: 2 });
     expect(result.content).toContain('Changed: brd-1');
+    expect(onWorkRegistration).toHaveBeenCalledWith({
+      action: 'register',
+      artboard: {
+        artboardId: 'art_1',
+        changeType: 'updated',
+        description: '首次进入',
+        projectId: 'prj_1',
+        title: '新用户首次进入项目',
+        toolName: 'updateArtboard',
+      },
+      type: 'artboard',
+    });
+  });
+
+  it('registers nothing when an update changes nothing', async () => {
+    const update = vi.fn().mockResolvedValue({
+      artboard: snapshot({ revision: 2 }),
+      changedIds: [],
+      ok: true,
+    });
+    const onWorkRegistration = vi.fn();
+    const result = await new ArtboardExecutionRuntime(service({ update })).updateArtboard(
+      { id: 'art_1', ops: [], revision: 1 },
+      { onWorkRegistration },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.content).toContain('Changed: nothing');
+    expect(onWorkRegistration).not.toHaveBeenCalled();
   });
 
   it('reads the board with the boards behind their Canvas', async () => {
