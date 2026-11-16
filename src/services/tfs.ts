@@ -35,6 +35,7 @@ export interface TfsData {
 }
 
 class TfsService {
+  agentContext = (topicId: string) => lambdaClient.tfs.agentContext.query({ topicId });
   connect = (input: TfsCredentials) => lambdaClient.tfs.connect.mutate(input).catch(throwTfsError);
   disconnect = () => lambdaClient.tfs.disconnect.mutate();
   resolveRepository = (url: string) => lambdaClient.tfs.resolveRepository.query({ url });

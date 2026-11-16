@@ -63,6 +63,21 @@ describe('resolveProjectTopicSandbox', () => {
     });
   });
 
+  it('keeps a published TFS source on the caller personal drive, including shared agents', async () => {
+    const tfs = {
+      ...repository,
+      configuration: { sources: [{ kind: 'git', url: 'https://dev.example.com/C/P/_git/R' }] },
+      visibility: 'public',
+    };
+    mocks.getAgentVisibility.mockResolvedValue('public');
+    mocks.listEnvironments.mockResolvedValue([tfs]);
+    mocks.findEnvironmentById.mockResolvedValue(tfs);
+    await expect(resolve({ workspaceId: 'ws-1', agentId: 'shared' })).resolves.toMatchObject({
+      sandboxDrive: 'personal',
+      sandboxEnvironmentId: 'env-repo',
+    });
+  });
+
   it('skips linked environments that have no repository', async () => {
     mocks.listEnvironments.mockResolvedValue([
       { configuration: {}, id: 'env-empty', name: 'Cloud device (node)' },

@@ -86,7 +86,6 @@ import { drainQueuedTurn, sendQueuedTurn } from '../../lifecycle/queuedFollowUp'
 import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler } from '../gateway/gatewayEventHandler';
 import { isCompletedRuntimeEnd } from '../gateway/runtimeEndReason';
-import { withHeteroContext } from '../viewedTaskPrompt';
 import { registerLocalBackgroundTaskStopper, writeBackgroundTaskSnapshot } from './backgroundTasks';
 import { markUnfinishedToolsCancelled } from './cancelledTools';
 import { getNativeHeteroSessionBindingKey, isRecoverableResumeError } from './heteroResume';
@@ -109,6 +108,7 @@ import {
   type SubagentStoreDispatcher,
 } from './subagentStoreDispatcher';
 import { createToolStateSnapshotClaimer } from './toolStateSnapshot';
+import { withHeteroContext } from './tfsContext';
 
 /** Mirrors `idGenerator('threads', 16)` on the server so sync-allocated ids have the same shape. */
 const generateThreadId = () => `thd_${createNanoId(16)()}`;
@@ -2432,7 +2432,7 @@ export const executeHeterogeneousAgent = async (
 
     const systemContext = buildLocalHeterogeneousSystemContext({
       // `/goal` and the viewed Tasks page reach a hetero agent as instructions.
-      agentSystemContext: withHeteroContext(heterogeneousProvider.systemContext, message, context),
+      agentSystemContext: await withHeteroContext(heterogeneousProvider, message, context),
       contextSelections,
       pageSelections,
       // Only a topic created by Codex edit-and-resend starts with copied

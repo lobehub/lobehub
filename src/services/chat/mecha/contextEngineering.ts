@@ -26,6 +26,7 @@ import debug from 'debug';
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { isCanUseFC } from '@/helpers/isCanUseFC';
 import { HOST_VARIABLE_GENERATORS } from '@/helpers/parserPlaceholder';
+import { withTfsInitialContext } from '@/services/tfs/agentContext';
 import { getAgentStoreState } from '@/store/agent';
 import {
   agentByIdSelectors,
@@ -333,6 +334,7 @@ export const contextEngineering = async ({
 
   // Everything gathered above is host-specific; shaping it into engine
   // parameters is shared with the server through `@lobechat/mecha`.
+  const tfsInitialContext = await withTfsInitialContext(initialContext, topicId, !!shareVisitor);
   const snapshot: ContextSnapshot = {
     agent: {
       documents: facts.agentDocuments,
@@ -374,7 +376,7 @@ export const contextEngineering = async ({
       enableAgentMode: effectiveEnableAgentMode,
       formatHistorySummary: historySummaryPrompt,
       historySummary,
-      initialContext,
+      initialContext: tfsInitialContext,
       messages,
       stepContext,
     },

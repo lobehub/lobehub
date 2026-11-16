@@ -1,10 +1,15 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { buildTfsAgentContext } from '@/server/services/tfs/agentContext';
 import { TfsConnectionService } from '@/server/services/tfs/connection';
 import { TfsRequestError } from '@/server/services/tfs/transport';
+
+import { assertCanViewTopicTargets } from './_helpers/conversationResourceGuard';
+import { assertCreatorTopicTargets } from './_helpers/shareVisitorTargetGuard';
 
 const hasControlCharacter = (value: string) => [...value].some((char) => char.codePointAt(0)! < 32);
 
@@ -41,6 +46,19 @@ const tfsProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next 
 });
 
 export const tfsRouter = router({
+  agentContext: wsCompatProcedure
+    .use(serverDatabase)
+    .input(z.object({ topicId: z.string().min(1).max(255) }))
+    .query(async ({ ctx, input }) => {
+      const deps = {
+        db: ctx.serverDB,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      };
+      await assertCreatorTopicTargets(deps, [input.topicId]);
+      await assertCanViewTopicTargets(deps, [input.topicId]);
+      return buildTfsAgentContext(deps, input);
+    }),
   branches: tfsProcedure
     .input(projectInput.extend({ cursor, repository: segment }))
     .query(async ({ ctx, input }) =>

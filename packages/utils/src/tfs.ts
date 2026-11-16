@@ -60,3 +60,13 @@ export const parseTfsRepository = (value: string, collection?: string) => {
 
 export const shortTfsBranch = (ref?: string | null) =>
   ref?.replace(/^refs\/heads\//, '') || undefined;
+
+/** TFS source metadata may be shared; its checkout always belongs to the caller. */
+export const hasTfsGitSource = (
+  configuration?: {
+    sources?: { kind: string; url?: string }[];
+  } | null,
+) =>
+  configuration?.sources?.some(
+    (source) => source.kind === 'git' && !!source.url && !!parseTfsRepository(source.url),
+  ) ?? false;

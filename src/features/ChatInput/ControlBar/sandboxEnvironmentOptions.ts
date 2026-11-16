@@ -1,5 +1,6 @@
+import { projectCheckoutDirectory } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { EnvironmentConfiguration } from '@lobechat/types';
-import { parseTfsRepository } from '@lobechat/utils/tfs';
+import { hasTfsGitSource, parseTfsRepository } from '@lobechat/utils/tfs';
 
 import type { SandboxSelection } from './useSandboxPlacement';
 
@@ -70,6 +71,24 @@ export const environmentChipState = ({
  * it is never checked out on the drive — the persistent sandbox is for keeping
  * a folder of the drive, not a repository.
  */
-export const repositorySelection = (environment: { id: string }): SandboxSelection => ({
-  environmentId: environment.id,
-});
+export const repositorySelection = (
+  environment: {
+    configuration?: { sources?: { kind: string; url?: string }[] } | null;
+    id: string;
+    name: string;
+  },
+  {
+    projectId,
+    published,
+    workspace,
+  }: { projectId?: string; published: boolean; workspace: boolean },
+): SandboxSelection =>
+  projectId
+    ? {
+        ...(workspace && {
+          drive: published && !hasTfsGitSource(environment.configuration) ? 'public' : 'personal',
+        }),
+        environmentId: environment.id,
+        workingDirectory: projectCheckoutDirectory(projectId, environment.id),
+      }
+    : { environmentId: environment.id };

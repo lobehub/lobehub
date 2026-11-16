@@ -3,6 +3,7 @@ import { buildProjectContextPrompt } from '@lobechat/prompts';
 import debug from 'debug';
 
 import { ProjectModel } from '@/database/models/project';
+import { buildTfsAgentContext } from '@/server/services/tfs/agentContext';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -23,7 +24,7 @@ export interface ProjectContextDeps {
  * identity, so renames and membership changes reach it immediately. A failed
  * read leaves the turn without the block rather than failing it.
  */
-export const buildRunProjectContextPrompt = async (
+const buildBaseProjectContextPrompt = async (
   deps: ProjectContextDeps,
   projectId: string | undefined,
   agentId: string,
@@ -78,6 +79,20 @@ export const buildRunProjectContextPrompt = async (
   }
 };
 
+/** DevOps context is independent: a failed optional read cannot erase the project block. */
+export const buildRunProjectContextPrompt = async (
+  deps: ProjectContextDeps,
+  projectId: string | undefined,
+  agentId: string,
+  options: { channelMessaging?: boolean; coordinationRules?: boolean; topicId?: string } = {},
+): Promise<string | undefined> => {
+  const [project, tfs] = await Promise.all([
+    buildBaseProjectContextPrompt(deps, projectId, agentId, options),
+    buildTfsAgentContext(deps, { projectId, topicId: options.topicId }),
+  ]);
+  return [project, tfs].filter(Boolean).join('\n\n') || undefined;
+};
+
 /**
  * The same project context for a heterogeneous (CLI) agent's system context,
  * which has no context engine to wrap it and no LobeHub task tools to follow
@@ -87,9 +102,11 @@ export const buildHeteroProjectContext = async (
   deps: ProjectContextDeps,
   projectId: string | undefined,
   agentId: string,
+  topicId?: string,
 ): Promise<string | undefined> => {
   const prompt = await buildRunProjectContextPrompt(deps, projectId, agentId, {
     coordinationRules: false,
+    topicId,
   });
   return prompt && `<project_context>\n${prompt}\n</project_context>`;
 };

@@ -22,6 +22,7 @@ import {
   resolveScmCloneCredential,
   resolveTfsCloneCredential,
 } from '@/server/services/scm/cloneCredential';
+import { isPersonalTfsProjectCheckout } from '@/server/services/tfs/projectCheckout';
 
 import { sandboxStorageBinding } from './binding';
 import { driveFolderExists, ensureDriveFolder } from './driveFolder';
@@ -243,6 +244,20 @@ const resolvePlacement = async ({
     const instanceId = topic?.metadata?.sandboxInstanceId;
     const folder = topic?.metadata?.sandboxWorkingDirectory;
     if (workspaceId && topic?.metadata?.sandboxDrive === 'personal') drive = 'personal';
+    // Older TFS project topics chose the public drive because their source was
+    // published. Keep the same relative checkout, isolated on the caller's drive.
+    if (
+      workspaceId &&
+      drive === 'public' &&
+      topic?.projectId &&
+      topic.metadata?.sandboxEnvironmentId &&
+      !instanceId
+    ) {
+      const environment = await new EnvironmentModel(serverDB, userId, workspaceId).findById(
+        topic.metadata.sandboxEnvironmentId,
+      );
+      if (isPersonalTfsProjectCheckout(topic, environment?.configuration)) drive = 'personal';
+    }
 
     if (instanceId) {
       // A workspace-public agent runs on its caller's session, and a private

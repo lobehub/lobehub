@@ -706,6 +706,36 @@ describe('resolveSandboxSessionConfig', () => {
       expect(config.initialization).not.toHaveProperty('cloneCredential');
     });
 
+    it('recovers an older TFS project checkout on the caller personal drive', async () => {
+      findById.mockResolvedValue({
+        projectId: 'proj-1',
+        metadata: {
+          sandboxDrive: 'public',
+          sandboxEnvironmentId: 'env-1',
+          sandboxWorkingDirectory: 'projects/proj-1/env-1',
+        },
+      });
+      mocks.findEnvironmentById.mockResolvedValue({
+        ...environment,
+        configuration: { sources: [{ kind: 'git', url: 'https://dev.example.com/C/P/_git/R' }] },
+        visibility: 'public',
+      });
+      mocks.resolveTfsCloneCredential.mockResolvedValue({
+        tfs: { authType: 'ntlm', username: 'user', secret: 'test-secret' },
+        urlPrefix: 'https://dev.example.com/C/',
+      });
+      const config = await resolve({ workspaceId: 'ws-1' });
+      expect(config).toMatchObject({
+        mode: 'drive',
+        drive: 'personal',
+        cwd: 'projects/proj-1/env-1',
+      });
+      expect(config.initialization).not.toHaveProperty('authorizationError');
+      expect(resolveSandboxStorageClaim).toHaveBeenCalledWith(
+        expect.objectContaining({ drive: 'personal', userId: 'user_1' }),
+      );
+    });
+
     it('initializes a temporary sandbox too, which has no drive at all', async () => {
       resolveSandboxStorageClaim.mockResolvedValue(null);
       findById.mockResolvedValue({ metadata: { sandboxEnvironmentId: 'env-1' } });

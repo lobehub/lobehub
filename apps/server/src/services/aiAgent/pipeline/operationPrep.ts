@@ -753,6 +753,7 @@ export const prepareOperation = async (
     buildViewedTaskContextPrompt(deps, appContext, input.taskId),
     buildViewedGoalOverview(deps, appContext),
     buildRunProjectContextPrompt(deps, appContext?.projectId, resolvedAgentId, {
+      topicId,
       channelMessaging: !!toolsResult.enabledToolIds?.includes(ChannelIdentifier),
       coordinationRules: !!toolsResult.enabledToolIds?.includes(TaskIdentifier),
     }),

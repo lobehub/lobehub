@@ -9,6 +9,11 @@ const mocks = vi.hoisted(() => ({
   listKnowledgeBases: vi.fn(),
   listTasks: vi.fn(),
   resolveCoordinatorAgents: vi.fn(async (items: unknown[]) => items),
+  tfsContext: vi.fn(),
+}));
+
+vi.mock('@/server/services/tfs/agentContext', () => ({
+  buildTfsAgentContext: mocks.tfsContext,
 }));
 
 vi.mock('@/database/models/project', () => ({
@@ -22,6 +27,7 @@ const deps = { db: {} as never, userId: 'user-1' };
 describe('buildRunProjectContextPrompt', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.tfsContext.mockReset().mockResolvedValue(undefined);
     mocks.findById.mockResolvedValue({
       coordinatorAgentId: 'agt-coord',
       description: 'Autumn launch',
@@ -101,5 +107,25 @@ describe('buildRunProjectContextPrompt', () => {
     expect(context).toContain('Writer (agt-writer): copy');
     expect(context).not.toContain('<coordination_rules>');
     await expect(buildHeteroProjectContext(deps, undefined, 'agt-coord')).resolves.toBe(undefined);
+  });
+
+  it('injects DevOps sources for both ordinary and CLI project runs', async () => {
+    mocks.tfsContext.mockResolvedValue('<tfs_repositories>repo and branch</tfs_repositories>');
+    const normal = await buildRunProjectContextPrompt(deps, 'proj-1', 'agt-coord', {
+      topicId: 'old-topic',
+    });
+    const cli = await buildHeteroProjectContext(deps, 'proj-1', 'agt-coord', 'old-topic');
+    expect(normal).toContain('repo and branch');
+    expect(cli).toContain('repo and branch');
+    expect(mocks.tfsContext).toHaveBeenCalledWith(deps, {
+      projectId: 'proj-1',
+      topicId: 'old-topic',
+    });
+  });
+
+  it('keeps DevOps metadata available even if unrelated task context fails', async () => {
+    mocks.tfsContext.mockResolvedValue('<tfs_repositories>repo</tfs_repositories>');
+    mocks.listTasks.mockRejectedValueOnce(new Error('tasks unavailable'));
+    expect(await buildRunProjectContextPrompt(deps, 'proj-1', 'agt-coord')).toContain('repo');
   });
 });

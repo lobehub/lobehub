@@ -12,6 +12,21 @@ const environments = [
   { id: 'team', visibility: 'public' },
 ];
 
+it('selects a personal checkout for a published TFS environment', () => {
+  const environment = {
+    id: 'env-tfs',
+    name: 'P/R',
+    configuration: { sources: [{ kind: 'git', url: 'https://dev.example.com/C/P/_git/R' }] },
+  };
+  expect(
+    repositorySelection(environment, { projectId: 'proj', published: true, workspace: true }),
+  ).toEqual({
+    drive: 'personal',
+    environmentId: 'env-tfs',
+    workingDirectory: 'projects/proj/env-tfs',
+  });
+});
+
 describe('pickableEnvironments', () => {
   it('offers a workspace-public agent the published environments only', () => {
     expect(pickableEnvironments(environments, true).map((e) => e.id)).toEqual(['team']);
