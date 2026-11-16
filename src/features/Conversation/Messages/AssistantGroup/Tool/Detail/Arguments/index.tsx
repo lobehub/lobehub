@@ -10,6 +10,8 @@ import Descriptions from '@/components/Descriptions';
 import { useYamlArguments } from '@/hooks/useYamlArguments';
 import { shinyTextStyles } from '@/styles';
 
+import { useConnectorAccountNames } from '../useConnectorAccountNames';
+
 const formatValue = (value: any): string => {
   if (Array.isArray(value)) {
     return value.map((v) => (typeof v === 'object' ? JSON.stringify(v) : v)).join(', ');
@@ -44,6 +46,9 @@ const Arguments = memo<ArgumentsProps>(({ arguments: args = '', loading, actions
   }, [args]);
 
   const yaml = useYamlArguments(args);
+  // A multi-account connector's `link_id` is an opaque id; show whose account
+  // the call uses, as named in the connector's Accounts.
+  const accountNames = useConnectorAccountNames(displayArgs);
 
   let contentNode;
 
@@ -60,7 +65,7 @@ const Arguments = memo<ArgumentsProps>(({ arguments: args = '', loading, actions
       copyable: true,
       key,
       label: key,
-      value: formatValue(value),
+      value: accountNames[key] ?? formatValue(value),
     }));
 
     contentNode = (

@@ -114,6 +114,7 @@ const McpAppView = memo<McpAppViewProps>(
       agentId,
       onThisDevice,
       server,
+      toolArguments: args,
     });
 
     const resource = pickAppResource(data, resourceUri);

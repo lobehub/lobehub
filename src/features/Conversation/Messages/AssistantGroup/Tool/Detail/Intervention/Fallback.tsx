@@ -21,6 +21,7 @@ import { toolInterventionSelectors } from '@/store/user/selectors';
 
 import { dataSelectors, useConversationStore } from '../../../../../store';
 import Arguments from '../Arguments';
+import { useConnectorAccountNames } from '../useConnectorAccountNames';
 import ApprovalActions from './ApprovalActions';
 import KeyValueEditor from './KeyValueEditor';
 
@@ -62,7 +63,7 @@ interface FallbackInterventionProps {
 
 const FallbackIntervention = memo<FallbackInterventionProps>(
   ({ requestArgs, id, identifier, apiName, toolCallId, assistantGroupId, actionsPortalTarget }) => {
-    const { t } = useTranslation(['chat', 'plugin', 'common']);
+    const { t } = useTranslation(['chat', 'plugin', 'common', 'tool']);
     const approvalMode = useUserStore(toolInterventionSelectors.approvalMode);
     const [isEditing, setIsEditing] = useState(false);
     const [showArgs, setShowArgs] = useState(false);
@@ -97,6 +98,9 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
       [pendingEditedArguments, requestArgs],
     );
     const argCount = typeof parsedArgs === 'object' ? Object.keys(parsedArgs).length : 0;
+    // The parameters start collapsed, so the account a connector call acts as
+    // is named next to the action: approving "send email" must say from where.
+    const accountName = Object.values(useConnectorAccountNames(parsedArgs))[0];
     const isActivateToolsIntervention =
       identifier === LobeActivatorIdentifier && apiName === ActivatorApiName.activateTools;
     const requestedToolIdentifiers = useMemo(() => {
@@ -204,6 +208,11 @@ const FallbackIntervention = memo<FallbackInterventionProps>(
         </Flexbox>
 
         {activationReason && <div {...stylex.props(styles.reason)}>{activationReason}</div>}
+        {accountName && (
+          <div {...stylex.props(styles.reason)}>
+            {t('connector.account.usingAccount', { name: accountName, ns: 'tool' })}
+          </div>
+        )}
 
         {argCount > 0 && (
           <>
