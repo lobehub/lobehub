@@ -9,11 +9,11 @@ import Agent from './Agent';
 import Nav from './Nav';
 
 const HeaderInfo = (_props: PropsWithChildren) => {
-  const backTo = useBackOrigin();
+  const origin = useBackOrigin();
 
   return (
     <>
-      <SideBarHeaderLayout backTo={backTo} left={<Agent />} />
+      <SideBarHeaderLayout backEscape={!!origin} backTo={origin ?? '/'} left={<Agent />} />
       <Nav />
     </>
   );

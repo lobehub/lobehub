@@ -128,11 +128,17 @@ export const resetBackOrigins = (): void => {
   listeners.forEach((listener) => listener());
 };
 
-/** Where the current agent / group sidebar's back button goes; `fallback` without an origin. */
-export const useBackOrigin = (fallback = '/'): string => {
+/**
+ * The page the current agent / group was opened from, or `undefined`. It is the
+ * literal location the user was on, so it already carries its own personal or
+ * workspace scope: navigate to it as-is instead of rebasing it onto the active
+ * workspace (an escaped cross-workspace link would otherwise send a personal
+ * `/tasks` origin to `/<slug>/tasks`).
+ */
+export const useBackOrigin = (): string | undefined => {
   const { pathname } = useActiveLocation();
   const owner = useLocationOwner();
   const all = useSyncExternalStore(subscribe, getOrigins, getOrigins);
 
-  return selectOrigin(all, owner, pathname) || fallback;
+  return selectOrigin(all, owner, pathname);
 };

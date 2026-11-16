@@ -76,6 +76,12 @@ describe('recordBackOrigin', () => {
     expect(getBackOrigin('main', '/agent/agt_1')).toBe('/memory');
   });
 
+  it('keeps the literal personal origin when an escaped link hops into a workspace', () => {
+    walk('/tasks', '/agent/agt_1', '/acme/agent/agt_2');
+    // Not rebased onto `/acme/tasks`: the back button navigates to it as-is.
+    expect(getBackOrigin('main', '/acme/agent/agt_2')).toBe('/tasks');
+  });
+
   it('returns nothing for unscoped pages', () => {
     walk('/tasks', '/agent/agt_1');
     expect(getBackOrigin('main', '/tasks')).toBeUndefined();
