@@ -361,6 +361,29 @@ describe('subscription maintenance', () => {
   });
 });
 
+describe('renewal racing deletion', () => {
+  it('takes back a renewal that finished after the subscription was deleted', async () => {
+    const { ctx, stored } = createContext();
+    mocks.subscribe.mockImplementation(async () => {
+      stored.status = 'deleting';
+      return { id: 'remote', refreshBefore: null };
+    });
+    await refreshSubscription(ctx);
+    expect(mocks.unsubscribe).toHaveBeenCalledOnce();
+    expect(stored.state.remoteSubscriptionId).toBeUndefined();
+  });
+
+  it('leaves the server alone when the row only ended meanwhile', async () => {
+    const { ctx, stored } = createContext();
+    mocks.subscribe.mockImplementation(async () => {
+      stored.status = 'terminated';
+      return { id: 'remote', refreshBefore: null };
+    });
+    await refreshSubscription(ctx);
+    expect(mocks.unsubscribe).not.toHaveBeenCalled();
+  });
+});
+
 describe('remote teardown', () => {
   it('allows cleanup without consulting a disabled feature flag', async () => {
     mocks.enabled.mockResolvedValue(false);

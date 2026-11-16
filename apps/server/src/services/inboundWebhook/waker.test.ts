@@ -12,6 +12,8 @@ import {
   inboundWebhooks,
   signalDecisions,
   signals,
+  tasks,
+  taskTopics,
   topics,
   userConnectors,
   users,
@@ -361,6 +363,28 @@ describe('durable inbound webhook wakes', () => {
     expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'processed' });
     expect((await model.findById(id))?.status).toBe('active');
     expect(execute.mock.calls[0][0].prompt).not.toContain('<notice ');
+  });
+
+  it('runs nothing for a subscription whose task was archived', async () => {
+    await db.insert(tasks).values({
+      archivedAt: new Date(),
+      createdByUserId: userId,
+      id: 'wake-task',
+      identifier: 'T-1',
+      instruction: 'Watch CI',
+      seq: 1,
+    });
+    await db.insert(taskTopics).values({ seq: 1, taskId: 'wake-task', topicId, userId });
+    await seedSignal();
+
+    expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'ignored' });
+    expect(execute).not.toHaveBeenCalled();
+    expect(await signalRows()).toMatchObject([{ error: 'task_archived', status: 'ignored' }]);
+
+    // Restored, it runs again.
+    await db.update(tasks).set({ archivedAt: null }).where(eq(tasks.id, 'wake-task'));
+    await seedSignal();
+    expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'processed' });
   });
 
   it('runs nothing as an owner who may no longer use the workspace agent', async () => {
