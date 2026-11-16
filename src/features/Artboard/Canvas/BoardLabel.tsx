@@ -41,15 +41,16 @@ interface ScaledLabelProps {
   children: ReactNode;
   gap?: number;
   k: number;
+  scale?: number;
   width: number;
 }
 
-export const ScaledLabel = ({ children, gap = 8, k, width }: ScaledLabelProps) => (
+export const ScaledLabel = ({ children, gap = 8, k, scale = 1 / k, width }: ScaledLabelProps) => (
   <div
     {...sx(canvasStyles.scaledLabel, undefined, {
       paddingBottom: gap,
-      transform: `scale(${1 / k})`,
-      width: width * k,
+      transform: `scale(${scale})`,
+      width: width / scale,
     })}
   >
     {children}
