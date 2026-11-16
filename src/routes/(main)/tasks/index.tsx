@@ -1,3 +1,1 @@
-'use client';
-
-export { default } from '@/features/AgentTasks/AgentTaskList/TasksTabPage';
+export { default } from '@/features/AgentTasks/AgentTaskList/AgentTasksPage';

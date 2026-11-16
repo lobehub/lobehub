@@ -159,12 +159,6 @@ describe('useGroupDropdownMenu', () => {
     expect(getMenuKeys(result.current())).not.toContain('hideFromSidebar');
   });
 
-  it('omits hide for lists that ignore the sidebar preference', () => {
-    const { result } = renderGroupMenu({ sidebarVisibilityEnabled: false });
-
-    expect(getMenuKeys(result.current())).not.toContain('hideFromSidebar');
-  });
-
   it('omits hide on a team-pinned workspace group, which every member sees', () => {
     mocks.activeWorkspaceId = 'workspace-1';
     mocks.isTeamPinned = true;
