@@ -12,6 +12,7 @@ import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { styles } from './style';
 import { taskDetailPath } from './taskDetailPath';
+import { useTaskListCrumbTarget, useTaskListOriginState } from './taskListOrigin';
 import { useAgentDisplayMeta } from './useAgentDisplayMeta';
 
 interface BreadcrumbProps {
@@ -22,6 +23,11 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
   const { t } = useTranslation('chat');
   const { aid } = useParams<{ aid?: string }>();
   const agentMeta = useAgentDisplayMeta(aid);
+  // Crumbs lead back to the list the detail was opened from, filters included,
+  // when that list is the crumb's own list; otherwise to the bare list.
+  const allTasksTarget = useTaskListCrumbTarget('/tasks');
+  const agentTasksTarget = useTaskListCrumbTarget(aid ? `/agent/${aid}/tasks` : '/tasks');
+  const taskListOriginState = useTaskListOriginState();
   const taskTitle = useTaskStore((s) =>
     taskId ? s.taskDetailMap[s.taskRefIndex?.[taskId] ?? taskId]?.name : undefined,
   );
@@ -84,14 +90,21 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
     agentCrumb && taskId
       ? {
           ...agentCrumb,
-          title: <WorkspaceLink to={`/agent/${aid}/tasks`}>{agentCrumb.title}</WorkspaceLink>,
+          title: (
+            <WorkspaceLink escape={agentTasksTarget.escape} to={agentTasksTarget.to}>
+              {agentCrumb.title}
+            </WorkspaceLink>
+          ),
         }
       : agentCrumb;
 
   const ancestorCrumbs = ancestors.map(({ id, identifier, agentId, name }) => ({
     key: id,
     title: (
-      <WorkspaceLink to={taskDetailPath(identifier, agentId ?? undefined, name)}>
+      <WorkspaceLink
+        state={taskListOriginState}
+        to={taskDetailPath(identifier, agentId ?? undefined, name)}
+      >
         <Text color={'inherit'} weight={500}>
           {identifier}
         </Text>
@@ -149,7 +162,9 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
               {
                 title:
                   taskId || agentCrumbNode ? (
-                    <WorkspaceLink to={'/tasks'}>{allTasksLabel}</WorkspaceLink>
+                    <WorkspaceLink escape={allTasksTarget.escape} to={allTasksTarget.to}>
+                      {allTasksLabel}
+                    </WorkspaceLink>
                   ) : (
                     allTasksLabel
                   ),
