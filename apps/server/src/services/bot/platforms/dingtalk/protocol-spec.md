@@ -501,7 +501,7 @@ sequenceDiagram
 
 ### 11.4 外部 message gateway
 
-启用外部 message gateway 时，Stream 长连接由 Node 版 message gateway 的 `dingtalk` 连接托管（`MESSAGE_GATEWAY_NODE_PLATFORMS` 需包含 `dingtalk`）：网关注册 Stream、用协议层 ping 保活、回 ACK，并把机器人回调原文按 HTTP 回调同样的 `timestamp` + `sign` 签名转发到 `/api/agent/webhooks/dingtalk/:clientId`，服务端沿用 Webhook 的验签与处理链路。部署顺序：网关先上线 `dingtalk` 平台，服务端再放开 Stream。
+启用外部 message gateway 时，Stream 长连接由 Node 版 message gateway 的 `dingtalk` 连接托管（`MESSAGE_GATEWAY_NODE_PLATFORMS` 需包含 `dingtalk`）：网关注册 Stream、用协议层 ping 保活、回 ACK，并把机器人回调原文按 HTTP 回调同样的 `timestamp` + `sign` 签名转发到 `/api/agent/webhooks/dingtalk/:clientId`，服务端沿用 Webhook 的验签与处理链路。服务端按部署判断是否开放 Stream（`nodeMessageGatewayOnly` + `isMessageGatewayHostingUnavailable`）：启用网关但钉钉未路由到已配置的 Node 网关时，只提供 Webhook，并拒绝持久连接；路由到 Node 网关后自动开放 Stream。因此服务端可以先于网关上线。
 
 ### 11.5 未覆盖
 
