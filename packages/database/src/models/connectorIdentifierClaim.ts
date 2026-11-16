@@ -43,6 +43,21 @@ export const sameBaseVisibility = (
     : undefined;
 
 /**
+ * The advisory-lock key of `identifier`'s base rows in this scope. It names the
+ * scope the rows are written to, so the workspace id is normalized as
+ * `buildWorkspacePayload` stores it: a padded id is its trimmed workspace, and
+ * a blank one is the user's personal scope.
+ */
+export const baseIdentifierLockKey = (
+  scope: Pick<BaseIdentifierScope, 'userId' | 'workspaceId'>,
+  identifier: string,
+) => {
+  const workspaceId = normalizeWorkspaceId(scope.workspaceId);
+  const scopeKey = workspaceId ? `workspace:${workspaceId}` : `user:${scope.userId}`;
+  return `user_connectors:${scopeKey}:${identifier}`;
+};
+
+/**
  * Hold this scope's base-row lock on `identifier` until `tx` ends. A writer
  * that adds a base row (a create, a move out of an agent) takes it before
  * looking for a holder, so no two of them both find the identifier free. One
@@ -53,9 +68,8 @@ const lockBaseIdentifier = async (
   scope: BaseIdentifierScope,
   identifier: string,
 ) => {
-  const scopeKey = scope.workspaceId ? `workspace:${scope.workspaceId}` : `user:${scope.userId}`;
   await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext(${`user_connectors:${scopeKey}:${identifier}`}))`,
+    sql`SELECT pg_advisory_xact_lock(hashtext(${baseIdentifierLockKey(scope, identifier)}))`,
   );
 };
 
