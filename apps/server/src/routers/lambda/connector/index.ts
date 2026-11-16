@@ -39,7 +39,10 @@ import {
   pruneMissingAutoConnectorTools,
   syncConnectorToolsById,
 } from '@/server/services/connector/sync';
-import { refreshByConnector, removeByConnector } from '@/server/services/inboundWebhook/lifecycle';
+import {
+  removeByConnector,
+  scheduleRefreshByConnector,
+} from '@/server/services/inboundWebhook/lifecycle';
 import {
   DeviceMcpManifestInputSchema,
   getDeviceMcpManifest,
@@ -566,7 +569,7 @@ const connectorCoreRouter = router({
           JSON.stringify(metadata?.customHeaders) !==
             JSON.stringify(target.metadata?.customHeaders);
         if (credentials !== undefined || headersChanged) {
-          await refreshByConnector(
+          scheduleRefreshByConnector(
             ctx.serverDB,
             { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
             input.id,

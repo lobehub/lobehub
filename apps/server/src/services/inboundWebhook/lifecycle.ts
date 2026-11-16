@@ -2,6 +2,7 @@ import type { InboundWebhookQuery, InboundWebhookView } from '@/database/models/
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
 import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import { createKindGate, getInboundWebhookKind } from './kinds';
 import { maintenanceBackoff } from './maintenance';
@@ -59,6 +60,19 @@ export async function removeByTopics(
   topicIds: string[],
 ) {
   for (const topicId of topicIds) await removeMatching(db, scope, { topicId });
+}
+
+/**
+ * Renew the connector's subscriptions after the response that changed its credentials. Each
+ * renewal calls the connector's server, one subscription after another, so a slow server must not
+ * hold the save or the OAuth popup; the new credentials are already stored when this runs.
+ */
+export function scheduleRefreshByConnector(
+  db: LobeChatDatabase,
+  scope: { userId: string; workspaceId?: string },
+  connectorId: string,
+): void {
+  afterUnscoped(() => refreshByConnector(db, scope, connectorId));
 }
 
 /** Credentials changed, including no-expiry subscriptions which have no scheduled refresh. */

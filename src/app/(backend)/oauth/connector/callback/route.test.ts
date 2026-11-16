@@ -70,11 +70,10 @@ vi.mock('@/database/models/connectorTool', () => ({
   ConnectorToolModel: vi.fn(function () {}),
 }));
 vi.mock('@/server/services/connector/sync', () => ({ syncConnectorToolsById: mockSync }));
-vi.mock('@/server/services/inboundWebhook/lifecycle', () => ({ refreshByConnector: mockRefresh }));
-// Work the route hands to after the response; tests run it when the response is out.
+// Renewal the route hands to after the response; tests run it when the response is out.
 const scheduled = vi.hoisted(() => [] as Array<() => unknown>);
-vi.mock('@/server/utils/scheduleAfterResponse', () => ({
-  afterUnscoped: (work: () => unknown) => scheduled.push(work),
+vi.mock('@/server/services/inboundWebhook/lifecycle', () => ({
+  scheduleRefreshByConnector: (...args: unknown[]) => scheduled.push(() => mockRefresh(...args)),
 }));
 const runScheduled = async () => {
   for (const work of scheduled.splice(0)) await work();
