@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -6,7 +6,12 @@ import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { log } from '../../utils/logger';
-import { registerGoalObjectiveCommands, withMachineLock } from './objective';
+import {
+  registerGoalObjectiveCommands,
+  runEvaluator,
+  splitEvaluatorCommand,
+  withMachineLock,
+} from './objective';
 
 const { mockClient, operationToken } = vi.hoisted(() => ({
   mockClient: {
@@ -120,7 +125,8 @@ describe('lh goal objective commands', () => {
   it('records nothing and fails when the evaluator prints no score', async () => {
     operationToken.value = true;
     mockClient.goal.objectiveOperation.query.mockResolvedValue({
-      data: board('echo boom; exit 3'),
+      // No shell any more: the exit code has to come from the program itself.
+      data: board(`node -e "console.log('boom'); process.exit(3)"`),
     });
 
     await run('evaluate');
@@ -172,5 +178,105 @@ describe('withMachineLock', () => {
       ),
     ).rejects.toThrow('x');
     await expect(withMachineLock(60, async () => 'free', { dir })).resolves.toBe('free');
+  });
+});
+
+describe('withMachineLock ownership', () => {
+  const makeDir = async () => path.join(await mkdtemp(path.join(tmpdir(), 'lh-lock-')), 'lock');
+
+  it('does not expire a live holder on the waiter’s shorter timeout', async () => {
+    const dir = await makeDir();
+    const order: string[] = [];
+    let release!: () => void;
+    const holder = withMachineLock(
+      1800,
+      () => new Promise<void>((resolve) => (release = resolve)).then(() => order.push('holder')),
+      { dir },
+    );
+    await vi.waitFor(async () =>
+      expect(await readFile(path.join(dir, 'owner'), 'utf8')).toBeTruthy(),
+    );
+
+    // A waiter that gives up after one second must still leave the 30-minute evaluation alone.
+    const waiter = withMachineLock(1, async () => void order.push('waiter'), { dir, pollMs: 20 });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(order).toEqual([]);
+
+    release();
+    await Promise.all([holder, waiter]);
+    expect(order).toEqual(['holder', 'waiter']);
+  });
+
+  it('takes over a lock whose holder deadline has passed', async () => {
+    const dir = await makeDir();
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, 'pid'), String(process.pid));
+    await writeFile(path.join(dir, 'owner'), 'someone-else');
+    await writeFile(path.join(dir, 'deadline'), String(Date.now() - 1000));
+
+    await expect(withMachineLock(60, async () => 'taken', { dir, pollMs: 20 })).resolves.toBe(
+      'taken',
+    );
+  });
+
+  it('leaves a replacement lock alone when the previous holder finishes', async () => {
+    const dir = await makeDir();
+    let release!: () => void;
+    const first = withMachineLock(60, () => new Promise<void>((resolve) => (release = resolve)), {
+      dir,
+    });
+    await vi.waitFor(async () =>
+      expect(await readFile(path.join(dir, 'owner'), 'utf8')).toBeTruthy(),
+    );
+    // Simulate a takeover: someone else now owns the directory.
+    await writeFile(path.join(dir, 'owner'), 'someone-else');
+    release();
+    await first;
+    expect(await readFile(path.join(dir, 'owner'), 'utf8')).toBe('someone-else');
+    await rm(dir, { force: true, recursive: true });
+  });
+});
+
+describe('runEvaluator', () => {
+  const makeCwd = async () => mkdtemp(path.join(tmpdir(), 'lh-eval-'));
+
+  it('splits quoted arguments without a shell', () => {
+    expect(splitEvaluatorCommand(`node eval.js --label "a b" 'c d'`)).toEqual([
+      'node',
+      'eval.js',
+      '--label',
+      'a b',
+      'c d',
+    ]);
+    // Metacharacters stay literal; nothing is interpreted.
+    expect(splitEvaluatorCommand('node x.js; rm -rf /')).toEqual([
+      'node',
+      'x.js;',
+      'rm',
+      '-rf',
+      '/',
+    ]);
+    expect(() => splitEvaluatorCommand(`node "unbalanced`)).toThrow(/Unbalanced/);
+  });
+
+  it('runs a command and collects its output', async () => {
+    const cwd = await makeCwd();
+    const result = await runEvaluator(`node -e "console.log(0.75)"`, cwd, 20);
+    expect(result.timedOut).toBe(false);
+    expect(result.code).toBe(0);
+    expect(result.output.trim()).toBe('0.75');
+  });
+
+  it('settles on timeout instead of waiting for inherited pipes', async () => {
+    const cwd = await makeCwd();
+    const started = Date.now();
+    // The child leaves a grandchild holding the pipes; the promise must still settle at the timeout.
+    const result = await runEvaluator(
+      `node -e "const {spawn}=require('node:child_process');spawn('sleep',['30'],{stdio:'inherit'});setInterval(()=>{},1000)"`,
+      cwd,
+      0.4,
+    );
+    expect(result.timedOut).toBe(true);
+    expect(Date.now() - started).toBeLessThan(5000);
   });
 });

@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -16,6 +16,8 @@ import { hasOperationToken } from './reads';
 const DEFAULT_TIMEOUT_SECONDS = 1800;
 const OUTPUT_TAIL_LINES = 60;
 const LOCK_POLL_MS = 2000;
+/** Only for locks written before a holder's deadline was recorded next to its pid. */
+const LOCK_STALE_GRACE_MS = 300;
 
 interface Lane {
   best: number;
@@ -80,17 +82,35 @@ const readLeaderboard = async (goalId?: string): Promise<Leaderboard | null> => 
 export const withMachineLock = async <T>(
   timeoutSeconds: number,
   run: () => Promise<T>,
-  { dir = path.join(tmpdir(), 'lobehub-goal-evaluate.lock'), onWait = () => {} } = {},
+  {
+    dir = path.join(tmpdir(), 'lobehub-goal-evaluate.lock'),
+    onWait = () => {},
+    pollMs = LOCK_POLL_MS,
+  } = {},
 ): Promise<T> => {
+  // Who holds the lock is recorded, so a waiter that took over an expired lock cannot be evicted
+  // by the previous holder's `finally`.
+  const owner = `${process.pid}-${Date.now().toString(36)}`;
+  const staged = `${dir}.staging-${owner}`;
   let waited = false;
   for (;;) {
+    // Built off to the side and renamed into place: a lock directory that exists always carries
+    // its owner files, so a waiter never reads a half-written lock as a dead one.
+    await mkdir(staged, { recursive: true });
+    await writeFile(path.join(staged, 'pid'), String(process.pid));
+    await writeFile(path.join(staged, 'owner'), owner);
+    // The holder's own deadline, not the waiter's timeout, decides when the lock may be taken.
+    await writeFile(path.join(staged, 'deadline'), String(Date.now() + timeoutSeconds * 1000));
     try {
-      await mkdir(dir);
-      await writeFile(path.join(dir, 'pid'), String(process.pid));
+      await rename(staged, dir);
       break;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      await rm(staged, { force: true, recursive: true });
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== 'EEXIST' && code !== 'ENOTEMPTY' && code !== 'ENOTDIR') throw error;
+
       const holder = Number(await readFile(path.join(dir, 'pid'), 'utf8').catch(() => '0'));
+      const deadline = Number(await readFile(path.join(dir, 'deadline'), 'utf8').catch(() => '0'));
       const age = Date.now() - (await stat(dir).catch(() => ({ mtimeMs: Date.now() }))).mtimeMs;
       const alive =
         holder > 0 &&
@@ -102,19 +122,23 @@ export const withMachineLock = async <T>(
             return false;
           }
         })();
-      if (!alive || age > (timeoutSeconds + 300) * 1000) {
+      // A live holder keeps the lock for as long as it said it would, whatever this waiter's own
+      // timeout is. Locks written before `deadline` existed fall back to pid plus age.
+      const expired = deadline > 0 ? Date.now() > deadline : age > LOCK_STALE_GRACE_MS * 1000;
+      if (!alive || expired) {
         await rm(dir, { force: true, recursive: true });
         continue;
       }
       if (!waited) onWait();
       waited = true;
-      await new Promise((resolve) => setTimeout(resolve, LOCK_POLL_MS));
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
     }
   }
   try {
     return await run();
   } finally {
-    await rm(dir, { force: true, recursive: true });
+    const current = await readFile(path.join(dir, 'owner'), 'utf8').catch(() => '');
+    if (current === owner) await rm(dir, { force: true, recursive: true });
   }
 };
 
@@ -134,22 +158,110 @@ export const workingTreeFingerprint = (cwd: string): string | undefined => {
     .slice(0, 16);
 };
 
-/** Run the evaluator in `cwd`; resolves with its combined output and whether it timed out. */
+/**
+ * Splits an evaluator command into an executable and its arguments.
+ *
+ * The evaluator string is stored on the goal and read back from the server, so other lane members
+ * can write it. It is never handed to a shell: metacharacters stay literal, and only quoting (so
+ * one argument can contain a space) keeps its meaning.
+ */
+export const splitEvaluatorCommand = (command: string): string[] => {
+  const tokens: string[] = [];
+  let current = '';
+  let quoted: '"' | "'" | undefined;
+  let started = false;
+  for (const char of command) {
+    if (quoted) {
+      if (char === quoted) quoted = undefined;
+      else current += char;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quoted = char;
+      started = true;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      if (started) tokens.push(current);
+      current = '';
+      started = false;
+      continue;
+    }
+    current += char;
+    started = true;
+  }
+  if (quoted) throw new Error(`Unbalanced ${quoted} in the evaluator command: ${command}`);
+  if (started) tokens.push(current);
+
+  return tokens;
+};
+
+/** Kills the evaluator and everything it started, not just the process we spawned. */
+const killEvaluatorTree = (child: { kill: (signal: NodeJS.Signals) => boolean; pid?: number }) => {
+  const { pid } = child;
+  if (pid && process.platform !== 'win32') {
+    try {
+      // `detached` below makes the child its own process group leader, so the group id is its pid.
+      process.kill(-pid, 'SIGKILL');
+      return;
+    } catch {
+      // Fall through to the plain kill below.
+    }
+  }
+  if (pid && process.platform === 'win32') {
+    const killed = spawnSync('taskkill', ['/pid', String(pid), '/T', '/F']);
+    if (killed.status === 0) return;
+  }
+  try {
+    child.kill('SIGKILL');
+  } catch {
+    // Already gone.
+  }
+};
+
+/**
+ * Run the evaluator in `cwd`; resolves with its combined output and whether it timed out.
+ *
+ * The timeout settles on its own: a helper that inherited stdout/stderr can keep the pipes open
+ * long after the evaluator is gone, and waiting for `close` would hold the machine lock past the
+ * deadline the user asked for.
+ */
 export const runEvaluator = (command: string, cwd: string, timeoutSeconds: number) =>
   new Promise<{ code: number | null; output: string; timedOut: boolean }>((resolve) => {
-    const child = spawn(command, { cwd, shell: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const [executable, ...args] = splitEvaluatorCommand(command);
+    if (!executable) {
+      resolve({ code: null, output: '', timedOut: false });
+      return;
+    }
+    const child = spawn(executable, args, {
+      cwd,
+      detached: process.platform !== 'win32',
+      shell: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     let output = '';
     let timedOut = false;
+    let settled = false;
+    const finish = (code: number | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.stdout.destroy();
+      child.stderr.destroy();
+      resolve({ code, output, timedOut });
+    };
     child.stdout.on('data', (chunk) => (output += chunk));
     child.stderr.on('data', (chunk) => (output += chunk));
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill('SIGKILL');
+      killEvaluatorTree(child);
+      finish(null);
     }, timeoutSeconds * 1000);
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      resolve({ code, output, timedOut });
+    child.on('error', (error) => {
+      output += `${error.message}\n`;
+      finish(null);
     });
+    child.on('close', (code) => finish(code));
   });
 
 const tail = (text: string, lines: number) => text.trimEnd().split('\n').slice(-lines).join('\n');
@@ -179,7 +291,7 @@ export function registerGoalObjectiveCommands(goal: Command) {
     .description('Set the score this goal optimises and the command that measures it')
     .option(
       '--evaluator <command>',
-      'Shell command that prints the score, run in the working directory',
+      'Command that prints the score, run in the working directory (no shell; quote arguments with spaces)',
     )
     .option('--direction <max|min>', 'Whether higher or lower is better', 'max')
     .option('--key <key>', 'Metric series key (default: objective)')
