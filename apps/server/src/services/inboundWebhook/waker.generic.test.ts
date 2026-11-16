@@ -200,6 +200,29 @@ describe('generic webhook wakes', () => {
     expect(rows.find((s) => s.id === callB.id)?.status).toBe('processed');
   });
 
+  it('carries at most 20 calls of a thread per run and runs the rest next', async () => {
+    await seedWebhook();
+    for (let i = 0; i < 21; i++) await seedSignal('ticket-42');
+    await wakeInboundWebhook(db, id, deps);
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute.mock.calls[0][0].prompt.match(/<event /g)).toHaveLength(20);
+    expect(execute.mock.calls[0][0].prompt).not.toContain('<omitted');
+    expect(execute.mock.calls[1][0].prompt.match(/<event /g)).toHaveLength(1);
+    expect(execute.mock.calls[1][0].appContext).toEqual({ topicId: 'topic-1' });
+    expect((await signalRows()).every((s) => s.status === 'processed')).toBe(true);
+  });
+
+  it('keeps the backoff when every group it tried was busy', async () => {
+    await seedWebhook();
+    for (let i = 0; i < MAX_RUNS_PER_WAKE; i++) await seedSignal(`ticket-${i}`);
+    execute.mockResolvedValue({
+      error: new Error('TopicStartReservationError: occupied'),
+    } as never);
+    expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'deferred' });
+    expect(execute).toHaveBeenCalledTimes(MAX_RUNS_PER_WAKE);
+    expect((await signalRows()).every((s) => s.status === 'pending')).toBe(true);
+  });
+
   it('puts every call of a reuse webhook in one shared Topic', async () => {
     await seedWebhook({ topicMode: 'reuse' });
     await seedSignal();

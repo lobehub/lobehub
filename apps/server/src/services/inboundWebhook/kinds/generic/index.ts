@@ -8,7 +8,7 @@ import { isAgentWebhooksEnabled } from '../../featureGate';
 import type { InboundWebhookKindHandler } from '../types';
 import { parseGenericDelivery } from './delivery';
 import { presentedToken, tokenMatches } from './token';
-import { buildGenericWebhookPrompt } from './wakePrompt';
+import { buildGenericWebhookPrompt, MAX_EVENTS_PER_PROMPT } from './wakePrompt';
 
 /** The thread key of the Topic every call of a `reuse` webhook shares; a caller's key is never empty. */
 const SHARED_THREAD = '';
@@ -39,14 +39,17 @@ export const genericKind: InboundWebhookKindHandler<'generic'> = {
   canCheck: false,
   deliveriesPerMinute: 120,
   groupKey: groupKeyOf,
-  /** The oldest group this wake has not given up on: one call, or every waiting call of a thread. */
+  /**
+   * The oldest group this wake has not given up on: one call, or a thread's oldest waiting calls,
+   * as many as one wake-up message carries. The rest stay pending for the thread's next run.
+   */
   groupSignals(row, signals, exclude) {
     const first = signals.find((signal) => !exclude.has(groupKeyOf(row, signal)));
     if (!first) return [];
     const key = groupKeyOf(row, first);
     return key.startsWith('call:')
       ? [first]
-      : signals.filter((signal) => groupKeyOf(row, signal) === key);
+      : signals.filter((signal) => groupKeyOf(row, signal) === key).slice(0, MAX_EVENTS_PER_PROMPT);
   },
   isEnabled: isAgentWebhooksEnabled,
   async parseDelivery(ctx, request) {

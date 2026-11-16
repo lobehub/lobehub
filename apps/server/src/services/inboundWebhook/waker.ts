@@ -109,17 +109,25 @@ export async function wakeInboundWebhook(
   // wake; skipping them keeps one stuck thread from holding back the others behind it.
   const blocked = new Set<string>();
   let deferred = false;
+  let progressed = false;
   for (let run = 0; run < runs; run++) {
     const next = await wakeOnce(db, kind, row, model, deps, blocked);
     if (next.outcome === 'empty') return { outcome: deferred ? 'deferred' : outcome };
     outcome = next.outcome;
-    if (outcome === 'processed' || outcome === 'ignored') continue;
+    if (outcome === 'processed' || outcome === 'ignored') {
+      progressed = true;
+      continue;
+    }
     // The hourly cap is the webhook's, not one group's: nothing else may run either.
     if (outcome === 'capped' || !next.groupKey) return { outcome };
     blocked.add(next.groupKey);
     if (outcome === 'deferred') deferred = true;
   }
-  return { outcome: kind.groupSignals ? 'more' : outcome };
+  if (!kind.groupSignals) return { outcome };
+  // Asking to be woken right away only helps when this pass got through work. A pass that only
+  // met busy or failing groups keeps their backoff, or it would retry the same groups at once.
+  if (progressed) return { outcome: 'more' };
+  return { outcome: deferred ? 'deferred' : outcome };
 }
 
 /** Claim one batch (a kind's group, or everything waiting) and start at most one run for it. */
