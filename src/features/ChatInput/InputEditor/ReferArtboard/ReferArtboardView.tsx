@@ -8,36 +8,54 @@ import type { ArtboardReference } from './serialize';
 
 const styles = stylex.create({
   body: {
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: 3,
     color: cssVar.colorText,
+    display: '-webkit-box',
     overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
+    whiteSpace: 'pre-line',
   },
   close: {
+    alignItems: 'center',
     color: cssVar.colorTextTertiary,
     cursor: 'pointer',
     display: 'inline-flex',
+    flexShrink: 0,
+    height: 20,
+    marginInlineStart: 'auto',
+  },
+  content: {
+    display: 'flex',
+    flex: '1',
+    flexDirection: 'column',
+    minWidth: 0,
+  },
+  icon: {
+    alignItems: 'center',
+    color: cssVar.colorTextSecondary,
+    display: 'inline-flex',
+    flexShrink: 0,
+    height: 20,
   },
   root: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: cssVar.colorFillTertiary,
-    borderInlineStartColor: cssVar.colorPrimary,
-    borderInlineStartStyle: 'solid',
-    borderInlineStartWidth: 2,
-    borderRadius: cssVar.borderRadiusSM,
-    display: 'inline-flex',
+    borderRadius: cssVar.borderRadius,
+    boxSizing: 'border-box',
+    display: 'flex',
     fontSize: 12,
-    gap: 6,
+    gap: 8,
     lineHeight: '20px',
-    maxWidth: '100%',
-    paddingBlock: 2,
-    paddingInline: 8,
+    paddingBlock: 6,
+    paddingInline: 10,
     userSelect: 'none',
-    verticalAlign: 'middle',
+    width: '100%',
   },
   target: {
     color: cssVar.colorTextSecondary,
-    flexShrink: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
 });
 
@@ -48,9 +66,13 @@ interface ReferArtboardViewProps {
 
 export const ReferArtboardView = memo<ReferArtboardViewProps>(({ onRemove, reference }) => (
   <span {...stylex.props(styles.root)}>
-    <Icon icon={MessageSquareQuoteIcon} size={12} />
-    <span {...stylex.props(styles.target)}>{reference.itemTitle}</span>
-    <span {...stylex.props(styles.body)}>{reference.text}</span>
+    <span {...stylex.props(styles.icon)}>
+      <Icon icon={MessageSquareQuoteIcon} size={12} />
+    </span>
+    <span {...stylex.props(styles.content)}>
+      <span {...stylex.props(styles.target)}>{reference.itemTitle}</span>
+      {reference.text && <span {...stylex.props(styles.body)}>{reference.text}</span>}
+    </span>
     {onRemove && (
       <span
         {...stylex.props(styles.close)}
