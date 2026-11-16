@@ -5212,9 +5212,9 @@ When I am ___, I need ___
   'settingsSearch.tabKeywords.automations':
     'automations, events, event subscriptions, triggers, webhooks',
   'automations.desc':
-    'Connector events your agents subscribed to. Each event runs the agent in its topic and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
+    'Connector events your agents subscribed to, and webhooks that wake them. Each event or call runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery.',
   'automations.descWorkspace':
-    'Connector events the agents in this workspace subscribed to. Each event runs the agent in its topic and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery. Only the member who approved a subscription or a workspace admin can check or delete it.',
+    'Connector events the agents in this workspace subscribed to, and webhooks that wake them. Each event or call runs the agent and uses credits. If events stop arriving, Check confirms the subscription with the connector and resumes paused delivery. Only the member who set one up or a workspace admin can check or delete it.',
   'automations.columns.subscription': 'Subscription',
   'automations.columns.status': 'Status',
   'automations.columns.target': 'Agent & topic',

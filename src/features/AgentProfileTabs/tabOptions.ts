@@ -12,7 +12,8 @@ export type AgentProfileTab =
   | 'share'
   | 'skills'
   | 'statistics'
-  | 'tools';
+  | 'tools'
+  | 'webhook';
 
 export interface AgentProfileTabOption {
   label: string;
@@ -30,7 +31,7 @@ export const buildAgentProfileTabPath = (agentId: string, tab: AgentProfileTab) 
   urlJoin('/agent', agentId, tab);
 
 const AGENT_PROFILE_ROUTE =
-  /^(?:\/[^/]+)?\/agent\/[^/]+\/(profile|instruction|knowledge|engine|environment|tools|skills|mail(?:\/[^/]+)?|channel(?:\/[^/]+)?|self-evolving(?:\/[^/]+)*|statistics|share)\/?$/;
+  /^(?:\/[^/]+)?\/agent\/[^/]+\/(profile|instruction|knowledge|engine|environment|tools|skills|mail(?:\/[^/]+)?|channel(?:\/[^/]+)?|webhook|self-evolving(?:\/[^/]+)*|statistics|share)\/?$/;
 
 /**
  * The profile-group tab a URL belongs to, if any. Anchored on Agent subroutes,
@@ -65,6 +66,7 @@ export const buildAgentProfileTabOptions = ({
   selfLearningSupported,
   shareSupported,
   heterogeneous,
+  webhookSupported = false,
 }: {
   active: AgentProfileTab;
   canConfigure: boolean;
@@ -77,6 +79,8 @@ export const buildAgentProfileTabOptions = ({
    * so the instruction, tools and skills pages have nothing to configure for them.
    */
   heterogeneous: boolean;
+  /** Generic webhooks are switched on for this member (`agent_webhooks`). */
+  webhookSupported?: boolean;
 }): AgentProfileTabOption[] => {
   const showProfile = canConfigure || active === 'profile';
   // Engine, Instruction, Environment, Tools and Skills edit the same agent config as Profile, so
@@ -91,6 +95,8 @@ export const buildAgentProfileTabOptions = ({
   const showMail = (canConfigure && mailSupported) || active === 'mail';
   // Channels can dispatch to a bound device; cloud sandbox support is not required.
   const showChannel = canConfigure || active === 'channel';
+  // Creating a webhook lets outsiders wake the agent, so it needs the same edit access.
+  const showWebhook = (canConfigure && webhookSupported) || active === 'webhook';
   // Sharing hands visitors real execution on the owner's account, so the
   // segment follows the same configure gate as Profile / Channels on top of the
   // capability gate (personal, non-builtin agents on deployments that allow it).
@@ -107,6 +113,7 @@ export const buildAgentProfileTabOptions = ({
     showSkills ? { label: labels.skills, value: 'skills' as const } : null,
     showMail ? { label: labels.mail, value: 'mail' as const } : null,
     showChannel ? { label: labels.channel, value: 'channel' as const } : null,
+    showWebhook ? { label: labels.webhook, value: 'webhook' as const } : null,
     showSelfLearning ? { label: labels['self-evolving'], value: 'self-evolving' as const } : null,
     { label: labels.statistics, value: 'statistics' as const },
     showShare ? { label: labels.share, value: 'share' as const } : null,
@@ -117,7 +124,7 @@ const AGENT_PROFILE_TAB_GROUPS: { key: AgentProfileTabGroupKey; tabs: AgentProfi
   { key: 'profile', tabs: ['profile'] },
   { key: 'shape', tabs: ['instruction', 'knowledge'] },
   { key: 'setup', tabs: ['engine', 'environment', 'tools', 'skills'] },
-  { key: 'identity', tabs: ['mail', 'channel'] },
+  { key: 'identity', tabs: ['mail', 'channel', 'webhook'] },
   { key: 'general', tabs: ['self-evolving', 'statistics', 'share'] },
 ];
 

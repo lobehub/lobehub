@@ -15,6 +15,7 @@ import AutomationsSkeleton from './Skeleton';
 const Automations = () => {
   const gate = useServerConfigStore((s) =>
     resolveAutomationsGate({
+      enableAgentWebhooks: serverConfigSelectors.enableAgentWebhooks(s),
       enableMcpEvents: serverConfigSelectors.enableMcpEvents(s),
       serverConfigInit: s.serverConfigInit,
     }),

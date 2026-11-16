@@ -8,7 +8,11 @@ import { useSelfLearningSurface } from '@/features/SelfLearning/SurfaceGate/useS
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
 import { isMobileSurface } from '@/utils/mobileSurface';
 
 import { type AgentProfileTab, buildAgentProfileTabOptions } from './tabOptions';
@@ -29,6 +33,7 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
     !!isAgentEditable && isAccessResolved && canEditContent && canManageResource;
   const { visible: shareVisible } = useAgentShareSupported(agentId);
   const mailSupported = useShowAgentIdentity(agentId);
+  const webhookSupported = useServerConfigStore(serverConfigSelectors.enableAgentWebhooks);
   const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
   const { enabled: enableSelfLearning } = useSelfLearningSurface();
   // The mobile Segmented has no room for another segment, so mobile keeps the
@@ -56,11 +61,13 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
           'skills': t('tab.skills'),
           'statistics': t('usageStats.title', { ns: 'spend' }),
           'tools': t('tab.tools'),
+          'webhook': t('tab.webhook'),
         },
         mailSupported,
         selfLearningSupported,
         shareSupported: shareVisible === true && canManageShare,
         heterogeneous: isHeterogeneous,
+        webhookSupported,
       }),
     [
       active,
@@ -71,6 +78,7 @@ export const useAgentProfileTabOptions = (active: AgentProfileTab, agentId: stri
       selfLearningSupported,
       shareVisible,
       t,
+      webhookSupported,
     ],
   );
 };

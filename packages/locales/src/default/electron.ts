@@ -36,6 +36,7 @@ export default {
   'navigation.tools': 'Agent Tools',
   'navigation.skills': 'Agent Skills',
   'navigation.mail': 'Mail',
+  'navigation.webhook': 'Webhook',
   'navigation.memory': 'Memory',
   'navigation.memoryContexts': 'Memory - Contexts',
   'navigation.memoryIdentities': 'Memory - Identities',

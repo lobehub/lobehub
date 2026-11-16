@@ -18,4 +18,14 @@ describe('resolveAutomationsGate', () => {
     );
     expect(resolveAutomationsGate({ enableMcpEvents: true, serverConfigInit: true })).toBe('ready');
   });
+
+  it('opens for generic webhooks too, without MCP Events', () => {
+    expect(
+      resolveAutomationsGate({
+        enableAgentWebhooks: true,
+        enableMcpEvents: false,
+        serverConfigInit: true,
+      }),
+    ).toBe('ready');
+  });
 });

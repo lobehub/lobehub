@@ -13,6 +13,7 @@ import {
   Share2Icon,
   SparklesIcon,
   UsersIcon,
+  WebhookIcon,
   WrenchIcon,
 } from 'lucide-react';
 import { lazy } from 'react';
@@ -170,6 +171,12 @@ export const agentMailRouteMeta = routeMeta({
   icon: MailIcon,
   Skeleton: createSurfaceSkeleton('list'),
   titleKey: 'navigation.mail',
+});
+
+export const agentWebhookRouteMeta = routeMeta({
+  icon: WebhookIcon,
+  Skeleton: createSurfaceSkeleton('list'),
+  titleKey: 'navigation.webhook',
 });
 
 export const agentChannelRouteMeta = routeMeta({

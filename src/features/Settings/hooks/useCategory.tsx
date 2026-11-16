@@ -86,7 +86,7 @@ export const useCategory = () => {
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
-  const enableMcpEvents = useServerConfigStore(serverConfigSelectors.enableMcpEvents);
+  const enableAutomations = useServerConfigStore(serverConfigSelectors.enableAutomations);
 
   const avatarUrl = useMemo(() => {
     if (!avatar) return undefined;
@@ -222,7 +222,7 @@ export const useCategory = () => {
       },
       // What connectors fire on their own: the event subscriptions agents made
       // through them. Next to the connectors they come from.
-      enableMcpEvents && {
+      enableAutomations && {
         icon: ZapIcon,
         key: SettingsTabs.Automations,
         label: t('tab.automations'),
@@ -331,7 +331,7 @@ export const useCategory = () => {
     showProvider,
     isDevMode,
     enableOAuthApps,
-    enableMcpEvents,
+    enableAutomations,
     avatarUrl,
     username,
   ]);
