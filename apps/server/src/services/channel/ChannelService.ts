@@ -7,8 +7,11 @@ import {
   defaultChannelAgentDirectory,
   isChannelRuntime,
 } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
 import pMap from 'p-map';
 
+import { AgentShareModel } from '@/database/models/agentShare';
+import { ContactModel, parseContactHandle } from '@/database/models/contact';
 import { DeviceModel } from '@/database/models/device';
 import { ProjectModel } from '@/database/models/project';
 import type {
@@ -17,6 +20,7 @@ import type {
   ChannelStopScope,
 } from '@/database/repositories/channel';
 import { ChannelError, ChannelRepository } from '@/database/repositories/channel';
+import { users } from '@/database/schemas';
 import { AgentService } from '@/server/services/agent';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
@@ -198,12 +202,56 @@ export class ChannelService {
    */
   createDirect = async (agentId: string) => {
     const agent = await this.agentService.getAgentConfigById(agentId);
-    if (!agent) return;
+    if (!agent) return this.createSharedDirect(agentId);
     if (!isChannelRuntime(agentRuntime(agent))) return;
     return this.repository.create({
       agentConfig: {},
       agentId,
       title: agentDisplayName(agent, 'Agent').slice(0, CHANNEL_LIMITS.titleLength),
+    });
+  };
+
+  /**
+   * Another person's Agent the caller added to their contacts through its link share; the entry
+   * shows they reached the share. The repository rechecks the live share. Always a personal
+   * direct conversation, run in the cloud as the owner.
+   */
+  private createSharedDirect = async (agentId: string) => {
+    if (this.workspaceId) return;
+    const shared = await new ContactModel(this.db, this.userId).findAgentAccess(agentId);
+    if (!shared) return;
+    return this.repository.create({
+      agentConfig: {},
+      agentId,
+      sharedAgent: true,
+      title: agentDisplayName(shared, 'Agent').slice(0, CHANNEL_LIMITS.titleLength),
+    });
+  };
+
+  /**
+   * The direct conversation with another person's Agent, opened from its share (id, handle or
+   * pasted link) — no contact entry or friendship needed, since a link share is open to anyone
+   * signed in. Adding it to contacts stays optional. One's own Agent opens as usual.
+   */
+  openShared = async (share: string) => {
+    if (this.workspaceId)
+      throw new ChannelError('BAD_REQUEST', 'A shared Agent is messaged from a personal scope');
+    const key = parseContactHandle(share);
+    const found = key ? await AgentShareModel.findBySlugOrId(this.db, key) : null;
+    if (!found || found.visibility !== 'link')
+      throw new ChannelError('NOT_FOUND', 'Agent not found');
+    if (found.ownerId === this.userId) return this.openDirect(found.agentId);
+
+    const existing = await this.repository.findDirectAccess(found.agentId);
+    if (existing) return existing.channel.isDeleted ? undefined : existing;
+    return this.repository.create({
+      agentConfig: {},
+      agentId: found.agentId,
+      sharedAgent: true,
+      title: agentDisplayName({ name: found.agentName, title: found.agentTitle }, 'Agent').slice(
+        0,
+        CHANNEL_LIMITS.titleLength,
+      ),
     });
   };
 
@@ -216,6 +264,26 @@ export class ChannelService {
     const existing = await this.repository.findDirectAccess(agentId);
     if (existing) return existing.channel.isDeleted ? undefined : existing;
     return this.createDirect(agentId);
+  };
+
+  /**
+   * The personal conversation with a contact. The stored title is the other person's name for
+   * whoever opened it; clients title it with whoever the viewer is talking to.
+   */
+  openPeer = async (peerUserId: string) => {
+    const [peer] = await this.db
+      .select({ fullName: users.fullName, username: users.username })
+      .from(users)
+      .where(eq(users.id, peerUserId))
+      .limit(1);
+    if (!peer) throw new ChannelError('NOT_FOUND', 'User not found');
+    const title = (peer.fullName?.trim() || peer.username || 'Conversation').slice(
+      0,
+      CHANNEL_LIMITS.titleLength,
+    );
+    const access = await this.repository.openPeer(peerUserId, title);
+    await this.changed(access.channel.id);
+    return access;
   };
 
   /**

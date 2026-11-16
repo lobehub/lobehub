@@ -882,7 +882,9 @@ export class PluginMCPStoreActionImpl {
         manifest = await mcpService.getStreamableMcpServerManifest(
           {
             auth: connection.auth,
-            // Tested from where its calls will run: the device, when chosen
+            // Tested from where its calls will run: the bound device, or the
+            // device when chosen
+            boundDeviceId: connection.boundDeviceId,
             connectVia: connection.connectVia,
             headers: connection.headers,
             identifier,
@@ -899,6 +901,7 @@ export class PluginMCPStoreActionImpl {
         manifest = await mcpService.getStdioMcpServerManifest(
           {
             args: connection.args,
+            boundDeviceId: connection.boundDeviceId,
             command: connection.command,
             env: connection.env,
             name: identifier,

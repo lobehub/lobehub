@@ -6,6 +6,7 @@ import {
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
   connectorConnectVia,
+  connectorDeviceBinding,
   connectorMcpEndpoint,
   shouldConnectViaDevice,
 } from '@lobechat/utils/mcpEndpoint';
@@ -22,7 +23,7 @@ import type { AuthConfig, McpTool } from '@/libs/mcp';
 import { inferCrudType } from '@/libs/mcp/utils';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { mcpService } from '@/server/services/mcp';
-import { listMcpToolsOnPersonalDevice } from '@/server/services/mcp/deviceTunnel';
+import { listMcpToolsOnDevice } from '@/server/services/mcp/deviceTunnel';
 import { isMcpAppsEnabled } from '@/server/services/mcp/featureGate';
 
 import { ensureFreshConnectorToken } from './tokens';
@@ -43,10 +44,13 @@ export interface ConnectorToolSyncContext {
 export const buildConnectorMcpParams = (
   connector: DecryptedConnector,
 ): Parameters<typeof mcpService.listRawTools>[0] => {
+  // Only set when bound, as `buildConnectorManifests` does
+  const boundDevice = connectorDeviceBinding(connector);
   if (connector.mcpConnectionType === ConnectorMcpConnectionType.stdio) {
     if (!connector.mcpStdioConfig) throw new Error('Missing stdio config');
     return {
       args: connector.mcpStdioConfig.args ?? [],
+      ...(boundDevice && { boundDevice }),
       command: connector.mcpStdioConfig.command,
       env: connector.mcpStdioConfig.env,
       name: connector.identifier,
@@ -63,6 +67,7 @@ export const buildConnectorMcpParams = (
   const mergedHeaders = headers || customHeaders ? { ...headers, ...customHeaders } : undefined;
   return {
     auth,
+    ...(boundDevice && { boundDevice }),
     // Only set when chosen, as `buildConnectorManifests` does
     ...(connectorConnectVia(connector.metadata) === 'device' && { connectVia: 'device' as const }),
     headers: mergedHeaders,
@@ -133,14 +138,16 @@ export const pruneMissingAutoConnectorTools = async (
 
 /**
  * A connector this server must not connect to itself (stdio, local network, or
- * set to connect through the device) is listed on the user's desktop through
- * the device gateway; `undefined` for any other, which the server lists itself.
- * Without a gateway (self-hosted) every connector keeps the in-process listing,
- * as agent runs keep the in-process call.
+ * set to connect through the device) is listed on a device through the device
+ * gateway: the device it is bound to, else the caller's newest capable one.
+ * `undefined` for any other, which the server lists itself. Without a gateway
+ * (self-hosted) every connector keeps the in-process listing, as agent runs
+ * keep the in-process call.
  *
- * Only the caller's own connector is tunneled to the caller's device: a
- * workspace connector another member set up carries that member's credentials,
- * which must not reach a machine they never approved.
+ * An unbound connector is only tunneled to the caller's device when it is the
+ * caller's own: a workspace connector another member set up carries that
+ * member's credentials, which must not reach a machine they never approved. A
+ * bound one always reaches the device its tool calls run on, whoever refreshes.
  */
 const listOnDevice = async (
   connector: DecryptedConnector,
@@ -156,13 +163,13 @@ const listOnDevice = async (
   )
     return undefined;
 
-  if (connector.userId !== ctx.userId) {
+  if (!mcpParams.boundDevice && connector.userId !== ctx.userId) {
     throw new Error(
       `Connector '${connector.name}' connects through a device, and only the member who set it up can refresh its tools from their desktop app.`,
     );
   }
 
-  return listMcpToolsOnPersonalDevice({
+  return listMcpToolsOnDevice({
     mcpApps,
     params: mcpParams,
     serverDB: ctx.serverDB,

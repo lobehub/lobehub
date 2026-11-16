@@ -108,7 +108,7 @@ const getToolActionLabel = (tool: ChatToolPayloadWithResult): string => {
   return builtinLabel || getToolDisplayName(tool.apiName);
 };
 
-/** The single most informative token from the args — never the raw args dump. */
+/** The most informative text from the args (a readable command line, query, path…) — never the raw args dump. */
 const getToolKeywordDetail = (tool: ChatToolPayloadWithResult): string => {
   try {
     return extractToolKeyword(JSON.parse(tool.arguments || '{}')) ?? '';

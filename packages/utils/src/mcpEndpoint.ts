@@ -68,3 +68,31 @@ export const connectorMcpEndpoint = (connector: {
 export const connectorConnectVia = (
   metadata: { connectVia?: unknown } | null | undefined,
 ): McpConnectVia => (metadata?.connectVia === 'device' ? 'device' : 'auto');
+
+/**
+ * The device a device-only MCP server is pinned to. `workspaceId` is the pool
+ * the device lives in: a workspace connector binds a device of its workspace,
+ * a personal one a device of its owner (no `workspaceId`).
+ */
+export interface McpDeviceBinding {
+  deviceId: string;
+  workspaceId?: string;
+}
+
+/**
+ * The device a connector is bound to (`metadata.boundDeviceId`), or `undefined`
+ * when it picks a device automatically. Only a server that runs on the user's
+ * device ({@link isDeviceOnlyMcpEndpoint}) can be bound: a binding left on one
+ * the server reaches itself is ignored, as the editor hides it there.
+ */
+export const connectorDeviceBinding = (connector: {
+  mcpConnectionType?: string | null;
+  mcpServerUrl?: string | null;
+  metadata?: { boundDeviceId?: unknown; connectVia?: unknown } | null;
+  workspaceId?: string | null;
+}): McpDeviceBinding | undefined => {
+  const deviceId = connector.metadata?.boundDeviceId;
+  if (typeof deviceId !== 'string' || !deviceId) return undefined;
+  if (!isDeviceOnlyMcpEndpoint(connectorMcpEndpoint(connector))) return undefined;
+  return connector.workspaceId ? { deviceId, workspaceId: connector.workspaceId } : { deviceId };
+};

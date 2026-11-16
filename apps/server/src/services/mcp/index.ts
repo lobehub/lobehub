@@ -535,7 +535,7 @@ export class MCPService {
    */
   buildStreamableMcpManifest(
     identifier: string,
-    mcpParams: HttpMCPClientParams,
+    mcpParams: HttpMCPClientParams | StdioMCPParams,
     rawTools: McpTool[],
     metadata?: CustomPluginMetadata,
     { mcpApps = false }: { mcpApps?: boolean } = {},

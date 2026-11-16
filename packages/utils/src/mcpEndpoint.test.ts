@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   connectorConnectVia,
+  connectorDeviceBinding,
   connectorMcpEndpoint,
   isDeviceOnlyMcpEndpoint,
   shouldConnectViaDevice,
@@ -121,5 +122,53 @@ describe('connectorMcpEndpoint', () => {
     expect(connectorConnectVia({})).toBe('auto');
     expect(connectorConnectVia({ connectVia: 'cloud' })).toBe('auto');
     expect(connectorConnectVia({ connectVia: 'device' })).toBe('device');
+  });
+});
+
+describe('connectorDeviceBinding', () => {
+  const stdio = { mcpConnectionType: 'stdio', mcpServerUrl: null };
+
+  it('is the bound device of a personal connector', () => {
+    expect(connectorDeviceBinding({ ...stdio, metadata: { boundDeviceId: 'laptop' } })).toEqual({
+      deviceId: 'laptop',
+    });
+  });
+
+  it("names the workspace pool of a workspace connector's device", () => {
+    expect(
+      connectorDeviceBinding({ ...stdio, metadata: { boundDeviceId: 'nas' }, workspaceId: 'ws1' }),
+    ).toEqual({ deviceId: 'nas', workspaceId: 'ws1' });
+  });
+
+  it('binds an HTTP server only when it runs on the device', () => {
+    const bound = { boundDeviceId: 'nas' };
+    expect(
+      connectorDeviceBinding({
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'http://192.168.1.10:8000/mcp',
+        metadata: bound,
+      }),
+    ).toEqual({ deviceId: 'nas' });
+    expect(
+      connectorDeviceBinding({
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://nas.tail1234.ts.net/mcp',
+        metadata: { ...bound, connectVia: 'device' },
+      }),
+    ).toEqual({ deviceId: 'nas' });
+    // A server the cloud reaches itself ignores a binding left on it
+    expect(
+      connectorDeviceBinding({
+        mcpConnectionType: 'http',
+        mcpServerUrl: 'https://mcp.example.com',
+        metadata: bound,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('is unbound without a usable device id', () => {
+    expect(connectorDeviceBinding({ ...stdio, metadata: null })).toBeUndefined();
+    expect(connectorDeviceBinding({ ...stdio, metadata: { boundDeviceId: '' } })).toBeUndefined();
+    expect(connectorDeviceBinding({ ...stdio, metadata: { boundDeviceId: 1 } })).toBeUndefined();
   });
 });

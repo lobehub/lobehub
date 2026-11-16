@@ -20,8 +20,12 @@ import { type MCPService } from '../mcp';
 import { callCloudMcpTool, runtimeCloudMcpCaller } from '../mcp/cloudTool';
 import {
   findPersonalMcpDevice,
+  MCP_BOUND_DEVICE_UNAVAILABLE,
   MCP_DEVICE_UNAVAILABLE,
+  McpBoundDeviceUnavailableError,
+  mcpBoundDeviceUnavailableMessage,
   mcpDeviceUnavailableMessage,
+  resolveBoundMcpDevice,
   toGatewayMcpParams,
 } from '../mcp/deviceTunnel';
 import { type BuiltinToolsExecutor } from './builtin';
@@ -349,6 +353,22 @@ export class ToolExecutionService {
           };
         }
 
+        // A server bound to a device runs there and nowhere else: when that
+        // device can't run it, the call fails with the reason instead of
+        // moving to the run's device or another of the user's.
+        if (mcpParams.boundDevice) {
+          const bound = await this.resolveBoundMcpTunnelTarget(context, mcpParams);
+          if ('error' in bound) {
+            log('Bound MCP %s:%s cannot run on its device — %s', identifier, apiName, bound.error);
+            return {
+              content: bound.error,
+              error: { code: MCP_BOUND_DEVICE_UNAVAILABLE, message: bound.error },
+              success: false,
+            };
+          }
+          return await this.executeMcpViaDevice(payload, context, mcpParams, bound);
+        }
+
         const tunnelTarget = context.userId
           ? await this.resolveMcpTunnelTarget(context)
           : undefined;
@@ -412,6 +432,33 @@ export class ToolExecutionService {
         },
         success: false,
       };
+    }
+  }
+
+  /**
+   * The device a bound MCP server's call tunnels to: always the bound one, in
+   * the pool the binding names (the connector's workspace, or its owner's
+   * personal devices), never the run's. `error` explains why it can't run there.
+   */
+  private async resolveBoundMcpTunnelTarget(
+    context: ToolExecutionContext,
+    mcpParams: StdioMCPParams | HttpMCPClientParams,
+  ): Promise<McpTunnelTarget | { error: string }> {
+    const binding = mcpParams.boundDevice!;
+    if (!context.userId || !context.serverDB) {
+      return { error: mcpBoundDeviceUnavailableMessage(mcpParams.name, 'not_found') };
+    }
+    try {
+      const target = await resolveBoundMcpDevice({
+        binding,
+        identifier: mcpParams.name,
+        serverDB: context.serverDB,
+        userId: context.userId,
+      });
+      return { ...target, workspaceId: binding.workspaceId };
+    } catch (error) {
+      if (error instanceof McpBoundDeviceUnavailableError) return { error: error.message };
+      throw error;
     }
   }
 

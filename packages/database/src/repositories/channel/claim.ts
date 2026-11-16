@@ -19,6 +19,7 @@ import { uniqueViolationConstraint } from '../../utils/uniqueViolation';
 import { resolveExecutionConfig } from './agent';
 import { AWAITING_PRIMARY_REASON, findThread } from './delivery';
 import { buildManifest } from './manifest';
+import type { ChannelTopicScope } from './topic';
 import { continuationTopic, resolveTopic } from './topic';
 import { audit } from './transaction';
 import { assignedWorktree } from './worktree';
@@ -376,6 +377,14 @@ export const claimJob = async (
     return null;
   }
 
+  // The execution identity the topic belongs to: a shared Agent's owner (with the requester as
+  // `senderId`), else the requester. The routing pre-check below and the claim itself resolve
+  // the same topic, so they have to agree on this scope.
+  const { share } = executionConfig;
+  const scope: ChannelTopicScope = share
+    ? { senderId: requester.userId!, userId: share.ownerId, workspaceId: share.workspaceId }
+    : { userId: requester.userId!, workspaceId: channel.workspaceId };
+
   // A device picked in the Channel, else the one the Agent's own settings route the run to.
   const channelDeviceId = member.config?.deviceId;
   const routed =
@@ -387,7 +396,7 @@ export const claimJob = async (
             channel,
             job,
             member,
-            requester.userId!,
+            scope,
             request.sequence,
             executionConfig,
           ),
@@ -427,7 +436,7 @@ export const claimJob = async (
         channel,
         job,
         member,
-        requester.userId!,
+        scope,
         request.sequence,
         executionConfig,
       );
@@ -443,8 +452,8 @@ export const claimJob = async (
       const operationId = `op_${Date.now()}_${member.agentId}_${topic.id}_${createNanoId(8)()}`;
       await savepoint.insert(agentOperations).values({
         id: operationId,
-        userId: requester.userId!,
-        workspaceId: channel.workspaceId,
+        userId: scope.userId,
+        workspaceId: scope.workspaceId,
         topicId: topic.id,
         agentId: member.agentId,
         trigger: 'channel',

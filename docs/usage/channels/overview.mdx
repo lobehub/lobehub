@@ -2,7 +2,7 @@
 title: Channels Overview
 description: >-
   Connect your LobeHub agents to external messaging platforms like Discord,
-  Slack, Telegram, LINE, QQ, WeChat, Feishu, and Lark; check the announced
+  Slack, Telegram, LINE, QQ, WeChat, Feishu, Lark, and DingTalk; check the announced
   status of WhatsApp and iMessage; and let users interact with AI assistants
   directly in their favorite chat apps.
 tags:
@@ -17,6 +17,7 @@ tags:
   - WeChat
   - Feishu
   - Lark
+  - DingTalk
   - WhatsApp
   - iMessage
 ---
@@ -63,6 +64,7 @@ Access policies decide whether a Channel is private or shared. You can restrict 
 | [WeCom](/docs/usage/channels/wecom)        | Connect a WeCom AI bot for direct chats and group @-mentions (Cloud, or single-instance self-hosts) |
 | [Feishu (飞书)](/docs/usage/channels/feishu) | Connect to Feishu for team collaboration (Chinese version)                                          |
 | [Lark](/docs/usage/channels/lark)          | Connect to Lark for team collaboration (international version)                                      |
+| [DingTalk (钉钉)](/docs/usage/channels/dingtalk) | Connect a DingTalk internal app robot for single chats and group @-mentions          |
 
 ### Coming Soon
 
@@ -93,6 +95,7 @@ Each Channel belongs to the current Agent. LobeHub passes incoming platform mess
    - [WeCom (企业微信)](/docs/usage/channels/wecom)
    - [Feishu (飞书)](/docs/usage/channels/feishu)
    - [Lark](/docs/usage/channels/lark)
+   - [DingTalk (钉钉)](/docs/usage/channels/dingtalk)
 
 WhatsApp and iMessage currently appear as **Coming Soon** and cannot be configured as generally available channels. See the [WhatsApp status page](/docs/usage/channels/whatsapp) and [iMessage preview page](/docs/usage/channels/imessage).
 
@@ -102,13 +105,13 @@ If **WeChat** is absent from the list, check that your personal account meets th
 
 Text messages are supported across all platforms. Some features vary by platform:
 
-| Feature                | Discord | Slack | Telegram | LINE    | QQ  | WeChat      | Feishu  | Lark    |
-| ---------------------- | ------- | ----- | -------- | ------- | --- | ----------- | ------- | ------- |
-| Text messages          | Yes     | Yes   | Yes      | Yes     | Yes | Yes         | Yes     | Yes     |
-| Direct messages        | Yes     | Yes   | Yes      | Yes     | Yes | Yes         | Yes     | Yes     |
-| Group chats            | Yes     | Yes   | Yes      | Yes     | Yes | Unconfirmed | Yes     | Yes     |
-| Reactions              | Yes     | Yes   | Yes      | No      | No  | No          | Partial | Partial |
-| Image/file attachments | Yes     | Yes   | Yes      | Inbound | Yes | Yes         | Yes     | Yes     |
+| Feature                | Discord | Slack | Telegram | LINE    | QQ  | WeChat      | Feishu  | Lark    | DingTalk |
+| ---------------------- | ------- | ----- | -------- | ------- | --- | ----------- | ------- | ------- | -------- |
+| Text messages          | Yes     | Yes   | Yes      | Yes     | Yes | Yes         | Yes     | Yes     | Yes      |
+| Direct messages        | Yes     | Yes   | Yes      | Yes     | Yes | Yes         | Yes     | Yes     | Yes      |
+| Group chats            | Yes     | Yes   | Yes      | Yes     | Yes | Unconfirmed | Yes     | Yes     | Yes      |
+| Reactions              | Yes     | Yes   | Yes      | No      | No  | No          | Partial | Partial | No       |
+| Image/file attachments | Yes     | Yes   | Yes      | Inbound | Yes | Yes         | Yes     | Yes     | Partial  |
 
 Repository documentation does not confirm WeChat group support. This guide covers direct messages only. The July 8 announcement changes paid access, not group support. See [WeChat](/docs/usage/channels/wechat).
 
@@ -163,6 +166,7 @@ Platforms that expose both policies default to **Open**. To restrict access, sel
 - **Telegram** — Ask the user to message [@userinfobot](https://t.me/userinfobot), or read `from.id` from the bot's incoming update.
 - **QQ** — Use the `openid` from the OpenAPI event payload — `user_openid` for private (C2C) messages, `member_openid` for group messages (the public-facing QQ number is not guaranteed to be the platform ID).
 - **Feishu / Lark** — Use the `open_id` from the event payload, or the **User ID** displayed in the developer portal.
+- **DingTalk** — Use the member's `userId` (staff ID) from the DingTalk admin console → **Contacts** → member details, or have them send `/whoami` to the robot in a single chat.
 
 ### Finding a channel / group ID
 
@@ -170,3 +174,4 @@ Platforms that expose both policies default to **Open**. To restrict access, sel
 - **Slack** — Open the channel's About panel and copy the channel ID at the bottom (starts with `C`).
 - **Telegram** — Forward a message from the group to [@userinfobot](https://t.me/userinfobot), or read `chat.id` from the bot's incoming update (group IDs are negative).
 - **Feishu / Lark** — Use the `chat_id` from the event payload.
+- **DingTalk** — Use the group's `openConversationId` (usually starts with `cid`) from the event payload.

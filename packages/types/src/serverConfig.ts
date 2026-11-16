@@ -39,12 +39,6 @@ export type IFeatureFlagsState = {
   enableDashboard: boolean | undefined;
   enableDevDock: boolean | undefined;
   /**
-   * Rail layout trial (`im_layout`): icon rail, IM-style Messages list,
-   * Contacts, Tasks scope list and the agent profile side panel. Off keeps the
-   * current sidebar layout.
-   */
-  enableImLayout: boolean | undefined;
-  /**
    * @deprecated The new subscription tiers are always on. Kept as a constant
    * `true` because released desktop clients still read it and fall back to the
    * retired plans when it is missing. Remove once those clients are no longer

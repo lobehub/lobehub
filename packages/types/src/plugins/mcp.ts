@@ -218,6 +218,11 @@ export interface McpConnection {
     token?: string;
     type: 'none' | 'bearer' | 'oauth2';
   };
+  /**
+   * The device a server that runs on the user's device (stdio, or HTTP reached
+   * from the device) is pinned to. Absent: the device is picked automatically.
+   */
+  boundDeviceId?: string;
   // STDIO connection parameters
   command?: string;
   /** HTTP only: `device` reaches the server from the user's device (`McpConnectVia`). */
