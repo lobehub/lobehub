@@ -224,9 +224,7 @@ export const inboundWebhookRouter = router({
   listDeliveries: procedure
     .input(
       z.object({
-        cursor: z
-          .object({ createdAt: z.string().datetime(), id: z.string().uuid() })
-          .optional(),
+        cursor: z.object({ createdAt: z.string().datetime(), id: z.string().uuid() }).optional(),
         id: z.string().uuid(),
       }),
     )

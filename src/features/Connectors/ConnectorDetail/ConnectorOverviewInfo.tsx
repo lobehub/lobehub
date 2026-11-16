@@ -67,9 +67,9 @@ interface ConnectorOverviewInfoProps {
 }
 
 /**
- * Overview facts of a connector: whether it is authorized and who authorized
- * it. The kind of object sits under the page title; tool permissions live in
- * the Tools tab.
+ * Overview facts of a connector: whether it is authorized and, for a single
+ * credential, who authorized it. The kind of object sits under the page title;
+ * tool permissions live in the Tools tab.
  */
 const ConnectorOverviewInfo = memo<ConnectorOverviewInfoProps>(({ connector }) => {
   const { t } = useTranslation('tool');
@@ -95,12 +95,18 @@ const ConnectorOverviewInfo = memo<ConnectorOverviewInfoProps>(({ connector }) =
           ? { color: 'error' as const, label: t('connector.authError') }
           : { label: t('connector.notConnected') };
 
+  // An OAuth connector is authorized per account, and each account names its
+  // own authorizer under Accounts. A connector-wide "Authorized by" would name
+  // only the creator — even before anyone has authorized an account.
+  const showAuthorizer =
+    !!connector.authorizedByName && connector.authKind !== 'oauth2' && !connector.links?.length;
+
   return (
     <div {...stylex.props(styles.list)}>
       <Row label={t('connector.overview.status')}>
         <Tag color={status.color}>{status.label}</Tag>
       </Row>
-      {connector.authorizedByName && (
+      {showAuthorizer && (
         <Row label={t('connector.overview.authorizedBy')}>
           {connector.authorizedByAvatar && (
             <Avatar avatar={connector.authorizedByAvatar} shape={'circle'} size={20} />

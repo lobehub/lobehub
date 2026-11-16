@@ -9,10 +9,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { resolveForegroundInterventionConfig } from '@/server/services/aiAgent/foregroundIntervention';
-import {
-  canPerformResourceAction,
-  getResourceMeta,
-} from '@/server/services/resourcePermission';
+import { canPerformResourceAction, getResourceMeta } from '@/server/services/resourcePermission';
 
 import { getInboundWebhookKind } from './kinds';
 import type { InboundWebhookKindHandler } from './kinds/types';

@@ -21,7 +21,10 @@ vi.mock('@/server/services/mcp/deviceTunnel', async (importOriginal) => ({
 vi.mock('@/server/services/mcp/featureGate', () => ({
   isMcpAppsEnabled: vi.fn().mockResolvedValue(false),
 }));
-vi.mock('./tokens', () => ({ ensureFreshConnectorToken: vi.fn(async (c) => c) }));
+vi.mock('./tokens', () => ({
+  ensureFreshConnectorToken: vi.fn(async (c) => c),
+  ensureFreshLinkToken: vi.fn(async (_c, link) => link),
+}));
 vi.mock('./refresh', () => ({
   buildLastSyncedAtMap: vi.fn(() => new Map()),
   scheduleStaleConnectorToolsRefresh: vi.fn(),
@@ -43,10 +46,13 @@ const stdioConnector = (metadata: Record<string, unknown> | null, workspaceId?: 
     workspaceId: workspaceId ?? null,
   }) as any;
 
-const makeCtx = (connector: any) =>
+const makeCtx = (connector: any, links: any[] = []) =>
   ({
     agentModel: { existsById: vi.fn().mockResolvedValue(true) },
-    connectorModel: { queryByIdentifiers: vi.fn().mockResolvedValue([connector]) },
+    connectorModel: {
+      getLinkModel: () => ({ listByConnectorIds: vi.fn().mockResolvedValue(links) }),
+      queryByIdentifiers: vi.fn().mockResolvedValue([connector]),
+    },
     connectorToolModel: {
       queryByConnector: vi
         .fn()
@@ -61,6 +67,22 @@ const call = (connector: any, over: Record<string, unknown> = {}) =>
     { args: '{"q":1}', identifier: 'local-tool', toolName: 'do_thing', ...over },
     makeCtx(connector),
   );
+
+const oauthAccount = (id: string, accessToken: string) => ({
+  credentials: { accessToken, type: 'oauth2' },
+  id,
+  name: id,
+  status: 'connected',
+  userConnectorId: 'c1',
+  userId: 'u1',
+});
+const lanOAuthConnector = {
+  ...stdioConnector({ boundDeviceId: 'ws-nas' }, 'ws1'),
+  mcpConnectionType: 'http',
+  mcpServerUrl: 'http://192.168.1.5/mcp',
+  mcpStdioConfig: null,
+  oidcConfig: { clientId: 'client', scheme: 'dcr' },
+};
 
 describe('callConnectorToolById — connector bound to a device', () => {
   beforeEach(() => {
@@ -107,6 +129,38 @@ describe('callConnectorToolById — connector bound to a device', () => {
       workspaceId: 'ws1',
     });
     expect(mcpService.callTool).not.toHaveBeenCalled();
+  });
+
+  it("sends the selected account's token and the arguments without the selector", async () => {
+    const links = [oauthAccount('lnk_a', 'alice-token'), oauthAccount('lnk_b', 'bob-token')];
+    await callConnectorToolById(
+      { args: '{"link_id":"lnk_b","q":1}', identifier: 'local-tool', toolName: 'do_thing' },
+      makeCtx(lanOAuthConnector, links),
+    );
+
+    expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        arguments: '{"q":1}',
+        params: expect.objectContaining({
+          auth: { accessToken: 'bob-token', type: 'oauth2' },
+          type: 'http',
+        }),
+      }),
+    );
+  });
+
+  it('fails a call that names no account of a connector holding several', async () => {
+    const links = [oauthAccount('lnk_a', 'alice-token'), oauthAccount('lnk_b', 'bob-token')];
+    await expect(
+      callConnectorToolById(
+        { args: '{"q":1}', identifier: 'local-tool', toolName: 'do_thing' },
+        makeCtx(lanOAuthConnector, links),
+      ),
+    ).resolves.toMatchObject({
+      error: { type: 'CONNECTOR_ACCOUNT_SELECTION' },
+      success: false,
+    });
+    expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
   });
 
   it("keeps a failure's error marker and details from the device", async () => {

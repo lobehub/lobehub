@@ -1,4 +1,5 @@
 import type { ConnectorVisibility } from '@lobechat/types';
+import { safeParseJSON } from '@lobechat/utils';
 import type { SQL } from 'drizzle-orm';
 import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import pMap from 'p-map';
@@ -12,6 +13,7 @@ import {
   normalizeWorkspaceId,
 } from '../utils/workspace';
 import { EvalConnectorUpdateError, normalizeEvalConnectorPatch } from './connectorEval';
+import { ConnectorLinkModel, isConnectorOAuthAccounts } from './connectorLink';
 import {
   connectorAccessScope,
   connectorAgentConfigScope,
@@ -38,6 +40,7 @@ interface GateKeeper {
 
 export interface DecryptedConnector extends Omit<UserConnectorItem, 'credentials'> {
   credentials: ConnectorCredentials | null;
+  links?: { id: string; name: string; userId?: string }[];
 }
 
 export interface ConnectorReference {
@@ -124,6 +127,9 @@ export class ConnectorModel {
     this.workspaceId = workspaceId;
     this.gateKeeper = gateKeeper;
   }
+
+  getLinkModel = () =>
+    new ConnectorLinkModel(this.db, this.userId, this.workspaceId, this.gateKeeper);
 
   private ownership = () =>
     connectorAccessScope(
@@ -905,6 +911,15 @@ export class ConnectorModel {
         patch,
         gateKeeper?.decrypt.bind(gateKeeper),
       );
+      if (
+        normalized.credentials !== undefined &&
+        normalized.oidcConfig === undefined &&
+        safeParseJSON<ConnectorCredentials>(normalized.credentials ?? undefined)?.type !== 'oauth2'
+      ) {
+        // Explicit static/no-auth credentials replace OAuth. Do not leave a
+        // stale client configuration presenting this as an OAuth connector.
+        normalized.oidcConfig = null;
+      }
       if (current.metadata?.agentEval && normalized.credentials && !gateKeeper) {
         throw new EvalConnectorUpdateError('Secure connection storage is unavailable');
       }
@@ -917,6 +932,20 @@ export class ConnectorModel {
             throw new EvalConnectorUpdateError('Could not securely store the mock connection');
           throw error;
         }
+      }
+      if (
+        !('credentials' in normalized) &&
+        current.credentials &&
+        ((normalized.mcpServerUrl !== undefined &&
+          normalized.mcpServerUrl !== current.mcpServerUrl) ||
+          (normalized.oidcConfig !== undefined &&
+            normalized.oidcConfig?.clientId !== current.oidcConfig?.clientId)) &&
+        (await isStoredOAuth(current.credentials, gateKeeper))
+      ) {
+        // OAuth tokens belong to the server and client that issued them: a new
+        // one ends every account. Static credentials stay with the connector.
+        normalized.credentials = null;
+        normalized.tokenExpiresAt = null;
       }
       await tx
         .update(userConnectors)
@@ -1018,6 +1047,11 @@ async function encryptCredentials(credentials: string, gateKeeper?: GateKeeper):
   return gateKeeper.encrypt(credentials);
 }
 
+/**
+ * Decrypt a connector row. OAuth accounts never leave as `credentials`: they
+ * are read through `ConnectorLinkModel`, so no caller of this model can hand a
+ * whole connector's tokens on by accident.
+ */
 async function decryptRow(
   row: UserConnectorItem,
   gateKeeper?: GateKeeper,
@@ -1028,8 +1062,21 @@ async function decryptRow(
     const plain = gateKeeper
       ? (await gateKeeper.decrypt(row.credentials)).plaintext
       : row.credentials;
-    return { ...row, credentials: JSON.parse(plain) as ConnectorCredentials };
+    const credentials: unknown = JSON.parse(plain);
+    if (isConnectorOAuthAccounts(credentials)) return { ...row, credentials: null };
+    return { ...row, credentials: credentials as ConnectorCredentials };
   } catch {
     return { ...row, credentials: null };
+  }
+}
+
+/** Whether stored credentials are OAuth: one legacy token or accounts. */
+async function isStoredOAuth(ciphertext: string, gateKeeper?: GateKeeper): Promise<boolean> {
+  try {
+    const plain = gateKeeper ? (await gateKeeper.decrypt(ciphertext)).plaintext : ciphertext;
+    return safeParseJSON<{ type?: string }>(plain)?.type === 'oauth2';
+  } catch {
+    // Unreadable: treat it as OAuth, since the new server cannot use it anyway.
+    return true;
   }
 }

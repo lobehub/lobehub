@@ -3,15 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChannelService } from './ChannelService';
 
-const { remove, removeThread, wake, notify, notifyMentions, send, routing } = vi.hoisted(() => ({
-  remove: vi.fn(),
-  send: vi.fn(),
-  routing: vi.fn(),
-  removeThread: vi.fn(),
-  wake: vi.fn(),
-  notify: vi.fn(),
-  notifyMentions: vi.fn(),
-}));
+const { remove, removeThread, wake, notify, notifyMentions, notifyDirect, send, routing } =
+  vi.hoisted(() => ({
+    remove: vi.fn(),
+    send: vi.fn(),
+    routing: vi.fn(),
+    removeThread: vi.fn(),
+    wake: vi.fn(),
+    notify: vi.fn(),
+    notifyMentions: vi.fn(),
+    notifyDirect: vi.fn(),
+  }));
 vi.mock('@/database/repositories/channel', async (original) => ({
   ...(await original<object>()),
   ChannelRepository: class {
@@ -25,6 +27,7 @@ vi.mock('@/server/services/agent', () => ({ AgentService: class {} }));
 vi.mock('@/server/services/file', () => ({ FileService: class {} }));
 vi.mock('./ChannelCoordinator', () => ({ ChannelCoordinator: class {} }));
 vi.mock('./mention', () => ({ notifyChannelMentions: notifyMentions }));
+vi.mock('./directMessage', () => ({ notifyChannelDirectMessages: notifyDirect }));
 vi.mock('./notify', () => ({ notifyChannel: notify }));
 vi.mock('./routingConfig', () => ({ resolveChannelRoutingConfig: routing }));
 vi.mock('./queue', () => ({ wakeChannel: wake }));
@@ -98,12 +101,17 @@ describe('Channel reply dispatch', () => {
     expect(send).toHaveBeenNthCalledWith(2, 'channel', { ...input, routing: 'fallback' });
   });
 
-  it('pings mentioned people once the message is stored, even when scheduling Agents fails', async () => {
+  it('pings mentioned people and the other person of a conversation once the message is stored, even when scheduling Agents fails', async () => {
     const message = { id: 'message', mentions: ['member'], routingStatus: 'directed' };
     send.mockResolvedValue(message);
     wake.mockRejectedValueOnce(new Error('queue unavailable'));
     await expect(service().send('channel', input)).rejects.toThrow('queue unavailable');
     expect(notifyMentions).toHaveBeenCalledWith(
+      expect.anything(),
+      { userId: 'owner', workspaceId: 'workspace' },
+      message,
+    );
+    expect(notifyDirect).toHaveBeenCalledWith(
       expect.anything(),
       { userId: 'owner', workspaceId: 'workspace' },
       message,

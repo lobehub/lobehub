@@ -6,7 +6,10 @@ import { SquareArrowOutUpRight } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import ConnectorActionErrorText from '@/features/Connectors/ConnectorActionErrorText';
+import ConnectorActionErrorText, {
+  InlineErrorText,
+} from '@/features/Connectors/ConnectorActionErrorText';
+import { type ConnectorLinkSummary } from '@/store/tool/slices/connector';
 import { type ConnectorActionError } from '@/utils/connectorActionError';
 
 const styles = stylex.create({
@@ -106,3 +109,20 @@ export const DisabledConnect = memo<DisabledConnectProps>(({ size = 'small' }) =
 });
 
 DisabledConnect.displayName = 'DisabledConnect';
+
+/** OAuth accounts of a connector whose authorization expired or was revoked. */
+export const countAccountsNeedingReauth = (links?: ConnectorLinkSummary[]): number =>
+  links?.filter((link) => link.status === 'error').length ?? 0;
+
+/**
+ * Row line for a connector with broken accounts: tool calls through them fail
+ * until they are re-authorized, which the user would otherwise only learn from
+ * a failed chat. Healthy accounts add nothing to the row.
+ */
+export const AccountsNeedReauth = memo<{ count: number }>(({ count }) => {
+  const { t } = useTranslation('tool');
+
+  return <InlineErrorText>{t('connector.account.needsReauth', { count })}</InlineErrorText>;
+});
+
+AccountsNeedReauth.displayName = 'AccountsNeedReauth';

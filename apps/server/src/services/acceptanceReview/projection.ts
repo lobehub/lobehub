@@ -61,6 +61,7 @@ export const projectReview = async (
   db: LobeChatDatabase,
   review: AcceptanceReview,
   marks: Pick<AcceptanceReviewMark, 'id'>[],
+  options: { evidence?: boolean } = {},
 ): Promise<ReviewProjectionResult> => {
   if (review.status === 'draft') return emptyProjection('draft');
   const [task] = review.taskId
@@ -86,7 +87,10 @@ export const projectReview = async (
     })),
   );
   const latestPlan = new Set((runs.at(-1)?.plan ?? []).map((item) => item.id));
-  const resultIds = union.flatMap((check) => (check.result ? [check.result.id] : []));
+  const resultIds =
+    options.evidence === false
+      ? []
+      : union.flatMap((check) => (check.result ? [check.result.id] : []));
   const evidenceRows = resultIds.length
     ? await db
         .select({ checkResultId: verifyEvidence.checkResultId, fileId: verifyEvidence.fileId })

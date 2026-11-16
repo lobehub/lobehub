@@ -23,7 +23,11 @@ const boundary = vi.hoisted(() => ({
 vi.mock('./featureGate', () => ({ isWebhookEnabled: boundary.enabled }));
 vi.mock('@/server/services/resourcePermission', () => ({
   canPerformResourceAction: boundary.canUse,
-  getResourceMeta: async () => ({ userId: 'generic-wake-user', visibility: 'public', workspaceId: 'generic-wake-ws' }),
+  getResourceMeta: async () => ({
+    userId: 'generic-wake-user',
+    visibility: 'public',
+    workspaceId: 'generic-wake-ws',
+  }),
 }));
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => boundary.gateKeeper },
@@ -317,10 +321,13 @@ describe('generic webhook wakes', () => {
     expect((await model.findById(id))?.lastError).toBe('wake_cap');
   });
 
-  it("runs nothing as an owner who may no longer use the workspace agent", async () => {
-    await db
-      .insert(workspaces)
-      .values({ id: 'generic-wake-ws', name: 'Team', primaryOwnerId: userId, slug: 'generic-wake-ws' });
+  it('runs nothing as an owner who may no longer use the workspace agent', async () => {
+    await db.insert(workspaces).values({
+      id: 'generic-wake-ws',
+      name: 'Team',
+      primaryOwnerId: userId,
+      slug: 'generic-wake-ws',
+    });
     await db.insert(agents).values({ id: `${agentId}-ws`, userId, workspaceId: 'generic-wake-ws' });
     const teamModel = new InboundWebhookModel(db, userId, 'generic-wake-ws', boundary.gateKeeper);
     id = (
@@ -343,7 +350,9 @@ describe('generic webhook wakes', () => {
     expect(boundary.canUse).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'use', resourceId: `${agentId}-ws`, userId }),
     );
-    expect(await signalRows()).toMatchObject([{ error: 'owner_access_revoked', status: 'ignored' }]);
+    expect(await signalRows()).toMatchObject([
+      { error: 'owner_access_revoked', status: 'ignored' },
+    ]);
     expect(await teamModel.findById(id)).toBeDefined();
   });
 

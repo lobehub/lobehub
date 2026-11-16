@@ -328,6 +328,8 @@ export default {
   'permission.configAccess.groupRoleRestricted':
     'Your workspace role cannot configure Agent Groups. You were returned to chat.',
   'agentNotFound.title': 'Agent Unavailable',
+  'agentSkillModal.frontmatterInvalid':
+    "This skill's SKILL.md has malformed frontmatter, so its name and description come from the last saved version. Open the document to fix it.",
   'agentSkillModal.loadFailed': "Couldn't load this skill",
   'agentSkillModal.notFound': 'This skill no longer exists. It may have been deleted.',
   'agentSkillModal.openDocument': 'Open in documents',
