@@ -4,7 +4,7 @@ import { mkdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { isInvalidBranchRef } from './branches';
+import { isInvalidBranchRef, qualifyStartPoint } from './branches';
 import { getGitWorkingTreeStatus } from './info';
 import type {
   GitAddWorktreeResult,
@@ -210,7 +210,14 @@ export const addGitWorktree = async (payload: {
   try {
     await execFileAsync(
       'git',
-      ['worktree', 'add', '-b', branch, worktreePath, ...(startPoint ? [startPoint] : [])],
+      [
+        'worktree',
+        'add',
+        '-b',
+        branch,
+        worktreePath,
+        ...(startPoint ? [await qualifyStartPoint(dirPath, startPoint)] : []),
+      ],
       { cwd: dirPath, timeout: 30_000 },
     );
     return startPoint

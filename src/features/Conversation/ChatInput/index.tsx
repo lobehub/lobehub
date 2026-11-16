@@ -470,6 +470,8 @@ const ChatInput = memo<ChatInputProps>(
               sendVoiceMessage(sendMessage, file, {
                 context: targetContext,
                 optimisticUserMessageId: messageId,
+                // The same send-time git step as a typed first message.
+                prepare: () => prepareComposerGitSend(targetContext ?? context),
                 signal,
                 ...(isVoiceMessageTranscribed(targetContext)
                   ? {

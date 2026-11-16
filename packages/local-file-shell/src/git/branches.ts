@@ -26,6 +26,23 @@ export const isInvalidBranchRef = (name: string): boolean =>
   name.includes('@{');
 
 /**
+ * A start point as git should read it: `refs/heads/<name>` when a local branch
+ * of that name exists, so a tag (or remote ref) sharing the name cannot make
+ * it ambiguous; anything else (a commit sha) as given.
+ */
+export const qualifyStartPoint = async (dirPath: string, startPoint: string): Promise<string> => {
+  try {
+    await execFileAsync('git', ['show-ref', '--verify', '--quiet', `refs/heads/${startPoint}`], {
+      cwd: dirPath,
+      timeout: 5000,
+    });
+    return `refs/heads/${startPoint}`;
+  } catch {
+    return startPoint;
+  }
+};
+
+/**
  * List local git branches ordered by most recent commit. `current` is true for
  * the checked-out branch.
  */
@@ -139,7 +156,12 @@ export const checkoutGitBranch = async (payload: {
   }
 
   const args = create
-    ? ['checkout', '-b', branch, ...(startPoint ? [startPoint] : [])]
+    ? [
+        'checkout',
+        '-b',
+        branch,
+        ...(startPoint ? [await qualifyStartPoint(dirPath, startPoint)] : []),
+      ]
     : ['checkout', branch];
   try {
     await execFileAsync('git', args, { cwd: dirPath, timeout: 10_000 });

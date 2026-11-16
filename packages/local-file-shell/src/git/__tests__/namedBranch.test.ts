@@ -113,6 +113,39 @@ describe('checkoutGitBranch with a start point', () => {
   });
 });
 
+describe('a start point sharing its name with a tag', () => {
+  // The picker hands over a LOCAL branch; a same-named tag must not make git
+  // refuse it as ambiguous.
+  it('reads the local branch for both the checkout and the worktree', async () => {
+    git(repo, 'tag', 'feature', 'main');
+
+    expect(
+      await checkoutGitBranch({ branch: 'mine', create: true, path: repo, startPoint: 'feature' }),
+    ).toEqual({ startPoint: 'feature', success: true });
+    expect(git(repo, 'rev-parse', 'HEAD')).toBe(git(repo, 'rev-parse', 'refs/heads/feature'));
+
+    git(repo, 'checkout', 'main');
+    const worktreePath = path.join(await tempDir('lfs-wt-'), 'tagged');
+    const result = await addGitWorktree({
+      branch: 'lobehub/tagged',
+      path: repo,
+      startPoint: 'feature',
+      worktreePath,
+    });
+    expect(result).toMatchObject({ startPoint: 'feature', success: true });
+    expect(git(worktreePath, 'rev-parse', 'HEAD')).toBe(
+      git(repo, 'rev-parse', 'refs/heads/feature'),
+    );
+  });
+
+  it('still takes a commit sha as given', async () => {
+    const sha = git(repo, 'rev-parse', 'feature');
+    expect(
+      await checkoutGitBranch({ branch: 'from-sha', create: true, path: repo, startPoint: sha }),
+    ).toEqual({ startPoint: sha, success: true });
+  });
+});
+
 describe('addGitWorktree with a start point', () => {
   it('forks the worktree branch from the start point and echoes it', async () => {
     const worktreePath = path.join(await tempDir('lfs-wt-'), 'quiet-hill');

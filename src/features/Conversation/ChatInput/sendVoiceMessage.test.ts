@@ -163,4 +163,32 @@ describe('sendVoiceMessage', () => {
     ).rejects.toMatchObject({ name: 'AbortError' });
     expect(sendMessage).not.toHaveBeenCalled();
   });
+
+  // A new topic's first turn runs the composer's git step first, like a typed send.
+  it('sends into the worktree the git step prepared', async () => {
+    const newTopicWorkingDirectory = { git: { activeWorktree: '/wt/x' }, path: '/repo' };
+    const sendMessage = vi.fn(async (params: SendMessageParams) => {
+      params.onMessageAccepted?.();
+    });
+
+    await sendVoiceMessage(sendMessage, voiceFile, {
+      prepare: async () => ({ newTopicWorkingDirectory, ok: true }),
+    });
+
+    expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ newTopicWorkingDirectory }));
+  });
+
+  it('sends nothing, and keeps the recording retryable, when the git step stops', async () => {
+    const sendMessage = vi.fn();
+    const transcribe = vi.fn();
+
+    await expect(
+      sendVoiceMessage(sendMessage, voiceFile, {
+        prepare: async () => ({ ok: false }),
+        transcribe,
+      }),
+    ).rejects.toThrow();
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(transcribe).not.toHaveBeenCalled();
+  });
 });
