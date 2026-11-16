@@ -24,6 +24,7 @@ import {
   getTableColumns,
   gt,
   inArray,
+  isNull,
   lt,
   lte,
   ne,
@@ -32,7 +33,7 @@ import {
 } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { inboundWebhooks, topics, users } from '../schemas';
+import { inboundWebhooks, topics, users, workspaceMembers, workspaces } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -80,7 +81,7 @@ export interface InboundWebhookQuery {
 export class InboundWebhookLimitError extends Error {
   readonly code = 'limit_reached';
 
-  constructor(scope: 'topic' | 'user') {
+  constructor(scope: 'topic' | 'user' | 'workspace') {
     super(`Inbound webhook ${scope} subscription limit reached`);
     this.name = 'InboundWebhookLimitError';
   }
@@ -170,14 +171,35 @@ export class InboundWebhookModel {
   create = async (input: CreateInboundWebhook): Promise<InboundWebhookView> =>
     this.insert(this.db, await this.prepare(input));
 
-  /** Parent-row locks serialize both creator and topic quotas, including pending/deleting rows. */
+  /**
+   * Parent-row locks serialize the creator, workspace and topic quotas, including pending and
+   * deleting rows. All kinds count together. A creator has `user` rows in each scope (personal, or
+   * one workspace); a workspace has `perMember` rows for each active member.
+   */
   createWithLimits = async (
     input: CreateInboundWebhook,
-    limits = { topic: 10, user: 50 },
+    limits = { perMember: 50, topic: 10, user: 50 },
   ): Promise<InboundWebhookView> => {
     const payload = await this.prepare(input);
     return this.db.transaction(async (tx) => {
       await tx.select({ id: users.id }).from(users).where(eq(users.id, this.userId)).for('update');
+      if (this.workspaceId) {
+        await tx
+          .select({ id: workspaces.id })
+          .from(workspaces)
+          .where(eq(workspaces.id, this.workspaceId))
+          .for('update');
+        const [workspaceCount] = await tx
+          .select({ count: count() })
+          .from(inboundWebhooks)
+          .where(eq(inboundWebhooks.workspaceId, this.workspaceId));
+        const members = await InboundWebhookModel.activeMemberCount(
+          tx as unknown as LobeChatDatabase,
+          this.workspaceId,
+        );
+        if (workspaceCount.count >= limits.perMember * Math.max(1, members))
+          throw new InboundWebhookLimitError('workspace');
+      }
       if (input.topicId) {
         await tx
           .select({ id: topics.id })
@@ -188,7 +210,14 @@ export class InboundWebhookModel {
       const [userCount] = await tx
         .select({ count: count() })
         .from(inboundWebhooks)
-        .where(eq(inboundWebhooks.userId, this.userId));
+        .where(
+          and(
+            eq(inboundWebhooks.userId, this.userId),
+            this.workspaceId
+              ? eq(inboundWebhooks.workspaceId, this.workspaceId)
+              : isNull(inboundWebhooks.workspaceId),
+          ),
+        );
       if (userCount.count >= limits.user) throw new InboundWebhookLimitError('user');
       if (input.topicId) {
         const [topicCount] = await tx
@@ -400,9 +429,17 @@ export class InboundWebhookModel {
   };
 
   /** Reserve one wake atomically, resetting the rolling hourly bucket when it expires. */
-  reserveWake = async (id: string, limit = 30): Promise<string | undefined> => {
+  /**
+   * Reserve one run in the webhook's window (`windowMs`, ten minutes by default); undefined once
+   * `limit` runs started in it. Returns the window it counted in, for {@link releaseWake}.
+   */
+  reserveWake = async (
+    id: string,
+    limit = 30,
+    windowMs = 10 * 60_000,
+  ): Promise<string | undefined> => {
     const now = new Date();
-    const reset = sql`${inboundWebhooks.wakeWindowStartedAt} <= ${new Date(now.getTime() - 3_600_000)}`;
+    const reset = sql`${inboundWebhooks.wakeWindowStartedAt} <= ${new Date(now.getTime() - windowMs)}`;
     const [row] = await this.db
       .update(inboundWebhooks)
       .set({
@@ -512,6 +549,17 @@ export class InboundWebhookModel {
           lte(inboundWebhooks.nextMaintenanceAt, new Date()),
         ),
       );
+  };
+
+  /** Members of the workspace who have not left it. */
+  static activeMemberCount = async (db: LobeChatDatabase, workspaceId: string): Promise<number> => {
+    const [row] = await db
+      .select({ count: count() })
+      .from(workspaceMembers)
+      .where(
+        and(eq(workspaceMembers.workspaceId, workspaceId), isNull(workspaceMembers.deletedAt)),
+      );
+    return row?.count ?? 0;
   };
 
   static queryStalePending = async (db: LobeChatDatabase): Promise<InboundWebhookView[]> => {

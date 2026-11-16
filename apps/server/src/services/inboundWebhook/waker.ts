@@ -1,5 +1,5 @@
 import { isRecord } from '@lobechat/utils/object';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, lt, or } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
 import type { InboundWebhookView } from '@/database/models/inboundWebhook';
@@ -16,6 +16,7 @@ import { canPerformResourceAction, getResourceMeta } from '@/server/services/res
 import { getInboundWebhookKind } from './kinds';
 import type { InboundWebhookKindHandler } from './kinds/types';
 import { removeInboundWebhook } from './lifecycle';
+import { RUN_WINDOW_MS, RUNS_PER_WINDOW } from './limits';
 import {
   claimWebhookSignals,
   releaseWebhookSignalClaim,
@@ -25,8 +26,13 @@ import {
   type WebhookSignalClaim,
 } from './wakeClaim';
 
-/** Runs one wake starts at most for a kind that runs its deliveries in groups; the rest wait. */
-export const MAX_RUNS_PER_WAKE = 10;
+/**
+ * Runs one wake starts: one. Whatever else is waiting (another thread, or more calls than one
+ * wake-up message carries) gets the next wake, which follows at once (`more`).
+ */
+export const MAX_RUNS_PER_WAKE = 1;
+/** Groups one wake may try while the earlier ones cannot start (busy Topic, lost claim). */
+const MAX_GROUP_ATTEMPTS_PER_WAKE = 10;
 
 export interface WebhookWakeDeps {
   execute?: AiAgentService['execAgent'];
@@ -34,7 +40,7 @@ export interface WebhookWakeDeps {
 }
 
 /**
- * - `more`: this wake hit {@link MAX_RUNS_PER_WAKE} with deliveries still waiting; wake again now.
+ * - `more`: this wake started its run and deliveries are still waiting; wake again now.
  * - `deferred`: retry later (busy Topic, lost claim).
  */
 export interface WebhookWakeResult {
@@ -66,6 +72,30 @@ export function classifyWakeError(error: unknown): 'busy' | 'budget' | 'unknown'
   }
   return 'unknown';
 }
+
+/** Whether deliveries are still waiting to run, after this wake started its one run. */
+const stillWaiting = async (
+  db: LobeChatDatabase,
+  row: InboundWebhookView,
+  kind: InboundWebhookKindHandler,
+) => {
+  const [left] = await db
+    .select({ id: signals.id })
+    .from(signals)
+    .where(
+      and(
+        eq(signals.userId, row.userId),
+        eq(signals.scopeKey, `inbound-webhook:${row.id}`),
+        eq(signals.source, kind.signalSource),
+        or(
+          eq(signals.status, 'pending'),
+          and(eq(signals.status, 'failed'), lt(signals.attempts, 3)),
+        ),
+      ),
+    )
+    .limit(1);
+  return !!left;
+};
 
 /** Settle what is still waiting for a webhook that can no longer run anything. */
 const ignoreWaiting = (db: LobeChatDatabase, id: string, reason: string) =>
@@ -150,30 +180,30 @@ export async function wakeInboundWebhook(
     await ignoreWaiting(db, id, held);
     return { outcome: 'ignored' };
   }
-  const runs = kind.groupSignals ? MAX_RUNS_PER_WAKE : 1;
+  const attempts = kind.groupSignals ? MAX_GROUP_ATTEMPTS_PER_WAKE : 1;
   let outcome = 'empty';
   // Groups this wake could not run (busy topic, failed start, lost claim). They wait for a later
   // wake; skipping them keeps one stuck thread from holding back the others behind it.
   const blocked = new Set<string>();
   let deferred = false;
-  let progressed = false;
-  for (let run = 0; run < runs; run++) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
     const next = await wakeOnce(db, kind, row, model, deps, blocked);
     if (next.outcome === 'empty') return { outcome: deferred ? 'deferred' : outcome };
     outcome = next.outcome;
-    if (outcome === 'processed' || outcome === 'ignored') {
-      progressed = true;
-      continue;
-    }
-    // The hourly cap is the webhook's, not one group's: nothing else may run either.
+    // One run per wake: the rest, if any, is the next wake's.
+    if (outcome === 'processed')
+      return {
+        outcome: kind.groupSignals && (await stillWaiting(db, row, kind)) ? 'more' : outcome,
+      };
+    // Settled without a run (paused, feature off): look at what else is waiting.
+    if (outcome === 'ignored') continue;
+    // The run window is the webhook's, not one group's: nothing else may run either.
     if (outcome === 'capped' || !next.groupKey) return { outcome };
     blocked.add(next.groupKey);
     if (outcome === 'deferred') deferred = true;
   }
-  if (!kind.groupSignals) return { outcome };
-  // Asking to be woken right away only helps when this pass got through work. A pass that only
-  // met busy or failing groups keeps their backoff, or it would retry the same groups at once.
-  if (progressed) return { outcome: 'more' };
+  // A pass that only met busy or failing groups keeps their backoff, or it would retry the same
+  // groups at once.
   return { outcome: deferred ? 'deferred' : outcome };
 }
 
@@ -264,7 +294,7 @@ async function runClaim(
     });
     if ('outcome' in plan) return plan;
     const { run } = plan;
-    const reserved = await model.reserveWake(id, kind.wakesPerHour);
+    const reserved = await model.reserveWake(id, RUNS_PER_WINDOW, RUN_WINDOW_MS);
     if (!reserved) {
       await model.update(id, { lastError: 'wake_cap' });
       await settle('ignored', 'wake_cap');

@@ -9,6 +9,7 @@ import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import { getInboundWebhookKind } from './kinds';
 import type { InboundDeliveryStatus } from './kinds/types';
+import { DELIVERIES_PER_MINUTE_PER_MEMBER, deliveryScopeOf } from './limits';
 import { scheduleInboundWebhookWake } from './scheduler';
 
 export const INBOUND_WEBHOOK_MAX_BODY_BYTES = 256 * 1024;
@@ -39,6 +40,19 @@ export interface InboundDeliveryInput {
   test?: boolean;
 }
 
+/** Deliveries per minute the row's scope accepts: per member of a workspace, one personal space. */
+const deliveryLimitOf = async (
+  db: LobeChatDatabase,
+  row: { userId: string; workspaceId: string | null },
+) => {
+  const { workspaceId } = row;
+  if (!workspaceId) return DELIVERIES_PER_MINUTE_PER_MEMBER;
+  const members = await redisService.inboundWebhook.workspaceMemberCount(workspaceId, () =>
+    InboundWebhookModel.activeMemberCount(db, workspaceId),
+  );
+  return DELIVERIES_PER_MINUTE_PER_MEMBER * Math.max(1, members);
+};
+
 export async function receiveInboundWebhook(
   db: LobeChatDatabase,
   input: InboundDeliveryInput,
@@ -62,9 +76,10 @@ export async function receiveInboundWebhook(
   if (!kind.verify({ request, row, secret }))
     return { body: { error: 'Invalid signature' }, status: 401 };
   // Checked once the caller has proven it holds the secret, so a stranger cannot spend the quota.
-  if (kind.deliveriesPerMinute && !input.test) {
-    const used = await redisService.inboundWebhook.countDelivery(row.id);
-    if (used !== undefined && used > kind.deliveriesPerMinute)
+  // One allowance per scope (workspace or personal space), shared by all its webhooks and kinds.
+  if (!input.test) {
+    const used = await redisService.inboundWebhook.countDelivery(deliveryScopeOf(row));
+    if (used !== undefined && used > (await deliveryLimitOf(db, row)))
       return { body: { error: 'Too many requests' }, retryAfter: 60, status: 429 };
   }
   const gateKeeper = await getGateKeeper();

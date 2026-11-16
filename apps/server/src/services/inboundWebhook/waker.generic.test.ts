@@ -125,14 +125,15 @@ afterEach(async () => {
 });
 
 describe('generic webhook wakes', () => {
-  it('gives each call without a thread a new Topic of its own', async () => {
+  it('runs the calls waiting without a thread together, once, in one new Topic', async () => {
     await seedWebhook();
     await seedSignal();
     await seedSignal();
 
     expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'processed' });
 
-    expect(execute).toHaveBeenCalledTimes(2);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0][0].prompt.match(/<event /g)).toHaveLength(2);
     for (const [params] of execute.mock.calls) {
       expect(params).toMatchObject({
         agentId,
@@ -154,8 +155,13 @@ describe('generic webhook wakes', () => {
     }
     expect((await signalRows()).map((s) => s.status)).toEqual(['processed', 'processed']);
     const decisions = await db.select().from(signalDecisions);
-    expect(decisions.map((d) => d.topicId).sort()).toEqual(['topic-1', 'topic-2']);
-    expect(decisions.map((d) => d.operationId).sort()).toEqual(['op-1', 'op-2']);
+    expect(decisions.map((d) => d.topicId)).toEqual(['topic-1', 'topic-1']);
+    expect(decisions.map((d) => d.operationId)).toEqual(['op-1', 'op-1']);
+
+    // A later call starts a Topic of its own again.
+    await seedSignal();
+    await wakeInboundWebhook(db, id, deps);
+    expect(execute.mock.calls[1][0].appContext).toBeUndefined();
   });
 
   it('runs a thread in one Topic: a new one first, the same one afterwards', async () => {
@@ -198,7 +204,8 @@ describe('generic webhook wakes', () => {
     const waitingA = await seedSignal('ticket-a');
     const callB = await seedSignal('ticket-b');
 
-    expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'deferred' });
+    // B ran; A still waits, so the next wake is asked for (it backs off if A is still busy).
+    expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'more' });
 
     expect(
       execute.mock.calls.map(([params]) => params.webhookThread?.threadKey ?? 'continued'),
@@ -214,7 +221,9 @@ describe('generic webhook wakes', () => {
   it('carries at most 20 calls of a thread per run and runs the rest next', async () => {
     await seedWebhook();
     for (let i = 0; i < 21; i++) await seedSignal('ticket-42');
-    await wakeInboundWebhook(db, id, deps);
+    expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'more' });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'processed' });
     expect(execute).toHaveBeenCalledTimes(2);
     expect(execute.mock.calls[0][0].prompt.match(/<event /g)).toHaveLength(20);
     expect(execute.mock.calls[0][0].prompt).not.toContain('<omitted');
@@ -225,12 +234,13 @@ describe('generic webhook wakes', () => {
 
   it('keeps the backoff when every group it tried was busy', async () => {
     await seedWebhook();
-    for (let i = 0; i < MAX_RUNS_PER_WAKE; i++) await seedSignal(`ticket-${i}`);
+    for (let i = 0; i < 3; i++) await seedSignal(`ticket-${i}`);
     execute.mockResolvedValue({
       error: new Error('TopicStartReservationError: occupied'),
     } as never);
     expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'deferred' });
-    expect(execute).toHaveBeenCalledTimes(MAX_RUNS_PER_WAKE);
+    // Each busy thread was tried once; none started a run.
+    expect(execute).toHaveBeenCalledTimes(3);
     expect((await signalRows()).every((s) => s.status === 'pending')).toBe(true);
   });
 
@@ -317,19 +327,23 @@ describe('generic webhook wakes', () => {
     expect(await signalRows()).toMatchObject([{ error: 'webhook_paused', status: 'ignored' }]);
   });
 
-  it('starts a bounded number of runs per wake and asks to be woken again', async () => {
+  it('starts one run per wake and asks to be woken again for the next thread', async () => {
+    expect(MAX_RUNS_PER_WAKE).toBe(1);
     await seedWebhook();
-    for (let i = 0; i <= MAX_RUNS_PER_WAKE; i++) await seedSignal();
+    await seedSignal('ticket-a');
+    await seedSignal('ticket-b');
     expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'more' });
-    expect(execute).toHaveBeenCalledTimes(MAX_RUNS_PER_WAKE);
+    expect(execute).toHaveBeenCalledTimes(1);
     expect((await signalRows()).filter((s) => s.status === 'pending')).toHaveLength(1);
+    expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'processed' });
+    expect(execute).toHaveBeenCalledTimes(2);
   });
 
-  it('stops at the hourly cap and records why', async () => {
+  it('stops at 30 runs in 10 minutes and records why', async () => {
     await seedWebhook();
     await seedSignal();
     await db.update(signals).set({ status: 'pending' });
-    for (let i = 0; i < 60; i++) await model.reserveWake(id, 60);
+    for (let i = 0; i < 30; i++) expect(await model.reserveWake(id)).toBeDefined();
     expect(await wakeInboundWebhook(db, id, deps)).toEqual({ outcome: 'capped' });
     expect(execute).not.toHaveBeenCalled();
     expect((await model.findById(id))?.lastError).toBe('wake_cap');

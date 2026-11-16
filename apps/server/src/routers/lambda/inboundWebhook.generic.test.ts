@@ -69,7 +69,12 @@ vi.mock('@/server/services/inboundWebhook/scheduler', () => ({
 }));
 vi.mock('@/server/utils/scheduleAfterResponse', () => ({ afterUnscoped: () => {} }));
 vi.mock('@/server/services/redis', () => ({
-  redisService: { inboundWebhook: { countDelivery: async () => 1 } },
+  redisService: {
+    inboundWebhook: {
+      countDelivery: async () => 1,
+      workspaceMemberCount: async (_id: string, read: () => Promise<number>) => read(),
+    },
+  },
 }));
 
 const { inboundWebhookRouter } = await import('./inboundWebhook');

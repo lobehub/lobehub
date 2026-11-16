@@ -94,11 +94,9 @@ export interface InboundWebhookKindHandler<K extends InboundWebhookKind = Inboun
     duplicate: boolean,
   ) => { body: Record<string, unknown>; status: 200 | 202 };
   readonly canCheck: boolean;
-  /** Per-webhook ingress limit, checked before anything is stored; absent: none. */
-  readonly deliveriesPerMinute?: number;
   /** When the row stops being valid on its own (an MCP subscription's expiry); absent: never. */
   expiresAt?: (row: InboundWebhookViewOf<K>) => string | null;
-  /** The group a signal runs in (its thread, or the call alone); set together with `groupSignals`. */
+  /** The group a signal runs in (a thread, or the calls without one); set with `groupSignals`. */
   groupKey?: (row: InboundWebhookViewOf<K>, signal: SignalItem) => string;
   /**
    * From the signals a wake could claim, the ones this wake claims, skipping the groups in
@@ -130,7 +128,6 @@ export interface InboundWebhookKindHandler<K extends InboundWebhookKind = Inboun
     row: InboundWebhookViewOf<K>;
     secret: string | null;
   }) => boolean;
-  readonly wakesPerHour: number;
 }
 
 export type { InboundWebhookView };

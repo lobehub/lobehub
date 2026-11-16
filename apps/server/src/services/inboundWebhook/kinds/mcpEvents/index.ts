@@ -131,5 +131,4 @@ export const mcpEventsKind: InboundWebhookKindHandler<'mcp_events'> = {
       secret,
       verification: row.verification,
     }),
-  wakesPerHour: 30,
 };

@@ -41,6 +41,8 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
 vi.mock('@/server/services/redis', () => ({
   redisService: {
     inboundWebhook: {
+      countDelivery: async () => 1,
+      workspaceMemberCount: async (_id: string, read: () => Promise<number>) => read(),
       claimDelivery: async () => true,
       releaseDelivery: async () => {},
       claimWakeWindow: async () => false,

@@ -21,10 +21,10 @@ export const threadKeyOf = (
   signal.metadata.address?.threadKey ||
   (row.config.topicMode === 'reuse' ? SHARED_THREAD : undefined);
 
-/** A thread's calls run together; a call without a thread runs alone. */
+/** A thread's calls run together, and so do all calls without one, in one new Topic. */
 const groupKeyOf = (row: InboundWebhookViewOf<'generic'>, signal: SignalItem) => {
   const key = threadKeyOf(row, signal);
-  return key === undefined ? `call:${signal.id}` : `thread:${key}`;
+  return key === undefined ? 'calls' : `thread:${key}`;
 };
 
 /**
@@ -37,19 +37,19 @@ export const genericKind: InboundWebhookKindHandler<'generic'> = {
       ? { body: { duplicate: true, id }, status: 200 }
       : { body: { id, status: 'accepted' }, status: 202 },
   canCheck: false,
-  deliveriesPerMinute: 120,
   groupKey: groupKeyOf,
   /**
-   * The oldest group this wake has not given up on: one call, or a thread's oldest waiting calls,
-   * as many as one wake-up message carries. The rest stay pending for the thread's next run.
+   * The oldest group this wake has not given up on: a thread's oldest waiting calls, or all calls
+   * without a thread, as many as one wake-up message carries. One wake runs one group; the rest
+   * stay pending for the next wake.
    */
   groupSignals(row, signals, exclude) {
     const first = signals.find((signal) => !exclude.has(groupKeyOf(row, signal)));
     if (!first) return [];
     const key = groupKeyOf(row, first);
-    return key.startsWith('call:')
-      ? [first]
-      : signals.filter((signal) => groupKeyOf(row, signal) === key).slice(0, MAX_EVENTS_PER_PROMPT);
+    return signals
+      .filter((signal) => groupKeyOf(row, signal) === key)
+      .slice(0, MAX_EVENTS_PER_PROMPT);
   },
   isEnabled: isWebhookEnabled,
   async parseDelivery(ctx, request) {
@@ -114,5 +114,4 @@ export const genericKind: InboundWebhookKindHandler<'generic'> = {
   targetExists: async () => true,
   trigger: RequestTrigger.Webhook,
   verify: ({ request, secret }) => tokenMatches(presentedToken(request), secret),
-  wakesPerHour: 60,
 };

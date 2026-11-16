@@ -5,7 +5,7 @@ import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { InboundWebhookModel } from '@/database/models/inboundWebhook';
-import { agents, signals, topics, users } from '@/database/schemas';
+import { agents, signals, topics, users, workspaceMembers, workspaces } from '@/database/schemas';
 import {
   inboundWebhook,
   inboundWebhookBodyLimit,
@@ -14,7 +14,7 @@ import {
 import { receiverTestSecret, signedWebhookHeaders } from './receiverTestUtils';
 
 const { countDelivery, gateKeeper, scheduleWake } = vi.hoisted(() => ({
-  countDelivery: vi.fn<(id: string) => Promise<number | undefined>>(),
+  countDelivery: vi.fn<(scope: string) => Promise<number | undefined>>(),
   gateKeeper: {
     encrypt: async (value: string) => `encrypted:${value}`,
     decrypt: async (value: string) => ({ plaintext: value.slice('encrypted:'.length) }),
@@ -30,7 +30,14 @@ vi.mock('@/server/services/inboundWebhook/sweep', () => ({ scheduleInboundWebhoo
 vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: { initWithEnvKey: async () => gateKeeper },
 }));
-vi.mock('@/server/services/redis', () => ({ redisService: { inboundWebhook: { countDelivery } } }));
+vi.mock('@/server/services/redis', () => ({
+  redisService: {
+    inboundWebhook: {
+      countDelivery,
+      workspaceMemberCount: async (_id: string, read: () => Promise<number>) => read(),
+    },
+  },
+}));
 vi.mock('@/server/services/inboundWebhook/scheduler', () => ({
   scheduleInboundWebhookWake: scheduleWake,
 }));
@@ -187,12 +194,66 @@ describe('generic webhook ingress', () => {
     expect(await stored()).toHaveLength(0);
   });
 
-  it('rate-limits a caller over 120 calls a minute before storing anything', async () => {
+  it('rate-limits a personal space over 120 calls a minute, before storing anything', async () => {
     const row = await seed();
     countDelivery.mockResolvedValue(121);
     const response = await post(`/inbound/${row.id}`, { body: '{}', headers: auth });
     expect(response.status).toBe(429);
     expect(response.headers.get('retry-after')).toBe('60');
+    expect(await stored()).toHaveLength(0);
+    // One counter for the whole personal space, not one per webhook.
+    expect(countDelivery).toHaveBeenCalledWith(`user:${userId}`);
+  });
+
+  it('gives a workspace 120 calls a minute for each active member, across its webhooks', async () => {
+    const ws = 'generic-receiver-ws';
+    await db.insert(users).values({ id: 'generic-receiver-mate' });
+    await db.insert(workspaces).values({ id: ws, name: 'Team', primaryOwnerId: userId, slug: ws });
+    await db.insert(workspaceMembers).values([
+      { role: 'owner', userId, workspaceId: ws },
+      { role: 'member', userId: 'generic-receiver-mate', workspaceId: ws },
+    ]);
+    await db.insert(agents).values({ id: `${agentId}-ws`, userId, workspaceId: ws });
+    const row = await new InboundWebhookModel(db, userId, ws, gateKeeper).create({
+      agentId: `${agentId}-ws`,
+      config: { autoApprove: false, topicMode: 'new' },
+      kind: 'generic',
+      secret: token,
+      status: 'active',
+      verification: { scheme: 'bearer_token' },
+    });
+    try {
+      countDelivery.mockResolvedValue(240);
+      expect((await post(`/inbound/${row.id}`, { body: '{}', headers: auth })).status).toBe(202);
+      countDelivery.mockResolvedValue(241);
+      expect((await post(`/inbound/${row.id}`, { body: '{}', headers: auth })).status).toBe(429);
+      expect(countDelivery).toHaveBeenCalledWith(`workspace:${ws}`);
+    } finally {
+      await db.delete(workspaces).where(eq(workspaces.id, ws));
+      await db.delete(users).where(eq(users.id, 'generic-receiver-mate'));
+    }
+  });
+
+  it('counts MCP Events deliveries against the same allowance', async () => {
+    const row = await model.create({
+      agentId,
+      config: { arguments: {}, eventName: 'issue.created' },
+      kind: 'mcp_events',
+      secret: receiverTestSecret,
+      status: 'active',
+      topicId,
+      verification: { scheme: 'standard_webhooks' },
+    });
+    const body = JSON.stringify({
+      data: {},
+      eventId: 'e-limit',
+      name: 'issue.created',
+      timestamp: '2026-11-13T08:00:00Z',
+    });
+    countDelivery.mockResolvedValue(121);
+    const headers = signedWebhookHeaders(body, { id: 'delivery-limit' });
+    expect((await post(`/inbound/${row.id}`, { body, headers })).status).toBe(429);
+    expect(countDelivery).toHaveBeenCalledWith(`user:${userId}`);
     expect(await stored()).toHaveLength(0);
   });
 
