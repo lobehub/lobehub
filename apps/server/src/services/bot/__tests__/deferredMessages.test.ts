@@ -18,7 +18,7 @@ const {
 function createRedis(execResult: unknown = []) {
   const calls: Array<[string, ...unknown[]]> = [];
   const chain: any = {};
-  for (const cmd of ['rpush', 'ltrim', 'expire', 'lrem']) {
+  for (const cmd of ['rpush', 'ltrim', 'expire', 'lrem', 'hincrby']) {
     chain[cmd] = vi.fn((...args: unknown[]) => {
       calls.push([cmd, ...args]);
       return chain;
@@ -91,13 +91,14 @@ describe('deferredMessages', () => {
       .fn()
       .mockRejectedValueOnce(new Error('adapter unavailable'))
       .mockResolvedValueOnce(undefined);
+    const acknowledged = () => redis.calls.filter(([cmd]) => cmd === 'lrem');
     await expect(replayDeferredBotMessages('app-1', 't', replay)).rejects.toThrow(
       'adapter unavailable',
     );
-    expect(redis.calls).toEqual([]);
+    expect(acknowledged()).toEqual([]);
     await replayDeferredBotMessages('app-1', 't', replay);
     expect(replay).toHaveBeenNthCalledWith(2, [{ id: '1' }, { id: '2' }]);
-    expect(redis.calls).toEqual(
+    expect(acknowledged()).toEqual(
       payloads.map((payload) => ['lrem', 'bot:deferred-messages:app-1:t', 1, payload]),
     );
   });
