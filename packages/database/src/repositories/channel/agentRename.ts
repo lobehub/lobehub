@@ -1,8 +1,8 @@
 import { agentDisplayName, CHANNEL_LIMITS } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, or } from 'drizzle-orm';
+import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 
-import type { AgentItem } from '../../schemas';
 import { agents, channelMembers, channels } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
@@ -55,20 +55,34 @@ const followAgentRename = async (
 
 /**
  * Write an Agent's columns, `where` selecting its row in the caller's scope. A rename also
- * carries the new label into its Channels, under a row lock: overlapping renames would otherwise
+ * carries the new label into its Channels, under row locks: overlapping renames would otherwise
  * each read the same previous label, and the later one would match no copy, leaving them at the
  * earlier name for good.
+ *
+ * Channel writes lock the Channel before the Agent (adding a member holds the Agent `for share`
+ * under the Channel lock), so a rename takes the Channels it touches first, in id order, and the
+ * Agent last; the opposite order would deadlock against them.
  */
 export const writeAgent = async (
   db: LobeChatDatabase,
   where: SQL | undefined,
   agentId: string,
-  data: Partial<AgentItem>,
+  data: AgentLabelFields & PgUpdateSetSource<typeof agents>,
 ) => {
   if (data.name === undefined && data.title === undefined)
     return db.update(agents).set(data).where(where);
 
   return db.transaction(async (tx) => {
+    const memberOf = tx
+      .select({ id: channelMembers.channelId })
+      .from(channelMembers)
+      .where(and(eq(channelMembers.agentId, agentId), eq(channelMembers.actorType, 'agent')));
+    await tx
+      .select({ id: channels.id })
+      .from(channels)
+      .where(or(eq(channels.agentId, agentId), inArray(channels.id, memberOf)))
+      .orderBy(asc(channels.id))
+      .for('update');
     const [before] = await tx
       .select({ name: agents.name, slug: agents.slug, title: agents.title })
       .from(agents)
