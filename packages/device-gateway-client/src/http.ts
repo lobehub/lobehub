@@ -342,6 +342,7 @@ export class GatewayHttpClient {
     prompt: string;
     resumeFallbackSystemContext?: string;
     resumeSessionId?: string;
+    scmCredential?: AgentRunRequestMessage['scmCredential'];
     systemContext?: string;
     timeout?: number;
     topicId: string;

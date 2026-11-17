@@ -55,7 +55,7 @@ beforeEach(async () => {
   await serverDB.insert(users).values([{ id: userId }, { id: 'scm-setup-other' }]);
   mocks.consumeState.mockResolvedValue(null);
   mocks.issueClaim.mockResolvedValue('claim-token');
-  mocks.getSession.mockResolvedValue(null);
+  mocks.getSession.mockResolvedValue({ user: { id: userId } });
   mocks.scmEnv.ENABLED_GITHUB_APP_OAUTH = true;
   mocks.fetchInstallation.mockResolvedValue(snapshot);
   mocks.canAccessInstallation.mockResolvedValue(true);
@@ -71,8 +71,84 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 
+describe('githubSetup authorize leg', () => {
+  it('links the identity with an expiring token when a member authorizes without installing', async () => {
+    mocks.consumeState.mockResolvedValue({ lobeUserId: userId, purpose: 'authorize', ts: 1 });
+    mocks.exchangeCode.mockResolvedValue({
+      accessToken: 'ghu_member',
+      expiresAt: '2026-11-17T18:00:00.000Z',
+      refreshToken: 'ghr_member',
+      refreshTokenExpiresAt: '2027-05-17T10:00:00.000Z',
+      user: { externalId: '42', login: 'arvinxx', name: 'Arvin Xu' },
+    });
+
+    const res = await setup({ code: 'c', state: 's' });
+
+    expect(res.status).toBe(302);
+    const location = new URL(res.headers.get('location')!);
+    expect(location.pathname).toBe('/settings/integrations/github');
+    expect(Object.fromEntries(location.searchParams)).toEqual({
+      account: 'arvinxx',
+      authorized: 'ok',
+    });
+    const identity = await ScmIdentityModel.findByUser(serverDB, 'github', userId);
+    expect(identity).toMatchObject({
+      credentials: { accessToken: 'ghu_member', refreshToken: 'ghr_member' },
+      metadata: { name: 'Arvin Xu' },
+      tokenExpiresAt: new Date('2026-11-17T18:00:00.000Z'),
+    });
+    expect(mocks.fetchInstallation).not.toHaveBeenCalled();
+  });
+
+  it("refuses to link a GitHub account into someone else's state", async () => {
+    mocks.consumeState.mockResolvedValue({ lobeUserId: userId, purpose: 'authorize', ts: 1 });
+    mocks.getSession.mockResolvedValue({ user: { id: 'scm-setup-other' } });
+
+    const res = await setup({ code: 'c', state: 's' });
+
+    expect(new URL(res.headers.get('location')!).searchParams.get('error')).toBe(
+      'session_mismatch',
+    );
+    expect(mocks.exchangeCode).not.toHaveBeenCalled();
+    await expect(ScmIdentityModel.findByUser(serverDB, 'github', userId)).resolves.toBeFalsy();
+  });
+
+  it('sends a signed-out visitor to sign in without spending the state', async () => {
+    mocks.getSession.mockResolvedValue(null);
+
+    const res = await setup({ code: 'c', state: 's' });
+
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/signin');
+    expect(mocks.consumeState).not.toHaveBeenCalled();
+  });
+
+  it('does not link an identity from a callback without an installation or our state', async () => {
+    const res = await setup({ code: 'c' });
+
+    expect(new URL(res.headers.get('location')!).searchParams.get('error')).toBe(
+      'missing_installation',
+    );
+    expect(mocks.exchangeCode).not.toHaveBeenCalled();
+  });
+
+  it('reports a GitHub account that already belongs to another member', async () => {
+    await ScmIdentityModel.upsert(serverDB, {
+      externalLogin: 'arvinxx',
+      externalUserId: '42',
+      provider: 'github',
+      userId: 'scm-setup-other',
+    });
+    mocks.consumeState.mockResolvedValue({ lobeUserId: userId, purpose: 'authorize', ts: 1 });
+
+    const res = await setup({ code: 'c', state: 's' });
+
+    expect(new URL(res.headers.get('location')!).searchParams.get('error')).toBe('identity_taken');
+  });
+});
+
 describe('githubSetup', () => {
   it('bounces to sign-in when neither state nor session identifies a user', async () => {
+    mocks.getSession.mockResolvedValue(null);
     const res = await setup({ code: 'c', installation_id: '777' });
     expect(res.status).toBe(302);
     expect(res.headers.get('location')).toContain('/signin?callbackUrl=');
@@ -195,6 +271,30 @@ describe('githubSetup', () => {
     expect(location.pathname).toBe('/settings/integrations/github');
   });
 
+  it("refuses an install callback that carries another member's state", async () => {
+    mocks.consumeState.mockResolvedValue({ lobeUserId: userId, ts: 1 });
+    mocks.getSession.mockResolvedValue({ user: { id: 'scm-setup-other' } });
+
+    const res = await setup({ code: 'c', installation_id: '777', state: 's' });
+
+    expect(new URL(res.headers.get('location')!).searchParams.get('error')).toBe(
+      'session_mismatch',
+    );
+    expect(mocks.exchangeCode).not.toHaveBeenCalled();
+    await expect(
+      ScmInstallationModel.findByProviderInstallationId(serverDB, 'github', '777'),
+    ).resolves.toBeFalsy();
+  });
+
+  it('keeps no identity from an installation the GitHub user cannot see', async () => {
+    mocks.consumeState.mockResolvedValue({ lobeUserId: userId, ts: 1 });
+    mocks.canAccessInstallation.mockResolvedValue(false);
+
+    await setup({ code: 'c', installation_id: '777', state: 's' });
+
+    await expect(ScmIdentityModel.findByUser(serverDB, 'github', userId)).resolves.toBeFalsy();
+  });
+
   it('refuses an installation the authorizing GitHub user cannot see', async () => {
     mocks.consumeState.mockResolvedValue({ lobeUserId: userId, ts: 1 });
     mocks.canAccessInstallation.mockResolvedValue(false);
@@ -227,6 +327,7 @@ describe('githubSetup', () => {
   it('refuses to move a GitHub identity to a second LobeHub account', async () => {
     await serverDB.insert(users).values({ id: 'scm-setup-first' });
     mocks.consumeState.mockResolvedValue({ lobeUserId: 'scm-setup-first', ts: 1 });
+    mocks.getSession.mockResolvedValue({ user: { id: 'scm-setup-first' } });
     await setup({ code: 'c', installation_id: '777', state: 's' });
     expect(await ScmIdentityModel.findByExternalUser(serverDB, 'github', '42')).toMatchObject({
       userId: 'scm-setup-first',
@@ -235,6 +336,7 @@ describe('githubSetup', () => {
     // The same GitHub account authorizing from another LobeHub account must
     // not carry the stored token across; the row keeps its owner.
     mocks.consumeState.mockResolvedValue({ lobeUserId: userId, ts: 1 });
+    mocks.getSession.mockResolvedValue({ user: { id: userId } });
     const res = await setup({ code: 'c', installation_id: '778', state: 's' });
     expect(new URL(res.headers.get('location')!).searchParams.get('error')).toBe('identity_taken');
     expect(await ScmIdentityModel.findByExternalUser(serverDB, 'github', '42')).toMatchObject({

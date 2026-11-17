@@ -15,6 +15,7 @@ import {
   wakeManagedDevice,
 } from '@/server/services/deviceGateway/managedDeviceWake';
 import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousAgent/remoteDeviceHeteroContext';
+import { resolveDeviceRequesterCredential } from '@/server/services/scm/requester/deviceCredential';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import {
@@ -27,6 +28,7 @@ import { resolveDeviceWorkingDirectoryConfig } from '../../resolveDeviceWorkingD
 import type { ExecRunContext } from '../../types';
 import { selectCodexDeviceDispatch } from '../codexDeviceRuntime';
 import { traceHeteroStage } from '../sendTracing';
+import { joinSystemContext } from '../viewedTaskContext';
 import type { PreparedHeteroRun } from './prepare';
 import { scheduleTimedOutDispatchConfirmation } from './timeoutConfirmation';
 import type { HeteroDispatchDeps, HeteroDispatchInput, HeteroRun } from './types';
@@ -115,10 +117,11 @@ export const dispatchToCliDevice = async (
     prepared,
   } = params;
   const {
-    agentSystemContext,
     conversationHistory,
     heteroExecArgs,
     heteroParams,
+    requesterInput,
+    resignOperationJwt,
     resumeSessionId,
     topic,
     topicRepos,
@@ -189,6 +192,39 @@ export const dispatchToCliDevice = async (
     );
   }
   const nativeCodex = codexRuntime.kind === 'native' ? codexRuntime : undefined;
+
+  const requesterCredential = await traceHeteroStage('device requester_credential', async () =>
+    resolveDeviceRequesterCredential({
+      db: deps.db,
+      // The owner may also hold a personal row for the same machine; the
+      // workspace's row is the one that says whether this is a shared node.
+      device: cliDeviceWorkspaceId
+        ? await new DeviceModel(deps.db, deps.userId, cliDeviceWorkspaceId).findWorkspaceDeviceById(
+            dispatchDeviceId,
+          )
+        : boundDevice,
+      deviceId: dispatchDeviceId,
+      readSystemInfo: (clientKinds) =>
+        deviceGateway.readDeviceSystemInfo(deps.userId, dispatchDeviceId, cliDeviceWorkspaceId, {
+          clientKinds,
+        }),
+      requesterInput,
+      resign: resignOperationJwt,
+    }),
+  );
+  if (requesterCredential.kind === 'refuse') {
+    return failHeteroDispatch(
+      deps,
+      run,
+      { detail: requesterCredential.detail, message: 'Requester GitHub credential unavailable' },
+      { error: requesterCredential.reason, message: requesterCredential.detail },
+    );
+  }
+  const issuedCredential = requesterCredential.kind === 'issue' ? requesterCredential : undefined;
+  const agentSystemContext = joinSystemContext(
+    prepared.agentSystemContext,
+    issuedCredential?.requesterLine,
+  );
 
   // Resolve the working directory for the run: a topic-level override
   // wins, else the device's user-configured defaultCwd.
@@ -284,11 +320,15 @@ export const dispatchToCliDevice = async (
     : await traceHeteroStage('device gateway_dispatch', () =>
         deviceGateway.dispatchAgentRun({
           ...deviceHeteroParams,
+          ...(issuedCredential && {
+            jwt: issuedCredential.jwt,
+            scmCredential: issuedCredential.scmCredential,
+          }),
           agentId: resolvedAgentId,
           // Only a live client advertising the native protocol receives these wrapper flags.
           args: nativeCodex ? [...(heteroExecArgs ?? []), ...nativeCodex.args] : heteroExecArgs,
           ...(claudeAccountRouting && { claudeAccountRouting }),
-          clientKinds: nativeCodex?.clientKinds,
+          clientKinds: issuedCredential ? ['cli'] : nativeCodex?.clientKinds,
           cwd: deviceCwd,
           deviceId: dispatchDeviceId,
           resumeFallbackSystemContext: deviceResumeFallbackSystemContext,

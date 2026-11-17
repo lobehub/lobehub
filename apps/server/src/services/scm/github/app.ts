@@ -53,7 +53,13 @@ export interface GitHubUserAuthorization {
   expiresAt?: string;
   refreshToken?: string;
   refreshTokenExpiresAt?: string;
-  user: { avatarUrl?: string; email?: string | null; externalId: string; login: string };
+  user: {
+    avatarUrl?: string;
+    email?: string | null;
+    externalId: string;
+    login: string;
+    name?: string | null;
+  };
 }
 
 /**
@@ -80,7 +86,41 @@ export const exchangeGitHubUserCode = async (code: string): Promise<GitHubUserAu
       email: user.email,
       externalId: String(user.id),
       login: user.login,
+      name: user.name,
     },
+  };
+};
+
+export const buildGitHubAuthorizeUrl = (state: string, redirectUri: string): string | null => {
+  if (!scmEnv.GITHUB_APP_CLIENT_ID) return null;
+  const url = new URL('https://github.com/login/oauth/authorize');
+  url.searchParams.set('client_id', scmEnv.GITHUB_APP_CLIENT_ID);
+  url.searchParams.set('redirect_uri', redirectUri);
+  url.searchParams.set('state', state);
+  return url.toString();
+};
+
+export const revokeGitHubUserToken = async (token: string): Promise<void> => {
+  const app = getGitHubApp();
+  if (!app) return;
+  await app.oauth.deleteToken({ token });
+};
+
+export type GitHubRefreshedUserToken = Omit<GitHubUserAuthorization, 'user'>;
+
+export const refreshGitHubUserToken = async (
+  refreshToken: string,
+): Promise<GitHubRefreshedUserToken> => {
+  const app = getGitHubApp();
+  if (!app) throw new Error('GitHub App is not configured');
+
+  const { authentication } = await app.oauth.refreshToken({ refreshToken });
+
+  return {
+    accessToken: authentication.token,
+    expiresAt: authentication.expiresAt,
+    refreshToken: authentication.refreshToken,
+    refreshTokenExpiresAt: authentication.refreshTokenExpiresAt,
   };
 };
 

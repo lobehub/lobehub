@@ -106,6 +106,7 @@ import { resourcePermissionRouter } from './resourcePermission';
 import { resourceTransferRequestRouter } from './resourceTransferRequest';
 import { sandboxStorageRouter } from './sandboxStorage';
 import { scmRouter } from './scm';
+import { scmCredentialRouter } from './scmCredential';
 import { searchRouter } from './search';
 import { sessionRouter } from './session';
 import { sessionGroupRouter } from './sessionGroup';
@@ -220,6 +221,7 @@ export const lambdaRouter = router({
   resourceTransferRequest: resourceTransferRequestRouter,
   search: searchRouter,
   scm: scmRouter,
+  scmCredential: scmCredentialRouter,
   session: sessionRouter,
   sessionGroup: sessionGroupRouter,
   share: shareRouter,

@@ -18,6 +18,7 @@ const claimKey = (claim: string): string => `${CLAIM_PREFIX}${claim}`;
 export interface ScmInstallStatePayload {
   /** LobeHub user who clicked "Connect"; the installation binds to them. */
   lobeUserId: string;
+  purpose?: 'authorize' | 'install';
   /** Where to send the user after the callback (relative path). */
   returnTo?: string;
   ts: number;

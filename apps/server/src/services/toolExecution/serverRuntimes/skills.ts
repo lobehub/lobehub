@@ -44,6 +44,7 @@ import {
   type SandboxSessionSpecification,
 } from '@/server/services/sandbox';
 import type { SandboxInitialization } from '@/server/services/sandbox/environmentInit';
+import { SCM_CREDENTIAL_TOOL_ARG } from '@/server/services/scm/requester/toolCallCredential';
 import { SkillResourceService } from '@/server/services/skill/resource';
 import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
 import {
@@ -61,6 +62,8 @@ import { resolveAgentSkillGates } from './librarySkillGate';
 import { pageSandboxWrapper, type SandboxWrapper } from './pageSandboxSync';
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { createSandboxMarketService } from './sandboxMarket';
+import { resolveContextScmCredential } from './scmCredential';
+import type { SkillDeviceExecution } from './skillDeviceExecution';
 import { type ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:skills-runtime');
@@ -94,37 +97,6 @@ interface UserSettingsWithMarketToken {
   market?: {
     accessToken?: string;
   };
-}
-
-/**
- * Device-execution wiring for the exec APIs, present only when the run's
- * execution plan routed a device (`plan.kind === 'device'` — the aiAgent sets
- * `context.activeDeviceId` from exactly that condition). When present,
- * `execScript` runs ON the device instead of the cloud sandbox: skill archives
- * are prepared device-side via the `prepareSkillDirectory` RPC and the command
- * executes through the local-system tool over the device gateway.
- */
-interface SkillDeviceExecution {
-  deviceId: string;
-  executionTimeoutMs?: number;
-  /**
-   * The run's resolved Local Sandbox decision (`context.localSandbox`), the
-   * same value the local-system device-proxy applies to `runCommand`.
-   */
-  localSandbox?: boolean;
-  /** `context.localSandboxNetwork`; only meaningful with {@link localSandbox}. */
-  localSandboxNetwork?: boolean;
-  operationId?: string;
-  /**
-   * Filesystem skills already living on the device (project/device SKILL.md).
-   * execScript resolves their SKILL.md directory as cwd, mirroring the
-   * prepared-archive skills.
-   */
-  projectSkills?: { location: string; name: string }[];
-  /** Lazily resolved workspace principal — see `resolveRunWorkspaceId`. */
-  resolveWorkspaceId: () => Promise<string | undefined>;
-  /** cwd fallback when no activated skill resolves to a directory. */
-  workingDirectory?: string;
 }
 
 interface ActivatedSkillArchive {
@@ -621,6 +593,8 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         operationId: device.operationId,
         workspaceId: await this.resolveWorkspaceId(),
       });
+      const scm = await device.resolveScmCredential();
+      if (scm.kind === 'refuse') return fail(scm.detail);
       const response = await executeAuthorizedDeviceToolCall(
         this.serverDB,
         {
@@ -640,6 +614,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
             // Keep `lh` on the device in this run's workspace instead of the
             // device credentials' personal scope, and tell it which run it acts for.
             ...(deviceLhEnv && { env: deviceLhEnv }),
+            ...(scm.kind === 'issue' && { [SCM_CREDENTIAL_TOOL_ARG]: scm.arg }),
             ...(device.executionTimeoutMs && { timeout: device.executionTimeoutMs }),
             // The fence is the run owner's decision, applied exactly as the
             // local-system device-proxy does for `runCommand`; neither it nor
@@ -1003,6 +978,11 @@ export const skillsRuntime: ServerRuntimeRegistration = {
           projectSkills: context.projectSkills,
           // Same lazy workspace-principal recovery as the local-system runtime,
           // so workspace devices are addressed under the right gateway pool.
+          resolveScmCredential: () =>
+            resolveContextScmCredential(context, {
+              contentWorkspaceId: () => resolveContentWorkspaceId(context),
+              deviceWorkspaceId: () => (workspaceIdPromise ??= resolveRunWorkspaceId(context)),
+            }),
           resolveWorkspaceId: () => (workspaceIdPromise ??= resolveRunWorkspaceId(context)),
           workingDirectory: context.workingDirectory,
         }

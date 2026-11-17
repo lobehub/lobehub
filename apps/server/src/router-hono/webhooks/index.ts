@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import { casdoorWebhook } from './handlers/casdoor';
 import { githubWebhook } from './handlers/github';
+import { githubAuthorize } from './handlers/githubAuthorize';
 import { githubInstall } from './handlers/githubInstall';
 import { githubSetup } from './handlers/githubSetup';
 import { inboundWebhook, inboundWebhookBodyLimit } from './handlers/inbound';
@@ -54,6 +55,7 @@ app.post('/music/:provider', musicWebhook);
 // Callback URL and Setup URL are registered on GitHub next to the webhook URL.
 app.post('/github', githubWebhook);
 app.get('/github/install', githubInstall);
+app.get('/github/authorize', githubAuthorize);
 app.get('/github/setup', githubSetup);
 app.get('/github/oauth/callback', githubSetup);
 

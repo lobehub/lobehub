@@ -34,11 +34,13 @@ export type HeteroOperationCapability =
   | 'hetero:finish'
   | 'hetero:ingest'
   | 'hetero:intervention:read'
-  | 'model:invoke';
+  | 'model:invoke'
+  | 'scm:github-credential';
 
 export interface HeteroOperationJwtClaims {
   aud: typeof HETERO_OPERATION_JWT_AUDIENCE;
   capabilities: HeteroOperationCapability[];
+  device_id?: string;
   exp: number;
   iat: number;
   iss: typeof HETERO_OPERATION_JWT_ISSUER;
@@ -47,6 +49,7 @@ export interface HeteroOperationJwtClaims {
   operation_id: string;
   provider_id?: string;
   purpose: typeof HETERO_OPERATION_JWT_PURPOSE;
+  requester?: string;
   sub: string;
   workspace_id?: string;
 }
@@ -180,9 +183,12 @@ export const signUserJWT = async (
  */
 export const signHeteroOperationJWT = async (params: {
   capabilities: HeteroOperationCapability[];
+  deviceId?: string;
+  expiration?: string;
   model?: string;
   operationId: string;
   providerId?: string;
+  requesterUserId?: string;
   userId: string;
   workspaceId?: string;
 }): Promise<string> => {
@@ -190,10 +196,12 @@ export const signHeteroOperationJWT = async (params: {
 
   return new SignJWT({
     capabilities: params.capabilities,
+    ...(params.deviceId ? { device_id: params.deviceId } : {}),
     ...(params.model ? { model: params.model } : {}),
     operation_id: params.operationId,
     ...(params.providerId ? { provider_id: params.providerId } : {}),
     purpose: HETERO_OPERATION_JWT_PURPOSE,
+    ...(params.requesterUserId ? { requester: params.requesterUserId } : {}),
     ...(params.workspaceId ? { workspace_id: params.workspaceId } : {}),
   })
     .setProtectedHeader({ alg: 'RS256', kid })
@@ -202,7 +210,7 @@ export const signHeteroOperationJWT = async (params: {
     .setSubject(params.userId)
     .setJti(randomUUID())
     .setIssuedAt()
-    .setExpirationTime('4h')
+    .setExpirationTime(params.expiration ?? '4h')
     .sign(key);
 };
 
@@ -239,10 +247,13 @@ export const validateHeteroOperationClaims = (
         'hetero:ingest',
         'hetero:finish',
         'hetero:intervention:read',
+        'scm:github-credential',
       ].includes(capability as string),
     ) ||
     (payload.model !== undefined && typeof payload.model !== 'string') ||
     (payload.provider_id !== undefined && typeof payload.provider_id !== 'string') ||
+    (payload.requester !== undefined && typeof payload.requester !== 'string') ||
+    (payload.device_id !== undefined && typeof payload.device_id !== 'string') ||
     (payload.workspace_id !== undefined && typeof payload.workspace_id !== 'string')
   ) {
     return null;

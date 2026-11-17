@@ -76,6 +76,22 @@ describe('aiAgentRouter.refreshHeteroOperationToken', () => {
     });
   });
 
+  it('keeps the requester on the renewed token', async () => {
+    await caller({
+      ...operationClaims,
+      device_id: 'device-1',
+      requester: 'user-visitor',
+    }).refreshHeteroOperationToken({ operationId: 'op-1' });
+
+    expect(signOperationToken).toHaveBeenCalledWith(
+      expect.objectContaining({
+        deviceId: 'device-1',
+        requesterUserId: 'user-visitor',
+        userId: 'user-1',
+      }),
+    );
+  });
+
   it('refuses to renew once the operation has ended', async () => {
     resolvePrincipal.mockRejectedValue(
       new HeteroOperationPrincipalError('Operation has already ended', 409),

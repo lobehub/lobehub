@@ -10,10 +10,12 @@ import {
   isDeviceUnreachableResult,
 } from '@/server/services/deviceGateway/managedDeviceWake';
 import { buildShellCompletion } from '@/server/services/deviceGateway/toolCallCompletion';
+import { SCM_CREDENTIAL_TOOL_ARG } from '@/server/services/scm/requester/toolCallCredential';
 import { buildDeviceLhEnv } from '@/server/services/toolExecution/preprocessLhCommand';
 
 import { buildNoActiveDeviceResult, REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
+import { resolveContextScmCredential } from './scmCredential';
 import { type ServerRuntimeRegistration } from './types';
 import { withoutDeviceReplay } from './withoutDeviceReplay';
 
@@ -117,7 +119,11 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         // be approved by the audit as a workspace-relative `scope` and then
         // execute against `/etc`. Likewise `readFile({ path: 'passwd', cwd:
         // '/etc' })` — only `path` is audited, and it looks workspace-relative.
-        const { cwd: _offContractCwd, ...sanitized } = (args ?? {}) as Record<string, unknown>;
+        const {
+          cwd: _offContractCwd,
+          [SCM_CREDENTIAL_TOOL_ARG]: _offContractScmCredential,
+          ...sanitized
+        } = (args ?? {}) as Record<string, unknown>;
         let finalArgs = sanitized as typeof args;
         if (workingDirArg && context.workingDirectory) {
           const scopeValue: unknown = finalArgs?.[workingDirArg];
@@ -159,6 +165,21 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
           // anything that arrived in the LLM args (the manifest doesn't expose
           // the field, but a model that guessed it must not be able to switch
           // its own fence off — or on).
+          const scm = await resolveContextScmCredential(context, {
+            contentWorkspaceId: getContentWorkspaceId,
+            deviceWorkspaceId: getDeviceWorkspaceId,
+          });
+          if (scm.kind === 'refuse') {
+            return {
+              content: scm.detail,
+              error: { code: 'SCM_CREDENTIAL_UNAVAILABLE', message: scm.detail },
+              success: false,
+            };
+          }
+          if (scm.kind === 'issue') {
+            finalArgs = { ...finalArgs, [SCM_CREDENTIAL_TOOL_ARG]: scm.arg };
+          }
+
           if (context.localSandbox !== undefined) {
             finalArgs = {
               ...finalArgs,

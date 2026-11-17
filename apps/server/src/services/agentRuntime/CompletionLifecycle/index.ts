@@ -10,13 +10,14 @@ import { MessageModel } from '@/database/models/message';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
+import { rotateRequesterTokenIfIdle } from '@/server/services/scm/github/rotateOnIdle';
 import {
   instantiateVerifyPlanOnStart,
   releaseUndeliveredRound,
   scheduleVerifyOnCompletion,
   settleFailedRepair,
 } from '@/server/services/verify';
-import { after } from '@/server/utils/scheduleAfterResponse';
+import { after, afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import { CriticalHookDeliveryError, hookDispatcher } from '../hooks';
 import {
@@ -429,6 +430,10 @@ export class CompletionLifecycle {
       }).catch((error) => {
         console.error('[CompletionLifecycle] settleAgentRunFee failed', { error, operationId });
       });
+
+      // The node keeps the last GitHub token it was handed until it expires;
+      // rotating once the requester has no run left makes that copy useless.
+      afterUnscoped(() => rotateRequesterTokenIfIdle(this.serverDB, operationId));
 
       // `lastAssistantContent` comes off the Redis-backed `state.messages`,
       // while the assistant message row is persisted through a separate
