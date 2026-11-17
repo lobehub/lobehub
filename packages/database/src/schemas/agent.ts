@@ -30,6 +30,15 @@ import { workspaces } from './workspace';
 // agent is a model that represents the assistant that is created by the user
 // agent can have its own knowledge base and files
 
+/**
+ * Foreign-key target for `agents.owner_project_id`. `schemas/project.ts` imports
+ * `agents` (coordinator and member FKs), so importing `projects` back would make
+ * the two schema modules import each other (`lint:circular`). A reference only
+ * needs the target table and column names; this unexported handle supplies them
+ * and generates the same constraint as `projects.id` would.
+ */
+const projectsKeyTarget = pgTable('projects', { id: text('id').primaryKey() });
+
 /** Agent visibility — shared by column def and insert schema. */
 export const AGENT_VISIBILITY = ['private', 'public'] as const;
 
@@ -101,6 +110,20 @@ export const agents = pgTable(
     }),
 
     /**
+     * The project this agent was provisioned for and is configured through. Set
+     * only for a project's own coordinator (`projects.coordinator_agent_id` points
+     * back at this row); such an agent is hidden from standalone agent lists and
+     * edited in the project's settings, so the project is the single entry to its
+     * prompt, model and IM channels. Shared agents, LobeAI and agents the user
+     * picked are never marked. Cleared — the agent becomes an ordinary, visible
+     * agent with its history intact — when the project is deleted or hands the
+     * agent back; nothing is ever deleted through this column.
+     */
+    ownerProjectId: text('owner_project_id').references(() => projectsKeyTarget.id, {
+      onDelete: 'set null',
+    }),
+
+    /**
      * Visibility within the owning workspace. `public` (default) means every
      * workspace member can see and use the agent; `private` constrains it to
      * the creator (`user_id`). Ignored in personal mode where the row is
@@ -120,6 +143,7 @@ export const agents = pgTable(
     index('agents_title_idx').on(t.title),
     index('agents_description_idx').on(t.description),
     index('agents_session_group_id_idx').on(t.sessionGroupId),
+    index('agents_owner_project_id_idx').on(t.ownerProjectId).where(isNotNull(t.ownerProjectId)),
     index('agents_workspace_id_idx').on(t.workspaceId),
     index('agents_workspace_visibility_idx').on(t.workspaceId, t.visibility, t.userId),
     uniqueIndex('agents_slug_workspace_id_unique')

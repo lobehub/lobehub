@@ -75,6 +75,9 @@ const assertNoAgentBuilderProtectedFields = (data: Record<string, unknown>) => {
 const IMMUTABLE_AGENT_FIELDS = [
   'createdAt',
   'id',
+  // Project ownership hides an agent from standalone lists and routes its
+  // configuration through the project; only the project flows may set or clear it.
+  'ownerProjectId',
   // Folder placement is shared state and has its own validated path
   // (`updateSessionGroupId`), which checks the target is visible in scope and
   // matches the agent's visibility bucket. Riding along in a config patch

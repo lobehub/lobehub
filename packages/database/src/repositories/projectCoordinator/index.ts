@@ -3,6 +3,7 @@ import { alias } from 'drizzle-orm/pg-core';
 
 import { AgentModel } from '../../models/agent';
 import { ProjectModel, type ProjectModelOptions } from '../../models/project';
+import { releaseProjectOwnedAgent } from '../../models/projectMainAgent';
 import {
   acceptanceComments,
   agentDocuments,
@@ -57,6 +58,10 @@ export class ProjectCoordinatorRepository {
       ) {
         await this.transferHistory(tx, previousId, agentId);
         await new AgentModel(tx, this.userId, this.workspaceId).delete(previousId);
+      } else if (previousId) {
+        // A project-owned predecessor no longer leads the project: it returns to
+        // the agents list as an ordinary agent, history and configuration intact.
+        await releaseProjectOwnedAgent(tx, { agentId: previousId, projectId });
       }
       return project;
     });

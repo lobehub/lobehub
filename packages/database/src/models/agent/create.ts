@@ -11,9 +11,17 @@ import { buildWorkspacePayload } from '../../utils/workspace';
 import { RESERVED_AGENT_SLUGS } from './constants';
 import { type AgentModelContext } from './context';
 
-export const stripReservedSlug = <T extends { slug?: string | null }>(config: T): T => {
-  if (!config.slug || !RESERVED_AGENT_SLUGS.has(config.slug)) return config;
-  return { ...config, slug: undefined };
+export const stripReservedSlug = <
+  T extends { ownerProjectId?: string | null; slug?: string | null },
+>(
+  config: T,
+): T => {
+  // Project ownership is written only by the project flows (ProjectRepository /
+  // ProjectCoordinatorRepository), never by a caller-supplied agent config.
+  const { ownerProjectId: _ownerProjectId, ...rest } = config;
+  const next = ('ownerProjectId' in config ? rest : config) as T;
+  if (!next.slug || !RESERVED_AGENT_SLUGS.has(next.slug)) return next;
+  return { ...next, slug: undefined };
 };
 
 /**

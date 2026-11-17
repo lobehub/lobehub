@@ -8,7 +8,7 @@ import {
   ProjectIdentifierTakenError,
   ProjectModel,
 } from '../../models/project';
-import { createProjectMainAgent } from '../../models/projectMainAgent';
+import { createProjectMainAgent, markProjectOwnedAgent } from '../../models/projectMainAgent';
 import { projectAgents, projectCompletionReviews } from '../../schemas/project';
 import { projectEnvironments } from '../../schemas/projectEnvironment';
 import type { LobeChatDatabase } from '../../type';
@@ -74,6 +74,12 @@ export class ProjectRepository {
         identifier,
       });
       await this.linkCoordinator(db, project.id, mainAgent.id);
+      // The agent made for this project is the project's own: configured through
+      // its settings and hidden from standalone agent lists. A picked agent
+      // (the user's own, a shared one or LobeAI) is only linked.
+      if (!input.coordinatorAgentId) {
+        await markProjectOwnedAgent(db, { agentId: mainAgent.id, projectId: project.id });
+      }
 
       // The environment belongs to another aggregate too, and a repository the
       // environment cannot accept must not leave a half-made project behind, so

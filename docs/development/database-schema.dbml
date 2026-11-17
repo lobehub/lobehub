@@ -166,6 +166,7 @@ table agents {
   opening_message text
   opening_questions text[] [default: `[]`]
   session_group_id text
+  owner_project_id text
   visibility text [not null, default: 'public']
   deleted_at "timestamp with time zone"
   is_deleted boolean
@@ -181,6 +182,7 @@ table agents {
     title [name: 'agents_title_idx']
     description [name: 'agents_description_idx']
     session_group_id [name: 'agents_session_group_id_idx']
+    owner_project_id [name: 'agents_owner_project_id_idx']
     workspace_id [name: 'agents_workspace_id_idx']
     (workspace_id, visibility, user_id) [name: 'agents_workspace_visibility_idx']
     (workspace_id, slug) [name: 'agents_slug_workspace_id_unique', unique]
@@ -3812,6 +3814,16 @@ table project_completion_reviews {
     workspace_id [name: 'project_completion_reviews_workspace_id_idx']
     
   }
+}
+
+table project_coordinator_ownership_log {
+  project_id text [pk, not null]
+  agent_id text
+  decision text [not null]
+  config_snapshot jsonb
+  marked boolean [not null, default: false]
+  migrated_at "timestamp with time zone" [not null, default: `now()`]
+  reverted_at "timestamp with time zone"
 }
 
 table project_knowledge_bases {

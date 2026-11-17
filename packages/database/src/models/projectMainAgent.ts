@@ -1,7 +1,8 @@
 import { createProjectCoordinatorAgentConfig } from '@lobechat/builtin-agents';
 import type { ProjectVisibility } from '@lobechat/types';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
+import { agents } from '../schemas/agent';
 import { agentLabelAssignments, agentLabels } from '../schemas/agentLabel';
 import { DEFAULT_RESOURCE_ACCESS_LEVELS } from '../schemas/resourcePermission';
 import type { LobeChatDatabase } from '../type';
@@ -58,9 +59,11 @@ const findOrCreateProjectLabel = async (db: LobeChatDatabase, scope: Scope) => {
 
 /**
  * Create the agent that leads a new project when none was picked: an ordinary
- * agent the user sees in the agents list, named after the project, wearing its
- * avatar and the shared project label. Unlike the virtual coordinators earlier
- * projects got, it outlives the project.
+ * agent named after the project, wearing its avatar and the shared project
+ * label. Once the project row exists the caller marks it as the project's own
+ * ({@link markProjectOwnedAgent}). Unlike the virtual coordinators earlier
+ * projects got, it outlives the project: deleting the project only clears the
+ * mark (`ON DELETE SET NULL`).
  */
 export const createProjectMainAgent = async (
   db: LobeChatDatabase,
@@ -102,4 +105,36 @@ export const createProjectMainAgent = async (
     .onConflictDoNothing();
 
   return agent;
+};
+
+/**
+ * Mark an agent as the project's own coordinator (`agents.owner_project_id`), so
+ * it is configured through the project and hidden from standalone agent lists.
+ * Called once the project row exists, inside the create transaction. Only an
+ * unowned agent is marked: an agent another project owns is never taken over.
+ */
+export const markProjectOwnedAgent = async (
+  db: LobeChatDatabase,
+  { agentId, projectId }: { agentId: string; projectId: string },
+) => {
+  const [marked] = await db
+    .update(agents)
+    .set({ ownerProjectId: projectId })
+    .where(and(eq(agents.id, agentId), isNull(agents.ownerProjectId)))
+    .returning({ id: agents.id, ownerProjectId: agents.ownerProjectId });
+  return marked ?? null;
+};
+
+/**
+ * Hand an agent the project owned back to the standalone agents list, e.g. once
+ * it stops leading the project. Its configuration and history stay untouched.
+ */
+export const releaseProjectOwnedAgent = async (
+  db: LobeChatDatabase,
+  { agentId, projectId }: { agentId: string; projectId: string },
+) => {
+  await db
+    .update(agents)
+    .set({ ownerProjectId: null })
+    .where(and(eq(agents.id, agentId), eq(agents.ownerProjectId, projectId)));
 };

@@ -14,14 +14,22 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { ProjectIdentifierTakenError, ProjectModel } from '@/database/models/project';
 import { ProjectRepository } from '@/database/repositories/project';
 import { ProjectCoordinatorRepository } from '@/database/repositories/projectCoordinator';
+import {
+  ProjectCoordinatorConfigError,
+  ProjectCoordinatorConfigRepository,
+} from '@/database/repositories/projectCoordinatorConfig';
 import { ProjectOverviewRepository } from '@/database/repositories/projectOverview';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { AgentService } from '@/server/services/agent';
 import { createDefaultChannel } from '@/server/services/channel/defaultChannel';
 import { leaveProjectChannels } from '@/server/services/channel/projectMembership';
 import { GoalService } from '@/server/services/goal';
-import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
+import {
+  assertCanEditResource,
+  assertCanPerformResourceAction,
+} from '@/server/services/resourcePermission';
 
 import { rethrowDuplicateProjectField } from './_helpers/projectConstraintErrors';
 import { projectModelOptions } from './_helpers/projectRights';
@@ -32,6 +40,12 @@ const projectProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
   const options = projectModelOptions(ctx);
   return opts.next({
     ctx: {
+      projectCoordinatorConfigRepo: new ProjectCoordinatorConfigRepository(
+        ctx.serverDB,
+        ctx.userId,
+        workspaceId,
+        options,
+      ),
       projectCoordinatorRepo: new ProjectCoordinatorRepository(
         ctx.serverDB,
         ctx.userId,
@@ -102,8 +116,37 @@ const knowledgeBaseBindingPatch = z.object({
   sortOrder: z.number().int().optional(),
 });
 
+/**
+ * The coordinator fields the project settings write — the agent's prompt, model
+ * and conversation setup. IM connections keep their own credential-encrypting
+ * routes (`agentBotProvider.*`), keyed by the `agentId` the read returns.
+ */
+const coordinatorConfigPatch = z
+  .object({
+    avatar: z.string().nullish(),
+    chatConfig: z.record(z.string(), z.unknown()).nullish(),
+    description: z.string().max(1000).nullish(),
+    model: z.string().nullish(),
+    openingMessage: z.string().nullish(),
+    openingQuestions: z.array(z.string()).nullish(),
+    params: z.record(z.string(), z.unknown()).nullish(),
+    plugins: z.array(z.string()).nullish(),
+    provider: z.string().nullish(),
+    systemRole: z.string().nullish(),
+    title: z.string().max(255).nullish(),
+    tts: z.record(z.string(), z.unknown()).nullish(),
+  })
+  .strict();
+
 function mapProjectError(error: unknown, operation: string): never {
   if (error instanceof TRPCError) throw error;
+  if (error instanceof ProjectCoordinatorConfigError) {
+    throw new TRPCError({
+      cause: error,
+      code: error.code === 'NOT_FOUND' ? 'NOT_FOUND' : 'FORBIDDEN',
+      message: error.message,
+    });
+  }
   // A duplicate identifier is a field-level problem the client renders next to
   // the input; `CONFLICT` carries the machine-readable code the create forms key
   // off, so they can mark the identifier rather than a generic failure.
@@ -275,6 +318,23 @@ export const projectRouter = router({
       };
     } catch (error) {
       mapProjectError(error, 'detail');
+    }
+  }),
+
+  /**
+   * The project's main agent configuration — prompt, model, params, tools,
+   * opening, IM connections (without credentials) and the coordinator's
+   * responsibility — resolved through the project, with where it lives
+   * (`owned` / `shared` / `user_picked` / `builtin`).
+   */
+  getCoordinatorConfig: projectProcedure.input(idInput).query(async ({ ctx, input }) => {
+    try {
+      return {
+        data: requireResult(await ctx.projectCoordinatorConfigRepo.getConfig(input.id)),
+        success: true,
+      };
+    } catch (error) {
+      mapProjectError(error, 'getCoordinatorConfig');
     }
   }),
 
@@ -511,6 +571,50 @@ export const projectRouter = router({
         };
       } catch (error) {
         mapProjectError(error, 'updateAgent');
+      }
+    }),
+
+  /**
+   * Write the project's main agent configuration through the project. Agent
+   * fields go to the resolved agent with the same edit permission and
+   * share-model guards as the agent settings; LobeAI is read-only here.
+   */
+  updateCoordinatorConfig: projectWriteProcedure
+    .input(
+      idInput.extend({
+        config: coordinatorConfigPatch.optional(),
+        responsibility: z.string().max(1000).nullish(),
+      }),
+    )
+    .mutation(async ({ ctx, input: { config, id, responsibility } }) => {
+      try {
+        const data = await ctx.projectCoordinatorConfigRepo.updateConfig(
+          id,
+          { config: config as any, responsibility },
+          {
+            writeAgentConfig: async (agentId, patch) => {
+              await assertCanEditResource({
+                db: ctx.serverDB,
+                resourceId: agentId,
+                resourceType: 'agent',
+                userId: ctx.userId,
+                workspaceId: ctx.workspaceId ?? undefined,
+              });
+              await new AgentService(
+                ctx.serverDB,
+                ctx.userId,
+                ctx.workspaceId ?? undefined,
+              ).updateAgentConfig(agentId, patch as any);
+            },
+          },
+        );
+        return {
+          data: requireResult(data),
+          message: 'Project main agent updated',
+          success: true,
+        };
+      } catch (error) {
+        mapProjectError(error, 'updateCoordinatorConfig');
       }
     }),
 

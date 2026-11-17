@@ -1,5 +1,7 @@
 import type {
   ProjectCompletionDecision,
+  ProjectCoordinatorConfigSnapshot,
+  ProjectCoordinatorOwnershipDecision,
   ProjectStatus,
   ProjectVisibility,
   ProjectWorkingDirectoryPermission,
@@ -10,6 +12,7 @@ import {
   check,
   index,
   integer,
+  jsonb,
   pgTable,
   text,
   uniqueIndex,
@@ -289,3 +292,29 @@ export const projectCompletionReviews = pgTable(
     check('project_completion_reviews_round_positive', sql`${t.round} > 0`),
   ],
 );
+
+/**
+ * One row per project the coordinator ownership migration has settled: how its
+ * main agent was classified and the agent's configuration at that moment (bot
+ * connections without credentials). The row is the migration's idempotency key —
+ * a project already logged is never re-classified — and the audit trail for a
+ * rollback (`reverted_at`), which only clears `agents.owner_project_id` again.
+ */
+export const projectCoordinatorOwnershipLog = pgTable('project_coordinator_ownership_log', {
+  projectId: text('project_id')
+    .primaryKey()
+    .references(() => projects.id, { onDelete: 'cascade' })
+    .notNull(),
+  /** `projects.coordinator_agent_id` when migrated; null = fell back to LobeAI. No FK: the log outlives the agent. */
+  agentId: text('agent_id'),
+
+  decision: text('decision').$type<ProjectCoordinatorOwnershipDecision>().notNull(),
+  configSnapshot: jsonb('config_snapshot').$type<ProjectCoordinatorConfigSnapshot>(),
+  /** The migration itself set `agents.owner_project_id` (an agent marked at creation is not its to undo). */
+  marked: boolean('marked').notNull().default(false),
+
+  migratedAt: timestamptz('migrated_at').notNull().defaultNow(),
+  revertedAt: timestamptz('reverted_at'),
+});
+
+export type ProjectCoordinatorOwnershipLogItem = typeof projectCoordinatorOwnershipLog.$inferSelect;
