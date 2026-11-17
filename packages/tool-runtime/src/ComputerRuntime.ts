@@ -161,6 +161,7 @@ export abstract class ComputerRuntime {
         totalCharCount: r.totalCharCount,
         totalLines: r.totalLineCount ?? r.totalLines,
         truncated: r.truncated === true ? true : undefined,
+        uploadError: r.isImage ? r.uploadError : undefined,
       };
 
       // Number every returned line (1-based gutter) and, when the window

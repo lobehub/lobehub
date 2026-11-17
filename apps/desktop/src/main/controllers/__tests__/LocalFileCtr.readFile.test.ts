@@ -231,6 +231,12 @@ describe('LocalFileCtr — readFile / readFiles (real fs)', () => {
       expect(result.content).toContain('storage_block:upgrade_required');
       expect(result.content).toMatch(/file storage is full/i);
       expect(result.content).toMatch(/retrying will not help/i);
+      expect(result.content).toMatch(/do not read more images/i);
+      // Structured, so the readFile card can offer the user a way to free space.
+      expect(result.uploadError).toEqual({
+        kind: 'storage_quota',
+        reason: 'storage_block:upgrade_required',
+      });
     });
 
     it('should tell a network upload failure apart from a full storage', async () => {

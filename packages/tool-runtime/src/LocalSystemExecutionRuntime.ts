@@ -536,6 +536,8 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
             // hint on truncated reads so it never points past undelivered
             // content.
             truncated: raw.truncated,
+            // Why an image upload failed, for the readFile card's recovery actions.
+            uploadError: raw.uploadError,
           },
           success: true,
         };

@@ -213,6 +213,17 @@ export interface ReadFileState {
   totalLines?: number;
   /** The service cut the content at its character cap before the window ended */
   truncated?: boolean;
+  /**
+   * Why reading an image left `images` empty. `storage_quota` means the user's
+   * file storage refused the upload; the card offers ways to free it up.
+   */
+  uploadError?: ReadFileUploadError;
+}
+
+export interface ReadFileUploadError {
+  kind: 'auth' | 'network' | 'storage_quota' | 'unknown';
+  /** The server's own error code, e.g. `storage_block:upgrade_required`. */
+  reason: string;
 }
 
 export interface WriteFileState {

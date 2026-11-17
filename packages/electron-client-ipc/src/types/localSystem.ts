@@ -300,6 +300,11 @@ export interface LocalReadFileResult {
    * requested `loc` window ended.
    */
   truncated?: boolean;
+  /**
+   * Why an image read could not be uploaded (`storage_quota` when the user's
+   * file storage refused it). `content` carries the model-facing explanation.
+   */
+  uploadError?: { kind: 'auth' | 'network' | 'storage_quota' | 'unknown'; reason: string };
 }
 
 export interface LocalSearchFilesParams {

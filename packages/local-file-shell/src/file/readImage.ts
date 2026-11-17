@@ -1,7 +1,12 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { ReadFileParams, ReadImageFileResult, UploadedImageRecord } from '../types';
+import type {
+  ImageUploadFailure,
+  ReadFileParams,
+  ReadImageFileResult,
+  UploadedImageRecord,
+} from '../types';
 import { resolveAgainstCwd } from './expandTilde';
 
 /**
@@ -33,10 +38,11 @@ export const getLocalImageMimeType = (filePath: string): string | undefined =>
 
 export interface ReadLocalImageFileOptions {
   /**
-   * Explains an upload failure to the model. The text follows
-   * "upload unavailable — ", so it should say why and what the model can do.
+   * Classifies an upload failure. The default only recognises the server's
+   * `storage_block:<reason>` code; hosts that know more about their transport
+   * (the desktop parses the CLI child's stderr) pass their own.
    */
-  describeUploadError?: (error: unknown) => string;
+  classifyUploadError?: (error: unknown) => ImageUploadFailure;
   /**
    * Uploads the image at an absolute path to file storage. Returns `undefined`
    * when the host declines, which degrades to a placeholder.
@@ -44,8 +50,39 @@ export interface ReadLocalImageFileOptions {
   upload: (filePath: string) => Promise<UploadedImageRecord | undefined>;
 }
 
-const defaultDescribeUploadError = (error: unknown): string =>
-  `${error instanceof Error ? error.message : String(error)}; the model cannot view this image`;
+const STORAGE_BLOCK_PATTERN = /storage_block:[\w-]+/;
+
+/** Default {@link ReadLocalImageFileOptions.classifyUploadError}. */
+export const classifyImageUploadError = (error: unknown): ImageUploadFailure => {
+  const message = error instanceof Error ? error.message : String(error);
+  const storageBlock = message.match(STORAGE_BLOCK_PATTERN);
+  if (storageBlock) return { kind: 'storage_quota', reason: storageBlock[0] };
+
+  return { kind: 'unknown', reason: message || 'unknown error' };
+};
+
+/**
+ * Model-facing explanation of an upload failure; follows "upload unavailable — ".
+ * Says why the model cannot see the image and what it should do next.
+ */
+export const formatImageUploadFailure = ({ kind, reason }: ImageUploadFailure): string => {
+  switch (kind) {
+    case 'storage_quota': {
+      // Every later image read fails the same way, so the model must stop the
+      // batch and hand the fix to the user instead of retrying image by image.
+      return `the user's LobeHub file storage is full or blocked by their plan (${reason}), so the model cannot view this image. Retrying will not help, and every other image read fails the same way until storage is available: do not read more images now. Tell the user, so they can delete files they no longer need from their LobeHub resource library or upgrade their plan, then read the images again`;
+    }
+    case 'network': {
+      return `network error while uploading (${reason}), already retried, so the model cannot view this image. It may work if the file is read again later`;
+    }
+    case 'auth': {
+      return `the app is not signed in to LobeHub (${reason}), so the model cannot view this image`;
+    }
+    default: {
+      return `${reason}; the model cannot view this image`;
+    }
+  }
+};
 
 /**
  * Read an image path for the agent: upload the bytes and return a durable
@@ -60,7 +97,7 @@ const defaultDescribeUploadError = (error: unknown): string =>
 export async function readLocalImageFile(
   { cwd, path: rawPath }: ReadFileParams,
   mimeType: string,
-  { describeUploadError = defaultDescribeUploadError, upload }: ReadLocalImageFileOptions,
+  { classifyUploadError = classifyImageUploadError, upload }: ReadLocalImageFileOptions,
 ): Promise<ReadImageFileResult> {
   const filePath = resolveAgainstCwd(rawPath, cwd) ?? rawPath;
   const filename = path.basename(filePath);
@@ -106,9 +143,10 @@ export async function readLocalImageFile(
   try {
     record = await upload(filePath);
   } catch (error) {
+    const uploadError = classifyUploadError(error);
     return buildResult(
-      `[Image: ${filename}] (upload unavailable — ${describeUploadError(error)})`,
-      times,
+      `[Image: ${filename}] (upload unavailable — ${formatImageUploadFailure(uploadError)})`,
+      { ...times, uploadError },
     );
   }
 

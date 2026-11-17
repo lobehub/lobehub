@@ -2,6 +2,8 @@ import { execFile } from 'node:child_process';
 import process from 'node:process';
 import { promisify } from 'node:util';
 
+import type { ImageUploadFailure } from '@lobechat/local-file-shell/types';
+
 import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
 import { resolveCliScript } from '@/modules/cliEmbedding';
 import { buildProxyEnv } from '@/modules/networkProxy/envBuilder';
@@ -54,13 +56,8 @@ export interface UploadedFileRecord {
   url: string;
 }
 
-export type UploadFailureKind = 'auth' | 'network' | 'storage_quota' | 'unknown';
-
-export interface UploadFailure {
-  kind: UploadFailureKind;
-  /** The CLI's own error line, e.g. `storage_block:upgrade_required`. */
-  reason: string;
-}
+/** `reason` is the CLI's own error line, e.g. `storage_block:upgrade_required`. */
+export type UploadFailure = ImageUploadFailure;
 
 const MAX_REASON_LENGTH = 300;
 

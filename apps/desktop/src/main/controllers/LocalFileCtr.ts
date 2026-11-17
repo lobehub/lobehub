@@ -95,10 +95,7 @@ import { dialog, shell } from 'electron';
 
 import ContentSearchService from '@/services/contentSearchSrv';
 import FileSearchService from '@/services/fileSearchSrv';
-import RemoteFileUploadService, {
-  describeUploadFailure,
-  type UploadFailure,
-} from '@/services/remoteFileUploadSrv';
+import RemoteFileUploadService, { describeUploadFailure } from '@/services/remoteFileUploadSrv';
 import { createLogger } from '@/utils/logger';
 import { netFetch } from '@/utils/net-fetch';
 import { shrinkImageForUpload } from '@/utils/shrinkImageForUpload';
@@ -107,23 +104,6 @@ import { ControllerModule, IpcMethod } from './index';
 
 // Create logger
 const logger = createLogger('controllers:LocalFileCtr');
-
-const formatUploadFailure = ({ kind, reason }: UploadFailure): string => {
-  switch (kind) {
-    case 'storage_quota': {
-      return `the user's LobeHub file storage is full (${reason}), so the model cannot view this image. Retrying will not help; the user needs to free up space in their file library or upgrade their plan`;
-    }
-    case 'network': {
-      return `network error while uploading (${reason}), already retried, so the model cannot view this image. It may work if the file is read again later`;
-    }
-    case 'auth': {
-      return `the desktop app is not signed in to LobeHub (${reason}), so the model cannot view this image`;
-    }
-    default: {
-      return `${reason}; the model cannot view this image`;
-    }
-  }
-};
 
 const SAFE_PATH_PREFIXES = ['/tmp', '/var/tmp'] as const;
 
@@ -506,10 +486,11 @@ export default class LocalFileCtr extends ControllerModule {
     if (imageMimeType) {
       return readLocalImageFile(params, imageMimeType, {
         // Degrade with the real cause so the model can tell a full storage
-        // quota (retrying is pointless) apart from a transient network error.
-        describeUploadError: (error) => {
+        // quota (retrying is pointless) apart from a transient network error,
+        // and the tool card can offer the user a way out.
+        classifyUploadError: (error) => {
           logger.warn('Image upload failed:', { error, filePath: params.path });
-          return formatUploadFailure(describeUploadFailure(error));
+          return describeUploadFailure(error);
         },
         upload: async (filePath) => {
           const prepared = await shrinkImageForUpload(filePath, imageMimeType);

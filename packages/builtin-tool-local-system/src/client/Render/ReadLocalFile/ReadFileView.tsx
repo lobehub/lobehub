@@ -1,8 +1,15 @@
 import { useToolRenderCapabilities } from '@lobechat/shared-tool-ui';
 import type { ReadFileState } from '@lobechat/tool-runtime';
-import { Flexbox, Image, Markdown, PreviewGroup, SyntaxHighlighter } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import {
+  ActionIcon,
+  createStaticStyles,
+  Flexbox,
+  Image,
+  Markdown,
+  PreviewGroup,
+  SyntaxHighlighter,
+  Text,
+} from '@lobehub/ui';
 import { ExternalLink, FolderOpen, SquareArrowOutUpRight } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import React, { memo, useMemo } from 'react';
@@ -12,6 +19,7 @@ import { InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
 import { useOpenEditedFile } from '@/features/Conversation/Messages/EditedFilesCard/useOpenEditedFile';
 
 import { stripFinalLineTerminator } from './buildReadFileState';
+import StorageBlockedAlert from './StorageBlockedAlert';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actions: css`
@@ -107,6 +115,7 @@ const ReadFileView = memo<ReadFileViewProps>(
     fileType,
     content,
     images,
+    uploadError,
     firstLineNumber = 1,
     sandboxBacked = false,
   }) => {
@@ -212,27 +221,31 @@ const ReadFileView = memo<ReadFileViewProps>(
           )}
         </Flexbox>
 
-        <Flexbox
-          className={styles.previewBox}
-          style={{ height: isHtml ? 240 : undefined, maxHeight: 240 }}
-        >
-          {isHtml ? (
-            <InlineHtmlPreview content={content} />
-          ) : isMarkdown ? (
-            <Markdown style={{ overflow: 'auto' }}>{content}</Markdown>
-          ) : (
-            // The bare highlighter: `Highlighter` trims its input, which would
-            // strip the first line's indentation and misalign the gutter.
-            <SyntaxHighlighter
-              className={styles.lineNumbers}
-              language={fileType || 'text'}
-              style={{ ...lineNumberVars, overflow: 'auto' }}
-              variant={'borderless'}
-            >
-              {code}
-            </SyntaxHighlighter>
-          )}
-        </Flexbox>
+        {uploadError?.kind === 'storage_quota' ? (
+          <StorageBlockedAlert reason={uploadError.reason} />
+        ) : (
+          <Flexbox
+            className={styles.previewBox}
+            style={{ height: isHtml ? 240 : undefined, maxHeight: 240 }}
+          >
+            {isHtml ? (
+              <InlineHtmlPreview content={content} />
+            ) : isMarkdown ? (
+              <Markdown style={{ overflow: 'auto' }}>{content}</Markdown>
+            ) : (
+              // The bare highlighter: `Highlighter` trims its input, which would
+              // strip the first line's indentation and misalign the gutter.
+              <SyntaxHighlighter
+                className={styles.lineNumbers}
+                language={fileType || 'text'}
+                style={{ ...lineNumberVars, overflow: 'auto' }}
+                variant={'borderless'}
+              >
+                {code}
+              </SyntaxHighlighter>
+            )}
+          </Flexbox>
+        )}
       </Flexbox>
     );
   },

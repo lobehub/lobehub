@@ -346,6 +346,9 @@ export default {
   'localFiles.read.more': 'View More',
   'localFiles.readFile': 'Read File',
   'localFiles.readFile.lineRange': 'Lines {{start}} - {{end}}',
+  'localFiles.readFile.storageBlocked.desc':
+    'Images the agent reads are saved to your file storage. Once there is room, ask it to read them again.',
+  'localFiles.readFile.storageBlocked.title': "The agent couldn't view this image",
   'localFiles.readFileError': 'Failed to read file, please check if the file path is correct',
   'localFiles.readFiles': 'Read Files',
   'localFiles.readFilesError': 'Failed to read files, please check if the file path is correct',

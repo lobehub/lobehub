@@ -279,6 +279,8 @@
   "localFiles.read.more": "查看更多",
   "localFiles.readFile": "读取文件",
   "localFiles.readFile.lineRange": "第 {{start}} 行至第 {{end}} 行",
+  "localFiles.readFile.storageBlocked.desc": "助手读取的图片会保存到你的文件存储。腾出空间后，让它重新读取即可。",
+  "localFiles.readFile.storageBlocked.title": "助手无法查看这张图片",
   "localFiles.readFileError": "读取文件失败，请检查文件路径是否正确",
   "localFiles.readFiles": "读取多个文件",
   "localFiles.readFilesError": "读取文件失败，请检查文件路径是否正确",

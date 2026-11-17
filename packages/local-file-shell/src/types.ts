@@ -155,6 +155,15 @@ export interface UploadedImageRecord {
   url: string;
 }
 
+export type ImageUploadFailureKind = 'auth' | 'network' | 'storage_quota' | 'unknown';
+
+/** Why an image read could not be uploaded, in a form the host UI can act on. */
+export interface ImageUploadFailure {
+  kind: ImageUploadFailureKind;
+  /** The server's own error code or line, e.g. `storage_block:upgrade_required`. */
+  reason: string;
+}
+
 /**
  * {@link ReadFileResult} for an image path. The bytes are uploaded to file
  * storage instead of being read as text, so a vision model can see the image.
@@ -165,6 +174,8 @@ export interface ReadImageFileResult extends ReadFileResult {
   /** Durable URL of the uploaded image; absent when the upload failed. */
   imageUrl?: string;
   isImage: true;
+  /** Set when the upload threw, so the UI can offer a fix instead of only the model text. */
+  uploadError?: ImageUploadFailure;
 }
 
 export interface WriteFileParams {

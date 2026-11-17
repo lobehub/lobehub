@@ -257,6 +257,30 @@ describe('LocalSystemExecutionRuntime.readFile', () => {
     expect(output.content).toContain('[Image: cat.png]');
   });
 
+  it('carries a storage-quota upload failure onto state.uploadError', async () => {
+    const uploadError = { kind: 'storage_quota', reason: 'storage_block:upgrade_required' };
+    const service = createService({
+      readLocalFile: vi.fn().mockResolvedValue({
+        content:
+          "[Image: hw-12.jpg] (upload unavailable — the user's LobeHub file storage is full)",
+        fileType: 'image/jpeg',
+        filename: 'hw-12.jpg',
+        isImage: true,
+        loc: [0, 0],
+        uploadError,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.readFile({ path: '/tmp/hw-12.jpg' });
+
+    expect(output.success).toBe(true);
+    expect(output.state?.images).toBeUndefined();
+    // The card reads this to offer "free up space" instead of raw model text.
+    expect(output.state?.uploadError).toEqual(uploadError);
+    expect(output.content).toContain('file storage is full');
+  });
+
   it('leaves text-file results unchanged (no images on state)', async () => {
     const service = createService({
       readLocalFile: vi.fn().mockResolvedValue({
