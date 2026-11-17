@@ -21,6 +21,7 @@ import {
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import type { MessageModel } from '@/database/models/message';
 import { HumanApprovalAlreadyResolvedError } from '@/database/models/message';
+import { TopicRepository } from '@/database/repositories/topic';
 import { router } from '@/libs/trpc/lambda';
 import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import { toClientExecAgentResult } from '@/server/routers/lambda/_helpers/groupMemberContinuationResult';
@@ -457,7 +458,13 @@ export const execRouter = router({
 
   cancelWorktreeTurn: aiAgentWriteProcedure
     .input(z.object({ topicId: z.string() }))
-    .mutation(({ ctx, input }) => ctx.topicModel.cancelWorktreeStart(input.topicId)),
+    .mutation(({ ctx, input }) =>
+      new TopicRepository(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ).cancelWorktreeStart(input.topicId),
+    ),
 
   retryWorktreeTurn: aiAgentWriteProcedure
     .input(z.object({ topicId: z.string() }))

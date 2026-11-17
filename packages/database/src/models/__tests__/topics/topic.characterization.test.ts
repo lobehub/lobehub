@@ -51,7 +51,6 @@ const PUBLIC_METHODS = [
   'batchDeleteIncludingTrashed',
   'batchInsert',
   'cancelRateLimitContinuation',
-  'cancelWorktreeStart',
   'count',
   'countBySender',
   'countInFlightInDirectory',

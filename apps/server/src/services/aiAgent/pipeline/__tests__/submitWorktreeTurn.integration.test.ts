@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
+import { TopicRepository } from '@/database/repositories/topic';
 import { agents, topics, users } from '@/database/schemas';
 
 import { submitWorktreeTurn } from '../submitWorktreeTurn';
@@ -23,6 +24,7 @@ const userId = 'worktree-turn-test-user';
 const agentId = generateEntityId('agents');
 const deps = { db, resolveAgentConfigOrThrow: vi.fn(), userId };
 const topicModel = new TopicModel(db, userId);
+const topicRepo = new TopicRepository(db, userId);
 const messageModel = new MessageModel(db, userId);
 const operationModel = new AgentOperationModel(db, userId);
 
@@ -113,18 +115,18 @@ describe('submitWorktreeTurn', () => {
       id: 'offline-check',
     };
     await expect(TopicModel.claimScheduledTopic(db, topicId, claim, now)).resolves.toBe(true);
-    await expect(topicModel.cancelWorktreeStart(topicId)).resolves.toBe('busy');
+    await expect(topicRepo.cancelWorktreeStart(topicId)).resolves.toBe('busy');
 
     const retryAt = new Date(now.getTime() + 30_000);
     await TopicModel.finishWorktreeStart(db, topicId, claim.id, {
       retryAt: retryAt.toISOString(),
       success: false,
     });
-    await expect(new TopicModel(db, 'foreign-user').cancelWorktreeStart(topicId)).resolves.toBe(
-      'unchanged',
-    );
-    await expect(topicModel.cancelWorktreeStart(topicId)).resolves.toBe('cancelled');
-    await expect(topicModel.cancelWorktreeStart(topicId)).resolves.toBe('unchanged');
+    await expect(
+      new TopicRepository(db, 'foreign-user').cancelWorktreeStart(topicId),
+    ).resolves.toBe('unchanged');
+    await expect(topicRepo.cancelWorktreeStart(topicId)).resolves.toBe('cancelled');
+    await expect(topicRepo.cancelWorktreeStart(topicId)).resolves.toBe('unchanged');
     expect(await TopicModel.getDueScheduledTopics(db, retryAt, topicId)).toHaveLength(0);
     await expect(TopicModel.claimScheduledTopic(db, topicId, claim, retryAt)).resolves.toBe(false);
     await expect(topicModel.findById(topicId)).resolves.toMatchObject({
