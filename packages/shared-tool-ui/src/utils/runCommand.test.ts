@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getRunCommandDisplayCommand } from './runCommand';
+import { findGitHubAuthorizeLink, getRunCommandDisplayCommand } from './runCommand';
 
 describe('getRunCommandDisplayCommand', () => {
   it('keeps plain commands unchanged', () => {
@@ -25,5 +25,24 @@ describe('getRunCommandDisplayCommand', () => {
 
   it('supports sh -c wrappers', () => {
     expect(getRunCommandDisplayCommand("sh -c 'printf ok'")).toBe('printf ok');
+  });
+});
+
+describe('findGitHubAuthorizeLink', () => {
+  it('finds the authorize link the git credential helper prints', () => {
+    const stderr = [
+      'lh git credential: Connect your GitHub account to LobeHub to push from a shared device.',
+      '  https://app.lobehub.com/api/webhooks/github/authorize?returnTo=%2Fsettings%2Fintegrations%2Fgithub',
+      "fatal: could not read Username for 'https://github.com': terminal prompts disabled",
+    ].join('\n');
+
+    expect(findGitHubAuthorizeLink(stderr)).toBe(
+      'https://app.lobehub.com/api/webhooks/github/authorize?returnTo=%2Fsettings%2Fintegrations%2Fgithub',
+    );
+  });
+
+  it('ignores output without one', () => {
+    expect(findGitHubAuthorizeLink('Everything up-to-date')).toBeUndefined();
+    expect(findGitHubAuthorizeLink(undefined)).toBeUndefined();
   });
 });

@@ -23,10 +23,12 @@ import { scmService } from '@/services/scm';
 
 import { IntegrationConnectionsSkeleton } from '../Skeleton';
 import { useGithubIntegration } from '../useGithubIntegration';
+import Account from './Account';
 import Automation from './Automation';
 import Connections from './Connections';
 import { GITHUB_INTEGRATION } from './definition';
-import { buildGithubInstallHref } from './installHref';
+import { buildGithubAuthorizeHref, buildGithubInstallHref } from './installHref';
+import SharedDevices from './SharedDevices';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   back: css`
@@ -83,6 +85,7 @@ const KNOWN_ERRORS = new Set([
   'identity_taken',
   'installation_fetch_failed',
   'missing_installation',
+  'session_mismatch',
   'workspace_forbidden',
 ]);
 
@@ -113,9 +116,11 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
     const error = url.searchParams.get('error');
     const account = url.searchParams.get('account');
     const pending = url.searchParams.get('pending');
-    if (!installed && !error && !pending) return;
+    const authorized = url.searchParams.get('authorized');
+    if (!installed && !error && !pending && !authorized) return;
 
-    if (installed === 'ok') toast.success(t('github.installResult.success', { account }));
+    if (authorized === 'ok') toast.success(t('github.account.authorized', { account }));
+    else if (installed === 'ok') toast.success(t('github.installResult.success', { account }));
     else if (installed === 'updated') toast.success(t('github.installResult.updated'));
     else if (error && KNOWN_ERRORS.has(error)) {
       toast.error(t(`github.installResult.error.${error}` as any));
@@ -144,7 +149,9 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
       });
     }
 
-    for (const key of ['installed', 'error', 'account', 'pending']) url.searchParams.delete(key);
+    for (const key of ['installed', 'error', 'account', 'pending', 'authorized']) {
+      url.searchParams.delete(key);
+    }
     window.history.replaceState({}, '', url.pathname + (url.search ? `?${url.searchParams}` : ''));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t, ready]);
@@ -157,6 +164,11 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
   const installHref =
     canWrite && config?.enabled && config.installPath
       ? buildGithubInstallHref(config.installPath, { appOrigin, workspaceId, workspaceSlug })
+      : undefined;
+
+  const authorizeHref =
+    config?.authorizeEnabled && config.authorizePath
+      ? buildGithubAuthorizeHref(config.authorizePath, { appOrigin, workspaceSlug })
       : undefined;
 
   const first = installations.at(-1);
@@ -233,6 +245,12 @@ const GithubIntegration = memo<GithubIntegrationProps>(({ onBack }) => {
           scope={scope}
         />
       )}
+
+      {config?.authorizeEnabled && !data.isInitialLoading ? (
+        <Account authorizeHref={authorizeHref} identity={identity} onChange={data.mutate} />
+      ) : null}
+
+      {scope === 'workspace' && config?.authorizeEnabled ? <SharedDevices /> : null}
 
       <Automation />
     </Flexbox>
