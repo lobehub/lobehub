@@ -4612,6 +4612,10 @@ export type PostApiV1AudioTranscriptionsErrors = {
      * Internal server error
      */
     500: ApiError;
+    /**
+     * Upstream error
+     */
+    502: ApiError;
 };
 
 export type PostApiV1AudioTranscriptionsError = PostApiV1AudioTranscriptionsErrors[keyof PostApiV1AudioTranscriptionsErrors];

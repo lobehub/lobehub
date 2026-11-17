@@ -236,6 +236,28 @@ describe('transcription', () => {
   });
 });
 
+describe('provider failures', () => {
+  it('answers 502 with the provider reason instead of an empty 500', async () => {
+    holder.transcribe = async () => {
+      throw new TRPCError({
+        cause: {
+          error: { message: 'Incorrect API key provided' },
+          errorType: 'InvalidProviderAPIKey',
+        } as unknown as Error,
+        code: 'INTERNAL_SERVER_ERROR',
+      });
+    };
+
+    const res = await transcribe({ file: clip(), model: 'whisper-1' }, { key: KEYS.write });
+
+    expect(res.status).toBe(502);
+    expect(await json(res)).toMatchObject({
+      code: 'upstream_error',
+      message: 'Transcription provider error (InvalidProviderAPIKey): Incorrect API key provided',
+    });
+  });
+});
+
 describe('workspace isolation', () => {
   it('transcribes inside the key workspace and refuses another workspace', async () => {
     const ok = await transcribe({ file: clip(), model: 'whisper-1' }, { key: KEYS.workspace });
