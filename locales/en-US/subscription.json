@@ -913,6 +913,7 @@
   "usage.window.overflow.updateFailed": "Update failed. Try again.",
   "usage.window.referral": "Referral credits",
   "usage.window.resetsIn": "Resets in {{duration}}",
+  "usage.window.rule.agentRunMonth": "Monthly agent task limit",
   "usage.window.rule.freeMonth": "Free monthly limit",
   "usage.window.rule.plan5h": "5-hour limit",
   "usage.window.rule.plan7d": "Weekly limit",

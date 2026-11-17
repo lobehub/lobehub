@@ -984,6 +984,7 @@ export default {
   'usage.window.resetsIn': 'Resets in {{duration}}',
   'usage.window.rule.plan5h': '5-hour limit',
   'usage.window.rule.plan7d': 'Weekly limit',
+  'usage.window.rule.agentRunMonth': 'Monthly agent task limit',
   'usage.window.rule.freeMonth': 'Free monthly limit',
   'usage.window.rule.planMonth': 'Monthly limit',
   'creditUsageReminder.exhausted': "This billing cycle's subscription usage has run out",

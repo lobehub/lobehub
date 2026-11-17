@@ -913,6 +913,7 @@
   "usage.window.overflow.updateFailed": "更新失败，请重试",
   "usage.window.referral": "返利额度",
   "usage.window.resetsIn": "{{duration}}后重置",
+  "usage.window.rule.agentRunMonth": "智能体任务每月限额",
   "usage.window.rule.freeMonth": "每月免费限额",
   "usage.window.rule.plan5h": "5 小时限额",
   "usage.window.rule.plan7d": "每周限额",
