@@ -1,6 +1,10 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { DEFAULT_TOOL_RESULT_MAX_LENGTH, truncateToolResult } from '@lobechat/prompts/toolResult';
-import { type ChatToolPayload, type DeviceClient } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  connectorIdentifierCandidates,
+  type DeviceClient,
+} from '@lobechat/types';
 import { isDeviceOnlyMcpEndpoint, shouldConnectViaDevice } from '@lobechat/utils/mcpEndpoint';
 import debug from 'debug';
 
@@ -366,11 +370,14 @@ export class ToolExecutionService {
         // the run (the one the permission gate checked) may lend its accounts,
         // and only to a tool it serves and has not disabled. It resolves in the
         // run's conversation, as discovery did: a private agent's own topic
-        // admits its owner's private and personal rows.
-        const [connector] = await connectorModel.resolveByIdentifiers([identifier], {
-          agentId: context.agentId,
-          topicId: context.topicId,
-        });
+        // admits its owner's private and personal rows, each a tool set of its
+        // own, so the row is the one this tool prefix names.
+        const connector = (
+          await connectorModel.resolveToolSets(
+            { agentId: context.agentId, topicId: context.topicId },
+            connectorIdentifierCandidates(identifier),
+          )
+        ).find((row) => row.toolIdentifier === identifier);
         if (!connector || connector.id !== marker.connectorId || !connector.isEnabled)
           throw new Error(
             'Connector is no longer available. Ask the user to connect an account in Settings > Connectors.',
@@ -698,9 +705,11 @@ export class ToolExecutionService {
     payload: ChatToolPayload,
     context: ToolExecutionContext,
 
-    _mcpParams: CloudMCPParams,
+    mcpParams: CloudMCPParams,
   ): Promise<ToolExecutionResult> {
-    const { identifier, apiName, arguments: args } = payload;
+    const { apiName, arguments: args } = payload;
+    // The gateway knows the connector, not a private row's tool prefix
+    const identifier = mcpParams.name || payload.identifier;
 
     log('Executing Cloud MCP tool: %s:%s via cloud gateway', identifier, apiName);
 

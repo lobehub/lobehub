@@ -57,6 +57,37 @@ const pickRoutingMetadata = (metadata: Record<string, unknown> | null | undefine
  */
 export const connectorRunRouter = router({
   /**
+   * The connector rows a conversation's run turns into tool sets, each with its
+   * tool prefix (`toolIdentifier`): what a client-run chat offers the model and
+   * routes calls by. Only the server can tell a private agent's own topic from
+   * a group, a channel, a link-shared or another agent's one, and a private
+   * agent's own topic also runs its owner's personal rows, which no workspace
+   * list on the client holds. Shaped like `connector.list`: no credentials and
+   * no client secret; every row is one the caller may run.
+   */
+  listForRun: connectorProcedure
+    .input(z.object({ agentId: z.string().optional(), topicId: z.string().optional() }))
+    .query(async ({ input, ctx }) => {
+      if (input.agentId && !(await ctx.agentModel.existsById(input.agentId))) return [];
+      const connectors = await ctx.connectorModel.resolveToolSets({
+        agentId: input.agentId,
+        topicId: input.topicId,
+      });
+      const presentation = await loadConnectorPresentation(connectors, ctx);
+      // A personal connector's tool rows live in the personal scope
+      const wsId = ctx.workspaceId ?? undefined;
+      const toolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId, { agentRun: true });
+      const tools = await toolModel.queryAllByConnectorIds(connectors.map((c) => c.id));
+
+      return connectors.map(({ credentials: _credentials, oidcConfig, ...connector }) => ({
+        ...connector,
+        ...presentation.get(connector.id),
+        oidcConfig: oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig,
+        tools: tools.filter((tool) => tool.userConnectorId === connector.id),
+      }));
+    }),
+
+  /**
    * The edit-read of the connector a conversation's call runs on, for a desktop
    * that runs a stdio connector itself. The server resolves the row exactly as
    * `callTool` does (`connectorRunScope`, then priority), so the desktop runs
@@ -171,6 +202,7 @@ export const connectorRunRouter = router({
         metadata: pickRoutingMetadata(connector.metadata),
         sourceType: connector.sourceType,
         status: connector.status,
+        toolIdentifier: connector.toolIdentifier,
         tools: await toolModel.queryByConnector(connector.id),
       };
     }),

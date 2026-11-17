@@ -1,7 +1,11 @@
 import { hasCallableMcpEndpoint, isMarketplaceInstallRunnable } from '@lobechat/const';
 import { getMcpServerFingerprint, isSyncedMcpToolVisibleTo } from '@lobechat/const/mcpApp';
 import type { LobeChatDatabase } from '@lobechat/database';
-import { getDisabledPluginIds, needsConnectorReauthorization } from '@lobechat/types';
+import {
+  connectorIdentifierCandidates,
+  getDisabledPluginIds,
+  needsConnectorReauthorization,
+} from '@lobechat/types';
 import {
   connectorDeviceBinding,
   connectorMcpEndpoint,
@@ -124,16 +128,31 @@ export interface ConnectorExecContext extends ConnectorToolSyncContext {
  * conversation is decided here, never by the client.
  */
 export const resolveConnectorForRun = async (
-  params: { agentId?: string; identifier: string; topicId?: string },
+  params: {
+    agentId?: string;
+    /**
+     * The tool prefix the call names (`connectorToolIdentifier`): a private or
+     * personal row is a tool set of its own beside the shared row of its
+     * connector, and only the row the prefix belongs to answers.
+     */
+    identifier: string;
+    topicId?: string;
+  },
   ctx: Pick<ConnectorExecContext, 'agentModel' | 'connectorModel'>,
 ) => {
-  if (!params.agentId) return ctx.connectorModel.queryByIdentifiers([params.identifier]);
+  // Without an agent only shared rows resolve, each under its identifier
+  if (!params.agentId)
+    return (await ctx.connectorModel.queryByIdentifiers([params.identifier])).map((row) => ({
+      ...row,
+      toolIdentifier: row.identifier,
+    }));
   if (!(await ctx.agentModel.existsById(params.agentId))) return [];
 
-  return ctx.connectorModel.resolveByIdentifiers([params.identifier], {
-    agentId: params.agentId,
-    topicId: params.topicId,
-  });
+  const rows = await ctx.connectorModel.resolveToolSets(
+    { agentId: params.agentId, topicId: params.topicId },
+    connectorIdentifierCandidates(params.identifier),
+  );
+  return rows.filter((row) => row.toolIdentifier === params.identifier);
 };
 
 /**
@@ -214,12 +233,13 @@ export const callConnectorToolById = async (
   ctx: ConnectorExecContext,
 ): Promise<unknown> => {
   const [connector] = await resolveConnectorForRun(params, ctx);
+  // The agent's configuration names the connector, not the row's tool prefix
   if (
     params.fromEntrypoint &&
     params.agentId &&
     getDisabledPluginIds(
       (await ctx.agentModel.getAgentConfigById(params.agentId))?.plugins ?? undefined,
-    ).includes(params.identifier)
+    ).includes(connector?.identifier ?? params.identifier)
   )
     throw new ConnectorToolCallError('FORBIDDEN', 'This app is disabled for the agent');
   if (!connector) {

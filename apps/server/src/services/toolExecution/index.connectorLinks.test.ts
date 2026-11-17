@@ -26,6 +26,11 @@ vi.mock('@/database/models/connector', () => ({
         const row = await mocks.find();
         return row ? [row] : [];
       },
+      resolveToolSets: async (target: unknown) => {
+        mocks.resolveTarget(target);
+        const row = await mocks.find();
+        return row ? [{ ...row, toolIdentifier: row.toolIdentifier ?? row.identifier }] : [];
+      },
       getLinkModel: () => ({ listByConnectorIds: mocks.links }),
     };
   }),

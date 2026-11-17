@@ -1,4 +1,6 @@
+import { hasCallableMcpEndpoint } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
+import { connectorIdentifierCandidates } from '@lobechat/types';
 
 import { ConnectorModel, type ConnectorRunTarget } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
@@ -12,7 +14,9 @@ export { patchManifestWithPermissions } from './patchManifestPermissions';
  *
  * @param db        - Server DB instance
  * @param userId    - Authenticated user ID
- * @param identifier - Connector identifier (e.g. 'gmail', 'vercel')
+ * @param identifier - The tool's identifier: an MCP connector row's tool prefix
+ *   (`connectorToolIdentifier`, e.g. 'vercel' or a private row's
+ *   'vercel-3f9a1c2e'), or a connector identifier (e.g. 'gmail')
  * @param toolName  - Tool API name (e.g. 'gmail_search_emails', 'deploy')
  * @param workspaceId - Workspace scope (omit for personal mode)
  * @param target - The run's agent and topic, so the gate resolves the same
@@ -31,7 +35,13 @@ export async function getConnectorToolPermission(
 ): Promise<ConnectorToolPermission | null> {
   try {
     const connectorModel = new ConnectorModel(db, userId, workspaceId);
-    const [connector] = await connectorModel.resolveByIdentifiers([identifier], target);
+    // An MCP connector's tool runs on the row its prefix names; every other
+    // tool (Composio, LobeHub skills, plugins) on the identifier's top row
+    const toolSet = (
+      await connectorModel.resolveToolSets(target, connectorIdentifierCandidates(identifier))
+    ).find((row) => row.toolIdentifier === identifier && hasCallableMcpEndpoint(row));
+    const connector =
+      toolSet ?? (await connectorModel.resolveByIdentifiers([identifier], target))[0];
     if (!connector) return null;
 
     const toolModel = new ConnectorToolModel(db, userId, workspaceId, { agentRun: true });
