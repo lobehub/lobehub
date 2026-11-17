@@ -2,6 +2,10 @@ import type { AgentInterventionInteractionKind } from '@lobechat/agent-gateway-c
 import type { HeteroPermissionMode } from '@lobechat/types';
 
 import type { AskUserBridge, InterventionAnswer } from '../askUser/AskUserBridge';
+import type {
+  ClaudeCodeControlRequest,
+  ClaudeCodeControlRequestHandle,
+} from '../spawn/claudeCodeLiveInput';
 import { resolveClaudeCodePermissionMode } from './args';
 import {
   buildClaudeCodePermissionIntervention,
@@ -100,3 +104,48 @@ export const buildSetPermissionModeRequest = (
   mode: resolveClaudeCodePermissionMode(mode, isRoot).mode,
   subtype: 'set_permission_mode',
 });
+
+/** How long Claude Code gets to confirm a mode switch. */
+export const SET_PERMISSION_MODE_TIMEOUT_MS = 10_000;
+
+/**
+ * Switch a live CLI session's mode: write `set_permission_mode` into its stdin
+ * and wait for Claude Code to confirm. The mode report follows on stdout.
+ *
+ * @param send Writes a control request; `undefined` once input has closed.
+ * @returns the mode Claude Code switched to
+ * @throws When input is closed, Claude Code refuses or never answers, or `signal` aborts.
+ */
+export const setClaudeCodePermissionMode = async (
+  send: (request: ClaudeCodeControlRequest) => ClaudeCodeControlRequestHandle | undefined,
+  mode: HeteroPermissionMode,
+  {
+    isRoot,
+    signal,
+    timeoutMs = SET_PERMISSION_MODE_TIMEOUT_MS,
+  }: { isRoot?: boolean; signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<HeteroPermissionMode> => {
+  const request = buildSetPermissionModeRequest(mode, isRoot);
+  const sent = send(request);
+  if (!sent) throw new Error('The Claude Code session no longer takes input');
+
+  let timer: NodeJS.Timeout | undefined;
+  let onAbort: (() => void) | undefined;
+  const cutOff = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error('Claude Code did not confirm the mode switch in time')),
+      timeoutMs,
+    );
+    onAbort = () => reject(new Error('The run ended before Claude Code confirmed the mode'));
+    if (signal?.aborted) onAbort();
+    else signal?.addEventListener('abort', onAbort, { once: true });
+  });
+  try {
+    const answer = await Promise.race([sent.response, cutOff]);
+    if (answer.subtype === 'error') throw new Error(answer.error);
+    return request.mode;
+  } finally {
+    clearTimeout(timer);
+    if (onAbort) signal?.removeEventListener('abort', onAbort);
+  }
+};

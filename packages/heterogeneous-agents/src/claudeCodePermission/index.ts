@@ -33,4 +33,6 @@ export {
   type ClaudeCodePermissionAsk,
   type ClaudeCodePermissionTransport,
   decideClaudeCodePermission,
+  SET_PERMISSION_MODE_TIMEOUT_MS,
+  setClaudeCodePermissionMode,
 } from './responder';
