@@ -177,8 +177,12 @@ export const prepareHeteroRun = async (
   const githubTokenPromise = traceHeteroStage('github_token', resolveGithubToken);
   const recentMessagesPromise = traceHeteroStage('history', loadRecentMessages);
   const [resumeSessionId, operationJwt, topic] = await settleInOrder([
+    // A sub-agent resumes its own session, never the topic's: the topic's
+    // belongs to the conversation's agent or to another sub-agent.
     traceHeteroStage('resume_session', () =>
-      heteroService.getHeterogeneousResumeSessionId(topicId),
+      appContext?.isolationThread && appContext.threadId
+        ? heteroService.getIsolationThreadResumeSessionId(appContext.threadId)
+        : heteroService.getHeterogeneousResumeSessionId(topicId),
     ),
     traceHeteroStage('sign_operation_jwt', signOperationJwt),
     // Read repos from topic metadata for sandbox setup (web/cloud only).
