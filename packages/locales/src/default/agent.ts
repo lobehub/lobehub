@@ -1277,6 +1277,8 @@ export default {
   'webhook.actions.test': 'Send test',
   'webhook.actions.usage': 'How to call',
   'webhook.autoApproveTag': 'Auto-approve',
+  'webhook.channel.readOnly':
+    'Results are posted to this Channel. Change it with the lh CLI or by asking the Agent; here you can only view or delete it.',
   'webhook.cancel': 'Cancel',
   'webhook.create': 'Create webhook',
   'webhook.created.done': 'Done',

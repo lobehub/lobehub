@@ -5228,6 +5228,13 @@ When I am ___, I need ___
   'automations.source.topicMode.reuse': 'One shared topic',
   'automations.untitledTopic': 'Untitled topic',
   'automations.target.webhookCalls': 'Calls and topics',
+  'automations.error.channel_unavailable':
+    "Couldn't post the last result to the Channel: the Agent or its creator is no longer a member, or the Channel was archived.",
+  'automations.target.channel': 'Posts to {{channel}}',
+  'automations.target.channelHidden': "Posts to a Channel you're not in",
+  'automations.target.channelThread': 'Posts to a thread in {{channel}}: {{thread}}',
+  'automations.target.untitledChannel': 'Untitled Channel',
+  'automations.target.untitledThread': 'Untitled thread',
   'automations.lastDelivery.never': 'No events yet',
   'automations.status.active': 'Active',
   'automations.status.reconnect': 'Reconnect needed',

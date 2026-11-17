@@ -15,6 +15,7 @@ import AgentAvatar from '@/components/AgentAvatar';
 import ConnectorBrandIcon from '@/features/Connectors/ConnectorBrandIcon';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
+import ChannelTarget, { channelTargetOf } from './ChannelTarget';
 import { summarizeArguments } from './formatArguments';
 
 dayjs.extend(relativeTime);
@@ -188,6 +189,8 @@ TargetCell.displayName = 'AutomationTargetCell';
 export const TopicCell = memo<{ item: InboundWebhookItem }>(({ item }) => {
   const { t } = useTranslation('setting');
   const { agent, topic } = item;
+  // Results posted to a Channel are read there, not in the Topic the run works in.
+  if (channelTargetOf(item)) return <ChannelTarget item={item} />;
   // A webhook starts its own topics (a new one per run, or by thread); its page lists every call
   // and where it ran, as on the settings list.
   if (agent && item.source.kind === 'generic')

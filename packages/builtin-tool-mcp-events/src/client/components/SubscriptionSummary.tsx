@@ -61,7 +61,19 @@ const SubscriptionSummary = memo<SubscriptionSummaryProps>(({ detailed, subscrip
         <AutomationStatusTag item={subscription} />
       </Flexbox>
       <Text style={{ fontSize: 12 }} type={'secondary'}>
-        {filter} · {lifetime}
+        {[
+          filter,
+          lifetime,
+          // Made in a Channel: each event's result is posted back there, not left in a topic.
+          subscription.deliversTo &&
+            t(
+              subscription.deliversTo === 'thread'
+                ? 'builtins.lobe-mcp-events.render.deliversToThread'
+                : 'builtins.lobe-mcp-events.render.deliversToChannel',
+            ),
+        ]
+          .filter(Boolean)
+          .join(' · ')}
       </Text>
       {detailed && (
         <AutomationStatusReason

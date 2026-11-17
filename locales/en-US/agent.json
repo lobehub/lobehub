@@ -985,6 +985,7 @@
   "webhook.actions.usage": "How to call",
   "webhook.autoApproveTag": "Auto-approve",
   "webhook.cancel": "Cancel",
+  "webhook.channel.readOnly": "Results are posted to this Channel. Change it with the lh CLI or by asking the Agent; here you can only view or delete it.",
   "webhook.create": "Create webhook",
   "webhook.created.done": "Done",
   "webhook.created.title": "Webhook created",

@@ -985,6 +985,7 @@
   "webhook.actions.usage": "调用方式",
   "webhook.autoApproveTag": "自动批准",
   "webhook.cancel": "取消",
+  "webhook.channel.readOnly": "运行结果会发到这个频道。如需修改，请使用 lh CLI 或让助理在对话中修改；这里只能查看和删除。",
   "webhook.create": "创建 Webhook",
   "webhook.created.done": "完成",
   "webhook.created.title": "Webhook 已创建",

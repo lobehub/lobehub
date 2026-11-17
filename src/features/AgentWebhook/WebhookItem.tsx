@@ -35,6 +35,7 @@ import {
   AutomationStatusReason,
   AutomationStatusTag,
 } from '@/features/Automations/AutomationStatus';
+import ChannelTarget from '@/features/Automations/ChannelTarget';
 import { inboundWebhookService } from '@/services/inboundWebhook';
 
 import DeliveryLog from './DeliveryLog';
@@ -106,6 +107,10 @@ const WebhookItem = memo<WebhookItemProps>(
     // Bumped after a test so an open log reads the new delivery.
     const [logKey, setLogKey] = useState(0);
     const source = item.source.kind === 'generic' ? item.source : undefined;
+    // One that posts to a Channel is configured from the CLI or by the Agent; here it is shown and
+    // can be deleted, not changed.
+    const readOnly = !!source?.delivery;
+    const canConfigure = item.canConfigure && !readOnly;
     const active = pendingActive ?? item.status !== 'paused';
     const name = item.name?.trim() || t('webhook.defaultName');
     const toggle = (next: Section) =>
@@ -179,7 +184,7 @@ const WebhookItem = memo<WebhookItemProps>(
 
     // What the webhook runs is its creator's to change; others who manage it can stop or delete it.
     const menu: DropdownItem[] = [
-      ...(item.canConfigure
+      ...(canConfigure
         ? ([
             {
               icon: <Icon icon={PencilIcon} />,
@@ -235,7 +240,12 @@ const WebhookItem = memo<WebhookItemProps>(
             </Flexbox>
             <span {...stylex.props(styles.meta)}>{meta}</span>
           </Flexbox>
-          {item.canManage && (
+          {item.canManage && readOnly && (
+            <DropdownMenu items={menu} placement={'bottomRight'}>
+              <ActionIcon icon={MoreHorizontalIcon} title={t('webhook.actions.more')} />
+            </DropdownMenu>
+          )}
+          {item.canManage && !readOnly && (
             <>
               <Switch
                 checked={active}
@@ -251,6 +261,15 @@ const WebhookItem = memo<WebhookItemProps>(
         </Flexbox>
 
         <AutomationStatusReason item={item} />
+
+        {readOnly && (
+          <Flexbox gap={2}>
+            <ChannelTarget item={item} />
+            <Text style={{ fontSize: 12 }} type={'secondary'}>
+              {t('webhook.channel.readOnly')}
+            </Text>
+          </Flexbox>
+        )}
 
         {item.endpoint && (
           <Flexbox horizontal align={'center'} gap={8} {...stylex.props(styles.endpointRow)}>
