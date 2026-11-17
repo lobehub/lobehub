@@ -147,6 +147,46 @@ const recordJobPids = (dir: string) =>
 const shellSingleQuote = (value: string): string => `'${value.replaceAll("'", String.raw`'\''`)}'`;
 
 /**
+ * Body of the `lh` wrapper: resolves an installable `@lobehub/cli`, then execs
+ * it with the credentials.
+ *
+ * The CLI ships to npm several times a day, and right after a publish, while
+ * npm is still processing it, the registry can list the new version as
+ * `latest` before it serves its tarball. A bare `npx -y @lobehub/cli`
+ * re-resolves `latest` on every call, even with an older copy in the npx
+ * cache, so in that window every sandbox `lh` failed with
+ * `npm error 404 … cli-<new version>.tgz`, which agents then reported as the
+ * sandbox being pinned to an unpublished CLI.
+ *
+ * Resolving the binary (`command -v lh` under `npx --call`) is a separate step
+ * from running it, so a failed install can fall back to the newest release
+ * below `latest` without ever running the model's command twice. The resolved
+ * path must be an installed package bin: the wrapper itself is on `PATH` too,
+ * and resolving to it would recurse. npm's output is shown only when both
+ * attempts fail; a fallback prints one line naming the skipped release. npm
+ * gets neither the credentials nor stdin, so only the CLI receives the token,
+ * and input piped into `lh` still reaches the CLI.
+ */
+const lhWrapperBody = (envAssignments: string) => [
+  '#!/bin/sh',
+  'lh_log=$(mktemp) || exit 1',
+  'lh_resolve() {',
+  `  lh_bin=$(npx --yes --package="$1" --call 'command -v lh' 2>>"$lh_log" </dev/null) &&`,
+  '    case $lh_bin in /*/node_modules/.bin/lh) [ -x "$lh_bin" ] ;; *) false ;; esac',
+  '}',
+  'if ! lh_resolve @lobehub/cli; then',
+  '  if lh_latest=$(npm view @lobehub/cli version 2>>"$lh_log" </dev/null) &&',
+  '    lh_resolve "@lobehub/cli@<$lh_latest"; then',
+  '    echo "lh: @lobehub/cli@$lh_latest cannot be downloaded from npm yet; using the release before it" >&2',
+  '  else',
+  '    cat "$lh_log" >&2; rm -f "$lh_log"; exit 1',
+  '  fi',
+  'fi',
+  'rm -f "$lh_log"',
+  `${envAssignments} exec "$lh_bin" "$@"`,
+];
+
+/**
  * Detect and prepare `lh` CLI commands for execution in the cloud sandbox.
  *
  * Instead of rewriting every `lh` occurrence (which can only ever cover the
@@ -157,7 +197,8 @@ const shellSingleQuote = (value: string): string => `'${value.replaceAll("'", St
  * ```sh
  * __lobehub_lh_bin=$(mktemp -d) && trap 'rm -rf …' EXIT && … && cat > …/lh <<'…' && chmod 700 … && export PATH=…
  * #!/bin/sh
- * LOBEHUB_JWT='…' LOBEHUB_SERVER='…' LOBEHUB_WORKSPACE_ID='…' exec npx -y @lobehub/cli "$@"
+ * <resolve an installable @lobehub/cli into $lh_bin, see lhWrapperBody>
+ * LOBEHUB_JWT='…' LOBEHUB_SERVER='…' LOBEHUB_WORKSPACE_ID='…' exec "$lh_bin" "$@"
  * …
  * (
  * <original command>
@@ -171,11 +212,11 @@ const shellSingleQuote = (value: string): string => `'${value.replaceAll("'", St
  * is inherited by every descendant, so each of those forms resolves the same
  * credentialed wrapper, while the JWT is still emitted exactly once.
  *
- * The credentials are assignment-prefixed to `npx` INSIDE the wrapper rather
+ * The credentials are assignment-prefixed to the CLI INSIDE the wrapper rather
  * than `export`ed around the script. Exporting would put a full user auth token
  * in the environment of every command the model wrote, where any later `env`,
  * `echo $LOBEHUB_JWT`, `curl` or child process could read it. Only `PATH` is
- * exported; the token stays scoped to the `npx` process the wrapper execs.
+ * exported; the token stays scoped to the CLI process the wrapper execs.
  *
  * The sandbox session outlives the command, so the wrapper must not: the EXIT
  * trap deletes it once the script ends, and the command runs in a subshell so
@@ -273,8 +314,7 @@ export const preprocessLhCommand = async (
         // Without the wrapper an `lh` would silently run unauthenticated, so
         // stop before any of the command runs.
         ` || { echo 'lh: could not set up LobeHub CLI credentials' >&2; exit 1; }`,
-      '#!/bin/sh',
-      `${envAssignments} exec npx -y @lobehub/cli "$@"`,
+      ...lhWrapperBody(envAssignments),
       LH_SHIM_EOF,
       // A subshell, so the command's own `trap … EXIT` or `exit` cannot skip the
       // outer cleanup, and it exits with the command's own status. Jobs it left
