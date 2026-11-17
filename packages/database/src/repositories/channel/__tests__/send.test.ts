@@ -45,6 +45,25 @@ describe('ChannelRepository.send', () => {
     expect(forOwner.unreadCount).toBe(1);
   });
 
+  // A relay (or its receipt) is posted for the person while they may be away.
+  it('leaves the sender’s unread alone for a request an Agent relayed for them', async () => {
+    const { asMember, asOwner, channel } = await fixture.createTeamChannel();
+    await asOwner.send(channel.id, {
+      content: 'Earlier',
+      requestKey: 'earlier',
+      routing: 'fallback',
+    });
+    await asMember.send(channel.id, {
+      content: 'Relayed',
+      metadata: { via: { agentId: 'agent-relay', name: 'Relay' } },
+      requestKey: 'relayed',
+      routing: 'fallback',
+    });
+
+    const [forMember] = await asMember.list();
+    expect(forMember.unreadCount).toBe(2);
+  });
+
   it('queues a job per mentioned Agent, on behalf of the sender', async () => {
     const { asMember, channel, member } = await fixture.createTeamChannel();
     const coder = await fixture.addAgent(channel.id, 'Coder');

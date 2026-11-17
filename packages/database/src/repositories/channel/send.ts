@@ -310,9 +310,10 @@ export const sendMessage = async (
   });
   await attachFiles(tx, { fileIds, messageId: message.id });
   // Like any chat app, sending reads the conversation up to the sender's own message, so it
-  // never counts as unread (or notifies) on the sender's other devices. An Agent's request is
-  // not the person reading, so it leaves their unseen messages unread.
-  if (!author)
+  // never counts as unread (or notifies) on the sender's other devices. An Agent's request, or a
+  // relay (`via`) posted for the person, is not the person reading: their unseen messages stay
+  // unread.
+  if (!author && !input.metadata?.via)
     await tx
       .update(channelMembers)
       .set({
