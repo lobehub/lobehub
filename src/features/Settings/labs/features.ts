@@ -173,7 +173,6 @@ const ALL_LAB_FEATURES: LabFeatureItem[] = [
     stage: 'alpha',
   },
   {
-    desktopOnly: true,
     flag: 'enableCodexAppServer',
     i18nKey: 'codexAppServer',
     searchKeywords: ['codex', 'app server'],

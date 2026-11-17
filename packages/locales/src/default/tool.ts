@@ -73,6 +73,8 @@ export default {
     'Time expired — this question can no longer be answered.',
   'claudeCode.askUserQuestion.timeRemaining':
     'Time remaining: {{time}} · unanswered questions default to option 1 on timeout.',
+  'claudeCode.askUserQuestion.timeRemainingNoAnswer':
+    'Time remaining: {{time}} · this question closes without an answer on timeout.',
   'codeInterpreter-legacy.error': 'Execution Error',
   'codeInterpreter-legacy.executing': 'Executing...',
   'codeInterpreter-legacy.files': 'Files:',
