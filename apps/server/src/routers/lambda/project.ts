@@ -40,7 +40,7 @@ const projectProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
       ),
       projectModel: new ProjectModel(ctx.serverDB, ctx.userId, workspaceId, options),
       projectOverviewRepo: new ProjectOverviewRepository(ctx.serverDB, ctx.userId, workspaceId),
-      projectRepo: new ProjectRepository(ctx.serverDB, ctx.userId, workspaceId),
+      projectRepo: new ProjectRepository(ctx.serverDB, ctx.userId, workspaceId, options),
     },
   });
 });
@@ -122,7 +122,7 @@ export const projectRouter = router({
       try {
         return {
           data: requireResult(
-            await ctx.projectModel.reviewCompletion(input.id, 'accepted', input.comment),
+            await ctx.projectRepo.reviewCompletion(input.id, 'accepted', input.comment),
           ),
           message: 'Project completion accepted',
           success: true,
@@ -231,7 +231,7 @@ export const projectRouter = router({
   delete: projectWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
     try {
       return {
-        data: requireResult(await ctx.projectModel.delete(input.id)),
+        data: requireResult(await ctx.projectRepo.delete(input.id)),
         message: 'Project deleted',
         success: true,
       };
@@ -351,7 +351,7 @@ export const projectRouter = router({
       try {
         return {
           data: requireResult(
-            await ctx.projectModel.reviewCompletion(input.id, 'rejected', input.comment),
+            await ctx.projectRepo.reviewCompletion(input.id, 'rejected', input.comment),
           ),
           message: 'Project completion rejected',
           success: true,

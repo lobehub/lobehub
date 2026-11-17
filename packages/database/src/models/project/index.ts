@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { ProjectStatus, ProjectVisibility } from '@lobechat/types';
-import { and, asc, desc, eq, inArray, isNull, max, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 
 import { agents } from '../../schemas/agent';
 import { channelMembers } from '../../schemas/channel';
@@ -245,34 +245,16 @@ export class ProjectModel {
     }
   }
 
-  async delete(id: string) {
-    return this.db.transaction(async (tx) => {
-      const [project] = await tx
-        .select({ coordinatorAgentId: projects.coordinatorAgentId })
-        .from(projects)
-        .where(and(eq(projects.id, id), this.manageable()))
-        .limit(1);
-      if (!project) return null;
-
-      const [deleted] = await tx
-        .delete(projects)
-        .where(and(eq(projects.id, id), this.manageable()))
-        .returning();
-      if (project.coordinatorAgentId) {
-        await this.deleteDedicatedCoordinator(tx as LobeChatDatabase, project.coordinatorAgentId);
-      }
-      return deleted ?? null;
-    });
-  }
-
   /**
-   * Remove a coordinator only when it was provisioned for this project: a
-   * virtual, non-builtin agent no other project still uses. Reusable agents
-   * (user agents, LobeAI) stay with their sessions intact.
+   * Deletes the project row only. `ProjectRepository.delete` also retires a
+   * coordinator provisioned for it, which belongs to another aggregate.
    */
-  private async deleteDedicatedCoordinator(db: LobeChatDatabase, agentId: string) {
-    if (!(await this.isDedicatedCoordinator(agentId, { db }))) return;
-    await new AgentModel(db, this.userId, this.workspaceId).delete(agentId);
+  async delete(id: string) {
+    const [deleted] = await this.db
+      .delete(projects)
+      .where(and(eq(projects.id, id), this.manageable()))
+      .returning();
+    return deleted ?? null;
   }
 
   /**
@@ -916,49 +898,23 @@ export class ProjectModel {
     return this.setStatus(id, 'reviewing', project.startedAt);
   }
 
-  async reviewCompletion(id: string, decision: 'accepted' | 'rejected', comment?: string) {
-    return this.db.transaction(async (tx) => {
-      const [project] = await tx
-        .select()
-        .from(projects)
-        .where(and(eq(projects.id, id), this.manageable()))
-        .for('update')
-        .limit(1);
-      if (!project) return null;
-      if (project.status !== 'reviewing') throw new Error('Project is not awaiting review');
-
-      const [{ value: lastRound }] = await tx
-        .select({ value: max(projectCompletionReviews.round) })
-        .from(projectCompletionReviews)
-        .where(eq(projectCompletionReviews.projectId, id));
-      const [review] = await tx
-        .insert(projectCompletionReviews)
-        .values({
-          comment,
-          decision,
-          projectId: id,
-          reviewerUserId: this.userId,
-          round: (lastRound ?? 0) + 1,
-          workspaceId: this.workspaceId ?? null,
-        })
-        .returning();
-      const now = new Date();
-      const [updated] = await tx
-        .update(projects)
-        .set(
-          decision === 'accepted'
-            ? {
-                completedAt: now,
-                completedReviewId: review.id,
-                status: 'completed',
-                updatedAt: now,
-              }
-            : { completedAt: null, completedReviewId: null, status: 'active', updatedAt: now },
-        )
-        .where(eq(projects.id, id))
-        .returning();
-      return { project: updated, review };
-    });
+  /**
+   * Settles a completion review on the project row: an accepted review completes
+   * it, a rejected one sends it back to active. `ProjectRepository.reviewCompletion`
+   * locks the row and records the review in the same transaction.
+   */
+  async applyCompletionReview(id: string, decision: 'accepted' | 'rejected', reviewId: string) {
+    const now = new Date();
+    const [updated] = await this.db
+      .update(projects)
+      .set(
+        decision === 'accepted'
+          ? { completedAt: now, completedReviewId: reviewId, status: 'completed', updatedAt: now }
+          : { completedAt: null, completedReviewId: null, status: 'active', updatedAt: now },
+      )
+      .where(eq(projects.id, id))
+      .returning();
+    return updated;
   }
 
   async listCompletionReviews(projectId: string) {
@@ -986,12 +942,13 @@ export class ProjectModel {
     return project ?? null;
   }
 
-  async findManageableById(id: string) {
-    const [project] = await this.db
+  async findManageableById(id: string, { lock = false }: { lock?: boolean } = {}) {
+    const query = this.db
       .select()
       .from(projects)
       .where(and(eq(projects.id, id), this.manageable()))
       .limit(1);
+    const [project] = lock ? await query.for('update') : await query;
     return project ?? null;
   }
 
