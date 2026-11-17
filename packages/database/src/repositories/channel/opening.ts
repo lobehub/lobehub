@@ -14,6 +14,8 @@ import type { LobeChatDatabase, Transaction } from '../../type';
 import { notTrashed } from '../../utils/softDelete';
 import { appendMessage } from './delivery';
 import { readManifestMessages } from './manifest';
+import type { OpeningFacts, OpeningLayout } from './openingLayout';
+import { chooseOpeningLayout } from './openingLayout';
 import { audit, withChannelLock } from './transaction';
 import { createChannelThread } from './view';
 
@@ -148,11 +150,9 @@ export const findOpeningCandidate = async (
 };
 
 /**
- * Applies the opener's decision to a still-queued job, once. In a group with several people, a
- * reply that moves into a Thread opens it under the request and acknowledges inside it, keeping
- * the shared timeline quiet. Otherwise the acknowledgement answers the request in its branch and
- * the Thread opens under it (under the request when there is none). Records the opening even
- * when nothing was posted, so the opener is not asked again.
+ * Applies the opener's decision to a still-queued job, once: picks the layout with
+ * `chooseOpeningLayout`, then opens the Thread and posts the acknowledgement where it says.
+ * Records the opening even when nothing was posted, so the opener is not asked again.
  * Returns false when another worker opened the job first or it already started.
  */
 export const applyOpening = async (
@@ -180,20 +180,15 @@ export const applyOpening = async (
     if (!member?.agentId) return false;
 
     const ack = decision.ack?.trim();
-    const title = decision.threadTitle?.trim().slice(0, THREAD_TITLE_LENGTH);
-    const opensThread = !!title && !job.threadId;
-    // An archived Thread under the request takes no new work, so the reply stays where it was
-    // asked, or moves under its acknowledgement.
-    const underRequest =
-      opensThread &&
-      (await hasSeveralPeople(tx, channelId)) &&
-      !(await hasArchivedThread(tx, channelId, job.messageId));
+    const title = decision.threadTitle?.trim().slice(0, THREAD_TITLE_LENGTH) ?? '';
+    const layout = await planOpening(tx, channelId, job, { ack, title });
 
     let threadId = job.threadId;
-    if (underRequest) threadId = await openReplyThread(tx, channelId, job, job.messageId, title!);
+    if (layout === 'underRequest')
+      threadId = await openReplyThread(tx, channelId, job, job.messageId, title);
 
-    // The acknowledgement goes where the person is looking: the request's own branch, or the
-    // Thread just opened under the request, answering the request.
+    // The acknowledgement answers the request where the reply continues: in place, or in the
+    // Thread just opened under the request.
     const posted = ack
       ? await appendMessage(tx, {
           agentId: member.agentId,
@@ -206,12 +201,8 @@ export const applyOpening = async (
         })
       : undefined;
 
-    if (opensThread && !underRequest) {
-      // Without an acknowledgement the Thread opens under the request itself.
-      const rootMessageId = posted?.id ?? job.messageId;
-      if (!(await hasArchivedThread(tx, channelId, rootMessageId)))
-        threadId = await openReplyThread(tx, channelId, job, rootMessageId, title!);
-    }
+    if (layout === 'underAck')
+      threadId = await openReplyThread(tx, channelId, job, posted?.id ?? job.messageId, title);
 
     await audit(tx, channelId, REPLY_OPENED_EVENT, job.id, {
       ...(posted && { messageId: posted.id }),
@@ -220,6 +211,29 @@ export const applyOpening = async (
 
     return true;
   });
+
+/** Gathers the facts `chooseOpeningLayout` needs, reading the Channel only when a Thread is wanted. */
+const planOpening = async (
+  tx: Transaction,
+  channelId: string,
+  job: typeof channelJobs.$inferSelect,
+  decision: { ack?: string; title: string },
+): Promise<OpeningLayout> => {
+  const wantsThread = !!decision.title;
+  const inThread = !!job.threadId;
+  const facts: OpeningFacts = {
+    acknowledges: !!decision.ack,
+    inThread,
+    requestHasArchivedThread: false,
+    sharedTimeline: false,
+    wantsThread,
+  };
+  if (wantsThread && !inThread) {
+    facts.sharedTimeline = await hasSeveralPeople(tx, channelId);
+    facts.requestHasArchivedThread = await hasArchivedThread(tx, channelId, job.messageId);
+  }
+  return chooseOpeningLayout(facts);
+};
 
 /** Whether more than one person is in the Channel, so its main timeline is shared. */
 const hasSeveralPeople = async (tx: Transaction, channelId: string) => {
