@@ -483,6 +483,24 @@ describe('KnowledgeBaseSearchService', () => {
         expect(searchRepoMock.searchKnowledgeBaseDocuments).toHaveBeenCalledTimes(2);
       });
 
+      it('keeps at most three keyword searches in flight', async () => {
+        let inFlight = 0;
+        let peak = 0;
+        searchRepoMock.searchKnowledgeBaseDocuments.mockImplementation(async () => {
+          inFlight += 1;
+          peak = Math.max(peak, inFlight);
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          inFlight -= 1;
+          return [];
+        });
+
+        await service.semanticSearchForChat({ knowledgeIds: ['kb_1'], query: 'a b c d e f' });
+
+        // One strict query, then one per keyword.
+        expect(searchRepoMock.searchKnowledgeBaseDocuments).toHaveBeenCalledTimes(7);
+        expect(peak).toBe(3);
+      });
+
       it('still reports a full-text failure when every keyword search fails', async () => {
         searchRepoMock.searchKnowledgeBaseDocuments
           .mockResolvedValueOnce([])

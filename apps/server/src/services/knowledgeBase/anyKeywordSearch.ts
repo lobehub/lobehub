@@ -1,7 +1,11 @@
+import pMap from 'p-map';
+
 import type { FtsSearchKnowledgeBaseDocumentHit } from '@/database/repositories/ftsSearch';
 
 /** Each keyword is one more full-text query, so a long keyword list stays bounded. */
 const MAX_KEYWORDS = 6;
+/** Keyword queries hit the search backend; keep only a few in flight at once. */
+const KEYWORD_SEARCH_CONCURRENCY = 3;
 
 /** Whitespace-separated keywords, deduplicated case-insensitively, in query order. */
 export const splitKeywords = (query: string): string[] => {
@@ -31,7 +35,15 @@ export const searchAnyKeyword = async (
   const keywords = splitKeywords(query).slice(0, MAX_KEYWORDS);
   if (keywords.length < 2) return [];
 
-  const settled = await Promise.allSettled(keywords.map((keyword) => search(keyword)));
+  const settled = await pMap(
+    keywords,
+    (keyword): Promise<PromiseSettledResult<FtsSearchKnowledgeBaseDocumentHit[]>> =>
+      search(keyword).then(
+        (value) => ({ status: 'fulfilled', value }),
+        (reason: unknown) => ({ reason, status: 'rejected' }),
+      ),
+    { concurrency: KEYWORD_SEARCH_CONCURRENCY },
+  );
   const merged = new Map<
     string,
     { hit: FtsSearchKnowledgeBaseDocumentHit; matched: number; relevance: number }
