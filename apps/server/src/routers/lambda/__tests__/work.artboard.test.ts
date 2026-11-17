@@ -35,7 +35,7 @@ const userId = 'work-artboard-share-user';
 const projectId = 'prj_work_artboard_share';
 const caller = () => workRouter.createCaller({ serverDB, userId });
 
-const publishedArtboardWork = async () => {
+const publishedArtboardWork = async (publisherUserId = userId) => {
   const board = await new ArtboardModel(serverDB, userId).create({
     projectId,
     title: 'Onboarding',
@@ -51,6 +51,7 @@ const publishedArtboardWork = async () => {
   await model.recordArtboardPublish(board.id, {
     deploymentId: 'dep_artboard',
     publishedRevision: 1,
+    publisherUserId,
     snapshotHash: 'hash',
     url: 'https://onboarding.lobe.page',
   });
@@ -83,5 +84,15 @@ describe('workRouter.deleteWork · published artboard', () => {
     await expect(caller().deleteWork({ id: workId })).rejects.toThrow();
 
     expect((await model.findArtboardWork(artboardId))?.url).toBe('https://onboarding.lobe.page');
+  });
+
+  it('takes the share offline as the person who published it', async () => {
+    const { workId } = await publishedArtboardWork('work-artboard-share-publisher');
+
+    await caller().deleteWork({ id: workId });
+
+    expect(unpublishCanvasSite).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'work-artboard-share-publisher' }),
+    );
   });
 });

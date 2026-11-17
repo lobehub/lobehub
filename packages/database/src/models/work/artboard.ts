@@ -106,6 +106,7 @@ export const recordArtboardPublish = async (
   const publish: ArtboardWorkPublishMetadata = {
     deploymentId: params.deploymentId,
     publishedRevision: params.publishedRevision,
+    publisherUserId: params.publisherUserId,
     snapshotHash: params.snapshotHash,
   };
   const [row] = await ctx.db
@@ -114,7 +115,7 @@ export const recordArtboardPublish = async (
       metadata: sql`coalesce(${works.metadata}, '{}'::jsonb) || jsonb_build_object('artboardPublish', ${JSON.stringify(publish)}::jsonb)`,
       url: params.url,
     })
-    .where(and(artboardResource(ctx, artboardId), eq(works.userId, ctx.userId)))
+    .where(artboardResource(ctx, artboardId))
     .returning();
   return (row as WorkItem | undefined) ?? null;
 };
@@ -129,7 +130,7 @@ export const clearArtboardPublish = async (
       metadata: sql`coalesce(${works.metadata}, '{}'::jsonb) - 'artboardPublish'`,
       url: null,
     })
-    .where(and(artboardResource(ctx, artboardId), eq(works.userId, ctx.userId)))
+    .where(artboardResource(ctx, artboardId))
     .returning();
   return (row as WorkItem | undefined) ?? null;
 };

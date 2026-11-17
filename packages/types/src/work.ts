@@ -54,6 +54,7 @@ export interface CanvasWorkPublishMetadata {
 export interface ArtboardWorkPublishMetadata {
   deploymentId: string;
   publishedRevision: number;
+  publisherUserId: string;
   snapshotHash: string;
 }
 

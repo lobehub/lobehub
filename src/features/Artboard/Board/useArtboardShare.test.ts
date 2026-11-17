@@ -92,4 +92,36 @@ describe('useArtboardShareTrigger', () => {
     expect(mocks.unpublish).toHaveBeenCalledWith('art_1');
     expect(refresh).toHaveBeenCalled();
   });
+
+  it('shows the reason the server gave when sharing is refused', async () => {
+    mocks.publish.mockRejectedValue(
+      Object.assign(new Error('Board "Pricing" points at a Canvas version that is gone'), {
+        data: { code: 'PRECONDITION_FAILED' },
+      }),
+    );
+    const value = trigger(state());
+    if (value.kind !== 'action') throw new Error('expected a single share action');
+
+    act(() => value.action.onClick());
+    const [{ onOk }] = mocks.openPublishConfirm.mock.calls[0];
+    await act(async () => onOk());
+
+    expect(mocks.toast.error).toHaveBeenCalledWith(
+      'Board "Pricing" points at a Canvas version that is gone',
+    );
+  });
+
+  it('keeps the generic message for an unexpected failure', async () => {
+    mocks.publish.mockRejectedValue(
+      Object.assign(new Error('Artboard failed'), { data: { code: 'INTERNAL_SERVER_ERROR' } }),
+    );
+    const value = trigger(state());
+    if (value.kind !== 'action') throw new Error('expected a single share action');
+
+    act(() => value.action.onClick());
+    const [{ onOk }] = mocks.openPublishConfirm.mock.calls[0];
+    await act(async () => onOk());
+
+    expect(mocks.toast.error).toHaveBeenCalledWith('artboard.share.failed');
+  });
 });

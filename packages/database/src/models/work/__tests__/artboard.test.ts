@@ -130,6 +130,7 @@ describe('WorkModel · artboard publish', () => {
   const publish = {
     deploymentId: 'dep_1',
     publishedRevision: 4,
+    publisherUserId: userId,
     snapshotHash: 'hash_1',
     url: 'https://board.lobe.page',
   };
@@ -145,6 +146,7 @@ describe('WorkModel · artboard publish', () => {
     expect(work?.metadata?.artboardPublish).toEqual({
       deploymentId: 'dep_1',
       publishedRevision: 4,
+      publisherUserId: userId,
       snapshotHash: 'hash_1',
     });
   });

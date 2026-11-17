@@ -84,8 +84,13 @@ const createDefaultDeps = ({
     loadImage: async (fileId) => {
       const file = await new FileModel(db, userId, workspaceId).findById(fileId);
       if (!file) return;
-      const bytes = await new FileService(db, userId, workspaceId).getFileByteArray(file.url);
-      return { bytes, contentType: file.fileType, fileId };
+      try {
+        const bytes = await new FileService(db, userId, workspaceId).getFileByteArray(file.url);
+        return { bytes, contentType: file.fileType, fileId };
+      } catch (error) {
+        console.error('[artboard:publish] image unreadable', fileId, error);
+        return;
+      }
     },
   };
 };
@@ -104,7 +109,11 @@ export class ArtboardPublishService {
     this.deps = { ...createDefaultDeps({ db, userId, workspaceId }), ...deps };
   }
 
-  private owns = (work: ArtboardWork | null) => !work || work.userId === this.userId;
+  // works.userId follows whoever registered the board last; the deployment lives with the publisher.
+  private owns = (work: ArtboardWork | null) => {
+    const publisher = work?.metadata?.artboardPublish?.publisherUserId;
+    return !publisher || publisher === this.userId;
+  };
 
   async getPublish(id: string): Promise<ArtboardPublishState> {
     const artboard = await this.deps.loadArtboard(id);
@@ -169,12 +178,18 @@ export class ArtboardPublishService {
       userId: this.userId,
       workspaceId: this.workspaceId,
     });
-    await this.workModel.recordArtboardPublish(id, {
+    const recorded = await this.workModel.recordArtboardPublish(id, {
       deploymentId: site.deploymentId,
       publishedRevision: artboard.revision,
+      publisherUserId: this.userId,
       snapshotHash: hashArtboardSnapshot(snapshot),
       url: site.url,
     });
+    if (!recorded)
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'The share was published but could not be recorded on the artboard',
+      });
     return { url: site.url };
   }
 

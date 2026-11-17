@@ -5,6 +5,11 @@ import { useTranslation } from 'react-i18next';
 import { openPublishConfirm } from '@/components/PublishConfirmModal';
 import { artboardService } from '@/services/artboard';
 
+const serverReason = (error: unknown) => {
+  const code = (error as { data?: { code?: string } } | undefined)?.data?.code;
+  return code && code !== 'INTERNAL_SERVER_ERROR' ? (error as Error).message : undefined;
+};
+
 export interface ArtboardShareState {
   canPublish: boolean;
   hasUpdates: boolean;
@@ -43,7 +48,7 @@ export const useArtboardShareTrigger = (
       toast.success(t('artboard.share.copied'));
     } catch (error) {
       console.error('[Artboard] share failed', error);
-      toast.error(t('artboard.share.failed'));
+      toast.error(serverReason(error) ?? t('artboard.share.failed'));
     } finally {
       setSharing(false);
     }
@@ -83,7 +88,7 @@ export const useArtboardShareTrigger = (
           toast.success(t('artboard.share.unpublished'));
         } catch (error) {
           console.error('[Artboard] stop sharing failed', error);
-          toast.error(t('artboard.share.unpublishFailed'));
+          toast.error(serverReason(error) ?? t('artboard.share.unpublishFailed'));
         }
       },
     });

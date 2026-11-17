@@ -10,6 +10,20 @@ const work = vi.hoisted(() => ({
   registerArtboard: vi.fn(),
 }));
 
+const files = vi.hoisted(() => ({ findById: vi.fn(), getFileByteArray: vi.fn() }));
+
+vi.mock('@/database/models/file', () => ({
+  FileModel: vi.fn(function FileModel() {
+    return { findById: files.findById };
+  }),
+}));
+
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn(function FileService() {
+    return { getFileByteArray: files.getFileByteArray };
+  }),
+}));
+
 vi.mock('@/database/models/work', () => ({
   WorkModel: vi.fn(function WorkModel() {
     return work;
@@ -67,7 +81,7 @@ const service = (boards: ArtboardBoardView[], deps = {}) =>
 
 beforeEach(() => {
   work.findArtboardWork.mockReset().mockResolvedValue(null);
-  work.recordArtboardPublish.mockReset();
+  work.recordArtboardPublish.mockReset().mockResolvedValue({ id: 'work_1' });
   work.registerArtboard.mockReset();
   site.publishArtboardSite
     .mockReset()
@@ -75,8 +89,12 @@ beforeEach(() => {
 });
 
 describe('ArtboardPublishService', () => {
-  it('refuses a member who does not own the Work', async () => {
-    work.findArtboardWork.mockResolvedValue({ metadata: null, url: null, userId: 'user_2' });
+  it('refuses a member who did not publish the share', async () => {
+    work.findArtboardWork.mockResolvedValue({
+      metadata: { artboardPublish: { deploymentId: 'dep_1', publisherUserId: 'user_2' } },
+      url: 'https://x',
+      userId: 'user_1',
+    });
 
     await expect(service([board({})]).publish('art_1')).rejects.toMatchObject({
       code: 'FORBIDDEN',
@@ -143,5 +161,54 @@ describe('ArtboardPublishService', () => {
       'art_1',
       expect.objectContaining({ deploymentId: 'dep_1', publishedRevision: 2, url: 'https://x' }),
     );
+  });
+
+  it('lets the person who shared the board update it after someone else edited the board', async () => {
+    work.findArtboardWork.mockResolvedValue({
+      metadata: { artboardPublish: { deploymentId: 'dep_1', publisherUserId: 'user_1' } },
+      url: 'https://x',
+      userId: 'user_2',
+    });
+
+    await service([board({})]).publish('art_1');
+
+    expect(site.publishArtboardSite).toHaveBeenCalledWith(
+      expect.objectContaining({ deploymentId: 'dep_1', userId: 'user_1' }),
+    );
+    expect(await service([board({})]).getPublish('art_1')).toMatchObject({ canPublish: true });
+  });
+
+  it('lets any editor share a board nobody has shared yet', async () => {
+    work.findArtboardWork.mockResolvedValue({ metadata: null, url: null, userId: 'user_2' });
+
+    await service([board({})]).publish('art_1');
+
+    expect(work.recordArtboardPublish).toHaveBeenCalledWith(
+      'art_1',
+      expect.objectContaining({ publisherUserId: 'user_1' }),
+    );
+  });
+
+  it('fails when the share could not be recorded on the Work', async () => {
+    work.recordArtboardPublish.mockResolvedValue(null);
+
+    await expect(service([board({})]).publish('art_1')).rejects.toThrow();
+  });
+
+  it('names the board whose image file can no longer be read', async () => {
+    files.findById.mockResolvedValue({ fileType: 'image/png', url: 'files/a.png' });
+    files.getFileByteArray.mockRejectedValue(new Error('NoSuchKey'));
+    const boards = [
+      board({ source: { fileId: 'file_1', kind: 'image' }, title: 'Moodboard', type: 'image' }),
+    ];
+
+    await expect(
+      new ArtboardPublishService({} as any, 'user_1', undefined, {
+        loadArtboard: async () => artboard(boards),
+      }).publish('art_1'),
+    ).rejects.toMatchObject({
+      code: 'PRECONDITION_FAILED',
+      message: expect.stringContaining('Moodboard'),
+    });
   });
 });
