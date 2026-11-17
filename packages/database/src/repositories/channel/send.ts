@@ -35,7 +35,7 @@ export interface ChannelSendInput {
   mentions?: string[];
   /** Stored with the message, e.g. `via` for a request an Agent relayed for the caller. */
   metadata?: ChannelMessageMetadata;
-  /** Quote a person (only mentions dispatch), or continue an Agent answer in its thread. */
+  /** Quote a person (only mentions dispatch), or ask the quoted Agent again in the same feed. */
   replyToId?: string;
   /** Client retry key; a retry with the same key returns the original message. */
   requestKey: string;
@@ -73,8 +73,8 @@ export const validateSendInput = (input: ChannelSendInput) => {
 /**
  * Posts a human message. The caller holds the channel lock and is `access.member`.
  *
- * - Human quotes stay in their feed; without mentions they get no jobs. Agent replies continue
- *   in a thread.
+ * - Quotes stay in their feed; only `rootMessageId` opens a thread. A human quote without
+ *   mentions gets no jobs; quoting an Agent asks that Agent again.
  * - @mentioned Agents get jobs in this transaction (`directed`, source `explicit`), quoted or not.
  * - @mentioning only people wakes no Agent.
  * - Without mentions, `decision` leaves the message `pending` for the routing task, and
@@ -129,16 +129,10 @@ export const sendMessage = async (
     throw new ChannelError('BAD_REQUEST', 'The replying Agent is no longer available');
   // Replying to a muted Agent still opens its Thread, but only an @mention makes it answer.
   const replyTarget = replyAgent?.config?.muted ? undefined : replyAgent;
-  // A click is local. Create the Agent's thread atomically with the first sent reply.
   const thread = assertThreadOpen(
-    replyAgent && !sourceThread
-      ? await createChannelThread(tx, channel.id, {
-          rootMessageId: replyTo!.id,
-          followerMemberIds: [replyAgent.id],
-        })
-      : input.rootMessageId
-        ? await createChannelThread(tx, channel.id, { rootMessageId: input.rootMessageId })
-        : sourceThread,
+    input.rootMessageId
+      ? await createChannelThread(tx, channel.id, { rootMessageId: input.rootMessageId })
+      : sourceThread,
   );
   const threadId = thread?.id ?? null;
 

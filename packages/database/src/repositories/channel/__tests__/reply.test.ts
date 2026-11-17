@@ -110,70 +110,39 @@ describe('Channel replies', () => {
     expect(await threads(channel.id)).toEqual([]);
   });
 
-  it('creates a thread with only the replied-to Agent and includes its answer in the claimed input', async () => {
+  it('keeps a reply to an Agent in its feed, asks only that Agent and includes its answer in the claimed input', async () => {
     const { asOwner, author, channel, executions, input } = await setup();
     const message = await asOwner.send(channel.id, input);
-    const [thread] = await threads(channel.id);
-    expect(thread).toMatchObject({
-      rootMessageId: input.replyToId,
-      followerMemberIds: [author.id],
-    });
+    expect(await threads(channel.id)).toEqual([]);
     expect(message).toMatchObject({
-      threadId: thread.id,
+      threadId: null,
       routingStatus: 'directed',
       recipientMemberIds: [author.id],
     });
     const [job] = await jobsOf(db, message.id);
-    expect(job).toMatchObject({ memberId: author.id, threadId: thread.id });
+    expect(job).toMatchObject({ memberId: author.id, threadId: null });
     await executions.claim(channel.id, job.id, lease);
     const context = await executions.input(channel.id, job.id);
     expect(context.map((entry) => entry.id)).toEqual([input.replyToId, message.id]);
     expect(context[1].replyToId).toBe(input.replyToId);
-    const detail = await asOwner.detail(channel.id, { threadId: thread.id });
-    expect(detail.messages[0].replyTo).toMatchObject({
-      id: input.replyToId,
-      author: { type: 'agent' },
-    });
-    expect((await asOwner.detail(channel.id)).messages.map((entry) => entry.id)).not.toContain(
-      message.id,
-    );
+    const detail = await asOwner.detail(channel.id);
+    const sent = detail.messages.find((entry) => entry.id === message.id);
+    expect(sent?.replyTo).toMatchObject({ id: input.replyToId, author: { type: 'agent' } });
   });
 
-  it('unions explicit Agent mentions with the author and retains them for subsequent conversation', async () => {
+  it('unions explicit Agent mentions with the replied-to Agent', async () => {
     const { asOwner, author, channel, input, other } = await setup();
     const message = await asOwner.send(channel.id, {
       ...input,
       mentions: [other.id, author.id, other.id],
     });
+    expect(message.threadId).toBeNull();
     expect(new Set(message.recipientMemberIds)).toEqual(new Set([author.id, other.id]));
     expect(await jobsOf(db, message.id)).toHaveLength(2);
-    const [thread] = await threads(channel.id);
-    expect(new Set(thread.followerMemberIds)).toEqual(new Set([author.id, other.id]));
-    const next = await asOwner.send(channel.id, {
-      content: 'Continue',
-      requestKey: 'next',
-      routing: 'fallback',
-      threadId: thread.id,
-    });
-    expect(new Set(next.recipientMemberIds)).toEqual(new Set([author.id, other.id]));
-    const humanQuote = await asOwner.send(channel.id, {
-      content: 'Just a note',
-      mentions: [other.id],
-      requestKey: 'note',
-      routing: 'decision',
-      replyToId: next.id,
-      threadId: thread.id,
-    });
-    // Quoting a person stays in the thread; only the mentioned Agent is asked.
-    expect(humanQuote.threadId).toBe(thread.id);
-    expect(humanQuote.recipientMemberIds).toEqual([other.id]);
-    expect(await jobsOf(db, humanQuote.id)).toMatchObject([
-      { memberId: other.id, threadId: thread.id },
-    ]);
-    expect(await threads(channel.id)).toHaveLength(1);
+    expect(await threads(channel.id)).toEqual([]);
   });
 
-  it('reuses the thread and idempotent message without removing existing followers', async () => {
+  it('returns the original message for a retried reply', async () => {
     const { asOwner, author, channel, input, other } = await setup();
     const firstInput = { ...input, mentions: [other.id] };
     const [first, retry] = await Promise.all([
@@ -183,27 +152,33 @@ describe('Channel replies', () => {
     expect(retry.id).toBe(first.id);
     expect(await jobsOf(db, first.id)).toHaveLength(2);
     const next = await asOwner.send(channel.id, { ...input, requestKey: 'again' });
-    expect(next.threadId).toBe(first.threadId);
+    expect(next.threadId).toBeNull();
     expect(next.recipientMemberIds).toEqual([author.id]);
-    const all = await threads(channel.id);
-    expect(all).toHaveLength(1);
-    expect(new Set(all[0].followerMemberIds)).toEqual(new Set([author.id, other.id]));
+    expect(await threads(channel.id)).toEqual([]);
   });
 
   it('replies to an Agent within the current thread without nesting, adding only mentioned Agents', async () => {
-    const { asOwner, author, channel, input, other, publish } = await setup();
-    const first = await asOwner.send(channel.id, input);
-    const answerId = await publish(first.id, 'Three works');
+    const { asOwner, author, channel, input, other, publish, root } = await setup();
+    const opened = await asOwner.send(channel.id, {
+      content: 'Let us discuss here',
+      mentions: [author.id],
+      requestKey: 'open-thread',
+      rootMessageId: root.id,
+      routing: 'decision',
+    });
+    const answerId = await publish(opened.id, 'Three works');
     const next = await asOwner.send(channel.id, {
       ...input,
       replyToId: answerId,
-      threadId: first.threadId,
+      threadId: opened.threadId,
       mentions: [other.id],
       requestKey: 'in-thread',
     });
-    expect(next.threadId).toBe(first.threadId);
+    expect(next.threadId).toBe(opened.threadId);
     expect(new Set(next.recipientMemberIds)).toEqual(new Set([author.id, other.id]));
-    expect(await threads(channel.id)).toHaveLength(1);
+    const all = await threads(channel.id);
+    expect(all).toHaveLength(1);
+    expect(new Set(all[0].followerMemberIds)).toEqual(new Set([author.id, other.id]));
     await expect(
       asOwner.send(channel.id, { ...input, replyToId: answerId, requestKey: 'wrong-scope' }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
@@ -232,7 +207,7 @@ describe('Channel replies', () => {
   });
 
   it('rejects a removed Agent and an archived thread without dispatch', async () => {
-    const { asOwner, author, channel, input } = await setup();
+    const { asOwner, author, channel, input, publish, root } = await setup();
     await db.update(channelMembers).set({ status: 'left' }).where(eq(channelMembers.id, author.id));
     await expect(asOwner.send(channel.id, input)).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     expect(await threads(channel.id)).toEqual([]);
@@ -240,17 +215,29 @@ describe('Channel replies', () => {
       .update(channelMembers)
       .set({ status: 'active' })
       .where(eq(channelMembers.id, author.id));
-    const first = await asOwner.send(channel.id, input);
+    const opened = await asOwner.send(channel.id, {
+      content: 'Let us discuss here',
+      mentions: [author.id],
+      requestKey: 'open-thread',
+      rootMessageId: root.id,
+      routing: 'decision',
+    });
+    const answerId = await publish(opened.id, 'Three works');
     await db
       .update(channelThreads)
       .set({ status: 'archived' })
-      .where(eq(channelThreads.id, first.threadId!));
+      .where(eq(channelThreads.id, opened.threadId!));
     await expect(
-      asOwner.send(channel.id, { ...input, requestKey: 'archived' }),
+      asOwner.send(channel.id, {
+        ...input,
+        replyToId: answerId,
+        requestKey: 'archived',
+        threadId: opened.threadId,
+      }),
     ).rejects.toMatchObject({ code: 'CONFLICT' });
   });
 
-  it('rejects a changed quote with the same retry key and rolls back thread creation', async () => {
+  it('rejects a changed quote with the same retry key', async () => {
     const { asOwner, channel, input, root } = await setup();
     await asOwner.send(channel.id, { ...input, replyToId: root.id });
     await expect(asOwner.send(channel.id, input)).rejects.toMatchObject({ code: 'CONFLICT' });
