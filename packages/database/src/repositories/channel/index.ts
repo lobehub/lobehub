@@ -22,6 +22,7 @@ import {
   workspaceMembers,
 } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { agentUsableByWhere } from '../../utils/agent-access';
 import { notTrashed, trashStamp } from '../../utils/softDelete';
 import { normalizeWorkspaceId } from '../../utils/workspace';
 import type { ChannelAddAgentInput } from './agent';
@@ -738,6 +739,24 @@ export class ChannelRepository {
       });
       return { channel, member };
     });
+
+  /**
+   * Whether the caller may run the Agent anywhere (their own or their workspace's), as opposed to
+   * an Agent another person shared with them, which runs only in its shared direct conversation.
+   */
+  canUseAgent = async (agentId: string): Promise<boolean> => {
+    const [agent] = await this.db
+      .select({ id: agents.id })
+      .from(agents)
+      .where(
+        agentUsableByWhere(agentId, {
+          userId: this.userId,
+          workspaceId: this.workspaceId ?? undefined,
+        }),
+      )
+      .limit(1);
+    return !!agent;
+  };
 
   /** The conversation in which one of the caller's Agents asks another. See {@link openAgentPair}. */
   openAgentPair = (params: Parameters<typeof openAgentPair>[2]): Promise<ChannelAgentPairAccess> =>

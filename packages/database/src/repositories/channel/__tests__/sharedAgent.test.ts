@@ -66,6 +66,12 @@ const send = async (channelId: string, requestKey: string) => {
 };
 
 describe('a contact’s shared Agent in a direct conversation', () => {
+  it('is not an Agent the visitor can use outside its shared conversation', async () => {
+    await visitor.create({ agentId, sharedAgent: true, title: 'Shared Helper' });
+    expect(await visitor.canUseAgent(agentId)).toBe(false);
+    expect(await new ChannelRepository(db, ownerId).canUseAgent(agentId)).toBe(true);
+  });
+
   it('opens through the live share without a contact entry, but never from a bare Agent id', async () => {
     await expect(visitor.create({ agentId, title: 'Shared Helper' })).rejects.toThrow(
       'Agent not found',
