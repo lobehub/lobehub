@@ -82,8 +82,8 @@ describe('client sub-agent with a target agent', () => {
       );
       const [runParams] = execute.mock.calls[0];
       expect(runParams.context).toMatchObject({ agentId: 'agent-designer', isSubAgent: true });
-      // A named agent keeps the model configured on it.
-      expect(runParams.modelOverride).toBeUndefined();
+      // A named agent runs on the model configured on it, not the topic's.
+      expect(runParams.modelOverride).toEqual({ model: 'gpt-5.4', provider: 'openai' });
       expect(runParams.chatConfigOverride).toBeUndefined();
     });
 

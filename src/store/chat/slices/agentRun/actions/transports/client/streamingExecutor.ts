@@ -1069,7 +1069,6 @@ export class StreamingExecutorActionImpl {
       //    wins, otherwise the sub-agent follows the parent's *effective* model
       //    — topic-pinned model over the agent default, the same precedence
       //    internal_createAgentState applies to the parent run itself.
-      //    A named target keeps the model configured on it (no override).
       const parentAgentConfig =
         agentSelectors.getAgentConfigById(parentAgentId)(getAgentStoreState());
       const parentEffectiveModel =
@@ -1077,11 +1076,17 @@ export class StreamingExecutorActionImpl {
       const subAgentModel = target
         ? undefined
         : resolveSubAgentModel(parentAgentConfig?.agencyConfig?.subagent, parentEffectiveModel);
+      // A named target runs on its own model, pinned explicitly: the run would
+      // otherwise follow this topic's pinned model, which is the parent's.
+      const targetModel =
+        target?.config.model && target.config.provider
+          ? { model: target.config.model, provider: target.config.provider }
+          : undefined;
+      const runModel = subAgentModel ?? targetModel;
       // Warm the sub-agent model's user-level reasoning config before the run:
       // the ChatInput loader only fetches the parent's effective model, while
       // resolveModelExtendParams reads this cache synchronously mid-run.
-      const runModel = subAgentModel ?? target?.config;
-      if (runModel?.model && runModel.provider) {
+      if (runModel) {
         await getAiInfraStoreState().ensureModelReasoningConfig(runModel.model, runModel.provider);
       }
       const runtimeResult = await this.#get().executeClientAgent({
@@ -1091,7 +1096,7 @@ export class StreamingExecutorActionImpl {
         context: subContext,
         isSubAgent: true,
         messages: subMessages,
-        modelOverride: subAgentModel,
+        modelOverride: runModel,
         operationId: taskOperationId,
         parentMessageId: userMessageId,
         parentMessageType: 'user',
