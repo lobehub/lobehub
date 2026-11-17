@@ -48,6 +48,8 @@ export interface ExecRunContext {
    * that re-runs later reads them back from there rather than from the turn's
    * request.
    */
+  /** Library skills the agent set to `auto`; mirrored on `world.autoSkillIds`. */
+  autoSkillIds: string[];
   botContext?: InternalExecAgentParams['botContext'];
   botPlatformContext?: InternalExecAgentParams['botPlatformContext'];
   canUseDevice: boolean;

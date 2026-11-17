@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getActivePluginIds,
+  getAutoPluginIds,
   getDisabledPluginIds,
+  getLibrarySkillMode,
   getPinnedPluginIds,
   getPluginMode,
   parsePluginEntry,
@@ -146,5 +148,40 @@ describe('upsertPluginMode', () => {
 
   it('is a no-op when setting auto on an identifier that is already absent', () => {
     expect(upsertPluginMode(['a'], 'not-there', 'auto')).toEqual(['a']);
+  });
+});
+
+describe('library skills', () => {
+  it('resolves a library skill the agent has no entry for as disabled', () => {
+    expect(getLibrarySkillMode(undefined, 'excalidraw')).toBe('disabled');
+    expect(getLibrarySkillMode(['other'], 'excalidraw')).toBe('disabled');
+  });
+
+  it('resolves the explicit mode of a library skill the agent has an entry for', () => {
+    expect(getLibrarySkillMode(['excalidraw'], 'excalidraw')).toBe('pinned');
+    expect(getLibrarySkillMode([{ identifier: 'excalidraw', mode: 'auto' }], 'excalidraw')).toBe(
+      'auto',
+    );
+  });
+
+  it('collects only explicit auto entries', () => {
+    expect(getAutoPluginIds(['a', { identifier: 'b', mode: 'auto' }, { identifier: 'c' }])).toEqual(
+      ['b'],
+    );
+  });
+
+  it('persists auto and removes disabled when disabled is the implicit mode', () => {
+    expect(upsertPluginMode(['a'], 'skill', 'auto', 'disabled')).toEqual([
+      'a',
+      { identifier: 'skill', mode: 'auto' },
+    ]);
+    expect(
+      upsertPluginMode(
+        [{ identifier: 'skill', mode: 'auto' }, 'a'],
+        'skill',
+        'disabled',
+        'disabled',
+      ),
+    ).toEqual(['a']);
   });
 });

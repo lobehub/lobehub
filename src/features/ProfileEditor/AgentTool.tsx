@@ -134,6 +134,18 @@ const AgentTool = memo<AgentToolProps>(
     // is a distinct, valid config state; this component has no tri-state UI
     // and treats it as "not enabled", matching pre-tri-state semantics).
     const plugins = getActivePluginIds(config?.plugins);
+    // Everything switched on for this agent: pinned entries, plus a library skill set to Auto
+    // from the chat input — the only kind of entry that carries an explicit `auto`.
+    const enabledIds = useMemo(
+      () =>
+        new Set(
+          (config?.plugins ?? [])
+            .map((entry) => parsePluginEntry(entry))
+            .filter((entry) => entry.mode !== 'disabled')
+            .map((entry) => entry.identifier),
+        ),
+      [config?.plugins],
+    );
 
     const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
     const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
@@ -237,7 +249,7 @@ const AgentTool = memo<AgentToolProps>(
       async (pluginId: string, state?: boolean) => {
         if (!canEdit) return;
         if (!effectiveAgentId) return;
-        const hasPlugin = plugins.includes(pluginId);
+        const hasPlugin = enabledIds.has(pluginId);
         const shouldEnable = state !== undefined ? state : !hasPlugin;
         // Taking an item out must also work on one that is switched off: it is not pinned, but
         // it still has an entry to remove.
@@ -253,13 +265,13 @@ const AgentTool = memo<AgentToolProps>(
           plugins: upsertPluginMode(config?.plugins, pluginId, shouldEnable ? 'pinned' : 'auto'),
         });
       },
-      [canEdit, effectiveAgentId, plugins, config?.plugins, updateAgentConfigById],
+      [canEdit, effectiveAgentId, enabledIds, config?.plugins, updateAgentConfigById],
     );
 
-    // Check if a profile-managed tool is pinned.
+    // Check if a profile-managed tool is on for this agent.
     const isToolEnabled = useCallback(
-      (identifier: string) => plugins.includes(identifier),
-      [plugins],
+      (identifier: string) => enabledIds.has(identifier),
+      [enabledIds],
     );
 
     // Toggle a profile-managed tool.
@@ -856,11 +868,10 @@ const AgentTool = memo<AgentToolProps>(
     ]);
 
     // A list shows what is turned off as well, so it can be turned back on; the chips show only
-    // what is on.
+    // what is on. Every entry is listed: one that is merely Auto has no entry at all, except a
+    // library skill, where an explicit Auto is what turns it on.
     const listedTools = useMemo(() => {
-      const entries = (config?.plugins ?? [])
-        .map((entry) => parsePluginEntry(entry))
-        .filter((entry) => entry.mode !== 'auto');
+      const entries = (config?.plugins ?? []).map((entry) => parsePluginEntry(entry));
       const visible = getVisibleProfileToolIds(
         entries.map((entry) => entry.identifier),
         {

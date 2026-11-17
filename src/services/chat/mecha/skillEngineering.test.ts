@@ -134,13 +134,30 @@ describe('resolveClientSkills', () => {
       ],
     });
 
-    // pluginIds empty => skill is exposed (available list) but not pinned
-    const result = await resolveClientSkills([]);
+    // set to auto, not pinned => skill is exposed (available list) without its body
+    const result = await resolveClientSkills([], undefined, 'auto', undefined, ['my-skill']);
 
     expect(mockedGetById).not.toHaveBeenCalled();
     const skill = findSkill(result.skills, 'my-skill');
+    expect(skill).toBeDefined();
     expect(skill?.content).toBeUndefined();
     expect(skill?.activated).toBeFalsy();
+  });
+
+  it('leaves out a library skill the agent never turned on, keeping builtin skills', async () => {
+    setToolState({
+      agentSkills: [
+        { description: 'A user skill', id: 'db-1', identifier: 'my-skill', name: 'My Skill' },
+      ],
+      builtinSkills: [
+        { content: 'guide', description: 'd', identifier: 'artifacts', name: 'Artifacts' },
+      ],
+    });
+
+    const result = await resolveClientSkills([]);
+
+    expect(findSkill(result.skills, 'my-skill')).toBeUndefined();
+    expect(findSkill(result.skills, 'artifacts')).toBeDefined();
   });
 
   it('does NOT pre-activate a pinned DB skill bundled as a ZIP', async () => {
@@ -226,7 +243,7 @@ describe('resolveClientSkills', () => {
       });
       mockedGetToolStoreState.mockReturnValue(state);
 
-      const result = await resolveClientSkills();
+      const result = await resolveClientSkills([], undefined, 'auto', undefined, ['bound-skill']);
 
       expect(state.ensureAgentSkillsLoaded).toHaveBeenCalledTimes(1);
       expect(findSkill(result.skills, 'bound-skill')).toMatchObject({ name: 'Bound' });
@@ -287,7 +304,9 @@ describe('resolveClientSkills', () => {
         ],
       });
 
-      const result = await resolveClientSkills([], ['disabled-skill']);
+      const result = await resolveClientSkills([], ['disabled-skill'], 'auto', undefined, [
+        'enabled-skill',
+      ]);
 
       expect(findSkill(result.skills, 'disabled-skill')).toBeUndefined();
       expect(findSkill(result.skills, 'enabled-skill')).toBeDefined();
