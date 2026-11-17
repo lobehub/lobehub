@@ -109,6 +109,7 @@ import { type StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { useUserMemoryStore } from '@/store/userMemory';
+import { rememberLocalImagePreview } from '@/utils/localImagePreview';
 import { toTitleText } from '@/utils/markdownToTxt';
 import { aggregateSubagentMetrics } from '@/utils/subagentMetrics';
 
@@ -927,14 +928,18 @@ export class ConversationLifecycleActionImpl {
     // Use the captured `files` param (not the global file store) so the optimistic preview
     // also works on the queue-drain path, where chatUploadFileList has already been cleared.
     const filesForPreview = files ?? [];
-    const tempImages: ChatImageItem[] = filesForPreview
-      .filter((f) => f.file?.type?.startsWith('image'))
-      .map((f) => ({
-        ...f.dimensions,
-        id: f.id,
-        url: f.fileUrl || f.base64Url || f.previewUrl || '',
-        alt: f.file?.name || f.id,
-      }));
+    const imageFiles = filesForPreview.filter((f) => f.file?.type?.startsWith('image'));
+    // The message, optimistic and saved alike, shows these from the local copy (see
+    // `localImagePreview`); an upload's id is its server file id once it has finished.
+    for (const f of imageFiles) {
+      if (f.status === 'success' && f.previewUrl) rememberLocalImagePreview(f.id, f.previewUrl);
+    }
+    const tempImages: ChatImageItem[] = imageFiles.map((f) => ({
+      ...f.dimensions,
+      id: f.id,
+      url: f.fileUrl || f.base64Url || f.previewUrl || '',
+      alt: f.file?.name || f.id,
+    }));
     const tempVideos: ChatVideoItem[] = filesForPreview
       .filter((f) => f.file?.type?.startsWith('video'))
       .map((f) => ({
