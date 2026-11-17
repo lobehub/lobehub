@@ -255,6 +255,7 @@ export const readChannelView = async (
           string | null
         >`coalesce(nullif(${channelMembers.description}, ''), ${agents.description})`,
         id: channelMembers.id,
+        muted: sql<boolean>`coalesce((${channelMembers.config}->>'muted')::boolean, false)`,
         name: channelMembers.name,
         role: channelMembers.role,
         status: channelMembers.status,

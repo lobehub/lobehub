@@ -437,6 +437,13 @@ export class ChannelService {
     return job;
   };
 
+  /** A muted Agent answers only @mentions; muting also stops what it is answering now. */
+  setMemberMuted = async (channelId: string, memberId: string, muted: boolean) => {
+    const writers = await this.repository.setMemberMuted(channelId, memberId, muted);
+    await new ChannelCoordinator(this.db).stopWriters(writers);
+    await Promise.all([wakeChannel(channelId), this.changed(channelId)]);
+  };
+
   stop = async (channelId: string, scope: ChannelStopScope) => {
     const writers = await this.repository.stop(channelId, scope);
     await new ChannelCoordinator(this.db).stopWriters(writers);

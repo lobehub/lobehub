@@ -267,6 +267,12 @@ export const channelRouter = router({
     await ctx.channelService.remove(input.channelId);
     return { success: true };
   }),
+  setMemberMuted: channelProcedure
+    .input(z.object({ channelId, memberId: z.uuid(), muted: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.channelService.setMemberMuted(input.channelId, input.memberId, input.muted);
+      return { success: true };
+    }),
   editMessage: channelProcedure
     .input(
       z.object({

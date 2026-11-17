@@ -106,6 +106,11 @@ export interface ChannelMemberConfig {
    */
   deviceOwnerId?: string;
   /**
+   * The Agent stays quiet here: nothing reaches it unless a person @mentions it, and it cannot
+   * post on its own. Kept beside the environment and reply strategy, never part of execution.
+   */
+  muted?: boolean;
+  /**
    * This member's own reply strategy, over the channel's `ChannelConfig.wake`. Parsed by the
    * shared wake schema; never part of the execution environment.
    */
@@ -530,6 +535,8 @@ export interface ChannelPublicMember {
   description: string | null;
   id: string;
   joinedAt: Date;
+  /** An Agent that answers only when @mentioned; see `ChannelMemberConfig.muted`. */
+  muted?: boolean;
   name: string | null;
   role: ChannelMemberRole | null;
   status: ChannelMemberStatus;
