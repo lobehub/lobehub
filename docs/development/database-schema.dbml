@@ -1605,8 +1605,7 @@ table channel_jobs {
     (topic_id, published_message_id) [name: 'channel_jobs_topic_idx']
     (member_id, status, created_at) [name: 'channel_jobs_member_queue_idx']
     lease_expires_at [name: 'channel_jobs_lease_expires_idx']
-    member_id [name: 'channel_jobs_active_member_unique', unique]
-    (device_id, working_directory) [name: 'channel_jobs_active_directory_unique', unique]
+    (device_id, working_directory) [name: 'channel_jobs_active_directory_idx']
     
     
     
@@ -1645,6 +1644,7 @@ table channel_members {
   user_id text
   role text
   last_read_sequence integer
+  pinned_at "timestamp with time zone"
   agent_id text
   name text
   description text [not null, default: '']
@@ -1710,7 +1710,6 @@ table channel_messages {
     
     
     
-    
   }
 }
 
@@ -1740,6 +1739,7 @@ table channels {
   project_id text
   agent_id text
   peer_user_id text
+  agent_pair_key text
   title text [not null]
   sequence integer [not null, default: 0]
   status text [not null, default: 'active']
@@ -1754,6 +1754,7 @@ table channels {
   indexes {
     user_id [name: 'channels_user_id_idx']
     (agent_id, user_id, workspace_id) [name: 'channels_direct_unique', unique]
+    (agent_pair_key, user_id, workspace_id) [name: 'channels_agent_pair_unique', unique]
     
     project_id [name: 'channels_project_id_idx']
     (workspace_id, visibility) [name: 'channels_workspace_visibility_idx']
@@ -1944,6 +1945,7 @@ table user_contact_tags {
 table user_contacts {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
+  workspace_id text
   type text [not null]
   contact_user_id text
   agent_id text
@@ -1958,6 +1960,7 @@ table user_contacts {
   indexes {
     (user_id, contact_user_id) [name: 'user_contacts_user_unique', unique]
     (user_id, agent_id) [name: 'user_contacts_agent_unique', unique]
+    (workspace_id, agent_id) [name: 'user_contacts_workspace_agent_unique', unique]
     contact_user_id [name: 'user_contacts_contact_user_id_idx']
     agent_id [name: 'user_contacts_agent_id_idx']
   }

@@ -14,10 +14,13 @@ import {
 import { timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 /**
- * One entry in a person's address book. Address books are personal: they are not scoped to a
- * workspace, and every read pins `user_id`.
+ * One entry in an address book. People are personal: their entries pin `user_id` and appear in
+ * every scope. An `agent` entry belongs to the scope it was added in: with no `workspace_id` it
+ * is its owner's alone; with one it is the workspace's, shown to every member there, and
+ * `user_id` only records who added it.
  *
  * A `user` entry exists only for an accepted contact request, and always in both directions.
  * An `agent` entry is another person's Agent added through its share link. It references the
@@ -40,6 +43,9 @@ export const userContacts = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
 
+    /** Only on `agent` entries: the workspace whose address book holds it; null is personal. */
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
     type: text('type').$type<ContactType>().notNull(),
     contactUserId: text('contact_user_id').references(() => users.id, { onDelete: 'cascade' }),
     agentId: text('agent_id').references(() => agents.id, { onDelete: 'cascade' }),
@@ -60,7 +66,10 @@ export const userContacts = pgTable(
       .where(sql`${t.contactUserId} IS NOT NULL`),
     uniqueIndex('user_contacts_agent_unique')
       .on(t.userId, t.agentId)
-      .where(sql`${t.agentId} IS NOT NULL`),
+      .where(sql`${t.agentId} IS NOT NULL AND ${t.workspaceId} IS NULL`),
+    uniqueIndex('user_contacts_workspace_agent_unique')
+      .on(t.workspaceId, t.agentId)
+      .where(sql`${t.agentId} IS NOT NULL AND ${t.workspaceId} IS NOT NULL`),
     // Neither partial index serves the cascades from users and agents.
     index('user_contacts_contact_user_id_idx').on(t.contactUserId),
     index('user_contacts_agent_id_idx').on(t.agentId),
