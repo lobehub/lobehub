@@ -343,3 +343,69 @@ describe('ClaudeAgentSdkSession steer', () => {
     );
   });
 });
+
+describe('ClaudeAgentSdkSession steer and background-task notifications', () => {
+  afterEach(() => {
+    sdkQueryMock.mockReset();
+  });
+
+  it('settles a notification turn that ends while a steer waits, so input still closes after it', async () => {
+    let ready!: () => void;
+    const started = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    let inputDone = false;
+    sdkQueryMock.mockImplementation(({ prompt }) => {
+      const input = prompt[Symbol.asyncIterator]();
+      return {
+        async *[Symbol.asyncIterator]() {
+          await input.next();
+          yield { session_id: 's', subtype: 'init', type: 'system' };
+          yield { session_id: 's', subtype: 'task_started', task_id: 't1', type: 'system' };
+          ready();
+          await input.next(); // the steer
+          yield { session_id: 's', subtype: 'task_notification', task_id: 't1', type: 'system' };
+          // The notification's turn ends before the steer is read.
+          yield {
+            is_error: false,
+            origin: { kind: 'task-notification' },
+            subtype: 'success',
+            type: 'result',
+          };
+          yield {
+            isReplay: true,
+            message: { content: 'x', role: 'user' },
+            type: 'user',
+            uuid: 'steer-1',
+          };
+          yield { is_error: false, subtype: 'success', type: 'result' };
+          inputDone = (await input.next()).done === true;
+        },
+        close: vi.fn(),
+      };
+    });
+
+    const session = new ClaudeAgentSdkSession({
+      args: [],
+      commandPath: 'claude',
+      cwd: os.tmpdir(),
+      env: {} as NodeJS.ProcessEnv,
+      onEvents: () => {},
+      onRawMessage: () => {},
+      onRuntimeStatus: () => {},
+      onSessionId: () => {},
+      onStderr: () => {},
+      operationId: 'op-notify',
+      replayUserMessages: true,
+      sessionId: 'session-1',
+      stdinPayload: `${JSON.stringify({ message: { content: 'go', role: 'user' }, type: 'user' })}\n`,
+    });
+    const running = session.run();
+    await started;
+    session.steer({ message: { content: 'also', role: 'user' }, type: 'user' } as any, 'steer-1');
+    await running;
+
+    // The steer's answer closed input: no notification left pending holds it open.
+    expect(inputDone).toBe(true);
+  });
+});

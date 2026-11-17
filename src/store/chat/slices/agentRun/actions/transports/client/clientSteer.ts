@@ -1,11 +1,16 @@
 import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
 import { findCurrentTurnPendingToolMessages } from '@lobechat/agent-runtime';
+import { isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import type { ConversationContext, MessageMetadata } from '@lobechat/types';
 import { COMPOSER_USER_MESSAGE_METADATA_KEYS } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 
 import { messageService } from '@/services/message';
+import {
+  parseActionTagsFromEditorData,
+  parseMentionedAgentsFromEditorData,
+} from '@/store/chat/slices/agentRun/actions/entries/commandBus/parseCommands';
 import { mergeQueuedMessages, type QueuedMessage } from '@/store/chat/slices/operation/types';
 import type { ChatStore } from '@/store/chat/store';
 
@@ -29,6 +34,11 @@ export const canSteerClientRun = (message: QueuedMessage): boolean => {
   if (!message.content.trim()) return false;
   if (message.files?.length || message.filesPreview?.length) return false;
   if (message.forceRuntime) return false;
+  // Tool and skill selections, commands and @-mentions live in the rich text and
+  // are turned into turn context only by a send of their own.
+  if (parseActionTagsFromEditorData(message.editorData).length > 0) return false;
+  if (parseMentionedAgentsFromEditorData(message.editorData).length > 0) return false;
+  if (isGoalPrompt(message.content)) return false;
   const metadata = message.metadata as Record<string, unknown> | undefined;
   return !COMPOSER_USER_MESSAGE_METADATA_KEYS.some((key) => {
     const value = metadata?.[key];

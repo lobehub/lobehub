@@ -63,8 +63,11 @@ interface PendingSteer {
    */
   deliveredText?: string;
   messageId: string;
-  /** `delivering` until the IPC answers; `written` once accepted, until the agent reads it. */
-  state: 'delivering' | 'written';
+  /**
+   * `delivering` until the IPC answers; `written` once accepted, until the
+   * agent reads it; `unknown` when the write failed and it may still arrive.
+   */
+  state: 'delivering' | 'unknown' | 'written';
   taken: QueuedMessage[];
 }
 
@@ -154,10 +157,11 @@ export const createLocalSteer = (options: LocalSteerOptions) => {
     } catch (error) {
       // Read already (`confirm` ran first): it landed.
       if (pending !== steer) return true;
-      // It may or may not be in the session: never sent again on its own.
+      // It may or may not be in the session: never sent again on its own, but
+      // kept so the agent reporting it read still writes it in.
       console.error('[localSteer] steering the session failed:', error);
       get().updateQueuedMessage(contextKey, steer.messageId, { localSteer: 'unknown' });
-      pending = undefined;
+      steer.state = 'unknown';
       stopped = true;
       return false;
     }

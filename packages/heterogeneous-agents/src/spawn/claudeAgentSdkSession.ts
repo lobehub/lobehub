@@ -468,12 +468,14 @@ export class ClaudeAgentSdkSession {
 
   private maybeCloseInputAfterResult(message: SDKMessage): void {
     if (message.type !== 'result') return;
+    const notificationTurn = message.origin?.kind === 'task-notification';
+    // The notification's turn is over, whether or not input closes now.
+    if (notificationTurn) this.taskNotificationPending = false;
     // A message written as a cycle ends is read after that cycle's result;
     // it still has to be read and answered.
     if (this.unconsumed.size > 0 || this.steerQueue.length > 0) return;
 
-    if (message.origin?.kind === 'task-notification') {
-      this.taskNotificationPending = false;
+    if (notificationTurn) {
       this.closeInput = true;
       return;
     }

@@ -68,6 +68,31 @@ describe('canSteerClientRun', () => {
       }),
     ],
     ['a pinned runtime', queued('q1', 'go', { forceRuntime: 'gateway' })],
+    [
+      'a selected tool',
+      queued('q1', 'search this', {
+        editorData: {
+          root: {
+            children: [
+              {
+                children: [
+                  {
+                    actionCategory: 'tool',
+                    actionLabel: 'Web Search',
+                    actionType: 'web-search',
+                    type: 'action-tag',
+                  },
+                  { text: ' search this', type: 'text' },
+                ],
+                type: 'paragraph',
+              },
+            ],
+            type: 'root',
+          },
+        },
+      }),
+    ],
+    ['a goal', queued('q1', '/goal ship it')],
   ])('leaves a message with %s to a turn of its own', (_label, message) => {
     expect(canSteerClientRun(message)).toBe(false);
   });

@@ -244,6 +244,14 @@ describe('createLocalSteer', () => {
     await vi.waitFor(() => expect(h.getQueue()[0]?.localSteer).toBe('unknown'));
     h.setQueue([...h.getQueue(), queued('q9', 'later')]);
     expect(heterogeneousAgentService.steerSession).toHaveBeenCalledTimes(1);
+
+    // The agent can still report it read; then it is written in after all.
+    const { messageId } = steerCall()!;
+    await expect(h.steer.confirm({ uuid: messageId })).resolves.toBe(true);
+    expect(messageService.createMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: messageId, metadata: { steer: true } }),
+    );
+    expect(h.getQueue().map((m) => m.id)).toEqual(['q9']);
   });
 
   it('turns a steer written but never read into the next turn when the run ends', async () => {
