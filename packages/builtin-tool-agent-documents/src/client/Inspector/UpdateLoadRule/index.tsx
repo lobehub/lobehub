@@ -17,6 +17,9 @@ export const UpdateLoadRuleInspector = memo<
 
   const id = args?.id || partialArgs?.id;
   const ruleType = args?.rule?.rule || partialArgs?.rule?.rule || pluginState?.rule?.rule;
+  // The stored mode after the call wins: a maxTokens-only update leaves a
+  // progressive document progressive, and the card should say so.
+  const loadMode = pluginState?.policyLoad || args?.rule?.mode || partialArgs?.rule?.mode;
   const styles = inspectorChipStyles;
 
   if (isArgumentsStreaming && !id) {
@@ -35,6 +38,14 @@ export const UpdateLoadRuleInspector = memo<
         {t('builtins.lobe-agent-documents.apiName.updateLoadRule')}
       </span>
       {id && <span className={styles.idChip}>{formatDocumentId(id)}</span>}
+      {loadMode && (
+        <>
+          <span className={styles.separator}>·</span>
+          <span className={styles.subdued}>
+            {t(`builtins.lobe-agent-documents.inspector.loadMode.${loadMode}`)}
+          </span>
+        </>
+      )}
       {ruleType && (
         <>
           <span className={styles.separator}>·</span>

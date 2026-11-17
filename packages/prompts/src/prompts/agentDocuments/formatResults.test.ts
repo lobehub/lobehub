@@ -69,6 +69,57 @@ describe('agentDocuments formatResults', () => {
     });
   });
 
+  // A maxTokens/priority-only update used to read as plain success while the
+  // document stayed progressive, so agents promised automatic loading (T-14044).
+  describe('update-load-rule effect', () => {
+    it('says a progressive document is not injected and its cap is inert', () => {
+      expect(
+        formatUpdateLoadRuleResult({
+          id: 'a',
+          maxTokens: 900,
+          policyLoad: 'progressive',
+          priority: 2,
+          title: 'T',
+        }),
+      ).toBe(
+        'Updated load rule for document "T" (internal id: a). Load mode is "progressive": only its title is listed in agent_documents_index and its content is not injected automatically; read it with readDocument when needed. maxTokens and priority take effect only after setting rule.mode to "always".',
+      );
+    });
+
+    it('omits the inert-cap note when no cap or priority is stored', () => {
+      expect(formatUpdateLoadRuleResult({ id: 'a', policyLoad: 'progressive' })).not.toContain(
+        'maxTokens and priority',
+      );
+    });
+
+    it('states the cap and priority an always-loaded document is injected with', () => {
+      expect(
+        formatUpdateLoadRuleResult({
+          id: 'a',
+          maxTokens: 900,
+          policyLoad: 'always',
+          priority: 2,
+          title: 'T',
+          url: URL,
+        }),
+      ).toBe(
+        `Updated load rule for document "T". Share this link with the user as a clickable markdown link: ${URL}. (Internal id a — for your own further edit/read/remove calls only; never show it to the user.) Load mode is now "always": its full content is injected into this agent's context on every later model call, truncated to about 900 tokens, priority 2 (lower loads first).`,
+      );
+    });
+
+    it('flags an always-loaded document without a token cap', () => {
+      expect(formatUpdateLoadRuleResult({ id: 'a', maxTokens: null, policyLoad: 'always' })).toBe(
+        'Updated load rule for document the document (internal id: a). Load mode is now "always": its full content is injected into this agent\'s context on every later model call, with no token cap (set maxTokens to limit it).',
+      );
+    });
+
+    it('says a disabled document is not loaded', () => {
+      expect(formatUpdateLoadRuleResult({ id: 'a', policyLoad: 'disabled' })).toMatch(
+        /Load mode is "disabled": it is not loaded into context\.$/,
+      );
+    });
+  });
+
   it('reports removal with only the id (no live url to share)', () => {
     expect(formatRemoveDocumentResult({ id: 'assoc-id' })).toBe('Removed document assoc-id.');
   });

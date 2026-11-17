@@ -4,6 +4,14 @@ import { describe, expect, it } from 'vitest';
 import { systemPrompt } from './systemRole';
 
 describe('systemPrompt', () => {
+  it('should describe what updateLoadRule really controls', () => {
+    expect(systemPrompt).toContain('Set rule.mode="always" to inject the full content');
+    expect(systemPrompt).toContain(
+      'maxTokens and priority do nothing while a document is progressive.',
+    );
+    expect(systemPrompt).not.toContain('including load rules, permissions, sharing mode');
+  });
+
   it('should distinguish agent document ids from folder navigation ids', () => {
     expect(systemPrompt).toContain("For read and mutation calls, pass the result's `id`.");
     expect(systemPrompt).toContain(

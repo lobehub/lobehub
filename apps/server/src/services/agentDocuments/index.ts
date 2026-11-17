@@ -60,6 +60,7 @@ import {
   createMarkdownEditorSnapshot,
   exportEditorDataSnapshot,
 } from './headlessEditor';
+import { assertLoadModeChangeAllowed } from './loadRuleGuard';
 
 /** Guards the ancestor walk against a corrupt parent cycle. */
 const MAX_TREE_DEPTH = 64;
@@ -1165,6 +1166,7 @@ export class AgentDocumentsService {
   async updateLoadRuleById(documentId: string, rule: ToolUpdateLoadRule, expectedAgentId?: string) {
     const doc = await this.getDocumentByIdInAgent(documentId, expectedAgentId);
     if (!doc) return undefined;
+    assertLoadModeChangeAllowed(doc, rule);
 
     return this.agentDocumentModel.updateToolLoadRule(documentId, rule);
   }

@@ -10,7 +10,7 @@ import {
   formatUpdateLoadRuleResult,
 } from '@lobechat/prompts';
 import { appendTextWindowNotice, sliceTextWindow } from '@lobechat/prompts/textWindow';
-import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
+import type { AgentDocumentPolicyLoad, BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {
   CopyDocumentArgs,
@@ -63,6 +63,10 @@ interface AgentDocumentRecord {
   litexml?: string;
   /** `documentId` of the containing folder or document; null at the root. */
   parentId?: string | null;
+  /** Stored load settings; maxTokens / priority live under `context`. */
+  policy?: { context?: { maxTokens?: number | null; priority?: number | null } } | null;
+  /** Stored load mode, read back after updateLoadRule to report what the next call sees. */
+  policyLoad?: AgentDocumentPolicyLoad;
   title?: string;
   updatedAt?: Date | string;
 }
@@ -971,10 +975,18 @@ export class AgentDocumentsExecutionRuntime {
     if (!updated) return { content: `Document not found: ${args.id}`, success: false };
 
     const url = await this.buildDocumentUrl(agentId, updated.documentId);
+    const storedContext = updated.policy?.context;
 
     return {
-      content: formatUpdateLoadRuleResult({ id: args.id, title: updated.title, url }),
-      state: { applied: true, rule: args.rule },
+      content: formatUpdateLoadRuleResult({
+        id: args.id,
+        maxTokens: storedContext?.maxTokens,
+        policyLoad: updated.policyLoad,
+        priority: storedContext?.priority,
+        title: updated.title,
+        url,
+      }),
+      state: { applied: true, policyLoad: updated.policyLoad, rule: args.rule },
       success: true,
     };
   }

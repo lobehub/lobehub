@@ -1,3 +1,5 @@
+import type { AgentDocumentPolicyLoad } from '@lobechat/types';
+
 export const AgentDocumentsIdentifier = 'lobe-agent-documents';
 
 /**
@@ -191,10 +193,20 @@ export interface CopyDocumentState {
   newDocumentId?: string;
 }
 
+/**
+ * Load modes the model may set through updateLoadRule. `progressive` lists the
+ * document in `agent_documents_index` only; `always` injects its full content.
+ * `disabled` is reserved for managed skills and is not offered to the model.
+ */
+export const AGENT_DOCUMENT_TOOL_LOAD_MODES = ['always', 'progressive'] as const;
+
+export type AgentDocumentToolLoadMode = (typeof AGENT_DOCUMENT_TOOL_LOAD_MODES)[number];
+
 export interface AgentDocumentLoadRule {
   keywordMatchMode?: 'all' | 'any';
   keywords?: string[];
   maxTokens?: number;
+  mode?: AgentDocumentToolLoadMode;
   policyLoadFormat?: 'file' | 'raw';
   priority?: number;
   regexp?: string;
@@ -212,6 +224,8 @@ export interface UpdateLoadRuleArgs {
 
 export interface UpdateLoadRuleState {
   applied: boolean;
+  /** The document's load mode after the update, read back from the stored row. */
+  policyLoad?: AgentDocumentPolicyLoad;
   rule: AgentDocumentLoadRule;
 }
 
