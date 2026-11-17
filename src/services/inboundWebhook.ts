@@ -28,6 +28,9 @@ class InboundWebhookService {
    * paused delivery as a side effect. Returns the refreshed row; a problem the
    * check found comes back as the row's status, not as a thrown error.
    */
+  /** One automation, as the list shows it. */
+  get = async (id: string) => lambdaClient.inboundWebhook.get.query({ id });
+
   check = async (id: string) => lambdaClient.inboundWebhook.check.mutate({ id });
 
   delete = async (id: string) => lambdaClient.inboundWebhook.delete.mutate({ id });
