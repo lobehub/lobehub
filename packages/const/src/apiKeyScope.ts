@@ -49,6 +49,13 @@ export const API_KEY_SCOPES = [
   'file:write',
   'knowledge:read',
   'knowledge:write',
+  /**
+   * Documents / Pages and topic notebooks on the public REST API
+   * (`/api/v1/documents`, `/api/v1/notebooks`). Separate from `knowledge:*` so a
+   * key can write pages without reaching knowledge bases, chunks or retrieval.
+   */
+  'document:read',
+  'document:write',
   'mcp:read',
   'mcp:write',
   'usage:read',

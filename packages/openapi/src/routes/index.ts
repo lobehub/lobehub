@@ -5,6 +5,7 @@ import ApiKeysRoutes from './api-keys.route';
 import AudioRoutes from './audio.route';
 import ChatRoutes from './chat.route';
 import ChatGroupsRoutes from './chat-groups.route';
+import DocumentsRoutes from './documents.route';
 import EvalRoutes from './eval.route';
 import FileRoutes from './files.route';
 import GoalsRoutes from './goals.route';
@@ -15,6 +16,7 @@ import MemoriesRoutes from './memories.route';
 import MessageTranslationsRoutes from './message-translations.route';
 import MessagesRoutes from './messages.route';
 import ModelsRoutes from './models.route';
+import NotebooksRoutes from './notebooks.route';
 import NotificationsRoutes from './notifications.route';
 import OpenAIRoutes from './openai.route';
 import PermissionsRoutes from './permissions.route';
@@ -60,4 +62,6 @@ export default {
   'topics': TopicsRoutes,
   'users': UsersRoutes,
   'usage': UsageRoutes,
+  'documents': DocumentsRoutes,
+  'notebooks': NotebooksRoutes,
 };

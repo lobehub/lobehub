@@ -12,6 +12,7 @@ import {
   desc,
   eq,
   gt,
+  ilike,
   inArray,
   isNull,
   ne,
@@ -61,7 +62,19 @@ export interface QueryDocumentParams {
    */
   excludeKnowledgeBaseIds?: string[];
   fileTypes?: string[];
+  /**
+   * Case-insensitive substring match on the title. `%` and `_` are matched
+   * literally, so a search for `50%` does not turn into a wildcard.
+   */
+  keyword?: string;
+  /**
+   * Row offset. Takes precedence over `current`, so a cursor that resumes
+   * after a partial page does not have to land on a page boundary.
+   */
+  offset?: number;
   pageSize?: number;
+  /** Keep only direct children of this folder; `null` keeps root-level documents. */
+  parentId?: string | null;
   /**
    * Row order: `updatedAt` (default) and `createdAt` list the newest first,
    * `title` lists A→Z. Ties fall back to the id so offset pages never overlap.
@@ -198,6 +211,9 @@ export class DocumentModel {
     pageSize = 9999,
     excludeKnowledgeBaseIds,
     fileTypes,
+    keyword,
+    offset: offsetParam,
+    parentId,
     sortBy = 'updatedAt',
     sourceTypes,
     standaloneOnly,
@@ -205,8 +221,17 @@ export class DocumentModel {
     items: DocumentItem[];
     total: number;
   }> => {
-    const offset = current * pageSize;
+    const offset = offsetParam ?? current * pageSize;
     const conditions = [this.readScope()];
+
+    const trimmedKeyword = keyword?.trim();
+    if (trimmedKeyword) {
+      const escaped = trimmedKeyword.replaceAll(/[%\\_]/g, (char) => `\\${char}`);
+      conditions.push(ilike(documents.title, `%${escaped}%`));
+    }
+
+    if (parentId === null) conditions.push(isNull(documents.parentId));
+    else if (parentId) conditions.push(eq(documents.parentId, parentId));
 
     if (fileTypes?.length) {
       conditions.push(inArray(documents.fileType, fileTypes));

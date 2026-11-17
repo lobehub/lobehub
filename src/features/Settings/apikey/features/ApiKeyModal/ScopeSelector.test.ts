@@ -33,4 +33,11 @@ describe('toggleScopeSelection', () => {
       'agent:read',
     ]);
   });
+
+  it('selects document read together with document write', () => {
+    expect(sorted(toggleScopeSelection([], 'document:write', true))).toEqual([
+      'document:read',
+      'document:write',
+    ]);
+  });
 });

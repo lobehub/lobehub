@@ -244,3 +244,61 @@ describe('DocumentModel.query — sortBy', () => {
     expect(await orderedIds('title')).toEqual(['page-a', 'page-b', 'page-c']);
   });
 });
+
+describe('DocumentModel.query — keyword / parentId / offset', () => {
+  beforeEach(async () => {
+    await insertPage({ id: 'Roadmap 2026', userId: userA, visibility: 'public' });
+    await insertPage({ id: 'roadmap draft', userId: userA, visibility: 'public' });
+    await insertPage({ id: 'Budget 50% cut', userId: userA, visibility: 'public' });
+    await insertPage({ id: 'Budget 500', userId: userA, visibility: 'public' });
+    await insertPage({ id: 'folder', userId: userA, visibility: 'public' });
+    await serverDB.insert(documents).values({
+      fileType: 'custom/document',
+      id: 'child-page',
+      parentId: 'folder',
+      source: 'document',
+      sourceType: 'api',
+      title: 'child-page',
+      totalCharCount: 0,
+      totalLineCount: 0,
+      userId: userA,
+      visibility: 'public',
+      workspaceId,
+    });
+  });
+
+  it('matches the title case-insensitively', async () => {
+    await expect(queryIds(userA, { keyword: 'ROADMAP' })).resolves.toEqual({
+      ids: ['Roadmap 2026', 'roadmap draft'],
+      total: 2,
+    });
+  });
+
+  it('matches % and _ literally instead of as wildcards', async () => {
+    await expect(queryIds(userA, { keyword: '50%' })).resolves.toEqual({
+      ids: ['Budget 50% cut'],
+      total: 1,
+    });
+  });
+
+  it('keeps only the direct children of a folder, or root rows for null', async () => {
+    await expect(queryIds(userA, { parentId: 'folder' })).resolves.toEqual({
+      ids: ['child-page'],
+      total: 1,
+    });
+    const root = await queryIds(userA, { parentId: null });
+    expect(root.ids).not.toContain('child-page');
+    expect(root.total).toBe(5);
+  });
+
+  it('starts at an explicit offset that is not a page boundary', async () => {
+    const all = await new DocumentModel(serverDB, userA, workspaceId).query({ sortBy: 'title' });
+    const page = await new DocumentModel(serverDB, userA, workspaceId).query({
+      offset: 1,
+      pageSize: 2,
+      sortBy: 'title',
+    });
+    expect(page.items.map((item) => item.id)).toEqual(all.items.slice(1, 3).map((i) => i.id));
+    expect(page.total).toBe(all.total);
+  });
+});
