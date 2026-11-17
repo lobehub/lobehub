@@ -1,31 +1,45 @@
-import { imagePlaceholder } from '../imageEcho';
+import { imagePlaceholder } from '../../imageEcho';
 import type {
   AgentEventAdapter,
   HeterogeneousAgentEvent,
   HeterogeneousRateLimitInfo,
   HeterogeneousTerminalErrorData,
-  HeterogeneousToolResultImage,
   StepCompleteData,
   StreamStartData,
   ToolCallPayload,
   ToolResultData,
   ToolStateChunkData,
   UsageData,
-} from '../types';
+} from '../../types';
 import {
   CODEX_COMMAND_OUTPUT_MAX_LENGTH,
   truncateCodexCommandOutput,
-} from '../utils/codexCommandOutput';
-import { isCodexCapacityError } from '../utils/codexErrors';
-import { toCodexUsageData, toTurnUsageFromCumulative } from '../utils/codexUsage';
+} from '../../utils/codexCommandOutput';
+import { isCodexCapacityError } from '../../utils/codexErrors';
+import { toCodexUsageData, toTurnUsageFromCumulative } from '../../utils/codexUsage';
+import type {
+  CodexCollabToolCallItem,
+  CodexFileChangeItem,
+  CodexMcpToolCallItem,
+  CodexTodoListItem,
+  CodexToolItem,
+  CodexWebSearchItem,
+} from './items';
+import {
+  CODEX_COMMAND_API,
+  isCollabToolCallItem,
+  isCommandExecutionItem,
+  isFileChangeItem,
+  isImageOutputItem,
+  isMcpToolCallItem,
+  isNonToolItemType,
+  isTodoListItem,
+  isWebSearchItem,
+} from './items';
+
+export type { CodexImageOutputItem } from './items';
 
 const CODEX_IDENTIFIER = 'codex';
-const CODEX_COLLAB_TOOL_CALL_API = 'collab_tool_call';
-const CODEX_COMMAND_API = 'command_execution';
-const CODEX_FILE_CHANGE_API = 'file_change';
-const CODEX_MCP_TOOL_CALL_API = 'mcp_tool_call';
-const CODEX_TODO_LIST_API = 'todo_list';
-const CODEX_WEB_SEARCH_API = 'web_search';
 const CODEX_USAGE_SETTINGS_URL = 'https://chatgpt.com/codex/settings/usage';
 
 const CODEX_USER_RATE_LIMIT_PATTERNS = [
@@ -36,29 +50,6 @@ const CODEX_USER_RATE_LIMIT_PATTERNS = [
 
 const CODEX_RETRY_AT_PATTERN =
   /\btry again at\s+(\d{1,2})(?::(\d{2}))?(?:(AM|PM)|\s+(AM|PM))?(?:\s+\(([^()]+)\))?/i;
-
-interface CodexBaseItem {
-  id: string;
-  status?: string;
-  type: string;
-}
-
-interface CodexCommandExecutionItem extends CodexBaseItem {
-  aggregated_output?: string;
-  command?: string;
-  exit_code?: number | null;
-}
-
-/** Image tool outputs omitted by exec --json and recovered from its rollout. */
-export interface CodexImageOutputItem extends CodexBaseItem {
-  images: HeterogeneousToolResultImage[];
-  type: 'image_output';
-}
-
-interface CodexTodoListEntry {
-  completed?: boolean;
-  text?: string;
-}
 
 interface TodoListPluginItem {
   status: 'completed' | 'processing' | 'todo';
@@ -71,61 +62,6 @@ interface StreamedCommandOutput {
   truncated: boolean;
 }
 
-interface CodexTodoListItem extends CodexBaseItem {
-  items?: CodexTodoListEntry[];
-}
-
-interface CodexFileChangeEntry {
-  diffText?: string;
-  kind?: string;
-  linesAdded?: number;
-  linesDeleted?: number;
-  path?: string;
-}
-
-interface CodexFileChangeItem extends CodexBaseItem {
-  changes?: CodexFileChangeEntry[];
-  diffText?: string;
-  linesAdded?: number;
-  linesDeleted?: number;
-}
-
-interface CodexMcpToolCallItem extends CodexBaseItem {
-  arguments?: unknown;
-  error?: unknown;
-  result?: unknown;
-  server?: string;
-  tool?: string;
-}
-
-interface CodexWebSearchItem extends CodexBaseItem {
-  action?: unknown;
-  query?: unknown;
-}
-
-interface CodexCollabAgentState {
-  message?: string | null;
-  status?: string;
-}
-
-interface CodexCollabToolCallItem extends CodexBaseItem {
-  agents_states?: Record<string, CodexCollabAgentState>;
-  prompt?: string | null;
-  receiver_thread_ids?: string[];
-  sender_thread_id?: string;
-  tool?: string;
-}
-
-type CodexToolItem =
-  | CodexBaseItem
-  | CodexCollabToolCallItem
-  | CodexCommandExecutionItem
-  | CodexFileChangeItem
-  | CodexImageOutputItem
-  | CodexMcpToolCallItem
-  | CodexTodoListItem
-  | CodexWebSearchItem;
-
 interface ZonedDateTimeParts {
   day: number;
   hour: number;
@@ -134,27 +70,6 @@ interface ZonedDateTimeParts {
   second: number;
   year: number;
 }
-
-const isImageOutputItem = (item: CodexToolItem): item is CodexImageOutputItem =>
-  item.type === 'image_output';
-
-const isCommandExecutionItem = (item: CodexToolItem): item is CodexCommandExecutionItem =>
-  item.type === CODEX_COMMAND_API;
-
-const isCollabToolCallItem = (item: CodexToolItem): item is CodexCollabToolCallItem =>
-  item.type === CODEX_COLLAB_TOOL_CALL_API;
-
-const isFileChangeItem = (item: CodexToolItem): item is CodexFileChangeItem =>
-  item.type === CODEX_FILE_CHANGE_API;
-
-const isMcpToolCallItem = (item: CodexToolItem): item is CodexMcpToolCallItem =>
-  item.type === CODEX_MCP_TOOL_CALL_API;
-
-const isTodoListItem = (item: CodexToolItem): item is CodexTodoListItem =>
-  item.type === CODEX_TODO_LIST_API;
-
-const isWebSearchItem = (item: CodexToolItem): item is CodexWebSearchItem =>
-  item.type === CODEX_WEB_SEARCH_API;
 
 const normalizeTodoListItems = (item: CodexTodoListItem) =>
   (item.items || [])
@@ -990,7 +905,7 @@ export class CodexAdapter implements AgentEventAdapter {
   }
 
   private handleItemStarted(item: any): HeterogeneousAgentEvent[] {
-    if (!item?.id || !item?.type || item.type === 'agent_message') return [];
+    if (!item?.id || !item?.type || isNonToolItemType(item.type)) return [];
 
     this.hasToolActivitySinceAgentMessage = true;
 
@@ -1117,7 +1032,7 @@ export class CodexAdapter implements AgentEventAdapter {
       return this.handleAgentMessageContent(item.id, item.text);
     }
 
-    if (!item.id) return [];
+    if (isNonToolItemType(item.type) || !item.id) return [];
     this.streamedCommandOutput.delete(item.id);
 
     // Codex emits the same status-less todo completion before both a successful
