@@ -2,6 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import Layout from './index';
@@ -23,6 +24,9 @@ vi.mock(import('@/const/version'), async (importOriginal) => ({
 vi.mock('@/hooks/useInitAgentConfig', () => ({ useInitAgentConfig: vi.fn() }));
 vi.mock('@/features/ProtocolUrlHandler', () => ({ default: () => null }));
 vi.mock('./RegisterHotkeys', () => ({ default: () => null }));
+vi.mock('./ProjectOwnedAgentRedirect', () => ({
+  default: ({ children }: { children: ReactNode }) => children,
+}));
 vi.mock('@/features/AgentSidebar', () => ({
   default: () => <div data-testid="agent-layout-sidebar" />,
 }));

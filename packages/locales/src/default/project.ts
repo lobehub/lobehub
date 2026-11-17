@@ -520,4 +520,57 @@ export default {
   'onboarding.connect.goal.title': 'Goals',
   'onboarding.connect.goal.description': 'Set a goal you can sign off',
   'onboarding.connect.goal.count': '{{count}} set',
+  'settings.coordinator': 'Main agent',
+  'coordinator.title': 'Main agent',
+  'coordinator.description':
+    'The agent that leads this project. Its prompt, model, IM channels and tools are set up here — this is the only place to configure it.',
+  'coordinator.readOnly': 'You can view this configuration but not change it.',
+  'coordinator.redirectedFromAgentSettings':
+    "This agent leads a project, so its settings live in the project settings. We've opened them for you.",
+  'coordinator.source.shared':
+    'This main agent also leads other projects ({{count}}). Changes here apply to all of them.',
+  'coordinator.source.userPicked':
+    'This is your standalone agent "{{name}}". Changes here apply everywhere it is used.',
+  'coordinator.source.builtin':
+    'LobeAI (default) leads this project. Its configuration is read-only here; pick a dedicated main agent to configure one.',
+  'coordinator.view.basic': 'Basics',
+  'coordinator.view.channel': 'IM channels',
+  'coordinator.view.tools': 'Tools',
+  'coordinator.view.skills': 'Skills',
+  'coordinator.view.knowledge': 'Knowledge',
+  'coordinator.view.environment': 'Environment',
+  'coordinator.prompt.title': 'Prompt',
+  'coordinator.prompt.description':
+    "The main agent's system prompt: who it is and how it leads the project.",
+  'coordinator.prompt.placeholder': 'Describe the role, tone and working rules of the main agent',
+  'coordinator.prompt.hint': '{{count}} characters',
+  'coordinator.model.title': 'Model',
+  'coordinator.model.description':
+    'The model and provider the main agent runs on, and its sampling parameters.',
+  'coordinator.model.model': 'Model',
+  'coordinator.model.provider': 'Provider: {{provider}}',
+  'coordinator.model.inherited':
+    'Provider: {{provider}} · not set for this agent, so it runs on the default model',
+  'coordinator.model.temperature': 'Temperature',
+  'coordinator.model.topP': 'Top P',
+  'coordinator.responsibility.title': 'Responsibility in this project',
+  'coordinator.responsibility.description':
+    "Added to the main agent's context for this project only.",
+  'coordinator.identity.title': 'Name and summary',
+  'coordinator.identity.description': 'How the main agent appears in conversations and channels.',
+  'coordinator.identity.name': 'Name',
+  'coordinator.identity.summary': 'Summary',
+  'coordinator.opening.title': 'Opening',
+  'coordinator.opening.description':
+    'The greeting and suggested questions shown when a new topic starts.',
+  'coordinator.opening.message': 'Opening message',
+  'coordinator.opening.questions': 'Suggested questions, one per line',
+  'coordinator.channel.back': 'All channels',
+  'coordinator.channel.title': 'IM connections',
+  'coordinator.channel.description': 'The chat apps where people can talk to the main agent.',
+  'coordinator.channel.manage': 'Manage IM channels',
+  'coordinator.channel.empty': 'No IM channel connected yet.',
+  'coordinator.channel.applicationId': 'Bot / app ID: {{id}}',
+  'coordinator.channel.enabled': 'Enabled',
+  'coordinator.channel.disabled': 'Disabled',
 };

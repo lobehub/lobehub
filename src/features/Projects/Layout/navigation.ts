@@ -29,10 +29,26 @@ export const getProjectDashboardPath = (projectId: string, dashboardId?: string)
     : `/project/${projectId}/dashboard`;
 
 export type ProjectSettingsSection =
-  'directories' | 'environments' | 'general' | 'knowledge' | 'members' | 'sites';
+  'agent' | 'directories' | 'environments' | 'general' | 'knowledge' | 'members' | 'sites';
 
 export const getProjectSettingsPath = (projectId: string, section: ProjectSettingsSection) =>
   `/project/${projectId}/settings/${section}`;
+
+/**
+ * The project's "Main agent" settings — the single place its coordinator's
+ * prompt, model, IM channels and tools are configured. `view` picks the page
+ * (`basic` when omitted), `platform` opens one IM channel's setup.
+ */
+export const getProjectCoordinatorSettingsPath = (
+  projectId: string,
+  { platform, view }: { platform?: string; view?: string } = {},
+) => {
+  const query = new URLSearchParams();
+  if (view && view !== 'basic') query.set('view', view);
+  if (platform) query.set('platform', platform);
+  const search = query.toString();
+  return `${getProjectSettingsPath(projectId, 'agent')}${search ? `?${search}` : ''}`;
+};
 
 export const getProjectAcceptancePath = (projectId: string) => `/project/${projectId}/acceptance`;
 

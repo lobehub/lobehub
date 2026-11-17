@@ -186,6 +186,12 @@ export interface AgentItem {
   name?: string | null;
   openingMessage?: string | null;
   openingQuestions?: string[];
+  /**
+   * The project this agent was provisioned for and belongs to (its main agent),
+   * or `null` for a standalone agent. Such an agent is configured only from the
+   * project settings and stays out of the standalone agent lists.
+   */
+  ownerProjectId?: string | null;
   params?: any;
   plugins?: AgentPluginEntry[];
   /** Character sheet — traits and artwork; see {@link AgentProfile}. */

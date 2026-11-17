@@ -11,6 +11,22 @@ export interface ProjectAgentBindingPatch {
   sortOrder?: number;
 }
 
+/** The coordinator fields the project settings write through the project. */
+export interface ProjectCoordinatorConfigPatch {
+  avatar?: string | null;
+  chatConfig?: Record<string, unknown> | null;
+  description?: string | null;
+  model?: string | null;
+  openingMessage?: string | null;
+  openingQuestions?: string[] | null;
+  params?: Record<string, unknown> | null;
+  plugins?: string[] | null;
+  provider?: string | null;
+  systemRole?: string | null;
+  title?: string | null;
+  tts?: Record<string, unknown> | null;
+}
+
 export interface ProjectKnowledgeBaseBindingPatch {
   enabled?: boolean;
   sortOrder?: number;
@@ -51,6 +67,16 @@ class ProjectService {
   listOverviews = async () => lambdaClient.project.listOverviews.query();
 
   detail = async (id: string) => lambdaClient.project.detail.query({ id });
+
+  /** The project's main agent configuration, resolved through the project. */
+  getCoordinatorConfig = async (id: string) =>
+    (await lambdaClient.project.getCoordinatorConfig.query({ id })).data;
+
+  /** Write the main agent's configuration (and its responsibility) through the project. */
+  updateCoordinatorConfig = async (
+    id: string,
+    input: { config?: ProjectCoordinatorConfigPatch; responsibility?: string | null },
+  ) => (await lambdaClient.project.updateCoordinatorConfig.mutate({ id, ...input })).data;
 
   delete = async (id: string) => lambdaClient.project.delete.mutate({ id });
 

@@ -9,6 +9,7 @@ import ProtocolUrlHandler from '@/features/ProtocolUrlHandler';
 import AgentIdSync from '@/routes/(main)/agent/_layout/AgentIdSync';
 
 import PortalAutoCollapse from './PortalAutoCollapse';
+import ProjectOwnedAgentRedirect from './ProjectOwnedAgentRedirect';
 import RegisterHotkeys from './RegisterHotkeys';
 import { styles } from './style';
 
@@ -20,7 +21,9 @@ const Layout: FC = () => {
         {/* Keep the sidebar interactive when the routed agent is gone (deleted
             or made private) — only the content area collapses to the 404 card. */}
         <AgentNotFoundGuard>
-          <Outlet />
+          <ProjectOwnedAgentRedirect>
+            <Outlet />
+          </ProjectOwnedAgentRedirect>
         </AgentNotFoundGuard>
       </Flexbox>
       <RegisterHotkeys />

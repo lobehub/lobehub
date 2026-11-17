@@ -6,6 +6,7 @@ import { Outlet } from 'react-router';
 import AgentSidebar from '@/features/AgentSidebar';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
 import AgentIdSync from '@/routes/(main)/agent/_layout/AgentIdSync';
+import ProjectOwnedAgentRedirect from '@/routes/(main)/agent/_layout/ProjectOwnedAgentRedirect';
 
 /**
  * Owns the routed agent for every mobile `/agent/:aid/*` page: the chat (which
@@ -21,7 +22,9 @@ const AgentScopeLayout: FC = () => {
   return (
     <>
       <AgentSidebar />
-      <Outlet />
+      <ProjectOwnedAgentRedirect>
+        <Outlet />
+      </ProjectOwnedAgentRedirect>
       <AgentIdSync />
     </>
   );

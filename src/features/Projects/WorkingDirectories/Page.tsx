@@ -10,6 +10,7 @@ import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
+import { ProjectCoordinatorSettings } from '../CoordinatorSettings';
 import { ProjectKnowledgeBaseSettings } from '../KnowledgeBases';
 import { ProjectMemberSettings } from '../Members';
 import { MembersSettings } from '../Review/MembersSettings';
@@ -43,6 +44,11 @@ export function ProjectDirectoriesPage() {
       key: 'general',
       label: t('settings.general'),
       render: () => <GeneralSettings key={detail.project.id} project={detail.project} />,
+    },
+    {
+      key: 'agent',
+      label: t('settings.coordinator'),
+      render: () => <ProjectCoordinatorSettings canManage={canManage} detail={detail} />,
     },
     {
       key: 'members',
