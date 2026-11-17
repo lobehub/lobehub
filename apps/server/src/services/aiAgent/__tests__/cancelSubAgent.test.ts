@@ -217,6 +217,24 @@ describe('cancelSubAgentThreadRun', () => {
     expect(result.error).toContain('not a sub-agent started by callSubAgent');
   });
 
+  // An external agent has no runtime state to carry the interrupt mark: the
+  // device confirming the process exited on this stop is the proof.
+  it('reports a Claude Code sub-agent stopped once the device confirms its exit', async () => {
+    deps.isOperationInterrupted = vi.fn().mockResolvedValue(false);
+    deps.interruptTask = vi
+      .fn()
+      .mockResolvedValue({ deviceCancellationConfirmed: true, success: true });
+    deps.agentOperationModel.findById = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'running' })
+      .mockResolvedValue({ status: 'interrupted' }) as any;
+
+    const result = await cancelSubAgentThreadRun(deps, params);
+
+    expect(result).toMatchObject({ status: 'cancelled', stopped: true });
+    expect(messageModel.releaseCancelSuppressedDelivery).not.toHaveBeenCalled();
+  });
+
   // The thread runs as the target agent; the dispatcher's tool call anchors it.
   it.each([
     ['callSubAgent({ agentId })', callSubAgentPlugin],

@@ -354,7 +354,7 @@ export interface CancelSubAgentRunDeps extends Pick<
     operationId?: string;
     threadId?: string;
     topicId?: string;
-  }) => Promise<{ success: boolean }>;
+  }) => Promise<{ deviceCancellationConfirmed?: boolean; success: boolean }>;
   /** Whether the run carries the interrupt mark (set only by a stop that caught it live). */
   isOperationInterrupted: (operationId: string) => Promise<boolean>;
   /** How long to wait for the stopped run to reach a terminal status; tests pass 0. */
@@ -427,7 +427,7 @@ export const cancelSubAgentThreadRun = async (
       .releaseCancelSuppressedDelivery(ids)
       .catch((error) => log('cancelSubAgent: failed to restore delivery of %O: %O', ids, error));
 
-  let interrupted: { success: boolean };
+  let interrupted: { deviceCancellationConfirmed?: boolean; success: boolean };
   try {
     interrupted = await deps.interruptTask({ operationId, threadId, topicId });
   } catch (error) {
@@ -450,10 +450,14 @@ export const cancelSubAgentThreadRun = async (
   // `interruptOperation` then acknowledges the terminal state without setting
   // the interrupt sentinel, and its completion records a real answer that must
   // still reach the parent.
-  const stoppedByUs = await deps.isOperationInterrupted(operationId).catch((error) => {
-    log('cancelSubAgent: reading the interrupt mark of %s failed: %O', operationId, error);
-    return false;
-  });
+  // An external agent (Claude Code) has no runtime state to carry the mark:
+  // the device confirming its process exited on this stop is the proof.
+  const stoppedByUs =
+    interrupted.deviceCancellationConfirmed === true ||
+    (await deps.isOperationInterrupted(operationId).catch((error) => {
+      log('cancelSubAgent: reading the interrupt mark of %s failed: %O', operationId, error);
+      return false;
+    }));
   if (!stoppedByUs) {
     await restoreDelivery(suppressed);
     return { operationId, status: 'not_running', threadId };
