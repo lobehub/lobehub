@@ -24,10 +24,8 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import type { ProjectDetail } from '@/store/project';
 
-import { useCanManageProject } from '../useCanManageProject';
 import ProjectAgentSelect from './ProjectAgentSelect';
 import { projectComposerAgents } from './projectComposerAgents';
-import ProjectWorkLocationPicker from './ProjectWorkLocationPicker';
 import {
   AttachmentsNotReadyError,
   DirectoryUnavailableError,
@@ -78,14 +76,10 @@ const styles = stylex.create({
   trayFrame: {
     paddingInline: '24px',
   },
-  // The left side gives way in a narrow window (the agent's name truncates);
-  // where the work happens, on the right, always stays whole.
+  // The agent's name truncates in a narrow window.
   trayLeading: {
     flex: '1',
     minWidth: 0,
-  },
-  trayTrailing: {
-    flexShrink: 0,
   },
   tray: {
     gap: '8px',
@@ -149,10 +143,12 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
     (s) => !!workspaceId && s.agentMap[agentId]?.visibility === 'public',
   );
   const repositoryState = useProjectRepository(project.id, sharedAgent);
-  const canManageProject = useCanManageProject();
   const location = useProjectWorkLocation(agentId);
   const directoryState = useProjectDirectory(project.id, location.machineDeviceId);
-  // A task is not started in a conversation, so it has no repository or folder to pick.
+  // No picker: a conversation starts where the agent runs, in the project's
+  // first repository (sandbox) or first folder on that machine — the defaults
+  // the server applies too. A task is not started in a conversation, so it has
+  // neither.
   const place =
     mode !== 'chat'
       ? {}
@@ -224,24 +220,6 @@ const ProjectComposer = memo<ProjectComposerProps>(({ detail, request }) => {
               disabled={sending}
               value={agentId}
               onChange={setPickedAgentId}
-            />
-          </Flexbox>
-          <Flexbox
-            horizontal
-            align={'center'}
-            className={stylex.props(styles.trayTrailing).className}
-            gap={2}
-          >
-            <ProjectWorkLocationPicker
-              canManage={canManageProject}
-              compact={compact}
-              directoryState={directoryState}
-              disabled={sending}
-              location={location}
-              projectId={project.id}
-              publish={sharedAgent}
-              showRepositories={mode === 'chat'}
-              state={repositoryState}
             />
           </Flexbox>
         </Flexbox>

@@ -1,5 +1,3 @@
-import { useState } from 'react';
-
 import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projectWorkingDirectory';
 
 type ProjectEnvironment = ReturnType<typeof useProjectEnvironments>[number];
@@ -9,10 +7,8 @@ export const isRepositoryEnvironment = (environment: ProjectEnvironment) =>
   (environment.configuration?.sources ?? []).some((source) => source.kind === 'git');
 
 /**
- * The project's repositories and the one a new conversation starts in: the
- * person's pick while it is still linked, otherwise the first. The server
- * applies the same default, so leaving it untouched and picking the first are
- * the same request.
+ * The repository a new conversation starts in: the project's first one, the
+ * same default the server applies.
  */
 export const useProjectRepository = (
   projectId: string,
@@ -20,13 +16,10 @@ export const useProjectRepository = (
   sharedAgent = false,
 ) => {
   const { hasData } = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
-  const repositories = useProjectEnvironments(projectId).filter(
+  const repository = useProjectEnvironments(projectId).find(
     (environment) =>
       isRepositoryEnvironment(environment) && (!sharedAgent || environment.visibility === 'public'),
   );
-  const [pickedId, setPickedId] = useState<string>();
-  const repository =
-    repositories.find((environment) => environment.id === pickedId) ?? repositories[0];
 
-  return { loaded: hasData, repositories, repository, setPickedId };
+  return { loaded: hasData, repository };
 };
