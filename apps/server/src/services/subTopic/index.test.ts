@@ -39,6 +39,7 @@ const createDeps = () =>
     archiveTopic: vi.fn().mockResolvedValue(undefined),
     assertCanEditTopics: vi.fn().mockResolvedValue(undefined),
     assertCanOpen: vi.fn().mockResolvedValue(undefined),
+    assertCanViewTopics: vi.fn().mockResolvedValue(undefined),
     detachTopics: vi.fn(async (ids: string[]) =>
       ids.map((id) => ({
         agentId: id === 'tpc_cross' ? 'agt_codex' : 'agt_lobe',
@@ -49,6 +50,7 @@ const createDeps = () =>
     execAgent: vi
       .fn()
       .mockResolvedValue({ operationId: 'op_child', success: true, topicId: 'tpc_new' }),
+    filterViewableAgents: vi.fn(async (ids: string[]) => new Set(ids)),
     findLatestRunStatus: vi.fn().mockResolvedValue(null),
     findLiveRunIds: vi.fn().mockResolvedValue([]),
     findTopic: vi.fn(async (id: string) => {
@@ -64,7 +66,9 @@ const createDeps = () =>
     issueWorktreeReceipt: vi.fn(() => ({ nonce: 'nonce-child', token: 'token-child' })),
     listDescendants: vi.fn().mockResolvedValue([]),
     listOpened: vi.fn().mockResolvedValue([]),
+    listOpenedTree: vi.fn().mockResolvedValue([]),
     readLastReply: vi.fn().mockResolvedValue('Done.'),
+    readTranscript: vi.fn().mockResolvedValue({ items: [], total: 0 }),
     resolveInterventionConfig: vi.fn().mockResolvedValue({ approvalMode: 'auto-run' }),
     rollbackWorktree: vi.fn().mockResolvedValue(undefined),
     startOnTopic: vi.fn().mockResolvedValue({ operationId: 'op_turn', success: true }),
@@ -528,6 +532,57 @@ describe('SubTopicService.retire — attachments', () => {
 
     expect(deps.trashTopic).toHaveBeenCalledWith('tpc_same', { removeFiles: false });
     expect(deps.trashTopic).toHaveBeenCalledWith('tpc_parent', { removeFiles: false });
+  });
+});
+
+describe('SubTopicService — view access', () => {
+  const row = (id: string, agentId: string, opener: string) =>
+    ({ agentId, id, openedBy: { topicId: opener }, status: null, trigger: 'sub_topic' }) as any;
+
+  it('hides a sub-topic whose agent the caller may not view, and everything below it', async () => {
+    const deps = createDeps();
+    deps.listOpenedTree.mockResolvedValue([
+      // Not in tree order: the grandchild comes first.
+      row('tpc_grand', 'agt_lobe', 'tpc_private'),
+      row('tpc_private', 'agt_private', 'tpc_parent'),
+      row('tpc_same', 'agt_lobe', 'tpc_parent'),
+    ]);
+    deps.filterViewableAgents.mockResolvedValue(new Set(['agt_lobe']));
+
+    const rows = await new SubTopicService(deps).listTree(['tpc_parent']);
+
+    expect(rows.map((item) => item.id)).toEqual(['tpc_same']);
+  });
+
+  it('refuses to read, get or describe a topic the caller may not view', async () => {
+    const deps = createDeps();
+    deps.assertCanViewTopics.mockRejectedValue(new Error('FORBIDDEN'));
+    const service = new SubTopicService(deps);
+
+    await expect(service.read('tpc_cross', { limit: 30 })).rejects.toThrow('FORBIDDEN');
+    await expect(service.get('tpc_cross')).rejects.toThrow('FORBIDDEN');
+    await expect(service.describe('tpc_parent')).rejects.toThrow('FORBIDDEN');
+    await expect(service.list('tpc_parent')).rejects.toThrow('FORBIDDEN');
+    expect(deps.readTranscript).not.toHaveBeenCalled();
+    expect(deps.readLastReply).not.toHaveBeenCalled();
+  });
+
+  it('reads the transcript once allowed', async () => {
+    const deps = createDeps();
+
+    await new SubTopicService(deps).read('tpc_cross', { limit: 30 });
+
+    expect(deps.assertCanViewTopics).toHaveBeenCalledWith(['tpc_cross']);
+    expect(deps.readTranscript).toHaveBeenCalledWith({ limit: 30, topicId: 'tpc_cross' });
+  });
+
+  it('needs edit access to stop a run', async () => {
+    const deps = createDeps();
+    deps.findLiveRunIds.mockResolvedValue(['op_a']);
+    deps.assertCanEditTopics.mockRejectedValue(new Error('FORBIDDEN'));
+
+    await expect(new SubTopicService(deps).stop('tpc_cross')).rejects.toThrow('FORBIDDEN');
+    expect(deps.interrupt).not.toHaveBeenCalled();
   });
 });
 

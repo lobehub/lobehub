@@ -117,10 +117,14 @@ export interface SubTopicDeps {
    * `openerTopicId` — the same workspace checks `aiAgent.execAgent` applies.
    */
   assertCanOpen: (params: { agentId: string; openerTopicId: string }) => Promise<void>;
+  /** Throws unless the caller may view these topics (`view` on their agent or group). */
+  assertCanViewTopics: (topicIds: string[]) => Promise<void>;
   detachTopics: (
     topicIds: string[],
   ) => Promise<{ agentId: null | string; id: string; trigger: null | string }[]>;
   execAgent: (params: Record<string, unknown>) => Promise<ExecAgentResult>;
+  /** The agents among `agentIds` whose conversations the caller may view. */
+  filterViewableAgents: (agentIds: string[]) => Promise<Set<string>>;
   /** Status of the topic's latest top-level operation; null before its first run. */
   findLatestRunStatus: (topicId: string) => Promise<AgentOperationStatus | null>;
   findLiveRunIds: (topicId: string) => Promise<string[]>;
@@ -130,7 +134,11 @@ export interface SubTopicDeps {
   issueWorktreeReceipt: () => { nonce: string; token: string } | undefined;
   listDescendants: (topicId: string) => Promise<OpenedTopicItem[]>;
   listOpened: (openerTopicIds: string[]) => Promise<OpenedTopicItem[]>;
+  /** Like `listOpened`, with the sub-topics' own sub-topics too (the sidebar hierarchy). */
+  listOpenedTree: (openerTopicIds: string[]) => Promise<OpenedTopicItem[]>;
   readLastReply: (topicId: string) => Promise<string | undefined>;
+  /** A page of the topic's transcript; without `offset`, its latest page. */
+  readTranscript: (params: { limit: number; offset?: number; topicId: string }) => Promise<any>;
   resolveInterventionConfig: () => Promise<UserInterventionConfig>;
   /**
    * Undo a worktree `open` created when the run it was for never started a
@@ -376,8 +384,47 @@ export class SubTopicService {
   }
 
   /** The live sub-topics `openerTopicId` opened (direct ones only). */
+  /**
+   * Drop sub-topics whose agent the caller may not view (another member's
+   * private agent), and everything below them: a listing must not reveal a
+   * conversation the caller could not open.
+   */
+  private async onlyViewable(rows: OpenedTopicItem[]): Promise<OpenedTopicItem[]> {
+    const agentIds = [...new Set(rows.map((row) => row.agentId).filter(Boolean))] as string[];
+    if (agentIds.length === 0) return rows;
+    const viewable = await this.deps.filterViewableAgents(agentIds);
+    const hidden = new Set(
+      rows.filter((row) => row.agentId && !viewable.has(row.agentId)).map((row) => row.id),
+    );
+    // Hide descendants of hidden rows too; rows are not in tree order, so repeat until stable.
+    let grew = hidden.size > 0;
+    while (grew) {
+      grew = false;
+      for (const row of rows) {
+        if (!hidden.has(row.id) && row.openedBy?.topicId && hidden.has(row.openedBy.topicId)) {
+          hidden.add(row.id);
+          grew = true;
+        }
+      }
+    }
+    return rows.filter((row) => !hidden.has(row.id));
+  }
+
+  /** The sidebar hierarchy under `openerTopicIds`, limited to what the caller may view. */
+  async listTree(openerTopicIds: string[]) {
+    return this.onlyViewable(await this.deps.listOpenedTree(openerTopicIds));
+  }
+
+  /** A page of a sub-topic's transcript, once the caller may view it. */
+  async read(topicId: string, params: { limit: number; offset?: number }) {
+    await this.requireTopic(topicId);
+    await this.deps.assertCanViewTopics([topicId]);
+    return this.deps.readTranscript({ ...params, topicId });
+  }
+
   async list(openerTopicId: string) {
-    const rows = await this.deps.listOpened([openerTopicId]);
+    await this.deps.assertCanViewTopics([openerTopicId]);
+    const rows = await this.onlyViewable(await this.deps.listOpened([openerTopicId]));
     return rows.map((row) => ({
       agentId: row.agentId,
       state: toSubTopicState(row.status, row.latestRunStatus),
@@ -390,6 +437,7 @@ export class SubTopicService {
 
   async get(topicId: string) {
     const topic = await this.requireTopic(topicId);
+    await this.deps.assertCanViewTopics([topicId]);
     const [liveRuns, latestRunStatus] = await Promise.all([
       this.deps.findLiveRunIds(topicId),
       this.deps.findLatestRunStatus(topicId),
@@ -474,6 +522,7 @@ export class SubTopicService {
    */
   async describe(topicId: string) {
     await this.requireTopic(topicId);
+    await this.deps.assertCanViewTopics([topicId]);
     const descendants = retirableDescendants(topicId, await this.deps.listDescendants(topicId));
     return {
       descendants: descendants.length,
@@ -489,6 +538,8 @@ export class SubTopicService {
   /** Stop the sub-topic's current turn. No receipt is sent for a stopped turn. */
   async stop(topicId: string) {
     await this.requireTopic(topicId);
+    // Stopping a run changes the conversation: `use`, as for any other edit.
+    await this.deps.assertCanEditTopics([topicId]);
     const runIds = await this.deps.findLiveRunIds(topicId);
     for (const operationId of runIds) await this.deps.interrupt(operationId);
     return { stopped: runIds.length, topicId };

@@ -11,7 +11,11 @@ import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { assertCanUseTopicTargets } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
+import {
+  assertCanUseTopicTargets,
+  assertCanViewConversationTargets,
+  assertCanViewTopicTargets,
+} from '@/server/routers/lambda/_helpers/conversationResourceGuard';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { startComposerRun } from '@/server/services/aiAgent/composerRun';
@@ -50,6 +54,9 @@ const LAST_REPLY_WINDOW = 20;
 /** Concurrent agent display-field reads behind one sidebar listing. */
 const AGENT_FIELDS_CONCURRENCY = 10;
 
+/** Concurrent per-agent view checks behind one sidebar listing. */
+const VIEW_CHECK_CONCURRENCY = 5;
+
 export const createSubTopicService = (ctx: CallerCtx) => {
   const db = ctx.serverDB;
   const workspaceId = ctx.workspaceId ?? undefined;
@@ -57,6 +64,7 @@ export const createSubTopicService = (ctx: CallerCtx) => {
   const topicModel = new TopicModel(db, ctx.userId, workspaceId);
   const messageModel = new MessageModel(db, ctx.userId, workspaceId);
   const topicCaller = () => topicRouter.createCaller(callerCtx);
+  const guard = { db, userId: ctx.userId, workspaceId };
 
   return new SubTopicService({
     addGitWorktree: async (params) =>
@@ -90,7 +98,24 @@ export const createSubTopicService = (ctx: CallerCtx) => {
       });
     },
     assertCanEditTopics: async (topicIds) => {
-      await assertCanUseTopicTargets({ db, userId: ctx.userId, workspaceId }, topicIds);
+      await assertCanUseTopicTargets(guard, topicIds);
+    },
+    assertCanViewTopics: async (topicIds) => {
+      await assertCanViewTopicTargets(guard, topicIds);
+    },
+    filterViewableAgents: async (agentIds) => {
+      // Outside a workspace every agent here is the caller's own.
+      if (!workspaceId) return new Set(agentIds);
+      const allowed = await pMap(
+        agentIds,
+        (agentId) =>
+          assertCanViewConversationTargets(guard, [{ agentId }]).then(
+            () => agentId,
+            () => undefined,
+          ),
+        { concurrency: VIEW_CHECK_CONCURRENCY },
+      );
+      return new Set(allowed.filter(Boolean) as string[]);
     },
     detachTopics: (topicIds) => topicModel.detachOpenedTopics(topicIds),
     execAgent: (params) =>
@@ -106,6 +131,12 @@ export const createSubTopicService = (ctx: CallerCtx) => {
       topicModel.listOpenedDescendants(topicId, { excludeStatuses: RETIRED_TOPIC_STATUSES }),
     listOpened: (openerTopicIds) =>
       topicModel.listOpenedTopics({ excludeStatuses: RETIRED_TOPIC_STATUSES, openerTopicIds }),
+    listOpenedTree: (openerTopicIds) =>
+      topicModel.listOpenedTopics({
+        excludeStatuses: RETIRED_TOPIC_STATUSES,
+        includeDescendants: true,
+        openerTopicIds,
+      }),
     readLastReply: async (topicId) => {
       const { total } = await messageModel.queryTopicTranscript({ limit: 1, offset: 0, topicId });
       const { items } = await messageModel.queryTopicTranscript({
@@ -119,6 +150,8 @@ export const createSubTopicService = (ctx: CallerCtx) => {
       const content = (last as { content?: string } | undefined)?.content?.trim();
       return content ? content.slice(0, 2000) : undefined;
     },
+    readTranscript: (params) =>
+      readLatestSubTopicTranscript({ db, userId: ctx.userId, workspaceId }, params),
     resolveInterventionConfig: () => resolveForegroundInterventionConfig(db, ctx.userId),
     rollbackWorktree: async ({ branch, deviceId, repoPath, worktreePath }) => {
       try {
@@ -266,11 +299,8 @@ export const subTopicRouter = router({
     .input(z.object({ openerTopicIds: z.array(z.string()).max(200) }))
     .query(async ({ ctx, input }): Promise<OpenedSubTopic[]> => {
       const workspaceId = ctx.workspaceId ?? undefined;
-      const rows = await new TopicModel(ctx.serverDB, ctx.userId, workspaceId).listOpenedTopics({
-        excludeStatuses: RETIRED_TOPIC_STATUSES,
-        includeDescendants: true,
-        openerTopicIds: input.openerTopicIds,
-      });
+      // Only sub-topics whose agent the caller may view (and nothing below a hidden one).
+      const rows = await createSubTopicService(ctx).listTree(input.openerTopicIds);
       const agentModel = new AgentModel(ctx.serverDB, ctx.userId, workspaceId);
       const agentIds = [...new Set(rows.map((row) => row.agentId).filter(Boolean))] as string[];
       // One display-field read per distinct agent, a bounded few at a time.
@@ -316,9 +346,11 @@ export const subTopicRouter = router({
       }),
     )
     .query(({ ctx, input }) =>
-      readLatestSubTopicTranscript(
-        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
-        input,
+      run(() =>
+        createSubTopicService(ctx).read(input.topicId, {
+          limit: input.limit,
+          offset: input.offset,
+        }),
       ),
     ),
 

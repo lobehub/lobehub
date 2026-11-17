@@ -4,10 +4,7 @@ import {
   TopicToolExecutionRuntime,
 } from '@lobechat/builtin-tool-topic/executionRuntime';
 
-import {
-  createSubTopicService,
-  readLatestSubTopicTranscript,
-} from '@/server/routers/lambda/subTopic';
+import { createSubTopicService } from '@/server/routers/lambda/subTopic';
 import { resolveDeviceAccessPolicy } from '@/server/services/aiAgent/deviceAccessPolicy';
 import { readSubTopicsEnabled } from '@/server/services/subTopic/labGate';
 
@@ -60,8 +57,7 @@ export const subTopicRuntime: ServerRuntimeRegistration = {
       },
       isOpenedBy: (topicId, openerTopicId) => service.isOpenedBy(topicId, openerTopicId),
       list: (openerTopicId) => service.list(openerTopicId),
-      read: async (topicId, limit) =>
-        readLatestSubTopicTranscript({ db, userId, workspaceId }, { limit, topicId }) as any,
+      read: async (topicId, limit) => (await service.read(topicId, { limit })) as any,
       send: async (params) => {
         assertMayStartRuns();
         return service.send(params);

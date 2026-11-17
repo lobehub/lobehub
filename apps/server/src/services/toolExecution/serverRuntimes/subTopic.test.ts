@@ -7,6 +7,7 @@ const service = vi.hoisted(() => ({
   get: vi.fn(),
   isOpenedBy: vi.fn(),
   list: vi.fn(),
+  read: vi.fn(),
   retire: vi.fn(),
   send: vi.fn(),
   open: vi.fn(),
@@ -15,7 +16,6 @@ const service = vi.hoisted(() => ({
 
 vi.mock('@/server/routers/lambda/subTopic', () => ({
   createSubTopicService: () => service,
-  readLatestSubTopicTranscript: vi.fn(),
 }));
 vi.mock('@/server/services/subTopic/labGate', () => ({
   readSubTopicsEnabled: vi.fn(async () => true),
