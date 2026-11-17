@@ -419,3 +419,17 @@ describe('PATCH /:id edge cases', () => {
     expect(message.content).toBe('hi');
   });
 });
+
+describe('PATCH /:id tool arguments on a detached result', () => {
+  it('refuses before writing when the calling assistant no longer lists the call', async () => {
+    await db.update(messages).set({ tools: [] }).where(eq(messages.id, 'msg_assistant'));
+
+    const res = await request('/msg_tool', {
+      body: { content: 'changed', toolArguments: { arguments: '{}', toolCallId: 'call_1' } },
+      method: 'PATCH',
+    });
+    expect(res.status).toBe(400);
+    const [tool] = await db.select().from(messages).where(eq(messages.id, 'msg_tool'));
+    expect(tool.content).toBe('pelicans are large water birds');
+  });
+});

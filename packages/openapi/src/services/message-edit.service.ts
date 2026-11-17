@@ -83,10 +83,7 @@ export class MessageEditService extends BaseService {
    * arguments by `toolCallId` alone, so an id shared by two results is refused
    * rather than letting the write land on a pair this request never guarded.
    */
-  private async assertToolCallOfMessage(
-    message: { id: string; role: string; tools: unknown },
-    toolCallId: string,
-  ) {
+  private async assertToolCallOfMessage(message: { id: string; role: string }, toolCallId: string) {
     const results = await this.db
       .select({ id: messagePlugins.id, parentId: messages.parentId })
       .from(messagePlugins)
@@ -100,12 +97,22 @@ export class MessageEditService extends BaseService {
       );
     }
 
-    const calls = Array.isArray(message.tools) ? (message.tools as { id?: string }[]) : [];
     const [result] = results;
+    // The model rewrites the call on the result's parent assistant too, so that
+    // parent must exist in scope and still list the call.
+    const callerId = message.role === 'tool' ? result?.parentId : message.id;
+    const [caller] = callerId
+      ? await this.db
+          .select({ tools: messages.tools })
+          .from(messages)
+          .where(and(eq(messages.id, callerId), this.buildWorkspaceWhere(messages)))
+          .limit(1)
+      : [];
+    const calls = Array.isArray(caller?.tools) ? (caller.tools as { id?: string }[]) : [];
     const owned =
-      message.role === 'tool'
-        ? result?.id === message.id
-        : calls.some((tool) => tool.id === toolCallId) && result?.parentId === message.id;
+      !!result &&
+      calls.some((tool) => tool.id === toolCallId) &&
+      (message.role === 'tool' ? result.id === message.id : result.parentId === message.id);
     if (!owned) {
       throw this.createValidationError(
         `Tool call ${toolCallId} has no stored result made or answered by this message`,
@@ -153,10 +160,11 @@ export class MessageEditService extends BaseService {
       }
 
       if (patch.toolArguments) {
-        await core.updateToolArguments(
+        const result = await core.updateToolArguments(
           patch.toolArguments.toolCallId,
           patch.toolArguments.arguments,
         );
+        if (!result.success) throw this.createBusinessError('Tool call arguments were not updated');
       }
     } catch (error) {
       this.fail(error, 'Update message');
