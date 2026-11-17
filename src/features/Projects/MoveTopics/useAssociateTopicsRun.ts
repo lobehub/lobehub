@@ -35,8 +35,13 @@ export const useAssociateTopicsRun = () => {
     setCanDismissByClickOutside?.(false);
     try {
       const next = await associateTopics(projectId, topicIds, setProgress);
-      // The agent-side lists group conversations by project too.
-      if (next.movedTopicIds.length) await useChatStore.getState().refreshTopic();
+      // The agent-side lists group conversations by project too. Best effort:
+      // the write already landed, and the result must still be reported.
+      if (next.movedTopicIds.length)
+        await useChatStore
+          .getState()
+          .refreshTopic()
+          .catch((error) => console.error('[MoveTopics] refresh failed:', error));
       setResult(next);
       return next;
     } finally {

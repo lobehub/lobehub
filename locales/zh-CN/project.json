@@ -233,7 +233,7 @@
   "moveTopics.intoProjectDesc": "勾选话题，或整组勾选某个助理的话题，一次移入本项目。",
   "moveTopics.intoProjectTitle": "移入话题…",
   "moveTopics.noMatch": "没有匹配的话题",
-  "moveTopics.progress": "已移入 {{done}} / {{total}}",
+  "moveTopics.progress": "已处理 {{done}} / {{total}}",
   "moveTopics.retry": "重试",
   "moveTopics.search": "搜索话题",
   "moveTopics.showDetails": "查看详情",

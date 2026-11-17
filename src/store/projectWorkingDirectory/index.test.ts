@@ -85,6 +85,18 @@ describe('projectWorkingDirectory store', () => {
       expect(invalidates('projectTopics', 'p-1')).toBe(true);
     });
 
+    it('still reports the filed topics when the refresh afterwards fails', async () => {
+      vi.spyOn(projectWorkingDirectoryService, 'associateTopics').mockResolvedValue({
+        data: { movedTopicIds: ['t-1'], skippedTopics: [] },
+        success: true,
+      } as never);
+      vi.mocked(mutate).mockRejectedValueOnce(new Error('network'));
+
+      const result = await useProjectDirectoryStore.getState().associateTopics('p-1', ['t-1']);
+
+      expect(result).toEqual({ movedTopicIds: ['t-1'], skippedTopics: [] });
+    });
+
     it('stops at a failed batch and keeps what the earlier batches filed', async () => {
       const ids = Array.from({ length: ASSOCIATE_TOPICS_BATCH_SIZE + 1 }, (_, i) => `t-${i}`);
       const failure = new Error('boom');

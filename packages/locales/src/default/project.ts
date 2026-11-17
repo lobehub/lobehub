@@ -532,7 +532,7 @@ export default {
   'moveTopics.intoProjectDesc': "Pick topics, or a whole agent's group, to move into this project.",
   'moveTopics.intoProjectTitle': 'Move topics in…',
   'moveTopics.noMatch': 'No topics match',
-  'moveTopics.progress': 'Moved {{done}} / {{total}}',
+  'moveTopics.progress': 'Processed {{done}} / {{total}}',
   'moveTopics.search': 'Search topics',
   'moveTopics.skipReason.differentLocation': '{{count}} run in a different location',
   'moveTopics.skipReason.needsDirectory':

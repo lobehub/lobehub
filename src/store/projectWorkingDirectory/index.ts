@@ -264,9 +264,10 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
         result.error = error;
       }
       // Refresh right away instead of waiting for the next poll or focus, so
-      // the project lists the group as soon as the write lands.
+      // the project lists the group as soon as the write lands. Best effort:
+      // the topics are already filed, so a failed refresh must not hide that.
       if (result.movedTopicIds.length)
-        await Promise.all([
+        await Promise.allSettled([
           projectTopics.revalidate(projectId),
           directoryTopics.revalidate(),
           environmentTopics.revalidate(),
