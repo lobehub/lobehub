@@ -28,6 +28,7 @@ import BoundDeviceSelect from './BoundDeviceSelect';
 import CollapsibleSection from './CollapsibleSection';
 import MCPTypeSelect from './MCPTypeSelect';
 import QuickImportSection from './QuickImportSection';
+import { hasAdvancedValue, useAdvancedSectionExpanded } from './useAdvancedSection';
 
 interface MCPManifestFormProps {
   /**
@@ -118,20 +119,12 @@ const MCPManifestForm = ({
   // means running the authorize flow instead.
   const isOAuth = enableOAuth && mcpType === 'http' && authType === 'oauth2';
 
-  // 高级设置 starts collapsed, but opens once it holds a value saving keeps (an
-  // edited connector, a JSON import): a device route, an OAuth client or headers
-  // must not take effect unseen behind the collapsed row.
   const clientId = useWatch(form, AUTH_CLIENT_ID);
   const clientSecret = useWatch(form, AUTH_CLIENT_SECRET);
   const headers = useWatch(form, HEADERS);
-  const hasAdvancedValue =
-    connectVia === 'device' ||
-    (isOAuth && Boolean(clientId || clientSecret)) ||
-    Object.keys(headers ?? {}).length > 0;
-  const [advancedExpanded, setAdvancedExpanded] = useState(false);
-  useEffect(() => {
-    if (hasAdvancedValue) setAdvancedExpanded(true);
-  }, [hasAdvancedValue]);
+  const [advancedExpanded, setAdvancedExpanded] = useAdvancedSectionExpanded(
+    hasAdvancedValue({ clientId, clientSecret, connectVia, headers, isOAuth }),
+  );
 
   // The redirect URI the server will use at authorize time (APP_URL-based), shown
   // so the user registers a matching URI on their OAuth app. Fetched lazily once
